@@ -35,32 +35,6 @@ singleuser:
         image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.3"
         node_selector: {'eos': 'true'}
         lifecycle_hooks:
-          postStart:
-            exec:
-              command:
-                - "bash"
-                - "-c"
-                - >
-                  export IMAGE_VERSION=$(basename "$JUPYTER_IMAGE");
-                  export TOPBAR_TEXT_CONFIG_PATH=$(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-text/;
-                  mkdir -p $TOPBAR_TEXT_CONFIG_PATH;
-                  echo "{\"text\":\"Purdue AF: 🚧 Developers area 🚧 \| User: $NB_USER \| Release: $IMAGE_VERSION\"}" > $TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings;
-
-                  mkdir -p $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
-                  cp /home/jovyan/.jupyter/lab/user-settings/jupyterlab-topbar-extension/plugin.jupyterlab-settings \
-                    $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
-
-                  if [ ! -d eos-purdue ]; then ln -s /eos/purdue/ $(pwd)/eos-purdue; fi;
-                  if [ -L depot ]; then rm -rf depot; fi;
-                  if [ -f depot ]; then rm -rf depot; fi;
-                  if [ ! -d depot ]; then mkdir depot; fi;
-                  if [ ! -L depot/users ]; then ln -s /depot/cms/users depot/users; fi;
-                  if [ ! -L depot/hmm ]; then ln -s /depot/cms/hmm depot/hmm; fi;
-                  if [ ! -L depot/top ]; then ln -s /depot/cms/top depot/top; fi;
-                  if [ ! -L depot/hh ]; then ln -s /depot/cms/hh depot/hh; fi;
-
-                  cp /etc/jupyter/dask/jobqueue-purdue-slurm.yaml $(pwd)/.config/dask/
-
           preStop:
             exec:
               command: ["bash", "-c", "rm -f eos-cern"]
@@ -122,30 +96,6 @@ singleuser:
         image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.7.11-debug"
         node_selector: {'testing': 'cmsaf'}
         lifecycle_hooks:
-          postStart:
-            exec:
-              command:
-                - "bash"
-                - "-c"
-                - >
-                  export IMAGE_VERSION=$(basename "$JUPYTER_IMAGE");
-                  export TOPBAR_TEXT_CONFIG_PATH=$(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-text/;
-                  mkdir -p $TOPBAR_TEXT_CONFIG_PATH;
-                  echo "{\"text\":\"Purdue AF: 🚧 Developers area 🚧 \| User: $NB_USER \| Release: $IMAGE_VERSION\"}" > $TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings;
-
-                  mkdir -p $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
-                  cp /home/jovyan/.jupyter/lab/user-settings/jupyterlab-topbar-extension/plugin.jupyterlab-settings \
-                    $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
-
-                  if [ ! -d eos-purdue ]; then ln -s /eos/purdue/ $(pwd)/eos-purdue; fi;
-                  if [ -L depot ]; then rm -rf depot; fi;
-                  if [ -f depot ]; then rm -rf depot; fi;
-                  if [ ! -d depot ]; then mkdir depot; fi;
-                  if [ ! -L depot/users ]; then ln -s /depot/cms/users depot/users; fi;
-                  if [ ! -L depot/hmm ]; then ln -s /depot/cms/hmm depot/hmm; fi;
-                  if [ ! -L depot/top ]; then ln -s /depot/cms/top depot/top; fi;
-                  if [ ! -L depot/hh ]; then ln -s /depot/cms/hh depot/hh; fi;
-
           preStop:
             exec:
               command: ["bash", "-c", "rm -f eos-cern"]
@@ -206,33 +156,9 @@ singleuser:
       default: false
       description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
       kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.7.11-debug"
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.3"
         node_selector: {'testing': 'cmsfe'}
         lifecycle_hooks:
-          postStart:
-            exec:
-              command:
-                - "bash"
-                - "-c"
-                - >
-                  export IMAGE_VERSION=$(basename "$JUPYTER_IMAGE");
-                  export TOPBAR_TEXT_CONFIG_PATH=$(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-text/;
-                  mkdir -p $TOPBAR_TEXT_CONFIG_PATH;
-                  echo "{\"text\":\"Purdue AF: 🚧 Developers area 🚧 \| User: $NB_USER \| Release: $IMAGE_VERSION\"}" > $TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings;
-
-                  mkdir -p $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
-                  cp /home/jovyan/.jupyter/lab/user-settings/jupyterlab-topbar-extension/plugin.jupyterlab-settings \
-                    $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
-
-                  if [ ! -d eos-purdue ]; then ln -s /eos/purdue/ $(pwd)/eos-purdue; fi;
-                  if [ -L depot ]; then rm -rf depot; fi;
-                  if [ -f depot ]; then rm -rf depot; fi;
-                  if [ ! -d depot ]; then mkdir depot; fi;
-                  if [ ! -L depot/users ]; then ln -s /depot/cms/users depot/users; fi;
-                  if [ ! -L depot/hmm ]; then ln -s /depot/cms/hmm depot/hmm; fi;
-                  if [ ! -L depot/top ]; then ln -s /depot/cms/top depot/top; fi;
-                  if [ ! -L depot/hh ]; then ln -s /depot/cms/hh depot/hh; fi;
-
           preStop:
             exec:
               command: ["bash", "-c", "rm -f eos-cern"]
@@ -293,35 +219,9 @@ singleuser:
       default: false
       description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
       kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.2"
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.3"
         node_selector: {'testing': 'hammer'}
         lifecycle_hooks:
-          postStart:
-            exec:
-              command:
-                - "bash"
-                - "-c"
-                - >
-                  export IMAGE_VERSION=$(basename "$JUPYTER_IMAGE");
-                  export TOPBAR_TEXT_CONFIG_PATH=$(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-text/;
-                  mkdir -p $TOPBAR_TEXT_CONFIG_PATH;
-                  echo "{\"text\":\"Purdue AF: 🚧 Developers area 🚧 \| User: $NB_USER \| Release: $IMAGE_VERSION\"}" > $TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings;
-
-                  mkdir -p $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
-                  cp /home/jovyan/.jupyter/lab/user-settings/jupyterlab-topbar-extension/plugin.jupyterlab-settings \
-                    $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
-
-                  if [ ! -d eos-purdue ]; then ln -s /eos/purdue/ $(pwd)/eos-purdue; fi;
-                  if [ -L depot ]; then rm -rf depot; fi;
-                  if [ -f depot ]; then rm -rf depot; fi;
-                  if [ ! -d depot ]; then mkdir depot; fi;
-                  if [ ! -L depot/users ]; then ln -s /depot/cms/users depot/users; fi;
-                  if [ ! -L depot/hmm ]; then ln -s /depot/cms/hmm depot/hmm; fi;
-                  if [ ! -L depot/top ]; then ln -s /depot/cms/top depot/top; fi;
-                  if [ ! -L depot/hh ]; then ln -s /depot/cms/hh depot/hh; fi;
-
-                  cp /etc/jupyter/dask/jobqueue-purdue-slurm.yaml $(pwd)/.config/dask/
-
           preStop:
             exec:
               command: ["bash", "-c", "rm -f eos-cern"]
@@ -427,6 +327,7 @@ prePuller:
   continuous:
     enabled: false
 hub:
+  nodeSelector: {'eos': 'true'}
   extraVolumes:
     - name: purdue-auth
       secret:

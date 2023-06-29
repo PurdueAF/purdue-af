@@ -5,9 +5,15 @@ chmod 400 /etc/munge/munge.key
 md5sum /etc/munge/munge.key > /etc/jupyter/test.txt
 sudo su -l munge -s /usr/sbin/munged
 
-rm -rf $(pwd)/.jupyter/migrated
-touch $(pwd)/.jupyter/migrated
-chmod 777 $(pwd)/.jupyter/migrated
-mkdir -p $(pwd)/.jupyter/lab/workspaces
-mkdir -p $(pwd)/.local
-chown -R $NB_USER:users ~/.[^.]*
+NEW_HOME=/home/$NB_USER
+rm -rf $NEW_HOME/.jupyter/migrated
+touch $NEW_HOME/.jupyter/migrated
+chmod 777 $NEW_HOME/.jupyter/migrated
+mkdir -p $NEW_HOME/.jupyter/lab/workspaces
+mkdir -p $NEW_HOME/.local
+mkdir -p $NEW_HOME/.local/share
+mkdir -p $NEW_HOME/.config/dask
+chown -R $NB_USER:users $NEW_HOME/.[^.]*
+
+cp /etc/jupyter/dask/jobqueue-purdue-slurm.yaml $NEW_HOME/.config/dask/
+chown -R $NB_USER:users $NEW_HOME/.config/dask/*

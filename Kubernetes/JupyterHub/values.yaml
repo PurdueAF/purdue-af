@@ -3,46 +3,17 @@ singleuser:
   uid: 0
   cmd: 
   image:
-    name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-base-notebook"
-    tag: "1.7"
+    name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
+    tag: "0.8.3"
   startTimeout: 3600
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
       default: true
       description: ""
       kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.0"
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.3"
         node_selector: {'eos': 'true'}
         lifecycle_hooks:
-          postStart:
-            exec:
-              command:
-                - "bash"
-                - "-c"
-                - >
-                  export IMAGE_VERSION=$(basename "$JUPYTER_IMAGE");
-                  export TOPBAR_TEXT_CONFIG_PATH=$(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-text/;
-                  mkdir -p $TOPBAR_TEXT_CONFIG_PATH;
-                  echo "{\"text\":\"Purdue Analysis Facility \| User: $NB_USER \| Release: $IMAGE_VERSION\"}" > $TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings;
-
-                  mkdir -p $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
-                  cp /home/jovyan/.jupyter/lab/user-settings/jupyterlab-topbar-extension/plugin.jupyterlab-settings \
-                    $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
-
-                  if [ ! -d eos-purdue ]; then ln -s /eos/purdue/ $(pwd)/eos-purdue; fi;
-                  if [ -L depot ]; then rm -rf depot; fi;
-                  if [ -f depot ]; then rm -rf depot; fi;
-                  if [ ! -d depot ]; then mkdir depot; fi;
-                  if [ ! -L depot/users ]; then ln -s /depot/cms/users depot/users; fi;
-                  if [ ! -L depot/hmm ]; then ln -s /depot/cms/hmm depot/hmm; fi;
-                  if [ ! -L depot/top ]; then ln -s /depot/cms/top depot/top; fi;
-                  if [ ! -L depot/hh ]; then ln -s /depot/cms/hh depot/hh; fi;
-
-                  mkdir -p $(pwd)/.local/share;
-                  chown -R $NB_USER:users $(pwd)/.[^.]*
-
-                  # cp /etc/jupyter/dask/jobqueue-purdue-slurm.yaml $(pwd)/.config/dask/
-
           preStop:
             exec:
               command: ["bash", "-c", "rm -f eos-cern"]
@@ -101,7 +72,6 @@ singleuser:
     JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
     CHOWN_HOME: "yes"
     NAMESPACE: "cms"
-    # GRANT_SUDO: "yes"
   networkPolicy:
     enabled: false
   storage:
@@ -147,6 +117,7 @@ prePuller:
   continuous:
     enabled: false
 hub:
+  nodeSelector: {'eos': 'true'}
   extraVolumes:
     - name: purdue-auth
       secret:
