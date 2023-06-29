@@ -231,14 +231,12 @@ RUN jupyter labextension install jupyterlab-theme-toggle && \
     jupyter lab build --dev-build=False
 RUN jupyter labextension disable "@jupyterlab/apputils-extension:announcements"
 
-# Configure jupyterlab extensions
-RUN echo "{\"jupyterlab-unfold:jupyterlab-unfold-settings\": {\"singleClickToUnfold\": false}}" > /opt/conda/share/jupyter/lab/settings/overrides.json
-RUN mkdir -p /home/jovyan/.jupyter/lab/user-settings/jupyterlab-topbar-extension/ && \
-    echo "{ \"order\": [ \"spacer\", \"custom-text\", \"theme-toggle\", \"logout-button\" ] }" \
-    > /home/jovyan/.jupyter/lab/user-settings/jupyterlab-topbar-extension/plugin.jupyterlab-settings;
-
 # Scripts that run before session start
-COPY scripts/run-as-root.sh scripts/init-conda-kernels.sh /usr/local/bin/before-notebook.d/
+COPY scripts/run-as-root.sh \
+  scripts/init-conda-kernels.sh \
+  scripts/config-extensions.sh \
+  scripts/create-symlinks.sh \
+  /usr/local/bin/before-notebook.d/
 
 # Bash profile scripts
 COPY scripts/aliases.sh scripts/init-conda.sh /etc/profile.d/
