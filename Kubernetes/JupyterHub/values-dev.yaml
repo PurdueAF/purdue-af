@@ -1,0 +1,675 @@
+singleuser:
+  podNameTemplate: "purdue-af-{userid}"
+  uid: 0
+  cmd: 
+  image:
+    name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-base-notebook"
+    tag: "1.7"
+  profileList:
+    - display_name: "JupyterLab based on CentOS7"
+      description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
+      kubespawner_override:
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-centos7:0.3"
+        node_selector: {'eos': 'true'}
+      profile_options:
+        cpu:
+          display_name: "CPUs"
+          choices:
+            1:
+              display_name: "4"
+              kubespawner_override:
+                cpu_limit: 4
+                cpu_guarantee: 4
+        memory:
+          display_name: "Memory"
+          choices:
+            1:
+              display_name: "16 GB"
+              kubespawner_override:
+                mem_limit: "16G"
+                mem_guarantee: "16G"
+    - display_name: "JupyterLab based on CERN Alma8"
+      default: true
+      description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
+      kubespawner_override:
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.3"
+        node_selector: {'eos': 'true'}
+        lifecycle_hooks:
+          postStart:
+            exec:
+              command:
+                - "bash"
+                - "-c"
+                - >
+                  export IMAGE_VERSION=$(basename "$JUPYTER_IMAGE");
+                  export TOPBAR_TEXT_CONFIG_PATH=$(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-text/;
+                  mkdir -p $TOPBAR_TEXT_CONFIG_PATH;
+                  echo "{\"text\":\"Purdue AF: 🚧 Developers area 🚧 \| User: $NB_USER \| Release: $IMAGE_VERSION\"}" > $TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings;
+
+                  mkdir -p $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
+                  cp /home/jovyan/.jupyter/lab/user-settings/jupyterlab-topbar-extension/plugin.jupyterlab-settings \
+                    $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
+
+                  if [ ! -d eos-purdue ]; then ln -s /eos/purdue/ $(pwd)/eos-purdue; fi;
+                  if [ -L depot ]; then rm -rf depot; fi;
+                  if [ -f depot ]; then rm -rf depot; fi;
+                  if [ ! -d depot ]; then mkdir depot; fi;
+                  if [ ! -L depot/users ]; then ln -s /depot/cms/users depot/users; fi;
+                  if [ ! -L depot/hmm ]; then ln -s /depot/cms/hmm depot/hmm; fi;
+                  if [ ! -L depot/top ]; then ln -s /depot/cms/top depot/top; fi;
+                  if [ ! -L depot/hh ]; then ln -s /depot/cms/hh depot/hh; fi;
+
+                  cp /etc/jupyter/dask/jobqueue-purdue-slurm.yaml $(pwd)/.config/dask/
+
+          preStop:
+            exec:
+              command: ["bash", "-c", "rm -f eos-cern"]
+      profile_options:
+        cpu:
+          display_name: "CPUs"
+          choices:
+            1:
+              display_name: "4"
+              kubespawner_override:
+                cpu_limit: 4
+                cpu_guarantee: 4
+            2: 
+              display_name: "16"
+              kubespawner_override:
+                cpu_limit: 16
+                cpu_guarantee: 16
+            3:
+              display_name: "32"
+              kubespawner_override:
+                cpu_limit: 32
+                cpu_guarantee: 32
+        gpu:
+          display_name: "GPUs"
+          choices:
+            1:
+              display_name: "0"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-1g.5gb: "0"
+            2:
+              display_name: "1"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-1g.5gb: "1"
+        memory:
+          display_name: "Memory"
+          choices:
+            1:
+              display_name: "16 GB"
+              kubespawner_override:
+                mem_limit: "16G"
+                mem_guarantee: "16G"
+            2:
+              display_name: "32 GB"
+              kubespawner_override:
+                mem_limit: "32G" 
+                mem_guarantee: "32G"
+            3:
+              display_name: "64 GB"
+              kubespawner_override:
+                mem_limit: "64G" 
+                mem_guarantee: "64G"
+
+    - display_name: "Start on af-a02 node (CERN Alma8)"
+      default: false
+      description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
+      kubespawner_override:
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.7.11-debug"
+        node_selector: {'testing': 'cmsaf'}
+        lifecycle_hooks:
+          postStart:
+            exec:
+              command:
+                - "bash"
+                - "-c"
+                - >
+                  export IMAGE_VERSION=$(basename "$JUPYTER_IMAGE");
+                  export TOPBAR_TEXT_CONFIG_PATH=$(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-text/;
+                  mkdir -p $TOPBAR_TEXT_CONFIG_PATH;
+                  echo "{\"text\":\"Purdue AF: 🚧 Developers area 🚧 \| User: $NB_USER \| Release: $IMAGE_VERSION\"}" > $TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings;
+
+                  mkdir -p $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
+                  cp /home/jovyan/.jupyter/lab/user-settings/jupyterlab-topbar-extension/plugin.jupyterlab-settings \
+                    $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
+
+                  if [ ! -d eos-purdue ]; then ln -s /eos/purdue/ $(pwd)/eos-purdue; fi;
+                  if [ -L depot ]; then rm -rf depot; fi;
+                  if [ -f depot ]; then rm -rf depot; fi;
+                  if [ ! -d depot ]; then mkdir depot; fi;
+                  if [ ! -L depot/users ]; then ln -s /depot/cms/users depot/users; fi;
+                  if [ ! -L depot/hmm ]; then ln -s /depot/cms/hmm depot/hmm; fi;
+                  if [ ! -L depot/top ]; then ln -s /depot/cms/top depot/top; fi;
+                  if [ ! -L depot/hh ]; then ln -s /depot/cms/hh depot/hh; fi;
+
+          preStop:
+            exec:
+              command: ["bash", "-c", "rm -f eos-cern"]
+      profile_options:
+        cpu:
+          display_name: "CPUs"
+          choices:
+            1:
+              display_name: "4"
+              kubespawner_override:
+                cpu_limit: 4
+                cpu_guarantee: 4
+            2: 
+              display_name: "16"
+              kubespawner_override:
+                cpu_limit: 16
+                cpu_guarantee: 16
+            3:
+              display_name: "32"
+              kubespawner_override:
+                cpu_limit: 32
+                cpu_guarantee: 32
+            4:
+              display_name: "64"
+              kubespawner_override:
+                cpu_limit: 64
+                cpu_guarantee: 64
+            5:
+              display_name: "128"
+              kubespawner_override:
+                cpu_limit: 128
+                cpu_guarantee: 128
+        memory:
+          display_name: "Memory"
+          choices:
+            1:
+              display_name: "16 GB"
+              kubespawner_override:
+                mem_limit: "16G"
+                mem_guarantee: "16G"
+            2:
+              display_name: "32 GB"
+              kubespawner_override:
+                mem_limit: "32G" 
+                mem_guarantee: "32G"
+            3:
+              display_name: "64 GB"
+              kubespawner_override:
+                mem_limit: "64G" 
+                mem_guarantee: "64G"
+            4:
+              display_name: "256 GB"
+              kubespawner_override:
+                mem_limit: "256G" 
+                mem_guarantee: "256G"
+
+    - display_name: "Start on Hammer frontend (CERN Alma8)"
+      default: false
+      description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
+      kubespawner_override:
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.7.11-debug"
+        node_selector: {'testing': 'cmsfe'}
+        lifecycle_hooks:
+          postStart:
+            exec:
+              command:
+                - "bash"
+                - "-c"
+                - >
+                  export IMAGE_VERSION=$(basename "$JUPYTER_IMAGE");
+                  export TOPBAR_TEXT_CONFIG_PATH=$(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-text/;
+                  mkdir -p $TOPBAR_TEXT_CONFIG_PATH;
+                  echo "{\"text\":\"Purdue AF: 🚧 Developers area 🚧 \| User: $NB_USER \| Release: $IMAGE_VERSION\"}" > $TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings;
+
+                  mkdir -p $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
+                  cp /home/jovyan/.jupyter/lab/user-settings/jupyterlab-topbar-extension/plugin.jupyterlab-settings \
+                    $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
+
+                  if [ ! -d eos-purdue ]; then ln -s /eos/purdue/ $(pwd)/eos-purdue; fi;
+                  if [ -L depot ]; then rm -rf depot; fi;
+                  if [ -f depot ]; then rm -rf depot; fi;
+                  if [ ! -d depot ]; then mkdir depot; fi;
+                  if [ ! -L depot/users ]; then ln -s /depot/cms/users depot/users; fi;
+                  if [ ! -L depot/hmm ]; then ln -s /depot/cms/hmm depot/hmm; fi;
+                  if [ ! -L depot/top ]; then ln -s /depot/cms/top depot/top; fi;
+                  if [ ! -L depot/hh ]; then ln -s /depot/cms/hh depot/hh; fi;
+
+          preStop:
+            exec:
+              command: ["bash", "-c", "rm -f eos-cern"]
+      profile_options:
+        cpu:
+          display_name: "CPUs"
+          choices:
+            1:
+              display_name: "4"
+              kubespawner_override:
+                cpu_limit: 4
+                cpu_guarantee: 4
+            2: 
+              display_name: "16"
+              kubespawner_override:
+                cpu_limit: 16
+                cpu_guarantee: 16
+            3:
+              display_name: "32"
+              kubespawner_override:
+                cpu_limit: 32
+                cpu_guarantee: 32
+            4:
+              display_name: "64"
+              kubespawner_override:
+                cpu_limit: 64
+                cpu_guarantee: 64
+            5:
+              display_name: "128"
+              kubespawner_override:
+                cpu_limit: 128
+                cpu_guarantee: 128
+        memory:
+          display_name: "Memory"
+          choices:
+            1:
+              display_name: "16 GB"
+              kubespawner_override:
+                mem_limit: "16G"
+                mem_guarantee: "16G"
+            2:
+              display_name: "32 GB"
+              kubespawner_override:
+                mem_limit: "32G" 
+                mem_guarantee: "32G"
+            3:
+              display_name: "64 GB"
+              kubespawner_override:
+                mem_limit: "64G" 
+                mem_guarantee: "64G"
+            4:
+              display_name: "256 GB"
+              kubespawner_override:
+                mem_limit: "256G" 
+                mem_guarantee: "256G"
+
+    - display_name: "Start on hammer-f013 node"
+      default: false
+      description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
+      kubespawner_override:
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.2"
+        node_selector: {'testing': 'hammer'}
+        lifecycle_hooks:
+          postStart:
+            exec:
+              command:
+                - "bash"
+                - "-c"
+                - >
+                  export IMAGE_VERSION=$(basename "$JUPYTER_IMAGE");
+                  export TOPBAR_TEXT_CONFIG_PATH=$(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-text/;
+                  mkdir -p $TOPBAR_TEXT_CONFIG_PATH;
+                  echo "{\"text\":\"Purdue AF: 🚧 Developers area 🚧 \| User: $NB_USER \| Release: $IMAGE_VERSION\"}" > $TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings;
+
+                  mkdir -p $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
+                  cp /home/jovyan/.jupyter/lab/user-settings/jupyterlab-topbar-extension/plugin.jupyterlab-settings \
+                    $(pwd)/.jupyter/lab/user-settings/jupyterlab-topbar-extension/;
+
+                  if [ ! -d eos-purdue ]; then ln -s /eos/purdue/ $(pwd)/eos-purdue; fi;
+                  if [ -L depot ]; then rm -rf depot; fi;
+                  if [ -f depot ]; then rm -rf depot; fi;
+                  if [ ! -d depot ]; then mkdir depot; fi;
+                  if [ ! -L depot/users ]; then ln -s /depot/cms/users depot/users; fi;
+                  if [ ! -L depot/hmm ]; then ln -s /depot/cms/hmm depot/hmm; fi;
+                  if [ ! -L depot/top ]; then ln -s /depot/cms/top depot/top; fi;
+                  if [ ! -L depot/hh ]; then ln -s /depot/cms/hh depot/hh; fi;
+
+                  cp /etc/jupyter/dask/jobqueue-purdue-slurm.yaml $(pwd)/.config/dask/
+
+          preStop:
+            exec:
+              command: ["bash", "-c", "rm -f eos-cern"]
+      profile_options:
+        cpu:
+          display_name: "CPUs"
+          choices:
+            1:
+              display_name: "4"
+              kubespawner_override:
+                cpu_limit: 4
+                cpu_guarantee: 4
+            2: 
+              display_name: "16"
+              kubespawner_override:
+                cpu_limit: 16
+                cpu_guarantee: 16
+            3:
+              display_name: "32"
+              kubespawner_override:
+                cpu_limit: 32
+                cpu_guarantee: 32
+        gpu:
+          display_name: "GPUs"
+          choices:
+            1:
+              display_name: "0"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-1g.5gb: "0"
+            2:
+              display_name: "1"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-1g.5gb: "1"
+        memory:
+          display_name: "Memory"
+          choices:
+            1:
+              display_name: "16 GB"
+              kubespawner_override:
+                mem_limit: "16G"
+                mem_guarantee: "16G"
+            2:
+              display_name: "32 GB"
+              kubespawner_override:
+                mem_limit: "32G" 
+                mem_guarantee: "32G"
+            3:
+              display_name: "64 GB"
+              kubespawner_override:
+                mem_limit: "64G" 
+                mem_guarantee: "64G"
+
+  defaultUrl: "/lab"
+  extraEnv:
+    JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
+    GRANT_SUDO: "yes"
+    NAMESPACE: "cms-dev"
+  networkPolicy:
+    enabled: false
+  storage:
+    capacity: 25Gi
+    dynamic:
+      storageClass: geddes-standard-multinode
+      storageAccessModes:
+        - ReadWriteMany
+    homeMountPath: /home/{legacy_escape_username}
+    extraVolumes:
+      - name: cvmfs
+        hostPath: 
+          path: /cvmfs
+      - name: eos
+        hostPath: 
+          path: /eos
+      - name: depot
+        nfs:
+          server: datadepot.rcac.purdue.edu
+          path: /depot/cms
+      - name: munge-key
+        secret:
+          secretName: munge-key
+    extraVolumeMounts:
+      - name: cvmfs
+        mountPath: /cvmfs
+        mountPropagation: HostToContainer
+      - name: eos
+        mountPath: /eos
+        mountPropagation: HostToContainer
+      - name: depot
+        mountPath: /depot/cms
+        mountPropagation: HostToContainer
+      - mountPath: /etc/secrets/munge/
+        name: munge-key
+        readOnly: false
+        mountPropagation: HostToContainer
+  cloudMetadata:
+    blockWithIptables: false
+
+prePuller:
+  hook:
+    enabled: false
+  continuous:
+    enabled: false
+hub:
+  extraVolumes:
+    - name: purdue-auth
+      secret:
+        secretName: purdue-auth
+    - name: cern-auth
+      secret:
+        secretName: cern-auth
+    - name: html-template
+      secret:
+        secretName: html-template
+  extraVolumeMounts:
+    - mountPath: /etc/secrets/purdue-auth/
+      name: purdue-auth
+      readOnly: true
+    - mountPath: /etc/secrets/cern-auth/
+      name: cern-auth
+      readOnly: true
+    - mountPath: /etc/secrets/html/
+      name: html-template
+      readOnly: true
+  config:
+    CILogonOAuthenticator:
+      client_id: cilogon:/client_id/652ad741e63f7aa6c602e2a806c7c705
+      client_secret: s-HM2wlBCMLJ0hy8LUakiD3lGcDOC6FSeluwDwL76epB67yFAGDEftwDGSUN_D_bdENpgaLqF2gBcx4YvW3V6w
+      oauth_callback_url: https://cmsdev.geddes.rcac.purdue.edu/hub/oauth_callback
+      username_claim: eppn
+      enable_auth_state: true
+      shown_idps:
+        - https://cern.ch/login
+        - https://idp.fnal.gov/idp/shibboleth
+        - https://idp.purdue.edu/idp/shibboleth
+    JupyterHub:
+      authenticator_class: cilogon
+  extraConfig:
+    # Some additional config
+    00-custom-spawner: |
+      from oauthenticator.cilogon import CILogonOAuthenticator
+      from jupyterhub.auth import LocalAuthenticator
+      from tornado import web
+      import pwd
+      #class PurdueCILogonOAuthenticator(LocalAuthenticator, CILogonOAuthenticator):
+      class PurdueCILogonOAuthenticator(CILogonOAuthenticator):
+          async def authenticate(self, handler, data=None):
+              import pprint
+              ret = await super().authenticate(handler, data)
+              print("in auth:")
+              pprint.pprint(ret)
+              name = ret['name']
+              username, domain = ret['auth_state']['cilogon_user']['eppn'].split("@")
+              fixedUsername = None
+
+              if domain == 'purdue.edu':
+                fixedUsername = username
+                with open('/etc/secrets/purdue-auth/purdue-auth.txt') as file:
+                  if not f"{username}\n" in file.readlines():
+                    raise web.HTTPError(500, f"Access denied! User {username} is not in the list of authorized users.")
+
+              elif domain == 'cern.ch':
+                fixedUsername = username + "-cern"
+                with open('/etc/secrets/cern-auth/cern-auth.txt') as file:
+                  if not f"{username}\n" in file.readlines():
+                    raise web.HTTPError(500, "Access denied! Only CMS members are allowed to log in with CERN credentials.")
+              
+              elif domain == 'fnal.gov':
+                      fixedUsername = username + "-fnal"
+              else:
+                  raise web.HTTPError(500, "Failed to get username from CILogon")
+              
+              ret['name'] = fixedUsername
+              ret['domain'] = domain
+              return ret
+
+      def passthrough_post_auth_hook(authenticator, handler, authentication):
+          import pprint
+          print("in post auth:")
+          pprint.pprint(authentication)
+          if authentication['auth_state'] is None:
+              authentication['auth_state'] = {}
+          authentication['auth_state']['name'] = authentication['name']
+          authentication['auth_state']['domain'] = authentication['domain']
+          return authentication
+
+      c.JupyterHub.authenticator_class = PurdueCILogonOAuthenticator
+      c.PurdueCILogonOAuthenticator.post_auth_hook = passthrough_post_auth_hook
+
+    01-set-user-info: |
+      from ldap3 import NTLM, SIMPLE, Server, Connection, ALL, SUBTREE
+      import json
+
+      def ldap_lookup(username):
+          url = "geddes-aux.rcac.purdue.edu"
+          searchid = username.split('@')[0]
+          baseDN = "ou=People,dc=rcac,dc=purdue,dc=edu"
+          search_filter = "(uid={0}*)"
+          #username = searchid[0]
+          attrs = ['uidNumber','gidNumber']
+          s = Server(host=url, use_ssl=True, get_info='ALL')
+          #conn = Connection(s, user= DN, password= secret, auto_bind= True, version= 3, authentication='ANONYMOUS', \
+          #client_strategy= 'SYNC', auto_referrals= True, check_names= True, read_only= False, lazy= False, raise_exceptions= False)
+          s = Server(host= url ,use_ssl= True, get_info= 'ALL')
+          conn = Connection(s, version = 3, authentication = "ANONYMOUS")
+          conn.start_tls()
+          print(conn.result)
+          print(conn)
+          conn.search(search_base = baseDN, search_filter = search_filter.format(username), search_scope = SUBTREE, attributes = attrs)
+          ldap_result_id = json.loads(conn.response_to_json())
+          print(ldap_result_id)
+          result = ldap_result_id[u'entries'][0][u'attributes']
+          uid_number = result[u'uidNumber']
+          gid_number = result [u'gidNumber']
+          print("UID",+ uid_number)
+          print("GID", + gid_number)            
+          return uid_number, gid_number
+
+      #def get_kube_uid(spawner):
+      #  uid,gid = ldap_lookup(spawner.userdata['name'])
+      #  spawner.environment["NB_USER"] = spawner.userdata['name']
+      #  spawner.environment["NB_UID"] = str(uid)
+      #  return uid
+      #c.KubeSpawner.uid = get_kube_uid                                        
+      #def get_kube_gid(spawner):
+      #  uid,gid = ldap_lookup(spawner.userdata['name'])
+      #  spawner.environment["NB_GID"] = str(gid)
+      #  return gid
+      #c.KubeSpawner.gid = get_kube_gid
+
+      def passthrough_auth_state_hook(spawner, auth_state):
+          import pprint
+          spawner.userdata = { "name": auth_state['name'],
+                               "domain": auth_state['domain']
+                             }
+          print("GOT STATE:")
+          pprint.pprint(spawner.userdata)
+          domain = spawner.userdata['domain']
+          username = spawner.userdata['name']
+          spawner.environment["NB_USER"] = username
+          if domain == "purdue.edu":
+              uid,gid = ldap_lookup(username)
+              spawner.environment["NB_UID"] = str(uid)
+              spawner.environment["NB_GID"] = str(gid)
+          else:
+              spawner.environment["NB_UID"] = "1000"
+              spawner.environment["NB_GID"] = "1000"
+
+      c.KubeSpawner.auth_state_hook = passthrough_auth_state_hook
+      
+
+      def get_dask_params(username, base_domain):
+          params = {}
+
+          # Limitation on length of metadata.name is 63 symbols: https://www.rfc-editor.org/rfc/rfc1123
+          limit = 63
+          params['name'] = ('dask-%s' % username)[:limit]
+
+          # Hostnames for dask manager and worker
+          # Eg. user-40example-2eedu.dask.coffea.casa
+          #     user-40example-2eedu.dask-worker.coffea.casa
+          params['sched-hostname']  = '%s.dask.%s'        % (username, base_domain)
+          params['worker-hostname'] = '%s.dask-worker.%s' % (username, base_domain)
+
+          return params
+
+      async def my_pre_spawn_hook(spawner):
+          import os
+          import contextlib
+          from kubernetes import client
+          dask_base_domain = os.environ.get('DASK_BASE_DOMAIN', 'rcac.purdue.edu')
+          dask_params = get_dask_params(spawner.user.name, dask_base_domain)
+          api_crd = client.CustomObjectsApi()
+          ingress = {
+              'apiVersion': 'traefik.containo.us/v1alpha1',
+              'kind': 'IngressRouteTCP',
+              'metadata': {'name': dask_params['name']},
+              'spec': {
+                  'entryPoints': ['dask', 'daskworker'],
+                  'routes': [
+                      {
+                          'match': 'HostSNI(`%s`)' % dask_params['sched-hostname'],
+                          'services': [{'name': dask_params['name'], 'port': 8786}]
+                      },
+                      {
+                          'match': 'HostSNI(`%s`)' % dask_params['worker-hostname'],
+                          'services': [{'name': dask_params['name'], 'port': 8788}]
+                      }
+                  ],
+                  'tls': {'passthrough': True}
+              }
+          }
+          with contextlib.suppress(client.exceptions.ApiException):
+              api_crd.delete_namespaced_custom_object(
+                  'traefik.containo.us', 'v1alpha1',
+                  K8S_NAMESPACE, 'ingressroutetcps', dask_params['name']
+              )
+          api_crd.create_namespaced_custom_object(
+              'traefik.containo.us', 'v1alpha1', K8S_NAMESPACE, 'ingressroutetcps',
+              ingress)
+          spawner.log.info('Ingress configured for %s' % spawner.user.name)
+
+
+      #c.KubeSpawner.pre_spawn_hook = my_pre_spawn_hook
+
+      #def dynamic_home(spawner):
+      #    return "/home/" + spawner.userdata['name']
+
+      #def dynamic_user(spawner):
+      #    user = spawner.userdata['name']
+      #    spawner.environment["NB_USER"] = user
+      #    return user
+      
+      c.KubeSpawner.notebook_dir = "~"
+      c.KubeSpawner.working_dir = "/home/{legacy_escape_username}"
+      c.KubeSpawner.disable_user_config = True
+      c.KubeSpawner.http_timeout = 120
+      c.KubeSpawner.start_timeout = 120
+      c.KernelSpecManager.ensure_native_kernel = False
+    templates: |
+        c.JupyterHub.template_paths = ['/etc/secrets/html/']
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+
+scheduling:
+  userScheduler:
+    enabled: false
+  userPods:
+      tolerations:
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
+
+ingress:
+ enabled: true
+ hosts:
+   - cmsdev.geddes.rcac.purdue.edu
+cull:
+#  concurrency: 10
+ enabled: true
+ every: 600
+#  maxAge: 0
+#  removeNamedServers: false
+ timeout: 1209600
+#  users: false
+

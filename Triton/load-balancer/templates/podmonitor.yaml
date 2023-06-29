@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ .Release.Name }}-tritonmetrics
+  labels:
+    k9s-app: tritonmetrics-monitor
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-triton
+  podMetricsEndpoints:
+    - targetPort: 8002
+      interval: 10s

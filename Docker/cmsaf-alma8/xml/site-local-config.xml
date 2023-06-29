@@ -1,0 +1,50 @@
+<site-local-config>
+ <site name="T2_US_Purdue">
+  <subsite name="Purdue-Hammer"/>
+    <event-data>
+      <catalog url="trivialcatalog_file:/cvmfs/cms.cern.ch/SITECONF/local/PhEDEx/storage.xml?protocol=root"/>
+      <catalog url="trivialcatalog_file:/cvmfs/cms.cern.ch/SITECONF/local/PhEDEx/storage.xml?protocol=xrootd"/>
+    </event-data>
+    <data-access>
+       <catalog volume="Purdue_HADOOP" protocol="XRootD"/>
+       <catalog site="T1_US_FNAL" volume="American_Federation" protocol="XRootD"/>
+    </data-access>
+    <source-config>
+     <cache-temp-dir name=".:$TMPDIR:$CONDOR_SCRATCH_DIR"/>
+     <cache-hint value="application-only"/>
+     <read-hint value="auto-detect"/>
+     <show-read-stats />
+     <ttree-cache-size value="20971520"/>
+     <statistics-destination name="cms-udpmon-collector.cern.ch:9331" />
+    </source-config>
+    <local-stage-out>
+      <command value="gfal2"/>
+      <option value="--nochecksum"/>
+      <catalog url="trivialcatalog_file:/cvmfs/cms.cern.ch/SITECONF/local/PhEDEx/storage.xml?protocol=eosdavs"/>
+      <se-name value="cms-gridftp.rcac.purdue.edu"/>
+      <phedex-node value="T2_US_Purdue"/>
+    </local-stage-out>
+    <stage-out>
+      <method volume="Purdue_HADOOP" protocol="WebDav"/>
+      <method site="T2_US_Wisconsin" volume="Wisconsin_HADOOP" protocol="WebDAV" command="gfal2"/>
+    </stage-out>
+    <fallback-stage-out>
+      <lfn-prefix value="davs://cmsxrootd.hep.wisc.edu:1094"/>
+      <command value="gfal2"/>
+      <phedex-node value="T2_US_Wisconsin"/>
+    </fallback-stage-out>
+    <calib-data>
+    <frontier-connect>
+      <load balance="proxies"/>
+      <proxy url="http://squid1.rcac.purdue.edu:3128"/>
+      <proxy url="http://squid2.rcac.purdue.edu:3128"/>
+      <backupproxy url="http://cmsbproxy.fnal.gov:3128"/>
+      <backupproxy url="http://cmsbpfrontier.cern.ch:3128"/>
+      <server url="http://cmsfrontier.cern.ch:8000/FrontierInt"/>
+      <server url="http://cmsfrontier1.cern.ch:8000/FrontierInt"/>
+      <server url="http://cmsfrontier2.cern.ch:8000/FrontierInt"/>
+      <server url="http://cmsfrontier3.cern.ch:8000/FrontierInt"/>
+    </frontier-connect>
+    </calib-data>
+ </site>
+</site-local-config>

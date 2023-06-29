@@ -1,0 +1,42 @@
+{{- $scaleUp := .Values.scaleUp | default dict }}
+{{- $scaleDown := .Values.scaleDown | default dict }}
+
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ .Release.Name }}-tritonserver-scaledobject
+  namespace: {{ .Release.Namespace }}
+spec:
+  scaleTargetRef:
+    name: {{ include "triton.fullname" . }}
+    kind: Deployment
+  minReplicaCount: {{ default 1 .Values.minReplicas }}
+  maxReplicaCount: {{ default 14 .Values.maxReplicas }}
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: {{ default 600 $scaleDown.window }}
+          policies:
+            - periodSeconds: {{ default 60 $scaleDown.period }}
+              type: Pods
+              value: {{ default 1 $scaleDown.stepsize }}
+        scaleUp:
+          stabilizationWindowSeconds: {{ default 60 $scaleUp.window }}
+          policies:
+            - periodSeconds: {{ default 180 $scaleUp.period }}
+              type: Pods
+              value: {{ default 1 $scaleUp.stepsize }}
+
+  triggers:
+  - type: prometheus
+    metricType: Value
+    metadata:
+      serverAddress: {{ required "prometheusAddress is required!" .Values.prometheusAddress  }}
+      namespace: triton
+      metricName: avg_queue_ms_per_inference
+      threshold: {{ required "scalingThreshold is required!" .Values.scalingThreshold | quote}}
+      query: {{ required "scalingMetric is required!" .Values.scalingMetric }}
+      # authModes: "bearer"
+    # authenticationRef:
+    #   name: {{ .Release.Name }}-token-triggerauthentication
