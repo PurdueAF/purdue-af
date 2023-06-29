@@ -56,7 +56,7 @@ local usersPerNode = graphPanel.new(
 ).addTargets([
   prometheus.target(
     |||
-      count by (node)(kube_pod_info{namespace=~"cms(-dev)?", node!=""})
+      count by (node)(kube_pod_info{namespace=~"cms(-dev)?", node!="", pod=~"purdue-af-.*"})
     |||,
     legendFormat='{{ node }}'
   ),
