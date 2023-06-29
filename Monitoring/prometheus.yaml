@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: cms-dev
+data:
+  prometheus.yml: |
+    # my global config
+    global:
+      scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+      evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+      # scrape_timeout is set to the global default (10s).
+    # Alertmanager configuration
+    alerting:
+      alertmanagers:
+      - static_configs:
+        - targets:
+          # - alertmanager:9093
+    # Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+    rule_files:
+      # - "first_rules.yml"
+      # - "second_rules.yml"
+    # A scrape configuration containing exactly one endpoint to scrape:
+    # Here it's Prometheus itself.
+    scrape_configs:
+      - job_name: 'jupyterhub'
+        metrics_path: '/hub/metrics'
+        static_configs:
+          - targets:
+            - 'cmsdev.geddes.rcac.purdue.edu'
+      - job_name: 'kube-state-metrics'
+        static_configs:
+          - targets: ['rancher-monitoring-kube-state-metrics.cattle-monitoring-system.svc.cluster.local:8080']
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-prometheus-data
+  namespace: cms-dev
+  labels:
+    app: prometheus-deployment
+spec:
+  storageClassName: geddes-standard-multinode
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 500Mi
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: cms-dev
+  labels:
+    app: prometheus
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      nodeSelector: {'eos': 'true'}
+      tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+      containers:
+      - name: prometheus
+        image: prom/prometheus
+        args:
+          - '--storage.tsdb.retention=6h'
+          - '--storage.tsdb.path=/prometheus'
+          - '--config.file=/etc/prometheus/prometheus.yml'
+        ports:
+        - name: web
+          containerPort: 9090
+        volumeMounts:
+        - name: prometheus-config-volume
+          mountPath: /etc/prometheus
+        - name: prometheus-storage-volume
+          mountPath: /prometheus
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 1Gi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+      initContainers:
+      - name: prometheus-data-permission-fix
+        image: busybox
+        command: ["/bin/chmod","-R","777", "/prometheus"]
+        volumeMounts:
+        - name: prometheus-storage-volume
+          mountPath: /prometheus
+      restartPolicy: Always
+
+      volumes:
+      - name: prometheus-config-volume
+        configMap:
+            defaultMode: 420
+            name: prometheus-config
+      - name: prometheus-storage-volume
+        persistentVolumeClaim:
+            claimName: pvc-prometheus-data
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+    name: prometheus-service
+    namespace: cms-dev
+    annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port:   '9090'
+
+spec:
+    selector:
+        app: prometheus
+    type: LoadBalancer
+    ports:
+    - port: 8080
+      targetPort: 9090 
+      nodePort: 30000
