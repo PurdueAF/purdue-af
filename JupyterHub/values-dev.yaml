@@ -3,8 +3,8 @@ singleuser:
   uid: 0
   cmd: 
   image:
-    name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-base-notebook"
-    tag: "1.7"
+    name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
+    tag: "0.8.3"
   profileList:
     - display_name: "JupyterLab based on CentOS7"
       description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
@@ -543,6 +543,7 @@ hub:
       c.KubeSpawner.http_timeout = 120
       c.KubeSpawner.start_timeout = 120
       c.KernelSpecManager.ensure_native_kernel = False
+      c.JupyterHub.authenticate_prometheus = False
     templates: |
         c.JupyterHub.template_paths = ['/etc/secrets/html/']
   tolerations:
