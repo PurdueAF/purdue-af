@@ -34,14 +34,21 @@ spec:
           - mountPath: /etc/grafana/provisioning/datasources
             name: grafana-datasources
             readOnly: false
+          - mountPath: /etc/grafana/grafana.ini
+            subPath: grafana.ini
+            name: grafana-config
+            readOnly: true
       volumes:
         - name: grafana-storage
           persistentVolumeClaim:
             claimName: pvc-grafana-data
         - name: grafana-datasources
           configMap:
-              defaultMode: 420
-              name: grafana-datasources
+            defaultMode: 420
+            name: grafana-datasources
+        - name: grafana-config
+          configMap:
+            name: grafana-config
       nodeSelector: {'eos': 'true'}
       tolerations:
       - key: "hub.jupyter.org/dedicated"
