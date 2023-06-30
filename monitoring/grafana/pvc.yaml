@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-grafana-data
+  namespace: cms-dev
+  labels:
+    app: grafana
+spec:
+  storageClassName: geddes-standard-multinode
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 500Mi
