@@ -1,3 +1,7 @@
 [submodule "Monitoring/grafana-dashboards"]
 	path = monitoring/grafana-dashboards
 	url = git@github.com:jupyterhub/grafana-dashboards
+[submodule "triton/load-balancer/charts/nginx"]
+	path = triton/load-balancer/charts/nginx
+	url = https://github.com/kondratyevd/nginx.git
+	branch = main
