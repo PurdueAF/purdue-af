@@ -12,7 +12,7 @@ singleuser:
       description: ""
       kubespawner_override:
         image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.3"
-        node_selector: {'eos': 'true'}
+        node_selector: {'cms-af-prod': 'true'}
         lifecycle_hooks:
           preStop:
             exec:
@@ -117,7 +117,7 @@ prePuller:
   continuous:
     enabled: false
 hub:
-  nodeSelector: {'eos': 'true'}
+  nodeSelector: {'cms-af-prod': 'true'}
   extraVolumes:
     - name: purdue-auth
       secret:
