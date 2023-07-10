@@ -2,7 +2,8 @@ namespace: cms-dev
 
 deployment:
   replicas: 1
-  nodeType: cms-af-dev
+  nodeSelector:
+    "cms-af-dev": "true"
   resources:
     requests:
       cpu: 2000m
@@ -13,6 +14,11 @@ deployment:
   tsdbRetention: 10d
   storagePath: /prometheus
   configPath: /etc/prometheus
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
 
 networking:
   externalPort: 8080

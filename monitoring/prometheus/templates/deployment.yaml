@@ -24,12 +24,9 @@ spec:
         prometheus.io/port: "{{ .Values.networking.containerPort }}"
     spec:
       nodeSelector:
-        {{ .Values.deployment.nodeType }}: "true"
+        {{ toYaml .Values.deployment.nodeSelector | nindent 8 }}
       tolerations:
-        - key: "hub.jupyter.org/dedicated"
-          operator: "Equal"
-          value: "cms-af"
-          effect: "NoSchedule"
+        {{ toYaml .Values.deployment.tolerations | nindent 8 }}
       containers:
         - name: {{ .Release.Name }}
           image: prom/prometheus
@@ -55,7 +52,7 @@ spec:
       initContainers:
         - name: {{ .Release.Name }}-data-permission-fix
           image: busybox
-          command: ["/bin/chmod","-R","777", "/prometheus"]
+          command: ["/bin/chmod", "-R", "777", "/prometheus"]
           volumeMounts:
             - name: {{ .Release.Name }}-storage-volume
               mountPath: {{ .Values.deployment.storagePath }}
