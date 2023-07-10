@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.deployment.replicas }}
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.networking.containerPort }}"
+    spec:
+      nodeSelector:
+        {{ .Values.deployment.nodeType }}: "true"
+      tolerations:
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
+      containers:
+        - name: {{ .Release.Name }}
+          image: prom/prometheus
+          args:
+            - '--storage.tsdb.retention={{ .Values.deployment.tsdbRetention }}'
+            - '--storage.tsdb.path={{ .Values.deployment.storagePath }}'
+            - '--config.file={{ .Values.deployment.configPath }}/prometheus.yml'
+          ports:
+            - name: web
+              containerPort: {{ .Values.networking.containerPort }}
+          volumeMounts:
+            - name: {{ .Release.Name }}-config-volume
+              mountPath: {{ .Values.deployment.configPath }}
+            - name: {{ .Release.Name }}-storage-volume
+              mountPath: {{ .Values.deployment.storagePath }}
+          resources:
+            requests:
+              cpu: {{ .Values.deployment.resources.requests.cpu }}
+              memory: {{ .Values.deployment.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.deployment.resources.limits.cpu }}
+              memory: {{ .Values.deployment.resources.limits.memory }}
+      initContainers:
+        - name: {{ .Release.Name }}-data-permission-fix
+          image: busybox
+          command: ["/bin/chmod","-R","777", "/prometheus"]
+          volumeMounts:
+            - name: {{ .Release.Name }}-storage-volume
+              mountPath: {{ .Values.deployment.storagePath }}
+      restartPolicy: Always
+      volumes:
+        - name: {{ .Release.Name }}-config-volume
+          configMap:
+            defaultMode: 420
+            name: {{ .Release.Name }}-config
+        - name: {{ .Release.Name }}-storage-volume
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-data-pvc

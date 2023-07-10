@@ -1,0 +1,56 @@
+namespace: cms-dev
+
+deployment:
+  replicas: 1
+  nodeType: cms-af-dev
+  resources:
+    requests:
+      cpu: 2000m
+      memory: 4Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  tsdbRetention: 10d
+  storagePath: /prometheus
+  configPath: /etc/prometheus
+
+networking:
+  externalPort: 8080
+  containerPort: 9090
+  nodePort: 30000
+
+pvc:
+  storageClassName: geddes-standard-multinode
+  storageRequest: 10Gi
+  storageAccessModes: ["ReadWriteMany"]
+
+prometheusConfig: |
+  # my global config
+  global:
+    scrape_interval: 15s
+    evaluation_interval: 15s
+  alerting:
+    alertmanagers:
+    - static_configs:
+      - targets:
+  rule_files:
+  scrape_configs:
+    - job_name: 'jupyterhub'
+      metrics_path: '/hub/metrics'
+      static_configs:
+        - targets:
+          - 'cmsdev.geddes.rcac.purdue.edu'
+    - job_name: 'kube-state-metrics'
+      static_configs:
+        - targets: ['rancher-monitoring-kube-state-metrics.cattle-monitoring-system.svc.cluster.local:8080']
+    - job_name: 'triton-server-5gb'
+      static_configs:
+        - targets: ['triton-5gb.cms.geddes.rcac.purdue.edu:8002']
+    - job_name: 'triton-server-10gb'
+      static_configs:
+        - targets: ['triton-10gb.cms.geddes.rcac.purdue.edu:8002']
+    - job_name: 'triton-server-20gb'
+      static_configs:
+        - targets: ['triton-20gb.cms.geddes.rcac.purdue.edu:8002']
+
+
