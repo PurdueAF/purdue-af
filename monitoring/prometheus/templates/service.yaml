@@ -5,7 +5,7 @@ metadata:
   namespace: {{ .Values.namespace }}
   annotations:
     prometheus.io/scrape: 'true'
-    prometheus.io/port: '{{ .Values.networking.targetPort }}'
+    prometheus.io/port: '{{ .Values.networking.containerPort }}'
 spec:
   selector:
     app: {{ .Release.Name }}

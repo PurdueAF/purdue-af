@@ -1,6 +1,7 @@
 namespace: cms-dev
 
 deployment:
+  image: prom/prometheus
   replicas: 1
   nodeSelector:
     "cms-af-dev": "true"
