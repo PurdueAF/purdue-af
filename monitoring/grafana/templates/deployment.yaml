@@ -34,7 +34,8 @@ spec:
           - mountPath: {{ .Values.deployment.configPath }}/provisioning/datasources
             name: {{ .Release.Name }}-datasources
             readOnly: false
-          - mountPath: {{ .Values.deployment.configPath }}/
+          - mountPath: {{ .Values.deployment.configPath }}/grafana.ini
+            subPath: grafana.ini
             name: {{ .Release.Name }}-config
             readOnly: true
       volumes:

@@ -9,14 +9,18 @@ if [ "$namespace" != "cms" ] && [ "$namespace" != "cms-dev" ]; then
 fi
 grafana_server=http://grafana.$namespace.geddes.rcac.purdue.edu:3000
 
-# authorize access to Grafana API
-read -s -p "  > Enter admin password: " password
+# reset admin passowrd
+read -s -p "  > Enter new admin password: " password
 echo
+pod_selector=$(kubectl get pods -n $namespace -l "app=grafana" -o jsonpath="{.items[0].metadata.name}")
+kubectl exec -n $namespace -it $pod_selector -- grafana cli --homepath "/usr/share/grafana" admin reset-admin-password $password
+
+# verify that API access works
 http_code=$(curl -w "%{http_code}" -s $grafana_server --user "admin:$password" -o /dev/null)
 if [  $http_code == 200 ]; then
-    echo "  > Authentication successful!"
+    echo "  > Authentication test successful!"
 else
-    echo "  > ERROR: Authentication failed!"
+    echo "  > ERROR: Authentication test failed!"
     echo
     return
 fi

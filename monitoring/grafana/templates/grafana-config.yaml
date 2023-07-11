@@ -6,7 +6,3 @@ metadata:
 data:
   grafana.ini: | 
     {{ .Values.config.grafanaini | nindent 4 }}
-  reset-admin-password.sh: |
-    read -s -p "Enter new password: " password
-    echo
-    grafana cli --homepath "/usr/share/grafana" admin reset-admin-password $password    
