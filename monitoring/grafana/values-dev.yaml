@@ -1,10 +1,10 @@
-namespace: cms
+namespace: cms-dev
 
 deployment:
   image: grafana/grafana:latest
   replicas: 1
   nodeSelector:
-    "cms-af-prod": "true"
+    "cms-af-dev": "true"
   resources:
     requests:
       cpu: 2000m
@@ -47,7 +47,7 @@ config:
                 "name": "prometheus",
                 "orgId": 1,
                 "type": "prometheus",
-                "url": "http://prometheus-service.cms.geddes.rcac.purdue.edu:8080",
+                "url": "http://prometheus-service.cms-dev.geddes.rcac.purdue.edu:8080",
                 "version": 1
             }
         ]

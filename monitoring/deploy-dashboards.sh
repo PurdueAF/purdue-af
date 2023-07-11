@@ -41,14 +41,19 @@ fi
 
 # deploy dashboards
 export JSONNET_PATH=grafana-dashboards/vendor/:$JSONNET_PATH
+dashboards_dir=dashboards-$namespace/
 echo "  > Deploying dashboards..."
-./grafana-dashboards/deploy.py $grafana_server --dashboards-dir dashboards-$namespace/
+./grafana-dashboards/deploy.py $grafana_server --dashboards-dir $dashboards_dir
 echo
 
 # install default (home) dashboard
 echo "  > Setting home dashboard..."
 dashboards_info=$(curl -s -XGET $grafana_server/api/search?type=dash-db --user "admin:$password")
-dashboard_id=$(echo "$dashboards_info" | jq '.[] | select(.uid == "hub-dashboard") | .id')
+if [ $namespace == "cms" ]; then
+    dashboard_id=$(echo "$dashboards_info" | jq '.[] | select(.uid == "purdue-af-dashboard") | .id')
+else
+    dashboard_id=$(echo "$dashboards_info" | jq '.[] | select(.uid == "hub-dashboard") | .id')
+fi
 response=$(curl -s $grafana_server/api/preferences/set-home-dash -H "content-type: application/json" --user "admin:$password" -d "{\"homeDashboardId\": $dashboard_id}")
 echo "  > "$(echo "$response" | jq -r '.message').
 echo

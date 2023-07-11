@@ -1,10 +1,10 @@
-namespace: cms
+namespace: cms-dev
 
 deployment:
   image: prom/prometheus
   replicas: 1
   nodeSelector:
-    "cms-af-prod": "true"
+    "cms-af-dev": "true"
   resources:
     requests:
       cpu: 2000m
@@ -46,7 +46,7 @@ prometheusConfig: |
       metrics_path: '/hub/metrics'
       static_configs:
         - targets:
-          - 'cms.geddes.rcac.purdue.edu'
+          - 'cmsdev.geddes.rcac.purdue.edu'
     - job_name: 'kube-state-metrics'
       static_configs:
         - targets: ['rancher-monitoring-kube-state-metrics.cattle-monitoring-system.svc.cluster.local:8080']
