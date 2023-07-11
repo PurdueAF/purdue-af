@@ -1,0 +1,54 @@
+namespace: cms-dev
+
+deployment:
+  image: grafana/grafana:latest
+  replicas: 1
+  nodeSelector:
+    "cms-af-dev": "true"
+  resources:
+    requests:
+      cpu: 2000m
+      memory: 4Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  storagePath: /var/lib/grafana
+  configPath: /etc/grafana
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+
+networking:
+  externalPort: 3000
+  containerPort: 3000
+  nodePort: 32000
+
+pvc:
+  storageClassName: geddes-standard-multinode
+  storageRequest: 10Gi
+  storageAccessModes: ["ReadWriteMany"]
+
+config:
+  grafanaini: |
+    [auth.anonymous]
+    enabled = true
+    org_name = Main Org.
+    org_role = Viewer
+    hide_version = true
+  datasources: |
+    {
+        "apiVersion": 1,
+        "datasources": [
+            {
+                "access":"proxy",
+                "editable": true,
+                "name": "prometheus",
+                "orgId": 1,
+                "type": "prometheus",
+                "url": "http://prometheus-service.cms-dev.geddes.rcac.purdue.edu:8080",
+                "version": 1
+            }
+        ]
+    }

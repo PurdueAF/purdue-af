@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.deployment.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      name: {{ .Release.Name }}
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: {{ .Release.Name }}
+        image: {{ .Values.deployment.image }}
+        ports:
+        - name: {{ .Release.Name }}
+          containerPort: {{ .Values.networking.containerPort }}
+        resources:
+          requests:
+            cpu: {{ .Values.deployment.resources.requests.cpu }}
+            memory: {{ .Values.deployment.resources.requests.memory }}
+          limits:
+            cpu: {{ .Values.deployment.resources.limits.cpu }}
+            memory: {{ .Values.deployment.resources.limits.memory }}
+        volumeMounts:
+          - mountPath: {{ .Values.deployment.storagePath }} 
+            name: {{ .Release.Name }}-storage
+            readOnly: false
+          - mountPath: {{ .Values.deployment.configPath }}/provisioning/datasources
+            name: {{ .Release.Name }}-datasources
+            readOnly: false
+          - mountPath: {{ .Values.deployment.configPath }}/
+            name: {{ .Release.Name }}-config
+            readOnly: true
+      volumes:
+        - name: {{ .Release.Name }}-storage
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-data-pvc
+        - name: {{ .Release.Name }}-datasources
+          configMap:
+            defaultMode: 420
+            name: {{ .Release.Name }}-datasources
+        - name: {{ .Release.Name }}-config
+          configMap:
+            name: {{ .Release.Name }}-config
+      nodeSelector:
+        {{ toYaml .Values.deployment.nodeSelector | nindent 8 }}
+      tolerations:
+        {{ toYaml .Values.deployment.tolerations | nindent 8 }}
+      initContainers:
+      - name: {{ .Release.Name }}-data-permission-fix
+        image: busybox
+        command: ["/bin/chmod","-R","777", "{{ .Values.deployment.storagePath }}"]
+        volumeMounts:
+        - name: {{ .Release.Name }}-storage
+          mountPath: {{ .Values.deployment.storagePath }}
+      restartPolicy: Always
