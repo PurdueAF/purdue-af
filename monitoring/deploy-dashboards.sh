@@ -12,6 +12,14 @@ grafana_server=http://grafana.$namespace.geddes.rcac.purdue.edu:3000
 # authorize access to Grafana API
 read -s -p "  > Enter admin password: " password
 echo
+http_code=$(curl -w "%{http_code}" -s $grafana_server --user "admin:$password" -o /dev/null)
+if [  $http_code == 200 ]; then
+    echo "  > Authentication successful!"
+else
+    echo "  > ERROR: Authentication failed!"
+    echo
+    return
+fi
 
 # extract API key
 random=$(head -c 4 /dev/urandom | base64 | tr -d '=' | tr '+/' '-_')
@@ -24,8 +32,7 @@ if [ -z "$key" ]; then
 else
     export GRAFANA_TOKEN=$key
     echo
-    echo "  > API key extracted successfully!"
-    echo
+    echo "  > API key extracted successfully."
 fi
 
 # deploy dashboards
