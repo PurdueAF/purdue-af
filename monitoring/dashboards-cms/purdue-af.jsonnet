@@ -215,14 +215,14 @@ local serverStartTimes = graphPanel.new(
 
 
 dashboard.new(
-  'Purdue Analysis Facility Dashboard',
+  'Analysis Facility Dashboard',
   tags=['analysis-facility'],
   uid='purdue-af-dashboard',
   editable=true
 ).addTemplates(
   templates
 ).addPanel(
-  row.new('Purdue Analysis Facility metrics'), {}
+  row.new('Analysis Facility metrics'), {}
 ).addPanel(
   currentRunningAFpods, {}
 ).addPanel(

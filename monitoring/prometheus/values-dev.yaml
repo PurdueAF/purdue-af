@@ -24,7 +24,7 @@ deployment:
 networking:
   externalPort: 8080
   containerPort: 9090
-  nodePort: 30000
+  nodePort: 30001
 
 pvc:
   storageClassName: geddes-standard-multinode

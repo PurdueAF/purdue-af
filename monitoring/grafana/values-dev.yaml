@@ -23,7 +23,7 @@ deployment:
 networking:
   externalPort: 3000
   containerPort: 3000
-  nodePort: 32000
+  nodePort: 32001
 
 pvc:
   storageClassName: geddes-standard-multinode
@@ -31,12 +31,17 @@ pvc:
   storageAccessModes: ["ReadWriteMany"]
 
 config:
+  useIngress: false
+  # hostname: cmsdev.geddes.rcac.purdue.edu
   grafanaini: |
     [auth.anonymous]
     enabled = true
     org_name = Main Org.
     org_role = Viewer
     hide_version = true
+    # domain = cmsdev.geddes.rcac.purdue.edu
+    # root_url = https://cmsdev.geddes.rcac.purdue.edu/grafana/
+    # serve_from_sub_path = true
   datasources: |
     {
         "apiVersion": 1,

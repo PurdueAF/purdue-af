@@ -3,11 +3,15 @@
 # select namespace for deployment
 echo
 read -p "  > Namespace: " namespace
-if [ "$namespace" != "cms" ] && [ "$namespace" != "cms-dev" ]; then
+if [ "$namespace" == "cms" ]; then
+    grafana_server=https://cms.geddes.rcac.purdue.edu/grafana
+elif [ "$namespace" == "cms-dev" ]; then
+    grafana_server=http://grafana.cms-dev.geddes.rcac.purdue.edu:3000
+else
     echo "  > ERROR: unknown namespace "$namespace
     return
 fi
-grafana_server=http://grafana.$namespace.geddes.rcac.purdue.edu:3000
+
 
 # reset admin passowrd
 read -s -p "  > Enter new admin password: " password
@@ -42,8 +46,9 @@ fi
 # deploy dashboards
 export JSONNET_PATH=grafana-dashboards/vendor/:$JSONNET_PATH
 dashboards_dir=dashboards-$namespace/
+folder_name="Purdue Analysis Facility Dashboards"
 echo "  > Deploying dashboards..."
-./grafana-dashboards/deploy.py $grafana_server --dashboards-dir $dashboards_dir
+./grafana-dashboards/deploy.py $grafana_server --dashboards-dir $dashboards_dir --folder-name "${folder_name}"
 echo
 
 # install default (home) dashboard
@@ -55,7 +60,9 @@ else
     dashboard_id=$(echo "$dashboards_info" | jq '.[] | select(.uid == "hub-dashboard") | .id')
 fi
 response=$(curl -s $grafana_server/api/preferences/set-home-dash -H "content-type: application/json" --user "admin:$password" -d "{\"homeDashboardId\": $dashboard_id}")
-echo "  > "$(echo "$response" | jq -r '.message').
+echo "  > Admin user: "$(echo "$response" | jq -r '.message').
+response=$(curl -s -X PUT $grafana_server/api/org/preferences -H "content-type: application/json" --user "admin:$password" -d "{\"homeDashboardId\": $dashboard_id}")
+echo "  > Organization: "$(echo "$response" | jq -r '.message').
 echo
 echo "  > DONE!"
 echo

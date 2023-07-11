@@ -31,12 +31,18 @@ pvc:
   storageAccessModes: ["ReadWriteMany"]
 
 config:
+  useIngress: true
+  hostname: cms.geddes.rcac.purdue.edu
   grafanaini: |
     [auth.anonymous]
     enabled = true
     org_name = Main Org.
     org_role = Viewer
     hide_version = true
+    [server]
+    domain = cms.geddes.rcac.purdue.edu
+    root_url = https://cms.geddes.rcac.purdue.edu/grafana/
+    serve_from_sub_path = true
   datasources: |
     {
         "apiVersion": 1,
