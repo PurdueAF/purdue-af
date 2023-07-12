@@ -61,6 +61,63 @@ local usersPerNode = graphPanel.new(
   ),
 ]);
 
+local nodeCpuUtil = graphPanel.new(
+  'Node CPU Utilization %',
+  formatY1='percentunit',
+  description=|||
+    % of available CPUs currently in use
+  |||,
+  min=0,
+  // since this is actual measured utilization, it should not be able to exceed max=1
+  max=1,
+  datasource='$PROMETHEUS_DS'
+).addTargets([
+  prometheus.target(
+    |||
+      sum by (node)(
+        label_replace(
+          rate(node_cpu_seconds_total{mode!="idle"}[1m]),
+          "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
+        )
+      )
+      /
+      sum(kube_node_status_capacity{resource="cpu"}) by (node)
+    |||,
+    legendFormat='{{ node }}'
+  ),
+]);
+
+local nodeMemoryUtil = graphPanel.new(
+  'Node Memory Utilization %',
+  formatY1='percentunit',
+  description=|||
+    % of available Memory currently in use
+  |||,
+  min=0,
+  // since this is actual measured utilization, it should not be able to exceed max=1
+  max=1,
+  datasource='$PROMETHEUS_DS'
+).addTargets([
+  prometheus.target(
+    |||
+      label_replace(
+        1 - (
+          sum (
+            # Memory that can be allocated to processes when they need
+            node_memory_MemFree_bytes + # Unused bytes
+            node_memory_Cached_bytes + # Shared memory + temporary disk cache
+            node_memory_Buffers_bytes # Very temporary buffer memory cache for disk i/o
+          ) by (instance)
+          /
+          sum(node_memory_MemTotal_bytes) by (instance)
+        ),
+        "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
+      )
+    |||,
+    legendFormat='{{node}}'
+  ),
+]);
+
 local podAgeDistribution = heatmapPanel.new(
   'Age distribution of running AF pods',
   // xBucketSize and interval must match to get correct values out of heatmaps
@@ -227,6 +284,10 @@ dashboard.new(
   currentRunningAFpods, {}
 ).addPanel(
   usersPerNode, {}
+).addPanel(
+  nodeCpuUtil, {}
+).addPanel(
+  nodeMemoryUtil, {}
 ).addPanel(
   podAgeDistribution, {}
 ).addPanel(
