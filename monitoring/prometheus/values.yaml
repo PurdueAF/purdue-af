@@ -56,14 +56,16 @@ prometheusConfig: |
           - 'geddes-b014.rcac.purdue.edu:9796'
           - 'geddes-b015.rcac.purdue.edu:9796'
           - 'geddes-g000.rcac.purdue.edu:9796'
-    - job_name: 'triton-server-5gb'
+    - job_name: 'triton'
       static_configs:
-        - targets: ['triton-5gb.cms.geddes.rcac.purdue.edu:8002']
-    - job_name: 'triton-server-10gb'
-      static_configs:
-        - targets: ['triton-10gb.cms.geddes.rcac.purdue.edu:8002']
-    - job_name: 'triton-server-20gb'
-      static_configs:
-        - targets: ['triton-20gb.cms.geddes.rcac.purdue.edu:8002']
+        - targets: 
+          - 'triton-5gb.cms.geddes.rcac.purdue.edu:8002'
+          - 'triton-10gb.cms.geddes.rcac.purdue.edu:8002'
+          - 'triton-20gb.cms.geddes.rcac.purdue.edu:8002'
+    - job_name: 'dask'
+      file_sd_configs:
+      - files:
+        - '/prometheus/dask_targets.json'
+
 
 

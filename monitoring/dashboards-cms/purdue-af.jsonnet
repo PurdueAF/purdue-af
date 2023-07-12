@@ -20,14 +20,14 @@ local templates = [
     current=null,
     hide='label',
   ),
-  template.new(
-    'hub',
-    datasource='$PROMETHEUS_DS',
-    query='label_values(kube_service_labels{service="hub"}, namespace)',
-    // Allow viewing dashboard for multiple combined hubs
-    includeAll=true,
-    multi=true
-  ),
+  // template.new(
+  //   'hub',
+  //   datasource='$PROMETHEUS_DS',
+  //   query='label_values(kube_service_labels{service="hub"}, namespace)',
+  //   // Allow viewing dashboard for multiple combined hubs
+  //   includeAll=true,
+  //   multi=true
+  // ),
 ];
 
 
@@ -68,8 +68,7 @@ local nodeCpuUtil = graphPanel.new(
     % of available CPUs currently in use
   |||,
   min=0,
-  // since this is actual measured utilization, it should not be able to exceed max=1
-  max=1,
+  // max=1,
   datasource='$PROMETHEUS_DS'
 ).addTargets([
   prometheus.target(
@@ -94,8 +93,7 @@ local nodeMemoryUtil = graphPanel.new(
     % of available Memory currently in use
   |||,
   min=0,
-  // since this is actual measured utilization, it should not be able to exceed max=1
-  max=1,
+  // max=1,
   datasource='$PROMETHEUS_DS'
 ).addTargets([
   prometheus.target(
@@ -115,6 +113,36 @@ local nodeMemoryUtil = graphPanel.new(
       )
     |||,
     legendFormat='{{node}}'
+  ),
+]);
+
+local daskSlurmSchedulers = graphPanel.new(
+  'Number of active Dask SLURM schedulers',
+  decimals=0,
+  stack=false,
+  min=0,
+  datasource='$PROMETHEUS_DS'
+).addTargets([
+  prometheus.target(
+    |||
+      count(dask_scheduler_workers)/4 or vector(0)
+    |||,
+    legendFormat='Number of schedulers',
+  ),
+]);
+
+local daskSlurmWorkers = graphPanel.new(
+  'Number of Dask SLURM workers created on Hammer',
+  decimals=0,
+  stack=false,
+  min=0,
+  datasource='$PROMETHEUS_DS'
+).addTargets([
+  prometheus.target(
+    |||
+      sum(dask_scheduler_workers) or vector(0)
+    |||,
+    legendFormat='Number of workers',
   ),
 ]);
 
@@ -288,6 +316,10 @@ dashboard.new(
   nodeCpuUtil, {}
 ).addPanel(
   nodeMemoryUtil, {}
+).addPanel(
+  daskSlurmSchedulers, {}
+).addPanel(
+  daskSlurmWorkers, {}
 ).addPanel(
   podAgeDistribution, {}
 ).addPanel(

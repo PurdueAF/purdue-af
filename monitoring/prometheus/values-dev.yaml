@@ -50,6 +50,12 @@ prometheusConfig: |
     - job_name: 'kube-state-metrics'
       static_configs:
         - targets: ['rancher-monitoring-kube-state-metrics.cattle-monitoring-system.svc.cluster.local:8080']
+    - job_name: 'node-exporter'
+      static_configs:
+        - targets:
+          - 'geddes-b014.rcac.purdue.edu:9796'
+          - 'geddes-b015.rcac.purdue.edu:9796'
+          - 'geddes-g000.rcac.purdue.edu:9796'
     - job_name: 'triton-server-5gb'
       static_configs:
         - targets: ['triton-5gb.cms.geddes.rcac.purdue.edu:8002']
@@ -59,5 +65,7 @@ prometheusConfig: |
     - job_name: 'triton-server-20gb'
       static_configs:
         - targets: ['triton-20gb.cms.geddes.rcac.purdue.edu:8002']
-
-
+    - job_name: 'dask'
+      file_sd_configs:
+      - files:
+        - '/prometheus/dask_targets.json'

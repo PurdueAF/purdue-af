@@ -24,17 +24,16 @@ local templates = [
   // template.new(
   //   'hub',
   //   datasource='$PROMETHEUS_DS',
-  //   query='label_values(kube_service_labels{service="hub"}, namespace)',
+  //   // query='label_values(kube_service_labels{service="hub"}, namespace)',
   //   // Allow viewing dashboard for multiple combined hubs
-  //   includeAll=true,
-  //   multi=true
+  //   // includeAll=true,
+  //   // multi=true
   // ),
 ];
 
 
-// Hub usage stats
-local tritonInferenceCount = graphPanel.new(
-  'Inferences per second (standalone Triton servers)',
+local daskSlurmSchedulers = graphPanel.new(
+  'Number of active Dask SLURM schedulers',
   decimals=0,
   stack=false,
   min=0,
@@ -42,28 +41,40 @@ local tritonInferenceCount = graphPanel.new(
 ).addTargets([
   prometheus.target(
     |||
-      rate(
-            (
-                sum(nv_inference_count) by (model)
-            )[1m:1s]
-        )
+      count(dask_scheduler_workers)/4 or vector(0)
     |||,
-    legendFormat='{{model}}',
+    legendFormat='Number of schedulers',
+  ),
+]);
+
+local daskSlurmWorkers = graphPanel.new(
+  'Number of Dask SLURM workers created on Hammer',
+  decimals=0,
+  stack=false,
+  min=0,
+  datasource='$PROMETHEUS_DS'
+).addTargets([
+  prometheus.target(
+    |||
+      sum(dask_scheduler_workers) or vector(0)
+    |||,
+    legendFormat='Number of workers',
   ),
 ]);
 
 
 
-
 dashboard.new(
-  'Triton Dashboard',
-  tags=['triton'],
-  uid='triton-dashboard',
+  'Dask Dashboard',
+  tags=['dask'],
+  uid='dask-dashboard',
   editable=true
 ).addTemplates(
   templates
 ).addPanel(
-  row.new('Triton stats'), {}
+  row.new('Dask stats'), {}
 ).addPanel(
-  tritonInferenceCount, {}
+  daskSlurmSchedulers, {}
+).addPanel(
+  daskSlurmWorkers, {}
 )
