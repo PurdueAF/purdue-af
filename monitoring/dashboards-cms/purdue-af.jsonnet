@@ -64,9 +64,7 @@ local totalRegisteredUsers = singlestat.new(
 local usersPerNamespace = graphPanel.new(
   'Current users per namespace',
   decimals=0,
-  // stack=true,
-  // fill=4,
-  fillGradient=5,
+  fillGradient=3,
   min=0,
   // transparent=true,
   legend_rightSide=true,
@@ -85,6 +83,7 @@ local usersPerNode = graphPanel.new(
   decimals=0,
   min=0,
   legend_rightSide=true,
+  fillGradient=3,
   datasource='$PROMETHEUS_DS'
 ).addTargets([
   prometheus.target(
@@ -194,6 +193,7 @@ local nodeCpuUtilGauge = gaugePanel.new(
   thresholdsMode='percentage',
   unit='percentunit',
   transparent=true,
+  reducerFunction='last',
 ).addTargets([
   prometheus.target(
     |||
@@ -232,6 +232,7 @@ local nodeMemUtilGauge = gaugePanel.new(
   thresholdsMode='percentage',
   unit='percentunit',
   transparent=true,
+  reducerFunction='last',
 ).addTargets([
   prometheus.target(
     |||

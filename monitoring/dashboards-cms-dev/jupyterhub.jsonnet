@@ -290,6 +290,7 @@ local nodeCpuUtilGauge = gaugePanel.new(
   thresholdsMode='percentage',
   unit='percentunit',
   transparent=true,
+  reducerFunction='last',
 ).addTargets([
   prometheus.target(
     |||
@@ -328,6 +329,7 @@ local nodeMemUtilGauge = gaugePanel.new(
   thresholdsMode='percentage',
   unit='percentunit',
   transparent=true,
+  reducerFunction='last',
 ).addTargets([
   prometheus.target(
     |||
