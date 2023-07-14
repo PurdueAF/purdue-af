@@ -12,35 +12,39 @@ else
     return
 fi
 
-
-# reset admin passowrd
-read -s -p "  > Enter new admin password: " password
-echo
-pod_selector=$(kubectl get pods -n $namespace -l "app=grafana" -o jsonpath="{.items[0].metadata.name}")
-kubectl exec -n $namespace -it $pod_selector -- grafana cli --homepath "/usr/share/grafana" admin reset-admin-password $password
-
-# verify that API access works
-http_code=$(curl -w "%{http_code}" -s $grafana_server --user "admin:$password" -o /dev/null)
-if [  $http_code == 200 ]; then
-    echo "  > Authentication test successful!"
-else
-    echo "  > ERROR: Authentication test failed!"
+if [[ $1 == "-r" ]]; then
+    echo "  > Password reset requested."
     echo
-    return
-fi
 
-# extract API key
-random=$(head -c 4 /dev/urandom | base64 | tr -d '=' | tr '+/' '-_')
-response=$(curl -s -XPOST -H "Content-Type: application/json" -d "{\"name\":\"apikeycurl-$random\", \"role\": \"Admin\"}" $grafana_server/api/auth/keys --user "admin:$password")
-key=$(echo "$response" | jq -r '.key')
-if [ -z "$key" ]; then
+    # reset admin passowrd
+    read -s -p "  > Enter new admin password: " password
     echo
-    echo "  > ERROR: empty API key!"
-    return
-else
-    export GRAFANA_TOKEN=$key
-    echo
-    echo "  > API key extracted successfully."
+    pod_selector=$(kubectl get pods -n $namespace -l "app=grafana" -o jsonpath="{.items[0].metadata.name}")
+    kubectl exec -n $namespace -it $pod_selector -- grafana cli --homepath "/usr/share/grafana" admin reset-admin-password $password
+
+    # verify that API access works
+    http_code=$(curl -w "%{http_code}" -s $grafana_server --user "admin:$password" -o /dev/null)
+    if [  $http_code == 200 ]; then
+        echo "  > Authentication test successful!"
+    else
+        echo "  > ERROR: Authentication test failed!"
+        echo
+        return
+    fi
+
+    # extract API key
+    random=$(head -c 4 /dev/urandom | base64 | tr -d '=' | tr '+/' '-_')
+    response=$(curl -s -XPOST -H "Content-Type: application/json" -d "{\"name\":\"apikeycurl-$random\", \"role\": \"Admin\"}" $grafana_server/api/auth/keys --user "admin:$password")
+    key=$(echo "$response" | jq -r '.key')
+    if [ -z "$key" ]; then
+        echo
+        echo "  > ERROR: empty API key!"
+        return
+    else
+        export GRAFANA_TOKEN=$key
+        echo
+        echo "  > API key extracted successfully."
+    fi
 fi
 
 # deploy dashboards

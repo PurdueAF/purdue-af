@@ -4,6 +4,7 @@ local grafana = import 'grafonnet/grafana.libsonnet';
 local dashboard = grafana.dashboard;
 local singlestat = grafana.singlestat;
 local graphPanel = grafana.graphPanel;
+local gaugePanel = grafana.gaugePanel;
 local prometheus = grafana.prometheus;
 local template = grafana.template;
 local tablePanel = grafana.tablePanel;
@@ -31,13 +32,45 @@ local templates = [
 ];
 
 
-// Hub usage stats
-local currentRunningAFpods = graphPanel.new(
-  'Currently running AF pods',
+local totalRunningPods = singlestat.new(
+  '',
+  colorValue=true,
+  valueName='last',
+  datasource='$PROMETHEUS_DS',
+).addTarget(
+  prometheus.target(
+    |||
+      sum(count by (namespace)(kube_pod_labels{pod=~"purdue-af-.*", namespace=~"cms(-dev)?"}))
+    |||,
+    legendFormat="Running AF pods"
+  )
+);
+local totalRegisteredUsers = singlestat.new(
+  '',
+  colorValue=true,
+  valueName='last',
+  datasource='$PROMETHEUS_DS',
+).addTarget(
+  prometheus.target(
+    |||
+      sum(jupyterhub_total_users{job="jupyterhub"})
+    |||,
+    legendFormat="Total registered users"
+  )
+);
+
+
+
+local usersPerNamespace = graphPanel.new(
+  'Current users per namespace',
   decimals=0,
-  stack=false,
+  // stack=true,
+  // fill=4,
+  fillGradient=5,
   min=0,
-  datasource='$PROMETHEUS_DS'
+  // transparent=true,
+  legend_rightSide=true,
+  datasource='$PROMETHEUS_DS',
 ).addTargets([
   prometheus.target(
     |||
@@ -48,9 +81,10 @@ local currentRunningAFpods = graphPanel.new(
 ]);
 
 local usersPerNode = graphPanel.new(
-  'Users per node',
+  'Current users per node',
   decimals=0,
   min=0,
+  legend_rightSide=true,
   datasource='$PROMETHEUS_DS'
 ).addTargets([
   prometheus.target(
@@ -62,14 +96,15 @@ local usersPerNode = graphPanel.new(
 ]);
 
 local nodeCpuUtil = graphPanel.new(
-  'Node CPU Utilization %',
+  '',
   formatY1='percentunit',
   description=|||
     % of available CPUs currently in use
   |||,
   min=0,
-  // max=1,
-  datasource='$PROMETHEUS_DS'
+  datasource='$PROMETHEUS_DS',
+  legend_rightSide=true,
+  transparent=true
 ).addTargets([
   prometheus.target(
     |||
@@ -87,14 +122,15 @@ local nodeCpuUtil = graphPanel.new(
 ]);
 
 local nodeMemoryUtil = graphPanel.new(
-  'Node Memory Utilization %',
+  '',
   formatY1='percentunit',
   description=|||
     % of available Memory currently in use
   |||,
   min=0,
-  // max=1,
-  datasource='$PROMETHEUS_DS'
+  datasource='$PROMETHEUS_DS',
+  legend_rightSide=true,
+  transparent=true
 ).addTargets([
   prometheus.target(
     |||
@@ -146,6 +182,87 @@ local daskSlurmWorkers = graphPanel.new(
   ),
 ]);
 
+local nodeCpuUtilGauge = gaugePanel.new(
+  'Node CPU Utilization %',
+  datasource='$PROMETHEUS_DS',
+  description=|||
+    % of available CPUs currently in use
+  |||,
+  min=0,
+  max=1,
+  showThresholdLabels=false,
+  thresholdsMode='percentage',
+  unit='percentunit',
+  transparent=true,
+).addTargets([
+  prometheus.target(
+    |||
+      label_replace(
+        sum by (node)(
+          label_replace(
+            rate(node_cpu_seconds_total{mode!="idle"}[1m]),
+            "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
+          )
+        )
+        /
+        sum(kube_node_status_capacity{resource="cpu"}) by (node),
+        "metric", "CPU", "node", "(.+)"
+      )
+    |||,
+    legendFormat='{{ node }}'
+  ),
+]).addThresholds(
+  [
+    { color: 'green', value: 0.0},
+    { color: 'yellow', value: 60},
+    { color: 'orange', value: 80 },
+    { color: 'red', value: 90 },
+    ]
+);
+
+local nodeMemUtilGauge = gaugePanel.new(
+  'Node Memory Utilization %',
+  datasource='$PROMETHEUS_DS',
+  description=|||
+    % of available CPUs currently in use
+  |||,
+  min=0,
+  max=1,
+  showThresholdLabels=false,
+  thresholdsMode='percentage',
+  unit='percentunit',
+  transparent=true,
+).addTargets([
+  prometheus.target(
+    |||
+      label_replace(
+        label_replace(
+          1 - (
+            sum (
+              # Memory that can be allocated to processes when they need
+              node_memory_MemFree_bytes + # Unused bytes
+              node_memory_Cached_bytes + # Shared memory + temporary disk cache
+              node_memory_Buffers_bytes # Very temporary buffer memory cache for disk i/o
+            ) by (instance)
+            /
+            sum(node_memory_MemTotal_bytes) by (instance)
+          ),
+          "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
+        ),
+         "metric", "Memory", "node", "(.+)"
+      )
+    |||,
+    legendFormat='{{ node }}'
+  ),
+]).addThresholds(
+  [
+    { color: 'green', value: 0.0},
+    { color: 'yellow', value: 60},
+    { color: 'orange', value: 80 },
+    { color: 'red', value: 90 },
+    ]
+);
+
 local podAgeDistribution = heatmapPanel.new(
   'Age distribution of running AF pods',
   // xBucketSize and interval must match to get correct values out of heatmaps
@@ -160,7 +277,7 @@ local podAgeDistribution = heatmapPanel.new(
       (
         time()
         - (
-          kube_pod_created{pod=~"purdue-af-.*", namespace=~"cms"}
+          kube_pod_created{pod=~"purdue-af-.*", namespace=~"cms(-dev)?"}
         )
       )
     |||,
@@ -175,7 +292,8 @@ local tritonInferenceCount = graphPanel.new(
   decimals=0,
   stack=false,
   min=0,
-  datasource='$PROMETHEUS_DS'
+  datasource='$PROMETHEUS_DS',
+  legend_rightSide=true,
 ).addTargets([
   prometheus.target(
     |||
@@ -231,24 +349,24 @@ local hubResponseLatency = graphPanel.new(
     |||,
     legendFormat='50th percentile'
   ),
-  prometheus.target(
-    |||
-      histogram_quantile(
-        0.25,
-        sum(
-          rate(
-            jupyterhub_request_duration_seconds_bucket{
-              job="jupyterhub",
-              instance="cms.geddes.rcac.purdue.edu:80",
-              # Ignore SpawnProgressAPIHandler, as it is a EventSource stream
-              # and keeps long lived connections open
-              handler!="jupyterhub.apihandlers.users.SpawnProgressAPIHandler"
-            }[5m]
-          )
-        ) by (le))
-    |||,
-    legendFormat='25th percentile'
-  ),
+  // prometheus.target(
+  //   |||
+  //     histogram_quantile(
+  //       0.25,
+  //       sum(
+  //         rate(
+  //           jupyterhub_request_duration_seconds_bucket{
+  //             job="jupyterhub",
+  //             instance="cms.geddes.rcac.purdue.edu:80",
+  //             # Ignore SpawnProgressAPIHandler, as it is a EventSource stream
+  //             # and keeps long lived connections open
+  //             handler!="jupyterhub.apihandlers.users.SpawnProgressAPIHandler"
+  //           }[5m]
+  //         )
+  //       ) by (le))
+  //   |||,
+  //   legendFormat='25th percentile'
+  // ),
 ]);
 
 
@@ -282,7 +400,6 @@ local serverStartTimes = graphPanel.new(
   datasource='$PROMETHEUS_DS'
 ).addTargets([
   prometheus.target(
-    // Metrics from hub seems to have `namespace` rather than just `namespace`
     'histogram_quantile(0.99, sum(rate(jupyterhub_server_spawn_duration_seconds_bucket{
       job="jupyterhub",
       instance="cms.geddes.rcac.purdue.edu:80"
@@ -298,6 +415,8 @@ local serverStartTimes = graphPanel.new(
   ),
 ]);
 
+local placeholder = graphPanel.new('');
+local placeholder_tr = graphPanel.new('',transparent=true);
 
 dashboard.new(
   'Analysis Facility Dashboard',
@@ -306,28 +425,32 @@ dashboard.new(
   editable=true
 ).addTemplates(
   templates
-).addPanel(
-  row.new('Analysis Facility metrics'), {}
-).addPanel(
-  currentRunningAFpods, {}
-).addPanel(
-  usersPerNode, {}
-).addPanel(
-  nodeCpuUtil, {}
-).addPanel(
-  nodeMemoryUtil, {}
-).addPanel(
-  daskSlurmSchedulers, {}
-).addPanel(
-  daskSlurmWorkers, {}
-).addPanel(
-  podAgeDistribution, {}
-).addPanel(
-  tritonInferenceCount, {}
-).addPanel(
-  hubResponseLatency, {}
-).addPanel(
-  hubResponseCodes, {}
-).addPanel(
-  serverStartTimes, {}
 )
+.addPanel(row.new('Analysis Facility metrics'), {})
+.addPanel(totalRunningPods,           gridPos={w: 4, h: 3})
+.addPanel(usersPerNamespace,          gridPos={w: 8, h: 6})
+.addPanel(nodeCpuUtilGauge,           gridPos={w: 12, h: 5})
+
+.addPanel(totalRegisteredUsers,       gridPos={w: 4, h: 3})
+.addPanel(placeholder_tr,             gridPos={w: 8, h: 0})
+.addPanel(nodeCpuUtil,                gridPos={w: 12, h: 6})
+
+.addPanel(usersPerNode,               gridPos={w: 12, h: 8})
+
+.addPanel(placeholder,                gridPos={w: 12, h: 0})
+.addPanel(placeholder_tr,             gridPos={w: 12, h: 0})
+.addPanel(nodeMemUtilGauge,           gridPos={w: 12, h: 5})
+
+.addPanel(placeholder_tr,                gridPos={w: 12, h: 0})
+.addPanel(nodeMemoryUtil,             gridPos={w: 12, h: 6})
+
+// .addPanel(podAgeDistribution,         gridPos={w: 8, h: 8})
+.addPanel(row.new('Dask stats'), {})
+.addPanel(daskSlurmSchedulers,        gridPos={w: 12, h: 10})
+.addPanel(daskSlurmWorkers,           gridPos={w: 12, h: 10})
+.addPanel(row.new('Triton stats'), {})
+.addPanel(tritonInferenceCount,       gridPos={w: 18, h: 12})
+.addPanel(row.new('JupyterHub diagnostics'), {})
+.addPanel(hubResponseCodes,           gridPos={w: 8, h: 10})
+.addPanel(hubResponseLatency,         gridPos={w: 8, h: 10})
+.addPanel(serverStartTimes,           gridPos={w: 8, h: 10})

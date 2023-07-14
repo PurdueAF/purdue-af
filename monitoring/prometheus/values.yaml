@@ -47,15 +47,50 @@ prometheusConfig: |
       static_configs:
         - targets:
           - 'cms.geddes.rcac.purdue.edu'
+          - 'cmsdev.geddes.rcac.purdue.edu'
     - job_name: 'kube-state-metrics'
       static_configs:
-        - targets: ['rancher-monitoring-kube-state-metrics.cattle-monitoring-system.svc.cluster.local:8080']
+        - targets: 
+          - 'rancher-monitoring-kube-state-metrics.cattle-monitoring-system.svc.cluster.local:8080'
+    - job_name: 'kubelet-metrics'
+      metrics_path: "/metrics"
+      static_configs:
+        - targets: 
+          - 'geddes-b014.rcac.purdue.edu:10250'
+          - 'geddes-b015.rcac.purdue.edu:10250'
+          - 'geddes-g000.rcac.purdue.edu:10250'
+          - 'af-a02.rcac.purdue.edu:10250'
+          - 'cms-fe01.rcac.purdue.edu:10250'
+          - 'hammer-f013.rcac.purdue.edu:10250'
+    - job_name: 'kubelet-metrics-cadvisor'
+      metrics_path: "/metrics/cadvisor"
+      static_configs:
+        - targets: 
+          - 'geddes-b014.rcac.purdue.edu:10250'
+          - 'geddes-b015.rcac.purdue.edu:10250'
+          - 'geddes-g000.rcac.purdue.edu:10250'
+          - 'af-a02.rcac.purdue.edu:10250'
+          - 'cms-fe01.rcac.purdue.edu:10250'
+          - 'hammer-f013.rcac.purdue.edu:10250'
+    - job_name: 'kubelet-metrics-probes'
+      metrics_path: "/metrics/probes"
+      static_configs:
+        - targets: 
+          - 'geddes-b014.rcac.purdue.edu:10250'
+          - 'geddes-b015.rcac.purdue.edu:10250'
+          - 'geddes-g000.rcac.purdue.edu:10250'
+          - 'af-a02.rcac.purdue.edu:10250'
+          - 'cms-fe01.rcac.purdue.edu:10250'
+          - 'hammer-f013.rcac.purdue.edu:10250'
     - job_name: 'node-exporter'
       static_configs:
         - targets:
           - 'geddes-b014.rcac.purdue.edu:9796'
           - 'geddes-b015.rcac.purdue.edu:9796'
           - 'geddes-g000.rcac.purdue.edu:9796'
+          - 'af-a02.rcac.purdue.edu:9796'
+          - 'cms-fe01.rcac.purdue.edu:9796'
+          - 'hammer-f013.rcac.purdue.edu:9796'
     - job_name: 'triton'
       static_configs:
         - targets: 
@@ -66,6 +101,10 @@ prometheusConfig: |
       file_sd_configs:
       - files:
         - '/prometheus/dask_targets.json'
+    - job_name: 'gpu-metrics'
+      static_configs:
+        - targets:
+          - '10.5.15.174:9400'
 
 
 
