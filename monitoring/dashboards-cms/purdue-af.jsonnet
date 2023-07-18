@@ -35,27 +35,25 @@ local templates = [
 local totalRunningPods = singlestat.new(
   '',
   colorValue=true,
-  valueName='last',
   datasource='$PROMETHEUS_DS',
 ).addTarget(
   prometheus.target(
     |||
       sum(count by (namespace)(kube_pod_labels{pod=~"purdue-af-.*", namespace=~"cms(-dev)?"}))
     |||,
-    legendFormat="Running AF pods"
+    legendFormat="Current AF users", instant=true
   )
 );
 local totalRegisteredUsers = singlestat.new(
   '',
   colorValue=true,
-  valueName='last',
   datasource='$PROMETHEUS_DS',
 ).addTarget(
   prometheus.target(
     |||
       sum(jupyterhub_total_users{job="jupyterhub"})
     |||,
-    legendFormat="Total registered users"
+    legendFormat="Total registered users", instant=true
   )
 );
 
@@ -64,8 +62,10 @@ local totalRegisteredUsers = singlestat.new(
 local usersPerNamespace = graphPanel.new(
   'Current users per namespace',
   decimals=0,
-  fillGradient=3,
+  // fillGradient=3,
+  fill=6,
   min=0,
+  stack=true,
   // transparent=true,
   legend_rightSide=true,
   datasource='$PROMETHEUS_DS',
@@ -82,7 +82,9 @@ local usersPerNode = graphPanel.new(
   'Current users per node',
   decimals=0,
   min=0,
+  // stack=true,
   legend_rightSide=true,
+  // fill=6,
   fillGradient=3,
   datasource='$PROMETHEUS_DS'
 ).addTargets([
@@ -101,6 +103,7 @@ local nodeCpuUtil = graphPanel.new(
     % of available CPUs currently in use
   |||,
   min=0,
+  fillGradient=1,
   datasource='$PROMETHEUS_DS',
   legend_rightSide=true,
   transparent=true
@@ -129,6 +132,7 @@ local nodeMemoryUtil = graphPanel.new(
   min=0,
   datasource='$PROMETHEUS_DS',
   legend_rightSide=true,
+  fillGradient=1,
   transparent=true
 ).addTargets([
   prometheus.target(
@@ -193,7 +197,6 @@ local nodeCpuUtilGauge = gaugePanel.new(
   thresholdsMode='percentage',
   unit='percentunit',
   transparent=true,
-  reducerFunction='last',
 ).addTargets([
   prometheus.target(
     |||
@@ -209,7 +212,7 @@ local nodeCpuUtilGauge = gaugePanel.new(
         "metric", "CPU", "node", "(.+)"
       )
     |||,
-    legendFormat='{{ node }}'
+    legendFormat='{{ node }}', instant=true
   ),
 ]).addThresholds(
   [
@@ -232,7 +235,6 @@ local nodeMemUtilGauge = gaugePanel.new(
   thresholdsMode='percentage',
   unit='percentunit',
   transparent=true,
-  reducerFunction='last',
 ).addTargets([
   prometheus.target(
     |||
@@ -253,7 +255,7 @@ local nodeMemUtilGauge = gaugePanel.new(
          "metric", "Memory", "node", "(.+)"
       )
     |||,
-    legendFormat='{{ node }}'
+    legendFormat='{{ node }}', instant=true
   ),
 ]).addThresholds(
   [
@@ -287,10 +289,90 @@ local podAgeDistribution = heatmapPanel.new(
   ),
 ]);
 
-// Hub usage stats
-local tritonInferenceCount = graphPanel.new(
-  'Inferences per second (standalone Triton servers)',
+local deployedTritonLB= singlestat.new(
+  '',
+  colorValue=true,
+  datasource='$PROMETHEUS_DS',
+).addTarget(
+  prometheus.target(
+    |||
+      count(sum by (instance) (nv_inference_count))
+    |||,
+    legendFormat="Deployed load balancers",
+    instant=true
+  )
+);
+
+local deployedTritonServers= singlestat.new(
+  '',
+  colorValue=true,
+  datasource='$PROMETHEUS_DS',
+).addTarget(
+  prometheus.target(
+    |||
+      sum (
+          kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton-(.*)"}
+      )
+    |||,
+    legendFormat="Deployed Triton servers",
+    instant=true
+  )
+);
+
+local tritonTable= tablePanel.new(
+  '',
+  transform='timeseries_to_rows',
+  transparent=true,
+  datasource='$PROMETHEUS_DS',
+  styles=[
+      {pattern: 'name', type: 'string', alias: 'Load balancer'},
+      {pattern: 'Value #A', type: 'number', alias: '# servers'},
+      {pattern: 'Value #B', type: 'number', alias: '# models'},
+  ],
+)
+.addTargets([
+  prometheus.target(
+    |||
+      sum by (name)(label_replace(
+          kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton-(.*)"},
+          "name", "$1", "deployment", "(.*)"
+      ))
+    |||,
+    legendFormat="{{name}}", instant=true, format='table'
+  ),
+  prometheus.target(
+    |||
+      count by (name) (
+        count by (model, name) (
+          label_replace(nv_inference_count, "name", "$1", "instance", "(.*).cms.geddes.rcac.purdue.edu:8002")
+        )
+      )
+    |||,
+    legendFormat="{{name}}", instant=true, format='table'
+    ),
+]).hideColumn('Time');
+
+local tritonNumServers = graphPanel.new(
+  'Triton servers per load balancer',
   decimals=0,
+  stack=false,
+  min=0,
+  legend_rightSide=true,
+  datasource='$PROMETHEUS_DS'
+).addTargets([
+  prometheus.target(
+    |||
+      sum by (deployment)(
+          kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton-(.*)"}
+      )
+    |||,
+    legendFormat='{{deployment}}', 
+  ),
+]);
+
+local tritonInferenceCount = graphPanel.new(
+  'Inferences per second (all Triton servers)',
+  // decimals=0,
   stack=false,
   min=0,
   datasource='$PROMETHEUS_DS',
@@ -403,14 +485,14 @@ local serverStartTimes = graphPanel.new(
   prometheus.target(
     'histogram_quantile(0.99, sum(rate(jupyterhub_server_spawn_duration_seconds_bucket{
       job="jupyterhub",
-      instance="cms.geddes.rcac.purdue.edu:80"
+      instance=~"cms(dev)?.geddes.rcac.purdue.edu:80"
     }[5m])) by (le))',
     legendFormat='99th percentile'
   ),
   prometheus.target(
     'histogram_quantile(0.5, sum(rate(jupyterhub_server_spawn_duration_seconds_bucket{
       job="jupyterhub",
-      instance="cms.geddes.rcac.purdue.edu:80",
+      instance=~"cms(dev)?.geddes.rcac.purdue.edu:80",
     }[5m])) by (le))',
     legendFormat='50th percentile'
   ),
@@ -423,7 +505,8 @@ dashboard.new(
   'Analysis Facility Dashboard',
   tags=['analysis-facility'],
   uid='purdue-af-dashboard',
-  editable=true
+  editable=true,
+  refresh='10s',
 ).addTemplates(
   templates
 )
@@ -442,15 +525,24 @@ dashboard.new(
 .addPanel(placeholder_tr,             gridPos={w: 12, h: 0})
 .addPanel(nodeMemUtilGauge,           gridPos={w: 12, h: 5})
 
-.addPanel(placeholder_tr,                gridPos={w: 12, h: 0})
+// .addPanel(placeholder_tr,                gridPos={w: 12, h: 0})
+.addPanel(podAgeDistribution,         gridPos={w: 12, h: 8})
 .addPanel(nodeMemoryUtil,             gridPos={w: 12, h: 6})
 
-// .addPanel(podAgeDistribution,         gridPos={w: 8, h: 8})
-.addPanel(row.new('Dask stats'), {})
+
+.addPanel(row.new('Triton metrics'), {})
+.addPanel(deployedTritonLB,           gridPos={w: 4, h: 3})
+.addPanel(deployedTritonServers,      gridPos={w: 4, h: 3})
+// .addPanel(placeholder_tr,             gridPos={w: 4, h: 0})
+.addPanel(tritonInferenceCount,       gridPos={w: 16, h: 12})
+.addPanel(tritonTable,                gridPos={w: 8, h: 4})
+.addPanel(placeholder_tr,             gridPos={w: 16, h: 0})
+.addPanel(tritonNumServers,           gridPos={w: 8, h: 6})
+
+.addPanel(row.new('Dask metrics'), {})
 .addPanel(daskSlurmSchedulers,        gridPos={w: 12, h: 10})
 .addPanel(daskSlurmWorkers,           gridPos={w: 12, h: 10})
-.addPanel(row.new('Triton stats'), {})
-.addPanel(tritonInferenceCount,       gridPos={w: 18, h: 12})
+
 .addPanel(row.new('JupyterHub diagnostics'), {})
 .addPanel(hubResponseCodes,           gridPos={w: 8, h: 10})
 .addPanel(hubResponseLatency,         gridPos={w: 8, h: 10})
