@@ -361,6 +361,120 @@ local nodeMemUtilGauge = gaugePanel.new(
     ]
 );
 
+local gpuTemp = gaugePanel.new(
+  'GPU Temperature',
+  datasource='$PROMETHEUS_DS',
+  description="",
+  min=0,
+  max=100,
+  showThresholdLabels=false,
+  decimals=0,
+  // thresholdsMode='percentage',
+  unit='celsius',
+  transparent=true,
+).addTargets([
+  prometheus.target(
+    |||
+      avg (DCGM_FI_DEV_GPU_TEMP) by (gpu)
+    |||,
+    legendFormat='GPU #{{ gpu }}', instant=true
+  ),
+]).addThresholds(
+  [
+    { color: 'blue', value: 0},
+    { color: 'green', value: 30},
+    { color: 'yellow', value: 70},
+    { color: 'orange', value: 80 },
+    { color: 'red', value: 85 },
+    ]
+);
+
+// local gpuPower = gaugePanel.new(
+//   'GPU Power Usage',
+//   datasource='$PROMETHEUS_DS',
+//   description="",
+//   min=0,
+//   max=500,
+//   showThresholdLabels=false,
+//   // thresholdsMode='percentage',
+//   unit='W',
+//   transparent=true,
+// ).addTargets([
+//   prometheus.target(
+//     |||
+//       sum (DCGM_FI_DEV_POWER_USAGE) by (gpu)
+//     |||,
+//     legendFormat='GPU #{{ gpu }}', instant=true
+//   ),
+// ]).addThresholds(
+//   [
+//     // { color: 'blue', value: 0},
+//     { color: 'green', value: 0},
+//     { color: 'yellow', value: 350},
+//     { color: 'orange', value: 400 },
+//     { color: 'red', value: 450 },
+//     ]
+// );
+
+
+local gpuPower = graphPanel.new(
+  'GPU Power Usage (Watts)',
+  description='',
+  datasource='$PROMETHEUS_DS',
+  legend_rightSide=true,
+  legend_sort=true,
+  // transparent=true,
+).addTargets([
+  prometheus.target(
+    |||
+      DCGM_FI_DEV_POWER_USAGE
+    |||,
+    legendFormat='GPU #{{gpu}} {{GPU_I_PROFILE}}'
+  ),
+]);
+
+local gpuTensUtil = graphPanel.new(
+  'GPU Tensor Core Utilization',
+  formatY1='percentunit',
+  description='',
+  min=0,
+  // since this is actual measured utilization, it should not be able to exceed max=1
+  // max=1,
+  datasource='$PROMETHEUS_DS',
+  legend_rightSide=true,
+  // transparent=true,
+  // decimals=4
+).addTargets([
+  prometheus.target(
+    |||
+      DCGM_FI_PROF_PIPE_TENSOR_ACTIVE
+    |||,
+    legendFormat='GPU #{{gpu}} {{GPU_I_PROFILE}}'
+  ),
+]);
+
+
+local gpuGrEngineUtil = graphPanel.new(
+  'GPU Graphics Engine Utilization',
+  formatY1='percentunit',
+  description='',
+  min=0,
+  // since this is actual measured utilization, it should not be able to exceed max=1
+  // max=1,
+  datasource='$PROMETHEUS_DS',
+  legend_rightSide=true,
+  legend_sort=true,
+  // transparent=true,
+  // decimals=4
+).addTargets([
+  prometheus.target(
+    |||
+      DCGM_FI_PROF_GR_ENGINE_ACTIVE
+    |||,
+    legendFormat='GPU #{{gpu}} {{GPU_I_PROFILE}}'
+  ),
+]);
+
 dashboard.new(
   'JupyterHub Dashboard',
   tags=['jupyterhub'],
@@ -383,3 +497,7 @@ dashboard.new(
 .addPanel(hubResponseCodesDev,        gridPos={w: 8, h: 8})
 .addPanel(hubResponseLatencyDev,      gridPos={w: 8, h: 8})
 .addPanel(serverStartTimesDev,        gridPos={w: 8, h: 8})
+.addPanel(gpuTemp,                    gridPos={w: 8, h: 8})
+.addPanel(gpuPower,                   gridPos={w: 8, h: 8})
+.addPanel(gpuTensUtil,                gridPos={w: 8, h: 8})
+.addPanel(gpuGrEngineUtil,            gridPos={w: 8, h: 8})
