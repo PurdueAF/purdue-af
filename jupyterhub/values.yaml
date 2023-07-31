@@ -67,6 +67,17 @@ singleuser:
               kubespawner_override:
                 mem_limit: "64G" 
                 mem_guarantee: "64G"
+    - default: false
+      display_name: Minimal JupyterLab interface
+      description: "Should be used only for debugging - no Analysis Facility functionality."
+      kubespawner_override:
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-base-notebook:1.1"
+        node_selector:
+          cms-af-prod: "true"
+        cpu_guarantee: 4
+        cpu_limit: 4        
+        mem_guarantee: 16G
+        mem_limit: 16G
   defaultUrl: "/lab"
   extraEnv:
     JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
