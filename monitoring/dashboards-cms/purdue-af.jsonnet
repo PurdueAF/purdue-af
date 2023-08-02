@@ -5,7 +5,6 @@ local dashboard = grafana.dashboard;
 local singlestat = grafana.singlestat;
 local graphPanel = grafana.graphPanel;
 local gaugePanel = grafana.gaugePanel;
-local barGaugePanel = grafana.barGaugePanel;
 local prometheus = grafana.prometheus;
 local template = grafana.template;
 local tablePanel = grafana.tablePanel;
@@ -113,8 +112,11 @@ local nodeCpuUtil = graphPanel.new(
     |||
       sum by (node)(
         label_replace(
-          rate(node_cpu_seconds_total{mode!="idle"}[1m]),
-          "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
+          label_replace(
+            rate(node_cpu_seconds_total{mode!="idle"}[1m]),
+            "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
+          ),
+          "node", "$1", "node", "(.*).cms"
         )
       )
       /
@@ -204,8 +206,11 @@ local nodeCpuUtilGauge = gaugePanel.new(
       label_replace(
         sum by (node)(
           label_replace(
-            rate(node_cpu_seconds_total{mode!="idle"}[1m]),
-            "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
+            label_replace(
+              rate(node_cpu_seconds_total{mode!="idle"}[1m]),
+              "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
+            ),
+            "node", "$1", "node", "(.*).cms"
           )
         )
         /
@@ -329,7 +334,7 @@ local gpuPower = graphPanel.new(
 ).addTargets([
   prometheus.target(
     |||
-      DCGM_FI_DEV_POWER_USAGE
+      avg_over_time(DCGM_FI_DEV_POWER_USAGE[10m:10s])
     |||,
     legendFormat='GPU #{{gpu}} {{GPU_I_PROFILE}}'
   ),
@@ -600,22 +605,22 @@ dashboard.new(
 )
 .addPanel(row.new('Analysis Facility metrics'), {})
 .addPanel(totalRunningPods,           gridPos={w: 4, h: 3})
-.addPanel(usersPerNamespace,          gridPos={w: 8, h: 6})
-.addPanel(nodeCpuUtilGauge,           gridPos={w: 12, h: 5})
+.addPanel(usersPerNamespace,          gridPos={w: 7, h: 6})
+.addPanel(nodeCpuUtilGauge,           gridPos={w: 13, h: 5})
 
 .addPanel(totalRegisteredUsers,       gridPos={w: 4, h: 3})
-.addPanel(placeholder_tr,             gridPos={w: 8, h: 0})
-.addPanel(nodeCpuUtil,                gridPos={w: 12, h: 6})
+.addPanel(placeholder_tr,             gridPos={w: 7, h: 0})
+.addPanel(nodeCpuUtil,                gridPos={w: 13, h: 5})
 
-.addPanel(usersPerNode,               gridPos={w: 12, h: 8})
+.addPanel(usersPerNode,               gridPos={w: 11, h: 7})
 
-.addPanel(placeholder,                gridPos={w: 12, h: 0})
-.addPanel(placeholder_tr,             gridPos={w: 12, h: 0})
-.addPanel(nodeMemUtilGauge,           gridPos={w: 12, h: 5})
+.addPanel(placeholder,                gridPos={w: 13, h: 0})
+.addPanel(placeholder_tr,             gridPos={w: 11, h: 0})
+.addPanel(nodeMemUtilGauge,           gridPos={w: 13, h: 5})
 
 // .addPanel(placeholder_tr,                gridPos={w: 12, h: 0})
-.addPanel(podAgeDistribution,         gridPos={w: 12, h: 8})
-.addPanel(nodeMemoryUtil,             gridPos={w: 12, h: 6})
+.addPanel(podAgeDistribution,         gridPos={w: 11, h: 7})
+.addPanel(nodeMemoryUtil,             gridPos={w: 13, h: 5})
 
 .addPanel(row.new('GPU metrics'), {})
 .addPanel(gpuGrEngineUtil,            gridPos={w: 10,h: 8})
@@ -628,7 +633,7 @@ dashboard.new(
 .addPanel(deployedTritonLB,           gridPos={w: 4, h: 3})
 .addPanel(deployedTritonServers,      gridPos={w: 4, h: 3})
 // .addPanel(placeholder_tr,             gridPos={w: 4, h: 0})
-.addPanel(tritonInferenceCount,       gridPos={w: 16, h: 12})
+.addPanel(tritonInferenceCount,       gridPos={w: 16, h: 13})
 .addPanel(tritonTable,                gridPos={w: 8, h: 4})
 .addPanel(placeholder_tr,             gridPos={w: 16, h: 0})
 .addPanel(tritonNumServers,           gridPos={w: 8, h: 6})
