@@ -6,6 +6,110 @@ singleuser:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
     tag: "0.8.3"
   profileList:
+    - display_name: "JupyterLab based on CERN Alma8"
+      default: true
+      description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
+      kubespawner_override:
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.3"
+        node_selector: {'cms-af-dev': 'true'}
+        lifecycle_hooks:
+          preStop:
+            exec:
+              command: ["bash", "-c", "rm -f eos-cern"]
+      profile_options:
+        node:
+          display_name: "Node"
+          choices:
+            0: 
+              display_name: "Auto (cms-af-dev: true)"
+              kubespawner_override:
+                node_selector:
+                  cms-af-dev: true
+            1: 
+              display_name: "geddes-b014"
+              kubespawner_override:
+                node_selector:
+                  kubernetes.io/hostname: geddes-b014
+            2: 
+              display_name: "geddes-b015"
+              kubespawner_override:
+                node_selector:
+                  kubernetes.io/hostname: geddes-b015
+            3: 
+              display_name: "geddes-g000"
+              kubespawner_override:
+                node_selector:
+                  kubernetes.io/hostname: geddes-g000
+            4: 
+              display_name: "af-a01"
+              kubespawner_override:
+                node_selector:
+                  kubernetes.io/hostname: af-a01
+            5: 
+              display_name: "af-a02"
+              kubespawner_override:
+                node_selector:
+                  kubernetes.io/hostname: af-a02
+            6: 
+              display_name: "hammer-f013"
+              kubespawner_override:
+                node_selector:
+                  kubernetes.io/hostname: hammer-f013
+            7: 
+              display_name: "cms-fe01"
+              kubespawner_override:
+                node_selector:
+                  kubernetes.io/hostname: cms-fe01
+
+        cpu:
+          display_name: "CPUs"
+          choices:
+            1:
+              display_name: "4"
+              kubespawner_override:
+                cpu_limit: 4
+                cpu_guarantee: 4
+            2: 
+              display_name: "16"
+              kubespawner_override:
+                cpu_limit: 16
+                cpu_guarantee: 16
+            3:
+              display_name: "32"
+              kubespawner_override:
+                cpu_limit: 32
+                cpu_guarantee: 32
+        gpu:
+          display_name: "GPUs"
+          choices:
+            1:
+              display_name: "0"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-1g.5gb: "0"
+            2:
+              display_name: "1"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-1g.5gb: "1"
+        memory:
+          display_name: "Memory"
+          choices:
+            1:
+              display_name: "16 GB"
+              kubespawner_override:
+                mem_limit: "16G"
+                mem_guarantee: "16G"
+            2:
+              display_name: "32 GB"
+              kubespawner_override:
+                mem_limit: "32G" 
+                mem_guarantee: "32G"
+            3:
+              display_name: "64 GB"
+              kubespawner_override:
+                mem_limit: "64G" 
+                mem_guarantee: "64G"
     - display_name: "JupyterLab based on CentOS7"
       description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
       kubespawner_override:
@@ -28,253 +132,6 @@ singleuser:
               kubespawner_override:
                 mem_limit: "16G"
                 mem_guarantee: "16G"
-    - display_name: "JupyterLab based on CERN Alma8"
-      default: true
-      description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
-      kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.3"
-        node_selector: {'cms-af-dev': 'true'}
-        lifecycle_hooks:
-          preStop:
-            exec:
-              command: ["bash", "-c", "rm -f eos-cern"]
-      profile_options:
-        cpu:
-          display_name: "CPUs"
-          choices:
-            1:
-              display_name: "4"
-              kubespawner_override:
-                cpu_limit: 4
-                cpu_guarantee: 4
-            2: 
-              display_name: "16"
-              kubespawner_override:
-                cpu_limit: 16
-                cpu_guarantee: 16
-            3:
-              display_name: "32"
-              kubespawner_override:
-                cpu_limit: 32
-                cpu_guarantee: 32
-        gpu:
-          display_name: "GPUs"
-          choices:
-            1:
-              display_name: "0"
-              kubespawner_override:
-                extra_resource_limits:
-                  nvidia.com/mig-1g.5gb: "0"
-            2:
-              display_name: "1"
-              kubespawner_override:
-                extra_resource_limits:
-                  nvidia.com/mig-1g.5gb: "1"
-        memory:
-          display_name: "Memory"
-          choices:
-            1:
-              display_name: "16 GB"
-              kubespawner_override:
-                mem_limit: "16G"
-                mem_guarantee: "16G"
-            2:
-              display_name: "32 GB"
-              kubespawner_override:
-                mem_limit: "32G" 
-                mem_guarantee: "32G"
-            3:
-              display_name: "64 GB"
-              kubespawner_override:
-                mem_limit: "64G" 
-                mem_guarantee: "64G"
-
-    - display_name: "Start on af-a02 node (CERN Alma8)"
-      default: false
-      description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
-      kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.3"
-        node_selector: {'testing': 'cmsaf'}
-        lifecycle_hooks:
-          preStop:
-            exec:
-              command: ["bash", "-c", "rm -f eos-cern"]
-      profile_options:
-        cpu:
-          display_name: "CPUs"
-          choices:
-            1:
-              display_name: "4"
-              kubespawner_override:
-                cpu_limit: 4
-                cpu_guarantee: 4
-            2: 
-              display_name: "16"
-              kubespawner_override:
-                cpu_limit: 16
-                cpu_guarantee: 16
-            3:
-              display_name: "32"
-              kubespawner_override:
-                cpu_limit: 32
-                cpu_guarantee: 32
-            4:
-              display_name: "64"
-              kubespawner_override:
-                cpu_limit: 64
-                cpu_guarantee: 64
-            5:
-              display_name: "128"
-              kubespawner_override:
-                cpu_limit: 128
-                cpu_guarantee: 128
-        memory:
-          display_name: "Memory"
-          choices:
-            1:
-              display_name: "16 GB"
-              kubespawner_override:
-                mem_limit: "16G"
-                mem_guarantee: "16G"
-            2:
-              display_name: "32 GB"
-              kubespawner_override:
-                mem_limit: "32G" 
-                mem_guarantee: "32G"
-            3:
-              display_name: "64 GB"
-              kubespawner_override:
-                mem_limit: "64G" 
-                mem_guarantee: "64G"
-            4:
-              display_name: "256 GB"
-              kubespawner_override:
-                mem_limit: "256G" 
-                mem_guarantee: "256G"
-
-    - display_name: "Start on Hammer frontend (CERN Alma8)"
-      default: false
-      description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
-      kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.3"
-        node_selector: {'testing': 'cmsfe'}
-        lifecycle_hooks:
-          preStop:
-            exec:
-              command: ["bash", "-c", "rm -f eos-cern"]
-      profile_options:
-        cpu:
-          display_name: "CPUs"
-          choices:
-            1:
-              display_name: "4"
-              kubespawner_override:
-                cpu_limit: 4
-                cpu_guarantee: 4
-            2: 
-              display_name: "16"
-              kubespawner_override:
-                cpu_limit: 16
-                cpu_guarantee: 16
-            3:
-              display_name: "32"
-              kubespawner_override:
-                cpu_limit: 32
-                cpu_guarantee: 32
-            4:
-              display_name: "64"
-              kubespawner_override:
-                cpu_limit: 64
-                cpu_guarantee: 64
-            5:
-              display_name: "128"
-              kubespawner_override:
-                cpu_limit: 128
-                cpu_guarantee: 128
-        memory:
-          display_name: "Memory"
-          choices:
-            1:
-              display_name: "16 GB"
-              kubespawner_override:
-                mem_limit: "16G"
-                mem_guarantee: "16G"
-            2:
-              display_name: "32 GB"
-              kubespawner_override:
-                mem_limit: "32G" 
-                mem_guarantee: "32G"
-            3:
-              display_name: "64 GB"
-              kubespawner_override:
-                mem_limit: "64G" 
-                mem_guarantee: "64G"
-            4:
-              display_name: "256 GB"
-              kubespawner_override:
-                mem_limit: "256G" 
-                mem_guarantee: "256G"
-
-    - display_name: "Start on hammer-f013 node"
-      default: false
-      description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
-      kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.3"
-        node_selector: {'testing': 'hammer'}
-        lifecycle_hooks:
-          preStop:
-            exec:
-              command: ["bash", "-c", "rm -f eos-cern"]
-      profile_options:
-        cpu:
-          display_name: "CPUs"
-          choices:
-            1:
-              display_name: "4"
-              kubespawner_override:
-                cpu_limit: 4
-                cpu_guarantee: 4
-            2: 
-              display_name: "16"
-              kubespawner_override:
-                cpu_limit: 16
-                cpu_guarantee: 16
-            3:
-              display_name: "32"
-              kubespawner_override:
-                cpu_limit: 32
-                cpu_guarantee: 32
-        gpu:
-          display_name: "GPUs"
-          choices:
-            1:
-              display_name: "0"
-              kubespawner_override:
-                extra_resource_limits:
-                  nvidia.com/mig-1g.5gb: "0"
-            2:
-              display_name: "1"
-              kubespawner_override:
-                extra_resource_limits:
-                  nvidia.com/mig-1g.5gb: "1"
-        memory:
-          display_name: "Memory"
-          choices:
-            1:
-              display_name: "16 GB"
-              kubespawner_override:
-                mem_limit: "16G"
-                mem_guarantee: "16G"
-            2:
-              display_name: "32 GB"
-              kubespawner_override:
-                mem_limit: "32G" 
-                mem_guarantee: "32G"
-            3:
-              display_name: "64 GB"
-              kubespawner_override:
-                mem_limit: "64G" 
-                mem_guarantee: "64G"
 
   defaultUrl: "/lab"
   extraEnv:
