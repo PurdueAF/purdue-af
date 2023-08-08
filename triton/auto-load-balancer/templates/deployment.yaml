@@ -66,19 +66,19 @@ spec:
           - -c
           - tritonserver --model-control-mode=poll --repository-poll-secs={{ .Values.modelPollInterval }} --log-verbose 1 --exit-on-error=false --model-repository={{ .Values.modelRepo }}
         env:
-          - name: AWS_ACCESS_KEY_ID
-            valueFrom:
-              secretKeyRef:
-                name: {{ .Values.awsK8sSecretName }}
-                key: S3_ACCESS_KEY_ID
-          - name: AWS_SECRET_ACCESS_KEY
-            valueFrom:
-              secretKeyRef:
-                name: {{ .Values.awsK8sSecretName }}
-                key: S3_SECRET_KEY
-          - name: AWS_DEFAULT_REGION
-            value: {{ .Values.awsDefaultRegion }}
-          {{ if .Values.pyTorchCudaAllocConf }}
+          # - name: AWS_ACCESS_KEY_ID
+          #   valueFrom:
+          #     secretKeyRef:
+          #       name: {{ .Values.awsK8sSecretName }}
+          #       key: S3_ACCESS_KEY_ID
+          # - name: AWS_SECRET_ACCESS_KEY
+          #   valueFrom:
+          #     secretKeyRef:
+          #       name: {{ .Values.awsK8sSecretName }}
+          #       key: S3_SECRET_KEY
+          # - name: AWS_DEFAULT_REGION
+          #   value: {{ .Values.awsDefaultRegion }}
+          # {{ if .Values.pyTorchCudaAllocConf }}
           - name: PYTORCH_CUDA_ALLOC_CONF
             value: {{ .Values.pyTorchCudaAllocConf }}
           {{ end }}

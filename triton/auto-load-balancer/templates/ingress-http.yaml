@@ -7,7 +7,8 @@ metadata:
   name: {{ .Release.Name }}-http
 spec:
   rules:
-  - host: {{ .Release.Name }}.{{ default .Values.frontendIP "127.0.0.1" }}.nip.io
+  - host: {{ .Release.Name }}.{{ .Values.namespace }}.geddes.rcac.purdue.edu
+    # host: {{ .Release.Name }}.{{ default .Values.frontendIP "127.0.0.1" }}.nip.io
     http:
       paths:
       - path: ''

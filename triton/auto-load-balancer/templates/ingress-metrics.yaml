@@ -13,6 +13,7 @@ spec:
         pathType: ImplementationSpecific
         backend:
           service:
-            name: {{ include "triton.fullname" . }}
+            # name: {{ include "triton.fullname" . }}
+            name: {{ .Release.Name }}-triton
             port:
               number: 8002

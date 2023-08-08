@@ -1,8 +1,6 @@
 # Triton server parameters
 #   width of MIG slice (e.g. "1" for 1g-10gb, "2" for 2g-20gb, etc.)
 # gpuWidth: 1
-namespace: "cms"
-
 gpuRequest: nvidia.com/mig-1g.5gb
 
 # location for models
@@ -21,18 +19,18 @@ image:
   pullPolicy: IfNotPresent
 
 # host: hostname (external to cluster)
-host: triton-auto-lb.cms.geddes.rcac.purdue.edu
+host: triton-passthrough.cms-dev.geddes.rcac.purdue.edu
 
 # metrics: hostname for metrics endpoint (for gathering externally)
 metrics:
   #hostname: triton-metrics.127.0.0.1.nip.io
-  hostname: triton-metrics.cms.geddes.rcac.purdue.edu
+  hostname: triton-metrics.cms-dev.geddes.rcac.purdue.edu
 
 # S3 access/secret keys if modelrepo is an s3 endpoint
-# awsAccessKey: 
-# awsSecretKey: 
-# awsK8sSecretName: s3-credentials
-# awsDefaultRegion: us-east-1
+awsAccessKey: 
+awsSecretKey: 
+awsK8sSecretName: s3-credentials
+awsDefaultRegion: us-east-1
 
 # pytorch inference tuning - for experts only!
 #pyTorchCudaAllocConf: "max_split_size_mb:512,garbage_collection_threshold:0.7"
@@ -45,7 +43,7 @@ scalingThreshold: 400
 scalingMetric: "max(avg by (model) (delta(nv_inference_queue_duration_us[30s])/(1000 * (1 + delta(nv_inference_request_success[30s])))))"
 
 # prometheus endpoint where scalingMetric can be queried
-prometheusAddress: http://prometheus-service.cms.geddes.rcac.purdue.edu:8080
+prometheusAddress: prometheus-service.cms-dev.geddes.rcac.purdue.edu:9090
 
 # nginx configuration to forward requests to triton
 #   note that locations have the form {{ .Release.name }}-triton hardcoded; below configuration
@@ -99,7 +97,7 @@ nginx:
     enabled:
       true
     #hostname: triton-grpc.131.225.163.60.nip.io
-    hostname: triton-grpc.cms.geddes.rcac.purdue.edu
+    hostname: triton-grpc.cms-dev.geddes.rcac.purdue.edu
     extraPaths:
     - path: ''
       pathType: ImplementationSpecific

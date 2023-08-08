@@ -1,1 +1,1 @@
-helm upgrade -n cms-dev triton . --values=values.yaml
+helm upgrade --install -n cms-dev triton . --values=values-dev.yaml
