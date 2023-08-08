@@ -334,9 +334,9 @@ local gpuPower = graphPanel.new(
 ).addTargets([
   prometheus.target(
     |||
-      avg_over_time(DCGM_FI_DEV_POWER_USAGE[10m:10s])
+      avg by (gpu) (avg_over_time(DCGM_FI_DEV_POWER_USAGE[10m:10s]))
     |||,
-    legendFormat='GPU #{{gpu}} {{GPU_I_PROFILE}}'
+    legendFormat='GPU #{{gpu}}'
   ),
 ]);
 
@@ -480,6 +480,29 @@ local tritonInferenceCount = graphPanel.new(
         )
     |||,
     legendFormat='{{model}}',
+  ),
+]);
+
+local tritonInferencesPerLB = graphPanel.new(
+  'Inferences per load balancer (all models)',
+  // decimals=0,
+  stack=false,
+  min=0,
+  datasource='$PROMETHEUS_DS',
+  legend_rightSide=true,
+).addTargets([
+  prometheus.target(
+    |||
+      label_replace(
+        rate(
+              (
+                  sum(nv_inference_count) by (instance)
+              )[1m:1s]
+          ),
+        "name", "$1", "instance", "(.*).cms.geddes.rcac.purdue.edu:8002"
+      )
+    |||,
+    legendFormat='{{name}}',
   ),
 ]);
 
@@ -633,9 +656,10 @@ dashboard.new(
 .addPanel(deployedTritonLB,           gridPos={w: 4, h: 3})
 .addPanel(deployedTritonServers,      gridPos={w: 4, h: 3})
 // .addPanel(placeholder_tr,             gridPos={w: 4, h: 0})
-.addPanel(tritonInferenceCount,       gridPos={w: 16, h: 13})
-.addPanel(tritonTable,                gridPos={w: 8, h: 4})
-.addPanel(placeholder_tr,             gridPos={w: 16, h: 0})
+.addPanel(tritonInferenceCount,       gridPos={w: 16, h: 8})
+.addPanel(tritonTable,                gridPos={w: 8, h: 7})
+.addPanel(tritonInferencesPerLB,       gridPos={w: 16, h: 8})
+// .addPanel(placeholder_tr,             gridPos={w: 16, h: 0})
 .addPanel(tritonNumServers,           gridPos={w: 8, h: 6})
 
 .addPanel(row.new('Dask metrics'), {})
