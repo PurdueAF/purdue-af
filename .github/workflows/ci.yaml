@@ -3,7 +3,7 @@ name: CI workflow
 on: workflow_dispatch
 
 jobs:
-  lint-test:
+  purdue-af-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -25,9 +25,15 @@ jobs:
       - name: Create kind cluster
         uses: helm/kind-action@v1.7.0
 
+      - name: Does Kind come with kubectl?
+        run: |
+          kubectl get namespaces
+
       - name: Install JupyterHub
         run: |
           cd jupyterhub
+          helm repo add jupyterhub https://jupyterhub.github.io/helm-chart/
+          helm repo update
           helm upgrade --cleanup-on-fail --install cmshub jupyterhub/jupyterhub --values values-dev.yaml
 
  
