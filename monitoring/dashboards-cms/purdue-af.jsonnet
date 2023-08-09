@@ -389,7 +389,7 @@ local deployedTritonLB= singlestat.new(
 ).addTarget(
   prometheus.target(
     |||
-      count(sum by (instance) (nv_inference_count))
+      count(sum by (app) (nv_inference_count))
     |||,
     legendFormat="Deployed load balancers",
     instant=true
@@ -426,10 +426,13 @@ local tritonTable= tablePanel.new(
 .addTargets([
   prometheus.target(
     |||
+      label_replace(
       sum by (name)(label_replace(
           kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton-(.*)"},
           "name", "$1", "deployment", "(.*)"
-      ))
+      )),
+      "name", "$1-triton", "name", "(.*)-nginx"
+      )
     |||,
     legendFormat="{{name}}", instant=true, format='table'
   ),

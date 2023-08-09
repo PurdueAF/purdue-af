@@ -4,6 +4,7 @@ metadata:
   name: {{ .Release.Name }}-triton
   labels:
     app: {{ .Release.Name }}-triton
+    scrape_metrics: "true"
 spec:
   type: ClusterIP
   selector:
