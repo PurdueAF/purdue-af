@@ -3,19 +3,16 @@
 # gpuWidth: 1
 namespace: "cms"
 
-gpuRequest: nvidia.com/mig-1g.5gb
+gpuRequest: nvidia.com/mig-2g.10gb
 
 # location for models
 modelRepo: /depot/cms/purdue-af/triton/models
 # modelRepo: s3://https://s3-prod.geddes.rcac.purdue.edu:443/triton-models
-#s3://https://minio-api.mysite.edu:443/triton-models
 
 # how often to poll for models (seconds)
 modelPollInterval: 60
 
 image:
-  # repository: nvcr.io/nvidia/tritonserver
-  # tag: 22.08-py3
   repository: fastml/triton-torchgeo
   tag: 22.07-py3-geometric
   pullPolicy: IfNotPresent
@@ -25,7 +22,6 @@ host: triton-auto-lb.cms.geddes.rcac.purdue.edu
 
 # metrics: hostname for metrics endpoint (for gathering externally)
 metrics:
-  #hostname: triton-metrics.127.0.0.1.nip.io
   hostname: triton-metrics.cms.geddes.rcac.purdue.edu
 
 # S3 access/secret keys if modelrepo is an s3 endpoint
@@ -45,7 +41,7 @@ scalingThreshold: 400
 scalingMetric: "max(avg by (model) (delta(nv_inference_queue_duration_us[30s])/(1000 * (1 + delta(nv_inference_request_success[30s])))))"
 
 # prometheus endpoint where scalingMetric can be queried
-prometheusAddress: http://prometheus-service.cms.geddes.rcac.purdue.edu:8080
+prometheusAddress: prometheus-service.cms.geddes.rcac.purdue.edu:9090
 
 # nginx configuration to forward requests to triton
 #   note that locations have the form {{ .Release.name }}-triton hardcoded; below configuration
@@ -89,16 +85,19 @@ nginx:
   #   - name: certs
   #     secret:
   #       secretName: my-tls-secret
-  # service:
-  #   type: ClusterIP
-  #   port: 9001
-  #   targetPort:
-  #     http: 9001
+  service:
+    type: ClusterIP
+    # port: 9001
+    # targetPort:
+    #   http: 9001
+    ports:
+      http: 8001
+    targetPort:
+      http: 8001
 
   ingress:
     enabled:
       true
-    #hostname: triton-grpc.131.225.163.60.nip.io
     hostname: triton-grpc.cms.geddes.rcac.purdue.edu
     extraPaths:
     - path: ''

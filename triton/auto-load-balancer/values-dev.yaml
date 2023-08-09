@@ -6,24 +6,20 @@ gpuRequest: nvidia.com/mig-1g.5gb
 # location for models
 modelRepo: /depot/cms/purdue-af/triton/models
 # modelRepo: s3://https://s3-prod.geddes.rcac.purdue.edu:443/triton-models
-#s3://https://minio-api.mysite.edu:443/triton-models
 
 # how often to poll for models (seconds)
 modelPollInterval: 60
 
 image:
-  # repository: nvcr.io/nvidia/tritonserver
-  # tag: 22.08-py3
   repository: fastml/triton-torchgeo
   tag: 22.07-py3-geometric
   pullPolicy: IfNotPresent
 
 # host: hostname (external to cluster)
-host: triton-passthrough.cms-dev.geddes.rcac.purdue.edu
+host: triton-auto-lb.cms-dev.geddes.rcac.purdue.edu
 
 # metrics: hostname for metrics endpoint (for gathering externally)
 metrics:
-  #hostname: triton-metrics.127.0.0.1.nip.io
   hostname: triton-metrics.cms-dev.geddes.rcac.purdue.edu
 
 # S3 access/secret keys if modelrepo is an s3 endpoint
@@ -87,16 +83,19 @@ nginx:
   #   - name: certs
   #     secret:
   #       secretName: my-tls-secret
-  # service:
-  #   type: ClusterIP
-  #   port: 9001
-  #   targetPort:
-  #     http: 9001
+  service:
+    type: ClusterIP
+    # port: 9001
+    # targetPort:
+    #   http: 9001
+    ports:
+      http: 8001
+    targetPort:
+      http: 8001
 
   ingress:
     enabled:
       true
-    #hostname: triton-grpc.131.225.163.60.nip.io
     hostname: triton-grpc.cms-dev.geddes.rcac.purdue.edu
     extraPaths:
     - path: ''
