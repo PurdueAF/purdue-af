@@ -25,26 +25,31 @@ jobs:
       - name: Create kind cluster
         uses: helm/kind-action@v1.7.0
 
+      - name: Create namespaces
+        run: |
+          kubectl create namespace cms
+          kubectl create namespace cms-dev
+
       - name: Install Prometheus & Grafana
         run: |
           cd monitoring/prometheus
           helm upgrade --install prometheus . --values values.yaml
           cd ../grafana
           helm upgrade --install grafana . --values values.yaml
-          kubectl get pods
+          kubectl get pods -n cms
 
       - name: Install JupyterHub
         run: |
           cd jupyterhub
           helm repo add jupyterhub https://jupyterhub.github.io/helm-chart/
           helm repo update
-          helm upgrade --cleanup-on-fail --install cmshub jupyterhub/jupyterhub --values values.yaml
+          helm upgrade --cleanup-on-fail --install cmshub jupyterhub/jupyterhub --values values.yaml -n cms
 
       - name: Check the status of JupyterHub
         run: |
-          POD_NAME=$(kubectl get pod -l app=jupyterhub -l component=hub -o jsonpath='{.items[*].metadata.name}')
+          POD_NAME=$(kubectl get pod -n cms -l app=jupyterhub -l component=hub -o jsonpath='{.items[*].metadata.name}')
           while true; do
-            POD_STATUS=$(kubectl get pod $POD_NAME -o jsonpath='{.status.phase}')
+            POD_STATUS=$(kubectl get pod -n cms $POD_NAME -o jsonpath='{.status.phase}')
             if [[ "$POD_STATUS" == "Failed" ]]; then
               echo "Pod $POD_NAME is in a Failed state."
               exit 1
@@ -53,9 +58,9 @@ jobs:
               break
             else
               echo "Pod $POD_NAME is in $POD_STATUS state. Waiting..."
-              kubectl describe pod $POD_NAME | tail
+              kubectl describe pod $POD_NAME -n cms | tail
               echo "--------"
-              kubectl logs $POD_NAME | tail
+              kubectl logs $POD_NAME -n cms | tail
               echo "--------"
               sleep 10  # Adjust the sleep interval as needed
             fi
