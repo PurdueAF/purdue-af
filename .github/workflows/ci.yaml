@@ -25,6 +25,14 @@ jobs:
       - name: Create kind cluster
         uses: helm/kind-action@v1.7.0
 
+      - name: Install Prometheus & Grafana
+        run: |
+          cd monitoring/prometheus
+          helm upgrade --install prometheus . --values values.yaml
+          cd ../grafana
+          helm upgrade --install grafana . --values values.yaml
+          kubectl get pods
+
       - name: Install JupyterHub
         run: |
           cd jupyterhub
@@ -45,7 +53,7 @@ jobs:
               break
             else
               echo "Pod $POD_NAME is in $POD_STATUS state. Waiting..."
-              kubectl describe pod $POD_NAME
+              kubectl describe pod $POD_NAME | tail
               echo "--------"
               kubectl logs $POD_NAME | tail
               echo "--------"
@@ -54,10 +62,3 @@ jobs:
           done
         timeout-minutes: 2
 
-      - name: Install Prometheus & Grafana
-        run: |
-          cd monitoring/prometheus
-          helm upgrade --install prometheus . --values values.yaml
-          cd ../grafana
-          helm upgrade --install grafana . --values values.yaml
-          kubectl get pods
