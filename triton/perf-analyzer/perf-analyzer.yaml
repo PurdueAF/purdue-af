@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: perf-analyzer
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: perf-analyzer
+  template:
+    metadata:
+      labels:
+        app: perf-analyzer
+    spec:
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+      containers:
+      - name: perf-analyzer
+        image: nvcr.io/nvidia/tritonserver:21.10-py3-sdk
+        command:
+          - "/bin/bash"
+          - "-c"
+          - |
+            perf_analyzer \
+            -m deepmet \
+            -u triton-20gb.cms.geddes.rcac.purdue.edu:8001 \
+            -i grpc \
+            --percentile=95 \
+            --async \
+            -p 60000 \
+            --concurrency-range 4:4 \
+            -b 100 \
+            --model-repository=/depot/cms/purdue-af/triton/models/ \
+            --input-data "random" 
+          #   -f [OUTPUT_FILE].csv
+        resources:
+          limits:
+            cpu: "1"           # Adjust as needed
+            memory: "2Gi"      # Adjust as needed
+          requests:
+            cpu: "1"           # Adjust as needed
+            memory: "2Gi"      # Adjust as needed
+        # env:
+        #   - name: ENV_VAR_NAME
+        #     value: "env_var_value"
