@@ -38,6 +38,28 @@ jobs:
           helm upgrade --install grafana . --values values.yaml
           kubectl get pods -n cms
 
+      - name: Check status of Prometheus
+        run: |
+          POD_NAME=$(kubectl get pod -n cms -l app=prometheus -o jsonpath='{.items[*].metadata.name}')
+          while true; do
+            POD_STATUS=$(kubectl get pod -n cms $POD_NAME -o jsonpath='{.status.phase}')
+            if [[ "$POD_STATUS" == "Failed" ]]; then
+              echo "Pod $POD_NAME is in a Failed state."
+              exit 1
+            elif [[ "$POD_STATUS" == "Running" ]]; then
+              echo "Pod $POD_NAME is in a Running state."
+              break
+            else
+              echo "Pod $POD_NAME is in $POD_STATUS state. Waiting..."
+              kubectl describe pod $POD_NAME -n cms | tail
+              echo "--------"
+              kubectl logs $POD_NAME -n cms | tail
+              echo "--------"
+              sleep 10  # Adjust the sleep interval as needed
+            fi
+          done
+        timeout-minutes: 2
+
       - name: Install JupyterHub
         run: |
           cd jupyterhub
