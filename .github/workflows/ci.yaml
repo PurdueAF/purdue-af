@@ -31,16 +31,27 @@ jobs:
           helm repo add jupyterhub https://jupyterhub.github.io/helm-chart/
           helm repo update
           helm upgrade --cleanup-on-fail --install cmshub jupyterhub/jupyterhub --values values.yaml
-          kubectl get pods
 
-      - name: Print logs from JupyterHub pod
+      - name: Wait for JupyterHub container to start or fail
         run: |
-          kubectl logs -n cms-dev -l app=jupyterhub -l component=hub
+          while true; do
+            POD_STATUS=$(kubectl get pod -l app=jupyterhub -l component=hub -o jsonpath='{.status.phase}')
+            if [[ "$POD_STATUS" == "Failed" ]]; then
+              echo "Pod $POD_NAME is in a Failed state."
+              exit 1
+            elif [[ "$POD_STATUS" == "Running" ]]; then
+              echo "Pod $POD_NAME is in a Ready state."
+              break
+            else
+              echo "Pod $POD_NAME is in $POD_STATUS state. Waiting..."
+              sleep 10  # Adjust the sleep interval as needed
+            fi
+          done
+        timeout-minutes: 2
 
       - name: Install Prometheus & Grafana
         run: |
-          cd ~/monitoring
-          cd prometheus
+          cd ../monitoring/prometheus
           helm upgrade --install prometheus . --values values.yaml
           cd ../grafana
           helm upgrade --install grafana . --values values.yaml
