@@ -95,13 +95,18 @@ prometheusConfig: |
           - 'af-a02.cms.rcac.purdue.edu:9796'
           - 'cms-fe01.rcac.purdue.edu:9796'
           - 'hammer-f013.rcac.purdue.edu:9796'
-    - job_name: 'triton'
-      static_configs:
-        - targets: 
-          - 'triton-stefan.cms.geddes.rcac.purdue.edu:8002'
-          - 'triton-5gb.cms.geddes.rcac.purdue.edu:8002'
-          - 'triton-10gb.cms.geddes.rcac.purdue.edu:8002'
-          - 'triton-20gb.cms.geddes.rcac.purdue.edu:8002'
+    - job_name: 'triton-service-monitor'
+      kubernetes_sd_configs:
+        - role: endpoints
+          namespaces:
+            names:
+              - 'cms'
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_service_label_app]
+          target_label: 'app'
+        - source_labels: [__meta_kubernetes_service_label_scrape_metrics]
+          action: keep
+          regex: 'true'
     - job_name: 'dask'
       file_sd_configs:
       - files:

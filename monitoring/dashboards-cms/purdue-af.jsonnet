@@ -374,9 +374,9 @@ local gpuGrEngineUtil = graphPanel.new(
 ).addTargets([
   prometheus.target(
     |||
-      DCGM_FI_PROF_GR_ENGINE_ACTIVE
+      sum by (GPU_I_ID, GPU_I_PROFILE, gpu) (DCGM_FI_PROF_GR_ENGINE_ACTIVE)
     |||,
-    legendFormat='GPU #{{gpu}} {{GPU_I_PROFILE}}'
+    legendFormat='Slice ID {{GPU_I_ID}}: GPU #{{gpu}}, {{GPU_I_PROFILE}}'
   ),
 ]);
 
@@ -437,7 +437,7 @@ local tritonTable= tablePanel.new(
     |||
       count by (name) (
         count by (model, name) (
-          label_replace(nv_inference_count, "name", "$1", "instance", "(.*).cms.geddes.rcac.purdue.edu:8002")
+          label_replace(nv_inference_count{job="triton-service-monitor"}, "name", "$1", "app", "(.*)")
         )
       )
     |||,
@@ -475,7 +475,7 @@ local tritonInferenceCount = graphPanel.new(
     |||
       rate(
             (
-                sum(nv_inference_count) by (model)
+                sum(nv_inference_count{job="triton-service-monitor"}) by (model)
             )[1m:1s]
         )
     |||,
@@ -493,16 +493,13 @@ local tritonInferencesPerLB = graphPanel.new(
 ).addTargets([
   prometheus.target(
     |||
-      label_replace(
         rate(
               (
-                  sum(nv_inference_count) by (instance)
+                  sum(nv_inference_count{job="triton-service-monitor"}) by (app)
               )[1m:1s]
-          ),
-        "name", "$1", "instance", "(.*).cms.geddes.rcac.purdue.edu:8002"
-      )
+          )
     |||,
-    legendFormat='{{name}}',
+    legendFormat='{{app}}',
   ),
 ]);
 

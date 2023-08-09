@@ -23,6 +23,7 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "{{ .Values.networking.containerPort }}"
     spec:
+      serviceAccountName: {{ .Release.Name }}
       nodeSelector:
         {{ toYaml .Values.deployment.nodeSelector | nindent 8 }}
       tolerations:

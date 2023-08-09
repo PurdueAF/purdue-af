@@ -1,0 +1,11 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}-metrics
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    matchLabels:
+      scrape-metrics: "true"
+  endpoints:
+    - port: "metrics"
