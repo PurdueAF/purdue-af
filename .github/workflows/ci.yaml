@@ -32,14 +32,6 @@ jobs:
           helm repo update
           helm upgrade --cleanup-on-fail --install cmshub jupyterhub/jupyterhub --values values.yaml
 
-      - name: Install Prometheus & Grafana
-        run: |
-          cd ../monitoring/prometheus
-          helm upgrade --install prometheus . --values values.yaml
-          cd ../grafana
-          helm upgrade --install grafana . --values values.yaml
-          kubectl get pods
-
       - name: Check the status of JupyterHub
         run: |
           while true; do
@@ -56,3 +48,11 @@ jobs:
             fi
           done
         timeout-minutes: 2
+
+      - name: Install Prometheus & Grafana
+        run: |
+          cd monitoring/prometheus
+          helm upgrade --install prometheus . --values values.yaml
+          cd ../grafana
+          helm upgrade --install grafana . --values values.yaml
+          kubectl get pods
