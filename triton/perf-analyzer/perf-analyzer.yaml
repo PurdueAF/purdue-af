@@ -1,12 +1,10 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: batch/v1
+kind: Job
 metadata:
   name: perf-analyzer
 spec:
-  replicas: 4
-  selector:
-    matchLabels:
-      app: perf-analyzer
+  completions: 100  # Number of consecutive pods to run
+  parallelism: 2  # Number of pods to run in parallel
   template:
     metadata:
       labels:
@@ -19,6 +17,7 @@ spec:
         operator: "Equal"
         value: "cms-af"
         effect: "NoSchedule"
+      restartPolicy: OnFailure
       containers:
       - name: perf-analyzer
         image: nvcr.io/nvidia/tritonserver:21.10-py3-sdk
@@ -32,19 +31,16 @@ spec:
             -i grpc \
             --percentile=95 \
             --async \
-            -p 60000 \
+            -p 10000 \
             --concurrency-range 4:4 \
             -b 100 \
             --model-repository=/depot/cms/purdue-af/triton/models/ \
             --input-data "random" 
-          #   -f [OUTPUT_FILE].csv
         resources:
           limits:
-            cpu: "1"           # Adjust as needed
-            memory: "2Gi"      # Adjust as needed
+            cpu: "1"     
+            memory: "2Gi"
           requests:
-            cpu: "1"           # Adjust as needed
-            memory: "2Gi"      # Adjust as needed
-        # env:
-        #   - name: ENV_VAR_NAME
-        #     value: "env_var_value"
+            cpu: "1"     
+            memory: "2Gi"
+  backoffLimit: 2  # Number of retries before considering the Job as failed
