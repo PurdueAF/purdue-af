@@ -78,6 +78,14 @@ singleuser:
         cpu_limit: 4        
         mem_guarantee: 16G
         mem_limit: 16G
+  extraContainers:
+    - name: af-pod-metrics
+      image: geddes-registry.rcac.purdue.edu/cms/cmsaf-pod-metrics-sidecar:0.1
+      command: [ "python", "/app/pod-metrics-exporter.py"]
+      volumeMounts:
+      - name: volume-{username}
+        mountPath: /home/{legacy_escape_username}
+
   defaultUrl: "/lab"
   extraEnv:
     JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
