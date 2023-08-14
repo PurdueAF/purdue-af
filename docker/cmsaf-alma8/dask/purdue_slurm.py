@@ -50,7 +50,7 @@ class PurdueSLURMCluster(SLURMCluster):
 
         job_config = job_kwargs.copy()
 
-        contact_address = f"{USER}-dask-slurm-scheduler.{NAMESPACE}.geddes.rcac.purdue.edu:{scheduler_port}"
+        contact_address = f"proxy-{USER}.{NAMESPACE}.geddes.rcac.purdue.edu:{scheduler_port}"
         job_config["scheduler_options"] = {
             "port": scheduler_port,
             "dashboard_address": f":{dashboard_port}",
