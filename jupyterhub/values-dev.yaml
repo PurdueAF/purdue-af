@@ -4,13 +4,13 @@ singleuser:
   cmd: 
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
-    tag: "0.8.4-dev"
+    tag: "0.8.4"
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
       default: true
       description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
       kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.4-dev"
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.4"
         node_selector: {'cms-af-dev': 'true'}
         lifecycle_hooks:
           preStop:
@@ -202,9 +202,6 @@ hub:
     - name: html-template
       secret:
         secretName: html-template
-    # - name: prometheus-storage-volume
-    #   persistentVolumeClaim:
-    #     claimName: prometheus-data-pvc
   extraVolumeMounts:
     - mountPath: /etc/secrets/purdue-auth/
       name: purdue-auth
@@ -215,8 +212,6 @@ hub:
     - mountPath: /etc/secrets/html/
       name: html-template
       readOnly: true
-    # - name: prometheus-storage-volume
-    #   mountPath: /prometheus/
   config:
     CILogonOAuthenticator:
       client_id: cilogon:/client_id/652ad741e63f7aa6c602e2a806c7c705
@@ -290,7 +285,6 @@ hub:
       from kubernetes_asyncio import client
 
       NAMESPACE = "cms-dev"
-      # PROMETHEUS_DASK_TARGETS_JSON = "/prometheus/dask_targets.json"
 
       def ldap_lookup(username):
           url = "geddes-aux.rcac.purdue.edu"
@@ -383,36 +377,12 @@ hub:
           await api.create_namespaced_service(NAMESPACE, dask_proxy)
           spawner.log.info('Dask proxy configured for %s' % spawner.user.name)
 
-          # # Register target for Prometheus
-          # try:
-          #     with open(PROMETHEUS_DASK_TARGETS_JSON, "r") as file:
-          #         dask_targets_json = json.load(file)
-          # except:
-          #     dask_targets_json = [{"targets": []}]
-          # new_target = f'{proxy_name}.{NAMESPACE}.geddes.rcac.purdue.edu:8787'
-          # if new_target not in dask_targets_json[0]["targets"]:
-          #     dask_targets_json[0]["targets"].append(new_target)
-          # with open(PROMETHEUS_DASK_TARGETS_JSON, "w") as file:
-          #   json.dump(dask_targets_json, file)        
-
       async def my_post_stop_hook(spawner):
           proxy_name = f"proxy-{spawner.user.name}"
           api = client.CoreV1Api(client.ApiClient())
           with contextlib.suppress(client.exceptions.ApiException):
               await api.delete_namespaced_service(proxy_name, NAMESPACE)
               spawner.log.info('Dask proxy deleted for %s' % spawner.user.name)
-          
-          # Remove Prometheus target
-          # the_target = f'{proxy_name}.{NAMESPACE}.geddes.rcac.purdue.edu:8787'
-          # try:
-          #     with open(PROMETHEUS_DASK_TARGETS_JSON, "r") as file:
-          #         dask_targets_json = json.load(file)
-          #     if the_target in dask_targets_json[0]["targets"]:
-          #         dask_targets_json[0]["targets"] = [t for t in dask_targets_json[0]["targets"] if t!=the_target]
-          #     with open(PROMETHEUS_DASK_TARGETS_JSON, "w") as file:
-          #         json.dump(dask_targets_json, file)
-          # except:
-          #     print(f"Couldn't delete prometheus target {the_target}")
 
       c.KubeSpawner.auth_state_hook = passthrough_auth_state_hook
       c.KubeSpawner.pre_spawn_hook = my_pre_spawn_hook
