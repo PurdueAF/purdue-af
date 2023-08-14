@@ -57,6 +57,8 @@ metadata:
    labels:
      app: triton-10gb
      scrape_metrics: "true"
+   annotations:
+     metallb.universe.tf/address-pool: geddes-private-pool
 spec:
    selector:
      app: triton-10gb
