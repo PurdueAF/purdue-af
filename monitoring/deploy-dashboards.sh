@@ -5,8 +5,10 @@ echo
 read -p "  > Namespace: " namespace
 if [ "$namespace" == "cms" ]; then
     grafana_server=https://cms.geddes.rcac.purdue.edu/grafana
+    dashboards_dir=dashboards
 elif [ "$namespace" == "cms-dev" ]; then
     grafana_server=http://grafana.cms-dev.geddes.rcac.purdue.edu:3000
+    dashboards_dir=dashboards-dev
 else
     echo "  > ERROR: unknown namespace "$namespace
     return
@@ -50,10 +52,10 @@ fi
 # deploy dashboards
 export JSONNET_PATH=grafana-dashboards/vendor/:grafonnet/vendor/:panels
 # export JSONNET_PATH=grafonnet/vendor/:$JSONNET_PATH
-dashboards_dir=dashboards-$namespace/
+
 folder_name="Purdue Analysis Facility Dashboards"
 echo "  > Deploying dashboards..."
-./grafana-dashboards/deploy.py $grafana_server --dashboards-dir $dashboards_dir --folder-name "${folder_name}"
+python deploy.py $grafana_server --dashboards-dir $dashboards_dir --folder-name "${folder_name}"
 echo
 
 # install default (home) dashboard
