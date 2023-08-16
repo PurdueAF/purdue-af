@@ -50,8 +50,7 @@ if [[ $1 == "-r" ]]; then
 fi
 
 # deploy dashboards
-export JSONNET_PATH=grafana-dashboards/vendor/:grafonnet/vendor/:panels
-# export JSONNET_PATH=grafonnet/vendor/:$JSONNET_PATH
+export JSONNET_PATH=grafonnet/vendor/:dashboards/panels
 
 folder_name="Purdue Analysis Facility Dashboards"
 echo "  > Deploying dashboards..."
