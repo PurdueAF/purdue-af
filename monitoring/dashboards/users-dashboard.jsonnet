@@ -14,218 +14,223 @@ local myPanels = {
 local w = g.panel.timeSeries.gridPos.withW;
 local h = g.panel.timeSeries.gridPos.withH;
 
-// local var =
-//   g.dashboard.variable.query.new('pod')
-//   + g.dashboard.variable.query.queryTypes.withLabelValues(
-//     'pod',
-//     'kube_pod_labels{namespace="cms",pod=~"purdue-af-.*"}',
-//   )
-//   + g.dashboard.variable.query.withDatasource(
-//     type='prometheus',
-//     uid='prometheus',
-//   )
-//   + g.dashboard.variable.query.selectionOptions.withIncludeAll()
-//   + g.dashboard.variable.query.withSort(3)
-// ;
+local addQueryTableInstant(datasource, query, refId) = 
+  g.query.prometheus.new(datasource, query)
+  + g.query.prometheus.withRefId(refId)
+  + g.query.prometheus.withInstant()
+  + g.query.prometheus.withFormat('table');
+
+local configureColumn(old_name, new_name, unit=null, min=null, max=null, decimals=null, columnWidth=null) =
+  g.panel.table.fieldOverride.byName.new(old_name)
+  + g.panel.table.fieldOverride.byName.withPropertiesFromOptions(
+    g.panel.table.standardOptions.withDisplayName(new_name)
+    + g.panel.table.standardOptions.withUnit(unit)
+    + g.panel.table.standardOptions.withMin(min)
+    + g.panel.table.standardOptions.withMax(max)
+    + g.panel.table.standardOptions.withDecimals(decimals)
+  )
+  + g.panel.table.fieldOverride.byName.withProperty("custom.width", columnWidth)
+;
+
+local configureBarGauge(steps) =
+  g.panel.table.fieldOverride.byName.withProperty("thresholds", {"steps": steps})
+  + g.panel.table.fieldOverride.byName.withProperty(
+    "custom.cellOptions", {"type": "gauge", "mode": "lcd", "valueDisplayMode": "color"}
+  );
+
+local var =
+  g.dashboard.variable.query.new('namespace')
+  + g.dashboard.variable.query.queryTypes.withLabelValues(
+    'namespace',
+    'kube_pod_labels{namespace=~"cms(-dev)?",pod=~"purdue-af-.*"}',
+  )
+  + g.dashboard.variable.query.withDatasource(
+    type='prometheus',
+    uid='prometheus',
+  )
+  + g.dashboard.variable.query.withSort(3)
+;
 
 local  userTable = g.panel.table.new('')
 //   + g.panel.table.panelOptions.withTransparent()
   + g.panel.table.queryOptions.withTargets([
-    g.query.prometheus.new(
+    addQueryTableInstant(
       'prometheus',
-      'af_home_dir_util{job="af-pod-monitor", username!=""}',
-    )
-    + g.query.prometheus.withRefId("storageUtil")
-    + g.query.prometheus.withInstant()
-    + g.query.prometheus.withFormat('table'),
-    g.query.prometheus.new(
+      'af_home_dir_util{namespace=~"$namespace",job="af-pod-monitor",username!=""}',
+      'storageUtil'
+    ),
+    addQueryTableInstant(
       'prometheus',
-      'time() - af_home_dir_last_accessed{job="af-pod-monitor", username!=""}',
-    )
-    + g.query.prometheus.withRefId("storageLastAccess")
-    + g.query.prometheus.withInstant()
-    + g.query.prometheus.withFormat('table'),
-    g.query.prometheus.new(
+      'time() - af_home_dir_last_accessed{namespace=~"$namespace", job="af-pod-monitor",username!=""}',
+      'storageLastAccess'
+    ),
+    addQueryTableInstant(
       'prometheus',
-      'time() - kube_pod_created{namespace="cms",pod=~"purdue-af-.*"}',
-    )
-    + g.query.prometheus.withRefId("podAge")
-    + g.query.prometheus.withInstant()
-    + g.query.prometheus.withFormat('table'),
-    g.query.prometheus.new(
+      |||
+        label_replace(
+          time() - kube_pod_created{namespace=~"$namespace",pod=~"purdue-af-.*"},
+          "userId", "$1", "pod", "purdue-af-(.*)"
+        )
+      |||,
+      'podAge'
+    ),
+    addQueryTableInstant(
       'prometheus',
-      'kube_pod_container_resource_requests{namespace="cms",pod=~"purdue-af-.*",resource="cpu"}',
-    )
-    + g.query.prometheus.withRefId("cpuRequest")
-    + g.query.prometheus.withInstant()
-    + g.query.prometheus.withFormat('table'),
-    g.query.prometheus.new(
+      'kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*",resource="cpu"}',
+      'cpuRequest'
+    ),
+    addQueryTableInstant(
       'prometheus',
-      'kube_pod_container_resource_requests{namespace="cms",pod=~"purdue-af-.*",resource="memory"}',
-    )
-    + g.query.prometheus.withRefId("memRequest")
-    + g.query.prometheus.withInstant()
-    + g.query.prometheus.withFormat('table'),
-    g.query.prometheus.new(
+      'kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*",resource="memory"}',
+      'memRequest'
+    ),
+    addQueryTableInstant(
       'prometheus-rancher',
       |||
         sum(
-            irate(container_cpu_usage_seconds_total{namespace="cms",pod=~"purdue-af-.*", container="notebook"}[5m])
+            irate(container_cpu_usage_seconds_total{namespace=~"$namespace",pod=~"purdue-af-.*", container="notebook"}[5m])
         ) by (pod)
             /
         sum by (pod)(
-            kube_pod_container_resource_requests{namespace="cms",pod=~"purdue-af-.*", resource="cpu", container="notebook"}
+            kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*", resource="cpu", container="notebook"}
         )
-      |||
-    )
-    + g.query.prometheus.withRefId("podCpuUtilCurrent")
-    + g.query.prometheus.withInstant()
-    + g.query.prometheus.withFormat('table'),
-    g.query.prometheus.new(
+      |||,
+      'podCpuUtilCurrent'
+    ),
+    addQueryTableInstant(
       'prometheus-rancher',
       |||
         sum by (pod)(
-            container_memory_working_set_bytes{namespace="cms", pod=~"purdue-af-.*", container="notebook"}
+            container_memory_working_set_bytes{namespace=~"$namespace", pod=~"purdue-af-.*", container="notebook"}
         ) /
         sum by (pod)(
-            kube_pod_container_resource_requests{namespace="cms", pod=~"purdue-af-.*", resource="memory", container="notebook"}
+            kube_pod_container_resource_requests{namespace=~"$namespace", pod=~"purdue-af-.*", resource="memory", container="notebook"}
         )
-      |||
-    )
-    + g.query.prometheus.withRefId("podMemUtilCurrent")
-    + g.query.prometheus.withInstant()
-    + g.query.prometheus.withFormat('table'),
+      |||,
+      'podMemUtilCurrent'
+    ),
   ])
   + g.panel.table.queryOptions.withTransformations([
+    // join into a single table
     g.panel.table.transformation.withId('joinByField')
     + g.panel.table.transformation.withOptions({"byField":"pod"}),
+    // filter columns
     g.panel.table.transformation.withId('filterFieldsByName')
     + g.panel.table.transformation.withOptions(
         {
-            "include": {"pattern": "^(pod|username.*|Value.*|phase)$"},
-            "exclude": {"pattern": "^(.*podStatus|username 2)$"}
+            "include": {"pattern": "^(pod|username.*|Value.*|userId|node 3)$"},
+            "exclude": {"pattern": "^(.*podStatus|username 2|Value #userId)$"}
         }
     ),
+    // set order of columns
     g.panel.table.transformation.withId('organize')
     + g.panel.table.transformation.withOptions(
         {
             "indexByName": {
-                "pod": 0,
-                "username 1": 1,
-                "Value #podAge": 2,
-                "Value #storageUtil": 3,
-                "Value #podCpuUtilCurrent": 4,
-                "Value #podMemUtilCurrent": 5,
-                "Value #cpuRequest": 6,
-                "Value #memRequest": 7,
-                "Value #storageLastAccess": 8
+                "userId": 0,
+                "pod": 1,
+                "node 3": 2,
+                "username 1": 3,
+                "Value #podAge": 4,
+                "Value #storageUtil": 5,
+                "Value #podCpuUtilCurrent": 6,
+                "Value #podMemUtilCurrent": 7,
+                "Value #cpuRequest": 8,
+                "Value #memRequest": 9,
+                "Value #storageLastAccess": 10,
                 },
         }
     ),
-  ]
-  )
-  + g.panel.table.standardOptions.withOverrides(
-    [
-      g.panel.table.fieldOverride.byName.new("Value #storageUtil")
-      + g.panel.table.fieldOverride.byName.withPropertiesFromOptions(
-        g.panel.table.standardOptions.withDisplayName("/home/ storage utilization")
-        + g.panel.table.standardOptions.withDecimals(1)
-        + g.panel.table.standardOptions.withUnit("percentunit")
-        + g.panel.table.standardOptions.withMin(0)
-        + g.panel.table.standardOptions.withMax(1)
-      )
-      + g.panel.table.fieldOverride.byName.withProperty("thresholds", {
-        "steps": [
-            { color: 'green', value: 0.0},
-            { color: 'yellow', value: 0.60},
-            { color: 'orange', value: 0.80},
-            { color: 'red', value: 0.90},
-          ],
-      })
-      + g.panel.table.fieldOverride.byName.withProperty(
-        "custom.cellOptions", {"type": "gauge", "mode": "lcd", "valueDisplayMode": "color"}
-      ),
-      g.panel.table.fieldOverride.byName.new("Value #storageLastAccess")
-      + g.panel.table.fieldOverride.byName.withPropertiesFromOptions(
-        g.panel.table.standardOptions.withDisplayName("/home/ storage last access")
-        + g.panel.table.standardOptions.withUnit("s")
-      ),
-      g.panel.table.fieldOverride.byName.new("Value #podCpuUtilCurrent")
-      + g.panel.table.fieldOverride.byName.withPropertiesFromOptions(
-        g.panel.table.standardOptions.withDisplayName("CPU utililzation")
-        + g.panel.table.standardOptions.withDecimals(1)
-        + g.panel.table.standardOptions.withUnit("percentunit")
-        + g.panel.table.standardOptions.withMin(0)
-        + g.panel.table.standardOptions.withMax(1)
-      )
-      + g.panel.table.fieldOverride.byName.withProperty("thresholds", {
-        "steps": [
-            { color: 'green', value: 0.0},
-            { color: 'yellow', value: 0.60},
-            { color: 'orange', value: 0.80},
-            { color: 'red', value: 0.90},
-          ],
-      })
-      + g.panel.table.fieldOverride.byName.withProperty(
-        "custom.cellOptions", {"type": "gauge", "mode": "lcd", "valueDisplayMode": "color"}
-      ),
-      g.panel.table.fieldOverride.byName.new("Value #podMemUtilCurrent")
-      + g.panel.table.fieldOverride.byName.withPropertiesFromOptions(
-        g.panel.table.standardOptions.withDisplayName("Memory utililzation")
-        + g.panel.table.standardOptions.withDecimals(1)
-        + g.panel.table.standardOptions.withUnit("percentunit")
-        + g.panel.table.standardOptions.withMin(0)
-        + g.panel.table.standardOptions.withMax(1)
-      )
-      + g.panel.table.fieldOverride.byName.withProperty("thresholds", {
-        "steps": [
-            { color: 'green', value: 0.0},
-            { color: 'yellow', value: 0.60},
-            { color: 'orange', value: 0.80},
-            { color: 'red', value: 0.90},
-          ],
-      })
-      + g.panel.table.fieldOverride.byName.withProperty(
-        "custom.cellOptions", {"type": "gauge", "mode": "lcd", "valueDisplayMode": "color"}
-      ),
-      g.panel.table.fieldOverride.byName.new("Value #podAge")
-      + g.panel.table.fieldOverride.byName.withPropertiesFromOptions(
-        g.panel.table.standardOptions.withDisplayName("Pod age")
-        + g.panel.table.standardOptions.withUnit("s")
-      )
-      + g.panel.table.fieldOverride.byName.withProperty("thresholds", {
-        "steps": [
-            { color: 'blue', value: 0},
-            { color: 'green', value: 604800},
-            { color: 'yellow', value: 1209600},
-            { color: 'orange', value: 1814400},
-            { color: 'red', value: 2419200},
+    // convert user ID to int
+    g.panel.table.transformation.withId('convertFieldType')
+    + g.panel.table.transformation.withOptions(
+        {
+          "conversions": [
+            {
+              "targetField": "userId",
+              "destinationType": "number"
+            }
+          ]
+        }
+    ),
+  ])
+  + g.panel.table.standardOptions.withOverrides([
+    configureColumn("userId", "ID", columnWidth=40),
+    configureColumn("pod", "Pod", columnWidth=120),
+    configureColumn("node", "Node", columnWidth=120),
+    configureColumn("username", "Username", columnWidth=150),
+    configureColumn("Value #podAge", "Pod age", "s", columnWidth=120)
+    + g.panel.table.fieldOverride.byName.withProperty("thresholds", {
+      "steps": [
+        { color: 'blue', value: 0},
+        { color: 'green', value: 604800},
+        { color: 'yellow', value: 1209600},
+        { color: 'orange', value: 1814400},
+        { color: 'red', value: 2419200},
         ]
     })
     + g.panel.table.fieldOverride.byName.withProperty(
-        "custom.cellOptions", {"type": "color-text", "color": "value"}
+      "custom.cellOptions", {"type": "color-text", "color": "value"}
     ),
-    g.panel.table.fieldOverride.byName.new("Value #cpuRequest")
-    + g.panel.table.fieldOverride.byName.withPropertiesFromOptions(
-        g.panel.table.standardOptions.withDisplayName("CPU request")
-        + g.panel.table.standardOptions.withUnit("CPUs")
+    configureColumn("Value #storageUtil", "Storage utilization", "percentunit", 0, 1, 1)
+    + configureBarGauge([
+      { color: 'green', value: 0.0},
+      { color: 'yellow', value: 0.60},
+      { color: 'orange', value: 0.80},
+      { color: 'red', value: 0.90},
+    ]),
+    configureColumn("Value #podCpuUtilCurrent", "CPU utilization", "percentunit", 0, 1, 1)
+    + configureBarGauge([
+      { color: 'green', value: 0.0},
+      { color: 'yellow', value: 0.60},
+      { color: 'orange', value: 0.80},
+      { color: 'red', value: 0.90},
+    ]),
+    configureColumn("Value #podMemUtilCurrent", "Memory utilization", "percentunit", 0, 1, 1)
+    + configureBarGauge([
+      { color: 'green', value: 0.0},
+      { color: 'yellow', value: 0.60},
+      { color: 'orange', value: 0.80},
+      { color: 'red', value: 0.90},
+    ]),
+    configureColumn("Value #cpuRequest", "CPU request", columnWidth=120),
+    configureColumn("Value #memRequest", "Memory request", "bytes", columnWidth=150),
+    configureColumn("Value #storageLastAccess", "Last accessed /home/", "s", columnWidth=180)
+    + g.panel.table.fieldOverride.byName.withProperty("thresholds", {
+      "steps": [
+        { color: 'blue', value: 0},
+        { color: 'green', value: 604800},
+        { color: 'yellow', value: 1209600},
+        { color: 'orange', value: 1814400},
+        { color: 'red', value: 2419200},
+        ]
+    })
+    + g.panel.table.fieldOverride.byName.withProperty(
+      "custom.cellOptions", {"type": "color-text", "color": "value"}
     ),
-    g.panel.table.fieldOverride.byName.new("Value #memRequest")
-    + g.panel.table.fieldOverride.byName.withPropertiesFromOptions(
-        g.panel.table.standardOptions.withDisplayName("Memory request")
-        + g.panel.table.standardOptions.withUnit("bytes")
-    ),
-    g.panel.table.fieldOverride.byRegexp.new("/.*/")
-    + g.panel.table.fieldOverride.byRegexp.withProperty("custom.align", "left")
+    g.panel.table.fieldOverride.byRegexp.new(".*")
+    + g.panel.table.fieldOverride.byRegexp.withProperty("custom.align", "left"),
+    g.panel.table.fieldOverride.byRegexp.new(".*request")
+    + g.panel.table.fieldOverride.byRegexp.withProperty("custom.align", "center")
     ]
   )
+  + g.panel.table.options.withSortBy([{"displayName": "ID", "desc": false}])
 ;
 
 
-g.dashboard.new('Users Stats')
-// + g.dashboard.withVariables([
-//   var,
-// ])
+g.dashboard.new('Users Statistics')
++ g.dashboard.withVariables([
+  var,
+])
++ g.dashboard.withUid('user-stats-dashboard')
++ g.dashboard.withDescription('Purdue AF User Statistics')
++ g.dashboard.withLiveNow()
++ g.dashboard.withRefresh('10s')
++ g.dashboard.withStyle(value="dark")
++ g.dashboard.withTimezone(value="browser")
+// + g.dashboard.time.withFrom(value="now-6h")
+// + g.dashboard.time.withTo(value="now")
++ g.dashboard.graphTooltip.withSharedCrosshair()
 + g.dashboard.withPanels([
   userTable + w(24) + h(24),
 ])
