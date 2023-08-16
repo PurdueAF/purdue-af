@@ -1,3 +1,0 @@
-[submodule "Monitoring/grafana-dashboards"]
-	path = monitoring/grafana-dashboards
-	url = git@github.com:jupyterhub/grafana-dashboards
