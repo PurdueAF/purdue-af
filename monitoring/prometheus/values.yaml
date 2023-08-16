@@ -95,7 +95,7 @@ prometheusConfig: |
           - 'af-a02.cms.rcac.purdue.edu:9796'
           - 'cms-fe01.rcac.purdue.edu:9796'
           - 'hammer-f013.rcac.purdue.edu:9796'
-    - job_name: 'service-monitor'
+    - job_name: 'af-pod-monitor'
       kubernetes_sd_configs:
         - role: endpoints
           namespaces:
@@ -104,6 +104,10 @@ prometheusConfig: |
       relabel_configs:
         - source_labels: [__meta_kubernetes_service_label_app]
           target_label: 'app'
+        - source_labels: [__meta_kubernetes_pod_name]
+          target_label: 'pod'
+        - source_labels: [__meta_kubernetes_pod_label_username_unescaped]
+          target_label: 'username'
         - source_labels: [__meta_kubernetes_service_label_scrape_metrics]
           action: keep
           regex: 'true'

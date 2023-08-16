@@ -278,6 +278,9 @@ local podAgeDistribution = heatmapPanel.new(
   xBucketSize='600s',
   yAxis_format='s',
   yAxis_min=0,
+  yBucketSize=604800,
+  yAxis_decimals=0,
+  // tooltip_showHistogram='true',
   color_colorScheme='interpolateViridis',
   datasource='$PROMETHEUS_DS'
 ).addTargets([
@@ -295,6 +298,27 @@ local podAgeDistribution = heatmapPanel.new(
   ),
 ]);
 
+
+local podStorageUtil = heatmapPanel.new(
+  '/home/ storage utilization for acrive users',
+  // xBucketSize and interval must match to get correct values out of heatmaps
+  xBucketSize='300s',
+  yAxis_format='percentunit',
+  yBucketSize=0.1,
+  yAxis_min=0,
+  yAxis_max=1,
+  // tooltip_showHistogram='true',
+  // color_colorScheme='interpolateViridis',
+  datasource='$PROMETHEUS_DS'
+).addTargets([
+  prometheus.target(
+    |||
+      af_home_dir_util{job="af-pod-monitor"}
+    |||,
+    interval='300s',
+    intervalFactor=1,
+  ),
+]);
 
 local gpuTemp = gaugePanel.new(
   'GPU Temperature',
@@ -440,7 +464,7 @@ local tritonTable= tablePanel.new(
     |||
       count by (name) (
         count by (model, name) (
-          label_replace(nv_inference_count{job="triton-service-monitor"}, "name", "$1", "app", "(.*)")
+          label_replace(nv_inference_count{job="af-pod-monitor"}, "name", "$1", "app", "(.*)")
         )
       )
     |||,
@@ -478,7 +502,7 @@ local tritonInferenceCount = graphPanel.new(
     |||
       rate(
             (
-                sum(nv_inference_count{job="triton-service-monitor"}) by (model)
+                sum(nv_inference_count{job="af-pod-monitor"}) by (model)
             )[1m:1s]
         )
     |||,
@@ -498,7 +522,7 @@ local tritonInferencesPerLB = graphPanel.new(
     |||
         rate(
               (
-                  sum(nv_inference_count{job="triton-service-monitor"}) by (app)
+                  sum(nv_inference_count{job="af-pod-monitor"}) by (app)
               )[1m:1s]
           )
     |||,
@@ -642,7 +666,8 @@ dashboard.new(
 .addPanel(nodeMemUtilGauge,           gridPos={w: 13, h: 5})
 
 // .addPanel(placeholder_tr,                gridPos={w: 12, h: 0})
-.addPanel(podAgeDistribution,         gridPos={w: 11, h: 7})
+.addPanel(podAgeDistribution,         gridPos={w: 6, h: 7})
+.addPanel(podStorageUtil,             gridPos={w: 5, h: 7})
 .addPanel(nodeMemoryUtil,             gridPos={w: 13, h: 5})
 
 .addPanel(row.new('GPU metrics'), {})

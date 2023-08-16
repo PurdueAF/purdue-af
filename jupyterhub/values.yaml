@@ -85,7 +85,8 @@ singleuser:
       volumeMounts:
       - name: volume-{username}
         mountPath: /home/{legacy_escape_username}
-
+  extraLabels:
+    username_unescaped: "{legacy_escape_username}"
   defaultUrl: "/lab"
   extraEnv:
     JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
@@ -284,9 +285,6 @@ hub:
                   name=proxy_name,
                   annotations={
                       "metallb.universe.tf/address-pool": "geddes-private-pool"
-                  },
-                  labels={
-                      "scrape-metrics": "true"
                   }
               ),
               spec=client.V1ServiceSpec(
@@ -299,18 +297,6 @@ hub:
                           port=8786,
                           name="dask-scheduler",
                           target_port=8786
-                      ),
-                      client.V1ServicePort(
-                          protocol="TCP",
-                          port=8787,
-                          name="dask-dashboard",
-                          target_port=8787
-                      ),
-                      client.V1ServicePort(
-                          protocol="TCP",
-                          port=9090,
-                          name="metrics",
-                          target_port=9090
                       )
                   ],
                   type="LoadBalancer"
