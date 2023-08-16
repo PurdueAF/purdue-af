@@ -244,6 +244,8 @@ COPY scripts/aliases.sh scripts/init-conda.sh /etc/profile.d/
 # Custom scripts
 COPY scripts/eos-connect.sh scripts/init-conda-kernels.py /etc/jupyter/
 
+RUN dnf install -y boost-devel
+
 # Switch back from root user
 USER USER ${NB_USER}
 WORKDIR "${HOME}"
