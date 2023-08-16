@@ -54,6 +54,15 @@ config:
                 "type": "prometheus",
                 "url": "http://prometheus-service.cms-dev.geddes.rcac.purdue.edu:8080",
                 "version": 1
+            },
+            {
+                "access":"proxy",
+                "editable": true,
+                "name": "prometheus-rancher",
+                "orgId": 1,
+                "type": "prometheus",
+                "url": "http://rancher-monitoring-prometheus.cattle-monitoring-system:9090",
+                "version": 1
             }
         ]
     }
