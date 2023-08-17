@@ -52,9 +52,14 @@ fi
 # deploy dashboards
 export JSONNET_PATH=grafonnet/vendor/:dashboards/panels
 
-folder_name="Purdue Analysis Facility Dashboards"
+folder_name_public="Public Dashboards"
+folder_uid_public="db-folder-public"
+folder_name_private="Private Dashboards"
+folder_uid_private="db-folder-private"
+
 echo "  > Deploying dashboards..."
-python deploy.py $grafana_server --dashboards-dir $dashboards_dir --folder-name "${folder_name}"
+python deploy.py $grafana_server --dashboards-dir $dashboards_dir/public/ --folder-name "${folder_name_public}" --folder-uid $folder_uid_public
+python deploy.py $grafana_server --dashboards-dir $dashboards_dir/private/ --folder-name "${folder_name_private}" --folder-uid $folder_uid_private
 echo
 
 # install default (home) dashboard
@@ -69,6 +74,11 @@ response=$(curl -s $grafana_server/api/preferences/set-home-dash -H "content-typ
 echo "  > Admin user: "$(echo "$response" | jq -r '.message').
 response=$(curl -s -X PUT $grafana_server/api/org/preferences -H "content-type: application/json" --user "admin:$password" -d "{\"homeDashboardId\": $dashboard_id}")
 echo "  > Organization: "$(echo "$response" | jq -r '.message').
+
+# Hide private dashboards
+response=$(curl -X POST $grafana_server/api/folders/$folder_uid_private/permissions -H "content-type: application/json" --user "admin:$password" -d '{"items":[]}')
+echo "  > Hiding private dashboards: "$(echo "$response" | jq -r '.message').
+
 echo
 echo "  > DONE!"
 echo
