@@ -10,7 +10,7 @@ singleuser:
       default: true
       description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
       kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.4"
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.5"
         node_selector: {'cms-af-dev': 'true'}
         lifecycle_hooks:
           preStop:

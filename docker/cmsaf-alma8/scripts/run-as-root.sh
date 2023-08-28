@@ -17,3 +17,6 @@ chown -R $NB_USER:users $NEW_HOME/.[^.]*
 
 cp /etc/jupyter/dask/jobqueue-purdue-slurm.yaml $NEW_HOME/.config/dask/
 chown -R $NB_USER:users $NEW_HOME/.config/dask/*
+
+mv /etc/slurm/slist /usr/bin
+export PATH=/etc/jupyter/dask/:$PATH

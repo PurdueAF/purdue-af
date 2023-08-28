@@ -202,7 +202,7 @@ RUN pip install --upgrade rucio-clients \
     jupyterlab-topbar-text \
     ipywidgets bokeh==2.4.2 \
     jupyterlab-topbar jupyterlab-logout \
-    jupyterlab-unfold \
+    jupyterlab-unfold==0.2.2 \
     distributed==2023.3.2 dask==2023.3.2 \
     dask_jobqueue==0.8.1 dask[dataframe] pytest lz4
 
@@ -245,6 +245,7 @@ COPY scripts/aliases.sh scripts/init-conda.sh /etc/profile.d/
 COPY scripts/eos-connect.sh scripts/init-conda-kernels.py /etc/jupyter/
 
 RUN dnf install -y boost-devel
+RUN yum install -y mesa-libGL
 
 # Switch back from root user
 USER USER ${NB_USER}
