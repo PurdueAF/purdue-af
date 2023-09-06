@@ -36,19 +36,19 @@ singleuser:
               kubespawner_override:
                 cpu_limit: 32
                 cpu_guarantee: 32
-        # gpu:
-        #   display_name: "GPUs"
-        #   choices:
-        #     1:
-        #       display_name: "0"
-        #       kubespawner_override:
-        #         extra_resource_limits:
-        #           nvidia.com/mig-1g.5gb: 0
-        #     2:
-        #       display_name: "1"
-        #       kubespawner_override:
-        #         extra_resource_limits:
-        #           nvidia.com/mig-1g.5gb: 1
+        gpu:
+          display_name: "GPUs"
+          choices:
+            1:
+              display_name: "0"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-1g.5gb: 0
+            2:
+              display_name: "1"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-1g.5gb: 1
         memory:
           display_name: "Memory"
           choices:
