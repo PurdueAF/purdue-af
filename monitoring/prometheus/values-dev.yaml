@@ -117,7 +117,3 @@ prometheusConfig: |
         - source_labels: [__meta_kubernetes_service_label_scrape_metrics]
           action: keep
           regex: 'true'
-    - job_name: 'gpu-metrics'
-      static_configs:
-        - targets:
-          - '10.5.15.174:9400'

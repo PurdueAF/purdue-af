@@ -93,8 +93,8 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
   + g.panel.timeSeries.panelOptions.withTransparent()
   + g.panel.timeSeries.queryOptions.withTargets([
     g.query.prometheus.new(
-      'prometheus',
-      'sum by (gpu, GPU_I_ID, GPU_I_PROFILE) (DCGM_FI_PROF_GR_ENGINE_ACTIVE)',
+      'prometheus-rancher',
+      'sum by (gpu, GPU_I_ID, GPU_I_PROFILE) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node="geddes-g000"})',
     )
     + g.query.prometheus.withLegendFormat('Slice ID {{GPU_I_ID}}, GPU #{{gpu}}: {{GPU_I_PROFILE}}'),
   ])
@@ -111,8 +111,8 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
   // + g.panel.timeSeries.panelOptions.withTransparent()
   + g.panel.timeSeries.queryOptions.withTargets([
     g.query.prometheus.new(
-      'prometheus',
-      'avg by (gpu) (avg_over_time(DCGM_FI_DEV_POWER_USAGE[10m:10s]))',
+      'prometheus-rancher',
+      'avg by (gpu) (avg_over_time(DCGM_FI_DEV_POWER_USAGE{kubernetes_node="geddes-g000"}[10m:10s]))',
     ) + g.query.prometheus.withLegendFormat('GPU #{{gpu}}'),
   ])
 
@@ -131,7 +131,7 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
         rate(
               (
                   sum(nv_inference_count{job="af-pod-monitor"}) by (model)
-              )[1m:1s]
+              )[1m:10s]
           )
       |||,
     ) + g.query.prometheus.withLegendFormat('{{ model }}'),
@@ -151,7 +151,7 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
         rate(
               (
                   sum(nv_inference_count{job="af-pod-monitor"}) by (app)
-              )[30s:1s]
+              )[1m:10s]
           )
       |||,
     ) + g.query.prometheus.withLegendFormat('{{ app }}'),

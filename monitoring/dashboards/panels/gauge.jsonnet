@@ -94,7 +94,7 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
   + g.panel.gauge.panelOptions.withTransparent()
   + g.panel.gauge.queryOptions.withTargets([
     g.query.prometheus.new(
-    'prometheus', 'avg (DCGM_FI_DEV_GPU_TEMP) by (gpu)',
+    'prometheus-rancher', 'avg (DCGM_FI_DEV_GPU_TEMP{kubernetes_node="geddes-g000"}) by (gpu)',
     )
     + g.query.prometheus.withLegendFormat('GPU #{{ gpu }}')
     + g.query.prometheus.withInstant(),

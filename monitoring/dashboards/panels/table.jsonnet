@@ -18,8 +18,8 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
 //   + g.panel.table.panelOptions.withTransparent()
   + g.panel.table.queryOptions.withTargets([
     g.query.prometheus.new(
-      'prometheus',
-      'count (DCGM_FI_DEV_GPU_TEMP) by (GPU_I_PROFILE)',
+      'prometheus-rancher',
+      'count (DCGM_FI_DEV_GPU_TEMP{kubernetes_node="geddes-g000"}) by (GPU_I_PROFILE)',
     )
     + g.query.prometheus.withLegendFormat('{{GPU_I_PROFILE}}')
     + g.query.prometheus.withInstant()
