@@ -81,6 +81,11 @@ local  userTable = g.panel.table.new('')
     ),
     addQueryTableInstant(
       'prometheus',
+      'kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*",resource="nvidia_com_mig_1g_5gb"}',
+      'gpuRequest'
+    ),
+    addQueryTableInstant(
+      'prometheus',
       'kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*",resource="memory"}',
       'memRequest'
     ),
@@ -135,9 +140,10 @@ local  userTable = g.panel.table.new('')
                 "Value #podCpuUtilCurrent": 5,
                 "Value #podMemUtilCurrent": 6,
                 "Value #cpuRequest": 7,
-                "Value #memRequest": 8,
-                "Value #storageLastAccess": 9,
-                "node 3": 10,
+                "Value #gpuRequest": 8,
+                "Value #memRequest": 9,
+                "Value #storageLastAccess": 10,
+                "node 3": 11,
                 },
         }
     ),
@@ -193,8 +199,9 @@ local  userTable = g.panel.table.new('')
       { color: 'orange', value: 0.80},
       { color: 'red', value: 0.90},
     ]),
-    configureColumn("Value #cpuRequest", "CPU request", columnWidth=120),
-    configureColumn("Value #memRequest", "Memory request", "bytes", columnWidth=150),
+    configureColumn("Value #cpuRequest", "CPU req.", columnWidth=80),
+    configureColumn("Value #gpuRequest", "GPU req.", columnWidth=80),
+    configureColumn("Value #memRequest", "Memory req.", "bytes", columnWidth=110),
     configureColumn("Value #storageLastAccess", "Last accessed /home/", "s", columnWidth=180)
     + g.panel.table.fieldOverride.byName.withProperty("thresholds", {
       "steps": [

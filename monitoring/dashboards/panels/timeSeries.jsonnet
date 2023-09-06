@@ -26,13 +26,13 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
   + g.panel.timeSeries.standardOptions.withDecimals(0)
   + g.panel.timeSeries.options.legend.withPlacement('right')
   + g.panel.timeSeries.options.tooltip.withMode('multi')
-  + g.panel.timeSeries.fieldConfig.defaults.custom.stacking.withMode('normal')
+  // + g.panel.timeSeries.fieldConfig.defaults.custom.stacking.withMode('normal')
   + g.panel.timeSeries.fieldConfig.defaults.custom.withFillOpacity(20)
   + g.panel.timeSeries.fieldConfig.defaults.custom.withGradientMode('opacity'),
 
   nodeCpuUtil:: g.panel.timeSeries.new('')
   + g.panel.timeSeries.panelOptions.withDescription('% of available CPUs currently in use')
-  + g.panel.timeSeries.panelOptions.withTransparent()
+  // + g.panel.timeSeries.panelOptions.withTransparent()
   + g.panel.timeSeries.queryOptions.withTargets([
     g.query.prometheus.new(
       'prometheus',
@@ -60,7 +60,7 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
 
   nodeMemoryUtil:: g.panel.timeSeries.new('')
   + g.panel.timeSeries.panelOptions.withDescription('% of available memory currently in use')
-  + g.panel.timeSeries.panelOptions.withTransparent()
+  // + g.panel.timeSeries.panelOptions.withTransparent()
   + g.panel.timeSeries.queryOptions.withTargets([
     g.query.prometheus.new(
       'prometheus',
@@ -151,7 +151,7 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
         rate(
               (
                   sum(nv_inference_count{job="af-pod-monitor"}) by (app)
-              )[1m:1s]
+              )[30s:1s]
           )
       |||,
     ) + g.query.prometheus.withLegendFormat('{{ app }}'),
@@ -169,12 +169,28 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
       'prometheus',
       |||
         sum by (deployment)(
-            kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton-(.*)"}
+            kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton(.*)", deployment!="triton-nginx"}
         )
       |||,
     ) + g.query.prometheus.withLegendFormat('{{ deployment }}'),
   ])
   + g.panel.timeSeries.options.legend.withPlacement('right')
+  + g.panel.timeSeries.options.tooltip.withMode('multi')
+  + g.panel.timeSeries.standardOptions.withMin(0)
+  + g.panel.timeSeries.fieldConfig.defaults.custom.withFillOpacity(6)
+  + g.panel.timeSeries.fieldConfig.defaults.custom.withGradientMode('opacity'),
+
+  tritonLBmetric:: g.panel.timeSeries.new('Avg. queue duration')
+  + g.panel.timeSeries.panelOptions.withDescription('(metric for autoscaling)')
+  + g.panel.timeSeries.queryOptions.withTargets([
+    g.query.prometheus.new(
+      'prometheus',
+      |||
+        max(avg by (model) (delta(nv_inference_queue_duration_us{app="triton-triton"}[30s])/(1000 * (1 + delta(nv_inference_request_success{app="triton-triton"}[30s])))))
+      |||,
+    ) + g.query.prometheus.withLegendFormat('Max avg. by model queue wait'),
+  ])
+  // + g.panel.timeSeries.options.legend.withPlacement('right')
   + g.panel.timeSeries.options.tooltip.withMode('multi')
   + g.panel.timeSeries.standardOptions.withMin(0)
   + g.panel.timeSeries.fieldConfig.defaults.custom.withFillOpacity(6)

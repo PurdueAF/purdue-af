@@ -3,7 +3,7 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
 {
   nodeCpuUtilGauge:: g.panel.gauge.new('Node CPU Utilization %')
   + g.panel.gauge.panelOptions.withDescription('% of available CPUs currently in use')
-  + g.panel.gauge.panelOptions.withTransparent()
+  // + g.panel.gauge.panelOptions.withTransparent()
   + g.panel.gauge.queryOptions.withTargets([
     g.query.prometheus.new(
       'prometheus',
@@ -40,7 +40,7 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
 
   nodeMemUtilGauge:: g.panel.gauge.new('Node Memory Utilization %')
   + g.panel.gauge.panelOptions.withDescription('% of available memory currently in use')
-  + g.panel.gauge.panelOptions.withTransparent()
+  // + g.panel.gauge.panelOptions.withTransparent()
   + g.panel.gauge.queryOptions.withTargets([
     g.query.prometheus.new(
     'prometheus',
