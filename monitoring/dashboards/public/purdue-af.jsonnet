@@ -40,13 +40,15 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
   myPanels.placeholder.placeholder_tr   + w(20) + h(0.5),
 
   myPanels.row.gpu_metrics               + w(24) + h(2),
+  myPanels.gauge.gpuTemp                + w(8)  + h(5),
+  myPanels.timeSeries.gpuPower          + w(10)  + h(5),
+  myPanels.table.gpuSlices              + w(6)  + h(5),
+
   myPanels.timeSeries.gpuGrEngineUtil   + w(12) + h(10),
-  myPanels.gauge.gpuTemp                + w(3)  + h(10),
-  myPanels.timeSeries.gpuPower          + w(9)  + h(5),
-  myPanels.placeholder.placeholder_tr   + w(12) + h(0),
-  myPanels.placeholder.placeholder_tr   + w(3) + h(0),
-  myPanels.table.gpuSlices              + w(9)  + h(5),
-  myPanels.placeholder.placeholder_tr   + w(20) + h(0.5),
+  // myPanels.placeholder.placeholder_tr   + w(12) + h(0),
+  // myPanels.placeholder.placeholder_tr   + w(3) + h(0),
+  myPanels.timeSeries.gpuMemUtil        + w(12) + h(10),
+  // myPanels.placeholder.placeholder_tr   + w(20) + h(0.5),
 
   myPanels.row.triton_metrics            + w(24) + h(2),
   myPanels.stat.deployedTritonLB            + w(4)  + h(3),

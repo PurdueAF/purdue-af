@@ -114,6 +114,27 @@ local  userTable = g.panel.table.new('')
       |||,
       'podMemUtilCurrent'
     ),
+    addQueryTableInstant(
+      'prometheus-rancher',
+      |||
+        sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node="geddes-g000",pod=~"purdue-af-.*"})
+      |||,
+      'gpuUtilCurrent'
+    ),
+    addQueryTableInstant(
+      'prometheus-rancher',
+      |||
+        sum by (pod) (
+          ( DCGM_FI_DEV_FB_USED{kubernetes_node="geddes-g000",pod=~"purdue-af-.*"}
+            / ( 
+              DCGM_FI_DEV_FB_USED{kubernetes_node="geddes-g000",pod=~"purdue-af-.*"} +
+              DCGM_FI_DEV_FB_FREE{kubernetes_node="geddes-g000",pod=~"purdue-af-.*"}
+            )
+          )
+        )
+      |||,
+      'gpuMemUtilCurrent'
+    ),
   ])
   + g.panel.table.queryOptions.withTransformations([
     // join into a single table
@@ -123,8 +144,8 @@ local  userTable = g.panel.table.new('')
     g.panel.table.transformation.withId('filterFieldsByName')
     + g.panel.table.transformation.withOptions(
         {
-            "include": {"pattern": "^(pod|username.*|Value.*|userId|node 3)$"},
-            "exclude": {"pattern": "^(.*podStatus|username 2|Value #userId)$"}
+            "include": {"pattern": "^(username.*|Value.*|userId|node 1|docker_image_tag 1)$"},
+            "exclude": {"pattern": "^(pod|.*podStatus|username 2|.*#userId|.*gpuRequest)$"}
         }
     ),
     // set order of columns
@@ -133,17 +154,18 @@ local  userTable = g.panel.table.new('')
         {
             "indexByName": {
                 "userId": 0,
-                "pod": 1,
-                "username 1": 2,
+                "username 1": 1,
+                "docker_image_tag 1": 2,
                 "Value #podAge": 3,
-                "Value #storageUtil": 4,
+                "Value #storageLastAccess": 4,
                 "Value #podCpuUtilCurrent": 5,
                 "Value #podMemUtilCurrent": 6,
-                "Value #cpuRequest": 7,
-                "Value #gpuRequest": 8,
-                "Value #memRequest": 9,
-                "Value #storageLastAccess": 10,
-                "node 3": 11,
+                "Value #gpuUtilCurrent": 7,
+                "Value #gpuMemUtilCurrent": 8,
+                "Value #storageUtil": 9,
+                "Value #cpuRequest": 10,
+                "Value #memRequest": 11,
+                "node 1": 12,
                 },
         }
     ),
@@ -164,35 +186,64 @@ local  userTable = g.panel.table.new('')
     configureColumn("userId", "ID", columnWidth=40),
     configureColumn("pod", "Pod", columnWidth=120),
     configureColumn("node", "Node", columnWidth=120),
-    configureColumn("username", "Username", columnWidth=150),
+    configureColumn("docker_image_tag", "Version", columnWidth=80),
+    configureColumn("username", "Username", columnWidth=120),
     configureColumn("Value #podAge", "Pod age", "s", columnWidth=120)
     + g.panel.table.fieldOverride.byName.withProperty("thresholds", {
       "steps": [
         { color: 'blue', value: 0},
-        { color: 'green', value: 604800},
-        { color: 'yellow', value: 1209600},
-        { color: 'orange', value: 1814400},
-        { color: 'red', value: 2419200},
+        { color: 'green', value: 86400}, # 1 day
+        { color: 'yellow', value: 1209600}, # 2 weeks
+        { color: 'orange', value: 2592000}, # 1 month
+        { color: 'red', value: 15552000}, # 6 months
         ]
     })
     + g.panel.table.fieldOverride.byName.withProperty(
       "custom.cellOptions", {"type": "color-text", "color": "value"}
     ),
-    configureColumn("Value #storageUtil", "Storage utilization", "percentunit", 0, 1, 1)
+    configureColumn("Value #storageLastAccess", "Last active", "s", columnWidth=120)
+    + g.panel.table.fieldOverride.byName.withProperty("thresholds", {
+      "steps": [
+        { color: 'blue', value: 0},
+        { color: 'green', value: 86400}, # 1 day
+        { color: 'yellow', value: 1209600}, # 2 weeks
+        { color: 'orange', value: 2592000}, # 1 month
+        { color: 'red', value: 15552000}, # 6 months
+        ]
+    })
+    + g.panel.table.fieldOverride.byName.withProperty(
+      "custom.cellOptions", {"type": "color-text", "color": "value"}
+    ),
+
+    configureColumn("Value #storageUtil", "Storage util.", "percentunit", 0, 1, 1, columnWidth=130)
     + configureBarGauge([
       { color: 'green', value: 0.0},
       { color: 'yellow', value: 0.60},
       { color: 'orange', value: 0.80},
       { color: 'red', value: 0.90},
     ]),
-    configureColumn("Value #podCpuUtilCurrent", "CPU utilization", "percentunit", 0, 1, 1)
+    configureColumn("Value #podCpuUtilCurrent", "Pod CPU util.", "percentunit", 0, 1, 1, columnWidth=130)
     + configureBarGauge([
       { color: 'green', value: 0.0},
       { color: 'yellow', value: 0.60},
       { color: 'orange', value: 0.80},
       { color: 'red', value: 0.90},
     ]),
-    configureColumn("Value #podMemUtilCurrent", "Memory utilization", "percentunit", 0, 1, 1)
+    configureColumn("Value #podMemUtilCurrent", "Pod memory util.", "percentunit", 0, 1, 1, columnWidth=130)
+    + configureBarGauge([
+      { color: 'green', value: 0.0},
+      { color: 'yellow', value: 0.60},
+      { color: 'orange', value: 0.80},
+      { color: 'red', value: 0.90},
+    ]),
+    configureColumn("Value #gpuUtilCurrent", "GPU engine util.", "percentunit", 0, 1, 1, columnWidth=130)
+    + configureBarGauge([
+      { color: 'green', value: 0.0},
+      { color: 'yellow', value: 0.60},
+      { color: 'orange', value: 0.80},
+      { color: 'red', value: 0.90},
+    ]),
+    configureColumn("Value #gpuMemUtilCurrent", "GPU mem. util.", "percentunit", 0, 1, 1, columnWidth=130)
     + configureBarGauge([
       { color: 'green', value: 0.0},
       { color: 'yellow', value: 0.60},
@@ -202,19 +253,6 @@ local  userTable = g.panel.table.new('')
     configureColumn("Value #cpuRequest", "CPU req.", columnWidth=80),
     configureColumn("Value #gpuRequest", "GPU req.", columnWidth=80),
     configureColumn("Value #memRequest", "Memory req.", "bytes", columnWidth=110),
-    configureColumn("Value #storageLastAccess", "Last accessed /home/", "s", columnWidth=180)
-    + g.panel.table.fieldOverride.byName.withProperty("thresholds", {
-      "steps": [
-        { color: 'blue', value: 0},
-        { color: 'green', value: 604800},
-        { color: 'yellow', value: 1209600},
-        { color: 'orange', value: 1814400},
-        { color: 'red', value: 2419200},
-        ]
-    })
-    + g.panel.table.fieldOverride.byName.withProperty(
-      "custom.cellOptions", {"type": "color-text", "color": "value"}
-    ),
     g.panel.table.fieldOverride.byRegexp.new(".*")
     + g.panel.table.fieldOverride.byRegexp.withProperty("custom.align", "left"),
     g.panel.table.fieldOverride.byRegexp.new(".*request")

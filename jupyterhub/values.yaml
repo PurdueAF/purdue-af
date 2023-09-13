@@ -4,14 +4,17 @@ singleuser:
   cmd: 
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
-    tag: "0.8.4"
+    tag: "0.8.5"
+  extraLabels:
+    username_unescaped: "{legacy_escape_username}"
+    docker_image_tag: "0.8.5"
   startTimeout: 3600
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
       default: true
       description: ""
       kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.5"
+        # image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.5"
         node_selector: {'cms-af-prod': 'true'}
         lifecycle_hooks:
           preStop:
@@ -85,8 +88,6 @@ singleuser:
       volumeMounts:
       - name: volume-{username}
         mountPath: /home/{legacy_escape_username}
-  extraLabels:
-    username_unescaped: "{legacy_escape_username}"
   defaultUrl: "/lab"
   extraEnv:
     JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
@@ -285,7 +286,8 @@ hub:
                   name=proxy_name,
                   annotations={
                       "metallb.universe.tf/address-pool": "geddes-private-pool"
-                  }
+                  },
+                  labels={"scrape_metrics": "true"}
               ),
               spec=client.V1ServiceSpec(
                   selector={
@@ -297,6 +299,12 @@ hub:
                           port=8786,
                           name="dask-scheduler",
                           target_port=8786
+                      ),
+                      client.V1ServicePort(
+                          protocol="TCP",
+                          port=8787,
+                          name="dask-metrics",
+                          target_port=8787
                       )
                   ],
                   type="LoadBalancer"

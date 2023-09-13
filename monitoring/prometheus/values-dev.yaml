@@ -107,8 +107,10 @@ prometheusConfig: |
           target_label: 'app'
         - source_labels: [__meta_kubernetes_pod_name]
           target_label: 'pod'
-        - source_labels: [__meta_kubernetes__pod_label_username_unescaped]
+        - source_labels: [__meta_kubernetes_pod_label_username_unescaped]
           target_label: 'username'
+        - source_labels: [__meta_kubernetes_pod_label_docker_image_tag]
+          target_label: 'docker_image_tag'
         - source_labels: [__meta_kubernetes_namespace]
           target_label: 'namespace'
           replacement: '$1'

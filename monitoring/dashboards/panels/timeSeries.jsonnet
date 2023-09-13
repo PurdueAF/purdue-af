@@ -90,11 +90,33 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
 
   gpuGrEngineUtil:: g.panel.timeSeries.new('GPU Graphics Engine Utilization')
   + g.panel.timeSeries.panelOptions.withDescription('')
-  + g.panel.timeSeries.panelOptions.withTransparent()
+  // + g.panel.timeSeries.panelOptions.withTransparent()
   + g.panel.timeSeries.queryOptions.withTargets([
     g.query.prometheus.new(
       'prometheus-rancher',
       'sum by (gpu, GPU_I_ID, GPU_I_PROFILE) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node="geddes-g000"})',
+    )
+    + g.query.prometheus.withLegendFormat('Slice ID {{GPU_I_ID}}, GPU #{{gpu}}: {{GPU_I_PROFILE}}'),
+  ])
+  + g.panel.timeSeries.standardOptions.withUnit('percentunit')
+  + g.panel.timeSeries.standardOptions.withMin(0)
+  + g.panel.timeSeries.options.legend.withPlacement('right')
+  // + g.panel.timeSeries.options.legend.withSortBy([{field: "gpu", desc:}])
+  + g.panel.timeSeries.options.tooltip.withMode('multi')
+  + g.panel.timeSeries.fieldConfig.defaults.custom.withFillOpacity(6)
+  + g.panel.timeSeries.fieldConfig.defaults.custom.withGradientMode('opacity'),
+
+  gpuMemUtil:: g.panel.timeSeries.new('GPU Memory Utilization')
+  + g.panel.timeSeries.panelOptions.withDescription('')
+  // + g.panel.timeSeries.panelOptions.withTransparent()
+  + g.panel.timeSeries.queryOptions.withTargets([
+    g.query.prometheus.new(
+      'prometheus-rancher',
+      'sum by (gpu, GPU_I_ID, GPU_I_PROFILE) (
+        ( DCGM_FI_DEV_FB_USED{kubernetes_node="geddes-g000"} 
+          / ( DCGM_FI_DEV_FB_USED{kubernetes_node="geddes-g000"} + DCGM_FI_DEV_FB_FREE{kubernetes_node="geddes-g000"} )
+        )
+      )',
     )
     + g.query.prometheus.withLegendFormat('Slice ID {{GPU_I_ID}}, GPU #{{gpu}}: {{GPU_I_PROFILE}}'),
   ])
@@ -131,7 +153,7 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
         rate(
               (
                   sum(nv_inference_count{job="af-pod-monitor"}) by (model)
-              )[1m:10s]
+              )[1m:1s]
           )
       |||,
     ) + g.query.prometheus.withLegendFormat('{{ model }}'),
@@ -151,7 +173,7 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
         rate(
               (
                   sum(nv_inference_count{job="af-pod-monitor"}) by (app)
-              )[1m:10s]
+              )[1m:1s]
           )
       |||,
     ) + g.query.prometheus.withLegendFormat('{{ app }}'),
