@@ -38,7 +38,7 @@ metrics:
 minReplicas: 1
 maxReplicas: 4
 scalingThreshold: 0.1
-scalingMetric: "max(avg by (model) (delta(nv_inference_queue_duration_us[30s])/(1000 * (1 + delta(nv_inference_request_success[30s])))))"
+scalingMetric: "max(avg by (model) (delta(nv_inference_queue_duration_us{app='triton-triton'}[30s])/(1000 * (1 + delta(nv_inference_request_success{app='triton-triton'}[30s])))))"
 
 # prometheus endpoint where scalingMetric can be queried
 prometheusAddress: http://prometheus-service.cms.geddes.rcac.purdue.edu:8080
