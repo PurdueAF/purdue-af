@@ -44,7 +44,7 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
         )
       |||,
     )
-    + g.query.prometheus.withLegendFormat('Deployed Triton servers')
+    + g.query.prometheus.withLegendFormat('Running Triton servers')
     + g.query.prometheus.withInstant(),
   ])
   + g.panel.stat.options.withColorMode('value'),
