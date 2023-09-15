@@ -32,9 +32,10 @@ RUN yum update -y && \
     bzip2 \
     sudo \
     wget \
-    libXft libXpm libXext libSM \
+    libXft libXpm libXext libSM mesa-libGL \
     glibc-locale-source glibc-langpack-en && \
     yum install -y voms-clients vo-client stress && \
+    dnf -y install boost-devel && \
     dnf -y --enablerepo=powertools install glibc-static && \
     curl -O https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/t/tini-0.19.0-1.el8.x86_64.rpm && \
     yum install -y tini-0.19.0-1.el8.x86_64.rpm && \
@@ -146,7 +147,7 @@ WORKDIR /tmp
 RUN mamba install --quiet --yes \
     'notebook' \
     'jupyterhub' \
-    'jupyterlab=3.6.4' root && \
+    'jupyterlab=3.6.4' root nb_conda_kernels && \
     jupyter notebook --generate-config && \
     mamba clean --all -f -y && \
     npm cache clean --force && \
@@ -219,11 +220,18 @@ RUN git clone https://github.com/kondratyevd/toolbar-button \
 RUN mkdir -p /etc/jupyter/dask
 COPY dask/purdue_slurm.py dask/jobqueue-purdue-slurm.yaml /etc/jupyter/dask/
 ENV PYTHONPATH "${PYTHONPATH}:/etc/jupyter/dask/"
-RUN git clone https://github.com/kondratyevd/dask-labextension.git \
+RUN git  clone https://github.com/kondratyevd/dask-labextension.git \
     && cd dask-labextension \
     && pip install .   \
     && cd ..  \
     && rm -rf dask-labextension
+
+ENV NODE_OPTIONS="--openssl-legacy-provider"
+RUN git clone https://github.com/kondratyevd/jupyterlab-shutdown  \
+    && cd jupyterlab-shutdown \
+    && pip install . \
+    && cd .. \
+    && rm -rf jupyterlab-shutdown
 
 # Build JupyterLab
 RUN jupyter labextension install jupyterlab-theme-toggle && \
@@ -242,10 +250,7 @@ COPY scripts/run-as-root.sh \
 COPY scripts/aliases.sh scripts/init-conda.sh /etc/profile.d/
 
 # Custom scripts
-COPY scripts/eos-connect.sh scripts/init-conda-kernels.py /etc/jupyter/
-
-RUN dnf install -y boost-devel
-RUN yum install -y mesa-libGL
+COPY scripts/eos-connect.sh jupyter/jupyter_config.json /etc/jupyter/
 
 # Switch back from root user
 USER USER ${NB_USER}
