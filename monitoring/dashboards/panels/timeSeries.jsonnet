@@ -218,7 +218,7 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
   + g.panel.timeSeries.fieldConfig.defaults.custom.withFillOpacity(6)
   + g.panel.timeSeries.fieldConfig.defaults.custom.withGradientMode('opacity'),
 
-  daskSlurmSchedulers:: g.panel.timeSeries.new('Number of Dask SLURM workers created on Hammer')
+  daskSlurmSchedulers:: g.panel.timeSeries.new('Number of active Dask SLURM schedulers')
   + g.panel.timeSeries.panelOptions.withDescription('')
   + g.panel.timeSeries.queryOptions.withTargets([
     g.query.prometheus.new(
@@ -232,7 +232,7 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
   + g.panel.timeSeries.fieldConfig.defaults.custom.withFillOpacity(6)
   + g.panel.timeSeries.fieldConfig.defaults.custom.withGradientMode('opacity'),
 
-  daskSlurmWorkers:: g.panel.timeSeries.new('Number of active Dask SLURM schedulers')
+  daskSlurmWorkers:: g.panel.timeSeries.new('Number of Dask workers')
   + g.panel.timeSeries.panelOptions.withDescription('')
   + g.panel.timeSeries.queryOptions.withTargets([
     g.query.prometheus.new(

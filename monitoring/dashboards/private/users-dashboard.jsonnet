@@ -135,6 +135,13 @@ local  userTable = g.panel.table.new('')
       |||,
       'gpuMemUtilCurrent'
     ),
+    addQueryTableInstant(
+      'prometheus',
+      |||
+        sum by (pod) (dask_scheduler_workers{job="af-pod-monitor",namespace=~"$namespace",pod=~"purdue-af-.*",})
+      |||,
+      'daskWorkers'
+    ),
   ])
   + g.panel.table.queryOptions.withTransformations([
     // join into a single table
@@ -163,9 +170,10 @@ local  userTable = g.panel.table.new('')
                 "Value #gpuUtilCurrent": 7,
                 "Value #gpuMemUtilCurrent": 8,
                 "Value #storageUtil": 9,
-                "Value #cpuRequest": 10,
-                "Value #memRequest": 11,
-                "node 1": 12,
+                "Value #daskWorkers": 10,
+                "Value #cpuRequest": 11,
+                "Value #memRequest": 12,
+                "node 1": 13,
                 },
         }
     ),
@@ -186,9 +194,10 @@ local  userTable = g.panel.table.new('')
     configureColumn("userId", "ID", columnWidth=40),
     configureColumn("pod", "Pod", columnWidth=120),
     configureColumn("node", "Node", columnWidth=120),
-    configureColumn("docker_image_tag", "Version", columnWidth=80),
+    configureColumn("docker_image_tag", "Version", columnWidth=70),
     configureColumn("username", "Username", columnWidth=120),
-    configureColumn("Value #podAge", "Pod age", "s", columnWidth=120)
+    configureColumn("Value #daskWorkers", "Dask workers", columnWidth=100),
+    configureColumn("Value #podAge", "Pod age", "s", columnWidth=100)
     + g.panel.table.fieldOverride.byName.withProperty("thresholds", {
       "steps": [
         { color: 'blue', value: 0},
@@ -201,7 +210,7 @@ local  userTable = g.panel.table.new('')
     + g.panel.table.fieldOverride.byName.withProperty(
       "custom.cellOptions", {"type": "color-text", "color": "value"}
     ),
-    configureColumn("Value #storageLastAccess", "Last active", "s", columnWidth=120)
+    configureColumn("Value #storageLastAccess", "Last active", "s", columnWidth=100)
     + g.panel.table.fieldOverride.byName.withProperty("thresholds", {
       "steps": [
         { color: 'blue', value: 0},
@@ -259,7 +268,7 @@ local  userTable = g.panel.table.new('')
     + g.panel.table.fieldOverride.byRegexp.withProperty("custom.align", "center")
     ]
   )
-  + g.panel.table.options.withSortBy([{"displayName": "ID", "desc": false}])
+  + g.panel.table.options.withSortBy([{"displayName": "Pod age", "desc": true}])
 ;
 
 
