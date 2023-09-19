@@ -1,52 +1,55 @@
-local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonnet';
+local prometheus = import 'prometheus.libsonnet';
+local panels = import 'panels.libsonnet';
 
 {
-  totalRunningPods:: g.panel.stat.new('')
-  + g.panel.stat.queryOptions.withTargets([
-    g.query.prometheus.new(
-      'prometheus',
-      'sum(count by (namespace)(kube_pod_labels{pod=~"purdue-af-.*", namespace=~"cms(-dev)?"}))',
-    )
-    + g.query.prometheus.withLegendFormat('Current AF users')
-    + g.query.prometheus.withInstant(),
-  ])
-  + g.panel.stat.options.withColorMode('value'),
+  totalRunningPods:: panels.stat(
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        'sum(count by (namespace)(kube_pod_labels{pod=~"purdue-af-.*", namespace=~"cms(-dev)?"}))',
+        legendFormat='Current AF users', instant = true
+      ),
+    ],
+    colorMode='value'
+  ),
 
-  totalRegisteredUsers:: g.panel.stat.new('')
-  + g.panel.stat.queryOptions.withTargets([
-    g.query.prometheus.new(
-      'prometheus',
-      'sum(jupyterhub_total_users{job="jupyterhub"})',
-    )
-    + g.query.prometheus.withLegendFormat('Total registered users')
-    + g.query.prometheus.withInstant(),
-  ])
-  + g.panel.stat.options.withColorMode('value'),
+  totalRegisteredUsers:: panels.stat(
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        'sum(jupyterhub_total_users{job="jupyterhub"})',
+        legendFormat='Total registered users',
+        instant=true
+      ),
+    ],
+    colorMode='value'
+  ),
 
-  deployedTritonLB:: g.panel.stat.new('')
-  + g.panel.stat.queryOptions.withTargets([
-    g.query.prometheus.new(
-      'prometheus',
-      'count(sum by (app) (nv_inference_count))',
-    )
-    + g.query.prometheus.withLegendFormat('Deployed load balancers')
-    + g.query.prometheus.withInstant(),
-  ])
-  + g.panel.stat.options.withColorMode('value'),
+  deployedTritonLB:: panels.stat(
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        'count(sum by (app) (nv_inference_count))',
+        legendFormat='Deployed load balancers',
+        instant=true
+      ),
+    ],
+    colorMode='value'
+  ),
 
-  deployedTritonServers:: g.panel.stat.new('')
-  + g.panel.stat.queryOptions.withTargets([
-    g.query.prometheus.new(
-      'prometheus',
-      |||
-        sum (
-            kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton-(.*)"}
-        )
-      |||,
-    )
-    + g.query.prometheus.withLegendFormat('Running Triton servers')
-    + g.query.prometheus.withInstant(),
-  ])
-  + g.panel.stat.options.withColorMode('value'),
-
+  deployedTritonServers:: panels.stat(
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        |||
+          sum (
+              kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton-(.*)"}
+          )
+        |||,
+        legendFormat='Running Triton servers',
+        instant=true
+      ),
+    ],
+    colorMode='value'
+  ),
 }

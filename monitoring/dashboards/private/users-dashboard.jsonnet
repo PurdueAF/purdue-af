@@ -1,26 +1,19 @@
 local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonnet';
+local prometheus = import 'prometheus.libsonnet';
 
-local myPanels = {
-  row: import 'row.jsonnet',
-  timeSeries: import 'timeSeries.jsonnet',
-  stat: import 'stat.jsonnet',
-  table: import 'table.jsonnet',
-  gauge: import 'gauge.jsonnet',
-  barGauge: import 'barGauge.jsonnet',
-  heatmap: import 'heatmap.jsonnet',
-  placeholder: import 'placeholder.jsonnet'
-};
 
 local w = g.panel.timeSeries.gridPos.withW;
 local h = g.panel.timeSeries.gridPos.withH;
 
-local addQueryTableInstant(datasource, query, refId) = 
-  g.query.prometheus.new(datasource, query)
-  + g.query.prometheus.withRefId(refId)
-  + g.query.prometheus.withInstant()
-  + g.query.prometheus.withFormat('table');
-
-local configureColumn(old_name, new_name, unit=null, min=null, max=null, decimals=null, columnWidth=null) =
+local configureColumn(
+  old_name,
+  new_name,
+  unit=null,
+  min=null,
+  max=null,
+  decimals=null,
+  columnWidth=null
+) =
   g.panel.table.fieldOverride.byName.new(old_name)
   + g.panel.table.fieldOverride.byName.withPropertiesFromOptions(
     g.panel.table.standardOptions.withDisplayName(new_name)
@@ -29,8 +22,7 @@ local configureColumn(old_name, new_name, unit=null, min=null, max=null, decimal
     + g.panel.table.standardOptions.withMax(max)
     + g.panel.table.standardOptions.withDecimals(decimals)
   )
-  + g.panel.table.fieldOverride.byName.withProperty("custom.width", columnWidth)
-;
+  + g.panel.table.fieldOverride.byName.withProperty("custom.width", columnWidth);
 
 local configureBarGauge(steps) =
   g.panel.table.fieldOverride.byName.withProperty("thresholds", {"steps": steps})
@@ -54,17 +46,17 @@ local var =
 local  userTable = g.panel.table.new('')
 //   + g.panel.table.panelOptions.withTransparent()
   + g.panel.table.queryOptions.withTargets([
-    addQueryTableInstant(
+    prometheus.addQuery(
       'prometheus',
       'af_home_dir_util{namespace=~"$namespace",job="af-pod-monitor",username!=""}',
-      'storageUtil'
+      refId='storageUtil', instant=true
     ),
-    addQueryTableInstant(
+    prometheus.addQuery(
       'prometheus',
       'time() - af_home_dir_last_accessed{namespace=~"$namespace", job="af-pod-monitor",username!=""}',
-      'storageLastAccess'
+      refId='storageLastAccess', instant=true
     ),
-    addQueryTableInstant(
+    prometheus.addQuery(
       'prometheus',
       |||
         label_replace(
@@ -72,24 +64,24 @@ local  userTable = g.panel.table.new('')
           "userId", "$1", "pod", "purdue-af-(.*)"
         )
       |||,
-      'podAge'
+      refId='podAge', instant=true
     ),
-    addQueryTableInstant(
+    prometheus.addQuery(
       'prometheus',
       'kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*",resource="cpu"}',
-      'cpuRequest'
+      refId='cpuRequest', instant=true
     ),
-    addQueryTableInstant(
+    prometheus.addQuery(
       'prometheus',
       'kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*",resource="nvidia_com_mig_1g_5gb"}',
-      'gpuRequest'
+      refId='gpuRequest', instant=true
     ),
-    addQueryTableInstant(
+    prometheus.addQuery(
       'prometheus',
       'kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*",resource="memory"}',
-      'memRequest'
+      refId='memRequest', instant=true
     ),
-    addQueryTableInstant(
+    prometheus.addQuery(
       'prometheus-rancher',
       |||
         sum(
@@ -100,9 +92,9 @@ local  userTable = g.panel.table.new('')
             kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*", resource="cpu", container="notebook"}
         )
       |||,
-      'podCpuUtilCurrent'
+      refId='podCpuUtilCurrent', instant=true
     ),
-    addQueryTableInstant(
+    prometheus.addQuery(
       'prometheus-rancher',
       |||
         sum by (pod)(
@@ -112,16 +104,16 @@ local  userTable = g.panel.table.new('')
             kube_pod_container_resource_requests{namespace=~"$namespace", pod=~"purdue-af-.*", resource="memory", container="notebook"}
         )
       |||,
-      'podMemUtilCurrent'
+      refId='podMemUtilCurrent', instant=true
     ),
-    addQueryTableInstant(
+    prometheus.addQuery(
       'prometheus-rancher',
       |||
         sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node="geddes-g000",pod=~"purdue-af-.*"})
       |||,
-      'gpuUtilCurrent'
+      refId='gpuUtilCurrent', instant=true
     ),
-    addQueryTableInstant(
+    prometheus.addQuery(
       'prometheus-rancher',
       |||
         sum by (pod) (
@@ -133,14 +125,14 @@ local  userTable = g.panel.table.new('')
           )
         )
       |||,
-      'gpuMemUtilCurrent'
+      refId='gpuMemUtilCurrent', instant=true
     ),
-    addQueryTableInstant(
+    prometheus.addQuery(
       'prometheus',
       |||
         sum by (pod) (dask_scheduler_workers{job="af-pod-monitor",namespace=~"$namespace",pod=~"purdue-af-.*",})
       |||,
-      'daskWorkers'
+      refId='daskWorkers', instant=true
     ),
   ])
   + g.panel.table.queryOptions.withTransformations([
@@ -196,7 +188,7 @@ local  userTable = g.panel.table.new('')
     configureColumn("node", "Node", columnWidth=120),
     configureColumn("docker_image_tag", "Version", columnWidth=70),
     configureColumn("username", "Username", columnWidth=120),
-    configureColumn("Value #daskWorkers", "Dask workers", columnWidth=100),
+    configureColumn("Value #daskWorkers", "Dask workers", columnWidth=110),
     configureColumn("Value #podAge", "Pod age", "s", columnWidth=100)
     + g.panel.table.fieldOverride.byName.withProperty("thresholds", {
       "steps": [

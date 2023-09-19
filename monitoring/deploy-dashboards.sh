@@ -50,7 +50,7 @@ if [[ $1 == "-r" ]]; then
 fi
 
 # deploy dashboards
-export JSONNET_PATH=grafonnet/vendor/:dashboards/panels
+export JSONNET_PATH=grafonnet/vendor/:dashboards/panels:dashboards/lib
 
 folder_name_public="Public Dashboards"
 folder_uid_public="db-folder-public"
