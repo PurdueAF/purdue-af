@@ -1,9 +1,23 @@
 local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonnet';
 local prometheus = import 'prometheus.libsonnet';
 
+local w = g.panel.table.gridPos.withW;
+local h = g.panel.table.gridPos.withH;
 
-local w = g.panel.timeSeries.gridPos.withW;
-local h = g.panel.timeSeries.gridPos.withH;
+local utilizationThresholds = [
+  { color: 'green', value: 0.0},
+  { color: 'yellow', value: 0.60},
+  { color: 'orange', value: 0.80},
+  { color: 'red', value: 0.90},
+];
+
+local ageThresholds = [
+  { color: 'blue', value: 0},
+  { color: 'green', value: 86400}, # 1 day
+  { color: 'yellow', value: 1209600}, # 2 weeks
+  { color: 'orange', value: 2592000}, # 1 month
+  { color: 'red', value: 15552000}, # 6 months
+];
 
 local configureColumn(
   old_name,
@@ -12,7 +26,9 @@ local configureColumn(
   min=null,
   max=null,
   decimals=null,
-  columnWidth=null
+  columnWidth=null,
+  thresholds=null,
+  type=null,
 ) =
   g.panel.table.fieldOverride.byName.new(old_name)
   + g.panel.table.fieldOverride.byName.withPropertiesFromOptions(
@@ -22,13 +38,24 @@ local configureColumn(
     + g.panel.table.standardOptions.withMax(max)
     + g.panel.table.standardOptions.withDecimals(decimals)
   )
-  + g.panel.table.fieldOverride.byName.withProperty("custom.width", columnWidth);
-
-local configureBarGauge(steps) =
-  g.panel.table.fieldOverride.byName.withProperty("thresholds", {"steps": steps})
-  + g.panel.table.fieldOverride.byName.withProperty(
-    "custom.cellOptions", {"type": "gauge", "mode": "lcd", "valueDisplayMode": "color"}
+  + g.panel.table.fieldOverride.byName.withProperty("custom.width", columnWidth)
+  + g.panel.table.fieldOverride.byName.withProperty("thresholds", {"steps": thresholds})
+  + (
+    if type=='color-text' then
+      g.panel.table.fieldOverride.byName.withProperty("custom.cellOptions", {"type": "color-text", "color": "value"})
+    else {}
+  )
+  + (
+    if type=='gauge' then
+      g.panel.table.fieldOverride.byName.withProperty("custom.cellOptions", {"type": "gauge", "mode": "lcd", "valueDisplayMode": "color"}
+  )    else {}
   );
+
+local alignText(
+  regexp,
+  alignment
+) = g.panel.table.fieldOverride.byRegexp.new(regexp)
+    + g.panel.table.fieldOverride.byRegexp.withProperty("custom.align", alignment);
 
 local var =
   g.dashboard.variable.query.new('namespace')
@@ -49,12 +76,12 @@ local  userTable = g.panel.table.new('')
     prometheus.addQuery(
       'prometheus',
       'af_home_dir_util{namespace=~"$namespace",job="af-pod-monitor",username!=""}',
-      refId='storageUtil', instant=true
+      refId='storageUtil', format='table', instant=true
     ),
     prometheus.addQuery(
       'prometheus',
       'time() - af_home_dir_last_accessed{namespace=~"$namespace", job="af-pod-monitor",username!=""}',
-      refId='storageLastAccess', instant=true
+      refId='storageLastAccess', format='table', instant=true
     ),
     prometheus.addQuery(
       'prometheus',
@@ -64,22 +91,22 @@ local  userTable = g.panel.table.new('')
           "userId", "$1", "pod", "purdue-af-(.*)"
         )
       |||,
-      refId='podAge', instant=true
+      refId='podAge', format='table', instant=true
     ),
     prometheus.addQuery(
       'prometheus',
       'kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*",resource="cpu"}',
-      refId='cpuRequest', instant=true
+      refId='cpuRequest', format='table', instant=true
     ),
     prometheus.addQuery(
       'prometheus',
       'kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*",resource="nvidia_com_mig_1g_5gb"}',
-      refId='gpuRequest', instant=true
+      refId='gpuRequest', format='table', instant=true
     ),
     prometheus.addQuery(
       'prometheus',
       'kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*",resource="memory"}',
-      refId='memRequest', instant=true
+      refId='memRequest', format='table', instant=true
     ),
     prometheus.addQuery(
       'prometheus-rancher',
@@ -92,7 +119,7 @@ local  userTable = g.panel.table.new('')
             kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*", resource="cpu", container="notebook"}
         )
       |||,
-      refId='podCpuUtilCurrent', instant=true
+      refId='podCpuUtilCurrent', format='table', instant=true
     ),
     prometheus.addQuery(
       'prometheus-rancher',
@@ -104,14 +131,14 @@ local  userTable = g.panel.table.new('')
             kube_pod_container_resource_requests{namespace=~"$namespace", pod=~"purdue-af-.*", resource="memory", container="notebook"}
         )
       |||,
-      refId='podMemUtilCurrent', instant=true
+      refId='podMemUtilCurrent', format='table', instant=true
     ),
     prometheus.addQuery(
       'prometheus-rancher',
       |||
         sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node="geddes-g000",pod=~"purdue-af-.*"})
       |||,
-      refId='gpuUtilCurrent', instant=true
+      refId='gpuUtilCurrent', format='table', instant=true
     ),
     prometheus.addQuery(
       'prometheus-rancher',
@@ -125,29 +152,29 @@ local  userTable = g.panel.table.new('')
           )
         )
       |||,
-      refId='gpuMemUtilCurrent', instant=true
+      refId='gpuMemUtilCurrent', format='table', instant=true
     ),
     prometheus.addQuery(
       'prometheus',
       |||
         sum by (pod) (dask_scheduler_workers{job="af-pod-monitor",namespace=~"$namespace",pod=~"purdue-af-.*",})
       |||,
-      refId='daskWorkers', instant=true
+      refId='daskWorkers', format='table', instant=true
     ),
   ])
   + g.panel.table.queryOptions.withTransformations([
-    // join into a single table
+    // Transformation 1: join into a single table
     g.panel.table.transformation.withId('joinByField')
     + g.panel.table.transformation.withOptions({"byField":"pod"}),
-    // filter columns
+    // Transformation 2: filter columns
     g.panel.table.transformation.withId('filterFieldsByName')
     + g.panel.table.transformation.withOptions(
         {
-            "include": {"pattern": "^(username.*|Value.*|userId|node 1|docker_image_tag 1)$"},
-            "exclude": {"pattern": "^(pod|.*podStatus|username 2|.*#userId|.*gpuRequest)$"}
+            "include": {"pattern": "^(Value.*|userId|username 1|node 1|docker_image_tag 1)$"},
+            "exclude": {"pattern": "^(pod|.*podStatus|.*#userId|.*gpuRequest)$"}
         }
     ),
-    // set order of columns
+    // Transformation 3: set order of columns
     g.panel.table.transformation.withId('organize')
     + g.panel.table.transformation.withOptions(
         {
@@ -169,7 +196,7 @@ local  userTable = g.panel.table.new('')
                 },
         }
     ),
-    // convert user ID to int
+    // Transformation 4: convert user ID to int
     g.panel.table.transformation.withId('convertFieldType')
     + g.panel.table.transformation.withOptions(
         {
@@ -182,6 +209,7 @@ local  userTable = g.panel.table.new('')
         }
     ),
   ])
+  // Configure column  styles
   + g.panel.table.standardOptions.withOverrides([
     configureColumn("userId", "ID", columnWidth=40),
     configureColumn("pod", "Pod", columnWidth=120),
@@ -189,77 +217,22 @@ local  userTable = g.panel.table.new('')
     configureColumn("docker_image_tag", "Version", columnWidth=70),
     configureColumn("username", "Username", columnWidth=120),
     configureColumn("Value #daskWorkers", "Dask workers", columnWidth=110),
-    configureColumn("Value #podAge", "Pod age", "s", columnWidth=100)
-    + g.panel.table.fieldOverride.byName.withProperty("thresholds", {
-      "steps": [
-        { color: 'blue', value: 0},
-        { color: 'green', value: 86400}, # 1 day
-        { color: 'yellow', value: 1209600}, # 2 weeks
-        { color: 'orange', value: 2592000}, # 1 month
-        { color: 'red', value: 15552000}, # 6 months
-        ]
-    })
-    + g.panel.table.fieldOverride.byName.withProperty(
-      "custom.cellOptions", {"type": "color-text", "color": "value"}
-    ),
-    configureColumn("Value #storageLastAccess", "Last active", "s", columnWidth=100)
-    + g.panel.table.fieldOverride.byName.withProperty("thresholds", {
-      "steps": [
-        { color: 'blue', value: 0},
-        { color: 'green', value: 86400}, # 1 day
-        { color: 'yellow', value: 1209600}, # 2 weeks
-        { color: 'orange', value: 2592000}, # 1 month
-        { color: 'red', value: 15552000}, # 6 months
-        ]
-    })
-    + g.panel.table.fieldOverride.byName.withProperty(
-      "custom.cellOptions", {"type": "color-text", "color": "value"}
-    ),
-
-    configureColumn("Value #storageUtil", "Storage util.", "percentunit", 0, 1, 1, columnWidth=130)
-    + configureBarGauge([
-      { color: 'green', value: 0.0},
-      { color: 'yellow', value: 0.60},
-      { color: 'orange', value: 0.80},
-      { color: 'red', value: 0.90},
-    ]),
-    configureColumn("Value #podCpuUtilCurrent", "Pod CPU util.", "percentunit", 0, 1, 1, columnWidth=130)
-    + configureBarGauge([
-      { color: 'green', value: 0.0},
-      { color: 'yellow', value: 0.60},
-      { color: 'orange', value: 0.80},
-      { color: 'red', value: 0.90},
-    ]),
-    configureColumn("Value #podMemUtilCurrent", "Pod memory util.", "percentunit", 0, 1, 1, columnWidth=130)
-    + configureBarGauge([
-      { color: 'green', value: 0.0},
-      { color: 'yellow', value: 0.60},
-      { color: 'orange', value: 0.80},
-      { color: 'red', value: 0.90},
-    ]),
-    configureColumn("Value #gpuUtilCurrent", "GPU engine util.", "percentunit", 0, 1, 1, columnWidth=130)
-    + configureBarGauge([
-      { color: 'green', value: 0.0},
-      { color: 'yellow', value: 0.60},
-      { color: 'orange', value: 0.80},
-      { color: 'red', value: 0.90},
-    ]),
-    configureColumn("Value #gpuMemUtilCurrent", "GPU mem. util.", "percentunit", 0, 1, 1, columnWidth=130)
-    + configureBarGauge([
-      { color: 'green', value: 0.0},
-      { color: 'yellow', value: 0.60},
-      { color: 'orange', value: 0.80},
-      { color: 'red', value: 0.90},
-    ]),
+    configureColumn("Value #podAge", "Pod age", "s", columnWidth=100, type='color-text', thresholds=ageThresholds),
+    configureColumn("Value #storageLastAccess", "Last active", "s", type='color-text', thresholds=ageThresholds),
+    configureColumn("Value #storageUtil", "Storage util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),
+    configureColumn("Value #podCpuUtilCurrent", "Pod CPU util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),
+    configureColumn("Value #podMemUtilCurrent", "Pod memory util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),
+    configureColumn("Value #gpuUtilCurrent", "GPU engine util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),
+    configureColumn("Value #gpuMemUtilCurrent", "GPU mem. util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),
     configureColumn("Value #cpuRequest", "CPU req.", columnWidth=80),
     configureColumn("Value #gpuRequest", "GPU req.", columnWidth=80),
     configureColumn("Value #memRequest", "Memory req.", "bytes", columnWidth=110),
-    g.panel.table.fieldOverride.byRegexp.new(".*")
-    + g.panel.table.fieldOverride.byRegexp.withProperty("custom.align", "left"),
-    g.panel.table.fieldOverride.byRegexp.new(".*request")
-    + g.panel.table.fieldOverride.byRegexp.withProperty("custom.align", "center")
+    // Align text in columns
+    alignText(".*", "left"),
+    alignText(".*request", "center"),
     ]
   )
+  // Sort table
   + g.panel.table.options.withSortBy([{"displayName": "Pod age", "desc": true}])
 ;
 
@@ -274,8 +247,6 @@ g.dashboard.new('Users Statistics')
 + g.dashboard.withRefresh('10s')
 + g.dashboard.withStyle(value="dark")
 + g.dashboard.withTimezone(value="browser")
-// + g.dashboard.time.withFrom(value="now-6h")
-// + g.dashboard.time.withTo(value="now")
 + g.dashboard.graphTooltip.withSharedCrosshair()
 + g.dashboard.withPanels([
   userTable + w(24) + h(24),
