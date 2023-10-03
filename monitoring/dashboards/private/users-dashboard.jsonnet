@@ -136,7 +136,7 @@ local  userTable = g.panel.table.new('')
     prometheus.addQuery(
       'prometheus-rancher',
       |||
-        sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node="geddes-g000",pod=~"purdue-af-.*"})
+        sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node=~"geddes-g000|geddes-g001",pod=~"purdue-af-.*"})
       |||,
       refId='gpuUtilCurrent', format='table', instant=true
     ),
@@ -144,10 +144,10 @@ local  userTable = g.panel.table.new('')
       'prometheus-rancher',
       |||
         sum by (pod) (
-          ( DCGM_FI_DEV_FB_USED{kubernetes_node="geddes-g000",pod=~"purdue-af-.*"}
+          ( DCGM_FI_DEV_FB_USED{kubernetes_node=~"geddes-g000|geddes-g001",pod=~"purdue-af-.*"}
             / ( 
-              DCGM_FI_DEV_FB_USED{kubernetes_node="geddes-g000",pod=~"purdue-af-.*"} +
-              DCGM_FI_DEV_FB_FREE{kubernetes_node="geddes-g000",pod=~"purdue-af-.*"}
+              DCGM_FI_DEV_FB_USED{kubernetes_node=~"geddes-g000|geddes-g001",pod=~"purdue-af-.*"} +
+              DCGM_FI_DEV_FB_FREE{kubernetes_node=~"geddes-g000|geddes-g001",pod=~"purdue-af-.*"}
             )
           )
         )
@@ -216,9 +216,18 @@ local  userTable = g.panel.table.new('')
     configureColumn("node", "Node", columnWidth=120),
     configureColumn("docker_image_tag", "Version", columnWidth=70),
     configureColumn("username", "Username", columnWidth=120),
+    g.panel.table.fieldOverride.byName.new("username")
+    + g.panel.table.fieldOverride.byName.withProperty(
+      "links",
+     [{
+        "title": "",
+        "url": "https://cms.geddes.rcac.purdue.edu/grafana/d/single-user-stat-dashboard/single-user-statistics?&var-user=purdue-af-${__data.fields.ID}",
+        "targetBlank": true
+      }]
+    ),
     configureColumn("Value #daskWorkers", "Dask workers", columnWidth=110),
     configureColumn("Value #podAge", "Pod age", "s", columnWidth=100, type='color-text', thresholds=ageThresholds),
-    configureColumn("Value #storageLastAccess", "Last active", "s", type='color-text', thresholds=ageThresholds),
+    configureColumn("Value #storageLastAccess", "Last active", "s", columnWidth=100, type='color-text', thresholds=ageThresholds),
     configureColumn("Value #storageUtil", "Storage util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),
     configureColumn("Value #podCpuUtilCurrent", "Pod CPU util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),
     configureColumn("Value #podMemUtilCurrent", "Pod memory util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),

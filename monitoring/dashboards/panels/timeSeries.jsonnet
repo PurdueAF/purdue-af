@@ -35,7 +35,7 @@ local panels = import 'panels.libsonnet';
   ),
 
   nodeCpuUtil:: panels.timeSeries(
-    description='% of available CPUs currently in use',
+    title='Node CPU utilization %',
     targets=[
       prometheus.addQuery(
         'prometheus',
@@ -61,23 +61,26 @@ local panels = import 'panels.libsonnet';
   ),
 
   nodeMemoryUtil:: panels.timeSeries(
-    description='% of available memory currently in use',
+    title='Node memory utilization %',
     targets=[
       prometheus.addQuery(
         'prometheus',
         |||
           label_replace(
-            1 - (
-              sum (
-                # Memory that can be allocated to processes when they need
-                node_memory_MemFree_bytes + # Unused bytes
-                node_memory_Cached_bytes + # Shared memory + temporary disk cache
-                node_memory_Buffers_bytes # Very temporary buffer memory cache for disk i/o
-              ) by (instance)
-              /
-              sum(node_memory_MemTotal_bytes) by (instance)
+            label_replace(
+              1 - (
+                sum (
+                  # Memory that can be allocated to processes when they need
+                  node_memory_MemFree_bytes + # Unused bytes
+                  node_memory_Cached_bytes + # Shared memory + temporary disk cache
+                  node_memory_Buffers_bytes # Very temporary buffer memory cache for disk i/o
+                ) by (instance)
+                /
+                sum(node_memory_MemTotal_bytes) by (instance)
+              ),
+              "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
             ),
-            "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
+            "node", "$1", "node", "(.*).cms"
           )
         |||,
         legendFormat='{{ node }}'
@@ -88,12 +91,58 @@ local panels = import 'panels.libsonnet';
     legendPlacement='right',
   ),
 
+  nodeCpuRequest:: panels.timeSeries(
+    title='CPUs requested by users',
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        |||
+          sum by (node) (
+            kube_pod_container_resource_requests{
+              namespace=~"cms(-dev)?",
+              pod=~"purdue-af-.*",
+              container="notebook",
+              resource="cpu"
+            }
+          )
+        |||,
+        legendFormat='{{ node }}'
+      ),
+    ],
+    unit='CPUs',
+    min=0,
+    legendPlacement='right',
+  ),
+
+  nodeMemoryRequest:: panels.timeSeries(
+    title='Memory requested by users',
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        |||
+          sum by (node) (
+            kube_pod_container_resource_requests{
+              namespace=~"cms(-dev)?",
+              pod=~"purdue-af-.*",
+              container="notebook",
+              resource="memory"
+            }
+          )
+        |||,
+        legendFormat='{{ node }}'
+      ),
+    ],
+    unit='bytes',
+    min=0,
+    legendPlacement='right',
+  ),
+
   gpuGrEngineUtil:: panels.timeSeries(
     title='GPU Graphics Engine Utilization',
     targets=[
       prometheus.addQuery(
         'prometheus-rancher',
-        'sum by (gpu, GPU_I_ID, GPU_I_PROFILE) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node="geddes-g000"})',
+        'sum by (gpu, GPU_I_ID, GPU_I_PROFILE) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node=~"geddes-g000|geddes-g001"})',
         legendFormat='Slice ID {{GPU_I_ID}}, GPU #{{gpu}}: {{GPU_I_PROFILE}}'
       ),
     ],
@@ -109,8 +158,8 @@ local panels = import 'panels.libsonnet';
         'prometheus-rancher',
         |||
           sum by (gpu, GPU_I_ID, GPU_I_PROFILE) (
-            DCGM_FI_DEV_FB_USED{kubernetes_node="geddes-g000"} /
-            ( DCGM_FI_DEV_FB_USED{kubernetes_node="geddes-g000"} + DCGM_FI_DEV_FB_FREE{kubernetes_node="geddes-g000"} )
+            DCGM_FI_DEV_FB_USED{kubernetes_node=~"geddes-g000|geddes-g001"} /
+            ( DCGM_FI_DEV_FB_USED{kubernetes_node=~"geddes-g000|geddes-g001"} + DCGM_FI_DEV_FB_FREE{kubernetes_node=~"geddes-g000|geddes-g001"} )
           )
         |||,
         legendFormat='Slice ID {{GPU_I_ID}}, GPU #{{gpu}}: {{GPU_I_PROFILE}}'
@@ -126,7 +175,7 @@ local panels = import 'panels.libsonnet';
     targets=[
       prometheus.addQuery(
         'prometheus-rancher',
-        'avg by (gpu) (avg_over_time(DCGM_FI_DEV_POWER_USAGE{kubernetes_node="geddes-g000"}[10m:10s]))',
+        'avg by (gpu) (avg_over_time(DCGM_FI_DEV_POWER_USAGE{kubernetes_node=~"geddes-g000|geddes-g001"}[10m:10s]))',
         legendFormat='GPU #{{gpu}}'
       ),
     ],
