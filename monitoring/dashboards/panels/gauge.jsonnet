@@ -75,8 +75,8 @@ local panels = import 'panels.libsonnet';
     targets=[
       prometheus.addQuery(
         'prometheus-rancher',
-        'avg (DCGM_FI_DEV_GPU_TEMP{kubernetes_node=~"geddes-g000|geddes-g001"}) by (gpu)',
-        legendFormat='GPU #{{ gpu }}', instant=true
+        'avg (DCGM_FI_DEV_GPU_TEMP) by (gpu, kubernetes_node)',
+        legendFormat='{{kubernetes_node}} GPU{{ gpu }}', instant=true
       ),
     ],
     transparent=true, unit='celsius', decimals=0, min=0, max=100,

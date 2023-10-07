@@ -137,7 +137,7 @@ def deploy_dashboard(dashboard_path, folder_uid, api, global_dash=False):
         return
 
     db = layout_dashboard(db)
-    db = populate_template_variables(api, db)
+    # db = populate_template_variables(api, db)
 
     data = {
         'dashboard': db,

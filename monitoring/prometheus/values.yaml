@@ -63,6 +63,8 @@ prometheusConfig: |
           - 'af-a02.cms.rcac.purdue.edu:9796'
           - 'cms-fe01.rcac.purdue.edu:9796'
           - 'cms-fe00.rcac.purdue.edu:9796'
+          - 'vm-hammer-g000.rcac.purdue.edu:9796'
+          - 'vm-hammer-f000.rcac.purdue.edu:9796'
     - job_name: 'af-pod-monitor'
       kubernetes_sd_configs:
         - role: endpoints

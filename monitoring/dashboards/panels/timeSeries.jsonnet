@@ -142,8 +142,8 @@ local panels = import 'panels.libsonnet';
     targets=[
       prometheus.addQuery(
         'prometheus-rancher',
-        'sum by (gpu, GPU_I_ID, GPU_I_PROFILE) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node=~"geddes-g000|geddes-g001"})',
-        legendFormat='Slice ID {{GPU_I_ID}}, GPU #{{gpu}}: {{GPU_I_PROFILE}}'
+        'sum by (gpu, GPU_I_ID, GPU_I_PROFILE, kubernetes_node) (DCGM_FI_PROF_GR_ENGINE_ACTIVE)',
+        legendFormat='{{kubernetes_node}} GPU #{{gpu}}: {{GPU_I_PROFILE}}'
       ),
     ],
     unit='percentunit',
@@ -157,12 +157,12 @@ local panels = import 'panels.libsonnet';
       prometheus.addQuery(
         'prometheus-rancher',
         |||
-          sum by (gpu, GPU_I_ID, GPU_I_PROFILE) (
-            DCGM_FI_DEV_FB_USED{kubernetes_node=~"geddes-g000|geddes-g001"} /
-            ( DCGM_FI_DEV_FB_USED{kubernetes_node=~"geddes-g000|geddes-g001"} + DCGM_FI_DEV_FB_FREE{kubernetes_node=~"geddes-g000|geddes-g001"} )
+          sum by (gpu, GPU_I_ID, GPU_I_PROFILE, kubernetes_node) (
+            DCGM_FI_DEV_FB_USED /
+            ( DCGM_FI_DEV_FB_USED + DCGM_FI_DEV_FB_FREE )
           )
         |||,
-        legendFormat='Slice ID {{GPU_I_ID}}, GPU #{{gpu}}: {{GPU_I_PROFILE}}'
+        legendFormat='{{kubernetes_node}} GPU #{{gpu}}: {{GPU_I_PROFILE}}'
       ),
     ],
     unit='percentunit',
@@ -175,8 +175,8 @@ local panels = import 'panels.libsonnet';
     targets=[
       prometheus.addQuery(
         'prometheus-rancher',
-        'avg by (gpu) (avg_over_time(DCGM_FI_DEV_POWER_USAGE{kubernetes_node=~"geddes-g000|geddes-g001"}[10m:10s]))',
-        legendFormat='GPU #{{gpu}}'
+        'avg by (gpu, kubernetes_node) (avg_over_time(DCGM_FI_DEV_POWER_USAGE[10m:10s]))',
+        legendFormat='{{kubernetes_node}} GPU #{{gpu}}'
       ),
     ],
     legendPlacement='right',

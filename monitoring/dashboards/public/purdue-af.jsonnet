@@ -32,8 +32,8 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
   myPanels.stat.totalRegisteredUsers    + w(4)  + h(3),
   myPanels.placeholder.placeholder_tr   + w(20) + h(0.1),
 
-  myPanels.gauge.nodeCpuUtilGauge       + w(12) + h(4),
-  myPanels.gauge.nodeMemUtilGauge       + w(12) + h(4),
+  myPanels.gauge.nodeCpuUtilGauge       + w(12) + h(7),
+  myPanels.gauge.nodeMemUtilGauge       + w(12) + h(7),
 
   myPanels.timeSeries.nodeCpuUtil       + w(12) + h(6),
   myPanels.timeSeries.nodeMemoryUtil    + w(12) + h(6),
@@ -44,9 +44,9 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
   myPanels.placeholder.placeholder_tr   + w(20) + h(0.5),
 
   myPanels.row.gpu_metrics               + w(24) + h(2),
-  myPanels.gauge.gpuTemp                + w(8)  + h(5),
-  myPanels.timeSeries.gpuPower          + w(10)  + h(5),
-  myPanels.table.gpuSlices              + w(6)  + h(5),
+  myPanels.gauge.gpuTemp                + w(8)  + h(6),
+  myPanels.timeSeries.gpuPower          + w(10)  + h(6),
+  myPanels.table.gpuSlices              + w(6)  + h(6),
 
   myPanels.timeSeries.gpuGrEngineUtil   + w(12) + h(10),
   // myPanels.placeholder.placeholder_tr   + w(12) + h(0),
