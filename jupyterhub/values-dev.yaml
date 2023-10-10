@@ -29,36 +29,46 @@ singleuser:
                 node_selector:
                   cms-af-dev: "true"
             1: 
+              display_name: "geddes-b013"
+              kubespawner_override:
+                node_selector:
+                  kubernetes.io/hostname: geddes-b013
+            2: 
               display_name: "geddes-b014"
               kubespawner_override:
                 node_selector:
                   kubernetes.io/hostname: geddes-b014
-            2: 
+            3: 
               display_name: "geddes-b015"
               kubespawner_override:
                 node_selector:
                   kubernetes.io/hostname: geddes-b015
-            3: 
+            4: 
               display_name: "geddes-g000"
               kubespawner_override:
                 node_selector:
                   kubernetes.io/hostname: geddes-g000
-            4: 
+            5: 
+              display_name: "geddes-g001"
+              kubespawner_override:
+                node_selector:
+                  kubernetes.io/hostname: geddes-g001
+            6: 
               display_name: "af-a01"
               kubespawner_override:
                 node_selector:
                   kubernetes.io/hostname: af-a01
-            5: 
+            7: 
               display_name: "af-a02"
               kubespawner_override:
                 node_selector:
                   kubernetes.io/hostname: af-a02
-            6: 
-              display_name: "hammer-f013"
+            8: 
+              display_name: "cms-fe00"
               kubespawner_override:
                 node_selector:
-                  kubernetes.io/hostname: hammer-f013
-            7: 
+                  kubernetes.io/hostname: cms-fe00
+            9: 
               display_name: "cms-fe01"
               kubespawner_override:
                 node_selector:
@@ -135,6 +145,36 @@ singleuser:
               kubespawner_override:
                 mem_limit: "16G"
                 mem_guarantee: "16G"
+    - display_name: "hls4ml tutorial"
+      description: ""
+      kubespawner_override:
+        image: ghcr.io/fastmachinelearning/hls4ml-tutorial/hls4ml-0.7.1-vivado-2019.2:dd18adb1d3fb1ac3bf18c2b7feb37f44c10b6262
+        node_selector: {'cms-af-prod': 'true'}
+        lifecycle_hooks:
+          postStart:
+            exec:
+              command: [
+                "bash", "-c", "if [ ! -d hls4ml-tutorial ]; then git clone https://github.com/fastmachinelearning/hls4ml-tutorial.git; fi; chown -R $NB_USER:$NB_USER /home/$NB_USER/hls4ml-tutorial",
+              ]
+        extraEnv:
+          XILINX_VIVADO: "/opt/Xilinx/Vivado/2019.2"
+      profile_options:
+        cpu:
+          display_name: "CPUs"
+          choices:
+            1:
+              display_name: "4"
+              kubespawner_override:
+                cpu_limit: 4
+                cpu_guarantee: 4
+        memory:
+          display_name: "Memory"
+          choices:
+            1:
+              display_name: "32 GB"
+              kubespawner_override:
+                mem_limit: "32G"
+                mem_guarantee: "32G"
   extraContainers:
     - name: af-pod-metrics
       image: geddes-registry.rcac.purdue.edu/cms/cmsaf-pod-metrics-sidecar:0.1
@@ -193,6 +233,10 @@ prePuller:
   continuous:
     enabled: false
 hub:
+  service:
+    type: LoadBalancer
+    annotations:
+      metallb.universe.tf/address-pool: geddes-private-pool
   nodeSelector: {'cms-af-dev': 'true'}
   extraVolumes:
     - name: purdue-auth
@@ -328,8 +372,13 @@ hub:
               spawner.environment["NB_UID"] = str(uid)
               spawner.environment["NB_GID"] = str(gid)
           else:
-              spawner.environment["NB_UID"] = "1000"
-              spawner.environment["NB_GID"] = "1000"
+              af_id = int(spawner.user.id)
+              if af_id > 199:
+                raise Exception(f"Error while trying to create an external user with AF ID {af_id}. We ran out of accounts for external users!")
+              username = 'paf{:04d}'.format(af_id)
+              uid, gid = ldap_lookup(username)
+              spawner.environment["NB_UID"] = str(uid)
+              spawner.environment["NB_GID"] = str(gid)
 
       async def my_pre_spawn_hook(spawner):
           proxy_name = f"proxy-{spawner.user.name}"
@@ -388,6 +437,9 @@ hub:
       c.KubeSpawner.start_timeout = 120
       c.KernelSpecManager.ensure_native_kernel = False
       c.JupyterHub.authenticate_prometheus = False
+      # c.JupyterHub.services = [
+      #     {"name": "dask-gateway", "api_token": "3a088ecc29ebda6c739d12cbedc20db50a7f3fb1405d4d5cb17b73100f3c0b48"}
+      # ]
     templates: |
         c.JupyterHub.template_paths = ['/etc/secrets/html/']
   tolerations:
@@ -405,7 +457,10 @@ scheduling:
           operator: "Equal"
           value: "cms-af"
           effect: "NoSchedule"
-
+        - key: "cmsfrontend"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
 ingress:
  enabled: true
  hosts:

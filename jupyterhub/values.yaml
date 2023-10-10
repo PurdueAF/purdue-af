@@ -74,8 +74,8 @@ singleuser:
               kubespawner_override:
                 mem_limit: "128G" 
                 mem_guarantee: "128G"
-    - default: false
-      display_name: Minimal JupyterLab interface
+    - display_name: Minimal JupyterLab interface
+      default: false
       description: "Should be used only for debugging - no Analysis Facility functionality."
       kubespawner_override:
         image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-base-notebook:1.1"
@@ -85,6 +85,37 @@ singleuser:
         cpu_limit: 4        
         mem_guarantee: 16G
         mem_limit: 16G
+    - display_name: "hls4ml tutorial"
+      default: false
+      description: ""
+      kubespawner_override:
+        image: ghcr.io/fastmachinelearning/hls4ml-tutorial/hls4ml-0.7.1-vivado-2019.2:dd18adb1d3fb1ac3bf18c2b7feb37f44c10b6262
+        node_selector: {'cms-af-prod': 'true'}
+        lifecycle_hooks:
+          postStart:
+            exec:
+              command: [
+                "bash", "-c", "if [ ! -d hls4ml-tutorial ]; then git clone https://github.com/fastmachinelearning/hls4ml-tutorial.git; fi; chown -R $NB_USER:$NB_USER /home/$NB_USER/hls4ml-tutorial",
+              ]
+        extraEnv:
+          XILINX_VIVADO: "/opt/Xilinx/Vivado/2019.2"
+      profile_options:
+        cpu:
+          display_name: "CPUs"
+          choices:
+            1:
+              display_name: "4"
+              kubespawner_override:
+                cpu_limit: 4
+                cpu_guarantee: 4
+        memory:
+          display_name: "Memory"
+          choices:
+            1:
+              display_name: "32 GB"
+              kubespawner_override:
+                mem_limit: "32G"
+                mem_guarantee: "32G"
   extraContainers:
     - name: af-pod-metrics
       image: geddes-registry.rcac.purdue.edu/cms/cmsaf-pod-metrics-sidecar:0.1
@@ -149,6 +180,13 @@ prePuller:
     enabled: false
 hub:
   nodeSelector: {'cms-af-prod': 'true'}
+  resources:
+    requests:
+      cpu: 1
+      memory: 2Gi
+    limits:
+      cpu: 1
+      memory: 2Gi
   extraVolumes:
     - name: purdue-auth
       secret:
