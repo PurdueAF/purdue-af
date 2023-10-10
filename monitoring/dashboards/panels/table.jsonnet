@@ -19,15 +19,24 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
   + g.panel.table.queryOptions.withTargets([
     g.query.prometheus.new(
       'prometheus-rancher',
-      'count (DCGM_FI_DEV_GPU_TEMP) by (GPU_I_PROFILE)',
+      'count (DCGM_FI_DEV_GPU_TEMP) by (modelName, GPU_I_PROFILE)',
     )
-    + g.query.prometheus.withLegendFormat('{{GPU_I_PROFILE}}')
+    + g.query.prometheus.withLegendFormat('{{modelName}} {{GPU_I_PROFILE}}')
     + g.query.prometheus.withInstant()
     + g.query.prometheus.withFormat('table')
   ])
   + g.panel.table.queryOptions.withTransformations([
     g.panel.table.transformation.withId('organize')
-    + g.panel.table.transformation.withOptions({"excludeByName": {"Time": true}})
+    + g.panel.table.transformation.withOptions(
+      {
+        "excludeByName": {"Time": true},
+        "indexByName": {
+            "modelName": 0,
+            "GPU_I_PROFILE": 1,
+            "Value": 2,
+        },
+      }
+    ),
   ])
   + g.panel.table.queryOptions.withTransformations([
     g.panel.table.transformation.withId('sortBy')
@@ -35,13 +44,17 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
   ])
   + g.panel.table.standardOptions.withOverrides(
     [
+      g.panel.table.fieldOverride.byName.new("modelName")
+      + g.panel.table.fieldOverride.byName.withPropertiesFromOptions(
+        g.panel.table.standardOptions.withDisplayName("Model")
+      ),
       g.panel.table.fieldOverride.byName.new("GPU_I_PROFILE")
       + g.panel.table.fieldOverride.byName.withPropertiesFromOptions(
-        g.panel.table.standardOptions.withDisplayName("GPU slice")
+        g.panel.table.standardOptions.withDisplayName("Partition")
       ),
       g.panel.table.fieldOverride.byName.new("Value")
       + g.panel.table.fieldOverride.byName.withPropertiesFromOptions(
-        g.panel.table.standardOptions.withDisplayName("Number of slices")
+        g.panel.table.standardOptions.withDisplayName("# instances")
       ),
       g.panel.table.fieldOverride.byRegexp.new("/.*/")
       + g.panel.table.fieldOverride.byRegexp.withProperty("custom.align", "left")

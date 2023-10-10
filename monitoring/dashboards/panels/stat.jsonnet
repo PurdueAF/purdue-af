@@ -43,7 +43,7 @@ local panels = import 'panels.libsonnet';
         'prometheus',
         |||
           sum (
-              kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton-(.*)"}
+              kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton(.*)", deployment!="triton-nginx"}
           )
         |||,
         legendFormat='Running Triton servers',

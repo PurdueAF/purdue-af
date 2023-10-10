@@ -74,4 +74,29 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
         + g.panel.gauge.standardOptions.withDecimals(decimals)
         + g.panel.gauge.standardOptions.thresholds.withMode(thresholdMode)
         + g.panel.gauge.standardOptions.thresholds.withSteps(thresholdSteps),
+    barGauge(
+        title='',
+        description='',
+        targets=[],
+        transparent=false,
+        unit=null,
+        min=null,
+        max=null,
+        decimals=null,
+        displayMode=null,
+        orientation=null,
+        thresholdMode=null,
+        thresholdSteps=[],
+    ):: g.panel.barGauge.new(title)
+        + g.panel.barGauge.panelOptions.withDescription(description)
+        + g.panel.barGauge.queryOptions.withTargets(targets)
+        + (if transparent then g.panel.barGauge.panelOptions.withTransparent() else {})
+        + g.panel.barGauge.standardOptions.withUnit(unit)
+        + g.panel.barGauge.standardOptions.withMin(min)
+        + g.panel.barGauge.standardOptions.withMax(max)
+        + g.panel.barGauge.standardOptions.withDecimals(decimals)
+        + g.panel.barGauge.options.withDisplayMode(displayMode)
+        + g.panel.barGauge.options.withOrientation(orientation)
+        + g.panel.barGauge.standardOptions.thresholds.withMode(thresholdMode)
+        + g.panel.barGauge.standardOptions.thresholds.withSteps(thresholdSteps),
 }

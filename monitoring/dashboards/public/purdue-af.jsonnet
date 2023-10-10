@@ -18,7 +18,7 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
 + g.dashboard.withUid('purdue-af-dashboard')
 + g.dashboard.withDescription('Purdue Analysis Facility monitoring')
 // + g.dashboard.withLiveNow()
-+ g.dashboard.withRefresh('10s')
++ g.dashboard.withRefresh('1m')
 + g.dashboard.withStyle(value="dark")
 + g.dashboard.withTimezone(value="browser")
 + g.dashboard.time.withFrom(value="now-6h")
@@ -26,27 +26,27 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
 + g.dashboard.graphTooltip.withSharedCrosshair()
 + g.dashboard.withPanels([
   myPanels.row.af_metrics               + w(24) + h(2),
-  myPanels.stat.totalRunningPods        + w(4)  + h(3),
-  myPanels.timeSeries.usersPerNode      + w(10) + h(6),
-  myPanels.timeSeries.usersPerNamespace + w(10) + h(6),
-  myPanels.stat.totalRegisteredUsers    + w(4)  + h(3),
+  myPanels.stat.totalRunningPods        + w(4)  + h(4),
+  myPanels.timeSeries.usersPerNode      + w(10) + h(8),
+  myPanels.timeSeries.usersPerNamespace + w(10) + h(8),
+  myPanels.stat.totalRegisteredUsers    + w(4)  + h(4),
   myPanels.placeholder.placeholder_tr   + w(20) + h(0.1),
 
-  myPanels.gauge.nodeCpuUtilGauge       + w(12) + h(7),
-  myPanels.gauge.nodeMemUtilGauge       + w(12) + h(7),
+  myPanels.barGauge.nodeCpuUtilBarGauge       + w(12) + h(8),
+  myPanels.barGauge.nodeMemUtilBarGauge       + w(12) + h(8),
 
-  myPanels.timeSeries.nodeCpuUtil       + w(12) + h(6),
-  myPanels.timeSeries.nodeMemoryUtil    + w(12) + h(6),
+  myPanels.timeSeries.nodeCpuUtil       + w(12) + h(8),
+  myPanels.timeSeries.nodeMemoryUtil    + w(12) + h(8),
 
-  myPanels.timeSeries.nodeCpuRequest      + w(12) + h(6),
-  myPanels.timeSeries.nodeMemoryRequest   + w(12) + h(6),
+  myPanels.timeSeries.nodeCpuRequest      + w(12) + h(8),
+  myPanels.timeSeries.nodeMemoryRequest   + w(12) + h(8),
 
   myPanels.placeholder.placeholder_tr   + w(20) + h(0.5),
 
   myPanels.row.gpu_metrics               + w(24) + h(2),
-  myPanels.gauge.gpuTemp                + w(8)  + h(6),
-  myPanels.timeSeries.gpuPower          + w(10)  + h(6),
-  myPanels.table.gpuSlices              + w(6)  + h(6),
+  myPanels.gauge.gpuTemp                + w(8)  + h(10),
+  myPanels.timeSeries.gpuPower          + w(9)  + h(10),
+  myPanels.table.gpuSlices              + w(7)  + h(10),
 
   myPanels.timeSeries.gpuGrEngineUtil   + w(12) + h(10),
   // myPanels.placeholder.placeholder_tr   + w(12) + h(0),

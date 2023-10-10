@@ -1,17 +1,17 @@
 namespace: cms
 
 deployment:
-  image: prom/prometheus
+  image: geddes-registry.rcac.purdue.edu/docker-hub-cache/prom/prometheus
   replicas: 1
   nodeSelector:
     "cms-af-prod": "true"
   resources:
     requests:
-      cpu: 2000m
-      memory: 4Gi
+      cpu: 4
+      memory: 8Gi
     limits:
-      cpu: 2000m
-      memory: 4Gi
+      cpu: 4
+      memory: 8Gi
   tsdbRetention: 10d
   storagePath: /prometheus
   configPath: /etc/prometheus
@@ -34,8 +34,8 @@ pvc:
 prometheusConfig: |
   # my global config
   global:
-    scrape_interval: 15s
-    evaluation_interval: 15s
+    scrape_interval: 60s
+    evaluation_interval: 60s
   alerting:
     alertmanagers:
     - static_configs:
@@ -55,6 +55,7 @@ prometheusConfig: |
     - job_name: 'node-exporter'
       static_configs:
         - targets:
+          - 'geddes-b013.rcac.purdue.edu:9796'
           - 'geddes-b014.rcac.purdue.edu:9796'
           - 'geddes-b015.rcac.purdue.edu:9796'
           - 'geddes-g000.rcac.purdue.edu:9796'
@@ -64,7 +65,17 @@ prometheusConfig: |
           - 'cms-fe01.rcac.purdue.edu:9796'
           - 'cms-fe00.rcac.purdue.edu:9796'
           - 'vm-hammer-g000.rcac.purdue.edu:9796'
+          - 'vm-hammer-g001.rcac.purdue.edu:9796'
+          - 'vm-hammer-g002.rcac.purdue.edu:9796'
+          - 'vm-hammer-g003.rcac.purdue.edu:9796'
+          - 'vm-hammer-g004.rcac.purdue.edu:9796'
+          - 'vm-hammer-g005.rcac.purdue.edu:9796'
           - 'vm-hammer-f000.rcac.purdue.edu:9796'
+          - 'vm-hammer-f001.rcac.purdue.edu:9796'
+          - 'vm-hammer-f002.rcac.purdue.edu:9796'
+          - 'vm-hammer-f003.rcac.purdue.edu:9796'
+          - 'vm-hammer-f004.rcac.purdue.edu:9796'
+          - 'vm-hammer-f005.rcac.purdue.edu:9796'
     - job_name: 'af-pod-monitor'
       kubernetes_sd_configs:
         - role: endpoints

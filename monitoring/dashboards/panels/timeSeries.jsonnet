@@ -43,7 +43,7 @@ local panels = import 'panels.libsonnet';
           sum by (node)(
             label_replace(
               label_replace(
-                rate(node_cpu_seconds_total{mode!="idle"}[1m]),
+                rate(node_cpu_seconds_total{mode!="idle"}[5m]),
                 "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
               ),
               "node", "$1", "node", "(.*).cms"
@@ -143,7 +143,7 @@ local panels = import 'panels.libsonnet';
       prometheus.addQuery(
         'prometheus-rancher',
         'sum by (gpu, GPU_I_ID, GPU_I_PROFILE, kubernetes_node) (DCGM_FI_PROF_GR_ENGINE_ACTIVE)',
-        legendFormat='{{kubernetes_node}} GPU #{{gpu}}: {{GPU_I_PROFILE}}'
+        legendFormat='{{kubernetes_node}} {{GPU_I_PROFILE}}'
       ),
     ],
     unit='percentunit',
@@ -162,7 +162,7 @@ local panels = import 'panels.libsonnet';
             ( DCGM_FI_DEV_FB_USED + DCGM_FI_DEV_FB_FREE )
           )
         |||,
-        legendFormat='{{kubernetes_node}} GPU #{{gpu}}: {{GPU_I_PROFILE}}'
+        legendFormat='{{kubernetes_node}} {{GPU_I_PROFILE}}'
       ),
     ],
     unit='percentunit',
@@ -175,8 +175,8 @@ local panels = import 'panels.libsonnet';
     targets=[
       prometheus.addQuery(
         'prometheus-rancher',
-        'avg by (gpu, kubernetes_node) (avg_over_time(DCGM_FI_DEV_POWER_USAGE[10m:10s]))',
-        legendFormat='{{kubernetes_node}} GPU #{{gpu}}'
+        'avg by (gpu, kubernetes_node) (avg_over_time(DCGM_FI_DEV_POWER_USAGE[10m:1m]))',
+        legendFormat='{{kubernetes_node}}'
       ),
     ],
     legendPlacement='right',
@@ -191,7 +191,7 @@ local panels = import 'panels.libsonnet';
           rate(
                 (
                   sum(nv_inference_count{job="af-pod-monitor"}) by (model)
-                )[1m:1s]
+                )[10m:5m]
             )
         |||,
         legendFormat='{{ model }}'
@@ -210,7 +210,7 @@ local panels = import 'panels.libsonnet';
           rate(
                 (
                     sum(nv_inference_count{job="af-pod-monitor"}) by (app)
-                )[1m:1s]
+                )[10m:5m]
             )
         |||,
         legendFormat='{{ app }}'
