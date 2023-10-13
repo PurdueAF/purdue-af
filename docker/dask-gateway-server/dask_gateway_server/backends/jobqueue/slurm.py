@@ -1,6 +1,10 @@
 import math
 import os
 import shutil
+import subprocess
+import pwd
+import json
+from ldap3 import Server, Connection, SUBTREE
 
 from traitlets import Unicode, default
 
@@ -8,6 +12,26 @@ from ...traitlets import Type
 from .base import JobQueueBackend, JobQueueClusterConfig
 
 __all__ = ("SlurmBackend", "SlurmClusterConfig")
+
+
+def ldap_lookup(username):
+    url = "geddes-aux.rcac.purdue.edu"
+    baseDN = "ou=People,dc=rcac,dc=purdue,dc=edu"
+    search_filter = "(uid={0}*)"
+    attrs = ['uidNumber','gidNumber']
+    s = Server(host=url, use_ssl=True, get_info='ALL')
+    s = Server(host= url ,use_ssl= True, get_info= 'ALL')
+    conn = Connection(s, version = 3, authentication = "ANONYMOUS")
+    conn.start_tls()
+    print(conn.result)
+    print(conn)
+    conn.search(search_base = baseDN, search_filter = search_filter.format(username), search_scope = SUBTREE, attributes = attrs)
+    ldap_result_id = json.loads(conn.response_to_json())
+    print(ldap_result_id)
+    result = ldap_result_id[u'entries'][0][u'attributes']
+    uid_number = result[u'uidNumber']
+    gid_number = result [u'gidNumber']
+    return uid_number, gid_number
 
 
 def slurm_format_memory(n):
@@ -53,7 +77,22 @@ class SlurmBackend(JobQueueBackend):
     def _default_status_command(self):
         return shutil.which("squeue") or "squeue"
 
+    def create_user(self, username):
+        uid, gid = ldap_lookup(username)
+
+        command = [
+            '/bin/sh', '-c',
+            f"id -u {username} &>/dev/null || "
+            +f" useradd {username} -u {uid} -d /depot/cms/users/{username} -M"
+        ]  
+        try:
+            subprocess.run(command, check=True)
+            print(f"User '{username}' with UID {uid} has been created successfully.")
+        except subprocess.CalledProcessError as e:
+            raise Exception(f"Error creating user: {e}")
+
     def get_submit_cmd_env_stdin(self, cluster, worker=None):
+        self.create_user(cluster.username)
         cmd = [self.submit_command, "--parsable"]
         cmd.append("--job-name=dask-gateway")
         if cluster.config.partition:
