@@ -76,7 +76,12 @@ local  userTable = g.panel.table.new('')
     prometheus.addQuery(
       'prometheus',
       'af_home_dir_util{namespace=~"$namespace",job="af-pod-monitor",username!=""}',
-      refId='storageUtil', format='table', instant=true
+      refId='homeStorageUtil', format='table', instant=true
+    ),
+    prometheus.addQuery(
+      'prometheus',
+      'af_work_dir_util{namespace=~"$namespace",job="af-pod-monitor",username!=""}',
+      refId='workStorageUtil', format='table', instant=true
     ),
     prometheus.addQuery(
       'prometheus',
@@ -191,11 +196,12 @@ local  userTable = g.panel.table.new('')
                 "Value #podMemUtilCurrent": 6,
                 "Value #gpuUtilCurrent": 7,
                 "Value #gpuMemUtilCurrent": 8,
-                "Value #storageUtil": 9,
-                "Value #daskWorkers": 10,
-                "Value #cpuRequest": 11,
-                "Value #memRequest": 12,
-                "node 1": 13,
+                "Value #homeStorageUtil": 9,
+                "Value #workStorageUtil": 10,
+                "Value #daskWorkers": 11,
+                "Value #cpuRequest": 12,
+                "Value #memRequest": 13,
+                "node 1": 14,
                 },
         }
     ),
@@ -231,7 +237,8 @@ local  userTable = g.panel.table.new('')
     configureColumn("Value #daskWorkers", "Dask workers", columnWidth=110),
     configureColumn("Value #podAge", "Pod age", "s", columnWidth=100, type='color-text', thresholds=ageThresholds),
     configureColumn("Value #storageLastAccess", "Last active", "s", columnWidth=100, type='color-text', thresholds=ageThresholds),
-    configureColumn("Value #storageUtil", "Storage util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),
+    configureColumn("Value #homeStorageUtil", "/home/ util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),
+    configureColumn("Value #workStorageUtil", "/work/ util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),
     configureColumn("Value #podCpuUtilCurrent", "Pod CPU util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),
     configureColumn("Value #podMemUtilCurrent", "Pod memory util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),
     configureColumn("Value #gpuUtilCurrent", "GPU engine util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),

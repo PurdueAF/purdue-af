@@ -32,11 +32,11 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
   myPanels.stat.totalRegisteredUsers    + w(4)  + h(4),
   myPanels.placeholder.placeholder_tr   + w(20) + h(0.1),
 
-  myPanels.barGauge.nodeCpuUtilBarGauge       + w(12) + h(8),
-  myPanels.barGauge.nodeMemUtilBarGauge       + w(12) + h(8),
+  myPanels.barGauge.nodeCpuUtilBarGauge       + w(12) + h(9),
+  myPanels.barGauge.nodeMemUtilBarGauge       + w(12) + h(9),
 
-  myPanels.timeSeries.nodeCpuUtil       + w(12) + h(8),
-  myPanels.timeSeries.nodeMemoryUtil    + w(12) + h(8),
+  myPanels.timeSeries.nodeCpuUtil       + w(12) + h(9),
+  myPanels.timeSeries.nodeMemoryUtil    + w(12) + h(9),
 
   myPanels.timeSeries.nodeCpuRequest      + w(12) + h(8),
   myPanels.timeSeries.nodeMemoryRequest   + w(12) + h(8),
@@ -54,6 +54,9 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
   myPanels.timeSeries.gpuMemUtil        + w(12) + h(10),
   // myPanels.placeholder.placeholder_tr   + w(20) + h(0.5),
 
+  myPanels.row.slurm_metrics                 + w(24) + h(2),
+  myPanels.timeSeries.hammerSlurmJobs        + w(12) + h(10),
+
   myPanels.row.triton_metrics            + w(24) + h(2),
   myPanels.stat.deployedTritonLB            + w(4)  + h(3),
   myPanels.stat.deployedTritonServers       + w(4)  + h(3),
@@ -65,10 +68,10 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
   myPanels.timeSeries.tritonInferencesPerLB  + w(16) + h(10),
   // myPanels.placeholder.placeholder_tr   + w(24) + h(0.5),
 
-  myPanels.row.dask_metrics                 + w(24) + h(2),
-  myPanels.timeSeries.daskSlurmSchedulers       + w(12) + h(10),
-  myPanels.timeSeries.daskSlurmWorkers          + w(12) + h(10),
-  myPanels.placeholder.placeholder_tr   + w(20) + h(0.5),
+  // myPanels.row.dask_metrics                 + w(24) + h(2),
+  // myPanels.timeSeries.daskSlurmSchedulers       + w(12) + h(10),
+  // myPanels.timeSeries.daskSlurmWorkers          + w(12) + h(10),
+  // myPanels.placeholder.placeholder_tr   + w(20) + h(0.5),
 
 
   myPanels.row.hub_metrics               + w(24) + h(2),

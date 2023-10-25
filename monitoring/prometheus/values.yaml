@@ -52,6 +52,10 @@ prometheusConfig: |
       static_configs:
         - targets: 
           - 'rancher-monitoring-kube-state-metrics.cattle-monitoring-system.svc.cluster.local:8080'
+    - job_name: 'slurm-metrics'
+      static_configs:
+        - targets: 
+          - 'hammer-adm.rcac.purdue.edu:9100'
     - job_name: 'node-exporter'
       static_configs:
         - targets:

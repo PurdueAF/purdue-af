@@ -76,7 +76,7 @@ local panels = import 'panels.libsonnet';
                   node_memory_Buffers_bytes # Very temporary buffer memory cache for disk i/o
                 ) by (instance)
                 /
-                sum(node_memory_MemTotal_bytes) by (instance)
+                sum(node_memory_MemTotal_bytes{instance!="hammer-adm.rcac.purdue.edu:9100"}) by (instance)
               ),
               "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
             ),
@@ -272,6 +272,19 @@ local panels = import 'panels.libsonnet';
       prometheus.addQuery(
         'prometheus', 'sum(dask_scheduler_workers) or vector(0)',
         legendFormat='Number of workers'
+      ),
+    ],
+    min=0,
+    decimals=0,
+    legendPlacement='right',
+  ),
+
+  hammerSlurmJobs:: panels.timeSeries(
+    title='Slurm jobs (Hammer)',
+    targets=[
+      prometheus.addQuery(
+        'prometheus', 'slurm_info_job_user{user!="cmspilot",user!="lcgadmin",user!="uscmslcl"}',
+        legendFormat='{{user}}'
       ),
     ],
     min=0,

@@ -14,7 +14,7 @@ local panels = import 'panels.libsonnet';
             sum by (node)(
               label_replace(
                 label_replace(
-                  rate(node_cpu_seconds_total{mode!="idle"}[5m]),
+                  rate(node_cpu_seconds_total{mode!="idle",instance!="hammer-adm.rcac.purdue.edu:9100"}[5m]),
                   "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
                 ),
                 "node", "$1", "node", "(.*).cms"
@@ -54,7 +54,7 @@ local panels = import 'panels.libsonnet';
                   node_memory_Buffers_bytes # Very temporary buffer memory cache for disk i/o
                   ) by (instance)
                   /
-                  sum(node_memory_MemTotal_bytes) by (instance)
+                  sum(node_memory_MemTotal_bytes{instance!="hammer-adm.rcac.purdue.edu:9100"}) by (instance)
               ),
               "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
               ),
