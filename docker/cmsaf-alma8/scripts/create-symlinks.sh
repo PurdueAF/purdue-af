@@ -4,6 +4,7 @@ if [ -L depot ]; then rm -rf depot; fi;
 if [ -f depot ]; then rm -rf depot; fi;
 if [ ! -d depot ]; then mkdir depot; fi;
 if [ ! -L depot/users ]; then ln -s /depot/cms/users $NEW_HOME/depot/users; fi;
+if [ ! -L work ]; then ln -sf /work/ $NEW_HOME/work; fi;
 
 projects=("hmm" "top" "hh")
 for project in "${projects[@]}"; do

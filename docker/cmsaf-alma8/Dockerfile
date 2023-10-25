@@ -18,7 +18,7 @@ USER root
 # Install all OS dependencies for notebook server that starts but lacks all
 # features (e.g., download as all possible file formats)
 
-RUN yum update -y && \
+RUN yum update -y  && \
     yum upgrade -y && \
     yum install -y \
     https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm \
@@ -32,14 +32,16 @@ RUN yum update -y && \
     bzip2 \
     sudo \
     wget \
+    emacs vim-enhanced \
     libXft libXpm libXext libSM mesa-libGL \
     glibc-locale-source glibc-langpack-en && \
+    rm /usr/bin/vi && ln -s /usr/bin/vim /usr/bin/vi && \
     yum install -y voms-clients vo-client stress && \
     dnf -y install boost-devel && \
     dnf -y --enablerepo=powertools install glibc-static && \
     curl -O https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/t/tini-0.19.0-1.el8.x86_64.rpm && \
     yum install -y tini-0.19.0-1.el8.x86_64.rpm && \
-    yum --enablerepo epel-testing install -y s3cmd && \
+    yum --enablerepo epel-testing install -y s3cmd htop && \
     yum install -y gfal2-util gfal2-all nodejs &&\
     yum clean all && rm -rf /var/lib/apt/lists/* && \
     localedef -c -f UTF-8 -i en_US en_US.UTF-8 && \
@@ -251,6 +253,7 @@ COPY scripts/aliases.sh scripts/init-conda.sh /etc/profile.d/
 
 # Custom scripts
 COPY scripts/eos-connect.sh jupyter/jupyter_config.json /etc/jupyter/
+COPY dask/gateway.yaml /etc/jupyter/dask/
 
 # Switch back from root user
 USER USER ${NB_USER}

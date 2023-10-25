@@ -1,0 +1,3 @@
+gateway:
+  address: http://traefik-dask-gateway-cms.cms.geddes.rcac.purdue.edu:80
+  proxy-address: api-dask-gateway-cms.cms.geddes.rcac.purdue.edu:8000

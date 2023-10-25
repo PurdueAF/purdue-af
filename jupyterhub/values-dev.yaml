@@ -4,16 +4,15 @@ singleuser:
   cmd: 
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
-    tag: "0.8.6"
+    tag: "0.8.7"
   extraLabels:
     username_unescaped: "{legacy_escape_username}"
-    docker_image_tag: "0.8.6"
+    docker_image_tag: "0.8.7"
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
       default: true
       description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
       kubespawner_override:
-        # image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.8.6"
         node_selector: {'cms-af-dev': 'true'}
         lifecycle_hooks:
           preStop:
@@ -127,7 +126,9 @@ singleuser:
       description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
       kubespawner_override:
         image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-centos7:0.3"
-        node_selector: {'cms-af-dev': 'true'}
+        node_selector:
+          'cms-af-dev': 'true'
+          # kubernetes.io/hostname: af-a01
       profile_options:
         cpu:
           display_name: "CPUs"
@@ -149,7 +150,9 @@ singleuser:
       description: ""
       kubespawner_override:
         image: ghcr.io/fastmachinelearning/hls4ml-tutorial/hls4ml-0.7.1-vivado-2019.2:dd18adb1d3fb1ac3bf18c2b7feb37f44c10b6262
-        node_selector: {'cms-af-prod': 'true'}
+        node_selector:
+          kubernetes.io/hostname: af-a02
+          # 'cms-af-prod': 'true'
         lifecycle_hooks:
           postStart:
             exec:
@@ -260,6 +263,7 @@ hub:
       readOnly: true
   config:
     CILogonOAuthenticator:
+      admin_users: ['dkondra']
       client_id: cilogon:/client_id/652ad741e63f7aa6c602e2a806c7c705
       client_secret: s-HM2wlBCMLJ0hy8LUakiD3lGcDOC6FSeluwDwL76epB67yFAGDEftwDGSUN_D_bdENpgaLqF2gBcx4YvW3V6w
       oauth_callback_url: https://cmsdev.geddes.rcac.purdue.edu/hub/oauth_callback
@@ -271,6 +275,7 @@ hub:
         - https://idp.purdue.edu/idp/shibboleth
     JupyterHub:
       authenticator_class: cilogon
+      admin_access: True
   extraConfig:
     # Some additional config
     00-custom-spawner: |
@@ -372,13 +377,8 @@ hub:
               spawner.environment["NB_UID"] = str(uid)
               spawner.environment["NB_GID"] = str(gid)
           else:
-              af_id = int(spawner.user.id)
-              if af_id > 199:
-                raise Exception(f"Error while trying to create an external user with AF ID {af_id}. We ran out of accounts for external users!")
-              username = 'paf{:04d}'.format(af_id)
-              uid, gid = ldap_lookup(username)
-              spawner.environment["NB_UID"] = str(uid)
-              spawner.environment["NB_GID"] = str(gid)
+              spawner.environment["NB_UID"] = "1000"
+              spawner.environment["NB_GID"] = "1000"
 
       async def my_pre_spawn_hook(spawner):
           proxy_name = f"proxy-{spawner.user.name}"
@@ -433,8 +433,8 @@ hub:
       c.KubeSpawner.notebook_dir = "~"
       c.KubeSpawner.working_dir = "/home/{legacy_escape_username}"
       c.KubeSpawner.disable_user_config = True
-      c.KubeSpawner.http_timeout = 120
-      c.KubeSpawner.start_timeout = 120
+      c.KubeSpawner.http_timeout = 3600
+      c.KubeSpawner.start_timeout = 3600
       c.KernelSpecManager.ensure_native_kernel = False
       c.JupyterHub.authenticate_prometheus = False
       # c.JupyterHub.services = [
