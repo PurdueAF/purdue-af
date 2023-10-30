@@ -54,6 +54,7 @@ class SlurmClusterConfig(JobQueueClusterConfig):
 
     account = Unicode("", help="Account string associated with each job.", config=True)
 
+    reservation = Unicode("", help="Node reservation for job submission.", config=True)
 
 class SlurmBackend(JobQueueBackend):
     """A backend for deploying Dask on a Slurm cluster."""
@@ -101,6 +102,8 @@ class SlurmBackend(JobQueueBackend):
             cmd.append("--account=" + cluster.config.account)
         if cluster.config.qos:
             cmd.extend("--qos=" + cluster.config.qos)
+        if cluster.config.reservation:
+            cmd.extend(["--reservation=" + cluster.config.reservation])
 
         if worker:
             cpus = cluster.config.worker_cores
