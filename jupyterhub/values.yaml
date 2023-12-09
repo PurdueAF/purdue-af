@@ -4,15 +4,15 @@ singleuser:
   cmd: 
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
-    tag: "0.8.7"
+    tag: "0.9.0"
   extraLabels:
     username_unescaped: "{legacy_escape_username}"
-    docker_image_tag: "0.8.7"
+    docker_image_tag: "0.9.0"
   startTimeout: 3600
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
       default: true
-      description: ""
+      description: "If you are starting a session with a GPU, please shut it down when finished in order to release the GPU."
       kubespawner_override:
         node_selector: {'cms-af-prod': 'true'}
         lifecycle_hooks:
@@ -45,12 +45,19 @@ singleuser:
               display_name: "0"
               kubespawner_override:
                 extra_resource_limits:
-                  nvidia.com/mig-2g.10gb: 0
+                  nvidia.com/mig-1g.5gb: 0
+                  # nvidia.com/mig-7g.40gb: 0
             2:
-              display_name: "1"
+              display_name: "1 GPU slice (5GB)"
               kubespawner_override:
                 extra_resource_limits:
-                  nvidia.com/mig-2g.10gb: 1
+                  nvidia.com/mig-1g.5gb: 1
+            3:
+              display_name: "1 full GPU (40GB) - subject to availability"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-7g.40gb: 1
+
         memory:
           display_name: "Memory"
           choices:
@@ -216,12 +223,20 @@ hub:
       client_id: cilogon:/client_id/76fff058f782d2425aa623c0ac290aa4
       client_secret: JHwzsOPFvX78Yi8n3k6iCoqgk_hMFh5MZSD7AINxOsqjwrrXI5yelQ6KxNCDcLwbrt8HQUV_7Z2xSLJPFS0KlA 
       oauth_callback_url: https://cms.geddes.rcac.purdue.edu/hub/oauth_callback
-      username_claim: eppn
       enable_auth_state: true
-      shown_idps:
-        - https://cern.ch/login
-        - https://idp.fnal.gov/idp/shibboleth
-        - https://idp.purdue.edu/idp/shibboleth
+      allowed_idps:
+        https://cern.ch/login:
+          allow_all: true
+          username_derivation:
+            username_claim: eppn
+        https://idp.fnal.gov/idp/shibboleth:
+          allow_all: true
+          username_derivation:
+            username_claim: eppn
+        https://idp.purdue.edu/idp/shibboleth:
+          allow_all: true
+          username_derivation:
+            username_claim: eppn
     JupyterHub:
       authenticator_class: cilogon
       admin_access: True

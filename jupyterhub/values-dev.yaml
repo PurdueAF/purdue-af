@@ -53,21 +53,26 @@ singleuser:
                 node_selector:
                   kubernetes.io/hostname: geddes-g001
             6: 
-              display_name: "af-a01"
+              display_name: "geddes-g002"
               kubespawner_override:
                 node_selector:
-                  kubernetes.io/hostname: af-a01
+                  kubernetes.io/hostname: geddes-g002
             7: 
-              display_name: "af-a02"
+              display_name: "paf-a01"
               kubespawner_override:
                 node_selector:
-                  kubernetes.io/hostname: af-a02
+                  kubernetes.io/hostname: paf-a01
             8: 
+              display_name: "paf-a02"
+              kubespawner_override:
+                node_selector:
+                  kubernetes.io/hostname: paf-a02
+            9: 
               display_name: "cms-fe00"
               kubespawner_override:
                 node_selector:
                   kubernetes.io/hostname: cms-fe00
-            9: 
+            10: 
               display_name: "cms-fe01"
               kubespawner_override:
                 node_selector:
@@ -122,6 +127,29 @@ singleuser:
               kubespawner_override:
                 mem_limit: "64G" 
                 mem_guarantee: "64G"
+    - display_name: "JupyterLab v4 (AF v0.9.0)"
+      kubespawner_override:
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.9.0"
+        node_selector:
+          'cms-af-prod': 'true'
+          # kubernetes.io/hostname: af-a01
+      profile_options:
+        cpu:
+          display_name: "CPUs"
+          choices:
+            1:
+              display_name: "4"
+              kubespawner_override:
+                cpu_limit: 4
+                cpu_guarantee: 4
+        memory:
+          display_name: "Memory"
+          choices:
+            1:
+              display_name: "16 GB"
+              kubespawner_override:
+                mem_limit: "16G"
+                mem_guarantee: "16G"
     - display_name: "JupyterLab based on CentOS7"
       description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
       kubespawner_override:
@@ -210,6 +238,9 @@ singleuser:
         nfs:
           server: datadepot.rcac.purdue.edu
           path: /depot/cms
+      - name: kernels
+        persistentVolumeClaim:
+          claimName: kernels
       - name: munge-key
         secret:
           secretName: munge-key
@@ -222,6 +253,9 @@ singleuser:
         mountPropagation: HostToContainer
       - name: depot
         mountPath: /depot/cms
+        mountPropagation: HostToContainer
+      - name: kernels
+        mountPath: /kernels/
         mountPropagation: HostToContainer
       - mountPath: /etc/secrets/munge/
         name: munge-key
@@ -240,7 +274,14 @@ hub:
     type: LoadBalancer
     annotations:
       metallb.universe.tf/address-pool: geddes-private-pool
-  nodeSelector: {'cms-af-dev': 'true'}
+  nodeSelector: {'cms-af-prod': 'true'}
+  resources:
+    requests:
+      cpu: 1
+      memory: 2Gi
+    limits:
+      cpu: 1
+      memory: 2Gi
   extraVolumes:
     - name: purdue-auth
       secret:
@@ -267,12 +308,20 @@ hub:
       client_id: cilogon:/client_id/652ad741e63f7aa6c602e2a806c7c705
       client_secret: s-HM2wlBCMLJ0hy8LUakiD3lGcDOC6FSeluwDwL76epB67yFAGDEftwDGSUN_D_bdENpgaLqF2gBcx4YvW3V6w
       oauth_callback_url: https://cmsdev.geddes.rcac.purdue.edu/hub/oauth_callback
-      username_claim: eppn
       enable_auth_state: true
-      shown_idps:
-        - https://cern.ch/login
-        - https://idp.fnal.gov/idp/shibboleth
-        - https://idp.purdue.edu/idp/shibboleth
+      allowed_idps:
+        https://cern.ch/login:
+          allow_all: true
+          username_derivation:
+            username_claim: eppn
+        https://idp.fnal.gov/idp/shibboleth:
+          allow_all: true
+          username_derivation:
+            username_claim: eppn
+        https://idp.purdue.edu/idp/shibboleth:
+          allow_all: true
+          username_derivation:
+            username_claim: eppn
     JupyterHub:
       authenticator_class: cilogon
       admin_access: True
@@ -433,8 +482,8 @@ hub:
       c.KubeSpawner.notebook_dir = "~"
       c.KubeSpawner.working_dir = "/home/{legacy_escape_username}"
       c.KubeSpawner.disable_user_config = True
-      c.KubeSpawner.http_timeout = 3600
-      c.KubeSpawner.start_timeout = 3600
+      c.KubeSpawner.http_timeout = 240
+      c.KubeSpawner.start_timeout = 240
       c.KernelSpecManager.ensure_native_kernel = False
       c.JupyterHub.authenticate_prometheus = False
       # c.JupyterHub.services = [

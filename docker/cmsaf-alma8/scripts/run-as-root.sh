@@ -24,3 +24,5 @@ chown -R $NB_USER:users $NEW_HOME/.config/dask/*
 
 mv /etc/slurm/slist /usr/bin
 export PATH=/etc/jupyter/dask/:$PATH
+
+cp /cvmfs/cms.cern.ch/SITECONF/T2_US_Purdue/storage.json /etc/cvmfs/
