@@ -40,6 +40,7 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
 
   myPanels.timeSeries.nodeCpuRequest      + w(12) + h(8),
   myPanels.timeSeries.nodeMemoryRequest   + w(12) + h(8),
+  myPanels.timeSeries.nodeEphStorageUsage + w(12) + h(8),
 
   myPanels.placeholder.placeholder_tr   + w(20) + h(0.5),
 

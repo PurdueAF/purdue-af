@@ -137,6 +137,22 @@ local panels = import 'panels.libsonnet';
     legendPlacement='right',
   ),
 
+  nodeEphStorageUsage:: panels.timeSeries(
+    title='Ephemeral storage usage',
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        |||
+          100-ephemeral_storage_node_percentage{node_name=~"geddes-b013|geddes-b014|geddes-b015|geddes-g000|geddes-g001|geddes-g002|vm-hammer-.*"}
+        |||,
+        legendFormat='{{ node_name }}'
+      ),
+    ],
+    unit='percent',
+    min=0, max=100,
+    legendPlacement='right',
+  ),
+
   gpuGrEngineUtil:: panels.timeSeries(
     title='GPU Graphics Engine Utilization',
     targets=[
@@ -191,7 +207,7 @@ local panels = import 'panels.libsonnet';
           rate(
                 (
                   sum(nv_inference_count{job="af-pod-monitor"}) by (model)
-                )[10m:5m]
+                )[4m:2m]
             )
         |||,
         legendFormat='{{ model }}'
@@ -210,7 +226,7 @@ local panels = import 'panels.libsonnet';
           rate(
                 (
                     sum(nv_inference_count{job="af-pod-monitor"}) by (app)
-                )[10m:5m]
+                )[4m:2m]
             )
         |||,
         legendFormat='{{ app }}'

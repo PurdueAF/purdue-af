@@ -64,8 +64,9 @@ prometheusConfig: |
           - 'geddes-b015.rcac.purdue.edu:9796'
           - 'geddes-g000.rcac.purdue.edu:9796'
           - 'geddes-g001.rcac.purdue.edu:9796'
-          - 'af-a01.cms.rcac.purdue.edu:9796'
-          - 'af-a02.cms.rcac.purdue.edu:9796'
+          - 'geddes-g002.rcac.purdue.edu:9796'
+          - 'paf-a01.cms.rcac.purdue.edu:9796'
+          - 'paf-a02.cms.rcac.purdue.edu:9796'
           - 'cms-fe01.rcac.purdue.edu:9796'
           - 'cms-fe00.rcac.purdue.edu:9796'
           - 'vm-hammer-g000.rcac.purdue.edu:9796'
@@ -103,5 +104,3 @@ prometheusConfig: |
         - source_labels: [__meta_kubernetes_service_label_scrape_metrics]
           action: keep
           regex: 'true'
-
-

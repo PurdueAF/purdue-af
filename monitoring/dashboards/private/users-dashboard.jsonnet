@@ -143,7 +143,8 @@ local  userTable = g.panel.table.new('')
       |||
         sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{
           namespace=~"$namespace",
-          pod=~"purdue-af-.*"
+          pod=~"purdue-af-.*",
+          kubernetes_node=~"geddes-g00.*"
         })
       |||,
       refId='gpuUtilCurrent', format='table', instant=true
@@ -152,10 +153,10 @@ local  userTable = g.panel.table.new('')
       'prometheus-rancher',
       |||
         sum by (pod) (
-          ( DCGM_FI_DEV_FB_USED{namespace=~"$namespace",pod=~"purdue-af-.*"}
+          ( DCGM_FI_DEV_FB_USED{kubernetes_node=~"geddes-g00.*",namespace=~"$namespace",pod=~"purdue-af-.*"}
             / ( 
-              DCGM_FI_DEV_FB_USED{namespace=~"$namespace",pod=~"purdue-af-.*"} +
-              DCGM_FI_DEV_FB_FREE{namespace=~"$namespace",pod=~"purdue-af-.*"}
+              DCGM_FI_DEV_FB_USED{kubernetes_node=~"geddes-g00.*",namespace=~"$namespace",pod=~"purdue-af-.*"} +
+              DCGM_FI_DEV_FB_FREE{kubernetes_node=~"geddes-g00.*",namespace=~"$namespace",pod=~"purdue-af-.*"}
             )
           )
         )

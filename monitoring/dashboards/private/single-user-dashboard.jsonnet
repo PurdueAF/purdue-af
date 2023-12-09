@@ -52,7 +52,7 @@ local userResourceUtil = panels.timeSeries(
     prometheus.addQuery(
       'prometheus-rancher',
       |||
-        sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node="geddes-g000",pod=~"$user"})
+        sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node=~"geddes-g00.*",pod=~"$user"})
       |||,
       legendFormat='GPU engine utilization'
     ),
@@ -60,10 +60,10 @@ local userResourceUtil = panels.timeSeries(
       'prometheus-rancher',
       |||
         sum by (pod) (
-          ( DCGM_FI_DEV_FB_USED{kubernetes_node="geddes-g000",pod=~"$user"}
+          ( DCGM_FI_DEV_FB_USED{kubernetes_node=~"geddes-g00.*",pod=~"$user"}
             / ( 
-              DCGM_FI_DEV_FB_USED{kubernetes_node="geddes-g000",pod=~"$user"} +
-              DCGM_FI_DEV_FB_FREE{kubernetes_node="geddes-g000",pod=~"$user"}
+              DCGM_FI_DEV_FB_USED{kubernetes_node=~"geddes-g00.*",pod=~"$user"} +
+              DCGM_FI_DEV_FB_FREE{kubernetes_node=~"geddes-g00.*",pod=~"$user"}
             )
           )
         )
