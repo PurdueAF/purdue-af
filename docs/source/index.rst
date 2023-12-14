@@ -17,31 +17,6 @@ Contents
 --------
 
 .. toctree::
-   :caption: Documentation
+    :caption: Documentation
 
     login-options
-    user-interface
-    Data access, storage, file sharing
-    Pre-installed software (Jupyter kernels)
-    Hardware
-    Diagrams
-    Contacts
-
-.. toctree::
-   :caption: Monitoring
-
-   Grafana dashboard
-
-.. toctree::
-   :caption: User guides
-
-    Interactive demos
-    How to enable access to CERN EOS
-    How to create and share Conda environments and Jupyter kernels
-    How to scale up using Dask Gateway
-    Rucio tutorial
-
-.. toctree::
-   :caption: Contacts
-
-   Contacts
