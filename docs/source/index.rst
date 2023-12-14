@@ -15,11 +15,10 @@ Each user is provided with a 25GB private ``/home/`` directory at first login, a
 
 .. toctree::
    :maxdepth: 1
-   :hidden:
    :caption: Documentation
 
-    Login options and user naming rules
-    User interface
+    login-options.rst
+    user-interface.rst
     Data access, storage, file sharing
     Pre-installed software (Jupyter kernels)
     Hardware
