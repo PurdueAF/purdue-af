@@ -17,8 +17,8 @@ Each user is provided with a 25GB private ``/home/`` directory at first login, a
    :maxdepth: 1
    :caption: Documentation
 
-    login-options.rst
-    user-interface.rst
+    login-options
+    user-interface
     Data access, storage, file sharing
     Pre-installed software (Jupyter kernels)
     Hardware
