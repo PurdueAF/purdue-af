@@ -1,3 +1,5 @@
+[![Documentation Status](https://readthedocs.org/projects/purdue-af/badge/?version=latest)](https://purdue-af.readthedocs.io/en/latest/?badge=latest)
+
 # Purdue Analysis Facility
 
 [Analysis Facility entry point and documentation](https://analysis-facility.physics.purdue.edu)
