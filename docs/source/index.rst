@@ -13,8 +13,10 @@ The same person using different accounts to sign in will be treated as different
 
 Each user is provided with a 25GB private ``/home/`` directory at first login, as well as 100GB storage space in a shared ``/work/`` directory. These directories will persist between sessions, but will be deleted after 6 months of inactivity.
 
+Contents
+--------
+
 .. toctree::
-   :maxdepth: 1
    :caption: Documentation
 
     login-options
@@ -26,15 +28,11 @@ Each user is provided with a 25GB private ``/home/`` directory at first login, a
     Contacts
 
 .. toctree::
-   :maxdepth: 1
-   :hidden:
    :caption: Monitoring
 
    Grafana dashboard
 
 .. toctree::
-   :maxdepth: 1
-   :hidden:
    :caption: User guides
 
     Interactive demos
@@ -44,8 +42,6 @@ Each user is provided with a 25GB private ``/home/`` directory at first login, a
     Rucio tutorial
 
 .. toctree::
-   :maxdepth: 1
-   :hidden:
    :caption: Contacts
 
    Contacts

@@ -2,7 +2,7 @@ User interface
 ===========================
 
 The Purdue Analysis Facility provides a user with a dedicated *Kubernetes pod*, which runs *JupyterHub*
- with *JupyterLab* interface on top of *AlmaLinux8* operating system. 
+with *JupyterLab* interface on top of *AlmaLinux8* operating system. 
 
 A JupyterLab session persists even if a user logs out or closes the browser tab;
 the user can reconnect to the same session later, possibly from another device.
@@ -15,11 +15,14 @@ The user data in ``/home/`` and ``/work/`` directories will be cleaned after **6
 
 
 The Analysis Facility interface features the following functionality:
+
 * Interactive file browser
+
   * Based at user's dedicated home directory with persistent 25GB storage
   * Multiple mounted external storage volumes for data access and file sharing
   * Drag-and-drop to move files
   * Copy, rename and other actions available via right-click menu
+
 * Jupyter Notebooks with Python3 and ROOT C++ kernels
 * Interactive text editor
 * Git extension for interactive work with GitHub or GitLab repositories
