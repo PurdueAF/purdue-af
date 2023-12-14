@@ -20,3 +20,4 @@ Contents
     :caption: Documentation
 
     login-options
+    user-interface
