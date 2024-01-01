@@ -41,4 +41,4 @@ The Purdue Analysis Facility provides access to multiple storage options:
     * **XRootD client** is installed and can be used to access data stored at other CERN sites.
 
 * **Subscribing datasets with Rucio**
-    :doc:`Rucio tutorial <guide-rucio>`
+    :doc:`guide-rucio`

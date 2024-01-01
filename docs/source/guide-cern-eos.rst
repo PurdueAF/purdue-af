@@ -8,9 +8,7 @@ In order to enable access to user’s CERNBox directory, one should run the ``eo
 terminal opened inside an Analysis Facility session. This command will trigger Kerberos authentication,
 and create a symlink pointing to the user’s CERNBox directory in the file browser.
 
-Example of the `eos-connect` command output:
-
-.. code-block:: shell
+Example of the ``eos-connect`` command output:
 
     [dkondra@purdue-af-1 ~]$ eos-connect
     
