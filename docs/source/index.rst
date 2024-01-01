@@ -21,3 +21,5 @@ Contents
 
     login-options
     user-interface
+    data-access
+    kernels
