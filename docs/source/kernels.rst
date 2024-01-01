@@ -16,7 +16,7 @@ Python3 kernel (default)
 
 This kernel is designed for typical pythonic analysis workflows which do not include machine learning.
 The kernel is based on Python 3.10. The following packages are installed:
-..
+
 * Scientific computing and data analysis: ``numpy``, ``scipy``, ``pandas``, ``awkward``, ``numba``,
   ``scikit-learn``, ``uncertainties``, ``lmfit``
 * High energy physics tools: ``ROOT``, ``uproot``, ``coffea``, ``vector``, ``hist``, ``pyhf``
@@ -29,7 +29,7 @@ Python3 kernel [ML]
 
 This kernel includes all of the packages included into the default kernel,
 and adds the most popular machine learning packages:
-..
+
 * ``tensorflow``
 * ``pytorch`` and ``pytorch-geometric``
 * ``keras``

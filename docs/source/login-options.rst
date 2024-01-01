@@ -16,7 +16,7 @@ The same person using different login credentials is treated as different users,
 which means that they will be assigned separate work areas and storage volumes for each login method.
 
 At login, the username and the hostname are constructed as follows:
-..
+
 * Local Purdue account: ``dkondra@purdue-af-1``
 * CERN account: ``dkondrat-cern@purdue-af-2``
 * FNAL account: ``dkondrat-fnal@purdue-af-3``

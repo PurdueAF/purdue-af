@@ -15,7 +15,7 @@ The user data in ``/home/`` and ``/work/`` directories will be cleaned after **6
 
 
 The Analysis Facility interface features the following functionality:
-..
+
 * Interactive file browser
 
   * Based at user's dedicated home directory with persistent 25GB storage

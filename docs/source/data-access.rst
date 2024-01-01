@@ -2,7 +2,7 @@ Data access, storage, file sharing
 ==================================
 
 The Purdue Analysis Facility provides access to multiple storage options:
-..
+
 * **Local storage:** at first login, each user is given a 25GB directory at ``/home/<username>/``.
   These directories persist between sessions and can be used to store user notebooks, scripts, and other data.
   However, the directories will be deleted after 6 months of inactivity, therefore they should not be used for
