@@ -18,6 +18,7 @@ Contents
 
 .. toctree::
     :caption: Documentation
+    :maxdepth: 1
 
     login-options
     user-interface
@@ -25,3 +26,11 @@ Contents
     kernels
     hardware
     contacts
+
+.. toctree::
+    :caption: Monitoring
+    :maxdepth: 1
+
+.. toctree::
+    :caption: User guides
+    :maxdepth: 1
