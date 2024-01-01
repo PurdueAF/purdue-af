@@ -11,6 +11,7 @@ and create a symlink pointing to the user’s CERNBox directory in the file brow
 Example of the `eos-connect` command output:
 
 .. code-block:: shell
+
     [dkondra@purdue-af-1 ~]$ eos-connect
     
     ------------------------ Connecting to CERN EOS ------------------------
@@ -34,7 +35,7 @@ Example of the `eos-connect` command output:
     --------------------------------- Done! ---------------------------------
     
     [dkondra@purdue-af-1 ~]$
-    ```
+
     
 
 The Kerberos ticket does not persist between sessions, therefore connection to CERN EOS must be re-established
