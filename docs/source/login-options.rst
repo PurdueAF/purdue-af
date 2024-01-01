@@ -2,7 +2,7 @@ Login options and user naming rules
 ======================================
 
 The user authentication is implemented using **CILogon**. Three login options are available: 
-
+..
 * Purdue University account (BoilerKey)
 * CERN account (CMS users only)
 * FNAL account
@@ -16,7 +16,7 @@ The same person using different login credentials is treated as different users,
 which means that they will be assigned separate work areas and storage volumes for each login method.
 
 At login, the username and the hostname are constructed as follows:
-
+..
 * Local Purdue account: ``dkondra@purdue-af-1``
 * CERN account: ``dkondrat-cern@purdue-af-2``
 * FNAL account: ``dkondrat-fnal@purdue-af-3``
