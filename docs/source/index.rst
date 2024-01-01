@@ -37,3 +37,6 @@ Contents
 .. toctree::
     :caption: User guides
     :maxdepth: 1
+
+    guide-cern-eos
+    guide-rucio

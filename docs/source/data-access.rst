@@ -22,7 +22,7 @@ The Purdue Analysis Facility provides access to multiple storage options:
     therefore it is recommended to use it for file sharing.
     CERNBox is mounted at ``/eos/cern/`` and ``/home/<username>/eos-cern/``.
      | **Warning:** access to CERNBox is not enabled by default. To set it up, please follow these instructions:
-       `How to enable access to CERN EOS <https://www.notion.so/How-to-enable-access-to-CERN-EOS-e4499fc5fd9e4849a08629bd146dd2d7?pvs=21>`_
+       :doc:`guide-cern-eos`
   * `CVMFS <https://cernvm.cern.ch/fs/>`_: mounted at ``/cvmfs/`` with **read-only** access.
     The main use case for CVMFS is  installation of CMSSW releases.
   * **Purdue EOS**: serves as a storage space for large centrally produced and private datasets,
@@ -41,4 +41,4 @@ The Purdue Analysis Facility provides access to multiple storage options:
     * **XRootD client** is installed and can be used to access data stored at other CERN sites.
 
 * **Subscribing datasets with Rucio**
-    `Rucio tutorial <link>`_
+    :doc:`Rucio tutorial <guide-rucio>`
