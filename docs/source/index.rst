@@ -23,3 +23,5 @@ Contents
     user-interface
     data-access
     kernels
+    hardware
+    contacts
