@@ -4,6 +4,8 @@ Purdue Analysis Facility documentation
 The Purdue Analysis Facility is designed to provide an interactive environment
 for fast and scalable CMS physics analyses using dedicated computing resources at Purdue.
 
+`🚀 Login to Purdue Analysis Facility <https://cms.geddes.rcac.purdue.edu>`_
+
 The following login options are supported:
 
 * Purdue University account (BoilerKey)
@@ -40,3 +42,4 @@ Contents
 
     guide-cern-eos
     guide-rucio
+    guide-dask-gateway
