@@ -26,6 +26,7 @@ which may or may not be the same for different accounts, and even for different 
 In order to avoid naming conflicts, CERN and FNAL usernames are amended by ``-cern`` and ``-fnal`` suffixes,
 respectively, while Purdue usernames are left unchanged. Since within the same institution usernames are unique,
 this ensures that a new user cannot accidentally get access to another user's data.
-Since every user is assigned a dedicated kubernetes pod which is not shared with other users,
-the hostname must also be unique. This is done by constructing the hostnames from unique user IDs taken
-from the user database.
+
+.. Since every user is assigned a dedicated Kubernetes pod which is not shared with other users,
+.. the hostname must also be unique. This is done by constructing the hostnames from unique user IDs taken
+.. from the user database.
