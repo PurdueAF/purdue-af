@@ -10,8 +10,8 @@ Users can also create their own kernels from scratch or from the existing kernel
 The pre-installed kernels are listed below. The versions of the packages in these kernels are not fixed,
 and will be occasionally upgraded.
 
-.. ![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/ec8b6eb2-fbe4-4958-b1a9-19f773c00680/Untitled.png)
-.. TODO: add screenshot of kernels
+.. image:: images/kernels.png
+   :width: 400
 
 **Python3 kernel (default)** ::
 
