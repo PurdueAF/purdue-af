@@ -12,6 +12,7 @@ and will be occasionally upgraded.
 
 .. image:: images/kernels.png
    :width: 300
+   :align: center
 
 **Python3 kernel (default)** ::
 

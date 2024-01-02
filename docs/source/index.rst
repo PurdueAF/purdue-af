@@ -36,6 +36,8 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     :caption: Monitoring
     :maxdepth: 1
 
+    monitoring
+
 .. toctree::
     :caption: User guides
     :maxdepth: 1
