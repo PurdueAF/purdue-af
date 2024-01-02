@@ -1,9 +1,15 @@
 How to scale up using Dask Gateway
 ===================================
 
+.. warning::
+    Dask Gateway creates schedulers and workers at the Purdue Hammer cluster via SLURM.
+    
+    Therefore, all analysis code that uses Dask Gateway must be stored in a storage volume accessible from both Hammer
+    cluster, and from Purdue Analysis Facility.
 
-* The instructions below show how to use Dask Gateway to manage Dask/SLURM clusters in Purdue Analysis Facility.
-* In order to avoid errors, make sure that your code is stored on Depot.
+    At the moment, there is only one such volume - **Purdue Depot storage**. Depot is only accessbile for users with a
+    Purdue account, therefore CERN and FNAL users cannot use Dask Gateway at the moment.
+
 * Default conda environments ``python3`` and ``python3-ml`` have all necessary software installed.
   If you want to use Dask Gateway in your own environment, make sure that it contains ``dask-gateway``,
   ``ipykernel`` and ``ipywidgets`` packages.

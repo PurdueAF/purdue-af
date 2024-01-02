@@ -6,20 +6,19 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
 
 `🚀 Login to Purdue Analysis Facility <https://cms.geddes.rcac.purdue.edu>`_
 
-The following login options are supported:
+
+
+Supported login options:
 
 * Purdue University account (BoilerKey)
 * CERN account (CMS users only)
 * FNAL account
 
-The same person using different accounts to sign in will be treated as different users.
+.. The same person using different accounts to sign in will be treated as different users.
 
-Each user is provided with a 25GB private ``/home/`` directory at first login,
-as well as 100GB storage space in a shared ``/work/`` directory.
-These directories will persist between sessions, but will be deleted after 6 months of inactivity.
-
-Contents
---------
+.. Each user is provided with a 25GB private ``/home/`` directory at first login,
+.. as well as 100GB storage space in a shared ``/work/`` directory.
+.. These directories will persist between sessions, but will be deleted after 6 months of inactivity.
 
 .. toctree::
     :caption: Documentation
@@ -41,5 +40,5 @@ Contents
     :maxdepth: 1
 
     guide-cern-eos
-    guide-rucio
     guide-dask-gateway
+    guide-rucio

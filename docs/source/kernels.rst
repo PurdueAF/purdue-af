@@ -19,7 +19,7 @@ This kernel is designed for typical pythonic analysis workflows which do not inc
 The kernel is based on Python 3.10. The following packages are installed:
 
 * Scientific computing and data analysis: ``numpy``, ``scipy``, ``pandas``, ``awkward``, ``numba``,
-``scikit-learn``, ``uncertainties``, ``lmfit``
+  ``scikit-learn``, ``uncertainties``, ``lmfit``
 * High energy physics tools: ``ROOT``, ``uproot``, ``coffea``, ``vector``, ``hist``, ``pyhf``
 * Plotting: ``matplotlib``, ``mplhep``, ``plotly``
 * Distributed computing: ``dask``, ``dask[distributed]``, ``dask[dataframe]``, ``dask-jobqueue``
@@ -39,4 +39,5 @@ and adds the most popular machine learning packages:
 
 This kernel provides an interactive interface to the ROOT command line,
 allowing to execute ROOT macros and produce plots inside Jupyter notebooks.
-`ROOT C++ notebook demo <link>`_
+
+   `ROOT C++ notebook demo <link>`_
