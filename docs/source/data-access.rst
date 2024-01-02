@@ -24,8 +24,9 @@ The Purdue Analysis Facility provides access to multiple storage options:
 
 .. warning::
    
-   **Warning:** access to CERNBox is not enabled by default. To set it up, please follow these instructions:
-   :doc:`guide-cern-eos`
+        **Warning:** access to CERNBox is not enabled by default. To set it up, please follow these instructions:
+        :doc:`guide-cern-eos`
+
 
   * `CVMFS <https://cernvm.cern.ch/fs/>`_: mounted at ``/cvmfs/`` with **read-only** access.
     The main use case for CVMFS is  installation of CMSSW releases.
