@@ -11,7 +11,7 @@ The pre-installed kernels are listed below. The versions of the packages in thes
 and will be occasionally upgraded.
 
 .. image:: images/kernels.png
-   :width: 400
+   :width: 300
 
 **Python3 kernel (default)** ::
 
