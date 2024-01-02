@@ -22,8 +22,8 @@ The kernel is based on Python 3.10. The following packages are installed:
   ``scikit-learn``, ``uncertainties``, ``lmfit``
 * High energy physics tools: ``ROOT``, ``uproot``, ``coffea``, ``vector``, ``hist``, ``pyhf``
 * Plotting: ``matplotlib``, ``mplhep``, ``plotly``
-* Distributed computing: ``dask``, ``dask[distributed]``, ``dask[dataframe]``, ``dask-jobqueue``
-* Other tools: ``xrootd``, ``pytest``, ``yaml``, ``tqdm``
+* Distributed computing: ``dask``, ``distributed``, ``dask-jobqueue``, ``dask-gateway``
+* Other tools: ``xrootd``, ``pytest``, ``yaml``, ``tqdm``, ``ipywidgets``
 
 **Python3 kernel [ML]** ::
 
@@ -40,4 +40,4 @@ and adds the most popular machine learning packages:
 This kernel provides an interactive interface to the ROOT command line,
 allowing to execute ROOT macros and produce plots inside Jupyter notebooks.
 
-   `ROOT C++ notebook demo <link>`_
+   `ROOT C++ notebook demo <https://github.com/kondratyevd/purdue-af-demo-sep2023/blob/master/0-root-cpp.ipynb>`_

@@ -14,7 +14,8 @@ This will delete all unsaved progress, but the user files in the ``/home/<userna
 The user data in ``/home/`` and ``/work/`` directories will be cleaned after **6 months** of user inactivity,
 unless requested otherwise.
 
-
+.. image:: images/inteface.png
+   :width: 800
 
 The Analysis Facility interface features the following functionality:
 
