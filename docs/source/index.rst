@@ -25,12 +25,12 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     :caption: Documentation
     :maxdepth: 1
 
-    login-options
-    user-interface
-    data-access
-    kernels
-    hardware
-    contacts
+    doc-login-options
+    doc-interface
+    doc-storage
+    doc-software
+    doc-hardware
+    doc-contacts
 
 .. toctree::
     :caption: Monitoring

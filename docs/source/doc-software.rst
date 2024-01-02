@@ -1,6 +1,6 @@
-.. _kernels:
+.. _doc-kernels:
 
-Software (Jupyter kernels)
+Software
 ==========================
 
 The Purdue Analysis Facility provides several Jupyter kernels with pre-installed analysis software.

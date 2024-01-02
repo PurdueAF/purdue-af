@@ -1,6 +1,6 @@
-.. _data-access:
+.. _doc-storage:
 
-Data access, storage, file sharing
+Storage, data access, file sharing
 ==================================
 
 The Purdue Analysis Facility provides access to multiple storage options:
