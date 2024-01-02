@@ -12,8 +12,10 @@ in order to prevent abuse of resources.
 For Purdue, the list of allowed users is defined as all users who have access to the Hammer cluster,
 while for CERN the allowed users are required to be members of CMS VO.
 
-The same person using different login credentials is treated as different users,
-which means that they will be assigned separate work areas and storage volumes for each login method.
+.. note::
+
+   The same person using different login credentials is treated as different users,
+   which means that they will be assigned separate work areas and storage volumes for each login method.
 
 At login, the username and the hostname are constructed as follows:
 

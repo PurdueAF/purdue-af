@@ -7,12 +7,13 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
 `🚀 Login to Purdue Analysis Facility <https://cms.geddes.rcac.purdue.edu>`_
 
 
+.. note::
 
-Supported login options:
+   Supported login options:
 
-* Purdue University account (BoilerKey)
-* CERN account (CMS users only)
-* FNAL account
+   * Purdue University account (BoilerKey)
+   * CERN account (CMS users only)
+   * FNAL account
 
 .. The same person using different accounts to sign in will be treated as different users.
 

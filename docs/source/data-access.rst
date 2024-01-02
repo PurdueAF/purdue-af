@@ -21,10 +21,11 @@ The Purdue Analysis Facility provides access to multiple storage options:
     CERNBox is the only writable external directory accessible to non-Purdue users,
     therefore it is recommended to use it for file sharing.
     CERNBox is mounted at ``/eos/cern/`` and ``/home/<username>/eos-cern/``.
-    .. warning::
 
-       **Warning:** access to CERNBox is not enabled by default. To set it up, please follow these instructions:
-       :doc:`guide-cern-eos`
+.. warning::
+   
+   **Warning:** access to CERNBox is not enabled by default. To set it up, please follow these instructions:
+   :doc:`guide-cern-eos`
 
   * `CVMFS <https://cernvm.cern.ch/fs/>`_: mounted at ``/cvmfs/`` with **read-only** access.
     The main use case for CVMFS is  installation of CMSSW releases.
