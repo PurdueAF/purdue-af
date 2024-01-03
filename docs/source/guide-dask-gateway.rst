@@ -17,9 +17,6 @@ How to scale up using Dask Gateway
 * For more information, refer to `Dask Gateway documentation <https://gateway.dask.org/>`_.
 
 
-How to use Dask Gateway to create SLURM clusters
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 1. **Initialize ``gateway`` object.**
    It will be used to interact with your Dask clusters.
 
