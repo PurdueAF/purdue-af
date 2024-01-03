@@ -81,6 +81,7 @@ Clusters can be scaled either via Jupyter widget or via ``cluster.scale()`` and 
    client = cluster.get_client()
 
 .. code-block:: python
+
    # Or connect to a specific cluster by name:
    cluster_name = "d63af7e662e84ac7b89ecb38b524221b" # paste cluster name here
    client = gateway.connect(cluster_name).get_client()
