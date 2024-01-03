@@ -42,6 +42,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     :caption: User guides
     :maxdepth: 1
 
+    guide-demos
     guide-cern-eos
     guide-conda
     guide-dask-gateway

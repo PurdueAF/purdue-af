@@ -4,7 +4,7 @@
 
 project = 'Purdue Analysis Facility'
 copyright = '2023, Purdue University'
-author = 'Dmitry Kondratyev'
+author = 'Dmitry Kondratyev, Stefan Piperov'
 
 release = '0.1'
 version = '0.1.0'
@@ -23,7 +23,14 @@ extensions = [
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_rtd_theme",
+    "sphinx_copybutton",
+
 ]
+
+# sphinx-copybutton configuration
+copybutton_prompt_text = r">>> |\.\.\. |\$ "
+copybutton_prompt_is_regexp = True
+copybutton_here_doc_delimiter = "EOF"
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
