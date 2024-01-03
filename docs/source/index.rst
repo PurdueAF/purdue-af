@@ -40,7 +40,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
 
 .. toctree::
     :caption: User guides
-    :maxdepth: 1
+    :maxdepth: 2
 
     guide-demos
     guide-cern-eos
