@@ -14,7 +14,7 @@ and will be occasionally upgraded.
    :width: 300
    :align: center
 
-**Python3 kernel (default)** ::
+**Python3 kernel (default)**
 
 This kernel is designed for typical pythonic analysis workflows which do not include machine learning.
 The kernel is based on Python 3.10. The following packages are installed:
@@ -26,7 +26,7 @@ The kernel is based on Python 3.10. The following packages are installed:
 * Distributed computing: ``dask``, ``distributed``, ``dask-jobqueue``, ``dask-gateway``
 * Other tools: ``xrootd``, ``pytest``, ``yaml``, ``tqdm``, ``ipywidgets``
 
-**Python3 kernel [ML]** ::
+**Python3 kernel [ML]**
 
 This kernel includes all of the packages included into the default kernel,
 and adds the most popular machine learning packages:
@@ -36,7 +36,7 @@ and adds the most popular machine learning packages:
 * ``keras``
 * ``xgboost``
 
-**ROOT C++ kernel** ::
+**ROOT C++ kernel**
 
 This kernel provides an interactive interface to the ROOT command line,
 allowing to execute ROOT macros and produce plots inside Jupyter notebooks.

@@ -1,5 +1,5 @@
 How to enable access to CERN EOS
-============================
+==================================
 
 Access to `CERNBox <https://cernbox.cern.ch>`_ (CERN EOS storage) can be enabled in the Purdue Analysis Facility
 for anyone who has CERN account, regardless of which account they used to log in. 

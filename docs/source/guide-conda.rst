@@ -81,9 +81,9 @@ if you know in advance which packages must be present in the kernel.
 
 1. If you have already been provided with a YAML file, proceed to step 6.
 2. If you are creating a YAML file from scratch, you can use one of the files made
-for the pre-installed kernels as a template:
-``/depot/cms/kernels/env-python3.yml``
-``/depot/cms/kernels/env-python3-ml.yml``
+   for the pre-installed kernels as a template:
+   ``/depot/cms/kernels/env-python3.yml``
+   ``/depot/cms/kernels/env-python3-ml.yml``
 3. Copy one of these files to your preferred location.
     
 .. code-block:: shell
@@ -92,7 +92,7 @@ for the pre-installed kernels as a template:
     
 4. Edit the contents of the copied YAML file by adding/removing packages and/or specifying their versions.
 5. Additional Conda repositories may be specified under the channels: section,
-as it is done in ``/depot/cms/kernels/env-conda-analysis-ml.yml``:
+   as it is done in ``/depot/cms/kernels/env-conda-analysis-ml.yml``:
 
 .. code-block:: yaml
 
