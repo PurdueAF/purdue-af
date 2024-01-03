@@ -15,6 +15,7 @@ The Purdue Analysis Facility provides access to multiple storage options:
 * **Shared storage:** Shared directories can be created for specific projects in ``/work/projects/`` by
   the Analysis Facility administrators at the request of the project's PI. 
 * **External storage:**
+
   * **Purdue Depot**: shared project space at Purdue, which can be used to store job outputs and other data
     up to several terabytes. The Depot storage is mounted at ``/depot/cms/`` and ``/home/<username>/depot/``.
     Users with Purdue account have **read/write** access, while other users have **read-only** access.
