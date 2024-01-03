@@ -8,5 +8,3 @@ The following demos are from `this repository <https://github.com/kondratyevd/pu
     demos/0-root-cpp
     demos/1-storage-data-access
     demos/2-plotting
-    demos/3-dask
-    demos/4-triton
