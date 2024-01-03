@@ -40,10 +40,12 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
 
 .. toctree::
     :caption: User guides
-    :maxdepth: 2
+    :maxdepth: 1
 
-    guide-demos
+    notebooks/0-root-cpp
+    notebooks/1-storage-data-access
+    notebooks/2-plotting
+    notebooks/gateway-cluster
     guide-cern-eos
     guide-conda
-    guide-dask-gateway
     guide-rucio
