@@ -29,6 +29,15 @@ extensions = [
 
 #disable notebook execution
 nbsphinx_execute = 'never'
+nbsphinx_prolog = """
+.. raw:: html
+
+    <style>
+        p:not(.admonition) {
+            margin: 24px 0 12px;
+        }
+    </style>
+"""
 
 # sphinx-copybutton configuration
 copybutton_prompt_text = r">>> |\.\.\. |\$ "
