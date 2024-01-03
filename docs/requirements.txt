@@ -1,4 +1,5 @@
 nbsphinx
 ipython
+ipywidgets
 sphinx_rtd_theme
 sphinx-copybutton>=0.3.2
