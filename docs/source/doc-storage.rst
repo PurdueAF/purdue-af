@@ -35,7 +35,7 @@ The Purdue Analysis Facility provides access to multiple storage options:
 
 .. warning::
    
-    **Warning:** access to CERNBox is not enabled by default. To set it up, please follow these instructions:
+    Access to CERNBox is not enabled by default. To set it up, please follow these instructions:
     :doc:`guide-cern-eos`
 
 * **Other options:**
