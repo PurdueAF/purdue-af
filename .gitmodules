@@ -1,0 +1,3 @@
+[submodule "docs/source/demos"]
+	path = docs/source/demos
+	url = https://github.com/kondratyevd/purdue-af-demos.git
