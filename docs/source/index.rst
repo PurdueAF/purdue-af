@@ -42,9 +42,9 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     :caption: User guides
     :maxdepth: 1
 
-    notebooks/0-root-cpp
-    notebooks/1-storage-data-access
-    notebooks/2-plotting
+    notebooks/root-cpp
+    notebooks/storage-data-access
+    notebooks/plotting
     notebooks/gateway-cluster
     guide-cern-eos
     guide-conda
