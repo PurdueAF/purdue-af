@@ -1,11 +1,9 @@
-.. _doc-kernels:
-
 Software
 ==========================
 
 The Purdue Analysis Facility provides several Jupyter kernels with pre-installed analysis software.
 Users can also create their own kernels from scratch or from the existing kernels using the following instructions:
-:doc:`<guide-conda>`.
+:doc:`guide-conda`.
 
 The pre-installed kernels are listed below. The versions of the packages in these kernels are not fixed,
 and will be occasionally upgraded.
