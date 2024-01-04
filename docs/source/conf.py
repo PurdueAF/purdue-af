@@ -33,7 +33,9 @@ nbsphinx_prolog = """
 .. raw:: html
 
     <style>
-        :not(.admonition) > p {
+        :not(.admonition) > p,
+        ol,
+        h2 {
             margin: 24px 0 12px;
         }
     </style>
