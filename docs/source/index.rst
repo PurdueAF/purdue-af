@@ -9,7 +9,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
 
 .. note::
 
-   Supported login options:
+   Supported login methods:
 
    * Purdue University account (BoilerKey)
    * CERN account (CMS users only)
@@ -19,7 +19,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     :caption: Documentation
     :maxdepth: 1
 
-    doc-login-options
+    doc-login-methods
     doc-interface
     doc-storage
     doc-software
@@ -34,7 +34,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
 
 .. toctree::
     :caption: User guides
-    :maxdepth: 2
+    :maxdepth: 1
 
     guide-demos
     guide-cern-eos

@@ -1,7 +1,7 @@
-Login options and user naming rules
+Login methods and user naming rules
 ======================================
 
-The user authentication is implemented using **CILogon**. Three login options are available: 
+The user authentication is implemented using **CILogon**. Three login methods are available: 
 
 * Purdue University account (BoilerKey)
 * CERN account (CMS users only)
