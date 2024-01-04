@@ -3,7 +3,8 @@
 Storage, data access, file sharing
 ==================================
 
-The Purdue Analysis Facility provides access to multiple storage options:
+The Purdue Analysis Facility provides access to multiple storage options.
+Examples for data access at these locations are given :doc:`here <demos/storage-data-access>`.
 
 * **Private personal storage:** 25GB at ``/home/<username>/``.
   The JupyterLab file browser is based in this directory.

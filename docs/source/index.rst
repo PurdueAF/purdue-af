@@ -15,12 +15,6 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
    * CERN account (CMS users only)
    * FNAL account
 
-.. The same person using different accounts to sign in will be treated as different users.
-
-.. Each user is provided with a 25GB private ``/home/`` directory at first login,
-.. as well as 100GB storage space in a shared ``/work/`` directory.
-.. These directories will persist between sessions, but will be deleted after 6 months of inactivity.
-
 .. toctree::
     :caption: Documentation
     :maxdepth: 1
@@ -40,7 +34,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
 
 .. toctree::
     :caption: User guides
-    :maxdepth: 1
+    :maxdepth: 2
 
     guide-demos
     guide-cern-eos

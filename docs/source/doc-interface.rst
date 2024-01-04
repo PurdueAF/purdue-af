@@ -18,13 +18,14 @@ unless requested otherwise.
    :width: 800
    :align: center
 
+
 The Analysis Facility interface features the following functionality:
 
 * Jupyter Notebooks with Python3 and ROOT C++ kernels. We provide :doc:`pre-installed kernels <doc-software>` ready for use in analyses.
 * Interactive file browser
 
   * The file browser is based at user's dedicated home directory (``/home/<username>/``) with persistent 25GB storage.
-  * Multiple mounted external storage volumes for data access and file sharing: :doc:`see available options <doc-storage>`.
+  * Multiple mounted external storage volumes for data access and file sharing: :doc:`see available options <doc-storage>` and :doc:`how to access data from them <demos/storage-data-access>`.
 
 * Interactive text editor
 * Git extension for interactive work with GitHub or GitLab repositories

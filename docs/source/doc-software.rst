@@ -5,7 +5,7 @@ Software
 
 The Purdue Analysis Facility provides several Jupyter kernels with pre-installed analysis software.
 Users can also create their own kernels from scratch or from the existing kernels using the following instructions:
-`How to create and share Conda environments and Jupyter kernels <fixme-link>`_ 
+:doc:`<guide-conda>`.
 
 The pre-installed kernels are listed below. The versions of the packages in these kernels are not fixed,
 and will be occasionally upgraded.
@@ -41,4 +41,4 @@ and adds the most popular machine learning packages:
 This kernel provides an interactive interface to the ROOT command line,
 allowing to execute ROOT macros and produce plots inside Jupyter notebooks.
 
-   `ROOT C++ notebook demo <https://github.com/kondratyevd/purdue-af-demo-sep2023/blob/master/0-root-cpp.ipynb>`_
+   :doc:`ROOT C++ notebook demo <demos/root-cpp>`
