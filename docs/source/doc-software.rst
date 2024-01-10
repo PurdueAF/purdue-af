@@ -19,20 +19,22 @@ The kernel is based on Python 3.10. The following packages are installed:
 
 * Scientific computing and data analysis: ``numpy``, ``scipy``, ``pandas``, ``awkward``, ``numba``,
   ``scikit-learn``, ``uncertainties``, ``lmfit``
-* High energy physics tools: ``ROOT``, ``uproot``, ``coffea``, ``vector``, ``hist``, ``pyhf``
-* Plotting: ``matplotlib``, ``mplhep``, ``plotly``
+* High energy physics tools: ``ROOT``, ``uproot``, ``coffea``, ``vector``, ``hist``, ``pyhf``, ``lhapdf``
+* Plotting: ``matplotlib``, ``mplhep``, ``plotly``, ``bokeh``
+* Machine learning: ``tensorflow``, ``pytorch``, ``pytorch-geometric``, ``keras``, ``xgboost``, ``mup``
 * Distributed computing: ``dask``, ``distributed``, ``dask-jobqueue``, ``dask-gateway``
-* Other tools: ``xrootd``, ``pytest``, ``yaml``, ``tqdm``, ``ipywidgets``
+* C++ libraries: ``gsl``, ``tbb``, ``vdt``, ``boost``, ``pcre``, ``eigen``
+* Other tools: ``xrootd``, ``pytest``, ``pyarrow``, ``yaml``, ``tqdm``, ``ipywidgets``, ``openssl``, ``certifi``, ``ca-certificates``
 
-**Python3 kernel [ML]**
+.. **Python3 kernel [ML]**
 
-This kernel includes all of the packages included into the default kernel,
-and adds the most popular machine learning packages:
+.. This kernel includes all of the packages included into the default kernel,
+.. and adds the most popular machine learning packages:
 
-* ``tensorflow``
-* ``pytorch`` and ``pytorch-geometric``
-* ``keras``
-* ``xgboost``
+.. * ``tensorflow``
+.. * ``pytorch`` and ``pytorch-geometric``
+.. * ``keras``
+.. * ``xgboost``
 
 **ROOT C++ kernel**
 
