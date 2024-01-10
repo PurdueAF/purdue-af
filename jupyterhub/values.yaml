@@ -4,10 +4,10 @@ singleuser:
   cmd: 
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
-    tag: "0.9.0"
+    tag: "0.9.1"
   extraLabels:
     username_unescaped: "{legacy_escape_username}"
-    docker_image_tag: "0.9.0"
+    docker_image_tag: "0.9.1"
   startTimeout: 3600
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
@@ -92,37 +92,6 @@ singleuser:
         cpu_limit: 4        
         mem_guarantee: 16G
         mem_limit: 16G
-    - display_name: "hls4ml tutorial"
-      default: false
-      description: ""
-      kubespawner_override:
-        image: ghcr.io/fastmachinelearning/hls4ml-tutorial/hls4ml-0.7.1-vivado-2019.2:dd18adb1d3fb1ac3bf18c2b7feb37f44c10b6262
-        node_selector: {'cms-af-prod': 'true'}
-        lifecycle_hooks:
-          postStart:
-            exec:
-              command: [
-                "bash", "-c", "if [ ! -d hls4ml-tutorial ]; then git clone https://github.com/fastmachinelearning/hls4ml-tutorial.git; fi; chown -R $NB_USER:$NB_USER /home/$NB_USER/hls4ml-tutorial",
-              ]
-        extraEnv:
-          XILINX_VIVADO: "/opt/Xilinx/Vivado/2019.2"
-      profile_options:
-        cpu:
-          display_name: "CPUs"
-          choices:
-            1:
-              display_name: "4"
-              kubespawner_override:
-                cpu_limit: 4
-                cpu_guarantee: 4
-        memory:
-          display_name: "Memory"
-          choices:
-            1:
-              display_name: "32 GB"
-              kubespawner_override:
-                mem_limit: "32G"
-                mem_guarantee: "32G"
   extraContainers:
     - name: af-pod-metrics
       image: geddes-registry.rcac.purdue.edu/cms/cmsaf-pod-metrics-sidecar:0.2
@@ -204,9 +173,9 @@ hub:
     - name: cern-auth
       secret:
         secretName: cern-auth
-    - name: html-template
+    - name: auth-secret
       secret:
-        secretName: html-template
+        secretName: auth-secret
   extraVolumeMounts:
     - mountPath: /etc/secrets/purdue-auth/
       name: purdue-auth
@@ -214,14 +183,23 @@ hub:
     - mountPath: /etc/secrets/cern-auth/
       name: cern-auth
       readOnly: true
-    - mountPath: /etc/secrets/html/
-      name: html-template
-      readOnly: true
+  extraEnv:
+    CILOGON_CLIENT_ID:
+      valueFrom:
+        secretKeyRef:
+          name: auth-secret
+          key: cilogon_client_id
+    CILOGON_CLIENT_SECRET:
+      valueFrom:
+        secretKeyRef:
+          name: auth-secret
+          key: cilogon_client_secret
   config:
-    CILogonOAuthenticator:
+    PurdueCILogonOAuthenticator:
+      auto_login: True
+      auto_login_oauth2_authorize: True
+      logout_redirect_url: https://cms.geddes.rcac.purdue.edu/hub
       admin_users: ['dkondra']
-      client_id: cilogon:/client_id/76fff058f782d2425aa623c0ac290aa4
-      client_secret: JHwzsOPFvX78Yi8n3k6iCoqgk_hMFh5MZSD7AINxOsqjwrrXI5yelQ6KxNCDcLwbrt8HQUV_7Z2xSLJPFS0KlA 
       oauth_callback_url: https://cms.geddes.rcac.purdue.edu/hub/oauth_callback
       enable_auth_state: true
       allowed_idps:
@@ -406,8 +384,6 @@ hub:
       c.KubeSpawner.start_timeout = 150
       c.KernelSpecManager.ensure_native_kernel = False
       c.JupyterHub.authenticate_prometheus = False
-    templates: |
-        c.JupyterHub.template_paths = ['/etc/secrets/html/']
 scheduling:
   userScheduler:
     enabled: false

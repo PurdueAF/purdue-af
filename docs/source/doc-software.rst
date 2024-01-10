@@ -26,16 +26,6 @@ The kernel is based on Python 3.10. The following packages are installed:
 * C++ libraries: ``gsl``, ``tbb``, ``vdt``, ``boost``, ``pcre``, ``eigen``
 * Other tools: ``xrootd``, ``pytest``, ``pyarrow``, ``yaml``, ``tqdm``, ``ipywidgets``, ``openssl``, ``certifi``, ``ca-certificates``
 
-.. **Python3 kernel [ML]**
-
-.. This kernel includes all of the packages included into the default kernel,
-.. and adds the most popular machine learning packages:
-
-.. * ``tensorflow``
-.. * ``pytorch`` and ``pytorch-geometric``
-.. * ``keras``
-.. * ``xgboost``
-
 **ROOT C++ kernel**
 
 This kernel provides an interactive interface to the ROOT command line,

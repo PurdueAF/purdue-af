@@ -4,6 +4,6 @@
   },
   "CondaKernelSpecManager": {
     "name_format": "{language} [conda env:{environment}]",
-    "env_filter": "/opt/conda|/depot/cms/kernels/python3|/depot/cms/kernels/python3-ml"
+    "env_filter": "/opt/conda|/depot/cms/kernels/python3"
   }
 }

@@ -6,7 +6,7 @@ if [ ! -d depot ]; then mkdir depot; fi;
 if [ ! -L depot/users ]; then ln -s /depot/cms/users $NEW_HOME/depot/users; fi;
 if [ ! -L work ]; then ln -sf /work/ $NEW_HOME/work; fi;
 
-projects=("hmm" "top" "hh")
+projects=("hmm" "top" "hh" "sonic")
 for project in "${projects[@]}"; do
     if [ ! -L "depot/$project" ]; then
         target="/depot/cms/$project"
