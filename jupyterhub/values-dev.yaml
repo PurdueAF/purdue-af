@@ -4,10 +4,10 @@ singleuser:
   cmd: 
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
-    tag: "0.8.7"
+    tag: "0.9.1"
   extraLabels:
     username_unescaped: "{legacy_escape_username}"
-    docker_image_tag: "0.8.7"
+    docker_image_tag: "0.9.1"
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
       default: true
@@ -127,29 +127,29 @@ singleuser:
               kubespawner_override:
                 mem_limit: "64G" 
                 mem_guarantee: "64G"
-    - display_name: "JupyterLab v4 (AF v0.9.0)"
-      kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.9.0"
-        node_selector:
-          'cms-af-prod': 'true'
-          # kubernetes.io/hostname: af-a01
-      profile_options:
-        cpu:
-          display_name: "CPUs"
-          choices:
-            1:
-              display_name: "4"
-              kubespawner_override:
-                cpu_limit: 4
-                cpu_guarantee: 4
-        memory:
-          display_name: "Memory"
-          choices:
-            1:
-              display_name: "16 GB"
-              kubespawner_override:
-                mem_limit: "16G"
-                mem_guarantee: "16G"
+    # - display_name: "JupyterLab v4 (AF v0.9.0)"
+    #   kubespawner_override:
+    #     image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.9.0"
+    #     node_selector:
+    #       'cms-af-prod': 'true'
+    #       # kubernetes.io/hostname: af-a01
+    #   profile_options:
+    #     cpu:
+    #       display_name: "CPUs"
+    #       choices:
+    #         1:
+    #           display_name: "4"
+    #           kubespawner_override:
+    #             cpu_limit: 4
+    #             cpu_guarantee: 4
+    #     memory:
+    #       display_name: "Memory"
+    #       choices:
+    #         1:
+    #           display_name: "16 GB"
+    #           kubespawner_override:
+    #             mem_limit: "16G"
+    #             mem_guarantee: "16G"
     - display_name: "JupyterLab based on CentOS7"
       description: "Container with pre-installed pythonic analysis software, as well as CVMFS and EOS mounts"
       kubespawner_override:
@@ -292,6 +292,9 @@ hub:
     - name: html-template
       secret:
         secretName: html-template
+    - name: auth-secret
+      secret:
+        secretName: auth-secret
   extraVolumeMounts:
     - mountPath: /etc/secrets/purdue-auth/
       name: purdue-auth
@@ -302,11 +305,28 @@ hub:
     - mountPath: /etc/secrets/html/
       name: html-template
       readOnly: true
+  extraEnv:
+    CILOGON_CLIENT_ID:
+      valueFrom:
+        secretKeyRef:
+          name: auth-secret
+          key: cilogon_client_id
+    CILOGON_CLIENT_SECRET:
+      valueFrom:
+        secretKeyRef:
+          name: auth-secret
+          key: cilogon_client_secret
+  extraFiles:
+    00-custom-spawner:
+      mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d/custom-spawner.py
+    01-set-user-info:
+      mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d/01-set-user-info.py
   config:
-    CILogonOAuthenticator:
+    PurdueCILogonOAuthenticator:
+      auto_login: True
+      auto_login_oauth2_authorize: True
+      logout_redirect_url: https://cmsdev.geddes.rcac.purdue.edu/hub
       admin_users: ['dkondra']
-      client_id: cilogon:/client_id/652ad741e63f7aa6c602e2a806c7c705
-      client_secret: s-HM2wlBCMLJ0hy8LUakiD3lGcDOC6FSeluwDwL76epB67yFAGDEftwDGSUN_D_bdENpgaLqF2gBcx4YvW3V6w
       oauth_callback_url: https://cmsdev.geddes.rcac.purdue.edu/hub/oauth_callback
       enable_auth_state: true
       allowed_idps:
@@ -325,172 +345,7 @@ hub:
     JupyterHub:
       authenticator_class: cilogon
       admin_access: True
-  extraConfig:
-    # Some additional config
-    00-custom-spawner: |
-      from oauthenticator.cilogon import CILogonOAuthenticator
-      from jupyterhub.auth import LocalAuthenticator
-      from tornado import web
-      import pwd
-      #class PurdueCILogonOAuthenticator(LocalAuthenticator, CILogonOAuthenticator):
-      class PurdueCILogonOAuthenticator(CILogonOAuthenticator):
-          async def authenticate(self, handler, data=None):
-              import pprint
-              ret = await super().authenticate(handler, data)
-              print("in auth:")
-              pprint.pprint(ret)
-              name = ret['name']
-              username, domain = ret['auth_state']['cilogon_user']['eppn'].split("@")
-              fixedUsername = None
 
-              if domain == 'purdue.edu':
-                fixedUsername = username
-                with open('/etc/secrets/purdue-auth/purdue-auth.txt') as file:
-                  if not f"{username}\n" in file.readlines():
-                    raise web.HTTPError(500, f"Access denied! User {username} is not in the list of authorized users.")
-
-              elif domain == 'cern.ch':
-                fixedUsername = username + "-cern"
-                with open('/etc/secrets/cern-auth/cern-auth.txt') as file:
-                  if not f"{username}\n" in file.readlines():
-                    raise web.HTTPError(500, "Access denied! Only CMS members are allowed to log in with CERN credentials.")
-              
-              elif domain == 'fnal.gov':
-                      fixedUsername = username + "-fnal"
-              else:
-                  raise web.HTTPError(500, "Failed to get username from CILogon")
-              
-              ret['name'] = fixedUsername
-              ret['domain'] = domain
-              return ret
-
-      def passthrough_post_auth_hook(authenticator, handler, authentication):
-          import pprint
-          print("in post auth:")
-          pprint.pprint(authentication)
-          if authentication['auth_state'] is None:
-              authentication['auth_state'] = {}
-          authentication['auth_state']['name'] = authentication['name']
-          authentication['auth_state']['domain'] = authentication['domain']
-          return authentication
-
-      c.JupyterHub.authenticator_class = PurdueCILogonOAuthenticator
-      c.PurdueCILogonOAuthenticator.post_auth_hook = passthrough_post_auth_hook
-
-    01-set-user-info: |
-      from ldap3 import NTLM, SIMPLE, Server, Connection, ALL, SUBTREE
-      import json
-      import os
-      import contextlib
-      from kubernetes_asyncio import client
-
-      NAMESPACE = "cms-dev"
-
-      def ldap_lookup(username):
-          url = "geddes-aux.rcac.purdue.edu"
-          searchid = username.split('@')[0]
-          baseDN = "ou=People,dc=rcac,dc=purdue,dc=edu"
-          search_filter = "(uid={0}*)"
-          #username = searchid[0]
-          attrs = ['uidNumber','gidNumber']
-          s = Server(host=url, use_ssl=True, get_info='ALL')
-          #conn = Connection(s, user= DN, password= secret, auto_bind= True, version= 3, authentication='ANONYMOUS', \
-          #client_strategy= 'SYNC', auto_referrals= True, check_names= True, read_only= False, lazy= False, raise_exceptions= False)
-          s = Server(host= url ,use_ssl= True, get_info= 'ALL')
-          conn = Connection(s, version = 3, authentication = "ANONYMOUS")
-          conn.start_tls()
-          print(conn.result)
-          print(conn)
-          conn.search(search_base = baseDN, search_filter = search_filter.format(username), search_scope = SUBTREE, attributes = attrs)
-          ldap_result_id = json.loads(conn.response_to_json())
-          print(ldap_result_id)
-          result = ldap_result_id[u'entries'][0][u'attributes']
-          uid_number = result[u'uidNumber']
-          gid_number = result [u'gidNumber']
-          print("UID",+ uid_number)
-          print("GID", + gid_number)            
-          return uid_number, gid_number
-
-      def passthrough_auth_state_hook(spawner, auth_state):
-          import pprint
-          spawner.userdata = { "name": auth_state['name'],
-                               "domain": auth_state['domain']
-                             }
-          print("GOT STATE:")
-          pprint.pprint(spawner.userdata)
-          domain = spawner.userdata['domain']
-          username = spawner.userdata['name']
-          spawner.environment["NB_USER"] = username
-          if domain == "purdue.edu":
-              uid,gid = ldap_lookup(username)
-              spawner.environment["NB_UID"] = str(uid)
-              spawner.environment["NB_GID"] = str(gid)
-          else:
-              spawner.environment["NB_UID"] = "1000"
-              spawner.environment["NB_GID"] = "1000"
-
-      async def my_pre_spawn_hook(spawner):
-          proxy_name = f"proxy-{spawner.user.name}"
-          api = client.CoreV1Api(client.ApiClient())
-          dask_proxy = client.V1Service(
-              api_version="v1",
-              kind="Service",
-              metadata=client.V1ObjectMeta(
-                  name=proxy_name,
-                  annotations={
-                      "metallb.universe.tf/address-pool": "geddes-private-pool"
-                  },
-                  labels={"scrape_metrics": "true"}
-              ),
-              spec=client.V1ServiceSpec(
-                  selector={
-                      "hub.jupyter.org/username": spawner.user.name
-                  },
-                  ports=[
-                      client.V1ServicePort(
-                          protocol="TCP",
-                          port=8786,
-                          name="dask-scheduler",
-                          target_port=8786
-                      ),
-                      client.V1ServicePort(
-                          protocol="TCP",
-                          port=8787,
-                          name="dask-metrics",
-                          target_port=8787
-                      )
-                  ],
-                  type="LoadBalancer"
-              )
-          )
-          with contextlib.suppress(client.exceptions.ApiException):
-              await api.delete_namespaced_service(proxy_name, NAMESPACE)
-
-          await api.create_namespaced_service(NAMESPACE, dask_proxy)
-          spawner.log.info('Dask proxy configured for %s' % spawner.user.name)
-
-      async def my_post_stop_hook(spawner):
-          proxy_name = f"proxy-{spawner.user.name}"
-          api = client.CoreV1Api(client.ApiClient())
-          with contextlib.suppress(client.exceptions.ApiException):
-              await api.delete_namespaced_service(proxy_name, NAMESPACE)
-              spawner.log.info('Dask proxy deleted for %s' % spawner.user.name)
-
-      c.KubeSpawner.auth_state_hook = passthrough_auth_state_hook
-      c.KubeSpawner.pre_spawn_hook = my_pre_spawn_hook
-      c.KubeSpawner.post_stop_hook = my_post_stop_hook
-      c.KubeSpawner.notebook_dir = "~"
-      c.KubeSpawner.working_dir = "/home/{legacy_escape_username}"
-      c.KubeSpawner.disable_user_config = True
-      c.KubeSpawner.http_timeout = 240
-      c.KubeSpawner.start_timeout = 240
-      c.KernelSpecManager.ensure_native_kernel = False
-      c.JupyterHub.authenticate_prometheus = False
-      # c.JupyterHub.services = [
-      #     {"name": "dask-gateway", "api_token": "3a088ecc29ebda6c739d12cbedc20db50a7f3fb1405d4d5cb17b73100f3c0b48"}
-      # ]
-    templates: |
-        c.JupyterHub.template_paths = ['/etc/secrets/html/']
   tolerations:
     - key: "hub.jupyter.org/dedicated"
       operator: "Equal"
