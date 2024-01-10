@@ -289,9 +289,6 @@ hub:
     - name: cern-auth
       secret:
         secretName: cern-auth
-    - name: html-template
-      secret:
-        secretName: html-template
     - name: auth-secret
       secret:
         secretName: auth-secret
@@ -301,9 +298,6 @@ hub:
       readOnly: true
     - mountPath: /etc/secrets/cern-auth/
       name: cern-auth
-      readOnly: true
-    - mountPath: /etc/secrets/html/
-      name: html-template
       readOnly: true
   extraEnv:
     CILOGON_CLIENT_ID:
@@ -320,7 +314,7 @@ hub:
     00-custom-spawner:
       mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d/custom-spawner.py
     01-set-user-info:
-      mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d/01-set-user-info.py
+      mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d/set-user-info.py
   config:
     PurdueCILogonOAuthenticator:
       auto_login: True

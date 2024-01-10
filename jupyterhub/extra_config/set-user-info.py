@@ -4,7 +4,7 @@ import os
 import contextlib
 from kubernetes_asyncio import client
 
-NAMESPACE = "cms"
+NAMESPACE = os.environ["POD_NAMESPACE"]
 
 def ldap_lookup(username):
     url = "geddes-aux.rcac.purdue.edu"
@@ -45,14 +45,23 @@ def passthrough_auth_state_hook(spawner, auth_state):
         uid,gid = ldap_lookup(username)
         spawner.environment["NB_UID"] = str(uid)
         spawner.environment["NB_GID"] = str(gid)
-    else:
+    elif NAMESPACE=="cms":
+        # in prod instance do the user mapping
         af_id = int(spawner.user.id)
         if af_id > 199:
-            raise Exception(f"Error while trying to create an external user with AF ID {af_id}. We ran out of accounts for external users!")
+            raise Exception(
+                f"Error while trying to create an external user with AF ID {af_id}."
+                "We ran out of accounts for external users!"
+            )
         username = 'paf{:04d}'.format(af_id)
         uid, gid = ldap_lookup(username)
         spawner.environment["NB_UID"] = str(uid)
         spawner.environment["NB_GID"] = str(gid)
+    else:
+        # in dev instance skip user mapping
+        spawner.environment["NB_UID"] = "1000"
+        spawner.environment["NB_GID"] = "1000"
+
 
 async def my_pre_spawn_hook(spawner):
     proxy_name = f"proxy-{spawner.user.name}"
