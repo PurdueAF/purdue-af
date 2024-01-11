@@ -58,21 +58,26 @@ singleuser:
                 node_selector:
                   kubernetes.io/hostname: geddes-g002
             7: 
+              display_name: "paf-a00"
+              kubespawner_override:
+                node_selector:
+                  kubernetes.io/hostname: paf-a00
+            8: 
               display_name: "paf-a01"
               kubespawner_override:
                 node_selector:
                   kubernetes.io/hostname: paf-a01
-            8: 
+            9: 
               display_name: "paf-a02"
               kubespawner_override:
                 node_selector:
                   kubernetes.io/hostname: paf-a02
-            9: 
+            10: 
               display_name: "cms-fe00"
               kubespawner_override:
                 node_selector:
                   kubernetes.io/hostname: cms-fe00
-            10: 
+            11: 
               display_name: "cms-fe01"
               kubespawner_override:
                 node_selector:

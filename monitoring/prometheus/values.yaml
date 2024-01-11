@@ -65,6 +65,7 @@ prometheusConfig: |
           - 'geddes-g000.rcac.purdue.edu:9796'
           - 'geddes-g001.rcac.purdue.edu:9796'
           - 'geddes-g002.rcac.purdue.edu:9796'
+          - 'paf-a00.cms.rcac.purdue.edu:9796'
           - 'paf-a01.cms.rcac.purdue.edu:9796'
           - 'paf-a02.cms.rcac.purdue.edu:9796'
           - 'cms-fe01.rcac.purdue.edu:9796'

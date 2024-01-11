@@ -45,20 +45,23 @@ local panels = import 'panels.libsonnet';
         'prometheus',
         |||
           label_replace(
-              label_replace(
-              1 - (
-                  sum (
-                  # Memory that can be allocated to processes when they need
-                  node_memory_MemFree_bytes + # Unused bytes
-                  node_memory_Cached_bytes + # Shared memory + temporary disk cache
-                  node_memory_Buffers_bytes # Very temporary buffer memory cache for disk i/o
-                  ) by (instance)
-                  /
-                  sum(node_memory_MemTotal_bytes{instance!="hammer-adm.rcac.purdue.edu:9100"}) by (instance)
+            label_replace(
+                label_replace(
+                1 - (
+                    sum (
+                    # Memory that can be allocated to processes when they need
+                    node_memory_MemFree_bytes + # Unused bytes
+                    node_memory_Cached_bytes + # Shared memory + temporary disk cache
+                    node_memory_Buffers_bytes # Very temporary buffer memory cache for disk i/o
+                    ) by (instance)
+                    /
+                    sum(node_memory_MemTotal_bytes{instance!="hammer-adm.rcac.purdue.edu:9100"}) by (instance)
+                ),
+                "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
               ),
-              "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
-              ),
-              "metric", "Memory", "node", "(.+)"
+              "node", "$1", "node", "(.*).cms"
+            ),
+            "metric", "Memory", "node", "(.+)"
           )
         |||, legendFormat='{{ node }}', instant=true
       ),

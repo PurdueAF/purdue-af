@@ -179,7 +179,7 @@ local  userTable = g.panel.table.new('')
     g.panel.table.transformation.withId('filterFieldsByName')
     + g.panel.table.transformation.withOptions(
         {
-            "include": {"pattern": "^(Value.*|userId|username 1|node 1|docker_image_tag 1)$"},
+            "include": {"pattern": "^(Value.*|userId|username|username 1|node|node 1|docker_image_tag 1)$"},
             "exclude": {"pattern": "^(pod|.*podStatus|.*#userId|.*gpuRequest)$"}
         }
     ),
@@ -189,20 +189,22 @@ local  userTable = g.panel.table.new('')
         {
             "indexByName": {
                 "userId": 0,
-                "username 1": 1,
-                "docker_image_tag 1": 2,
-                "Value #podAge": 3,
-                "Value #storageLastAccess": 4,
-                "Value #podCpuUtilCurrent": 5,
-                "Value #podMemUtilCurrent": 6,
-                "Value #gpuUtilCurrent": 7,
-                "Value #gpuMemUtilCurrent": 8,
-                "Value #homeStorageUtil": 9,
-                "Value #workStorageUtil": 10,
-                "Value #daskWorkers": 11,
-                "Value #cpuRequest": 12,
-                "Value #memRequest": 13,
-                "node 1": 14,
+                "username": 1,
+                "username 1": 2,
+                "docker_image_tag 1": 3,
+                "Value #podAge": 4,
+                "Value #storageLastAccess": 5,
+                "Value #podCpuUtilCurrent": 6,
+                "Value #podMemUtilCurrent": 7,
+                "Value #gpuUtilCurrent": 8,
+                "Value #gpuMemUtilCurrent": 9,
+                "Value #homeStorageUtil": 10,
+                "Value #workStorageUtil": 11,
+                "Value #daskWorkers": 12,
+                "Value #cpuRequest": 13,
+                "Value #memRequest": 14,
+                "node": 15,
+                "node 1": 16,
                 },
         }
     ),
@@ -224,9 +226,20 @@ local  userTable = g.panel.table.new('')
     configureColumn("userId", "ID", columnWidth=40),
     configureColumn("pod", "Pod", columnWidth=120),
     configureColumn("node", "Node", columnWidth=120),
+    configureColumn("node 1", "Node", columnWidth=120),
     configureColumn("docker_image_tag", "Version", columnWidth=70),
     configureColumn("username", "Username", columnWidth=120),
     g.panel.table.fieldOverride.byName.new("username")
+    + g.panel.table.fieldOverride.byName.withProperty(
+      "links",
+     [{
+        "title": "",
+        "url": "https://cms.geddes.rcac.purdue.edu/grafana/d/single-user-stat-dashboard/single-user-statistics?&var-user=purdue-af-${__data.fields.ID}",
+        "targetBlank": true
+      }]
+    ),
+    configureColumn("username 1", "Username", columnWidth=120),
+    g.panel.table.fieldOverride.byName.new("username 1")
     + g.panel.table.fieldOverride.byName.withProperty(
       "links",
      [{
