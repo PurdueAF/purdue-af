@@ -1,16 +1,23 @@
-/* .sidebar-brand {
-} */
+.sidebar-brand {
+    display: block;
+}
 
 .sidebar-brand-text {
     float: left;
     font-size: 1.5rem;
     margin: var(--sidebar-item-spacing-vertical) 0;
+    padding: 5px;
 }
 
 .sidebar-logo-container {
     float: left;
     height: 1.5rem;
     margin: var(--sidebar-item-spacing-vertical) 0;
+    padding: 5px;
 }
 
+.sidebar-logo {
+    height: 100%;
+    margin: 0;
+}
   
