@@ -7,6 +7,7 @@
     font-size: 1.5rem;
     margin: var(--sidebar-item-spacing-vertical) 0;
     padding: 5px;
+    font-weight: bold
 }
 
 .sidebar-logo-container {
