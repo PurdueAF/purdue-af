@@ -58,6 +58,7 @@ templates_path = ['_templates']
 
 # html_theme = 'sphinx_rtd_theme'
 html_theme = 'furo'
+html_logo = "images/cms_logo.png"
 html_theme_options = {
     "top_of_page_button": None,
     "footer_icons": [
@@ -73,7 +74,7 @@ html_theme_options = {
         },
     ],
 }
-html_title = "Purdue Analysis Facility"
+html_title = "Purdue AF"
 html_sidebars = {
     "**": [
         "sidebar/brand.html",
@@ -82,6 +83,8 @@ html_sidebars = {
         "sidebar/navigation.html",
         # "sidebar/ethical-ads.html",
         "sidebar/scroll-end.html",
+        "sidebar/rtd-versions.html",
+        "sidebar/variant-selector.html"
     ]
 }
 
