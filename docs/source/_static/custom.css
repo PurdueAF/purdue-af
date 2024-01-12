@@ -1,0 +1,23 @@
+.sidebar-brand {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+.sidebar-brand-text {
+    color: var(--color-sidebar-brand-text);
+    overflow-wrap: break-word;
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.sidebar-logo-container {
+    margin-right: 10px;
+}
+
+.sidebar-logo {
+    display: block;
+    max-width: 100%;
+    height: 100%;
+}
+  
