@@ -1,4 +1,4 @@
-Purdue Analysis Facility documentation
+Purdue Analysis Facility
 ======================================
 
 The Purdue Analysis Facility is designed to provide an interactive environment
