@@ -1,7 +1,7 @@
 Interactive demos
 ==================
 
-These demos can be downloaded `here <https://github.com/kondratyevd/purdue-af-demos>`_ and executed as Jupyter Notebooks.
+These demos can be downloaded `here <https://github.com/PurdueAF/purdue-af-demos>`_ and executed as Jupyter Notebooks.
 
 .. toctree::
     :maxdepth: 2
