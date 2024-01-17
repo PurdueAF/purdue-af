@@ -34,6 +34,13 @@ spec:
         - name: configmap
           configMap:
             name: {{ include "dask-gateway.apiName" . }}
+        - name: depot
+          nfs:
+            server: datadepot.rcac.purdue.edu
+            path: /depot/cms
+        - name: munge-key
+          secret:
+            secretName: munge-key
       {{- with .Values.gateway.imagePullSecrets }}
       imagePullSecrets:
         {{- . | toYaml | nindent 8 }}
@@ -43,9 +50,10 @@ spec:
           image: {{ .Values.gateway.image.name }}:{{ .Values.gateway.image.tag }}
           imagePullPolicy: {{ .Values.gateway.image.pullPolicy }}
           args:
-            - dask-gateway-server
-            - --config
-            - /etc/dask-gateway/dask_gateway_config.py
+            - /start.sh
+            # - dask-gateway-server
+            # - --config
+            # - /etc/dask-gateway/dask_gateway_config.py
           {{- with .Values.gateway.resources }}
           resources:
             {{- . | toYaml | nindent 12 }}
@@ -53,6 +61,13 @@ spec:
           volumeMounts:
             - mountPath: /etc/dask-gateway/
               name: configmap
+            - name: depot
+              mountPath: /depot/cms
+              mountPropagation: HostToContainer
+            - name: munge-key
+              mountPath: /etc/secrets/munge
+              readOnly: false
+              mountPropagation: HostToContainer
           env:
             {{- with .Values.gateway.env }}
             {{- . | toYaml | nindent 12 }}

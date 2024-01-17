@@ -1,0 +1,89 @@
+gateway:
+  replicas: 1
+  prefix: /
+  loglevel: INFO
+  image:
+    name: geddes-registry.rcac.purdue.edu/cms/dask-gateway-server
+    tag: 2023.9.0-jobqueue
+    pullPolicy: IfNotPresent
+  auth:
+    type: simple
+    simple:
+      password: null
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  env:
+    - name: NAMESPACE
+      value: cms
+    - name: RELEASE_NAME
+      value: dask-gateway
+  extraConfig:
+    slurmConfig: |
+        import os
+        RELEASE_NAME = os.environ["RELEASE_NAME"]
+        NAMESPACE = os.environ["NAMESPACE"]
+
+        c.DaskGateway.backend_class = "dask_gateway_server.backends.jobqueue.slurm.SlurmBackend"
+        c.DaskGateway.address = ':8786'
+        c.SlurmBackend.api_url = f'http://api-{RELEASE_NAME}.{NAMESPACE}.geddes.rcac.purdue.edu:8000/api'
+
+        from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
+
+        def options_handler(options):
+            env_vars = options.env
+            env_vars["X509_CERT_DIR"] = "/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates"
+            if ("WORKDIR" in env_vars) and ("PYTHONPATH" not in env_vars):
+              env_vars["PYTHONPATH"] = env_vars["WORKDIR"]
+            return {
+                "worker_cores": options.worker_cores,
+                "worker_memory": int(options.worker_memory * 2 ** 30),
+                "environment": env_vars,
+                "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
+                "worker_cmd": f"{options.conda_env}/bin/dask-worker",
+                "account": options.queue,
+                "reservation": options.reservation,
+                "scheduler_setup": "export TMPDIR=/tmp/dask-$USER",
+                "worker_setup": "export TMPDIR=/tmp/dask-$USER",
+                # "cluster_start_timeout": options.cluster_start_timeout,
+                "staging_directory": "/depot/cms/users/{username}/.dask-gateway/"
+            }
+        c.Backend.cluster_options = Options(
+            String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
+            Select("queue", ["cms", "cms-express", "standby"], default="cms", label="Slurm queue"),
+            String("reservation", default="", label="Node reservation"),
+            Integer("worker_cores", default=1, min=1, max=4, label="Cores per worker"),
+            Float("worker_memory", default=4, min=1, max=16, label="Memory per worker (GiB)"),
+            Mapping("env", {"X509_USER_PROXY": "<path to proxy>", "WORKDIR": "<path to your framework>"}, label="Environment variables"),
+            # Float("cluster_start_timeout", default=60, min=10, max=21600, label="Cluster start timeout (s)"),
+            handler=options_handler,
+        )
+
+traefik:
+  replicas: 1
+  image:
+    name: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/traefik
+    tag: 2.10.4
+    pullPolicy: IfNotPresent
+  loglevel: WARN
+  dashboard: false
+  service:
+    type: LoadBalancer
+    annotations:
+      metallb.universe.tf/address-pool: geddes-private-pool
+    ports:
+      web:
+        port: 80
+      tcp:
+        port: 8786
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
