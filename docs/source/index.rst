@@ -16,7 +16,6 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
    * FNAL account
 
 .. toctree::
-    :hidden:
     :caption: Documentation
     :maxdepth: 1
 
