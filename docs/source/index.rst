@@ -16,6 +16,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
    * FNAL account
 
 .. toctree::
+    :hidden:
     :caption: Documentation
     :maxdepth: 1
 
@@ -27,12 +28,14 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     doc-contacts
 
 .. toctree::
+    :hidden:
     :caption: Monitoring
     :maxdepth: 1
 
     monitoring
 
 .. toctree::
+    :hidden:
     :caption: User guides
     :maxdepth: 1
 
@@ -42,6 +45,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     guide-rucio
 
 .. toctree::
+    :hidden:
     :caption: Useful links
 
     Purdue Tier-2 website <https://www.physics.purdue.edu/Tier2/>
