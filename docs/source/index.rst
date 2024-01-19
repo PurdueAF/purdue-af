@@ -40,3 +40,11 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     guide-cern-eos
     guide-conda
     guide-rucio
+
+.. toctree::
+    :caption: Useful links
+
+    Purdue Tier-2 website <https://www.physics.purdue.edu/Tier2/>
+    CMS Common Analysis Tools documentation <https://cms-analysis.docs.cern.ch>
+    Data Aggregation System (DAS) <https://cmsweb.cern.ch/das/>
+
