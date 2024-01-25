@@ -24,6 +24,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     doc-storage
     doc-software
     doc-hardware
+    doc-dask
     doc-contacts
 
 .. toctree::
