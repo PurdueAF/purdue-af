@@ -68,12 +68,13 @@ chown -R $NB_USER:users $TOPBAR_TEXT_CONFIG_PATH
 chown -R $NB_USER:users $TOPBAR_CONFIG_PATH
 
 # The current environment and dask configuration via environment
-export DASK_DISTRIBUTED__DASHBOARD_LINK=/user/$NB_USER/proxy/8787/status
-export DASK_GATEWAY__ADDRESS=http://traefik-dask-gateway-cms.cms.geddes.rcac.purdue.edu:80
-# export DASK_GATEWAY__AUTH__TYPE=jupyterhub
-# export DASK_GATEWAY__CLUSTER__OPTIONS__IMAGE={JUPYTER_IMAGE_SPEC}
-export DASK_GATEWAY__PROXY_ADDRESS=api-dask-gateway-cms.cms.geddes.rcac.purdue.edu:8000
-# export DASK_GATEWAY__PUBLIC_ADDRESS=/services/dask-gateway/
+# export DASK_DISTRIBUTED__DASHBOARD_LINK=/user/$NB_USER/proxy/8787/status
+export DASK_GATEWAY__ADDRESS=http://dask-gateway.geddes.rcac.purdue.edu
+export DASK_GATEWAY__PROXY_ADDRESS=api-dask-gateway.cms.geddes.rcac.purdue.edu:8000
 export DASK_LABEXTENSION__FACTORY__CLASS=GatewayCluster
 export DASK_LABEXTENSION__FACTORY__MODULE=dask_gateway
+
+# export DASK_GATEWAY__AUTH__TYPE=jupyterhub
+# export DASK_GATEWAY__CLUSTER__OPTIONS__IMAGE={JUPYTER_IMAGE_SPEC}
+# export DASK_GATEWAY__PUBLIC_ADDRESS=/services/dask-gateway/
 # export DASK_ROOT_CONFIG=/opt/conda/etc

@@ -191,8 +191,8 @@ RUN mkdir -p /home/jovyan/.globus /home/jovyan/.rnd && \
 ENV X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
 
 # Install Dask packages
-RUN pip install distributed==2023.3.2 dask==2023.3.2 \
-    dask_gateway==2023.9.0 dask_jobqueue==0.8.1 dask[dataframe]
+# RUN pip install distributed==2023.3.2 dask==2023.3.2 \
+#     dask_gateway==2023.9.0 dask_jobqueue==0.8.1 dask[dataframe]
 
 # Install JupyterLab extensions
 RUN pip install --upgrade \
@@ -221,6 +221,8 @@ RUN jupyter labextension disable "@jupyterlab/apputils-extension:announcements"
 # Temporary measure
 RUN pip uninstall -y dask-labextension
 
+RUN yum install jq -y
+
 # Scripts that run before session start
 COPY scripts/run-as-root.sh \
   scripts/init-conda-kernels.sh \
@@ -233,7 +235,6 @@ COPY scripts/aliases.sh scripts/init-conda.sh /etc/profile.d/
 
 # Custom scripts
 COPY scripts/eos-connect.sh jupyter/jupyter_config.json /etc/jupyter/
-COPY dask/gateway.yaml /etc/jupyter/dask/
 
 # Switch back from root user
 USER USER ${NB_USER}
