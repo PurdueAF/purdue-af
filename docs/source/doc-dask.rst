@@ -49,24 +49,26 @@ Dask Clusters and Clients
 2. Dask Gateway cluster
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-   :doc:`demos/gateway-cluster`
+:doc:`demos/gateway-cluster`
 
-   a. Connecting to a Dask Gateway cluster manually
+a. Connecting to a Dask Gateway cluster manually
 
-   .. code-block:: python
+.. code-block:: python
 
-      from dask_gateway import Gateway
-      gateway = Gateway()
-      cluster = gateway.new_cluster(...)
-      client = cluster.get_client()
+   from dask_gateway import Gateway
+   gateway = Gateway()
+   cluster = gateway.new_cluster(...)
+   client = cluster.get_client()
 
-   b. Connecting to a Dask Gateway cluster automatically
+b. Connecting to a Dask Gateway cluster automatically
 
-   .. code-block:: python
-      from dask_gateway import Gateway
-      gateway = Gateway()
-      clusters = gateway.list_clusters()
-      # for example, select first of existing clusters
-      cluster = gateway.connect(clusters[0].name)
-      client = cluster.get_client()
+.. code-block:: python
+
+   from dask_gateway import Gateway
+   gateway = Gateway()
+   clusters = gateway.list_clusters()
+
+   # for example, select the first of existing clusters
+   cluster = gateway.connect(clusters[0].name)
+   client = cluster.get_client()
 
