@@ -4,13 +4,14 @@ Scaling out with Dask
 If your analysis code is written in Python, it is likely that it can be accelerated
 using `Dask <https://docs.dask.org/en/stable/>`_ library. Dask includes multiple submodules
 with different use cases; here we will focus only on ``dask.distributed`` (or simply ``distributed``)
-submodule.
+submodule. ``distributed`` package is installed in the default ``Pithon3`` kernel.
+To use it in your own private kernel: ``conda install distributed``.
 
 Below is a simple example of parallelizing execution of a function using Dask.
 
 .. code-block:: python
 
-   from dask.distributed import Client
+   from distributed import Client
    client = Client(...)
 
    def func(x):
@@ -36,6 +37,7 @@ Dask Clusters and Clients
 ---------------------------
 
 1. Local cluster
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
@@ -45,9 +47,26 @@ Dask Clusters and Clients
    client = Client(cluster)
 
 2. Dask Gateway cluster
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
    :doc:`demos/gateway-cluster`
 
    a. Connecting to a Dask Gateway cluster manually
+
+   .. code-block:: python
+
+      from dask_gateway import Gateway
+      gateway = Gateway()
+      cluster = gateway.new_cluster(...)
+      client = cluster.get_client()
+
    b. Connecting to a Dask Gateway cluster automatically
+
+   .. code-block:: python
+      from dask_gateway import Gateway
+      gateway = Gateway()
+      clusters = gateway.list_clusters()
+      # for example, select first of existing clusters
+      cluster = gateway.connect(clusters[0].name)
+      client = cluster.get_client()
 
