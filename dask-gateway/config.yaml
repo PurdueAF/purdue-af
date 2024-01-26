@@ -4,7 +4,7 @@ gateway:
   loglevel: INFO
   image:
     name: geddes-registry.rcac.purdue.edu/cms/dask-gateway-server
-    tag: 2023.9.0-jobqueue
+    tag: 2023.9.0-purdue.v1
     pullPolicy: IfNotPresent
   auth:
     type: simple
@@ -17,6 +17,16 @@ gateway:
       operator: "Equal"
       value: "cms-af"
       effect: "NoSchedule"
+  resources:
+    limits:
+      cpu: 2
+      memory: 4Gi
+    requests:
+      cpu: 2
+      memory: 4Gi
+  service:
+    annotations:
+      metallb.universe.tf/address-pool: geddes-public-pool
   env:
     - name: NAMESPACE
       value: cms
@@ -44,6 +54,7 @@ gateway:
                 "worker_memory": int(options.worker_memory * 2 ** 30),
                 "environment": env_vars,
                 "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
+                "scheduler_partition": "hammer-nodes",
                 "worker_cmd": f"{options.conda_env}/bin/dask-worker",
                 "account": options.queue,
                 "reservation": options.reservation,
@@ -62,7 +73,6 @@ gateway:
             # Float("cluster_start_timeout", default=60, min=10, max=21600, label="Cluster start timeout (s)"),
             handler=options_handler,
         )
-
 traefik:
   replicas: 1
   image:
@@ -72,7 +82,7 @@ traefik:
   loglevel: WARN
   dashboard: false
   service:
-    type: LoadBalancer
+    type: ClusterIP
     annotations:
       metallb.universe.tf/address-pool: geddes-private-pool
     ports:
@@ -80,6 +90,9 @@ traefik:
         port: 80
       tcp:
         port: 8786
+  ingress:
+    ingressClassName: public
+    host: dask-gateway.geddes.rcac.purdue.edu
   nodeSelector:
     cms-af-prod: "true"
   tolerations:

@@ -21,7 +21,8 @@ RUN yum update -y && \
     yum install -y \
         https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm \
         https://repo.opensciencegrid.org/osg/3.6/osg-3.6-el8-release-latest.rpm \
-        curl sudo libXft libXpm libXext libSM mesa-libGL glibc-locale-source glibc-langpack-en &&\
+        curl sudo libXft libXpm libXext libSM mesa-libGL glibc-locale-source glibc-langpack-en\
+        wget bzip2 &&\
     curl -O https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/t/tini-0.19.0-1.el8.x86_64.rpm && \
     yum install -y tini-0.19.0-1.el8.x86_64.rpm &&\
     yum clean all && rm -rf /var/lib/apt/lists/* &&\
@@ -61,35 +62,26 @@ RUN yum localinstall -y /etc/slurm-21.08.8-2.el8.x86_64.rpm &&\
 #     make altinstall
 ENV CONDA_DIR=/opt/conda
 ENV PATH="${CONDA_DIR}/bin:${PATH}"
-ARG PYTHON_VERSION=3.10
 # RUN sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashrc && \
 #    # Add call to conda init script see https://stackoverflow.com/a/58081608/4413446
 #    echo 'eval "$(command conda shell.bash hook 2> /dev/null)"' >> /etc/skel/.bashrc
-RUN yum install -y wget bzip2
-RUN set -x && \
-    arch=$(uname -m) && \
-    if [ "${arch}" = "x86_64" ]; then \
-        # Should be simpler, see <https://github.com/mamba-org/mamba/issues/1437>
-        arch="64"; \
-    fi && \
-    wget -qO /tmp/micromamba.tar.bz2 \
-        "https://micromamba.snakepit.net/api/micromamba/linux-${arch}/latest" && \
+
+# RUN wget -qO /tmp/micromamba.tar.bz2 "https://micromamba.snakepit.net/api/micromamba/linux-64/latest" 
+RUN curl -sL -o /tmp/micromamba.tar.bz2 "https://micromamba.snakepit.net/api/micromamba/linux-64/latest" && \
     tar -xvjf /tmp/micromamba.tar.bz2 --strip-components=1 bin/micromamba && \
     rm /tmp/micromamba.tar.bz2 && \
-    PYTHON_SPECIFIER="python=${PYTHON_VERSION}" &&\
-    if [[ "${PYTHON_VERSION}" == "default" ]]; then PYTHON_SPECIFIER="python"; fi &&\
     # Install the packages
     ./micromamba config append channels conda-forge &&\
     ./micromamba install \
         --root-prefix="${CONDA_DIR}" \
         --prefix="${CONDA_DIR}" \
         --yes \
-        "${PYTHON_SPECIFIER}" \
+        "python=3.10" \
         'mamba' &&\
     rm micromamba &&\
     # # Pin major.minor version of python
     mamba list python | grep '^python ' | tr -s ' ' | cut -d ' ' -f 1,2 >> "${CONDA_DIR}/conda-meta/pinned" && \
-    mamba clean --all -f -y
+    mamba clean --all -f -y 
 
 COPY --chown=dask:dask . /opt/dask-gateway-server
 RUN export PATH=$PATH:/usr/local/go/bin && pip install --no-cache-dir \

@@ -48,7 +48,9 @@ def slurm_format_memory(n):
 class SlurmClusterConfig(JobQueueClusterConfig):
     """Dask cluster configuration options when running on SLURM"""
 
-    partition = Unicode("", help="The partition to submit jobs to.", config=True)
+    scheduler_partition = Unicode("", help="Slurm partition to submit the scheduler.", config=True)
+
+    worker_partition = Unicode("", help="Slurm partition to submit the workers.", config=True)
 
     qos = Unicode("", help="QOS string associated with each job.", config=True)
 
@@ -96,8 +98,6 @@ class SlurmBackend(JobQueueBackend):
         self.create_user(cluster.username)
         cmd = [self.submit_command, "--parsable"]
         cmd.append("--job-name=dask-gateway")
-        if cluster.config.partition:
-            cmd.append("--partition=" + cluster.config.partition)
         if cluster.config.account:
             cmd.append("--account=" + cluster.config.account)
         if cluster.config.qos:
@@ -106,6 +106,8 @@ class SlurmBackend(JobQueueBackend):
             cmd.extend(["--reservation=" + cluster.config.reservation])
 
         if worker:
+            if cluster.config.worker_partition:
+                cmd.append("--partition=" + cluster.config.worker_partition)
             cpus = cluster.config.worker_cores
             mem = slurm_format_memory(cluster.config.worker_memory)
             log_file = "dask-worker-%s.log" % worker.name
@@ -118,6 +120,8 @@ class SlurmBackend(JobQueueBackend):
             )
             env = self.get_worker_env(cluster)
         else:
+            if cluster.config.scheduler_partition:
+                cmd.append("--partition=" + cluster.config.scheduler_partition)
             cpus = cluster.config.scheduler_cores
             mem = slurm_format_memory(cluster.config.scheduler_memory)
             log_file = "dask-scheduler-%s.log" % cluster.name

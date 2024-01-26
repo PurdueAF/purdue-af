@@ -61,11 +61,27 @@ API Server name
 {{- end -}}
 
 {{/*
+API Ingress name
+*/}}
+{{- define "dask-gateway.apiIngressName" -}}
+{{ include "dask-gateway.fullname" . | printf "api-ingress-%s" | trunc 63 | trimSuffix "-" }}
+{{- end -}}
+
+
+{{/*
 Traefik name
 */}}
 {{- define "dask-gateway.traefikName" -}}
 {{ include "dask-gateway.fullname" . | printf "traefik-%s" | trunc 63 | trimSuffix "-" }}
 {{- end -}}
+
+{{/*
+Traefik Ingress name
+*/}}
+{{- define "dask-gateway.traefikIngressName" -}}
+{{ include "dask-gateway.fullname" . | printf "traefik-ingress-%s" | trunc 63 | trimSuffix "-" }}
+{{- end -}}
+
 
 {{/*
 Controller name
