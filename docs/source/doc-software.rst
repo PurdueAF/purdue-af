@@ -1,12 +1,13 @@
 Software
 ==========================
 
-The Purdue Analysis Facility provides several Jupyter kernels with pre-installed analysis software.
-Users can also create their own kernels from scratch or from the existing kernels using the following instructions:
+The Purdue Analysis Facility provides two Jupyter kernels with pre-installed
+analysis software. Users can also create their own kernels from scratch
+or from the existing kernels using the following instructions:
 :doc:`guide-conda`.
 
-The pre-installed kernels are listed below. The versions of the packages in these kernels are not fixed,
-and will be occasionally upgraded.
+The pre-installed kernels are listed below. The versions of the packages
+in these kernels will be occasionally upgraded.
 
 .. image:: images/kernels.png
    :width: 300
@@ -14,17 +15,9 @@ and will be occasionally upgraded.
 
 **Python3 kernel (default)**
 
-This kernel is designed for typical pythonic analysis workflows which do not include machine learning.
-The kernel is based on Python 3.10. The environment is built from the following YAML file:
-
-.. * Scientific computing and data analysis: ``numpy``, ``scipy``, ``pandas``, ``awkward``, ``numba``,
-..   ``scikit-learn``, ``uncertainties``, ``lmfit``
-.. * High energy physics tools: ``ROOT``, ``uproot``, ``coffea``, ``vector``, ``hist``, ``pyhf``, ``lhapdf``
-.. * Plotting: ``matplotlib``, ``mplhep``, ``plotly``, ``bokeh``
-.. * Machine learning: ``tensorflow``, ``pytorch``, ``pytorch-geometric``, ``keras``, ``xgboost``, ``mup``
-.. * Distributed computing: ``dask``, ``distributed``, ``dask-jobqueue``, ``dask-gateway``
-.. * C++ libraries: ``gsl``, ``tbb``, ``vdt``, ``boost``, ``pcre``, ``eigen``
-.. * Other tools: ``xrootd``, ``pytest``, ``pyarrow``, ``yaml``, ``tqdm``, ``ipywidgets``, ``openssl``, ``certifi``, ``ca-certificates``
+This kernel is based on Python 3.10 and designed for typical pythonic HEP analysis
+workflows. The kernel corresponds to the conda environment located
+at ``/depot/cms/kernels/python3``, which is built from the following YAML file:
 
 .. literalinclude :: python3-env.yaml
    :language: yaml

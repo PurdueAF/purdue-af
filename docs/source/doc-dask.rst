@@ -4,7 +4,9 @@ Scaling out with Dask
 If your analysis code is written in Python, it is likely that it can be accelerated
 using `Dask <https://docs.dask.org/en/stable/>`_ library. Dask includes multiple submodules
 with different use cases; here we will focus only on ``dask.distributed`` (or simply ``distributed``)
-submodule. ``distributed`` package is installed in the default ``Pithon3`` kernel.
+submodule.
+
+The ``distributed`` package is installed in the default ``Python3`` kernel (Conda environment ``/depot/cms/kernels/python3```).
 To use it in your own private kernel: ``conda install distributed``.
 
 Below is a simple example of parallelizing execution of a function using Dask.
@@ -39,6 +41,10 @@ Dask Clusters and Clients
 1. Local cluster
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Local cluster can be used to parallelize the analysis code over the local CPU cores.
+In most cases, the best scaling is achieved when the number of Dask workers
+doesn't exceed the number of cores selected at session creation.
+
 .. code-block:: python
 
    from distributed import LocalCluster, Client
@@ -49,7 +55,22 @@ Dask Clusters and Clients
 2. Dask Gateway cluster
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-:doc:`demos/gateway-cluster`
+Dask Gateway provides a way to scale out to multiple compute nodes, using SLURM 
+batch scheduler in the backend.
+
+.. warning::
+
+   Dask Gateway will submit SLURM jobs to the Purdue Hammer cluster.
+
+   Therefore, all analysis code that uses Dask Gateway must be located in
+   a storage volume accessible from both the Purdue Analysis Facility and 
+   the Hammer cluster.
+   
+   At the moment, there is only one such volume - Purdue Depot storage.
+   Purdue Depot is only accessbile for users with a Purdue account,
+   therefore CERN and FNAL users cannot use Dask Gateway at the moment.
+
+Example notebook: :doc:`demos/gateway-cluster`
 
 a. Connecting to a Dask Gateway cluster manually
 

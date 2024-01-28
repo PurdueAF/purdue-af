@@ -2,7 +2,9 @@ Contacts
 =============
 
 
-In case of problems, as well as for questions and suggestions, please contact the developers:
+In case of problems, as well as for questions and suggestions,
+please send a message to the following address:
+`cms-af@groups.purdue.edu <mailto:cms-af@groups.purdue.edu>`_.
 
-* Dmitry Kondratyev: `dkondra@purdue.edu <mailto:dkondra@purdue.edu>`_
-* Stefan Piperov: `spiperov@purdue.edu <mailto:spiperov@purdue.edu>`_
+Users with Purdue email can also request to join this mailing list
+to receive news and announcements about the Purdue Analysis Facility.
