@@ -15,16 +15,16 @@ and will be occasionally upgraded.
 **Python3 kernel (default)**
 
 This kernel is designed for typical pythonic analysis workflows which do not include machine learning.
-The kernel is based on Python 3.10. The following packages are installed:
+The kernel is based on Python 3.10. The environment is built from the following YAML file:
 
-* Scientific computing and data analysis: ``numpy``, ``scipy``, ``pandas``, ``awkward``, ``numba``,
-  ``scikit-learn``, ``uncertainties``, ``lmfit``
-* High energy physics tools: ``ROOT``, ``uproot``, ``coffea``, ``vector``, ``hist``, ``pyhf``, ``lhapdf``
-* Plotting: ``matplotlib``, ``mplhep``, ``plotly``, ``bokeh``
-* Machine learning: ``tensorflow``, ``pytorch``, ``pytorch-geometric``, ``keras``, ``xgboost``, ``mup``
-* Distributed computing: ``dask``, ``distributed``, ``dask-jobqueue``, ``dask-gateway``
-* C++ libraries: ``gsl``, ``tbb``, ``vdt``, ``boost``, ``pcre``, ``eigen``
-* Other tools: ``xrootd``, ``pytest``, ``pyarrow``, ``yaml``, ``tqdm``, ``ipywidgets``, ``openssl``, ``certifi``, ``ca-certificates``
+.. * Scientific computing and data analysis: ``numpy``, ``scipy``, ``pandas``, ``awkward``, ``numba``,
+..   ``scikit-learn``, ``uncertainties``, ``lmfit``
+.. * High energy physics tools: ``ROOT``, ``uproot``, ``coffea``, ``vector``, ``hist``, ``pyhf``, ``lhapdf``
+.. * Plotting: ``matplotlib``, ``mplhep``, ``plotly``, ``bokeh``
+.. * Machine learning: ``tensorflow``, ``pytorch``, ``pytorch-geometric``, ``keras``, ``xgboost``, ``mup``
+.. * Distributed computing: ``dask``, ``distributed``, ``dask-jobqueue``, ``dask-gateway``
+.. * C++ libraries: ``gsl``, ``tbb``, ``vdt``, ``boost``, ``pcre``, ``eigen``
+.. * Other tools: ``xrootd``, ``pytest``, ``pyarrow``, ``yaml``, ``tqdm``, ``ipywidgets``, ``openssl``, ``certifi``, ``ca-certificates``
 
 .. literalinclude :: python3-env.yaml
    :language: yaml
