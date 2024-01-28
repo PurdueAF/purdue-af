@@ -26,6 +26,9 @@ The kernel is based on Python 3.10. The following packages are installed:
 * C++ libraries: ``gsl``, ``tbb``, ``vdt``, ``boost``, ``pcre``, ``eigen``
 * Other tools: ``xrootd``, ``pytest``, ``pyarrow``, ``yaml``, ``tqdm``, ``ipywidgets``, ``openssl``, ``certifi``, ``ca-certificates``
 
+.. literalinclude :: python3-env.yaml
+   :language: yaml
+
 **ROOT C++ kernel**
 
 This kernel provides an interactive interface to the ROOT command line,

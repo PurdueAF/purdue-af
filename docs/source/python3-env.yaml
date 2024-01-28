@@ -1,0 +1,75 @@
+name: python3
+channels:
+  - conda-forge
+dependencies:
+  # CONDA PACKAGES
+  - python=3.10.10
+  # Scientific computing and data analysis
+  - awkward=1.10.3
+  - lmfit
+  - numba
+  - numpy=1.26.3
+  - pandas=1.5.3
+  - scipy
+  - scikit-learn
+  - uncertainties
+  # High energy physics tools
+  - coffea=0.7.21
+  - hist
+  # - lhapdf - installed manually (see PATHs)
+  - pyhf
+  - root=6.28.0
+  - uproot=4.3.7
+  - vector
+  # Plotting
+  - bokeh=2.4.2
+  - matplotlib
+  - mplhep
+  - plotly
+  # Machine learning
+  - keras=2.15.0
+  - mup
+  # - tensorflow - see pip packages
+  # - torch & torch_geometric - see pip packages
+  - xgboost
+  # Distributed computing
+  - dask=2023.3.2
+  - dask-gateway=2023.9.0
+  - dask-jobqueue=0.8.1
+  - distributed=2023.3.2
+  # C++ libraries
+  - boost
+  - eigen
+  - gsl
+  - pcre
+  - tbb
+  - vdt
+  # Other tools
+  - ca-certificates
+  - certifi
+  - click=8.1.3
+  - ipykernel
+  - ipywidgets
+  - mamba
+  - openssl
+  - pip
+  - pyarrow
+  - pytest
+  - tqdm
+  - xrootd
+  - yaml
+  # PIP PACKAGES
+  - pip:
+    - rucio-clients
+    - scalpl
+    - tensorflow[and-cuda]
+    - torch==2.0.1
+    - torch-geometric==2.3.1
+    - git+https://github.com/mattbellis/particle_physics_simplified.git
+    - git+https://github.com/mattbellis/h5hep.git
+
+variables:
+  PATH: /depot/cms/kernels/python3/bin:/usr/sue/bin:/etc/jupyter/dask:/opt/conda/condabin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/depot/cms/purdue-af/lhapdf/bin
+  LD_LIBRARY_PATH: :/depot/cms/purdue-af/lhapdf/lib
+  PYTHONPATH: :/depot/cms/purdue-af/lhapdf/lib/python3.10/site-packages
+prefix: /depot/cms/kernels/python3
