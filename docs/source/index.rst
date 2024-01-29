@@ -23,7 +23,6 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
 .. toctree::
     :caption: Documentation
     :maxdepth: 1
-    .. :numbered: 2
 
     doc-getting-started
     doc-login-methods

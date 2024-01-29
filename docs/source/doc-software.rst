@@ -13,7 +13,7 @@ or from the existing kernels using the following instructions:
 The pre-installed kernels are listed below. The versions of the packages
 in these kernels will be occasionally upgraded.
 
-Python3 kernel (default)
+1. Python3 kernel (default)
 ----------------------------
 
 This kernel is based on Python 3.10 and designed for typical pythonic HEP analysis
@@ -23,7 +23,7 @@ at ``/depot/cms/kernels/python3``, which is built from the following YAML file:
 .. literalinclude :: python3-env.yaml
    :language: yaml
 
-ROOT C++ kernel
+2. ROOT C++ kernel
 -----------------------
 
 This kernel provides an interactive interface to the ROOT command line,

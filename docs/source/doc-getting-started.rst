@@ -13,14 +13,14 @@ This guide will help you to quickly set up the work environment for your analysi
       🚀 Login to Purdue Analysis Facility
    </a>
 
-Choose a login method
+1. Choose a login method
 ------------------------
 
 * Purdue University account - recommended if you are a Purdue user
 * CERN account (CMS users only)
 * FNAL account
 
-Select resources
+2. Select resources
 ------------------------
 
 After a successful login, you will be redirected to a page
@@ -42,22 +42,22 @@ recreate it with a different selection.
    If for any reason the session creation fails but you need urgent access to your files,
    use ``Minimal JupyterLab interface`` option.
 
-Review storage volumes
+3. Review storage volumes
 --------------------------
 
 Work in progress
 
-Review kernels and conda environments
+4. Review kernels and conda environments
 -----------------------------------------
 
 Work in progress
 
-Set up GitHub account
+5. Set up GitHub account
 ---------------------------
 
 Work in progress
 
-Set up VOMS proxy
+6. Set up VOMS proxy
 ----------------------
 
 Work in progress
