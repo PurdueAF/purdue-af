@@ -8,7 +8,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
 
 .. |login_to_af| raw:: html
 
-   <a href="https://cms.geddes.rcac.purdue.edu" target="_blank">
+   <a href="https://cms.geddes.rcac.purdue.edu/hub" target="_blank">
       🚀 Login to Purdue Analysis Facility
    </a>
 
