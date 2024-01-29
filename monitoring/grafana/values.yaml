@@ -43,6 +43,8 @@ config:
     domain = cms.geddes.rcac.purdue.edu
     root_url = https://cms.geddes.rcac.purdue.edu/grafana/
     serve_from_sub_path = true
+    [security]
+    allow_embedding=true
   datasources: |
     {
         "apiVersion": 1,
