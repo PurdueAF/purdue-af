@@ -38,6 +38,16 @@ In the code above:
 * ``futures`` - metadata associated with tasks submited to the Dask clusters via ``client.map()`` command.
 * ``results`` - actual results returned once all tasks have been completed
 
+.. tip::
+
+   Before enabling parallelization via Dask client, make sure that your code
+   works by running it on a small set of arguments sequentially:
+   
+   .. code-block:: python
+
+      results = []
+      for arg in args:
+         results.append(func(arg))
 
 Dask Clusters and Clients
 ---------------------------
