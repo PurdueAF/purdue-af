@@ -6,3 +6,9 @@ Public Grafana dashboard
 .. raw:: html
 
     <iframe src="https://cms.geddes.rcac.purdue.edu/grafana/d-solo/purdue-af-dashboard/purdue-analysis-facility-dashboard?orgId=1&refresh=1m&panelId=3" width="450" height="200" frameborder="0"></iframe>
+
+.. container::
+
+    https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard?orgId=1&refresh=1m&panelId=3
+
+|clearfix|
