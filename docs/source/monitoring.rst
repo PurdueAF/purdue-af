@@ -1,4 +1,4 @@
-Public Grafana dashboard
+Monitoring dashboard
 =========================
 
 |open_dashboard|
