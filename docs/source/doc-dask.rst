@@ -42,7 +42,7 @@ In the code above:
 Dask Clusters and Clients
 ---------------------------
 
-#. Local cluster
+Local cluster
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Local cluster can be used to parallelize the analysis code over the local CPU cores.
@@ -56,7 +56,7 @@ doesn't exceed the number of cores selected at session creation.
    cluster.scale(4) # create 4 local workers
    client = Client(cluster)
 
-#. Dask Gateway cluster
+Dask Gateway cluster
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Dask Gateway provides a way to scale out to multiple compute nodes, using SLURM 
