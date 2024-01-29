@@ -24,6 +24,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     :caption: Documentation
     :maxdepth: 1
 
+    doc-getting-started
     doc-login-methods
     doc-interface
     doc-storage
