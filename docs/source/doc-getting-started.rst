@@ -1,6 +1,10 @@
 Getting started
 ======================================
 
+Welcome to the Purdue Analysis facility!
+
+This guide will help you to quickly set up the work environment for your analysis.
+
 |login_to_af|
 
 .. |login_to_af| raw:: html
@@ -8,9 +12,6 @@ Getting started
    <a href="https://cms.geddes.rcac.purdue.edu" target="_blank">
       🚀 Login to Purdue Analysis Facility
    </a>
-
-Welcome to the Purdue Analysis facility!
-This guide will help you to set up the work environment for your analysis.
 
 1. Choose a login method
 ------------------------

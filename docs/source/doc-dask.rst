@@ -6,8 +6,12 @@ using `Dask <https://docs.dask.org/en/stable/>`_ library. Dask includes multiple
 with different use cases; here we will focus only on ``dask.distributed`` (or simply ``distributed``)
 submodule.
 
-The ``distributed`` package is installed in the default ``Python3`` kernel (Conda environment ``/depot/cms/kernels/python3```).
-To use it in your own private kernel: ``conda install distributed``.
+.. note::
+
+   The ``distributed`` package is already installed in the default ``Python3`` kernel
+   (corresponding to Conda environment ``/depot/cms/kernels/python3```).
+
+   To use ``distributed`` in your own private kernel: ``conda install distributed``.
 
 Below is a simple example of parallelizing execution of a function using Dask.
 

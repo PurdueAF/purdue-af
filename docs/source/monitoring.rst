@@ -1,7 +1,14 @@
 Public Grafana dashboard
 =========================
 
-`Open full dashboard <https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard>`_
+|open_dashboard|
+
+.. |open_dashboard| raw:: html
+
+   <a href="https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard" target="_blank">
+      📊 Open full dashboard
+   </a>
+
 
 .. Light mode
 .. raw:: html
