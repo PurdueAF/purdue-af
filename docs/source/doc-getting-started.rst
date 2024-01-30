@@ -68,7 +68,7 @@ After the session has started, review the available storage options:
 -----------------------------------------
 
 There is a pre-installed Python3 kernel that includes all of the most common
-packages used in HEP analyses (see `full list of packages <doc-software>`).
+packages used in HEP analyses (see :doc:`full list of packages <doc-software>`).
 This kernel will be automatically selected when you create a new Jupyter notebook.
 
 When working in a Terminal instead of a Jupyter Notebook,
@@ -79,8 +79,8 @@ you need to activate the environment explicitly:
    conda activate /depot/cms/kernels/python3
 
 If you need a package that is missing from the default kernel, please
-`contact Purdue AF support <doc-contacts>`.
-You can also `create and share custom kernels <guide-conda>`.
+:doc:`contact Purdue AF support <doc-contacts>`.
+You can also :doc:`create and share custom kernels <guide-conda>`.
 
 5. Set up GitHub access
 ---------------------------
@@ -167,4 +167,4 @@ Once the certificate is installed, activate the VOMS proxy:
 
    Currently only possible for users with Purdue email accounts.
 
-`Instructions to subsrcibe to the mailing list <guide-cern-eos>`.
+:doc:`Instructions to subsrcibe to the mailing list <guide-cern-eos>`.

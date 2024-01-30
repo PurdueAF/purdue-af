@@ -8,11 +8,12 @@ In case of problems, as well as for questions and suggestions,
 please send a message to the following address:
 `cms-af@groups.purdue.edu <mailto:cms-af@groups.purdue.edu>`_.
 
+This mailing list is used for important announcements and alerts about
+new features.
+
+
 Subscribing to the mailing list
 ---------------------------------
-
-The same mailing list is used for important announcements and alerts about
-new features.
 
 Users with Purdue email can subscribe to it by managing their
 group membership at the `Microsoft Outlook ECP portal <https://outlook.office365.com/ecp/>`_:
