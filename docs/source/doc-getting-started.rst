@@ -52,10 +52,18 @@ Work in progress
 
 Work in progress
 
-5. Set up GitHub account
+5. Set up GitHub SSH key
 ---------------------------
 
-Work in progress
+Follow these instructions:
+`Adding a new SSH key to your GitHub account <https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account?tool=webui>_.
+
+After you generated an SSH key and added it to your GitHub account,
+run the following in a Terminal in Purdue AF interface to finish GitHub authentication:
+
+.. code-block:: shell
+
+   ssh -T git@github.com
 
 6. Set up VOMS proxy
 ----------------------
@@ -76,33 +84,33 @@ specifically section **"Obtaining and installing your Certificate"**.
    * Drag-and-drop a file from your local file browser into Purdue AF file browser.
    * **OR** (Purdue users only):
    
-   #. Upload the file to your ``/home/`` directory at Hammer cluster:
-   
-      .. code-block:: shell
+      #. Upload the file from your computer to the ``/home/`` directory at Hammer cluster:
       
-         scp /local/path/mycert.p12 <username>@hammer.rcac.purdue.edu
-   
-   #. SSH into Hammer cluster.
-
-      .. code-block:: shell
+         .. code-block:: shell
+         
+            scp /local/path/mycert.p12 <username>@hammer.rcac.purdue.edu
       
-         ssh <username>@hammer.rcac.purdue.edu
+      #. SSH into Hammer cluster:
 
-   #. Copy the file to your Depot directory where it will be visible from Purdue AF.
+         .. code-block:: shell
+         
+            ssh <username>@hammer.rcac.purdue.edu
 
-      .. code-block:: shell
-      
-         cp /hammer/path/mycert.p12 /depot/cms/users/<username>/
+      #. Copy the file to your Depot directory where it will be visible from Purdue AF:
 
-   #. Open your Purdue AF session and copy the file from Depot:
+         .. code-block:: shell
+         
+            cp /hammer/path/mycert.p12 /depot/cms/users/<username>/
 
-      .. code-block:: shell
-      
-         mkdir ~/.globus
-         cp /depot/cms/users/<username>/mycert.p12 ~/.globus
+      #. Open your Purdue AF session and copy the file from Depot:
+
+         .. code-block:: shell
+         
+            mkdir ~/.globus
+            cp /depot/cms/users/<username>/mycert.p12 ~/.globus
 
 Once the certificate is installed, activate the VOMS proxy:
 
-.. code-block:: shell
+.. code-block::
 
    voms-proxy-init --rfc --voms cms -valid 192:00

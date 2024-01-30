@@ -22,3 +22,7 @@
     margin: 0;
 }
   
+button.toggle-button.toggle-button-hidden:before {
+    position: relative;
+    top: -.55em;
+}
