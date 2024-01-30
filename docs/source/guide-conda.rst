@@ -1,4 +1,4 @@
-How to create Conda environments and Jupyter kernels
+Creating Conda environments and Jupyter kernels
 ====================================================
 
 In the Purdue Analysis Facility, the Python-based Jupyter kernels are created from conda environments.

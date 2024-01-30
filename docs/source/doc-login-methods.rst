@@ -1,4 +1,4 @@
-Login methods and user naming rules
+Login methods and usernames
 ======================================
 
 The user authentication is implemented using **CILogon**.

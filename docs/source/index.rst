@@ -25,12 +25,12 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     :maxdepth: 1
 
     doc-getting-started
-    doc-login-methods
-    doc-interface
     doc-storage
     doc-software
     doc-hardware
     doc-dask
+    doc-login-methods
+    doc-interface
     doc-contacts
 
 .. toctree::

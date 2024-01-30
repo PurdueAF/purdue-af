@@ -1,5 +1,5 @@
 Scaling out with Dask
-==========================
+#######################
 
 If your analysis code is written in Python, it is likely that it can be accelerated
 using `Dask <https://docs.dask.org/en/stable/>`_ library. Dask includes multiple submodules
@@ -12,6 +12,9 @@ submodule.
    (corresponding to Conda environment ``/depot/cms/kernels/python3```).
 
    To use ``distributed`` in your own private kernel: ``conda install distributed``.
+
+Parallelization example
+========================
 
 Below is a simple example of parallelizing execution of a function using Dask.
 
@@ -32,7 +35,7 @@ Below is a simple example of parallelizing execution of a function using Dask.
 
 In the code above:
 
-* ``Client()`` - Dask client connected to a cluster (scheduler). See options below.
+* ``client`` - Dask client connected to a cluster (scheduler). See options below.
 * ``func()`` - function to be parallelized.
 * ``args`` - list of arguments for which the function will be executed.
 * ``futures`` - metadata associated with tasks submited to the Dask clusters via ``client.map()`` command.
@@ -50,10 +53,10 @@ In the code above:
          results.append(func(arg))
 
 Dask Clusters and Clients
----------------------------
+===========================
 
 1. Local cluster
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+-------------------
 
 Local cluster can be used to parallelize the analysis code over the local CPU cores.
 In most cases, the best scaling is achieved when the number of Dask workers
@@ -67,7 +70,7 @@ doesn't exceed the number of CPU cores selected at session creation.
    client = Client(cluster)
 
 2. Dask Gateway cluster
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------
 
 Dask Gateway provides a way to scale out to multiple compute nodes, using SLURM 
 batch scheduler in the backend.
@@ -115,6 +118,7 @@ by manually pasting the cluster name, or by selecting an existing cluster
 automatically.
 
 a. Connecting to a Dask Gateway cluster manually
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
@@ -125,6 +129,7 @@ a. Connecting to a Dask Gateway cluster manually
    client = gateway.connect(cluster_name).get_client()
 
 b. Connecting to a Dask Gateway cluster automatically
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
