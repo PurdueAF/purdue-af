@@ -52,14 +52,29 @@ Work in progress
 
 Work in progress
 
-5. Set up GitHub SSH key
+5. Set up GitHub access
 ---------------------------
 
 Follow these instructions:
-`Adding a new SSH key to your GitHub account <https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account?tool=webui>_.
 
-After you generated an SSH key and added it to your GitHub account,
-run the following in a Terminal in Purdue AF interface to finish GitHub authentication:
+* |generate-ssh-key|
+* |add-ssh-key|
+
+.. |generate-ssh-key| raw:: html
+
+   <a href="https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent" target="_blank">
+      Generating a new SSH key and adding it to the ssh-agent
+   </a>
+
+.. |add-ssh-key| raw:: html
+
+   <a href="https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account" target="_blank">
+      Adding a new SSH key to your GitHub account
+   </a>
+
+
+After you generated an SSH key and added it to your GitHub account, run the
+following command in a Terminal to finish GitHub authentication:
 
 .. code-block:: shell
 
@@ -81,8 +96,8 @@ specifically section **"Obtaining and installing your Certificate"**.
    certificate or any other file to your ``/home/`` storage at Purdue AF, you can
    do one of the following:
 
-   * Drag-and-drop a file from your local file browser into Purdue AF file browser.
-   * **OR** (Purdue users only):
+   *  Drag-and-drop a file from your local file browser into Purdue AF file browser.
+   *  **OR** (Purdue users only):
    
       #. Upload the file from your computer to the ``/home/`` directory at Hammer cluster:
       
