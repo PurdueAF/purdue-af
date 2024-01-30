@@ -35,9 +35,10 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     doc-software
     doc-hardware
     doc-dask
-    doc-login-methods
-    doc-interface
     doc-support
+
+    .. doc-login-methods
+    .. doc-interface
 
 .. toctree::
     :hidden:
