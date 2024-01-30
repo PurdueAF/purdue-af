@@ -52,15 +52,16 @@ After the session has started, review the available storage options:
 
   * ``work`` - shared storage for AF users. There are 100GB personal directories under ``work/users``,
     and project directories under ``work/projects``.
-  * ``depot`` - shared storage **only for Purdue users**.
+  * ``depot`` (also mounted at ``/depot/cms``) - shared storage **only for Purdue users**.
+    
     Any code that uses SLURM or Dask Gateway should be stored here.
-  * ``eos-purdue`` - **read-only** directory that stores large datasets and users'
+  * ``eos-purdue`` (also mounted at ``/eos/purdue``) - **read-only** directory that stores large datasets and users'
     Grid directories.
-  * It is possible to also enable access to CERNBox here: :doc:`guide-cern-eos`.
   
 .. seealso::
 
-   :doc:`doc-storage`.
+   * Detailed description of storage options: :doc:`doc-storage`.
+   * :doc:`guide-cern-eos`
 
 4. Review kernels and conda environments
 -----------------------------------------
@@ -77,8 +78,9 @@ Alternatively, you can activate it in the Terminal:
 
 .. seealso::
 
-   :doc:`doc-software`
-   :doc:`guide-conda`
+   * List of packages in default kernel: :doc:`doc-software`
+
+   * :doc:`guide-conda`
 
 5. Set up GitHub access
 ---------------------------
