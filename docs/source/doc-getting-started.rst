@@ -65,8 +65,9 @@ To obtain and install your CMS VOMS certificate, follow the instructions at
 `CMS TWiki <https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookStartingGrid>`_,
 specifically section **"Obtaining and installing your Certificate"**.
 
-.. important::
-   :class: dropdown
+
+.. admonition:: Uploading files to Purdue AF
+   :class: toggle
 
    There is no ``ssh`` access to Purdue Analysis Facility. In order to upload a VOMS
    certificate or any other file to your ``/home/`` storage at Purdue AF, you can
@@ -75,33 +76,33 @@ specifically section **"Obtaining and installing your Certificate"**.
    * Drag-and-drop a file from your local file browser into Purdue AF file browser.
    * **OR** (Purdue users only):
    
-     #. Upload the file to your ``/home/`` directory at Hammer cluster:
-     
-        .. codeblock:: shell
-        
-            scp /local/path/mycert.p12 <username>@hammer.rcac.purdue.edu
-     
-     #. SSH into Hammer cluster.
+   #. Upload the file to your ``/home/`` directory at Hammer cluster:
+   
+      .. code-block:: shell
+      
+         scp /local/path/mycert.p12 <username>@hammer.rcac.purdue.edu
+   
+   #. SSH into Hammer cluster.
 
-        .. codeblock:: shell
-        
-            ssh <username>@hammer.rcac.purdue.edu
+      .. code-block:: shell
+      
+         ssh <username>@hammer.rcac.purdue.edu
 
-     #. Copy the file to your Depot directory where it will be visible from Purdue AF.
+   #. Copy the file to your Depot directory where it will be visible from Purdue AF.
 
-        .. codeblock:: shell
-        
-            cp /hammer/path/mycert.p12 /depot/cms/users/<username>/
+      .. code-block:: shell
+      
+         cp /hammer/path/mycert.p12 /depot/cms/users/<username>/
 
-     #. Open your Purdue AF session and copy the file from Depot:
+   #. Open your Purdue AF session and copy the file from Depot:
 
-        .. codeblock:: shell
-        
-            mkdir ~/.globus
-            cp /depot/cms/users/<username>/mycert.p12 ~/.globus
+      .. code-block:: shell
+      
+         mkdir ~/.globus
+         cp /depot/cms/users/<username>/mycert.p12 ~/.globus
 
 Once the certificate is installed, activate the VOMS proxy:
 
-.. codeblock:: shell
+.. code-block:: shell
 
    voms-proxy-init --rfc --voms cms -valid 192:00
