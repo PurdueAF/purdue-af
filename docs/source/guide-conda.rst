@@ -125,18 +125,18 @@ if you know in advance which packages must be present in the kernel.
 4. Once the list of packages is finalized, create a Conda environment in a desired location
    (in this example the environment will get created with a name ``my-new-env``):
 
-    .. code-block:: shell
+   .. code-block:: shell
 
        conda env create -f /some-path/my-env-file.yml --prefix /some-path/my-new-env
 
-    .. warning::
+   .. warning::
 
-       Keep in mind that Conda environments can take up a lot of space
-       (up to several dozen GB), so the ``/home/<username>/`` storage space
-       may be insufficient for storing more than 1-2 custom environments.
+      Keep in mind that Conda environments can take up a lot of space
+      (up to several dozen GB), so the ``/home/<username>/`` storage space
+      may be insufficient for storing more than 1-2 custom environments.
 
-       A better location to store your environment is either ``/work/`` or
-       ``/depot/`` storage (Depot is only writeable by Purdue users).
+      A better location to store your environment is either ``/work/`` or
+      ``/depot/`` storage (Depot is only writeable by Purdue users).
 
 5. You can activate the environment and install more packages into it at any time:
 
