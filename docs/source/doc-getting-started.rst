@@ -64,7 +64,7 @@ After the session has started, review the available storage options:
    * Detailed description of storage options: :doc:`doc-storage`.
    * :doc:`guide-cern-eos`
 
-4. Review kernels and conda environments
+4. Review kernels and Conda envs
 -----------------------------------------
 
 There is a pre-installed Python3 kernel that includes all of the most common
@@ -79,7 +79,8 @@ you need to activate the environment explicitly:
    conda activate /depot/cms/kernels/python3
 
 If you need a package that is missing from the default kernel, please
-:doc:`contact Purdue AF support <doc-contacts>`.
+:doc:`contact Purdue AF support <doc-support>`.
+
 You can also :doc:`create and share custom kernels <guide-conda>`.
 
 5. Set up GitHub access
