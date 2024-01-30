@@ -45,12 +45,40 @@ recreate it with a different selection.
 3. Review storage volumes
 --------------------------
 
-Work in progress
+After the session has started, review the available storage options:
+
+* The default directory in file browser and Terminal is ``/home/<username>``, it has 25GB quota.
+* In the file browser you will see symlinks to the following directories:
+
+  * ``work`` - shared storage for AF users. There are 100GB personal directories under ``work/users``,
+    and project directories under ``work/projects``.
+  * ``depot`` - shared storage **only for Purdue users**.
+    Any code that uses SLURM or Dask Gateway should be stored here.
+  * ``eos-purdue`` - **read-only** directory that stores large datasets and users'
+    Grid directories.
+  * It is possible to also enable access to CERNBox here: :doc:`guide-cern-eos`.
+  
+.. seealso::
+
+   :doc:`doc-storage`.
 
 4. Review kernels and conda environments
 -----------------------------------------
 
-Work in progress
+There is a pre-installed Python3 kernel that includes all of the most common
+packages used in HEP analyses. This kernel will be automatically selected when
+you create a new Jupyter notebook.
+
+Alternatively, you can activate it in the Terminal:
+
+.. code-block:: shell
+
+   conda activate /depot/cms/kernels/python3
+
+.. seealso::
+
+   :doc:`doc-software`
+   :doc:`guide-conda`
 
 5. Set up GitHub access
 ---------------------------
@@ -86,7 +114,7 @@ following command in a Terminal to finish GitHub authentication:
 In order to access data via XRootD, you will need a VOMS certificate.
 To obtain and install your CMS VOMS certificate, follow the instructions at
 `CMS TWiki <https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookStartingGrid>`_,
-specifically section **"Obtaining and installing your Certificate"**.
+specifically the section **"Obtaining and installing your Certificate"**.
 
 
 .. admonition:: Uploading files to Purdue AF
