@@ -2,9 +2,16 @@ Creating Conda environments and Jupyter kernels
 ====================================================
 
 In the Purdue Analysis Facility, the Python-based Jupyter kernels are created from
-Conda environments.
-A pre-installed Conda environment named ``python3`` is stored under
-``/depot/cms/kernels/``; the packages installed there are listed :doc:`here <doc-software>`.
+Conda environments. We provide a pre-installed Conda environment
+(``/depot/cms/kernels/python3``), which includes most of the Python packages
+commonly used for HEP analyses. This environment corresponds to the
+``Python3 (default)`` Jupyter kernel.
+
+.. tip::
+   
+   Before creating custom environments, consult with the :doc:`Analysis Facility support <doc-support>`.
+   It may be easier to install missing packages into the default environment.
+
 
 * List all available Conda environments: 
 
