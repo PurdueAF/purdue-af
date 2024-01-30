@@ -12,15 +12,19 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
 
 .. |login_to_af| raw:: html
 
-   <a href="https://cms.geddes.rcac.purdue.edu/hub" target="_blank">
-      🚀 Login to Purdue Analysis Facility
-   </a>
+    <div style="text-align: center">
+        <a href="https://cms.geddes.rcac.purdue.edu/hub" target="_blank">
+            🚀 Login to Purdue Analysis Facility
+        </a>
+    </div>
 
-.. admonition:: Supported login methods
+.. admonition:: Supported login credentials:
 
    * Purdue University account (BoilerKey)
    * CERN account (CMS users only)
    * FNAL account
+
+|
 
 .. toctree::
     :caption: Documentation
