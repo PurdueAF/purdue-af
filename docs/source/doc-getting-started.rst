@@ -113,58 +113,68 @@ following command in a Terminal to finish GitHub authentication:
 6. Set up VOMS proxy
 ----------------------
 
-In order to access data via XRootD, you will need a VOMS certificate.
-To obtain and install your CMS VOMS certificate, follow the instructions at
-`CMS TWiki <https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookStartingGrid>`_,
-specifically the section **"Obtaining and installing your Certificate"**.
+#. In order to access data via XRootD, you will need a VOMS certificate.
+   To obtain and install your CMS VOMS certificate, follow the instructions at
+   `CMS TWiki <https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookStartingGrid>`_,
+   specifically the section **"Obtaining and installing your Certificate"**.
 
 
-.. admonition:: Uploading files to Purdue AF
-   :class: toggle
+   .. admonition:: Uploading files to Purdue AF
+      :class: toggle
 
-   There is no ``ssh`` access to Purdue Analysis Facility. In order to upload a VOMS
-   certificate or any other file to your ``/home/`` storage at Purdue AF, you can
-   do one of the following:
+      There is no ``ssh`` access to Purdue Analysis Facility. In order to upload a VOMS
+      certificate or any other file to your ``/home/`` storage at Purdue AF, you can
+      do one of the following:
 
-   *  Drag-and-drop a file from your local file browser into Purdue AF file browser.
-   *  **OR** (Purdue users only):
-   
-      #. Upload the file from your computer to the ``/home/`` directory at Hammer cluster:
+      *  Drag-and-drop a file from your local file browser into Purdue AF file browser.
+      *  **OR** (Purdue users only):
       
-         .. code-block:: shell
+         #. Upload the file from your computer to the ``/home/`` directory at Hammer cluster:
          
-            scp /local/path/mycert.p12 <username>@hammer.rcac.purdue.edu
-      
-      #. SSH into Hammer cluster:
-
-         .. code-block:: shell
+            .. code-block:: shell
+            
+               scp /local/path/mycert.p12 <username>@hammer.rcac.purdue.edu
          
-            ssh <username>@hammer.rcac.purdue.edu
+         #. SSH into Hammer cluster:
 
-      #. Copy the file to your Depot directory where it will be visible from Purdue AF:
+            .. code-block:: shell
+            
+               ssh <username>@hammer.rcac.purdue.edu
 
-         .. code-block:: shell
-         
-            cp /hammer/path/mycert.p12 /depot/cms/users/<username>/
+         #. Copy the file to your Depot directory where it will be visible from Purdue AF:
 
-      #. Open your Purdue AF session and copy the file from Depot:
+            .. code-block:: shell
+            
+               cp /hammer/path/mycert.p12 /depot/cms/users/<username>/
 
-         .. code-block:: shell
-         
-            mkdir ~/.globus
-            cp /depot/cms/users/<username>/mycert.p12 ~/.globus
+         #. Open your Purdue AF session and copy the file from Depot:
 
-Once the certificate is installed, activate the VOMS proxy:
+            .. code-block:: shell
+            
+               mkdir ~/.globus
+               cp /depot/cms/users/<username>/mycert.p12 ~/.globus
 
-.. code-block::
+#. (Optional) Specify the path where your VOMS proxy will be stored. If you are
+   using SLURM or Dask Gateway, the proxy location must be on Depot
+   (currently only allowed for users with Purdue account):
 
-   voms-proxy-init --rfc --voms cms -valid 192:00
+   .. code-block:: shell
 
-6. Subscribe to Purdue AF mailing list
+      export X509_USER_PROXY=/depot/cms/users/$USER/x509up_u$NB_UID
+
+
+#. Activate the VOMS proxy:
+
+   .. code-block::
+
+      voms-proxy-init --rfc --voms cms -valid 192:00
+
+7. Subscribe to Purdue AF mailing list
 ----------------------------------------
+
+:doc:`Instructions to subsrcibe to the mailing list <guide-cern-eos>`.
 
 .. warning:: 
 
    Currently only possible for users with Purdue email accounts.
 
-:doc:`Instructions to subsrcibe to the mailing list <guide-cern-eos>`.
