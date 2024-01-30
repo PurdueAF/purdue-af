@@ -24,7 +24,7 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_rtd_theme",
     "sphinx_copybutton",
-
+    "sphinx_togglebutton",
 ]
 
 #disable notebook execution
