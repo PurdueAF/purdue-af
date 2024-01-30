@@ -4,7 +4,11 @@ Purdue Analysis Facility
 The Purdue Analysis Facility is designed to provide an interactive environment
 for fast and scalable CMS physics analyses using dedicated computing resources at Purdue.
 
+|
+
 |login_to_af|
+
+|
 
 .. |login_to_af| raw:: html
 
@@ -12,9 +16,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
       🚀 Login to Purdue Analysis Facility
    </a>
 
-.. note::
-
-   Supported login methods:
+.. admonition:: Supported login methods
 
    * Purdue University account (BoilerKey)
    * CERN account (CMS users only)

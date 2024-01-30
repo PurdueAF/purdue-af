@@ -17,8 +17,16 @@ in these kernels will be occasionally upgraded.
 ----------------------------
 
 This kernel is based on Python 3.10 and designed for typical pythonic HEP analysis
-workflows. The kernel corresponds to the conda environment located
-at ``/depot/cms/kernels/python3``, which is built from the following YAML file:
+workflows.
+
+* In new Jupyter notebooks, this kernel will be automatically selected as default.
+* In Terminal, it can be activated as follows:
+
+  .. code-block:: shell
+
+    conda activate /depot/cms/kernels/python3
+
+The environment is built from the following YAML file:
 
 .. literalinclude :: python3-env.yaml
    :language: yaml
