@@ -50,8 +50,9 @@ After the session has started, review the available storage options:
 * The default directory in file browser and Terminal is ``/home/<username>``, it has 25GB quota.
 * In the file browser you will see symlinks to the following directories:
 
-  * ``work`` - shared storage for AF users. There are 100GB personal directories under ``work/users``,
-    and project directories under ``work/projects``.
+  * ``work`` (also mounted at ``/work/``) - shared storage for AF users.
+  
+    There are 100GB personal directories under ``work/users``, and project directories under ``work/projects``.
   * ``depot`` (also mounted at ``/depot/cms``) - shared storage **only for Purdue users**.
     
     Any code that uses SLURM or Dask Gateway should be stored here.
@@ -67,20 +68,19 @@ After the session has started, review the available storage options:
 -----------------------------------------
 
 There is a pre-installed Python3 kernel that includes all of the most common
-packages used in HEP analyses. This kernel will be automatically selected when
-you create a new Jupyter notebook.
+packages used in HEP analyses (see `full list of packages <doc-software>`).
+This kernel will be automatically selected when you create a new Jupyter notebook.
 
-Alternatively, you can activate it in the Terminal:
+When working in a Terminal instead of a Jupyter Notebook,
+you need to activate the environment explicitly:
 
 .. code-block:: shell
 
    conda activate /depot/cms/kernels/python3
 
-.. seealso::
-
-   * List of packages in default kernel: :doc:`doc-software`
-
-   * :doc:`guide-conda`
+If you need a package that is missing from the default kernel, please
+`contact Purdue AF support <doc-contacts>`.
+You can also `create and share custom kernels <guide-conda>`.
 
 5. Set up GitHub access
 ---------------------------
@@ -103,7 +103,7 @@ Follow these instructions:
    </a>
 
 
-After you generated an SSH key and added it to your GitHub account, run the
+After you have generated an SSH key and added it to your GitHub account, run the
 following command in a Terminal to finish GitHub authentication:
 
 .. code-block:: shell
@@ -159,3 +159,12 @@ Once the certificate is installed, activate the VOMS proxy:
 .. code-block::
 
    voms-proxy-init --rfc --voms cms -valid 192:00
+
+6. Subscribe to Purdue AF mailing list
+----------------------------------------
+
+.. warning:: 
+
+   Currently only possible for users with Purdue email accounts.
+
+`Instructions to subsrcibe to the mailing list <guide-cern-eos>`.
