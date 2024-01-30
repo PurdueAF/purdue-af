@@ -57,7 +57,7 @@ Dask Clusters and Clients
 
 Local cluster can be used to parallelize the analysis code over the local CPU cores.
 In most cases, the best scaling is achieved when the number of Dask workers
-doesn't exceed the number of cores selected at session creation.
+doesn't exceed the number of CPU cores selected at session creation.
 
 .. code-block:: python
 
@@ -86,14 +86,43 @@ batch scheduler in the backend.
 
 Example notebook: :doc:`demos/gateway-cluster`
 
+It is recommended to create a Dask Gateway cluster in a separate Jupyter notebook,
+rather than in your main analysis code. Here is an example for cluster creation:
+
+
+.. code-block:: python
+
+   from dask_gateway import Gateway
+   gateway = Gateway()
+   cluster = gateway.new_cluster(
+      conda_env = "/depot/cms/kernels/python3",
+      queue = "cms",
+      worker_cores = 1,
+      worker_memory = 4,
+      env = {
+         "PYTHONPATH": "/depot/cms/<path to your framework>",
+         "X509_USER_PROXY": "/depot/cms/<path to proxy>",
+         # "KEY": "VALUE"
+      },
+   )
+   # Scale cluster to 4 workers
+   cluster.scale(4)
+   # Print cluster info
+   print(cluster)
+
+In the main analysis code, you can connect to the Gateway cluster either
+by manually pasting the cluster name, or by selecting an existing cluster
+automatically.
+
 a. Connecting to a Dask Gateway cluster manually
 
 .. code-block:: python
 
    from dask_gateway import Gateway
    gateway = Gateway()
-   cluster = gateway.new_cluster(...)
-   client = cluster.get_client()
+   # replace with actual cluster name:
+   cluster_name = "17dfaa3c10dc48719f5dd8371893f3e5"
+   client = gateway.connect(cluster_name).get_client()
 
 b. Connecting to a Dask Gateway cluster automatically
 
@@ -102,8 +131,12 @@ b. Connecting to a Dask Gateway cluster automatically
    from dask_gateway import Gateway
    gateway = Gateway()
    clusters = gateway.list_clusters()
-
    # for example, select the first of existing clusters
-   cluster = gateway.connect(clusters[0].name)
-   client = cluster.get_client()
+   cluster_name = clusters[0].name
+   cluster = gateway.connect(cluster_name).get_client()
+
+.. caution::
+
+   If you have more than one Dask Gateway cluster running, automatic detection
+   may be ambiguous.
 

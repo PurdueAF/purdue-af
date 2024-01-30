@@ -29,4 +29,6 @@ at ``/depot/cms/kernels/python3``, which is built from the following YAML file:
 This kernel provides an interactive interface to the ROOT command line,
 allowing to execute ROOT macros and produce plots inside Jupyter notebooks.
 
+.. seealso::
+
    :doc:`ROOT C++ notebook demo <demos/root-cpp>`
