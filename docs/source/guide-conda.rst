@@ -1,13 +1,24 @@
 Creating Conda environments and Jupyter kernels
 ====================================================
 
-In the Purdue Analysis Facility, the Python-based Jupyter kernels are created from conda environments.
-Two pre-installed environments named ``python3`` and ``python3-ml`` are stored in ``/depot/cms/kernels/``,
-the packages installed in these environments are listed :doc:`here <doc-software>`.
+In the Purdue Analysis Facility, the Python-based Jupyter kernels are created from
+Conda environments.
+A pre-installed Conda environment named ``python3`` is stored under
+``/depot/cms/kernels/``; the packages installed there are listed :doc:`here <doc-software>`.
 
-List all available conda environments: ``conda env list``
+* List all available conda environments: 
 
-List all available kernels: ``jupyter kernelspec list``
+  .. code-block:: shell
+    
+      conda env list
+
+* List all available Jupyter kernels:
+
+  .. code-block:: shell
+        
+      jupyter kernelspec list
+
+  or simply click the ``[+]`` button (New Launcher) in the AF interface.
 
 Minimal example of creating a custom kernel
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -23,6 +34,8 @@ The basic recipe to create a custom kernel is straightforward:
     
     # path to your conda environments on Depot:
     conda_envs_path="/depot/cms/conda_envs/$USER"
+    # or under /work/, if you are not a Purdue user:
+    # conda_envs_path="/work/users/$USER"
     
     # name of the new environment:
     conda_env_name="my-new-env"
@@ -34,7 +47,7 @@ The basic recipe to create a custom kernel is straightforward:
     conda activate $conda_envs_path/$conda_env_name
     
 .. warning::
-    Since the kernel names are based on the conda environment names,
+    Since Jupyter kernel names are based on the conda environment names,
     one should avoid creating multiple conda environments with the same name.
     Also, one should avoid using names ``python3`` and ``python3-ml`` to name conda environments,
     as these names are reserved for the pre-installed kernels.
