@@ -103,7 +103,7 @@ rather than in your main analysis code. Here is an example for cluster creation:
       worker_cores = 1,
       worker_memory = 4,
       env = {
-         "PYTHONPATH": "/depot/cms/<path to your framework>",
+         "WORKDIR": "/depot/cms/<path to your framework>",
          "X509_USER_PROXY": "/depot/cms/<path to proxy>",
          # "KEY": "VALUE"
       },

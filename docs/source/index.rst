@@ -56,6 +56,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     guide-cern-eos
     guide-conda
     guide-rucio
+    guide-mc-gen
 
 .. toctree::
     :hidden:
