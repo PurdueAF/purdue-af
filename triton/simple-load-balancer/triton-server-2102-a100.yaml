@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+   name: triton-2102-a100
+   labels:
+     app: triton-2102-a100
+spec:
+   replicas: 1
+   selector:
+     matchLabels:
+       app: triton-2102-a100
+   template:
+     metadata:
+       labels:
+         app: triton-2102-a100
+     spec:
+      #  nodeSelector:
+      #     kubernetes.io/hostname: vm-hammer-g000
+       volumes:
+         - name: depot
+           nfs:
+             server: datadepot.rcac.purdue.edu
+             path: /depot/cms
+       containers:
+         - name: triton-2102-a100
+           ports:
+           - containerPort: 8000
+             name: http-triton
+           - containerPort: 8001
+             name: grpc-triton
+           - containerPort: 8002
+             name: metrics-triton
+           image: "fastml/triton-torchgeo:21.02-py3-geometric"
+           volumeMounts:
+           - mountPath: /depot/cms
+             name: depot
+             #mountPropagation: HostToContainer
+           command: ["/bin/sh", "-c"]
+           args: ["cd /depot/cms/sonic/models &&\ /opt/tritonserver/bin/tritonserver --model-repository=/depot/cms/sonic/models --allow-gpu-metrics=true --log-verbose=1 --strict-model-config=false"]
+           resources:
+             limits:
+               nvidia.com/mig-7g.40gb: 1
+               cpu: 2
+               memory: 6G
+       tolerations:
+         - key: hub.jupyter.org/dedicated
+           operator: Equal
+           value: cms-af
+           effect: NoSchedule
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+   name: triton-2102-a100
+   labels:
+     app: triton-2102-a100
+     scrape_metrics: "true"
+   annotations:
+     metallb.universe.tf/address-pool: geddes-private-pool
+spec:
+   selector:
+     app: triton-2102-a100
+   ports:
+     - protocol: TCP
+       port: 8000
+       name: http
+       targetPort: 8000
+     - protocol: TCP
+       port: 8001
+       name: grpc
+       targetPort: 8001
+     - protocol: TCP
+       port: 8002
+       name: metrics
+       targetPort: 8002
+   type: LoadBalancer 

@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+   name: triton-cpu
+   labels:
+     app: triton-cpu
+spec:
+   replicas: 1
+   selector:
+     matchLabels:
+       app: triton-cpu
+   template:
+     metadata:
+       labels:
+         app: triton-cpu
+     spec:
+       nodeSelector:
+          kubernetes.io/hostname: geddes-b013
+       volumes:
+         - name: depot
+           nfs:
+             server: datadepot.rcac.purdue.edu
+             path: /depot/cms
+       containers:
+         - name: triton-cpu
+           ports:
+           - containerPort: 8000
+             name: http-triton
+           - containerPort: 8001
+             name: grpc-triton
+           - containerPort: 8002
+             name: metrics-triton
+           image: "fastml/triton-torchgeo:21.02-py3-geometric"
+           volumeMounts:
+           - mountPath: /depot/cms
+             name: depot
+             #mountPropagation: HostToContainer
+           command: ["/bin/sh", "-c"]
+           args: ["cd /depot/cms/sonic/models &&\ /opt/tritonserver/bin/tritonserver --model-repository=/depot/cms/sonic/models --allow-gpu-metrics=true --log-verbose=1 --strict-model-config=false"]
+           resources:
+             limits:
+               cpu: 20
+               memory: 64G
+       tolerations:
+         - key: hub.jupyter.org/dedicated
+           operator: Equal
+           value: cms-af
+           effect: NoSchedule
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+   name: triton-cpu
+   labels:
+     app: triton-cpu
+     scrape_metrics: "true"
+   annotations:
+     metallb.universe.tf/address-pool: geddes-private-pool
+spec:
+   selector:
+     app: triton-cpu
+   ports:
+     - protocol: TCP
+       port: 8000
+       name: http
+       targetPort: 8000
+     - protocol: TCP
+       port: 8001
+       name: grpc
+       targetPort: 8001
+     - protocol: TCP
+       port: 8002
+       name: metrics
+       targetPort: 8002
+   type: LoadBalancer 
