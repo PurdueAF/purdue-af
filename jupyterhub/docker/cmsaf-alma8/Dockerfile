@@ -24,15 +24,15 @@ RUN yum update -y  && \
         https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/t/tini-0.19.0-1.el8.x86_64.rpm \
         sudo wget perl which nodejs git bzip2\
         openssh-server openssh-clients openssl-devel \
-        emacs vim-enhanced \
-        libXft libXpm libXext libSM mesa-libGL \
+        emacs vim-enhanced jq \
+        libXft libXpm libXext libSM mesa-libGL libnsl.x86_64 \
         glibc-locale-source glibc-langpack-en && \
     yum install -y \
         voms-clients vo-client myproxy gfal2-util gfal2-all stress && \
     yum --enablerepo epel-testing install -y \
         s3cmd htop
 
-RUN dnf -y install boost-devel diffutils && \
+RUN dnf -y install boost-devel diffutils ncurses-compat-libs && \
     dnf -y --enablerepo=powertools install glibc-static
 
 RUN yum clean all && \
@@ -197,12 +197,14 @@ ENV X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
 # Install JupyterLab extensions
 RUN pip install --upgrade \
     jupyterlab-git \
-    dask-labextension \
+    # dask-labextension \
     jupyter-resource-usage \
+    jupyterlab_iframe \
     "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-topbar-text&subdirectory=packages/topbar-text-extension" \
     "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-logout&subdirectory=packages/logout-extension" \
     "git+https://github.com/kondratyevd/jupyterlab-topbar.git#egg=jupyterlab-theme-toggler&subdirectory=packages/theme-toggler-extension" \
-    "git+https://github.com/kondratyevd/jupyterlab-topbar.git#egg=jupyterlab-shutdown&subdirectory=packages/shutdown-extension"
+    "git+https://github.com/kondratyevd/jupyterlab-topbar.git#egg=jupyterlab-shutdown&subdirectory=packages/shutdown-extension" \
+    "git+https://github.com/PurdueAF/purdue-af-extensions.git#egg=jupyterlab-iframe-launcher&subdirectory=jupyterlab-iframe-launcher"
 
 # Install custom extensions
 # ENV EXTENSIONS_DIR "/etc/jupyter/extensions"
@@ -217,11 +219,6 @@ RUN pip install --upgrade \
 # RUN jupyter lab build --dev-build=False
 
 RUN jupyter labextension disable "@jupyterlab/apputils-extension:announcements"
-
-# Temporary measure
-RUN pip uninstall -y dask-labextension
-
-RUN yum install jq -y
 
 # Scripts that run before session start
 COPY scripts/run-as-root.sh \

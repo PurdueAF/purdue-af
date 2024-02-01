@@ -97,6 +97,18 @@ singleuser:
         cpu_limit: 4        
         mem_guarantee: 16G
         mem_limit: 16G
+    # - display_name: testing
+    #   default: false
+    #   description: "ignore this"
+    #   kubespawner_override:
+    #     image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.9.3"
+    #     node_selector:
+    #       cms-af-prod: "true"
+    #     cpu_guarantee: 4
+    #     cpu_limit: 4        
+    #     mem_guarantee: 16G
+    #     mem_limit: 16G
+
   extraContainers:
     - name: af-pod-metrics
       image: geddes-registry.rcac.purdue.edu/cms/cmsaf-pod-metrics-sidecar:0.2
