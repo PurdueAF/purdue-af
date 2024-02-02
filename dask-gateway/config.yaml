@@ -58,8 +58,8 @@ gateway:
                 "worker_cmd": f"{options.conda_env}/bin/dask-worker",
                 "account": options.queue,
                 "reservation": options.reservation,
-                "scheduler_setup": "export TMPDIR=/tmp/dask-$USER",
-                "worker_setup": "export TMPDIR=/tmp/dask-$USER",
+                "scheduler_setup": "export DASK__TEMPORARY_DIRECTORY=/tmp/dask-$USER",
+                "worker_setup": "export DASK__TEMPORARY_DIRECTORY=/tmp/dask-$USER",
                 # "cluster_start_timeout": options.cluster_start_timeout,
                 "staging_directory": "/depot/cms/users/{username}/.dask-gateway/"
             }
