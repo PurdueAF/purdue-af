@@ -126,7 +126,7 @@ COPY jupyter/start.sh /usr/local/bin/
 
 WORKDIR /tmp
 RUN mamba install --quiet --yes \
-    notebook jupyterhub jupyterlab=4.0.8 \
+    notebook jupyterhub jupyterlab=4.1.0 \
     nb_conda_kernels rucio-clients pytest lz4 ipywidgets bokeh==2.4.2 \
     root && \
     jupyter notebook --generate-config && \
@@ -201,10 +201,9 @@ RUN pip install --upgrade \
     jupyter-resource-usage \
     jupyterlab_iframe \
     "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-topbar-text&subdirectory=packages/topbar-text-extension" \
-    "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-logout&subdirectory=packages/logout-extension" \
-    "git+https://github.com/kondratyevd/jupyterlab-topbar.git#egg=jupyterlab-theme-toggler&subdirectory=packages/theme-toggler-extension" \
-    "git+https://github.com/kondratyevd/jupyterlab-topbar.git#egg=jupyterlab-shutdown&subdirectory=packages/shutdown-extension" \
-    "git+https://github.com/PurdueAF/purdue-af-extensions.git#egg=jupyterlab-iframe-launcher&subdirectory=jupyterlab-iframe-launcher"
+    "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-theme-toggler&subdirectory=packages/theme-toggler-extension" \
+    "git+https://github.com/PurdueAF/purdue-af-extensions.git#egg=jupyterlab-shutdown&subdirectory=jupyterlab-shutdown"  \
+    "git+https://github.com/PurdueAF/purdue-af-extensions.git#egg=purdue-af-grafana-iframe&subdirectory=purdue-af-grafana-iframe"
 
 # Install custom extensions
 # ENV EXTENSIONS_DIR "/etc/jupyter/extensions"

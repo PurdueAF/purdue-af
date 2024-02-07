@@ -50,12 +50,6 @@ echo '{
             "rank": 130
         },
         {
-            "name": "logout",
-            "command": "jupyterlab-topbar:logout",
-            "disabled": false,
-            "rank": 150
-        },
-        {
             "name": "shutdown",
             "command": "jupyterlab-topbar:shutdown",
             "disabled": false,
@@ -79,14 +73,13 @@ export DASK_LABEXTENSION__FACTORY__MODULE=dask_gateway
 # export DASK_GATEWAY__PUBLIC_ADDRESS=/services/dask-gateway/
 # export DASK_ROOT_CONFIG=/opt/conda/etc
 
-JIL_PATH=$NEW_HOME/.jupyter/lab/user-settings/jupyterlab-iframe-launcher/
+JIL_PATH=$NEW_HOME/.jupyter/lab/user-settings/purdue-af-grafana-iframe/
 mkdir -p $JIL_PATH
 DASHBOARD_URL="https://cms.geddes.rcac.purdue.edu/grafana/d-solo/single-user-stat-dashboard/single-user-statistics"
 THEME="&theme=light"
 echo "{
     \"url\": \"$DASHBOARD_URL?orgId=1&refresh=1m&var-user=$HOSTNAME&from=now-3h&to=now&panelId=1$THEME\",
-    \"label\": \"Monitoring\",
-    \"caption\": \"Open grafana dashboard\",
-    \"rank\": 0,
-    \"icon_svg\": \"grafana\"
+    \"label\": \"Resource usage\",
+    \"caption\": \"Open grafana panel\",
+    \"rank\": 0
 }" > $JIL_PATH/plugin.jupyterlab-settings

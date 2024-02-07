@@ -20,8 +20,9 @@ chmod 755 /work/users/$NB_USER
 chown $NB_UID:users /work/users/$NB_USER
 
 # cp /etc/jupyter/dask/*.yaml $NEW_HOME/.config/dask/
-rm -f $NEW_HOME/.config/dask/gateway.yaml
-chown -R $NB_USER:users $NEW_HOME/.config/dask/*
+# rm -f $NEW_HOME/.config/dask/gateway.yaml
+# mkdir -p $NEW_HOME/.config/dask/
+# chown -R $NB_USER:users $NEW_HOME/.config/dask/*
 
 mv /etc/slurm/slist /usr/bin
 export PATH=/etc/jupyter/dask/:$PATH
