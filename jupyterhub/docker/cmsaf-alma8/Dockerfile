@@ -197,13 +197,15 @@ ENV X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
 # Install JupyterLab extensions
 RUN pip install --upgrade \
     jupyterlab-git \
-    # dask-labextension \
     jupyter-resource-usage \
     jupyterlab_iframe \
+    purdue-af-shutdown-button \
+    purdue-af-grafana-iframe \
     "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-topbar-text&subdirectory=packages/topbar-text-extension"   \
-    "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-theme-toggler&subdirectory=packages/theme-toggler-extension" \
-    "git+https://github.com/PurdueAF/purdue-af-extensions.git#egg=jupyterlab-shutdown&subdirectory=jupyterlab-shutdown" \
-    "git+https://github.com/PurdueAF/purdue-af-extensions.git#egg=purdue-af-grafana-iframe&subdirectory=purdue-af-grafana-iframe"
+    "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-theme-toggler&subdirectory=packages/theme-toggler-extension" 
+    # \
+    # "git+https://github.com/PurdueAF/purdue-af-extensions.git#egg=jupyterlab-shutdown&subdirectory=jupyterlab-shutdown" \
+    # "git+https://github.com/PurdueAF/purdue-af-extensions.git#egg=purdue-af-grafana-iframe&subdirectory=purdue-af-grafana-iframe"
 
 # Install custom extensions
 # ENV EXTENSIONS_DIR "/etc/jupyter/extensions"

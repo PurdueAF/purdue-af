@@ -51,7 +51,7 @@ bashrc_file=$NEW_HOME/.bashrc
 touch $bashrc_file
 
 extra_bashrc="source /home/$NB_USER/.bashrc_af"
-grep -qxF $extra_bashrc $bashrc_file || echo $extra_bashrc >> $bashrc_file
+grep -qxF "$extra_bashrc" "$bashrc_file" || echo "$extra_bashrc" >> "$bashrc_file"
 
 echo """
 bash
