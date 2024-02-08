@@ -279,7 +279,7 @@ g.dashboard.new('Users Statistics')
 + g.dashboard.withDescription('Purdue AF User Statistics')
 + g.dashboard.withLiveNow()
 + g.dashboard.withRefresh('10s')
-+ g.dashboard.withStyle(value="dark")
+// + g.dashboard.withStyle(value="dark")
 + g.dashboard.withTimezone(value="browser")
 + g.dashboard.graphTooltip.withSharedCrosshair()
 + g.dashboard.withPanels([

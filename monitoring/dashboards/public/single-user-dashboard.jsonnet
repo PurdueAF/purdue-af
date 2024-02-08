@@ -73,7 +73,7 @@ local userResourceUtil = panels.timeSeries(
     prometheus.addQuery(
       'prometheus',
       'sum(af_home_dir_util{namespace=~"cms",job="af-pod-monitor",pod=~"$user"})',
-      legendFormat='Storage utilization'
+      legendFormat='/home/ storage utilization'
     ),
   ],
   unit='percentunit',
@@ -89,7 +89,7 @@ g.dashboard.new('Single User Statistics')
 + g.dashboard.withDescription('Purdue AF Single User Statistics')
 + g.dashboard.withLiveNow()
 + g.dashboard.withRefresh('10s')
-+ g.dashboard.withStyle(value="dark")
+// + g.dashboard.withStyle(value="dark")
 + g.dashboard.withTimezone(value="browser")
 + g.dashboard.graphTooltip.withSharedCrosshair()
 + g.dashboard.withPanels([
