@@ -97,7 +97,7 @@ availability of the SLURM job slots.
    Purdue Depot is only accessbile for users with a Purdue account,
    therefore CERN and FNAL users cannot use Dask Gateway at the moment.
 
-Gateway Cluster creation
+2.1 Gateway Cluster creation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 It is recommended to create a Dask Gateway cluster in a separate Jupyter notebook,
@@ -111,8 +111,8 @@ rather than in your main analysis code.
    You can copy this notebook from ``/depot/cms/purdue-af/purdue-af-demos/gateway-cluster.ipynb``
    and customize it for your purposes.
 
-Cluster lifetime and timeouts
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2.2 Cluster lifetime and timeouts
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 * Cluster creation will fail if the SLURM job for the schaduler doesn't
   start in **2 minutes**. If this happens, try to resubmit the cluster.
@@ -121,33 +121,35 @@ Cluster lifetime and timeouts
   terminated, the cluster and all its workers will be killed after **5 minutes**.
 
 
-Connecting a Client to a Dask Gateway cluster
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2.3 Connecting a Client to a Dask Gateway cluster
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In the main analysis code, you can connect to the Gateway cluster either
 by manually pasting the cluster name, or by selecting an existing cluster
 automatically.
 
-**a. Connecting manually**
+.. tabs::
 
-.. code-block:: python
+   .. tab:: **Connecting manually**
 
-   from dask_gateway import Gateway
-   gateway = Gateway()
-   # replace with actual cluster name:
-   cluster_name = "17dfaa3c10dc48719f5dd8371893f3e5"
-   client = gateway.connect(cluster_name).get_client()
+      .. code-block:: python
 
-**b. Connecting automatically**
+         from dask_gateway import Gateway
+         gateway = Gateway()
+         # replace with actual cluster name:
+         cluster_name = "17dfaa3c10dc48719f5dd8371893f3e5"
+         client = gateway.connect(cluster_name).get_client()
 
-.. code-block:: python
+   .. tab:: **Connecting automatically**
 
-   from dask_gateway import Gateway
-   gateway = Gateway()
-   clusters = gateway.list_clusters()
-   # for example, select the first of existing clusters
-   cluster_name = clusters[0].name
-   cluster = gateway.connect(cluster_name).get_client()
+      .. code-block:: python
+
+         from dask_gateway import Gateway
+         gateway = Gateway()
+         clusters = gateway.list_clusters()
+         # for example, select the first of existing clusters
+         cluster_name = clusters[0].name
+         cluster = gateway.connect(cluster_name).get_client()
 
 .. caution::
 

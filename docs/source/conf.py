@@ -25,6 +25,7 @@ extensions = [
     "sphinx_rtd_theme",
     "sphinx_copybutton",
     "sphinx_togglebutton",
+    'sphinx_tabs.tabs'
 ]
 
 #disable notebook execution
