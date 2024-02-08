@@ -48,15 +48,13 @@ if [[ $krb_ticket = "" ]]; then
         echo " > The interaction with CERN EOS may be slow at first."
         echo ""
         echo " > If the file browser shows 'eos-cern' as a file rather than a directory,"
-        echo " > try restarting the session (File > Hub Control Panel > Stop My Server),"
-        echo " > and then run the eos-connect command again."
+        echo " > try restarting the session, and then run the eos-connect command again."
     else
         echo " > Symlink $HOME/eos-cern already exists."
         echo ""
         echo " > It is unlikely that the file browser will show the eos-cern link correctly"
         echo " > in this session."
-        echo " > Please restart the session (File > Hub Control Panel > Stop My Server),"
-        echo " > and then run the eos-connect command again."
+        echo " > Please restart the session, and then run the eos-connect command again."
         echo " > The broken link will be automatically deleted when the session is closed."
         echo ""
         echo "--------------- Please restart the session and try again! ---------------"
@@ -85,8 +83,7 @@ else
     fi
 
     echo " > If the file browser shows 'eos-cern' as a file rather than a directory,"
-    echo " > try restarting the session (File > Hub Control Panel > Stop My Server),"
-    echo " > and then run the eos-connect command again."
+    echo " > try restarting the session, and then run the eos-connect command again."
 fi
 echo ""
 echo "--------------------------------- Done! ---------------------------------"

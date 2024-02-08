@@ -200,9 +200,9 @@ RUN pip install --upgrade \
     # dask-labextension \
     jupyter-resource-usage \
     jupyterlab_iframe \
-    "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-topbar-text&subdirectory=packages/topbar-text-extension" \
+    "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-topbar-text&subdirectory=packages/topbar-text-extension"   \
     "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-theme-toggler&subdirectory=packages/theme-toggler-extension" \
-    "git+https://github.com/PurdueAF/purdue-af-extensions.git#egg=jupyterlab-shutdown&subdirectory=jupyterlab-shutdown"  \
+    "git+https://github.com/PurdueAF/purdue-af-extensions.git#egg=jupyterlab-shutdown&subdirectory=jupyterlab-shutdown" \
     "git+https://github.com/PurdueAF/purdue-af-extensions.git#egg=purdue-af-grafana-iframe&subdirectory=purdue-af-grafana-iframe"
 
 # Install custom extensions
@@ -226,8 +226,8 @@ COPY scripts/run-as-root.sh \
   scripts/create-symlinks.sh \
   /usr/local/bin/before-notebook.d/
 
-# Bash profile scripts
-COPY scripts/aliases.sh scripts/init-conda.sh /etc/profile.d/
+# Bash profile scripts - not working anymore
+# COPY scripts/aliases.sh scripts/init-conda.sh /etc/profile.d/
 
 # Custom scripts
 COPY scripts/eos-connect.sh jupyter/jupyter_config.json /etc/jupyter/
