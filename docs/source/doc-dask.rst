@@ -153,8 +153,8 @@ automatically.
          cluster_name = clusters[0].name
          cluster = gateway.connect(cluster_name).get_client()
 
-.. caution::
+      .. caution::
 
-   If you have more than one Dask Gateway cluster running, automatic detection
-   may be ambiguous.
+         If you have more than one Dask Gateway cluster running, automatic detection
+         may be ambiguous.
 
