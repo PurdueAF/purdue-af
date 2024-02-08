@@ -82,22 +82,17 @@ availability of the SLURM job slots.
 
 .. note::
 
-   * Default Python3 kernel / conda environment has all necessary software installed.
+   Default Python3 kernel / conda environment has all necessary software installed.
    If you want to use Dask Gateway in your own custom environment, make sure
    that it contains ``dask-gateway``, ``ipykernel`` and ``ipywidgets`` packages.
-   * For more information, refer to `Dask Gateway documentation <https://gateway.dask.org>`_.
 
 .. warning::
 
    Dask Gateway will submit SLURM jobs to the Purdue Hammer cluster.
-
-   Therefore, all analysis code that uses Dask Gateway must be located in
-   a storage volume accessible from both the Purdue Analysis Facility and 
-   the Hammer cluster.
+   Therefore, **all analysis code that uses Dask Gateway must be located
+   in Purdue Depot storage**, in order to be accessible by Dask workers.
    
-   At the moment, there is only one such volume - Purdue Depot storage.
-   Purdue Depot is only accessbile for users with a Purdue account,
-   therefore CERN and FNAL users cannot use Dask Gateway at the moment.
+   Currenlty, Depot is only writeable by Purdue users, but not by CERN or FNAL users.
 
 2.1 Gateway Cluster creation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
