@@ -59,8 +59,8 @@ Dask Clusters and Clients
 -------------------
 
 Local cluster can be used to parallelize the analysis code over the local CPU cores.
-In most cases, the best scaling is achieved when the number of Dask workers
-doesn't exceed the number of CPU cores selected at session creation.
+The number of workers that you can create is limited to number of CPU cores
+selected during session creation (up to **64 workers**).
 
 .. admonition:: LocalCluster setup
    :class: toggle
@@ -75,8 +75,10 @@ doesn't exceed the number of CPU cores selected at session creation.
 2. Dask Gateway cluster
 ------------------------
 
-Dask Gateway provides a way to scale out to multiple compute nodes, using SLURM 
-batch scheduler in the backend.
+Dask Gateway provides a way to scale out to multiple compute nodes,
+using SLURM batch scheduler in the backend. With Dask Gateway, you
+should be able to scale up to **150-200 workers** or more, depending on
+availability of the SLURM job slots.
 
 .. warning::
 
@@ -92,11 +94,11 @@ batch scheduler in the backend.
 
 
 It is recommended to create a Dask Gateway cluster in a separate Jupyter notebook,
-rather than in your main analysis code. Here is an example for cluster creation:
+rather than in your main analysis code.
 
-.. Example notebook: :doc:`demos/gateway-cluster`
-
-.. literalinclude :: demos/gateway-cluster
+Here is an example of a notebook for cluster creation: :doc:`demos/gateway-cluster`.
+You can copy this exacmple from ``/depot/cms/purdue-af/purdue-af-demos/gateway-cluster.ipynb``
+and customize it for your purposes.
 
 In the main analysis code, you can connect to the Gateway cluster either
 by manually pasting the cluster name, or by selecting an existing cluster
