@@ -80,6 +80,11 @@ using SLURM batch scheduler in the backend. With Dask Gateway, you
 should be able to scale up to **150-200 workers** or more, depending on
 availability of the SLURM job slots.
 
+* Default Python3 kernel / conda environment has all necessary software installed.
+  If you want to use Dask Gateway in your own custom environment, make sure
+  that it contains `dask-gateway`, `ipykernel` and `ipywidgets` packages.
+* For more information, refer to `Dask Gateway documentation <https://gateway.dask.org>`_.
+
 .. warning::
 
    Dask Gateway will submit SLURM jobs to the Purdue Hammer cluster.
