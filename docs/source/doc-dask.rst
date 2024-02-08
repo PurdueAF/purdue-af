@@ -62,12 +62,15 @@ Local cluster can be used to parallelize the analysis code over the local CPU co
 In most cases, the best scaling is achieved when the number of Dask workers
 doesn't exceed the number of CPU cores selected at session creation.
 
-.. code-block:: python
+.. admonition:: LocalCluster setup
+   :class: toggle
 
-   from distributed import LocalCluster, Client
-   cluster = LocalCluster()
-   cluster.scale(4) # create 4 local workers
-   client = Client(cluster)
+   .. code-block:: python
+
+      from distributed import LocalCluster, Client
+      cluster = LocalCluster()
+      cluster.scale(4) # create 4 local workers
+      client = Client(cluster)
 
 2. Dask Gateway cluster
 ------------------------
@@ -87,31 +90,13 @@ batch scheduler in the backend.
    Purdue Depot is only accessbile for users with a Purdue account,
    therefore CERN and FNAL users cannot use Dask Gateway at the moment.
 
-Example notebook: :doc:`demos/gateway-cluster`
 
 It is recommended to create a Dask Gateway cluster in a separate Jupyter notebook,
 rather than in your main analysis code. Here is an example for cluster creation:
 
+.. Example notebook: :doc:`demos/gateway-cluster`
 
-.. code-block:: python
-
-   from dask_gateway import Gateway
-   gateway = Gateway()
-   cluster = gateway.new_cluster(
-      conda_env = "/depot/cms/kernels/python3",
-      queue = "cms",
-      worker_cores = 1,
-      worker_memory = 4,
-      env = {
-         "WORKDIR": "/depot/cms/<path to your framework>",
-         "X509_USER_PROXY": "/depot/cms/<path to proxy>",
-         # "KEY": "VALUE"
-      },
-   )
-   # Scale cluster to 4 workers
-   cluster.scale(4)
-   # Print cluster info
-   print(cluster)
+.. literalinclude :: demos/gateway-cluster
 
 In the main analysis code, you can connect to the Gateway cluster either
 by manually pasting the cluster name, or by selecting an existing cluster
