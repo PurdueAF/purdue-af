@@ -96,9 +96,14 @@ availability of the SLURM job slots.
 It is recommended to create a Dask Gateway cluster in a separate Jupyter notebook,
 rather than in your main analysis code.
 
-Here is an example of a notebook for cluster creation: :doc:`demos/gateway-cluster`.
-You can copy this exacmple from ``/depot/cms/purdue-af/purdue-af-demos/gateway-cluster.ipynb``
-and customize it for your purposes.
+.. admonition:: Example notebook for Dask Gateway cluster creation
+   :class: toggle
+
+   :doc:`demos/gateway-cluster`
+
+   You can copy this notebook from ``/depot/cms/purdue-af/purdue-af-demos/gateway-cluster.ipynb``
+   and customize it for your purposes.
+
 
 In the main analysis code, you can connect to the Gateway cluster either
 by manually pasting the cluster name, or by selecting an existing cluster
