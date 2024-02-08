@@ -60,7 +60,7 @@ Dask Clusters and Clients
 
 Local cluster can be used to parallelize the analysis code over the local CPU cores.
 The number of workers that you can create is limited to number of CPU cores
-selected during session creation (up to **64 workers**).
+selected during session creation (**up to 64 workers**).
 
 .. admonition:: LocalCluster setup
    :class: toggle
@@ -82,7 +82,7 @@ availability of the SLURM job slots.
 
 * Default Python3 kernel / conda environment has all necessary software installed.
   If you want to use Dask Gateway in your own custom environment, make sure
-  that it contains `dask-gateway`, `ipykernel` and `ipywidgets` packages.
+  that it contains ``dask-gateway``, ``ipykernel`` and ``ipywidgets`` packages.
 * For more information, refer to `Dask Gateway documentation <https://gateway.dask.org>`_.
 
 .. warning::
@@ -97,6 +97,8 @@ availability of the SLURM job slots.
    Purdue Depot is only accessbile for users with a Purdue account,
    therefore CERN and FNAL users cannot use Dask Gateway at the moment.
 
+Gateway Cluster creation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 It is recommended to create a Dask Gateway cluster in a separate Jupyter notebook,
 rather than in your main analysis code.
@@ -109,13 +111,24 @@ rather than in your main analysis code.
    You can copy this notebook from ``/depot/cms/purdue-af/purdue-af-demos/gateway-cluster.ipynb``
    and customize it for your purposes.
 
+Cluster lifetime and timeouts
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Cluster creation will fail if the SLURM job for the schaduler doesn't
+  start in **2 minutes**. If this happens, try to resubmit the cluster.
+* Once created, Dask scheduler and workers will persist for **1 day**.
+* If the notebook from which the Dask Gateway cluster was created is
+  terminated, the cluster and all its workers will be killed after **5 minutes**.
+
+
+Connecting a Client to a Dask Gateway cluster
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In the main analysis code, you can connect to the Gateway cluster either
 by manually pasting the cluster name, or by selecting an existing cluster
 automatically.
 
-a. Connecting to a Dask Gateway cluster manually
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+**a. Connecting manually**
 
 .. code-block:: python
 
@@ -125,8 +138,7 @@ a. Connecting to a Dask Gateway cluster manually
    cluster_name = "17dfaa3c10dc48719f5dd8371893f3e5"
    client = gateway.connect(cluster_name).get_client()
 
-b. Connecting to a Dask Gateway cluster automatically
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+**b. Connecting automatically**
 
 .. code-block:: python
 
