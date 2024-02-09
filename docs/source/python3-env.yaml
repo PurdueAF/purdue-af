@@ -43,6 +43,8 @@ dependencies:
   - dask-gateway=2023.9.0
   - dask-jobqueue=0.8.1
   - distributed=2023.3.2
+  - dask-ml
+  - dask-xgboost
 
   # C++ libraries
   - boost
