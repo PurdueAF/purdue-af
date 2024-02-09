@@ -22,13 +22,13 @@ RUN yum update -y  && \
         https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm \
         https://repo.opensciencegrid.org/osg/3.6/osg-3.6-el8-release-latest.rpm \
         https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/t/tini-0.19.0-1.el8.x86_64.rpm \
-        sudo wget perl which nodejs git bzip2\
+        sudo wget perl which nodejs git bzip2 \
         openssh-server openssh-clients openssl-devel \
-        emacs vim-enhanced jq \
+        emacs vim-enhanced jq xterm-resize \
         libXft libXpm libXext libSM mesa-libGL libnsl.x86_64 \
         glibc-locale-source glibc-langpack-en && \
     yum install -y \
-        voms-clients vo-client myproxy gfal2-util gfal2-all stress && \
+        voms-clients vo-client myproxy gfal2-util gfal2-all stress apptainer && \
     yum --enablerepo epel-testing install -y \
         s3cmd htop
 
@@ -128,7 +128,7 @@ WORKDIR /tmp
 RUN mamba install --quiet --yes \
     notebook jupyterhub jupyterlab=4.1.0 \
     nb_conda_kernels rucio-clients pytest lz4 ipywidgets bokeh==2.4.2 \
-    root && \
+    root==6.28.0 && \
     jupyter notebook --generate-config && \
     mamba clean --all -f -y && \
     npm cache clean --force && \
@@ -203,9 +203,6 @@ RUN pip install --upgrade \
     purdue-af-grafana-iframe \
     "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-topbar-text&subdirectory=packages/topbar-text-extension"   \
     "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-theme-toggler&subdirectory=packages/theme-toggler-extension" 
-    # \
-    # "git+https://github.com/PurdueAF/purdue-af-extensions.git#egg=jupyterlab-shutdown&subdirectory=jupyterlab-shutdown" \
-    # "git+https://github.com/PurdueAF/purdue-af-extensions.git#egg=purdue-af-grafana-iframe&subdirectory=purdue-af-grafana-iframe"
 
 # Install custom extensions
 # ENV EXTENSIONS_DIR "/etc/jupyter/extensions"

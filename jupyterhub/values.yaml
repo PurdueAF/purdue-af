@@ -4,10 +4,10 @@ singleuser:
   cmd: 
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
-    tag: "0.9.2"
+    tag: "0.9.3"
   extraLabels:
     username_unescaped: "{legacy_escape_username}"
-    docker_image_tag: "0.9.2"
+    docker_image_tag: "0.9.3"
   startTimeout: 3600
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
@@ -38,6 +38,16 @@ singleuser:
               kubespawner_override:
                 cpu_limit: 32
                 cpu_guarantee: 32
+            4:
+              display_name: "64"
+              kubespawner_override:
+                cpu_limit: 64
+                cpu_guarantee: 64
+            # 5:
+            #   display_name: "128"
+            #   kubespawner_override:
+            #     cpu_limit: 128
+            #     cpu_guarantee: 128
         gpu:
           display_name: "GPUs"
           choices:
@@ -86,6 +96,7 @@ singleuser:
             #   kubespawner_override:
             #     mem_limit: "256G" 
             #     mem_guarantee: "256G"
+
     - display_name: Minimal JupyterLab interface
       default: false
       description: "Should be used only for debugging - no Analysis Facility functionality."
