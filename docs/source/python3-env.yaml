@@ -79,6 +79,7 @@ dependencies:
     - torch-geometric==2.3.1
     - git+https://github.com/mattbellis/particle_physics_simplified.git
     - git+https://github.com/mattbellis/h5hep.git
+    - PhyPraKit
 
 variables:
   PATH: /depot/cms/kernels/python3/bin:/usr/sue/bin:/etc/jupyter/dask:/opt/conda/condabin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/depot/cms/purdue-af/lhapdf/bin

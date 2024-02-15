@@ -20,6 +20,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.ifconfig",
     "sphinx.ext.viewcode",
+    "sphinx.ext.mathjax",
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_rtd_theme",

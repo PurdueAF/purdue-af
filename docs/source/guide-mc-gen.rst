@@ -8,20 +8,32 @@ Comprehensive documentation about central MC production in CMS can be found here
 `<https://cms-pdmv.gitbook.io>`_.
 
 
+The MC generation pipeline contains multiple steps (see figure below),
+which include simulation of physics processes, interactions of particles with
+detector material, reconstruction and triggering algorithms, etc.
+
 .. image:: images/mc_gen.png
    :width: 80%
    :align: center
 
 
-We assume that we use ``MadGraph`` as our generator. 
-In ``MadGraph``, we have different cards to define a process. 
-Link to short MG tutorial : https://twiki.cern.ch/twiki/bin/view/CMSPublic/MadgraphTutorial
+In this tutorial, we will cover the following steps:
+.. contents::
+   :local:
+
+The examples are given for generation of:
+
+* Run 2 Ultra Legacy (UL) datasets
+* Run 3 datasets
+
+The generator in these examples is ``MadGraph``. A short ``MadGraph`` tutorial can
+be found `here <https://twiki.cern.ch/twiki/bin/view/CMSPublic/MadgraphTutorial>`_.
 
 .. tabs::
 
    .. group-tab:: Run 2 UL
 
-      In this example we are going to produce DY(pp → ll) samples.
+      In this example we are going to produce :math:`DY(pp\rightarrow ll)` samples.
       We define this process in ``MadGraph`` and it creates LHE files
       (python file with settings).
 
