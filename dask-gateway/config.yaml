@@ -54,6 +54,11 @@ gateway:
               setup_cmd += f'cd {env_vars["WORKDIR"]}'
               if ("PYTHONPATH" not in env_vars):
                 env_vars["PYTHONPATH"] = env_vars["WORKDIR"]
+            env_vars["PYTHONPATH"] += ":/depot/cms/purdue-af/lhapdf/lib/python3.10/site-packages"
+            if ("LD_LIBRARY_PATH" in env_vars):
+              env_vars["LD_LIBRARY_PATH"] += ":/depot/cms/purdue-af/lhapdf/lib"
+            else:
+              env_vars["LD_LIBRARY_PATH"] = "/depot/cms/purdue-af/lhapdf/lib"
             return {
                 "worker_cores": options.worker_cores,
                 "worker_memory": int(options.worker_memory * 2 ** 30),
