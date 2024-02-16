@@ -35,6 +35,9 @@ touch $bashrc_af_file
 bashrc_af_text='''
 #!/bin/bash
 
+eval "$(command conda shell.bash hook 2> /dev/null)"
+conda deactivate
+
 echo "
 # To activate the \"default\" conda environment in this Terminal, run the following command:
 #
@@ -57,3 +60,5 @@ echo """
 bash
 source $bashrc_file
 """ > $NEW_HOME/.profile
+
+cp .bashrc .bash_profile
