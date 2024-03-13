@@ -49,3 +49,5 @@ def passthrough_post_auth_hook(authenticator, handler, authentication):
 
 c.JupyterHub.authenticator_class = PurdueCILogonOAuthenticator
 c.PurdueCILogonOAuthenticator.post_auth_hook = passthrough_post_auth_hook
+c.KubeSpawner.service_account = "dask-sa"
+c.KubeSpawner.automount_service_account_token = True
