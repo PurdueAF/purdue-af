@@ -58,16 +58,19 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
   myPanels.row.slurm_metrics                 + w(24) + h(2),
   myPanels.timeSeries.hammerSlurmJobs        + w(12) + h(10),
 
-  myPanels.row.triton_metrics            + w(24) + h(2),
-  myPanels.stat.deployedTritonLB            + w(4)  + h(3),
-  myPanels.stat.deployedTritonServers       + w(4)  + h(3),
-  myPanels.timeSeries.tritonInferenceCount  + w(16) + h(10),
-  // myPanels.table.tritonTable               + w(8)  + h(7),
-  myPanels.timeSeries.tritonNumServers       + w(8) + h(7),
-  myPanels.placeholder.placeholder_tr   + w(16) + h(0),
-  myPanels.timeSeries.tritonLBmetric       + w(8) + h(10),
-  myPanels.timeSeries.tritonInferencesPerLB  + w(16) + h(10),
-  // myPanels.placeholder.placeholder_tr   + w(24) + h(0.5),
+  myPanels.row.triton_metrics             + w(24) + h(2),
+  myPanels.stat.deployedTritonLB          + w(3)  + h(4),
+  myPanels.stat.deployedTritonServers     + w(3)  + h(4),
+  myPanels.timeSeries.tritonNumServers    + w(8) + h(10),
+  myPanels.timeSeries.tritonMemUtil       + w(10) + h(10),
+
+  // myPanels.placeholder.placeholder_tr   + w(24) + h(0.1),
+
+  myPanels.timeSeries.tritonInferenceCount  + w(12) + h(10),
+  myPanels.timeSeries.tritonInferencesPerLB  + w(12) + h(10),
+
+  myPanels.timeSeries.tritonQueueTimeByModel  + w(12) + h(10),
+  myPanels.timeSeries.tritonQueueTimeByServer  + w(12) + h(10),
 
   // myPanels.row.dask_metrics                 + w(24) + h(2),
   // myPanels.timeSeries.daskSlurmSchedulers       + w(12) + h(10),

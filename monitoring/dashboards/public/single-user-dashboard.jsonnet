@@ -75,11 +75,35 @@ local userResourceUtil = panels.timeSeries(
       'sum(af_home_dir_util{namespace=~"cms",job="af-pod-monitor",pod=~"$user"})',
       legendFormat='/home/ storage utilization'
     ),
+    prometheus.addQuery(
+      'prometheus-rancher',
+      '
+        sum by (pod) (
+          irate(container_network_transmit_bytes_total{namespace="cms", pod=~"$user"}[5m])
+        )
+      ',
+      legendFormat='I/O send'
+    ),
+    prometheus.addQuery(
+      'prometheus-rancher',
+      '
+        sum by (pod) (
+          irate(container_network_receive_bytes_total{namespace="cms", pod=~"$user"}[5m])
+        )
+      ',
+      legendFormat='I/O receive'
+    ),
   ],
   unit='percentunit',
-  min=0, max=1,
+  min=0,
   legendPlacement='right',
-);
+)  + g.panel.timeSeries.standardOptions.withOverrides([
+  g.panel.timeSeries.fieldOverride.byRegexp.new("I/O.*")
+    + g.panel.timeSeries.fieldOverride.byName.withPropertiesFromOptions(
+      g.panel.timeSeries.fieldConfig.defaults.custom.withAxisPlacement("right")
+      + g.panel.table.standardOptions.withUnit("binBps")
+  ),
+]);
 
 g.dashboard.new('Single User Statistics')
 + g.dashboard.withVariables([

@@ -253,20 +253,60 @@ local panels = import 'panels.libsonnet';
     legendPlacement='right',
   ),
 
-  tritonLBmetric:: panels.timeSeries(
-    title='Avg. queue wait time',
-    description='(metric for autoscaling)',
+  tritonQueueTimeByModel:: panels.timeSeries(
+    title='Queue time by model',
+    description='',
     targets=[
       prometheus.addQuery(
-        'prometheus',
+        'prometheus-rancher',
         |||
-          max(avg by (model) (delta(nv_inference_queue_duration_us{app="triton-triton"}[30s])/(1000 * (1 + delta(nv_inference_request_success{app="triton-triton"}[30s])))))
+          avg by (model) (rate(nv_inference_queue_duration_us{pod=~"triton-.*"}[4m:2m])/(1000 * (1 + rate(nv_inference_request_success{pod=~"triton-.*"}[4m:2m]))))
+
         |||,
-        legendFormat='Max avg. by model queue wait'
+        legendFormat='{{ model }}'
       ),
     ],
     min=0,
-    legendPlacement='bottom',
+    legendPlacement='right',
+  ),
+
+  tritonQueueTimeByServer:: panels.timeSeries(
+    title='Queue time by server',
+    description='',
+    targets=[
+      prometheus.addQuery(
+        'prometheus-rancher',
+        |||
+          avg by (pod) (rate(nv_inference_queue_duration_us{pod=~"triton-.*"}[4m:2m])/(1000 * (1 + rate(nv_inference_request_success{pod=~"triton-.*"}[4m:2m]))))
+        |||,
+        legendFormat='{{ pod }}'
+      ),
+    ],
+    min=0,
+    legendPlacement='right',
+  ),
+
+
+  tritonMemUtil:: panels.timeSeries(
+    title='Memory utilization by Triton pods',
+    description='',
+    targets=[
+      prometheus.addQuery(
+        'prometheus-rancher',
+        |||
+          sum by (pod)(
+              container_memory_working_set_bytes{namespace="cms", pod=~"triton-.*", container=~"triton-.*"}
+          ) /
+          sum by (pod)(
+              kube_pod_container_resource_requests{namespace="cms", pod=~"triton-.*", container=~"triton-.*", resource="memory"}
+          )
+        |||,
+        legendFormat='{{ pod }}'
+      ),
+    ],
+    unit='percentunit',
+    min=0, max=1,
+    legendPlacement='right',
   ),
 
   daskSlurmSchedulers:: panels.timeSeries(
