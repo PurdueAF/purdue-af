@@ -32,17 +32,18 @@ dependencies:
   - plotly
 
   # Machine learning
-  - keras=2.15.0
   - mup
-  # - tensorflow - see pip packages
+  # - tensorflow & keras - see pip packages
   # - torch & torch_geometric - see pip packages
   - xgboost
+  - nvidia/label/cuda-12.2.0::cuda-toolkit
 
   # Distributed computing
   - dask=2023.3.2
   - dask-gateway=2023.9.0
   - dask-jobqueue=0.8.1
   - distributed=2023.3.2
+  - dask-kubernetes
   - dask-ml
   - dask-xgboost
 
@@ -69,17 +70,19 @@ dependencies:
   - tqdm
   - xrootd
   - yaml
+  - pycurl 
 
   # PIP PACKAGES
   - pip:
     - rucio-clients
     - scalpl
-    - tensorflow[and-cuda]
+    - tensorflow[and-cuda]==2.16.0rc0
     - torch==2.0.1
     - torch-geometric==2.3.1
     - git+https://github.com/mattbellis/particle_physics_simplified.git
     - git+https://github.com/mattbellis/h5hep.git
     - PhyPraKit
+    - dbs3-client
 
 variables:
   PATH: /depot/cms/kernels/python3/bin:/usr/sue/bin:/etc/jupyter/dask:/opt/conda/condabin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/depot/cms/purdue-af/lhapdf/bin
