@@ -14,8 +14,6 @@ spec:
        labels:
          app: triton-2102
      spec:
-      #  nodeSelector:
-      #     kubernetes.io/hostname: vm-hammer-g002
        volumes:
          - name: depot
            nfs:
@@ -41,7 +39,7 @@ spec:
              limits:
                nvidia.com/gpu: 1
                cpu: 2
-               memory: 6G
+               memory: 16G
        tolerations:
          - key: hub.jupyter.org/dedicated
            operator: Equal

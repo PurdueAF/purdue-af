@@ -14,8 +14,6 @@ spec:
        labels:
          app: triton-2102-a100
      spec:
-      #  nodeSelector:
-      #     kubernetes.io/hostname: vm-hammer-g000
        volumes:
          - name: depot
            nfs:
@@ -36,12 +34,12 @@ spec:
              name: depot
              #mountPropagation: HostToContainer
            command: ["/bin/sh", "-c"]
-           args: ["cd /depot/cms/sonic/models &&\ /opt/tritonserver/bin/tritonserver --model-repository=/depot/cms/sonic/models --allow-gpu-metrics=true --log-verbose=1 --strict-model-config=false"]
+           args: ["cd /depot/cms/sonic/models &&\ /opt/tritonserver/bin/tritonserver --model-repository=/depot/cms/sonic/models --allow-gpu-metrics=true --log-verbose=0 --strict-model-config=false"]
            resources:
              limits:
                nvidia.com/mig-7g.40gb: 1
                cpu: 2
-               memory: 6G
+               memory: 16G
        tolerations:
          - key: hub.jupyter.org/dedicated
            operator: Equal
