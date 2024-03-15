@@ -173,7 +173,7 @@ following command in a Terminal to finish GitHub authentication:
 7. Subscribe to Purdue AF mailing list
 ----------------------------------------
 
-:doc:`Instructions to subsrcibe to the mailing list <guide-cern-eos>`.
+:doc:`Instructions to subsrcibe to the mailing list <doc-support>`.
 
 .. warning:: 
 

@@ -18,8 +18,8 @@ detector material, reconstruction and triggering algorithms, etc.
 
 
 In this tutorial, we will cover the following steps:
-.. contents::
-   :local:
+
+.. contents:: :local:
 
 The examples are given for generation of:
 
@@ -40,6 +40,7 @@ be found `here <https://twiki.cern.ch/twiki/bin/view/CMSPublic/MadgraphTutorial>
       Here, we are going to use ``UL18`` DY LHE file already produced by
       CMS PPD.
 
+      ``DYJetsToLL_M-50_TuneCP5_13TeV-madgraphMLM-pythia8``
 
    .. group-tab:: Run 3
 
