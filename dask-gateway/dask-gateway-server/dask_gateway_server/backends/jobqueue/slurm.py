@@ -20,7 +20,6 @@ def ldap_lookup(username):
     search_filter = "(uid={0}*)"
     attrs = ['uidNumber','gidNumber']
     s = Server(host=url, use_ssl=True, get_info='ALL')
-    s = Server(host= url ,use_ssl= True, get_info= 'ALL')
     conn = Connection(s, version = 3, authentication = "ANONYMOUS")
     conn.start_tls()
     print(conn.result)
