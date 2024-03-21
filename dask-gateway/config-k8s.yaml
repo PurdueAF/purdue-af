@@ -1,0 +1,209 @@
+gateway:
+  replicas: 1
+  prefix: /
+  loglevel: ERROR
+  image:
+    name: ghcr.io/dask/dask-gateway-server
+    tag: 2024.1.0
+    pullPolicy: IfNotPresent
+  auth:
+    type: simple
+    simple:
+      password: null
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  resources:
+    limits:
+      cpu: 2
+      memory: 4Gi
+    requests:
+      cpu: 2
+      memory: 4Gi
+  service:
+    annotations:
+      metallb.universe.tf/address-pool: geddes-public-pool
+  env:
+    - name: NAMESPACE
+      value: cms
+    - name: RELEASE_NAME
+      value: dask-gateway-k8s
+  backend:
+    image:
+      name: ghcr.io/dask/dask-gateway
+      tag: 2024.1.0
+      pullPolicy:
+    imagePullSecrets: []
+    namespace: cms
+    environment: {}
+    scheduler:
+      extraPodConfig:
+        nodeSelector:
+          cms-af-prod: "true"
+        tolerations:
+          - key: "hub.jupyter.org/dedicated"
+            operator: "Equal"
+            value: "cms-af"
+            effect: "NoSchedule"
+        volumes:
+          - name: depot
+            nfs:
+              server: datadepot.rcac.purdue.edu
+              path: /depot/cms
+          - name: munge-key
+            secret:
+              secretName: munge-key
+      extraContainerConfig:
+        volumeMounts:
+          - name: depot
+            mountPath: /depot/cms
+            mountPropagation: HostToContainer
+          - name: munge-key
+            mountPath: /etc/secrets/munge
+            readOnly: false
+            mountPropagation: HostToContainer
+    worker:
+      extraPodConfig:
+        nodeSelector:
+          cms-af-prod: "true"
+        tolerations:
+          - key: "hub.jupyter.org/dedicated"
+            operator: "Equal"
+            value: "cms-af"
+            effect: "NoSchedule"
+        volumes:
+          - name: cvmfs
+            hostPath: 
+              path: /cvmfs
+          - name: eos
+            hostPath: 
+              path: /eos
+          - name: depot
+            nfs:
+              server: datadepot.rcac.purdue.edu
+              path: /depot/cms
+          - name: work
+            persistentVolumeClaim:
+              claimName: af-shared-storage
+      extraContainerConfig:
+        volumeMounts:
+          - name: cvmfs
+            mountPath: /cvmfs
+            mountPropagation: HostToContainer
+          - name: eos
+            mountPath: /eos
+            mountPropagation: HostToContainer
+          - name: depot
+            mountPath: /depot/cms
+            mountPropagation: HostToContainer
+          - name: work
+            mountPath: /work/
+            mountPropagation: HostToContainer
+
+
+  extraConfig:
+    config: |
+        c.DaskGateway.address = ':8000'
+        c.KubeBackend.api_url = 'http://dask-gateway-k8s.geddes.rcac.purdue.edu:80/api'
+
+        c.ClusterConfig.cluster_max_cores = 200
+        c.ClusterConfig.cluster_max_memory = '800 G'
+        c.ClusterConfig.cluster_max_workers = 200
+        c.ClusterConfig.idle_timeout = 3600
+
+        from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
+
+        def options_handler(options):
+            env_vars = options.env
+            env_vars["X509_CERT_DIR"] = "/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates"
+            setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
+            if ("WORKDIR" in env_vars):
+              setup_cmd += f'cd {env_vars["WORKDIR"]}'
+              if ("PYTHONPATH" not in env_vars):
+                env_vars["PYTHONPATH"] = env_vars["WORKDIR"]
+            env_vars["PYTHONPATH"] += ":/depot/cms/purdue-af/lhapdf/lib/python3.10/site-packages"
+            if ("LD_LIBRARY_PATH" in env_vars):
+              env_vars["LD_LIBRARY_PATH"] += ":/depot/cms/purdue-af/lhapdf/lib"
+            else:
+              env_vars["LD_LIBRARY_PATH"] = "/depot/cms/purdue-af/lhapdf/lib"
+            return {
+                "worker_cores": options.worker_cores,
+                "worker_memory": int(options.worker_memory * 2 ** 30),
+                "environment": env_vars,
+                "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
+                "worker_cmd": f"{options.conda_env}/bin/dask-worker",
+                "time": "1-00:00:00",
+                "scheduler_setup": setup_cmd,
+                "worker_setup": setup_cmd,
+            }
+        c.Backend.cluster_options = Options(
+            String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
+            Integer("worker_cores", default=1, min=1, max=4, label="Cores per worker"),
+            Float("worker_memory", default=4, min=1, max=16, label="Memory per worker (GiB)"),
+            Mapping("env", {"X509_USER_PROXY": "<path to proxy>", "WORKDIR": "<path to your framework>"}, label="Environment variables"),
+            handler=options_handler,
+        )
+traefik:
+  replicas: 1
+  image:
+    name: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/traefik
+    tag: 2.10.4
+    pullPolicy: IfNotPresent
+  loglevel: ERROR
+  dashboard: false
+  service:
+    type: LoadBalancer
+    annotations:
+      metallb.universe.tf/address-pool: geddes-private-pool
+    ports:
+      web:
+        port: 80
+        nodePort: null
+      tcp:
+        port: 8786
+        nodePort: null
+  ingress:
+    ingressClassName: public
+    host: dask-gateway-k8s.geddes.rcac.purdue.edu
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+
+controller:
+  enabled: true
+  annotations: {}
+  resources:
+    limits:
+      cpu: 2
+      memory: 4Gi
+    requests:
+      cpu: 2
+      memory: 4Gi
+  imagePullSecrets: []
+  loglevel: ERROR
+  completedClusterMaxAge: 86400
+  completedClusterCleanupPeriod: 600
+  backoffBaseDelay: 0.1
+  backoffMaxDelay: 300
+  k8sApiRateLimit: 50
+  k8sApiRateLimitBurst: 100
+  image:
+    name: ghcr.io/dask/dask-gateway-server
+    tag: 2024.1.0
+    pullPolicy: IfNotPresent
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  affinity: {}
