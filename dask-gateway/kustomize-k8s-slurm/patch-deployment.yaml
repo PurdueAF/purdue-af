@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: cms
+  name: doesNotMatter
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: gateway
+  template:
+    spec:
+      volumes:
+        - name: depot
+          nfs:
+            server: datadepot.rcac.purdue.edu
+            path: /depot/cms
+        - name: munge-key
+          secret:
+            secretName: munge-key
+      containers:
+        - name: gateway
+          args: [/start.sh]
+          volumeMounts:
+            - name: depot
+              mountPath: /depot/cms
+              mountPropagation: HostToContainer
+            - name: munge-key
+              mountPath: /etc/secrets/munge
+              readOnly: false
+              mountPropagation: HostToContainer

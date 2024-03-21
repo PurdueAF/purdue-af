@@ -1,0 +1,11 @@
+resources:
+  - all.yaml
+patches:
+  - path: patch-deployment.yaml
+    target:
+      kind: Deployment
+      name: "api-.*"
+  - path: patch-service.yaml
+    target:
+      kind: Service
+      name: "api-.*"
