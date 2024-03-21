@@ -99,17 +99,17 @@ local  userTable = g.panel.table.new('')
       refId='podAge', format='table', instant=true
     ),
     prometheus.addQuery(
-      'prometheus',
+      'prometheus-rancher',
       'kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*",resource="cpu"}',
       refId='cpuRequest', format='table', instant=true
     ),
     prometheus.addQuery(
-      'prometheus',
+      'prometheus-rancher',
       'kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*",resource="nvidia_com_mig_1g_5gb"}',
       refId='gpuRequest', format='table', instant=true
     ),
     prometheus.addQuery(
-      'prometheus',
+      'prometheus-rancher',
       'kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*",resource="memory"}',
       refId='memRequest', format='table', instant=true
     ),

@@ -88,4 +88,74 @@ local panels = import 'panels.libsonnet';
       { color: 'red', value: 85 },
     ]
   ),
+
+  nPodsQuota:: panels.gauge(
+    title='Num. of pods quota',
+    targets=[
+      prometheus.addQuery(
+        'prometheus-rancher',
+        |||
+          (
+            sum by (namespace) (kube_resourcequota{namespace="cms", resource="pods", type="used"}) /
+            sum by (namespace) (kube_resourcequota{namespace="cms", resource="pods", type="hard"})
+          )
+        |||,
+        legendFormat='{{ namespace }}', instant=true
+      ),
+    ],
+    transparent=true, unit='percentunit', decimals=0, min=0, max=1,
+    thresholdSteps=[
+      { color: 'green', value: 0},
+      { color: 'yellow', value: 0.8},
+      { color: 'orange', value: 0.9},
+      { color: 'red', value: 0.95 },
+    ]
+  ),
+
+  cpuQuota:: panels.gauge(
+    title='CPU requests quota',
+    targets=[
+      prometheus.addQuery(
+        'prometheus-rancher',
+        |||
+          (
+            sum by (namespace) (kube_resourcequota{namespace="cms", resource="limits.cpu", type="used"}) /
+            sum by (namespace) (kube_resourcequota{namespace="cms", resource="limits.cpu", type="hard"})
+          )
+        |||,
+        legendFormat='{{ namespace }}', instant=true
+      ),
+    ],
+    transparent=true, unit='percentunit', decimals=0, min=0, max=1,
+    thresholdSteps=[
+      { color: 'green', value: 0},
+      { color: 'yellow', value: 0.8},
+      { color: 'orange', value: 0.9},
+      { color: 'red', value: 0.95 },
+    ]
+  ),
+
+  memQuota:: panels.gauge(
+    title='RAM requests quota',
+    targets=[
+      prometheus.addQuery(
+        'prometheus-rancher',
+        |||
+          (
+            sum by (namespace) (kube_resourcequota{namespace="cms", resource="limits.memory", type="used"}) /
+            sum by (namespace) (kube_resourcequota{namespace="cms", resource="limits.memory", type="hard"})
+          )
+        |||,
+        legendFormat='{{ namespace }}', instant=true
+      ),
+    ],
+    transparent=true, unit='percentunit', decimals=0, min=0, max=1,
+    thresholdSteps=[
+      { color: 'green', value: 0},
+      { color: 'yellow', value: 0.8},
+      { color: 'orange', value: 0.9},
+      { color: 'red', value: 0.95 },
+    ]
+  ),
+
 }
