@@ -508,10 +508,6 @@ properties:
         description: |
           Whether to expose the dashboard on port 9000 (enable for debugging only!)
 
-      ingress:
-        host: string
-        ingressClassName: string
-
       service:
         type: object
         additionalProperties: false

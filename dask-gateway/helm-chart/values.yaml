@@ -274,9 +274,6 @@ traefik:
         # web service port
         port: web
         nodePort:
-  ingress:
-    ingressClassName: 
-    host:
 
   # Settings for nodeSelector, affinity, and tolerations for the traefik pods
   nodeSelector: {}
