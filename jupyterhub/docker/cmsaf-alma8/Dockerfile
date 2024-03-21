@@ -28,12 +28,19 @@ RUN yum update -y  && \
         libXft libXpm libXext libSM mesa-libGL libnsl.x86_64 \
         glibc-locale-source glibc-langpack-en && \
     yum install -y \
-        voms-clients vo-client myproxy gfal2-util gfal2-all stress apptainer && \
+        voms-clients vo-client myproxy gfal2-util gfal2-all \
+        stress apptainer compat-openssl10 && \
     yum --enablerepo epel-testing install -y \
         s3cmd htop
 
 RUN dnf -y install boost-devel diffutils ncurses-compat-libs && \
     dnf -y --enablerepo=powertools install glibc-static
+
+# Install CUDA libraries
+RUN yum install -y 'dnf-command(config-manager)' && \
+    dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo && \
+    dnf -y install cuda-toolkit-12-2 && \
+    yum install -y libcudnn8-8.9.7.29-1+cuda12.2
 
 RUN yum clean all && \
     rm -rf /var/lib/apt/lists/* && \
