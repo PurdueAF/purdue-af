@@ -36,7 +36,6 @@ dependencies:
   # - tensorflow & keras - see pip packages
   # - torch & torch_geometric - see pip packages
   - xgboost
-  - nvidia/label/cuda-12.2.0::cuda-toolkit
 
   # Distributed computing
   - dask=2023.3.2
@@ -76,7 +75,9 @@ dependencies:
   - pip:
     - rucio-clients
     - scalpl
-    - tensorflow[and-cuda]==2.16.0rc0
+    - tensorflow[and-cuda]
+    - tensorflow-probability
+    - qkeras
     - torch==2.0.1
     - torch-geometric==2.3.1
     - git+https://github.com/mattbellis/particle_physics_simplified.git
