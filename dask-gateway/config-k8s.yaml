@@ -168,9 +168,6 @@ traefik:
       tcp:
         port: 8786
         nodePort: null
-  ingress:
-    ingressClassName: public
-    host: dask-gateway-k8s.geddes.rcac.purdue.edu
   nodeSelector:
     cms-af-prod: "true"
   tolerations:

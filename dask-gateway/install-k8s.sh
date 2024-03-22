@@ -1,6 +1,7 @@
-helm upgrade --install dask-gateway-k8s helm-chart\
+helm upgrade --install dask-gateway-k8s dask-gateway\
  --repo=https://helm.dask.org --install \
- --version 2024.1.0 \
+ --version 2023.9.0 \
  --namespace cms \
- --values config-k8s.yaml
+ --values config-k8s.yaml \
+ --post-renderer ./kustomize-k8s
  

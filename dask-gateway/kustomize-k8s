@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd kustomize-k8s-slurm 
+cd kustomization-k8s
 
 cat <&0 > all.yaml
 

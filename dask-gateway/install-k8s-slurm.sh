@@ -4,4 +4,4 @@ helm upgrade  dask-gateway-k8s-slurm dask-gateway\
  --version 2023.9.0 \
  --namespace cms \
  --values config-k8s-slurm.yaml \
- --post-renderer ./kustomize
+ --post-renderer ./kustomize-k8s-slurm
