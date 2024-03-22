@@ -2,16 +2,16 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "dask-gateway.traefikIngressName" . }}
+  name: traefik-dask-gateway-k8s-slurm-ingress
 spec:
-  ingressClassName: {{ .Values.traefik.ingress.ingressClassName }}
+  ingressClassName: public
   rules:
-  - host: {{ .Values.traefik.ingress.host }}
+  - host: dask-gateway-k8s-slurm.geddes.rcac.purdue.edu
     http:
       paths:
       - backend:
           service:
-            name: {{ include "dask-gateway.traefikName" . }}
+            name: traefik-dask-gateway-k8s-slurm
             port:
               number: 80
         path: /

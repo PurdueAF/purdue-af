@@ -67,8 +67,8 @@ gateway:
                 "scheduler_partition": "hammer-nodes",
                 "scheduler_reservation": "CMSLOCAL",
                 "worker_cmd": f"{options.conda_env}/bin/dask-worker",
-                "account": options.queue,
-                "reservation": options.reservation,
+                "account": "cms",
+                # "reservation": options.reservation,
                 "time": "1-00:00:00",
                 "scheduler_setup": setup_cmd,
                 "worker_setup": setup_cmd,
@@ -76,11 +76,9 @@ gateway:
             }
         c.Backend.cluster_options = Options(
             String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
-            Select("queue", ["cms", "cms-express", "standby"], default="cms", label="Slurm queue"),
-            String("reservation", default="", label="Node reservation"),
             Integer("worker_cores", default=1, min=1, max=4, label="Cores per worker"),
             Float("worker_memory", default=4, min=1, max=16, label="Memory per worker (GiB)"),
-            Mapping("env", {"X509_USER_PROXY": "<path to proxy>", "WORKDIR": "<path to your framework>"}, label="Environment variables"),
+            Mapping("env", {"X509_USER_PROXY": "", "WORKDIR": ""}, label="Environment variables"),
             handler=options_handler,
         )
 traefik:
@@ -100,9 +98,6 @@ traefik:
         port: 80
       tcp:
         port: 8786
-  ingress:
-    ingressClassName: public
-    host: dask-gateway-k8s-slurm.geddes.rcac.purdue.edu
   nodeSelector:
     cms-af-prod: "true"
   tolerations:
