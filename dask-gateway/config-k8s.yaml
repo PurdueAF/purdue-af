@@ -117,7 +117,9 @@ gateway:
 
         from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
 
-        def options_handler(options):
+        def options_handler(options, user):
+            c.KubeClusterConfig.scheduler_extra_pod_labels = {"user": user.name}
+            c.KubeClusterConfig.worker_extra_pod_labels = {"user": user.name}
             env_vars = options.env
             env_vars["X509_CERT_DIR"] = "/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates"
             setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
