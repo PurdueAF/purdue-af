@@ -4,10 +4,10 @@ singleuser:
   cmd: 
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
-    tag: "0.9.3"
+    tag: "0.9.5"
   extraLabels:
     username_unescaped: "{legacy_escape_username}"
-    docker_image_tag: "0.9.3"
+    docker_image_tag: "0.9.5"
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
       default: true
@@ -239,6 +239,9 @@ singleuser:
       - name: eos
         hostPath: 
           path: /eos
+      - name: work-test
+        hostPath: 
+          path: /work-test
       - name: depot
         nfs:
           server: datadepot.rcac.purdue.edu
@@ -258,6 +261,9 @@ singleuser:
         mountPropagation: HostToContainer
       - name: depot
         mountPath: /depot/cms
+        mountPropagation: HostToContainer
+      - name: work-test
+        mountPath: /work-test
         mountPropagation: HostToContainer
       - name: kernels
         mountPath: /kernels/

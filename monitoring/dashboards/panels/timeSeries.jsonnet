@@ -202,11 +202,11 @@ local panels = import 'panels.libsonnet';
     title='Inferences per second (all Triton servers)',
     targets=[
       prometheus.addQuery(
-        'prometheus',
+        'prometheus-rancher',
         |||
           rate(
                 (
-                  sum(nv_inference_count{job="af-pod-monitor"}) by (model)
+                  sum(nv_inference_count) by (model)
                 )[4m:2m]
             )
         |||,
@@ -221,11 +221,11 @@ local panels = import 'panels.libsonnet';
     title='Inferences per load balancer (all models)',
     targets=[
       prometheus.addQuery(
-        'prometheus',
+        'prometheus-rancher',
         |||
           rate(
                 (
-                    sum(nv_inference_count{job="af-pod-monitor"}) by (app)
+                    sum(nv_inference_count) by (service)
                 )[4m:2m]
             )
         |||,
@@ -240,7 +240,7 @@ local panels = import 'panels.libsonnet';
     title='Triton servers per load balancer',
     targets=[
       prometheus.addQuery(
-        'prometheus',
+        'prometheus-rancher',
         |||
           sum by (deployment)(
               kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton(.*)", deployment!="triton-nginx"}
@@ -309,12 +309,12 @@ local panels = import 'panels.libsonnet';
     legendPlacement='right',
   ),
 
-  daskSlurmSchedulers:: panels.timeSeries(
-    title='Number of active Dask SLURM schedulers',
+  daskSchedulers:: panels.timeSeries(
+    title='Number of Dask Gateway / k8s schedulers',
     targets=[
       prometheus.addQuery(
-        'prometheus', 'count(dask_scheduler_workers)/4 or vector(0)',
-        legendFormat='Number of schedulers'
+        'prometheus', 'count by (user) (sum by (user, instance) (dask_scheduler_workers))',
+        legendFormat='{{ user }}'
       ),
     ],
     min=0,
@@ -322,12 +322,25 @@ local panels = import 'panels.libsonnet';
     legendPlacement='right',
   ),
 
-  daskSlurmWorkers:: panels.timeSeries(
-    title='Number of Dask workers',
+  daskWorkers:: panels.timeSeries(
+    title='Number of Dask Gateway / k8s workers',
     targets=[
       prometheus.addQuery(
-        'prometheus', 'sum(dask_scheduler_workers) or vector(0)',
-        legendFormat='Number of workers'
+        'prometheus', 'sum by (user) (dask_scheduler_workers)',
+        legendFormat='{{ user }}'
+      ),
+    ],
+    min=0,
+    decimals=0,
+    legendPlacement='right',
+  ),
+
+  daskClients:: panels.timeSeries(
+    title='Number of Dask Gateway / k8s clients',
+    targets=[
+      prometheus.addQuery(
+        'prometheus', 'sum by (user) (dask_scheduler_clients)',
+        legendFormat='{{ user }}'
       ),
     ],
     min=0,

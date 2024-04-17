@@ -28,8 +28,8 @@ local panels = import 'panels.libsonnet';
   deployedTritonLB:: panels.stat(
     targets=[
       prometheus.addQuery(
-        'prometheus',
-        'count(sum by (app) (nv_inference_count))',
+        'prometheus-rancher',
+        'count(sum by (service) (nv_inference_count))',
         legendFormat='Deployed load balancers',
         instant=true
       ),

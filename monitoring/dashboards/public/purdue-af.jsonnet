@@ -62,6 +62,13 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
   myPanels.row.slurm_metrics                 + w(24) + h(2),
   myPanels.timeSeries.hammerSlurmJobs        + w(12) + h(10),
 
+  myPanels.row.dask_metrics                 + w(24) + h(2),
+  myPanels.timeSeries.daskSchedulers       + w(8) + h(8),
+  myPanels.timeSeries.daskWorkers          + w(8) + h(8),
+  myPanels.timeSeries.daskClients         + w(8) + h(8),
+  myPanels.placeholder.placeholder_tr   + w(20) + h(0.5),
+
+
   myPanels.row.triton_metrics             + w(24) + h(2),
   myPanels.stat.deployedTritonLB          + w(3)  + h(4),
   myPanels.stat.deployedTritonServers     + w(3)  + h(4),
@@ -75,11 +82,6 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
 
   myPanels.timeSeries.tritonQueueTimeByModel  + w(12) + h(10),
   myPanels.timeSeries.tritonQueueTimeByServer  + w(12) + h(10),
-
-  // myPanels.row.dask_metrics                 + w(24) + h(2),
-  // myPanels.timeSeries.daskSlurmSchedulers       + w(12) + h(10),
-  // myPanels.timeSeries.daskSlurmWorkers          + w(12) + h(10),
-  // myPanels.placeholder.placeholder_tr   + w(20) + h(0.5),
 
 
   myPanels.row.hub_metrics               + w(24) + h(2),

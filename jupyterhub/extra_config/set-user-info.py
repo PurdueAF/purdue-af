@@ -12,8 +12,6 @@ def ldap_lookup(username):
     s = Server(host= url ,use_ssl= True, get_info= 'ALL')
     conn = Connection(s, version = 3, authentication = "ANONYMOUS")
     conn.start_tls()
-    # print(conn.result)
-    # print(conn)
     conn.search(
         search_base = baseDN,
         search_filter = search_filter.format(username),
@@ -30,12 +28,10 @@ def ldap_lookup(username):
     return uid_number, gid_number
 
 def passthrough_auth_state_hook(spawner, auth_state):
-    # import pprint
-    spawner.userdata = { "name": auth_state['name'],
-                        "domain": auth_state['domain']
-                        }
-    # print("GOT STATE:")
-    # pprint.pprint(spawner.userdata)
+    spawner.userdata = {
+        "name": auth_state['name'],
+        "domain": auth_state['domain']
+    }
     domain = spawner.userdata['domain']
     username = spawner.userdata['name']
     spawner.environment["NB_USER"] = username

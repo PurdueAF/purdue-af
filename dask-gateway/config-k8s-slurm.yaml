@@ -50,6 +50,8 @@ gateway:
             env_vars = options.env
             env_vars["X509_CERT_DIR"] = "/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates"
             setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
+            if ("PYTHONPATH") not in env_vars:
+                env_vars["PYTHONPATH"] = ""
             if ("WORKDIR" in env_vars):
               setup_cmd += f'cd {env_vars["WORKDIR"]}'
               if ("PYTHONPATH" not in env_vars):

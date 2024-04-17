@@ -33,7 +33,7 @@ RUN yum update -y  && \
     yum --enablerepo epel-testing install -y \
         s3cmd htop
 
-RUN dnf -y install boost-devel diffutils ncurses-compat-libs && \
+RUN dnf -y install boost-devel diffutils ncurses-compat-libs &&  \
     dnf -y --enablerepo=powertools install glibc-static
 
 # Install CUDA libraries
@@ -211,6 +211,13 @@ RUN pip install --upgrade \
     "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-topbar-text&subdirectory=packages/topbar-text-extension"   \
     "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-theme-toggler&subdirectory=packages/theme-toggler-extension" 
 
+# RUN pip install dask-labextension dask-gateway
+RUN pip install dask-gateway
+RUN git clone https://github.com/kondratyevd/dask-labextension.git \
+    && cd dask-labextension \
+    && pip install . \
+    && cd ..    \
+    && rm -rf dask-labextension
 # Install custom extensions
 # ENV EXTENSIONS_DIR "/etc/jupyter/extensions"
 # RUN git clone https://github.com/kondratyevd/toolbar-button \
