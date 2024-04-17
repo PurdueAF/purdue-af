@@ -1,27 +1,47 @@
-Dask Gateway at Purdue Analysis Facility
+Dask Gateway at Purdue AF
 #########################################
 
-1. Gateway Cluster creation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Dask Gateway is a service that allows to manage Dask clusters in a milti-tenant environment
+such as the Purdue Analysis Facility.
 
-Purdue Analysis Facility provides two ways to create Dask Gateway clusters:
+To make Dask Gateway useful in a variety of analysis workflows, we provide four ways to
+use it at our Analysis Facility:
 
-* From an interactive JupyterLab extension
-* Manually from a Jupyter Notebook or Python script
+* The cluster creation can be done in two ways:
 
-For each of these options, you can select how the Dask workers will be created:
+  * **Interactively** from the Dask Labextension interface
+  * **Manually** in a Jupyter Notebook or in a Python script
 
-* Create workers as **SLURM jobs** on Hammer cluster (only available to Purdue users).
+* For each of these methods, we allow to create two types of clusters:
 
-  * *Pros:* more familiar to current users, easy to access worker info & logs via ``squeue`` command.
-  * *Cons:* may take long to start workers due to competition with CMS production jobs.
+  * **Dask Gateway cluster w/ SLURM workers** submitted to Purdue Hammer cluster.
+    This is available to *Purdue users only* due to Purdue data access policies.
+  * **Dask Gateway cluster w/ Kubernetes workers** submitted to Purdue Geddes cluster.
+    This is available to *all users*.
 
-* Create workers as **Kubernetes pods** on Geddes cluster (available to all users).
+  +----------+-----------------------------+---------------------------------+
+  |          | SLURM                       | Kubernetes                      |
+  +==========+=============================+=================================+
+  | **Pros** | * Familiar to current users | * Fast scheduling of resources  |
+  |          |                             |                                 |
+  |          | * Easy to access logs and   | * Detailed monitoring           |
+  |          |   worker info via ``squeue``|                                 |
+  |          |                             | * Available to CERN/FNAL users  |
+  |          |                             |                                 |
+  +----------+-----------------------------+---------------------------------+
+  | **Cons** | * Unavailable to CERN/FNAL  | * Limited total amount of       |
+  |          |   users                     |   resources                     |
+  |          |                             |                                 |
+  |          | * Scheduling workers can be |                                 |
+  |          |   slow due to competition   |                                 |
+  |          |   with CMS production jobs  |                                 |
+  +----------+-----------------------------+---------------------------------+
 
-  * *Pros:* workers are created very fast if the resources are available.
-  * *Cons:* total amount of resources is limited. 
 
-The instructions and caveats for these methods are described below.
+1. Creating Dask Gateway clusters 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This section contains the instructions to create Dask Gateway clusters using methods described above.
 
 .. tabs::
 
@@ -71,15 +91,6 @@ The instructions and caveats for these methods are described below.
          # If working in Jupyter Notebook, the following will create a widget
          # which can be used to scale the cluster interactively:
          cluster
-     
-
-.. .. admonition:: Dask Gateway cluster setup (example notebook)
-..    :class: toggle
-
-..    :doc:`demos/gateway-cluster`
-
-..    You can copy this notebook from ``/depot/cms/purdue-af/purdue-af-demos/gateway-cluster.ipynb``
-..    and customize it for your purposes.
 
 2. Shared environments and storage volumes in Dask Gateway
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -192,14 +203,36 @@ The instructions and caveats for these methods are described below.
                   # other environment variables...
                }  
 
-3. Cluster lifetime and timeouts
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+3. Monitoring dashboards
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* Cluster creation will fail if the scheduler doesn't start in **2 minutes**.
-  If this happens, try to resubmit the cluster.
-* Once created, Dask scheduler and workers will persist for **1 day**.
-* If the notebook from which the Dask Gateway cluster was created is
-  terminated, the cluster and all its workers will be killed after **5 minutes**.
+  .. tabs::
+
+     .. group-tab:: Interactive JupyterLab extension
+
+        When a cluster is created via the Dask Labextension interface,
+        the extension should connect to monitoring dashboards automatically;
+        you can open various dashboards by clicking on the yellow buttons in the sidebar.
+
+        Alternatively, you can copy the URL from the window at the top of the Labextension
+        sidebar, and open the Dask dashboard in a separate web browser tab.
+
+        .. image:: images/dask-gateway.png
+           :width: 700
+           :align: center
+
+     .. group-tab:: Jupyter Notebook or Python script
+         
+        When a cluster is created in a Jupyter Notebook, you can create the Gateway widget by
+        simply executing a cell containing the reference to the cluster object.
+
+        The widget will contain a clickable link to a Dask dashboard.
+
+        Alternatively, you can retrieve the dashboard address as ``cluster.dashboard_link``.
+
+        .. image:: images/dask-gateway-widget.png
+           :width: 700
+           :align: center
 
 
 4. Connecting a Client to a Dask Gateway cluster
@@ -265,3 +298,11 @@ automatically.
          If you have more than one Dask Gateway cluster running, automatic detection
          may be ambiguous.
 
+5. Cluster lifetime and timeouts
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Cluster creation will fail if the scheduler doesn't start in **2 minutes**.
+  If this happens, try to resubmit the cluster.
+* Once created, Dask scheduler and workers will persist for **1 day**.
+* If the notebook from which the Dask Gateway cluster was created is
+  terminated, the cluster and all its workers will be killed after **5 minutes**.
