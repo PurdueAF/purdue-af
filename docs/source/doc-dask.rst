@@ -76,9 +76,9 @@ selected during session creation (**up to 64 workers**).
 ------------------------
 
 Dask Gateway provides a way to scale out to multiple compute nodes,
-using SLURM batch scheduler in the backend. With Dask Gateway, you
-should be able to scale up to **150-200 workers** or more, depending on
-availability of the SLURM job slots.
+using either SLURM batch scheduler or Kubernetes in the backend. With Dask Gateway, you
+should be able to quickly scale up to **100-200 cores** or more, depending on
+availability of resources.
 
 .. note::
 
@@ -86,33 +86,113 @@ availability of the SLURM job slots.
    If you want to use Dask Gateway in your own custom environment, make sure
    that it contains ``dask-gateway``, ``ipykernel`` and ``ipywidgets`` packages.
 
-.. warning::
+.. .. warning::
 
-   Dask Gateway will submit SLURM jobs to the Purdue Hammer cluster.
-   Therefore, **all analysis code that uses Dask Gateway must be located
-   in Purdue Depot storage**, in order to be accessible by Dask workers.
+..    Dask Gateway will submit SLURM jobs to the Purdue Hammer cluster.
+..    Therefore, **all analysis code that uses Dask Gateway must be located
+..    in Purdue Depot storage**, in order to be accessible by Dask workers.
    
-   Currenlty, Depot is only writeable by Purdue users, but not by CERN or FNAL users.
+..    Currenlty, Depot is only writeable by Purdue users, but not by CERN or FNAL users.
 
 2.1 Gateway Cluster creation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-It is recommended to create a Dask Gateway cluster in a separate Jupyter notebook,
-rather than in your main analysis code.
+Purdue Analysis Facility provides two ways to create Dask Gateway clusters:
+from an interactive JupyterLab extension, or manually from a Jupyter Notebook or python script.
 
-.. admonition:: Dask Gateway cluster setup (example notebook)
-   :class: toggle
+.. It is recommended to create a Dask Gateway cluster in a separate Jupyter notebook,
+.. rather than in your main analysis code. In the near future we will also provide an
+.. interactive way to create the cluster by clicking a button in JupyterLab interface.
 
-   :doc:`demos/gateway-cluster`
+.. Creating a Dask Gateway cluster:
 
-   You can copy this notebook from ``/depot/cms/purdue-af/purdue-af-demos/gateway-cluster.ipynb``
-   and customize it for your purposes.
+.. tabs::
+
+   .. group-tab:: Interactive JupyterLab extension
+
+      1. Click on the Dask logo in the left sidebar of JupyterLab interface.
+      2. Click on ``[+ NEW]`` button to open the dialog window with cluster settings.
+      3. In the dialog window, select cluster type, kernel, and desired worker resources.
+      4. Click ``Apply`` button and wait for ~1 min, the cluster info will appear in the interface.
+      5. The sidebar should automatically connect to Dask dashboards;
+         you can open different dashboards by clicking on yellow buttons in the sidebar,
+         and rearrange the tabs as desired.
+
+      .. info::
+
+         You may need to pass some environment variables to your Dask workers,
+         for example the path to VOMS proxy. To achieve that in the interactive extension:
+
+         1. Create a file ``~/.config/dask/labextension.yaml``
+         2. Add any environment variables in the following way:
+
+            .. code-block:: yaml
+               # contents of labextension.yaml
+               labextension:
+                 env_override:
+                   KEY1: VALUE1
+                   X509_USER_PROXY: "/path-to-proxy/"
+                   # any other variables..
+
+   .. group-tab:: Jupyter Notebook
+
+      .. code-block:: python
+
+         import os
+         import dask_gateway
+         from dask_gateway import Gateway
+
+         # To submit jobs via SLURM (Purdue users only!)
+         gateway = Gateway()
+
+         # To submit jobs via Kubernetes (all users)
+         # gateway = Gateway(
+         #     "http://dask-gateway-k8s.geddes.rcac.purdue.edu/",
+         #     proxy_address="traefik-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8786",
+         # )
+
+         # You may need to update some environment variables before creating a cluster.
+         # For example:
+         os.environ["X509_USER_PROXY"] = "/path-to-voms-proxy/"
+
+         # Create the cluster
+         cluster = gateway.new_cluster(
+            conda_env = "/depot/cms/kernels/python3", # path to conda env
+            worker_cores = 1,    # cores per worker
+            worker_memory = 4,   # memory per worker in GB
+            env = dict(os.environ), # pass environment as a dictionary
+         )
+
+      .. info::
+
+         For CERN and FNAL users, the dictionary passed to ``env`` argument must
+         contain elements ``NB_UID`` and ``NB_GID``. This is already satisfied if
+         you pass ``env = dict(os.environ)``, so no further action is needed.
+         
+         However, if you want to pass a custom environment
+         to workers, you can add the required elements as follows:
+
+         .. code-block:: python
+
+            env = {
+               "NB_UID": os.environ["NB_UID"],
+               "NB_GID": os.environ["NB_GID"],
+               # other environment variables...
+            }       
+
+.. .. admonition:: Dask Gateway cluster setup (example notebook)
+..    :class: toggle
+
+..    :doc:`demos/gateway-cluster`
+
+..    You can copy this notebook from ``/depot/cms/purdue-af/purdue-af-demos/gateway-cluster.ipynb``
+..    and customize it for your purposes.
 
 2.2 Cluster lifetime and timeouts
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* Cluster creation will fail if the SLURM job for the schaduler doesn't
-  start in **2 minutes**. If this happens, try to resubmit the cluster.
+* Cluster creation will fail if the scheduler doesn't start in **2 minutes**.
+  If this happens, try to resubmit the cluster.
 * Once created, Dask scheduler and workers will persist for **1 day**.
 * If the notebook from which the Dask Gateway cluster was created is
   terminated, the cluster and all its workers will be killed after **5 minutes**.
@@ -132,7 +212,16 @@ automatically.
       .. code-block:: python
 
          from dask_gateway import Gateway
+
+         # If submitting workers as SLURM jobs (Purdue users only):
          gateway = Gateway()
+
+         # If submitting workers as Kubernetes pods (all users):
+         # gateway = Gateway(
+         #     "http://dask-gateway-k8s.geddes.rcac.purdue.edu/",
+         #     proxy_address="traefik-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8786",
+         # )
+
          # replace with actual cluster name:
          cluster_name = "17dfaa3c10dc48719f5dd8371893f3e5"
          client = gateway.connect(cluster_name).get_client()
@@ -142,7 +231,16 @@ automatically.
       .. code-block:: python
 
          from dask_gateway import Gateway
+
+         # If submitting workers as SLURM jobs (Purdue users only):
          gateway = Gateway()
+
+         # If submitting workers as Kubernetes pods (all users):
+         # gateway = Gateway(
+         #     "http://dask-gateway-k8s.geddes.rcac.purdue.edu/",
+         #     proxy_address="traefik-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8786",
+         # )
+
          clusters = gateway.list_clusters()
          # for example, select the first of existing clusters
          cluster_name = clusters[0].name
