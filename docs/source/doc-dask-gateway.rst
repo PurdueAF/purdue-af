@@ -16,8 +16,18 @@ use it at our Analysis Facility:
 
   * **Dask Gateway cluster + SLURM backend**, with workers submitted to Purdue Hammer cluster.
     This is available to **Purdue users only** due to Purdue data access policies.
+
+    With this method, users can potentially create **hundreds of workers**, but in practice
+    their number is usually limited to 100-200, due to competition with CMS production jobs
+    and other users, and requesting more than 100 workers is usually associated with some wait time.
+
   * **Dask Gateway cluster + Kubernetes backend**, with workers submitted to Purdue Geddes cluster.
     This is available to **all users**.
+
+    With this method, the workers are scheduled almost instantly, but we currently limit the total
+    per-user resources to **100 cores, 400 GB RAM** due to limited resources in the Analysis Facility.
+
+  The pros and cons of the Dask Gateway backends are summarized in the following table:
 
   +----------+-----------------------------+---------------------------------+
   |          | Dask Gateway + SLURM        | Dask Gateway + Kubernetes       |
@@ -42,7 +52,7 @@ use it at our Analysis Facility:
 1. Creating Dask Gateway clusters 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This section contains the instructions to create Dask Gateway clusters using methods described above.
+This section contains the instructions for creating Dask Gateway clusters using the methods described above.
 
 .. tabs::
 
@@ -51,7 +61,7 @@ This section contains the instructions to create Dask Gateway clusters using met
       1. Click on the Dask logo in the left sidebar of JupyterLab interface.
       2. Click on ``[+ NEW]`` button to open the dialog window with cluster settings.
       3. In the dialog window, select cluster type, kernel, and desired worker resources.
-      4. Click the ``[Apply]`` button and wait for ~1 min, the cluster info will appear in the interface.
+      4. Click the ``[Apply]`` button and wait for ~1 min, the cluster info will appear in the sidebar.
       5. The sidebar should automatically connect to Dask dashboards;
          you can open different dashboards by clicking on yellow buttons in the sidebar,
          and rearrange the tabs as desired.
@@ -109,7 +119,7 @@ Conda environments, Python packages, C++ libraries, etc.
 
    +------------+---------------+--------------------+--------------------+
    |            | SLURM workers | Kubernetes workers | Kubernetes workers |
-   | -------    | ------------- | ------------------ | ------------------ |
+   |            | ---           | ---                | ---                |
    |            | (Purdue users)| (Purdue users)     | (CERN/FNAL users)  |
    +============+===============+====================+====================+
    | **Depot**  | read / write  | read / write       | read-only          |
@@ -136,6 +146,10 @@ Conda environments, Python packages, C++ libraries, etc.
 
         To make your Conda environment appear as a kernel,
         it must have the ``ipykernel`` package installed.
+
+        .. image:: images/dask-gateway-dialog.png
+           :width: 500
+           :align: center
 
      .. group-tab:: Jupyter Notebook or Python script
          
@@ -217,11 +231,11 @@ Conda environments, Python packages, C++ libraries, etc.
 3. Monitoring 
 ^^^^^^^^^^^^^^^
 
-  Monitoring your Dask jobs is possible in two ways:
+Monitoring your Dask jobs is possible in two ways:
 
-  1. Via Dask dashboard which is created for each cluster (see instructions below).
-  2. Via the general Purdue AF monitoring page, in the "Slurm metrics" and "Dask metrics" sections
-     of the |open_dashboard|.
+1. Via Dask dashboard which is created for each cluster (see instructions below).
+2. Via the general Purdue AF monitoring page, in the "Slurm metrics" and "Dask metrics" sections
+   of the |open_dashboard|.
 
 .. |open_dashboard| raw:: html
 
@@ -229,35 +243,35 @@ Conda environments, Python packages, C++ libraries, etc.
       monitoring dashboard
    </a>
 
-  Instructions to open Dask cluster dashboards for different Gateway setups:
+Instructions to open Dask cluster dashboards for different Gateway setups:
 
-  .. tabs::
+.. tabs::
 
-     .. group-tab:: Interactive JupyterLab extension
+  .. group-tab:: Interactive JupyterLab extension
 
-        When a cluster is created via the Dask Labextension interface,
-        the extension should connect to monitoring dashboards automatically;
-        you can open various dashboards by clicking on the yellow buttons in the sidebar.
+     When a cluster is created via the Dask Labextension interface,
+     the extension should connect to monitoring dashboards automatically;
+     you can open various dashboards by clicking on the yellow buttons in the sidebar.
 
-        Alternatively, you can copy the URL from the window at the top of the Labextension
-        sidebar, and open the Dask dashboard in a separate web browser tab.
+     Alternatively, you can copy the URL from the window at the top of the Labextension
+     sidebar, and open the Dask dashboard in a separate web browser tab.
 
-        .. image:: images/dask-gateway.png
-           :width: 700
-           :align: center
+     .. image:: images/dask-gateway.png
+        :width: 700
+        :align: center
 
-     .. group-tab:: Jupyter Notebook or Python script
+  .. group-tab:: Jupyter Notebook or Python script
          
-        When a cluster is created in a Jupyter Notebook, you can create the Gateway widget by
-        simply executing a cell containing the reference to the cluster object.
+     When a cluster is created in a Jupyter Notebook, you can create the Gateway widget by
+     simply executing a cell containing the reference to the cluster object.
 
-        The widget will contain a clickable link to a Dask dashboard.
+     The widget will contain a clickable link to a Dask dashboard.
 
-        Alternatively, you can retrieve the dashboard address as ``cluster.dashboard_link``.
+     Alternatively, you can retrieve the dashboard address as ``cluster.dashboard_link``.
 
-        .. image:: images/dask-gateway-widget.png
-           :width: 700
-           :align: center
+     .. image:: images/dask-gateway-widget.png
+        :width: 700
+        :align: center
 
 
 4. Cluster discovery and connecting a client 
@@ -301,7 +315,7 @@ Below are listed the different ways to connect to a cluster created elsewhere:
          If you have more than one Dask Gateway cluster running, automatic detection
          may be ambiguous.
 
-   .. tab:: **Client code injection from Dask Labextension**
+   .. tab:: **Client code injection from extension**
 
       If you created the cluster via the interactive extension, you can obtain
       the client code simply by clicking on the ``<>`` symbol in the cluster widget.
@@ -309,10 +323,14 @@ Below are listed the different ways to connect to a cluster created elsewhere:
       recently used Jupyter notebook.
 
       .. image:: images/dask-gateway-labextension-widget.png
-         :width: 400
+         :width: 300
          :align: center
 
-   .. tab:: **Connecting manually**
+      .. image:: images/dask-gateway-labextension-code-injection.png
+         :width: 500
+         :align: center
+
+   .. tab:: **Manual connection**
 
       .. code-block:: python
 
