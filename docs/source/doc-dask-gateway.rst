@@ -158,7 +158,7 @@ Conda environments, Python packages, C++ libraries, etc.
 
         .. code-block:: python
 
-           cluster = new_cluster(
+           cluster = gateway.new_cluster(
               conda_env = "/depot/cms/kernels/python3",
               # ...
            )
