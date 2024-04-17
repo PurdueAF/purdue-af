@@ -77,7 +77,7 @@ selected during session creation (**up to 64 cores** and **up to 128 GB RAM**).
 
 Dask Gateway provides a way to scale out to multiple compute nodes,
 using either SLURM batch scheduler or Kubernetes in the backend. With Dask Gateway, you
-should be able to quickly scale up to **100-200 cores** and **400-800 GB RAM** or more,
+should be able to quickly scale **up to 100-200 cores** and **400-800 GB RAM** or more,
 depending on availability of resources.
 
 .. note::
@@ -98,13 +98,11 @@ depending on availability of resources.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Purdue Analysis Facility provides two ways to create Dask Gateway clusters:
-from an interactive JupyterLab extension, or manually from a Jupyter Notebook or python script.
 
-.. It is recommended to create a Dask Gateway cluster in a separate Jupyter notebook,
-.. rather than in your main analysis code. In the near future we will also provide an
-.. interactive way to create the cluster by clicking a button in JupyterLab interface.
+* From an interactive JupyterLab extension
+* Manually from a Jupyter Notebook or Python script
 
-.. Creating a Dask Gateway cluster:
+The instructions and caveats for these methods are described below.
 
 .. tabs::
 
@@ -118,24 +116,7 @@ from an interactive JupyterLab extension, or manually from a Jupyter Notebook or
          you can open different dashboards by clicking on yellow buttons in the sidebar,
          and rearrange the tabs as desired.
 
-      .. important::
-
-         You may need to pass some environment variables to your Dask workers,
-         for example the path to VOMS proxy. To achieve that in the interactive extension:
-
-         1. Create a file ``~/.config/dask/labextension.yaml``
-         2. Add any environment variables in the following way:
-
-            .. code-block:: yaml
-
-               # contents of labextension.yaml
-               labextension:
-                 env_override:
-                   KEY1: VALUE1
-                   X509_USER_PROXY: "/path-to-proxy/"
-                   # any other variables..
-
-   .. group-tab:: Jupyter Notebook
+   .. group-tab:: Jupyter Notebook or Python script
 
       .. code-block:: python
 
@@ -164,22 +145,10 @@ from an interactive JupyterLab extension, or manually from a Jupyter Notebook or
             env = dict(os.environ), # pass environment as a dictionary
          )
 
-      .. important::
-
-         For CERN and FNAL users, the dictionary passed to ``env`` argument must
-         contain elements ``"NB_UID"`` and ``"NB_GID"``. **This is already satisfied if
-         you pass ``env = dict(os.environ)``, so no further action is needed.**
-         
-         However, if you want to pass a custom environment
-         to workers, you can add the required elements as follows:
-
-         .. code-block:: python
-
-            env = {
-               "NB_UID": os.environ["NB_UID"],
-               "NB_GID": os.environ["NB_GID"],
-               # other environment variables...
-            }       
+         # If working in Jupyter Notebook, the following will create a widget
+         # which can be used to scale the cluster interactively:
+         cluster
+     
 
 .. .. admonition:: Dask Gateway cluster setup (example notebook)
 ..    :class: toggle
@@ -189,7 +158,100 @@ from an interactive JupyterLab extension, or manually from a Jupyter Notebook or
 ..    You can copy this notebook from ``/depot/cms/purdue-af/purdue-af-demos/gateway-cluster.ipynb``
 ..    and customize it for your purposes.
 
-2.2 Cluster lifetime and timeouts
+2.2 Passing shared environment to Dask workers
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* **Conda environments / Jupyter kernels**
+  
+  In the interactive extesion, the environment / kernel can be selected from a
+  drop-down list in the dialog window that appears when you click on ``[+NEW]`` button.
+  To make your Conda environment appear as a kernel, it must have the ``ipykernel`` package installed.
+
+  In manual setup, the path to conda environment is specified in the ``conda_env`` argument of ``gateway.new_cluster()``.
+
+*  **Shared storage**
+
+   Dask workers have the same permissions as the user that creates them.
+   You can use this to your advantage if your workers need read or write data to/from storage locations. 
+
+   Refer to the following table to decide which Dask Gateway setup works best for your case:
+
+   +--------+----------------------+---------------------------+------------------------------+
+   |        | SLURM (Purdue users) | Kubernetes (Purdue users) | Kubernetes (CERN/FNAL users) |
+   +--------+----------------------+---------------------------+------------------------------+
+   | Depot  | read / write         | read / write              | read-only                    |
+   +--------+----------------------+---------------------------+------------------------------+
+   | /work/ | no access            | read / write              | read / write                 |
+   +--------+----------------------+---------------------------+------------------------------+
+   | EOS    | read-only            | read-only                 | read-only                    |
+   +--------+----------------------+---------------------------+------------------------------+
+
+*  **Environment variables**
+
+   Passing environment variables to workers can be beneficial in various ways, for example:
+
+   * Enable imports from local Python (sub)modules by amending the ``PYTHONPATH`` variable.
+   * Enable imports from C++ libraries by amending the ``LD_LIBRARY_PATH`` variable.
+   * Allow workers to read data via XRootD by specifying path to VOMS proxy via ``X509_USER_PROXY`` variable.
+
+   These and other environment variables can be passed to Dask workers as follows:
+
+   .. tabs::
+
+      .. group-tab:: Interactive JupyterLab extension
+
+         When a Dask Gateway cluster is created via the JupyterLab extension,
+         there is no direct interface to pass environment to workers.
+
+         Instead, we use the following workaround which allows to override the
+         worker environment for clusters created via the JupyterLab extension:
+
+         1. Create a file ``~/.config/dask/labextension.yaml``
+         2. Add any environment variables in the following way:
+
+            .. code-block:: yaml
+
+               # contents of labextension.yaml
+               labextension:
+                  env_override:
+                     KEY1: VALUE1
+                     X509_USER_PROXY: "/path-to-proxy/"
+                     # any other variables..
+         
+         3. **Shut down and restart the Analysis Facility session**
+         4. Create a new cluster by clicking the ``[+NEW]`` button in the left sidebar.
+
+      .. group-tab:: Jupyter Notebook or Python script
+
+         The `gateway.new_cluster()` command takes ``env`` argument which can be used
+         to pass any set of environment variables to workers. The most straightforward
+         way to use this is to pass the entire local environment as follows:
+
+         .. code-block:: python
+
+            cluster = gateway.new_cluster(
+               #...
+               env = dict(os.environ)
+            )
+
+         .. important::
+
+            For CERN and FNAL users, the dictionary passed to ``env`` argument must
+            contain elements ``"NB_UID"`` and ``"NB_GID"``. **This is already satisfied when
+            you pass ``env = dict(os.environ)``, so no further action is needed.**
+            
+            However, if you want to pass a custom environment
+            to workers, you can add the required elements as follows:
+
+            .. code-block:: python
+
+               env = {
+                  "NB_UID": os.environ["NB_UID"],
+                  "NB_GID": os.environ["NB_GID"],
+                  # other environment variables...
+               }  
+
+2.3 Cluster lifetime and timeouts
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 * Cluster creation will fail if the scheduler doesn't start in **2 minutes**.
@@ -199,7 +261,7 @@ from an interactive JupyterLab extension, or manually from a Jupyter Notebook or
   terminated, the cluster and all its workers will be killed after **5 minutes**.
 
 
-2.3 Connecting a Client to a Dask Gateway cluster
+2.4 Connecting a Client to a Dask Gateway cluster
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In the main analysis code, you can connect to the Gateway cluster either
