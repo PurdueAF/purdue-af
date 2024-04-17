@@ -20,11 +20,12 @@ use it at our Analysis Facility:
     This is available to *all users*.
 
   +----------+-----------------------------+---------------------------------+
-  |          | SLURM                       | Kubernetes                      |
+  |          | Dask Gateway + SLURM        | Dask Gateway + Kubernetes       |
   +==========+=============================+=================================+
-  | **Pros** | * Familiar to current users | * Fast scheduling of resources  |
+  | **Pros** | * SLURM is familiar to      | * Fast scheduling of resources  |
+  |          |   current users             |                                 |
   |          |                             |                                 |
-  |          | * Easy to access logs and   | * Detailed monitoring           |
+  |          |  * Easy to access logs and  | * Detailed monitoring           |
   |          |   worker info via ``squeue``|                                 |
   |          |                             | * Available to CERN/FNAL users  |
   |          |                             |                                 |
@@ -32,9 +33,9 @@ use it at our Analysis Facility:
   | **Cons** | * Unavailable to CERN/FNAL  | * Limited total amount of       |
   |          |   users                     |   resources                     |
   |          |                             |                                 |
-  |          | * Scheduling workers can be |                                 |
-  |          |   slow due to competition   |                                 |
-  |          |   with CMS production jobs  |                                 |
+  |          | * Scheduling workers can be | * Retreiving detailed worker    |
+  |          |   slow due to competition   |   info can be non-trivial for   |
+  |          |   with CMS production jobs  |   users (but easy for admins)   |
   +----------+-----------------------------+---------------------------------+
 
 
