@@ -235,45 +235,23 @@ This section contains the instructions to create Dask Gateway clusters using met
            :align: center
 
 
-4. Connecting a Client to a Dask Gateway cluster
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+4. Cluster discovery and connecting a client 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In the main analysis code, you can connect to the Gateway cluster either
-by manually pasting the cluster name, or by selecting an existing cluster
-automatically.
+In general, connecting a client to a Gateway cluster is done as follows:
+
+.. code-block:: python
+
+    client = cluster.get_client()
+
+However, this implies that ``cluster`` refers to an already existing object.
+This is true if the cluster was created in the same Notebook / Python script.
+
+Below are listed the different ways to connect to a cluster created elsewhere:
 
 .. tabs::
 
-   .. tab:: **Connecting manually**
-
-      .. note::
-
-         If you created the cluster via the interactive extension, you can obtain
-         the client code simply by clicking on the ``<>`` symbol in the cluster widget.
-         This action will paste the client code into a new cell in the most
-         recently used Jupyter notebook.
-
-      .. code-block:: python
-
-         from dask_gateway import Gateway
-
-         # If submitting workers as SLURM jobs (Purdue users only):
-         gateway = Gateway()
-
-         # If submitting workers as Kubernetes pods (all users):
-         # gateway = Gateway(
-         #     "http://dask-gateway-k8s.geddes.rcac.purdue.edu/",
-         #     proxy_address="traefik-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8786",
-         # )
-
-         # To find the cluster name:
-         print(gateway.list_clusters())
-
-         # replace with actual cluster name:
-         cluster_name = "17dfaa3c10dc48719f5dd8371893f3e5"
-         client = gateway.connect(cluster_name).get_client()
-
-   .. tab:: **Connecting automatically**
+   .. tab:: **Automatic cluster discovery**
 
       .. code-block:: python
 
@@ -297,6 +275,40 @@ automatically.
 
          If you have more than one Dask Gateway cluster running, automatic detection
          may be ambiguous.
+
+   .. tab:: **Client code injection from Dask Labextension**
+
+      If you created the cluster via the interactive extension, you can obtain
+      the client code simply by clicking on the ``<>`` symbol in the cluster widget.
+      This action will paste the client code into a new cell in the most
+      recently used Jupyter notebook.
+
+      .. image:: images/dask-gateway-labextension-widget.png
+         :width: 400
+         :align: center
+
+   .. tab:: **Connecting manually**
+
+      .. code-block:: python
+
+         from dask_gateway import Gateway
+
+         # If submitting workers as SLURM jobs (Purdue users only):
+         gateway = Gateway()
+
+         # If submitting workers as Kubernetes pods (all users):
+         # gateway = Gateway(
+         #     "http://dask-gateway-k8s.geddes.rcac.purdue.edu/",
+         #     proxy_address="traefik-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8786",
+         # )
+
+         # To find the cluster name:
+         print(gateway.list_clusters())
+
+         # replace with actual cluster name:
+         cluster_name = "17dfaa3c10dc48719f5dd8371893f3e5"
+         client = gateway.connect(cluster_name).get_client()
+
 
 5. Cluster lifetime and timeouts
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
