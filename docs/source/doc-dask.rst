@@ -59,8 +59,8 @@ Dask Clusters and Clients
 -------------------
 
 Local cluster can be used to parallelize the analysis code over the local CPU cores.
-The number of workers that you can create is limited to number of CPU cores
-selected during session creation (**up to 64 workers**).
+The number of workers that you can create is limited by the amount of resources
+selected during session creation (**up to 64 cores** and **up to 128 GB RAM**).
 
 .. admonition:: LocalCluster setup
    :class: toggle
@@ -77,8 +77,8 @@ selected during session creation (**up to 64 workers**).
 
 Dask Gateway provides a way to scale out to multiple compute nodes,
 using either SLURM batch scheduler or Kubernetes in the backend. With Dask Gateway, you
-should be able to quickly scale up to **100-200 cores** or more, depending on
-availability of resources.
+should be able to quickly scale up to **100-200 cores** and **400-800 GB RAM** or more,
+depending on availability of resources.
 
 .. note::
 
@@ -113,12 +113,12 @@ from an interactive JupyterLab extension, or manually from a Jupyter Notebook or
       1. Click on the Dask logo in the left sidebar of JupyterLab interface.
       2. Click on ``[+ NEW]`` button to open the dialog window with cluster settings.
       3. In the dialog window, select cluster type, kernel, and desired worker resources.
-      4. Click ``Apply`` button and wait for ~1 min, the cluster info will appear in the interface.
+      4. Click the ``[Apply]`` button and wait for ~1 min, the cluster info will appear in the interface.
       5. The sidebar should automatically connect to Dask dashboards;
          you can open different dashboards by clicking on yellow buttons in the sidebar,
          and rearrange the tabs as desired.
 
-      .. info::
+      .. important::
 
          You may need to pass some environment variables to your Dask workers,
          for example the path to VOMS proxy. To achieve that in the interactive extension:
@@ -163,7 +163,7 @@ from an interactive JupyterLab extension, or manually from a Jupyter Notebook or
             env = dict(os.environ), # pass environment as a dictionary
          )
 
-      .. info::
+      .. important::
 
          For CERN and FNAL users, the dictionary passed to ``env`` argument must
          contain elements ``NB_UID`` and ``NB_GID``. This is already satisfied if
