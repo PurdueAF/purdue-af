@@ -35,6 +35,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     doc-software
     doc-hardware
     doc-dask
+    doc-dask-gateway
     doc-support
 
     .. doc-login-methods
