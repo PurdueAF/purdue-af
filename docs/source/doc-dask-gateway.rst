@@ -327,7 +327,7 @@ Below are listed the different ways to connect to a cluster created elsewhere:
          :align: center
 
       .. image:: images/dask-gateway-code-injection.png
-         :width: 500
+         :width: 700
          :align: center
 
    .. tab:: **Manual connection**
