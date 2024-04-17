@@ -4,10 +4,9 @@ Dask Gateway at Purdue AF
 Dask Gateway is a service that allows to manage Dask clusters in a milti-tenant environment
 such as the Purdue Analysis Facility.
 
-To make Dask Gateway useful in a variety of analysis workflows, we provide four ways to
-use it at our Analysis Facility:
+To make Dask Gateway useful in a variety of analysis workflows, we provide four ways to work with it:
 
-* The cluster creation can be done in two ways:
+* The Dask Gateway cluster creation can be done in two ways:
 
   * **Interactively** from the Dask Labextension interface
   * **Manually** in a Jupyter Notebook or in a Python script
@@ -18,14 +17,15 @@ use it at our Analysis Facility:
     This is available to **Purdue users only** due to Purdue data access policies.
 
     With this method, users can potentially create **hundreds of workers**, but in practice
-    their number is usually limited to 100-200, due to competition with CMS production jobs
-    and other users, and requesting more than 100 workers is usually associated with some wait time.
+    requesting more than 100 workers is usually associated with some wait time due to competiton with
+    CMS production jobs and other users.
 
   * **Dask Gateway cluster + Kubernetes backend**, with workers submitted to Purdue Geddes cluster.
     This is available to **all users**.
 
-    With this method, the workers are scheduled almost instantly, but we currently limit the total
-    per-user resources to **100 cores, 400 GB RAM** due to limited resources in the Analysis Facility.
+    With this method, the workers are scheduled almost instantly, but at the moment we restrict
+    the total per-user resource usage to **100 cores, 400 GB RAM** due to limited resources
+    in the Analysis Facility.
 
   The pros and cons of the Dask Gateway backends are summarized in the following table:
 
@@ -119,7 +119,7 @@ Conda environments, Python packages, C++ libraries, etc.
 
    +------------+---------------+--------------------+--------------------+
    |            | SLURM workers | Kubernetes workers | Kubernetes workers |
-   |            | ---           | ---                | ---                |
+   |            |               |                    |                    |
    |            | (Purdue users)| (Purdue users)     | (CERN/FNAL users)  |
    +============+===============+====================+====================+
    | **Depot**  | read / write  | read / write       | read-only          |
@@ -148,7 +148,7 @@ Conda environments, Python packages, C++ libraries, etc.
         it must have the ``ipykernel`` package installed.
 
         .. image:: images/dask-gateway-dialog.png
-           :width: 500
+           :width: 400
            :align: center
 
      .. group-tab:: Jupyter Notebook or Python script
