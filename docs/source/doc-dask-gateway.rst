@@ -14,10 +14,10 @@ use it at our Analysis Facility:
 
 * For each of these methods, we allow to create two types of clusters:
 
-  * **Dask Gateway cluster w/ SLURM workers** submitted to Purdue Hammer cluster.
-    This is available to *Purdue users only* due to Purdue data access policies.
-  * **Dask Gateway cluster w/ Kubernetes workers** submitted to Purdue Geddes cluster.
-    This is available to *all users*.
+  * **Dask Gateway cluster + SLURM backend**, with workers submitted to Purdue Hammer cluster.
+    This is available to **Purdue users only** due to Purdue data access policies.
+  * **Dask Gateway cluster + Kubernetes backend**, with workers submitted to Purdue Geddes cluster.
+    This is available to **all users**.
 
   +----------+-----------------------------+---------------------------------+
   |          | Dask Gateway + SLURM        | Dask Gateway + Kubernetes       |
@@ -25,7 +25,7 @@ use it at our Analysis Facility:
   | **Pros** | * SLURM is familiar to      | * Fast scheduling of resources  |
   |          |   current users             |                                 |
   |          |                             |                                 |
-  |          |  * Easy to access logs and  | * Detailed monitoring           |
+  |          | * Easy to access logs and   | * Detailed monitoring           |
   |          |   worker info via ``squeue``|                                 |
   |          |                             | * Available to CERN/FNAL users  |
   |          |                             |                                 |
@@ -93,11 +93,40 @@ This section contains the instructions to create Dask Gateway clusters using met
          # which can be used to scale the cluster interactively:
          cluster
 
-2. Shared environments and storage volumes in Dask Gateway
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2. Shared environments and storage volumes 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+There are multiple ways to ensure that the workers have access to specific storage volumes,
+Conda environments, Python packages, C++ libraries, etc.
+
+*  **Shared storage**
+
+   Dask workers have the same permissions as the user that creates them.
+   You can use this to your advantage if your workers read/write data to/from
+   storage locations.
+
+   Refer to the following table to decide which Dask Gateway setup works best in your case:
+
+   +------------+---------------+--------------------+--------------------+
+   |            | SLURM workers | Kubernetes workers | Kubernetes workers |
+   | -------    | ------------- | ------------------ | ------------------ |
+   |            | (Purdue users)| (Purdue users)     | (CERN/FNAL users)  |
+   +============+===============+====================+====================+
+   | **Depot**  | read / write  | read / write       | read-only          |
+   +------------+---------------+--------------------+--------------------+
+   | **/work/** | no access     | read / write       | read / write       |
+   +------------+---------------+--------------------+--------------------+
+   | **EOS**    | read-only     | read-only          | read-only          |
+   +------------+---------------+--------------------+--------------------+
+
 
 * **Conda environments / Jupyter kernels**
-  
+
+  Any Conda environment that is used in your analysis can be propagated to Dask workers.
+  The only caveat is that the workers must have read access to the storage volume where the
+  environment is stored (see table above). For example, SLURM workers will not be able to see
+  Conda environments located in ``/work/`` storage.
+
   .. tabs::
 
      .. group-tab:: Interactive JupyterLab extension
@@ -119,25 +148,6 @@ This section contains the instructions to create Dask Gateway clusters using met
               conda_env = "/depot/cms/kernels/python3",
               # ...
            )
-
-*  **Shared storage**
-
-   Dask workers have the same permissions as the user that creates them.
-   You can use this to your advantage if your workers read/write data to/from storage locations. 
-
-   Refer to the following table to decide which Dask Gateway setup works best in your case:
-
-   +------------+---------------+--------------------+--------------------+
-   |            | SLURM workers | Kubernetes workers | Kubernetes workers |
-   | -------    | ------------- | ------------------ | ------------------ |
-   |            | (Purdue users)| (Purdue users)     | (CERN/FNAL users)  |
-   +============+===============+====================+====================+
-   | **Depot**  | read / write  | read / write       | read-only          |
-   +------------+---------------+--------------------+--------------------+
-   | **/work/** | no access     | read / write       | read / write       |
-   +------------+---------------+--------------------+--------------------+
-   | **EOS**    | read-only     | read-only          | read-only          |
-   +------------+---------------+--------------------+--------------------+
 
 *  **Environment variables**
 
@@ -204,8 +214,22 @@ This section contains the instructions to create Dask Gateway clusters using met
                   # other environment variables...
                }  
 
-3. Monitoring dashboards
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+3. Monitoring 
+^^^^^^^^^^^^^^^
+
+  Monitoring your Dask jobs is possible in two ways:
+
+  1. Via Dask dashboard which is created for each cluster (see instructions below).
+  2. Via the general Purdue AF monitoring page, in the "Slurm metrics" and "Dask metrics" sections
+     of the |open_dashboard|.
+
+.. |open_dashboard| raw:: html
+
+   <a href="https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard" target="_blank">
+      monitoring dashboard
+   </a>
+
+  Instructions to open Dask cluster dashboards for different Gateway setups:
 
   .. tabs::
 
