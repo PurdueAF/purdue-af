@@ -158,33 +158,49 @@ The instructions and caveats for these methods are described below.
 ..    You can copy this notebook from ``/depot/cms/purdue-af/purdue-af-demos/gateway-cluster.ipynb``
 ..    and customize it for your purposes.
 
-2.2 Passing shared environment to Dask workers
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2.2 Shared environments and storage volumes in Dask Gateway
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 * **Conda environments / Jupyter kernels**
   
-  In the interactive extesion, the environment / kernel can be selected from a
-  drop-down list in the dialog window that appears when you click on ``[+NEW]`` button.
-  To make your Conda environment appear as a kernel, it must have the ``ipykernel`` package installed.
+   .. tabs::
 
-  In manual setup, the path to conda environment is specified in the ``conda_env`` argument of ``gateway.new_cluster()``.
+      .. group-tab:: Interactive JupyterLab extension
+
+         The Conda environment / Jupyter kernel can be selected from a drop-down list
+         in the dialog window that appears when you click on ``[+NEW]`` button.
+  
+         To make your Conda environment appear as a kernel,
+         it must have the ``ipykernel`` package installed.
+
+      .. group-tab:: Jupyter Notebook or Python script
+         
+         The path to conda environment is specified in the ``conda_env``
+         argument of ``new_cluster()``:
+
+         .. code-block:: python
+
+            cluster = new_cluster(
+               conda_env = "/depot/cms/kernels/python3",
+               # ...
+            )
 
 *  **Shared storage**
 
    Dask workers have the same permissions as the user that creates them.
-   You can use this to your advantage if your workers need read or write data to/from storage locations. 
+   You can use this to your advantage if your workers read/write data to/from storage locations. 
 
-   Refer to the following table to decide which Dask Gateway setup works best for your case:
+   Refer to the following table to decide which Dask Gateway setup works best in your case:
 
-   +--------+----------------------+---------------------------+------------------------------+
-   |        | SLURM (Purdue users) | Kubernetes (Purdue users) | Kubernetes (CERN/FNAL users) |
-   +--------+----------------------+---------------------------+------------------------------+
-   | Depot  | read / write         | read / write              | read-only                    |
-   +--------+----------------------+---------------------------+------------------------------+
-   | /work/ | no access            | read / write              | read / write                 |
-   +--------+----------------------+---------------------------+------------------------------+
-   | EOS    | read-only            | read-only                 | read-only                    |
-   +--------+----------------------+---------------------------+------------------------------+
+   +----------+----------------------+---------------------------+------------------------------+
+   |          | SLURM (Purdue users) | Kubernetes (Purdue users) | Kubernetes (CERN/FNAL users) |
+   +==========+======================+===========================+==============================+
+   | *Depot*  | read / write         | read / write              | read-only                    |
+   +----------+----------------------+---------------------------+------------------------------+
+   | */work/* | no access            | read / write              | read / write                 |
+   +----------+----------------------+---------------------------+------------------------------+
+   | *EOS*    | read-only            | read-only                 | read-only                    |
+   +----------+----------------------+---------------------------+------------------------------+
 
 *  **Environment variables**
 
@@ -203,8 +219,8 @@ The instructions and caveats for these methods are described below.
          When a Dask Gateway cluster is created via the JupyterLab extension,
          there is no direct interface to pass environment to workers.
 
-         Instead, we use the following workaround which allows to override the
-         worker environment for clusters created via the JupyterLab extension:
+         Instead, we use the following workaround to override the
+         worker environment:
 
          1. Create a file ``~/.config/dask/labextension.yaml``
          2. Add any environment variables in the following way:
@@ -223,7 +239,7 @@ The instructions and caveats for these methods are described below.
 
       .. group-tab:: Jupyter Notebook or Python script
 
-         The `gateway.new_cluster()` command takes ``env`` argument which can be used
+         The ``gateway.new_cluster()`` command takes ``env`` argument which can be used
          to pass any set of environment variables to workers. The most straightforward
          way to use this is to pass the entire local environment as follows:
 
@@ -238,7 +254,7 @@ The instructions and caveats for these methods are described below.
 
             For CERN and FNAL users, the dictionary passed to ``env`` argument must
             contain elements ``"NB_UID"`` and ``"NB_GID"``. **This is already satisfied when
-            you pass ``env = dict(os.environ)``, so no further action is needed.**
+            you pass** ``env = dict(os.environ)``, **so no further action is needed.**
             
             However, if you want to pass a custom environment
             to workers, you can add the required elements as follows:
