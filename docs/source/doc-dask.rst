@@ -102,6 +102,18 @@ Purdue Analysis Facility provides two ways to create Dask Gateway clusters:
 * From an interactive JupyterLab extension
 * Manually from a Jupyter Notebook or Python script
 
+For each of these options, you can select how the Dask workers will be created:
+
+* Create workers as **SLURM jobs** on Hammer cluster (only available to Purdue users).
+
+  * *Pros:* more familiar to current users, easy to access worker info & logs via ``squeue`` command.
+  * *Cons:* may take long to start workers due to competition with CMS production jobs.
+
+* Create workers as **Kubernetes pods** on Geddes cluster (available to all users).
+
+  * *Pros:* workers are created very fast if the resources are available.
+  * *Cons:* total amount of resources is limited. 
+
 The instructions and caveats for these methods are described below.
 
 .. tabs::
@@ -115,6 +127,10 @@ The instructions and caveats for these methods are described below.
       5. The sidebar should automatically connect to Dask dashboards;
          you can open different dashboards by clicking on yellow buttons in the sidebar,
          and rearrange the tabs as desired.
+      
+      .. image:: images/dask-gateway.png
+         :width: 300
+         :align: center
 
    .. group-tab:: Jupyter Notebook or Python script
 
@@ -192,15 +208,17 @@ The instructions and caveats for these methods are described below.
 
    Refer to the following table to decide which Dask Gateway setup works best in your case:
 
-   +----------+----------------------+---------------------------+------------------------------+
-   |          | SLURM (Purdue users) | Kubernetes (Purdue users) | Kubernetes (CERN/FNAL users) |
-   +==========+======================+===========================+==============================+
-   | *Depot*  | read / write         | read / write              | read-only                    |
-   +----------+----------------------+---------------------------+------------------------------+
-   | */work/* | no access            | read / write              | read / write                 |
-   +----------+----------------------+---------------------------+------------------------------+
-   | *EOS*    | read-only            | read-only                 | read-only                    |
-   +----------+----------------------+---------------------------+------------------------------+
+   +------------+---------------+--------------------+--------------------+
+   |            | SLURM workers | Kubernetes workers | Kubernetes workers |
+   | -------    | ------------- | ------------------ | ------------------ |
+   |            | (Purdue users)| (Purdue users)     | (CERN/FNAL users)  |
+   +============+===============+====================+====================+
+   | **Depot**  | read / write  | read / write       | read-only          |
+   +------------+---------------+--------------------+--------------------+
+   | **/work/** | no access     | read / write       | read / write       |
+   +------------+---------------+--------------------+--------------------+
+   | **EOS**    | read-only     | read-only          | read-only          |
+   +------------+---------------+--------------------+--------------------+
 
 *  **Environment variables**
 
