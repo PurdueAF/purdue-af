@@ -127,6 +127,7 @@ from an interactive JupyterLab extension, or manually from a Jupyter Notebook or
          2. Add any environment variables in the following way:
 
             .. code-block:: yaml
+
                # contents of labextension.yaml
                labextension:
                  env_override:
@@ -166,8 +167,8 @@ from an interactive JupyterLab extension, or manually from a Jupyter Notebook or
       .. important::
 
          For CERN and FNAL users, the dictionary passed to ``env`` argument must
-         contain elements ``NB_UID`` and ``NB_GID``. This is already satisfied if
-         you pass ``env = dict(os.environ)``, so no further action is needed.
+         contain elements ``"NB_UID"`` and ``"NB_GID"``. **This is already satisfied if
+         you pass ``env = dict(os.environ)``, so no further action is needed.**
          
          However, if you want to pass a custom environment
          to workers, you can add the required elements as follows:
@@ -209,6 +210,13 @@ automatically.
 
    .. tab:: **Connecting manually**
 
+      .. note::
+
+         If you created the cluster via the interactive extension, you can obtain
+         the client code simply by clicking on the ``<>`` symbol in the cluster widget.
+         This action will paste the client code into a new cell in the most
+         recently used Jupyter notebook.
+
       .. code-block:: python
 
          from dask_gateway import Gateway
@@ -221,6 +229,9 @@ automatically.
          #     "http://dask-gateway-k8s.geddes.rcac.purdue.edu/",
          #     proxy_address="traefik-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8786",
          # )
+
+         # To find the cluster name:
+         print(gateway.list_clusters())
 
          # replace with actual cluster name:
          cluster_name = "17dfaa3c10dc48719f5dd8371893f3e5"
