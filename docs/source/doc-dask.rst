@@ -129,7 +129,7 @@ The instructions and caveats for these methods are described below.
          and rearrange the tabs as desired.
       
       .. image:: images/dask-gateway.png
-         :width: 300
+         :width: 500
          :align: center
 
    .. group-tab:: Jupyter Notebook or Python script
@@ -179,27 +179,27 @@ The instructions and caveats for these methods are described below.
 
 * **Conda environments / Jupyter kernels**
   
-   .. tabs::
+  .. tabs::
 
-      .. group-tab:: Interactive JupyterLab extension
+     .. group-tab:: Interactive JupyterLab extension
 
-         The Conda environment / Jupyter kernel can be selected from a drop-down list
-         in the dialog window that appears when you click on ``[+NEW]`` button.
-  
-         To make your Conda environment appear as a kernel,
-         it must have the ``ipykernel`` package installed.
+        The Conda environment / Jupyter kernel can be selected from a drop-down list
+        in the dialog window that appears when you click on ``[+NEW]`` button.
 
-      .. group-tab:: Jupyter Notebook or Python script
+        To make your Conda environment appear as a kernel,
+        it must have the ``ipykernel`` package installed.
+
+     .. group-tab:: Jupyter Notebook or Python script
          
-         The path to conda environment is specified in the ``conda_env``
-         argument of ``new_cluster()``:
+        The path to conda environment is specified in the ``conda_env``
+        argument of ``new_cluster()``:
 
-         .. code-block:: python
+        .. code-block:: python
 
-            cluster = new_cluster(
-               conda_env = "/depot/cms/kernels/python3",
-               # ...
-            )
+           cluster = new_cluster(
+              conda_env = "/depot/cms/kernels/python3",
+              # ...
+           )
 
 *  **Shared storage**
 
