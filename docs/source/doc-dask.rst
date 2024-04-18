@@ -77,7 +77,7 @@ selected during session creation (**up to 64 cores** and **up to 128 GB RAM**).
 
 Dask Gateway provides a way to scale out to multiple compute nodes,
 using either SLURM batch scheduler or Kubernetes in the backend. With Dask Gateway, you
-should be able to quickly scale **up to 100-200 cores** and **400-800 GB RAM** or more,
+should be able to quickly scale **up to 100 cores** and **400 GB RAM** or more,
 depending on availability of resources.
 
 .. note::

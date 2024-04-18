@@ -13,17 +13,17 @@ To make Dask Gateway useful in a variety of analysis workflows, we provide four 
 
 * For each of these methods, we allow to create two types of clusters:
 
-  * **Dask Gateway cluster + SLURM backend**, with workers submitted to Purdue Hammer cluster.
+  * **Dask Gateway cluster with SLURM backend**: workers are submitted to Purdue Hammer cluster.
     This is available to **Purdue users only** due to Purdue data access policies.
 
     With this method, users can potentially create **hundreds of workers**, but in practice
     requesting more than 100 workers is usually associated with some wait time due to competiton with
     CMS production jobs and other users.
 
-  * **Dask Gateway cluster + Kubernetes backend**, with workers submitted to Purdue Geddes cluster.
+  * **Dask Gateway cluster with Kubernetes backend**: workers are submitted to Purdue Geddes cluster.
     This is available to **all users**.
 
-    With this method, the workers are scheduled almost instantly, but at the moment we restrict
+    With this method, the workers are scheduled almost instantly, but for now we restrict
     the total per-user resource usage to **100 cores, 400 GB RAM** due to limited resources
     in the Analysis Facility.
 
@@ -71,6 +71,17 @@ This section contains the instructions for creating Dask Gateway clusters using 
          :align: center
 
    .. group-tab:: Jupyter Notebook or Python script
+
+      To create a Dask Gateway cluster manually, you need to connect to the Gateway server
+      via a ``Gateway`` object, and then use ``Gateway.new_cluster()`` method.
+
+      Calling ``Gateway()`` without arguments will connect you to the server with **SLURM backend**.
+      In order to use the **Kubernetes** backend, you need to specify the server URL explicitly
+      (see code below).
+
+      While it is possible to create a cluster in a Python script, we recommend that you instead
+      do it from a separate Jupyter Notebook - that way the same cluster can be reused multiple
+      times without restarting.
 
       .. code-block:: python
 
@@ -122,9 +133,13 @@ Conda environments, Python packages, C++ libraries, etc.
    |            |               |                    |                    |
    |            | (Purdue users)| (Purdue users)     | (CERN/FNAL users)  |
    +============+===============+====================+====================+
-   | **Depot**  | read / write  | read / write       | read-only          |
+   | **/home/** | no access     | no access          | no access          |
    +------------+---------------+--------------------+--------------------+
    | **/work/** | no access     | read / write       | read / write       |
+   +------------+---------------+--------------------+--------------------+
+   | **Depot**  | read / write  | read / write       | read-only          |
+   +------------+---------------+--------------------+--------------------+
+   | **CVMFS**  | read-only     | read-only          | read-only          |
    +------------+---------------+--------------------+--------------------+
    | **EOS**    | read-only     | read-only          | read-only          |
    +------------+---------------+--------------------+--------------------+
@@ -206,6 +221,8 @@ Conda environments, Python packages, C++ libraries, etc.
 
          .. code-block:: python
 
+            os.environ["X509_USER_PROXY"] = "/path-to-proxy"
+
             cluster = gateway.new_cluster(
                #...
                env = dict(os.environ)
@@ -262,12 +279,11 @@ Instructions to open Dask cluster dashboards for different Gateway setups:
 
   .. group-tab:: Jupyter Notebook or Python script
          
-     When a cluster is created in a Jupyter Notebook, you can create the Gateway widget by
-     simply executing a cell containing the reference to the cluster object.
+     When a cluster is created in a Jupyter Notebook, you can extract the link to the dashboard
+     either from a Dask Gateway widget, or from ``cluster.dashboard_link``.
 
-     The widget will contain a clickable link to a Dask dashboard.
-
-     Alternatively, you can retrieve the dashboard address as ``cluster.dashboard_link``.
+     To create a widget, simply execute a cell containing a reference to the cluster object,
+     as shown in the screenshot.
 
      .. image:: images/dask-gateway-widget.png
         :width: 700
@@ -284,13 +300,18 @@ In general, connecting a client to a Gateway cluster is done as follows:
     client = cluster.get_client()
 
 However, this implies that ``cluster`` refers to an already existing object.
-This is true if the cluster was created in the same Notebook / Python script.
+This is true if the cluster was created in the same Notebook / Python script,
+but in most cases we recommend that the cluster is kept separate from the clients.
 
-Below are listed the different ways to connect to a cluster created elsewhere:
+Below are the different ways to connect a client to a cluster created elsewhere:
 
 .. tabs::
 
    .. tab:: **Automatic cluster discovery**
+
+      This snippet allows to discover the cluster and connect to it automatically,
+      as long as the cluster exists.
+
 
       .. code-block:: python
 
@@ -331,6 +352,10 @@ Below are listed the different ways to connect to a cluster created elsewhere:
          :align: center
 
    .. tab:: **Manual connection**
+
+      This is the most straightforward method of connecting to a specific cluster,
+      it may be benefitial if you have more than one cluster running and need to ensure
+      that you are connecting to a correct one.
 
       .. code-block:: python
 
