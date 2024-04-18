@@ -385,4 +385,4 @@ Below are the different ways to connect a client to a cluster created elsewhere:
   If this happens, try to resubmit the cluster.
 * Once created, Dask scheduler and workers will persist for **1 day**.
 * If the notebook from which the Dask Gateway cluster was created is
-  terminated, the cluster and all its workers will be killed after **5 minutes**.
+  terminated, the cluster and all its workers will be killed after **1 hour**.

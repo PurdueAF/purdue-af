@@ -47,30 +47,16 @@ gateway:
         from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
 
         def options_handler(options):
-            env_vars = options.env
-            env_vars["X509_CERT_DIR"] = "/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates"
             setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
-            if ("PYTHONPATH") not in env_vars:
-                env_vars["PYTHONPATH"] = ""
-            if ("WORKDIR" in env_vars):
-              setup_cmd += f'cd {env_vars["WORKDIR"]}'
-              if ("PYTHONPATH" not in env_vars):
-                env_vars["PYTHONPATH"] = env_vars["WORKDIR"]
-            env_vars["PYTHONPATH"] += ":/depot/cms/purdue-af/lhapdf/lib/python3.10/site-packages"
-            if ("LD_LIBRARY_PATH" in env_vars):
-              env_vars["LD_LIBRARY_PATH"] += ":/depot/cms/purdue-af/lhapdf/lib"
-            else:
-              env_vars["LD_LIBRARY_PATH"] = "/depot/cms/purdue-af/lhapdf/lib"
             return {
                 "worker_cores": options.worker_cores,
                 "worker_memory": int(options.worker_memory * 2 ** 30),
-                "environment": env_vars,
+                "environment": options.env,
                 "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
                 "scheduler_partition": "hammer-nodes",
                 "scheduler_reservation": "CMSLOCAL",
                 "worker_cmd": f"{options.conda_env}/bin/dask-worker",
                 "account": "cms",
-                # "reservation": options.reservation,
                 "time": "1-00:00:00",
                 "scheduler_setup": setup_cmd,
                 "worker_setup": setup_cmd,

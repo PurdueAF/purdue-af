@@ -163,19 +163,6 @@ gateway:
             c.KubeClusterConfig.scheduler_extra_pod_labels = {"user": user.name}
             c.KubeClusterConfig.worker_extra_pod_labels = {"user": user.name}
 
-            # if options.env_propagate and (not options.env):
-            #     raise ValueError(
-            #         "To propagate environment variables to workers, 'env' must be specified"
-            #         " in new_cluster(), for example env=dict(os.environ)"
-            #     )
-
-            # env_propagate_list = options.env_propagate.replace(" ","").split(",")
-            # ensure = ["PYTHONPATH", "X509_CERT_DIR", "X509_USER_PROXY", "LD_LIBRARY_PATH"]
-            # for var in ensure:
-            #     if var not in env_propagate_list:
-            #         env_propagate_list.append(var)
-
-            # env_vars = {k:v for k,v in options.env.items() if k in env_propagate_list}
             setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
             return {
                 "worker_cores": options.worker_cores,
@@ -192,7 +179,6 @@ gateway:
             Integer("worker_cores", default=1, min=1, max=4, label="Cores per worker"),
             Float("worker_memory", default=4, min=1, max=16, label="Memory per worker (GiB)"),
             Mapping("env", {}, label="Environment variables"),
-            String("env_propagate", "X509_USER_PROXY,PYTHONPATH", label="Environment variables to propagate to workers"),
             handler=options_handler,
         )
 traefik:
