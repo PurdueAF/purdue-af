@@ -16,17 +16,18 @@ detector material, reconstruction and triggering algorithms, etc.
    :width: 80%
    :align: center
 
+Reference: https://cms-pdmv.gitbook.io/project/monte-carlo-management-mcm-introduction
 
 .. In this tutorial, we will cover the following steps:
 
 .. .. contents:: :local:
 
-The examples are given for generation of:
+In this tutorial, we provide examples for generation of:
 
 * Run 2 Ultra Legacy (UL) datasets
 * Run 3 datasets
 
-The generator in these examples is ``MadGraph``. A short ``MadGraph`` tutorial can
+The generator used in these examples is ``MadGraph``. A short ``MadGraph`` tutorial can
 be found `here <https://twiki.cern.ch/twiki/bin/view/CMSPublic/MadgraphTutorial>`_.
 
 Typically, the conditions that should be decided before beginning the production are the following:
@@ -67,16 +68,22 @@ Step 0: Create your gridpack
 Step 1 : LHE → GEN → SIM
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-First, we need to download the LHE file and PYTHIA settings for hadronization modeling.
+In this step, we will generate a dataset in ``GEN-SIM`` format.
+We will start by producing events at the generator level (the four-vectors of particles),
+and simulate the energy footprint left by the particles interacting with detector material.
+
+Some of the important parameters to keep in mind for such campaigns:
+
+* Beamspot
+* Generator fragment (specifies the process which needs to be generated)
+* Detector geometry
+
+We start with downloading the LHE fragment (process definition, pythia settings,
+path to MadGraph gridpack) from McM (Monte Carlo Production Management):
 
 .. tabs::
 
    .. group-tab:: Run 2 UL
-
-      Download LHE file information and other PYTHIA (for hadronization)
-      settings 
-
-      For this step, we will use the ``CMSSW_10_6_30`` release. 
 
       .. code-block:: shell
 
@@ -92,10 +99,6 @@ First, we need to download the LHE file and PYTHIA settings for hadronization mo
 
    .. group-tab:: Run 3
 
-      First we will download the process fragment
-      (process definition, pythia settings , path to MGraph  gridpack) 
-      from McM (Monte Carlo Production Management )
-
       .. code-block:: shell
 
          mkdir run3_mcgen
@@ -108,11 +111,13 @@ First, we need to download the LHE file and PYTHIA settings for hadronization mo
 
          [ -s Configuration/GenProduction/python/PPD-Run3Summer22wmLHEGS-00014-fragment.py ] || exit $?;
 
+Then, install the ``CMSSW`` release:
+
 .. tabs::
 
    .. group-tab:: Run 2 UL
 
-      For this step, we will use the ``CMSSW_10_6_30`` release. 
+      For Run 2 production, we will use the ``CMSSW_10_6_17_patch1`` release. 
 
       .. code-block:: shell
 
@@ -128,8 +133,27 @@ First, we need to download the LHE file and PYTHIA settings for hadronization mo
          scram b -j8
          cd ../..
 
+   .. group-tab:: Run 3
 
-      Producing 10 events locally. For full production, please submit a CRAB job.
+      For Run 3 production, we will use the ``CMSSW_12_4_14_patch3`` release. 
+
+      .. code-block:: shell
+
+         export SCRAM_ARCH=el8_amd64_gcc10
+         source /cvmfs/cms.cern.ch/cmsset_default.sh
+         cmsrel CMSSW_12_4_14_patch3
+         cd CMSSW_12_4_14_patch3/src
+         eval `scram runtime -sh`
+         mv ../../Configuration .
+         scram b
+         cd ../..
+
+Finally, run ``cmsDriver.py`` to generate the events. In this example, we generate only
+10 events locally. For full production, please submit this via CRAB jobs.
+
+.. tabs::
+
+   .. group-tab:: Run 2 UL
 
       .. code-block:: shell
 
@@ -152,21 +176,6 @@ First, we need to download the LHE file and PYTHIA settings for hadronization mo
          cmsRun TAU-RunIISummer20UL18wmLHEGEN-00001_1_cfg.py 
 
    .. group-tab:: Run 3
-
-      Setting up the CMSSW release for this production chain.
-
-      .. code-block:: shell
-
-         export SCRAM_ARCH=el8_amd64_gcc10
-         source /cvmfs/cms.cern.ch/cmsset_default.sh
-         cmsrel CMSSW_12_4_14_patch3
-         cd CMSSW_12_4_14_patch3/src
-         eval `scram runtime -sh`
-         mv ../../Configuration .
-         scram b
-         cd ../..
-
-      Producing 10 events locally. For full production, please submit a CRAB job.
 
       .. code-block:: shell
 
@@ -191,18 +200,6 @@ First, we need to download the LHE file and PYTHIA settings for hadronization mo
       Output : ``PPD-Run3Summer22wmLHEGS-00014.root``
 
 Step 1 will produce a ``GEN-SIM`` output file.
-
-``GEN-SIM`` starts from a Monte Carlo generator, produces events at
-generator level (the four-vectors of particles), and simulates
-the energy released by the particles in the crossed detectors.
-
-Important parameters for such campaigns are:
-
-* Beamspot
-* Generator fragment (specifies the process which needs to be generated)
-* Detector geometry
-
-Reference: https://cms-pdmv.gitbook.io/project/monte-carlo-management-mcm-introduction
 
 Step 2 DIGI → L1 → DIGI2RAW → HLT
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
