@@ -17,9 +17,9 @@ detector material, reconstruction and triggering algorithms, etc.
    :align: center
 
 
-In this tutorial, we will cover the following steps:
+.. In this tutorial, we will cover the following steps:
 
-.. contents:: :local:
+.. .. contents:: :local:
 
 The examples are given for generation of:
 
@@ -29,37 +29,36 @@ The examples are given for generation of:
 The generator in these examples is ``MadGraph``. A short ``MadGraph`` tutorial can
 be found `here <https://twiki.cern.ch/twiki/bin/view/CMSPublic/MadgraphTutorial>`_.
 
+Typically, the conditions that should be decided before beginning the production are the following:
+
+* GlobalTag
+* Detector alignment (CMSSW release)
+* HLT menus
+* NanoAOD versions
+
 .. tabs::
 
    .. group-tab:: Run 2 UL
 
-      In this example we are going to produce :math:`DY(pp\rightarrow ll)` samples.
-      We define this process in ``MadGraph`` and it creates LHE files
-      (python file with settings).
+      In this example we are going to produce :math:`DY(pp\rightarrow ll)`
+      samples for the Run 2 Ultra Legacy (UL) campaign.
 
-      Here, we are going to use ``UL18`` DY LHE file already produced by
-      CMS PPD.
+      The first step of production is generation of LHE files (python files with settings)
+      via ``Madgraph``. In this example we are going to use the ``UL18`` Drell-Yan LHE file
+      already produced by the CMS PPD.
 
-      ``DYJetsToLL_M-50_TuneCP5_13TeV-madgraphMLM-pythia8``
+      Test dataset: ``DYJetsToLL_M-50_TuneCP5_13TeV-madgraphMLM-pythia8``
 
    .. group-tab:: Run 3
+
+      In this example, we will produce a Drell-Yan dataset using the same conditions
+      as in the official Run 3 samples (``Run3Summer22`` campaigns).
+
+      Test dataset: ``DYJetsToLL_M-50_TuneCP5_13p6TeV-madgraphMLM-pythia8``
 
       .. caution::
 
          Will work only with ``slc8`` architectures. 
-
-      In this example, the same conditions as in official samples
-      (``Run3Summer22`` campaigns) are used.
-
-      Conditions to keep in mind: 
-
-      * GlobalTag
-      * Detector alignment (CMSSW release)
-      * HLT menus
-      * NanoAOD versions
-
-      Test sample : ``DYJetsToLL_M-50_TuneCP5_13p6TeV-madgraphMLM-pythia8``
-
 
 
 Step 0: Create your gridpack
@@ -67,6 +66,8 @@ Step 0: Create your gridpack
 
 Step 1 : LHE → GEN → SIM
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+First, we need to download the LHE file and PYTHIA settings for hadronization modeling.
 
 .. tabs::
 
@@ -88,6 +89,32 @@ Step 1 : LHE → GEN → SIM
              -o Configuration/GenProduction/python/TAU-RunIISummer20UL18wmLHEGEN-00001-fragment.py 
 
          [ -s Configuration/GenProduction/python/TAU-RunIISummer20UL18wmLHEGEN-00001-fragment.py ] || exit $?;
+
+   .. group-tab:: Run 3
+
+      First we will download the process fragment
+      (process definition, pythia settings , path to MGraph  gridpack) 
+      from McM (Monte Carlo Production Management )
+
+      .. code-block:: shell
+
+         mkdir run3_mcgen
+         cd run3_mcgen
+
+         curl -s -k https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get_fragment/PPD-Run3Summer22wmLHEGS-00014 \
+             --retry 3 \
+             --create-dirs \
+             -o Configuration/GenProduction/python/PPD-Run3Summer22wmLHEGS-00014-fragment.py
+
+         [ -s Configuration/GenProduction/python/PPD-Run3Summer22wmLHEGS-00014-fragment.py ] || exit $?;
+
+.. tabs::
+
+   .. group-tab:: Run 2 UL
+
+      For this step, we will use the ``CMSSW_10_6_30`` release. 
+
+      .. code-block:: shell
 
          export SCRAM_ARCH=slc7_amd64_gcc700
          source /cvmfs/cms.cern.ch/cmsset_default.sh
@@ -125,22 +152,6 @@ Step 1 : LHE → GEN → SIM
          cmsRun TAU-RunIISummer20UL18wmLHEGEN-00001_1_cfg.py 
 
    .. group-tab:: Run 3
-
-      First we will download the process fragment
-      (process definition, pythia settings , path to MGraph  gridpack) 
-      from McM (Monte Carlo Production Management )
-
-      .. code-block:: shell
-
-         mkdir run3_mcgen
-         cd run3_mcgen
-
-         curl -s -k https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get_fragment/PPD-Run3Summer22wmLHEGS-00014 \
-             --retry 3 \
-             --create-dirs \
-             -o Configuration/GenProduction/python/PPD-Run3Summer22wmLHEGS-00014-fragment.py
-
-         [ -s Configuration/GenProduction/python/PPD-Run3Summer22wmLHEGS-00014-fragment.py ] || exit $?;
 
       Setting up the CMSSW release for this production chain.
 
