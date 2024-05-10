@@ -206,11 +206,11 @@ local panels = import 'panels.libsonnet';
         |||
           rate(
                 (
-                  sum(nv_inference_count) by (model)
-                )[4m:2m]
+                  sum(nv_inference_count) by (model, version)
+                )[5m:1m]
             )
         |||,
-        legendFormat='{{ model }}'
+        legendFormat='{{ model }} {{ version }}'
       ),
     ],
     min=0,
@@ -226,7 +226,7 @@ local panels = import 'panels.libsonnet';
           rate(
                 (
                     sum(nv_inference_count) by (service)
-                )[4m:2m]
+                )[5m:1m]
             )
         |||,
         legendFormat='{{ app }}'
@@ -243,7 +243,7 @@ local panels = import 'panels.libsonnet';
         'prometheus-rancher',
         |||
           sum by (deployment)(
-              kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton(.*)", deployment!="triton-nginx"}
+              kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton(.*)lb"}
           )
         |||,
         legendFormat='{{ deployment }}'
@@ -253,6 +253,22 @@ local panels = import 'panels.libsonnet';
     legendPlacement='right',
   ),
 
+  tritonServerSaturation:: panels.timeSeries(
+    title='Triton load balancer saturation metric',
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        |||
+          sonic_lb_saturated{lb_name=~"triton-.*-lb"}
+        |||,
+        legendFormat='{{ lb_name }}'
+      ),
+    ],
+    min=0,
+    legendPlacement='right',
+  ),
+
+
   tritonQueueTimeByModel:: panels.timeSeries(
     title='Queue time by model',
     description='',
@@ -260,10 +276,17 @@ local panels = import 'panels.libsonnet';
       prometheus.addQuery(
         'prometheus-rancher',
         |||
-          avg by (model) (rate(nv_inference_queue_duration_us{pod=~"triton-.*"}[4m:2m])/(1000 * (1 + rate(nv_inference_request_success{pod=~"triton-.*"}[4m:2m]))))
-
+          sum by (model, version) (
+            avg by (model, lb_name, version) (
+              label_replace(irate(nv_inference_queue_duration_us{pod=~"triton-.*"}[5m]), "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+              /
+              (1000 * (1 + 
+                label_replace(irate(nv_inference_request_success{pod=~"triton-.*"}[5m]), "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+              ))
+            )
+          )
         |||,
-        legendFormat='{{ model }}'
+        legendFormat='{{ model }} {{ version }}'
       ),
     ],
     min=0,
@@ -271,18 +294,43 @@ local panels = import 'panels.libsonnet';
   ),
 
   tritonQueueTimeByServer:: panels.timeSeries(
-    title='Queue time by server',
+    title='Max queue time by load balancer',
     description='',
     targets=[
       prometheus.addQuery(
         'prometheus-rancher',
         |||
-          avg by (pod) (rate(nv_inference_queue_duration_us{pod=~"triton-.*"}[4m:2m])/(1000 * (1 + rate(nv_inference_request_success{pod=~"triton-.*"}[4m:2m]))))
+          max by (lb_name) (
+            avg by (model, lb_name, version) (
+              label_replace(irate(nv_inference_queue_duration_us{pod=~"triton-.*"}[5m]), "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+              /
+              (1000 * (1 + 
+                label_replace(irate(nv_inference_request_success{pod=~"triton-.*"}[5m]), "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+              ))
+            )
+          )
+        |||,
+        legendFormat='{{ lb_name }}'
+      ),
+    ],
+    min=0,
+    legendPlacement='right',
+  ),
+
+  tritonGPUload:: panels.timeSeries(
+    title='GPU utilization per SONIC load balancer (avg over 5m)',
+    description='',
+    targets=[
+      prometheus.addQuery(
+        'prometheus-rancher',
+        |||
+          label_replace(avg_over_time(nv_gpu_utilization[5m]), "app", "$1", "pod", "(.*)-(.*)-(.*)$")
         |||,
         legendFormat='{{ pod }}'
       ),
     ],
     min=0,
+    unit='percentunit',
     legendPlacement='right',
   ),
 
