@@ -199,16 +199,19 @@ local panels = import 'panels.libsonnet';
   ),
 
   tritonInferenceCount:: panels.timeSeries(
-    title='Inferences per second (all Triton servers)',
+    title='Inference rate (batches per second) - all Triton servers',
     targets=[
       prometheus.addQuery(
         'prometheus-rancher',
         |||
-          rate(
-                (
-                  sum(nv_inference_count) by (model, version)
-                )[5m:1m]
-            )
+          sum (
+           (rate(nv_inference_exec_count[5m:1m])*1000000)/(rate(nv_inference_request_duration_us[5m:1m])+0.000000000000001)
+          ) by (model, version)
+          # rate(
+          #       (
+          #         sum(nv_inference_count) by (model, version)
+          #       )[5m:1m]
+          #   )
         |||,
         legendFormat='{{ model }} {{ version }}'
       ),
@@ -218,16 +221,20 @@ local panels = import 'panels.libsonnet';
   ),
 
   tritonInferencesPerLB:: panels.timeSeries(
-    title='Inferences per load balancer (all models)',
+    title='Inference rate (batches per second) - all models',
     targets=[
       prometheus.addQuery(
         'prometheus-rancher',
         |||
-          rate(
-                (
-                    sum(nv_inference_count) by (service)
-                )[5m:1m]
-            )
+          sum (
+           (rate(nv_inference_exec_count[5m:1m])*1000000)/(rate(nv_inference_request_duration_us[5m:1m])+0.000000000000001)
+          ) by (service)
+
+          #rate(
+          #      (
+          #          sum(nv_inference_count) by (service)
+          #      )[5m:1m]
+          #  )
         |||,
         legendFormat='{{ app }}'
       ),
@@ -270,7 +277,7 @@ local panels = import 'panels.libsonnet';
 
 
   tritonQueueTimeByModel:: panels.timeSeries(
-    title='Queue time by model',
+    title='Queue time by model, avg. over Triton servers [ms]',
     description='',
     targets=[
       prometheus.addQuery(
@@ -294,7 +301,7 @@ local panels = import 'panels.libsonnet';
   ),
 
   tritonQueueTimeByServer:: panels.timeSeries(
-    title='Max queue time by load balancer',
+    title='Max queue time by load balancer, avg. over Triton servers [ms]',
     description='',
     targets=[
       prometheus.addQuery(
@@ -318,13 +325,13 @@ local panels = import 'panels.libsonnet';
   ),
 
   tritonGPUload:: panels.timeSeries(
-    title='GPU utilization per SONIC load balancer (avg over 5m)',
+    title='GPU utilization per Triton server (avg over 10m)',
     description='',
     targets=[
       prometheus.addQuery(
         'prometheus-rancher',
         |||
-          label_replace(avg_over_time(nv_gpu_utilization[5m]), "app", "$1", "pod", "(.*)-(.*)-(.*)$")
+          label_replace(avg_over_time(nv_gpu_utilization[5m:1m]), "app", "$1", "pod", "(.*)-(.*)-(.*)$")
         |||,
         legendFormat='{{ pod }}'
       ),
@@ -334,6 +341,184 @@ local panels = import 'panels.libsonnet';
     legendPlacement='right',
   ),
 
+
+  envoyLatency:: panels.timeSeries(
+    title='Envoy Proxy latency [ms]',
+    description='',
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        |||
+          sum(
+            rate(
+              label_replace(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
+            [5m:1m])
+            /
+            rate(
+              label_replace(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
+            [5m:1m])
+          ) by (pod)
+        |||,
+        legendFormat='{{ pod }}'
+      ),
+    ],
+    min=0,
+    unit='ms',
+    legendPlacement='right',
+  ),
+
+  tritonLatency:: panels.timeSeries(
+    title='Triton latency [ms]',
+    description='',
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        |||
+          sum by (pod)(
+            rate(
+              label_replace(nv_inference_request_duration_us, "pod", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
+            [5m:1m])
+          )
+          /
+          sum by (pod) (((
+            rate(
+              label_replace(nv_inference_exec_count, "pod", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
+            [5m:1m])
+          +0.000000000000001)*1000))
+        |||,
+        legendFormat='{{ lb_name }}'
+      ),
+    ],
+    min=0,
+    unit='ms',
+    legendPlacement='right',
+  ),
+
+  envoyOverhead:: panels.timeSeries(
+    title='Envoy overhead [ms]',
+    description='',
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        |||
+          sum(
+            rate(
+              label_replace(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
+            [5m:1m])
+            /
+            rate(
+              label_replace(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
+            [5m:1m])
+          ) by (pod)
+          -           
+          sum by (pod)(
+            rate(
+              label_replace(nv_inference_request_duration_us, "pod", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
+            [5m:1m])
+          )
+          /
+          sum by (pod) (((
+            rate(
+              label_replace(nv_inference_exec_count, "pod", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
+            [5m:1m])
+          +0.000000000000001)*1000))
+        |||,
+        legendFormat='{{ pod }}'
+      ),
+    ],
+    min=0,
+    unit='ms',
+    legendPlacement='right',
+  ),
+
+  envoyClients:: panels.timeSeries(
+    title='Active connections to Envoy Proxy',
+    description='',
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        |||
+          sum by (pod) (
+            label_replace(envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix="ingress_grpc"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
+          )
+        |||,
+        legendFormat='{{ pod }}'
+      ),
+    ],
+    min=0,
+    legendPlacement='right',
+  ),
+
+  envoyMemUtil:: panels.timeSeries(
+    title='Envoy Proxy memory utilization',
+    description='',
+    targets=[
+      prometheus.addQuery(
+        'prometheus-rancher',
+        |||
+          sum by (pod)(
+              label_replace(container_memory_working_set_bytes{namespace="cms", pod=~"triton-.*", container=~"envoy"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
+          ) /
+          sum by (pod)(
+              label_replace(kube_pod_container_resource_requests{namespace="cms", pod=~"triton-.*", container=~"envoy", resource="memory"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
+          )
+        |||,
+        legendFormat='{{ pod }}'
+      ),
+    ],
+    unit='percentunit',
+    min=0, max=1,    legendPlacement='right',
+  ),
+
+  envoyReqRate:: panels.timeSeries(
+    title='Envoy Proxy request rates',
+    description='',
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        |||
+          sum(sum by (pod) (
+            label_replace(rate(envoy_http_rq_total[5m:1m]), "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
+          ))
+        |||,
+        legendFormat='{{ pod }}'
+      ),
+    ],
+    // unit='percentunit',
+    min=0,
+    legendPlacement='right',
+    thresholdMode='area',
+    thresholdSteps=[
+      { color: 'green', value: 0 },
+      { color: 'red', value: 900 },
+    ]
+  ),
+
+  envoyCpuUtil:: panels.timeSeries(
+    title='Envoy Proxy CPU utilization',
+    description='',
+    targets=[
+      prometheus.addQuery(
+        'prometheus-rancher',
+        |||
+          sum(rate(
+            label_replace(
+              container_cpu_usage_seconds_total{namespace="cms",pod=~"triton-.*", container="envoy"},
+            "pod", "$1", "pod", "(.*)-(.*)-(.*)$")[5m:1m]
+          )) by (pod)
+        |||,
+        legendFormat='{{ pod }}'
+      ),
+    ],
+    unit='cpu',
+    min=0,
+    legendPlacement='right',
+    thresholdMode='area',
+    thresholdSteps=[
+      { color: 'green', value: 0 },
+      { color: 'red', value: 8 },
+    ]
+  ),
 
   tritonMemUtil:: panels.timeSeries(
     title='Memory utilization by Triton pods',

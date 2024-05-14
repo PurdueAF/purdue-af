@@ -105,6 +105,30 @@ prometheusConfig: |
         - source_labels: [__meta_kubernetes_service_label_scrape_metrics]
           action: keep
           regex: 'true'
+    - job_name: 'envoy-monitor'
+      metrics_path: '/stats/prometheus'
+      kubernetes_sd_configs:
+        - role: endpoints
+          namespaces:
+            names:
+              - 'cms'
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_service_label_app]
+          target_label: 'app'
+        - source_labels: [__meta_kubernetes_pod_name]
+          target_label: 'pod'
+        - source_labels: [__meta_kubernetes_pod_label_username_unescaped]
+          target_label: 'username'
+        - source_labels: [__meta_kubernetes_pod_label_docker_image_tag]
+          target_label: 'docker_image_tag'
+        - source_labels: [__meta_kubernetes_namespace]
+          target_label: 'namespace'
+          replacement: '$1'
+        - source_labels: [__meta_kubernetes_pod_node_name]
+          target_label: 'node'
+        - source_labels: [__meta_kubernetes_service_label_envoy]
+          action: keep
+          regex: 'true'
     - job_name: 'dask-gateway-monitor'
       kubernetes_sd_configs:
         - role: endpoints

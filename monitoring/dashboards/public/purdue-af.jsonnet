@@ -69,22 +69,30 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
   myPanels.placeholder.placeholder_tr   + w(20) + h(0.5),
 
 
-  myPanels.row.triton_metrics             + w(24) + h(2),
-  myPanels.stat.deployedTritonLB          + w(3)  + h(4),
-  myPanels.stat.deployedTritonServers     + w(3)  + h(4),
-  myPanels.timeSeries.tritonNumServers    + w(9) + h(10),
-  myPanels.timeSeries.tritonMemUtil       + w(9) + h(10),
+  // myPanels.row.triton_metrics             + w(24) + h(2),
+  // myPanels.stat.deployedTritonLB          + w(3)  + h(4),
+  // myPanels.stat.deployedTritonServers     + w(3)  + h(4),
+  // myPanels.timeSeries.tritonNumServers    + w(9) + h(10),
+  // myPanels.timeSeries.tritonMemUtil       + w(9) + h(10),
 
-  myPanels.timeSeries.tritonGPUload       + w(12) + h(10),
-  myPanels.timeSeries.tritonServerSaturation + w(12) + h(10),
+  // myPanels.timeSeries.tritonGPUload       + w(12) + h(10),
+  // myPanels.timeSeries.tritonServerSaturation + w(12) + h(10),
 
-  myPanels.timeSeries.tritonQueueTimeByModel  + w(12) + h(10),
-  myPanels.timeSeries.tritonQueueTimeByServer  + w(12) + h(10),
+  // myPanels.timeSeries.tritonQueueTimeByModel  + w(12) + h(10),
+  // myPanels.timeSeries.tritonQueueTimeByServer  + w(12) + h(10),
 
-  myPanels.timeSeries.tritonInferenceCount  + w(12) + h(10),
-  myPanels.timeSeries.tritonInferencesPerLB  + w(12) + h(10),
+  // myPanels.timeSeries.tritonInferenceCount  + w(12) + h(10),
+  // myPanels.timeSeries.tritonInferencesPerLB  + w(12) + h(10),
 
+  // myPanels.timeSeries.envoyLatency  + w(8) + h(10),
+  // myPanels.timeSeries.tritonLatency  + w(8) + h(10),
+  // myPanels.timeSeries.envoyOverhead  + w(8) + h(10),
+  // myPanels.timeSeries.envoyClients  + w(8) + h(10),
+  // myPanels.timeSeries.envoyMemUtil  + w(8) + h(10),
+  // myPanels.timeSeries.envoyCpuUtil  + w(8) + h(10),
 
+  
+  // myPanels.timeSeries.envoyReqRate + w(8) + h(10),
 
   myPanels.row.hub_metrics               + w(24) + h(2),
   myPanels.timeSeries.hubResponseCodes       + w(8) + h(10),
