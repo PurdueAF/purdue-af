@@ -20,6 +20,7 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
         drawStyle=null,
         thresholdMode=null,
         thresholdSteps=[],
+        logBase=null,
     ):: g.panel.timeSeries.new(title)
         + g.panel.timeSeries.panelOptions.withDescription(description)
         + g.panel.timeSeries.queryOptions.withTargets(targets)
@@ -37,7 +38,19 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
         + g.panel.timeSeries.fieldConfig.defaults.custom.withAxisWidth(axisWidth)
         + g.panel.timeSeries.fieldConfig.defaults.custom.withDrawStyle(drawStyle)
         + g.panel.timeSeries.fieldConfig.defaults.custom.thresholdsStyle.withMode(thresholdMode)
-        + g.panel.timeSeries.standardOptions.thresholds.withSteps(thresholdSteps),
+        + g.panel.timeSeries.standardOptions.thresholds.withSteps(thresholdSteps)
+        + (if logBase != null then
+            { fieldConfig+: {
+                defaults+: {
+                    custom+: {
+                        scaleDistribution: {
+                            type: 'log',
+                            log: logBase,
+                        },
+                    },
+                },
+            }}
+        else {}),
 
     stat(
         title='',
@@ -99,4 +112,30 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
         + g.panel.barGauge.options.withOrientation(orientation)
         + g.panel.barGauge.standardOptions.thresholds.withMode(thresholdMode)
         + g.panel.barGauge.standardOptions.thresholds.withSteps(thresholdSteps),
+
+    text(
+        title='',
+        description='',
+        content='',
+        transparent=false,
+        mode='markdown'
+    ):: g.panel.text.new(title)
+        + g.panel.text.panelOptions.withDescription(description)
+        + g.panel.text.options.withContent(content)
+        + g.panel.text.options.withMode(mode)
+        + (if transparent then g.panel.text.panelOptions.withTransparent() else {}),
+
+    stateTimeline(
+        title='',
+        description='',
+        targets=[],
+        transparent=false,
+        unit=null,
+        showValue='auto',
+    ):: g.panel.stateTimeline.new(title)
+        + g.panel.stateTimeline.panelOptions.withDescription(description)
+        + g.panel.stateTimeline.queryOptions.withTargets(targets)
+        + (if transparent then g.panel.stateTimeline.panelOptions.withTransparent() else {})
+        + g.panel.stateTimeline.standardOptions.withUnit(unit)
+        + g.panel.stateTimeline.options.withShowValue(showValue),
 }

@@ -24,32 +24,4 @@ local panels = import 'panels.libsonnet';
     ],
     colorMode='value'
   ),
-
-  deployedTritonLB:: panels.stat(
-    targets=[
-      prometheus.addQuery(
-        'prometheus-rancher',
-        'count(sum by (service) (nv_inference_count))',
-        legendFormat='Deployed load balancers',
-        instant=true
-      ),
-    ],
-    colorMode='value'
-  ),
-
-  deployedTritonServers:: panels.stat(
-    targets=[
-      prometheus.addQuery(
-        'prometheus',
-        |||
-          sum (
-              kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton(.*)lb"}
-          )
-        |||,
-        legendFormat='Running Triton servers',
-        instant=true
-      ),
-    ],
-    colorMode='value'
-  ),
 }
