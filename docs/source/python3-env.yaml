@@ -30,6 +30,8 @@ dependencies:
   - matplotlib
   - mplhep
   - plotly
+  # - texlive-core
+  - tectonic
 
   # Machine learning
   - mup
@@ -42,7 +44,7 @@ dependencies:
   - dask-gateway=2023.9.0
   - dask-jobqueue=0.8.1
   - distributed=2023.3.2
-  - dask-kubernetes
+  # - dask-kubernetes
   - dask-ml
   - dask-xgboost
 
@@ -69,7 +71,7 @@ dependencies:
   - tqdm
   - xrootd
   - yaml
-  - pycurl 
+  - pycurl
 
   # PIP PACKAGES
   - pip:
@@ -77,6 +79,7 @@ dependencies:
     - scalpl
     - tensorflow[and-cuda]
     - tensorflow-probability
+    - tf-keras
     - qkeras
     - torch==2.0.1
     - torch-geometric==2.3.1
@@ -84,10 +87,11 @@ dependencies:
     - git+https://github.com/mattbellis/h5hep.git
     - PhyPraKit
     - dbs3-client
+    - correctionlib==2.5.0
 
 variables:
   PATH: /depot/cms/kernels/python3/bin:/usr/sue/bin:/etc/jupyter/dask:/opt/conda/condabin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/depot/cms/purdue-af/lhapdf/bin
-  LD_LIBRARY_PATH: :/depot/cms/purdue-af/lhapdf/lib
+  LD_LIBRARY_PATH: :/depot/cms/purdue-af/lhapdf/lib:/opt/conda/lib/
   PYTHONPATH: :/depot/cms/purdue-af/lhapdf/lib/python3.10/site-packages
 
 prefix: /depot/cms/kernels/python3

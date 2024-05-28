@@ -65,7 +65,7 @@ Typically, the conditions that should be decided before beginning the production
 Step 0: Create your gridpack
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Step 1 : LHE → GEN → SIM
+Step 1 : LHE → GEN-SIM
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In this step, we will generate a dataset in ``GEN-SIM`` format.
@@ -141,14 +141,17 @@ Then, install the ``CMSSW`` release:
 
          export SCRAM_ARCH=el8_amd64_gcc10
          source /cvmfs/cms.cern.ch/cmsset_default.sh
+         voms-proxy-init -voms cms
+
          cmsrel CMSSW_12_4_14_patch3
          cd CMSSW_12_4_14_patch3/src
+
          eval `scram runtime -sh`
          mv ../../Configuration .
-         scram b
+         scram b -j8
          cd ../..
 
-Finally, run ``cmsDriver.py`` to generate the events. In this example, we generate only
+Finally, run the ``cmsDriver.py`` script and ``cmsRun`` to generate the events. In this example, we generate only
 10 events locally. For full production, please submit this via CRAB jobs.
 
 .. tabs::
@@ -174,6 +177,8 @@ Finally, run ``cmsDriver.py`` to generate the events. In this example, we genera
              -n 10
 
          cmsRun TAU-RunIISummer20UL18wmLHEGEN-00001_1_cfg.py 
+
+      Output : ``TAU-RunIISummer20UL18wmLHEGEN-00001.root``
 
    .. group-tab:: Run 3
 
