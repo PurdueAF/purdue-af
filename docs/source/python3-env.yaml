@@ -24,6 +24,7 @@ dependencies:
   - root=6.28.0
   - uproot=4.3.7
   - vector
+  - cabinetry
 
   # Plotting
   - bokeh=2.4.2
@@ -47,6 +48,7 @@ dependencies:
   # - dask-kubernetes
   - dask-ml
   - dask-xgboost
+  - dask-memusage
 
   # C++ libraries
   - boost
@@ -88,6 +90,8 @@ dependencies:
     - PhyPraKit
     - dbs3-client
     - correctionlib==2.5.0
+    - cmsstyle
+    - xgbfir
 
 variables:
   PATH: /depot/cms/kernels/python3/bin:/usr/sue/bin:/etc/jupyter/dask:/opt/conda/condabin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/depot/cms/purdue-af/lhapdf/bin

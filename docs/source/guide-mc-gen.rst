@@ -497,11 +497,11 @@ Step 5 : NanoAOD
              --eventcontent NANOAODSIM \
              --customise Configuration/DataProcessing/Utils.addMonitoring \
              --datatier NANOAODSIM \
-             --fileout file:TAU-RunIISummer20UL18NanoAODv9-00020.root \
+             --fileout file:PPD-RunIISummer20UL18NanoAODv9-00001.root \
              --conditions 106X_upgrade2018_realistic_v16_L1v1 \
-             --customise_commands "process.add_(cms.Service('InitRootHandlers', EnableIMT = cms.untracked.bool(False))) \\n from PhysicsTools.NanoAOD.custom_jme_cff import PrepJMECustomNanoAOD_MC; PrepJMECustomNanoAOD_MC(process)" \
              --step NANO \
-             --filein file:TAU-RunIISummer20UL18MiniAODv2-00015.root \
+             --nThreads 2 \
+             --filein "file:file:TAU-RunIISummer20UL18MiniAODv2-00015.root" \
              --era Run2_2018,run2_nanoAOD_106Xv2 \
              --no_exec \
              --mc \
