@@ -58,13 +58,22 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
         targets=[],
         transparent=false,
         unit=null,
-        colorMode=null
+        colorMode=null,
+        thresholdMode='absolute',
+        thresholdSteps=[
+            {
+            "value": null,
+            "color": "green"
+          },
+        ],
     ):: g.panel.stat.new(title)
         + g.panel.stat.panelOptions.withDescription(description)
         + g.panel.stat.queryOptions.withTargets(targets)
         + (if transparent then g.panel.gauge.panelOptions.withTransparent() else {})
         + g.panel.stat.standardOptions.withUnit(unit)
-        + g.panel.stat.options.withColorMode(colorMode),
+        + g.panel.stat.options.withColorMode(colorMode)
+        + g.panel.stat.standardOptions.thresholds.withMode(thresholdMode)
+        + g.panel.stat.standardOptions.thresholds.withSteps(thresholdSteps),
     
     gauge(
         title='',

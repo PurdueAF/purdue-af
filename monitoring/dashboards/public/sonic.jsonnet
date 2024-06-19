@@ -152,6 +152,28 @@ local tritonInferencesPerLB = panels.timeSeries(
   legendPlacement='right',
 );
 
+local tritonInferencesEvPerLB = panels.timeSeries(
+  title='Inference rate (events per second)',
+  targets=[
+    prometheus.addQuery(
+      'prometheus-rancher',
+      |||
+        #sum (
+        #  (rate(nv_inference_count[5m:1m])*1000000)/(rate(nv_inference_request_duration_us[5m:1m])+0.000000000000001)
+        #) by (service)
+        rate(
+              (
+                  sum(nv_inference_count) by (service)
+              )[5m:1m]
+          )
+      |||,
+      legendFormat='{{ app }}'
+    ),
+  ],
+  min=0,
+  legendPlacement='right',
+);
+
 local tritonInferencesPerModel = panels.timeSeries(
   title='Inference rate (batches per second)',
   targets=[
@@ -164,6 +186,28 @@ local tritonInferencesPerModel = panels.timeSeries(
         rate(
               (
                   sum(nv_inference_exec_count) by (model, version)
+              )[5m:1m]
+          )
+      |||,
+      legendFormat='{{ model }} v{{ version }}'
+    ),
+  ],
+  min=0,
+  legendPlacement='right',
+);
+
+local tritonInferencesEvPerModel = panels.timeSeries(
+  title='Inference rate (events per second)',
+  targets=[
+    prometheus.addQuery(
+      'prometheus-rancher',
+      |||
+        #sum (
+        #  (rate(nv_inference_count[5m:1m])*1000000)/(rate(nv_inference_request_duration_us[5m:1m])+0.000000000000001)
+        #) by (service)
+        rate(
+              (
+                  sum(nv_inference_count) by (model, version)
               )[5m:1m]
           )
       |||,
@@ -479,7 +523,25 @@ local envoyClients = panels.timeSeries(
     ),
   ],
   min=0,
-  legendPlacement='right',
+  legendPlacement='bottom',
+);
+
+local envoyConnRate = panels.timeSeries(
+  title='Rate of new connections',
+  description='',
+  targets=[
+    prometheus.addQuery(
+      'prometheus',
+      |||
+        sum by (pod) (
+          label_replace(rate(envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix="ingress_grpc"}[2m:30s]), "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
+        )
+      |||,
+      legendFormat='{{ pod }}'
+    ),
+  ],
+  min=0,
+  legendPlacement='bottom',
 );
 
 local envoyMemUtil = panels.timeSeries(
@@ -502,7 +564,7 @@ local envoyMemUtil = panels.timeSeries(
   unit='percentunit',
   min=0,
   // max=1,
-  legendPlacement='right',
+  legendPlacement='bottom',
 );
 
 local envoyReqRate = panels.timeSeries(
@@ -521,7 +583,7 @@ local envoyReqRate = panels.timeSeries(
   ],
   // unit='percentunit',
   min=0,
-  legendPlacement='right',
+  legendPlacement='bottom',
   thresholdMode='area',
   thresholdSteps=[
     { color: 'green', value: 0 },
@@ -579,6 +641,164 @@ local tritonMemUtil = panels.timeSeries(
 );
 
 
+local gpuPowerUsage = panels.timeSeries(
+  title='GPU power usage (all GPUs in a load balancer)',
+  targets=[
+    prometheus.addQuery(
+      'prometheus-rancher',
+      |||
+        sum by (lb_name)(
+          label_replace(
+            sum(nv_gpu_power_usage) by (pod),
+          "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+        )
+      |||,
+      legendFormat='{{ lb_name }}'
+    ),
+  ],
+  min=0,
+  legendPlacement='right',
+);
+
+local inferencesPerSecondPerWatt = panels.timeSeries(
+  title='Inferences per second per Watt',
+  targets=[
+    prometheus.addQuery(
+      'prometheus-rancher',
+      |||
+        sum by (lb_name)(
+          label_replace(
+            rate((sum(nv_inference_count) by (pod))[5m:1m]),
+          "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$"
+          )
+        )
+            /
+        sum by (lb_name)(
+          label_replace(
+            (sum(nv_gpu_power_usage) by (pod)),
+          "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$"
+          )
+        )
+      |||,
+      legendFormat='{{ lb_name }}'
+    ),
+  ],
+  min=0,
+  legendPlacement='right',
+);
+
+local  targets=[
+  prometheus.addQuery(
+    'prometheus',
+    |||
+      ping_latency_ms
+    |||,
+    legendFormat='{{ name }}',
+    // refId='nodes',
+    instant=true,
+    format='table'
+  ),
+];
+
+local pingGraph = g.panel.geomap.new('Network Latency from Purdue') +
+  g.query.prometheus.withDatasource('prometheus') +
+  g.panel.geomap.queryOptions.withTargets(targets)
+  + g.panel.geomap.queryOptions.withTransformations([
+      g.panel.geomap.queryOptions.transformation.withId('filterFieldsByName')
+    + g.panel.geomap.queryOptions.transformation.withOptions(
+        {
+            "include": {
+              "names": [
+                "ip",
+                "name",
+                "Value",
+                "latitude",
+                "longitude"
+              ]
+            },
+
+        }
+    ),
+    g.panel.geomap.transformation.withId('organize')
+    + g.panel.geomap.transformation.withOptions(
+        {
+            "indexByName": {
+                "name": 0,
+                "ip": 1,
+                "Value": 2
+            },
+        }
+    ),
+  ])
+  + g.panel.geomap.options.withView(
+    {
+      "allLayers": true,
+      "id": "coords",
+      "lat": 38.487153,
+      "lon": -99.779504,
+      "zoom": 3.84
+    }
+  ) +
+  g.panel.geomap.options.withLayers(
+    [
+      {
+        "type": "markers",
+        "name": "Latency from Purdue",
+        "config": {
+          "style": {
+            "size": {
+              "min": 1,
+              "max": 10,
+              "field": "Value"
+            },
+            "color": {
+              "field": "Value"
+            },
+            "opacity": 0.4,
+            "symbol": {
+              "mode": "fixed",
+              "fixed": "img/icons/marker/circle.svg"
+            },
+            "symbolAlign": {
+              "horizontal": "center",
+              "vertical": "center"
+            },
+            "text": {
+              "fixed": "",
+              "mode": "field",
+              "field": "Value"
+            },
+            "textConfig": {
+              "textAlign": "right",
+              "textBaseline": "bottom"
+            }
+          },
+          "showLegend": true
+        },
+        "location": {
+          "mode": "auto"
+        },
+        "tooltip": true
+      }
+    ],
+  )
+  + g.panel.geomap.standardOptions.thresholds.withSteps(
+    [
+      { color: 'green', value: 0 },
+      { color: 'yellow', value: 1 },
+      { color: 'orange', value: 10 },
+      { color: 'red', value: 100 },
+    ],
+  )
+  + g.panel.geomap.standardOptions.withOverrides([
+    g.panel.geomap.fieldOverride.byName.new("Value")
+    + g.panel.geomap.fieldOverride.byName.withPropertiesFromOptions(
+      g.panel.geomap.standardOptions.withUnit('ms')
+      + g.panel.table.standardOptions.withDisplayName('Latency')
+    )
+  ])
+;
+
 g.dashboard.new('SONIC Dashboard')
 + g.dashboard.withUid('sonic-dashboard')
 + g.dashboard.withDescription('SONIC monitoring')
@@ -613,11 +833,20 @@ g.dashboard.new('SONIC Dashboard')
   gpuGrEngineUtil     + w(12) + h(10),
   // envoyLatency  + w(8) + h(10),
   // envoyOverhead  + w(8) + h(10),
-  envoyClients  + w(8) + h(10),
-  envoyMemUtil  + w(8) + h(10),
-  envoyCpuUtil  + w(8) + h(10),
+  envoyClients  + w(6) + h(8),
+  envoyConnRate + w(6) + h(8),
+  envoyMemUtil  + w(6) + h(8),
+  envoyCpuUtil  + w(6) + h(8),
   tritonInferencesPerLB + w(12) + h(10),
   tritonInferencesPerModel + w(12) + h(10),
+
+  tritonInferencesEvPerLB + w(12) + h(10),
+  tritonInferencesEvPerModel + w(12) + h(10),
+
+  gpuPowerUsage  + w(12) + h(10),
+  inferencesPerSecondPerWatt + w(12) + h(10),
+
+  pingGraph + w(10) + h(12)
 
   // tritonMemUtil       + w(8) + h(10),
   // tritonInferencesPerLB  + w(8) + h(10),
