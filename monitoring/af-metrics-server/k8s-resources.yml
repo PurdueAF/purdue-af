@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: af-metrics-server-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: af-metrics-server
+  template:
+    metadata:
+      labels:
+        app: af-metrics-server
+    spec:
+      containers:
+      - name: af-metrics-server
+        image: geddes-registry.rcac.purdue.edu/cms/af-metrics-server:latest
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - name: work
+          mountPath: /work/
+          mountPropagation: HostToContainer
+      volumes:
+      - name: work
+        persistentVolumeClaim:
+          claimName: af-shared-storage
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: af-metrics-service
+  labels:
+    scrape-metrics: "true"
+spec:
+  selector:
+    app: af-metrics-server
+  ports:
+  - protocol: TCP
+    port: 8000
+    targetPort: 8000
