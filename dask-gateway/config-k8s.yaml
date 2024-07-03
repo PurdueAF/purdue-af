@@ -67,6 +67,7 @@ gateway:
             mountPropagation: HostToContainer
     worker:
       extraPodConfig:
+        # schedulerName: yunikorn
         nodeSelector:
           cms-af-prod: "true"
         tolerations:
@@ -107,9 +108,9 @@ gateway:
         c.DaskGateway.address = ':8000'
         c.KubeBackend.api_url = 'http://dask-gateway-k8s.geddes.rcac.purdue.edu:80/api'
 
-        c.ClusterConfig.cluster_max_cores = 101
-        c.ClusterConfig.cluster_max_memory = '404 G'
-        c.ClusterConfig.cluster_max_workers = 101
+        c.ClusterConfig.cluster_max_cores = 201
+        c.ClusterConfig.cluster_max_memory = '808 G'
+        c.ClusterConfig.cluster_max_workers = 201
         c.ClusterConfig.idle_timeout = 3600
 
         def ldap_lookup(username):
@@ -146,7 +147,9 @@ gateway:
         from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
 
         def options_handler(options, user):
-            if ("-cern" in user.name) or ("-fnal" in user.name):
+            if user.name=="jovyan":
+              uid, gid = 1000, 1000
+            elif ("-cern" in user.name) or ("-fnal" in user.name):
                 if not options.env:
                   raise ValueError("'env' must be specified in new_cluster(), for example env=dict(os.environ)")
                 if ("NB_UID" not in options.env) or ("NB_GID" not in options.env):
@@ -161,7 +164,10 @@ gateway:
             c.KubeClusterConfig.scheduler_extra_pod_config.update(extra_pod_config)
             c.KubeClusterConfig.worker_extra_pod_config.update(extra_pod_config)
             c.KubeClusterConfig.scheduler_extra_pod_labels = {"user": user.name}
-            c.KubeClusterConfig.worker_extra_pod_labels = {"user": user.name}
+            c.KubeClusterConfig.worker_extra_pod_labels = {
+              "user": user.name,
+              #"queue": "root.community.cms"
+            }
 
             setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
             return {

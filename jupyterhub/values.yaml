@@ -4,10 +4,10 @@ singleuser:
   cmd: 
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
-    tag: "0.9.5"
+    tag: "0.9.6"
   extraLabels:
     username_unescaped: "{legacy_escape_username}"
-    docker_image_tag: "0.9.5"
+    docker_image_tag: "0.9.6"
   startTimeout: 3600
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
@@ -23,6 +23,11 @@ singleuser:
         cpu:
           display_name: "CPUs"
           choices:
+            # 0:
+            #   display_name: "1"
+            #   kubespawner_override:
+            #     cpu_limit: 1
+            #     cpu_guarantee: 1
             1:
               display_name: "4"
               kubespawner_override:
@@ -113,7 +118,7 @@ singleuser:
     #   default: false
     #   description: "ignore this"
     #   kubespawner_override:
-    #     image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.9.5"
+    #     image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.9.6"
     #     node_selector:
     #       cms-af-prod: "true"
     #     cpu_guarantee: 4
