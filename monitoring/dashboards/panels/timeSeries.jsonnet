@@ -250,6 +250,21 @@ local panels = import 'panels.libsonnet';
     legendPlacement='right',
   ),
 
+  agcEventRate:: panels.timeSeries(
+    title='Analysis Grand Challenge Event Rate per worker (1 file per dataset, 10 workers)',
+    // description='',
+    targets=[
+      prometheus.addQuery(
+        'prometheus', 'agc_event_rate_per_worker',
+        legendFormat='Event rate', interval = '600s'
+      ),
+    ],
+    min=0,
+    unit='kHz',
+    decimals=0,
+    legendPlacement='right',
+  ),
+
   hubResponseCodes:: panels.timeSeries(
     title='JupyterHub response status codes',
     targets=[

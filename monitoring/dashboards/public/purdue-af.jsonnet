@@ -98,5 +98,6 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
   myPanels.timeSeries.hubResponseCodes       + w(8) + h(10),
   myPanels.timeSeries.hubResponseLatency     + w(8) + h(10),
   myPanels.timeSeries.serverStartTimes       + w(8) + h(10),
+  myPanels.timeSeries.agcEventRate        + w(12) + h(10),
 
 ])
