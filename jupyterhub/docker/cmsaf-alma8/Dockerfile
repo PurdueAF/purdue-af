@@ -216,7 +216,7 @@ RUN pip install dask-gateway
 RUN git clone https://github.com/kondratyevd/dask-labextension.git \
     && cd dask-labextension \
     && pip install . \
-    && cd ..    \
+    && cd .. \
     && rm -rf dask-labextension
 # Install custom extensions
 # ENV EXTENSIONS_DIR "/etc/jupyter/extensions"
