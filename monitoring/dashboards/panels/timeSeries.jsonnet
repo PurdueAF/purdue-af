@@ -110,6 +110,7 @@ local panels = import 'panels.libsonnet';
         legendFormat='{{ node }}'
       ),
     ],
+    transparent=true,
     unit='CPUs',
     min=0,
     legendPlacement='right',
@@ -133,6 +134,7 @@ local panels = import 'panels.libsonnet';
         legendFormat='{{ node }}'
       ),
     ],
+    transparent=true,
     unit='bytes',
     min=0,
     legendPlacement='right',

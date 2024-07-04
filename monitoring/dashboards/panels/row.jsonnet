@@ -2,6 +2,7 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
 
 {
     af_metrics:: g.panel.row.new('Purdue Analysis Facility metrics'),
+    storage:: g.panel.row.new('Storage mounts'),
     gpu_metrics:: g.panel.row.new('GPU metrics'),
     triton_metrics:: g.panel.row.new('Triton metrics'),
     dask_metrics:: g.panel.row.new('Dask metrics'),

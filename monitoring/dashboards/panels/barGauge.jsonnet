@@ -38,6 +38,36 @@ local panels = import 'panels.libsonnet';
     ]
   ),
 
+  nodeCpuReqQuotaBarGauge:: panels.barGauge(
+    title='Node CPU Request Quota Usage %',
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        |||
+          sum by (node) (
+            kube_pod_container_resource_requests{
+              namespace=~"cms(-dev)?",
+              pod=~"purdue-af-.*",
+              container="notebook",
+              resource="cpu"
+            }
+          )
+            /
+          sum(kube_node_status_capacity{resource="cpu"}) by (node)
+        |||, legendFormat='{{ node }}', instant=true
+      )
+    ],
+    transparent=true,
+    unit='percentunit', min=0, max=1, thresholdMode='percentage',
+    displayMode='lcd', orientation='horizontal',
+    thresholdSteps=[
+      { color: 'green', value: 0.0},
+      { color: 'yellow', value: 60},
+      { color: 'orange', value: 80 },
+      { color: 'red', value: 90 },
+    ]
+  ),
+
   nodeMemUtilBarGauge:: panels.barGauge(
     title='Node Memory Utilization %',
     description='% of available memory currently in use',
@@ -77,6 +107,47 @@ local panels = import 'panels.libsonnet';
       { color: 'red', value: 90 },
     ]
   ),
+
+  nodeMemReqQuotaBarGauge:: panels.barGauge(
+    title='Node Memory Request Quota Usage %',
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        |||
+          sum by (node) (
+            kube_pod_container_resource_requests{
+              namespace=~"cms(-dev)?",
+              pod=~"purdue-af-.*",
+              container="notebook",
+              resource="memory"
+            }
+          )
+            /
+          sum by (node) (
+            label_replace(
+                label_replace(
+                (
+                  sum(node_memory_MemTotal_bytes{instance!="hammer-adm.rcac.purdue.edu:9100"}) by (instance)
+                ),
+                "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
+              ),
+              "node", "$1", "node", "(.*).cms"
+            )
+          )
+        |||, legendFormat='{{ node }}', instant=true
+      )
+    ],
+    transparent=true,
+    unit='percentunit', min=0, max=1, thresholdMode='percentage',
+    displayMode='lcd', orientation='horizontal',
+    thresholdSteps=[
+      { color: 'green', value: 0.0},
+      { color: 'yellow', value: 60},
+      { color: 'orange', value: 80 },
+      { color: 'red', value: 90 },
+    ]
+  ),
+
   // podStorageUtil:: panels.barGauge.new('Storage utilization (/home/<username>)')
   // + g.panel.barGauge.panelOptions.withDescription('')
   // + g.panel.barGauge.queryOptions.withTargets([

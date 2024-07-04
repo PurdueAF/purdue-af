@@ -30,28 +30,35 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
 // 
   myPanels.stat.totalRunningPods        + w(4)  + h(4),
   myPanels.timeSeries.usersPerNode      + w(8)  + h(8),
-  myPanels.barGauge.nodeCpuUtilBarGauge + w(6) + h(7),
+  myPanels.barGauge.nodeCpuReqQuotaBarGauge + w(6) + h(7),
+  // myPanels.timeSeries.nodeCpuRequest      + w(6) + h(7),
+  // myPanels.barGauge.nodeCpuUtilBarGauge + w(6) + h(7),
   myPanels.timeSeries.nodeCpuUtil       + w(6) + h(7),
+
+
 // 
   myPanels.stat.totalRegisteredUsers    + w(4)  + h(4),
   myPanels.placeholder.placeholder_tr   + w(8) + h(0),
-  myPanels.barGauge.nodeMemUtilBarGauge + w(6) + h(7),
+  myPanels.barGauge.nodeMemReqQuotaBarGauge + w(6) + h(7),
+  // myPanels.timeSeries.nodeMemoryRequest   + w(6) + h(7),
+  // myPanels.barGauge.nodeMemUtilBarGauge + w(6) + h(7),
   myPanels.timeSeries.nodeMemoryUtil    + w(6) + h(7),
+
+
 // 
   myPanels.gauge.nPodsQuota              + w(4)  + h(6),
   myPanels.gauge.cpuQuota                + w(4)  + h(6),
   myPanels.gauge.memQuota                + w(4)  + h(6),
   myPanels.placeholder.placeholder_tr   + w(6) + h(0),
 // 
-  myPanels.statusHistory.eosMount          + w(6) + h(6),
+  myPanels.row.storage               + w(24) + h(2),
   myPanels.statusHistory.depotMount           + w(6) + h(6),
   myPanels.statusHistory.workMount            + w(6) + h(6),
+  myPanels.statusHistory.eosMount          + w(6) + h(6),
   myPanels.statusHistory.cvmfsMount           + w(6) + h(6),
 
 // 
   myPanels.placeholder.placeholder_tr   + w(8) + h(0.1),
-  myPanels.timeSeries.nodeCpuRequest      + w(8) + h(8),
-  myPanels.timeSeries.nodeMemoryRequest   + w(8) + h(8),
   // myPanels.timeSeries.nodeEphStorageUsage + w(8) + h(8),
   // myPanels.placeholder.placeholder_tr   + w(40) + h(0.1),
 
@@ -82,5 +89,6 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
   myPanels.timeSeries.agcEventRate           + w(10) + h(10),
 
   // myPanels.timeSeries.nodeCpuStats  + w(10) + h(10),
+
 
 ])
