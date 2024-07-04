@@ -276,7 +276,15 @@ ingress:
   annotations:
     kubernetes.io/ingress.class: "public"
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
-
+proxy:
+  chp:
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
 cull:
 #  concurrency: 10
  enabled: true

@@ -93,3 +93,12 @@ traefik:
       operator: "Equal"
       value: "cms-af"
       effect: "NoSchedule"
+controller:
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+
