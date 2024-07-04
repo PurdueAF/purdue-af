@@ -27,6 +27,7 @@ local panels = import 'panels.libsonnet';
         |||, legendFormat='{{ node }}', instant=true
       )
     ],
+    transparent=true,
     unit='percentunit', min=0, max=1, thresholdMode='percentage',
     displayMode='lcd', orientation='horizontal',
     thresholdSteps=[
@@ -66,6 +67,7 @@ local panels = import 'panels.libsonnet';
         |||, legendFormat='{{ node }}', instant=true
       ),
     ],
+    transparent=true,
     unit='percentunit', min=0, max=1, thresholdMode='percentage',
     displayMode='lcd', orientation='horizontal',
     thresholdSteps=[

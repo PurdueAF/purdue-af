@@ -1,6 +1,5 @@
 local prometheus = import 'prometheus.libsonnet';
 local panels = import 'panels.libsonnet';
-
 {
   usersPerNamespace:: panels.timeSeries(
     title='Current users per namespace',
@@ -58,6 +57,7 @@ local panels = import 'panels.libsonnet';
     unit='percentunit',
     min=0,
     legendPlacement='right',
+    transparent=true,
   ),
 
   nodeMemoryUtil:: panels.timeSeries(
@@ -89,6 +89,7 @@ local panels = import 'panels.libsonnet';
     unit='percentunit',
     min=0,
     legendPlacement='right',
+    transparent=true,
   ),
 
   nodeCpuRequest:: panels.timeSeries(
@@ -255,8 +256,8 @@ local panels = import 'panels.libsonnet';
     // description='',
     targets=[
       prometheus.addQuery(
-        'prometheus', 'agc_event_rate_per_worker',
-        legendFormat='Event rate', interval = '600s'
+        'prometheus', 'avg_over_time((sum(agc_event_rate_per_worker) > 0)[60m:])',
+        legendFormat='Event rate', interval = '60m'
       ),
     ],
     min=0,
@@ -364,7 +365,7 @@ local panels = import 'panels.libsonnet';
     ],
     unit='s',
     min=0,
-    legendMode='hidden',
+    hideLegend=true,
     drawStyle='points',
     thresholdMode='area',
     thresholdSteps=[
@@ -374,4 +375,36 @@ local panels = import 'panels.libsonnet';
       { color: 'red', value: 120 },
     ]
   ),
+
+  nodeCpuStats:: panels.timeSeries(
+    title='Node CPU usage (geddes-g000)',
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        |||
+          sum(kube_node_status_capacity{resource="cpu", node=~"geddes-g000.*"})
+        |||,
+        legendFormat='{{ node }} Total'
+      ),
+      prometheus.addQuery(
+        'prometheus',
+        |||
+            sum(kube_pod_container_resource_requests{node="geddes-g000", resource="cpu"})
+        |||,
+        legendFormat='{{ node }} Requested'
+      ),
+      prometheus.addQuery(
+        'prometheus',
+        |||
+          sum by (node)(rate(node_cpu_seconds_total{mode!="idle", instance=~"geddes-g000.*"}[5m]))
+        |||,
+        legendFormat='{{ node }} Used'
+      ),
+    ],
+    min=0,
+    legendPlacement='right',
+    axisWidth=0,
+    unit='CPU'
+  ),
+
 }

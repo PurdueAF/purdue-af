@@ -10,6 +10,7 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
         min=null,
         max=null,
         decimals=null,
+        hideLegend=false,
         legendMode='list',
         legendPlacement=null,
         tooltipMode='multi',
@@ -29,8 +30,9 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
         + g.panel.timeSeries.standardOptions.withMin(min)
         + g.panel.timeSeries.standardOptions.withMax(max)
         + g.panel.timeSeries.standardOptions.withDecimals(decimals)
-        + g.panel.timeSeries.options.legend.withDisplayMode(legendMode)
-        + g.panel.timeSeries.options.legend.withPlacement(legendPlacement)
+        + (if hideLegend then
+            g.panel.timeSeries.options.legend.withShowLegend(false)
+            else (g.panel.timeSeries.options.legend.withDisplayMode(legendMode)+ g.panel.timeSeries.options.legend.withPlacement(legendPlacement)))
         + g.panel.timeSeries.options.tooltip.withMode(tooltipMode)
         + g.panel.timeSeries.fieldConfig.defaults.custom.stacking.withMode(stackingMode)
         + g.panel.timeSeries.fieldConfig.defaults.custom.withFillOpacity(fillOpacity)
@@ -147,4 +149,23 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
         + (if transparent then g.panel.stateTimeline.panelOptions.withTransparent() else {})
         + g.panel.stateTimeline.standardOptions.withUnit(unit)
         + g.panel.stateTimeline.options.withShowValue(showValue),
+
+    statusHistory(
+        title='',
+        description='',
+        targets=[],
+        transparent=false,
+        unit=null,
+        showValue='auto',
+        thresholdSteps=[],
+        hideLegend = false
+    ):: g.panel.statusHistory.new(title)
+        + g.panel.statusHistory.panelOptions.withDescription(description)
+        + g.panel.statusHistory.queryOptions.withTargets(targets)
+        + (if transparent then g.panel.statusHistory.panelOptions.withTransparent() else {})
+        + g.panel.statusHistory.standardOptions.withUnit(unit)
+        + g.panel.statusHistory.options.withShowValue(showValue)
+        + g.panel.statusHistory.standardOptions.thresholds.withSteps(thresholdSteps)
+        + (if hideLegend then g.panel.statusHistory.options.legend.withShowLegend(false))
+,
 }

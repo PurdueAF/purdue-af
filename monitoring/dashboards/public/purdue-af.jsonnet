@@ -8,6 +8,7 @@ local myPanels = {
   gauge: import 'gauge.jsonnet',
   barGauge: import 'barGauge.jsonnet',
   heatmap: import 'heatmap.jsonnet',
+  statusHistory: import 'statusHistory.jsonnet',
   placeholder: import 'placeholder.jsonnet'
 };
 
@@ -26,27 +27,33 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
 + g.dashboard.graphTooltip.withSharedCrosshair()
 + g.dashboard.withPanels([
   myPanels.row.af_metrics               + w(24) + h(2),
+// 
   myPanels.stat.totalRunningPods        + w(4)  + h(4),
-  myPanels.timeSeries.usersPerNode      + w(10) + h(8),
-  myPanels.timeSeries.usersPerNamespace + w(10) + h(8),
+  myPanels.timeSeries.usersPerNode      + w(8)  + h(8),
+  myPanels.barGauge.nodeCpuUtilBarGauge + w(6) + h(7),
+  myPanels.timeSeries.nodeCpuUtil       + w(6) + h(7),
+// 
   myPanels.stat.totalRegisteredUsers    + w(4)  + h(4),
-  myPanels.placeholder.placeholder_tr   + w(20) + h(0.1),
+  myPanels.placeholder.placeholder_tr   + w(8) + h(0),
+  myPanels.barGauge.nodeMemUtilBarGauge + w(6) + h(7),
+  myPanels.timeSeries.nodeMemoryUtil    + w(6) + h(7),
+// 
+  myPanels.gauge.nPodsQuota              + w(4)  + h(6),
+  myPanels.gauge.cpuQuota                + w(4)  + h(6),
+  myPanels.gauge.memQuota                + w(4)  + h(6),
+  myPanels.placeholder.placeholder_tr   + w(6) + h(0),
+// 
+  myPanels.statusHistory.eosMount          + w(6) + h(6),
+  myPanels.statusHistory.depotMount           + w(6) + h(6),
+  myPanels.statusHistory.workMount            + w(6) + h(6),
+  myPanels.statusHistory.cvmfsMount           + w(6) + h(6),
 
-  myPanels.barGauge.nodeCpuUtilBarGauge       + w(12) + h(9),
-  myPanels.barGauge.nodeMemUtilBarGauge       + w(12) + h(9),
-
-  myPanels.timeSeries.nodeCpuUtil       + w(12) + h(9),
-  myPanels.timeSeries.nodeMemoryUtil    + w(12) + h(9),
-
-  myPanels.timeSeries.nodeCpuRequest      + w(12) + h(8),
-  myPanels.timeSeries.nodeMemoryRequest   + w(12) + h(8),
-  myPanels.timeSeries.nodeEphStorageUsage + w(12) + h(8),
-
-  myPanels.gauge.nPodsQuota              + w(4)  + h(8),
-  myPanels.gauge.cpuQuota                + w(4)  + h(8),
-  myPanels.gauge.memQuota                + w(4)  + h(8),
-
-  myPanels.placeholder.placeholder_tr   + w(20) + h(0.5),
+// 
+  myPanels.placeholder.placeholder_tr   + w(8) + h(0.1),
+  myPanels.timeSeries.nodeCpuRequest      + w(8) + h(8),
+  myPanels.timeSeries.nodeMemoryRequest   + w(8) + h(8),
+  // myPanels.timeSeries.nodeEphStorageUsage + w(8) + h(8),
+  // myPanels.placeholder.placeholder_tr   + w(40) + h(0.1),
 
   myPanels.row.gpu_metrics               + w(24) + h(2),
   myPanels.gauge.gpuTemp                + w(8)  + h(10),
@@ -68,36 +75,12 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
   myPanels.timeSeries.daskClients         + w(8) + h(8),
   myPanels.placeholder.placeholder_tr   + w(20) + h(0.5),
 
-
-  // myPanels.row.triton_metrics             + w(24) + h(2),
-  // myPanels.stat.deployedTritonLB          + w(3)  + h(4),
-  // myPanels.stat.deployedTritonServers     + w(3)  + h(4),
-  // myPanels.timeSeries.tritonNumServers    + w(9) + h(10),
-  // myPanels.timeSeries.tritonMemUtil       + w(9) + h(10),
-
-  // myPanels.timeSeries.tritonGPUload       + w(12) + h(10),
-  // myPanels.timeSeries.tritonServerSaturation + w(12) + h(10),
-
-  // myPanels.timeSeries.tritonQueueTimeByModel  + w(12) + h(10),
-  // myPanels.timeSeries.tritonQueueTimeByServer  + w(12) + h(10),
-
-  // myPanels.timeSeries.tritonInferenceCount  + w(12) + h(10),
-  // myPanels.timeSeries.tritonInferencesPerLB  + w(12) + h(10),
-
-  // myPanels.timeSeries.envoyLatency  + w(8) + h(10),
-  // myPanels.timeSeries.tritonLatency  + w(8) + h(10),
-  // myPanels.timeSeries.envoyOverhead  + w(8) + h(10),
-  // myPanels.timeSeries.envoyClients  + w(8) + h(10),
-  // myPanels.timeSeries.envoyMemUtil  + w(8) + h(10),
-  // myPanels.timeSeries.envoyCpuUtil  + w(8) + h(10),
-
-  
-  // myPanels.timeSeries.envoyReqRate + w(8) + h(10),
-
   myPanels.row.hub_metrics               + w(24) + h(2),
   myPanels.timeSeries.hubResponseCodes       + w(8) + h(10),
   myPanels.timeSeries.hubResponseLatency     + w(8) + h(10),
   myPanels.timeSeries.serverStartTimes       + w(8) + h(10),
-  myPanels.timeSeries.agcEventRate        + w(12) + h(10),
+  myPanels.timeSeries.agcEventRate           + w(10) + h(10),
+
+  // myPanels.timeSeries.nodeCpuStats  + w(10) + h(10),
 
 ])
