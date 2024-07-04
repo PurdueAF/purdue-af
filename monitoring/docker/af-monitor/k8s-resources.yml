@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: af-metrics-server-deployment
+  name: af-monitor
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: af-metrics-server
+      app: af-monitor
   template:
     metadata:
       labels:
-        app: af-metrics-server
+        app: af-monitor
     spec:
       nodeSelector: {'cms-af-prod': 'true'}
       tolerations:
@@ -19,8 +19,8 @@ spec:
         value: "cms-af"
         effect: "NoSchedule"
       containers:
-      - name: af-metrics-server
-        image: geddes-registry.rcac.purdue.edu/cms/af-metrics-server:latest
+      - name: af-monitor
+        image: geddes-registry.rcac.purdue.edu/cms/af-monitor:latest
         ports:
         - containerPort: 8000
         volumeMounts:
@@ -37,12 +37,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: af-metrics-service
+  name: af-monitor-service
   labels:
     scrape-metrics: "true"
 spec:
   selector:
-    app: af-metrics-server
+    app: af-monitor
   ports:
   - protocol: TCP
     port: 8000

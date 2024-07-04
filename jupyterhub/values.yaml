@@ -130,9 +130,8 @@ singleuser:
 
 
   extraContainers:
-    - name: af-pod-metrics
-      image: geddes-registry.rcac.purdue.edu/cms/cmsaf-pod-metrics-sidecar:0.2
-      command: [ "python", "/app/pod-metrics-exporter.py"]
+    - name: af-pod-monitor
+      image: geddes-registry.rcac.purdue.edu/cms/af-node-monitor:latest
       volumeMounts:
       - name: volume-{username}
         mountPath: /home/{legacy_escape_username}

@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: node-healthcheck
+  name: af-node-monitor
   namespace: cms
 spec:
   selector:
     matchLabels:
-      name: node-healthcheck
+      name: af-node-monitor
   template:
     metadata:
       labels:
-        name: node-healthcheck
+        name: af-node-monitor
     spec:
       nodeSelector: {'cms-af-prod': 'true'}
       tolerations:
@@ -19,8 +19,8 @@ spec:
         value: "cms-af"
         effect: "NoSchedule"
       containers:
-      - name: node-healthcheck
-        image: geddes-registry.rcac.purdue.edu/cms/node-healthcheck:latest
+      - name: af-node-monitor
+        image: geddes-registry.rcac.purdue.edu/cms/af-node-monitor:latest
         ports:
         - containerPort: 8000
           name: metrics
@@ -57,12 +57,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: node-healthcheck-service
+  name: af-node-monitor-service
   labels:
     scrape-metrics: "true"
 spec:
   selector:
-    name: node-healthcheck
+    name: af-node-monitor
   ports:
   - protocol: TCP
     port: 8000
