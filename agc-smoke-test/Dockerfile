@@ -8,8 +8,8 @@ RUN git clone https://github.com/kondratyevd/analysis-grand-challenge.git /app/a
 
 WORKDIR /app/analysis-grand-challenge
 
-COPY run_agc.sh start_dask_cluster.py stop_dask_cluster.py /app/
-COPY nanoaod_inputs.json /app/analysis-grand-challenge/analyses/cms-open-data-ttbar/
+COPY files/run_agc.sh files/start_dask_cluster.py files/stop_dask_cluster.py /app/
+COPY files/nanoaod_inputs.json /app/analysis-grand-challenge/analyses/cms-open-data-ttbar/
 RUN chmod -R 777 /app/
 
 USER jovyan
