@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-healthcheck
+  namespace: cms
+spec:
+  selector:
+    matchLabels:
+      name: node-healthcheck
+  template:
+    metadata:
+      labels:
+        name: node-healthcheck
+    spec:
+      nodeSelector: {'cms-af-prod': 'true'}
+      tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+      containers:
+      - name: node-healthcheck
+        image: geddes-registry.rcac.purdue.edu/cms/node-healthcheck:latest
+        ports:
+        - containerPort: 8000
+          name: metrics
+        volumeMounts:
+        - name: cvmfs
+          mountPath: /cvmfs
+          mountPropagation: HostToContainer
+        - name: eos
+          mountPath: /eos
+          mountPropagation: HostToContainer
+        - name: depot
+          mountPath: /depot/cms
+          mountPropagation: HostToContainer
+        - name: work
+          mountPath: /work/
+          mountPropagation: HostToContainer
+      volumes:
+      - name: cvmfs
+        hostPath: 
+          path: /cvmfs
+      - name: eos
+        hostPath: 
+          path: /eos
+      - name: depot
+        nfs:
+          server: datadepot.rcac.purdue.edu
+          path: /depot/cms
+      - name: work
+        persistentVolumeClaim:
+          claimName: af-shared-storage
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-healthcheck-service
+  labels:
+    scrape-metrics: "true"
+spec:
+  selector:
+    name: node-healthcheck
+  ports:
+  - protocol: TCP
+    port: 8000
+    targetPort: 8000
