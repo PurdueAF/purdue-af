@@ -33,6 +33,7 @@ dependencies:
   - plotly
   # - texlive-core
   - tectonic
+  - py-spy
 
   # Machine learning
   - mup
@@ -49,6 +50,7 @@ dependencies:
   - dask-ml
   - dask-xgboost
   - dask-memusage
+  - dask-histogram
 
   # C++ libraries
   - boost
