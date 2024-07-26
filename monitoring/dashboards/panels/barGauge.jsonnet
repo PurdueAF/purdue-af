@@ -47,8 +47,6 @@ local panels = import 'panels.libsonnet';
           sum by (node) (
             kube_pod_container_resource_requests{
               namespace=~"cms(-dev)?",
-              pod=~"purdue-af-.*",
-              container="notebook",
               resource="cpu"
             }
           )
@@ -117,8 +115,6 @@ local panels = import 'panels.libsonnet';
           sum by (node) (
             kube_pod_container_resource_requests{
               namespace=~"cms(-dev)?",
-              pod=~"purdue-af-.*",
-              container="notebook",
               resource="memory"
             }
           )

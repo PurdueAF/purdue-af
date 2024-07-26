@@ -7,7 +7,7 @@ local panels = import 'panels.libsonnet';
       prometheus.addQuery(
         'prometheus',
         'sum(count by (namespace)(kube_pod_labels{pod=~"purdue-af-.*", namespace=~"cms(-dev)?"}))',
-        legendFormat='Current AF users', instant = true
+        legendFormat='Current AF users'
       ),
     ],
     colorMode='value'
@@ -18,8 +18,7 @@ local panels = import 'panels.libsonnet';
       prometheus.addQuery(
         'prometheus',
         'sum(jupyterhub_total_users{job="jupyterhub"})',
-        legendFormat='Total registered users',
-        instant=true
+        legendFormat='Total registered users'
       ),
     ],
     colorMode='value'

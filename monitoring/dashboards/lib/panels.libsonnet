@@ -142,12 +142,20 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
         targets=[],
         transparent=false,
         unit=null,
+        colorMode='thresholds',
         showValue='auto',
+        thresholdMode='absolute',
+        thresholdSteps=[],
+        hideLegend=true
     ):: g.panel.stateTimeline.new(title)
         + g.panel.stateTimeline.panelOptions.withDescription(description)
         + g.panel.stateTimeline.queryOptions.withTargets(targets)
         + (if transparent then g.panel.stateTimeline.panelOptions.withTransparent() else {})
         + g.panel.stateTimeline.standardOptions.withUnit(unit)
+        + g.panel.stateTimeline.standardOptions.color.withMode(colorMode)
+        + g.panel.stateTimeline.standardOptions.thresholds.withMode(thresholdMode)
+        + g.panel.stateTimeline.standardOptions.thresholds.withSteps(thresholdSteps)
+        + (if hideLegend then g.panel.stateTimeline.options.legend.withShowLegend(false))
         + g.panel.stateTimeline.options.withShowValue(showValue),
 
     statusHistory(
