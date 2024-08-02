@@ -109,11 +109,11 @@ local sonicStatus = panels.stateTimeline(
         sum(
           rate(
             label_replace(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
           /
           rate(
             label_replace(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         ) by (pod)
       |||,
       legendFormat='{{ pod }}'
@@ -136,7 +136,7 @@ local latencyByModel = panels.timeSeries(
     prometheus.addQuery(
       'prometheus-rancher',
       |||
-        sum by (model, version) (rate(nv_inference_compute_infer_duration_us{pod=~"$lb_name.*"}[2m:10s])) / 1000 / sum by (model, version) (rate(nv_inference_exec_count[2m:10s]))
+        sum by (model, version) (rate(nv_inference_compute_infer_duration_us{pod=~"$lb_name.*"}[5m:1m])) / 1000 / sum by (model, version) (rate(nv_inference_exec_count[5m:1m]))
       |||,
       legendFormat='{{ model }} v{{ version }}'
     ),
@@ -154,7 +154,7 @@ local tritonInferencesPerLB = panels.timeSeries(
       |||
         sum(
           rate(
-            nv_inference_exec_count{pod=~"$lb_name.*"}[2m:10s]
+            nv_inference_exec_count{pod=~"$lb_name.*"}[5m:1m]
           )
         ) by (service)
       |||,
@@ -173,7 +173,7 @@ local tritonInferencesEvPerLB = panels.timeSeries(
       |||
         sum (
           rate(
-            nv_inference_count{pod=~"$lb_name.*"}[2m:10s]
+            nv_inference_count{pod=~"$lb_name.*"}[5m:1m]
           )
         ) by (service)
       |||,
@@ -192,7 +192,7 @@ local tritonInferencesPerModel = panels.timeSeries(
       |||
         sum (
           rate(
-            nv_inference_exec_count{pod=~"$lb_name.*"}[2m:10s]
+            nv_inference_exec_count{pod=~"$lb_name.*"}[5m:1m]
           )
         ) by (model, version)
       |||,
@@ -211,7 +211,7 @@ local tritonInferencesEvPerModel = panels.timeSeries(
       |||
         sum (
           rate(
-            nv_inference_count{pod=~"$lb_name.*"}[2m:10s]
+            nv_inference_count{pod=~"$lb_name.*"}[5m:1m]
           )
         ) by (model, version)
       |||,
@@ -289,11 +289,11 @@ local totalLatency = panels.timeSeries(
         sum(
           rate(
             label_replace(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
           /
           rate(
             label_replace(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         ) by (lb_name)
       |||,
       legendFormat='{{ lb_name }}'
@@ -317,7 +317,7 @@ local tritonGPUload = panels.timeSeries(
     prometheus.addQuery(
       'prometheus-rancher',
       |||
-        label_replace(avg_over_time(nv_gpu_utilization{pod=~"$lb_name.*"}[2m:10s]), "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+        label_replace(avg_over_time(nv_gpu_utilization{pod=~"$lb_name.*"}[5m:1m]), "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
       |||,
       legendFormat='{{ pod }}'
     ),
@@ -351,11 +351,11 @@ local envoyLatency = panels.timeSeries(
         sum(
           rate(
             label_replace(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
           /
           rate(
             label_replace(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         ) by (lb_name)
       |||,
       legendFormat='{{ lb_name }}'
@@ -377,13 +377,13 @@ local sonicLatency = panels.timeSeries(
         sum by (lb_name)(
           rate(
             label_replace(nv_inference_compute_infer_duration_us{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         )
         /
         sum by (lb_name) (((
           rate(
             label_replace(nv_inference_exec_count{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         +0.000000000000001)*1000))
         )
       |||,
@@ -396,13 +396,13 @@ local sonicLatency = panels.timeSeries(
         sum by (lb_name)(
           rate(
             label_replace(nv_inference_queue_duration_us{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         )
         /
         sum by (lb_name) (((
           rate(
             label_replace(nv_inference_exec_count{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         +0.000000000000001)*1000))
         )
       |||,
@@ -415,13 +415,13 @@ local sonicLatency = panels.timeSeries(
         sum by (lb_name)(
           rate(
             label_replace(nv_inference_compute_input_duration_us{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         )
         /
         sum by (lb_name) (((
           rate(
             label_replace(nv_inference_exec_count{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         +0.000000000000001)*1000))
         )
       |||,
@@ -434,13 +434,13 @@ local sonicLatency = panels.timeSeries(
         sum by (lb_name)(
           rate(
             label_replace(nv_inference_compute_output_duration_us{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         )
         /
         sum by (lb_name) (((
           rate(
             label_replace(nv_inference_exec_count{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         +0.000000000000001)*1000))
         )
       |||,
@@ -453,27 +453,27 @@ local sonicLatency = panels.timeSeries(
         sum(
           rate(
             label_replace(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
           /
           rate(
             label_replace(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         ) by (lb_name)
         -           
         sum by (lb_name)(
           rate(
             label_replace(nv_inference_request_duration_us{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         )
         /
         sum by (lb_name) (((
           rate(
             label_replace(nv_inference_exec_count{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         +0.000000000000001)*1000))
         )
       |||,
-      legendFormat='Proxy overhead'
+      legendFormat='Other sources'
     ),
   ],
   min=0,
@@ -495,23 +495,23 @@ local envoyOverhead = panels.timeSeries(
         sum(
           rate(
             label_replace(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc"}, "lb_name", "$1", "lb_name", "(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
           /
           rate(
             label_replace(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc"}, "lb_name", "$1", "lb_name", "(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         ) by (lb_name)
         -           
         sum by (lb_name)(
           rate(
             label_replace(nv_inference_request_duration_us, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         )
         /
         sum by (lb_name) (((
           rate(
             label_replace(nv_inference_exec_count, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [2m:10s])
+          [5m:1m])
         +0.000000000000001)*1000))
       |||,
       legendFormat='{{ lb_name }}'
@@ -589,7 +589,7 @@ local envoyReqRate = panels.timeSeries(
       'prometheus',
       |||
         sum(sum by (lb_name) (
-          label_replace(rate(envoy_http_rq_total[2m:10s]), "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+          label_replace(rate(envoy_http_rq_total[5m:1m]), "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
         ))
       |||,
       legendFormat='{{ lb_name }}'
@@ -615,7 +615,7 @@ local envoyCpuUtil = panels.timeSeries(
         sum(rate(
           label_replace(
             container_cpu_usage_seconds_total{namespace="cms",pod=~"$lb_name.*", container="envoy"},
-          "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")[2m:10s]
+          "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")[5m:1m]
         )) by (lb_name)
       |||,
       legendFormat='{{ lb_name }}'
@@ -683,7 +683,7 @@ local inferencesPerSecondPerWatt = panels.timeSeries(
         sum by (lb_name)(
           label_replace(
             (sum(
-              rate(nv_inference_count{pod=~"$lb_name.*"}[2m:10s])
+              rate(nv_inference_count{pod=~"$lb_name.*"}[5m:1m])
             ) by (pod)),
           "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$"
           )
@@ -716,12 +716,12 @@ local networkTraffic = panels.timeSeries(
               label_replace(
                 envoy_http_downstream_cx_rx_bytes_total{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"},
                 "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$"
-              )[2m:10s]
+              )[5m:1m]
             ) + rate(
               label_replace(
                 envoy_http_downstream_cx_tx_bytes_total{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"},
                 "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$"
-              )[2m:10s]
+              )[5m:1m]
             )
           ) / (1024 * 1024 * 1024) * 8
         )
