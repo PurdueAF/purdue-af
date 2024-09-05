@@ -124,9 +124,9 @@ local sonicStatus = panels.stateTimeline(
   thresholdMode='absolute',
   thresholdSteps=[
     { color: 'green', value: 0 },
-    { color: 'yellow', value: 20 },
-    { color: 'orange', value: 40 },
-    { color: 'red', value: 100 },
+    { color: 'yellow', value: 50 },
+    { color: 'orange', value: 100 },
+    { color: 'red', value: 200 },
   ],
 );
 
@@ -229,7 +229,7 @@ local tritonNumServers = panels.timeSeries(
       'prometheus-rancher',
       |||
         sum by (deployment)(
-            kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton-.*-lb"}
+            kube_deployment_status_replicas_available{namespace="cms", deployment=~"$lb_name-lb"}
         )
       |||,
       legendFormat='{{ deployment }}'
@@ -280,22 +280,44 @@ local tritonQueueTimeByModel = panels.timeSeries(
 );
 
 local totalLatency = panels.timeSeries(
-  title='Total latency',
+  // title='Total latency',
+  title='Autoscaler indicator',
   description='',
   targets=[
     prometheus.addQuery(
       'prometheus',
       |||
-        sum(
-          rate(
-            label_replace(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
-          [5m:1m])
+        ((
+          sum by (pod) (
+            rate(label_replace(nv_inference_queue_duration_us{pod=~"triton-run2.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$") [5m:1m])
+          )
           /
-          rate(
-            label_replace(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
-          [5m:1m])
-        ) by (lb_name)
+          sum by (pod) (
+            (rate(label_replace(nv_inference_exec_count{pod=~"triton-run2.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$") [5m:1m]) + 0.00001) * 1000
+          )
+        ) OR 0.0000 *
+        (
+          sum by (pod) (
+            label_replace(envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"triton-run2.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
+          )
+        ))
+        + 0.00001 * (
+          sum by (pod) (
+            label_replace(envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"triton-run2.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
+          ) > bool 1
+        )
       |||,
+      // |||
+      //   sum(
+      //     rate(
+      //       label_replace(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+      //     [5m:1m])
+      //     /
+      //     rate(
+      //       label_replace(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+      //     [5m:1m])
+      //   ) by (lb_name)
+      // |||,
       legendFormat='{{ lb_name }}'
     ),
   ],
@@ -305,7 +327,8 @@ local totalLatency = panels.timeSeries(
   thresholdMode='dashed',
   thresholdSteps=[
     { color: 'green', value: 0 },
-    { color: 'red', value: 20 },
+    { color: 'orange', value: 0.00001 },
+    { color: 'red', value: 100 },
   ],
   fillOpacity=20,
 );

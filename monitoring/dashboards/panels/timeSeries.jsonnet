@@ -409,4 +409,24 @@ local panels = import 'panels.libsonnet';
     unit='CPU'
   ),
 
+    nGPUreq:: panels.timeSeries(
+    title='GPUs requested by users',
+    targets=[
+      prometheus.addQuery(
+        'prometheus',
+        |||
+          sum by (resource) (
+            kube_pod_container_resource_requests{namespace="cms",pod=~"purdue-af-.*",resource=~"nvidia_.*"}
+          )
+        |||,
+        legendFormat='{{ resource }}'
+      ),
+    ],
+    min=0,
+    legendPlacement='bottom',
+    stackingMode='normal',
+    fillOpacity=60,
+  ),
+
+
 }

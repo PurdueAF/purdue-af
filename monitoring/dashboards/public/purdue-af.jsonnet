@@ -67,10 +67,11 @@ g.dashboard.new('Purdue Analysis Facility Dashboard')
   myPanels.timeSeries.gpuPower          + w(9)  + h(10),
   myPanels.table.gpuSlices              + w(7)  + h(10),
 
-  myPanels.timeSeries.gpuGrEngineUtil   + w(12) + h(10),
+  myPanels.timeSeries.nGPUreq          + w(8)  + h(10),
+  myPanels.timeSeries.gpuGrEngineUtil   + w(8) + h(10),
   // myPanels.placeholder.placeholder_tr   + w(12) + h(0),
   // myPanels.placeholder.placeholder_tr   + w(3) + h(0),
-  myPanels.timeSeries.gpuMemUtil        + w(12) + h(10),
+  myPanels.timeSeries.gpuMemUtil        + w(8) + h(10),
   // myPanels.placeholder.placeholder_tr   + w(20) + h(0.5),
 
   myPanels.row.slurm_metrics                 + w(24) + h(2),
