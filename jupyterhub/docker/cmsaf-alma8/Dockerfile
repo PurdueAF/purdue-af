@@ -28,13 +28,17 @@ RUN yum update -y  && \
         libXft libXpm libXext libSM mesa-libGL libnsl.x86_64 \
         glibc-locale-source glibc-langpack-en && \
     yum install -y \
-        voms-clients vo-client myproxy gfal2-util gfal2-all \
+        voms-clients vo-client myproxy \
         stress apptainer compat-openssl10 && \
     yum --enablerepo epel-testing install -y \
         s3cmd htop
 
 RUN dnf -y install boost-devel diffutils ncurses-compat-libs &&  \
     dnf -y --enablerepo=powertools install glibc-static
+
+RUN dnf install -y epel-release dnf-plugins-core &&\
+    dnf config-manager --set-enabled powertools &&\
+    dnf install -y python3-gfal2
 
 # Install CUDA libraries
 RUN yum install -y 'dnf-command(config-manager)' && \
@@ -133,8 +137,8 @@ COPY jupyter/start.sh /usr/local/bin/
 
 WORKDIR /tmp
 RUN mamba install --quiet --yes \
-    notebook jupyterhub jupyterlab=4.1.0 \
-    nb_conda_kernels rucio-clients pytest lz4 ipywidgets bokeh==2.4.2 \
+    notebook jupyterhub jupyterlab=4.1.0 nodejs==18.11.0 \
+    nb_conda_kernels rucio-clients pytest lz4 ipywidgets ipympl bokeh==2.4.2 \
     root==6.28.0 && \
     jupyter notebook --generate-config && \
     mamba clean --all -f -y && \
@@ -176,10 +180,10 @@ HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
 RUN alternatives --set python /usr/bin/python3
 
 # Install Slurm
-COPY rpms/slurm/slurm-21.08.8-2.el8.x86_64.rpm /etc/
+COPY rpms/slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
 COPY slurm /etc/slurm
-RUN yum localinstall -y /etc/slurm-21.08.8-2.el8.x86_64.rpm &&\
-    rm -rf /etc/slurm-21.08.8-2.el8.x86_64.rpm &&\
+RUN yum localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm &&\
+    rm -rf /etc/slurm-24.05.1-1.el8.x86_64.rpm &&\
     groupadd -g 1033 slurm &&\
     adduser -u 2000 -g 1033 slurm &&\
     chown -R slurm:slurm /etc/slurm/ &&\
@@ -215,6 +219,7 @@ RUN pip install --upgrade \
 RUN pip install dask-gateway
 RUN git clone https://github.com/kondratyevd/dask-labextension.git \
     && cd dask-labextension \
+    && git checkout hats \
     && pip install . \
     && cd .. \
     && rm -rf dask-labextension
@@ -231,6 +236,9 @@ RUN git clone https://github.com/kondratyevd/dask-labextension.git \
 # RUN jupyter lab build --dev-build=False
 
 RUN jupyter labextension disable "@jupyterlab/apputils-extension:announcements"
+RUN jupyter nbextension enable --py --sys-prefix ipympl
+
+# RUN pip install rucio-jupyterlab jupyterlab_favorites
 
 # Scripts that run before session start
 COPY scripts/run-as-root.sh \
@@ -244,7 +252,13 @@ COPY scripts/run-as-root.sh \
 
 # Custom scripts
 COPY scripts/eos-connect.sh jupyter/jupyter_config.json /etc/jupyter/
+RUN mkdir -p /etc/cvmfs/
+COPY default.local /etc/cvmfs/
 
 # Switch back from root user
 USER USER ${NB_USER}
 WORKDIR "${HOME}"
+
+# RUN dnf module enable -y nodejs:18 && \
+#     dnf -y install nodejs boost-devel diffutils ncurses-compat-libs &&  \
+#     dnf -y --enablerepo=powertools install glibc-static
