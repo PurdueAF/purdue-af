@@ -607,4 +607,4 @@ Step 5 : NanoAOD
       Output :  ``PPD-Run3Summer22NanoAODv12-00002.root``
 
 
-*This tutorial was prepared by Amandeep Kaur and Dmitry Kondratyev @ Purdue University CMS group.*
+*This tutorial was prepared by Amandeep Kaur, Dmitry Kondratyev, and Hyeon-Seo Yun @ Purdue University CMS group.*
