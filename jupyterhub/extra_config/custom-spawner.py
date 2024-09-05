@@ -21,11 +21,11 @@ class PurdueCILogonOAuthenticator(CILogonOAuthenticator):
 
         elif domain == 'cern.ch':
             fixedUsername = username + "-cern"
-            with open('/etc/secrets/cern-auth/cern-auth.txt') as file:
-                if not f"{username}\n" in file.readlines():
-                    raise web.HTTPError(
-                        500, "Access denied! Only CMS members are allowed to log in with CERN credentials."
-                    )
+            # with open('/etc/secrets/cern-auth/cern-auth.txt') as file:
+            #     if not f"{username}\n" in file.readlines():
+            #         raise web.HTTPError(
+            #             500, "Access denied! Only CMS members are allowed to log in with CERN credentials."
+            #         )
         
         elif domain == 'fnal.gov':
                 fixedUsername = username + "-fnal"
@@ -52,8 +52,8 @@ c.JupyterHub.authenticator_class = PurdueCILogonOAuthenticator
 c.PurdueCILogonOAuthenticator.post_auth_hook = passthrough_post_auth_hook
 
 if os.environ["POD_NAMESPACE"]=="cms":
-    c.KubeSpawner.service_account = "dask-sa"
-    c.KubeSpawner.automount_service_account_token = True
+    # c.KubeSpawner.service_account = "dask-sa"
+    # c.KubeSpawner.automount_service_account_token = True
     # The current environment and dask configuration via environment
     # export DASK_DISTRIBUTED__DASHBOARD_LINK=/user/$NB_USER/proxy/8787/status
     # export DASK_GATEWAY__AUTH__TYPE=jupyterhub

@@ -20,4 +20,20 @@ PATH="$PATH" \
     "$kernel_path/kernel.json" > tmp_kernel.json
 mv tmp_kernel.json "$kernel_path/kernel.json"
 
+
+# For HATS 2024 workshop
+
+conda run -p /depot/cms/kernels/hats2024 ipython kernel install \
+    --prefix=/opt/conda --name="hats2024"  --display-name "HATS 2024"
+
+# kernel_path="/opt/conda/share/jupyter/kernels/hats2024/"
+# "$kernel_path/kernel.json" > tmp_kernel.json
+
+# ls -ltr $kernel_path
+
+# mv tmp_kernel.json "$kernel_path/kernel.json"
+
+# ------------------
+
+
 jupyter kernelspec list
