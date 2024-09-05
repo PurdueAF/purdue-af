@@ -31,7 +31,7 @@ gateway:
     - name: NAMESPACE
       value: cms
     - name: RELEASE_NAME
-      value: dask-gateway-k8s
+      value: dask-gateway-hats
   backend:
     image:
       name: ghcr.io/dask/dask-gateway
@@ -106,12 +106,12 @@ gateway:
   extraConfig:
     config: |
         c.DaskGateway.address = ':8000'
-        c.KubeBackend.api_url = 'http://dask-gateway-k8s.geddes.rcac.purdue.edu:80/api'
+        c.KubeBackend.api_url = 'http://dask-gateway-hats.geddes.rcac.purdue.edu:80/api'
 
-        c.ClusterConfig.cluster_max_cores = 201
-        c.ClusterConfig.cluster_max_memory = '808 G'
-        c.ClusterConfig.cluster_max_workers = 201
-        c.ClusterConfig.idle_timeout = 3*3600
+        c.ClusterConfig.cluster_max_cores = 11
+        c.ClusterConfig.cluster_max_memory = '44 G'
+        c.ClusterConfig.cluster_max_workers = 11
+        c.ClusterConfig.idle_timeout = 3600
 
         def ldap_lookup(username):
             import subprocess
@@ -174,14 +174,14 @@ gateway:
                 "worker_cores": options.worker_cores,
                 "worker_memory": int(options.worker_memory * 2 ** 30),
                 "environment": options.env,
-                "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
-                "worker_cmd": f"{options.conda_env}/bin/dask-worker",
+                "scheduler_cmd": f"/depot/cms/kernels/hats2024/bin/dask-scheduler",
+                "worker_cmd": f"/depot/cms/kernels/hats2024/bin/dask-worker",
                 "time": "1-00:00:00",
                 "scheduler_setup": setup_cmd,
                 "worker_setup": setup_cmd,
             }
         c.Backend.cluster_options = Options(
-            String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
+            String("conda_env", default="/depot/cms/kernels/hats2024", label="Conda environment"),
             Integer("worker_cores", default=1, min=1, max=4, label="Cores per worker"),
             Float("worker_memory", default=4, min=1, max=16, label="Memory per worker (GiB)"),
             Mapping("env", {}, label="Environment variables"),
