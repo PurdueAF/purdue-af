@@ -31,7 +31,6 @@ RUN dnf -y update && \
         emacs vim-enhanced jq xterm-resize \
         libXft libXpm libXext libSM mesa-libGL libnsl.x86_64 \
         glibc-locale-source glibc-langpack-en \
-        voms-clients osg-vo-tools myproxy \
         stress apptainer compat-openssl10 \
         s3cmd htop \
         boost-devel diffutils ncurses-compat-libs cmake \
@@ -45,6 +44,8 @@ RUN dnf -y update && \
     rm /usr/bin/vi && \
     ln -s /usr/bin/vim /usr/bin/vi && \
     localedef -c -f UTF-8 -i en_US en_US.UTF-8
+
+RUN yum install -y vo-client voms-clients vo-client myproxy
 
 # Configure environment
 ENV CONDA_DIR=/opt/conda \
