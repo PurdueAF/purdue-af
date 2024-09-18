@@ -193,6 +193,13 @@ traefik:
     name: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/traefik
     tag: 2.10.4
     pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 2
+      memory: 4Gi
+    requests:
+      cpu: 2
+      memory: 4Gi
   loglevel: ERROR
   dashboard: false
   service:
