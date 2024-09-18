@@ -114,7 +114,7 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # Copy local files as late as possible to avoid cache busting
 COPY jupyter/start.sh /usr/local/bin/
-RUN chmod a+rx /usr/local/bin/start.sh
+# RUN chmod a+rx /usr/local/bin/start.sh
 
 WORKDIR /tmp
 RUN mamba install --quiet --yes \
