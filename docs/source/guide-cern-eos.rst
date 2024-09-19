@@ -1,4 +1,4 @@
-Enabling access to CERNBox
+Access from PurdueAF to CERNBox
 ==================================
 
 Access to `CERNBox <https://cernbox.cern.ch>`_ (CERN EOS storage) can be enabled in the Purdue Analysis Facility

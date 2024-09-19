@@ -1,5 +1,5 @@
 
-Accessing Purdue AF from VSCode
+Access to Purdue AF via VSCode
 ================================
 
 `Visual Studio Code <https://code.visualstudio.com>`_ is currenlty the most popular
