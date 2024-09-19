@@ -41,15 +41,14 @@ RUN curl -LO https://golang.org/dl/go1.19.2.linux-amd64.tar.gz
 RUN tar -C /usr/local -xzf go1.19.2.linux-amd64.tar.gz
 # USER dask:dask
 
-COPY slurm-21.08.8-2.el8.x86_64.rpm /etc/
+COPY slurm-24.05.1-1.el8.x86_64.rpm /etc/
 COPY slurm /etc/slurm
-COPY slurm/slist /usr/bin
-RUN yum localinstall -y /etc/slurm-21.08.8-2.el8.x86_64.rpm &&\
-    rm -rf /etc/slurm-21.08.8-2.el8.x86_64.rpm &&\
-    groupadd -g 1033 slurm &&\
-    adduser -u 2000 -g 1033 slurm &&\
-    chown -R slurm:slurm /etc/slurm/ &&\
-    mkdir -p /var/log/slurm &&\
+RUN dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
+    rm -rf /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
+    groupadd -g 1033 slurm && \
+    adduser -u 2000 -g 1033 slurm && \
+    chown -R slurm:slurm /etc/slurm/ && \
+    mkdir -p /var/log/slurm && \
     chown -R slurm:slurm /var/log/slurm
 
 # Install dask-gateway-server

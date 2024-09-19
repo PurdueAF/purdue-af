@@ -4,7 +4,7 @@ gateway:
   loglevel: INFO
   image:
     name: geddes-registry.rcac.purdue.edu/cms/dask-gateway-server
-    tag: 2023.9.0-purdue.v2
+    tag: 2023.9.0-purdue.v3
     pullPolicy: IfNotPresent
   auth:
     type: simple
