@@ -186,10 +186,9 @@ RUN pip install --upgrade \
 
 # Install Dask packages
 RUN pip install dask-gateway
-ADD https://api.github.com/repos/kondratyevd/dask-labextension/git/refs/heads/hats version.json
 RUN git clone https://github.com/kondratyevd/dask-labextension.git && \
     cd dask-labextension && \
-    git checkout hats && \
+    git checkout 4e69798b0fb136dd8ade2e3b117f21f2a839decf && \
     pip install . && \
     cd .. && \
     rm -rf dask-labextension
