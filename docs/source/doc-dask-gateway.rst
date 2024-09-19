@@ -9,7 +9,7 @@ To make Dask Gateway useful in a variety of analysis workflows, we provide four 
 * The Dask Gateway cluster creation can be done in two ways:
 
   * **Interactively** from the Dask Labextension interface
-  * **Manually** in a Jupyter Notebook or in a Python script
+  * **Manually** in a Jupyter Notebook
 
 * For each of these methods, we allow to create two types of clusters:
 
@@ -70,7 +70,7 @@ This section contains the instructions for creating Dask Gateway clusters using 
          :width: 700
          :align: center
 
-   .. group-tab:: Jupyter Notebook or Python script
+   .. group-tab:: Jupyter Notebook
 
       To create a Dask Gateway cluster manually, you need to connect to the Gateway server
       via a ``Gateway`` object, and then use ``Gateway.new_cluster()`` method.
@@ -166,7 +166,7 @@ Conda environments, Python packages, C++ libraries, etc.
            :width: 400
            :align: center
 
-     .. group-tab:: Jupyter Notebook or Python script
+     .. group-tab:: Jupyter Notebook
          
         The path to conda environment is specified in the ``conda_env``
         argument of ``new_cluster()``:
@@ -213,7 +213,7 @@ Conda environments, Python packages, C++ libraries, etc.
          3. **Shut down and restart the Analysis Facility session**
          4. Create a new cluster by clicking the ``[+NEW]`` button in the left sidebar.
 
-      .. group-tab:: Jupyter Notebook or Python script
+      .. group-tab:: Jupyter Notebook
 
          The ``gateway.new_cluster()`` command takes ``env`` argument which can be used
          to pass any set of environment variables to workers. The most straightforward
@@ -277,7 +277,7 @@ Instructions to open Dask cluster dashboards for different Gateway setups:
         :width: 700
         :align: center
 
-  .. group-tab:: Jupyter Notebook or Python script
+  .. group-tab:: Jupyter Notebook
          
      When a cluster is created in a Jupyter Notebook, you can extract the link to the dashboard
      either from a Dask Gateway widget, or from ``cluster.dashboard_link``.
@@ -300,7 +300,7 @@ In general, connecting a client to a Gateway cluster is done as follows:
     client = cluster.get_client()
 
 However, this implies that ``cluster`` refers to an already existing object.
-This is true if the cluster was created in the same Notebook / Python script,
+This is true if the cluster was created in the same notebook,
 but in most cases we recommend that the cluster is kept separate from the clients.
 
 Below are the different ways to connect a client to a cluster created elsewhere:
