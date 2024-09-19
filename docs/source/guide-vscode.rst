@@ -2,21 +2,26 @@
 Access to Purdue AF via VSCode
 ================================
 
-.. image:: https://images.app.goo.gl/8nd5o8QB3tXwfevL7
-   :width: 80
+.. image:: https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Visual_Studio_Code_1.35_icon.svg/240px-Visual_Studio_Code_1.35_icon.svg.png
+   :width: 50
    :align: left
 
 `Visual Studio Code <https://code.visualstudio.com>`_ is currenlty the most popular
 integrated development environment (IDE).
 
-Although most of the Purdue Analysis Facility functionality is available only via the
-JupyterLab interface, it is possible to connect to it via VSCode.
-Here is what you will be able to do:
+Although most of the Purdue AF functionality is available only via the JupyterLab web interface,
+you can connect to your AF session via VSCode.
 
-- Running local notebooks on your computer using Purdue AF Python kernels, ensuring
-  that you are using exactly the same versions of packages.
-- Scale out directly from you computer to Slurm or Kubernetes resources using
-  Purdue AF Dask Gateway instances.
+Purdue AF + VSCode integration offers new possibilities:
+
+- Running local notebooks with remote Conda environments (Jupyter kernels), which ensures that
+  you use exactly the same versions of packages without a need to reinstall the environment.
+- Scaling out directly from you computer through Dask Gateway to hundreds of cores available
+  through Purdue AF.
+
+.. image:: images/vscode.png
+   :width: 80%
+   :align: center
 
 Follow these steps to connect VSCode to your Purdue AF session:
 
