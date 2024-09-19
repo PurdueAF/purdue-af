@@ -137,7 +137,7 @@ CMD ["start-notebook.sh"]
 
 # Copy local files as late as possible to avoid cache busting
 COPY jupyter/start-notebook.sh jupyter/start-singleuser.sh /usr/local/bin/
-RUN chmod a+rx /usr/local/bin/start-notebook.sh /usr/local/bin/start-singleuser.sh
+# RUN chmod a+rx /usr/local/bin/start-notebook.sh /usr/local/bin/start-singleuser.sh
 
 # Copy Jupyter configuration files
 COPY jupyter/jupyter_server_config.py jupyter/docker_healthcheck.py /etc/jupyter/
