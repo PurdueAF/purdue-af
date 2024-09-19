@@ -155,4 +155,61 @@ HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
 # Install Slurm
 COPY rpms/slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
 COPY slurm /etc/slurm
-RUN dnf localinstall -​⬤
+RUN dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
+    rm -rf /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
+    groupadd -g 1033 slurm && \
+    adduser -u 2000 -g 1033 slurm && \
+    chown -R slurm:slurm /etc/slurm/ && \
+    mkdir -p /var/log/slurm && \
+    chown -R slurm:slurm /var/log/slurm
+
+# Configure XrootD, grid certificates, VOMS
+RUN mkdir -p /etc/cvmfs /etc/cvmfs/SITECONF/JobConfig/ /etc/cvmfs/SITECONF/PhEDEx
+COPY xml/site-local-config.xml /etc/cvmfs/SITECONF/JobConfig/
+COPY xml/storage.xml /etc/cvmfs/SITECONF/PhEDEx/
+COPY vomses /etc
+RUN mkdir -p /home/${NB_USER}/.globus /home/${NB_USER}/.rnd && \
+    chown -R ${NB_USER}:${NB_GID} /home/${NB_USER}/.globus /home/${NB_USER}/.rnd && \
+    chmod 700 /home/${NB_USER}/.globus
+
+ENV X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
+
+# Install JupyterLab extensions
+RUN pip install --upgrade \
+    jupyterlab-git \
+    jupyter-resource-usage \
+    jupyterlab_iframe \
+    purdue-af-shutdown-button \
+    purdue-af-grafana-iframe \
+    "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-topbar-text&subdirectory=packages/topbar-text-extension" \
+    "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-theme-toggler&subdirectory=packages/theme-toggler-extension"
+
+# Install Dask packages
+RUN pip install dask-gateway
+RUN git clone https://github.com/kondratyevd/dask-labextension.git && \
+    cd dask-labextension && \
+    git checkout hats && \
+    pip install . && \
+    cd .. && \
+    rm -rf dask-labextension
+
+# Configure JupyterLab extensions
+RUN jupyter labextension disable "@jupyterlab/apputils-extension:announcements"
+RUN jupyter nbextension enable --py --sys-prefix ipympl
+
+# Scripts that run before session start
+COPY --chown=root:root scripts/run-as-root.sh \
+    scripts/init-conda-kernels.sh \
+    scripts/config-extensions.sh \
+    scripts/create-symlinks.sh \
+    /usr/local/bin/before-notebook.d/
+RUN chmod +x /usr/local/bin/before-notebook.d/*
+
+# Custom scripts and configurations
+COPY scripts/eos-connect.sh jupyter/jupyter_config.json /etc/jupyter/
+RUN mkdir -p /etc/cvmfs/
+COPY default.local /etc/cvmfs/
+
+# Switch back to NB_USER
+USER ${NB_USER}
+WORKDIR "${HOME}"
