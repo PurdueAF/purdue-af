@@ -54,11 +54,11 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     :maxdepth: 1
 
     guide-vscode
-    guide-demos
     guide-cern-eos
     guide-conda
     guide-rucio
     guide-mc-gen
+    guide-demos
 
 .. toctree::
     :hidden:
