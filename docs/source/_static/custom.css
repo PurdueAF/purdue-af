@@ -32,10 +32,10 @@ ol {
 }
 
 ol li {
-    display: block;
     counter-increment: item;
 }
 
-ol li:before {
-    content: counters(item, ".") ". ";
+ol li::before {
+    content: counters(item, ".") " ";
+    /* margin-right: 0.5em; */
 }
