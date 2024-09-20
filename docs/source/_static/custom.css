@@ -27,7 +27,7 @@ button.toggle-button.toggle-button-hidden:before {
     top: -.595em;
 }
 
-ol {
+/* ol {
     counter-reset: item;
 }
 
@@ -37,5 +37,4 @@ ol li {
 
 ol li::before {
     content: counters(item, ".") " ";
-    /* margin-right: 0.5em; */
-}
+} */
