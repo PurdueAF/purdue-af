@@ -26,3 +26,16 @@ button.toggle-button.toggle-button-hidden:before {
     position: relative;
     top: -.595em;
 }
+
+ol {
+    counter-reset: item;
+}
+
+ol li {
+    display: block;
+    counter-increment: item;
+}
+
+ol li:before {
+    content: counters(item, ".") ". ";
+}
