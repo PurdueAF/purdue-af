@@ -14,7 +14,7 @@ Purdue AF + VSCode use cases
 
 - Running local notebooks with remote Conda environments (Jupyter kernels), which ensures that
   you use exactly the same versions of packages without a need to reinstall the environment.
-- Scaling out directly from you computer using :doc:`Dask Gateway <doc-dask-gateway>` instances at Purdue AF.
+- Scaling out from you computer to 100s cores using :doc:`Dask Gateway <doc-dask-gateway>` instances at Purdue AF.
 
 .. image:: images/vscode.png
    :width: 90%
@@ -60,11 +60,11 @@ Installation instructions
 
    4.5. When prompted for username:
 
-        - If you are using Purdue account, type your Purdue username.
+      - If you are using Purdue account, type your Purdue username.
 
-        - If you are using CERN account, type your CERN username followed by ``-cern``.
+      - If you are using CERN account, type your CERN username followed by ``-cern``.
 
-        - If you are using Fermilab account, type your FNAL account followed by ``-fnal``.
+      - If you are using Fermilab account, type your FNAL account followed by ``-fnal``.
 
    4.6. When prompted for token or password, paste the token obtained in step 3.
 
