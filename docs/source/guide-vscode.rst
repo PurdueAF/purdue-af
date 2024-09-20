@@ -60,11 +60,11 @@ Installation instructions
 
    4.5. When prompted for username:
 
-      - If you are using Purdue account, type your Purdue username.
+   - If you are using Purdue account, type your Purdue username.
 
-      - If you are using CERN account, type your CERN username followed by ``-cern``.
+   - If you are using CERN account, type your CERN username followed by ``-cern``.
 
-      - If you are using Fermilab account, type your FNAL account followed by ``-fnal``.
+   - If you are using Fermilab account, type your FNAL account followed by ``-fnal``.
 
    4.6. When prompted for token or password, paste the token obtained in step 3.
 
