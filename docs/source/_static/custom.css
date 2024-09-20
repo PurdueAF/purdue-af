@@ -27,14 +27,15 @@ button.toggle-button.toggle-button-hidden:before {
     top: -.595em;
 }
 
-/* ol {
+ol {
     counter-reset: item;
 }
 
 ol li {
+    /* display: block; */
     counter-increment: item;
 }
 
-ol li::before {
-    content: counters(item, ".") " ";
-} */
+ol li:before {
+    content: counters(item, ".") ". ";
+}
