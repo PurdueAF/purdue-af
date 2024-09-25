@@ -16,12 +16,12 @@ Subscribing to the mailing list
 ---------------------------------
 
 Users with Purdue email can subscribe to it by managing their
-group membership at the `Microsoft Outlook ECP portal <https://outlook.office365.com/ecp/>`_:
+group membership at the `Microsoft Exchange admin center <https://admin.exchange.microsoft.com/#/>`_:
 
 #. Log in with Pudue career account.
 #. Click "groups" in the sidebar.
-#. Under the section "Distribution groups I belong to", clink on the "Join..." icon.
+#. Under the section "Groups I belong to", clink on the "Join..." icon.
 #. Seacrh for ``cms-af``.
-#. Double-click on the returned serach result and confirm subscription.
+#. Select "Purdue CMS Analysis Facility" and click "Join group".
 
 Unsubscribing from the mailing list is managed via the same portal.
