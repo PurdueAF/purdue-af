@@ -150,7 +150,12 @@ HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
     CMD /etc/jupyter/docker_healthcheck.py || exit 1
 
 # Install ROOT
-RUN yum install -y root
+RUN mkdir /opt/root && cd /opt/root/ &&\
+    git clone --branch latest-stable --depth=1 https://github.com/root-project/root.git root_src &&\
+    mkdir root_build root_install && cd root_build &&\
+    cmake -DCMAKE_INSTALL_PREFIX=../root_install ../root_src &&\
+    cmake --build . -- install -j4 &&\
+    source ../root_install/bin/thisroot.sh
 
 # Install Slurm
 COPY rpms/slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
