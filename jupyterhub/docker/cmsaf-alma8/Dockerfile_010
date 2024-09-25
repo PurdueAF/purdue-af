@@ -119,7 +119,6 @@ WORKDIR /tmp
 RUN mamba install --quiet --yes \
         notebook jupyterhub jupyterlab=4.2.5 nodejs==18.11.0 \
         nb_conda_kernels rucio-clients pytest lz4 ipywidgets ipympl bokeh==2.4.2 \
-        root==6.32.06 && \
     jupyter notebook --generate-config && \
     mamba clean --all -f -y && \
     npm cache clean --force && \
@@ -130,6 +129,12 @@ RUN mamba install --quiet --yes \
 
 ENV JUPYTER_PORT=8888
 EXPOSE $JUPYTER_PORT
+
+RUN cd /opt/ && \
+    wget https://root.cern/download/root_v6.32.06-rc1.Linux-almalinux8.10-x86_64-gcc8.5.tar.gz &&\
+    tar -xzvf root_v6.32.06-rc1.Linux-almalinux8.10-x86_64-gcc8.5.tar.gz &&\
+    source root/bin/thisroot.sh &&\
+    rm root_v6.32.06-rc1.Linux-almalinux8.10-x86_64-gcc8.5.tar.gz
 
 # Configure container startup
 CMD ["start-notebook.sh"]
