@@ -130,12 +130,6 @@ RUN mamba install --quiet --yes \
 ENV JUPYTER_PORT=8888
 EXPOSE $JUPYTER_PORT
 
-RUN cd /opt/ && \
-    wget https://root.cern/download/root_v6.32.06-rc1.Linux-almalinux8.10-x86_64-gcc8.5.tar.gz &&\
-    tar -xzvf root_v6.32.06-rc1.Linux-almalinux8.10-x86_64-gcc8.5.tar.gz &&\
-    source root/bin/thisroot.sh &&\
-    rm root_v6.32.06-rc1.Linux-almalinux8.10-x86_64-gcc8.5.tar.gz
-
 # Configure container startup
 CMD ["start-notebook.sh"]
 
@@ -154,6 +148,13 @@ RUN sed -re "s/c.ServerApp/c.NotebookApp/g" \
 # Healthcheck configuration
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
     CMD /etc/jupyter/docker_healthcheck.py || exit 1
+
+# Install ROOT
+RUN cd /opt/ && \
+    wget https://root.cern/download/root_v6.32.06-rc1.Linux-almalinux8.10-x86_64-gcc8.5.tar.gz &&\
+    tar -xzvf root_v6.32.06-rc1.Linux-almalinux8.10-x86_64-gcc8.5.tar.gz &&\
+    source root/bin/thisroot.sh &&\
+    rm root_v6.32.06-rc1.Linux-almalinux8.10-x86_64-gcc8.5.tar.gz
 
 # Install Slurm
 COPY rpms/slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
