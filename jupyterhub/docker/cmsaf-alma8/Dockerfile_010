@@ -150,7 +150,7 @@ HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
     CMD /etc/jupyter/docker_healthcheck.py || exit 1
 
 # Install ROOT
-RUN yum install root
+RUN yum install -y root
 
 # Install Slurm
 COPY rpms/slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
