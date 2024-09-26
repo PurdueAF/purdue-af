@@ -10,17 +10,18 @@ The screenshot below shows the main elements of the interface:
    :width: 900
    :align: center
 
-#. File browser - your home directory with symlinks to different storage volumes (Depot, CVMFS, /work/, etc. - learn more here).
-#. Launcher - features buttons to create Python and ROOT C++ notebooks with different Conda environments, open terminals, create new text files, etc. Launcher window can be opened by clicking the `+` button.
-#. Terminal - standard Bash terminal, useful for any cases that require a command line interface, such as `voms-proxy-init`. You can also activate Conda environments here, run shell or Python scripts, use ROOT console, etc.
-#. File editor - simple IDE with syntax highlight for most common programming languages.
+#. **File browser** - your home directory with symlinks to different storage volumes (Depot, CVMFS, /work/, etc. - learn more here).
+#. **Exstensions** - left sidebar contains useful extesions: an interactive Dask Gateway interface, and a Git extension for interactive work with GitHub or GitLab repositories.
+#. **Launcher** - features buttons to create Python and ROOT C++ notebooks with different Conda environments, open terminals, create new text files, etc. Launcher window can be opened by clicking the `+` button.
+#. **Top bar** - contains Purdue AF release version, your username, dark theme switch, and the shutdown button.
+#. **Terminal** - standard Bash terminal, useful for any cases that require a command line interface, such as `voms-proxy-init`. You can also activate Conda environments here, run shell or Python scripts, use ROOT console, etc.
+#. **File editor** - simple IDE with syntax highlight for most common programming languages.
 
 .. note::
 
-   Windows with terminals, editors, etc., can be rearranged; the layout is saved even if you close the session.
+   Windows with terminals, editors, etc., can be rearranged.
+   The window layout is preserved if you shut down and restart your session.
 
-Extensions
------------
 
 Python code development
 ------------------------
