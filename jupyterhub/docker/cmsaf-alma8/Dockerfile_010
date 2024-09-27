@@ -154,7 +154,13 @@ RUN dnf install -y libX11-devel libXpm-devel libXft-devel libXext-devel fftw-dev
 RUN mkdir /opt/root_build /opt/root && cd /opt/root_build/  &&\
     git clone --branch latest-stable --depth=1 https://github.com/root-project/root.git root_src &&\
     mkdir root_build && cd root_build &&\
-    cmake -DCMAKE_INSTALL_PREFIX=../../root ../root_src &&\
+    cmake -DCMAKE_INSTALL_PREFIX=../../root \
+        -Dcuda=ON -Dcudnn=ON -Dtmva-gpu=ON \
+        -DCMAKE_CUDA_HOST_COMPILER=/usr/bin/g++ \
+        -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.2/bin/nvcc \
+        -DCMAKE_CUDA_ARCHITECTURES=native \
+        -DCMAKE_CUDA_STANDARD=17 \
+        ../root_src &&\
     cmake --build . -- install -j4 &&\
     source ../../root/bin/thisroot.sh
 
