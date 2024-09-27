@@ -58,7 +58,7 @@ ROOT
 `ROOT <https://root.cern>`_ is a software package developed by CERN and widely used in
 high energy physics for histogramming, fitting, and statistical analysis.
 
-* ROOT console can be launched from a terminal by typing `root -l`.
+* ROOT console can be launched from a terminal by typing ``root -l``.
   Note that it is not possible to display canvases or open ``TBrowser`` as JupyterLab interface
   does not support X11 forwarding.
 * Alternatively, you can turn a Jupyter Notebook into a ROOT console by selecting
@@ -66,6 +66,8 @@ high energy physics for histogramming, fitting, and statistical analysis.
   cells in arbitrary order.
   
   When working from a Jupyter Notebook, you can display ROOT plots using ``TCanvas::Draw`` method.
+
+  :doc:`See example of ROOT C++ notebook here <demos/root-cpp>`.
 * In Python, ROOT functionality is accessiblae via `PyROOT <https://root.cern/manual/python/>`_ package, present in the default kernel.
 * *Work in progress*: We are woking on enabling a CUDA backend for RooFit,
   in order to leverage GPU acceleration in ROOT workflows.
