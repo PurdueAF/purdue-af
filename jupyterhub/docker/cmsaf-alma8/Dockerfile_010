@@ -158,7 +158,7 @@ RUN mkdir /opt/root_build /opt/root && cd /opt/root_build/  &&\
         -Dcuda=ON -Dcudnn=ON -Dtmva-gpu=ON \
         -DCMAKE_CUDA_HOST_COMPILER=/usr/bin/g++ \
         -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.2/bin/nvcc \
-        -DCMAKE_CUDA_ARCHITECTURES=native \
+        -DCMAKE_CUDA_ARCHITECTURES=80 \
         -DCMAKE_CUDA_STANDARD=17 \
         ../root_src &&\
     cmake --build . -- install -j4 &&\
