@@ -60,6 +60,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     guide-rucio
     guide-mc-gen
     guide-demos
+    guide-binderhub
 
 .. toctree::
     :hidden:
