@@ -63,13 +63,13 @@ Purdue AF instance and make it executable via BinderHub.
       the directory in which Conda environment is installed - this is not needed
       for BinderHub.
 
-#.	**Launch a BinderHub session**
+#. **Launch a BinderHub session**
 
-    Once a Git repository with your code and ``environment.yml`` is ready, it
-    can be launched at a public BinderHub instance as follows:
+   Once a Git repository with your code and ``environment.yml`` is ready, it
+   can be launched at a public BinderHub instance as follows:
 
    1. Navigate to a public BinderHub instance, e.g. `mybinder.org <https://mybinder.org>`_.
-   2. Paste link to your Git repository in the window labeled *"GitHub repository name or URL"*.
+   2. Paste the link to your Git repository in the window labeled *"GitHub repository name or URL"*.
    3. Press ``Launch`` and wait for BinderHub to build your environment and launch JupyterHub.
 
    .. important:: 
@@ -77,6 +77,5 @@ Purdue AF instance and make it executable via BinderHub.
       Be aware of resource limits imposed at mybinder.org - sessions exceeding these
       limits will be killed.
 
-      * No more than 100 users runing the same repository simultaneously.
-      * Maximum 2BG memory per user session.
-
+      * No more than 100 users running the same repository simultaneously.
+      * Maximum 2GB memory per user session.
