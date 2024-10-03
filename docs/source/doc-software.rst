@@ -31,7 +31,7 @@ The environment is built from the following YAML file:
 .. raw:: html
 
    <details>
-   <summary>Click to expand/collapse</summary>
+   <summary>python3-env.yaml</summary>
 
 .. literalinclude:: python3-env.yaml
    :language: yaml
@@ -62,8 +62,17 @@ environment is fixed to ``0.7.21``.
 
 The environment is built from the following YAML file:
 
-.. literalinclude :: coffea_latest.yaml
+.. raw:: html
+
+   <details>
+   <summary>coffea_latest.yaml</summary>
+
+.. literalinclude:: coffea_latest.yaml
    :language: yaml
+
+.. raw:: html
+
+   </details>
 
 3. ROOT C++ kernel
 -----------------------
