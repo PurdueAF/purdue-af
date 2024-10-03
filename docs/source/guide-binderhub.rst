@@ -1,16 +1,18 @@
 Sharing reproducible code via BinderHub
 =========================================
 
-BinderHub is an open-source service that allows you to turn a Git repository
-into a collection of interactive Jupyter notebooks, which can then be shared
-and executed outside of Purdue AF without needing to have an account or install
-any software.
+`BinderHub <https://binderhub.readthedocs.io/en/latest/>`_ is an open-source
+service that allows you to turn a Git repository into a collection of
+interactive Jupyter notebooks, which can then be shared and executed outside
+of Purdue AF without needing to have an account or install any software.
 
 This can be useful for sharing your code with people who do not have access to
 Purdue AF, for example to host public workshops or tutorials.
 
 
-Steps to Export Your Analysis Code via BinderHub
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+How to Export Your Analysis Code via BinderHub
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Below is a step-by-step guide to export your analysis code from your private
