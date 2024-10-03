@@ -1,0 +1,39 @@
+name: coffea_latest
+channels:
+  - conda-forge
+dependencies:
+  - python
+  - pip
+
+  # Columnar
+  - coffea==2024.9.0
+  - awkward
+  - uproot
+
+  # ROOT
+  - root==6.32.02
+  - root_base==6.32.02
+  - boost
+  - eigen
+  - gsl
+  - pcre
+  - tbb
+  - vdt
+
+  # ML
+  - xgboost
+
+  # Tools
+  - dask==2024.9.1
+  - dask-gateway
+  - prometheus_client
+  - xrootd
+  - ipywidgets
+  - omegaconf
+
+  - pip:
+    - rucio-clients==33.3.0
+    - fsspec-xrootd
+    - torch
+    - cmsstyle
+    - scikit-hep-testdata

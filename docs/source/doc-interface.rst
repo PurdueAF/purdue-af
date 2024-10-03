@@ -78,6 +78,7 @@ HEP analysis frameworks
 We aim to support a wide range of modern HEP analysis tools.
 Below are a few examples of frameworks which have been shown to perform well
 at Purdue AF:
+
 * `Coffea <https://coffeateam.github.io/coffea/>`_ is a popular Python package
   for efficient columnar particle physics analyses. Coffea implements all common
   tools used in modern HEP analyses, and has a large and active support community.
@@ -89,11 +90,13 @@ at Purdue AF:
   To access one of the latest Coffea versions, you can either use ``coffea_latest`` kernel,
   or :doc:`create your own kernel <guide-conda>`. If you want to use ``coffea_latest`` but
   missing some packages, please :doc:`contact Purdue AF admins <doc-support>` and we will install them for you.
+
 * `PocketCoffea <https://pocketcoffea.readthedocs.io/en/stable/>`_ is a slim declarative
   framework built on top of Coffea. It allows to define an analysis with a few configuration
   files. A PocketCoffea analysis can be executed in a distributed way using
   `dask@purdue-af executor <https://pocketcoffea.readthedocs.io/en/stable/running.html#executors-availability>`_
   which is based on :doc:`Dask Gateway <doc-dask-gateway>`.
+
 * `RDataFrame <https://root.cern.ch/doc/master/group__tutorial__dataframe.html>`_ is
   another common HEP analysis framework based on ROOT. RDataFrame analysis can
   be written in either C++ or Python. Purdue AF supports RDataFrame in any Conda
