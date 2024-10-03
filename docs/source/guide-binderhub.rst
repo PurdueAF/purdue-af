@@ -11,8 +11,7 @@ Purdue AF, for example to host public workshops or tutorials.
 
 
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-How to Export Your Analysis Code via BinderHub
+How to share your code using BinderHub
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Below is a step-by-step guide to export your analysis code from your private

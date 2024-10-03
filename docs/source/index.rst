@@ -54,13 +54,13 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     :caption: User guides
     :maxdepth: 1
 
-    guide-vscode
-    guide-cern-eos
     guide-conda
     guide-rucio
+    guide-cern-eos
+    guide-vscode
+    guide-binderhub
     guide-mc-gen
     guide-demos
-    guide-binderhub
 
 .. toctree::
     :hidden:
