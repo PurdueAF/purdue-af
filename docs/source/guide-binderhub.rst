@@ -65,8 +65,8 @@ Purdue AF instance and make it executable via BinderHub.
 
 #.	**Launch a BinderHub session**
 
-  Once a Git repository with your code and ``environment.yml`` is ready, it
-  can be launched at a public BinderHub instance as follows:
+    Once a Git repository with your code and ``environment.yml`` is ready, it
+    can be launched at a public BinderHub instance as follows:
 
    1. Navigate to a public BinderHub instance, e.g. `mybinder.org <https://mybinder.org>`_.
    2. Paste link to your Git repository in the window labeled *"GitHub repository name or URL"*.
