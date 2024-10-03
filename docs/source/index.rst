@@ -31,13 +31,13 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     :maxdepth: 1
 
     doc-getting-started
+    doc-interface
     doc-storage
     doc-software
     doc-hardware
     doc-dask
     doc-dask-gateway
     doc-support
-    doc-interface-1
 
     .. doc-login-methods
     .. doc-interface
