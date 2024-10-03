@@ -13,7 +13,7 @@ or from the existing kernels using the following instructions:
 The pre-installed kernels are listed below. The versions of the packages
 in these kernels will be occasionally upgraded.
 
-#. Python3 kernel (default)
+1. Python3 kernel (default)
 ----------------------------
 
 This kernel is based on Python 3.10 and designed for typical pythonic HEP analysis
@@ -28,10 +28,19 @@ workflows.
 
 The environment is built from the following YAML file:
 
-.. literalinclude :: python3-env.yaml
+.. raw:: html
+
+   <details>
+   <summary>Click to expand/collapse</summary>
+
+.. literalinclude:: python3-env.yaml
    :language: yaml
 
-#. ``coffea_latest``
+.. raw:: html
+
+   </details>
+
+2. ``coffea_latest`` kernel
 ----------------------------
 
 This kernel features the latest version of `Coffea <https://coffeateam.github.io/coffea/>`_ package,
@@ -56,7 +65,7 @@ The environment is built from the following YAML file:
 .. literalinclude :: coffea_latest.yaml
    :language: yaml
 
-#. ROOT C++ kernel
+3. ROOT C++ kernel
 -----------------------
 
 This kernel provides an interactive interface to the ROOT command line,
