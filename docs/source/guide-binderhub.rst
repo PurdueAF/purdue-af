@@ -16,7 +16,7 @@ Steps to Export Your Analysis Code via BinderHub
 Below is a step-by-step guide to export your analysis code from your private
 Purdue AF instance and make it executable via BinderHub.
 
-1. **Save Your Code to a GitHub Repository**
+#. **Save Your Code to a GitHub Repository**
 
    Ensure that all your analysis code, notebooks, and any other necessary
    files are saved in a public GitHub or GitLab repository.
@@ -26,7 +26,7 @@ Purdue AF instance and make it executable via BinderHub.
    To turn an existing directory into a Git repository, you can use
    `git init <https://github.com/git-guides/git-init>`_ command.
 
-2. **Create an ``environment.yml`` File**
+#. **Create an ``environment.yml`` File**
 
    In order for BinderHub to create the necessary environment for your analysis,
    you need to define the dependencies in an ``environment.yml`` file, which
@@ -63,7 +63,7 @@ Purdue AF instance and make it executable via BinderHub.
       the directory in which Conda environment is installed - this is not needed
       for BinderHub.
 
-3.	**Launch a BinderHub session**
+#.	**Launch a BinderHub session**
 
    Once a Git repository with your code and ``environment.yml`` is ready, it
    can be launched at a public BinderHub instance as follows:
