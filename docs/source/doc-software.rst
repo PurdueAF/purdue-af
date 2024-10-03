@@ -1,14 +1,14 @@
 Software
 ==========================
 
-The Purdue Analysis Facility provides two Jupyter kernels with pre-installed
+The Purdue Analysis Facility provides multiple Jupyter kernels with pre-installed
 analysis software. Users can also create their own kernels from scratch
 or from the existing kernels using the following instructions:
 :doc:`guide-conda`.
 
-.. image:: images/kernels.png
-   :width: 300
-   :align: center
+.. .. image:: images/kernels.png
+..    :width: 300
+..    :align: center
 
 The pre-installed kernels are listed below. The versions of the packages
 in these kernels will be occasionally upgraded.
