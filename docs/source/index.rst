@@ -43,9 +43,8 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
 .. toctree::
     :hidden:
     :caption: Monitoring
-    :maxdepth: 1
 
-    monitoring
+    Monitoring dashboard <https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard>
 
 .. toctree::
     :hidden:
