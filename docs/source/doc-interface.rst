@@ -105,9 +105,33 @@ at Purdue AF:
 Scaling out
 ------------
 
-* Slurm
-* Dask
-* CRAB
+* **Slurm** is the main batch system in use at Purdue. Users with Purdue accounts
+  can submit jobs from Purdue AF to ``cms`` queue.
+  
+  `Instructions to submit Slurm jobs <https://www.rcac.purdue.edu/knowledge/hammer/run>`_
+
+* **Dask** is an open-source library for parallel computing in Python. It can
+  be used to :doc:`quickly parallelize any Python code <doc-dask>`,
+  or implicitly as a backend in frameworks such as Coffea and RDataFrame.
+
+  At Purdue AF, we host :doc:`Dask Gateway servers <doc-dask-gateway>`, which
+  allow users with both local and external (CERN/FNAL) accounts to scale out
+  beyond local session resources.
+
+* **CRAB** (CMS Remote Analysis Builder) is a utility to submit CMSSW jobs
+  to distributed computing resources. CRAB allows users to:
+
+  * Access Data and Monte Carlo datasets stored at any CMS computing site
+    worldwide.
+  * Exploit the CPU and storage resources at CMS computing sites via
+    Worldwide LHC Computing Grid (WLCG).
+
+  CRAB is suitable for running most CMSSW framework jobs
+  (i.e. jobs launched via the ``cmsRun`` command).
+  It is recommended to use CRAB for computationally intensive jobs,
+  such as Monte Carlo generation or "skimming" AOD / MiniAOD datasets.
+
+  `Instructions for submitting CRAB jobs <https://www.physics.purdue.edu/Tier2/user-info/tutorials/crab3.php>`_
 
 GPUs
 ------
