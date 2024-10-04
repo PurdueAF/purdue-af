@@ -14,7 +14,7 @@ Purdue AF + VSCode use cases
 
 - Running local notebooks with remote Conda environments (Jupyter kernels), which ensures that
   you use exactly the same versions of packages without a need to reinstall the environment.
-- Scaling out from you computer to 100s cores using :doc:`Dask Gateway <doc-dask-gateway>` instances at Purdue AF.
+- Scaling out from you computer to 100s cores using :doc:`Dask Gateway <guide-dask-gateway>` instances at Purdue AF.
 
 .. image:: images/vscode.png
    :width: 90%
@@ -64,6 +64,6 @@ Installation instructions
 
 #. (optional) **Start a Dask Gateway cluster**
 
-   Follow :doc:`instructions to start Dask Gateway cluster from a Jupyter notebook <doc-dask-gateway>` -
+   Follow :doc:`instructions to start Dask Gateway cluster from a Jupyter notebook <guide-dask-gateway>` -
    they will work in your local notebook in VSCode too, but interactive widgets will
    not be displayed.

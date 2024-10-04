@@ -35,8 +35,6 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     doc-storage
     doc-software
     doc-hardware
-    doc-dask
-    doc-dask-gateway
     doc-support
 
     .. doc-login-methods
@@ -55,6 +53,8 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     :maxdepth: 1
 
     guide-conda
+    guide-dask
+    guide-dask-gateway
     guide-rucio
     guide-cern-eos
     guide-vscode

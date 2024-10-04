@@ -11,7 +11,7 @@ The screenshot below shows the main elements of the interface:
    :align: center
 
 #. **File browser** - your home directory with symlinks to different storage volumes (Depot, CVMFS, ``/work/``, etc. - learn more :doc:`here <doc-storage>`).
-#. **Exstensions** - left sidebar contains useful extesions: an interactive :doc:`Dask Gateway <doc-dask-gateway>` interface, and a Git extension for interactive work with GitHub or GitLab repositories.
+#. **Exstensions** - left sidebar contains useful extesions: an interactive :doc:`Dask Gateway <guide-dask-gateway>` interface, and a Git extension for interactive work with GitHub or GitLab repositories.
 #. **Launcher** - features buttons to create Python and ROOT C++ notebooks with different Conda environments, open terminals, create new text files, etc.
    New launcher window can be opened by clicking the ``+`` button in the file browser or next to any open tab.
 #. **Top bar** - contains Purdue AF release version, your username, dark theme switch, and the shutdown button.
@@ -49,8 +49,8 @@ JupyterLab is especially well suited for developing analysis workflows in Python
      if there are any packages missing.
 
 * Analysis code written in Python can be accelerated via parallelization. We recommend using
-  :doc:`Dask <doc-dask>` for parallelization and distributed computing.
-  For scaling out to multiple computing nodes, consider using :doc:`Dask Gateway <doc-dask-gateway>`.
+  :doc:`Dask <guide-dask>` for parallelization and distributed computing.
+  For scaling out to multiple computing nodes, consider using :doc:`Dask Gateway <guide-dask-gateway>`.
 
 ROOT
 -------
@@ -95,7 +95,7 @@ at Purdue AF:
   framework built on top of Coffea. It allows to define an analysis with a few configuration
   files. A PocketCoffea analysis can be executed in a distributed way using
   `dask@purdue-af executor <https://pocketcoffea.readthedocs.io/en/stable/running.html#executors-availability>`_
-  which is based on :doc:`Dask Gateway <doc-dask-gateway>`.
+  which is based on :doc:`Dask Gateway <guide-dask-gateway>`.
 
 * `RDataFrame <https://root.cern.ch/doc/master/group__tutorial__dataframe.html>`_ is
   another common HEP analysis framework based on ROOT. RDataFrame analysis can
@@ -113,10 +113,10 @@ Scaling out
   `Instructions for submitting Slurm jobs <https://www.rcac.purdue.edu/knowledge/hammer/run>`_
 
 * `Dask <https://docs.dask.org/en/stable/>`_  is an open-source library for parallel computing in Python. It can
-  be used to :doc:`quickly parallelize any Python code <doc-dask>`,
+  be used to :doc:`quickly parallelize any Python code <guide-dask>`,
   or implicitly as a backend in frameworks such as Coffea and RDataFrame.
 
-  At Purdue AF, we host :doc:`Dask Gateway servers <doc-dask-gateway>`, which
+  At Purdue AF, we host :doc:`Dask Gateway servers <guide-dask-gateway>`, which
   allow **users with both local and external (CERN/FNAL) accounts** to scale out
   beyond local session resources.
 

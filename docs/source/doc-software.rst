@@ -1,4 +1,4 @@
-Software
+Analysis software (kernels)
 ==========================
 
 The Purdue Analysis Facility provides multiple Jupyter kernels with pre-installed

@@ -87,4 +87,4 @@ depending on availability of resources.
    that it contains ``dask-gateway``, ``ipykernel`` and ``ipywidgets`` packages.
 
 Please refer to the following page for detailed documentation about
-Dask Gateway at Purdue Analysis Facility: :doc:`doc-dask-gateway`.
+Dask Gateway at Purdue Analysis Facility: :doc:`guide-dask-gateway`.
