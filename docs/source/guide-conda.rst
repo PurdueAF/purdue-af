@@ -69,42 +69,21 @@ Creating custom Conda environments
 There are multiple ways to create a custom Conda environment,
 the particular choice of a method depends on the use case.
 
+.. tip::
 
-Option 1: Create a Conda environment from scratch
---------------------------------------------------
+   Use ``mamba`` instead of ``conda`` where possible - it will significantly accelerate installation of packages.
 
-This option is preferred if you want to start from a clean environment and install all packages manually.
 
-.. code-block:: shell
-
-    conda create --prefix /some-path/my-new-env python=3.10 ipykernel
-    conda activate /some-path/my-new-env
-    conda install numpy pandas # install any packages here
-    conda deactivate
-
-Option 2: Clone an existing environment into a new environment
+Option 1 (recommended): Create a Conda environment from a YAML file
 ----------------------------------------------------------------
 
-This is a simple method to duplicate an existing environment. 
-
-.. code-block:: shell
-
-    conda create --prefix /path/to/cloned_env --clone /path/to/original_env
-
-Option 3: Create a Conda environment from a YAML file
-----------------------------------------------------------------
-
-This is another method to replicate an environment, it can be used if the original
-environment is exported and shared as a YAML file. The main benefit of this
-approach is the possibility to share environments outside of the Analysis Facility
-(one can simply email the YAML file).
-
-Alternatively, this method can be used to create a Conda environment from scratch,
-if you know in advance which packages must be present in the kernel.
+The main benefits of this approach are the reproducibility and portability of
+the resulting environment - it can be easily rebuilt anywhere from the same YAML
+file.
 
 1. If you have already been provided with a YAML file, proceed to step 4.
 2. If you are creating a YAML file from scratch, you can use the YAML file
-   corresponding to the default kernel as an example: :ref:`see here <doc-software>`.
+   corresponding to the default kernel as an example: :doc:`see here <doc-software>`.
 
    .. warning::
 
@@ -138,11 +117,35 @@ if you know in advance which packages must be present in the kernel.
       A better location to store your environment is either ``/work/`` or
       ``/depot/`` storage (Depot is only writeable by Purdue users).
 
-5. You can activate the environment and install more packages into it at any time:
+5. To install more packages into the environment or change package versions,
+   the recommended method is to add the package name into the same YAML file,
+   and then update the environment using the following commands:
 
    .. code-block:: shell
       
       conda activate /some-path/my-new-env
+      mamba env update --file /path/to/environment.yaml
+
+Option 2: Create a Conda environment from scratch
+--------------------------------------------------
+
+This option is preferred if you want to start from a clean environment and install all packages manually.
+
+.. code-block:: shell
+
+    conda create --prefix /some-path/my-new-env python=3.10 ipykernel
+    conda activate /some-path/my-new-env
+    conda install numpy pandas # install any packages here
+    conda deactivate
+
+Option 3: Clone an existing environment into a new environment
+----------------------------------------------------------------
+
+This is a simple method to duplicate an existing environment. 
+
+.. code-block:: shell
+
+    conda create --prefix /path/to/cloned_env --clone /path/to/original_env
 
 
 

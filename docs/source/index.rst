@@ -44,7 +44,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     :hidden:
     :caption: Monitoring
 
-    Monitoring dashboard <https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard>
+    Monitoring dashboard <https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard> target="_blank"
 
 .. toctree::
     :hidden:
@@ -65,7 +65,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     :hidden:
     :caption: Useful links
 
-    Purdue Tier-2 website <https://www.physics.purdue.edu/Tier2/>
-    CMS Common Analysis Tools documentation <https://cms-analysis.docs.cern.ch>
-    Data Aggregation System (DAS) <https://cmsweb.cern.ch/das/>
+    Purdue Tier-2 website <https://www.physics.purdue.edu/Tier2/> target="_blank"
+    CMS Common Analysis Tools documentation <https://cms-analysis.docs.cern.ch> target="_blank"
+    Data Aggregation System (DAS) <https://cmsweb.cern.ch/das/> target="_blank"
 
