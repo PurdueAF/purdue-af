@@ -105,12 +105,14 @@ at Purdue AF:
 Scaling out
 ------------
 
-* **Slurm** is the main batch system in use at Purdue. Users with Purdue accounts
+* `**Slurm** <https://slurm.schedmd.com/documentation.html>`_ is a job
+  scheduler and workload manager that enables batch submission on Purdue
+  computing clusters.  At Purdue AF, **users with local Purdue accounts**
   can submit jobs from Purdue AF to ``cms`` queue.
   
   `Instructions to submit Slurm jobs <https://www.rcac.purdue.edu/knowledge/hammer/run>`_
 
-* **Dask** is an open-source library for parallel computing in Python. It can
+* `**Dask** <https://docs.dask.org/en/stable/>`_  is an open-source library for parallel computing in Python. It can
   be used to :doc:`quickly parallelize any Python code <doc-dask>`,
   or implicitly as a backend in frameworks such as Coffea and RDataFrame.
 
@@ -118,7 +120,7 @@ Scaling out
   allow users with both local and external (CERN/FNAL) accounts to scale out
   beyond local session resources.
 
-* **CRAB** (CMS Remote Analysis Builder) is a utility to submit CMSSW jobs
+* `**CRAB** <https://twiki.cern.ch/twiki/bin/view/CMSPublic/SWGuideCrab>`_ (CMS Remote Analysis Builder) is a utility to submit CMSSW jobs
   to distributed computing resources. CRAB allows users to:
 
   * Access Data and Monte Carlo datasets stored at any CMS computing site
@@ -135,3 +137,26 @@ Scaling out
 
 GPUs
 ------
+
+At Purdue AF, you can start a session with a GPU by specifying it at resource selection step.
+
+We have a limited number of Nvidia A100 GPUs, which are available in two configurations:
+
++----------------------+--------+---------------------+
+| Configuration        | Memory | Number of instances |
++----------------------+--------+---------------------+
++----------------------+--------+---------------------+
+| Full A100 GPU        | 40GB   | 4                   |
++----------------------+--------+---------------------+
+| 5GB "slice" of A100  | 5GB    | 14                  |
++----------------------+--------+---------------------+
+
+When GPU is selected, you session will have the following GPU software versions:
+
+* Nvidia Driver Version: 535.129.03
+* CUDA Version: 12.2
+
+.. important::
+
+   Please shut down your session after finishing GPU work to release the
+   GPU for other users.
