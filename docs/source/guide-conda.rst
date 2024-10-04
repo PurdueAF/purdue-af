@@ -81,19 +81,25 @@ The main benefits of this approach are the reproducibility and portability of
 the resulting environment - it can be easily rebuilt anywhere from the same YAML
 file.
 
-1. If you have already been provided with a YAML file, proceed to step 4.
-2. If you are creating a YAML file from scratch, you can use the YAML file
-   corresponding to the default kernel as an example: :doc:`see here <doc-software>`.
+1. Here is an example of an ``environment.yaml`` file:
 
-   .. warning::
+   .. code-block:: yaml
 
-      Do not copy ``prefix: /depot/cms/kernels/python3`` from the example YAML, as
-      it will lead to errors during installation.
-      
-      Also, you can ignore the ``variables:`` section, it is only there for correct
-      installation of the ``lhapdf`` package.
+      name: my-new-env
+      channels:
+        - defaults
+        - conda-forge
+      dependencies:
+        - python=3.9
+        - numpy
+        - pandas
+        - matplotlib
+        - coffea=2024.9.0
+        - pip
+        - pip:
+          - rucio-clients
 
-3. Additional Conda repositories may be specified under the ``channels:`` section, e.g:
+2. Additional Conda repositories may be specified under the ``channels:`` section, e.g:
 
    .. code-block:: yaml
 
@@ -101,12 +107,12 @@ file.
         - conda-forge
         - pyg
 
-4. Once the list of packages is finalized, create a Conda environment in a desired location
+3. Once the list of packages is finalized, create a Conda environment in a desired location
    (in this example the environment will get created with a name ``my-new-env``):
 
    .. code-block:: shell
 
-       conda env create -f /some-path/my-env-file.yml --prefix /some-path/my-new-env
+       mamba env create --file /some-path/environment.yml --prefix /some-path/my-new-env
 
    .. warning::
 
@@ -117,9 +123,9 @@ file.
       A better location to store your environment is either ``/work/`` or
       ``/depot/`` storage (Depot is only writeable by Purdue users).
 
-5. To install more packages into the environment or change package versions,
-   the recommended method is to add the package name into the same YAML file,
-   and then update the environment using the following commands:
+4. To install more packages into the environment or change package versions,
+   the recommended method is to add the package name and/or version into the
+   same YAML file, and then update the environment using the following commands:
 
    .. code-block:: shell
       
