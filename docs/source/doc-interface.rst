@@ -105,14 +105,14 @@ at Purdue AF:
 Scaling out
 ------------
 
-* **`Slurm <https://slurm.schedmd.com/documentation.html>`_** is a job
+* `Slurm <https://slurm.schedmd.com/documentation.html>`_ is a job
   scheduler and workload manager that enables batch submission on Purdue
   computing clusters.  At Purdue AF, **users with local Purdue accounts**
   can submit jobs from Purdue AF to ``cms`` queue.
   
   `Instructions for submitting Slurm jobs <https://www.rcac.purdue.edu/knowledge/hammer/run>`_
 
-* **`Dask <https://docs.dask.org/en/stable/>`_**  is an open-source library for parallel computing in Python. It can
+* `Dask <https://docs.dask.org/en/stable/>`_  is an open-source library for parallel computing in Python. It can
   be used to :doc:`quickly parallelize any Python code <doc-dask>`,
   or implicitly as a backend in frameworks such as Coffea and RDataFrame.
 
@@ -120,7 +120,7 @@ Scaling out
   allow **users with both local and external (CERN/FNAL) accounts** to scale out
   beyond local session resources.
 
-* **`CRAB <https://twiki.cern.ch/twiki/bin/view/CMSPublic/SWGuideCrab>`_** (CMS Remote Analysis Builder) is a utility to submit CMSSW jobs
+* `CRAB <https://twiki.cern.ch/twiki/bin/view/CMSPublic/SWGuideCrab>`_ (CMS Remote Analysis Builder) is a utility to submit CMSSW jobs
   to distributed computing resources. CRAB allows users to:
 
   * Access Data and Monte Carlo datasets stored at any CMS computing site
