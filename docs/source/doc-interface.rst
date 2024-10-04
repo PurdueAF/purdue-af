@@ -110,7 +110,7 @@ Scaling out
   computing clusters.  At Purdue AF, **users with local Purdue accounts**
   can submit jobs from Purdue AF to ``cms`` queue.
   
-  `Instructions to submit Slurm jobs <https://www.rcac.purdue.edu/knowledge/hammer/run>`_
+  `Instructions for submitting Slurm jobs <https://www.rcac.purdue.edu/knowledge/hammer/run>`_
 
 * **`Dask <https://docs.dask.org/en/stable/>`_**  is an open-source library for parallel computing in Python. It can
   be used to :doc:`quickly parallelize any Python code <doc-dask>`,
