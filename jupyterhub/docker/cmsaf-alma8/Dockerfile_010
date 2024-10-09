@@ -118,7 +118,7 @@ COPY jupyter/start.sh /usr/local/bin/
 WORKDIR /tmp
 RUN mamba install --quiet --yes \
         notebook jupyterhub jupyterlab=4.2.5 nodejs==18.11.0 \
-        nb_conda_kernels rucio-clients pytest lz4 ipywidgets ipympl bokeh==2.4.2 &&\
+        nb_conda_kernels metakernel rucio-clients pytest lz4 ipywidgets ipympl bokeh==2.4.2 &&\
     jupyter notebook --generate-config && \
     mamba clean --all -f -y && \
     npm cache clean --force && \
@@ -163,6 +163,8 @@ RUN mkdir /opt/root_build /opt/root && cd /opt/root_build/  &&\
         ../root_src &&\
     cmake --build . -- install -j4 &&\
     source ../../root/bin/thisroot.sh
+
+RUN jupyter kernelspec install /opt/root/etc/notebook/kernels/root/ --user
 
 # Install Slurm
 COPY rpms/slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
