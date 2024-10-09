@@ -98,8 +98,8 @@ RUN set -x && \
     rm /tmp/micromamba.tar.bz2 && \
     PYTHON_SPECIFIER="python=${PYTHON_VERSION}" && \
     if [[ "${PYTHON_VERSION}" == "default" ]]; then PYTHON_SPECIFIER="python"; fi && \
-    eval "$(./micromamba shell hook --shell bash)" && \
-    ./micromamba activate && \
+    eval "$(micromamba shell hook --shell bash)" && \
+    micromamba activate && \
     ./micromamba install \
         --root-prefix="${CONDA_DIR}" \
         --prefix="${CONDA_DIR}" \
