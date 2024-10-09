@@ -98,6 +98,7 @@ RUN set -x && \
     rm /tmp/micromamba.tar.bz2 && \
     PYTHON_SPECIFIER="python=${PYTHON_VERSION}" && \
     if [[ "${PYTHON_VERSION}" == "default" ]]; then PYTHON_SPECIFIER="python"; fi && \
+    ./micromamba activate base && \
     ./micromamba install \
         --root-prefix="${CONDA_DIR}" \
         --prefix="${CONDA_DIR}" \
@@ -106,7 +107,6 @@ RUN set -x && \
         'mamba' \
         'jupyter_core' && \
     rm micromamba && \
-    micromamba activate base && \
     mamba list python | grep '^python ' | tr -s ' ' | cut -d ' ' -f 1,2 >> "${CONDA_DIR}/conda-meta/pinned" && \
     mamba clean --all -f -y && \
     fix-permissions "${CONDA_DIR}" && \
