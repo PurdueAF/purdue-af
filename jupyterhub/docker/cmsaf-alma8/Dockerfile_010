@@ -84,14 +84,13 @@ USER ${NB_USER}
 ARG PYTHON_VERSION=3.10
 
 # Setup work directory for backward-compatibility
-RUN mkdir -p "/home/${NB_USER}/work" && \
+RUN mkdir -p  "/home/${NB_USER}/work" && \
     fix-permissions "/home/${NB_USER}"
 
 # Download and install Micromamba, and initialize Conda prefix
 COPY --chown="${NB_USER}:${NB_GID}" initial-condarc "${CONDA_DIR}/.condarc"
 WORKDIR /tmp
-RUN     mkdir -p "/home/${NB_USER}/.mamba/pkgs" 
-RUN set -x  && \
+RUN set -x && \
     wget -qO /tmp/micromamba.tar.bz2 "https://micromamba.snakepit.net/api/micromamba/linux-64/latest" && \
     tar -xvjf /tmp/micromamba.tar.bz2 --strip-components=1 bin/micromamba && \
     rm /tmp/micromamba.tar.bz2 && \
