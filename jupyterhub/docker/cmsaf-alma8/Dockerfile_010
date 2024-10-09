@@ -94,6 +94,7 @@ RUN set -x  && \
     wget -qO /tmp/micromamba.tar.bz2 "https://micromamba.snakepit.net/api/micromamba/linux-64/latest" && \
     tar -xvjf /tmp/micromamba.tar.bz2 --strip-components=1 bin/micromamba && \
     rm /tmp/micromamba.tar.bz2 && \
+    mkdir -p "/home/${NB_USER}/.mamba/pkgs" && \
     PYTHON_SPECIFIER="python=${PYTHON_VERSION}" && \
     if [[ "${PYTHON_VERSION}" == "default" ]]; then PYTHON_SPECIFIER="python"; fi && \
     ./micromamba install \
@@ -109,7 +110,6 @@ RUN set -x  && \
     fix-permissions "${CONDA_DIR}" && \
     fix-permissions "/home/${NB_USER}"
 
-# mkdir -p "/home/${NB_USER}/.mamba/pkgs" && \
 
 # Configure container startup
 ENTRYPOINT ["/usr/bin/tini", "--"]
