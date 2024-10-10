@@ -103,12 +103,11 @@ RUN set -x  && \
         "${PYTHON_SPECIFIER}" \
         'mamba' \
         'jupyter_core' && \
-    export MAMBA_ROOT_PREFIX="${CONDA_DIR}" && \
-    ./micromamba list -p "${CONDA_DIR}" python | grep '^python ' | tr -s ' ' | cut -d ' ' -f 1,2 >> "${CONDA_DIR}/conda-meta/pinned" && \
-    mamba clean --all -f -y && \
     rm micromamba && \
+    mamba clean --all -f -y && \
     fix-permissions "${CONDA_DIR}" && \
     fix-permissions "/home/${NB_USER}"
+# mamba list python | grep '^python ' | tr -s ' ' | cut -d ' ' -f 1,2 >> "${CONDA_DIR}/conda-meta/pinned" && \
 
 
 # Configure container startup
