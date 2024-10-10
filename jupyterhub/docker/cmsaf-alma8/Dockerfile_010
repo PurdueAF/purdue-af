@@ -103,6 +103,7 @@ RUN set -x  && \
         "${PYTHON_SPECIFIER}" \
         'mamba' \
         'jupyter_core' && \
+    export MAMBA_ROOT_PREFIX="${CONDA_DIR}" && \
     ./micromamba run -n base mamba list python | grep '^python ' | tr -s ' ' | cut -d ' ' -f 1,2 >> "${CONDA_DIR}/conda-meta/pinned" && \
     mamba clean --all -f -y && \
     rm micromamba && \
