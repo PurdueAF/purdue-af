@@ -104,6 +104,7 @@ RUN set -x  && \
         'mamba' \
         'jupyter_core' && \
     rm micromamba && \
+    export PATH="${CONDA_DIR}/bin:${PATH}" && \
     mamba list python | grep '^python ' | tr -s ' ' | cut -d ' ' -f 1,2 >> "${CONDA_DIR}/conda-meta/pinned" && \
     mamba clean --all -f -y && \
     fix-permissions "${CONDA_DIR}" && \
