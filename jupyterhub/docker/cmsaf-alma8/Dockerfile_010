@@ -226,5 +226,6 @@ COPY default.local /etc/cvmfs/
 USER ${NB_USER}
 
 RUN jupyter kernelspec install /opt/root/etc/notebook/kernels/root/ --user
+RUN source /opt/root/bin/thisroot.sh
 
 WORKDIR "${HOME}"
