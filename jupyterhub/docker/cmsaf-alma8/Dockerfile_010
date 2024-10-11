@@ -165,8 +165,6 @@ RUN mkdir /opt/root_build /opt/root && cd /opt/root_build/  &&\
     cmake --build . -- install -j4 &&\
     source ../../root/bin/thisroot.sh
 
-RUN jupyter kernelspec install /opt/root/etc/notebook/kernels/root/ --user
-
 # Install Slurm
 COPY rpms/slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
 COPY slurm /etc/slurm
@@ -226,4 +224,7 @@ COPY default.local /etc/cvmfs/
 
 # Switch back to NB_USER
 USER ${NB_USER}
+
+RUN jupyter kernelspec install /opt/root/etc/notebook/kernels/root/ --user
+
 WORKDIR "${HOME}"
