@@ -163,6 +163,7 @@ RUN mkdir /opt/root_build /opt/root && cd /opt/root_build/  &&\
         -DCMAKE_CUDA_STANDARD=17 \
         ../root_src &&\
     cmake --build . -- install -j4 &&\
+    chmod -R o+w /opt/root/etc/ && \
     source ../../root/bin/thisroot.sh
 
 # Install Slurm
