@@ -148,7 +148,7 @@ RUN sed -re "s/c.ServerApp/c.NotebookApp/g" \
 
 # Healthcheck configuration
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
-    CMD /etc/jupyter/docker_healthcheck.py || exit 1
+CMD /etc/jupyter/docker_healthcheck.py || exit 1
 
 # Install ROOT
 RUN dnf install -y libX11-devel libXpm-devel libXft-devel libXext-devel fftw-devel
@@ -192,6 +192,8 @@ RUN pip install --upgrade \
     jupyterlab-git \
     jupyter-resource-usage \
     jupyterlab_iframe \
+    jupyter-archive \
+    jupyterlab_favorites \
     purdue-af-shutdown-button \
     purdue-af-grafana-iframe \
     "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-topbar-text&subdirectory=packages/topbar-text-extension" \

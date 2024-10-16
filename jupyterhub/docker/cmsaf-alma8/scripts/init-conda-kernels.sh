@@ -10,7 +10,7 @@ conda run -p /depot/cms/kernels/python3 ipython kernel install \
 
 kernel_path="/opt/conda/share/jupyter/kernels/python3/"
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/depot/cms/purdue-af/lhapdf/lib
-PYTHONPATH=$PYTHONPATH:/depot/cms/purdue-af/lhapdf/lib/python3.10/site-packages
+PYTHONPATH=$PYTHONPATH:/depot/cms/purdue-af/lhapdf/lib/python3.10/site-packages:/opt/root/lib/:/opt/root/bin/
 PATH=$PATH:/depot/cms/purdue-af/lhapdf/bin
 
 LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
