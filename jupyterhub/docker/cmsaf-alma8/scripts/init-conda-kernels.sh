@@ -20,6 +20,8 @@ PATH="$PATH" \
     "$kernel_path/kernel.json" > tmp_kernel.json
 mv tmp_kernel.json "$kernel_path/kernel.json"
 
+# for ROOT
+jupyter kernelspec install /opt/root/etc/notebook/kernels/root --name ROOT
 
 # For HATS 2024 workshop
 
