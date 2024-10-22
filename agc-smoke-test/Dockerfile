@@ -1,4 +1,4 @@
-FROM geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.9.6
+FROM geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.10.1
 
 ENV PATH /opt/conda/bin:$PATH
 

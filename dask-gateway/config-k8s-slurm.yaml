@@ -55,6 +55,7 @@ gateway:
                 "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
                 "scheduler_partition": "hammer-nodes",
                 "scheduler_reservation": "CMSLOCAL",
+                "worker_partition": "hammer-g",
                 "worker_cmd": f"{options.conda_env}/bin/dask-worker",
                 "account": "cms",
                 "time": "1-00:00:00",

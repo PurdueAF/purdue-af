@@ -119,7 +119,8 @@ COPY jupyter/start.sh /usr/local/bin/
 WORKDIR /tmp
 RUN mamba install --quiet --yes \
         notebook jupyterhub jupyterlab=4.2.5 nodejs==18.11.0 \
-        nb_conda_kernels metakernel rucio-clients pytest lz4 ipywidgets ipympl bokeh==2.4.2 &&\
+        nb_conda_kernels metakernel rucio-clients pytest lz4 ipywidgets ipympl bokeh==2.4.2 \
+        julia &&\
     jupyter notebook --generate-config && \
     mamba clean --all -f -y && \
     npm cache clean --force && \
@@ -149,6 +150,9 @@ RUN sed -re "s/c.ServerApp/c.NotebookApp/g" \
 # Healthcheck configuration
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
 CMD /etc/jupyter/docker_healthcheck.py || exit 1
+
+# Install Julia
+RUN julia -e 'using Pkg; Pkg.add("IJulia"); using IJulia; IJulia.installkernel("Julia", "--depwarn=no")'
 
 # Install ROOT
 RUN dnf install -y libX11-devel libXpm-devel libXft-devel libXext-devel fftw-devel

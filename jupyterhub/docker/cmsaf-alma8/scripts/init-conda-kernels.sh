@@ -24,9 +24,12 @@ mv tmp_kernel.json "$kernel_path/kernel.json"
 jupyter kernelspec install /opt/root/etc/notebook/kernels/root --name ROOT
 
 # For HATS 2024 workshop
+# conda run -p /depot/cms/kernels/hats2024 ipython kernel install \
+#     --prefix=/opt/conda --name="hats2024"  --display-name "HATS 2024"
 
-conda run -p /depot/cms/kernels/hats2024 ipython kernel install \
-    --prefix=/opt/conda --name="hats2024"  --display-name "HATS 2024"
+# For Coffea_latest
+conda run -p /depot/cms/kernels/coffea_latest ipython kernel install \
+    --prefix=/opt/conda --name="coffea_latest"  --display-name "coffea_latest"
 
 # kernel_path="/opt/conda/share/jupyter/kernels/hats2024/"
 # "$kernel_path/kernel.json" > tmp_kernel.json

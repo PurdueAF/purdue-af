@@ -44,14 +44,8 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     :hidden:
     :caption: Monitoring
 
-    |monitoring_link|
-    .. Monitoring dashboard <https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard>
+    Monitoring dashboard <https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard>
 
-.. |monitoring_link| raw:: html
-
-    <a href="https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard" target="_blank">
-        Monitoring dashboard
-    </a>
 
 .. toctree::
     :hidden:
