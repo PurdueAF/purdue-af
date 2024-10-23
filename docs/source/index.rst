@@ -34,8 +34,8 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
     doc-interface
     doc-storage
     doc-software
-    doc-hardware
     doc-data-access
+    doc-hardware
     doc-support
 
     .. doc-login-methods
