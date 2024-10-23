@@ -1,4 +1,4 @@
-CMS Experiment Data Access 
+Data Access 
 ============================
 
 General Principles
