@@ -151,7 +151,10 @@ RUN sed -re "s/c.ServerApp/c.NotebookApp/g" \
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
 CMD /etc/jupyter/docker_healthcheck.py || exit 1
 
-# Install Julia
+# Set LD_LIBRARY_PATH to avoid crashes due to library mismatches
+ENV LD_LIBRARY_PATH="/opt/conda/envs/julia_env/lib:$LD_LIBRARY_PATH"
+
+# Install the Julia kernel via IJulia
 RUN julia -e 'using Pkg; Pkg.add("IJulia"); using IJulia; IJulia.installkernel("Julia", "--depwarn=no")'
 
 # Install ROOT
