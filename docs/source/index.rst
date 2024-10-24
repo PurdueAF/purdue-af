@@ -26,6 +26,19 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
 
 |
 
+Purdue AF features a JupyterLab interface with access to CPUs, GPUs, and
+distributed computing resources via SLURM and Dask Gateway.
+It features a software stack suitable for all steps of
+HEP analysis design and execution, including popular tools such as
+``coffea``, ``ROOT``, ``RDataFrame``, as well as popular
+machine learning packages like ``tensorflow``. 
+Users are provided with a variety of data access methods
+(``XRootD``, ``XCache``, ``Rucio``), as well as multiple
+private and shared storage volumes.
+
+The software and functionality is regularly updated to provide state-of-the-art
+tools and features for fast, efficient, collaborative HEP research.
+
 .. toctree::
     :caption: Documentation
     :maxdepth: 1
