@@ -1,4 +1,4 @@
-GPUs at Purdue AF 
+GPU Access
 ============================
 
 **Graphics processing units (GPUs)** are specialized processors that can
@@ -19,7 +19,7 @@ How to access GPUs at Purdue AF
    You will have a choice of either a 5GB "slice" of A100, or a full 40GB A100.
 
    .. image:: images/gpu-selection.png
-      :width: 400
+      :width: 500
       :align: center
 
    .. note::
@@ -55,10 +55,10 @@ How to access GPUs at Purdue AF
         is ``/depot/``; consider saving the outputs of your jobs there.
 
    
-How to enable GPU support in common ML libraries
+GPU support in common ML libraries
 --------------------------------------------------
 
-- ``Tensorflow``:
+- **Tensorflow**:
 
   1. Install ``tensorflow[and-cuda]`` using ``pip``
      (this is already done for :doc:`pre-installed kernels <doc-support>`).
@@ -66,7 +66,9 @@ How to enable GPU support in common ML libraries
   2. Learn how to use Tensorflow with GPUs:
      `Tensorflow GPU guide <https://www.tensorflow.org/guide/gpu>`_.
 
-- ``Pytorch``: does not require any special installation, as long as its version
+- **Pytorch**:
+
+  Does not require any special installation, as long as its version
   supports ``CUDA 12.2`` and ``cudnn 8.9.x`` (this is already true
   for :doc:`pre-installed kernels <doc-support>`).
 
