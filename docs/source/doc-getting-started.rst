@@ -37,6 +37,8 @@ recreate it with a different selection.
    * 5GB "slice" of Nvidia A100 GPU - immediately available, but less powerful
    * Full 40GB instance of Nvidia A100 GPU - more powerful, but subject to availability
 
+   :doc:`Learn more about GPU access at Purdue AF <doc-gpus>`
+
 .. tip::
    
    If for any reason the session creation fails but you need urgent access to your files,
@@ -47,7 +49,7 @@ recreate it with a different selection.
 
 After the session has started, review the available storage options:
 
-* The default directory in file browser and Terminal is ``/home/<username>``, it has 25GB quota.
+* The default directory in file browser and Terminal is ``/home/<username>``, it has 25 GB quota.
 * In the file browser you will see symlinks to the following directories:
 
   * ``work`` (also mounted at ``/work/``) - shared storage for AF users.
@@ -67,18 +69,19 @@ After the session has started, review the available storage options:
 4. Review kernels and Conda envs
 -----------------------------------------
 
-There is a pre-installed Python3 kernel that includes all of the most common
+There are two pre-installed Python3 kernels that include all of the most common
 packages used in HEP analyses (see :doc:`full list of packages <doc-software>`).
-This kernel will be automatically selected when you create a new Jupyter notebook.
+The "default" Python3 kernel will be automatically selected when you create
+a new Jupyter notebook.
 
 When working in a Terminal instead of a Jupyter Notebook,
-you need to activate the environment explicitly:
+you need to activate the environment explicitly, e.g.:
 
 .. code-block:: shell
 
    conda activate /depot/cms/kernels/python3
 
-If you need a package that is missing from the default kernel, please
+If you need a package that is missing from the pre-installed kernels, please
 :doc:`contact Purdue AF support <doc-support>`.
 
 You can also :doc:`create and share custom kernels <guide-conda>`.
@@ -119,41 +122,49 @@ following command in a Terminal to finish GitHub authentication:
    `CMS TWiki <https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookStartingGrid>`_,
    specifically the section **"Obtaining and installing your Certificate"**.
 
-
    .. admonition:: Uploading files to Purdue AF
       :class: toggle
 
-      There is no ``ssh`` access to Purdue Analysis Facility. In order to upload a VOMS
-      certificate or any other file to your ``/home/`` storage at Purdue AF, you can
-      do one of the following:
+      To upload files to Purdue AF, you can either:
 
-      *  Drag-and-drop a file from your local file browser into Purdue AF file browser.
-      *  **OR** (Purdue users only):
+      - Drag-and-drop a file from local directory into the Jupyter file browser, OR
+      - click "upload" icon (upward arrow) at the top of the Jupyter file browser
+        and select a file to upload.
+
+   .. .. admonition:: Uploading files to Purdue AF
+   ..    :class: toggle
+
+   ..    There is no ``ssh`` access to Purdue Analysis Facility. In order to upload a VOMS
+   ..    certificate or any other file to your ``/home/`` storage at Purdue AF, you can
+   ..    do one of the following:
+
+   ..    *  Drag-and-drop a file from your local file browser into Purdue AF file browser.
+   ..    *  **OR** (Purdue users only):
       
-         #. Upload the file from your computer to the ``/home/`` directory at Hammer cluster:
+   ..       #. Upload the file from your computer to the ``/home/`` directory at Hammer cluster:
          
-            .. code-block:: shell
+   ..          .. code-block:: shell
             
-               scp /local/path/mycert.p12 <username>@hammer.rcac.purdue.edu
+   ..             scp /local/path/mycert.p12 <username>@hammer.rcac.purdue.edu
          
-         #. SSH into Hammer cluster:
+   ..       #. SSH into Hammer cluster:
 
-            .. code-block:: shell
+   ..          .. code-block:: shell
             
-               ssh <username>@hammer.rcac.purdue.edu
+   ..             ssh <username>@hammer.rcac.purdue.edu
 
-         #. Copy the file to your Depot directory where it will be visible from Purdue AF:
+   ..       #. Copy the file to your Depot directory where it will be visible from Purdue AF:
 
-            .. code-block:: shell
+   ..          .. code-block:: shell
             
-               cp /hammer/path/mycert.p12 /depot/cms/users/<username>/
+   ..             cp /hammer/path/mycert.p12 /depot/cms/users/<username>/
 
-         #. Open your Purdue AF session and copy the file from Depot:
+   ..       #. Open your Purdue AF session and copy the file from Depot:
 
-            .. code-block:: shell
+   ..          .. code-block:: shell
             
-               mkdir ~/.globus
-               cp /depot/cms/users/<username>/mycert.p12 ~/.globus
+   ..             mkdir ~/.globus
+   ..             cp /depot/cms/users/<username>/mycert.p12 ~/.globus
 
 #. (Optional) Specify the path where your VOMS proxy will be stored. If you are
    using SLURM or Dask Gateway, the proxy location must be on Depot

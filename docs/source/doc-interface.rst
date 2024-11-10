@@ -42,6 +42,8 @@ JupyterLab is especially well suited for developing analysis workflows in Python
   for most applications, unless your code relies on a specific
   version of ``pytorch`` or ``tensorflow``, or uses ``coffea==2024.X.X``.
 
+  For ``coffea 2024.x`` workflows, we also provide a pre-installed ``coffea_latest`` environment.
+
   .. important::
 
      In most cases, you will not need to create your own Conda environment.
@@ -68,9 +70,9 @@ high energy physics for histogramming, fitting, and statistical analysis.
   When working from a Jupyter Notebook, you can display ROOT plots using ``TCanvas::Draw`` method.
 
   :doc:`See example of ROOT C++ notebook here <demos/root-cpp>`.
+* The pre-installed ROOT C++ kernel supports **CUDA backend** for RooFit. To use it,
+  pass ``RooFit::EvalBackend("cuda")`` argument to ``model.fitTo()``.
 * In Python, ROOT functionality is accessiblae via `PyROOT <https://root.cern/manual/python/>`_ package, present in the default kernel.
-* *Work in progress*: We are woking on enabling a CUDA backend for RooFit,
-  in order to leverage GPU acceleration in ROOT workflows.
 
 HEP analysis frameworks
 -------------------------
@@ -138,6 +140,7 @@ Scaling out
 GPUs
 ------
 
+
 At Purdue AF, you can start a session with a GPU by specifying it at resource selection step.
 
 We have a limited number of Nvidia A100 GPUs, which are available in two configurations:
@@ -151,12 +154,16 @@ We have a limited number of Nvidia A100 GPUs, which are available in two configu
 | 5GB "slice" of A100  | 5GB    | 14                  |
 +----------------------+--------+---------------------+
 
-When GPU is selected, you session will have the following GPU software versions:
+See more info here: :doc:`GPU access at Purdue AF <doc-gpus>`.
 
-* Nvidia Driver Version: 535.129.03
-* CUDA Version: 12.2
 
-.. important::
 
-   Please shut down your session after finishing GPU work to release the
-   GPU for other users.
+.. When GPU is selected, you session will have the following GPU software versions:
+
+.. * Nvidia Driver Version: 535.129.03
+.. * CUDA Version: 12.2
+
+.. .. important::
+
+..    Please shut down your session after finishing GPU work to release the
+..    GPU for other users.

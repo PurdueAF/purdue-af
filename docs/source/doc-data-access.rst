@@ -4,9 +4,9 @@ Data access
 .. admonition:: TL;DR
 
   - To access remote datasets, use ``XRootD`` protocol.
-  - Repeated accessing to the same remote dataset is faster with ``XCache``.
-  - To use ``XCache``, replace ``XRootD`` prefix with ``xcache.cms.rcac.purdue.edu:1094``.
-  - To subscribe a dataset to Purdue, create a `Rucio rule`` with a limited lifetime.
+  - Repeated reading of the same remote dataset is faster if you use ``XCache``.
+  - To enable ``XCache``, replace ``XRootD`` prefix in the dataset path with ``xcache.cms.rcac.purdue.edu:1094``.
+  - To subscribe a dataset to Purdue, create a `Rucio rule` with a limited lifetime.
 
 General Principles
 --------------------
