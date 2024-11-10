@@ -18,21 +18,21 @@ How to access GPUs at Purdue AF
    (see screenshot below).
    You will have a choice of either a 5GB "slice" of A100, or a full 40GB A100.
 
-  .. image:: images/gpu-selection.png
-    :width: 400
-    :align: center
+   .. image:: images/gpu-selection.png
+      :width: 400
+      :align: center
 
-  .. note::
+   .. note::
 
-     If you selected a GPU, your session will have ``CUDA 12.2`` and
-     ``cudnn 8.9.7.29``libraries loaded. Take this into account if you need
-     to install particular versions of ML libraries such as ``tensorflow``
-     - these libraries are notoriously sensitive to CUDA version.
+      If you selected a GPU, your session will have ``CUDA 12.2`` and
+      ``cudnn 8.9.7.29`` libraries loaded. Take this into account if you need
+      to install particular versions of ML libraries such as ``tensorflow``
+      - these libraries are notoriously sensitive to CUDA version.
 
-  .. important::
+   .. important::
 
-     Please terminate your session after using a GPU in order to release the GPU
-     for other users.
+      Please terminate your session after using a GPU in order to release the GPU
+      for other users.
 
 2. **Submit Slurm jobs (Purdue users only)**
 
@@ -40,15 +40,14 @@ How to access GPUs at Purdue AF
    a GPU for a Slurm job, simply add ``--gpus-per-node=1`` argument to ``sbatch``
    command.
 
-   - If you submit Slurm jobs directly from the Purdue AF inteface, they will be
-     submitted to the Hammer cluster, which currectly features 13 nodes with
-     **Nvidia T4** GPUs.
+   - The Slurm jobs submitted directly from the Purdue AF inteface are executed
+     at the Hammer cluster, which features 22 nodes with **Nvidia T4** GPUs.
     
    - If you need more GPUs, or different GPU models, you may consider submitting
-     Slurm jobs at Gilbreth cluster. To log in to Gilbreth cluster directly from
-     the Purdue AF interface, simply run command ``ssh gilbreth`` and use BoilerKey
-     credentials. Once you have logged in, you can use Slurm queues on Gilbreth
-     cluster to run GPU jobs.
+     Slurm jobs at `Gilbreth cluster <https://www.rcac.purdue.edu/compute/gilbreth>`_.
+     To log in to Gilbreth cluster directly from the Purdue AF interface,
+     simply run command ``ssh gilbreth`` and use BoilerKey two-factor authentication.
+     Once you have logged in, you can use Slurm queues on Gilbreth cluster to run GPU jobs.
 
      .. important::
 
