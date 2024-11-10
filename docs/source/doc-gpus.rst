@@ -1,4 +1,4 @@
-GPU Access
+GPU access
 ============================
 
 **Graphics processing units (GPUs)** are specialized processors that can
