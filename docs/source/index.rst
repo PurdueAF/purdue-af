@@ -47,6 +47,7 @@ tools and features for fast, efficient, collaborative HEP research.
     doc-interface
     doc-storage
     doc-software
+    doc-gpus
     doc-data-access
     doc-hardware
     doc-support
