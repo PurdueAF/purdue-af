@@ -59,5 +59,18 @@ How to enable GPU support in common ML libraries
 --------------------------------------------------
 
 - ``Tensorflow``:
-- ``Pytorch``:
-- ``ONNX``:
+
+  1. Install ``tensorflow[and-cuda]`` using ``pip``
+     (this is already done for :doc:`pre-installed kernels <doc-support>`).
+
+  2. Learn how to use Tensorflow with GPUs:
+     `Tensorflow GPU guide <https://www.tensorflow.org/guide/gpu>`_.
+
+- ``Pytorch``: does not require any special installation, as long as its version
+  supports ``CUDA 12.2`` and ``cudnn 8.9.x`` (this is already true
+  for :doc:`pre-installed kernels <doc-support>`).
+
+  See `PyTorch / CUDA tutorial <https://cnvrg.io/pytorch-cuda/>`_.
+
+If you experience any issues, or missing any ML libraries, please
+:doc:`contact Purdue AF support <doc-support>`.
