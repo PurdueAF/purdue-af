@@ -281,6 +281,9 @@ prePuller:
   continuous:
     enabled: false
 hub:
+  image:
+      name: quay.io/jupyterhub/k8s-hub
+      tag: 3.3.8
   service:
     type: LoadBalancer
     annotations:

@@ -4,10 +4,10 @@ singleuser:
   cmd: 
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
-    tag: "0.9.8"
+    tag: "0.10.1"
   extraLabels:
     username_unescaped: "{legacy_escape_username}"
-    docker_image_tag: "0.9.8"
+    docker_image_tag: "0.10.1"
   startTimeout: 3600
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
@@ -114,20 +114,20 @@ singleuser:
         mem_guarantee: 16G
         mem_limit: 16G
 
-    - display_name: testing
+    - display_name: "Latest pre-release version"
       default: false
-      description: "ignore this"
+      description: "Contains the latest features but may be unstable - use at your own risk."
       kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.9.9"
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.10.1"
         node_selector:
           cms-af-prod: "true"
         cpu_guarantee: 4
         cpu_limit: 4        
         mem_guarantee: 16G
         mem_limit: 16G
-        # extra_resource_limits:
-        #   nvidia.com/mig-7g.40gb: 1
-
+        extra_resource_limits:
+          # nvidia.com/mig-7g.40gb: 1
+          nvidia.com/mig-1g.5gb: 1
 
   extraContainers:
     - name: af-pod-monitor
@@ -194,6 +194,9 @@ prePuller:
   continuous:
     enabled: false
 hub:
+  image:
+      name: quay.io/jupyterhub/k8s-hub
+      tag: 3.3.8
   nodeSelector: {'cms-af-prod': 'true'}
   resources:
     requests:
@@ -276,6 +279,52 @@ ingress:
     kubernetes.io/ingress.class: "public"
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
 proxy:
+  https:
+    enabled: true
+    type: letsencrypt
+  service:
+    extraPorts:
+      - name: ssh
+        port: 22
+        targetPort: ssh
+      - name: sftp
+        port: 2222
+        targetPort: sftp
+  traefik:
+    extraPorts:
+      - name: ssh
+        containerPort: 8022
+      - name: sftp
+        containerPort: 2222
+    networkPolicy:
+      allowedIngressPorts: [http, https, ssh, sftp]
+    extraStaticConfig:
+      entryPoints:
+        ssh-entrypoint:
+          address: :8022
+        sftp-entrypoint:
+          address: :2222
+    extraDynamicConfig:
+      tcp:
+        services:
+          ssh-service:
+            loadBalancer:
+              servers:
+                - address: jupyterhub-ssh:22
+          sftp-service:
+            loadBalancer:
+              servers:
+                - address: jupyterhub-sftp:22
+        routers:
+          ssh-router:
+            entrypoints: [ssh-entrypoint]
+            rule: HostSNI(`*`)
+            service: ssh-service
+          sftp-router:
+            entrypoints: [sftp-entrypoint]
+            rule: HostSNI(`*`)
+            service: sftp-service
+
   chp:
     nodeSelector:
       cms-af-prod: "true"
