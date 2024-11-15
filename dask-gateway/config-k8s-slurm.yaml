@@ -42,7 +42,7 @@ gateway:
         c.DaskGateway.address = ':8786'
         c.SlurmBackend.api_url = f'http://api-{RELEASE_NAME}.{NAMESPACE}.geddes.rcac.purdue.edu:8000/api'
         c.SlurmBackend.cluster_start_timeout = 120
-        c.ClusterConfig.idle_timeout = 3600
+        c.ClusterConfig.idle_timeout = 3600*24
 
         from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
 
@@ -55,7 +55,7 @@ gateway:
                 "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
                 "scheduler_partition": "hammer-nodes",
                 "scheduler_reservation": "CMSLOCAL",
-                "worker_partition": "hammer-g",
+                "worker_partition": "hammer-nodes",
                 "worker_cmd": f"{options.conda_env}/bin/dask-worker",
                 "account": "cms",
                 "time": "1-00:00:00",
