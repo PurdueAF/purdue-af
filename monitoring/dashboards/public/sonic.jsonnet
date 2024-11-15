@@ -24,7 +24,7 @@ local placeholder = g.panel.canvas.new('')+g.panel.text.panelOptions.withTranspa
 local lb_name =
   g.dashboard.variable.query.new(
     'lb_name',
-    query='query_result(envoy_server_live{namespace=~"cms",pod=~"triton-.*"})'
+    query='query_result(envoy_server_live{namespace=~"cms",pod=~"triton-.*|sonic-.*"})'
   )
   + g.dashboard.variable.query.withRegex(
     '/pod="(?<text>triton-[^"]+)-[a-z0-9]+-[a-z0-9]+/g'
@@ -90,7 +90,7 @@ local deployedTritonServers = panels.stat(
       'prometheus',
       |||
         sum (
-            kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton-.*-lb"}
+            kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton-.*-lb|sonic-server-triton|sonic-test-server-triton"}
         )
       |||,
       legendFormat='Active Triton servers',
@@ -229,7 +229,7 @@ local tritonNumServers = panels.timeSeries(
       'prometheus-rancher',
       |||
         sum by (deployment)(
-            kube_deployment_status_replicas_available{namespace="cms", deployment=~"$lb_name-lb"}
+            kube_deployment_status_replicas_available{namespace="cms", deployment=~"$lb_name-lb|sonic-server-triton|sonic-test-server-triton"}
         )
       |||,
       legendFormat='{{ deployment }}'
@@ -289,21 +289,21 @@ local totalLatency = panels.timeSeries(
       |||
         ((
           sum by (pod) (
-            rate(label_replace(nv_inference_queue_duration_us{pod=~"triton-run2.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$") [5m:1m])
+            rate(label_replace(nv_inference_queue_duration_us{pod=~"$lb_name.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$") [5m:1m])
           )
           /
           sum by (pod) (
-            (rate(label_replace(nv_inference_exec_count{pod=~"triton-run2.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$") [5m:1m]) + 0.00001) * 1000
+            (rate(label_replace(nv_inference_exec_count{pod=~"$lb_name.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$") [5m:1m]) + 0.00001) * 1000
           )
         ) OR 0.0000 *
         (
           sum by (pod) (
-            label_replace(envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"triton-run2.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
+            label_replace(envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
           )
         ))
         + 0.00001 * (
           sum by (pod) (
-            label_replace(envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"triton-run2.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
+            label_replace(envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
           ) > bool 1
         )
       |||,
