@@ -1,4 +1,4 @@
-scp dkondra@hammer.rcac.purdue.edu:*-auth.txt .
+scp dkondra@cms-fe01.rcac.purdue.edu:purdue-auth.txt .
 
 # files=("purdue-auth.txt" "cern-auth.txt")
 # namespaces=("cms" "cms-dev")
