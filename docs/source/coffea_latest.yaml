@@ -5,14 +5,18 @@ dependencies:
   - python
   - pip
 
-  # Columnar
-  - coffea==2024.9.0
+  # HEP
+  - coffea==2024.10.0
   - awkward
   - uproot
+  - hist
+  - mplhep
+  - uncertainties
+  - lmfit
 
   # ROOT
-  - root==6.32.02
-  - root_base==6.32.02
+  - root==6.30.04
+  - root_base==6.30.04
   - boost
   - eigen
   - gsl
@@ -29,7 +33,10 @@ dependencies:
   - prometheus_client
   - xrootd
   - ipywidgets
+  - ipykernel
   - omegaconf
+
+  - libnvjitlink-dev
 
   - pip:
     - rucio-clients==33.3.0
@@ -37,3 +44,5 @@ dependencies:
     - torch
     - cmsstyle
     - scikit-hep-testdata
+variables:
+  LD_LIBRARY_PATH: /depot/cms/kernels/coffea_latest/lib/python3.11/site-packages/nvidia/nvjitlink/lib/:/usr/local/cuda-12.2/lib64:/depot/cms/purdue-af/combine/HiggsAnalysis/CombinedLimit/build/lib:/depot/cms/purdue-af/roofit-batchcompute/build/

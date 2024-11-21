@@ -16,14 +16,17 @@ dependencies:
   - scikit-learn
   - uncertainties
 
+  # JuliaCall
+  - pyjuliacall
+
   # High energy physics tools
   - coffea=0.7.21
   - hist
   # - lhapdf - installed manually (see PATHs)
   - pyhf
-  - root=6.28.0
+  - root=6.32.2
   - uproot=4.3.7
-  - vector
+  - vector=1.4.2
   - cabinetry
 
   # Plotting
@@ -32,14 +35,20 @@ dependencies:
   - mplhep
   - plotly
   # - texlive-core
-  - tectonic
+  # - tectonic
   - py-spy
+  - graphviz
+  - python-graphviz
+  - pydot
+  - ipympl
 
   # Machine learning
   - mup
   # - tensorflow & keras - see pip packages
   # - torch & torch_geometric - see pip packages
   - xgboost
+  - optuna
+  - scikit-optimize
 
   # Distributed computing
   - dask=2023.3.2
@@ -76,13 +85,15 @@ dependencies:
   - xrootd
   - yaml
   - pycurl
+  - mimesis=8
+  - setuptools=67
 
   # PIP PACKAGES
   - pip:
     - rucio-clients
     - scalpl
-    - tensorflow[and-cuda]
-    - tensorflow-probability
+    - tensorflow[and-cuda]==2.15.1
+    - tensorflow-probability==0.23
     - tf-keras
     - qkeras
     - torch==2.0.1
@@ -94,6 +105,7 @@ dependencies:
     - correctionlib==2.5.0
     - cmsstyle
     - xgbfir
+    # must run this command: pip uninstall nvidia-cudnn-cu11
 
 variables:
   PATH: /depot/cms/kernels/python3/bin:/usr/sue/bin:/etc/jupyter/dask:/opt/conda/condabin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/depot/cms/purdue-af/lhapdf/bin

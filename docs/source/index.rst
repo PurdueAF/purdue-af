@@ -51,6 +51,7 @@ tools and features for fast, efficient, collaborative HEP research.
     doc-data-access
     doc-hardware
     doc-support
+    doc-contributing
 
     .. doc-login-methods
     .. doc-interface
