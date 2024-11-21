@@ -97,8 +97,13 @@ allowing to execute ROOT macros and produce plots inside Jupyter notebooks.
 Software stacks from CVMFS
 --------------------------------
 
-Since CVMFS is mounted at Purdue AF, it is possible to load centrally distributed
-software stacks such as LCG Releases and Singularity images.
+It is possible to load centrally distributed CERN software stacks for CVMFS, such as
+LCG Releases and Apptainer/Singularity images. 
+
+.. warning::
+
+   Methods described in this section will work only in Terminal, it is not currently
+   possible to use the LCG stacks and Apptainer images to launch custom Jupyter kernels.
 
 
 1. LCG Releases
@@ -109,10 +114,6 @@ contains information about software releases avaiable for loading via CVMFS.
 Loading remote software is possible either via LCG **views** for entire software stacks,
 or via LCG **releases** for specific packages.
 
-.. warning::
-
-   Software distributed via LCG Releases can be used only in Terminal, it is not currently
-   possible to use these stacks as Jupyter kernels.
 
 
 2. Apptainer (Singularity) images
