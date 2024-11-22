@@ -18,7 +18,7 @@ To achieve this:
 
 #. **Log in to your session from external Terminal**
 
-   .. code-block::
+   .. code-block:: shell
 
       ssh <username>@jupyterhub-ssh.cms.geddes.rcac.purdue.edu
 
@@ -30,7 +30,7 @@ To achieve this:
 .. tip::
 
    If you encounter any formatting issues while working at Purdue AF via SSH connection
-   (for example, broken lines in `vim` text editor), try running ``resize`` command.
+   (for example, broken lines in Vim text editor), try running ``resize`` command.
 
 .. warning::
 
