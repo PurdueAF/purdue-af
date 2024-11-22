@@ -26,6 +26,13 @@ To achieve this:
      ``-cern`` or ``-fnal`` suffix, respectively.
    - Instead of password, paste the **token** obtained in the previous step.
 
+#. **(Optional) Set up an alias in .bashrc**
+
+   By doing this you can avoid copy-pasting the token every time:
+
+   .. code-block:: shell
+
+      alias purdue-af='sshpass -p <token> ssh <username>@jupyterhub-ssh.cms.geddes.rcac.purdue.edu'
 
 .. tip::
 
