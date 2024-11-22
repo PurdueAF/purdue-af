@@ -28,6 +28,10 @@ General Principles
 - Repeated access to remote datasets can be sped up significantly through the
   use of the local **XCache** server. 
 
+  - Additional benefit of using the local **XCache** server is that all the XRootD redirection needed for locating the data is done by that server, so the user does not need to do it explicitly. I.e. when the user tries to open file  ``/store/mc/HC/GenericTTbar/AODSIM/CMSSW_9_2_6_91X_mcRun1_realistic_v2-v2/00000/00B29645-2B76-E711-8802-FA163EB9B8B4.root`` they can just ask for ``root://xcache.cms.rcac.purdue.edu//store/mc/HC/GenericTTbar/AODSIM/CMSSW_9_2_6_91X_mcRun1_realistic_v2-v2/00000/00B29645-2B76-E711-8802-FA163EB9B8B4.root`` and the **XCache** server will find what site has this file, download it into its fast local disks, and then serve it from there to the user. 
+
+  - The one exception when access through **XCache** does **not** work is if files are only available on tape. That is - no CMS Tier site has the file on disk, and therefore a tape recall is necessary. In that case the user has to create a Rucio replication rue, as explained below.
+
 - There is no need to have a given dataset at the site in order to access its
   files in your analysis. Only when increased data-access performance is desired
   (e.g. when running a given analysis multiple times at the site)
