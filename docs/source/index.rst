@@ -69,11 +69,12 @@ tools and features for fast, efficient, collaborative HEP research.
     :maxdepth: 1
 
     guide-conda
+    guide-ssh-access
+    guide-vscode
     guide-dask
     guide-dask-gateway
     guide-rucio
     guide-cern-eos
-    guide-vscode
     guide-binderhub
     guide-mc-gen
     guide-demos
