@@ -29,14 +29,16 @@ To achieve this:
 #. **(Optional) Set up an alias in .bashrc**
 
    By adding the following line to ``~/.bashrc`` or ``~/.bash_profile`` on you local machine,
-   you can avoid copy-pasting the token every time. Simply running ``purdue-af`` command will
-   immediately connect you to Purdue AF, provided that you had already started the session.
-
+   you can avoid copy-pasting the token every time. Note: you will need to have ``sshpass`` utility
+   installed on the local machine.
+   
    .. code-block:: shell
 
       alias purdue-af='sshpass -p <token> ssh <username>@jupyterhub-ssh.cms.geddes.rcac.purdue.edu'
 
-   
+   Now simply running the ``purdue-af`` command will immediately connect you to Purdue AF,
+   provided that you had already started the session.
+
 
 .. tip::
 
