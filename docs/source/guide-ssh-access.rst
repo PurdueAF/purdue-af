@@ -30,7 +30,7 @@ To achieve this:
 
    By adding the following line to ``~/.bashrc`` or ``~/.bash_profile`` on you local machine,
    you can avoid copy-pasting the token every time. Simply running ``purdue-af`` command will
-   immediately connect you to Purdue AF, provided that you have already started the session.
+   immediately connect you to Purdue AF, provided that you had already started the session.
 
    .. code-block:: shell
 
