@@ -7,7 +7,7 @@ The Purdue Analysis Facility provides access to multiple storage options.
 
 .. list-table:: Storage Options
    :header-rows: 1
-   :widths: 10 20 5 50 5 5 5
+   :widths: 1 1 1 5 1 1 1
 
    * - Storage Volume
      - Path
