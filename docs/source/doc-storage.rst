@@ -1,6 +1,6 @@
 .. _doc-storage:
 
-Storage and file sharing
+Storage volumes
 ==================================
 
 .. raw:: html
