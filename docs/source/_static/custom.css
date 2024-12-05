@@ -27,3 +27,6 @@ button.toggle-button.toggle-button-hidden:before {
     top: -.595em;
 }
 
+.wy-table-responsive {
+    overflow-x: auto;
+}

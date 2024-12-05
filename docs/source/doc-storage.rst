@@ -5,6 +5,10 @@ Storage and file sharing
 
 The Purdue Analysis Facility provides access to multiple storage options.
 
+.. raw:: html
+
+   <div class="wy-table-responsive">
+
 .. list-table:: Storage Options
    :header-rows: 1
    :widths: 1 1 1 5 1 1 1
@@ -65,6 +69,10 @@ The Purdue Analysis Facility provides access to multiple storage options.
      - No
      - No
      - Yes
+
+.. raw:: html
+
+   </div>
 
 .. warning::
    
