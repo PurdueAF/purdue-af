@@ -4,32 +4,43 @@ Storage and file sharing
 ==================================
 
 The Purdue Analysis Facility provides access to multiple storage options.
-Examples for data access at these locations are given :doc:`here <demos/storage-data-access>`.
 
-* **Private personal storage:** 25GB at ``/home/<username>/``.
-  The JupyterLab file browser is based in this directory.
-  This directory will be deleted after 6 months of inactivity, unless requested otherwise.
-* **Public personal storage:** 100GB at ``/work/users/<username>/``.
-  By default, the directory is readable by all Analysis Facility users, and therefore can be used for collaboration
-  and sharing your work (permissions can be adjusted).
-  This directory will be deleted after 6 months of inactivity, unless requested otherwise.
-* **Shared storage:** Shared directories can be created for specific projects in ``/work/projects/`` by
-  the Analysis Facility administrators at the request of the project's PI. 
-* **External storage:**
+.. list-table:: Storage Options
+   :header-rows: 1
+   :widths: 20 40 20 60
 
-  * **Purdue Depot**: shared project space at Purdue, which can be used to store job outputs and other data
-    up to several terabytes. The Depot storage is mounted at ``/depot/cms/`` and ``/home/<username>/depot/``.
-    Users with Purdue account have **read/write** access, while other users have **read-only** access.
-  * **Purdue EOS**: serves as a storage space for large centrally produced and private datasets,
-    as well as the Grid directories of Purdue users. The Purdue EOS storage is mounted at
-    ``/eos/purdue/`` and ``/home/<username>/eos-purdue/`` with **read-only** access.
-    CMS datasets can be found at these locations under ``/store/data/`` and ``/store/mc/``,
-    and the Grid directories of Purdue users under ``/store/user/``.
-  * `CVMFS <https://cernvm.cern.ch/fs/>`_: mounted at ``/cvmfs/`` with **read-only** access.
-    The main use case for CVMFS is installation of CMSSW releases.
-  * `CERNBox (CERN EOS) <https://cernbox.cern.ch/>`_: regardless of the login method (Purdue/CERN/FNAL),
-    any user can get **read/write** access to their CERNBox directory, if they have a CERN account.
-    CERNBox is mounted at ``/eos/cern/`` and ``/home/<username>/eos-cern/``.
+   * - Storage Volume
+     - Path
+     - Size
+     - Use Cases
+   * - AF home storage
+     - ``/home/<username>/``
+     - 25 GB
+     - This is JupyterLab's default directory, suitable for storing small files. Deleted after 6 months of inactivity unless requested otherwise.
+   * - AF work storage
+     - ``/work/users/<username>/``
+     - 100 GB
+     - Collaborative work; directory is readable by all users by default (permissions can be adjusted); deleted after 6 months of inactivity unless requested otherwise.
+   * - AF shared project storage
+     - ``/work/projects/``
+     - Varies
+     - Shared directories for specific projects; created upon request by the project's Principal Investigator.
+   * - Purdue Depot storage
+     - ``/depot/cms/`` and ``/home/<username>/depot/``
+     - Several terabytes
+     - Storing job outputs and small datasets; read/write access for Purdue users; read-only for others.
+   * - Purdue EOS
+     - ``/eos/purdue/`` and ``/home/<username>/eos-purdue/``
+     - Large datasets
+     - Storage for large datasets; read-only access; includes CMS datasets and user Grid directories.
+   * - CVMFS
+     - ``/cvmfs/``
+     - N/A
+     - Installation of CMSSW releases; read-only access.
+   * - CERNBox (CERN EOS)
+     - ``/eos/cern/`` and ``/home/<username>/eos-cern/``
+     - 
+     - Connect to private CERNBox directory; read/write access; enable by running ``eos-connect`` command.
 
 .. warning::
    
