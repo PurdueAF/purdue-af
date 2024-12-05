@@ -13,10 +13,11 @@ The Purdue Analysis Facility provides access to multiple storage options.
    :header-rows: 1
    :widths: 1 2 1 4 1 1 1
 
-   * - Storage Volume
+   * - Storage volume
      - Path
      - Size
-     - Use Cases
+     - Use cases
+     - Access mode
      - Mounted in Slurm jobs
      - Mounted in k8s Dask workers
      - Available for users without Purdue account
@@ -24,51 +25,58 @@ The Purdue Analysis Facility provides access to multiple storage options.
      - ``/home/<username>/``
      - 25 GB
      - This is JupyterLab's default directory, suitable for storing small files. Deleted after 6 months of inactivity unless requested otherwise.
-     - No
-     - No
-     - Yes
+     - Read/write
+     - ❌
+     - ❌
+     - ✅
    * - AF work storage
      - ``/work/users/<username>/``
      - 100 GB
      - Collaborative work; directory is readable by all users by default (permissions can be adjusted); deleted after 6 months of inactivity unless requested otherwise.
-     - No
-     - Yes
-     - Yes
+     - Read/write
+     - ❌
+     - ✅
+     - ✅
    * - AF shared project storage
      - ``/work/projects/``
-     - 
-     - Shared directories for specific projects; created upon request by the project's Principal Investigator.
-     - No
-     - Yes
-     - Yes
+     - up to 1 TB
+     - Shared directories for collaborative projects; created upon request.
+     - Read/write
+     - ❌
+     - ✅
+     - ✅
    * - Purdue Depot storage
      - ``/depot/cms/`` and ``/home/<username>/depot/``
      - up to 1 TB
      - Storing job outputs and small datasets; read/write access for Purdue users; read-only for others.
-     - Yes
-     - Yes
-     - No
+     - Read/write for Purdue users, read-only for others
+     - ✅
+     - ✅
+     - ❌
    * - Purdue EOS
      - ``/eos/purdue/`` and ``/home/<username>/eos-purdue/``
      - up to 100 TB
      - Storage for large datasets; read-only access; includes CMS datasets and user Grid directories.
-     - Yes
-     - Yes
-     - No
+     - Read/write for Purdue users, read-only for others
+     - ✅
+     - ✅
+     - ❌
    * - CVMFS
      - ``/cvmfs/``
      - N/A
      - Installation of CMSSW releases; read-only access.
-     - Yes
-     - Yes
-     - Yes
+     - Read-only
+     - ✅
+     - ✅
+     - ✅
    * - CERNBox (CERN EOS)
      - ``/eos/cern/`` and ``/home/<username>/eos-cern/``
      - 
      - Connect to private CERNBox directory; read/write access; enable by running ``eos-connect`` command.
-     - No
-     - No
-     - Yes
+     - Read/write
+     - ❌
+     - ❌
+     - ✅
 
 .. raw:: html
 
