@@ -27,4 +27,10 @@ button.toggle-button.toggle-button-hidden:before {
     top: -.595em;
 }
 
-.wy-table-responsive table th{white-space:nowrap}
+/* .wy-table-responsive table th{white-space:nowrap} */
+
+table.docutils {
+    table-layout: fixed;
+    width: 200%;
+    overflow-wrap: break-word;
+}
