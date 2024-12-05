@@ -11,7 +11,7 @@ The Purdue Analysis Facility provides access to multiple storage options.
 
 .. list-table:: Storage Options
    :header-rows: 1
-   :widths: 1 1 1 5 1 1 1
+   :widths: 1 2 1 4 1 1 1
 
    * - Storage Volume
      - Path
@@ -43,14 +43,14 @@ The Purdue Analysis Facility provides access to multiple storage options.
      - Yes
    * - Purdue Depot storage
      - ``/depot/cms/`` and ``/home/<username>/depot/``
-     - Several terabytes
+     - up to 1 TB
      - Storing job outputs and small datasets; read/write access for Purdue users; read-only for others.
      - Yes
      - Yes
      - No
    * - Purdue EOS
      - ``/eos/purdue/`` and ``/home/<username>/eos-purdue/``
-     - Large datasets
+     - up to 100 TB
      - Storage for large datasets; read-only access; includes CMS datasets and user Grid directories.
      - Yes
      - Yes

@@ -31,6 +31,6 @@ button.toggle-button.toggle-button-hidden:before {
 
 table.docutils {
     table-layout: fixed;
-    width: 200%;
+    width: 180%;
     overflow-wrap: break-word;
 }
