@@ -33,11 +33,7 @@ The Purdue Analysis Facility provides access to multiple storage options.
      - ``/depot/cms/``
      - up to 1 TB
      - Best as a working directory for Purdue users, because Depot is mounted
-       to all clusters and Dask workers. **Warning:** avoid writing many files
-       at the same time, as it may slow Depot down for everyone.
-       If your jobs produce large outputs, it is recommended to first save them
-       into ``/tmp/<username>`` at individual workers, and then copy over to EOS
-       using ``xrdcp`` commands.
+       to all clusters and Dask workers.
      - Read/write for Purdue users, read-only for others
      - ✅
      - ✅
@@ -82,8 +78,7 @@ The Purdue Analysis Facility provides access to multiple storage options.
      - ``/eos/cern/``
      - 
      - Private CERNBox directory, useful for collaboration outside of Purdue AF.
-       The directory is enabled by running ``eos-connect`` command, which will
-       query Kerberos authentication with CERN credentials.
+       To enable access, follow these instructions: :doc:`guide-cern-eos`.
      - Read/write
      - ❌
      - ❌
@@ -95,8 +90,11 @@ The Purdue Analysis Facility provides access to multiple storage options.
 
 .. warning::
    
-    Access to CERNBox is not enabled by default. To set it up, please follow these instructions:
-    :doc:`guide-cern-eos`
+   Avoid writing many files to Depot at the same time, as it may slow
+   Depot down for everyone. If your jobs produce large outputs,
+   it is recommended to first save them into ``/tmp/<username>`` at
+   individual Slurm jobs / Dask workers, and then copy over to EOS
+   using ``gfal`` or ``xrdcp`` commands: :doc:`doc-data-access`.
 
 * **Other options:**
 
