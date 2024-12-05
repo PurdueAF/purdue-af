@@ -13,34 +13,58 @@ The Purdue Analysis Facility provides access to multiple storage options.
      - Path
      - Size
      - Use Cases
+     - Mounted in Slurm jobs
+     - Mounted in k8s Dask workers
+     - Available for users without Purdue account
    * - AF home storage
      - ``/home/<username>/``
      - 25 GB
      - This is JupyterLab's default directory, suitable for storing small files. Deleted after 6 months of inactivity unless requested otherwise.
+     - No
+     - No
+     - Yes
    * - AF work storage
      - ``/work/users/<username>/``
      - 100 GB
      - Collaborative work; directory is readable by all users by default (permissions can be adjusted); deleted after 6 months of inactivity unless requested otherwise.
+     - No
+     - Yes
+     - Yes
    * - AF shared project storage
      - ``/work/projects/``
-     - Varies
+     - 
      - Shared directories for specific projects; created upon request by the project's Principal Investigator.
+     - No
+     - Yes
+     - Yes
    * - Purdue Depot storage
      - ``/depot/cms/`` and ``/home/<username>/depot/``
      - Several terabytes
      - Storing job outputs and small datasets; read/write access for Purdue users; read-only for others.
+     - Yes
+     - Yes
+     - No
    * - Purdue EOS
      - ``/eos/purdue/`` and ``/home/<username>/eos-purdue/``
      - Large datasets
      - Storage for large datasets; read-only access; includes CMS datasets and user Grid directories.
+     - Yes
+     - Yes
+     - No
    * - CVMFS
      - ``/cvmfs/``
      - N/A
      - Installation of CMSSW releases; read-only access.
+     - Yes
+     - Yes
+     - Yes
    * - CERNBox (CERN EOS)
      - ``/eos/cern/`` and ``/home/<username>/eos-cern/``
      - 
      - Connect to private CERNBox directory; read/write access; enable by running ``eos-connect`` command.
+     - No
+     - No
+     - Yes
 
 .. warning::
    
