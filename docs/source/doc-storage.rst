@@ -3,13 +3,11 @@
 Storage and file sharing
 ==================================
 
-The Purdue Analysis Facility provides access to multiple storage options.
-
 .. raw:: html
 
    <div class="wy-table-responsive">
 
-.. list-table:: Storage Options
+.. list-table:: 
    :header-rows: 1
    :widths: 1 2 1 3 2 1 1 1
 
@@ -73,7 +71,7 @@ The Purdue Analysis Facility provides access to multiple storage options.
      - Read-only
      - ✅
      - ✅
-     - ✅
+     - ❌
    * - CERNBox (CERN EOS)
      - ``/eos/cern/``
      - 
@@ -96,11 +94,8 @@ The Purdue Analysis Facility provides access to multiple storage options.
    individual Slurm jobs / Dask workers, and then copy over to EOS
    using ``gfal`` or ``xrdcp`` commands: :doc:`doc-data-access`.
 
-* **Other options:**
+**Other options:**
 
-  * **Git** functionality is enabled, users can use GitHub or GitLab to store and share their work.
-    The Git extension located in the left sidebar allows to work with repositories interactively  (commit, push, pull, etc.).
-  * **XRootD client** is installed and can be used to access data stored at other CERN sites.
-
-* **Subscribing datasets with Rucio**
-    :doc:`guide-rucio`
+* **Git** functionality is enabled, users can use GitHub or GitLab to store and share their work.
+  The Git extension located in the left sidebar allows to work with repositories interactively  (commit, push, pull, etc.).
+* **XRootD client** is installed and can be used to access data stored at other CERN sites.
