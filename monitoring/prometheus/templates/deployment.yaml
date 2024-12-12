@@ -32,7 +32,7 @@ spec:
         - name: {{ .Release.Name }}
           image: {{ .Values.deployment.image }}
           args:
-            - '--storage.tsdb.retention={{ .Values.deployment.tsdbRetention }}'
+            # - '--storage.tsdb.retention={{ .Values.deployment.tsdbRetention }}'
             - '--storage.tsdb.path={{ .Values.deployment.storagePath }}'
             - '--config.file={{ .Values.deployment.configPath }}/prometheus.yml'
           ports:

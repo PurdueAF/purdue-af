@@ -90,7 +90,7 @@ local deployedTritonServers = panels.stat(
       'prometheus',
       |||
         sum (
-            kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton-.*-lb|sonic-server-triton|sonic-test-server-triton"}
+            kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton-.*-lb|sonic-.*trito.*"}
         )
       |||,
       legendFormat='Active Triton servers',
@@ -229,7 +229,7 @@ local tritonNumServers = panels.timeSeries(
       'prometheus-rancher',
       |||
         sum by (deployment)(
-            kube_deployment_status_replicas_available{namespace="cms", deployment=~"$lb_name-lb|sonic-server-triton|sonic-test-server-triton"}
+            kube_deployment_status_replicas_available{namespace="cms", deployment=~"$lb_name-lb|sonic-.*trito.*"}
         )
       |||,
       legendFormat='{{ deployment }}'

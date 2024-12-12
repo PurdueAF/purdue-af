@@ -12,7 +12,7 @@ deployment:
     limits:
       cpu: 4
       memory: 8Gi
-  tsdbRetention: 10d
+  # tsdbRetention: 10d
   storagePath: /prometheus
   configPath: /etc/prometheus
   tolerations:
@@ -68,6 +68,7 @@ prometheusConfig: |
           - 'paf-a00.cms.rcac.purdue.edu:9796'
           - 'paf-a01.cms.rcac.purdue.edu:9796'
           - 'paf-a02.cms.rcac.purdue.edu:9796'
+          - 'paf-b00.cms.rcac.purdue.edu:9796'
           - 'cms-fe01.rcac.purdue.edu:9796'
           - 'cms-fe00.rcac.purdue.edu:9796'
           - 'vm-hammer-g000.rcac.purdue.edu:9796'
