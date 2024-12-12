@@ -6,13 +6,14 @@ dependencies:
   - pip
 
   # HEP
-  - coffea==2024.10.0
+  - coffea==2024.11.0
   - awkward
   - uproot
   - hist
   - mplhep
   - uncertainties
   - lmfit
+  - correctionlib==2.6.4
 
   # ROOT
   - root==6.30.04

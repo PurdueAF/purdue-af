@@ -13,7 +13,7 @@ dependencies:
   - numpy=1.23.5
   - pandas=1.5.3
   - scipy
-  - scikit-learn
+  - scikit-learn=1.5.2
   - uncertainties
 
   # JuliaCall
@@ -28,6 +28,7 @@ dependencies:
   - uproot=4.3.7
   - vector=1.4.2
   - cabinetry
+  - hepdata-lib
 
   # Plotting
   - bokeh=2.4.2
