@@ -244,7 +244,7 @@ local panels = import 'panels.libsonnet';
     title='Slurm jobs (Hammer)',
     targets=[
       prometheus.addQuery(
-        'prometheus', 'slurm_info_job_user{user!="cmspilot",user!="lcgadmin",user!="uscmslcl"}',
+        'prometheus', 'slurm_info_job_user',
         legendFormat='{{user}}'
       ),
     ],
@@ -278,7 +278,7 @@ local panels = import 'panels.libsonnet';
             increase(
               jupyterhub_request_duration_seconds_bucket{
                 job="jupyterhub",
-                instance="cms.geddes.rcac.purdue.edu:80",
+                instance="cms.geddes.rcac.purdue.edu",
               }[2m]
             )
           ) by (code)
@@ -303,7 +303,7 @@ local panels = import 'panels.libsonnet';
               rate(
                 jupyterhub_request_duration_seconds_bucket{
                   job="jupyterhub",
-                  instance="cms.geddes.rcac.purdue.edu:80",
+                  instance="cms.geddes.rcac.purdue.edu",
                   handler!="jupyterhub.apihandlers.users.SpawnProgressAPIHandler"
                 }[5m]
               )
@@ -320,7 +320,7 @@ local panels = import 'panels.libsonnet';
               rate(
                 jupyterhub_request_duration_seconds_bucket{
                   job="jupyterhub",
-                  instance="cms.geddes.rcac.purdue.edu:80",
+                  instance="cms.geddes.rcac.purdue.edu",
                   handler!="jupyterhub.apihandlers.users.SpawnProgressAPIHandler"
                 }[5m]
               )
@@ -337,7 +337,7 @@ local panels = import 'panels.libsonnet';
               rate(
                 jupyterhub_request_duration_seconds_bucket{
                   job="jupyterhub",
-                  instance="cms.geddes.rcac.purdue.edu:80",
+                  instance="cms.geddes.rcac.purdue.edu",
                   handler!="jupyterhub.apihandlers.users.SpawnProgressAPIHandler"
                 }[5m]
               )
@@ -360,7 +360,7 @@ local panels = import 'panels.libsonnet';
         |||
           histogram_quantile(1, sum(rate(jupyterhub_server_spawn_duration_seconds_bucket{
           job="jupyterhub",
-          instance=~"cms(dev)?.geddes.rcac.purdue.edu:80"
+          instance=~"cms(dev)?.geddes.rcac.purdue.edu"
           }[5m])) by (le))
         |||
       ),

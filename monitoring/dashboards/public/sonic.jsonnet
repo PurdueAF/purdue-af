@@ -21,13 +21,13 @@ local h = g.panel.timeSeries.gridPos.withH;
 local placeholder = g.panel.canvas.new('')+g.panel.text.panelOptions.withTransparent();
 
 
-local lb_name =
+local instance =
   g.dashboard.variable.query.new(
-    'lb_name',
-    query='query_result(envoy_server_live{namespace=~"cms",pod=~"triton-.*|sonic-.*"})'
+    'instance',
   )
-  + g.dashboard.variable.query.withRegex(
-    '/pod="(?<text>triton-[^"]+)-[a-z0-9]+-[a-z0-9]+/g'
+  + g.dashboard.variable.query.queryTypes.withLabelValues(
+    'instance',
+    metric='envoy_cluster_membership_total{component="envoy"}',
   )
   + g.dashboard.variable.query.withDatasource(
     type='prometheus',
@@ -35,6 +35,7 @@ local lb_name =
   )
   + g.dashboard.variable.query.withSort(1)
   + g.dashboard.variable.query.selectionOptions.withIncludeAll()
+  + g.dashboard.variable.query.selectionOptions.withMulti()
 ;
 
 
@@ -45,7 +46,7 @@ local sonicLogo = panels.text(
     content=|||
       <div style="display: flex; flex-direction: column; align-items: center; width: 100%; height: 100%; box-sizing: border-box;">
           <img src="https://yongbinfeng.gitbook.io/~gitbook/image?url=https%3A%2F%2F2104107444-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252Fgj0XlXp8qhEh0Cusn3gq%252Fuploads%252Fq0BdjaLNbsosFn9OK8N0%252FSONIC_Logo.png%3Falt%3Dmedia%26token%3D8cdf9ae5-d8e1-46ec-a532-a2493e65e377&width=300&dpr=4&quality=100&sign=ecb659d174c2a67811253fce3b00b25903ab7a2198911dc7f2407a12976319dc" alt="SONIC Logo" style="max-width: 100%; max-height: calc(50% - 20px); height: auto; padding-top: 10px; padding-bottom: 10px;">
-          <img src="https://cms-docdb.cern.ch/cgi-bin/PublicDocDB/RetrieveFile?docid=3045&filename=CMSlogo_white_label_1024_May2014.png&version=3" style="max-width: 100%; max-height: calc(50% - 20px); height: auto; padding-top: 10px; padding-bottom: 10px">
+          <img src="https://tikz.net/wp-content/uploads/2023/09/CMS_logo-008.png" style="max-width: 100%; max-height: calc(50% - 20px); height: auto; padding-top: 10px; padding-bottom: 10px">
       </div>
     |||,
 
@@ -75,9 +76,9 @@ local sonicTitle = panels.text(
 local deployedTritonLB = panels.stat(
   targets=[
     prometheus.addQuery(
-      'prometheus-rancher',
-      'count(sum by (service) (nv_inference_count))',
-      legendFormat='Active load balancers',
+      'prometheus',
+      'count(sum by (instance) (nv_inference_count{instance=~"$instance"}))',
+      legendFormat='Active SONIC instances',
       instant=true
     ),
   ],
@@ -90,7 +91,7 @@ local deployedTritonServers = panels.stat(
       'prometheus',
       |||
         sum (
-            kube_deployment_status_replicas_available{namespace="cms", deployment=~"triton-.*-lb|sonic-.*trito.*"}
+          envoy_cluster_membership_total{envoy_cluster_name="triton_grpc_service", component="envoy", instance=~"$instance"}
         )
       |||,
       legendFormat='Active Triton servers',
@@ -108,15 +109,15 @@ local sonicStatus = panels.stateTimeline(
       |||
         sum(
           rate(
-            label_replace(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
+            envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}
           [5m:1m])
           /
           rate(
-            label_replace(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
+            envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}
           [5m:1m])
-        ) by (pod)
+        ) by (instance)
       |||,
-      legendFormat='{{ pod }}'
+      legendFormat='{{ instance }}'
     ),
   ],
   showValue='never',
@@ -136,7 +137,7 @@ local latencyByModel = panels.timeSeries(
     prometheus.addQuery(
       'prometheus-rancher',
       |||
-        sum by (model, version) (rate(nv_inference_compute_infer_duration_us{pod=~"$lb_name.*"}[5m:1m])) / 1000 / sum by (model, version) (rate(nv_inference_exec_count[5m:1m]))
+        sum by (model, version) (rate(nv_inference_compute_infer_duration_us{pod=~"$instance.*"}[5m:1m])) / 1000 / sum by (model, version) (rate(nv_inference_exec_count[5m:1m]))
       |||,
       legendFormat='{{ model }} v{{ version }}'
     ),
@@ -154,7 +155,7 @@ local tritonInferencesPerLB = panels.timeSeries(
       |||
         sum(
           rate(
-            nv_inference_exec_count{pod=~"$lb_name.*"}[5m:1m]
+            nv_inference_exec_count{pod=~"$instance.*"}[5m:1m]
           )
         ) by (service)
       |||,
@@ -173,7 +174,7 @@ local tritonInferencesEvPerLB = panels.timeSeries(
       |||
         sum (
           rate(
-            nv_inference_count{pod=~"$lb_name.*"}[5m:1m]
+            nv_inference_count{pod=~"$instance.*"}[5m:1m]
           )
         ) by (service)
       |||,
@@ -192,7 +193,7 @@ local tritonInferencesPerModel = panels.timeSeries(
       |||
         sum (
           rate(
-            nv_inference_exec_count{pod=~"$lb_name.*"}[5m:1m]
+            nv_inference_exec_count{pod=~"$instance.*"}[5m:1m]
           )
         ) by (model, version)
       |||,
@@ -211,7 +212,7 @@ local tritonInferencesEvPerModel = panels.timeSeries(
       |||
         sum (
           rate(
-            nv_inference_count{pod=~"$lb_name.*"}[5m:1m]
+            nv_inference_count{pod=~"$instance.*"}[5m:1m]
           )
         ) by (model, version)
       |||,
@@ -223,37 +224,20 @@ local tritonInferencesEvPerModel = panels.timeSeries(
 );
 
 local tritonNumServers = panels.timeSeries(
-  title='Triton servers per load balancer',
+  title='Triton servers per SONIC instance',
   targets=[
     prometheus.addQuery(
-      'prometheus-rancher',
+      'prometheus',
       |||
-        sum by (deployment)(
-            kube_deployment_status_replicas_available{namespace="cms", deployment=~"$lb_name-lb|sonic-.*trito.*"}
-        )
+        envoy_cluster_membership_total{envoy_cluster_name="triton_grpc_service", component="envoy"}
       |||,
-      legendFormat='{{ deployment }}'
+      legendFormat='{{ instance }}'
     ),
   ],
   min=0,
   legendPlacement='right',
 );
 
-local tritonServerSaturation = panels.timeSeries(
-  title='Triton load balancer saturation metric',
-  targets=[
-    prometheus.addQuery(
-      'prometheus',
-      |||
-        sonic_lb_saturated{lb_name=~"$lb_name-lb"}
-      |||,
-      legendFormat='{{ lb_name }}'
-    ),
-  ],
-  min=0,
-  legendPlacement='right',
-  fillOpacity=20,
-);
 
 local tritonQueueTimeByModel = panels.timeSeries(
   title='Queue time by model, avg. over Triton servers [ms]',
@@ -263,11 +247,11 @@ local tritonQueueTimeByModel = panels.timeSeries(
       'prometheus-rancher',
       |||
         sum by (model, version) (
-          avg by (model, lb_name, version) (
-            label_replace(irate(nv_inference_queue_duration_us{pod=~"$lb_name.*"}[5m]), "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+          avg by (model, pod, version) (
+            irate(nv_inference_queue_duration_us{pod=~"$instance.*"}[5m])
             /
             (1000 * (1 + 
-              label_replace(irate(nv_inference_request_success{pod=~"$lb_name.*"}[5m]), "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+              irate(nv_inference_request_success{pod=~"$instance.*"}[5m])
             ))
           )
         )
@@ -280,45 +264,19 @@ local tritonQueueTimeByModel = panels.timeSeries(
 );
 
 local totalLatency = panels.timeSeries(
-  // title='Total latency',
-  title='Autoscaler indicator',
+  title='Server load metric',
   description='',
   targets=[
     prometheus.addQuery(
       'prometheus',
       |||
-        ((
-          sum by (pod) (
-            rate(label_replace(nv_inference_queue_duration_us{pod=~"$lb_name.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$") [5m:1m])
-          )
+        sum by (instance) (
+          rate(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[5m:1m])
           /
-          sum by (pod) (
-            (rate(label_replace(nv_inference_exec_count{pod=~"$lb_name.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$") [5m:1m]) + 0.00001) * 1000
-          )
-        ) OR 0.0000 *
-        (
-          sum by (pod) (
-            label_replace(envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
-          )
-        ))
-        + 0.00001 * (
-          sum by (pod) (
-            label_replace(envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "pod", "$1", "pod", "(.*)-(.*)-(.*)$")
-          ) > bool 1
+          rate(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[5m:1m])
         )
       |||,
-      // |||
-      //   sum(
-      //     rate(
-      //       label_replace(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
-      //     [5m:1m])
-      //     /
-      //     rate(
-      //       label_replace(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
-      //     [5m:1m])
-      //   ) by (lb_name)
-      // |||,
-      legendFormat='{{ lb_name }}'
+      legendFormat='{{ instance }}'
     ),
   ],
   min=0,
@@ -340,7 +298,7 @@ local tritonGPUload = panels.timeSeries(
     prometheus.addQuery(
       'prometheus-rancher',
       |||
-        label_replace(avg_over_time(nv_gpu_utilization{pod=~"$lb_name.*"}[5m:1m]), "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+        avg_over_time(nv_gpu_utilization{pod=~"$instance.*"}[5m:1m])
       |||,
       legendFormat='{{ pod }}'
     ),
@@ -372,16 +330,12 @@ local envoyLatency = panels.timeSeries(
       'prometheus',
       |||
         sum(
-          rate(
-            label_replace(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
-          [5m:1m])
+          rate(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc"}[5m:1m])
           /
-          rate(
-            label_replace(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
-          [5m:1m])
-        ) by (lb_name)
+          rate(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc"}[5m:1m])
+        ) by (instance)
       |||,
-      legendFormat='{{ lb_name }}'
+      legendFormat='{{ instance }}'
     ),
   ],
   min=0,
@@ -396,18 +350,14 @@ local sonicLatency = panels.timeSeries(
     prometheus.addQuery(
       'prometheus',
       |||
-        sum(
-        sum by (lb_name)(
-          rate(
-            label_replace(nv_inference_compute_infer_duration_us{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [5m:1m])
-        )
+        sum (
+          sum by (instance)(
+            rate(nv_inference_compute_infer_duration_us{instance=~"$instance"}[5m:1m])
+          )
         /
-        sum by (lb_name) (((
-          rate(
-            label_replace(nv_inference_exec_count{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [5m:1m])
-        +0.000000000000001)*1000))
+          sum by (instance) (((
+            rate(nv_inference_exec_count{instance=~"$instance"}[5m:1m])
+          +0.000000000000001)*1000))
         )
       |||,
       legendFormat='Inference'
@@ -416,17 +366,13 @@ local sonicLatency = panels.timeSeries(
       'prometheus',
       |||
         sum(
-        sum by (lb_name)(
-          rate(
-            label_replace(nv_inference_queue_duration_us{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [5m:1m])
-        )
+          sum by (instance)(
+            rate(nv_inference_queue_duration_us{instance=~"$instance"}[5m:1m])
+          )
         /
-        sum by (lb_name) (((
-          rate(
-            label_replace(nv_inference_exec_count{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [5m:1m])
-        +0.000000000000001)*1000))
+          sum by (instance) (((
+            rate(nv_inference_exec_count{instance=~"$instance"}[5m:1m])
+          +0.000000000000001)*1000))
         )
       |||,
       legendFormat='Queue'
@@ -435,17 +381,13 @@ local sonicLatency = panels.timeSeries(
       'prometheus',
       |||
         sum(
-        sum by (lb_name)(
-          rate(
-            label_replace(nv_inference_compute_input_duration_us{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [5m:1m])
-        )
+          sum by (instance)(
+            rate(nv_inference_compute_input_duration_us{instance=~"$instance"}[5m:1m])
+          )
         /
-        sum by (lb_name) (((
-          rate(
-            label_replace(nv_inference_exec_count{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [5m:1m])
-        +0.000000000000001)*1000))
+          sum by (instance) (((
+            rate(nv_inference_exec_count{instance=~"$instance"}[5m:1m])
+          +0.000000000000001)*1000))
         )
       |||,
       legendFormat='Input'
@@ -454,17 +396,13 @@ local sonicLatency = panels.timeSeries(
       'prometheus',
       |||
         sum(
-        sum by (lb_name)(
-          rate(
-            label_replace(nv_inference_compute_output_duration_us{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [5m:1m])
-        )
+          sum by (instance)(
+            rate(nv_inference_compute_output_duration_us{instance=~"$instance"}[5m:1m])
+          )
         /
-        sum by (lb_name) (((
-          rate(
-            label_replace(nv_inference_exec_count{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [5m:1m])
-        +0.000000000000001)*1000))
+          sum by (instance) (((
+            rate(nv_inference_exec_count{instance=~"$instance"}[5m:1m])
+          +0.000000000000001)*1000))
         )
       |||,
       legendFormat='Output'
@@ -473,27 +411,19 @@ local sonicLatency = panels.timeSeries(
       'prometheus',
       |||
         sum(
-        sum(
-          rate(
-            label_replace(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
-          [5m:1m])
-          /
-          rate(
-            label_replace(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
-          [5m:1m])
-        ) by (lb_name)
-        -           
-        sum by (lb_name)(
-          rate(
-            label_replace(nv_inference_request_duration_us{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [5m:1m])
-        )
+          sum(
+            rate(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[5m:1m])
+            /
+            rate(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[5m:1m])
+          ) by (instance)
+        -
+          sum by (instance)(
+            rate(nv_inference_request_duration_us{instance=~"$instance"}[5m:1m])
+          )
         /
-        sum by (lb_name) (((
-          rate(
-            label_replace(nv_inference_exec_count{pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [5m:1m])
-        +0.000000000000001)*1000))
+          sum by (instance) (((
+            rate(nv_inference_exec_count{instance=~"$instance"}[5m:1m])
+          +0.000000000000001)*1000))
         )
       |||,
       legendFormat='Other sources'
@@ -516,28 +446,20 @@ local envoyOverhead = panels.timeSeries(
       'prometheus',
       |||
         sum(
-          rate(
-            label_replace(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc"}, "lb_name", "$1", "lb_name", "(.*)-(.*)-(.*)$")
-          [5m:1m])
+          rate(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc"}[5m:1m])
           /
-          rate(
-            label_replace(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc"}, "lb_name", "$1", "lb_name", "(.*)-(.*)-(.*)$")
-          [5m:1m])
-        ) by (lb_name)
+          rate(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc"}[5m:1m])
+        ) by (instance)
         -           
-        sum by (lb_name)(
-          rate(
-            label_replace(nv_inference_request_duration_us, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [5m:1m])
+        sum by (instance)(
+          rate(nv_inference_request_duration_us[5m:1m])
         )
         /
-        sum by (lb_name) (((
-          rate(
-            label_replace(nv_inference_exec_count, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)-(.*)$")
-          [5m:1m])
+        sum by (instance) (((
+          rate(nv_inference_exec_count[5m:1m])
         +0.000000000000001)*1000))
       |||,
-      legendFormat='{{ lb_name }}'
+      legendFormat='{{ instance }}'
     ),
   ],
   min=0,
@@ -552,11 +474,11 @@ local envoyClients = panels.timeSeries(
     prometheus.addQuery(
       'prometheus',
       |||
-        sum by (lb_name) (
-          label_replace(envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+        sum by (instance) (
+          envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}
         )
       |||,
-      legendFormat='{{ lb_name }}'
+      legendFormat='{{ instance }}'
     ),
   ],
   min=0,
@@ -570,11 +492,11 @@ local envoyConnRate = panels.timeSeries(
     prometheus.addQuery(
       'prometheus',
       |||
-        sum by (lb_name) (
-          label_replace(rate(envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"}[2m:30s]), "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+        sum by (instance) (
+          rate(envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[2m:30s])
         )
       |||,
-      legendFormat='{{ lb_name }}'
+      legendFormat='{{ instance }}'
     ),
   ],
   min=0,
@@ -588,14 +510,14 @@ local envoyMemUtil = panels.timeSeries(
     prometheus.addQuery(
       'prometheus-rancher',
       |||
-        sum by (lb_name)(
-            label_replace(container_memory_working_set_bytes{namespace="cms", pod=~"$lb_name.*", container=~"envoy"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+        sum by (pod)(
+            container_memory_working_set_bytes{namespace="cms", container=~"envoy"}
         ) /
-        sum by (lb_name)(
-            label_replace(kube_pod_container_resource_requests{namespace="cms", pod=~"$lb_name.*", container=~"envoy", resource="memory"}, "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+        sum by (pod)(
+            kube_pod_container_resource_requests{namespace="cms", container=~"envoy", resource="memory"}
         )
       |||,
-      legendFormat='{{ lb_name }}'
+      legendFormat='{{ pod }}'
     ),
   ],
   unit='percentunit',
@@ -611,11 +533,11 @@ local envoyReqRate = panels.timeSeries(
     prometheus.addQuery(
       'prometheus',
       |||
-        sum(sum by (lb_name) (
-          label_replace(rate(envoy_http_rq_total[5m:1m]), "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
+        sum(sum by (instance) (
+          rate(envoy_http_rq_total[5m:1m])
         ))
       |||,
-      legendFormat='{{ lb_name }}'
+      legendFormat='{{ instance }}'
     ),
   ],
   // unit='percentunit',
@@ -636,12 +558,10 @@ local envoyCpuUtil = panels.timeSeries(
       'prometheus-rancher',
       |||
         sum(rate(
-          label_replace(
-            container_cpu_usage_seconds_total{namespace="cms",pod=~"$lb_name.*", container="envoy"},
-          "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")[5m:1m]
-        )) by (lb_name)
+          container_cpu_usage_seconds_total{namespace="cms", container="envoy"}[5m:1m]
+        )) by (pod)
       |||,
-      legendFormat='{{ lb_name }}'
+      legendFormat='{{ pod }}'
     ),
   ],
   unit='cpu',
@@ -663,10 +583,10 @@ local tritonMemUtil = panels.timeSeries(
       'prometheus-rancher',
       |||
         sum by (pod)(
-            container_memory_working_set_bytes{namespace="cms", pod=~"$lb_name.*", container=~"$lb_name.*"}
+            container_memory_working_set_bytes{namespace="cms", container=~"$instance.*"}
         ) /
         sum by (pod)(
-            kube_pod_container_resource_requests{namespace="cms", pod=~"$lb_name.*", container=~"$lb_name.*", resource="memory"}
+            kube_pod_container_resource_requests{namespace="cms", container=~"$instance.*", resource="memory"}
         )
       |||,
       legendFormat='{{ pod }}'
@@ -684,13 +604,9 @@ local gpuPowerUsage = panels.timeSeries(
     prometheus.addQuery(
       'prometheus-rancher',
       |||
-        sum by (lb_name)(
-          label_replace(
-            sum(nv_gpu_power_usage{pod=~"$lb_name.*"}) by (pod),
-          "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$")
-        )
+        sum(nv_gpu_power_usage) by (pod)
       |||,
-      legendFormat='{{ lb_name }}'
+      legendFormat='{{ pod }}'
     ),
   ],
   min=0,
@@ -703,23 +619,15 @@ local inferencesPerSecondPerWatt = panels.timeSeries(
     prometheus.addQuery(
       'prometheus-rancher',
       |||
-        sum by (lb_name)(
-          label_replace(
-            (sum(
-              rate(nv_inference_count{pod=~"$lb_name.*"}[5m:1m])
-            ) by (pod)),
-          "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$"
-          )
+        sum by (pod)(
+          rate(nv_inference_count{pod=~"$instance.*"}[5m:1m])
         )
-            /
-        sum by (lb_name)(
-          label_replace(
-            (sum(nv_gpu_power_usage{pod=~"$lb_name.*"}) by (pod)),
-          "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$"
-          )
+        /
+        sum by (pod)(
+          nv_gpu_power_usage{pod=~"$instance.*"}
         )
       |||,
-      legendFormat='{{ lb_name }}'
+      legendFormat='{{ pod }}'
     ),
   ],
   min=0,
@@ -733,23 +641,17 @@ local networkTraffic = panels.timeSeries(
     prometheus.addQuery(
       'prometheus',
       |||
-        sum by (lb_name) (
+        sum by (instance) (
           (
             rate(
-              label_replace(
-                envoy_http_downstream_cx_rx_bytes_total{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"},
-                "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$"
-              )[5m:1m]
+                envoy_http_downstream_cx_rx_bytes_total{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[5m:1m]
             ) + rate(
-              label_replace(
-                envoy_http_downstream_cx_tx_bytes_total{envoy_http_conn_manager_prefix="ingress_grpc", pod=~"$lb_name.*"},
-                "lb_name", "$1", "pod", "(.*)-(.*)-(.*)$"
-              )[5m:1m]
+                envoy_http_downstream_cx_tx_bytes_total{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[5m:1m]
             )
           ) / (1024 * 1024 * 1024) * 8
         )
       |||,
-      legendFormat='{{ lb_name }}',
+      legendFormat='{{ instance }}',
     ),
   ],
   min=0,
@@ -882,7 +784,7 @@ g.dashboard.new('SONIC Dashboard')
 + g.dashboard.time.withTo(value="now")
 + g.dashboard.graphTooltip.withSharedCrosshair()
 + g.dashboard.withVariables([
-  lb_name,
+  instance,
 ])
 + g.dashboard.withPanels([
 

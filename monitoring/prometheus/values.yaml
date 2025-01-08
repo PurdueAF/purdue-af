@@ -36,6 +36,7 @@ prometheusConfig: |
   global:
     scrape_interval: 60s
     evaluation_interval: 60s
+    scrape_timeout: 60s
   alerting:
     alertmanagers:
     - static_configs:
@@ -151,3 +152,57 @@ prometheusConfig: |
         - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
           action: keep
           regex: dask-gateway
+    - job_name: 'supersonic-monitor-triton'
+      metrics_path: '/metrics'
+      kubernetes_sd_configs:
+        - role: endpoints
+          namespaces:
+            names:
+              - 'cms'
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_pod_name]
+          target_label: 'pod'
+        - source_labels: [__meta_kubernetes_namespace]
+          target_label: 'namespace'
+          replacement: '$1'
+        - source_labels: [__meta_kubernetes_pod_node_name]
+          target_label: 'node'
+        - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+          target_label: 'app'
+        - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_instance]
+          target_label: 'instance'
+        - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component]
+          target_label: 'component'
+        - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+          action: keep
+          regex: supersonic
+        - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component]
+          action: keep
+          regex: triton
+    - job_name: 'supersonic-monitor-envoy'
+      metrics_path: '/stats/prometheus'
+      kubernetes_sd_configs:
+        - role: endpoints
+          namespaces:
+            names:
+              - 'cms'
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_pod_name]
+          target_label: 'pod'
+        - source_labels: [__meta_kubernetes_namespace]
+          target_label: 'namespace'
+          replacement: '$1'
+        - source_labels: [__meta_kubernetes_pod_node_name]
+          target_label: 'node'
+        - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+          target_label: 'app'
+        - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_instance]
+          target_label: 'instance'
+        - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component]
+          target_label: 'component'
+        - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+          action: keep
+          regex: supersonic
+        - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component]
+          action: keep
+          regex: envoy
