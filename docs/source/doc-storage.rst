@@ -1,5 +1,24 @@
 .. _doc-storage:
 
+.. attention::
+
+    **Updated: January 10, 2024**
+
+    The Purdue EOS storage servers are down since December 23, 2024.
+
+    All EOS directories are affected, including ``/store/user``, ``/store/data``, and ``/store/mc``.
+    
+    CMS datasets can still be accessed from other CMS sites via XRootD or XCache.
+    Datasets with the only copy at T2_Purdue, as well as any private data at EOS
+    are not accessible at the moment; we hope to recover all data by January 17th.
+
+    Outputs of CRAB jobs executed since December 23rd are stored on fallback servers,
+    please contact the site support if you need to access them.
+
+    All other storage (``/home/``, ``/work/``, Depot) remains fully operational.
+
+    We will keep you updated on the progress of the recovery.
+
 Storage volumes
 ==================================
 
