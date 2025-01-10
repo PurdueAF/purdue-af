@@ -15,10 +15,10 @@ singleuser:
       description: "If you are starting a session with a GPU, please shut it down when finished in order to release the GPU."
       kubespawner_override:
         node_selector: {'cms-af-prod': 'true'}
-        lifecycle_hooks:
-          preStop:
-            exec:
-              command: ["bash", "-c", "rm -f eos-cern"]
+        # lifecycle_hooks:
+          # preStop:
+          #   exec:
+          #     command: ["bash", "-c", "rm -f eos-cern"]
       profile_options:
         cpu:
           display_name: "CPUs"
@@ -198,6 +198,11 @@ hub:
       name: quay.io/jupyterhub/k8s-hub
       tag: 3.3.8
   nodeSelector: {'cms-af-prod': 'true'}
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
   resources:
     requests:
       cpu: 1
