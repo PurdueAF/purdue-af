@@ -2,7 +2,7 @@
 
 .. attention::
 
-    **Updated: January 10, 2025**
+    **Updated: January 14, 2025**
 
     The Purdue EOS storage servers are down since December 23, 2024.
 
