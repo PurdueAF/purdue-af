@@ -160,6 +160,10 @@ gateway:
             else:
                 uid,gid = ldap_lookup(user.name)
 
+            # Remove NVIDIA_VISIBLE_DEVICES from the environment
+            if "NVIDIA_VISIBLE_DEVICES" in options.env:
+                del options.env["NVIDIA_VISIBLE_DEVICES"]
+
             extra_pod_config = {"securityContext": {"runAsUser": uid, "runAsGroup": gid,}}
             c.KubeClusterConfig.scheduler_extra_pod_config.update(extra_pod_config)
             c.KubeClusterConfig.worker_extra_pod_config.update(extra_pod_config)
