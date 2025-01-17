@@ -1,6 +1,6 @@
 .. attention::
 
-    **Updated: January 14, 2025**
+    **Updated: January 17, 2025**
 
     The Purdue EOS storage servers are down since December 23, 2024.
 
@@ -8,7 +8,7 @@
     
     CMS datasets can still be accessed from other CMS sites via XRootD or XCache.
     Datasets with the only copy at T2_Purdue, as well as any private data at EOS
-    are not accessible at the moment; we hope to recover all data by January 17th.
+    are not accessible at the moment; we hope to recover all data by January 19th.
 
     Outputs of CRAB jobs executed since December 23rd are stored on fallback servers,
     please contact the site support if you need to access them.
