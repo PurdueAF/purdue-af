@@ -6,7 +6,7 @@ dependencies:
   - pip
 
   # HEP
-  - coffea==2024.11.0
+  - coffea==2025.1.0
   - awkward
   - uproot
   - hist
@@ -16,8 +16,8 @@ dependencies:
   - correctionlib==2.6.4
 
   # ROOT
-  - root==6.30.04
-  - root_base==6.30.04
+  - root==6.32.02
+  - root_base==6.32.02
   - boost
   - eigen
   - gsl
@@ -29,7 +29,7 @@ dependencies:
   - xgboost
 
   # Tools
-  - dask==2024.9.1
+  - dask
   - dask-gateway
   - prometheus_client
   - xrootd
@@ -47,3 +47,4 @@ dependencies:
     - scikit-hep-testdata
 variables:
   LD_LIBRARY_PATH: /depot/cms/kernels/coffea_latest/lib/python3.11/site-packages/nvidia/nvjitlink/lib/:/usr/local/cuda-12.2/lib64:/depot/cms/purdue-af/combine/HiggsAnalysis/CombinedLimit/build/lib:/depot/cms/purdue-af/roofit-batchcompute/build/
+  PYTHONPATH: /depot/cms/kernels/coffea_latest/bin
