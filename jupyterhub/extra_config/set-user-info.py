@@ -43,7 +43,7 @@ def passthrough_auth_state_hook(spawner, auth_state):
     elif NAMESPACE=="cms":
         # in prod instance do the user mapping
         af_id = int(spawner.user.id)
-        if af_id > 199:
+        if af_id > 399:
             # raise Exception(
             print(
                 f"Error while trying to create an external user with AF ID {af_id}."
