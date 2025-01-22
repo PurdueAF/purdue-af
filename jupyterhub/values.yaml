@@ -154,8 +154,8 @@ singleuser:
     homeMountPath: /home/{legacy_escape_username}
     extraVolumes:
       - name: cvmfs
-        hostPath: 
-          path: /cvmfs
+        persistentVolumeClaim:
+          claimName: cvmfs
       - name: eos
         hostPath: 
           path: /eos

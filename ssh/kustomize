@@ -4,6 +4,6 @@ cd kustomization
 
 cat <&0 > all.yaml
 
-kustomize build . && rm all.yaml
+kubectl kustomize . && rm all.yaml
 
 cd ../

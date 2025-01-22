@@ -12,7 +12,21 @@ spec:
       labels:
         name: af-node-monitor
     spec:
-      nodeSelector: {'cms-af-prod': 'true'}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: cms-af-prod
+                    operator: In
+                    values:
+                      - "true"
+              - matchExpressions:
+                  - key: cms-af-dev
+                    operator: In
+                    values:
+                      - "true"
+      # nodeSelector: {'cms-af-prod': 'true'}
       tolerations:
       - key: "hub.jupyter.org/dedicated"
         operator: "Equal"
@@ -39,8 +53,8 @@ spec:
           mountPropagation: HostToContainer
       volumes:
       - name: cvmfs
-        hostPath: 
-          path: /cvmfs
+        persistentVolumeClaim:
+          claimName: cvmfs
       - name: eos
         hostPath: 
           path: /eos

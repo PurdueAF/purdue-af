@@ -77,8 +77,8 @@ gateway:
             effect: "NoSchedule"
         volumes:
           - name: cvmfs
-            hostPath: 
-              path: /cvmfs
+            persistentVolumeClaim:
+              claimName: cvmfs
           - name: eos
             hostPath: 
               path: /eos

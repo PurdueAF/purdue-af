@@ -4,10 +4,10 @@ singleuser:
   cmd: 
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
-    tag: "0.9.5"
+    tag: "0.10.1"
   extraLabels:
     username_unescaped: "{legacy_escape_username}"
-    docker_image_tag: "0.9.5"
+    docker_image_tag: "0.10.1"
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
       default: true
@@ -82,7 +82,10 @@ singleuser:
               kubespawner_override:
                 node_selector:
                   kubernetes.io/hostname: cms-fe01
-
+            12: 
+              display_name: "paf-b00"
+              kubespawner_override:
+                node_selector: {'cms-af-prod': 'true'}
         cpu:
           display_name: "CPUs"
           choices:
@@ -234,8 +237,8 @@ singleuser:
     homeMountPath: /home/{legacy_escape_username}
     extraVolumes:
       - name: cvmfs
-        hostPath: 
-          path: /cvmfs
+        persistentVolumeClaim:
+          claimName: cvmfs
       - name: eos
         hostPath: 
           path: /eos
