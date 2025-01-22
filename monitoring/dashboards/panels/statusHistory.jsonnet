@@ -8,7 +8,7 @@ local panels = import 'panels.libsonnet';
       prometheus.addQuery(
         'prometheus',
         'sum by (node) (af_node_mount_valid{mount_name="eos"})',
-        legendFormat='{{ node }}', interval='1h'
+        legendFormat='{{ node }}', interval='10m'
       ),
     ],
     showValue='never',
@@ -25,7 +25,7 @@ local panels = import 'panels.libsonnet';
       prometheus.addQuery(
         'prometheus',
         'sum by (node) (af_node_mount_valid{mount_name="/depot/"})',
-        legendFormat='{{ node }}', interval='1h'
+        legendFormat='{{ node }}', interval='10m'
       ),
     ],
     showValue='never',
@@ -42,7 +42,7 @@ local panels = import 'panels.libsonnet';
       prometheus.addQuery(
         'prometheus',
         'sum by (node) (af_node_mount_valid{mount_name="/work/"})',
-        legendFormat='{{ node }}', interval='1h'
+        legendFormat='{{ node }}', interval='10m'
       ),
     ],
     showValue='never',
@@ -59,7 +59,7 @@ local panels = import 'panels.libsonnet';
       prometheus.addQuery(
         'prometheus',
         'sum by (node) (af_node_mount_valid{mount_name="cvmfs"})',
-        legendFormat='{{ node }}', interval='1h'
+        legendFormat='{{ node }}', interval='10m'
       ),
     ],
     showValue='never',

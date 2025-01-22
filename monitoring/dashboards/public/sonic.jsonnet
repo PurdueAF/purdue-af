@@ -107,15 +107,13 @@ local sonicStatus = panels.stateTimeline(
     prometheus.addQuery(
       'prometheus',
       |||
-        sum(
-          rate(
-            envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}
-          [5m:1m])
+          sum by (instance) (
+              nv_inference_queue_duration_us{instance=~"$instance"}
+          )
           /
-          rate(
-            envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}
-          [5m:1m])
-        ) by (instance)
+          sum by (instance) (
+              (nv_inference_exec_count{instance=~"$instance"} * 1000) + 0.001
+          )
       |||,
       legendFormat='{{ instance }}'
     ),
@@ -125,9 +123,9 @@ local sonicStatus = panels.stateTimeline(
   thresholdMode='absolute',
   thresholdSteps=[
     { color: 'green', value: 0 },
-    { color: 'yellow', value: 50 },
-    { color: 'orange', value: 100 },
-    { color: 'red', value: 200 },
+    { color: 'yellow', value: 100 },
+    { color: 'orange', value: 200 },
+    { color: 'red', value: 300 },
   ],
 );
 
@@ -137,7 +135,7 @@ local latencyByModel = panels.timeSeries(
     prometheus.addQuery(
       'prometheus-rancher',
       |||
-        sum by (model, version) (rate(nv_inference_compute_infer_duration_us{pod=~"$instance.*"}[5m:1m])) / 1000 / sum by (model, version) (rate(nv_inference_exec_count[5m:1m]))
+        sum by (model, version) (nv_inference_compute_infer_duration_us{pod=~"$instance.*"}) / 1000 / sum by (model, version) (nv_inference_exec_count)
       |||,
       legendFormat='{{ model }} v{{ version }}'
     ),
@@ -155,7 +153,7 @@ local tritonInferencesPerLB = panels.timeSeries(
       |||
         sum(
           rate(
-            nv_inference_exec_count{pod=~"$instance.*"}[5m:1m]
+            nv_inference_exec_count{pod=~"$instance.*"}[2m]
           )
         ) by (service)
       |||,
@@ -174,7 +172,7 @@ local tritonInferencesEvPerLB = panels.timeSeries(
       |||
         sum (
           rate(
-            nv_inference_count{pod=~"$instance.*"}[5m:1m]
+            nv_inference_count{pod=~"$instance.*"}[2m]
           )
         ) by (service)
       |||,
@@ -193,7 +191,7 @@ local tritonInferencesPerModel = panels.timeSeries(
       |||
         sum (
           rate(
-            nv_inference_exec_count{pod=~"$instance.*"}[5m:1m]
+            nv_inference_exec_count{pod=~"$instance.*"}[2m]
           )
         ) by (model, version)
       |||,
@@ -212,7 +210,7 @@ local tritonInferencesEvPerModel = panels.timeSeries(
       |||
         sum (
           rate(
-            nv_inference_count{pod=~"$instance.*"}[5m:1m]
+            nv_inference_count{pod=~"$instance.*"}[2m]
           )
         ) by (model, version)
       |||,
@@ -248,10 +246,10 @@ local tritonQueueTimeByModel = panels.timeSeries(
       |||
         sum by (model, version) (
           avg by (model, pod, version) (
-            irate(nv_inference_queue_duration_us{pod=~"$instance.*"}[5m])
+            nv_inference_queue_duration_us{pod=~"$instance.*"}
             /
             (1000 * (1 + 
-              irate(nv_inference_request_success{pod=~"$instance.*"}[5m])
+              nv_inference_request_success{pod=~"$instance.*"}
             ))
           )
         )
@@ -270,11 +268,13 @@ local totalLatency = panels.timeSeries(
     prometheus.addQuery(
       'prometheus',
       |||
-        sum by (instance) (
-          rate(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[5m:1m])
+          sum by (instance) (
+              nv_inference_queue_duration_us{instance=~"$instance"}
+          )
           /
-          rate(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[5m:1m])
-        )
+          sum by (instance) (
+              (nv_inference_exec_count{instance=~"$instance"} * 1000) + 0.001
+          )
       |||,
       legendFormat='{{ instance }}'
     ),
@@ -284,9 +284,11 @@ local totalLatency = panels.timeSeries(
   unit='ms',
   thresholdMode='dashed',
   thresholdSteps=[
-    { color: 'green', value: 0 },
-    { color: 'orange', value: 0.00001 },
-    { color: 'red', value: 100 },
+    { color: 'blue', value: 0 },
+    { color: 'green', value: 10 },
+    { color: 'yellow', value: 100 },
+    { color: 'orange', value: 200 },
+    { color: 'red', value: 300 },
   ],
   fillOpacity=20,
 );
@@ -298,7 +300,7 @@ local tritonGPUload = panels.timeSeries(
     prometheus.addQuery(
       'prometheus-rancher',
       |||
-        avg_over_time(nv_gpu_utilization{pod=~"$instance.*"}[5m:1m])
+        avg_over_time(nv_gpu_utilization{pod=~"$instance.*"}[2m])
       |||,
       legendFormat='{{ pod }}'
     ),
@@ -330,9 +332,9 @@ local envoyLatency = panels.timeSeries(
       'prometheus',
       |||
         sum(
-          rate(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc"}[5m:1m])
+          envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc"}
           /
-          rate(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc"}[5m:1m])
+          envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc"}
         ) by (instance)
       |||,
       legendFormat='{{ instance }}'
@@ -352,11 +354,11 @@ local sonicLatency = panels.timeSeries(
       |||
         sum (
           sum by (instance)(
-            rate(nv_inference_compute_infer_duration_us{instance=~"$instance"}[5m:1m])
+            nv_inference_compute_infer_duration_us{instance=~"$instance"}
           )
         /
           sum by (instance) (((
-            rate(nv_inference_exec_count{instance=~"$instance"}[5m:1m])
+            nv_inference_exec_count{instance=~"$instance"}
           +0.000000000000001)*1000))
         )
       |||,
@@ -367,11 +369,11 @@ local sonicLatency = panels.timeSeries(
       |||
         sum(
           sum by (instance)(
-            rate(nv_inference_queue_duration_us{instance=~"$instance"}[5m:1m])
+            nv_inference_queue_duration_us{instance=~"$instance"}
           )
         /
           sum by (instance) (((
-            rate(nv_inference_exec_count{instance=~"$instance"}[5m:1m])
+            nv_inference_exec_count{instance=~"$instance"}
           +0.000000000000001)*1000))
         )
       |||,
@@ -382,11 +384,11 @@ local sonicLatency = panels.timeSeries(
       |||
         sum(
           sum by (instance)(
-            rate(nv_inference_compute_input_duration_us{instance=~"$instance"}[5m:1m])
+            nv_inference_compute_input_duration_us{instance=~"$instance"}
           )
         /
           sum by (instance) (((
-            rate(nv_inference_exec_count{instance=~"$instance"}[5m:1m])
+            nv_inference_exec_count{instance=~"$instance"}
           +0.000000000000001)*1000))
         )
       |||,
@@ -397,11 +399,11 @@ local sonicLatency = panels.timeSeries(
       |||
         sum(
           sum by (instance)(
-            rate(nv_inference_compute_output_duration_us{instance=~"$instance"}[5m:1m])
+            nv_inference_compute_output_duration_us{instance=~"$instance"}
           )
         /
           sum by (instance) (((
-            rate(nv_inference_exec_count{instance=~"$instance"}[5m:1m])
+            nv_inference_exec_count{instance=~"$instance"}
           +0.000000000000001)*1000))
         )
       |||,
@@ -412,17 +414,17 @@ local sonicLatency = panels.timeSeries(
       |||
         sum(
           sum(
-            rate(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[5m:1m])
+            envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}
             /
-            rate(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[5m:1m])
+            envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}
           ) by (instance)
         -
           sum by (instance)(
-            rate(nv_inference_request_duration_us{instance=~"$instance"}[5m:1m])
+            nv_inference_request_duration_us{instance=~"$instance"}
           )
         /
           sum by (instance) (((
-            rate(nv_inference_exec_count{instance=~"$instance"}[5m:1m])
+            nv_inference_exec_count{instance=~"$instance"}
           +0.000000000000001)*1000))
         )
       |||,
@@ -446,17 +448,17 @@ local envoyOverhead = panels.timeSeries(
       'prometheus',
       |||
         sum(
-          rate(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc"}[5m:1m])
+          envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix="ingress_grpc"}
           /
-          rate(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc"}[5m:1m])
+          envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix="ingress_grpc"}
         ) by (instance)
         -           
         sum by (instance)(
-          rate(nv_inference_request_duration_us[5m:1m])
+          nv_inference_request_duration_us
         )
         /
         sum by (instance) (((
-          rate(nv_inference_exec_count[5m:1m])
+          nv_inference_exec_count
         +0.000000000000001)*1000))
       |||,
       legendFormat='{{ instance }}'
@@ -493,7 +495,7 @@ local envoyConnRate = panels.timeSeries(
       'prometheus',
       |||
         sum by (instance) (
-          rate(envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[2m:30s])
+          rate(envoy_http_downstream_cx_active{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[5m:1m])
         )
       |||,
       legendFormat='{{ instance }}'
@@ -534,7 +536,7 @@ local envoyReqRate = panels.timeSeries(
       'prometheus',
       |||
         sum(sum by (instance) (
-          rate(envoy_http_rq_total[5m:1m])
+          rate(envoy_http_rq_total[2m])
         ))
       |||,
       legendFormat='{{ instance }}'
@@ -558,7 +560,7 @@ local envoyCpuUtil = panels.timeSeries(
       'prometheus-rancher',
       |||
         sum(rate(
-          container_cpu_usage_seconds_total{namespace="cms", container="envoy"}[5m:1m]
+          container_cpu_usage_seconds_total{namespace="cms", container="envoy"}[2m]
         )) by (pod)
       |||,
       legendFormat='{{ pod }}'
@@ -566,12 +568,13 @@ local envoyCpuUtil = panels.timeSeries(
   ],
   unit='cpu',
   min=0,
-  max=9,
+  max=4.5,
   legendPlacement='bottom',
   thresholdMode='dashed',
   thresholdSteps=[
     { color: 'green', value: 0 },
-    { color: 'red', value: 8 },
+    { color: 'orange', value: 2 },
+    { color: 'red', value: 4 },
   ]
 );
 
@@ -604,7 +607,7 @@ local gpuPowerUsage = panels.timeSeries(
     prometheus.addQuery(
       'prometheus-rancher',
       |||
-        sum(nv_gpu_power_usage) by (pod)
+        sum(avg_over_time(nv_gpu_power_usage[2m])) by (pod)
       |||,
       legendFormat='{{ pod }}'
     ),
@@ -644,9 +647,9 @@ local networkTraffic = panels.timeSeries(
         sum by (instance) (
           (
             rate(
-                envoy_http_downstream_cx_rx_bytes_total{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[5m:1m]
+                envoy_http_downstream_cx_rx_bytes_total{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[2m]
             ) + rate(
-                envoy_http_downstream_cx_tx_bytes_total{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[5m:1m]
+                envoy_http_downstream_cx_tx_bytes_total{envoy_http_conn_manager_prefix="ingress_grpc", instance=~"$instance"}[2m]
             )
           ) / (1024 * 1024 * 1024) * 8
         )

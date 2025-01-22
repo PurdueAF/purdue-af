@@ -34,8 +34,8 @@ pvc:
 prometheusConfig: |
   # my global config
   global:
-    scrape_interval: 60s
-    evaluation_interval: 60s
+    # scrape_interval: 60s
+    # evaluation_interval: 60s
     scrape_timeout: 60s
   alerting:
     alertmanagers:
@@ -153,6 +153,7 @@ prometheusConfig: |
           action: keep
           regex: dask-gateway
     - job_name: 'supersonic-monitor-triton'
+      scrape_interval: 1s
       metrics_path: '/metrics'
       kubernetes_sd_configs:
         - role: endpoints
@@ -180,6 +181,7 @@ prometheusConfig: |
           action: keep
           regex: triton
     - job_name: 'supersonic-monitor-envoy'
+      scrape_interval: 1s
       metrics_path: '/stats/prometheus'
       kubernetes_sd_configs:
         - role: endpoints
