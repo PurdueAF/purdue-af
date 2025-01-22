@@ -1,0 +1,62 @@
+app:
+  resources:
+    requests:
+      cpu: 1
+      memory: 1Gi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  ingress:
+    enabled: true
+    class: public
+    host: geddes.rcac.purdue.edu
+
+postgres:
+  enabled: true
+postgresql:
+  global:
+    postgresql:
+      auth:
+        database: servicex
+        postgresPassword: leftfoot1
+
+objectStore:
+  publicURL: servicex-minio.geddes.rcac.purdue.edu
+
+codeGen:
+  atlasr21:
+    enabled: false
+  atlasr22:
+    enabled: false
+  cmssw-5-3-32:
+    enabled: false
+
+transformer:
+  cachePrefix: "'xcache.cms.rcac.purdue.edu'"
+
+rabbitmq:
+  resources:
+    requests:
+      cpu: 1
+      memory: 1Gi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+minio:
+  resources:
+    requests:
+      cpu: 1
+      memory: 1Gi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+didFinder:
+  rucio:
+    enabled: true
+    rucio_host: http://cms-rucio.cern.ch
+    auth_host: https://cms-rucio-auth.cern.ch
+gridAccount: dkondrat
+x509Secrets:
+  vomsOrg: cms

@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: servicex-did-finder-pod
+  namespace: cms
+  labels:
+    app: servicex-did-finder
+spec:
+  containers:
+  - name: servicex-did-finder
+    image: sslhep/servicex-did-finder:latest
+    imagePullPolicy: Always
+    command: ["tail", "-f", "/dev/null"]
+    ports:
+    - containerPort: 80
+      protocol: TCP
+    volumeMounts:
+    - name: x509-secret
+      mountPath: /etc/grid-security-ro
+      readOnly: true
+  volumes:
+  - name: x509-secret
+    secret:
+      secretName: x509-proxy
