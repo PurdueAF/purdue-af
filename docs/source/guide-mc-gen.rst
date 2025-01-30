@@ -1,8 +1,6 @@
 Private MC generation
 ======================
 
-🏗️ Work in progress 🚧
-
 This guide describes private MC production.
 Comprehensive documentation about central MC production in CMS can be found here:
 `<https://cms-pdmv.gitbook.io>`_.

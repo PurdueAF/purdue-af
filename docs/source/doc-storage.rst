@@ -9,6 +9,49 @@
 Storage volumes
 ==================================
 
+
+Which storage volume should I use?
+-----------------------------------
+
+.. warning::
+
+   Your ``/home/<username>/`` directory (root directory of JupyterLab file browser) has a strict quota of 25 GB.
+   If you go over this limit, you will not be able to start a session on Purdue AF.
+   Rather than storing your data, Conda environments, etc. in your home directory, consider using storage volumes listed below.
+
+   You can check your current ``/home/`` directory usage with the following command:
+
+   ```bash
+   du -sh $HOME
+   ```
+
+
+Below are common storage use cases with recommendations on which storage volume to use.
+
+- Transferring official CMS datasets to Purdue:
+  - Locate the dataset using `DAS (CMS Data Aggregation System) <https://cmsweb.cern.ch/das/>`_
+  - Use Rucio to 'subscribe' dataset to Purdue for a *limited* amount of time. :doc:`guide-rucio`
+  - The dataset will be copied to the **Purdue EOS** storage and appear under ``/eos/purdue/store/mc/`` or ``/eos/purdue/store/data/``
+- Saving outputs of CRAB jobs (for example :doc:`guide-mc-gen`):
+  - The outputs of CRAB jobs will be written to your Grid directory, which is ``/eos/purdue/store/user/<your-cern-username>``.
+    Note that CERN username is different from Purdue username!
+  - The Grid directory at Purdue EOS is created only for Purdue-affiliated users. This must be indicated when creating Purdue Tier-2 account.
+  - If you can't see your Grid directory under ``/eos/purdue/store/user/``, please contact :doc:`doc-support`.
+- Processing ("skimming") CMS datasets:
+  - The best storage volume to use will depend on the size of the output.
+  - For large outputs (over 100 GB), it is recommended to save outputs to **Purdue EOS**.
+    Since Purdue EOS is not directly writeable, this can be achieved by saving outputs into ``/tmp`` and then copying over to Purdue EOS using ``gfal`` or ``xrdcp`` commands.
+  - For small outputs (under 100 GB):
+    - Purdue users should use **Depot** (``/depot/cms``). If the outputs need to be accessible by other users, use a group directory (e.g. ``/depot/cms/top/``).
+    - Non-Purdue users should use **work storage**: ``/work/users/<username>/`` or ``/work/projects/<project-name>``.
+- Storing custom Conda environments:
+  - Before creating custom environments, try our pre-installed environments: :doc:`doc-software`
+  - In order for Conda environments to appear as JupyterLab kernels, they must be stored in publicly readable directories.
+  - Possible options are: group directories at Depot (e.g. ``/depot/cms/top/``), personal or project directories at work storage (``/work/users/<username>/``, ``/work/projects/<project-name>/``).
+  - If using Slurm jobs or Dask Gateway workers, make sure that the directory where Conda environments are stored is visible from them.
+
+The following table summarizes the details, access modes, mount points and availability of each storage volume.
+
 .. raw:: html
 
    <div class="wy-table-responsive">
@@ -20,7 +63,6 @@ Storage volumes
    * - Storage volume
      - Path
      - Size
-     - Use cases
      - Access mode
      - Mounted in Slurm jobs
      - Mounted in k8s Dask workers
@@ -28,7 +70,6 @@ Storage volumes
    * - AF home storage
      - ``/home/<username>/``
      - 25 GB
-     - JupyterLab's default directory, suitable for storing small files.
      - Read/write
      - ❌
      - ❌
@@ -36,8 +77,6 @@ Storage volumes
    * - Purdue Depot storage
      - ``/depot/cms/``
      - up to 1 TB
-     - Best as a working directory for Purdue users, because Depot is mounted
-       to all clusters and Dask workers.
      - Read/write for Purdue users, read-only for others
      - ✅
      - ✅
@@ -45,9 +84,6 @@ Storage volumes
    * - AF work storage
      - ``/work/users/<username>/``
      - 100 GB
-     - Best for collaboration with non-Purdue users and writing outputs
-       from Dask Gateway workers with Kubernetes backend.
-       Readable by all users by default (permissions can be adjusted).
      - Read/write
      - ❌
      - ✅
@@ -55,7 +91,6 @@ Storage volumes
    * - AF shared project storage
      - ``/work/projects/``
      - up to 1 TB
-     - Project directories for collaborative work created upon request.
      - Read/write
      - ❌
      - ✅
@@ -63,8 +98,6 @@ Storage volumes
    * - Purdue EOS
      - ``/eos/purdue/``
      - up to 100 TB
-     - Storage for large job outputs and CMS datasets. Users can request
-       creation of personal Grid sub-directories tied to CERN account.
      - Read-only
      - ✅
      - ✅
@@ -72,17 +105,13 @@ Storage volumes
    * - CVMFS
      - ``/cvmfs/``
      - N/A
-     - Distributed CernVM file system, primarily used to install CMSSW releases.
-       Can be used to load Apptainer images or LCG releases.
      - Read-only
      - ✅
      - ✅
      - ❌
    * - CERNBox (CERN EOS)
      - ``/eos/cern/``
-     - 
-     - Private CERNBox directory, useful for collaboration outside of Purdue AF.
-       To enable access, follow these instructions: :doc:`guide-cern-eos`.
+     - N/A
      - Read/write
      - ❌
      - ❌
