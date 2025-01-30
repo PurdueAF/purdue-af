@@ -50,6 +50,10 @@ Below are common storage use cases with recommendations on which storage volume 
   - Possible options are: group directories at Depot (e.g. ``/depot/cms/top/``), personal or project directories at work storage (``/work/users/<username>/``, ``/work/projects/<project-name>/``).
   - If using Slurm jobs or Dask Gateway workers, make sure that the directory where Conda environments are stored is visible from them.
 
+
+Storage volumes summary
+-----------------------------------
+
 The following table summarizes the details, access modes, mount points and availability of each storage volume.
 
 .. raw:: html
@@ -58,7 +62,7 @@ The following table summarizes the details, access modes, mount points and avail
 
 .. list-table:: 
    :header-rows: 1
-   :widths: 1 2 1 3 2 1 1 1
+   :widths: 1 2 1 2 1 1 1
 
    * - Storage volume
      - Path
