@@ -9,59 +9,8 @@
 Storage volumes
 ==================================
 
-
-Which storage volume should I use?
------------------------------------
-
-.. warning::
-
-   Your ``/home/<username>/`` directory (root directory of JupyterLab file browser) has a strict quota of 25 GB.
-   If you go over this limit, you will not be able to start a session on Purdue AF.
-   Rather than storing your data, Conda environments, etc. in your home directory, consider using storage volumes listed below.
-
-   You can check your current ``/home/`` directory usage with the following command: ``bash du -sh $HOME``
-
-
-Below are common storage use cases with recommendations on which storage volume to use.
-
-- **Transferring official CMS datasets to Purdue:**
-
-  - Locate the dataset using `DAS (CMS Data Aggregation System) <https://cmsweb.cern.ch/das/>`_
-  - Use Rucio to 'subscribe' dataset to Purdue for a *limited* amount of time. See :doc:`guide-rucio`
-  - The dataset will be copied to the **Purdue EOS** storage and appear under ``/eos/purdue/store/mc/`` or ``/eos/purdue/store/data/``.
-
-- **Saving outputs of CRAB jobs** (for example for :doc:`guide-mc-gen`)
-
-  - The outputs of CRAB jobs will be written to your Grid directory, which is ``/eos/purdue/store/user/<cern-username>``.
-    Note that CERN username is different from Purdue username!
-  - The Grid directory at Purdue EOS is created only for Purdue-affiliated users. This must be indicated when creating Purdue Tier-2 account.
-  - If you can't see your Grid directory under ``/eos/purdue/store/user/``, please contact :doc:`doc-support`.
-
-- **Processing ("skimming") CMS datasets:**
-
-  - The best storage volume to use will depend on the size of the output.
-  - For large outputs (over 100 GB), it is recommended to save outputs to **Purdue EOS**.
-    Since Purdue EOS is not directly writeable, this can be achieved by saving outputs into ``/tmp`` and then copying over to Purdue EOS using ``gfal`` or ``xrdcp`` commands.
-  - For small outputs (under 100 GB):
-
-    - Purdue users should use **Depot** (``/depot/cms``). If the outputs need to be accessible by other users, use a group directory (e.g. ``/depot/cms/top/``).
-    - Non-Purdue users should use **work storage**: ``/work/users/<username>/`` or ``/work/projects/<project-name>``.
-
-- **Storing custom Conda environments:**
-
-  - Before creating custom environments, try our pre-installed environments: :doc:`doc-software`
-  - In order for Conda environments to appear as JupyterLab kernels, they must be stored in publicly readable directories.
-  - Possible locations are:
-
-    - group directories at Depot (for example, ``/depot/cms/top/``)
-    - personal directories at work storage: ``/work/users/<username>/``
-    - shared project directories at work storage: ``/work/projects/<project-name>/``
-
-  - If using Slurm jobs or Dask Gateway workers, make sure that the directory where Conda environments are stored is visible from them (see table below).
-
-
-Storage volumes summary
------------------------------------
+Overview
+--------
 
 The following table summarizes the details, access modes, mount points and availability of each storage volume.
 
@@ -71,7 +20,7 @@ The following table summarizes the details, access modes, mount points and avail
 
 .. list-table:: 
    :header-rows: 1
-   :widths: 1 1.5 1 2 1 1 1
+   :widths: 1 1 1 2 1 1 1
 
    * - Storage volume
      - Path
@@ -133,6 +82,57 @@ The following table summarizes the details, access modes, mount points and avail
 .. raw:: html
 
    </div>
+
+
+Which storage volume should I use?
+-----------------------------------
+
+.. warning::
+
+   Your ``/home/<username>/`` directory (root directory of JupyterLab file browser) has a strict quota of 25 GB.
+   If you go over this limit, you will not be able to start a session on Purdue AF.
+   Rather than storing your data, Conda environments, etc. in your home directory, consider using storage volumes listed below.
+
+   You can check your current ``/home/`` directory usage with the following command: ``bash du -sh $HOME``
+
+
+Below are common storage use cases with recommendations on which storage volume to use.
+
+- **Transferring official CMS datasets to Purdue:**
+
+  - Locate the dataset using `DAS (CMS Data Aggregation System) <https://cmsweb.cern.ch/das/>`_
+  - Use Rucio to 'subscribe' dataset to Purdue for a *limited* amount of time. See :doc:`guide-rucio`
+  - The dataset will be copied to the **Purdue EOS** storage and appear under ``/eos/purdue/store/mc/`` or ``/eos/purdue/store/data/``.
+
+- **Saving outputs of CRAB jobs** (for example for :doc:`guide-mc-gen`)
+
+  - The outputs of CRAB jobs will be written to your Grid directory, which is ``/eos/purdue/store/user/<cern-username>``.
+    Note that CERN username is different from Purdue username!
+  - The Grid directory at Purdue EOS is created only for Purdue-affiliated users. This must be indicated when creating Purdue Tier-2 account.
+  - If you can't see your Grid directory under ``/eos/purdue/store/user/``, please contact :doc:`doc-support`.
+
+- **Processing ("skimming") CMS datasets:**
+
+  - The best storage volume to use will depend on the size of the output.
+  - For large outputs (over 100 GB), it is recommended to save outputs to **Purdue EOS**.
+    Since Purdue EOS is not directly writeable, this can be achieved by saving outputs into ``/tmp`` and then copying over to Purdue EOS using ``gfal`` or ``xrdcp`` commands.
+  - For small outputs (under 100 GB):
+
+    - Purdue users should use **Depot** (``/depot/cms``). If the outputs need to be accessible by other users, use a group directory (e.g. ``/depot/cms/top/``).
+    - Non-Purdue users should use **work storage**: ``/work/users/<username>/`` or ``/work/projects/<project-name>``.
+
+- **Storing custom Conda environments:**
+
+  - Before creating custom environments, try our pre-installed environments: :doc:`doc-software`
+  - In order for Conda environments to appear as JupyterLab kernels, they must be stored in publicly readable directories.
+  - Possible locations are:
+
+    - group directories at Depot (for example, ``/depot/cms/top/``)
+    - personal directories at work storage: ``/work/users/<username>/``
+    - shared project directories at work storage: ``/work/projects/<project-name>/``
+
+  - If using Slurm jobs or Dask Gateway workers, make sure that the directory where Conda environments are stored is visible from them (see table above).
+
 
 .. warning::
    
