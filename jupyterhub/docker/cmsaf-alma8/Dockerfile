@@ -157,21 +157,6 @@ CMD /etc/jupyter/docker_healthcheck.py || exit 1
 # # Install the Julia kernel via IJulia
 # RUN julia -e 'using Pkg; Pkg.add("IJulia"); using IJulia; IJulia.installkernel("Julia", "--depwarn=no")'
 
-# Install ROOT
-RUN dnf install -y libX11-devel libXpm-devel libXft-devel libXext-devel fftw-devel
-RUN mkdir /opt/root_build /opt/root && cd /opt/root_build/  &&\
-    git clone --branch latest-stable --depth=1 https://github.com/root-project/root.git root_src &&\
-    mkdir root_build && cd root_build &&\
-    cmake -DCMAKE_INSTALL_PREFIX=../../root \
-        -Dcuda=ON -Dcudnn=ON -Dtmva-gpu=ON \
-        -DCMAKE_CUDA_HOST_COMPILER=/usr/bin/g++ \
-        -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.2/bin/nvcc \
-        -DCMAKE_CUDA_ARCHITECTURES=80 \
-        -DCMAKE_CUDA_STANDARD=17 \
-        ../root_src &&\
-    cmake --build . -- install -j4 &&\
-    chmod -R o+w /opt/root/etc/
-
 # Install Slurm
 COPY rpms/slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
 COPY slurm /etc/slurm
@@ -233,7 +218,5 @@ COPY default.local /etc/cvmfs/
 
 # Switch back to NB_USER
 USER ${NB_USER}
-
-RUN source /opt/root/bin/thisroot.sh
 
 WORKDIR "${HOME}"
