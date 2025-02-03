@@ -10,7 +10,7 @@ conda run -p /depot/cms/kernels/python3 ipython kernel install \
 
 kernel_path="/opt/conda/share/jupyter/kernels/python3/"
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/depot/cms/purdue-af/lhapdf/lib
-PYTHONPATH=$PYTHONPATH:/depot/cms/purdue-af/lhapdf/lib/python3.10/site-packages:/opt/root/lib/:/opt/root/bin/
+PYTHONPATH=$PYTHONPATH:/depot/cms/purdue-af/lhapdf/lib/python3.10/site-packages
 PATH=$PATH:/depot/cms/purdue-af/lhapdf/bin
 
 LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
@@ -19,9 +19,6 @@ PATH="$PATH" \
     jq '.env = {"PATH": env.PATH, "PYTHONPATH": env.PYTHONPATH, "LD_LIBRARY_PATH": env.LD_LIBRARY_PATH}' \
     "$kernel_path/kernel.json" > tmp_kernel.json
 mv tmp_kernel.json "$kernel_path/kernel.json"
-
-# for ROOT
-jupyter kernelspec install /opt/root/etc/notebook/kernels/root --name ROOT
 
 # For HATS 2024 workshop
 # conda run -p /depot/cms/kernels/hats2024 ipython kernel install \
