@@ -47,7 +47,7 @@ echo "
 "
 
 alias eos-connect="source /etc/jupyter/eos-connect.sh"
-resize
+resize > /dev/null 2>&1
 '''
 echo "$bashrc_af_text" > $bashrc_af_file;
 
