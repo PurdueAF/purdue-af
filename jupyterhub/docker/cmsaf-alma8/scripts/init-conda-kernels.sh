@@ -17,6 +17,7 @@ CPLUS_INCLUDE_PATH=/depot/cms/kernels/python3/x86_64-conda-linux-gnu/sysroot/usr
 LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
 PYTHONPATH="$PYTHONPATH" \
 PATH="$PATH" \
+CPLUS_INCLUDE_PATH="$CPLUS_INCLUDE_PATH" \
     jq '.env = {"PATH": env.PATH, "PYTHONPATH": env.PYTHONPATH, "LD_LIBRARY_PATH": env.LD_LIBRARY_PATH, "CPLUS_INCLUDE_PATH": env.CPLUS_INCLUDE_PATH}' \
     "$kernel_path/kernel.json" > tmp_kernel.json
 mv tmp_kernel.json "$kernel_path/kernel.json"
