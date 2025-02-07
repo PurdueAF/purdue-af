@@ -13,6 +13,7 @@ LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/depot/cms/purdue-af/lhapdf/lib:/depot/cms/purd
 PYTHONPATH=$PYTHONPATH:/depot/cms/purdue-af/lhapdf/lib/python3.10/site-packages:/depot/cms/purdue-af/combine/HiggsAnalysis/CombinedLimit/build/lib/python
 PATH=/depot/cms/kernels/python3/bin/:/depot/cms/purdue-af/combine/HiggsAnalysis/CombinedLimit/build/bin:$PATH:/depot/cms/purdue-af/lhapdf/bin
 CPLUS_INCLUDE_PATH=/depot/cms/kernels/python3/x86_64-conda-linux-gnu/sysroot/usr/include
+export CPLUS_INCLUDE_PATH=$CPLUS_INCLUDE_PATH
 
 LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
 PYTHONPATH="$PYTHONPATH" \
