@@ -48,13 +48,17 @@ gateway:
 
         def options_handler(options):
             setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
+
+            options.env["PATH"]=f"{options.conda_env}/bin/:"+options.env.pop("PATH")
+            options.env["CPLUS_INCLUDE_PATH"]=f"{options.conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
+
             return {
                 "worker_cores": options.worker_cores,
                 "worker_memory": int(options.worker_memory * 2 ** 30),
                 "environment": options.env,
                 "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
                 "scheduler_partition": "hammer-nodes",
-                "scheduler_reservation": "CMSLOCAL",
+                # "scheduler_reservation": "CMSLOCAL",
                 "worker_partition": "hammer-nodes",
                 "worker_cmd": f"{options.conda_env}/bin/dask-worker",
                 "account": "cms",

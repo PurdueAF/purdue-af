@@ -163,6 +163,9 @@ gateway:
             # Remove NVIDIA_VISIBLE_DEVICES from the environment
             if "NVIDIA_VISIBLE_DEVICES" in options.env:
                 del options.env["NVIDIA_VISIBLE_DEVICES"]
+            
+            options.env["PATH"]=f"{options.conda_env}/bin/:"+options.env.pop("PATH")
+            options.env["CPLUS_INCLUDE_PATH"]=f"{options.conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
 
             extra_pod_config = {"securityContext": {"runAsUser": uid, "runAsGroup": gid,}}
             c.KubeClusterConfig.scheduler_extra_pod_config.update(extra_pod_config)
