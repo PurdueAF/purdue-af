@@ -1,1 +1,1 @@
-"cms" "voms-cms-auth.app.cern.ch" "443" "/DC=ch/DC=cern/OU=computers/CN=voms-cms-auth.app.cern.ch" "cms"
+"cms" "voms-cms-auth.cern.ch" "443" "/DC=ch/DC=cern/OU=computers/CN=cms-auth.web.cern.ch" "cms"
