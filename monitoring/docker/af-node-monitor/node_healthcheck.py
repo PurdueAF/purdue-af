@@ -14,7 +14,7 @@ mounts = {
     "/depot/": ("/depot/cms/purdue-af/validate-mount.txt", "13dede34ee8dc7e5b70c9cd06ac15467"),
     "/work/": ("/work/projects/purdue-af/validate-mount.txt", "f4cb7f2740ba3e87edfbda6c70fa94c2"),
     "eos": ("/eos/purdue/store/user/dkondrat/test.root", "18864b0de8ae5a6a8d3b459a7999b431"),
-    "cvmfs": ("/cvmfs/cms.cern.ch/cmsset_default.sh", "85a1ce97329f5bebd6ceb0155447e863")
+    "cvmfs": ("/cvmfs/cms.cern.ch/cmsset_default.sh", "aaf910393256dbbac56d42973324deb7")
 }
 
 def check_if_directory_exists(path_tuple):
