@@ -44,11 +44,8 @@ conda run -p /depot/cms/kernels/coffea_latest ipython kernel install \
 if [ ! -z "$LCG_PATH" ]; then
     echo "Setting up LCG kernel..."
     
-    # Save current environment
-    OLD_PATH=$PATH
-    OLD_LD_LIBRARY_PATH=$LD_LIBRARY_PATH
-    OLD_PYTHONPATH=$PYTHONPATH
-    OLD_CPLUS_INCLUDE_PATH=$CPLUS_INCLUDE_PATH
+    # Save entire environment to a temporary file
+    env > /tmp/original_env
     
     # Source LCG setup and install kernel
     source "$LCG_PATH/setup.sh"
@@ -61,11 +58,23 @@ if [ ! -z "$LCG_PATH" ]; then
     python -m ipykernel install --user --name "$KERNEL_NAME" --display-name "$DISPLAY_NAME"
     echo "LCG kernel setup complete."
     
-    # Restore original environment
-    export PATH=$OLD_PATH
-    export LD_LIBRARY_PATH=$OLD_LD_LIBRARY_PATH
-    export PYTHONPATH=$OLD_PYTHONPATH
-    export CPLUS_INCLUDE_PATH=$OLD_CPLUS_INCLUDE_PATH
+    # Restore environment variables that were modified by LCG
+    while IFS='=' read -r key value; do
+        if [ -n "$key" ]; then  # Skip empty lines
+            current_value="${!key}"
+            if [[ "$current_value" == *"lcg"* ]]; then  # If current value contains "lcg"
+                if grep -q "^$key=" /tmp/original_env; then  # If we have original value
+                    original_value=$(grep "^$key=" /tmp/original_env | cut -d'=' -f2-)
+                    export "$key=$original_value"
+                else  # If variable didn't exist before
+                    unset "$key"
+                fi
+            fi
+        fi
+    done < <(env)
+    
+    # Clean up
+    rm /tmp/original_env
 fi
 
 jupyter kernelspec list
