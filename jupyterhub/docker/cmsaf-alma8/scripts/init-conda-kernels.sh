@@ -43,6 +43,11 @@ conda run -p /depot/cms/kernels/coffea_latest ipython kernel install \
 # Set up LCG kernel if LCG_PATH is not empty
 if [ ! -z "$LCG_PATH" ]; then
     echo "Setting up LCG kernel..."
+    
+    # Save entire environment to a temporary file
+    env > /tmp/original_env
+    
+    # Source LCG setup and install kernel
     source "$LCG_PATH/setup.sh"
     
     # Install the kernel with name and display name from environment variables
@@ -52,6 +57,16 @@ if [ ! -z "$LCG_PATH" ]; then
     
     python -m ipykernel install --user --name "$KERNEL_NAME" --display-name "$DISPLAY_NAME"
     echo "LCG kernel setup complete."
+    
+    # Restore original environment
+    while IFS='=' read -r key value; do
+        if [ -n "$key" ]; then  # Skip empty lines
+            export "$key=$value"
+        fi
+    done < /tmp/original_env
+    
+    # Clean up
+    rm /tmp/original_env
 fi
 
 jupyter kernelspec list
