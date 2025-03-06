@@ -13,8 +13,8 @@ spec:
           - "--context=git://github.com/PurdueAF/purdue-af.git"
           - "--context-sub-path=jupyterhub/docker/cmsaf-alma8/"
           - "--dockerfile=Dockerfile"
-          - "--destination=geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.10.1"
-          # - "--cache=true"
+          - "--destination=geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.10.3"
+          - "--cache=true"
           # - "--no-push"
         resources:
           requests:

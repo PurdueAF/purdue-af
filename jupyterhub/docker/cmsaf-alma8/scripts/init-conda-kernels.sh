@@ -40,5 +40,18 @@ conda run -p /depot/cms/kernels/coffea_latest ipython kernel install \
 
 # ------------------
 
+# Set up LCG kernel if LCG_PATH is not empty
+if [ ! -z "$LCG_PATH" ]; then
+    echo "Setting up LCG kernel..."
+    source "$LCG_PATH/setup.sh"
+    
+    # Install the kernel with name and display name from environment variables
+    # If variables are not set, use defaults
+    KERNEL_NAME=${LCG_NAME:-"LCG"}
+    DISPLAY_NAME=${LCG_DISPLAY_NAME:-"LCG"}
+    
+    python -m ipykernel install --user --name "$KERNEL_NAME" --display-name "$DISPLAY_NAME"
+    echo "LCG kernel setup complete."
+fi
 
 jupyter kernelspec list

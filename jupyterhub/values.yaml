@@ -4,10 +4,10 @@ singleuser:
   cmd: 
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
-    tag: "0.10.1"
+    tag: "0.10.2"
   extraLabels:
     username_unescaped: "{legacy_escape_username}"
-    docker_image_tag: "0.10.1"
+    docker_image_tag: "0.10.2"
   startTimeout: 3600
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
@@ -63,16 +63,20 @@ singleuser:
                   nvidia.com/mig-1g.5gb: 0
                   # nvidia.com/mig-7g.40gb: 0
             2:
-              display_name: "1 GPU slice (5GB)"
+              display_name: "1 A100 GPU slice (5GB)"
               kubespawner_override:
                 extra_resource_limits:
                   nvidia.com/mig-1g.5gb: 1
             3:
-              display_name: "1 full GPU (40GB) - subject to availability"
+              display_name: "1 full A100 GPU (40GB) - subject to availability"
               kubespawner_override:
                 extra_resource_limits:
                   nvidia.com/mig-7g.40gb: 1
-
+            # 4:
+            #   display_name: "1 T4 GPU (16GB)"
+            #   kubespawner_override:
+            #     extra_resource_limits:
+            #       nvidia.com/gpu: 1
         memory:
           display_name: "Memory"
           choices:
@@ -118,7 +122,7 @@ singleuser:
       default: false
       description: "Contains the latest features but may be unstable - use at your own risk."
       kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.10.1"
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.10.3"
         node_selector:
           cms-af-prod: "true"
         cpu_guarantee: 4
@@ -128,7 +132,42 @@ singleuser:
         extra_resource_limits:
           # nvidia.com/mig-7g.40gb: 1
           nvidia.com/mig-1g.5gb: 1
-
+      profile_options:
+        lcg_stack:
+          display_name: "LCG Stack"
+          choices:
+            1:
+              display_name: "None"
+              default: true
+              kubespawner_override:
+                extraEnv:
+                  LCG_STACK: ""
+            2:
+              display_name: "LCG_106a_cuda"
+              kubespawner_override:
+                extraEnv:
+                  LCG_PATH: "/cvmfs/sft.cern.ch/lcg/views/LCG_106a_cuda/x86_64-el8-gcc11-opt"
+                  LCG_NAME: "LCG_106a_cuda"
+                  LCG_DISPLAY_NAME: "LCG 106a CUDA"
+        gpu:
+          display_name: "GPUs"
+          choices:
+            1:
+              display_name: "0"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-1g.5gb: 0
+                  # nvidia.com/mig-7g.40gb: 0
+            2:
+              display_name: "1 A100 GPU slice (5GB)"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-1g.5gb: 1
+            3:
+              display_name: "1 full A100 GPU (40GB) - subject to availability"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-7g.40gb: 1
   extraContainers:
     - name: af-pod-monitor
       image: geddes-registry.rcac.purdue.edu/cms/af-pod-monitor:latest
