@@ -56,6 +56,16 @@ if [ ! -z "$LCG_PATH" ]; then
     DISPLAY_NAME=${LCG_DISPLAY_NAME:-"LCG"}
     
     python -m ipykernel install --user --name "$KERNEL_NAME" --display-name "$DISPLAY_NAME"
+
+    kernel_path="/home/$NB_USER/.local/share/jupyter/kernels/$KERNEL_NAME/"
+    LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
+    PYTHONPATH="$PYTHONPATH" \
+    PATH="$PATH" \
+    CPLUS_INCLUDE_PATH="$CPLUS_INCLUDE_PATH" \
+        jq '.env = {"PATH": env.PATH, "PYTHONPATH": env.PYTHONPATH, "LD_LIBRARY_PATH": env.LD_LIBRARY_PATH, "CPLUS_INCLUDE_PATH": env.CPLUS_INCLUDE_PATH}' \
+        "$kernel_path/kernel.json" > tmp_kernel.json
+    mv tmp_kernel.json "$kernel_path/kernel.json"
+
     echo "LCG kernel setup complete."
     
     # Restore environment variables that were modified by LCG
