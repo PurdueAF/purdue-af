@@ -10,20 +10,42 @@ app:
     enabled: true
     class: public
     host: geddes.rcac.purdue.edu
-
+noCerts: true
 postgres:
   enabled: true
 postgresql:
-  global:
-    postgresql:
-      auth:
-        database: servicex
-        postgresPassword: leftfoot1
+  image:
+    registry: geddes-registry.rcac.purdue.edu/docker-hub-cache
+    repository: bitnami/postgresql
+    tag: 17.4.0
+  # global:
+  #   postgresql:
+  #     auth:
+  #       database: servicex
+  #       postgresPassword: leftfoot1
+  primary:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    persistence:
+      enabled: false
+      storageClass: geddes-standard-multinode
+      accessModes: [ReadWriteMany]
 
 objectStore:
-  publicURL: servicex-minio.geddes.rcac.purdue.edu
+  publicURL: servicex-minio-api.geddes.rcac.purdue.edu
 
 codeGen:
+  uproot-raw:
+    enabled: true
+    defaultScienceContainerTag: uproot5
+  uproot:
+    enabled: true
+    defaultScienceContainerTag: uproot5
+  python:
+    enabled: true
+    defaultScienceContainerTag: uproot5
   atlasr21:
     enabled: false
   atlasr22:
@@ -31,8 +53,11 @@ codeGen:
   cmssw-5-3-32:
     enabled: false
 
-transformer:
-  cachePrefix: "'xcache.cms.rcac.purdue.edu'"
+# transformer:
+  # persistence:
+  #   existingClaim: "claim-dkondra"
+  #   subdir: /servicex/
+  # cachePrefix: "'xcache.cms.rcac.purdue.edu'"
 
 rabbitmq:
   resources:
@@ -44,6 +69,26 @@ rabbitmq:
       memory: 1Gi
 
 minio:
+  image:
+    registry: geddes-registry.rcac.purdue.edu/docker-hub-cache
+    repository: bitnami/minio
+    tag: 2025.2.28
+  persistence:
+    enabled: true
+    storageClass: geddes-standard-multinode
+    accessModes: [ReadWriteMany]
+    size: 10Gi
+  service:
+    ports:
+      api: 9000
+  ingress: 
+    enabled: true
+    hostname: servicex-minio.geddes.rcac.purdue.edu
+    ingressClassName: public
+  apiIngress:
+    enabled: true
+    hostname: "servicex-minio-api.geddes.rcac.purdue.edu"
+    ingressClassName: public
   resources:
     requests:
       cpu: 1
@@ -51,12 +96,14 @@ minio:
     limits:
       cpu: 1
       memory: 1Gi
-
+minioCleanup:
+  enabled: true
 didFinder:
   rucio:
-    enabled: true
+    enabled: false
     rucio_host: http://cms-rucio.cern.ch
     auth_host: https://cms-rucio-auth.cern.ch
 gridAccount: dkondrat
 x509Secrets:
+  pullPolicy: Always
   vomsOrg: cms
