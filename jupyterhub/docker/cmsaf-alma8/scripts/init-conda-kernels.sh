@@ -57,7 +57,7 @@ if [ ! -z "$LCG_PATH" ]; then
     
     python -m ipykernel install --name "$KERNEL_NAME" --display-name "$DISPLAY_NAME"
 
-    kernel_path="/opt/conda/share/jupyter/kernels/$KERNEL_NAME/"
+    kernel_path="/usr/local/share/jupyter/kernels/$KERNEL_NAME/"
     LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
     PYTHONPATH="$PYTHONPATH" \
     PATH="$PATH" \
