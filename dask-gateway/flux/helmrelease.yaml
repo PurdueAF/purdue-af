@@ -8,11 +8,11 @@ spec:
   chart:
     spec:
       chart: dask-gateway
-      version: "2023.9.0"
+      version: "2024.1.0"
       sourceRef:
         kind: HelmRepository
         name: dask
-        namespace: flux-system
+        namespace: cms
       interval: 1m
   values:
     gateway:
