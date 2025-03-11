@@ -259,10 +259,3 @@ spec:
         pullPolicy: IfNotPresent
       nodeSelector:
         cms-af-prod: "true"
-  postRenderers:
-    - kustomize:
-        patches:
-          - target:
-              kind: Ingress
-              name: traefik-dask-gateway-k8s-flux-ingress
-            path: ingress.yaml 
