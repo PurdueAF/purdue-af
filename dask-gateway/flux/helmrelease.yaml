@@ -236,7 +236,6 @@ spec:
           operator: "Equal"
           value: "cms-af"
           effect: "NoSchedule"
-
     controller:
       enabled: true
       resources:
@@ -259,3 +258,8 @@ spec:
         pullPolicy: IfNotPresent
       nodeSelector:
         cms-af-prod: "true"
+      tolerations:
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
