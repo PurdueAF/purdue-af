@@ -1,0 +1,12 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: purdue-af
+  namespace: cms
+spec:
+  interval: 1m
+  url: https://github.com/PurdueAF/purdue-af.git
+  ref:
+    branch: master
+  secretRef:
+    name: flux-kondratyevd-auth
