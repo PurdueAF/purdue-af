@@ -24,4 +24,5 @@ spec:
           - target:
               kind: Deployment
               name: "jupyterhub-sftp.*"
-            path: patch-sftp-deployment.yaml
+            patch: |
+              {}
