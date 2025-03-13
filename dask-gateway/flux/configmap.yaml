@@ -5,4 +5,4 @@ metadata:
   namespace: cms
 data:
   values.yaml: |-
-{{ (.Files.Get "values.yaml") | indent 4 }}
+    {{ (.Files.Get "values.yaml") | indent 4 }}
