@@ -1,9 +1,0 @@
-#!/bin/bash
-
-cd kustomization-k8s
-
-cat <&0 > all.yaml
-
-kubectl kustomize . && rm all.yaml
-
-cd ../
