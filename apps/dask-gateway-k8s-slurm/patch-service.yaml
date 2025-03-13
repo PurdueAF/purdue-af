@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: cms
+  name: doesNotMatter
+spec:
+  type: LoadBalancer

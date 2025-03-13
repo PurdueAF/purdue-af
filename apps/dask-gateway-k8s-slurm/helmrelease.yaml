@@ -1,0 +1,20 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: dask-gateway-k8s-slurm
+  namespace: cms
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: dask-gateway
+      version: "2023.9.0"
+      sourceRef:
+        kind: HelmRepository
+        name: dask
+        namespace: cms
+      interval: 1m
+  valuesFrom:
+  - kind: ConfigMap
+    name: dask-gateway-k8s-slurm-config
+    valuesKey: values.yaml
