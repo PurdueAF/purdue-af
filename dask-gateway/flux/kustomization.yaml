@@ -9,3 +9,5 @@ configMapGenerator:
   namespace: cms
   files:
   - values.yaml
+  options:
+    disableNameSuffixHash: true
