@@ -7,11 +7,11 @@ spec:
   interval: 5m
   chart:
     spec:
-      chart: jupyterhub/jupyterhub
+      chart: jupyterhub
       version: "3.2.1"
       sourceRef:
         kind: HelmRepository
-        name: ssl-hep
+        name: jupyterhub
         namespace: cms
       interval: 1m
   valuesFrom:
