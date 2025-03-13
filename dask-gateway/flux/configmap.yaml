@@ -4,5 +4,5 @@ metadata:
   name: dask-gateway-flux-config
   namespace: cms
 data:
-  values.yaml: |-
-    {{ (.Files.Get "values.yaml") | indent 4 }}
+  values.yaml: |
+    {{ .Files.Get "values.yaml" | indent 4 }}
