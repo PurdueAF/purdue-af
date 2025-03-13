@@ -4,7 +4,8 @@ metadata:
   name: purdue-af
   namespace: cms
 spec:
-  interval: 1m
+  interval: 5m
+  timeout: 5m
   url: https://github.com/PurdueAF/purdue-af.git
   ref:
     branch: master

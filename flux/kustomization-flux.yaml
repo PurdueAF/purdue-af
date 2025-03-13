@@ -4,7 +4,8 @@ metadata:
   name: purdue-af-flux
   namespace: cms
 spec:
-  interval: 1m
+  interval: 5m
+  timeout: 5m
   path: "./dask-gateway/flux"
   prune: true
   sourceRef:
