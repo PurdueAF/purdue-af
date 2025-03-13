@@ -31,13 +31,22 @@ gateway:
     - name: NAMESPACE
       value: cms
     - name: RELEASE_NAME
-      value: dask-gateway-k8s-flux
+      value: dask-gateway-k8s
   backend:
     image:
       name: ghcr.io/dask/dask-gateway
       tag: 2024.1.0
+      pullPolicy:
+    imagePullSecrets: []
     namespace: cms
+    environment: {}
     scheduler:
+      cores:
+        request: 2
+        limit: 4
+      memory:
+        request: 4G
+        limit: 8G
       extraPodConfig:
         nodeSelector:
           cms-af-prod: "true"
@@ -64,6 +73,7 @@ gateway:
             mountPropagation: HostToContainer
     worker:
       extraPodConfig:
+        # schedulerName: yunikorn
         nodeSelector:
           cms-af-prod: "true"
         tolerations:
@@ -102,7 +112,7 @@ gateway:
   extraConfig:
     config: |
         c.DaskGateway.address = ':8000'
-        c.KubeBackend.api_url = 'http://dask-gateway-k8s-flux.geddes.rcac.purdue.edu:80/api'
+        c.KubeBackend.api_url = 'http://dask-gateway-k8s.geddes.rcac.purdue.edu:80/api'
 
         c.ClusterConfig.cluster_max_cores = 201
         c.ClusterConfig.cluster_max_memory = '808 G'
@@ -159,6 +169,9 @@ gateway:
             # Remove NVIDIA_VISIBLE_DEVICES from the environment
             if "NVIDIA_VISIBLE_DEVICES" in options.env:
                 del options.env["NVIDIA_VISIBLE_DEVICES"]
+            
+            options.env["PATH"]=f"{options.conda_env}/bin/:"+options.env.pop("PATH")
+            options.env["CPLUS_INCLUDE_PATH"]=f"{options.conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
 
             extra_pod_config = {"securityContext": {"runAsUser": uid, "runAsGroup": gid,}}
             c.KubeClusterConfig.scheduler_extra_pod_config.update(extra_pod_config)
@@ -166,6 +179,7 @@ gateway:
             c.KubeClusterConfig.scheduler_extra_pod_labels = {"user": user.name}
             c.KubeClusterConfig.worker_extra_pod_labels = {
               "user": user.name,
+              #"queue": "root.community.cms"
             }
 
             setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
@@ -219,8 +233,10 @@ traefik:
       operator: "Equal"
       value: "cms-af"
       effect: "NoSchedule"
+
 controller:
   enabled: true
+  annotations: {}
   resources:
     limits:
       cpu: 2
@@ -228,6 +244,7 @@ controller:
     requests:
       cpu: 2
       memory: 4Gi
+  imagePullSecrets: []
   loglevel: ERROR
   completedClusterMaxAge: 86400
   completedClusterCleanupPeriod: 600
@@ -246,3 +263,4 @@ controller:
       operator: "Equal"
       value: "cms-af"
       effect: "NoSchedule"
+  affinity: {}

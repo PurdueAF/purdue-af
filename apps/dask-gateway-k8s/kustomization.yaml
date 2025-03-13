@@ -4,7 +4,7 @@ resources:
   - ingress.yaml
   - helmrelease.yaml
 configMapGenerator:
-- name: dask-gateway-flux-config
+- name: dask-gateway-k8s-config
   namespace: cms
   files:
   - values.yaml

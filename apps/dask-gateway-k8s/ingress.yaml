@@ -1,17 +1,17 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: traefik-dask-gateway-k8s-flux-ingress
+  name: traefik-dask-gateway-k8s-ingress
   namespace: cms
 spec:
   ingressClassName: public
   rules:
-  - host: dask-gateway-k8s-flux.geddes.rcac.purdue.edu
+  - host: dask-gateway-k8s.geddes.rcac.purdue.edu
     http:
       paths:
       - backend:
           service:
-            name: traefik-dask-gateway-k8s-flux
+            name: traefik-dask-gateway-k8s
             port:
               number: 80
         path: /

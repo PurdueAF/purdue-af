@@ -41,6 +41,12 @@ gateway:
     namespace: cms
     environment: {}
     scheduler:
+      cores:
+        request: 2
+        limit: 4
+      memory:
+        request: 4G
+        limit: 8G
       extraPodConfig:
         nodeSelector:
           cms-af-prod: "true"
