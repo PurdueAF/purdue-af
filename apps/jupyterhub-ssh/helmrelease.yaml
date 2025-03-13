@@ -18,3 +18,10 @@ spec:
   - kind: ConfigMap
     name: jupyterhub-ssh-config
     valuesKey: values.yaml
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: "jupyterhub-sftp.*"
+            path: patch-sftp-deployment.yaml

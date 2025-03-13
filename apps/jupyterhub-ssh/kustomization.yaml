@@ -9,8 +9,3 @@ configMapGenerator:
   - values.yaml
   options:
     disableNameSuffixHash: true
-patches:
-  - path: patch-sftp-deployment.yaml
-    target:
-      kind: Deployment
-      name: "jupyterhub-sftp.*"
