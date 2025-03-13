@@ -9,12 +9,3 @@ configMapGenerator:
   - values.yaml
   options:
     disableNameSuffixHash: true
-patches:
-  - target:
-      kind: HelmRelease
-      name: cmshub-ssh
-    patch: |-
-      - op: replace
-        path: /spec/postRenderers/0/kustomize/patchesStrategicMerge/0/patch
-        value: |
-          $(cat patch-sftp-deployment.yaml)
