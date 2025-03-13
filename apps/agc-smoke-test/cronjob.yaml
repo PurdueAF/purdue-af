@@ -2,6 +2,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: analysis-grand-challenge
+  namespace: cms
 spec:
   schedule: "0 */3 * * *"
   jobTemplate:
