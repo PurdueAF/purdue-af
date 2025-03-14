@@ -77,19 +77,8 @@ server:
   # configMapOverrideName: prometheus-config
 
 serverFiles:
-  prometheus.yml: |
-    # my global config
-    global:
-      # scrape_interval: 60s
-      # evaluation_interval: 60s
-      scrape_timeout: 60s
-    alerting:
-      alertmanagers:
-      - static_configs:
-        - targets:
-    rule_files:
+  prometheus.yml:
     scrape_configs:
-
       - job_name: 'jupyterhub'
         metrics_path: '/hub/metrics'
         static_configs:
