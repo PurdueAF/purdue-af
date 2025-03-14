@@ -1,0 +1,78 @@
+serverLoadThreshold: 100
+
+triton: 
+  # image: fastml/triton-torchgeo:21.02-py3-geometric # run2
+  image: fastml/triton-torchgeo:22.07-py3-geometric # run3
+  command: ["/bin/sh", "-c"]
+  args: 
+    - |
+      /opt/tritonserver/bin/tritonserver \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoBTag/Combined/data/models/ \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoEgamma/EgammaPhotonProducers/data/models/ \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoTauTag/TrainingFiles/data/DeepTauIdSONIC/ \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoMET/METPUSubtraction/data/models/ \
+      --allow-gpu-metrics=true \
+      --log-verbose=0 \
+      --strict-model-config=false \
+      --exit-timeout-secs=60
+  resources:
+    limits: { nvidia.com/gpu: 1, cpu: 2, memory: 4G}
+    requests: { nvidia.com/gpu: 1, cpu: 2, memory: 4G}
+  service:
+    labels:
+      scrape_metrics: "true"
+    annotations:
+      metallb.universe.tf/address-pool: geddes-private-pool
+  modelRepository:
+    enabled: true
+    storageType: cvmfs-pvc
+    mountPath: /cvmfs
+
+envoy:
+  enabled: true
+  loadBalancerPolicy: "ROUND_ROBIN"
+  service:
+    type: LoadBalancer
+  ingress:
+    enabled: true
+    hostName: sonic-cms.geddes.rcac.purdue.edu
+    ingressClassName: public
+
+autoscaler:
+  enabled: true
+  minReplicaCount: 1
+  maxReplicaCount: 7
+
+ingress:
+  enabled: false
+
+nodeSelector: {'cms-af-prod': 'true'}
+
+tolerations:
+  - key: hub.jupyter.org/dedicated
+    operator: Equal
+    value: cms-af
+    effect: NoSchedule
+
+prometheus:
+  enabled: true
+  server:
+    ingress:
+      enabled: true
+      hosts:
+        - prometheus-cms.geddes.rcac.purdue.edu
+      tls:
+        hosts:
+          - prometheus-cms.geddes.rcac.purdue.edu
+      ingressClassName: public
+
+grafana:
+  enabled: true
+  ingress:
+    enabled: true
+    hosts:
+      - grafana-cms.geddes.rcac.purdue.edu
+    tls:
+      hosts:
+        - grafana-cms.geddes.rcac.purdue.edu
+    ingressClassName: public
