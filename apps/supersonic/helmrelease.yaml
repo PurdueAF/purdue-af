@@ -14,7 +14,6 @@ spec:
         name: fastml
         namespace: cms
       interval: 1m
-      timeout: 10m
   valuesFrom:
   - kind: ConfigMap
     name: supersonic-config
