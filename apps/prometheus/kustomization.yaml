@@ -5,6 +5,7 @@ resources:
   - helmrelease.yaml
   - servicemonitors.yaml
   - pod-monitor-svc.yaml
+  - pvc.yaml
 configMapGenerator:
 - name: prometheus-config
   namespace: cms
