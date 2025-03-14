@@ -55,6 +55,8 @@ server:
 
   persistentVolume:
     enabled: true
+    size: 10Gi
+    storageClass: geddes-standard-multinode
     existingClaim: prometheus-data-pvc
     mountPath: /prometheus
 
