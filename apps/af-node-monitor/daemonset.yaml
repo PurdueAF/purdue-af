@@ -26,7 +26,6 @@ spec:
                     operator: In
                     values:
                       - "true"
-      # nodeSelector: {'cms-af-prod': 'true'}
       tolerations:
       - key: "hub.jupyter.org/dedicated"
         operator: "Equal"
@@ -34,11 +33,18 @@ spec:
         effect: "NoSchedule"
       containers:
       - name: af-node-monitor
-        image: geddes-registry.rcac.purdue.edu/cms/af-node-monitor:latest
+        image: python:3.11-slim
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          pip install prometheus_client
+          python /scripts/node_healthcheck.py
         ports:
         - containerPort: 8000
           name: metrics
         volumeMounts:
+        - name: scripts
+          mountPath: /scripts
         - name: cvmfs
           mountPath: /cvmfs
           mountPropagation: HostToContainer
@@ -52,6 +58,9 @@ spec:
           mountPath: /work/
           mountPropagation: HostToContainer
       volumes:
+      - name: scripts
+        configMap:
+          name: af-node-monitor-config
       - name: cvmfs
         persistentVolumeClaim:
           claimName: cvmfs
