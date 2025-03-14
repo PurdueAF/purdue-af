@@ -57,15 +57,45 @@ tolerations:
 prometheus:
   enabled: true
   server:
+    useExistingClusterRoleName: supersonic-prometheus-role
     ingress:
       enabled: true
       hosts: [prometheus-cms.geddes.rcac.purdue.edu]
       tls:
         - hosts: [prometheus-cms.geddes.rcac.purdue.edu]
       ingressClassName: public
+  serviceAccounts:
+    server:
+      name: supersonic-prometheus-sa
 
 grafana:
   enabled: true
+  dashboardsConfigMaps:
+    default: supersonic-grafana-default-dashboard
+  datasources:
+    datasources.yaml:
+      datasources:
+        - name: prometheus
+          type: prometheus
+          access: proxy
+          isDefault: true
+          url: http://prometheus-cms.geddes.rcac.purdue.edu
+          jsonData:
+            timeInterval: "5s"
+            tlsSkipVerify: true
+        - name: tempo
+          type: tempo
+          url: http://supersonic-tempo:3100
+          access: proxy
+          isDefault: false
+          basicAuth: false
+          jsonData:
+            timeInterval: "5s"
+            tlsSkipVerify: true
+            serviceMap:
+              datasourceUid: 'prometheus'
+            nodeGraph:
+              enabled: true
   ingress:
     enabled: true
     hosts: [grafana-cms.geddes.rcac.purdue.edu]
@@ -73,3 +103,6 @@ grafana:
       - hosts: [grafana-cms.geddes.rcac.purdue.edu]
         secretName: grafana-cms-tls
     ingressClassName: public
+  grafana.ini:
+    server:
+      root_url: https://grafana-cms.geddes.rcac.purdue.edu
