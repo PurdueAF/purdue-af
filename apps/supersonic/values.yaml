@@ -55,18 +55,11 @@ tolerations:
     effect: NoSchedule
 
 prometheus:
-  enabled: true
-  server:
-    useExistingClusterRoleName: supersonic-prometheus-role
-    ingress:
-      enabled: true
-      hosts: [prometheus-cms.geddes.rcac.purdue.edu]
-      tls:
-        - hosts: [prometheus-cms.geddes.rcac.purdue.edu]
-      ingressClassName: public
-  serviceAccounts:
-    server:
-      name: supersonic-prometheus-sa
+  external:
+    enabled: true
+    url: prometheus-cms.geddes.rcac.purdue.edu
+    port: 443
+    scheme: https
 
 grafana:
   enabled: true
@@ -79,7 +72,7 @@ grafana:
           type: prometheus
           access: proxy
           isDefault: true
-          url: http://supersonic-prometheus-server:9090 
+          url: https://prometheus-cms.geddes.rcac.purdue.edu
           jsonData:
             timeInterval: "5s"
             tlsSkipVerify: true
