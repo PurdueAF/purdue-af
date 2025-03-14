@@ -1,8 +1,8 @@
 apiVersion: source.toolkit.fluxcd.io/v1beta2
 kind: HelmRepository
 metadata:
-  name: prometheus-community
+  name: geddes-cache
   namespace: cms
 spec:
   interval: 1h
-  url: https://geddes-registry.rcac.purdue.edu/docker-hub-cache/prom/
+  url: https://geddes-registry.rcac.purdue.edu/docker-hub-cache/
