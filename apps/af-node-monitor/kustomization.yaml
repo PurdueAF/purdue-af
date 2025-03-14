@@ -3,10 +3,3 @@ kind: Kustomization
 resources:
   - service.yaml
   - daemonset.yaml
-configMapGenerator:
-- name: af-node-monitor-config
-  namespace: cms
-  files:
-  - values.yaml
-  options:
-    disableNameSuffixHash: true
