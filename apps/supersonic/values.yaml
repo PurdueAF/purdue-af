@@ -79,7 +79,7 @@ grafana:
           type: prometheus
           access: proxy
           isDefault: true
-          url: http://prometheus-cms.geddes.rcac.purdue.edu
+          url: http://supersonic-prometheus-server:9090 
           jsonData:
             timeInterval: "5s"
             tlsSkipVerify: true
