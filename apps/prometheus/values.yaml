@@ -18,7 +18,7 @@ server:
     fsGroup: 0
   useExistingClusterRoleName: rancher-monitoring-prometheus 
   releaseNamespace: true
-  configPath: /etc/prometheus/prometheus.yml
+  configPath: /etc/config/prometheus.yml
   storagePath: /prometheus
 
   global:
