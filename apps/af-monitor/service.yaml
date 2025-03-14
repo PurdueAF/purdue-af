@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: af-monitor-service
+  labels:
+    scrape-metrics: "true"
+spec:
+  selector:
+    app: af-monitor
+  ports:
+  - protocol: TCP
+    port: 8000
+    targetPort: 8000
