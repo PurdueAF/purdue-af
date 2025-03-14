@@ -3,8 +3,8 @@ rbac:
 
 serviceAccounts:
   server:
-    create: true
-    name: prometheus
+    create: false
+    name: prometheus-sa
     automountServiceAccountToken: true
 
 configmapReload:
@@ -12,6 +12,7 @@ configmapReload:
     enabled: false
 
 server:
+  automountServiceAccountToken: true
   securityContext:
     runAsUser: 0
     runAsNonRoot: false

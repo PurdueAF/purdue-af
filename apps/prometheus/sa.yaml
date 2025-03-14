@@ -7,3 +7,12 @@ rules:
   - apiGroups: [""]
     resources: ["pods", "services", "endpoints"]
     verbs: ["list", "watch"]
+
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus-sa
+  namespace: cms
+automountServiceAccountToken: true
