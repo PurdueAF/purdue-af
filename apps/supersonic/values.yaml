@@ -57,7 +57,7 @@ tolerations:
 prometheus:
   external:
     enabled: true
-    url: prometheus-cms.geddes.rcac.purdue.edu
+    url: prometheus-af.geddes.rcac.purdue.edu
     port: 443
     scheme: https
 
@@ -72,7 +72,7 @@ grafana:
           type: prometheus
           access: proxy
           isDefault: true
-          url: https://prometheus-cms.geddes.rcac.purdue.edu
+          url: https://prometheus-af.geddes.rcac.purdue.edu
           jsonData:
             timeInterval: "5s"
             tlsSkipVerify: true
