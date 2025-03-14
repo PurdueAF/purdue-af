@@ -1,0 +1,23 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: prometheus-metrics
+  namespace: cms
+spec:
+  selector:
+    matchLabels:
+      scrape-metrics: "true"
+  endpoints:
+    - port: "metrics"
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: prometheus-metrics-dask-gateway
+  namespace: cms
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dask-gateway
+  endpoints:
+    - port: "dashboard"

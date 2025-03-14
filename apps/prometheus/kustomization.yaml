@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - helmrepo.yaml
+  - helmrelease.yaml
+  - servicemonitors.yaml
+  - pod-monitor-svc.yaml
+configMapGenerator:
+- name: prometheus-config
+  namespace: cms
+  files:
+  - values.yaml
+  options:
+    disableNameSuffixHash: true
