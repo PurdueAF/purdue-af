@@ -3,6 +3,8 @@ kind: PersistentVolumeClaim
 metadata:
   name: cvmfs
   namespace: cms
+  annotations:
+    "helm.sh/resource-policy": keep
 spec:
   accessModes:
   - ReadOnlyMany
