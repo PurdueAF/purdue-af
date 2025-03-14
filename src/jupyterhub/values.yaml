@@ -1,0 +1,387 @@
+singleuser:
+  podNameTemplate: "purdue-af-{userid}"
+  uid: 0
+  cmd: 
+  image:
+    name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
+    tag: "0.10.2"
+  extraLabels:
+    username_unescaped: "{legacy_escape_username}"
+    docker_image_tag: "0.10.2"
+  startTimeout: 3600
+  profileList:
+    - display_name: "JupyterLab based on CERN Alma8"
+      default: true
+      description: "If you are starting a session with a GPU, please shut it down when finished in order to release the GPU."
+      kubespawner_override:
+        node_selector: {'cms-af-prod': 'true'}
+        # lifecycle_hooks:
+          # preStop:
+          #   exec:
+          #     command: ["bash", "-c", "rm -f eos-cern"]
+      profile_options:
+        cpu:
+          display_name: "CPUs"
+          choices:
+            # 0:
+            #   display_name: "1"
+            #   kubespawner_override:
+            #     cpu_limit: 1
+            #     cpu_guarantee: 1
+            1:
+              display_name: "4"
+              kubespawner_override:
+                cpu_limit: 4
+                cpu_guarantee: 4
+            2: 
+              display_name: "16"
+              kubespawner_override:
+                cpu_limit: 16
+                cpu_guarantee: 16
+            3:
+              display_name: "32"
+              kubespawner_override:
+                cpu_limit: 32
+                cpu_guarantee: 32
+            4:
+              display_name: "64"
+              kubespawner_override:
+                cpu_limit: 64
+                cpu_guarantee: 64
+            # 5:
+            #   display_name: "128"
+            #   kubespawner_override:
+            #     cpu_limit: 128
+            #     cpu_guarantee: 128
+        gpu:
+          display_name: "GPUs"
+          choices:
+            1:
+              display_name: "0"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-1g.5gb: 0
+                  # nvidia.com/mig-7g.40gb: 0
+            2:
+              display_name: "1 A100 GPU slice (5GB)"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-1g.5gb: 1
+            3:
+              display_name: "1 full A100 GPU (40GB) - subject to availability"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-7g.40gb: 1
+            # 4:
+            #   display_name: "1 T4 GPU (16GB)"
+            #   kubespawner_override:
+            #     extra_resource_limits:
+            #       nvidia.com/gpu: 1
+        memory:
+          display_name: "Memory"
+          choices:
+            1:
+              display_name: "16 GB"
+              kubespawner_override:
+                mem_limit: "16G"
+                mem_guarantee: "16G"
+            2:
+              display_name: "32 GB"
+              kubespawner_override:
+                mem_limit: "32G" 
+                mem_guarantee: "32G"
+            3:
+              display_name: "64 GB"
+              kubespawner_override:
+                mem_limit: "64G" 
+                mem_guarantee: "64G"
+            4:
+              display_name: "128 GB"
+              kubespawner_override:
+                mem_limit: "128G" 
+                mem_guarantee: "128G"
+            # 5:
+            #   display_name: "256 GB"
+            #   kubespawner_override:
+            #     mem_limit: "256G" 
+            #     mem_guarantee: "256G"
+
+    - display_name: Minimal JupyterLab interface
+      default: false
+      description: "Should be used only for debugging - no Analysis Facility functionality."
+      kubespawner_override:
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-base-notebook:1.1"
+        node_selector:
+          cms-af-prod: "true"
+        cpu_guarantee: 4
+        cpu_limit: 4        
+        mem_guarantee: 16G
+        mem_limit: 16G
+
+    - display_name: "Latest pre-release version"
+      default: false
+      description: "Contains the latest features but may be unstable - use at your own risk."
+      kubespawner_override:
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.10.3"
+        node_selector:
+          cms-af-prod: "true"
+        cpu_guarantee: 4
+        cpu_limit: 4        
+        mem_guarantee: 16G
+        mem_limit: 16G
+        extra_resource_limits:
+          # nvidia.com/mig-7g.40gb: 1
+          nvidia.com/mig-1g.5gb: 1
+      profile_options:
+        lcg_stack:
+          display_name: "LCG Stack"
+          choices:
+            1:
+              display_name: "None"
+              default: true
+              kubespawner_override:
+                extraEnv:
+                  LCG_STACK: ""
+            2:
+              display_name: "LCG_106a_cuda"
+              kubespawner_override:
+                extraEnv:
+                  LCG_PATH: "/cvmfs/sft.cern.ch/lcg/views/LCG_106a_cuda/x86_64-el8-gcc11-opt"
+                  LCG_NAME: "LCG_106a_cuda"
+                  LCG_DISPLAY_NAME: "LCG 106a CUDA"
+        gpu:
+          display_name: "GPUs"
+          choices:
+            1:
+              display_name: "0"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-1g.5gb: 0
+                  # nvidia.com/mig-7g.40gb: 0
+            2:
+              display_name: "1 A100 GPU slice (5GB)"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-1g.5gb: 1
+            3:
+              display_name: "1 full A100 GPU (40GB) - subject to availability"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-7g.40gb: 1
+  extraContainers:
+    - name: af-pod-monitor
+      image: geddes-registry.rcac.purdue.edu/cms/af-pod-monitor:latest
+      volumeMounts:
+      - name: volume-{username}
+        mountPath: /home/{legacy_escape_username}
+      - name: work
+        mountPath: /work/
+        mountPropagation: HostToContainer
+  defaultUrl: "/lab"
+  extraEnv:
+    JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
+    CHOWN_HOME: "yes"
+    NAMESPACE: "cms"
+  networkPolicy:
+    enabled: false
+  storage:
+    capacity: 25Gi
+    dynamic:
+      storageClass: geddes-standard-multinode
+      storageAccessModes:
+        - ReadWriteMany
+    homeMountPath: /home/{legacy_escape_username}
+    extraVolumes:
+      - name: cvmfs
+        persistentVolumeClaim:
+          claimName: cvmfs
+      - name: eos
+        hostPath: 
+          path: /eos
+      - name: depot
+        nfs:
+          server: datadepot.rcac.purdue.edu
+          path: /depot/cms
+      - name: work
+        persistentVolumeClaim:
+          claimName: af-shared-storage
+      - name: munge-key
+        secret:
+          secretName: munge-key
+    extraVolumeMounts:
+      - name: cvmfs
+        mountPath: /cvmfs
+        mountPropagation: HostToContainer
+      - name: eos
+        mountPath: /eos
+        mountPropagation: HostToContainer
+      - name: depot
+        mountPath: /depot/cms
+        mountPropagation: HostToContainer
+      - name: work
+        mountPath: /work/
+        mountPropagation: HostToContainer
+      - name: munge-key
+        mountPath: /etc/secrets/munge
+        readOnly: false
+        mountPropagation: HostToContainer
+  cloudMetadata:
+    blockWithIptables: false
+prePuller:
+  hook:
+    enabled: false
+  continuous:
+    enabled: false
+hub:
+  image:
+      name: quay.io/jupyterhub/k8s-hub
+      tag: 3.3.8
+  nodeSelector: {'cms-af-prod': 'true'}
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  resources:
+    requests:
+      cpu: 1
+      memory: 2Gi
+    limits:
+      cpu: 1
+      memory: 2Gi
+  extraVolumes:
+    - name: purdue-auth
+      secret:
+        secretName: purdue-auth
+    - name: cern-auth
+      secret:
+        secretName: cern-auth
+    - name: auth-secret
+      secret:
+        secretName: auth-secret
+  extraVolumeMounts:
+    - mountPath: /etc/secrets/purdue-auth/
+      name: purdue-auth
+      readOnly: true
+    - mountPath: /etc/secrets/cern-auth/
+      name: cern-auth
+      readOnly: true
+  extraEnv:
+    CILOGON_CLIENT_ID:
+      valueFrom:
+        secretKeyRef:
+          name: auth-secret
+          key: cilogon_client_id
+    CILOGON_CLIENT_SECRET:
+      valueFrom:
+        secretKeyRef:
+          name: auth-secret
+          key: cilogon_client_secret
+  extraFiles:
+    00-custom-spawner:
+      mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d/custom-spawner.py
+    01-set-user-info:
+      mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d/set-user-info.py  
+  config:
+    PurdueCILogonOAuthenticator:
+      auto_login: True
+      auto_login_oauth2_authorize: True
+      logout_redirect_url: https://cms.geddes.rcac.purdue.edu/hub
+      admin_users: ['dkondra']
+      oauth_callback_url: https://cms.geddes.rcac.purdue.edu/hub/oauth_callback
+      enable_auth_state: true
+      allowed_idps:
+        https://cern.ch/login:
+          allow_all: true
+          username_derivation:
+            username_claim: eppn
+        https://idp.fnal.gov/idp/shibboleth:
+          allow_all: true
+          username_derivation:
+            username_claim: eppn
+        https://idp.purdue.edu/idp/shibboleth:
+          allow_all: true
+          username_derivation:
+            username_claim: eppn
+    JupyterHub:
+      authenticator_class: cilogon
+      admin_access: True
+scheduling:
+  userScheduler:
+    enabled: false
+  userPods:
+      tolerations:
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
+ingress:
+  enabled: true
+  hosts:
+    - cms.geddes.rcac.purdue.edu
+  annotations:
+    kubernetes.io/ingress.class: "public"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+proxy:
+  https:
+    enabled: true
+    type: letsencrypt
+  service:
+    extraPorts:
+      - name: ssh
+        port: 22
+        targetPort: ssh
+      - name: sftp
+        port: 2222
+        targetPort: sftp
+  traefik:
+    extraPorts:
+      - name: ssh
+        containerPort: 8022
+      - name: sftp
+        containerPort: 2222
+    networkPolicy:
+      allowedIngressPorts: [http, https, ssh, sftp]
+    extraStaticConfig:
+      entryPoints:
+        ssh-entrypoint:
+          address: :8022
+        sftp-entrypoint:
+          address: :2222
+    extraDynamicConfig:
+      tcp:
+        services:
+          ssh-service:
+            loadBalancer:
+              servers:
+                - address: jupyterhub-ssh:22
+          sftp-service:
+            loadBalancer:
+              servers:
+                - address: jupyterhub-sftp:22
+        routers:
+          ssh-router:
+            entrypoints: [ssh-entrypoint]
+            rule: HostSNI(`*`)
+            service: ssh-service
+          sftp-router:
+            entrypoints: [sftp-entrypoint]
+            rule: HostSNI(`*`)
+            service: sftp-service
+
+  chp:
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+cull:
+#  concurrency: 10
+ enabled: true
+ every: 600
+#  maxAge: 0
+#  removeNamedServers: false
+ timeout: 1209600
+#  users: false
