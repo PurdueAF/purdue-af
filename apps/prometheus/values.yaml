@@ -14,6 +14,7 @@ configmapReload:
 server:
   securityContext:
     runAsUser: 0
+    runAsNonRoot: false
     fsGroup: 0
   useExistingClusterRoleName: rancher-monitoring-prometheus 
   releaseNamespace: true
