@@ -5,4 +5,4 @@ metadata:
   namespace: cms
 spec:
   interval: 1h
-  url: geddes-registry.rcac.purdue.edu/docker-hub-cache/prom/
+  url: https://geddes-registry.rcac.purdue.edu/docker-hub-cache/prom/
