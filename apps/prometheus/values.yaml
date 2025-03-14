@@ -76,7 +76,6 @@ server:
       prometheus.io/port: '9090'
 
   retention: 30d
-  # configMapOverrideName: prometheus-config
 
 serverFiles:
   prometheus.yml:
