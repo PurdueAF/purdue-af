@@ -26,13 +26,8 @@ server:
       image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox
       command: ["/bin/chmod", "-R", "777", "/prometheus"]
       volumeMounts:
-        - name: prometheus-storage-volume
+        - name: storage-volume
           mountPath: /prometheus
-
-  extraVolumes:
-    - name: prometheus-storage-volume
-      persistentVolumeClaim:
-        claimName: prometheus-data-pvc  
 
   ingress:
     enabled: true
