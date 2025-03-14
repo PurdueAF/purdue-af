@@ -16,7 +16,7 @@ server:
     runAsUser: 0
     runAsNonRoot: false
     fsGroup: 0
-  useExistingClusterRoleName: rancher-monitoring-prometheus 
+  useExistingClusterRoleName: prometheus-sa-role
   releaseNamespace: true
   configPath: /etc/config/prometheus.yml
   storagePath: /prometheus
