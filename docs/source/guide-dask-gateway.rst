@@ -24,7 +24,7 @@ To make Dask Gateway useful in a variety of analysis workflows, we provide four 
     This is available to **all users**.
 
     With this method, the workers are scheduled almost instantly, but for now we restrict
-    the total per-user resource usage to **100 cores, 400 GB RAM** due to limited resources
+    the total per-user resource usage to **400 cores, 800 GB RAM** due to limited resources
     in the Analysis Facility.
 
   The pros and cons of the Dask Gateway backends are summarized in the following table:

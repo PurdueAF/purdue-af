@@ -114,9 +114,9 @@ gateway:
         c.DaskGateway.address = ':8000'
         c.KubeBackend.api_url = 'http://dask-gateway-k8s.geddes.rcac.purdue.edu:80/api'
 
-        c.ClusterConfig.cluster_max_cores = 201
+        c.ClusterConfig.cluster_max_cores = 401
         c.ClusterConfig.cluster_max_memory = '808 G'
-        c.ClusterConfig.cluster_max_workers = 201
+        c.ClusterConfig.cluster_max_workers = 401
         c.ClusterConfig.idle_timeout = 3*3600
 
         def ldap_lookup(username):
