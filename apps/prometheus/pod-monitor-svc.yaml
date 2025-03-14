@@ -2,6 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: prometheus-af-pod-monitor
+  namespace: cms
   labels:
     app: prometheus-af-pod-monitor
     scrape_metrics: "true"
