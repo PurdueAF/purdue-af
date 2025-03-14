@@ -12,6 +12,9 @@ configmapReload:
     enabled: false
 
 server:
+  securityContext:
+    runAsUser: 0
+    fsGroup: 0
   useExistingClusterRoleName: rancher-monitoring-prometheus 
   releaseNamespace: true
   configPath: /etc/prometheus/prometheus.yml
