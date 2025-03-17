@@ -12,7 +12,7 @@ spec:
       labels:
         name: af-node-monitor
       annotations:
-        config-hash: "{{config-hash}}"
+        config-name: "$(CONFIGMAP_NAME)"
     spec:
       affinity:
         nodeAffinity:
@@ -62,7 +62,7 @@ spec:
       volumes:
       - name: scripts
         configMap:
-          name: af-node-monitor-config
+          name: "$(CONFIGMAP_NAME)"
       - name: cvmfs
         persistentVolumeClaim:
           claimName: cvmfs
