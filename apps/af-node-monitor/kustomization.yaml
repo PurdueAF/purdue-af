@@ -9,12 +9,4 @@ configMapGenerator:
   files:
   - node_healthcheck.py
   options:
-    disableNameSuffixHash: false
-vars:
-  - name: CONFIGMAP_NAME
-    objref:
-      kind: ConfigMap
-      name: af-node-monitor-config
-      apiVersion: v1
-    fieldref:
-      fieldpath: metadata.name
+    disableNameSuffixHash: true
