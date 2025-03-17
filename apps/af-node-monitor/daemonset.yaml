@@ -11,6 +11,8 @@ spec:
     metadata:
       labels:
         name: af-node-monitor
+      annotations:
+        config-hash: "{{config-hash}}"
     spec:
       affinity:
         nodeAffinity:

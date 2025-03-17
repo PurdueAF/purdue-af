@@ -9,4 +9,6 @@ configMapGenerator:
   files:
   - node_healthcheck.py
   options:
+    annotations:
+      config-hash: "{sha256sum}"
     disableNameSuffixHash: true
