@@ -45,8 +45,8 @@ declare -A LCG_STACKS
 # Format: [LCG_VERSION]="path display_name"
 LCG_STACKS["106b"]="/cvmfs/sft.cern.ch/lcg/views/LCG_106b/x86_64-el8-gcc11-opt/setup.sh LCG_106b"
 LCG_STACKS["106b_cuda"]="/cvmfs/sft.cern.ch/lcg/views/LCG_106b_cuda/x86_64-el8-gcc11-opt/setup.sh LCG_106b_cuda"
-LCG_STACKS["107"]="/cvmfs/sft.cern.ch/lcg/views/LCG_107/x86_64-el8-gcc11-opt/setup.sh LCG_107"
-LCG_STACKS["107_cuda"]="/cvmfs/sft.cern.ch/lcg/views/LCG_107_cuda/x86_64-el8-gcc11-opt/setup.sh LCG_107_cuda"
+# LCG_STACKS["107"]="/cvmfs/sft.cern.ch/lcg/views/LCG_107/x86_64-el8-gcc11-opt/setup.sh LCG_107"
+# LCG_STACKS["107_cuda"]="/cvmfs/sft.cern.ch/lcg/views/LCG_107_cuda/x86_64-el8-gcc11-opt/setup.sh LCG_107_cuda"
 
 # Loop through each LCG stack and set up kernels
 for lcg_version in "${!LCG_STACKS[@]}"; do
