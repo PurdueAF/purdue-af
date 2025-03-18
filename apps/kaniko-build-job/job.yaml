@@ -2,6 +2,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: kaniko-build-job
+  namespace: cms
 spec:
   backoffLimit: 0
   completions: 1
