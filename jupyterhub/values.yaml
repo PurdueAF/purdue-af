@@ -133,22 +133,6 @@ singleuser:
           # nvidia.com/mig-7g.40gb: 1
           nvidia.com/mig-1g.5gb: 1
       profile_options:
-        lcg_stack:
-          display_name: "LCG Stack"
-          choices:
-            1:
-              display_name: "None"
-              default: true
-              kubespawner_override:
-                extraEnv:
-                  LCG_STACK: ""
-            2:
-              display_name: "LCG_106a_cuda"
-              kubespawner_override:
-                extraEnv:
-                  LCG_PATH: "/cvmfs/sft.cern.ch/lcg/views/LCG_106a_cuda/x86_64-el8-gcc11-opt"
-                  LCG_NAME: "LCG_106a_cuda"
-                  LCG_DISPLAY_NAME: "LCG 106a CUDA"
         gpu:
           display_name: "GPUs"
           choices:

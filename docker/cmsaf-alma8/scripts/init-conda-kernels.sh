@@ -43,7 +43,7 @@ conda run -p /depot/cms/kernels/coffea_latest ipython kernel install \
 # Define LCG stacks statically
 declare -A LCG_STACKS
 # Format: [LCG_VERSION]="path display_name"
-LCG_STACKS["106b"]="/cvmfs/sft.cern.ch/lcg/views/LCG_106b/x86_64-el8-gcc11-opt/setup.sh LCG_106c"
+LCG_STACKS["106b"]="/cvmfs/sft.cern.ch/lcg/views/LCG_106b/x86_64-el8-gcc11-opt/setup.sh LCG_106b"
 LCG_STACKS["106b_cuda"]="/cvmfs/sft.cern.ch/lcg/views/LCG_106b_cuda/x86_64-el8-gcc11-opt/setup.sh LCG_106b_cuda"
 LCG_STACKS["107"]="/cvmfs/sft.cern.ch/lcg/views/LCG_107/x86_64-el8-gcc11-opt/setup.sh LCG_107"
 LCG_STACKS["107_cuda"]="/cvmfs/sft.cern.ch/lcg/views/LCG_107_cuda/x86_64-el8-gcc11-opt/setup.sh LCG_107_cuda"
@@ -66,7 +66,7 @@ for lcg_version in "${!LCG_STACKS[@]}"; do
         source "$lcg_path"
         
         # Create kernel name
-        kernel_name="LCG_${lcg_version}"
+        kernel_name="lcg_${lcg_version}"
         
         # Install the kernel
         python -m ipykernel install --name "$kernel_name" --display-name "$lcg_display_name"
