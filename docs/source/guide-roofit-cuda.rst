@@ -1,17 +1,28 @@
 Accelerating RooFit with GPUs
 ================================
 
-ROOT introduced CUDA backend for RooFit since version 6.26.
-Purdue Analysis Facility now supports this feature, allowing users to 
-accelerate their analyses by running RooFit on GPUs.
+Fitting data distributions with analytical models is a common task in CMS analyses.
+Depending on the size of the dataset and the number of free parameters in the model,
+the fitting can take a significant amount of time and become a bottleneck in the analysis.
+
+The standard tool to perform such fits is RooFit, distributed with the ROOT framework.
+Since ROOT version 6.26, RooFit supports GPU-accelerated fitting using CUDA backend,
+which allows to speed up the fitting process by up to an order of magnitude.
+
+Purdue Analysis Facility now supports this feature, allowing users to
+leverage available GPU resources to speed up their RooFit code. The feature is
+supported in both Jupyter Notebooks and Terminals, and for both C++ ROOT interface and PyROOT.
+
 
 Pre-requisites
 ~~~~~~~~~~~~~~~
 
 1. Start your AF session with a GPU.
-2. Load the LCG view with CUDA-enabled ROOT build:
+2. Load the LCG view with CUDA-enabled ROOT build.
+   `LCG "releases" and "views" <https://lcgdocs.web.cern.ch/lcgdocs/lcgreleases/introduction/>`_
+   are software stacks distributed by CERN.
 
-   a. If using a Jupyter Notebook: select the ``LCG_106b_cuda`` kernel.
+   a. If using a Jupyter Notebook: simply select the ``LCG_106b_cuda`` kernel.
    b. If using a Terminal, run the following command:
 
       .. code-block:: shell
