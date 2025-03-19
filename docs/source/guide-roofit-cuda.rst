@@ -23,7 +23,7 @@ Pre-requisites
    The CUDA-enabled ROOT build is currently available only via the LCG software stack.
    It is not available in other kernels such as the "default" Python3 kernel or ``coffea-latest``.
 
-   The only supported ROOT version at the moment is ``6.30.08``.
+   The only supported ROOT version at the moment is ``6.32.08``.
 
 Enabling CUDA backend in RooFit
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
