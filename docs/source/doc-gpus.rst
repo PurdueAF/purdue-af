@@ -24,7 +24,7 @@ How to access GPUs at Purdue AF
 
    .. note::
 
-      If you selected a GPU, your session will have ``CUDA 12.2`` and
+      If you selected a GPU, your session will have ``CUDA 12.4`` and
       ``cudnn 8.9.7.29`` libraries loaded. Take this into account if you need
       to install particular versions of ML libraries such as ``tensorflow``
       - these libraries are notoriously sensitive to CUDA version.
@@ -69,7 +69,7 @@ GPU support in common ML libraries
 - **Pytorch**:
 
   Does not require any special installation, as long as its version
-  supports ``CUDA 12.2`` and ``cudnn 8.9.x`` (this is already true
+  supports ``CUDA 12.4`` and ``cudnn 8.9.x`` (this is already true
   for :doc:`pre-installed kernels <doc-support>`).
 
   See `PyTorch / CUDA tutorial <https://cnvrg.io/pytorch-cuda/>`_.

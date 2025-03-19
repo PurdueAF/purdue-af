@@ -1,9 +1,3 @@
-.. important::
-
-    **Updated: January 20, 2025**
-
-    The Purdue EOS storage has been fully restored after the December 23 outage.
-
 Purdue Analysis Facility
 ======================================
 

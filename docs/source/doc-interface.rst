@@ -155,15 +155,3 @@ We have a limited number of Nvidia A100 GPUs, which are available in two configu
 +----------------------+--------+---------------------+
 
 See more info here: :doc:`GPU access at Purdue AF <doc-gpus>`.
-
-
-
-.. When GPU is selected, you session will have the following GPU software versions:
-
-.. * Nvidia Driver Version: 535.129.03
-.. * CUDA Version: 12.2
-
-.. .. important::
-
-..    Please shut down your session after finishing GPU work to release the
-..    GPU for other users.
