@@ -8,6 +8,9 @@ The most common use cases for GPUs in high energy physics are
 **training** and **inference** of machine learning models,
 however there are other frameworks and algorithms optimized to run on GPUs.
 
+Purdue AF also allows to use GPUs to accelerate RooFit fits, see more info
+:doc:`here <guide-roofit-cuda>`.
+
 How to access GPUs at Purdue AF
 --------------------------------------------------
 
