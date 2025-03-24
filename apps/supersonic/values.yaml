@@ -62,7 +62,7 @@ prometheus:
 grafana:
   enabled: true
   dashboardsConfigMaps:
-    default: supersonic-grafana-default-dashboard
+    default: sonic-server-grafana-default-dashboard
   datasources:
     datasources.yaml:
       datasources:
@@ -76,7 +76,7 @@ grafana:
             tlsSkipVerify: true
         - name: tempo
           type: tempo
-          url: http://supersonic-tempo:3100
+          url: http://sonic-server-tempo:3100
           access: proxy
           isDefault: false
           basicAuth: false
