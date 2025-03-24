@@ -23,8 +23,8 @@ server:
   storagePath: /prometheus
 
   global:
-    scrape_interval: 30s
-    evaluation_interval: 30s
+    scrape_interval: 5s
+    evaluation_interval: 5s
 
 
   # extraInitContainers:
