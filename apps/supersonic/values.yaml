@@ -34,9 +34,7 @@ envoy:
   service:
     type: LoadBalancer
   ingress:
-    enabled: true
-    hostName: sonic-cms.geddes.rcac.purdue.edu
-    ingressClassName: public
+    enabled: false
 
 autoscaler:
   enabled: true
