@@ -16,8 +16,8 @@ triton:
       --strict-model-config=false \
       --exit-timeout-secs=60
   resources:
-    limits: { nvidia.com/gpu: 1, cpu: 2, memory: 4G}
-    requests: { nvidia.com/gpu: 1, cpu: 2, memory: 4G}
+    limits: { nvidia.com/gpu: 1, cpu: 2, memory: 8G}
+    requests: { nvidia.com/gpu: 1, cpu: 2, memory: 8G}
   service:
     labels:
       scrape_metrics: "true"
