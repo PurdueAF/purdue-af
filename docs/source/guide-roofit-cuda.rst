@@ -27,7 +27,7 @@ Pre-requisites
 
       .. code-block:: shell
 
-         source /cvmfs/sft.cern.ch/lcg/views/LCG_106b/x86_64-el8-gcc11-opt/setup.sh
+         source /cvmfs/sft.cern.ch/lcg/views/LCG_106b_cuda/x86_64-el8-gcc11-opt/setup.sh
 
 .. warning::
 
