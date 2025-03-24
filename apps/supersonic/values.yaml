@@ -35,7 +35,9 @@ envoy:
     type: LoadBalancer
   ingress:
     enabled: false
-
+  rate_limiter:
+    prometheus_based:
+      enabled: true
 autoscaler:
   enabled: true
   minReplicaCount: 1
