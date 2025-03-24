@@ -39,7 +39,7 @@ envoy:
 autoscaler:
   enabled: true
   minReplicaCount: 1
-  maxReplicaCount: 7
+  maxReplicaCount: 11
 
 ingress:
   enabled: false
