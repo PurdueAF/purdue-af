@@ -41,7 +41,7 @@ spec:
               - op: add
                 path: /spec/template/spec/containers/0/args/-
                 value:
-                  - /start.sh
+                  /start.sh
               - op: add
                 path: /spec/template/spec/containers/0/volumeMounts/-
                 value:
