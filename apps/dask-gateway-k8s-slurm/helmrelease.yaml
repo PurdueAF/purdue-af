@@ -38,10 +38,10 @@ spec:
                   name: munge-key
                   secret:
                     secretName: munge-key
-              - op: add
-                path: /spec/template/spec/containers/0/args/-
+              - op: replace
+                path: /spec/template/spec/containers/0/args/
                 value:
-                  /start.sh
+                  - /start.sh
               - op: add
                 path: /spec/template/spec/containers/0/volumeMounts/-
                 value:
