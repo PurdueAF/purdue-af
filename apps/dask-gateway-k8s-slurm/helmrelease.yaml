@@ -18,3 +18,47 @@ spec:
   - kind: ConfigMap
     name: dask-gateway-k8s-slurm-config
     valuesKey: values.yaml
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: "api-.*"
+            patch: |
+              - op: add
+                path: /spec/template/spec/volumes/-
+                value:
+                  name: depot
+                  nfs:
+                    server: datadepot.rcac.purdue.edu
+                    path: /depot/cms
+              - op: add
+                path: /spec/template/spec/volumes/-
+                value:
+                  name: munge-key
+                  secret:
+                    secretName: munge-key
+              - op: add
+                path: /spec/template/spec/containers/0/args/-
+                value:
+                  - /start.sh
+              - op: add
+                path: /spec/template/spec/containers/0/volumeMounts/-
+                value:
+                  name: depot
+                  mountPath: /depot/cms
+                  mountPropagation: HostToContainer
+              - op: add
+                path: /spec/template/spec/containers/0/volumeMounts/-
+                value:
+                  name: munge-key
+                  mountPath: /etc/secrets/munge
+                  readOnly: false
+                  mountPropagation: HostToContainer
+          - target:
+              kind: Service
+              name: "api-.*"
+            patch: |
+              - op: add
+                path: /spec/type
+                value: LoadBalancer
