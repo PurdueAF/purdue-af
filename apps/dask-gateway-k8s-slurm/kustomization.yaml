@@ -3,15 +3,6 @@ kind: Kustomization
 resources:
   - ingress.yaml
   - helmrelease.yaml
-patches:
-  - path: patch-deployment.yaml
-    target:
-      kind: Deployment
-      name: "api-.*"
-  - path: patch-service.yaml
-    target:
-      kind: Service
-      name: "api-.*"
 configMapGenerator:
 - name: dask-gateway-k8s-slurm-config
   namespace: cms
