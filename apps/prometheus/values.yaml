@@ -34,6 +34,7 @@ server:
       command: ["/bin/chmod", "-R", "777", "/prometheus"]
       securityContext:
         runAsUser: 0
+        runAsNonRoot: false
       volumeMounts:
         - name: storage-volume
           mountPath: /prometheus
