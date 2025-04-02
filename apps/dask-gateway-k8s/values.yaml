@@ -115,7 +115,7 @@ gateway:
         c.KubeBackend.api_url = 'http://dask-gateway-k8s.geddes.rcac.purdue.edu:80/api'
 
         c.ClusterConfig.cluster_max_cores = 401
-        c.ClusterConfig.cluster_max_memory = '808 G'
+        c.ClusterConfig.cluster_max_memory = '404 G'
         c.ClusterConfig.cluster_max_workers = 401
         c.ClusterConfig.idle_timeout = 3*3600
 
@@ -195,8 +195,8 @@ gateway:
             }
         c.Backend.cluster_options = Options(
             String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
-            Integer("worker_cores", default=1, min=1, max=4, label="Cores per worker"),
-            Float("worker_memory", default=4, min=1, max=16, label="Memory per worker (GiB)"),
+            Integer("worker_cores", default=1, min=1, max=32, label="Cores per worker"),
+            Float("worker_memory", default=4, min=1, max=32, label="Memory per worker (GiB)"),
             Mapping("env", {}, label="Environment variables"),
             handler=options_handler,
         )
