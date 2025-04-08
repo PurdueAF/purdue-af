@@ -12,7 +12,7 @@ singleuser:
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
       default: true
-      description: "If you are starting a session with a GPU, please shut it down when finished in order to release the GPU."
+      description: "The CPU and memory request below are <em>desired</em> values. The actual CPU and memory allocation may be smaller if AF is under heavy load, but you are always guaranteed at least 4 cores and 16 GB of memory.<br>If you are starting a session with a GPU, please shut it down when finished in order to release the GPU."
       kubespawner_override:
         node_selector: {'cms-af-prod': 'true'}
         # lifecycle_hooks:
@@ -37,22 +37,22 @@ singleuser:
               display_name: "16"
               kubespawner_override:
                 cpu_limit: 16
-                cpu_guarantee: 16
+                cpu_guarantee: 4
             3:
               display_name: "32"
               kubespawner_override:
                 cpu_limit: 32
-                cpu_guarantee: 32
+                cpu_guarantee: 4
             4:
               display_name: "64"
               kubespawner_override:
                 cpu_limit: 64
-                cpu_guarantee: 64
-            # 5:
-            #   display_name: "128"
-            #   kubespawner_override:
-            #     cpu_limit: 128
-            #     cpu_guarantee: 128
+                cpu_guarantee: 4
+            5:
+              display_name: "128"
+              kubespawner_override:
+                cpu_limit: 128
+                cpu_guarantee: 4
         gpu:
           display_name: "GPUs"
           choices:
@@ -89,22 +89,22 @@ singleuser:
               display_name: "32 GB"
               kubespawner_override:
                 mem_limit: "32G" 
-                mem_guarantee: "32G"
+                mem_guarantee: "16G"
             3:
               display_name: "64 GB"
               kubespawner_override:
                 mem_limit: "64G" 
-                mem_guarantee: "64G"
+                mem_guarantee: "16G"
             4:
               display_name: "128 GB"
               kubespawner_override:
                 mem_limit: "128G" 
-                mem_guarantee: "128G"
-            # 5:
-            #   display_name: "256 GB"
-            #   kubespawner_override:
-            #     mem_limit: "256G" 
-            #     mem_guarantee: "256G"
+                mem_guarantee: "16G"
+            5:
+              display_name: "256 GB"
+              kubespawner_override:
+                mem_limit: "256G" 
+                mem_guarantee: "16G"
 
     - display_name: Minimal JupyterLab interface
       default: false
@@ -218,7 +218,8 @@ prePuller:
     enabled: false
 hub:
   image:
-      name: geddes-registry.rcac.purdue.edu/docker-hub-cache/jupyterhub/k8s-hub
+      # name: quay.io/jupyterhub/k8s-hub
+      name: geddes-registry.rcac.purdue.edu/cms/k8s-hub
       tag: 3.3.8
   nodeSelector: {'cms-af-prod': 'true'}
   tolerations:
