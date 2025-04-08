@@ -76,7 +76,7 @@ local panels = import 'panels.libsonnet';
                   node_memory_Buffers_bytes # Very temporary buffer memory cache for disk i/o
                 ) by (instance)
                 /
-                sum(node_memory_MemTotal_bytes{instance!="hammer-adm.rcac.purdue.edu:9100"}) by (instance)
+                sum(node_memory_MemTotal_bytes{instance!="hammer-osg.rcac.purdue.edu:9100"}) by (instance)
               ),
               "node", "$1", "instance", "(.*).rcac.purdue.edu:9796"
             ),

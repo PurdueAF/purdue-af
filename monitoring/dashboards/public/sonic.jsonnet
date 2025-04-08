@@ -45,7 +45,7 @@ local sonicLogo = panels.text(
     // description='',
     content=|||
       <div style="display: flex; flex-direction: column; align-items: center; width: 100%; height: 100%; box-sizing: border-box;">
-          <img src="https://yongbinfeng.gitbook.io/~gitbook/image?url=https%3A%2F%2F2104107444-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252Fgj0XlXp8qhEh0Cusn3gq%252Fuploads%252Fq0BdjaLNbsosFn9OK8N0%252FSONIC_Logo.png%3Falt%3Dmedia%26token%3D8cdf9ae5-d8e1-46ec-a532-a2493e65e377&width=300&dpr=4&quality=100&sign=ecb659d174c2a67811253fce3b00b25903ab7a2198911dc7f2407a12976319dc" alt="SONIC Logo" style="max-width: 100%; max-height: calc(50% - 20px); height: auto; padding-top: 10px; padding-bottom: 10px;">
+          <img src="https://github.com/fastmachinelearning/SuperSONIC/blob/main/docs/img/SuperSONIC_small_light_256.png?raw=true" alt="SONIC Logo" style="max-width: 100%; max-height: calc(50% - 20px); height: auto; padding-top: 10px; padding-bottom: 10px;">
           <img src="https://tikz.net/wp-content/uploads/2023/09/CMS_logo-008.png" style="max-width: 100%; max-height: calc(50% - 20px); height: auto; padding-top: 10px; padding-bottom: 10px">
       </div>
     |||,

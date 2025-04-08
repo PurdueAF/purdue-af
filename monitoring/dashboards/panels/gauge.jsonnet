@@ -119,8 +119,8 @@ local panels = import 'panels.libsonnet';
         'prometheus-rancher',
         |||
           (
-            sum by (namespace) (kube_resourcequota{namespace="cms", resource="limits.cpu", type="used"}) /
-            sum by (namespace) (kube_resourcequota{namespace="cms", resource="limits.cpu", type="hard"})
+            sum by (namespace) (kube_resourcequota{namespace="cms", resource="requests.cpu", type="used"}) /
+            sum by (namespace) (kube_resourcequota{namespace="cms", resource="requests.cpu", type="hard"})
           )
         |||,
         legendFormat='{{ namespace }}', instant=true
@@ -142,8 +142,8 @@ local panels = import 'panels.libsonnet';
         'prometheus-rancher',
         |||
           (
-            sum by (namespace) (kube_resourcequota{namespace="cms", resource="limits.memory", type="used"}) /
-            sum by (namespace) (kube_resourcequota{namespace="cms", resource="limits.memory", type="hard"})
+            sum by (namespace) (kube_resourcequota{namespace="cms", resource="requests.memory", type="used"}) /
+            sum by (namespace) (kube_resourcequota{namespace="cms", resource="requests.memory", type="hard"})
           )
         |||,
         legendFormat='{{ namespace }}', instant=true

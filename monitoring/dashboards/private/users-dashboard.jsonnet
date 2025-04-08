@@ -100,18 +100,18 @@ local  userTable = g.panel.table.new('')
     ),
     prometheus.addQuery(
       'prometheus-rancher',
-      'kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*",resource="cpu"}',
-      refId='cpuRequest', format='table', instant=true
+      'kube_pod_container_resource_limits{namespace=~"$namespace",pod=~"purdue-af-.*",resource="cpu",container="notebook"}',
+      refId='cpuLimit', format='table', instant=true
     ),
     prometheus.addQuery(
       'prometheus-rancher',
-      'kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*",resource="nvidia_com_mig_1g_5gb"}',
-      refId='gpuRequest', format='table', instant=true
+      'kube_pod_container_resource_limits{namespace=~"$namespace",pod=~"purdue-af-.*",resource="nvidia_com_mig_1g_5gb",container="notebook"}',
+      refId='gpuLimit', format='table', instant=true
     ),
     prometheus.addQuery(
       'prometheus-rancher',
-      'kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*",resource="memory"}',
-      refId='memRequest', format='table', instant=true
+      'kube_pod_container_resource_limits{namespace=~"$namespace",pod=~"purdue-af-.*",resource="memory",container="notebook"}',
+      refId='memLimit', format='table', instant=true
     ),
     prometheus.addQuery(
       'prometheus-rancher',
@@ -121,7 +121,7 @@ local  userTable = g.panel.table.new('')
         ) by (pod)
             /
         sum by (pod)(
-            kube_pod_container_resource_requests{namespace=~"$namespace",pod=~"purdue-af-.*", resource="cpu", container="notebook"}
+            kube_pod_container_resource_limits{namespace=~"$namespace",pod=~"purdue-af-.*", resource="cpu", container="notebook"}
         )
       |||,
       refId='podCpuUtilCurrent', format='table', instant=true
@@ -133,7 +133,7 @@ local  userTable = g.panel.table.new('')
             container_memory_working_set_bytes{namespace=~"$namespace", pod=~"purdue-af-.*", container="notebook"}
         ) /
         sum by (pod)(
-            kube_pod_container_resource_requests{namespace=~"$namespace", pod=~"purdue-af-.*", resource="memory", container="notebook"}
+            kube_pod_container_resource_limits{namespace=~"$namespace", pod=~"purdue-af-.*", resource="memory", container="notebook"}
         )
       |||,
       refId='podMemUtilCurrent', format='table', instant=true
@@ -180,7 +180,7 @@ local  userTable = g.panel.table.new('')
     + g.panel.table.transformation.withOptions(
         {
             "include": {"pattern": "^(Value.*|userId|username|username 1|node|node 1|docker_image_tag|docker_image_tag 1)$"},
-            "exclude": {"pattern": "^(pod|.*podStatus|.*#userId|.*gpuRequest)$"}
+            "exclude": {"pattern": "^(pod|.*podStatus|.*#userId|.*gpuLimit)$"}
         }
     ),
     // Transformation 3: set order of columns
@@ -202,8 +202,8 @@ local  userTable = g.panel.table.new('')
                 "Value #homeStorageUtil": 11,
                 "Value #workStorageUtil": 12,
                 "Value #daskWorkers": 13,
-                "Value #cpuRequest": 14,
-                "Value #memRequest": 15,
+                "Value #cpuLimit": 14,
+                "Value #memLimit": 15,
                 "node": 16,
                 "node 1": 17,
                 },
@@ -258,12 +258,12 @@ local  userTable = g.panel.table.new('')
     configureColumn("Value #podMemUtilCurrent", "Pod memory util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),
     configureColumn("Value #gpuUtilCurrent", "GPU engine util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),
     configureColumn("Value #gpuMemUtilCurrent", "GPU mem. util.", "percentunit", 0, 1, 1, columnWidth=130, type='gauge', thresholds=utilizationThresholds),
-    configureColumn("Value #cpuRequest", "CPU req.", columnWidth=80),
-    configureColumn("Value #gpuRequest", "GPU req.", columnWidth=80),
-    configureColumn("Value #memRequest", "Memory req.", "bytes", columnWidth=110),
+    configureColumn("Value #cpuLimit", "CPU lim.", columnWidth=80),
+    configureColumn("Value #gpuLimit", "GPU lim.", columnWidth=80),
+    configureColumn("Value #memLimit", "Memory lim.", "bytes", columnWidth=110),
     // Align text in columns
     alignText(".*", "left"),
-    alignText(".*request", "center"),
+    alignText(".*Limit", "center"),
     ]
   )
   // Sort table

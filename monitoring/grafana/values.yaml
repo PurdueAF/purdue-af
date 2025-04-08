@@ -55,7 +55,7 @@ config:
                 "name": "prometheus",
                 "orgId": 1,
                 "type": "prometheus",
-                "url": "http://prometheus-service.cms.geddes.rcac.purdue.edu:8080",
+                "url": "https://prometheus-af.geddes.rcac.purdue.edu:443",
                 "version": 1
             },
             {
