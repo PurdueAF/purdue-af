@@ -184,8 +184,10 @@ gateway:
 
             setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
             return {
-                "worker_cores": options.worker_cores,
-                "worker_memory": int(options.worker_memory * 2 ** 30),
+                "worker_cores": 1, # minimal request
+                "worker_cores_limit": options.worker_cores, # actual request
+                "worker_memory": int(2 ** 30), # minimal request (1 GiB)
+                "worker_memory_limit": int(options.worker_memory * 2 ** 30), # actual request
                 "environment": options.env,
                 "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
                 "worker_cmd": f"{options.conda_env}/bin/dask-worker",
@@ -195,8 +197,8 @@ gateway:
             }
         c.Backend.cluster_options = Options(
             String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
-            Integer("worker_cores", default=1, min=1, max=32, label="Cores per worker"),
-            Float("worker_memory", default=4, min=1, max=32, label="Memory per worker (GiB)"),
+            Integer("worker_cores", default=1, min=1, max=64, label="Cores per worker"),
+            Float("worker_memory", default=4, min=1, max=64, label="Memory per worker (GiB)"),
             Mapping("env", {}, label="Environment variables"),
             handler=options_handler,
         )
