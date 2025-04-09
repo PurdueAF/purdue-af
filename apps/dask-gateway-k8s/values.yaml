@@ -186,7 +186,7 @@ gateway:
             desired_cores = options.worker_cores
             desired_memory = int(options.worker_memory * 2 ** 30)
             return {
-                "worker_cores": int(desired_cores * 0.75),
+                "worker_cores": 1,
                 "worker_cores_limit": desired_cores,
                 "worker_memory": int(desired_memory * 0.75),
                 "worker_memory_limit": desired_memory,
