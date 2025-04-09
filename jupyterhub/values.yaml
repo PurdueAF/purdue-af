@@ -100,11 +100,11 @@ singleuser:
               kubespawner_override:
                 mem_limit: "128G" 
                 mem_guarantee: "16G"
-            5:
-              display_name: "256 GB"
-              kubespawner_override:
-                mem_limit: "256G" 
-                mem_guarantee: "16G"
+            # 5:
+            #   display_name: "256 GB"
+            #   kubespawner_override:
+            #     mem_limit: "256G" 
+            #     mem_guarantee: "16G"
 
     - display_name: Minimal JupyterLab interface
       default: false
