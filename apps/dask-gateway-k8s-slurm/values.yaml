@@ -69,8 +69,8 @@ gateway:
             }
         c.Backend.cluster_options = Options(
             String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
-            Integer("worker_cores", default=1, min=1, max=4, label="Cores per worker"),
-            Float("worker_memory", default=4, min=1, max=16, label="Memory per worker (GiB)"),
+            Integer("worker_cores", default=1, min=1, max=16, label="Cores per worker"),
+            Float("worker_memory", default=4, min=1, max=64, label="Memory per worker (GiB)"),
             Mapping("env", {"X509_USER_PROXY": "", "WORKDIR": ""}, label="Environment variables"),
             handler=options_handler,
         )
