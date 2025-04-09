@@ -183,11 +183,13 @@ gateway:
             }
 
             setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
+            desired_cores = options.worker_cores
+            desired_memory = int(options.worker_memory * 2 ** 30)
             return {
-                "worker_cores": 1, # minimal request
-                "worker_cores_limit": options.worker_cores, # actual request
-                "worker_memory": int(2 ** 30), # minimal request (1 GiB)
-                "worker_memory_limit": int(options.worker_memory * 2 ** 30), # actual request
+                "worker_cores": int(desired_cores * 0.75),
+                "worker_cores_limit": desired_cores,
+                "worker_memory": int(desired_memory * 0.75),
+                "worker_memory_limit": desired_memory,
                 "environment": options.env,
                 "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
                 "worker_cmd": f"{options.conda_env}/bin/dask-worker",
