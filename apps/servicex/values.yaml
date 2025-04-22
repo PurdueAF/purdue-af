@@ -100,13 +100,13 @@ minioCleanup:
   enabled: true
 didFinder:
   rucio:
-    enabled: true
+    enabled: false
     rucio_host: http://cms-rucio.cern.ch
     auth_host: https://cms-rucio-auth.cern.ch
   xrootd:
     enabled: true
   CERNOpenData:
-    enabled: true
+    enabled: false
 gridAccount: dkondrat
 x509Secrets:
   # image: sslhep/x509-secrets
