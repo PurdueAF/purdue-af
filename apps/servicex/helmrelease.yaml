@@ -35,6 +35,9 @@ spec:
                   secret:
                     secretName: x509-secret
               - op: add
+                path: /spec/template/spec/containers/0/volumeMounts
+                value: []
+              - op: add
                 path: /spec/template/spec/containers/0/volumeMounts/-
                 value:
                   name: x509-proxy
