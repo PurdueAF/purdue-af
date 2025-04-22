@@ -26,6 +26,9 @@ spec:
               name: "servicex-did-finder-xrootd"
             patch: |
               - op: add
+                path: /spec/template/spec/volumes
+                value: []
+              - op: add
                 path: /spec/template/spec/volumes/-
                 value:
                   name: x509-proxy
