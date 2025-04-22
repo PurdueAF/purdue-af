@@ -117,7 +117,7 @@ gateway:
         c.ClusterConfig.cluster_max_cores = 401
         c.ClusterConfig.cluster_max_memory = '404 G'
         c.ClusterConfig.cluster_max_workers = 401
-        c.ClusterConfig.idle_timeout = 3*3600
+        c.ClusterConfig.idle_timeout = 3600
 
         def ldap_lookup(username):
             import subprocess
