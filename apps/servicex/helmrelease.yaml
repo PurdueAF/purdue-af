@@ -18,3 +18,27 @@ spec:
   - kind: ConfigMap
     name: servicex-config
     valuesKey: values.yaml
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: "servicex-did-finder-xrootd-.*"
+            patch: |
+              - op: add
+                path: /spec/template/spec/volumes/-
+                value:
+                  name: x509-proxy
+                  secret:
+                    secretName: x509-secret
+              - op: add
+                path: /spec/template/spec/containers/0/volumeMounts/-
+                value:
+                  name: x509-proxy
+                  mountPath: /etc/grid-security-ro
+                  mountPropagation: HostToContainer
+              - op: add
+                path: /spec/template/spec/containers/0/env/-
+                value:
+                  name: X509_USER_PROXY
+                  value: /etc/grid-security-ro/x509up
