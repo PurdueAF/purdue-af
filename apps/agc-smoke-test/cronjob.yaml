@@ -5,6 +5,7 @@ metadata:
   namespace: cms
 spec:
   schedule: "0 */3 * * *"
+  suspend: true
   jobTemplate:
     spec:
       template:
