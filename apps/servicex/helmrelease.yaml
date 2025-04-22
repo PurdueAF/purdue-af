@@ -23,7 +23,7 @@ spec:
         patches:
           - target:
               kind: Deployment
-              name: "servicex-did-finder-xrootd-.*"
+              name: "servicex-did-finder-xrootd"
             patch: |
               - op: add
                 path: /spec/template/spec/volumes/-
