@@ -1,4 +1,5 @@
 app:
+  tag: worker-set-spec
   resources:
     requests:
       cpu: 1
