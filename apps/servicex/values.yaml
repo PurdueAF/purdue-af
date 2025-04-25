@@ -1,5 +1,4 @@
 app:
-  tag: worker-set-spec
   resources:
     requests:
       cpu: 1
@@ -54,7 +53,8 @@ codeGen:
   cmssw-5-3-32:
     enabled: false
 
-# transformer:
+transformer:
+  memoryLimit: 4Gi
   # persistence:
   #   existingClaim: "claim-dkondra"
   #   subdir: /servicex/
