@@ -116,7 +116,7 @@ gateway:
 
         c.ClusterConfig.cluster_max_cores = 401
         c.ClusterConfig.cluster_max_memory = '404 G'
-        c.ClusterConfig.cluster_max_workers = 2000
+        c.ClusterConfig.cluster_max_workers = 400
         c.ClusterConfig.idle_timeout = 3600
 
         def ldap_lookup(username):
@@ -186,7 +186,7 @@ gateway:
             desired_cores = options.worker_cores
             desired_memory = int(options.worker_memory * 2 ** 30)
             return {
-                "worker_cores": desired_cores,
+                "worker_cores": 1,
                 "worker_cores_limit": desired_cores,
                 "worker_memory": int(desired_memory * 0.75),
                 "worker_memory_limit": desired_memory,
