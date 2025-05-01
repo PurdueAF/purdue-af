@@ -252,7 +252,30 @@ serverFiles:
           - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component]
             action: keep
             regex: envoy
-
+      - job_name: 'seldon-monitor-envoy'
+        metrics_path: '/stats/prometheus'
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names:
+                - 'cms'
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: 'pod'
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: 'namespace'
+            replacement: '$1'
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: 'node'
+          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+            target_label: 'app'
+          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_instance]
+            target_label: 'release'
+          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component]
+            target_label: 'component'
+          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+            action: keep
+            regex: seldon-envoy
 
 alertmanager:
   enabled: false
