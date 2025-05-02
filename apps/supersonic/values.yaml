@@ -99,3 +99,9 @@ grafana:
   grafana.ini:
     server:
       root_url: https://grafana-cms.geddes.rcac.purdue.edu
+
+tracing_sampling_rate: 0.001
+opentelemetry-collector:
+  enabled: true
+tempo:
+  enabled: true
