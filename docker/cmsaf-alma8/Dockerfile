@@ -38,14 +38,15 @@ RUN dnf -y update && \
         python3-gfal2 && \
     # Add CUDA repository
     dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo && \
-    dnf -y install cuda-toolkit-12-2 libcudnn8-8.9.7.29-1+cuda12.2 libcurl-devel && \
+    dnf -y install cuda-toolkit-12-4 libcudnn8-8.9.7.29-1+cuda12.2 libcurl-devel && \
     dnf clean all && \
     rm -rf /var/cache/dnf && \
     rm /usr/bin/vi && \
     ln -s /usr/bin/vim /usr/bin/vi && \
     localedef -c -f UTF-8 -i en_US en_US.UTF-8
-
-RUN yum install -y vo-client voms-clients vo-client myproxy
+# cudnn9-cuda-12-4-9.1.1.17-1.x86_64.rpm
+# libcudnn9-cuda-12-9.7.1.26-1.x86_64.rpm
+RUN yum install -y vo-client voms-clients vo-client myproxy patch
 
 # Configure environment
 ENV CONDA_DIR=/opt/conda \
