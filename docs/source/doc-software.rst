@@ -58,8 +58,8 @@ environment is fixed to ``0.7.21``.
 
 .. note::
 
-   - Last updated: January 17, 2025
-   - Coffea version: ``2025.1.0``
+   - Last updated: May 28, 2025
+   - Coffea version: ``2025.3.0``
 
 * In new Jupyter notebooks, this kernel will appear as ``Python[conda env:coffea_latest]``.
 * In Terminal, it can be activated as follows:

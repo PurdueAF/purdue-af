@@ -31,7 +31,7 @@ dependencies:
   - hepdata-lib
 
   # Plotting
-  - bokeh=2.4.2
+  - bokeh=3.1.0
   - matplotlib
   - mplhep
   - plotly
@@ -52,11 +52,14 @@ dependencies:
   - scikit-optimize
 
   # Distributed computing
-  - dask=2023.3.2
-  - dask-gateway=2023.9.0
-  - dask-jobqueue=0.8.1
-  - distributed=2023.3.2
-  # - dask-kubernetes
+  - dask
+  - dask-gateway
+  - dask-jobqueue
+  - distributed
+  # - dask=2023.3.2
+  # - dask-gateway=2023.9.0
+  # - dask-jobqueue=0.8.1
+  # - distributed=2023.3.2
   - dask-ml
   - dask-xgboost
   - dask-memusage
@@ -69,6 +72,10 @@ dependencies:
   - pcre
   - tbb
   - vdt
+  - gcc_linux-64
+  - gxx_linux-64
+  - libgcc-ng
+  - libstdcxx-ng
 
   # Other tools
   - ca-certificates
@@ -106,6 +113,8 @@ dependencies:
     - correctionlib==2.5.0
     - cmsstyle
     - xgbfir
+    - servicex==3.1.1
+
     # must run this command: pip uninstall nvidia-cudnn-cu11
 
 variables:

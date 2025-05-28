@@ -6,7 +6,7 @@ dependencies:
   - pip
 
   # HEP
-  - coffea==2025.1.0
+  - coffea==2025.3.0
   - awkward
   - uproot
   - hist
@@ -14,6 +14,7 @@ dependencies:
   - uncertainties
   - lmfit
   - correctionlib==2.6.4
+  - hepconvert
 
   # ROOT
   - root==6.32.02
@@ -45,6 +46,8 @@ dependencies:
     - torch
     - cmsstyle
     - scikit-hep-testdata
+    - graphviz
+
 variables:
   LD_LIBRARY_PATH: /depot/cms/kernels/coffea_latest/lib/python3.11/site-packages/nvidia/nvjitlink/lib/:/usr/local/cuda-12.2/lib64:/depot/cms/purdue-af/combine/HiggsAnalysis/CombinedLimit/build/lib:/depot/cms/purdue-af/roofit-batchcompute/build/
   PYTHONPATH: /depot/cms/kernels/coffea_latest/bin
