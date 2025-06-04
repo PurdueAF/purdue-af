@@ -104,6 +104,6 @@ grafana:
 
 tracing_sampling_rate: 0.001
 opentelemetry-collector:
-  enabled: true
+  enabled: false
 tempo:
-  enabled: true
+  enabled: false
