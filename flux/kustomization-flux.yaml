@@ -12,10 +12,3 @@ spec:
     kind: GitRepository
     name: purdue-af
     namespace: cms
-  postBuild:
-    substituteFrom:
-      - kind: ConfigMap
-        name: flux-vars
-        optional: true
-  exclude:
-    - path: "./apps/supersonic"
