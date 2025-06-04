@@ -4,7 +4,7 @@ metadata:
   name: sonic-server
   namespace: cms
 spec:
-  suspend: true
+  # suspend: true
   interval: 1m
   chart:
     spec:
