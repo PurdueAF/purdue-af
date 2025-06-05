@@ -10,11 +10,12 @@ dependencies:
   - awkward-cpp=15
   - lmfit
   - numba
-  - numpy=1.23.5
+  - numpy=1.26.4
   - pandas=1.5.3
-  - scipy
+  - scipy=1.10
   - scikit-learn=1.5.2
   - uncertainties
+  - h5py=3.8.0
 
   # JuliaCall
   - pyjuliacall
