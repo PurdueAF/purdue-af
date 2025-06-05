@@ -4,4 +4,4 @@ kind: Kustomization
 resources:
 - cronjob.yaml
 
-namespace: jupyterhub 
+namespace: cms 

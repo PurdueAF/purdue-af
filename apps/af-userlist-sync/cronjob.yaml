@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: af-userlist-sync
-  namespace: jupyterhub
+  namespace: cms
 spec:
   schedule: "*/5 * * * *"  # Run every 5 minutes
   jobTemplate:
