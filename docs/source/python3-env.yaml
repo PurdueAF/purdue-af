@@ -103,6 +103,9 @@ dependencies:
     - scalpl
     - tensorflow[and-cuda]==2.15.1
     - tensorflow-probability==0.23
+    - pyarrow==10.0.1
+    - uproot==4.3.7
+    - awkward==1.10.3
     - tf-keras
     - qkeras
     - torch==2.0.1
