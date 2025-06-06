@@ -41,7 +41,7 @@ envoy:
     prometheus_based:
       enabled: true
 autoscaler:
-  enabled: false
+  enabled: true
   minReplicaCount: 1
   maxReplicaCount: 11
 
