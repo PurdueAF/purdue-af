@@ -5,6 +5,7 @@ metadata:
   namespace: cms
 spec:
   schedule: "*/5 * * * *"  # Run every 5 minutes
+  suspend: true
   jobTemplate:
     spec:
       template:
