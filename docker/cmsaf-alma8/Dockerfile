@@ -120,7 +120,7 @@ COPY jupyter/start.sh /usr/local/bin/
 
 WORKDIR /tmp
 RUN mamba install --quiet --yes \
-        notebook jupyterhub jupyterlab=4.2.5 nodejs==18.11.0 \
+        notebook jupyterhub jupyterlab=4.4.3 nodejs==18.11.0 \
         nb_conda_kernels metakernel rucio-clients pytest lz4 ipywidgets ipympl bokeh==2.4.2 \
         julia &&\
     jupyter notebook --generate-config && \
