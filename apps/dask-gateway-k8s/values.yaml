@@ -4,7 +4,7 @@ gateway:
   loglevel: INFO
   image:
     name: ghcr.io/dask/dask-gateway-server
-    tag: 2025.4.0
+    tag: 2024.1.0
     pullPolicy: IfNotPresent
   auth:
     type: simple
@@ -35,7 +35,7 @@ gateway:
   backend:
     image:
       name: ghcr.io/dask/dask-gateway
-      tag: 2025.4.0
+      tag: 2024.1.0
       pullPolicy:
     imagePullSecrets: []
     namespace: cms
