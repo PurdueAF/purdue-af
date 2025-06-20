@@ -4,14 +4,5 @@ metadata:
   name: ssl-hep
   namespace: cms
 spec:
-  # interval: 1h
-  # url: https://ssl-hep.github.io/ssl-helm-charts/
-  interval: 5m
-  chart:
-    spec:
-      chart: helm/servicex
-      sourceRef:
-        kind: GitRepository
-        name: servicex
-        namespace: cms
-      interval: 1m
+  interval: 1h
+  url: https://ssl-hep.github.io/ssl-helm-charts/
