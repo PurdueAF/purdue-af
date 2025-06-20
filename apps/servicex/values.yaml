@@ -39,8 +39,8 @@ objectStore:
 codeGen:
   uproot-raw:
     enabled: true
-    compressionAlgorithm: ZSTD
-    compressionLevel: 9
+    compressionAlgorithm: ZSTDD
+    compressionLevel: 91
   uproot:
     enabled: false
   python:
