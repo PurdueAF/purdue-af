@@ -4,6 +4,7 @@ metadata:
   name: servicex
   namespace: cms
 spec:
+  suspend: true
   interval: 1m
   chart:
     spec:
