@@ -1,0 +1,10 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: servicex
+  namespace: cms
+spec:
+  interval: 1m0s
+  url: https://github.com/kondratyevd/ServiceX
+  ref:
+    branch: uproot-compression
