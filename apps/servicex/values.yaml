@@ -39,13 +39,12 @@ objectStore:
 codeGen:
   uproot-raw:
     enabled: true
-    defaultScienceContainerTag: uproot5
+    compressionAlgorithm: ZSTD
+    compressionLevel: 9
   uproot:
-    enabled: true
-    defaultScienceContainerTag: uproot5
+    enabled: false
   python:
-    enabled: true
-    defaultScienceContainerTag: uproot5
+    enabled: false
   atlasr21:
     enabled: false
   atlasr22:
