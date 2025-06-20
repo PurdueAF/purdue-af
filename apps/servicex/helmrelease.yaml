@@ -20,7 +20,7 @@ spec:
       #   name: ssl-hep
       #   namespace: cms
       interval: 1m
-  install:
+  upgrade:
     remediation:
       retries: -1
   valuesFrom:
