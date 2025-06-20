@@ -111,7 +111,7 @@ gridAccount: dkondrat
 x509Secrets:
   # image: sslhep/x509-secrets
   # tag: 2025-03-update
-  image: geddes-registry.rcac.purdue.edu/docker-hub-cache/ponyisi/x509-secrets
-  tag: override-voms-file
+  # image: geddes-registry.rcac.purdue.edu/docker-hub-cache/ponyisi/x509-secrets
+  # tag: override-voms-file
   pullPolicy: Always
   vomsOrg: cms
