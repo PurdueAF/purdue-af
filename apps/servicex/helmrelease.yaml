@@ -20,6 +20,9 @@ spec:
       #   name: ssl-hep
       #   namespace: cms
       interval: 1m
+  install:
+    remediation:
+      retries: -1
   valuesFrom:
   - kind: ConfigMap
     name: servicex-config
