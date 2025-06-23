@@ -33,7 +33,7 @@ spec:
                 --private-key=/etc/grid-security-ro/x509up \
                 https://voms2.cern.ch:8443/voms/cms/services/VOMSCompatibility?method=getGridmapUsers \
                 -O /tmp/grid-mapfile.xml
-              
+              sleep 60
               xmllint --format /tmp/grid-mapfile.xml | \
                 grep 'getGridmapUsersReturn xsi:type' | \
                 cut -d '>' -f2 | \
