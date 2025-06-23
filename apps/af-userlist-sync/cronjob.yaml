@@ -10,6 +10,7 @@ spec:
     spec:
       template:
         spec:
+          restartPolicy: Never
           containers:
           - name: af-userlist-sync
             image: ubuntu:22.04
