@@ -5,7 +5,7 @@ metadata:
   namespace: cms
 spec:
   schedule: "*/5 * * * *"  # Run every 5 minutes
-  suspend: true
+  suspend: false
   jobTemplate:
     spec:
       template:
@@ -46,8 +46,29 @@ spec:
             - name: x509-proxy
               mountPath: /etc/grid-security-ro
               readOnly: true
+            - name: openldap-config
+              mountPath: /etc/openldap
+              readOnly: true
+            - name: pki-certs
+              mountPath: /etc/pki
+              readOnly: true
+            - name: ldap-conf
+              mountPath: /etc/ldap.conf
+              subPath: ldap.conf
+              readOnly: true
           volumes:
           - name: x509-proxy
             secret:
               secretName: x509-proxy
-          restartPolicy: OnFailure 
+          - name: openldap-config
+            hostPath:
+              path: /etc/openldap
+              type: Directory
+          - name: pki-certs
+            hostPath:
+              path: /etc/pki
+              type: Directory
+          - name: ldap-conf
+            hostPath:
+              path: /etc/ldap.conf
+              type: File
