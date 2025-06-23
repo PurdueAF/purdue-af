@@ -38,6 +38,7 @@ objectStore:
 
 codeGen:
   uproot-raw:
+    image: sslhep/servicex_code_gen_raw_uproot:uproot-compression
     enabled: true
     defaultScienceContainerTag: uproot5
     compressionAlgorithm: ZSTD
