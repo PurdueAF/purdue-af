@@ -49,10 +49,10 @@ spec:
             #   readOnly: true
             - name: ldap-conf
               mountPath: /etc/openldap
-              subPath: openldap
+              subPath: /mnt/data/openldap
             - name: ldap-conf
               mountPath: /etc/pki
-              subPath: pki
+              subPath: /mnt/data/pki
           volumes:
           # - name: x509-proxy
           #   secret:
