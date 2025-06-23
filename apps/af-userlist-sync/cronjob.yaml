@@ -44,9 +44,9 @@ spec:
               echo "CERN users:"
               cat /tmp/cern-auth.txt
             volumeMounts:
-            - name: x509-proxy
-              mountPath: /etc/grid-security-ro
-              readOnly: true
+            # - name: x509-proxy
+            #   mountPath: /etc/grid-security-ro
+            #   readOnly: true
             - name: openldap-config
               mountPath: /etc/openldap
               readOnly: true
@@ -58,9 +58,9 @@ spec:
               subPath: ldap.conf
               readOnly: true
           volumes:
-          - name: x509-proxy
-            secret:
-              secretName: x509-proxy
+          # - name: x509-proxy
+          #   secret:
+          #     secretName: x509-proxy
           - name: openldap-config
             hostPath:
               path: /etc/openldap
