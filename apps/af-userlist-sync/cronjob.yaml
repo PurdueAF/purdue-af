@@ -48,11 +48,11 @@ spec:
             #   mountPath: /etc/grid-security-ro
             #   readOnly: true
             - name: ldap-conf
-              mountPath: /etc/openldap
-              subPath: /mnt/data/openldap
+              mountPath: /mnt/data/openldap
+              subPath: openldap
             - name: ldap-conf
-              mountPath: /etc/pki
-              subPath: /mnt/data/pki
+              mountPath: /mnt/data/pki
+              subPath: pki
           volumes:
           # - name: x509-proxy
           #   secret:
