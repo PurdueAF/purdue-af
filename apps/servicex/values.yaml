@@ -40,8 +40,6 @@ codeGen:
   uproot-raw:
     enabled: true
     defaultScienceContainerTag: uproot5
-    compressionAlgorithm: ZSTDD
-    compressionLevel: 91
   uproot:
     enabled: false
   python:
@@ -59,6 +57,9 @@ transformer:
   #   existingClaim: "claim-dkondra"
   #   subdir: /servicex/
   # cachePrefix: "'xcache.cms.rcac.purdue.edu'"
+  compressionAlgorithm: ZSTDD
+  compressionLevel: 91
+
 
 rabbitmq:
   resources:
