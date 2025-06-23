@@ -40,8 +40,8 @@ codeGen:
   uproot-raw:
     enabled: true
     defaultScienceContainerTag: uproot5
-    # compressionAlgorithm: ZSTDD
-    # compressionLevel: 91
+    compressionAlgorithm: ZSTDD
+    compressionLevel: 91
   uproot:
     enabled: false
   python:
