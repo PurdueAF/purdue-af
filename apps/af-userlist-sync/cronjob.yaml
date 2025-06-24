@@ -43,6 +43,13 @@ spec:
                 cut -d "/" -f1 > /tmp/cern-auth.txt
               echo "CERN users:"
               cat /tmp/cern-auth.txt
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
             volumeMounts:
             # - name: x509-proxy
             #   mountPath: /etc/grid-security-ro
