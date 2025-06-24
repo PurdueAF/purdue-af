@@ -60,7 +60,7 @@ spec:
                   echo "Secret exists, updating it..."
                   
                   # Get existing users for comparison
-                  kubectl get secret $SECRET_NAME -o jsonpath='{.data.purdue-users}' | base64 -d > /tmp/existing-users.txt
+                  kubectl get secret $SECRET_NAME -o jsonpath='{.data.purdue-auth.txt}' | base64 -d > /tmp/existing-users.txt
                   
                   # Show differences
                   echo "=== User List Changes ==="
@@ -88,7 +88,7 @@ spec:
                   # Update existing secret
                   if ! kubectl patch secret $SECRET_NAME \
                     --type='merge' \
-                    -p="{\"data\":{\"purdue-users\":\"$(base64 -w0 /tmp/purdue-auth.txt)\"}}"; then
+                    -p="{\"data\":{\"purdue-auth.txt\":\"$(base64 -w0 /tmp/purdue-auth.txt)\"}}"; then
                     echo "ERROR: Failed to update secret"
                     exit 1
                   fi
@@ -100,7 +100,7 @@ spec:
                   
                   # Create new secret
                   if ! kubectl create secret generic $SECRET_NAME \
-                    --from-file=purdue-users=/tmp/purdue-auth.txt; then
+                    --from-file=purdue-auth.txt=/tmp/purdue-auth.txt; then
                     echo "ERROR: Failed to create secret"
                     exit 1
                   fi

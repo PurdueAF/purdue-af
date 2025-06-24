@@ -36,10 +36,12 @@ spec:
                 "https://cms-cric.cern.ch/api/accounts/user/query/?json" \
                 -o /tmp/cern-users.json
               
-              # Parse JSON to extract usernames
-              # The JSON structure should contain user information
-              # We'll extract usernames from the JSON response
-              cat /tmp/cern-users.json | jq -r '.result[] | .login' > /tmp/cern-auth.txt
+              # Parse JSON to extract DNs and filter for CERN internal users
+              # Extract usernames from DNs using the same method as the original VOMS approach
+              cat /tmp/cern-users.json | jq -r '.[] | .profiles[] | .dn | select(. != null)' | \
+                grep "/OU=Users/" | \
+                sed -n 's/.*\/OU=Users\/CN=\([^\/]*\)\/CN=.*/\1/p' | \
+                sort | uniq > /tmp/cern-auth.txt
               
               echo "CERN users:"
               cat /tmp/cern-auth.txt
@@ -70,7 +72,7 @@ spec:
                   echo "Secret exists, updating it..."
                   
                   # Get existing users for comparison
-                  kubectl get secret $SECRET_NAME -o jsonpath='{.data.cern-users}' | base64 -d > /tmp/existing-users.txt
+                  kubectl get secret $SECRET_NAME -o jsonpath='{.data.cern-auth.txt}' | base64 -d > /tmp/existing-users.txt
                   
                   # Show differences
                   echo "=== User List Changes ==="
@@ -98,7 +100,7 @@ spec:
                   # Update existing secret
                   if ! kubectl patch secret $SECRET_NAME \
                     --type='merge' \
-                    -p="{\"data\":{\"cern-users\":\"$(base64 -w0 /tmp/cern-auth.txt)\"}}"; then
+                    -p="{\"data\":{\"cern-auth.txt\":\"$(base64 -w0 /tmp/cern-auth.txt)\"}}"; then
                     echo "ERROR: Failed to update secret"
                     exit 1
                   fi
@@ -110,7 +112,7 @@ spec:
                   
                   # Create new secret
                   if ! kubectl create secret generic $SECRET_NAME \
-                    --from-file=cern-users=/tmp/cern-auth.txt; then
+                    --from-file=cern-auth.txt=/tmp/cern-auth.txt; then
                     echo "ERROR: Failed to create secret"
                     exit 1
                   fi
