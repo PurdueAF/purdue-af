@@ -34,22 +34,46 @@ spec:
               echo "Purdue users:"
               cat /tmp/purdue-auth.txt
               
-              # Check if the list is not empty before updating secret
+              # Validate the data before updating secret
               if [ -s /tmp/purdue-auth.txt ]; then
-                echo "Purdue users list is not empty, updating purdue-auth-test secret..."
+                # Check if the data looks reasonable (at least 100 users, typical for Purdue)
+                USER_COUNT=$(wc -l < /tmp/purdue-auth.txt)
+                echo "Found $USER_COUNT users"
+                
+                if [ $USER_COUNT -lt 200 ]; then
+                  echo "ERROR: Only $USER_COUNT users found - this seems too low for Purdue LDAP"
+                  echo "This might indicate a problem with the LDAP query or server"
+                  echo "Job will fail to prevent data loss"
+                  exit 1
+                fi
+                
+                # Validate that each line looks like a valid username (no spaces, reasonable length)
+                if grep -q " " /tmp/purdue-auth.txt || grep -q "^$" /tmp/purdue-auth.txt; then
+                  echo "ERROR: Invalid data format detected in user list"
+                  echo "Job will fail to prevent data loss"
+                  exit 1
+                fi
+                
+                echo "Purdue users list validation passed, updating $SECRET_NAME secret..."
                 
                 # Check if secret already exists
                 if kubectl get secret $SECRET_NAME >/dev/null 2>&1; then
                   echo "Secret exists, updating it..."
                   # Update existing secret
-                  kubectl patch secret $SECRET_NAME \
+                  if ! kubectl patch secret $SECRET_NAME \
                     --type='merge' \
-                    -p="{\"data\":{\"purdue-users\":\"$(base64 -w0 /tmp/purdue-auth.txt)\"}}"
+                    -p="{\"data\":{\"purdue-users\":\"$(base64 -w0 /tmp/purdue-auth.txt)\"}}"; then
+                    echo "ERROR: Failed to update secret"
+                    exit 1
+                  fi
                 else
                   echo "Secret does not exist, creating it..."
                   # Create new secret
-                  kubectl create secret generic $SECRET_NAME \
-                    --from-file=purdue-users=/tmp/purdue-auth.txt
+                  if ! kubectl create secret generic $SECRET_NAME \
+                    --from-file=purdue-users=/tmp/purdue-auth.txt; then
+                    echo "ERROR: Failed to create secret"
+                    exit 1
+                  fi
                 fi
                 
                 echo "Secret $SECRET_NAME updated successfully"
