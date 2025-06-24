@@ -68,6 +68,33 @@ spec:
                 # Check if secret already exists
                 if kubectl get secret $SECRET_NAME >/dev/null 2>&1; then
                   echo "Secret exists, updating it..."
+                  
+                  # Get existing users for comparison
+                  kubectl get secret $SECRET_NAME -o jsonpath='{.data.cern-users}' | base64 -d > /tmp/existing-users.txt
+                  
+                  # Show differences
+                  echo "=== User List Changes ==="
+                  
+                  # Find added users (in new list but not in old list)
+                  comm -13 <(sort /tmp/existing-users.txt) <(sort /tmp/cern-auth.txt) > /tmp/added-users.txt
+                  if [ -s /tmp/added-users.txt ]; then
+                    echo "Added users:"
+                    cat /tmp/added-users.txt
+                  else
+                    echo "No new users added"
+                  fi
+                  
+                  # Find removed users (in old list but not in new list)
+                  comm -23 <(sort /tmp/existing-users.txt) <(sort /tmp/cern-auth.txt) > /tmp/removed-users.txt
+                  if [ -s /tmp/removed-users.txt ]; then
+                    echo "Removed users:"
+                    cat /tmp/removed-users.txt
+                  else
+                    echo "No users removed"
+                  fi
+                  
+                  echo "========================"
+                  
                   # Update existing secret
                   if ! kubectl patch secret $SECRET_NAME \
                     --type='merge' \
@@ -77,6 +104,10 @@ spec:
                   fi
                 else
                   echo "Secret does not exist, creating it..."
+                  echo "=== User List Changes ==="
+                  echo "Initial user list created with $USER_COUNT users"
+                  echo "========================"
+                  
                   # Create new secret
                   if ! kubectl create secret generic $SECRET_NAME \
                     --from-file=cern-users=/tmp/cern-auth.txt; then
@@ -84,8 +115,6 @@ spec:
                     exit 1
                   fi
                 fi
-                
-                echo "Secret $SECRET_NAME updated successfully"
               else
                 echo "ERROR: CERN users list is empty - this indicates a problem with LDAP connection or data retrieval"
                 echo "Job will fail to prevent data loss"
