@@ -3,6 +3,6 @@ kind: Kustomization
 
 resources:
 - cronjob.yaml
-- ldap-conf-pvc.yaml
+- configmap.yaml
 
 namespace: cms 

@@ -55,8 +55,8 @@ spec:
             #   mountPath: /etc/grid-security-ro
             #   readOnly: true
             - name: ldap-conf
-              mountPath: /etc/openldap
-              subPath: openldap
+              mountPath: /etc/openldap/ldap.conf
+              subPath: ldap.conf
             # - name: ldap-conf
             #   mountPath: /etc/pki
             #   subPath: pki
@@ -65,5 +65,5 @@ spec:
           #   secret:
           #     secretName: x509-proxy# In your CronJob spec:
           - name: ldap-conf
-            persistentVolumeClaim:
-              claimName: ldap-conf
+            configMap:
+              name: ldap-conf
