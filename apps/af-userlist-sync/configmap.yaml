@@ -13,6 +13,6 @@ data:
     # This file should be world readable but not world writable.
 
     BASE dc=rcac,dc=purdue,dc=edu
-    URI ldap://cms-aux.rcac.purdue.edu/ ldap://centralservices.rcac.purdue.edu/
+    URI ldap://centralservices.rcac.purdue.edu/
     TLS_CACERT      /etc/certs/cacert.pem
     TLS_CACERTDIR /etc/openldap/cacerts 
