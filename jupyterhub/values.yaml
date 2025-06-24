@@ -235,21 +235,21 @@ hub:
       cpu: 1
       memory: 2Gi
   extraVolumes:
-    - name: purdue-auth
+    - name: af-auth-purdue
       secret:
-        secretName: purdue-auth
-    - name: cern-auth
+        secretName: af-auth-purdue
+    - name: af-auth-cern
       secret:
-        secretName: cern-auth
+        secretName: af-auth-cern
     - name: auth-secret
       secret:
         secretName: auth-secret
   extraVolumeMounts:
-    - mountPath: /etc/secrets/purdue-auth/
-      name: purdue-auth
+    - mountPath: /etc/secrets/af-auth-purdue/
+      name: af-auth-purdue
       readOnly: true
-    - mountPath: /etc/secrets/cern-auth/
-      name: cern-auth
+    - mountPath: /etc/secrets/af-auth-cern/
+      name: af-auth-cern
       readOnly: true
   extraEnv:
     CILOGON_CLIENT_ID:

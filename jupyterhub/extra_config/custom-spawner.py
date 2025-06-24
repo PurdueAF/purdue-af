@@ -13,7 +13,7 @@ class PurdueCILogonOAuthenticator(CILogonOAuthenticator):
 
         if domain == 'purdue.edu':
             fixedUsername = username
-            with open('/etc/secrets/purdue-auth/purdue-auth.txt') as file:
+            with open('/etc/secrets/af-auth-purdue/userlist') as file:
                 if not f"{username}\n" in file.readlines():
                     raise web.HTTPError(
                         500, f"Access denied! User {username} is not in the list of authorized users."
@@ -21,11 +21,11 @@ class PurdueCILogonOAuthenticator(CILogonOAuthenticator):
 
         elif domain == 'cern.ch':
             fixedUsername = username + "-cern"
-            # with open('/etc/secrets/cern-auth/cern-auth.txt') as file:
-            #     if not f"{username}\n" in file.readlines():
-            #         raise web.HTTPError(
-            #             500, "Access denied! Only CMS members are allowed to log in with CERN credentials."
-            #         )
+            with open('/etc/secrets/af-auth-cern/userlist') as file:
+                if not f"{username}\n" in file.readlines():
+                    raise web.HTTPError(
+                        500, "Access denied! Only CMS members are allowed to log in with CERN credentials."
+                    )
         
         elif domain == 'fnal.gov':
                 fixedUsername = username + "-fnal"
