@@ -13,12 +13,12 @@ spec:
           restartPolicy: Never
           containers:
           - name: af-userlist-sync
-            image: ubuntu:22.04
+            image: rockylinux:8.9
             command:
             - /bin/bash
             - -c
             - |
-              apt-get update && apt-get install -y ldap-utils wget libxml2-utils
+              dnf install -y openldap-clients --nogpgcheck
               
               # Get Purdue users
               echo "Fetching Purdue users..."
@@ -50,9 +50,9 @@ spec:
             - name: ldap-conf
               mountPath: /etc/openldap
               subPath: openldap
-            - name: ldap-conf
-              mountPath: /etc/pki
-              subPath: pki
+            # - name: ldap-conf
+            #   mountPath: /etc/pki
+            #   subPath: pki
           volumes:
           # - name: x509-proxy
           #   secret:
