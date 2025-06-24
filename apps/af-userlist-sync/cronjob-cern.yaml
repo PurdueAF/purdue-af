@@ -19,7 +19,8 @@ spec:
             - /bin/bash
             - -c
             - |
-              SECRET_NAME=cern-auth-test
+              SECRET_NAME=auth-cern-cms
+              TMP_FILE=/tmp/cern-auth.txt
 
               dnf install -y curl wget libxml2 jq --nogpgcheck
               
@@ -41,14 +42,14 @@ spec:
               cat /tmp/cern-users.json | jq -r '.[] | .profiles[] | .dn | select(. != null)' | \
                 grep "/OU=Users/" | \
                 sed -n 's/.*\/OU=Users\/CN=\([^\/]*\)\/CN=.*/\1/p' | \
-                sort | uniq > /tmp/cern-auth.txt
+                sort | uniq > $TMP_FILE
               
               echo "CERN users:"
-              cat /tmp/cern-auth.txt
+              cat $TMP_FILE
 
               # Validate the data before updating secret
-              if [ -s /tmp/cern-auth.txt ]; then
-                USER_COUNT=$(wc -l < /tmp/cern-auth.txt)
+              if [ -s $TMP_FILE ]; then
+                USER_COUNT=$(wc -l < $TMP_FILE)
                 echo "Found $USER_COUNT users"
                 
                 if [ $USER_COUNT -lt 200 ]; then
@@ -59,7 +60,7 @@ spec:
                 fi
                 
                 # Validate that each line looks like a valid username (no spaces, reasonable length)
-                if grep -q " " /tmp/cern-auth.txt || grep -q "^$" /tmp/cern-auth.txt; then
+                if grep -q " " $TMP_FILE || grep -q "^$" $TMP_FILE; then
                   echo "ERROR: Invalid data format detected in user list"
                   echo "Job will fail to prevent data loss"
                   exit 1
@@ -72,13 +73,13 @@ spec:
                   echo "Secret exists, updating it..."
                   
                   # Get existing users for comparison
-                  kubectl get secret $SECRET_NAME -o jsonpath='{.data.cern-auth.txt}' | base64 -d > /tmp/existing-users.txt
+                  kubectl get secret $SECRET_NAME -o jsonpath='{.data.userlist}' | base64 -d > /tmp/existing-users.txt
                   
                   # Show differences
                   echo "=== User List Changes ==="
                   
                   # Find added users (in new list but not in old list)
-                  comm -13 <(sort /tmp/existing-users.txt) <(sort /tmp/cern-auth.txt) > /tmp/added-users.txt
+                  comm -13 <(sort /tmp/existing-users.txt) <(sort $TMP_FILE) > /tmp/added-users.txt
                   if [ -s /tmp/added-users.txt ]; then
                     echo "Added users:"
                     cat /tmp/added-users.txt
@@ -87,7 +88,7 @@ spec:
                   fi
                   
                   # Find removed users (in old list but not in new list)
-                  comm -23 <(sort /tmp/existing-users.txt) <(sort /tmp/cern-auth.txt) > /tmp/removed-users.txt
+                  comm -23 <(sort /tmp/existing-users.txt) <(sort $TMP_FILE) > /tmp/removed-users.txt
                   if [ -s /tmp/removed-users.txt ]; then
                     echo "Removed users:"
                     cat /tmp/removed-users.txt
@@ -100,7 +101,7 @@ spec:
                   # Update existing secret
                   if ! kubectl patch secret $SECRET_NAME \
                     --type='merge' \
-                    -p="{\"data\":{\"cern-auth.txt\":\"$(base64 -w0 /tmp/cern-auth.txt)\"}}"; then
+                    -p="{\"data\":{\"userlist\":\"$(base64 -w0 $TMP_FILE)\"}}"; then
                     echo "ERROR: Failed to update secret"
                     exit 1
                   fi
@@ -112,7 +113,7 @@ spec:
                   
                   # Create new secret
                   if ! kubectl create secret generic $SECRET_NAME \
-                    --from-file=cern-auth.txt=/tmp/cern-auth.txt; then
+                    --from-file=userlist=$TMP_FILE; then
                     echo "ERROR: Failed to create secret"
                     exit 1
                   fi
