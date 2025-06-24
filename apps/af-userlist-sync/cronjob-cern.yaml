@@ -30,7 +30,7 @@ spec:
               
               # Get CERN CMS users
               echo "Fetching CERN CMS users..."
-              curl --no-check-certificate \
+              curl -k \
                 --cert /etc/grid-security-ro/x509up \
                 --key /etc/grid-security-ro/x509up \
                 "https://cms-cric.cern.ch/api/accounts/user/query/?json" \

@@ -31,8 +31,8 @@ spec:
               # Get Purdue users
               echo "Fetching Purdue users..."
               ldapsearch -x host=hammer.rcac.purdue.edu | grep uid: | cut -d " " -f2 > /tmp/purdue-auth.txt
-              echo "Purdue users:"
-              cat /tmp/purdue-auth.txt
+              # echo "Purdue users:"
+              # cat /tmp/purdue-auth.txt
               
               # Validate the data before updating secret
               if [ -s /tmp/purdue-auth.txt ]; then
