@@ -4,10 +4,10 @@ singleuser:
   cmd: 
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
-    tag: "0.10.4"
+    tag: "0.10.5"
   extraLabels:
     username_unescaped: "{legacy_escape_username}"
-    docker_image_tag: "0.10.4"
+    docker_image_tag: "0.10.5"
   startTimeout: 3600
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
