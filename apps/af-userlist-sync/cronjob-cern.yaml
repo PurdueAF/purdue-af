@@ -4,7 +4,7 @@ metadata:
   name: af-userlist-sync-cern
   namespace: cms
 spec:
-  schedule: "*/5 * * * *"  # Run every 5 minutes
+  schedule: "*/10 * * * *"  # Run every 10 minutes
   suspend: false
   jobTemplate:
     spec:
@@ -44,8 +44,8 @@ spec:
                 sed -n 's/.*\/OU=Users\/CN=\([^\/]*\)\/CN=.*/\1/p' | \
                 sort | uniq > $TMP_FILE
               
-              echo "CERN users:"
-              cat $TMP_FILE
+              # echo "CERN users:"
+              # cat $TMP_FILE
 
               # Validate the data before updating secret
               if [ -s $TMP_FILE ]; then
