@@ -61,7 +61,9 @@ spec:
                 
                 echo "Secret $SECRET_NAME updated successfully"
               else
-                echo "Purdue users list is empty, skipping secret update to preserve existing data"
+                echo "ERROR: Purdue users list is empty - this indicates a problem with LDAP connection or data retrieval"
+                echo "Job will fail to prevent data loss"
+                exit 1
               fi
               
               # Get CERN CMS users
