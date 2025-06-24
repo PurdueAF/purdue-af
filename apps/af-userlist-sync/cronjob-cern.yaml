@@ -21,7 +21,7 @@ spec:
             - |
               SECRET_NAME=cern-auth-test
 
-              dnf install -y wget xmllint --nogpgcheck
+              dnf install -y curl wget libxml2 jq --nogpgcheck
               
               # Install kubectl directly from binary
               curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -30,19 +30,17 @@ spec:
               
               # Get CERN CMS users
               echo "Fetching CERN CMS users..."
-              wget --no-check-certificate \
-                --certificate=/etc/grid-security-ro/x509up \
-                --private-key=/etc/grid-security-ro/x509up \
-                https://cms-cric.cern.ch/api/accounts/user/query/?json \
-                -O /tmp/grid-mapfile.xml
-              sleep 60
-              xmllint --format /tmp/grid-mapfile.xml | \
-                grep 'getGridmapUsersReturn xsi:type' | \
-                cut -d '>' -f2 | \
-                cut -d '<' -f1 | \
-                grep "OU=Users" | \
-                cut -d "=" -f6 | \
-                cut -d "/" -f1 > /tmp/cern-auth.txt
+              curl --no-check-certificate \
+                --cert /etc/grid-security-ro/x509up \
+                --key /etc/grid-security-ro/x509up \
+                "https://cms-cric.cern.ch/api/accounts/user/query/?json" \
+                -o /tmp/cern-users.json
+              
+              # Parse JSON to extract usernames
+              # The JSON structure should contain user information
+              # We'll extract usernames from the JSON response
+              cat /tmp/cern-users.json | jq -r '.result[] | .login' > /tmp/cern-auth.txt
+              
               echo "CERN users:"
               cat /tmp/cern-auth.txt
 
@@ -73,7 +71,7 @@ spec:
                   # Update existing secret
                   if ! kubectl patch secret $SECRET_NAME \
                     --type='merge' \
-                    -p="{\"data\":{\"cern-auth.txt\":\"$(base64 -w0 /tmp/cern-auth.txt)\"}}"; then
+                    -p="{\"data\":{\"cern-users\":\"$(base64 -w0 /tmp/cern-auth.txt)\"}}"; then
                     echo "ERROR: Failed to update secret"
                     exit 1
                   fi
@@ -81,7 +79,7 @@ spec:
                   echo "Secret does not exist, creating it..."
                   # Create new secret
                   if ! kubectl create secret generic $SECRET_NAME \
-                    --from-file=cern-auth.txt=/tmp/cern-auth.txt; then
+                    --from-file=cern-users=/tmp/cern-auth.txt; then
                     echo "ERROR: Failed to create secret"
                     exit 1
                   fi
