@@ -10,7 +10,7 @@ spec:
     spec:
       template:
         spec:
-          serviceAccountName: af-userlist-sync-purdue
+          serviceAccountName: af-userlist-sync
           restartPolicy: Never
           containers:
           - name: af-userlist-sync-purdue
