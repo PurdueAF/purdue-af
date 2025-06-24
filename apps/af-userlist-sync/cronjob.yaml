@@ -10,6 +10,7 @@ spec:
     spec:
       template:
         spec:
+          serviceAccountName: hub
           restartPolicy: Never
           containers:
           - name: af-userlist-sync
@@ -18,13 +19,38 @@ spec:
             - /bin/bash
             - -c
             - |
-              dnf install -y openldap-clients --nogpgcheck
+              SECRET_NAME=purdue-auth-test
+
+              dnf install -y openldap-clients kubectl --nogpgcheck
               
               # Get Purdue users
               echo "Fetching Purdue users..."
               ldapsearch -x host=hammer.rcac.purdue.edu | grep uid: | cut -d " " -f2 > /tmp/purdue-auth.txt
               echo "Purdue users:"
               cat /tmp/purdue-auth.txt
+              
+              # Check if the list is not empty before updating secret
+              if [ -s /tmp/purdue-auth.txt ]; then
+                echo "Purdue users list is not empty, updating purdue-auth-test secret..."
+                
+                # Check if secret already exists
+                if kubectl get secret $SECRET_NAME >/dev/null 2>&1; then
+                  echo "Secret exists, updating it..."
+                  # Update existing secret
+                  kubectl patch secret $SECRET_NAME \
+                    --type='merge' \
+                    -p="{\"data\":{\"purdue-users\":\"$(base64 -w0 /tmp/purdue-auth.txt)\"}}"
+                else
+                  echo "Secret does not exist, creating it..."
+                  # Create new secret
+                  kubectl create secret generic $SECRET_NAME \
+                    --from-file=purdue-users=/tmp/purdue-auth.txt
+                fi
+                
+                echo "Secret $SECRET_NAME updated successfully"
+              else
+                echo "Purdue users list is empty, skipping secret update to preserve existing data"
+              fi
               
               # Get CERN CMS users
               # echo "Fetching CERN CMS users..."
