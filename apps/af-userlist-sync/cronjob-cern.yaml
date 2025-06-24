@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: af-userlist-sync
+  name: af-userlist-sync-cern
   namespace: cms
 spec:
   schedule: "*/5 * * * *"  # Run every 5 minutes
@@ -10,10 +10,10 @@ spec:
     spec:
       template:
         spec:
-          serviceAccountName: af-userlist-sync
+          serviceAccountName: af-userlist-sync-cern
           restartPolicy: Never
           containers:
-          - name: af-userlist-sync
+          - name: af-userlist-sync-cern
             image: rockylinux:8.9
             command:
             - /bin/bash
