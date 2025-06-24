@@ -23,27 +23,26 @@ spec:
               # Get Purdue users
               echo "Fetching Purdue users..."
               ldapsearch -x host=hammer.rcac.purdue.edu | grep uid: | cut -d " " -f2 > /tmp/purdue-auth.txt
-              sleep 3600
               echo "Purdue users:"
               cat /tmp/purdue-auth.txt
               
               # Get CERN CMS users
-              echo "Fetching CERN CMS users..."
-              wget --no-check-certificate \
-                --certificate=/etc/grid-security-ro/x509up \
-                --private-key=/etc/grid-security-ro/x509up \
-                https://voms2.cern.ch:8443/voms/cms/services/VOMSCompatibility?method=getGridmapUsers \
-                -O /tmp/grid-mapfile.xml
-              sleep 60
-              xmllint --format /tmp/grid-mapfile.xml | \
-                grep 'getGridmapUsersReturn xsi:type' | \
-                cut -d '>' -f2 | \
-                cut -d '<' -f1 | \
-                grep "OU=Users" | \
-                cut -d "=" -f6 | \
-                cut -d "/" -f1 > /tmp/cern-auth.txt
-              echo "CERN users:"
-              cat /tmp/cern-auth.txt
+              # echo "Fetching CERN CMS users..."
+              # wget --no-check-certificate \
+              #   --certificate=/etc/grid-security-ro/x509up \
+              #   --private-key=/etc/grid-security-ro/x509up \
+              #   https://voms2.cern.ch:8443/voms/cms/services/VOMSCompatibility?method=getGridmapUsers \
+              #   -O /tmp/grid-mapfile.xml
+              # sleep 60
+              # xmllint --format /tmp/grid-mapfile.xml | \
+              #   grep 'getGridmapUsersReturn xsi:type' | \
+              #   cut -d '>' -f2 | \
+              #   cut -d '<' -f1 | \
+              #   grep "OU=Users" | \
+              #   cut -d "=" -f6 | \
+              #   cut -d "/" -f1 > /tmp/cern-auth.txt
+              # echo "CERN users:"
+              # cat /tmp/cern-auth.txt
             resources:
               requests:
                 memory: "128Mi"
