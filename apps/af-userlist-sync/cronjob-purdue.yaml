@@ -19,7 +19,7 @@ spec:
             - /bin/bash
             - -c
             - |
-              SECRET_NAME=purdue-af-auth-purdue
+              SECRET_NAME=af-auth-purdue
               TMP_FILE=/tmp/purdue-users.txt
 
               dnf install -y openldap-clients curl --nogpgcheck

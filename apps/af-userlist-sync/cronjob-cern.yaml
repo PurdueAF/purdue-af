@@ -19,7 +19,7 @@ spec:
             - /bin/bash
             - -c
             - |
-              SECRET_NAME=purdue-af-auth-cern
+              SECRET_NAME=af-auth-cern
               TMP_FILE=/tmp/cern-auth.txt
 
               dnf install -y curl wget libxml2 jq --nogpgcheck
