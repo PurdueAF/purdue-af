@@ -19,41 +19,53 @@ spec:
             - /bin/bash
             - -c
             - |
-              SECRET_NAME=purdue-auth
+              SECRET_NAME=cern-auth-test
 
-              dnf install -y openldap-clients curl --nogpgcheck
+              dnf install -y wget xmllint --nogpgcheck
               
               # Install kubectl directly from binary
               curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
               chmod +x kubectl
               mv kubectl /usr/local/bin/
               
-              # Get Purdue users
-              echo "Fetching Purdue users..."
-              ldapsearch -x host=hammer.rcac.purdue.edu | grep uid: | cut -d " " -f2 > /tmp/purdue-auth.txt
-              echo "Purdue users:"
-              cat /tmp/purdue-auth.txt
-              
+              # Get CERN CMS users
+              echo "Fetching CERN CMS users..."
+              wget --no-check-certificate \
+                --certificate=/etc/grid-security-ro/x509up \
+                --private-key=/etc/grid-security-ro/x509up \
+                https://cms-cric.cern.ch/api/accounts/user/query/?json \
+                -O /tmp/grid-mapfile.xml
+              sleep 60
+              xmllint --format /tmp/grid-mapfile.xml | \
+                grep 'getGridmapUsersReturn xsi:type' | \
+                cut -d '>' -f2 | \
+                cut -d '<' -f1 | \
+                grep "OU=Users" | \
+                cut -d "=" -f6 | \
+                cut -d "/" -f1 > /tmp/cern-auth.txt
+              echo "CERN users:"
+              cat /tmp/cern-auth.txt
+
               # Validate the data before updating secret
-              if [ -s /tmp/purdue-auth.txt ]; then
-                USER_COUNT=$(wc -l < /tmp/purdue-auth.txt)
+              if [ -s /tmp/cern-auth.txt ]; then
+                USER_COUNT=$(wc -l < /tmp/cern-auth.txt)
                 echo "Found $USER_COUNT users"
                 
                 if [ $USER_COUNT -lt 200 ]; then
-                  echo "ERROR: Only $USER_COUNT users found - this seems too low for Purdue LDAP"
+                  echo "ERROR: Only $USER_COUNT users found - this seems too low for CERN LDAP"
                   echo "This might indicate a problem with the LDAP query or server"
                   echo "Job will fail to prevent data loss"
                   exit 1
                 fi
                 
                 # Validate that each line looks like a valid username (no spaces, reasonable length)
-                if grep -q " " /tmp/purdue-auth.txt || grep -q "^$" /tmp/purdue-auth.txt; then
+                if grep -q " " /tmp/cern-auth.txt || grep -q "^$" /tmp/cern-auth.txt; then
                   echo "ERROR: Invalid data format detected in user list"
                   echo "Job will fail to prevent data loss"
                   exit 1
                 fi
                 
-                echo "Purdue users list validation passed, updating $SECRET_NAME secret..."
+                echo "CERN users list validation passed, updating $SECRET_NAME secret..."
                 
                 # Check if secret already exists
                 if kubectl get secret $SECRET_NAME >/dev/null 2>&1; then
@@ -61,7 +73,7 @@ spec:
                   # Update existing secret
                   if ! kubectl patch secret $SECRET_NAME \
                     --type='merge' \
-                    -p="{\"data\":{\"purdue-auth.txt\":\"$(base64 -w0 /tmp/purdue-auth.txt)\"}}"; then
+                    -p="{\"data\":{\"cern-auth.txt\":\"$(base64 -w0 /tmp/cern-auth.txt)\"}}"; then
                     echo "ERROR: Failed to update secret"
                     exit 1
                   fi
@@ -69,7 +81,7 @@ spec:
                   echo "Secret does not exist, creating it..."
                   # Create new secret
                   if ! kubectl create secret generic $SECRET_NAME \
-                    --from-file=purdue-auth.txt=/tmp/purdue-auth.txt; then
+                    --from-file=cern-auth.txt=/tmp/cern-auth.txt; then
                     echo "ERROR: Failed to create secret"
                     exit 1
                   fi
@@ -77,7 +89,7 @@ spec:
                 
                 echo "Secret $SECRET_NAME updated successfully"
               else
-                echo "ERROR: Purdue users list is empty - this indicates a problem with LDAP connection or data retrieval"
+                echo "ERROR: CERN users list is empty - this indicates a problem with LDAP connection or data retrieval"
                 echo "Job will fail to prevent data loss"
                 exit 1
               fi
@@ -90,11 +102,10 @@ spec:
                 memory: "512Mi"
                 cpu: "500m"
             volumeMounts:
-            - name: ldap-conf
-              mountPath: /etc/openldap/ldap.conf
-              subPath: ldap.conf
-
+            - name: x509-proxy
+              mountPath: /etc/grid-security-ro
+              readOnly: true
           volumes:
-          - name: ldap-conf
-            configMap:
-              name: ldap-conf
+          - name: x509-proxy
+            secret:
+              secretName: x509-proxy

@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
 - cronjob-purdue.yaml
+- cronjob-cern.yaml
 - configmap.yaml
 - rbac.yaml
 
