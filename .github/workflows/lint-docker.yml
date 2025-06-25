@@ -1,0 +1,22 @@
+name: Lint Dockerfiles
+
+on:
+  push:
+    paths:
+      - '**/Dockerfile*'
+  pull_request:
+    paths:
+      - '**/Dockerfile*'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install hadolint
+        run: |
+          sudo wget -O /bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-$(uname -s)-$(uname -m)
+          sudo chmod +x /bin/hadolint
+      - name: Run hadolint
+        run: |
+          find . -type f -iname 'Dockerfile*' -exec hadolint {} + 
