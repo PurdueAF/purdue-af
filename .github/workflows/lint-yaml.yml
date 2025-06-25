@@ -21,16 +21,9 @@ jobs:
           node-version: '20'
       - name: Install prettier
         run: npm install -g prettier
-      - name: Install yamllint
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y yamllint
       - name: Format YAML files
         run: |
           find . -name "*.yml" -o -name "*.yaml" | grep -v "docker/dask-gateway-server" | xargs prettier --write
-      - name: Check YAML files
-        run: |
-          find . -name "*.yml" -o -name "*.yaml" | grep -v "docker/dask-gateway-server" | xargs yamllint
       - name: Commit changes
         run: |
           git config --local user.email "action@github.com"
