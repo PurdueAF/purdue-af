@@ -7,4 +7,4 @@ spec:
   type: github
   address: https://github.com/PurdueAF/purdue-af
   secretRef:
-    name: flux-purdue-af-auth 
+    name: flux-github-token 
