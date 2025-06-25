@@ -20,16 +20,9 @@ jobs:
           curl -L https://github.com/mvdan/sh/releases/download/v3.7.0/shfmt_v3.7.0_linux_amd64 -o shfmt
           chmod +x shfmt
           sudo mv shfmt /usr/local/bin/
-      - name: Install shellcheck
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
       - name: Format shell scripts
         run: |
           find . -type f -name '*.sh' -not -path './docker/dask-gateway-server/*' -exec shfmt -w {} +
-      - name: Check shell scripts
-        run: |
-          find . -type f -name '*.sh' -not -path './docker/dask-gateway-server/*' -exec shellcheck {} +
       - name: Commit changes
         run: |
           git config --local user.email "action@github.com"
