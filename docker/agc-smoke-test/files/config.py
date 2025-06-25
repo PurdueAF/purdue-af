@@ -11,7 +11,6 @@ config = {
         "BIN_LOW": 50,
         # upper end of standard histograms in processor
         "BIN_HIGH": 550,
-
     },
     "benchmarking": {
         # chunk size to use
@@ -196,7 +195,5 @@ config = {
             "Quark vs Gluon likelihood discriminator of the $b_{top-lep}$ Jet",
         ],
     },
-    "preservation": {
-        "HEPData": False
-    }
+    "preservation": {"HEPData": False},
 }

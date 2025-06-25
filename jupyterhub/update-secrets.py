@@ -1,10 +1,11 @@
 import argparse
-import yaml
 import subprocess
+
+import yaml
 
 
 def load_secrets_from_file(file_path):
-    with open(file_path, 'r') as file:
+    with open(file_path, "r") as file:
         secrets = yaml.safe_load(file)
     return secrets
 
@@ -26,13 +27,17 @@ stringData:
             secret_yaml += f"  {key}: {value}\n"
         output_yaml += secret_yaml
 
-
     return output_yaml
 
 
 def apply_secrets(secrets_yaml, namespace):
     try:
-        subprocess.run(["kubectl", "apply", "-n", namespace, "-f", "-"], input=secrets_yaml, text=True, check=True)
+        subprocess.run(
+            ["kubectl", "apply", "-n", namespace, "-f", "-"],
+            input=secrets_yaml,
+            text=True,
+            check=True,
+        )
         print("Secrets applied successfully.")
     except subprocess.CalledProcessError as e:
         print(f"Error applying secrets: {e}")
@@ -40,14 +45,19 @@ def apply_secrets(secrets_yaml, namespace):
 
 def main():
     parser = argparse.ArgumentParser(description="Generate and apply secrets YAML.")
-    parser.add_argument("-n", "--namespace", default="cms", choices=["cms", "cms-dev"],
-                        help="Namespace for the secrets (default: cms)")
+    parser.add_argument(
+        "-n",
+        "--namespace",
+        default="cms",
+        choices=["cms", "cms-dev"],
+        help="Namespace for the secrets (default: cms)",
+    )
 
     args = parser.parse_args()
 
-    if args.namespace=="cms":
+    if args.namespace == "cms":
         secrets = load_secrets_from_file("secrets.yaml")
-    elif args.namespace=="cms-dev":
+    elif args.namespace == "cms-dev":
         secrets = load_secrets_from_file("secrets-dev.yaml")
     else:
         print(f"Invalid namespace: {args.namespace}")

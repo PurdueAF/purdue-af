@@ -1,6 +1,7 @@
 import os
+
 import dask
-from dask_jobqueue.slurm import SLURMJob, SLURMCluster
+from dask_jobqueue.slurm import SLURMCluster, SLURMJob
 
 # Port settings
 DEFAULT_SCHEDULER_PORT = 8786
@@ -8,14 +9,17 @@ DEFAULT_DASHBOARD_PORT = 8787
 USER = os.environ["USER"]
 NAMESPACE = os.environ["NAMESPACE"]
 
+
 class PurdueSLURMJob(SLURMJob):
     config_name = "purdue-slurm"
+
 
 class PurdueSLURMCluster(SLURMCluster):
     """
     This is a  subclass expanding settings for launch Dask via SLURMCluster
     in Purdue Analysis Facility.
     """
+
     job_cls = PurdueSLURMJob
     config_name = "purdue-slurm"
     kernel_name = ""
@@ -26,13 +30,11 @@ class PurdueSLURMCluster(SLURMCluster):
         *,
         scheduler_port=DEFAULT_SCHEDULER_PORT,
         dashboard_port=DEFAULT_DASHBOARD_PORT,
-        **job_kwargs
+        **job_kwargs,
     ):
 
         job_kwargs = self._modify_job_kwargs(
-            job_kwargs,
-            scheduler_port=scheduler_port,
-            dashboard_port=dashboard_port
+            job_kwargs, scheduler_port=scheduler_port, dashboard_port=dashboard_port
         )
         self.kernel_name = job_kwargs.pop("kernel_name", "")
         self.kernel_display_name = job_kwargs.pop("kernel_display_name", "")
@@ -45,16 +47,18 @@ class PurdueSLURMCluster(SLURMCluster):
         job_kwargs,
         *,
         scheduler_port=DEFAULT_SCHEDULER_PORT,
-        dashboard_port=DEFAULT_DASHBOARD_PORT
+        dashboard_port=DEFAULT_DASHBOARD_PORT,
     ):
 
         job_config = job_kwargs.copy()
 
-        contact_address = f"proxy-{USER}.{NAMESPACE}.geddes.rcac.purdue.edu:{scheduler_port}"
+        contact_address = (
+            f"proxy-{USER}.{NAMESPACE}.geddes.rcac.purdue.edu:{scheduler_port}"
+        )
         job_config["scheduler_options"] = {
             "port": scheduler_port,
             "dashboard_address": f":{dashboard_port}",
-            "contact_address": contact_address
+            "contact_address": contact_address,
         }
 
         return job_config
