@@ -34,10 +34,11 @@ spec:
                   else
                     TIMESTAMP="noon"
                   fi
-
+                  
+                  YEAR=$(date +%Y)
                   MONTH=$(date +%b | tr '[:upper:]' '[:lower:]')
                   DAY=$(date +%d)
-                  BACKUP_FILENAME="jupyterhub-${MONTH}${DAY}-${TIMESTAMP}.sqlite"
+                  BACKUP_FILENAME="jupyterhub-${YEAR}${MONTH}${DAY}-${TIMESTAMP}.sqlite"
                   BACKUP_PATH="/depot/cms/purdue-af/backups/${BACKUP_FILENAME}"
 
                   echo "Starting database backup at $(date)"
