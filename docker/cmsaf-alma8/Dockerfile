@@ -192,8 +192,6 @@ RUN pip install --no-cache-dir --upgrade \
     jupyterlab-topbar-text==1.1.0 \
     jupyterlab-theme-toggler==1.1.0 \
     dask-gateway==2025.4.0
-    # "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-topbar-text&subdirectory=packages/topbar-text-extension" \
-    # "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-theme-toggler&subdirectory=packages/theme-toggler-extension"
 
 # Install Dask labextension
 RUN git clone https://github.com/kondratyevd/dask-labextension.git
