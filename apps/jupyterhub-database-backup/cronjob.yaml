@@ -60,7 +60,7 @@ spec:
                   # Copy the database file from the pod
                   echo "Copying database from pod..."
                   kubectl cp cms/${HUB_POD}:/srv/jupyterhub/jupyterhub.sqlite ${BACKUP_PATH}
-                  
+
                   if [ $? -eq 0 ]; then
                     # Check if the backup file exists and has content
                     if [ -f "${BACKUP_PATH}" ] && [ -s "${BACKUP_PATH}" ]; then
