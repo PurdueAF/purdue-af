@@ -10,7 +10,9 @@ spec:
     spec:
       template:
         spec:
-          serviceAccountName: hub
+          serviceAccountName: database-backup
+          securityContext:
+            runAsUser: 616617
           nodeSelector: { "cms-af-prod": "true" }
           tolerations:
             - key: "hub.jupyter.org/dedicated"
@@ -20,6 +22,8 @@ spec:
           containers:
             - name: database-backup
               image: bitnami/kubectl:latest
+              securityContext:
+                runAsUser: 616617
               command:
                 - /bin/bash
                 - -c
