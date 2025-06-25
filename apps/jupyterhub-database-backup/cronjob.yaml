@@ -60,18 +60,25 @@ spec:
                   # Copy the database file from the pod
                   echo "Copying database from pod..."
                   kubectl cp cms/${HUB_POD}:/srv/jupyterhub/jupyterhub.sqlite ${BACKUP_PATH}
-
+                  
                   if [ $? -eq 0 ]; then
-                    echo "Database backup completed successfully: ${BACKUP_PATH}"
-                    
-                    # Keep only the last 5 backups
-                    echo "Cleaning up old backups (keeping last 5)..."
-                    cd /depot/cms/purdue-af/backups
-                    ls -t jupyterhub-*.sqlite | tail -n +6 | xargs -r rm -f
-                    
-                    echo "Backup cleanup completed"
-                    echo "Current backups:"
-                    ls -la jupyterhub-*.sqlite 2>/dev/null || echo "No backups found"
+                    # Check if the backup file exists and has content
+                    if [ -f "${BACKUP_PATH}" ] && [ -s "${BACKUP_PATH}" ]; then
+                      echo "Database backup completed successfully: ${BACKUP_PATH}"
+                      
+                      # Keep only the last 5 backups
+                      echo "Cleaning up old backups (keeping last 5)..."
+                      cd /depot/cms/purdue-af/backups
+                      ls -t jupyterhub-*.sqlite | tail -n +6 | xargs -r rm -f
+                      
+                      echo "Backup cleanup completed"
+                      echo "Current backups:"
+                      ls -la jupyterhub-*.sqlite 2>/dev/null || echo "No backups found"
+                    else
+                      echo "WARNING: Database file is empty or does not exist, removing backup file"
+                      rm -f "${BACKUP_PATH}"
+                      exit 0
+                    fi
                   else
                     echo "ERROR: Failed to copy database from pod"
                     exit 1
