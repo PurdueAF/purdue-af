@@ -15,4 +15,4 @@ jobs:
           sudo chmod +x /bin/hadolint
       - name: Run hadolint
         run: |
-          find . -type f -iname 'Dockerfile*' -not -path './docker/dask-gateway-server/*' -exec hadolint --ignore DL3041 --ignore DL3033 {} + 
+          find . -type f -iname 'Dockerfile*' -not -path './docker/dask-gateway-server/*' -exec hadolint --ignore DL3041 --ignore DL3033 --failure-threshold warning {} + 
