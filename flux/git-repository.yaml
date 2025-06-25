@@ -10,4 +10,4 @@ spec:
   ref:
     branch: master
   secretRef:
-    name: flux-kondratyevd-auth
+    name: flux-github-token
