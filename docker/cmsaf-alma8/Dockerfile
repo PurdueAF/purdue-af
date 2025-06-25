@@ -190,16 +190,19 @@ RUN pip install --no-cache-dir --upgrade \
     jupyterlab_favorites==3.2.2 \
     purdue-af-shutdown-button==0.1.0 \
     purdue-af-grafana-iframe==0.1.0 \
-    "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-topbar-text&subdirectory=packages/topbar-text-extension" \
-    "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-theme-toggler&subdirectory=packages/theme-toggler-extension"
+    jupyterlab-topbar-text==1.1.0 \
+    jupyterlab-theme-toggler==1.1.0
+    # "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-topbar-text&subdirectory=packages/topbar-text-extension" \
+    # "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-theme-toggler&subdirectory=packages/theme-toggler-extension"
 
 # Install Dask packages
 RUN pip install --no-cache-dir  dask-gateway==2025.4.0
-RUN git clone https://github.com/kondratyevd/dask-labextension.git   && \
-    cd dask-labextension && \
-    pip install --no-cache-dir . && \
-    cd .. && \
-    rm -rf dask-labextension
+RUN git clone https://github.com/kondratyevd/dask-labextension.git
+
+WORKDIR dask-labextension
+RUN pip install --no-cache-dir .
+WORKDIR ..
+RUN rm -rf dask-labextension
 
 # Configure JupyterLab extensions
 RUN jupyter labextension disable "@jupyterlab/apputils-extension:announcements"
