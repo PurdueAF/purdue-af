@@ -183,18 +183,18 @@ ENV X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
 
 # Install JupyterLab extensions
 RUN pip install --no-cache-dir --upgrade \
-    jupyterlab-git \
-    jupyter-resource-usage \
-    jupyterlab_iframe \
-    jupyter-archive \
-    jupyterlab_favorites \
-    purdue-af-shutdown-button \
-    purdue-af-grafana-iframe \
+    jupyterlab-git==0.51.2 \
+    jupyter-resource-usage==1.1.1 \
+    jupyterlab_iframe==0.5.0 \
+    jupyter-archive==3.4.0 \
+    jupyterlab_favorites==3.2.2 \
+    purdue-af-shutdown-button==0.1.0 \
+    purdue-af-grafana-iframe==0.1.0 \
     "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-topbar-text&subdirectory=packages/topbar-text-extension" \
     "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-theme-toggler&subdirectory=packages/theme-toggler-extension"
 
 # Install Dask packages
-RUN pip install --no-cache-dir  dask-gateway
+RUN pip install --no-cache-dir  dask-gateway==2025.4.0
 RUN git clone https://github.com/kondratyevd/dask-labextension.git   && \
     cd dask-labextension && \
     pip install --no-cache-dir . && \
