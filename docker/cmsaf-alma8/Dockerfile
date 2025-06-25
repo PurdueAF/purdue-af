@@ -1,8 +1,7 @@
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
 ARG OWNER=jupyter
-ARG ROOT_CONTAINER=gitlab-registry.cern.ch/linuxsupport/alma8-base:20250501-1
-FROM $ROOT_CONTAINER
+FROM gitlab-registry.cern.ch/linuxsupport/alma8-base:20250501-1
 
 LABEL maintainer="Dmitry Kondratyev <dkondra@purdue.edu>"
 ARG NB_USER="jovyan"
