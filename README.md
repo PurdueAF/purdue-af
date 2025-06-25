@@ -1,4 +1,9 @@
 [![Documentation Status](https://readthedocs.org/projects/purdue-af/badge/?version=latest)](https://purdue-af.readthedocs.io/en/latest/?badge=latest)
+[![Lint Python](https://github.com/PurdueAF/purdue-af/workflows/Lint%20Python/badge.svg)](https://github.com/PurdueAF/purdue-af/actions?query=workflow%3A%22Lint+Python%22)
+[![Lint YAML](https://github.com/PurdueAF/purdue-af/workflows/Lint%20YAML/badge.svg)](https://github.com/PurdueAF/purdue-af/actions?query=workflow%3A%22Lint+YAML%22)
+[![Lint JSON](https://github.com/PurdueAF/purdue-af/workflows/Lint%20JSON/badge.svg)](https://github.com/PurdueAF/purdue-af/actions?query=workflow%3A%22Lint+JSON%22)
+[![Lint Shell](https://github.com/PurdueAF/purdue-af/workflows/Lint%20Shell%20Scripts/badge.svg)](https://github.com/PurdueAF/purdue-af/actions?query=workflow%3A%22Lint+Shell+Scripts%22)
+[![Lint Docker](https://github.com/PurdueAF/purdue-af/workflows/Lint%20Dockerfiles/badge.svg)](https://github.com/PurdueAF/purdue-af/actions?query=workflow%3A%22Lint+Dockerfiles%22)
 
 # Purdue Analysis Facility
 
