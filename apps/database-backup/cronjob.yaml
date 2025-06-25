@@ -4,7 +4,7 @@ metadata:
   name: jupyterhub-database-backup
   namespace: cms
 spec:
-  schedule: "*/5 * * * *"  # Run every 5 minutes for testing
+  schedule: "*/5 * * * *" # Run every 5 minutes for testing
   suspend: false
   jobTemplate:
     spec:
@@ -29,32 +29,32 @@ spec:
                   else
                     TIMESTAMP="noon"
                   fi
-                  
+
                   MONTH=$(date +%b | tr '[:upper:]' '[:lower:]')
                   DAY=$(date +%d)
                   BACKUP_FILENAME="jupyterhub-${MONTH}${DAY}-${TIMESTAMP}.sqlite"
                   BACKUP_PATH="/depot/cms/purdue-af/backups/${BACKUP_FILENAME}"
-                  
+
                   echo "Starting database backup at $(date)"
                   echo "Backup filename: ${BACKUP_FILENAME}"
-                  
+
                   # Find the JupyterHub hub pod
                   HUB_POD=$(kubectl get pods -n cms -l app=jupyterhub,component=hub -o jsonpath='{.items[0].metadata.name}')
-                  
+
                   if [ -z "$HUB_POD" ]; then
                     echo "ERROR: Could not find JupyterHub hub pod"
                     exit 1
                   fi
-                  
+
                   echo "Found hub pod: ${HUB_POD}"
-                  
+
                   # Create backup directory if it doesn't exist
                   mkdir -p /depot/cms/purdue-af/backups
-                  
+
                   # Copy the database file from the pod
                   echo "Copying database from pod..."
                   kubectl cp cms/${HUB_POD}:/srv/jupyterhub/jupyterhub.sqlite ${BACKUP_PATH}
-                  
+
                   if [ $? -eq 0 ]; then
                     echo "Database backup completed successfully: ${BACKUP_PATH}"
                     
@@ -70,7 +70,7 @@ spec:
                     echo "ERROR: Failed to copy database from pod"
                     exit 1
                   fi
-                  
+
                   echo "Database backup job completed at $(date)"
               resources:
                 requests:
@@ -88,4 +88,4 @@ spec:
             - name: depot
               nfs:
                 server: datadepot.rcac.purdue.edu
-                path: /depot/cms 
+                path: /depot/cms

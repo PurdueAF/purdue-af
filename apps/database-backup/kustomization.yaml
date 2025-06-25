@@ -4,4 +4,4 @@ metadata:
   name: database-backup
   namespace: cms
 resources:
-  - cronjob.yaml 
+  - cronjob.yaml
