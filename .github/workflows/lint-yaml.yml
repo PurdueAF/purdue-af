@@ -2,7 +2,13 @@ name: Lint YAML
 
 on:
   push:
+    paths:
+      - '**.yml'
+      - '**.yaml'
   pull_request:
+    paths:
+      - '**.yml'
+      - '**.yaml'
 
 permissions:
   contents: write

@@ -2,7 +2,11 @@ name: Lint Shell Scripts
 
 on:
   push:
+    paths:
+      - '**.sh'
   pull_request:
+    paths:
+      - '**.sh'
 
 permissions:
   contents: write

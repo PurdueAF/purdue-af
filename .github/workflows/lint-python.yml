@@ -2,7 +2,11 @@ name: Lint Python
 
 on:
   push:
+    paths:
+      - '**.py'
   pull_request:
+    paths:
+      - '**.py'
 
 permissions:
   contents: write

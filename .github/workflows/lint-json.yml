@@ -2,7 +2,11 @@ name: Lint JSON
 
 on:
   push:
+    paths:
+      - '**.json'
   pull_request:
+    paths:
+      - '**.json'
 
 permissions:
   contents: write
