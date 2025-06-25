@@ -4,7 +4,7 @@ metadata:
   name: jupyterhub-database-backup
   namespace: cms
 spec:
-  schedule: "0 0,12 * * *"  # Run at midnight and noon every day
+  schedule: "0 0,12 * * *" # Run at midnight and noon every day
   suspend: false
   jobTemplate:
     spec:
