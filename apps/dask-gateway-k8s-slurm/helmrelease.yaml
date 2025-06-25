@@ -15,9 +15,9 @@ spec:
         namespace: cms
       interval: 1m
   valuesFrom:
-  - kind: ConfigMap
-    name: dask-gateway-k8s-slurm-config
-    valuesKey: values.yaml
+    - kind: ConfigMap
+      name: dask-gateway-k8s-slurm-config
+      valuesKey: values.yaml
   postRenderers:
     - kustomize:
         patches:

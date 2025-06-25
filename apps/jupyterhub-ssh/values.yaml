@@ -50,7 +50,7 @@ ssh:
 
   resources: {}
   imagePullSecrets: []
-  nodeSelector: {'cms-af-prod': 'true'}
+  nodeSelector: { "cms-af-prod": "true" }
   tolerations:
     - key: "hub.jupyter.org/dedicated"
       operator: "Equal"
@@ -85,7 +85,7 @@ sftp:
 
   resources: {}
   imagePullSecrets: []
-  nodeSelector: {'cms-af-prod': 'true'}
+  nodeSelector: { "cms-af-prod": "true" }
   tolerations:
     - key: "hub.jupyter.org/dedicated"
       operator: "Equal"

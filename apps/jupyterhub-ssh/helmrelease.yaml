@@ -15,9 +15,9 @@ spec:
         namespace: cms
       interval: 1m
   valuesFrom:
-  - kind: ConfigMap
-    name: jupyterhub-ssh-config
-    valuesKey: values.yaml
+    - kind: ConfigMap
+      name: jupyterhub-ssh-config
+      valuesKey: values.yaml
   postRenderers:
     - kustomize:
         patches:
@@ -62,4 +62,3 @@ spec:
                       - name: depot
                         mountPath: /depot/cms
                         mountPropagation: HostToContainer
-

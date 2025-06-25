@@ -13,34 +13,34 @@ spec:
       labels:
         app: af-monitor
     spec:
-      nodeSelector: {'cms-af-prod': 'true'}
+      nodeSelector: { "cms-af-prod": "true" }
       tolerations:
-      - key: "hub.jupyter.org/dedicated"
-        operator: "Equal"
-        value: "cms-af"
-        effect: "NoSchedule"
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
       containers:
-      - name: af-monitor
-        image: python:3.11-slim
-        command: ["/bin/bash", "-c"]
-        args:
-        - |
-          pip install prometheus_client
-          python /scripts/metrics_server.py
-        ports:
-        - containerPort: 8000
-        volumeMounts:
+        - name: af-monitor
+          image: python:3.11-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              pip install prometheus_client
+              python /scripts/metrics_server.py
+          ports:
+            - containerPort: 8000
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              configMap:
+                name: af-monitor-config
+            - name: work
+              mountPath: /work/
+              mountPropagation: HostToContainer
+      volumes:
         - name: scripts
-          mountPath: /scripts
           configMap:
             name: af-monitor-config
         - name: work
-          mountPath: /work/
-          mountPropagation: HostToContainer
-      volumes:
-      - name: scripts
-        configMap:
-          name: af-monitor-config
-      - name: work
-        persistentVolumeClaim:
-          claimName: af-shared-storage
+          persistentVolumeClaim:
+            claimName: af-shared-storage

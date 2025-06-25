@@ -15,6 +15,6 @@ spec:
         namespace: cms
       interval: 1m
   valuesFrom:
-  - kind: ConfigMap
-    name: prometheus-config
-    valuesKey: values.yaml
+    - kind: ConfigMap
+      name: prometheus-config
+      valuesKey: values.yaml

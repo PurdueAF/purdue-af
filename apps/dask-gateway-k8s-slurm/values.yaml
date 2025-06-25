@@ -34,48 +34,48 @@ gateway:
       value: dask-gateway-k8s-slurm
   extraConfig:
     slurmConfig: |
-        import os
-        RELEASE_NAME = os.environ["RELEASE_NAME"]
-        NAMESPACE = os.environ["NAMESPACE"]
+      import os
+      RELEASE_NAME = os.environ["RELEASE_NAME"]
+      NAMESPACE = os.environ["NAMESPACE"]
 
-        c.DaskGateway.backend_class = "dask_gateway_server.backends.jobqueue.slurm.SlurmBackend"
-        c.DaskGateway.address = ':8786'
-        c.SlurmBackend.api_url = f'http://api-{RELEASE_NAME}.{NAMESPACE}.geddes.rcac.purdue.edu:8000/api'
-        c.SlurmBackend.cluster_start_timeout = 60*5
-        c.SlurmBackend.cluster_heartbeat_period = 60
-        c.SlurmBackend.worker_start_timeout = 60*5
-        c.ClusterConfig.idle_timeout = 3600*24
+      c.DaskGateway.backend_class = "dask_gateway_server.backends.jobqueue.slurm.SlurmBackend"
+      c.DaskGateway.address = ':8786'
+      c.SlurmBackend.api_url = f'http://api-{RELEASE_NAME}.{NAMESPACE}.geddes.rcac.purdue.edu:8000/api'
+      c.SlurmBackend.cluster_start_timeout = 60*5
+      c.SlurmBackend.cluster_heartbeat_period = 60
+      c.SlurmBackend.worker_start_timeout = 60*5
+      c.ClusterConfig.idle_timeout = 3600*24
 
-        from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
+      from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
 
-        def options_handler(options):
-            setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
+      def options_handler(options):
+          setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
 
-            options.env["PATH"]=f"{options.conda_env}/bin/:"+options.env.pop("PATH")
-            options.env["CPLUS_INCLUDE_PATH"]=f"{options.conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
+          options.env["PATH"]=f"{options.conda_env}/bin/:"+options.env.pop("PATH")
+          options.env["CPLUS_INCLUDE_PATH"]=f"{options.conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
 
-            return {
-                "worker_cores": options.worker_cores,
-                "worker_memory": int(options.worker_memory * 2 ** 30),
-                "environment": options.env,
-                "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
-                "scheduler_partition": "hammer-nodes",
-                # "scheduler_reservation": "CMSLOCAL",
-                "worker_partition": "hammer-nodes",
-                "worker_cmd": f"{options.conda_env}/bin/dask-worker",
-                "account": "cms",
-                "time": "1-00:00:00",
-                "scheduler_setup": setup_cmd,
-                "worker_setup": setup_cmd,
-                "staging_directory": "/depot/cms/users/{username}/.dask-gateway/"
-            }
-        c.Backend.cluster_options = Options(
-            String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
-            Integer("worker_cores", default=1, min=1, max=16, label="Cores per worker"),
-            Float("worker_memory", default=4, min=1, max=64, label="Memory per worker (GiB)"),
-            Mapping("env", {"X509_USER_PROXY": "", "WORKDIR": ""}, label="Environment variables"),
-            handler=options_handler,
-        )
+          return {
+              "worker_cores": options.worker_cores,
+              "worker_memory": int(options.worker_memory * 2 ** 30),
+              "environment": options.env,
+              "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
+              "scheduler_partition": "hammer-nodes",
+              # "scheduler_reservation": "CMSLOCAL",
+              "worker_partition": "hammer-nodes",
+              "worker_cmd": f"{options.conda_env}/bin/dask-worker",
+              "account": "cms",
+              "time": "1-00:00:00",
+              "scheduler_setup": setup_cmd,
+              "worker_setup": setup_cmd,
+              "staging_directory": "/depot/cms/users/{username}/.dask-gateway/"
+          }
+      c.Backend.cluster_options = Options(
+          String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
+          Integer("worker_cores", default=1, min=1, max=16, label="Cores per worker"),
+          Float("worker_memory", default=4, min=1, max=64, label="Memory per worker (GiB)"),
+          Mapping("env", {"X509_USER_PROXY": "", "WORKDIR": ""}, label="Environment variables"),
+          handler=options_handler,
+      )
 traefik:
   replicas: 1
   image:

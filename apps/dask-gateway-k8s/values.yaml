@@ -86,7 +86,7 @@ gateway:
             persistentVolumeClaim:
               claimName: cvmfs
           - name: eos
-            hostPath: 
+            hostPath:
               path: /eos
           - name: depot
             nfs:
@@ -111,99 +111,99 @@ gateway:
             mountPropagation: HostToContainer
   extraConfig:
     config: |
-        c.DaskGateway.address = ':8000'
-        c.KubeBackend.api_url = 'http://dask-gateway-k8s.geddes.rcac.purdue.edu:80/api'
+      c.DaskGateway.address = ':8000'
+      c.KubeBackend.api_url = 'http://dask-gateway-k8s.geddes.rcac.purdue.edu:80/api'
 
-        c.ClusterConfig.cluster_max_cores = 401
-        c.ClusterConfig.cluster_max_memory = '404 G'
-        c.ClusterConfig.cluster_max_workers = 400
-        c.ClusterConfig.idle_timeout = 3600
+      c.ClusterConfig.cluster_max_cores = 401
+      c.ClusterConfig.cluster_max_memory = '404 G'
+      c.ClusterConfig.cluster_max_workers = 400
+      c.ClusterConfig.idle_timeout = 3600
 
-        def ldap_lookup(username):
-            import subprocess
-            import pkg_resources
-            import sys
+      def ldap_lookup(username):
+          import subprocess
+          import pkg_resources
+          import sys
 
-            try:
-                pkg_resources.get_distribution('ldap3')
-            except pkg_resources.DistributionNotFound:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "ldap3"])
+          try:
+              pkg_resources.get_distribution('ldap3')
+          except pkg_resources.DistributionNotFound:
+              subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "ldap3"])
 
-            from ldap3 import Server, Connection, SUBTREE
-            url = "geddes-aux.rcac.purdue.edu"
-            baseDN = "ou=People,dc=rcac,dc=purdue,dc=edu"
-            search_filter = "(uid={0}*)"
-            attrs = ['uidNumber','gidNumber']
-            s = Server(host= url ,use_ssl= True, get_info= 'ALL')
-            conn = Connection(s, version = 3, authentication = "ANONYMOUS")
-            conn.start_tls()
-            conn.search(
-                search_base = baseDN,
-                search_filter = search_filter.format(username),
-                search_scope = SUBTREE,
-                attributes = attrs
-            )
-            ldap_result_id = json.loads(conn.response_to_json())
-            result = ldap_result_id[u'entries'][0][u'attributes']
-            uid_number = result[u'uidNumber']
-            gid_number = result [u'gidNumber']
-            return uid_number, gid_number            
+          from ldap3 import Server, Connection, SUBTREE
+          url = "geddes-aux.rcac.purdue.edu"
+          baseDN = "ou=People,dc=rcac,dc=purdue,dc=edu"
+          search_filter = "(uid={0}*)"
+          attrs = ['uidNumber','gidNumber']
+          s = Server(host= url ,use_ssl= True, get_info= 'ALL')
+          conn = Connection(s, version = 3, authentication = "ANONYMOUS")
+          conn.start_tls()
+          conn.search(
+              search_base = baseDN,
+              search_filter = search_filter.format(username),
+              search_scope = SUBTREE,
+              attributes = attrs
+          )
+          ldap_result_id = json.loads(conn.response_to_json())
+          result = ldap_result_id[u'entries'][0][u'attributes']
+          uid_number = result[u'uidNumber']
+          gid_number = result [u'gidNumber']
+          return uid_number, gid_number            
 
 
-        from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
+      from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
 
-        def options_handler(options, user):
-            if user.name=="jovyan":
-              uid, gid = 1000, 1000
-            elif ("-cern" in user.name) or ("-fnal" in user.name):
-                if not options.env:
-                  raise ValueError("'env' must be specified in new_cluster(), for example env=dict(os.environ)")
-                if ("NB_UID" not in options.env) or ("NB_GID" not in options.env):
-                    raise ValueError(
-                        "NB_UID and NB_GID variables must exist in 'env'"
-                    )
-                uid, gid = int(options.env["NB_UID"]), int(options.env["NB_GID"])
-            else:
-                uid,gid = ldap_lookup(user.name)
+      def options_handler(options, user):
+          if user.name=="jovyan":
+            uid, gid = 1000, 1000
+          elif ("-cern" in user.name) or ("-fnal" in user.name):
+              if not options.env:
+                raise ValueError("'env' must be specified in new_cluster(), for example env=dict(os.environ)")
+              if ("NB_UID" not in options.env) or ("NB_GID" not in options.env):
+                  raise ValueError(
+                      "NB_UID and NB_GID variables must exist in 'env'"
+                  )
+              uid, gid = int(options.env["NB_UID"]), int(options.env["NB_GID"])
+          else:
+              uid,gid = ldap_lookup(user.name)
 
-            # Remove NVIDIA_VISIBLE_DEVICES from the environment
-            if "NVIDIA_VISIBLE_DEVICES" in options.env:
-                del options.env["NVIDIA_VISIBLE_DEVICES"]
-            
-            options.env["PATH"]=f"{options.conda_env}/bin/:"+options.env.pop("PATH")
-            options.env["CPLUS_INCLUDE_PATH"]=f"{options.conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
+          # Remove NVIDIA_VISIBLE_DEVICES from the environment
+          if "NVIDIA_VISIBLE_DEVICES" in options.env:
+              del options.env["NVIDIA_VISIBLE_DEVICES"]
+          
+          options.env["PATH"]=f"{options.conda_env}/bin/:"+options.env.pop("PATH")
+          options.env["CPLUS_INCLUDE_PATH"]=f"{options.conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
 
-            extra_pod_config = {"securityContext": {"runAsUser": uid, "runAsGroup": gid,}}
-            c.KubeClusterConfig.scheduler_extra_pod_config.update(extra_pod_config)
-            c.KubeClusterConfig.worker_extra_pod_config.update(extra_pod_config)
-            c.KubeClusterConfig.scheduler_extra_pod_labels = {"user": user.name}
-            c.KubeClusterConfig.worker_extra_pod_labels = {
-              "user": user.name,
-              #"queue": "root.community.cms"
-            }
+          extra_pod_config = {"securityContext": {"runAsUser": uid, "runAsGroup": gid,}}
+          c.KubeClusterConfig.scheduler_extra_pod_config.update(extra_pod_config)
+          c.KubeClusterConfig.worker_extra_pod_config.update(extra_pod_config)
+          c.KubeClusterConfig.scheduler_extra_pod_labels = {"user": user.name}
+          c.KubeClusterConfig.worker_extra_pod_labels = {
+            "user": user.name,
+            #"queue": "root.community.cms"
+          }
 
-            setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
-            desired_cores = options.worker_cores
-            desired_memory = int(options.worker_memory * 2 ** 30)
-            return {
-                "worker_cores": 1,
-                "worker_cores_limit": desired_cores,
-                "worker_memory": int(desired_memory * 0.75),
-                "worker_memory_limit": desired_memory,
-                "environment": options.env,
-                "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
-                "worker_cmd": f"{options.conda_env}/bin/dask-worker",
-                "time": "1-00:00:00",
-                "scheduler_setup": setup_cmd,
-                "worker_setup": setup_cmd,
-            }
-        c.Backend.cluster_options = Options(
-            String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
-            Float("worker_cores", default=1, min=0.1, max=64, label="Cores per worker"),
-            Float("worker_memory", default=4, min=0.1, max=64, label="Memory per worker (GiB)"),
-            Mapping("env", {}, label="Environment variables"),
-            handler=options_handler,
-        )
+          setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
+          desired_cores = options.worker_cores
+          desired_memory = int(options.worker_memory * 2 ** 30)
+          return {
+              "worker_cores": 1,
+              "worker_cores_limit": desired_cores,
+              "worker_memory": int(desired_memory * 0.75),
+              "worker_memory_limit": desired_memory,
+              "environment": options.env,
+              "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
+              "worker_cmd": f"{options.conda_env}/bin/dask-worker",
+              "time": "1-00:00:00",
+              "scheduler_setup": setup_cmd,
+              "worker_setup": setup_cmd,
+          }
+      c.Backend.cluster_options = Options(
+          String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
+          Float("worker_cores", default=1, min=0.1, max=64, label="Cores per worker"),
+          Float("worker_memory", default=4, min=0.1, max=64, label="Memory per worker (GiB)"),
+          Mapping("env", {}, label="Environment variables"),
+          handler=options_handler,
+      )
 traefik:
   replicas: 1
   image:

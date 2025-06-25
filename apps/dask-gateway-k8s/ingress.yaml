@@ -6,13 +6,13 @@ metadata:
 spec:
   ingressClassName: public
   rules:
-  - host: dask-gateway-k8s.geddes.rcac.purdue.edu
-    http:
-      paths:
-      - backend:
-          service:
-            name: traefik-dask-gateway-k8s
-            port:
-              number: 80
-        path: /
-        pathType: ImplementationSpecific 
+    - host: dask-gateway-k8s.geddes.rcac.purdue.edu
+      http:
+        paths:
+          - backend:
+              service:
+                name: traefik-dask-gateway-k8s
+                port:
+                  number: 80
+            path: /
+            pathType: ImplementationSpecific

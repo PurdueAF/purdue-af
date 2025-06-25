@@ -41,12 +41,12 @@ dependencies:
   - libnvjitlink-dev
 
   - pip:
-    - rucio-clients==33.3.0
-    - fsspec-xrootd
-    - torch
-    - cmsstyle
-    - scikit-hep-testdata
-    - graphviz
+      - rucio-clients==33.3.0
+      - fsspec-xrootd
+      - torch
+      - cmsstyle
+      - scikit-hep-testdata
+      - graphviz
 
 variables:
   LD_LIBRARY_PATH: /depot/cms/kernels/coffea_latest/lib/python3.11/site-packages/nvidia/nvjitlink/lib/:/usr/local/cuda-12.2/lib64:/depot/cms/purdue-af/combine/HiggsAnalysis/CombinedLimit/build/lib:/depot/cms/purdue-af/roofit-batchcompute/build/

@@ -4,9 +4,9 @@ resources:
   - service.yaml
   - deployment.yaml
 configMapGenerator:
-- name: af-monitor-config
-  namespace: cms
-  files:
-  - metrics_server.py
-  options:
-    disableNameSuffixHash: true
+  - name: af-monitor-config
+    namespace: cms
+    files:
+      - metrics_server.py
+    options:
+      disableNameSuffixHash: true

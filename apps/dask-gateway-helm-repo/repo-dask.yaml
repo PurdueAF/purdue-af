@@ -5,4 +5,4 @@ metadata:
   namespace: cms
 spec:
   interval: 1h
-  url: https://helm.dask.org 
+  url: https://helm.dask.org

@@ -4,4 +4,4 @@ metadata:
   name: flux-github-alert
 resources:
   - github-provider.yaml
-  - github-alert.yaml 
+  - github-alert.yaml

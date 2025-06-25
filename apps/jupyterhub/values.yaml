@@ -1,7 +1,7 @@
 singleuser:
   podNameTemplate: "purdue-af-{userid}"
   uid: 0
-  cmd: 
+  cmd:
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
     tag: "0.10.2"
@@ -14,11 +14,11 @@ singleuser:
       default: true
       description: "If you are starting a session with a GPU, please shut it down when finished in order to release the GPU."
       kubespawner_override:
-        node_selector: {'cms-af-prod': 'true'}
+        node_selector: { "cms-af-prod": "true" }
         # lifecycle_hooks:
-          # preStop:
-          #   exec:
-          #     command: ["bash", "-c", "rm -f eos-cern"]
+        # preStop:
+        #   exec:
+        #     command: ["bash", "-c", "rm -f eos-cern"]
       profile_options:
         cpu:
           display_name: "CPUs"
@@ -33,7 +33,7 @@ singleuser:
               kubespawner_override:
                 cpu_limit: 4
                 cpu_guarantee: 4
-            2: 
+            2:
               display_name: "16"
               kubespawner_override:
                 cpu_limit: 16
@@ -88,22 +88,22 @@ singleuser:
             2:
               display_name: "32 GB"
               kubespawner_override:
-                mem_limit: "32G" 
+                mem_limit: "32G"
                 mem_guarantee: "32G"
             3:
               display_name: "64 GB"
               kubespawner_override:
-                mem_limit: "64G" 
+                mem_limit: "64G"
                 mem_guarantee: "64G"
             4:
               display_name: "128 GB"
               kubespawner_override:
-                mem_limit: "128G" 
+                mem_limit: "128G"
                 mem_guarantee: "128G"
             # 5:
             #   display_name: "256 GB"
             #   kubespawner_override:
-            #     mem_limit: "256G" 
+            #     mem_limit: "256G"
             #     mem_guarantee: "256G"
 
     - display_name: Minimal JupyterLab interface
@@ -114,7 +114,7 @@ singleuser:
         node_selector:
           cms-af-prod: "true"
         cpu_guarantee: 4
-        cpu_limit: 4        
+        cpu_limit: 4
         mem_guarantee: 16G
         mem_limit: 16G
 
@@ -126,7 +126,7 @@ singleuser:
         node_selector:
           cms-af-prod: "true"
         cpu_guarantee: 4
-        cpu_limit: 4        
+        cpu_limit: 4
         mem_guarantee: 16G
         mem_limit: 16G
         extra_resource_limits:
@@ -174,11 +174,11 @@ singleuser:
     - name: af-pod-monitor
       image: geddes-registry.rcac.purdue.edu/cms/af-pod-monitor:latest
       volumeMounts:
-      - name: volume-{username}
-        mountPath: /home/{legacy_escape_username}
-      - name: work
-        mountPath: /work/
-        mountPropagation: HostToContainer
+        - name: volume-{username}
+          mountPath: /home/{legacy_escape_username}
+        - name: work
+          mountPath: /work/
+          mountPropagation: HostToContainer
   defaultUrl: "/lab"
   extraEnv:
     JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
@@ -198,7 +198,7 @@ singleuser:
         persistentVolumeClaim:
           claimName: cvmfs
       - name: eos
-        hostPath: 
+        hostPath:
           path: /eos
       - name: depot
         nfs:
@@ -236,9 +236,9 @@ prePuller:
     enabled: false
 hub:
   image:
-      name: quay.io/jupyterhub/k8s-hub
-      tag: 3.3.8
-  nodeSelector: {'cms-af-prod': 'true'}
+    name: quay.io/jupyterhub/k8s-hub
+    tag: 3.3.8
+  nodeSelector: { "cms-af-prod": "true" }
   tolerations:
     - key: "hub.jupyter.org/dedicated"
       operator: "Equal"
@@ -348,7 +348,7 @@ hub:
         c.KubeSpawner.environment.setdefault("DASK_LABEXTENSION__FACTORY__KWARGS__PUBLIC_ADDRESS", "https://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu")
 
     01-set-user-info:
-      mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d/set-user-info.py  
+      mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d/set-user-info.py
       stringData: |
         from ldap3 import Server, Connection, SUBTREE
         import json
@@ -425,7 +425,7 @@ hub:
       auto_login: True
       auto_login_oauth2_authorize: True
       logout_redirect_url: https://cms.geddes.rcac.purdue.edu/hub
-      admin_users: ['dkondra']
+      admin_users: ["dkondra"]
       oauth_callback_url: https://cms.geddes.rcac.purdue.edu/hub/oauth_callback
       enable_auth_state: true
       allowed_idps:
@@ -448,11 +448,11 @@ scheduling:
   userScheduler:
     enabled: false
   userPods:
-      tolerations:
-        - key: "hub.jupyter.org/dedicated"
-          operator: "Equal"
-          value: "cms-af"
-          effect: "NoSchedule"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
 ingress:
   enabled: true
   hosts:
@@ -516,11 +516,11 @@ proxy:
         value: "cms-af"
         effect: "NoSchedule"
 cull:
-#  concurrency: 10
- enabled: true
- every: 600
-#  maxAge: 0
-#  removeNamedServers: false
- timeout: 1209600
+  #  concurrency: 10
+  enabled: true
+  every: 600
+  #  maxAge: 0
+  #  removeNamedServers: false
+  timeout: 1209600
 #  users: false
 

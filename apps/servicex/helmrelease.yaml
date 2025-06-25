@@ -27,9 +27,9 @@ spec:
     remediation:
       retries: -1
   valuesFrom:
-  - kind: ConfigMap
-    name: servicex-config
-    valuesKey: values.yaml
+    - kind: ConfigMap
+      name: servicex-config
+      valuesKey: values.yaml
   postRenderers:
     - kustomize:
         patches:

@@ -7,34 +7,34 @@ spec:
   template:
     spec:
       containers:
-      - name: kaniko
-        image: gcr.io/kaniko-project/executor:latest
-        args:
-          - "--context=git://github.com/PurdueAF/purdue-af.git"
-          - "--context-sub-path=jupyterhub/docker/cmsaf-alma8/"
-          - "--dockerfile=Dockerfile"
-          - "--destination=geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.10.3"
-          - "--cache=true"
-          # - "--no-push"
-        resources:
-          requests:
-            memory: "8Gi"
-            cpu: "4"
-            # nvidia.com/mig-7g.40gb: 1
-          limits:
-            memory: "256Gi"
-            cpu: "16"
-            # nvidia.com/mig-/7g.40gb: 1
-        volumeMounts:
-          - name: docker-config
-            mountPath: /kaniko/.docker/
+        - name: kaniko
+          image: gcr.io/kaniko-project/executor:latest
+          args:
+            - "--context=git://github.com/PurdueAF/purdue-af.git"
+            - "--context-sub-path=jupyterhub/docker/cmsaf-alma8/"
+            - "--dockerfile=Dockerfile"
+            - "--destination=geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.10.3"
+            - "--cache=true"
+            # - "--no-push"
+          resources:
+            requests:
+              memory: "8Gi"
+              cpu: "4"
+              # nvidia.com/mig-7g.40gb: 1
+            limits:
+              memory: "256Gi"
+              cpu: "16"
+              # nvidia.com/mig-/7g.40gb: 1
+          volumeMounts:
+            - name: docker-config
+              mountPath: /kaniko/.docker/
       restartPolicy: Never
       volumes:
         - name: docker-config
           secret:
             secretName: docker-config
       nodeSelector:
-        cms-af-prod: 'true'
+        cms-af-prod: "true"
       tolerations:
         - key: "hub.jupyter.org/dedicated"
           operator: "Equal"

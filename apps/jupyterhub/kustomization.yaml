@@ -3,9 +3,9 @@ kind: Kustomization
 resources:
   - helmrepo.yaml
 configMapGenerator:
-- name: jupyterhub-config
-  namespace: cms
-  files:
-  - values.yaml
-  options:
-    disableNameSuffixHash: true
+  - name: jupyterhub-config
+    namespace: cms
+    files:
+      - values.yaml
+    options:
+      disableNameSuffixHash: true

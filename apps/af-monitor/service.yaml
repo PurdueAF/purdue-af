@@ -9,6 +9,6 @@ spec:
   selector:
     app: af-monitor
   ports:
-  - protocol: TCP
-    port: 8000
-    targetPort: 8000
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000

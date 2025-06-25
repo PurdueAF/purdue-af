@@ -27,7 +27,6 @@ server:
     evaluation_interval: 15s
     scrape_timeout: 15s
 
-
   extraInitContainers:
     - name: prometheus-data-permission-fix
       image: busybox
@@ -41,9 +40,9 @@ server:
 
   ingress:
     enabled: true
-    hosts: [ prometheus-af.geddes.rcac.purdue.edu ]
+    hosts: [prometheus-af.geddes.rcac.purdue.edu]
     tls:
-      - hosts: [ prometheus-af.geddes.rcac.purdue.edu ]
+      - hosts: [prometheus-af.geddes.rcac.purdue.edu]
     ingressClassName: public
 
   strategy:
@@ -75,127 +74,131 @@ server:
     enabled: true
     servicePort: 9090
     annotations:
-      prometheus.io/scrape: 'true'
-      prometheus.io/port: '9090'
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9090"
 
   retention: 30d
 
 serverFiles:
   prometheus.yml:
     scrape_configs:
-      - job_name: 'jupyterhub'
-        metrics_path: '/hub/metrics'
+      - job_name: "jupyterhub"
+        metrics_path: "/hub/metrics"
         static_configs:
           - targets:
-            - 'cms.geddes.rcac.purdue.edu'
-            - 'cmsdev.geddes.rcac.purdue.edu'
-      - job_name: 'kube-state-metrics'
-        static_configs:
-          - targets: 
-            - 'rancher-monitoring-kube-state-metrics.cattle-monitoring-system.svc.cluster.local:8080'
-      - job_name: 'slurm-metrics'
-        static_configs:
-          - targets: 
-            - 'hammer-osg.rcac.purdue.edu:9100'
-      - job_name: 'node-exporter'
+              - "cms.geddes.rcac.purdue.edu"
+              - "cmsdev.geddes.rcac.purdue.edu"
+      - job_name: "kube-state-metrics"
         static_configs:
           - targets:
-            - 'geddes-b013.rcac.purdue.edu:9796'
-            - 'geddes-b014.rcac.purdue.edu:9796'
-            - 'geddes-b015.rcac.purdue.edu:9796'
-            - 'geddes-g000.rcac.purdue.edu:9796'
-            - 'geddes-g001.rcac.purdue.edu:9796'
-            - 'geddes-g002.rcac.purdue.edu:9796'
-            - 'paf-a00.cms.rcac.purdue.edu:9796'
-            - 'paf-a01.cms.rcac.purdue.edu:9796'
-            - 'paf-a02.cms.rcac.purdue.edu:9796'
-            - 'paf-b00.cms.rcac.purdue.edu:9796'
-            - 'cms-fe01.rcac.purdue.edu:9796'
-            - 'cms-fe00.rcac.purdue.edu:9796'
-            - 'vm-hammer-g000.rcac.purdue.edu:9796'
-            - 'vm-hammer-g001.rcac.purdue.edu:9796'
-            - 'vm-hammer-g002.rcac.purdue.edu:9796'
-            - 'vm-hammer-g003.rcac.purdue.edu:9796'
-            - 'vm-hammer-g004.rcac.purdue.edu:9796'
-            - 'vm-hammer-g005.rcac.purdue.edu:9796'
-            - 'vm-hammer-f000.rcac.purdue.edu:9796'
-            - 'vm-hammer-f001.rcac.purdue.edu:9796'
-            - 'vm-hammer-f002.rcac.purdue.edu:9796'
-            - 'vm-hammer-f003.rcac.purdue.edu:9796'
-            - 'vm-hammer-f004.rcac.purdue.edu:9796'
-            - 'vm-hammer-f005.rcac.purdue.edu:9796'
-      - job_name: 'af-pod-monitor'
+              - "rancher-monitoring-kube-state-metrics.cattle-monitoring-system.svc.cluster.local:8080"
+      - job_name: "slurm-metrics"
+        static_configs:
+          - targets:
+              - "hammer-osg.rcac.purdue.edu:9100"
+      - job_name: "node-exporter"
+        static_configs:
+          - targets:
+              - "geddes-b013.rcac.purdue.edu:9796"
+              - "geddes-b014.rcac.purdue.edu:9796"
+              - "geddes-b015.rcac.purdue.edu:9796"
+              - "geddes-g000.rcac.purdue.edu:9796"
+              - "geddes-g001.rcac.purdue.edu:9796"
+              - "geddes-g002.rcac.purdue.edu:9796"
+              - "paf-a00.cms.rcac.purdue.edu:9796"
+              - "paf-a01.cms.rcac.purdue.edu:9796"
+              - "paf-a02.cms.rcac.purdue.edu:9796"
+              - "paf-b00.cms.rcac.purdue.edu:9796"
+              - "cms-fe01.rcac.purdue.edu:9796"
+              - "cms-fe00.rcac.purdue.edu:9796"
+              - "vm-hammer-g000.rcac.purdue.edu:9796"
+              - "vm-hammer-g001.rcac.purdue.edu:9796"
+              - "vm-hammer-g002.rcac.purdue.edu:9796"
+              - "vm-hammer-g003.rcac.purdue.edu:9796"
+              - "vm-hammer-g004.rcac.purdue.edu:9796"
+              - "vm-hammer-g005.rcac.purdue.edu:9796"
+              - "vm-hammer-f000.rcac.purdue.edu:9796"
+              - "vm-hammer-f001.rcac.purdue.edu:9796"
+              - "vm-hammer-f002.rcac.purdue.edu:9796"
+              - "vm-hammer-f003.rcac.purdue.edu:9796"
+              - "vm-hammer-f004.rcac.purdue.edu:9796"
+              - "vm-hammer-f005.rcac.purdue.edu:9796"
+      - job_name: "af-pod-monitor"
         kubernetes_sd_configs:
           - role: endpoints
             namespaces:
               names:
-                - 'cms'
+                - "cms"
         relabel_configs:
           # - source_labels: [__meta_kubernetes_service_label_app]
           #   target_label: 'app'
           - source_labels: [__meta_kubernetes_pod_name]
-            target_label: 'pod'
+            target_label: "pod"
           - source_labels: [__meta_kubernetes_pod_label_username_unescaped]
-            target_label: 'username'
+            target_label: "username"
           - source_labels: [__meta_kubernetes_pod_label_docker_image_tag]
-            target_label: 'docker_image_tag'
+            target_label: "docker_image_tag"
           - source_labels: [__meta_kubernetes_namespace]
-            target_label: 'namespace'
-            replacement: '$1'
+            target_label: "namespace"
+            replacement: "$1"
           - source_labels: [__meta_kubernetes_pod_node_name]
-            target_label: 'node'
-          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
-            target_label: 'app'
-          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_instance]
-            target_label: 'release'
-          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component]
-            target_label: 'component'
+            target_label: "node"
+          - source_labels:
+              [__meta_kubernetes_service_label_app_kubernetes_io_name]
+            target_label: "app"
+          - source_labels:
+              [__meta_kubernetes_service_label_app_kubernetes_io_instance]
+            target_label: "release"
+          - source_labels:
+              [__meta_kubernetes_service_label_app_kubernetes_io_component]
+            target_label: "component"
           - source_labels: [__meta_kubernetes_service_label_scrape_metrics]
             action: keep
-            regex: 'true'
-      - job_name: 'envoy-monitor'
-        metrics_path: '/stats/prometheus'
+            regex: "true"
+      - job_name: "envoy-monitor"
+        metrics_path: "/stats/prometheus"
         kubernetes_sd_configs:
           - role: endpoints
             namespaces:
               names:
-                - 'cms'
+                - "cms"
         relabel_configs:
           - source_labels: [__meta_kubernetes_service_label_app]
-            target_label: 'app'
+            target_label: "app"
           - source_labels: [__meta_kubernetes_pod_name]
-            target_label: 'pod'
+            target_label: "pod"
           - source_labels: [__meta_kubernetes_pod_label_username_unescaped]
-            target_label: 'username'
+            target_label: "username"
           - source_labels: [__meta_kubernetes_pod_label_docker_image_tag]
-            target_label: 'docker_image_tag'
+            target_label: "docker_image_tag"
           - source_labels: [__meta_kubernetes_namespace]
-            target_label: 'namespace'
-            replacement: '$1'
+            target_label: "namespace"
+            replacement: "$1"
           - source_labels: [__meta_kubernetes_pod_node_name]
-            target_label: 'node'
+            target_label: "node"
           - source_labels: [__meta_kubernetes_service_label_envoy]
             action: keep
-            regex: 'true'
-      - job_name: 'dask-gateway-monitor'
+            regex: "true"
+      - job_name: "dask-gateway-monitor"
         kubernetes_sd_configs:
           - role: endpoints
             namespaces:
               names:
-                - 'cms'
+                - "cms"
         relabel_configs:
           - source_labels: [__meta_kubernetes_service_label_app]
-            target_label: 'app'
+            target_label: "app"
           - source_labels: [__meta_kubernetes_pod_name]
-            target_label: 'pod'
+            target_label: "pod"
           - source_labels: [__meta_kubernetes_pod_label_user]
-            target_label: 'user'
+            target_label: "user"
           - source_labels: [__meta_kubernetes_namespace]
-            target_label: 'namespace'
-            replacement: '$1'
+            target_label: "namespace"
+            replacement: "$1"
           - source_labels: [__meta_kubernetes_pod_node_name]
-            target_label: 'node'
-          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+            target_label: "node"
+          - source_labels:
+              [__meta_kubernetes_service_label_app_kubernetes_io_name]
             action: keep
             regex: dask-gateway
       # - job_name: 'supersonic-monitor-triton'
@@ -225,58 +228,66 @@ serverFiles:
       #     - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component]
       #       action: keep
       #       regex: triton
-      - job_name: 'supersonic-monitor-envoy'
-        metrics_path: '/stats/prometheus'
+      - job_name: "supersonic-monitor-envoy"
+        metrics_path: "/stats/prometheus"
         kubernetes_sd_configs:
           - role: endpoints
             namespaces:
               names:
-                - 'cms'
+                - "cms"
         relabel_configs:
           - source_labels: [__meta_kubernetes_pod_name]
-            target_label: 'pod'
+            target_label: "pod"
           - source_labels: [__meta_kubernetes_namespace]
-            target_label: 'namespace'
-            replacement: '$1'
+            target_label: "namespace"
+            replacement: "$1"
           - source_labels: [__meta_kubernetes_pod_node_name]
-            target_label: 'node'
-          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
-            target_label: 'app'
-          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_instance]
-            target_label: 'release'
-          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component]
-            target_label: 'component'
-          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+            target_label: "node"
+          - source_labels:
+              [__meta_kubernetes_service_label_app_kubernetes_io_name]
+            target_label: "app"
+          - source_labels:
+              [__meta_kubernetes_service_label_app_kubernetes_io_instance]
+            target_label: "release"
+          - source_labels:
+              [__meta_kubernetes_service_label_app_kubernetes_io_component]
+            target_label: "component"
+          - source_labels:
+              [__meta_kubernetes_service_label_app_kubernetes_io_name]
             action: keep
             regex: supersonic
-          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component]
+          - source_labels:
+              [__meta_kubernetes_service_label_app_kubernetes_io_component]
             action: keep
             regex: envoy
-      - job_name: 'seldon-monitor-envoy'
-        metrics_path: '/stats/prometheus'
+      - job_name: "seldon-monitor-envoy"
+        metrics_path: "/stats/prometheus"
         kubernetes_sd_configs:
           - role: endpoints
             namespaces:
               names:
-                - 'cms'
+                - "cms"
         relabel_configs:
           - source_labels: [__meta_kubernetes_pod_name]
-            target_label: 'pod'
+            target_label: "pod"
           - source_labels: [__meta_kubernetes_namespace]
-            target_label: 'namespace'
-            replacement: '$1'
+            target_label: "namespace"
+            replacement: "$1"
           - source_labels: [__meta_kubernetes_pod_node_name]
-            target_label: 'node'
-          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
-            target_label: 'app'
-          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_instance]
-            target_label: 'release'
-          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component]
-            target_label: 'component'
-          - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+            target_label: "node"
+          - source_labels:
+              [__meta_kubernetes_service_label_app_kubernetes_io_name]
+            target_label: "app"
+          - source_labels:
+              [__meta_kubernetes_service_label_app_kubernetes_io_instance]
+            target_label: "release"
+          - source_labels:
+              [__meta_kubernetes_service_label_app_kubernetes_io_component]
+            target_label: "component"
+          - source_labels:
+              [__meta_kubernetes_service_label_app_kubernetes_io_name]
             action: keep
             regex: seldon-envoy
-
 
 alertmanager:
   enabled: false

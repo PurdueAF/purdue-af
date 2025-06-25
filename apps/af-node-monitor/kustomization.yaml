@@ -4,9 +4,9 @@ resources:
   - service.yaml
   - daemonset.yaml
 configMapGenerator:
-- name: af-node-monitor-config
-  namespace: cms
-  files:
-  - node_healthcheck.py
-  options:
-    disableNameSuffixHash: true
+  - name: af-node-monitor-config
+    namespace: cms
+    files:
+      - node_healthcheck.py
+    options:
+      disableNameSuffixHash: true

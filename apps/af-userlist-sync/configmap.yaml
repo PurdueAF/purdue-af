@@ -15,4 +15,4 @@ data:
     BASE dc=rcac,dc=purdue,dc=edu
     URI ldap://centralservices.rcac.purdue.edu/
     TLS_CACERT      /etc/certs/cacert.pem
-    TLS_CACERTDIR /etc/openldap/cacerts 
+    TLS_CACERTDIR /etc/openldap/cacerts

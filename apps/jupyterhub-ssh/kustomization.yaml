@@ -4,9 +4,9 @@ resources:
   - helmrepo.yaml
   - helmrelease.yaml
 configMapGenerator:
-- name: jupyterhub-ssh-config
-  namespace: cms
-  files:
-  - values.yaml
-  options:
-    disableNameSuffixHash: true
+  - name: jupyterhub-ssh-config
+    namespace: cms
+    files:
+      - values.yaml
+    options:
+      disableNameSuffixHash: true

@@ -5,9 +5,9 @@ resources:
   - helmrelease.yaml
   - gitrepo.yaml
 configMapGenerator:
-- name: servicex-config
-  namespace: cms
-  files:
-  - values.yaml
-  options:
-    disableNameSuffixHash: true
+  - name: servicex-config
+    namespace: cms
+    files:
+      - values.yaml
+    options:
+      disableNameSuffixHash: true

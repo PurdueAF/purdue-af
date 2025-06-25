@@ -4,9 +4,9 @@ resources:
   - helmrepo.yaml
   - helmrelease.yaml
 configMapGenerator:
-- name: supersonic-config
-  namespace: cms
-  files:
-  - values.yaml
-  options:
-    disableNameSuffixHash: true
+  - name: supersonic-config
+    namespace: cms
+    files:
+      - values.yaml
+    options:
+      disableNameSuffixHash: true

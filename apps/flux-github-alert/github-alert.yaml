@@ -10,4 +10,4 @@ spec:
   eventSources:
     - kind: Kustomization
       name: purdue-af-flux
-      namespace: cms 
+      namespace: cms

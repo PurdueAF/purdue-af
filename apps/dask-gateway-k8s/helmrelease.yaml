@@ -15,6 +15,6 @@ spec:
         namespace: cms
       interval: 1m
   valuesFrom:
-  - kind: ConfigMap
-    name: dask-gateway-k8s-config
-    valuesKey: values.yaml
+    - kind: ConfigMap
+      name: dask-gateway-k8s-config
+      valuesKey: values.yaml

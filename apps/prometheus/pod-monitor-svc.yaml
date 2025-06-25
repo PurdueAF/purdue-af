@@ -11,6 +11,6 @@ spec:
   selector:
     app: jupyterhub
   ports:
-  - name: pod-metrics
-    port: 9090
-    targetPort: 9090
+    - name: pod-metrics
+      port: 9090
+      targetPort: 9090

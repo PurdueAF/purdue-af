@@ -27,50 +27,50 @@ spec:
                     values:
                       - "true"
       tolerations:
-      - key: "hub.jupyter.org/dedicated"
-        operator: "Equal"
-        value: "cms-af"
-        effect: "NoSchedule"
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
       containers:
-      - name: af-node-monitor
-        image: python:3.11-slim
-        command: ["/bin/bash", "-c"]
-        args:
-        - |
-          pip install prometheus_client
-          python /scripts/node_healthcheck.py
-        ports:
-        - containerPort: 8000
-          name: metrics
-        volumeMounts:
-        - name: scripts
-          mountPath: /scripts
-        - name: cvmfs
-          mountPath: /cvmfs
-          mountPropagation: HostToContainer
-        - name: eos
-          mountPath: /eos
-          mountPropagation: HostToContainer
-        - name: depot
-          mountPath: /depot/cms
-          mountPropagation: HostToContainer
-        - name: work
-          mountPath: /work/
-          mountPropagation: HostToContainer
+        - name: af-node-monitor
+          image: python:3.11-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              pip install prometheus_client
+              python /scripts/node_healthcheck.py
+          ports:
+            - containerPort: 8000
+              name: metrics
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: cvmfs
+              mountPath: /cvmfs
+              mountPropagation: HostToContainer
+            - name: eos
+              mountPath: /eos
+              mountPropagation: HostToContainer
+            - name: depot
+              mountPath: /depot/cms
+              mountPropagation: HostToContainer
+            - name: work
+              mountPath: /work/
+              mountPropagation: HostToContainer
       volumes:
-      - name: scripts
-        configMap:
-          name: af-node-monitor-config
-      - name: cvmfs
-        persistentVolumeClaim:
-          claimName: cvmfs
-      - name: eos
-        hostPath: 
-          path: /eos
-      - name: depot
-        nfs:
-          server: datadepot.rcac.purdue.edu
-          path: /depot/cms
-      - name: work
-        persistentVolumeClaim:
-          claimName: af-shared-storage
+        - name: scripts
+          configMap:
+            name: af-node-monitor-config
+        - name: cvmfs
+          persistentVolumeClaim:
+            claimName: cvmfs
+        - name: eos
+          hostPath:
+            path: /eos
+        - name: depot
+          nfs:
+            server: datadepot.rcac.purdue.edu
+            path: /depot/cms
+        - name: work
+          persistentVolumeClaim:
+            claimName: af-shared-storage

@@ -84,7 +84,7 @@ minio:
   service:
     ports:
       api: 9000
-  ingress: 
+  ingress:
     enabled: true
     hostname: servicex-minio.geddes.rcac.purdue.edu
     ingressClassName: public
