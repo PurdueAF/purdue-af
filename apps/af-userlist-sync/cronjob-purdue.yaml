@@ -4,7 +4,7 @@ metadata:
   name: af-userlist-sync-purdue
   namespace: cms
 spec:
-  schedule: "*/10 * * * *"  # Run every 10 minutes
+  schedule: "*/30 * * * *"  # Run every 30 minutes
   suspend: false
   jobTemplate:
     spec:
