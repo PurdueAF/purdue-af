@@ -2,7 +2,7 @@ Contributing to documentation
 ===============================
 
 This website is rendered from documentation in the
-`Purdue AF GitHub repository <https://github.com/PurdueAF/purdue-af/tree/master/docs>`_.
+`Purdue AF GitHub repository <https://github.com/PurdueAF/purdue-af/tree/main/docs>`_.
 
 To contribute to documentation, please **open a pull request**.
 
