@@ -2,11 +2,7 @@ name: Lint Markdown
 
 on:
   push:
-    paths:
-      - '**.md'
   pull_request:
-    paths:
-      - '**.md'
 
 jobs:
   lint:
