@@ -17,7 +17,7 @@ echo "Complete!"
 
 event_rate=$(echo "$output" | grep -oP 'event rate per worker \(pure processtime\): \K[0-9.]+')
 echo "Event rate: " $event_rate "kHz"
-echo $event_rate > /work/projects/purdue-af/agc/metrics/event_rate.txt
+echo $event_rate >/work/projects/purdue-af/agc/metrics/event_rate.txt
 
 echo "Stopping Dask Gateway cluster..."
 kill $DASK_PID

@@ -2,7 +2,7 @@ mkdir -p /etc/munge/
 cp /etc/secrets/munge/munge.key /etc/munge/
 chown munge:munge /etc/munge/munge.key
 chmod 400 /etc/munge/munge.key
-md5sum /etc/munge/munge.key > /etc/jupyter/test.txt
+md5sum /etc/munge/munge.key >/etc/jupyter/test.txt
 sudo su -l munge -s /usr/sbin/munged
 
 NEW_HOME=/home/$NB_USER
@@ -48,17 +48,17 @@ echo "
 
 alias eos-connect="source /etc/jupyter/eos-connect.sh"
 '''
-echo "$bashrc_af_text" > $bashrc_af_file;
+echo "$bashrc_af_text" >$bashrc_af_file
 
 bashrc_file=$NEW_HOME/.bashrc
 touch $bashrc_file
 
 extra_bashrc="source /home/$NB_USER/.bashrc_af"
-grep -qxF "$extra_bashrc" "$bashrc_file" || echo "$extra_bashrc" >> "$bashrc_file"
+grep -qxF "$extra_bashrc" "$bashrc_file" || echo "$extra_bashrc" >>"$bashrc_file"
 
 echo """
 bash
 source $bashrc_file
-""" > $NEW_HOME/.profile
+""" >$NEW_HOME/.profile
 
 cp .bashrc .bash_profile
