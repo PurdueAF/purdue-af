@@ -191,17 +191,16 @@ RUN pip install --no-cache-dir --upgrade \
     purdue-af-shutdown-button==0.1.0 \
     purdue-af-grafana-iframe==0.1.0 \
     jupyterlab-topbar-text==1.1.0 \
-    jupyterlab-theme-toggler==1.1.0
+    jupyterlab-theme-toggler==1.1.0 \
+    dask-gateway==2025.4.0
     # "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-topbar-text&subdirectory=packages/topbar-text-extension" \
     # "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-theme-toggler&subdirectory=packages/theme-toggler-extension"
 
-# Install Dask packages
-RUN pip install --no-cache-dir  dask-gateway==2025.4.0
+# Install Dask labextension
 RUN git clone https://github.com/kondratyevd/dask-labextension.git
-
-WORKDIR dask-labextension
+WORKDIR /tmp/dask-labextension
 RUN pip install --no-cache-dir .
-WORKDIR ..
+WORKDIR /tmp
 RUN rm -rf dask-labextension
 
 # Configure JupyterLab extensions
