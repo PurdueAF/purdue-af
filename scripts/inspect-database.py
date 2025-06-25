@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sqlite3
 
-conn = sqlite3.connect('jupyterhub.sqlite')
+conn = sqlite3.connect("jupyterhub.sqlite")
 cursor = conn.cursor()
 
 # List all tables in the database.

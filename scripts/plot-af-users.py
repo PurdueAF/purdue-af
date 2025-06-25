@@ -1,13 +1,14 @@
 import sqlite3
-import pandas as pd
+
 import matplotlib.pyplot as plt
 import mplhep as hep
+import pandas as pd
 
 # Apply the CMS style from mplhep
 hep.style.use(hep.style.CMS)
 
 # Connect to the JupyterHub SQLite database
-conn = sqlite3.connect('jupyterhub.sqlite')
+conn = sqlite3.connect("jupyterhub.sqlite")
 
 # Query to get daily registered users based on the 'created' timestamp
 query = """
@@ -20,12 +21,12 @@ df = pd.read_sql_query(query, conn)
 conn.close()
 
 # Convert registration dates to datetime and compute cumulative registered users
-df['reg_date'] = pd.to_datetime(df['reg_date'])
-df['cumulative_users'] = df['num_users'].cumsum()
+df["reg_date"] = pd.to_datetime(df["reg_date"])
+df["cumulative_users"] = df["num_users"].cumsum()
 
 # Create the cumulative plot using mplhep's CMS style
 plt.figure(figsize=(12, 9))
-plt.plot(df['reg_date'], df['cumulative_users'], marker='o', linestyle='-')
+plt.plot(df["reg_date"], df["cumulative_users"], marker="o", linestyle="-")
 
 # Set labels and title as specified
 plt.xlabel("Date")
