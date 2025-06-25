@@ -10,6 +10,7 @@ spec:
     spec:
       template:
         spec:
+          serviceAccountName: hub
           nodeSelector: { "cms-af-prod": "true" }
           tolerations:
             - key: "hub.jupyter.org/dedicated"
