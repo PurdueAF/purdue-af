@@ -1,0 +1,91 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: jupyterhub-database-backup
+  namespace: cms
+spec:
+  schedule: "*/5 * * * *"  # Run every 5 minutes for testing
+  suspend: false
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          nodeSelector: { "cms-af-prod": "true" }
+          tolerations:
+            - key: "hub.jupyter.org/dedicated"
+              operator: "Equal"
+              value: "cms-af"
+              effect: "NoSchedule"
+          containers:
+            - name: database-backup
+              image: bitnami/kubectl:latest
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  # Get current timestamp for filename
+                  if [ "$(date +%H)" -lt 12 ]; then
+                    TIMESTAMP="midnight"
+                  else
+                    TIMESTAMP="noon"
+                  fi
+                  
+                  MONTH=$(date +%b | tr '[:upper:]' '[:lower:]')
+                  DAY=$(date +%d)
+                  BACKUP_FILENAME="jupyterhub-${MONTH}${DAY}-${TIMESTAMP}.sqlite"
+                  BACKUP_PATH="/depot/cms/purdue-af/backups/${BACKUP_FILENAME}"
+                  
+                  echo "Starting database backup at $(date)"
+                  echo "Backup filename: ${BACKUP_FILENAME}"
+                  
+                  # Find the JupyterHub hub pod
+                  HUB_POD=$(kubectl get pods -n cms -l app=jupyterhub,component=hub -o jsonpath='{.items[0].metadata.name}')
+                  
+                  if [ -z "$HUB_POD" ]; then
+                    echo "ERROR: Could not find JupyterHub hub pod"
+                    exit 1
+                  fi
+                  
+                  echo "Found hub pod: ${HUB_POD}"
+                  
+                  # Create backup directory if it doesn't exist
+                  mkdir -p /depot/cms/purdue-af/backups
+                  
+                  # Copy the database file from the pod
+                  echo "Copying database from pod..."
+                  kubectl cp cms/${HUB_POD}:/srv/jupyterhub/jupyterhub.sqlite ${BACKUP_PATH}
+                  
+                  if [ $? -eq 0 ]; then
+                    echo "Database backup completed successfully: ${BACKUP_PATH}"
+                    
+                    # Keep only the last 5 backups
+                    echo "Cleaning up old backups (keeping last 5)..."
+                    cd /depot/cms/purdue-af/backups
+                    ls -t jupyterhub-*.sqlite | tail -n +6 | xargs -r rm -f
+                    
+                    echo "Backup cleanup completed"
+                    echo "Current backups:"
+                    ls -la jupyterhub-*.sqlite 2>/dev/null || echo "No backups found"
+                  else
+                    echo "ERROR: Failed to copy database from pod"
+                    exit 1
+                  fi
+                  
+                  echo "Database backup job completed at $(date)"
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "256Mi"
+                  cpu: "200m"
+              volumeMounts:
+                - name: depot
+                  mountPath: /depot/cms
+                  mountPropagation: HostToContainer
+          restartPolicy: OnFailure
+          volumes:
+            - name: depot
+              nfs:
+                server: datadepot.rcac.purdue.edu
+                path: /depot/cms 
