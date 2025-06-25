@@ -1,7 +1,7 @@
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
 ARG OWNER=jupyter
-ARG ROOT_CONTAINER=gitlab-registry.cern.ch/linuxsupport/alma8-base:latest
+ARG ROOT_CONTAINER=gitlab-registry.cern.ch/linuxsupport/alma8-base:20250501-1
 FROM $ROOT_CONTAINER
 
 LABEL maintainer="Dmitry Kondratyev <dkondra@purdue.edu>"
@@ -46,7 +46,7 @@ RUN dnf -y update && \
     localedef -c -f UTF-8 -i en_US en_US.UTF-8
 # cudnn9-cuda-12-4-9.1.1.17-1.x86_64.rpm
 # libcudnn9-cuda-12-9.7.1.26-1.x86_64.rpm
-RUN yum install -y vo-client voms-clients vo-client myproxy patch
+RUN yum install -y vo-client voms-clients vo-client myproxy patch && yum clean all && rm -rf /var/cache/yum
 
 # Configure environment
 ENV CONDA_DIR=/opt/conda \
@@ -182,7 +182,7 @@ RUN mkdir -p /home/${NB_USER}/.globus /home/${NB_USER}/.rnd && \
 ENV X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
 
 # Install JupyterLab extensions
-RUN pip install --upgrade \
+RUN pip install --no-cache-dir --upgrade \
     jupyterlab-git \
     jupyter-resource-usage \
     jupyterlab_iframe \
@@ -194,10 +194,10 @@ RUN pip install --upgrade \
     "git+https://github.com/jupyterlab-contrib/jupyterlab-topbar.git#egg=jupyterlab-theme-toggler&subdirectory=packages/theme-toggler-extension"
 
 # Install Dask packages
-RUN pip install dask-gateway
+RUN pip install --no-cache-dir  dask-gateway
 RUN git clone https://github.com/kondratyevd/dask-labextension.git   && \
     cd dask-labextension && \
-    pip install . && \
+    pip install --no-cache-dir . && \
     cd .. && \
     rm -rf dask-labextension
 
