@@ -63,10 +63,9 @@ dashboardProviders:
         options:
           path: /var/lib/grafana/dashboards/default
 
-dashboards:
-  default:
-    default-dashboard:
-      file: default.json
+# Use ConfigMap for dashboards
+dashboardsConfigMaps:
+  default: grafana-dashboards
 
 datasources:
   datasources.yaml:
@@ -77,14 +76,3 @@ datasources:
         url: http://prometheus-server.cms.svc.cluster.local
         access: proxy
         isDefault: true
-
-# Mount ConfigMap for dashboards
-extraVolumeMounts:
-  - name: grafana-dashboards
-    mountPath: /var/lib/grafana/dashboards/default
-    readOnly: true
-
-extraVolumes:
-  - name: grafana-dashboards
-    configMap:
-      name: grafana-dashboards
