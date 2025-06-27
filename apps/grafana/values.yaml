@@ -1,0 +1,92 @@
+# Grafana Helm Chart Values
+# https://github.com/grafana/helm-charts/tree/main/charts/grafana
+
+# Default admin password - should be changed in production
+adminPassword: "admin"
+
+# Persistence configuration
+persistence:
+  enabled: true
+  type: pvc
+  size: 10Gi
+  accessMode: ReadWriteOnce
+
+# Ingress configuration
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  hosts:
+    - host: cms.geddes.rcac.purdue.edu
+      paths:
+        - path: /grafana-flux
+          pathType: Prefix
+  tls:
+    - secretName: grafana-tls
+      hosts:
+        - cms.geddes.rcac.purdue.edu
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 472
+  fsGroup: 472
+
+# Resources
+resources:
+  limits:
+    cpu: 200m
+    memory: 200Mi
+  requests:
+    cpu: 100m
+    memory: 100Mi
+
+# Grafana configuration
+grafana.ini:
+  server:
+    root_url: https://cms.geddes.rcac.purdue.edu/grafana-flux
+    serve_from_sub_path: true
+  security:
+    admin_user: admin
+    admin_password: admin
+  users:
+    allow_sign_up: false
+  auth.anonymous:
+    enabled: false
+
+# Dashboard and datasource provisioning
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 10
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+
+dashboards:
+  default:
+    prometheus-overview:
+      gnetId: 315
+      revision: 3
+      datasource: Prometheus
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus-server.cms.svc.cluster.local
+        access: proxy
+        isDefault: true 
