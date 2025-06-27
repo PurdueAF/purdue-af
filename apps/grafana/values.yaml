@@ -47,6 +47,15 @@ grafana.ini:
   server:
     root_url: https://cms.geddes.rcac.purdue.edu/grafana-flux
     serve_from_sub_path: true
+  auth.anonymous:
+    enabled: true
+    org_name: Main Org.
+    org_role: Viewer
+    hide_version: true
+  users:
+    allow_sign_up: false
+  security:
+    allow_embedding: true
 
 # Dashboard and datasource provisioning
 dashboardProviders:
@@ -67,12 +76,26 @@ dashboardProviders:
 dashboardsConfigMaps:
   default: grafana-dashboards
 
+# Set default dashboard
+dashboards:
+  default:
+    default-dashboard:
+      file: default.json
+      editable: true
+      options:
+        home: true
+
 datasources:
   datasources.yaml:
     apiVersion: 1
     datasources:
-      - name: Prometheus
+      - name: prometheus
         type: prometheus
-        url: http://prometheus-server.cms.svc.cluster.local
+        url: https://prometheus-af.geddes.rcac.purdue.edu:443
         access: proxy
         isDefault: true
+      - name: prometheus-rancher
+        type: prometheus
+        url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
+        access: proxy
+        isDefault: false
