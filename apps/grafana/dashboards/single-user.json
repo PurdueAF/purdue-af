@@ -1,383 +1,383 @@
 {
-    "annotations": {
-      "list": [
-        {
-          "builtIn": 1,
-          "datasource": {
-            "type": "grafana",
-            "uid": "-- Grafana --"
-          },
-          "enable": true,
-          "hide": true,
-          "iconColor": "rgba(0, 211, 255, 1)",
-          "name": "Annotations & Alerts",
-          "type": "dashboard"
-        }
-      ]
-    },
-    "description": "Purdue AF Single User Statistics",
-    "editable": true,
-    "fiscalYearStartMonth": 0,
-    "graphTooltip": 1,
-    "id": 55,
-    "links": [],
-    "liveNow": true,
-    "panels": [
+  "annotations": {
+    "list": [
       {
+        "builtIn": 1,
         "datasource": {
-          "type": "datasource",
-          "uid": "-- Mixed --"
+          "type": "grafana",
+          "uid": "-- Grafana --"
         },
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "fillOpacity": 6,
-              "gradientMode": "opacity",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A"
-              },
-              "thresholdsStyle": {}
-            },
-            "mappings": [],
-            "min": 0,
-            "thresholds": {
-              "mode": "absolute",
-              "steps": []
-            },
-            "unit": "percentunit"
-          },
-          "overrides": [
-            {
-              "matcher": {
-                "id": "byRegexp",
-                "options": "I/O.*"
-              },
-              "properties": [
-                {
-                  "id": "custom.axisPlacement",
-                  "value": "right"
-                },
-                {
-                  "id": "unit",
-                  "value": "binBps"
-                }
-              ]
-            }
-          ]
-        },
-        "gridPos": {
-          "h": 16,
-          "w": 16,
-          "x": 0,
-          "y": 0
-        },
-        "id": 1,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "right",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "multi",
-            "sort": "none"
-          }
-        },
-        "pluginVersion": "v11.0.0",
-        "targets": [
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus-rancher"
-            },
-            "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=~\"cms\",pod=\"$user\", container=\"notebook\"}[5m])\n) by (pod)\n    /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=~\"cms\",pod=\"$user\", resource=\"cpu\", container=\"notebook\"}\n)\n",
-            "interval": "",
-            "legendFormat": "CPU utilization",
-            "refId": "A"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus-rancher"
-            },
-            "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=~\"cms\", pod=~\"$user\", container=\"notebook\"}\n) /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=~\"cms\", pod=~\"$user\", resource=\"memory\", container=\"notebook\"}\n)\n",
-            "interval": "",
-            "legendFormat": "Memory utilization",
-            "refId": "B"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus-rancher"
-            },
-            "expr": "sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node=~\"geddes-g00.*\",pod=~\"$user\"})\n",
-            "interval": "",
-            "legendFormat": "GPU engine utilization",
-            "refId": "C"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus-rancher"
-            },
-            "expr": "sum by (pod) (\n  ( DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00.*\",pod=~\"$user\"}\n    / ( \n      DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00.*\",pod=~\"$user\"} +\n      DCGM_FI_DEV_FB_FREE{kubernetes_node=~\"geddes-g00.*\",pod=~\"$user\"}\n    )\n  )\n)\n",
-            "interval": "",
-            "legendFormat": "GPU memory utilization",
-            "refId": "D"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus"
-            },
-            "expr": "sum(af_home_dir_util{namespace=~\"cms\",job=\"af-pod-monitor\",pod=~\"$user\"})",
-            "interval": "",
-            "legendFormat": "/home/ storage utilization",
-            "refId": "E"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus-rancher"
-            },
-            "expr": "\n        sum by (pod) (\n          irate(container_network_transmit_bytes_total{namespace=\"cms\", pod=~\"$user\"}[5m])\n        )\n      ",
-            "interval": "",
-            "legendFormat": "I/O send",
-            "refId": "F"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus-rancher"
-            },
-            "expr": "\n        sum by (pod) (\n          irate(container_network_receive_bytes_total{namespace=\"cms\", pod=~\"$user\"}[5m])\n        )\n      ",
-            "interval": "",
-            "legendFormat": "I/O receive",
-            "refId": "G"
-          }
-        ],
-        "title": "Resource usage history",
-        "type": "timeseries"
-      },
-      {
-        "collapsed": false,
-        "gridPos": {
-          "h": 1,
-          "w": 24,
-          "x": 0,
-          "y": 16
-        },
-        "id": 2,
-        "type": "row"
-      },
-      {
-        "datasource": {
-          "type": "datasource",
-          "uid": "-- Mixed --"
-        },
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "fillOpacity": 6,
-              "gradientMode": "opacity",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A"
-              },
-              "thresholdsStyle": {}
-            },
-            "mappings": [],
-            "min": 0,
-            "thresholds": {
-              "mode": "absolute",
-              "steps": []
-            },
-            "unit": "cpu"
-          },
-          "overrides": [
-            {
-              "matcher": {
-                "id": "byRegexp",
-                "options": "Memory.*"
-              },
-              "properties": [
-                {
-                  "id": "custom.axisPlacement",
-                  "value": "right"
-                },
-                {
-                  "id": "unit",
-                  "value": "bytes"
-                }
-              ]
-            }
-          ]
-        },
-        "gridPos": {
-          "h": 10,
-          "w": 10,
-          "x": 0,
-          "y": 17
-        },
-        "id": 3,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "right",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "multi",
-            "sort": "none"
-          }
-        },
-        "pluginVersion": "v11.0.0",
-        "targets": [
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus-rancher"
-            },
-            "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=~\"cms\",pod=\"$user\", container=\"notebook\"}[5m])\n) by (pod)\n",
-            "interval": "",
-            "legendFormat": "CPU utilization",
-            "refId": "A"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus-rancher"
-            },
-            "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=~\"cms\", pod=~\"$user\", container=\"notebook\"}\n)\n",
-            "interval": "",
-            "legendFormat": "Memory utilization",
-            "refId": "B"
-          }
-        ],
-        "title": "Resource usage history",
-        "type": "timeseries"
-      },
-      {
-        "collapsed": false,
-        "gridPos": {
-          "h": 1,
-          "w": 24,
-          "x": 0,
-          "y": 27
-        },
-        "id": 4,
-        "type": "row"
-      },
-      {
-        "collapsed": false,
-        "gridPos": {
-          "h": 1,
-          "w": 24,
-          "x": 0,
-          "y": 28
-        },
-        "id": 5,
-        "type": "row"
-      },
-      {
-        "collapsed": false,
-        "gridPos": {
-          "h": 1,
-          "w": 24,
-          "x": 0,
-          "y": 29
-        },
-        "id": 6,
-        "type": "row"
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
       }
-    ],
-    "refresh": "10s",
-    "schemaVersion": 39,
-    "tags": [],
-    "templating": {
-      "list": [
-        {
-          "current": {
-            "selected": false,
-            "text": "All",
-            "value": "$__all"
+    ]
+  },
+  "description": "Purdue AF Single User Statistics",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": 55,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
           },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "fillOpacity": 6,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A"
+            },
+            "thresholdsStyle": {}
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": []
+          },
+          "unit": "percentunit"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "I/O.*"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "binBps"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 16,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "v11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=~\"cms\",pod=\"$user\", container=\"notebook\"}[5m])\n) by (pod)\n    /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=~\"cms\",pod=\"$user\", resource=\"cpu\", container=\"notebook\"}\n)\n",
+          "interval": "",
+          "legendFormat": "CPU utilization",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=~\"cms\", pod=~\"$user\", container=\"notebook\"}\n) /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=~\"cms\", pod=~\"$user\", resource=\"memory\", container=\"notebook\"}\n)\n",
+          "interval": "",
+          "legendFormat": "Memory utilization",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "expr": "sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node=~\"geddes-g00.*\",pod=~\"$user\"})\n",
+          "interval": "",
+          "legendFormat": "GPU engine utilization",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "expr": "sum by (pod) (\n  ( DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00.*\",pod=~\"$user\"}\n    / ( \n      DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00.*\",pod=~\"$user\"} +\n      DCGM_FI_DEV_FB_FREE{kubernetes_node=~\"geddes-g00.*\",pod=~\"$user\"}\n    )\n  )\n)\n",
+          "interval": "",
+          "legendFormat": "GPU memory utilization",
+          "refId": "D"
+        },
+        {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "definition": "",
-          "hide": 0,
-          "includeAll": true,
-          "multi": false,
-          "name": "user",
-          "options": [],
-          "query": "query_result(af_home_dir_util{namespace=~\"cms\",pod=~\"purdue-af-.*\"})",
-          "refresh": 1,
-          "regex": "/username=\"(?<text>[^\"]+)|pod=\"(?<value>[^\"]+)/g",
-          "skipUrlSync": false,
-          "sort": 1,
-          "type": "query"
+          "expr": "sum(af_home_dir_util{namespace=~\"cms\",job=\"af-pod-monitor\",pod=~\"$user\"})",
+          "interval": "",
+          "legendFormat": "/home/ storage utilization",
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "expr": "\n        sum by (pod) (\n          irate(container_network_transmit_bytes_total{namespace=\"cms\", pod=~\"$user\"}[5m])\n        )\n      ",
+          "interval": "",
+          "legendFormat": "I/O send",
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "expr": "\n        sum by (pod) (\n          irate(container_network_receive_bytes_total{namespace=\"cms\", pod=~\"$user\"}[5m])\n        )\n      ",
+          "interval": "",
+          "legendFormat": "I/O receive",
+          "refId": "G"
         }
-      ]
+      ],
+      "title": "Resource usage history",
+      "type": "timeseries"
     },
-    "time": {
-      "from": "now-6h",
-      "to": "now"
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 2,
+      "type": "row"
     },
-    "timepicker": {},
-    "timezone": "browser",
-    "title": "Single User Statistics",
-    "uid": "single-user-stat-dashboard",
-    "version": 852,
-    "weekStart": ""
-  }
+    {
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "fillOpacity": 6,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A"
+            },
+            "thresholdsStyle": {}
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": []
+          },
+          "unit": "cpu"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "Memory.*"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 10,
+        "x": 0,
+        "y": 17
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "v11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=~\"cms\",pod=\"$user\", container=\"notebook\"}[5m])\n) by (pod)\n",
+          "interval": "",
+          "legendFormat": "CPU utilization",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=~\"cms\", pod=~\"$user\", container=\"notebook\"}\n)\n",
+          "interval": "",
+          "legendFormat": "Memory utilization",
+          "refId": "B"
+        }
+      ],
+      "title": "Resource usage history",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
+      "id": 4,
+      "type": "row"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "id": 5,
+      "type": "row"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 29
+      },
+      "id": 6,
+      "type": "row"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "",
+        "hide": 0,
+        "includeAll": true,
+        "multi": false,
+        "name": "user",
+        "options": [],
+        "query": "query_result(af_home_dir_util{namespace=~\"cms\",pod=~\"purdue-af-.*\"})",
+        "refresh": 1,
+        "regex": "/username=\"(?<text>[^\"]+)|pod=\"(?<value>[^\"]+)/g",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Single User Statistics",
+  "uid": "single-user-stat-dashboard",
+  "version": 852,
+  "weekStart": ""
+}

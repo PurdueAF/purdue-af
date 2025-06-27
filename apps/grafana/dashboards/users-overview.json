@@ -1,1286 +1,1284 @@
 {
-    "annotations": {
-      "list": [
-        {
-          "builtIn": 1,
-          "datasource": {
-            "type": "grafana",
-            "uid": "-- Grafana --"
-          },
-          "enable": true,
-          "hide": true,
-          "iconColor": "rgba(0, 211, 255, 1)",
-          "name": "Annotations & Alerts",
-          "type": "dashboard"
-        }
-      ]
-    },
-    "description": "Purdue AF User Statistics",
-    "editable": true,
-    "fiscalYearStartMonth": 0,
-    "graphTooltip": 1,
-    "id": 54,
-    "links": [],
-    "liveNow": true,
-    "panels": [
+  "annotations": {
+    "list": [
       {
+        "builtIn": 1,
         "datasource": {
-          "type": "datasource",
-          "uid": "-- Mixed --"
+          "type": "grafana",
+          "uid": "-- Grafana --"
         },
-        "fieldConfig": {
-          "defaults": {
-            "custom": {
-              "align": "auto",
-              "cellOptions": {
-                "type": "auto"
-              },
-              "inspect": false
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
-          },
-          "overrides": [
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "userId"
-              },
-              "properties": [
-                {
-                  "id": "decimals"
-                },
-                {
-                  "id": "displayName",
-                  "value": "ID"
-                },
-                {
-                  "id": "max"
-                },
-                {
-                  "id": "min"
-                },
-                {
-                  "id": "unit"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 40
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": []
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "pod"
-              },
-              "properties": [
-                {
-                  "id": "decimals"
-                },
-                {
-                  "id": "displayName",
-                  "value": "Pod"
-                },
-                {
-                  "id": "max"
-                },
-                {
-                  "id": "min"
-                },
-                {
-                  "id": "unit"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 120
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": []
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "node"
-              },
-              "properties": [
-                {
-                  "id": "decimals"
-                },
-                {
-                  "id": "displayName",
-                  "value": "Node"
-                },
-                {
-                  "id": "max"
-                },
-                {
-                  "id": "min"
-                },
-                {
-                  "id": "unit"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 120
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": []
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "node 1"
-              },
-              "properties": [
-                {
-                  "id": "decimals"
-                },
-                {
-                  "id": "displayName",
-                  "value": "Node"
-                },
-                {
-                  "id": "max"
-                },
-                {
-                  "id": "min"
-                },
-                {
-                  "id": "unit"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 120
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": []
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "docker_image_tag"
-              },
-              "properties": [
-                {
-                  "id": "decimals"
-                },
-                {
-                  "id": "displayName",
-                  "value": "Version"
-                },
-                {
-                  "id": "max"
-                },
-                {
-                  "id": "min"
-                },
-                {
-                  "id": "unit"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 70
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": []
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "username"
-              },
-              "properties": [
-                {
-                  "id": "decimals"
-                },
-                {
-                  "id": "displayName",
-                  "value": "Username"
-                },
-                {
-                  "id": "max"
-                },
-                {
-                  "id": "min"
-                },
-                {
-                  "id": "unit"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 120
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": []
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "username"
-              },
-              "properties": [
-                {
-                  "id": "links",
-                  "value": [
-                    {
-                      "targetBlank": true,
-                      "title": "",
-                      "url": "https://cms.geddes.rcac.purdue.edu/grafana/d/single-user-stat-dashboard/single-user-statistics?&var-user=purdue-af-${__data.fields.ID}"
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "username 1"
-              },
-              "properties": [
-                {
-                  "id": "decimals"
-                },
-                {
-                  "id": "displayName",
-                  "value": "Username"
-                },
-                {
-                  "id": "max"
-                },
-                {
-                  "id": "min"
-                },
-                {
-                  "id": "unit"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 120
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": []
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "username 1"
-              },
-              "properties": [
-                {
-                  "id": "links",
-                  "value": [
-                    {
-                      "targetBlank": true,
-                      "title": "",
-                      "url": "https://cms.geddes.rcac.purdue.edu/grafana/d/single-user-stat-dashboard/single-user-statistics?&var-user=purdue-af-${__data.fields.ID}"
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Value #daskWorkers"
-              },
-              "properties": [
-                {
-                  "id": "decimals"
-                },
-                {
-                  "id": "displayName",
-                  "value": "Dask workers"
-                },
-                {
-                  "id": "max"
-                },
-                {
-                  "id": "min"
-                },
-                {
-                  "id": "unit"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 110
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": []
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Value #podAge"
-              },
-              "properties": [
-                {
-                  "id": "decimals"
-                },
-                {
-                  "id": "displayName",
-                  "value": "Pod age"
-                },
-                {
-                  "id": "max"
-                },
-                {
-                  "id": "min"
-                },
-                {
-                  "id": "unit",
-                  "value": "s"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 100
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "blue",
-                        "value": null
-                      },
-                      {
-                        "color": "green",
-                        "value": 86400
-                      },
-                      {
-                        "color": "yellow",
-                        "value": 1209600
-                      },
-                      {
-                        "color": "orange",
-                        "value": 2592000
-                      },
-                      {
-                        "color": "red",
-                        "value": 15552000
-                      }
-                    ]
-                  }
-                },
-                {
-                  "id": "custom.cellOptions",
-                  "value": {
-                    "color": "value",
-                    "type": "color-text"
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Value #storageLastAccess"
-              },
-              "properties": [
-                {
-                  "id": "decimals"
-                },
-                {
-                  "id": "displayName",
-                  "value": "Last active"
-                },
-                {
-                  "id": "max"
-                },
-                {
-                  "id": "min"
-                },
-                {
-                  "id": "unit",
-                  "value": "s"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 100
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "blue",
-                        "value": null
-                      },
-                      {
-                        "color": "green",
-                        "value": 86400
-                      },
-                      {
-                        "color": "yellow",
-                        "value": 1209600
-                      },
-                      {
-                        "color": "orange",
-                        "value": 2592000
-                      },
-                      {
-                        "color": "red",
-                        "value": 15552000
-                      }
-                    ]
-                  }
-                },
-                {
-                  "id": "custom.cellOptions",
-                  "value": {
-                    "color": "value",
-                    "type": "color-text"
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Value #homeStorageUtil"
-              },
-              "properties": [
-                {
-                  "id": "decimals",
-                  "value": 1
-                },
-                {
-                  "id": "displayName",
-                  "value": "/home/ util."
-                },
-                {
-                  "id": "max",
-                  "value": 1
-                },
-                {
-                  "id": "min",
-                  "value": 0
-                },
-                {
-                  "id": "unit",
-                  "value": "percentunit"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 130
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": null
-                      },
-                      {
-                        "color": "yellow",
-                        "value": 0.6
-                      },
-                      {
-                        "color": "orange",
-                        "value": 0.8
-                      },
-                      {
-                        "color": "red",
-                        "value": 0.9
-                      }
-                    ]
-                  }
-                },
-                {
-                  "id": "custom.cellOptions",
-                  "value": {
-                    "mode": "lcd",
-                    "type": "gauge",
-                    "valueDisplayMode": "color"
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Value #workStorageUtil"
-              },
-              "properties": [
-                {
-                  "id": "decimals",
-                  "value": 1
-                },
-                {
-                  "id": "displayName",
-                  "value": "/work/ util."
-                },
-                {
-                  "id": "max",
-                  "value": 1
-                },
-                {
-                  "id": "min",
-                  "value": 0
-                },
-                {
-                  "id": "unit",
-                  "value": "percentunit"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 130
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": null
-                      },
-                      {
-                        "color": "yellow",
-                        "value": 0.6
-                      },
-                      {
-                        "color": "orange",
-                        "value": 0.8
-                      },
-                      {
-                        "color": "red",
-                        "value": 0.9
-                      }
-                    ]
-                  }
-                },
-                {
-                  "id": "custom.cellOptions",
-                  "value": {
-                    "mode": "lcd",
-                    "type": "gauge",
-                    "valueDisplayMode": "color"
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Value #podCpuUtilCurrent"
-              },
-              "properties": [
-                {
-                  "id": "decimals",
-                  "value": 1
-                },
-                {
-                  "id": "displayName",
-                  "value": "Pod CPU util."
-                },
-                {
-                  "id": "max",
-                  "value": 1
-                },
-                {
-                  "id": "min",
-                  "value": 0
-                },
-                {
-                  "id": "unit",
-                  "value": "percentunit"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 130
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": null
-                      },
-                      {
-                        "color": "yellow",
-                        "value": 0.6
-                      },
-                      {
-                        "color": "orange",
-                        "value": 0.8
-                      },
-                      {
-                        "color": "red",
-                        "value": 0.9
-                      }
-                    ]
-                  }
-                },
-                {
-                  "id": "custom.cellOptions",
-                  "value": {
-                    "mode": "lcd",
-                    "type": "gauge",
-                    "valueDisplayMode": "color"
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Value #podMemUtilCurrent"
-              },
-              "properties": [
-                {
-                  "id": "decimals",
-                  "value": 1
-                },
-                {
-                  "id": "displayName",
-                  "value": "Pod memory util."
-                },
-                {
-                  "id": "max",
-                  "value": 1
-                },
-                {
-                  "id": "min",
-                  "value": 0
-                },
-                {
-                  "id": "unit",
-                  "value": "percentunit"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 130
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": null
-                      },
-                      {
-                        "color": "yellow",
-                        "value": 0.6
-                      },
-                      {
-                        "color": "orange",
-                        "value": 0.8
-                      },
-                      {
-                        "color": "red",
-                        "value": 0.9
-                      }
-                    ]
-                  }
-                },
-                {
-                  "id": "custom.cellOptions",
-                  "value": {
-                    "mode": "lcd",
-                    "type": "gauge",
-                    "valueDisplayMode": "color"
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Value #gpuUtilCurrent"
-              },
-              "properties": [
-                {
-                  "id": "decimals",
-                  "value": 1
-                },
-                {
-                  "id": "displayName",
-                  "value": "GPU engine util."
-                },
-                {
-                  "id": "max",
-                  "value": 1
-                },
-                {
-                  "id": "min",
-                  "value": 0
-                },
-                {
-                  "id": "unit",
-                  "value": "percentunit"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 130
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": null
-                      },
-                      {
-                        "color": "yellow",
-                        "value": 0.6
-                      },
-                      {
-                        "color": "orange",
-                        "value": 0.8
-                      },
-                      {
-                        "color": "red",
-                        "value": 0.9
-                      }
-                    ]
-                  }
-                },
-                {
-                  "id": "custom.cellOptions",
-                  "value": {
-                    "mode": "lcd",
-                    "type": "gauge",
-                    "valueDisplayMode": "color"
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Value #gpuMemUtilCurrent"
-              },
-              "properties": [
-                {
-                  "id": "decimals",
-                  "value": 1
-                },
-                {
-                  "id": "displayName",
-                  "value": "GPU mem. util."
-                },
-                {
-                  "id": "max",
-                  "value": 1
-                },
-                {
-                  "id": "min",
-                  "value": 0
-                },
-                {
-                  "id": "unit",
-                  "value": "percentunit"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 130
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": null
-                      },
-                      {
-                        "color": "yellow",
-                        "value": 0.6
-                      },
-                      {
-                        "color": "orange",
-                        "value": 0.8
-                      },
-                      {
-                        "color": "red",
-                        "value": 0.9
-                      }
-                    ]
-                  }
-                },
-                {
-                  "id": "custom.cellOptions",
-                  "value": {
-                    "mode": "lcd",
-                    "type": "gauge",
-                    "valueDisplayMode": "color"
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Value #cpuLimit"
-              },
-              "properties": [
-                {
-                  "id": "decimals"
-                },
-                {
-                  "id": "displayName",
-                  "value": "CPU lim."
-                },
-                {
-                  "id": "max"
-                },
-                {
-                  "id": "min"
-                },
-                {
-                  "id": "unit"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 80
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": []
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Value #gpuLimit"
-              },
-              "properties": [
-                {
-                  "id": "decimals"
-                },
-                {
-                  "id": "displayName",
-                  "value": "GPU lim."
-                },
-                {
-                  "id": "max"
-                },
-                {
-                  "id": "min"
-                },
-                {
-                  "id": "unit"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 80
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": []
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "Value #memLimit"
-              },
-              "properties": [
-                {
-                  "id": "decimals"
-                },
-                {
-                  "id": "displayName",
-                  "value": "Memory lim."
-                },
-                {
-                  "id": "max"
-                },
-                {
-                  "id": "min"
-                },
-                {
-                  "id": "unit",
-                  "value": "bytes"
-                },
-                {
-                  "id": "custom.width",
-                  "value": 110
-                },
-                {
-                  "id": "thresholds",
-                  "value": {
-                    "mode": "absolute",
-                    "steps": []
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byRegexp",
-                "options": ".*"
-              },
-              "properties": [
-                {
-                  "id": "custom.align",
-                  "value": "left"
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byRegexp",
-                "options": ".*Limit"
-              },
-              "properties": [
-                {
-                  "id": "custom.align",
-                  "value": "center"
-                }
-              ]
-            }
-          ]
-        },
-        "gridPos": {
-          "h": 24,
-          "w": 24,
-          "x": 0,
-          "y": 0
-        },
-        "id": 1,
-        "options": {
-          "cellHeight": "sm",
-          "footer": {
-            "countRows": false,
-            "fields": "",
-            "reducer": [
-              "sum"
-            ],
-            "show": false
-          },
-          "showHeader": true,
-          "sortBy": [
-            {
-              "desc": true,
-              "displayName": "Pod age"
-            }
-          ]
-        },
-        "pluginVersion": "10.4.14",
-        "targets": [
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus"
-            },
-            "expr": "af_home_dir_util{namespace=~\"$namespace\",job=\"af-pod-monitor\",username!=\"\"}",
-            "format": "table",
-            "instant": true,
-            "interval": "",
-            "legendFormat": "",
-            "refId": "homeStorageUtil"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus"
-            },
-            "expr": "af_work_dir_util{namespace=~\"$namespace\",job=\"af-pod-monitor\",username!=\"\"}",
-            "format": "table",
-            "instant": true,
-            "interval": "",
-            "legendFormat": "",
-            "refId": "workStorageUtil"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus"
-            },
-            "expr": "time() - af_home_dir_last_accessed{namespace=~\"$namespace\", job=\"af-pod-monitor\",username!=\"\"}",
-            "format": "table",
-            "instant": true,
-            "interval": "",
-            "legendFormat": "",
-            "refId": "storageLastAccess"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus"
-            },
-            "expr": "label_replace(\n  time() - kube_pod_created{namespace=~\"$namespace\",pod=~\"purdue-af-.*\"},\n  \"userId\", \"$1\", \"pod\", \"purdue-af-(.*)\"\n)\n",
-            "format": "table",
-            "instant": true,
-            "interval": "",
-            "legendFormat": "",
-            "refId": "podAge"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus-rancher"
-            },
-            "expr": "kube_pod_container_resource_limits{namespace=~\"$namespace\",pod=~\"purdue-af-.*\",resource=\"cpu\",container=\"notebook\"}",
-            "format": "table",
-            "instant": true,
-            "interval": "",
-            "legendFormat": "",
-            "refId": "cpuLimit"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus-rancher"
-            },
-            "expr": "kube_pod_container_resource_limits{namespace=~\"$namespace\",pod=~\"purdue-af-.*\",resource=\"nvidia_com_mig_1g_5gb\",container=\"notebook\"}",
-            "format": "table",
-            "instant": true,
-            "interval": "",
-            "legendFormat": "",
-            "refId": "gpuLimit"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus-rancher"
-            },
-            "expr": "kube_pod_container_resource_limits{namespace=~\"$namespace\",pod=~\"purdue-af-.*\",resource=\"memory\",container=\"notebook\"}",
-            "format": "table",
-            "instant": true,
-            "interval": "",
-            "legendFormat": "",
-            "refId": "memLimit"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus-rancher"
-            },
-            "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=~\"$namespace\",pod=~\"purdue-af-.*\", container=\"notebook\"}[5m])\n) by (pod)\n    /\nsum by (pod)(\n    kube_pod_container_resource_limits{namespace=~\"$namespace\",pod=~\"purdue-af-.*\", resource=\"cpu\", container=\"notebook\"}\n)\n",
-            "format": "table",
-            "instant": true,
-            "interval": "",
-            "legendFormat": "",
-            "refId": "podCpuUtilCurrent"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus-rancher"
-            },
-            "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=~\"$namespace\", pod=~\"purdue-af-.*\", container=\"notebook\"}\n) /\nsum by (pod)(\n    kube_pod_container_resource_limits{namespace=~\"$namespace\", pod=~\"purdue-af-.*\", resource=\"memory\", container=\"notebook\"}\n)\n",
-            "format": "table",
-            "instant": true,
-            "interval": "",
-            "legendFormat": "",
-            "refId": "podMemUtilCurrent"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus-rancher"
-            },
-            "expr": "sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{\n  namespace=~\"$namespace\",\n  pod=~\"purdue-af-.*\",\n  kubernetes_node=~\"geddes-g00.*\"\n})\n",
-            "format": "table",
-            "instant": true,
-            "interval": "",
-            "legendFormat": "",
-            "refId": "gpuUtilCurrent"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus-rancher"
-            },
-            "expr": "sum by (pod) (\n  ( DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00.*\",namespace=~\"$namespace\",pod=~\"purdue-af-.*\"}\n    / ( \n      DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00.*\",namespace=~\"$namespace\",pod=~\"purdue-af-.*\"} +\n      DCGM_FI_DEV_FB_FREE{kubernetes_node=~\"geddes-g00.*\",namespace=~\"$namespace\",pod=~\"purdue-af-.*\"}\n    )\n  )\n)\n",
-            "format": "table",
-            "instant": true,
-            "interval": "",
-            "legendFormat": "",
-            "refId": "gpuMemUtilCurrent"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus"
-            },
-            "expr": "sum by (pod) (dask_scheduler_workers{job=\"af-pod-monitor\",namespace=~\"$namespace\",pod=~\"purdue-af-.*\",})\n",
-            "format": "table",
-            "instant": true,
-            "interval": "",
-            "legendFormat": "",
-            "refId": "daskWorkers"
-          }
-        ],
-        "transformations": [
-          {
-            "id": "joinByField",
-            "options": {
-              "byField": "pod"
-            }
-          },
-          {
-            "id": "filterFieldsByName",
-            "options": {
-              "exclude": {
-                "pattern": "^(pod|.*podStatus|.*#userId|.*gpuLimit)$"
-              },
-              "include": {
-                "pattern": "^(Value.*|userId|username|username 1|node|node 1|docker_image_tag|docker_image_tag 1)$"
-              }
-            }
-          },
-          {
-            "id": "organize",
-            "options": {
-              "indexByName": {
-                "Value #cpuLimit": 14,
-                "Value #daskWorkers": 13,
-                "Value #gpuMemUtilCurrent": 10,
-                "Value #gpuUtilCurrent": 9,
-                "Value #homeStorageUtil": 11,
-                "Value #memLimit": 15,
-                "Value #podAge": 5,
-                "Value #podCpuUtilCurrent": 7,
-                "Value #podMemUtilCurrent": 8,
-                "Value #storageLastAccess": 6,
-                "Value #workStorageUtil": 12,
-                "docker_image_tag": 3,
-                "docker_image_tag 1": 4,
-                "node": 16,
-                "node 1": 17,
-                "userId": 0,
-                "username": 1,
-                "username 1": 2
-              }
-            }
-          },
-          {
-            "id": "convertFieldType",
-            "options": {
-              "conversions": [
-                {
-                  "destinationType": "number",
-                  "targetField": "userId"
-                }
-              ]
-            }
-          }
-        ],
-        "type": "table"
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
       }
-    ],
-    "refresh": "10s",
-    "schemaVersion": 39,
-    "tags": [],
-    "templating": {
-      "list": [
-        {
-          "current": {
-            "selected": false,
-            "text": "cms",
-            "value": "cms"
+    ]
+  },
+  "description": "Purdue AF User Statistics",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": 54,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
           },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "userId"
+            },
+            "properties": [
+              {
+                "id": "decimals"
+              },
+              {
+                "id": "displayName",
+                "value": "ID"
+              },
+              {
+                "id": "max"
+              },
+              {
+                "id": "min"
+              },
+              {
+                "id": "unit"
+              },
+              {
+                "id": "custom.width",
+                "value": 40
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": []
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pod"
+            },
+            "properties": [
+              {
+                "id": "decimals"
+              },
+              {
+                "id": "displayName",
+                "value": "Pod"
+              },
+              {
+                "id": "max"
+              },
+              {
+                "id": "min"
+              },
+              {
+                "id": "unit"
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": []
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "node"
+            },
+            "properties": [
+              {
+                "id": "decimals"
+              },
+              {
+                "id": "displayName",
+                "value": "Node"
+              },
+              {
+                "id": "max"
+              },
+              {
+                "id": "min"
+              },
+              {
+                "id": "unit"
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": []
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "node 1"
+            },
+            "properties": [
+              {
+                "id": "decimals"
+              },
+              {
+                "id": "displayName",
+                "value": "Node"
+              },
+              {
+                "id": "max"
+              },
+              {
+                "id": "min"
+              },
+              {
+                "id": "unit"
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": []
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "docker_image_tag"
+            },
+            "properties": [
+              {
+                "id": "decimals"
+              },
+              {
+                "id": "displayName",
+                "value": "Version"
+              },
+              {
+                "id": "max"
+              },
+              {
+                "id": "min"
+              },
+              {
+                "id": "unit"
+              },
+              {
+                "id": "custom.width",
+                "value": 70
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": []
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "username"
+            },
+            "properties": [
+              {
+                "id": "decimals"
+              },
+              {
+                "id": "displayName",
+                "value": "Username"
+              },
+              {
+                "id": "max"
+              },
+              {
+                "id": "min"
+              },
+              {
+                "id": "unit"
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": []
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "username"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": true,
+                    "title": "",
+                    "url": "https://cms.geddes.rcac.purdue.edu/grafana/d/single-user-stat-dashboard/single-user-statistics?&var-user=purdue-af-${__data.fields.ID}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "username 1"
+            },
+            "properties": [
+              {
+                "id": "decimals"
+              },
+              {
+                "id": "displayName",
+                "value": "Username"
+              },
+              {
+                "id": "max"
+              },
+              {
+                "id": "min"
+              },
+              {
+                "id": "unit"
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": []
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "username 1"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": true,
+                    "title": "",
+                    "url": "https://cms.geddes.rcac.purdue.edu/grafana/d/single-user-stat-dashboard/single-user-statistics?&var-user=purdue-af-${__data.fields.ID}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #daskWorkers"
+            },
+            "properties": [
+              {
+                "id": "decimals"
+              },
+              {
+                "id": "displayName",
+                "value": "Dask workers"
+              },
+              {
+                "id": "max"
+              },
+              {
+                "id": "min"
+              },
+              {
+                "id": "unit"
+              },
+              {
+                "id": "custom.width",
+                "value": 110
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": []
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #podAge"
+            },
+            "properties": [
+              {
+                "id": "decimals"
+              },
+              {
+                "id": "displayName",
+                "value": "Pod age"
+              },
+              {
+                "id": "max"
+              },
+              {
+                "id": "min"
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.width",
+                "value": 100
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "blue",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 86400
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 1209600
+                    },
+                    {
+                      "color": "orange",
+                      "value": 2592000
+                    },
+                    {
+                      "color": "red",
+                      "value": 15552000
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "color": "value",
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #storageLastAccess"
+            },
+            "properties": [
+              {
+                "id": "decimals"
+              },
+              {
+                "id": "displayName",
+                "value": "Last active"
+              },
+              {
+                "id": "max"
+              },
+              {
+                "id": "min"
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.width",
+                "value": 100
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "blue",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 86400
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 1209600
+                    },
+                    {
+                      "color": "orange",
+                      "value": 2592000
+                    },
+                    {
+                      "color": "red",
+                      "value": 15552000
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "color": "value",
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #homeStorageUtil"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "displayName",
+                "value": "/home/ util."
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 0.6
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.8
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.9
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "lcd",
+                  "type": "gauge",
+                  "valueDisplayMode": "color"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #workStorageUtil"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "displayName",
+                "value": "/work/ util."
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 0.6
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.8
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.9
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "lcd",
+                  "type": "gauge",
+                  "valueDisplayMode": "color"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #podCpuUtilCurrent"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "displayName",
+                "value": "Pod CPU util."
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 0.6
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.8
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.9
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "lcd",
+                  "type": "gauge",
+                  "valueDisplayMode": "color"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #podMemUtilCurrent"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "displayName",
+                "value": "Pod memory util."
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 0.6
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.8
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.9
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "lcd",
+                  "type": "gauge",
+                  "valueDisplayMode": "color"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #gpuUtilCurrent"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "displayName",
+                "value": "GPU engine util."
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 0.6
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.8
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.9
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "lcd",
+                  "type": "gauge",
+                  "valueDisplayMode": "color"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #gpuMemUtilCurrent"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "displayName",
+                "value": "GPU mem. util."
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 0.6
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.8
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.9
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "lcd",
+                  "type": "gauge",
+                  "valueDisplayMode": "color"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #cpuLimit"
+            },
+            "properties": [
+              {
+                "id": "decimals"
+              },
+              {
+                "id": "displayName",
+                "value": "CPU lim."
+              },
+              {
+                "id": "max"
+              },
+              {
+                "id": "min"
+              },
+              {
+                "id": "unit"
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": []
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #gpuLimit"
+            },
+            "properties": [
+              {
+                "id": "decimals"
+              },
+              {
+                "id": "displayName",
+                "value": "GPU lim."
+              },
+              {
+                "id": "max"
+              },
+              {
+                "id": "min"
+              },
+              {
+                "id": "unit"
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": []
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #memLimit"
+            },
+            "properties": [
+              {
+                "id": "decimals"
+              },
+              {
+                "id": "displayName",
+                "value": "Memory lim."
+              },
+              {
+                "id": "max"
+              },
+              {
+                "id": "min"
+              },
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "custom.width",
+                "value": 110
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": []
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*"
+            },
+            "properties": [
+              {
+                "id": "custom.align",
+                "value": "left"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*Limit"
+            },
+            "properties": [
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 24,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Pod age"
+          }
+        ]
+      },
+      "pluginVersion": "10.4.14",
+      "targets": [
+        {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "definition": "",
-          "hide": 0,
-          "includeAll": false,
-          "multi": false,
-          "name": "namespace",
-          "options": [],
-          "query": "label_values(kube_pod_labels{namespace=~\"cms(-dev)?\",pod=~\"purdue-af-.*\"}, namespace)",
-          "refresh": 1,
-          "regex": "",
-          "skipUrlSync": false,
-          "sort": 3,
-          "type": "query"
+          "expr": "af_home_dir_util{namespace=~\"$namespace\",job=\"af-pod-monitor\",username!=\"\"}",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "homeStorageUtil"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "af_work_dir_util{namespace=~\"$namespace\",job=\"af-pod-monitor\",username!=\"\"}",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "workStorageUtil"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "time() - af_home_dir_last_accessed{namespace=~\"$namespace\", job=\"af-pod-monitor\",username!=\"\"}",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "storageLastAccess"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(\n  time() - kube_pod_created{namespace=~\"$namespace\",pod=~\"purdue-af-.*\"},\n  \"userId\", \"$1\", \"pod\", \"purdue-af-(.*)\"\n)\n",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "podAge"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "expr": "kube_pod_container_resource_limits{namespace=~\"$namespace\",pod=~\"purdue-af-.*\",resource=\"cpu\",container=\"notebook\"}",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "cpuLimit"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "expr": "kube_pod_container_resource_limits{namespace=~\"$namespace\",pod=~\"purdue-af-.*\",resource=\"nvidia_com_mig_1g_5gb\",container=\"notebook\"}",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "gpuLimit"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "expr": "kube_pod_container_resource_limits{namespace=~\"$namespace\",pod=~\"purdue-af-.*\",resource=\"memory\",container=\"notebook\"}",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "memLimit"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=~\"$namespace\",pod=~\"purdue-af-.*\", container=\"notebook\"}[5m])\n) by (pod)\n    /\nsum by (pod)(\n    kube_pod_container_resource_limits{namespace=~\"$namespace\",pod=~\"purdue-af-.*\", resource=\"cpu\", container=\"notebook\"}\n)\n",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "podCpuUtilCurrent"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=~\"$namespace\", pod=~\"purdue-af-.*\", container=\"notebook\"}\n) /\nsum by (pod)(\n    kube_pod_container_resource_limits{namespace=~\"$namespace\", pod=~\"purdue-af-.*\", resource=\"memory\", container=\"notebook\"}\n)\n",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "podMemUtilCurrent"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "expr": "sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{\n  namespace=~\"$namespace\",\n  pod=~\"purdue-af-.*\",\n  kubernetes_node=~\"geddes-g00.*\"\n})\n",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "gpuUtilCurrent"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "expr": "sum by (pod) (\n  ( DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00.*\",namespace=~\"$namespace\",pod=~\"purdue-af-.*\"}\n    / ( \n      DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00.*\",namespace=~\"$namespace\",pod=~\"purdue-af-.*\"} +\n      DCGM_FI_DEV_FB_FREE{kubernetes_node=~\"geddes-g00.*\",namespace=~\"$namespace\",pod=~\"purdue-af-.*\"}\n    )\n  )\n)\n",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "gpuMemUtilCurrent"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (pod) (dask_scheduler_workers{job=\"af-pod-monitor\",namespace=~\"$namespace\",pod=~\"purdue-af-.*\",})\n",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "daskWorkers"
         }
-      ]
-    },
-    "time": {
-      "from": "now-6h",
-      "to": "now"
-    },
-    "timepicker": {},
-    "timezone": "browser",
-    "title": "Users Statistics",
-    "uid": "user-stats-dashboard",
-    "version": 1294,
-    "weekStart": ""
-  }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "pod"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "exclude": {
+              "pattern": "^(pod|.*podStatus|.*#userId|.*gpuLimit)$"
+            },
+            "include": {
+              "pattern": "^(Value.*|userId|username|username 1|node|node 1|docker_image_tag|docker_image_tag 1)$"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "Value #cpuLimit": 14,
+              "Value #daskWorkers": 13,
+              "Value #gpuMemUtilCurrent": 10,
+              "Value #gpuUtilCurrent": 9,
+              "Value #homeStorageUtil": 11,
+              "Value #memLimit": 15,
+              "Value #podAge": 5,
+              "Value #podCpuUtilCurrent": 7,
+              "Value #podMemUtilCurrent": 8,
+              "Value #storageLastAccess": 6,
+              "Value #workStorageUtil": 12,
+              "docker_image_tag": 3,
+              "docker_image_tag 1": 4,
+              "node": 16,
+              "node 1": 17,
+              "userId": 0,
+              "username": 1,
+              "username 1": 2
+            }
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "conversions": [
+              {
+                "destinationType": "number",
+                "targetField": "userId"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "table"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "cms",
+          "value": "cms"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "",
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "namespace",
+        "options": [],
+        "query": "label_values(kube_pod_labels{namespace=~\"cms(-dev)?\",pod=~\"purdue-af-.*\"}, namespace)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 3,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Users Statistics",
+  "uid": "user-stats-dashboard",
+  "version": 1294,
+  "weekStart": ""
+}
