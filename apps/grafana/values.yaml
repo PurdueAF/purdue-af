@@ -54,6 +54,7 @@ grafana.ini:
     hide_version: true
   users:
     allow_sign_up: false
+    default_theme: light
   security:
     allow_embedding: true
 
@@ -75,15 +76,6 @@ dashboardProviders:
 # Use ConfigMap for dashboards
 dashboardsConfigMaps:
   default: grafana-dashboards
-
-# Set default dashboard
-dashboards:
-  default:
-    default-dashboard:
-      file: default.json
-      editable: true
-      options:
-        home: true
 
 datasources:
   datasources.yaml:
