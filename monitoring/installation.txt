@@ -1,8 +1,0 @@
-brew install go-jsonnet
-brew install jsonnet-bundler
-
-mkdir grafonnet
-cd grafonnet
-
-jb init
-jb install github.com/grafana/grafonnet/gen/grafonnet-latest@main
