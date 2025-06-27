@@ -47,10 +47,6 @@ grafana.ini:
   server:
     root_url: https://cms.geddes.rcac.purdue.edu/grafana-flux
     serve_from_sub_path: true
-  users:
-    allow_sign_up: false
-  auth.anonymous:
-    enabled: false
 
 # Dashboard and datasource provisioning
 dashboardProviders:
@@ -69,10 +65,8 @@ dashboardProviders:
 
 dashboards:
   default:
-    prometheus-overview:
-      gnetId: 315
-      revision: 3
-      datasource: Prometheus
+    default-dashboard:
+      file: default.json
 
 datasources:
   datasources.yaml:
@@ -83,3 +77,14 @@ datasources:
         url: http://prometheus-server.cms.svc.cluster.local
         access: proxy
         isDefault: true
+
+# Mount ConfigMap for dashboards
+extraVolumeMounts:
+  - name: grafana-dashboards
+    mountPath: /var/lib/grafana/dashboards/default
+    readOnly: true
+
+extraVolumes:
+  - name: grafana-dashboards
+    configMap:
+      name: grafana-dashboards
