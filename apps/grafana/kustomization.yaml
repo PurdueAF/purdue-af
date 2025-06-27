@@ -14,5 +14,7 @@ configMapGenerator:
     namespace: cms
     files:
       - dashboards/default.json
+      - dashboards/single-user.json
+      - dashboards/users-overview.json
     options:
       disableNameSuffixHash: true

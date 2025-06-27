@@ -62,7 +62,7 @@ dashboardProviders:
     providers:
       - name: "default"
         orgId: 1
-        folder: ""
+        folder: "Public Dashboards"
         type: file
         disableDeletion: false
         updateIntervalSeconds: 10
@@ -71,7 +71,7 @@ dashboardProviders:
           path: /var/lib/grafana/dashboards/default
       - name: "single-user"
         orgId: 1
-        folder: ""
+        folder: "Public Dashboards"
         type: file
         disableDeletion: false
         updateIntervalSeconds: 10
@@ -80,7 +80,7 @@ dashboardProviders:
           path: /var/lib/grafana/dashboards/single-user
       - name: "users-overview"
         orgId: 1
-        folder: ""
+        folder: "Private Dashboards"
         type: file
         disableDeletion: false
         updateIntervalSeconds: 10
