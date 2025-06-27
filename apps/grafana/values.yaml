@@ -6,7 +6,6 @@ persistence:
   enabled: true
   type: pvc
   size: 10Gi
-  accessMode: ReadWriteOnce
 
 # Ingress configuration
 ingress:
@@ -60,7 +59,7 @@ dashboardProviders:
   dashboardproviders.yaml:
     apiVersion: 1
     providers:
-      - name: "default"
+      - name: "public"
         orgId: 1
         folder: "Public Dashboards"
         type: file
@@ -68,17 +67,8 @@ dashboardProviders:
         updateIntervalSeconds: 10
         allowUiUpdates: true
         options:
-          path: /var/lib/grafana/dashboards/default
-      - name: "single-user"
-        orgId: 1
-        folder: "Public Dashboards"
-        type: file
-        disableDeletion: false
-        updateIntervalSeconds: 10
-        allowUiUpdates: true
-        options:
-          path: /var/lib/grafana/dashboards/single-user
-      - name: "users-overview"
+          path: /var/lib/grafana/dashboards/public
+      - name: "private"
         orgId: 1
         folder: "Private Dashboards"
         type: file
@@ -86,11 +76,12 @@ dashboardProviders:
         updateIntervalSeconds: 10
         allowUiUpdates: true
         options:
-          path: /var/lib/grafana/dashboards/users-overview
+          path: /var/lib/grafana/dashboards/private
 
 # Use ConfigMap for dashboards
 dashboardsConfigMaps:
-  default: grafana-dashboards
+  public: grafana-public-dashboards
+  private: grafana-private-dashboards
 
 datasources:
   datasources.yaml:

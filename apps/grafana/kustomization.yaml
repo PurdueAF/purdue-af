@@ -10,11 +10,16 @@ configMapGenerator:
       - values.yaml
     options:
       disableNameSuffixHash: true
-  - name: grafana-dashboards
+  - name: grafana-public-dashboards
     namespace: cms
     files:
       - dashboards/default.json
       - dashboards/single-user.json
+    options:
+      disableNameSuffixHash: true
+  - name: grafana-private-dashboards
+    namespace: cms
+    files:
       - dashboards/users-overview.json
     options:
       disableNameSuffixHash: true
