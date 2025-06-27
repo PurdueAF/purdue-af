@@ -64,9 +64,9 @@ dashboardProviders:
   dashboardproviders.yaml:
     apiVersion: 1
     providers:
-      - name: 'default'
+      - name: "default"
         orgId: 1
-        folder: ''
+        folder: ""
         type: file
         disableDeletion: false
         updateIntervalSeconds: 10
@@ -89,4 +89,4 @@ datasources:
         type: prometheus
         url: http://prometheus-server.cms.svc.cluster.local
         access: proxy
-        isDefault: true 
+        isDefault: true
