@@ -14,16 +14,15 @@ persistence:
 # Ingress configuration
 ingress:
   enabled: true
-  ingressClassName: nginx
+  ingressClassName: public
+  path: /grafana-flux
+  pathType: Prefix
   hosts:
-    - host: cms.geddes.rcac.purdue.edu
-      paths:
-        - path: /grafana-flux
-          pathType: Prefix
-  tls:
-    - secretName: grafana-tls
-      hosts:
-        - cms.geddes.rcac.purdue.edu
+    - cms.geddes.rcac.purdue.edu
+  # tls:
+  #   - secretName: grafana-tls
+  #     hosts:
+  #       - cms.geddes.rcac.purdue.edu
 
 # Service configuration
 service:
