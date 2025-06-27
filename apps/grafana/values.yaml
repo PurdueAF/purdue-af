@@ -44,7 +44,7 @@ resources:
 # Grafana configuration
 grafana.ini:
   server:
-    root_url: https://cms.geddes.rcac.purdue.edu/grafana-flux
+    root_url: https://cms.geddes.rcac.purdue.edu/hub/grafana
     serve_from_sub_path: true
   dashboards:
     default_home_dashboard_path: /var/lib/grafana/dashboards/default/default.json
