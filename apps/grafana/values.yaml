@@ -47,16 +47,8 @@ grafana.ini:
   server:
     root_url: https://cms.geddes.rcac.purdue.edu/grafana-flux
     serve_from_sub_path: true
-  auth.anonymous:
-    enabled: true
-    org_name: Main Org.
-    org_role: Viewer
-    hide_version: true
-  users:
-    allow_sign_up: false
-    default_theme: light
-  security:
-    allow_embedding: true
+  dashboards:
+    default_home_dashboard_path: /var/lib/grafana/dashboards/default/default.json
 
 # Dashboard and datasource provisioning
 dashboardProviders:
