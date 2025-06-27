@@ -1,9 +1,6 @@
 # Grafana Helm Chart Values
 # https://github.com/grafana/helm-charts/tree/main/charts/grafana
 
-# Default admin password - should be changed in production
-adminPassword: "admin"
-
 # Persistence configuration
 persistence:
   enabled: true
@@ -50,9 +47,6 @@ grafana.ini:
   server:
     root_url: https://cms.geddes.rcac.purdue.edu/grafana-flux
     serve_from_sub_path: true
-  security:
-    admin_user: admin
-    admin_password: admin
   users:
     allow_sign_up: false
   auth.anonymous:
