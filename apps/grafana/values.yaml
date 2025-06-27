@@ -35,12 +35,12 @@ securityContext:
 
 # Resources
 resources:
-  limits:
-    cpu: 200m
-    memory: 200Mi
   requests:
-    cpu: 100m
-    memory: 100Mi
+    cpu: 2000m
+    memory: 4Gi
+  limits:
+    cpu: 2000m
+    memory: 4Gi
 
 # Grafana configuration
 grafana.ini:
