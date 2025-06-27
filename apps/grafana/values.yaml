@@ -11,7 +11,7 @@ persistence:
 ingress:
   enabled: true
   ingressClassName: public
-  path: /grafana-flux
+  path: /grafana
   pathType: Prefix
   hosts:
     - cms.geddes.rcac.purdue.edu
