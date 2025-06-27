@@ -47,7 +47,7 @@ grafana.ini:
     root_url: https://cms.geddes.rcac.purdue.edu/grafana/
     serve_from_sub_path: true
   dashboards:
-    default_home_dashboard_path: /var/lib/grafana/dashboards/default/default.json
+    default_home_dashboard_path: /var/lib/grafana/dashboards/public/default.json
   auth.anonymous:
     enabled: true
     org_name: Main Org.
