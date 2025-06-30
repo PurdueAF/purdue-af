@@ -78,7 +78,7 @@ prometheus:
     scheme: https
 
 grafana:
-  enabled: true
+  enabled: false
   dashboardsConfigMaps:
     default: sonic-server-grafana-default-dashboard
   datasources:
