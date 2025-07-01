@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kaniko-build-job
+  namespace: cms
+spec:
+  backoffLimit: 0
+  completions: 1
+  template:
+    spec:
+      containers:
+        - name: kaniko
+          image: gcr.io/kaniko-project/executor:latest
+          args:
+            - "--context=git://github.com/PurdueAF/purdue-af.git"
+            - "--context-sub-path=docker/interlink-slurm-plugin/"
+            - "--dockerfile=Dockerfile"
+            - "--destination=geddes-registry.rcac.purdue.edu/cms/interlink-slurm-plugin:0.5.0"
+            - "--cache=true"
+            # - "--no-push"
+          resources:
+            requests:
+              memory: "4Gi"
+              cpu: "4"
+            limits:
+              memory: "8Gi"
+              cpu: "8"
+          volumeMounts:
+            - name: docker-config
+              mountPath: /kaniko/.docker/
+      restartPolicy: Never
+      volumes:
+        - name: docker-config
+          secret:
+            secretName: docker-config
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
