@@ -1,0 +1,21 @@
+# values-incluster.yaml
+nodeName: interlink-incluster-node
+
+interlink:
+  enabled: true
+  socket: unix:///var/run/interlink.sock
+
+plugin:
+  enabled: true
+  image: "ghcr.io/intertwin-eu/interlink/plugin-docker:latest"
+  socket: unix:///var/run/plugin.sock
+  config: |
+    InterlinkURL: "unix:///var/run/interlink.sock"
+    SidecarURL: "unix:///var/run/plugin.sock"
+    VerboseLogging: true
+
+virtualNode:
+  resources:
+    CPUs: 4
+    memGiB: 16
+    pods: 50
