@@ -17,4 +17,4 @@ spec:
   valuesFrom:
     - kind: ConfigMap
       name: interlink-config
-      valuesKey: values.yaml 
+      valuesKey: values.yaml
