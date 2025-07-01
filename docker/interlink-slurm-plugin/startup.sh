@@ -7,6 +7,11 @@ if [ "$(id -u)" != "0" ]; then
 	sudo -k
 fi
 
+chmod 0755 /run
+mkdir -p /run/munge
+chown munge:munge /run/munge
+chmod 0711 /run/munge
+
 # Configure Slurm to use maximum available processors and memory
 # and start required services
 ${sudo_cmd} bash <<SCRIPT

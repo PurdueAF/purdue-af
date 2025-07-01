@@ -35,11 +35,6 @@ RUN DEBIAN_FRONTEND=noninteractive \
     apt-get -y install munge \
                    slurm-wlm
 
-RUN chmod 0755 /run
-RUN mkdir -p /run/munge \
-    && chown munge:munge /run/munge \
-    && chmod 0711 /run/munge
-
 # Slurm configuration
 COPY ../cmsaf-alma8/slurm/slurm.conf /etc/slurm/slurm.conf
 RUN mkdir -p /var/spool/slurmctld \
