@@ -99,26 +99,26 @@ dependencies:
 
   # PIP PACKAGES
   - pip:
-    - rucio-clients
-    - scalpl
-    - tensorflow[and-cuda]==2.15.1
-    - tensorflow-probability==0.23
-    - pyarrow==10.0.1
-    - uproot==4.3.7
-    - awkward==1.10.3
-    - vector==1.4.2
-    - tf-keras
-    - qkeras
-    - torch==2.0.1
-    - torch-geometric==2.3.1
-    - git+https://github.com/mattbellis/particle_physics_simplified.git
-    - git+https://github.com/mattbellis/h5hep.git
-    - PhyPraKit
-    - dbs3-client
-    - correctionlib==2.5.0
-    - cmsstyle
-    - xgbfir
-    - servicex==3.1.1
+      - rucio-clients
+      - scalpl
+      - tensorflow[and-cuda]==2.15.1
+      - tensorflow-probability==0.23
+      - pyarrow==10.0.1
+      - uproot==4.3.7
+      - awkward==1.10.3
+      - vector==1.4.2
+      - tf-keras
+      - qkeras
+      - torch==2.0.1
+      - torch-geometric==2.3.1
+      - git+https://github.com/mattbellis/particle_physics_simplified.git
+      - git+https://github.com/mattbellis/h5hep.git
+      - PhyPraKit
+      - dbs3-client
+      - correctionlib==2.5.0
+      - cmsstyle
+      - xgbfir
+      - servicex==3.1.1
 
     # must run this command: pip uninstall nvidia-cudnn-cu11
 
