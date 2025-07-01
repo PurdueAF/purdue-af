@@ -5,4 +5,4 @@ metadata:
   namespace: cms
 spec:
   interval: 1h
-  url: https://intertwin-eu.github.io/interlink-helm-chart/
+  url: https://interlink-hq.github.io/interlink-helm-chart
