@@ -3,9 +3,8 @@ FROM golang:1.22 as build-stage
 WORKDIR /app
 
 # COPY . .
-RUN git clone https://github.com/interlink-hq/interlink-slurm-plugin.git
+RUN git clone https://github.com/interlink-hq/interlink-slurm-plugin.git /app
 
-WORKDIR /app/interlink-slurm-plugin
 RUN git checkout 0.5.0
 
 
