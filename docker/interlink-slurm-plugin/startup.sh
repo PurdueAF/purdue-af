@@ -3,8 +3,8 @@
 # Determine whether script is running as root
 sudo_cmd=""
 if [ "$(id -u)" != "0" ]; then
-    sudo_cmd="sudo"
-    sudo -k
+	sudo_cmd="sudo"
+	sudo -k
 fi
 
 # Configure Slurm to use maximum available processors and memory
@@ -20,5 +20,5 @@ SCRIPT
 
 # Revoke sudo permissions
 if [[ ${sudo_cmd} ]]; then
-    sudo -k
+	sudo -k
 fi
