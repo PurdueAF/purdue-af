@@ -2,7 +2,13 @@ FROM golang:1.22 as build-stage
 
 WORKDIR /app
 
-COPY . .
+# COPY . .
+RUN git clone https://github.com/interlink-hq/interlink-slurm-plugin.git
+
+WORKDIR /app/interlink-slurm-plugin
+RUN git checkout 0.5.0
+
+
 RUN CGO_ENABLED=0 GOOS=linux go build -o bin/slurm-sidecar cmd/main.go
 
 
