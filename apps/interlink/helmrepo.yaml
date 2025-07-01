@@ -5,4 +5,5 @@ metadata:
   namespace: cms
 spec:
   interval: 1h
-  url: https://interlink-hq.github.io/interlink-helm-chart
+  type: oci
+  url: oci://ghcr.io/interlink-hq/interlink-helm-chart
