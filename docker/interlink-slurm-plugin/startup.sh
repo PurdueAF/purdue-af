@@ -7,10 +7,15 @@ if [ "$(id -u)" != "0" ]; then
 	sudo -k
 fi
 
+# Configure permissions for munge
 chmod 0755 /run
 mkdir -p /run/munge
 chown munge:munge /run/munge
 chmod 0711 /run/munge
+
+# Configure permissions for slurm
+mkdir -p /var/lock/slurm
+chown slurm:slurm /var/lock/slurm
 
 # Configure Slurm to use maximum available processors and memory
 # and start required services

@@ -36,7 +36,7 @@ RUN DEBIAN_FRONTEND=noninteractive \
                    slurm-wlm
 
 # Slurm configuration
-COPY ../cmsaf-alma8/slurm/slurm.conf /etc/slurm/slurm.conf
+COPY slurm.conf /etc/slurm/slurm.conf
 RUN mkdir -p /var/spool/slurmctld \
     && chown slurm:slurm /var/spool/slurmctld
 
