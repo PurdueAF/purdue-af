@@ -7,12 +7,18 @@ spec:
   interval: 1m
   chart:
     spec:
-      chart: interlink
+      chart: helm/interlink
       version: "0.5.0"
       sourceRef:
-        kind: HelmRepository
+        kind: GitRepository
         name: interlink
         namespace: cms
+      # chart: interlink
+      # version: "0.5.0"
+      # sourceRef:
+      #   kind: HelmRepository
+      #   name: interlink
+      #   namespace: cms
       interval: 1m
   valuesFrom:
     - kind: ConfigMap
