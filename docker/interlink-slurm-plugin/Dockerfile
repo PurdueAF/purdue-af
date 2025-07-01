@@ -7,7 +7,6 @@ RUN git clone https://github.com/interlink-hq/interlink-slurm-plugin.git /app
 
 RUN git checkout 0.5.0
 
-
 RUN CGO_ENABLED=0 GOOS=linux go build -o bin/slurm-sidecar cmd/main.go
 
 
@@ -47,6 +46,7 @@ RUN chmod 555 /etc/startup.sh
 
 WORKDIR /root
 
+COPY SlurmConfig.yaml /root/SlurmConfig.yaml
 COPY --from=build-stage /app/bin/slurm-sidecar /sidecar/slurm-sidecar
 
 ENV SLURMCONFIGPATH=/root/SlurmConfig.yaml
