@@ -7,7 +7,7 @@ spec:
   interval: 1m
   chart:
     spec:
-      chart: helm/interlink
+      chart: interlink
       version: "0.5.0"
       sourceRef:
         kind: GitRepository
