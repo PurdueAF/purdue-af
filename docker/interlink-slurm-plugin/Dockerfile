@@ -33,11 +33,12 @@ RUN apt-get -y install locales \
 # Install system packages
 RUN DEBIAN_FRONTEND=noninteractive \
     apt-get -y install munge \
-                   slurm-wlm \
-    && mkdir -p /run/munge /var/lock/slurm \
+                   slurm-wlm
+
+RUN chmod 0755 /run
+RUN mkdir -p /run/munge \
     && chown munge:munge /run/munge \
-    && chmod 0711 /run/munge \
-    && chown slurm:slurm /var/lock/slurm
+    && chmod 0711 /run/munge
 
 # Slurm configuration
 COPY ../cmsaf-alma8/slurm/slurm.conf /etc/slurm/slurm.conf
