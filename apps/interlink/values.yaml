@@ -3,15 +3,15 @@ nodeName: interlink-hammer
 
 interlink:
   enabled: true
-  socket: unix:///tmp/interlink.sock
+  socket: unix:///var/run/interlink.sock
 
 plugin:
   enabled: true
   image: "geddes-registry.rcac.purdue.edu/cms/interlink-slurm-plugin:0.5.0"
-  socket: unix:///tmp/plugin.sock
+  socket: unix:///var/run/plugin.sock
   config: |
-    InterlinkURL: "unix:///tmp/interlink.sock"
-    SidecarURL: "unix:///tmp/plugin.sock"
+    InterlinkURL: "unix:///var/run/interlink.sock"
+    SidecarURL: "unix:///var/run/plugin.sock"
     VerboseLogging: true
 
 virtualNode:
