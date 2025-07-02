@@ -1,5 +1,5 @@
 # values-incluster.yaml
-nodeName: interlink-incluster-node
+nodeName: interlink-hammer
 
 interlink:
   enabled: true
