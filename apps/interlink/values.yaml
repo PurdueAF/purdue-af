@@ -3,15 +3,15 @@ nodeName: interlink-incluster-node
 
 interlink:
   enabled: true
-  socket: unix:///tmp/run/interlink.sock
+  socket: unix:///tmp/interlink.sock
 
 plugin:
   enabled: true
   image: "geddes-registry.rcac.purdue.edu/cms/interlink-slurm-plugin:0.5.0"
-  socket: unix:///tmp/run/plugin.sock
+  socket: unix:///tmp/plugin.sock
   config: |
-    InterlinkURL: "unix:///tmp/run/interlink.sock"
-    SidecarURL: "unix:///tmp/run/plugin.sock"
+    InterlinkURL: "unix:///tmp/interlink.sock"
+    SidecarURL: "unix:///tmp/plugin.sock"
     VerboseLogging: true
 
 virtualNode:
