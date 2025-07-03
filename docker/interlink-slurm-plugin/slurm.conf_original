@@ -3,7 +3,7 @@
 # See the slurm.conf man page for more information.
 #
 ClusterName=cluster
-SlurmctldHost=hammer-adm
+SlurmctldHost=<<HOSTNAME>>
 #
 #MailProg=/bin/mail
 MpiDefault=none
@@ -46,7 +46,5 @@ SlurmdLogFile=/var/log/slurmd.log
 #
 #
 # COMPUTE NODES
-NodeName=hammer-f[001-015] RealMemory=511000 MemSpecLimit=512 Sockets=2 CoresPerSocket=64 ThreadsPerCore=2 Gres=gpu:1 Feature=F,f,T4 State=UNKNOWN
-PartitionName=hammer-nodes Nodes=hammer-c[000-026],hammer-d[000-017],hammer-e[000-014],hammer-f[000-015],hammer-g[000-005] Default=NO MaxTime=720:00:00 State=UP PriorityJobFactor=10 PriorityTier=1 PreemptMode=off OverSubscribe=FORCE:1
-# NodeName=<<HOSTNAME>> CPUs=<<CPU>> RealMemory=<<MEMORY>> State=UNKNOWN
-# PartitionName=debug Nodes=ALL Default=YES MaxTime=INFINITE State=UP
+NodeName=<<HOSTNAME>> CPUs=<<CPU>> RealMemory=<<MEMORY>> State=UNKNOWN
+PartitionName=debug Nodes=ALL Default=YES MaxTime=INFINITE State=UP
