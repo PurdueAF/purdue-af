@@ -46,4 +46,3 @@ spec:
                 value:
                   capabilities:
                     add: ["NET_BIND_SERVICE"]
-
