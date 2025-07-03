@@ -32,17 +32,13 @@ spec:
               name: "interlink-hammer-node"
             patch: |
               - op: add
-                path: /spec/template/spec/containers/0/securityContext
+                path: /spec/template/spec/initContainers
                 value:
-                  capabilities:
-                    add: ["NET_BIND_SERVICE"]
-              - op: add
-                path: /spec/template/spec/containers/1/securityContext
-                value:
-                  capabilities:
-                    add: ["NET_BIND_SERVICE"]
-              - op: add
-                path: /spec/template/spec/containers/2/securityContext
-                value:
-                  capabilities:
-                    add: ["NET_BIND_SERVICE"]
+                  - name: chmod-var-run
+                    image: busybox:1.35
+                    command: ["sh", "-c", "chmod 777 /var/run"]
+                    volumeMounts:
+                      - name: sockets
+                        mountPath: /var/run
+                    securityContext:
+                      runAsUser: 0
