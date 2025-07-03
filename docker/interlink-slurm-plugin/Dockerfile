@@ -57,4 +57,4 @@ RUN apt-get update && apt-get install -y software-properties-common \
 
 RUN mkdir -p /cvmfs/grid.cern.ch/etc/grid-security
 
-CMD ["/bin/sh", "-c", "/etc/startup.sh && SHARED_FS=false /sidecar/slurm-sidecar"]
+CMD ["/bin/sh", "-c", "/etc/startup.sh && SHARED_FS=true /sidecar/slurm-sidecar"]
