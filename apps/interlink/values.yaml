@@ -7,7 +7,7 @@ interlink:
 
 plugin:
   enabled: true
-  image: "geddes-registry.rcac.purdue.edu/cms/interlink-slurm-plugin:0.5.0"
+  # image: "geddes-registry.rcac.purdue.edu/cms/interlink-slurm-plugin:0.5.0"
   socket: unix:///var/run/plugin.sock
   config: |
     InterlinkURL: "unix:///var/run/interlink.sock"
