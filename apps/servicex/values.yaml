@@ -42,7 +42,7 @@ codeGen:
     tag: uproot-compression
     enabled: true
     defaultScienceContainerTag: uproot5
-    compressionAlgorithm: LZMA
+    compressionAlgorithm: ZSTD
     compressionLevel: 1
   uproot:
     enabled: false
