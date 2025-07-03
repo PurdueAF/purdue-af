@@ -15,10 +15,6 @@ chmod 0711 /run/munge
 mkdir -p /run/lock/
 touch /run/lock/slurm
 
-mkdir -p /var/run/interlink
-chown slurm:slurm /var/run/interlink
-chmod 0755 /var/run/interlink
-
 # Configure Slurm to use maximum available processors and memory
 # and start required services
 ${sudo_cmd} bash <<SCRIPT
