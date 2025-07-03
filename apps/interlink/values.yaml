@@ -4,6 +4,8 @@ nodeName: interlink-hammer
 interlink:
   enabled: true
   socket: unix:///var/run/interlink.sock
+  logging:
+    verboseLogging: true
 
 plugin:
   enabled: true
