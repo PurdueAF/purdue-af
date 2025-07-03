@@ -32,13 +32,14 @@ spec:
               name: "interlink-hammer-node"
             patch: |
               - op: add
-                path: /spec/template/spec/initContainers
+                path: /spec/template/spec/containers/0/securityContext
                 value:
-                  - name: chmod-var-run
-                    image: busybox:1.35
-                    command: ["sh", "-c", "chmod 777 /var/run"]
-                    volumeMounts:
-                      - name: sockets
-                        mountPath: /var/run
-                    securityContext:
-                      runAsUser: 0
+                  runAsUser: 0
+              - op: add
+                path: /spec/template/spec/containers/1/securityContext
+                value:
+                  runAsUser: 0
+              - op: add
+                path: /spec/template/spec/containers/2/securityContext
+                value:
+                  runAsUser: 0
