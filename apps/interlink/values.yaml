@@ -58,3 +58,12 @@ extraVolumes:
     nfs:
       server: datadepot.rcac.purdue.edu
       path: /depot/cms/purdue-af/interlink
+
+podScheduling:
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
