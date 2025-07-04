@@ -46,7 +46,6 @@ plugin:
     TsocksLoginNode: "login01"
     BashPath: /bin/bash
 
-
 virtualNode:
   resources:
     CPUs: 4
