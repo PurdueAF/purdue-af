@@ -3,7 +3,7 @@ nodeName: interlink-hammer
 
 interlink:
   enabled: true
-  image: ghcr.io/interlink-hq/interlink-helm-chart/interlink:0.5.1
+  image: ghcr.io/interlink-hq/interlink-helm-chart/interlink:0.5.2
   socket: unix:///var/run/interlink.sock
   address: http://localhost
   port: 3000
