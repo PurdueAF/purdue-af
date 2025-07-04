@@ -14,7 +14,7 @@ spec:
       #   name: interlink
       #   namespace: cms
       chart: interlink
-      version: "0.5.1"
+      version: "0.5.2"
       sourceRef:
         kind: HelmRepository
         name: interlink
