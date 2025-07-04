@@ -16,7 +16,7 @@ plugin:
   #socket: unix:///var/run/plugin.sock
   address: "http://localhost"
   port: 4000
-  privileged: true
+  privileged: false
   extraVolumeMounts:
     - name: plugin-data
       mountPath: /slurm-data
