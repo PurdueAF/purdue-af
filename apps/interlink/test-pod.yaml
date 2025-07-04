@@ -6,19 +6,27 @@ metadata:
 spec:
   nodeSelector:
     kubernetes.io/hostname: interlink-hammer
+  tolerations:
+    - key: virtual-node.interlink/no-schedule
+      operator: Exists
+  volumes:
+    - name: slurm-data
+      nfs:
+        server: datadepot.rcac.purdue.edu
+        path: /depot/cms/purdue-af/interlink
   containers:
-    - name: test
-      image: busybox:1.35
-      command: ["sh", "-c"]
-      args:
-        [
-          "echo 'Hello from virtual node interlink-incluster-node!' && sleep 300",
-        ]
-      resources:
-        requests:
-          memory: "1Gi"
-          cpu: "1"
-        limits:
-          memory: "2Gi"
-          cpu: "2"
+  - name: test
+    image: busybox:1.35
+    command: ["sh", "-c"]
+    args: ["echo 'Hello from virtual node interlink-hammer!' && sleep 300"]
+    volumeMounts:
+      - name: slurm-data
+        mountPath: /slurm-data
+    resources:
+      requests:
+        memory: "100M"
+        cpu: "250m"
+      limits:
+        memory: "200M"
+        cpu: "1"
   restartPolicy: Never

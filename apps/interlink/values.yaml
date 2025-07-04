@@ -55,5 +55,5 @@ virtualNode:
 extraVolumes:
   - name: plugin-data
     nfs:
-    server: datadepot.rcac.purdue.edu
-    path: /depot/cms/purdue-af/interlink
+      server: datadepot.rcac.purdue.edu
+      path: /depot/cms/purdue-af/interlink
