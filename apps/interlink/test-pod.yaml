@@ -21,7 +21,7 @@ spec:
       args: ["echo 'Hello from virtual node interlink-hammer!' && sleep 300"]
       volumeMounts:
         - name: slurm-data
-          mountPath: /slurm-data
+          mountPath: /depot/cms/purdue-af/interlink/
       resources:
         requests:
           memory: "100M"

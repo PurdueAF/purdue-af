@@ -18,7 +18,7 @@ plugin:
   privileged: false
   extraVolumeMounts:
     - name: plugin-data
-      mountPath: /slurm-data
+      mountPath: /depot/cms/purdue-af/interlink/
   envs:
     - name: SLURMCONFIGPATH
       value: "/etc/interlink/plugin.yaml"
