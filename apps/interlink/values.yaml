@@ -33,7 +33,7 @@ plugin:
     # NEEDED PATH FOR GITHUB ACTIONS
     #DataRootFolder: "/home/runner/work/interLink/interLink/.interlink/"
     # on your host use something like:
-    DataRootFolder: "/slurm-data/"
+    DataRootFolder: "/depot/cms/purdue-af/interlink/"
     ExportPodData: true
     SbatchPath: "/usr/bin/sbatch"
     ScancelPath: "/usr/bin/scancel"
