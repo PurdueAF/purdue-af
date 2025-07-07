@@ -7,6 +7,12 @@ if [ "$(id -u)" != "0" ]; then
 	sudo -k
 fi
 
+mkdir -p /etc/munge/
+cp /etc/secrets/munge/munge.key /etc/munge/
+chown munge:munge /etc/munge/munge.key
+chmod 400 /etc/munge/munge.key
+sudo su -l munge -s /usr/sbin/munged
+
 # Configure Slurm to use maximum available processors and memory
 # and start required services
 ${sudo_cmd} bash <<SCRIPT

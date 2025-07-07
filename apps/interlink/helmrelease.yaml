@@ -41,5 +41,5 @@ spec:
                 path: /spec/template/spec/containers/0/volumeMounts/-
                 value:
                   name: munge-key
-                  mountPath: /etc/munge
+                  mountPath: /etc/secrets/munge
                   readOnly: true
