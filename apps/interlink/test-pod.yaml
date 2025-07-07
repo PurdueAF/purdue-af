@@ -3,6 +3,9 @@ kind: Pod
 metadata:
   name: test-interlink-hammer
   namespace: cms
+  annotations:
+    slurm-job.vk.io/singularity-options: "--unsquash"
+    slurm-job.vk.io/flags: "--uid=616617 --gid=132"
 spec:
   nodeSelector:
     kubernetes.io/hostname: interlink-hammer
