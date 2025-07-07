@@ -32,14 +32,14 @@ spec:
               name: "interlink-hammer-node"
             patch: |
               - op: add
-                path: /spec/template/spec/volumes
+                path: /spec/template/spec/volumes/-
                 value:
-                  - name: munge-key
-                    secret:
-                      secretName: munge-key
+                  name: munge-key
+                  secret:
+                    secretName: munge-key
               - op: add
-                path: /spec/template/spec/containers/1/volumeMounts
+                path: /spec/template/spec/containers/1/volumeMounts/-
                 value:
-                  - name: munge-key
-                    mountPath: /etc/munge
-                    readOnly: true
+                  name: munge-key
+                  mountPath: /etc/munge
+                  readOnly: true
