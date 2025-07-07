@@ -38,7 +38,7 @@ spec:
                   secret:
                     secretName: munge-key
               - op: add
-                path: /spec/template/spec/containers/1/volumeMounts/-
+                path: /spec/template/spec/containers/0/volumeMounts/-
                 value:
                   name: munge-key
                   mountPath: /etc/munge
