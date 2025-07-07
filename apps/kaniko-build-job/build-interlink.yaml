@@ -15,7 +15,7 @@ spec:
             - "--context=git://github.com/PurdueAF/purdue-af.git"
             - "--context-sub-path=docker/interlink-slurm-plugin/"
             - "--dockerfile=Dockerfile"
-            - "--destination=geddes-registry.rcac.purdue.edu/cms/interlink-slurm-plugin:0.5.0"
+            - "--destination=geddes-registry.rcac.purdue.edu/cms/interlink-slurm-plugin:0.5.1"
             - "--cache=true"
             # - "--no-push"
           resources:

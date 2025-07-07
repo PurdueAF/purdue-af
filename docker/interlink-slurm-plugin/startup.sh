@@ -3,17 +3,9 @@
 # Determine whether script is running as root
 sudo_cmd=""
 if [ "$(id -u)" != "0" ]; then
-	sudo_cmd="sudo"
-	sudo -k
+    sudo_cmd="sudo"
+    sudo -k
 fi
-
-# Configure permissions
-chmod 0755 /run
-mkdir -p /run/munge
-chown munge:munge /run/munge
-chmod 0711 /run/munge
-mkdir -p /run/lock/
-touch /run/lock/slurm
 
 # Configure Slurm to use maximum available processors and memory
 # and start required services
@@ -28,5 +20,5 @@ SCRIPT
 
 # Revoke sudo permissions
 if [[ ${sudo_cmd} ]]; then
-	sudo -k
+    sudo -k
 fi
