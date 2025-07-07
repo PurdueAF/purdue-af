@@ -24,22 +24,22 @@ spec:
     - kind: ConfigMap
       name: interlink-config
       valuesKey: values.yaml
-  # postRenderers:
-  #   - kustomize:
-  #       patches:
-  #         - target:
-  #             kind: Deployment
-  #             name: "interlink-hammer-node"
-  #           patch: |
-  #             - op: add
-  #               path: /spec/template/spec/containers/0/securityContext
-  #               value:
-  #                 runAsUser: 0
-  #             - op: add
-  #               path: /spec/template/spec/containers/1/securityContext
-  #               value:
-  #                 runAsUser: 0
-  #             - op: add
-  #               path: /spec/template/spec/containers/2/securityContext
-  #               value:
-  #                 runAsUser: 0
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: "interlink-hammer-node"
+            patch: |
+              - op: add
+                path: /spec/template/spec/volumes
+                value:
+                  - name: munge-key
+                    secret:
+                      secretName: munge-key
+              - op: add
+                path: /spec/template/spec/containers/1/volumeMounts
+                value:
+                  - name: munge-key
+                    mountPath: /etc/munge
+                    readOnly: true
