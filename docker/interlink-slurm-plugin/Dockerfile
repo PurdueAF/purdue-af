@@ -30,6 +30,7 @@ RUN apt-get -y install locales \
 
 # Install system packages
 RUN apt-get update &&apt-cache policy slurm-wlm
+RUN blablabla
 RUN DEBIAN_FRONTEND=noninteractive \
     apt-get -y install munge \
                    slurm-wlm
