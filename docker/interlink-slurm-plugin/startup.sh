@@ -12,10 +12,6 @@ cp /etc/secrets/munge/munge.key /etc/munge/
 chown munge:munge /etc/munge/munge.key
 chmod 400 /etc/munge/munge.key
 
-mkdir -p /var/spool/slurm
-chown -R slurm:slurm /var/spool/slurm
-chmod 755 /var/spool/slurm
-
 # Configure Slurm to use maximum available processors and memory
 # and start required services
 ${sudo_cmd} bash <<SCRIPT
@@ -24,7 +20,7 @@ sed -i "s/<<CPU>>/$(nproc)/" /etc/slurm/slurm.conf
 sed -i "s/<<MEMORY>>/$(if [[ "$(slurmd -C)" =~ RealMemory=([0-9]+) ]]; then echo "${BASH_REMATCH[1]}"; else exit 100; fi)/" /etc/slurm/slurm.conf
 service munge start
 # service slurmd start
-service slurmctld start
+# service slurmctld start
 SCRIPT
 
 # Revoke sudo permissions
