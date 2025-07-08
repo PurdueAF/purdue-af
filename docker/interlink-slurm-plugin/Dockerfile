@@ -48,11 +48,9 @@ COPY --from=build-stage /app/bin/slurm-sidecar /sidecar/slurm-sidecar
 
 ENV SLURMCONFIGPATH=/root/SlurmConfig.yaml
 
-RUN apt-get update && apt-get install -y software-properties-common wget curl gnupg2 \
- && (apt-get install -y apptainer || (wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | gpg --dearmor -o /usr/share/keyrings/oneapi-archive-keyring.gpg \
- && echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | tee /etc/apt/sources.list.d/oneAPI.list \
- && apt-get update && apt-get install -y apptainer))
-
+RUN apt-get update && apt-get install -y software-properties-common \
+ && add-apt-repository -y ppa:apptainer/ppa \
+ && apt update && apt-get install -y apptainer
 RUN mkdir -p /cvmfs/grid.cern.ch/etc/grid-security
 
 CMD ["/bin/sh", "-c", "/etc/startup.sh && SHARED_FS=true /sidecar/slurm-sidecar"]
