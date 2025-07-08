@@ -29,7 +29,7 @@ RUN apt-get -y install locales \
     && update-locale LANG=en_US.UTF-8 LC_MESSAGES=POSIX
 
 # Install system packages
-RUN apt-cache policy slurm-wlm
+RUN apt-get update &&apt-cache policy slurm-wlm
 RUN DEBIAN_FRONTEND=noninteractive \
     apt-get -y install munge \
                    slurm-wlm
