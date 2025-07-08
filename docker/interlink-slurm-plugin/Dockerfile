@@ -29,11 +29,9 @@ RUN apt-get -y install locales \
     && update-locale LANG=en_US.UTF-8 LC_MESSAGES=POSIX
 
 # Install system packages
-RUN apt-get update && apt-cache madison slurm-wlm
-RUN blablabla
 RUN DEBIAN_FRONTEND=noninteractive \
     apt-get -y install munge \
-                   slurm-wlm
+                   slurm-wlm=24.05.1-1
 
 # Slurm configuration
 COPY slurm.conf /etc/slurm/slurm.conf
