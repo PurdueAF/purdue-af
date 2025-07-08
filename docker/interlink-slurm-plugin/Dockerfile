@@ -31,7 +31,7 @@ RUN apt-get -y install locales \
 # Install system packages
 RUN DEBIAN_FRONTEND=noninteractive \
     apt-get -y install munge \
-                   slurm-wlm=24.05.1-1
+                   slurm-wlm=24.05.1
 
 # Slurm configuration
 COPY slurm.conf /etc/slurm/slurm.conf
