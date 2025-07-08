@@ -10,7 +10,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o bin/slurm-sidecar cmd/main.go
 
 # Deploy the application binary into a lean image
 #FROM ubuntu:latest AS build-release-stage
-FROM ubuntu:24.04
+FROM ubuntu:25.04
 
 # Settings for all images
 ENV TIMEZONE=America/New_York
