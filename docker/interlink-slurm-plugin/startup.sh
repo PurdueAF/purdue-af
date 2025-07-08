@@ -12,6 +12,10 @@ cp /etc/secrets/munge/munge.key /etc/munge/
 chown munge:munge /etc/munge/munge.key
 chmod 400 /etc/munge/munge.key
 
+mkdir -p /var/spool/slurm
+chown -R slurm:slurm /var/spool/slurm
+chmod 755 /var/spool/slurm
+
 # Configure Slurm to use maximum available processors and memory
 # and start required services
 ${sudo_cmd} bash <<SCRIPT
