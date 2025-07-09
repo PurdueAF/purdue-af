@@ -34,8 +34,8 @@ RUN yum install -y glibc-locale-source glibc-langpack-en && \
 
 # Install SLURM using the same approach as dask-gateway-server
 # Copy SLURM RPM and configuration files
-COPY slurm-24.05.1-1.el8.x86_64.rpm /etc/
-COPY slurm /etc/slurm
+COPY ../../slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
+COPY ../../slurm/slurm-configs /etc/slurm
 
 RUN dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
     rm -rf /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
@@ -50,7 +50,6 @@ RUN yum install -y munge && \
     yum clean all
 
 # Slurm configuration
-COPY slurm.conf /etc/slurm/slurm.conf
 RUN mkdir -p /var/spool/slurmctld \
     && chown slurm:slurm /var/spool/slurmctld
 
