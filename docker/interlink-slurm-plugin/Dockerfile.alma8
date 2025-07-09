@@ -23,7 +23,8 @@ RUN yum update -y && \
     rm -rf /var/cache/yum
 
 # Set time zone
-RUN ln -sn /usr/share/zoneinfo/${TIMEZONE} /etc/localtime \
+RUN rm -f /etc/localtime && \
+    ln -sn /usr/share/zoneinfo/${TIMEZONE} /etc/localtime \
     && echo ${TIMEZONE} > /etc/timezone
 
 # Set locale
