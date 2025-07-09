@@ -3,8 +3,8 @@ FROM gitlab-registry.cern.ch/linuxsupport/alma8-base:latest as build-stage
 WORKDIR /app
 
 # Install Go compiler
-RUN curl -LO https://golang.org/dl/go1.22.linux-amd64.tar.gz
-RUN tar -C /usr/local -xzf go1.22.linux-amd64.tar.gz
+RUN curl -LO https://go.dev/dl/go1.24.5.linux-amd64.tar.gz
+RUN tar -C /usr/local -xzf go1.24.5.linux-amd64.tar.gz
 ENV PATH=/usr/local/go/bin:$PATH
 
 # Clone and build the interlink-slurm-plugin
