@@ -64,7 +64,7 @@ extraVolumes:
       path: /depot/cms/purdue-af/interlink
   - name: cvmfs
     persistentVolumeClaim:
-      claimName: cvmfs-pvc
+      claimName: cvmfs
 
 podScheduling:
   nodeSelector:
