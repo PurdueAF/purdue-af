@@ -31,7 +31,7 @@ RUN apt-get -y install locales \
 # Install system packages
 RUN DEBIAN_FRONTEND=noninteractive \
     apt-get -y install munge \
-                   slurm-wlm
+                   slurm-wlm=24.05.2-1
 
 # Slurm configuration
 COPY slurm.conf /etc/slurm/slurm.conf
@@ -48,9 +48,6 @@ COPY --from=build-stage /app/bin/slurm-sidecar /sidecar/slurm-sidecar
 
 ENV SLURMCONFIGPATH=/root/SlurmConfig.yaml
 
-# RUN apt-get update && apt-get install -y software-properties-common \
-#  && add-apt-repository -y ppa:apptainer/ppa \
-#  && apt-get install -y apptainer
 RUN mkdir -p /cvmfs/grid.cern.ch/etc/grid-security
 
 CMD ["/bin/sh", "-c", "/etc/startup.sh && SHARED_FS=true /sidecar/slurm-sidecar"]
