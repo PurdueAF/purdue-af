@@ -28,7 +28,8 @@ RUN rm -f /etc/localtime && \
     && echo ${TIMEZONE} > /etc/timezone
 
 # Set locale
-RUN localedef -c -f UTF-8 -i en_US en_US.UTF-8 && \
+RUN yum install -y glibc-locale-source glibc-langpack-en && \
+    localedef -c -f UTF-8 -i en_US en_US.UTF-8 && \
     export LC_ALL=en_US.UTF-8
 
 # Install SLURM using the same approach as dask-gateway-server
