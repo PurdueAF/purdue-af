@@ -5,7 +5,7 @@ metadata:
   namespace: cms
   annotations:
     # slurm-job.vk.io/pre-exec:
-    slurm-job.vk.io/singularity-options: "--unsquash"
+    slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs"
     slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --gres=gpu:1"
 spec:
   nodeSelector:
@@ -22,7 +22,11 @@ spec:
     - name: test
       image: busybox:1.35
       command: ["sh", "-c"]
-      args: ["echo 'Hello from virtual node interlink-hammer!' && sleep 300"]
+      args:
+        - |
+          echo 'Hello from virtual node interlink-hammer!'
+          ls -l /cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoBTag/Combined/
+          sleep 300
       volumeMounts:
         - name: slurm-data
           mountPath: /depot/cms/purdue-af/interlink/

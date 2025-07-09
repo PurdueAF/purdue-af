@@ -4,8 +4,8 @@ metadata:
   name: test-interlink-sonic
   namespace: cms
   annotations:
-    slurm-job.vk.io/singularity-options: "--unsquash"
-    slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --gres=gpu:1"
+    slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs --bind /proc:/proc"
+    slurm-job.vk.io/flags: "--uid=616617 -A cms --gres=gpu:1"
 spec:
   nodeSelector:
     kubernetes.io/hostname: interlink-hammer
@@ -30,7 +30,7 @@ spec:
           --load-model=* \
           --allow-gpu-metrics=true \
           --log-verbose=0 \
-          --strict-model-config=false \
+          --disable-auto-complete-config \
           --exit-timeout-secs=60
       volumeMounts:
         - name: slurm-data
