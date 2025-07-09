@@ -4,6 +4,7 @@ resources:
   - helmrepo.yaml
   # - gitrepo.yaml
   - helmrelease.yaml
+  - cache-pvc.yaml
 configMapGenerator:
   - name: interlink-config
     namespace: cms
