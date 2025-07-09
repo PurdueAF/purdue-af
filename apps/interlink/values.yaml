@@ -20,15 +20,15 @@ plugin:
   extraVolumeMounts:
     - name: plugin-data
       mountPath: /depot/cms/purdue-af/interlink/
-    - name: apptainer-cache
-      mountPath: /etc/apptainer-cache/
+    - name: cache
+      mountPath: /etc/cache/
   envs:
     - name: SLURMCONFIGPATH
       value: "/etc/interlink/plugin.yaml"
     - name: SHARED_FS
       values: "true"
     - name: HOME
-      value: "/etc/apptainer-cache/"
+      value: "/etc/cache/"
   config: |
     #Socket: "unix:///var/run/plugin.sock"
     ImagePrefix: "docker://"
@@ -62,8 +62,8 @@ extraVolumes:
     nfs:
       server: datadepot.rcac.purdue.edu
       path: /depot/cms/purdue-af/interlink
-  - name: apptainer-cache
-    pvc:
+  - name: cache
+    persistentVolumeClaim:
       claimName: interlink-cache
 
 podScheduling:
