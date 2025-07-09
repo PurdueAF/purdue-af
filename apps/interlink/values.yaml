@@ -21,14 +21,14 @@ plugin:
     - name: plugin-data
       mountPath: /depot/cms/purdue-af/interlink/
     - name: cache
-      mountPath: /etc/cache/
+      mountPath: /tmp/cache/
   envs:
     - name: SLURMCONFIGPATH
       value: "/etc/interlink/plugin.yaml"
     - name: SHARED_FS
       values: "true"
     - name: HOME
-      value: "/etc/cache/"
+      value: "/tmp/cache/"
   config: |
     #Socket: "unix:///var/run/plugin.sock"
     ImagePrefix: "docker://"
