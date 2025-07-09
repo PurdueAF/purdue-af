@@ -137,10 +137,10 @@ EXPOSE $JUPYTER_PORT
 CMD ["start-notebook.sh"]
 
 # Copy local files as late as possible to avoid cache busting
-COPY jupyter/start-notebook.sh jupyter/start-singleuser.sh /usr/local/bin/
+COPY docker/cmsaf-alma8/jupyter/start-notebook.sh docker/cmsaf-alma8/jupyter/start-singleuser.sh /usr/local/bin/
 
 # Copy Jupyter configuration files
-COPY jupyter/jupyter_server_config.py jupyter/docker_healthcheck.py /etc/jupyter/
+COPY docker/cmsaf-alma8/jupyter/jupyter_server_config.py docker/cmsaf-alma8/jupyter/docker_healthcheck.py /etc/jupyter/
 
 # Fix permissions on /etc/jupyter as root
 USER root
