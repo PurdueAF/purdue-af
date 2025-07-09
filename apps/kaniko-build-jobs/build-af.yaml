@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: kaniko-build-job
+  name: kaniko-build-af
   namespace: cms
 spec:
   backoffLimit: 0
@@ -13,9 +13,8 @@ spec:
           image: gcr.io/kaniko-project/executor:latest
           args:
             - "--context=git://github.com/PurdueAF/purdue-af.git"
-            - "--context-sub-path=docker/cmsaf-alma8/"
-            - "--dockerfile=Dockerfile"
-            - "--destination=geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.10.5"
+            - "--dockerfile=docker/cmsaf-alma8/Dockerfile"
+            - "--destination=geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.10.6"
             - "--cache=true"
             # - "--no-push"
           resources:
