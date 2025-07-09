@@ -64,11 +64,7 @@ extraVolumes:
       path: /depot/cms/purdue-af/interlink
   - name: cache
     pvc:
-      accessModes:
-        - ReadWriteMany
-      resources:
-        requests:
-          storage: 12Gi
+      claimName: interlink-cache
 
 podScheduling:
   nodeSelector:
