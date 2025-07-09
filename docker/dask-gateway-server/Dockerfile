@@ -41,8 +41,8 @@ RUN curl -LO https://golang.org/dl/go1.19.2.linux-amd64.tar.gz
 RUN tar -C /usr/local -xzf go1.19.2.linux-amd64.tar.gz
 # USER dask:dask
 
-COPY slurm-24.05.1-1.el8.x86_64.rpm /etc/
-COPY slurm /etc/slurm
+COPY slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
+COPY slurm/slurm-configs /etc/slurm
 RUN dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
     rm -rf /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
     groupadd -g 1033 slurm && \
@@ -82,12 +82,12 @@ RUN curl -sL -o /tmp/micromamba.tar.bz2 "https://micromamba.snakepit.net/api/mic
     mamba list python | grep '^python ' | tr -s ' ' | cut -d ' ' -f 1,2 >> "${CONDA_DIR}/conda-meta/pinned" && \
     mamba clean --all -f -y 
 
-COPY --chown=dask:dask . /opt/dask-gateway-server
+COPY --chown=dask:dask docker/dask-gateway-server/ /opt/dask-gateway-server/
 RUN export PATH=$PATH:/usr/local/go/bin && pip install --no-cache-dir \
         -r /opt/dask-gateway-server/Dockerfile.requirements.txt
 RUN pip install sqlalchemy>=2.0.0 ldap3
 
-ADD start.sh /
+ADD docker/dask-gateway-server/start.sh /
 RUN chmod +x /start.sh
 
 ENTRYPOINT ["tini", "-g", "--"]
