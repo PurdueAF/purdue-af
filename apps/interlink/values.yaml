@@ -25,6 +25,8 @@ plugin:
       value: "/etc/interlink/plugin.yaml"
     - name: SHARED_FS
       values: "true"
+    - name: HOME
+      value: "/depot/cms/purdue-af/interlink/"
   config: |
     #Socket: "unix:///var/run/plugin.sock"
     ImagePrefix: "docker://"
