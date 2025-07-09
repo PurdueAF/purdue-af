@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-interlink-sonic
+  namespace: cms
+  annotations:
+    slurm-job.vk.io/singularity-options: "--unsquash"
+    slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --gres=gpu:1"
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: interlink-hammer
+  tolerations:
+    - key: virtual-node.interlink/no-schedule
+      operator: Exists
+  volumes:
+    - name: slurm-data
+      nfs:
+        server: datadepot.rcac.purdue.edu
+        path: /depot/cms/purdue-af/interlink
+  containers:
+    - name: sonic
+      image: fastml/triton-torchgeo:22.07-py3-geometric
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          /opt/tritonserver/bin/tritonserver \
+          --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoMET/METPUSubtraction/data/models/ \
+          --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoBTag/Combined/data/models/ \
+          --model-control-mode=explicit \
+          --load-model=* \
+          --allow-gpu-metrics=true \
+          --log-verbose=0 \
+          --strict-model-config=false \
+          --exit-timeout-secs=60
+      volumeMounts:
+        - name: slurm-data
+          mountPath: /depot/cms/purdue-af/interlink/
+      resources:
+        limits: { cpu: 2, memory: 8G }
+        requests: { cpu: 2, memory: 8G }
+  restartPolicy: Never

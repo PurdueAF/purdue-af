@@ -4,13 +4,10 @@ metadata:
   name: test-interlink-hammer
   namespace: cms
   annotations:
+    # slurm-job.vk.io/pre-exec: 
     slurm-job.vk.io/singularity-options: "--unsquash"
-    slurm-job.vk.io/flags: "--uid=616617 --gid=132"
+    slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --gres=gpu:1"
 spec:
-  securityContext:
-    runAsUser: 616617
-    runAsGroup: 132
-    fsGroup: 132
   nodeSelector:
     kubernetes.io/hostname: interlink-hammer
   tolerations:

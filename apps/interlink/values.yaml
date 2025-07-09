@@ -20,6 +20,8 @@ plugin:
   extraVolumeMounts:
     - name: plugin-data
       mountPath: /depot/cms/purdue-af/interlink/
+    - name: cvmfs
+      mountPath: /cvmfs
   envs:
     - name: SLURMCONFIGPATH
       value: "/etc/interlink/plugin.yaml"
@@ -60,6 +62,9 @@ extraVolumes:
     nfs:
       server: datadepot.rcac.purdue.edu
       path: /depot/cms/purdue-af/interlink
+  - name: cvmfs
+    persistentVolumeClaim:
+      claimName: cvmfs-pvc
 
 podScheduling:
   nodeSelector:
