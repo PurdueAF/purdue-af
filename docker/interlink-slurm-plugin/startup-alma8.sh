@@ -27,4 +27,4 @@ SCRIPT
 # Revoke sudo permissions
 if [[ ${sudo_cmd} ]]; then
 	sudo -k
-fi 
+fi
