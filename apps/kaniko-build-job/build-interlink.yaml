@@ -13,8 +13,7 @@ spec:
           image: gcr.io/kaniko-project/executor:latest
           args:
             - "--context=git://github.com/PurdueAF/purdue-af.git"
-            - "--context-sub-path=docker/interlink-slurm-plugin/"
-            - "--dockerfile=Dockerfile.alma8"
+            - "--dockerfile=docker/interlink-slurm-plugin/Dockerfile.alma8"
             - "--destination=geddes-registry.rcac.purdue.edu/cms/interlink-slurm-plugin:0.5.1-alma8"
             - "--cache=true"
             # - "--no-push"

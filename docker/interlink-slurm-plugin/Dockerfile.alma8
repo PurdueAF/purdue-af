@@ -34,8 +34,8 @@ RUN yum install -y glibc-locale-source glibc-langpack-en && \
 
 # Install SLURM using the same approach as dask-gateway-server
 # Copy SLURM RPM and configuration files
-COPY ../../slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
-COPY ../../slurm/slurm-configs /etc/slurm
+COPY slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
+COPY slurm/slurm-configs /etc/slurm
 
 RUN dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
     rm -rf /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
@@ -54,7 +54,7 @@ RUN mkdir -p /var/spool/slurmctld \
     && chown slurm:slurm /var/spool/slurmctld
 
 # Startup configuration
-COPY startup-alma8.sh /etc/startup-alma8.sh
+COPY docker/interlink-slurm-plugin/startup-alma8.sh /etc/startup-alma8.sh
 RUN chmod 555 /etc/startup-alma8.sh
 
 WORKDIR /root
