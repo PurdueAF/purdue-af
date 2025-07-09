@@ -8,7 +8,7 @@ RUN git checkout main
 RUN CGO_ENABLED=0 GOOS=linux go build -o bin/slurm-sidecar cmd/main.go
 
 # Deploy the application binary into a lean image
-FROM gitlab-registry.cern.ch/linuxsupport/alma8-base:latest
+FROM gitlab-registry.cern.ch/linuxsupport/alma8-base:20250501-1
 
 # Settings for all images
 ENV TIMEZONE=America/New_York
@@ -30,7 +30,9 @@ RUN rm -f /etc/localtime && \
 # Set locale
 RUN yum install -y glibc-locale-source glibc-langpack-en && \
     localedef -c -f UTF-8 -i en_US en_US.UTF-8 && \
-    export LC_ALL=en_US.UTF-8
+    export LC_ALL=en_US.UTF-8 && \
+    yum clean all && \
+    rm -rf /var/cache/yum
 
 # Install SLURM using the same approach as dask-gateway-server
 # Copy SLURM RPM and configuration files
@@ -49,13 +51,9 @@ RUN dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
 RUN yum install -y munge && \
     yum clean all
 
-# Slurm configuration
-RUN mkdir -p /var/spool/slurmctld \
-    && chown slurm:slurm /var/spool/slurmctld
-
 # Startup configuration
-COPY docker/interlink-slurm-plugin/startup-alma8.sh /etc/startup-alma8.sh
-RUN chmod 555 /etc/startup-alma8.sh
+COPY docker/interlink-slurm-plugin/startup.sh /etc/startup.sh
+RUN chmod 555 /etc/startup.sh
 
 WORKDIR /root
 
@@ -65,4 +63,4 @@ ENV SLURMCONFIGPATH=/root/SlurmConfig.yaml
 
 RUN mkdir -p /cvmfs/grid.cern.ch/etc/grid-security
 
-CMD ["/bin/sh", "-c", "/etc/startup-alma8.sh && SHARED_FS=true /sidecar/slurm-sidecar"] 
+CMD ["/bin/sh", "-c", "/etc/startup.sh && SHARED_FS=true /sidecar/slurm-sidecar"] 
