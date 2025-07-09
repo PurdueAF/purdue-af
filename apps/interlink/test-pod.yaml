@@ -7,6 +7,10 @@ metadata:
     slurm-job.vk.io/singularity-options: "--unsquash"
     slurm-job.vk.io/flags: "--uid=616617 --gid=132"
 spec:
+  securityContext:
+    runAsUser: 616617
+    runAsGroup: 132
+    fsGroup: 132
   nodeSelector:
     kubernetes.io/hostname: interlink-hammer
   tolerations:

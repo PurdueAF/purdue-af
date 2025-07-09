@@ -15,6 +15,7 @@ chmod 400 /etc/munge/munge.key
 # Configure Slurm to use maximum available processors and memory
 # and start required services
 ${sudo_cmd} bash <<SCRIPT
+useradd -u 616617  -m dkondra
 su -l munge -s /usr/sbin/munged &
 SCRIPT
 
