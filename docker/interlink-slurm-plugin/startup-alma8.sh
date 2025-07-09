@@ -19,6 +19,9 @@ useradd -u 616617  -m dkondra
 su -l munge -s /usr/sbin/munged &
 SCRIPT
 
+export SINGULARITY_CACHEDIR=/depot/cms/purdue-af/interlink/.singularity/cache
+export SINGULARITY_TMPDIR=/depot/cms/purdue-af/interlink/.singularity/tmp
+
 # Revoke sudo permissions
 if [[ ${sudo_cmd} ]]; then
 	sudo -k
