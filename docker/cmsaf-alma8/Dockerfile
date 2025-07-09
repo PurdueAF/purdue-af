@@ -60,7 +60,7 @@ ENV CONDA_DIR=/opt/conda \
     HOME="/home/${NB_USER}"
 
 # Copy a script that we will use to correct permissions after running certain commands
-COPY --chown=root:root fix-permissions /usr/local/bin/fix-permissions
+COPY --chown=root:root docker/cmsaf-alma8/scripts/fix-permissions /usr/local/bin/fix-permissions
 RUN chmod a+rx /usr/local/bin/fix-permissions
 
 # Enable prompt color in the skeleton .bashrc before creating the default NB_USER
@@ -88,9 +88,9 @@ RUN mkdir -p "/home/${NB_USER}/work" && \
     fix-permissions "/home/${NB_USER}"
 
 # Download and install Micromamba, and initialize Conda prefix
-COPY --chown="${NB_USER}:${NB_GID}" initial-condarc "${CONDA_DIR}/.condarc"
+COPY --chown="${NB_USER}:${NB_GID}" docker/cmsaf-alma8/scripts/initial-condarc "${CONDA_DIR}/.condarc"
 WORKDIR /tmp
-COPY micromamba.tar.bz2 /tmp/
+COPY docker/cmsaf-alma8/src/micromamba.tar.bz2 /tmp/
 # wget -qO /tmp/micromamba.tar.bz2 "https://micromamba.snakepit.net/api/micromamba/linux-64/latest" && \
 
 RUN set -x  && \
@@ -115,7 +115,7 @@ RUN set -x  && \
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # Copy local files as late as possible to avoid cache busting
-COPY jupyter/start.sh /usr/local/bin/
+COPY docker/cmsaf-alma8/jupyter/start.sh /usr/local/bin/
 
 WORKDIR /tmp
 RUN mamba install --quiet --yes \
@@ -159,8 +159,8 @@ CMD /etc/jupyter/docker_healthcheck.py || exit 1
 # RUN julia -e 'using Pkg; Pkg.add("IJulia"); using IJulia; IJulia.installkernel("Julia", "--depwarn=no")'
 
 # Install Slurm
-COPY rpms/slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
-COPY slurm /etc/slurm
+COPY slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
+COPY slurm/slurm-configs /etc/slurm
 RUN dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
     rm -rf /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
     groupadd -g 1033 slurm && \
@@ -171,9 +171,9 @@ RUN dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
 
 # Configure XrootD, grid certificates, VOMS
 RUN mkdir -p /etc/cvmfs /etc/cvmfs/SITECONF/JobConfig/ /etc/cvmfs/SITECONF/PhEDEx
-COPY xml/site-local-config.xml /etc/cvmfs/SITECONF/JobConfig/
-COPY xml/storage.xml /etc/cvmfs/SITECONF/PhEDEx/
-COPY vomses /etc
+COPY docker/cmsaf-alma8/xml/site-local-config.xml /etc/cvmfs/SITECONF/JobConfig/
+COPY docker/cmsaf-alma8/xml/storage.xml /etc/cvmfs/SITECONF/PhEDEx/
+COPY docker/cmsaf-alma8/configs/vomses /etc
 RUN mkdir -p /home/${NB_USER}/.globus /home/${NB_USER}/.rnd && \
     chown -R ${NB_USER}:${NB_GID} /home/${NB_USER}/.globus /home/${NB_USER}/.rnd && \
     chmod 700 /home/${NB_USER}/.globus
@@ -205,17 +205,17 @@ RUN jupyter labextension disable "@jupyterlab/apputils-extension:announcements"
 # RUN jupyter nbextension enable --py --sys-prefix ipympl
 
 # Scripts that run before session start
-COPY --chown=root:root scripts/run-as-root.sh \
-    scripts/init-conda-kernels.sh \
-    scripts/config-extensions.sh \
-    scripts/create-symlinks.sh \
+COPY --chown=root:root docker/cmsaf-alma8/scripts/run-as-root.sh \
+    docker/cmsaf-alma8/scripts/init-conda-kernels.sh \
+    docker/cmsaf-alma8/scripts/config-extensions.sh \
+    docker/cmsaf-alma8/scripts/create-symlinks.sh \
     /usr/local/bin/before-notebook.d/
 RUN chmod +x /usr/local/bin/before-notebook.d/*
 
 # Custom scripts and configurations
-COPY scripts/eos-connect.sh jupyter/jupyter_config.json /etc/jupyter/
+COPY docker/cmsaf-alma8/scripts/eos-connect.sh docker/cmsaf-alma8/jupyter/jupyter_config.json /etc/jupyter/
 RUN mkdir -p /etc/cvmfs/
-COPY default.local /etc/cvmfs/
+COPY docker/cmsaf-alma8/configs/default.local /etc/cvmfs/
 
 # Switch back to NB_USER
 USER ${NB_USER}
