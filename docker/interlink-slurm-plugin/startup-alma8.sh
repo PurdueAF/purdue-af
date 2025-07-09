@@ -19,8 +19,6 @@ useradd -u 616617  -m dkondra
 su -l munge -s /usr/sbin/munged &
 SCRIPT
 
-export HOME=/depot/cms/purdue-af/interlink/
-
 # Revoke sudo permissions
 if [[ ${sudo_cmd} ]]; then
 	sudo -k
