@@ -6,6 +6,7 @@ configMapGenerator:
   - name: supersonic-interlink-config
     namespace: cms
     files:
+      - gitrepo.yaml
       - values.yaml
     options:
       disableNameSuffixHash: true

@@ -8,40 +8,19 @@ spec:
   interval: 1m
   chart:
     spec:
-      # chart: helm/supersonic
-      # sourceRef:
-      #   kind: GitRepository
-      #   name: supersonic
-      #   namespace: cms
-      chart: supersonic
-      version: "0.2.1"
+      chart: helm/supersonic
       sourceRef:
-        kind: HelmRepository
-        name: fastml
+        kind: GitRepository
+        name: supersonic-interlink
         namespace: cms
+      # chart: supersonic
+      # version: "0.2.1"
+      # sourceRef:
+      #   kind: HelmRepository
+      #   name: fastml
+      #   namespace: cms
       interval: 1m
   valuesFrom:
     - kind: ConfigMap
       name: supersonic-interlink-config
       valuesKey: values.yaml
-  postRenderers:
-    - kustomize:
-        patches:
-          - target:
-              kind: Deployment
-              name: "sonic-interlink-triton"
-            patch: |
-              - op: add
-                path: /spec/template/spec/nodeSelector
-                value:
-                  kubernetes.io/hostname: interlink-hammer
-              - op: add
-                path: /spec/template/spec/tolerations/-
-                value:
-                  key: virtual-node.interlink/no-schedule
-                  operator: Exists
-              - op: add
-                path: /spec/template/metadata/annotations
-                value:
-                  slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs"
-                  slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --gres=gpu:1"

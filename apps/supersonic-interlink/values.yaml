@@ -21,6 +21,14 @@ triton:
   resources:
     limits: { cpu: 2, memory: 8G }
     requests: { cpu: 2, memory: 8G }
+  nodeSelector:
+    kubernetes.io/hostname: interlink-hammer
+  tolerations:
+    - key: virtual-node.interlink/no-schedule
+      operator: Exists
+  annotations:
+    slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs"
+    slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --gres=gpu:1"
   service:
     labels:
       scrape_metrics: "true"
@@ -34,6 +42,13 @@ triton:
 envoy:
   enabled: true
   loadBalancerPolicy: "ROUND_ROBIN"
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: hub.jupyter.org/dedicated
+      operator: Equal
+      value: cms-af
+      effect: NoSchedule
   service:
     type: LoadBalancer
   ingress:
