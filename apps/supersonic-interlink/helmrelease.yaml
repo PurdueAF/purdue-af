@@ -41,7 +41,7 @@ spec:
                   key: virtual-node.interlink/no-schedule
                   operator: Exists
               - op: add
-                path: /spec/template/spec/annotations
+                path: /spec/template/metadata/annotations
                 value:
                   slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs"
                   slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --gres=gpu:1"
