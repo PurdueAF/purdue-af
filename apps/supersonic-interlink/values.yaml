@@ -93,7 +93,7 @@ prometheus:
     scheme: https
 
 grafana:
-  enabled: false
+  enabled: true
   dashboardsConfigMaps:
     default: sonic-interlink-grafana-default-dashboard
   datasources:
