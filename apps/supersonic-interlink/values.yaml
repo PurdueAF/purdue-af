@@ -1,0 +1,123 @@
+serverLoadThreshold: 20
+serverLoadMetric: 'sum by (release) (rate(nv_inference_queue_duration_us{release=~"sonic-interlink"}[30s]) / (rate(nv_inference_exec_count{release=~"sonic-interlink"}[30s]) * 1000 + 0.001))'
+
+triton:
+  # image: fastml/triton-torchgeo:21.02-py3-geometric # run2
+  image: fastml/triton-torchgeo:22.07-py3-geometric # run3
+  command: ["/bin/sh", "-c"]
+  args:
+    - |
+      /opt/tritonserver/bin/tritonserver \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoMET/METPUSubtraction/data/models/ \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoBTag/Combined/data/models/ \
+      --model-control-mode=explicit \
+      --load-model=deepmet \
+      --allow-gpu-metrics=true \
+      --log-verbose=0 \
+      --strict-model-config=false \
+      --exit-timeout-secs=60
+  # --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoEgamma/EgammaPhotonProducers/data/models/ \
+  # --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoTauTag/TrainingFiles/data/DeepTauIdSONIC/ \
+  resources:
+    limits: { nvidia.com/gpu: 1, cpu: 2, memory: 8G }
+    requests: { nvidia.com/gpu: 1, cpu: 2, memory: 8G }
+  service:
+    labels:
+      scrape_metrics: "true"
+    annotations:
+      metallb.universe.tf/address-pool: geddes-private-pool
+  modelRepository:
+    enabled: true
+    storageType: cvmfs-pvc
+    mountPath: /cvmfs
+
+envoy:
+  enabled: true
+  loadBalancerPolicy: "ROUND_ROBIN"
+  service:
+    type: LoadBalancer
+  ingress:
+    enabled: false
+  rate_limiter:
+    prometheus_based:
+      enabled: true
+    listener_level:
+      enabled: true
+      max_tokens: 5
+      tokens_per_fill: 1
+      fill_interval: 12s
+autoscaler:
+  enabled: true
+  minReplicaCount: 1
+  maxReplicaCount: 11
+  scaleUp:
+    stabilizationWindowSeconds: 30
+    periodSeconds: 15
+    stepsize: 1
+  scaleDown:
+    stabilizationWindowSeconds: 45
+    periodSeconds: 45
+    stepsize: 1
+
+ingress:
+  enabled: false
+
+nodeSelector: { "cms-af-prod": "true" }
+
+tolerations:
+  - key: hub.jupyter.org/dedicated
+    operator: Equal
+    value: cms-af
+    effect: NoSchedule
+
+prometheus:
+  external:
+    enabled: true
+    url: prometheus-af.geddes.rcac.purdue.edu
+    port: 443
+    scheme: https
+
+grafana:
+  enabled: false
+  dashboardsConfigMaps:
+    default: sonic-interlink-grafana-default-dashboard
+  datasources:
+    datasources.yaml:
+      datasources:
+        - name: prometheus
+          type: prometheus
+          access: proxy
+          isDefault: true
+          url: https://prometheus-af.geddes.rcac.purdue.edu
+          jsonData:
+            timeInterval: "5s"
+            tlsSkipVerify: true
+        - name: tempo
+          type: tempo
+          url: http://sonic-interlink-tempo:3100
+          access: proxy
+          isDefault: false
+          basicAuth: false
+          jsonData:
+            timeInterval: "5s"
+            tlsSkipVerify: true
+            serviceMap:
+              datasourceUid: "prometheus"
+            nodeGraph:
+              enabled: true
+  ingress:
+    enabled: true
+    hosts: [grafana-cms-interlink.geddes.rcac.purdue.edu]
+    tls:
+      - hosts: [grafana-cms-interlink.geddes.rcac.purdue.edu]
+        secretName: grafana-cms-tls
+    ingressClassName: public
+  grafana.ini:
+    server:
+      root_url: https://grafana-cms-interlink.geddes.rcac.purdue.edu
+
+tracing_sampling_rate: 0.001
+opentelemetry-collector:
+  enabled: false
+tempo:
+  enabled: false

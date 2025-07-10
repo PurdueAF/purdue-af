@@ -5,7 +5,7 @@ metadata:
   namespace: cms
   annotations:
     slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs --bind /proc:/proc"
-    slurm-job.vk.io/flags: "--uid=616617 -A cms --gres=gpu:1"
+    slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --gres=gpu:1"
 spec:
   nodeSelector:
     kubernetes.io/hostname: interlink-hammer
@@ -27,7 +27,7 @@ spec:
           --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoMET/METPUSubtraction/data/models/ \
           --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoBTag/Combined/data/models/ \
           --model-control-mode=explicit \
-          --load-model=* \
+          --load-model=deepmet \
           --allow-gpu-metrics=true \
           --log-verbose=0 \
           --disable-auto-complete-config \
