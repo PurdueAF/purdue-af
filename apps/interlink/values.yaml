@@ -12,7 +12,7 @@ interlink:
 plugin:
   enabled: true
   # image: "ghcr.io/interlink-hq/interlink-sidecar-slurm/interlink-sidecar-slurm:0.5.1-pre3"
-  image: "geddes-registry.rcac.purdue.edu/cms/interlink-slurm-plugin:0.5.1-alma8"
+  image: "geddes-registry.rcac.purdue.edu/cms/interlink-slurm-plugin:0.5.2-pre1"
   #socket: unix:///var/run/plugin.sock
   address: "http://localhost"
   port: 4000
@@ -45,6 +45,9 @@ plugin:
     SqueuePath: "/usr/bin/squeue"
     CommandPrefix: ""
     SingularityPrefix: ""
+    SingularityDefaultOptions:
+      - "--nv"
+      - "--no-eval"
     Namespace: "cms"
     Tsocks: false
     TsocksPath: "$WORK/tsocks-1.8beta5+ds1/libtsocks.so"
