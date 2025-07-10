@@ -10,3 +10,7 @@ configMapGenerator:
       - values.yaml
     options:
       disableNameSuffixHash: true
+  - name: sonic-interlink-grafana-default-dashboard
+    namespace: cms
+    files:
+      - dashboards/default.json
