@@ -29,7 +29,7 @@ spec:
         patches:
           - target:
               kind: Deployment
-              name: "sonic-interlink"
+              name: "sonic-interlink-triton"
             patch: |
               - op: add
                 path: /spec/template/spec/nodeSelector
