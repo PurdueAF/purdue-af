@@ -20,21 +20,21 @@ spec:
           value: "cms-af"
           effect: "NoSchedule"
       containers:
-      - name: nginx
-        image: nginx:alpine
-        ports:
-        - containerPort: 80
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 200m
-            memory: 256Mi
-        volumeMounts:
-        - name: img-vol
-          mountPath: /usr/share/nginx/html
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - name: img-vol
+              mountPath: /usr/share/nginx/html
       volumes:
-      - name: img-vol
-        persistentVolumeClaim:
-          claimName: af-users-graph-pvc 
+        - name: img-vol
+          persistentVolumeClaim:
+            claimName: af-users-graph-pvc

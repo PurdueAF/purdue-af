@@ -15,4 +15,4 @@ configMapGenerator:
     files:
       - plot-af-users.py
     options:
-      disableNameSuffixHash: true 
+      disableNameSuffixHash: true
