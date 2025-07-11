@@ -118,7 +118,7 @@ ax.set_ylabel("")
 ax.text(
     0.02,
     0.98,
-    "Purdue Analysis Facility Users",
+    "Registered Users",
     transform=ax.transAxes,
     fontsize=14,
     fontweight=600,
