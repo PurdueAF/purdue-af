@@ -42,7 +42,7 @@ tools and features for fast, efficient, collaborative HEP research.
 .. image:: https://cms.geddes.rcac.purdue.edu/users-graph/purdue-af-registered-users.png
    :alt: Purdue AF User Statistics
    :align: center
-   :width: 800px
+   :width: 900px
 
 .. toctree::
     :caption: Documentation
