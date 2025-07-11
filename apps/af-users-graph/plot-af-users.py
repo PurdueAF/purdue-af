@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-import sqlite3
-import os
 import glob
+import os
+import sqlite3
 from datetime import datetime
 
 import matplotlib.pyplot as plt
@@ -55,5 +55,5 @@ plt.tight_layout()
 
 # Save the figure
 output_path = "/data/purdue-af-registered-users.png"
-plt.savefig(output_path, dpi=300, bbox_inches='tight')
-print(f"Plot saved as {output_path}") 
+plt.savefig(output_path, dpi=300, bbox_inches="tight")
+print(f"Plot saved as {output_path}")
