@@ -18,7 +18,7 @@ Each user is provided with a 25GB home directory at first login. These directori
 
 ## User Statistics
 
-![Purdue AF Registered Users](https://cms.geddes.rcac.purdue.edu/users-graph/purdue-af-registered-users.png)
+![Purdue AF Registered Users](https://cms.geddes.rcac.purdue.edu/users-graph/purdue-af-registered-users.png?)
 
 *Updated every 6 hours*
 
