@@ -79,9 +79,6 @@ gateway:
         tolerations:
           - key: virtual-node.interlink/no-schedule
             operator: Exists
-        annotations:
-          slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs"
-          slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes"
         volumes:
           - name: cvmfs
             persistentVolumeClaim:
@@ -175,8 +172,14 @@ gateway:
           options.env["CPLUS_INCLUDE_PATH"]=f"{options.conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
 
           extra_pod_config = {"securityContext": {"runAsUser": uid, "runAsGroup": gid,}}
+          extra_pod_annotations = {
+            "slurm-job.vk.io/singularity-options": "--unsquash --bind /cvmfs",
+            "slurm-job.vk.io/flags": f"--uid={uid} -A cms -p hammer-nodes"
+          }
           c.KubeClusterConfig.scheduler_extra_pod_config.update(extra_pod_config)
           c.KubeClusterConfig.worker_extra_pod_config.update(extra_pod_config)
+          c.KubeClusterConfig.worker_extra_pod_annotations.update(extra_pod_annotations)
+          c.KubeClusterConfig.scheduler_extra_pod_annotations.update(extra_pod_annotations)
           c.KubeClusterConfig.scheduler_extra_pod_labels = {"user": user.name}
           c.KubeClusterConfig.worker_extra_pod_labels = {
             "user": user.name,
