@@ -21,4 +21,4 @@ configMapGenerator:
     files:
       - nginx.conf
     options:
-      disableNameSuffixHash: true 
+      disableNameSuffixHash: true
