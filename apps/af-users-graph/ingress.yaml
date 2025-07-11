@@ -9,8 +9,8 @@ spec:
   - host: cms.geddes.rcac.purdue.edu
     http:
       paths:
-      - path: /users-graph/purdue-af-registered-users.png
-        pathType: Exact
+      - path: /users-graph/
+        pathType: Prefix
         backend:
           service:
             name: af-users-graph
