@@ -1,4 +1,4 @@
-name: Lint Shell Scripts
+name: Lint Shell
 
 on:
   push:
