@@ -115,16 +115,16 @@ ax.set_xlabel("")
 ax.set_ylabel("")
 
 # Add a subtle title
-ax.text(
-    0.02,
-    0.98,
-    "Registered Users",
-    transform=ax.transAxes,
-    fontsize=14,
-    fontweight=600,
-    color="#333333",
-    verticalalignment="top",
-)
+# ax.text(
+#     0.02,
+#     0.98,
+#     "Registered Users",
+#     transform=ax.transAxes,
+#     fontsize=14,
+#     fontweight=600,
+#     color="#333333",
+#     verticalalignment="top",
+# )
 
 # Add current user count as a prominent number
 current_users = df["cumulative_users"].iloc[-1]
@@ -144,7 +144,7 @@ ax.text(
 ax.text(
     0.98,
     0.38,
-    "users",
+    "registered users",
     transform=ax.transAxes,
     fontsize=22,
     fontweight=400,
