@@ -2,8 +2,8 @@ name: Purge README Cache
 
 on:
   schedule:
-    # Run every 5 minutes for testing
-    - cron: '*/5 * * * *'
+    # Run every 6 hours to match the user graph update frequency
+    - cron: '0 */6 * * *'
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
@@ -16,5 +16,5 @@ jobs:
       
     - name: Purge README cache
       run: |
-        chmod +x scripts/purge-readme-cache.sh
-        ./scripts/purge-readme-cache.sh 
+        chmod +x .github/workflows/purge-readme-cache.sh
+        ./.github/workflows/purge-readme-cache.sh 
