@@ -1,5 +1,3 @@
-[![Documentation Status](https://readthedocs.org/projects/purdue-af/badge/?version=latest)](https://purdue-af.readthedocs.io/en/latest/?badge=latest)
-
 # Purdue Analysis Facility
 
 [Analysis Facility entry point and documentation](https://analysis-facility.physics.purdue.edu)
@@ -18,8 +16,9 @@ Each user is provided with a 25GB home directory at first login. These directori
 
 ![Purdue AF Registered Users](https://cms.geddes.rcac.purdue.edu/users-graph/purdue-af-registered-users.png?)
 
-## Linters & Formatters
+---
 
+[![Documentation Status](https://readthedocs.org/projects/purdue-af/badge/?version=latest)](https://purdue-af.readthedocs.io/en/latest/?badge=latest)
 [![Python](https://github.com/PurdueAF/purdue-af/workflows/Lint%20Python/badge.svg)](https://github.com/PurdueAF/purdue-af/actions?query=workflow%3A%22Lint+Python%22)
 [![YAML](https://github.com/PurdueAF/purdue-af/workflows/Lint%20YAML/badge.svg)](https://github.com/PurdueAF/purdue-af/actions?query=workflow%3A%22Lint+YAML%22)
 [![JSON](https://github.com/PurdueAF/purdue-af/workflows/Lint%20JSON/badge.svg)](https://github.com/PurdueAF/purdue-af/actions?query=workflow%3A%22Lint+JSON%22)
