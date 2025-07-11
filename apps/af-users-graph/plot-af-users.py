@@ -130,7 +130,7 @@ ax.set_ylabel("")
 current_users = df["cumulative_users"].iloc[-1]
 ax.text(
     0.98,
-    0.5,
+    0.45,
     f"{current_users}",
     transform=ax.transAxes,
     fontsize=48,
@@ -143,7 +143,7 @@ ax.text(
 # Add "users" label
 ax.text(
     0.98,
-    0.38,
+    0.33,
     "registered users",
     transform=ax.transAxes,
     fontsize=22,
