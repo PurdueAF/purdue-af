@@ -16,3 +16,9 @@ configMapGenerator:
       - plot-af-users.py
     options:
       disableNameSuffixHash: true
+  - name: af-users-graph-nginx-config
+    namespace: cms
+    files:
+      - nginx.conf
+    options:
+      disableNameSuffixHash: true 

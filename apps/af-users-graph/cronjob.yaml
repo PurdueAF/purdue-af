@@ -4,7 +4,7 @@ metadata:
   name: af-users-graph-updater
   namespace: cms
 spec:
-  schedule: "*/2 * * * *" # every 2 minutes (for testing)
+  schedule: "*/2 * * * *"        # every 2 minutes (for testing)
   concurrencyPolicy: Forbid
   jobTemplate:
     spec:
@@ -18,36 +18,36 @@ spec:
               value: "cms-af"
               effect: "NoSchedule"
           containers:
-            - name: updater
-              image: python:3.11-slim
-              command: ["/bin/bash", "-c"]
-              args:
-                - |
-                  pip install --no-cache-dir matplotlib mplhep pandas
-                  python /scripts/plot-af-users.py
-              resources:
-                requests:
-                  cpu: 500m
-                  memory: 1Gi
-                limits:
-                  cpu: 1
-                  memory: 2Gi
-              volumeMounts:
-                - name: img-vol
-                  mountPath: /data
-                - name: script
-                  mountPath: /scripts
-                - name: depot
-                  mountPath: /depot/cms
-                  mountPropagation: HostToContainer
-          volumes:
+          - name: updater
+            image: python:3.11-slim
+            command: ["/bin/bash", "-c"]
+            args:
+            - |
+              pip install --no-cache-dir matplotlib mplhep pandas
+              python /scripts/plot-af-users.py
+            resources:
+              requests:
+                cpu: 500m
+                memory: 1Gi
+              limits:
+                cpu: 1
+                memory: 2Gi
+            volumeMounts:
             - name: img-vol
-              persistentVolumeClaim:
-                claimName: af-users-graph-pvc
+              mountPath: /data
             - name: script
-              configMap:
-                name: af-users-graph-script
+              mountPath: /scripts
             - name: depot
-              nfs:
-                server: datadepot.rcac.purdue.edu
-                path: /depot/cms
+              mountPath: /depot/cms
+              mountPropagation: HostToContainer
+          volumes:
+          - name: img-vol
+            persistentVolumeClaim:
+              claimName: af-users-graph-pvc
+          - name: script
+            configMap:
+              name: af-users-graph-script
+          - name: depot
+            nfs:
+              server: datadepot.rcac.purdue.edu
+              path: /depot/cms 

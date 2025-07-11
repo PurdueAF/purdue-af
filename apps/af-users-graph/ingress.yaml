@@ -6,13 +6,13 @@ metadata:
 spec:
   ingressClassName: public
   rules:
-    - host: cms.geddes.rcac.purdue.edu
-      http:
-        paths:
-          - path: /users-graph/
-            pathType: Prefix
-            backend:
-              service:
-                name: af-users-graph
-                port:
-                  number: 80
+  - host: cms.geddes.rcac.purdue.edu
+    http:
+      paths:
+      - path: /users-graph/
+        pathType: Prefix
+        backend:
+          service:
+            name: af-users-graph
+            port:
+              number: 80 
