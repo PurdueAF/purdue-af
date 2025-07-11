@@ -142,11 +142,11 @@ ax.text(
 
 # Add "users" label
 ax.text(
-    0.98,
-    0.35,
+    0.95,
+    0.40,
     "users",
     transform=ax.transAxes,
-    fontsize=12,
+    fontsize=24,
     fontweight=400,
     color="#666666",
     horizontalalignment="right",
