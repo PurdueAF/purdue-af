@@ -3,11 +3,6 @@ kind: Ingress
 metadata:
   name: af-users-graph
   namespace: cms
-  annotations:
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
-      add_header Pragma "no-cache";
-      add_header Expires "0";
 spec:
   ingressClassName: public
   rules:
