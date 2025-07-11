@@ -82,9 +82,9 @@ line = ax.plot(
 )
 
 # Add subtle markers at data points
-ax.scatter(
-    df["reg_date"], df["cumulative_users"], color="#007ACC", s=20, alpha=0.7, zorder=5
-)
+# ax.scatter(
+#     df["reg_date"], df["cumulative_users"], color="#007ACC", s=20, alpha=0.7, zorder=5
+# )
 
 # Add a subtle area fill under the line
 ax.fill_between(df["reg_date"], df["cumulative_users"], alpha=0.1, color="#007ACC")
@@ -142,11 +142,11 @@ ax.text(
 
 # Add "users" label
 ax.text(
-    0.95,
-    0.40,
+    0.98,
+    0.38,
     "users",
     transform=ax.transAxes,
-    fontsize=24,
+    fontsize=22,
     fontweight=400,
     color="#666666",
     horizontalalignment="right",
