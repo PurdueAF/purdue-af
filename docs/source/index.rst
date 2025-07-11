@@ -26,6 +26,15 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
 
 |
 
+.. |user_stats| image:: https://cms.geddes.rcac.purdue.edu/users-graph/purdue-af-registered-users.png
+   :alt: Purdue AF User Statistics
+   :align: center
+   :width: 800px
+
+|user_stats|
+
+|
+
 Purdue AF features a JupyterLab interface with access to CPUs, GPUs, and
 distributed computing resources via SLURM and Dask Gateway.
 It features a software stack suitable for all steps of
