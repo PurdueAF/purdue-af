@@ -1,0 +1,20 @@
+name: Purge README Cache
+
+on:
+  schedule:
+    # Run every 5 minutes for testing
+    - cron: '*/5 * * * *'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  purge-cache:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Purge README cache
+      run: |
+        chmod +x scripts/purge-readme-cache.sh
+        ./scripts/purge-readme-cache.sh 
