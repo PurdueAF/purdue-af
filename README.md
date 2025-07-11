@@ -16,8 +16,6 @@ The same person using different accounts to sign in will be treated as different
 
 Each user is provided with a 25GB home directory at first login. These directories will persist between sessions, but will be deleted after 6 months of inactivity.
 
-## User Statistics
-
 ![Purdue AF Registered Users](https://cms.geddes.rcac.purdue.edu/users-graph/purdue-af-registered-users.png?)
 
 *Updated every 6 hours*
