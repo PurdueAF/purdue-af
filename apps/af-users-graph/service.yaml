@@ -8,5 +8,5 @@ spec:
   selector:
     app: af-users-graph
   ports:
-  - port: 80
-    targetPort: 80 
+    - port: 80
+      targetPort: 80
