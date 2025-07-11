@@ -4,7 +4,7 @@ metadata:
   name: af-users-graph-updater
   namespace: cms
 spec:
-  schedule: "* * * * *" # every minute (for testing)
+  schedule: "0 */6 * * *" # every 6 hours
   concurrencyPolicy: Forbid
   jobTemplate:
     spec:
