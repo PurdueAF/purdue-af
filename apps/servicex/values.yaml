@@ -43,7 +43,7 @@ codeGen:
     enabled: true
     defaultScienceContainerTag: uproot5
     compressionAlgorithm: ZSTD
-    compressionLevel: 5
+    compressionLevel: 9
   uproot:
     enabled: false
   python:
