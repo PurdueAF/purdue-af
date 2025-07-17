@@ -36,6 +36,9 @@ envoy:
     enabled: false
   dynamic_routing:
     enabled: true
+  lua_filter:
+    enabled: true
+    lua_config: "cfg/envoy-filter-dynamic.lua"
 
 autoscaler:
   enabled: false
