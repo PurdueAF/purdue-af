@@ -22,5 +22,5 @@ spec:
       interval: 1m
   valuesFrom:
     - kind: ConfigMap
-      name: supersonic-config
+      name: supersonic-dynamic-config
       valuesKey: values.yaml
