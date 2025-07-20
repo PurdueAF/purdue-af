@@ -103,7 +103,7 @@ minioCleanup:
   enabled: true
 didFinder:
   rucio:
-    enabled: true
+    enabled: false
     rucio_host: http://cms-rucio.cern.ch
     auth_host: https://cms-rucio-auth.cern.ch
   xrootd:
