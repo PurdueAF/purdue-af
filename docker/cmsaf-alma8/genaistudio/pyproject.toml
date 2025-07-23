@@ -4,4 +4,4 @@ name = "genaistudio"
 version = "0.0.1"
 
 [project.entry-points."jupyter_ai.model_providers"]
-genaistudio = "genaistudio:GenAIStudioProvider"
+genaistudio = "genaistudio:PurdueGenAIStudioProvider"
