@@ -11,6 +11,7 @@ class PurdueGenAIStudioProvider(BaseProvider, ChatOpenAI):
         "llama3.1:latest",
         "llama3.2:latest",
         "llama3.3:70b",
+        "llama3.3:70b-purdue-af",
     ]
     model_id_key = "model_name"
     pypi_package_deps = ["langchain_openai"]
