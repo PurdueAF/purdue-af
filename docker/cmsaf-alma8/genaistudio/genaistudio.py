@@ -1,8 +1,7 @@
-from langchain_openai import (
-    ChatOpenAI,
-)
+from jupyter_ai_magics.providers import (BaseProvider, EnvAuthStrategy,
+                                         TextField)
+from langchain_openai import ChatOpenAI
 
-from jupyter_ai_magics.providers import BaseProvider, EnvAuthStrategy, TextField
 
 class PurdueGenAIStudioProvider(BaseProvider, ChatOpenAI):
     id = "genaistudio"
@@ -15,7 +14,9 @@ class PurdueGenAIStudioProvider(BaseProvider, ChatOpenAI):
     ]
     model_id_key = "model_name"
     pypi_package_deps = ["langchain_openai"]
-    auth_strategy = EnvAuthStrategy(name="GENAISTUDIO_API_KEY",  keyword_param="openai_api_key")
+    auth_strategy = EnvAuthStrategy(
+        name="GENAISTUDIO_API_KEY", keyword_param="openai_api_key"
+    )
 
     def __init__(self, **kwargs):
         super().__init__(openai_api_base="https://genai.rcac.purdue.edu/api", **kwargs)

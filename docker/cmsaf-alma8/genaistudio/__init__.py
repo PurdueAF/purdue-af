@@ -1,3 +1,1 @@
-from .genaistudio import (
-    PurdueGenAIStudioProvider
-)
+from .genaistudio import PurdueGenAIStudioProvider
