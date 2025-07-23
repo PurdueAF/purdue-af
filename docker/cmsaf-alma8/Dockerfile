@@ -191,7 +191,11 @@ RUN pip install --no-cache-dir --upgrade \
     purdue-af-grafana-iframe==0.1.0 \
     jupyterlab-topbar-text==1.1.0 \
     jupyterlab-theme-toggler==1.1.0 \
-    dask-gateway==2025.4.0
+    dask-gateway==2025.4.0 \
+    jupyter-ai[all]
+
+COPY genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio
+RUN pip install -e /opt/conda/lib/python3.10/site-packages/genaistudio
 
 # Install Dask labextension
 RUN git clone https://github.com/kondratyevd/dask-labextension.git

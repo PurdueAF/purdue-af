@@ -37,22 +37,22 @@ singleuser:
               display_name: "16"
               kubespawner_override:
                 cpu_limit: 16
-                cpu_guarantee: 4
+                cpu_guarantee: 16
             3:
               display_name: "32"
               kubespawner_override:
                 cpu_limit: 32
-                cpu_guarantee: 4
+                cpu_guarantee: 32
             4:
               display_name: "64"
               kubespawner_override:
                 cpu_limit: 64
-                cpu_guarantee: 4
+                cpu_guarantee: 64
             5:
               display_name: "128"
               kubespawner_override:
                 cpu_limit: 128
-                cpu_guarantee: 4
+                cpu_guarantee: 128
         gpu:
           display_name: "GPUs"
           choices:
@@ -84,22 +84,22 @@ singleuser:
               display_name: "16 GB"
               kubespawner_override:
                 mem_limit: "16G"
-                mem_guarantee: "12G"
+                mem_guarantee: "16G"
             2:
               display_name: "32 GB"
               kubespawner_override:
                 mem_limit: "32G"
-                mem_guarantee: "24G"
+                mem_guarantee: "32G"
             3:
               display_name: "64 GB"
               kubespawner_override:
                 mem_limit: "64G"
-                mem_guarantee: "48G"
+                mem_guarantee: "64G"
             4:
               display_name: "128 GB"
               kubespawner_override:
                 mem_limit: "128G"
-                mem_guarantee: "96G"
+                mem_guarantee: "128G"
             # 5:
             #   display_name: "256 GB"
             #   kubespawner_override:
@@ -122,7 +122,7 @@ singleuser:
       default: false
       description: "Contains the latest features but may be unstable - use at your own risk."
       kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.10.5-dev"
+        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.11.0"
         node_selector:
           cms-af-prod: "true"
         cpu_guarantee: 4
