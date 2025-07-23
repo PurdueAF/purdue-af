@@ -7,10 +7,10 @@ class PurdueGenAIStudioProvider(BaseProvider, ChatOpenAI):
     id = "genaistudio"
     name = "PurdueGenAIStudio"
     models = [
-        "gemma:latest",
+        "gemma3:27b",
         "llama3.1:latest",
         "llama3.2:latest",
-        "llama3.3:70b-instruct-q4_K_M",
+        "llama3.3:70b",
     ]
     model_id_key = "model_name"
     pypi_package_deps = ["langchain_openai"]
