@@ -61,11 +61,14 @@ if "NB_UMASK" in os.environ:
 c.AiExtension.help_message_template = """
 Hello! I am {persona_name}, your Purdue AF AI assistant.
 
-You can ask me anything about functionality and usage of the Purdue Analysis Facility.
+You can ask me about functionality and usage of the Purdue Analysis Facility,
+as well as general questions to help your analysis development.
 
-WARNING: do not rely exclusively on AI responses! If you have any doubts,
-consult the <a href="https://analysis-facility.purdue.edu/" target="_blank">Purdue AF documentation website</a>
-or contact the AF support team at <a href="mailto:cms-af@groups.purdue.edu">cms-af@groups.purdue.edu</a>
+**WARNING: do not rely exclusively on AI responses, as models may hallucinate.**
+
+If you have any doubts, please consult the
+<a href="https://analysis-facility.physics.purdue.edu/" target="_blank">Purdue AF documentation website</a>
+or contact the AF support team at <a href="mailto:cms-af@groups.purdue.edu">cms-af@groups.purdue.edu</a>.
 """
 c.AiExtension.default_language_model = "purdue-cms-af"
 c.AiExtension.allowed_providers = ["genaistudio"]
