@@ -7,10 +7,10 @@ class PurdueGenAIStudioProvider(BaseProvider, ChatOpenAI):
     id = "genaistudio"
     name = "PurdueGenAIStudio"
     models = [
-        "gemma3:27b",
-        "llama3.1:latest",
-        "llama3.2:latest",
-        "llama3.3:70b",
+        # "gemma3:27b",
+        # "llama3.1:latest",
+        # "llama3.2:latest",
+        # "llama3.3:70b",
         "purdue-cms-af",
     ]
     model_id_key = "model_name"
