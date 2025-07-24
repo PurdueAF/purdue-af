@@ -57,3 +57,5 @@ if "GEN_CERT" in os.environ:
 # the environment
 if "NB_UMASK" in os.environ:
     os.umask(int(os.environ["NB_UMASK"], 8))
+
+c.AiExtension.help_message_template = "Test help message"
