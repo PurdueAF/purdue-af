@@ -7,6 +7,8 @@ spec:
   schedule: "*/15 * * * *" # Run every 15 minutes
   concurrencyPolicy: Forbid
   suspend: false
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
       template:

@@ -176,15 +176,25 @@ for dir in */; do
 			env_file="environment.yml"
 		fi
 
-		if [ -n "$env_file" ]; then
-			echo "Found $env_file in $env_dir, creating job..."
-
+				if [ -n "$env_file" ]; then
+			echo "Found $env_file in $env_dir, checking for existing jobs..."
+			
+			# Check if there's already a running job for this environment
+			existing_jobs=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name" --field-selector=status.successful!=1,status.failed!=1 -o name 2>/dev/null || echo "")
+			
+			if [ -n "$existing_jobs" ]; then
+				echo "Skipping $env_name - job already running or pending"
+				continue
+			fi
+			
+			echo "Creating job for environment: $env_name..."
+			
 			# Create job YAML
 			job_yaml=$(create_job_yaml "$env_name" "$env_dir" "$env_file")
-
+			
 			# Apply the job
 			echo "$job_yaml" | kubectl apply -f -
-
+			
 			if [ $? -eq 0 ]; then
 				echo "Successfully created job for environment: $env_name"
 			else
