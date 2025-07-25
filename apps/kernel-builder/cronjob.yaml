@@ -4,7 +4,7 @@ metadata:
   name: kernel-builder
   namespace: cms
 spec:
-  schedule: "*/2 * * * *" # Run every 5 minutes
+  schedule: "*/2 * * * *" # Run every 2 minutes
   suspend: false
   jobTemplate:
     spec:
@@ -31,7 +31,7 @@ spec:
                   memory: "8Gi"
                   cpu: "4"
               volumeMounts:
-                - name: work
+                - name: af-shared-storage
                   mountPath: /work/
                   mountPropagation: HostToContainer
                 - name: scripts
