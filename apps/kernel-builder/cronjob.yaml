@@ -4,7 +4,7 @@ metadata:
   name: kernel-builder
   namespace: cms
 spec:
-  schedule: "*/5 * * * *" # Run every 5 minutes
+  schedule: "*/2 * * * *" # Run every 5 minutes
   suspend: false
   jobTemplate:
     spec:
