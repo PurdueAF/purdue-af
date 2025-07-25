@@ -33,8 +33,29 @@ wget -O micromamba.tar.bz2 "https://micro.mamba.pm/api/micromamba/$PLATFORM/late
 
 echo "Extracting micromamba..."
 tar -xvjf micromamba.tar.bz2
-chmod +x micromamba
+echo "Checking extracted files:"
+ls -la
 
+# Find the micromamba binary (it might be in a subdirectory)
+if [ -f "micromamba" ]; then
+    echo "Found micromamba in current directory"
+elif [ -f "bin/micromamba" ]; then
+    echo "Found micromamba in bin/ directory"
+    mv bin/micromamba micromamba
+else
+    echo "Looking for micromamba binary..."
+    find . -name "micromamba" -type f
+    MICROMAMBA_PATH=$(find . -name "micromamba" -type f | head -1)
+    if [ -n "$MICROMAMBA_PATH" ]; then
+        echo "Found micromamba at: $MICROMAMBA_PATH"
+        mv "$MICROMAMBA_PATH" micromamba
+    else
+        echo "ERROR: Could not find micromamba binary after extraction"
+        exit 1
+    fi
+fi
+
+chmod +x micromamba
 echo "Moving micromamba to /usr/local/bin/"
 mv micromamba /usr/local/bin/
 
@@ -75,6 +96,8 @@ build_environment() {
 			else
 				echo "Environment $env_name exists but is invalid. Recreating..."
 				rm -rf "$env_path"
+				# Wait a moment to ensure filesystem sync
+				sleep 1
 				mkdir -p "$env_path"
 				cp "${dir%/}/environment.yaml" "$env_path/"
 				chmod 644 "$env_path/environment.yaml"
@@ -84,6 +107,10 @@ build_environment() {
 				else
 					echo "Failed to create environment: $env_name, cleaning up and retrying..."
 					rm -rf "$env_path"
+					# Wait a moment to ensure filesystem sync
+					sleep 1
+					# Also clean up any parent directory that might be causing issues
+					rm -rf "$(dirname "$env_path")/$(basename "$env_path")"
 					mkdir -p "$env_path"
 					cp "${dir%/}/environment.yaml" "$env_path/"
 					chmod 644 "$env_path/environment.yaml"
@@ -112,6 +139,10 @@ build_environment() {
 			else
 				echo "Failed to create environment: $env_name, cleaning up and retrying..."
 				rm -rf "$env_path"
+				# Wait a moment to ensure filesystem sync
+				sleep 1
+				# Also clean up any parent directory that might be causing issues
+				rm -rf "$(dirname "$env_path")/$(basename "$env_path")"
 				mkdir -p "$env_path"
 				cp "${dir%/}/environment.yaml" "$env_path/"
 				chmod 644 "$env_path/environment.yaml"
