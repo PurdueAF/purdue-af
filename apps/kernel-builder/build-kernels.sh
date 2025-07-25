@@ -50,24 +50,16 @@ build_environment() {
 
 		# Check if environment already exists and is up to date
 		if [ -d "$env_path" ]; then
-			echo "Environment $env_name already exists, checking for updates..."
-
-			# Compare environment.yaml with existing environment
-			if cmp -s "${dir%/}/environment.yaml" "$env_path/environment.yaml"; then
-				echo "Environment $env_name is up to date, skipping..."
-				return 0
+			echo "Environment $env_name already exists, updating..."
+			# Copy the new environment.yaml for tracking
+			cp "${dir%/}/environment.yaml" "$env_path/"
+			chmod 644 "$env_path/environment.yaml"
+			# Update the existing environment
+			if micromamba env update -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
+				echo "Successfully updated environment: $env_name"
 			else
-				echo "Environment $env_name needs update, updating existing environment..."
-				# Copy the new environment.yaml for tracking
-				cp "${dir%/}/environment.yaml" "$env_path/"
-				chmod 644 "$env_path/environment.yaml"
-				# Update the existing environment
-				if micromamba env update -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
-					echo "Successfully updated environment: $env_name"
-				else
-					echo "Failed to update environment: $env_name"
-					return 1
-				fi
+				echo "Failed to update environment: $env_name"
+				return 1
 			fi
 		else
 			echo "Environment $env_name does not exist, creating new environment..."
