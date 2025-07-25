@@ -4,6 +4,10 @@ kind: Kustomization
 resources:
   - cronjob.yaml
   - rbac.yaml
-  - configmap.yaml
+
+configMapGenerator:
+  - name: kernel-builder-scripts
+    files:
+      - build-kernels.sh
 
 namespace: cms
