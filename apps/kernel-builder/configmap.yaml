@@ -81,4 +81,4 @@ data:
     # Clean up
     rm -rf /tmp/purdue-af-kernels
 
-    echo "Kernel building job completed" 
+    echo "Kernel building job completed"
