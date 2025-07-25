@@ -16,16 +16,16 @@ ARCH=$(uname -m)
 echo "Detected architecture: $ARCH"
 
 case "$ARCH" in
-  x86_64)
-    PLATFORM="linux-64"
-    ;;
-  aarch64|arm64)
-    PLATFORM="linux-aarch64"
-    ;;
-  *)
-    echo "Unsupported architecture: $ARCH"
-    exit 1
-    ;;
+x86_64)
+	PLATFORM="linux-64"
+	;;
+aarch64 | arm64)
+	PLATFORM="linux-aarch64"
+	;;
+*)
+	echo "Unsupported architecture: $ARCH"
+	exit 1
+	;;
 esac
 
 echo "Downloading micromamba for $PLATFORM..."
