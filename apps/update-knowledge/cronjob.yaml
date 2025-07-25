@@ -43,9 +43,9 @@ spec:
               workingDir: /workspace
               env:
                 - name: OPENWEBUI_API_URL
-                  value: "https://genai.rcac.purdue.edu/api/"  # Update this URL
+                  value: "https://genai.rcac.purdue.edu/api/" # Update this URL
                 - name: KNOWLEDGE_ID
-                  value: "866d52ed-332a-4703-934a-96022729d080"  # Update this ID
+                  value: "866d52ed-332a-4703-934a-96022729d080" # Update this ID
                 - name: OPENWEBUI_API_TOKEN
                   valueFrom:
                     secretKeyRef:
@@ -59,4 +59,4 @@ spec:
               gitRepo:
                 repository: https://github.com/PurdueAF/purdue-af.git
                 revision: main
-                directory: docs 
+                directory: docs
