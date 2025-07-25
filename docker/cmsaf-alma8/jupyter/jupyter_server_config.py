@@ -67,7 +67,7 @@ as well as general questions to help your analysis development.
 **WARNING: do not rely exclusively on AI responses, as models may hallucinate.**
 
 If you have any doubts, please consult the
-<a href="https://analysis-facility.physics.purdue.edu/" target="_blank">Purdue AF documentation website</a>
+<a href="https://analysis-facility.physics.purdue.edu/" target="_blank">Purdue AF documentation</a>
 or contact the AF support team at <a href="mailto:cms-af@groups.purdue.edu">cms-af@groups.purdue.edu</a>.
 """
 c.AiExtension.default_language_model = "purdue-cms-af"
