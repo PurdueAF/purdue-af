@@ -127,7 +127,7 @@ def main():
     if LIST_ALL_FILES:
         list_all_server_files()
         return
-    
+
     # Delete all existing files at the beginning
     print("Cleaning up all existing files...")
     try:
@@ -136,11 +136,11 @@ def main():
     except Exception as e:
         print(f"Error deleting existing files: {e}")
         return
-    
+
     # Upload new files
     rst_files = find_rst_files()
     print(f"Found {len(rst_files)} .rst files to upload.")
-    
+
     uploaded_file_ids = []
     for file_path in rst_files:
         try:
@@ -156,7 +156,7 @@ def main():
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
             continue
-    
+
     print(f"Successfully uploaded {len(uploaded_file_ids)} files to knowledge base")
 
 
