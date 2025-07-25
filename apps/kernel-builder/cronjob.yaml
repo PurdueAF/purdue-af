@@ -21,17 +21,17 @@ spec:
                 - |
                   # Install required packages
                   dnf install -y git conda python3-pip --nogpgcheck
-                  
+
                   # Install micromamba for faster conda operations
                   curl -L -O "https://micro.mamba.pm/api/micromamba/linux-64/latest"
                   chmod +x micromamba
                   mv micromamba /usr/local/bin/
-                  
+
                   # Clone the repository
                   echo "Cloning purdue-af-kernels repository..."
                   git clone https://github.com/PurdueAF/purdue-af-kernels.git /tmp/purdue-af-kernels
                   cd /tmp/purdue-af-kernels
-                  
+
                   # Function to build environment from directory
                   build_environment() {
                     local dir="$1"
@@ -96,7 +96,7 @@ spec:
                       echo "No environment.yaml found in $dir"
                     fi
                   }
-                  
+
                   # Find all directories and process them
                   echo "Scanning for directories with environment.yaml files..."
                   for dir in */; do
@@ -104,10 +104,10 @@ spec:
                       build_environment "$dir"
                     fi
                   done
-                  
+
                   # Clean up
                   rm -rf /tmp/purdue-af-kernels
-                  
+
                   echo "Kernel building job completed"
               resources:
                 requests:
@@ -129,4 +129,4 @@ spec:
             - key: "hub.jupyter.org/dedicated"
               operator: "Equal"
               value: "cms-af"
-              effect: "NoSchedule" 
+              effect: "NoSchedule"
