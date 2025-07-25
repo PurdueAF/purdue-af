@@ -140,21 +140,21 @@ done
 echo "Cleaning up orphaned kernel directories..."
 cleanup_orphaned_kernels() {
 	local repo_dirs=()
-	
+
 	# Get list of directories in the repository
 	for dir in */; do
 		if [ -d "$dir" ]; then
 			repo_dirs+=("$(basename "$dir")")
 		fi
 	done
-	
+
 	# Check each kernel directory in /work/kernels
 	if [ -d "/work/kernels" ]; then
 		for kernel_dir in /work/kernels/*/; do
 			if [ -d "$kernel_dir" ]; then
 				local kernel_name=$(basename "$kernel_dir")
 				local found=false
-				
+
 				# Check if this kernel exists in the repository
 				for repo_dir in "${repo_dirs[@]}"; do
 					if [ "$kernel_name" = "$repo_dir" ]; then
@@ -162,7 +162,7 @@ cleanup_orphaned_kernels() {
 						break
 					fi
 				done
-				
+
 				# If not found in repository, remove it
 				if [ "$found" = false ]; then
 					echo "Removing orphaned kernel directory: $kernel_name"
