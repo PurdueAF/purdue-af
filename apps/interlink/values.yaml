@@ -67,13 +67,13 @@ virtualNode:
     enableTunnel: true
     # Container image for wstunnel
     tunnelImage: "ghcr.io/erebe/wstunnel:latest"
-    # DNS domain for ingress (e.g. each pod will have its own tunnel at: 
+    # DNS domain for ingress (e.g. each pod will have its own tunnel at:
     # "<podname>.<wildcardDNS>"
     wildcardDNS: "131.154.98.82.myip.cloud.infn.it"
     # Path where wstunnel template will be mounted in VK container
     wstunnelTemplatePath: "/etc/templates/wstunnel.yaml"
     # Custom wstunnel template content (optional, uses built-in template if empty)
-    # Default template is made to work with nginx ingress controller: 
+    # Default template is made to work with nginx ingress controller:
     #   https://github.com/interlink-hq/interlink-helm-chart/blob/main/interlink/wstunnel-template_nginx.yaml
     customTemplate: ""
     wstunnelCommand: |
