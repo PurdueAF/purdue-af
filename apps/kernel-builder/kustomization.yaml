@@ -7,7 +7,10 @@ resources:
 
 configMapGenerator:
   - name: kernel-builder-scripts
+    namespace: cms
     files:
       - build-kernels.sh
+    options:
+      disableNameSuffixHash: true
 
 namespace: cms
