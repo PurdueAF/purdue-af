@@ -45,7 +45,7 @@ spec:
                 - name: OPENWEBUI_API_URL
                   value: "https://genai.rcac.purdue.edu/api/" # Update this URL
                 - name: KNOWLEDGE_ID
-                  value: "866d52ed-332a-4703-934a-96022729d080" # Update this ID
+                  value: "2ffc2559-006b-4b1a-bcea-7e3e62243f7c" # Update this ID
                 - name: OPENWEBUI_API_TOKEN
                   valueFrom:
                     secretKeyRef:
