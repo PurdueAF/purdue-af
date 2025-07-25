@@ -7,13 +7,23 @@ data:
   build-kernels.sh: |
     #!/bin/bash
 
+    set -e  # Exit on any error
+    set -x  # Print commands as they execute
+
+    echo "Starting kernel builder script..."
+
     # Install required packages
+    echo "Installing required packages..."
     dnf install -y git python3-pip wget --nogpgcheck
 
     # Install micromamba for faster conda operations
+    echo "Downloading micromamba..."
     wget -O micromamba "https://micro.mamba.pm/api/micromamba/linux-64/latest"
+    echo "Setting permissions on micromamba..."
     chmod +x micromamba
+    echo "Moving micromamba to /usr/local/bin/"
     mv micromamba /usr/local/bin/
+    echo "Micromamba installation completed"
 
     # Clone the repository
     echo "Cloning purdue-af-kernels repository..."
