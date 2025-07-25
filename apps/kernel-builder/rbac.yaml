@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kernel-builder
+  namespace: cms
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kernel-builder-role
+  namespace: cms
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kernel-builder-rolebinding
+  namespace: cms
+subjects:
+  - kind: ServiceAccount
+    name: kernel-builder
+    namespace: cms
+roleRef:
+  kind: Role
+  name: kernel-builder-role
+  apiGroup: rbac.authorization.k8s.io 
