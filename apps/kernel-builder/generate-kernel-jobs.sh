@@ -99,7 +99,7 @@ create_job_yaml() {
 	printf 'apiVersion: batch/v1\n'
 	printf 'kind: Job\n'
 	printf 'metadata:\n'
-	printf '  name: kernel-builder-%s-%s\n' "$sanitized_name" "$(date +%s)"
+	printf '  name: kernel-builder-%s\n' "$sanitized_name"
 	printf '  namespace: cms\n'
 	printf '  labels:\n'
 	printf '    app: kernel-builder\n'
@@ -206,19 +206,23 @@ for dir in */; do
 	fi
 done
 
-# Clean up old jobs (keep only last 10 jobs per environment)
-echo "Cleaning up old jobs..."
+# Clean up completed jobs (keep only the current job per environment)
+echo "Cleaning up completed jobs..."
 for env_name in $(kubectl get jobs -n cms -l app=kernel-builder -o jsonpath='{.items[*].metadata.labels.environment}' | tr ' ' '\n' | sort -u); do
-	echo "Cleaning up old jobs for environment: $env_name"
-	# Get list of jobs to delete (skip first 10)
-	jobs_to_delete=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name" --sort-by=.metadata.creationTimestamp -o name | tail -n +11)
-	if [ -n "$jobs_to_delete" ]; then
-		echo "$jobs_to_delete" | while read job; do
-			echo "Deleting job: $job"
-			kubectl delete -n cms "$job"
+	echo "Checking completed jobs for environment: $env_name"
+	# Get completed jobs (successful or failed)
+	completed_jobs=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name" --field-selector=status.successful=1 -o name 2>/dev/null || echo "")
+	completed_jobs="$completed_jobs $(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name" --field-selector=status.failed=1 -o name 2>/dev/null || echo "")"
+	
+	if [ -n "$completed_jobs" ]; then
+		echo "$completed_jobs" | while read job; do
+			if [ -n "$job" ]; then
+				echo "Deleting completed job: $job"
+				kubectl delete -n cms "$job"
+			fi
 		done
 	else
-		echo "No old jobs to delete for environment: $env_name"
+		echo "No completed jobs to delete for environment: $env_name"
 	fi
 done
 
