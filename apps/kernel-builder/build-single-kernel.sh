@@ -103,12 +103,12 @@ if [ -d "$ENV_PATH" ]; then
 	echo "Environment $ENV_NAME already exists, checking validity..."
 	# Check if the environment is valid by trying to list packages
 	if micromamba list -p "$ENV_PATH" >/dev/null 2>&1; then
-		        echo "Environment $ENV_NAME is valid, updating..."
-        # Copy the new environment file for tracking
-        cp "$ENV_YAML_PATH" "$ENV_PATH/"
-        chmod 644 "$ENV_PATH/$ENV_FILE"
-        # Update the existing environment
-        if micromamba env update -f "$ENV_YAML_PATH" -p "$ENV_PATH" --yes; then
+		echo "Environment $ENV_NAME is valid, updating..."
+		# Copy the new environment file for tracking
+		cp "$ENV_YAML_PATH" "$ENV_PATH/"
+		chmod 644 "$ENV_PATH/$ENV_FILE"
+		# Update the existing environment
+		if micromamba env update -f "$ENV_YAML_PATH" -p "$ENV_PATH" --yes; then
 			echo "Successfully updated environment: $ENV_NAME"
 		else
 			echo "Failed to update environment: $ENV_NAME"
