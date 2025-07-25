@@ -146,18 +146,19 @@ def clear_knowledge_base():
     except Exception as e:
         print(f"Error clearing knowledge base: {e}")
 
+
 def clear_vector_database():
     """Clear the vector database to work around OpenWebUI bug #7181"""
     try:
         # Based on the GitHub issue solution, we need to properly clean up vector database entries
         # The solution involves deleting files and their vector database entries
-        
+
         print("Clearing vector database using file-by-file cleanup...")
-        
+
         # Get all files in the knowledge base
         current_files = list_knowledge_files()
         print(f"Found {len(current_files)} files to clean up")
-        
+
         # Remove each file from knowledge base (this should trigger vector database cleanup)
         for file_id in current_files:
             try:
@@ -166,11 +167,11 @@ def clear_vector_database():
                 print(f"File {file_id} removed from knowledge base")
             except Exception as e:
                 print(f"Error removing file {file_id} from knowledge: {e}")
-        
+
         # Also delete all files from server storage to ensure complete cleanup
         server_files = list_all_server_files()
         print(f"Found {len(server_files)} files in server storage to delete")
-        
+
         for file_info in server_files:
             file_id = file_info.get("id")
             try:
@@ -179,10 +180,10 @@ def clear_vector_database():
                 print(f"File {file_id} deleted from server storage")
             except Exception as e:
                 print(f"Error deleting file {file_id} from server: {e}")
-        
+
         print("Vector database cleanup completed")
         return True
-        
+
     except Exception as e:
         print(f"Error clearing vector database: {e}")
         return False
@@ -223,7 +224,7 @@ def main():
         # Clear vector database and all files (this is the key fix for the bug)
         print("Clearing vector database to work around OpenWebUI bug #7181...")
         clear_vector_database()
-        
+
         print("All files and vector database cleared successfully")
     except Exception as e:
         print(f"Error clearing files: {e}")
