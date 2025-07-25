@@ -12,14 +12,12 @@ echo "Downloading micromamba..."
 ARCH=$(uname -m)
 echo "Detected architecture: $ARCH"
 if [ "$ARCH" = "x86_64" ]; then
-    echo "Downloading x86_64 version..."
     wget -O micromamba "https://micro.mamba.pm/api/micromamba/linux-64/latest"
 elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-    echo "Downloading ARM64 version..."
     wget -O micromamba "https://micro.mamba.pm/api/micromamba/linux-aarch64/latest"
 else
-    echo "Unsupported architecture: $ARCH"
-    exit 1
+	echo "Unsupported architecture: $ARCH"
+	exit 1
 fi
 
 echo "Checking downloaded file..."
