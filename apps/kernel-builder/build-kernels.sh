@@ -4,20 +4,28 @@ echo "Starting kernel builder script..."
 
 # Install required packages
 echo "Installing required packages..."
-dnf install -y git python3-pip wget --nogpgcheck
+dnf install -y git python3-pip wget diffutils --nogpgcheck
 
 # Install micromamba for faster conda operations
 echo "Downloading micromamba..."
 # Detect architecture and download appropriate binary
 ARCH=$(uname -m)
+echo "Detected architecture: $ARCH"
 if [ "$ARCH" = "x86_64" ]; then
+    echo "Downloading x86_64 version..."
     wget -O micromamba "https://micro.mamba.pm/api/micromamba/linux-64/latest"
 elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+    echo "Downloading ARM64 version..."
     wget -O micromamba "https://micro.mamba.pm/api/micromamba/linux-aarch64/latest"
 else
     echo "Unsupported architecture: $ARCH"
     exit 1
 fi
+
+echo "Checking downloaded file..."
+ls -la micromamba
+file micromamba
+
 echo "Setting permissions on micromamba..."
 chmod +x micromamba
 echo "Moving micromamba to /usr/local/bin/"
