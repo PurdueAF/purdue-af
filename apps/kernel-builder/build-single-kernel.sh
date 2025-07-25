@@ -103,12 +103,12 @@ if [ -d "$ENV_PATH" ]; then
 	echo "Environment $ENV_NAME already exists, checking validity..."
 	# Check if the environment is valid by trying to list packages
 	if micromamba list -p "$ENV_PATH" >/dev/null 2>&1; then
-		echo "Environment $ENV_NAME is valid, updating..."
-		# Copy the new environment.yaml for tracking
-		cp "$ENV_YAML_PATH" "$ENV_PATH/"
-		chmod 644 "$ENV_PATH/environment.yaml"
-		# Update the existing environment
-		if micromamba env update -f "$ENV_YAML_PATH" -p "$ENV_PATH" --yes; then
+		        echo "Environment $ENV_NAME is valid, updating..."
+        # Copy the new environment file for tracking
+        cp "$ENV_YAML_PATH" "$ENV_PATH/"
+        chmod 644 "$ENV_PATH/$ENV_FILE"
+        # Update the existing environment
+        if micromamba env update -f "$ENV_YAML_PATH" -p "$ENV_PATH" --yes; then
 			echo "Successfully updated environment: $ENV_NAME"
 		else
 			echo "Failed to update environment: $ENV_NAME"
@@ -128,9 +128,9 @@ if [ -d "$ENV_PATH" ]; then
 		echo "Creating new conda environment: $ENV_NAME"
 		if micromamba env create -f "$ENV_YAML_PATH" -p "$ENV_PATH" --yes; then
 			echo "Successfully created environment: $ENV_NAME"
-			# Copy environment.yaml to the created environment for tracking
+			# Copy environment file to the created environment for tracking
 			cp "$ENV_YAML_PATH" "$ENV_PATH/"
-			chmod 644 "$ENV_PATH/environment.yaml"
+			chmod 644 "$ENV_PATH/$ENV_FILE"
 		else
 			echo "Failed to create environment: $ENV_NAME, performing aggressive cleanup..."
 			echo "Current directory contents:"
@@ -147,9 +147,9 @@ if [ -d "$ENV_PATH" ]; then
 
 			if micromamba env create -f "$ENV_YAML_PATH" -p "$ENV_PATH" --yes; then
 				echo "Successfully created environment: $ENV_NAME on retry"
-				# Copy environment.yaml to the created environment for tracking
+				# Copy environment file to the created environment for tracking
 				cp "$ENV_YAML_PATH" "$ENV_PATH/"
-				chmod 644 "$ENV_PATH/environment.yaml"
+				chmod 644 "$ENV_PATH/$ENV_FILE"
 			else
 				echo "Failed to create environment: $ENV_NAME even after aggressive cleanup"
 				echo "Final directory contents:"
@@ -164,9 +164,9 @@ else
 	echo "Creating new conda environment: $ENV_NAME"
 	if micromamba env create -f "$ENV_YAML_PATH" -p "$ENV_PATH" --yes; then
 		echo "Successfully created environment: $ENV_NAME"
-		# Copy environment.yaml to the created environment for tracking
+		# Copy environment file to the created environment for tracking
 		cp "$ENV_YAML_PATH" "$ENV_PATH/"
-		chmod 644 "$ENV_PATH/environment.yaml"
+		chmod 644 "$ENV_PATH/$ENV_FILE"
 	else
 		echo "Failed to create environment: $ENV_NAME, performing aggressive cleanup..."
 		echo "Current directory contents:"
@@ -183,9 +183,9 @@ else
 
 		if micromamba env create -f "$ENV_YAML_PATH" -p "$ENV_PATH" --yes; then
 			echo "Successfully created environment: $ENV_NAME on retry"
-			# Copy environment.yaml to the created environment for tracking
+			# Copy environment file to the created environment for tracking
 			cp "$ENV_YAML_PATH" "$ENV_PATH/"
-			chmod 644 "$ENV_PATH/environment.yaml"
+			chmod 644 "$ENV_PATH/$ENV_FILE"
 		else
 			echo "Failed to create environment: $ENV_NAME even after aggressive cleanup"
 			echo "Final directory contents:"
