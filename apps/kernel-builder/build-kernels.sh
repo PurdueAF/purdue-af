@@ -109,7 +109,7 @@ build_environment() {
 				sleep 2
 				echo "Checking if directory still exists:"
 				ls -la "$(dirname "$env_path")" | grep "$(basename "$env_path")" || echo "Directory successfully removed"
-				
+
 				echo "Creating new conda environment: $env_name"
 				if micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
 					echo "Successfully created environment: $env_name"
@@ -120,16 +120,16 @@ build_environment() {
 					echo "Failed to create environment: $env_name, performing aggressive cleanup..."
 					echo "Current directory contents:"
 					ls -la "$env_path" || echo "Directory does not exist"
-					
+
 					# More aggressive cleanup
 					rm -rf "$env_path"
 					find "$(dirname "$env_path")" -name "$(basename "$env_path")" -type d -exec rm -rf {} + 2>/dev/null || true
 					find "$(dirname "$env_path")" -name "$(basename "$env_path")" -type f -delete 2>/dev/null || true
 					sleep 3
-					
+
 					echo "After cleanup, checking directory:"
 					ls -la "$(dirname "$env_path")" | grep "$(basename "$env_path")" || echo "Directory successfully removed"
-					
+
 					if micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
 						echo "Successfully created environment: $env_name on retry"
 						# Copy environment.yaml to the created environment for tracking
@@ -156,16 +156,16 @@ build_environment() {
 				echo "Failed to create environment: $env_name, performing aggressive cleanup..."
 				echo "Current directory contents:"
 				ls -la "$env_path" || echo "Directory does not exist"
-				
+
 				# More aggressive cleanup
 				rm -rf "$env_path"
 				find "$(dirname "$env_path")" -name "$(basename "$env_path")" -type d -exec rm -rf {} + 2>/dev/null || true
 				find "$(dirname "$env_path")" -name "$(basename "$env_path")" -type f -delete 2>/dev/null || true
 				sleep 3
-				
+
 				echo "After cleanup, checking directory:"
 				ls -la "$(dirname "$env_path")" | grep "$(basename "$env_path")" || echo "Directory successfully removed"
-				
+
 				if micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
 					echo "Successfully created environment: $env_name on retry"
 					# Copy environment.yaml to the created environment for tracking
