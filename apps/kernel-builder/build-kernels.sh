@@ -1,7 +1,7 @@
 #!/bin/bash
 
-set -e  # Exit on any error
-set -x  # Print commands as they execute
+set -e # Exit on any error
+set -x # Print commands as they execute
 
 echo "Starting kernel builder script..."
 
