@@ -4,7 +4,7 @@ metadata:
   name: kernel-builder-generator
   namespace: cms
 spec:
-  schedule: "*/15 * * * *" # Run every 15 minutes
+  schedule: "0 * * * *" # Run every hour
   concurrencyPolicy: Forbid
   suspend: false
   successfulJobsHistoryLimit: 3
