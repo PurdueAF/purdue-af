@@ -84,39 +84,11 @@ fi
 # Set up environment path
 ENV_PATH="/work/kernels/$ENV_NAME"
 ENV_YAML_PATH="${ENV_DIR}/${ENV_FILE}"
-LOCK_FILE="/work/kernels/.lock_${ENV_NAME}"
 
 echo "Environment name: $ENV_NAME"
 echo "Environment path: $ENV_PATH"
 echo "Environment file: $ENV_FILE"
 echo "Environment file path: $ENV_YAML_PATH"
-echo "Lock file: $LOCK_FILE"
-
-# Check if another process is already building this environment
-if [ -f "$LOCK_FILE" ]; then
-	echo "Lock file exists for $ENV_NAME, checking if process is still running..."
-	lock_pid=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
-	if [ -n "$lock_pid" ] && kill -0 "$lock_pid" 2>/dev/null; then
-		echo "Process $lock_pid is still running for $ENV_NAME, exiting..."
-		exit 0
-	else
-		echo "Lock file exists but process is not running, removing stale lock..."
-		rm -f "$LOCK_FILE"
-	fi
-fi
-
-# Create lock file
-echo $$ >"$LOCK_FILE"
-echo "Created lock file for $ENV_NAME with PID $$"
-
-# Function to cleanup lock file on exit
-cleanup_lock() {
-	echo "Cleaning up lock file for $ENV_NAME"
-	rm -f "$LOCK_FILE"
-}
-
-# Set trap to cleanup lock file on script exit
-trap cleanup_lock EXIT
 
 # Check if environment file exists
 if [ ! -f "$ENV_YAML_PATH" ]; then
