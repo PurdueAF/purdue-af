@@ -17,16 +17,16 @@ ARCH=$(uname -m)
 echo "Detected architecture: $ARCH"
 
 case "$ARCH" in
-  x86_64)
-    PLATFORM="linux-64"
-    ;;
-  aarch64 | arm64)
-    PLATFORM="linux-aarch64"
-    ;;
-  *)
-    echo "Unsupported architecture: $ARCH"
-    exit 1
-    ;;
+x86_64)
+	PLATFORM="linux-64"
+	;;
+aarch64 | arm64)
+	PLATFORM="linux-aarch64"
+	;;
+*)
+	echo "Unsupported architecture: $ARCH"
+	exit 1
+	;;
 esac
 
 echo "Downloading micromamba for $PLATFORM..."
@@ -39,21 +39,21 @@ ls -la
 
 # Find the micromamba binary (it might be in a subdirectory)
 if [ -f "micromamba" ]; then
-    echo "Found micromamba in current directory"
+	echo "Found micromamba in current directory"
 elif [ -f "bin/micromamba" ]; then
-    echo "Found micromamba in bin/ directory"
-    mv bin/micromamba micromamba
+	echo "Found micromamba in bin/ directory"
+	mv bin/micromamba micromamba
 else
-    echo "Looking for micromamba binary..."
-    find . -name "micromamba" -type f
-    MICROMAMBA_PATH=$(find . -name "micromamba" -type f | head -1)
-    if [ -n "$MICROMAMBA_PATH" ]; then
-        echo "Found micromamba at: $MICROMAMBA_PATH"
-        mv "$MICROMAMBA_PATH" micromamba
-    else
-        echo "ERROR: Could not find micromamba binary after extraction"
-        exit 1
-    fi
+	echo "Looking for micromamba binary..."
+	find . -name "micromamba" -type f
+	MICROMAMBA_PATH=$(find . -name "micromamba" -type f | head -1)
+	if [ -n "$MICROMAMBA_PATH" ]; then
+		echo "Found micromamba at: $MICROMAMBA_PATH"
+		mv "$MICROMAMBA_PATH" micromamba
+	else
+		echo "ERROR: Could not find micromamba binary after extraction"
+		exit 1
+	fi
 fi
 
 chmod +x micromamba
@@ -67,20 +67,20 @@ cd /tmp/purdue-af-kernels
 
 # Function to validate environment name
 validate_env_name() {
-    local env_name="$1"
-    if [[ "$env_name" =~ \.\. ]] || [[ "$env_name" =~ / ]] || [[ "$env_name" =~ ^[[:space:]]*$ ]]; then
-        echo "ERROR: Invalid environment name '$env_name' - contains path traversal characters or is empty"
-        return 1
-    fi
-    return 0
+	local env_name="$1"
+	if [[ "$env_name" =~ \.\. ]] || [[ "$env_name" =~ / ]] || [[ "$env_name" =~ ^[[:space:]]*$ ]]; then
+		echo "ERROR: Invalid environment name '$env_name' - contains path traversal characters or is empty"
+		return 1
+	fi
+	return 0
 }
 
 # Function to create job YAML for a single environment
 create_job_yaml() {
-    local env_name="$1"
-    local env_dir="$2"
-    
-    cat <<EOF
+	local env_name="$1"
+	local env_dir="$2"
+
+	cat <<EOF
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -139,48 +139,48 @@ EOF
 # Find all directories and create jobs for them
 echo "Scanning for directories with environment.yaml files..."
 for dir in */; do
-    if [ -d "$dir" ]; then
-        local env_name=$(basename "$dir")
-        local env_dir="${dir%/}"
-        
-        echo "Processing directory: $env_dir"
-        echo "Environment name: $env_name"
-        
-        # Validate environment name
-        if ! validate_env_name "$env_name"; then
-            echo "Skipping invalid environment: $env_name"
-            continue
-        fi
-        
-        # Check if environment.yaml exists
-        if [ -f "${env_dir}/environment.yaml" ]; then
-            echo "Found environment.yaml in $env_dir, creating job..."
-            
-            # Create job YAML
-            job_yaml=$(create_job_yaml "$env_name" "$env_dir")
-            
-            # Apply the job
-            echo "$job_yaml" | kubectl apply -f -
-            
-            if [ $? -eq 0 ]; then
-                echo "Successfully created job for environment: $env_name"
-            else
-                echo "Failed to create job for environment: $env_name"
-            fi
-        else
-            echo "No environment.yaml found in $env_dir, skipping..."
-        fi
-    fi
+	if [ -d "$dir" ]; then
+		local env_name=$(basename "$dir")
+		local env_dir="${dir%/}"
+
+		echo "Processing directory: $env_dir"
+		echo "Environment name: $env_name"
+
+		# Validate environment name
+		if ! validate_env_name "$env_name"; then
+			echo "Skipping invalid environment: $env_name"
+			continue
+		fi
+
+		# Check if environment.yaml exists
+		if [ -f "${env_dir}/environment.yaml" ]; then
+			echo "Found environment.yaml in $env_dir, creating job..."
+
+			# Create job YAML
+			job_yaml=$(create_job_yaml "$env_name" "$env_dir")
+
+			# Apply the job
+			echo "$job_yaml" | kubectl apply -f -
+
+			if [ $? -eq 0 ]; then
+				echo "Successfully created job for environment: $env_name"
+			else
+				echo "Failed to create job for environment: $env_name"
+			fi
+		else
+			echo "No environment.yaml found in $env_dir, skipping..."
+		fi
+	fi
 done
 
 # Clean up old jobs (keep only last 10 jobs per environment)
 echo "Cleaning up old jobs..."
 for env_name in $(kubectl get jobs -n cms -l app=kernel-builder -o jsonpath='{.items[*].metadata.labels.environment}' | tr ' ' '\n' | sort -u); do
-    echo "Cleaning up old jobs for environment: $env_name"
-    kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name" --sort-by=.metadata.creationTimestamp -o name | tail -n +11 | xargs -r kubectl delete -n cms
+	echo "Cleaning up old jobs for environment: $env_name"
+	kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name" --sort-by=.metadata.creationTimestamp -o name | tail -n +11 | xargs -r kubectl delete -n cms
 done
 
 # Clean up
 rm -rf /tmp/purdue-af-kernels
 
-echo "Kernel job generation completed" 
+echo "Kernel job generation completed"
