@@ -193,8 +193,17 @@ done
 # Clean up old jobs (keep only last 10 jobs per environment)
 echo "Cleaning up old jobs..."
 for env_name in $(kubectl get jobs -n cms -l app=kernel-builder -o jsonpath='{.items[*].metadata.labels.environment}' | tr ' ' '\n' | sort -u); do
-	echo "Cleaning up old jobs for environment: $env_name"
-	kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name" --sort-by=.metadata.creationTimestamp -o name | tail -n +11 | xargs -r kubectl delete -n cms
+    echo "Cleaning up old jobs for environment: $env_name"
+    # Get list of jobs to delete (skip first 10)
+    jobs_to_delete=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name" --sort-by=.metadata.creationTimestamp -o name | tail -n +11)
+    if [ -n "$jobs_to_delete" ]; then
+        echo "$jobs_to_delete" | while read job; do
+            echo "Deleting job: $job"
+            kubectl delete -n cms "$job"
+        done
+    else
+        echo "No old jobs to delete for environment: $env_name"
+    fi
 done
 
 # Clean up
