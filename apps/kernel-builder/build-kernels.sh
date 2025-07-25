@@ -33,15 +33,15 @@ build_environment() {
 	echo "Environment name: $env_name"
 	echo "Environment path: $env_path"
 
-	  if [ -f "${dir%/}/environment.yaml" ]; then
+	if [ -f "${dir%/}/environment.yaml" ]; then
 		echo "Found environment.yaml in $dir"
 
 		# Check if environment already exists and is up to date
 		if [ -d "$env_path" ]; then
 			echo "Environment $env_name already exists, checking for updates..."
 
-			        # Compare environment.yaml with existing environment
-        if cmp -s "${dir%/}/environment.yaml" "$env_path/environment.yaml"; then
+			# Compare environment.yaml with existing environment
+			if cmp -s "${dir%/}/environment.yaml" "$env_path/environment.yaml"; then
 				echo "Environment $env_name is up to date, skipping..."
 				return 0
 			else
@@ -54,13 +54,13 @@ build_environment() {
 		mkdir -p "$env_path"
 		chmod 755 "$env_path"
 
-		        # Copy environment.yaml to the environment directory for tracking
-        cp "${dir%/}/environment.yaml" "$env_path/"
+		# Copy environment.yaml to the environment directory for tracking
+		cp "${dir%/}/environment.yaml" "$env_path/"
 		chmod 644 "$env_path/environment.yaml"
 
-		        # Build the conda environment
-        echo "Building conda environment: $env_name"
-        micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes
+		# Build the conda environment
+		echo "Building conda environment: $env_name"
+		micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes
 
 		if [ $? -eq 0 ]; then
 			echo "Successfully built environment: $env_name"
