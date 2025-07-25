@@ -213,7 +213,7 @@ for env_name in $(kubectl get jobs -n cms -l app=kernel-builder -o jsonpath='{.i
 	# Get completed jobs (successful or failed)
 	completed_jobs=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name" --field-selector=status.successful=1 -o name 2>/dev/null || echo "")
 	completed_jobs="$completed_jobs $(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name" --field-selector=status.failed=1 -o name 2>/dev/null || echo "")"
-	
+
 	if [ -n "$completed_jobs" ]; then
 		echo "$completed_jobs" | while read job; do
 			if [ -n "$job" ]; then
