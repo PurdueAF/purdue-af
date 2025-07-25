@@ -11,9 +11,16 @@ echo "Downloading micromamba..."
 # Detect architecture and download appropriate binary
 ARCH=$(uname -m)
 echo "Detected architecture: $ARCH"
+echo "System info:"
+uname -a
+echo "CPU info:"
+cat /proc/cpuinfo | head -5
+
 if [ "$ARCH" = "x86_64" ]; then
+	echo "Downloading x86_64 version..."
 	wget -O micromamba "https://micro.mamba.pm/api/micromamba/linux-64/latest"
 elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+	echo "Downloading ARM64 version..."
 	wget -O micromamba "https://micro.mamba.pm/api/micromamba/linux-aarch64/latest"
 else
 	echo "Unsupported architecture: $ARCH"
@@ -23,11 +30,15 @@ fi
 echo "Checking downloaded file..."
 ls -la micromamba
 file micromamba
+echo "File type details:"
+ldd micromamba 2>/dev/null || echo "ldd not available or not a dynamic binary"
 
 echo "Setting permissions on micromamba..."
 chmod +x micromamba
 echo "Moving micromamba to /usr/local/bin/"
 mv micromamba /usr/local/bin/
+echo "Testing micromamba..."
+/usr/local/bin/micromamba --version
 echo "Micromamba installation completed"
 
 # Clone the repository
