@@ -73,29 +73,29 @@ cd /tmp/purdue-af-kernels
 
 # Function to validate environment name
 validate_env_name() {
-    local env_name="$1"
-    if [[ "$env_name" =~ \.\. ]] || [[ "$env_name" =~ / ]] || [[ "$env_name" =~ ^[[:space:]]*$ ]]; then
-        echo "ERROR: Invalid environment name '$env_name' - contains path traversal characters or is empty"
-        return 1
-    fi
-    return 0
+	local env_name="$1"
+	if [[ "$env_name" =~ \.\. ]] || [[ "$env_name" =~ / ]] || [[ "$env_name" =~ ^[[:space:]]*$ ]]; then
+		echo "ERROR: Invalid environment name '$env_name' - contains path traversal characters or is empty"
+		return 1
+	fi
+	return 0
 }
 
 # Function to sanitize environment name for Kubernetes
 sanitize_env_name() {
-    local env_name="$1"
-    # Replace underscores and other invalid characters with hyphens
-    # Remove any leading/trailing non-alphanumeric characters
-    echo "$env_name" | sed 's/[^a-z0-9]/-/g' | sed 's/^[^a-z0-9]*//' | sed 's/[^a-z0-9]*$//' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//'
+	local env_name="$1"
+	# Replace underscores and other invalid characters with hyphens
+	# Remove any leading/trailing non-alphanumeric characters
+	echo "$env_name" | sed 's/[^a-z0-9]/-/g' | sed 's/^[^a-z0-9]*//' | sed 's/[^a-z0-9]*$//' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//'
 }
 
 # Function to create job YAML for a single environment
 create_job_yaml() {
-    local env_name="$1"
-    local env_dir="$2"
-    local sanitized_name=$(sanitize_env_name "$env_name")
-    
-    cat <<EOF
+	local env_name="$1"
+	local env_dir="$2"
+	local sanitized_name=$(sanitize_env_name "$env_name")
+
+	cat <<EOF
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -158,16 +158,16 @@ for dir in */; do
 		env_name=$(basename "$dir")
 		env_dir="${dir%/}"
 
-		        echo "Processing directory: $env_dir"
-        echo "Environment name: $env_name"
-        sanitized_name=$(sanitize_env_name "$env_name")
-        echo "Sanitized name for job: $sanitized_name"
-        
-        # Validate environment name
-        if ! validate_env_name "$env_name"; then
-            echo "Skipping invalid environment: $env_name"
-            continue
-        fi
+		echo "Processing directory: $env_dir"
+		echo "Environment name: $env_name"
+		sanitized_name=$(sanitize_env_name "$env_name")
+		echo "Sanitized name for job: $sanitized_name"
+
+		# Validate environment name
+		if ! validate_env_name "$env_name"; then
+			echo "Skipping invalid environment: $env_name"
+			continue
+		fi
 
 		# Check if environment.yaml exists
 		if [ -f "${env_dir}/environment.yaml" ]; then
