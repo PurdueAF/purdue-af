@@ -174,7 +174,7 @@ def main():
     if LIST_ALL_FILES:
         list_all_server_files()
         return
-    
+
     # Step 1: Delete ALL files from server and knowledge base first
     print("Step 1: Clearing everything...")
     try:
@@ -186,7 +186,7 @@ def main():
                 remove_file_from_knowledge(file_id)
             except Exception as e:
                 print(f"Error removing file {file_id} from knowledge: {e}")
-        
+
         # Clear server storage
         current_server_files = list_all_server_files()
         print(f"Deleting {len(current_server_files)} files from server storage...")
@@ -196,25 +196,25 @@ def main():
                 delete_file(file_id)
             except Exception as e:
                 print(f"Error deleting file {file_id} from server: {e}")
-        
+
         print("All files cleared successfully")
     except Exception as e:
         print(f"Error clearing files: {e}")
         return
-    
+
     # Step 2: Upload and add files one by one
     rst_files = find_rst_files()
     print(f"Step 2: Found {len(rst_files)} .rst files to process.")
-    
+
     added_count = 0
     for file_path in rst_files:
         try:
             print(f"Processing file: {file_path}")
-            
+
             # Upload file
             file_id = upload_file(file_path)
             print(f"File uploaded with id: {file_id}")
-            
+
             # Add to knowledge immediately
             result = add_file_to_knowledge(file_id)
             if result == "DUPLICATE":
@@ -232,11 +232,11 @@ def main():
             else:
                 print(f"File {file_path} added to knowledge")
                 added_count += 1
-                
+
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
             continue
-    
+
     print(f"Successfully processed {added_count} files")
     
     # Final verification
