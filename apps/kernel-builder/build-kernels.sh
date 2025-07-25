@@ -70,6 +70,12 @@ build_environment() {
 	local env_name=$(basename "$dir")
 	local env_path="/work/kernels/$env_name"
 
+	# Validate environment name to prevent path traversal attacks
+	if [[ "$env_name" =~ \.\. ]] || [[ "$env_name" =~ / ]] || [[ "$env_name" =~ ^[[:space:]]*$ ]]; then
+		echo "ERROR: Invalid environment name '$env_name' - contains path traversal characters or is empty"
+		return 1
+	fi
+
 	echo "Processing directory: $dir"
 	echo "Environment name: $env_name"
 	echo "Environment path: $env_path"
@@ -95,61 +101,80 @@ build_environment() {
 				fi
 			else
 				echo "Environment $env_name exists but is invalid. Recreating..."
+				echo "Cleaning up environment directory: $env_path"
 				rm -rf "$env_path"
+				# Force remove with find to handle any stubborn files
+				find "$(dirname "$env_path")" -name "$(basename "$env_path")" -type d -exec rm -rf {} + 2>/dev/null || true
 				# Wait a moment to ensure filesystem sync
-				sleep 1
-				mkdir -p "$env_path"
-				cp "${dir%/}/environment.yaml" "$env_path/"
-				chmod 644 "$env_path/environment.yaml"
+				sleep 2
+				echo "Checking if directory still exists:"
+				ls -la "$(dirname "$env_path")" | grep "$(basename "$env_path")" || echo "Directory successfully removed"
+				
 				echo "Creating new conda environment: $env_name"
 				if micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
 					echo "Successfully created environment: $env_name"
-				else
-					echo "Failed to create environment: $env_name, cleaning up and retrying..."
-					rm -rf "$env_path"
-					# Wait a moment to ensure filesystem sync
-					sleep 1
-					# Also clean up any parent directory that might be causing issues
-					rm -rf "$(dirname "$env_path")/$(basename "$env_path")"
-					mkdir -p "$env_path"
+					# Copy environment.yaml to the created environment for tracking
 					cp "${dir%/}/environment.yaml" "$env_path/"
 					chmod 644 "$env_path/environment.yaml"
+				else
+					echo "Failed to create environment: $env_name, performing aggressive cleanup..."
+					echo "Current directory contents:"
+					ls -la "$env_path" || echo "Directory does not exist"
+					
+					# More aggressive cleanup
+					rm -rf "$env_path"
+					find "$(dirname "$env_path")" -name "$(basename "$env_path")" -type d -exec rm -rf {} + 2>/dev/null || true
+					find "$(dirname "$env_path")" -name "$(basename "$env_path")" -type f -delete 2>/dev/null || true
+					sleep 3
+					
+					echo "After cleanup, checking directory:"
+					ls -la "$(dirname "$env_path")" | grep "$(basename "$env_path")" || echo "Directory successfully removed"
+					
 					if micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
 						echo "Successfully created environment: $env_name on retry"
+						# Copy environment.yaml to the created environment for tracking
+						cp "${dir%/}/environment.yaml" "$env_path/"
+						chmod 644 "$env_path/environment.yaml"
 					else
-						echo "Failed to create environment: $env_name even after cleanup"
+						echo "Failed to create environment: $env_name even after aggressive cleanup"
+						echo "Final directory contents:"
+						ls -la "$env_path" || echo "Directory does not exist"
 						return 1
 					fi
 				fi
 			fi
 		else
 			echo "Environment $env_name does not exist, creating new environment..."
-			# Create environment directory with proper permissions
-			mkdir -p "$env_path"
-			chmod 755 "$env_path"
-
-			# Copy environment.yaml to the environment directory for tracking
-			cp "${dir%/}/environment.yaml" "$env_path/"
-			chmod 644 "$env_path/environment.yaml"
-
 			# Create new conda environment
 			echo "Creating new conda environment: $env_name"
 			if micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
 				echo "Successfully created environment: $env_name"
-			else
-				echo "Failed to create environment: $env_name, cleaning up and retrying..."
-				rm -rf "$env_path"
-				# Wait a moment to ensure filesystem sync
-				sleep 1
-				# Also clean up any parent directory that might be causing issues
-				rm -rf "$(dirname "$env_path")/$(basename "$env_path")"
-				mkdir -p "$env_path"
+				# Copy environment.yaml to the created environment for tracking
 				cp "${dir%/}/environment.yaml" "$env_path/"
 				chmod 644 "$env_path/environment.yaml"
+			else
+				echo "Failed to create environment: $env_name, performing aggressive cleanup..."
+				echo "Current directory contents:"
+				ls -la "$env_path" || echo "Directory does not exist"
+				
+				# More aggressive cleanup
+				rm -rf "$env_path"
+				find "$(dirname "$env_path")" -name "$(basename "$env_path")" -type d -exec rm -rf {} + 2>/dev/null || true
+				find "$(dirname "$env_path")" -name "$(basename "$env_path")" -type f -delete 2>/dev/null || true
+				sleep 3
+				
+				echo "After cleanup, checking directory:"
+				ls -la "$(dirname "$env_path")" | grep "$(basename "$env_path")" || echo "Directory successfully removed"
+				
 				if micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
 					echo "Successfully created environment: $env_name on retry"
+					# Copy environment.yaml to the created environment for tracking
+					cp "${dir%/}/environment.yaml" "$env_path/"
+					chmod 644 "$env_path/environment.yaml"
 				else
-					echo "Failed to create environment: $env_name even after cleanup"
+					echo "Failed to create environment: $env_name even after aggressive cleanup"
+					echo "Final directory contents:"
+					ls -la "$env_path" || echo "Directory does not exist"
 					return 1
 				fi
 			fi
