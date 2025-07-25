@@ -25,6 +25,8 @@ spec:
               args:
                 - |
                   pip install --no-cache-dir requests python-dotenv gitpython
+                  git clone https://github.com/PurdueAF/purdue-af.git /workspace/repo
+                  cd /workspace/repo
                   python /scripts/update_knowledge.py
               resources:
                 requests:
@@ -36,9 +38,6 @@ spec:
               volumeMounts:
                 - name: script
                   mountPath: /scripts
-                  readOnly: true
-                - name: docs
-                  mountPath: /workspace/docs
                   readOnly: true
               workingDir: /workspace
               env:
@@ -55,8 +54,3 @@ spec:
             - name: script
               configMap:
                 name: update-knowledge-script
-            - name: docs
-              gitRepo:
-                repository: https://github.com/PurdueAF/purdue-af.git
-                revision: main
-                directory: docs
