@@ -44,4 +44,4 @@ spec:
             - key: "hub.jupyter.org/dedicated"
               operator: "Equal"
               value: "cms-af"
-              effect: "NoSchedule" 
+              effect: "NoSchedule"
