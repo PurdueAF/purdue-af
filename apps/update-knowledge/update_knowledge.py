@@ -28,14 +28,20 @@ def upload_file(file_path):
     return resp.json()["id"]
 
 
-def add_file_to_knowledge(file_id):
+def add_file_to_knowledge(file_id, force=False):
     url = f"{API_URL}v1/knowledge/{KNOWLEDGE_ID}/file/add"
     headers = {**HEADERS, "Content-Type": "application/json"}
     data = {"file_id": file_id}
+    if force:
+        data["force"] = True
     resp = requests.post(url, headers=headers, json=data)
     print(f"Add-to-knowledge status: {resp.status_code}")
     if resp.status_code == 400 and "Duplicate content detected" in resp.text:
-        print("Warning: Duplicate content detected, skipping file")
+        print(f"Warning: Duplicate content detected for file {file_id}")
+        print(f"Full response: {resp.text}")
+        if not force:
+            print("Trying with force=True...")
+            return add_file_to_knowledge(file_id, force=True)
         return "DUPLICATE"
     if resp.status_code != 200:
         print(f"Error response: {resp.text}")
@@ -177,7 +183,7 @@ def main():
 
     print(f"Successfully uploaded {len(new_file_ids)} files to server")
 
-    # Step 3: Remove old files from knowledge base
+        # Step 3: Remove old files from knowledge base
     if current_knowledge_files:
         print(
             f"Step 3: Removing {len(current_knowledge_files)} old files from knowledge base..."
@@ -188,7 +194,21 @@ def main():
                 remove_file_from_knowledge(file_id)
             except Exception as e:
                 print(f"Error removing file {file_id} from knowledge: {e}")
-
+    else:
+        print("Step 3: No files to remove from knowledge base")
+    
+    # Step 3.5: Verify knowledge base is empty
+    print("Step 3.5: Verifying knowledge base is empty...")
+    try:
+        remaining_files = list_knowledge_files()
+        print(f"Files remaining in knowledge base: {len(remaining_files)}")
+        if remaining_files:
+            print("WARNING: Knowledge base is not empty!")
+            for file_id in remaining_files:
+                print(f"  - {file_id}")
+    except Exception as e:
+        print(f"Error verifying knowledge base: {e}")
+    
     # Step 4: Delete old files from server storage
     if current_server_files:
         print(
