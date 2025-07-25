@@ -4,5 +4,6 @@ kind: Kustomization
 resources:
   - cronjob.yaml
   - rbac.yaml
+  - configmap.yaml
 
 namespace: cms
