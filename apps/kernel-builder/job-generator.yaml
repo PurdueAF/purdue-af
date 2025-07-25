@@ -1,10 +1,10 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: kernel-builder
+  name: kernel-builder-generator
   namespace: cms
 spec:
-  schedule: "*/10 * * * *" # Run every 10 minutes
+  schedule: "*/5 * * * *" # Run every 5 minutes
   suspend: false
   jobTemplate:
     spec:
@@ -13,34 +13,28 @@ spec:
           serviceAccountName: kernel-builder
           restartPolicy: Never
           containers:
-            - name: kernel-builder
+            - name: job-generator
               image: rockylinux:8.9
               command:
                 - /bin/bash
                 - -c
                 - |
-                  # Copy the script to the container and execute it
-                  cp /scripts/build-kernels.sh /tmp/build-kernels.sh
-                  chmod +x /tmp/build-kernels.sh
-                  /tmp/build-kernels.sh
+                  # Copy the generator script and execute it
+                  cp /scripts/generate-kernel-jobs.sh /tmp/generate-kernel-jobs.sh
+                  chmod +x /tmp/generate-kernel-jobs.sh
+                  /tmp/generate-kernel-jobs.sh
               resources:
                 requests:
-                  memory: "4Gi"
-                  cpu: "2"
+                  memory: "1Gi"
+                  cpu: "0.5"
                 limits:
-                  memory: "8Gi"
-                  cpu: "4"
+                  memory: "2Gi"
+                  cpu: "1"
               volumeMounts:
-                - name: af-shared-storage
-                  mountPath: /work/
-                  mountPropagation: HostToContainer
                 - name: scripts
                   mountPath: /scripts/
                   readOnly: true
           volumes:
-            - name: af-shared-storage
-              persistentVolumeClaim:
-                claimName: af-shared-storage
             - name: scripts
               configMap:
                 name: kernel-builder-scripts
@@ -50,4 +44,4 @@ spec:
             - key: "hub.jupyter.org/dedicated"
               operator: "Equal"
               value: "cms-af"
-              effect: "NoSchedule"
+              effect: "NoSchedule" 
