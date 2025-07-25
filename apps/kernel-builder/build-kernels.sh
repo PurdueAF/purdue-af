@@ -28,22 +28,16 @@ aarch64 | arm64)
 	;;
 esac
 
+
 echo "Downloading micromamba for $PLATFORM..."
-wget -O micromamba "https://micro.mamba.pm/api/micromamba/$PLATFORM/latest"
+wget -O micromamba.tar.bz2 "https://micro.mamba.pm/api/micromamba/$PLATFORM/latest"
 
-echo "Checking downloaded file..."
-ls -la micromamba
-file micromamba
-echo "File type details:"
-ldd micromamba 2>/dev/null || echo "ldd not available or not a dynamic binary"
-
-echo "Setting permissions on micromamba..."
+echo "Extracting micromamba..."
+tar -xvjf micromamba.tar.bz2
 chmod +x micromamba
+
 echo "Moving micromamba to /usr/local/bin/"
 mv micromamba /usr/local/bin/
-echo "Testing micromamba..."
-/usr/local/bin/micromamba --version
-echo "Micromamba installation completed"
 
 # Clone the repository
 echo "Cloning purdue-af-kernels repository..."
