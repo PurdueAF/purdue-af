@@ -126,65 +126,38 @@ def find_rst_files():
 def main():
     if LIST_ALL_FILES:
         list_all_server_files()
-    if DELETE_ALL_FILES:
-        delete_all_files()
         return
-
-    # Get current files in knowledge base
-    print("Getting current files in knowledge base...")
+    
+    # Delete all existing files at the beginning
+    print("Cleaning up all existing files...")
     try:
-        current_file_ids = list_knowledge_files()
-        print(f"Found {len(current_file_ids)} files currently in knowledge base")
+        delete_all_files()
+        print("All existing files deleted successfully")
     except Exception as e:
-        print(f"Error getting current files: {e}")
-        current_file_ids = []
-
-    # Upload new files and track successful uploads
+        print(f"Error deleting existing files: {e}")
+        return
+    
+    # Upload new files
     rst_files = find_rst_files()
-    print(f"Found {len(rst_files)} .rst files to process.")
-
+    print(f"Found {len(rst_files)} .rst files to upload.")
+    
     uploaded_file_ids = []
     for file_path in rst_files:
         try:
-            print(f"Processing file: {file_path}")
+            print(f"Uploading file: {file_path}")
             file_id = upload_file(file_path)
             print(f"File uploaded with id: {file_id}")
             result = add_file_to_knowledge(file_id)
             if result == "DUPLICATE":
-                print(f"Skipped duplicate file: {file_path}")
-                # Find the existing file ID for this content
-                # We'll keep the existing one and not delete it
-                existing_files = list_all_server_files()
-                for existing_file in existing_files:
-                    if existing_file.get("name") == file_path.name:
-                        uploaded_file_ids.append(existing_file.get("id"))
-                        break
+                print(f"Warning: Unexpected duplicate detected for {file_path}")
             else:
                 print(f"File added to knowledge")
                 uploaded_file_ids.append(file_id)
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
             continue
-
-    # Clean up old files that are no longer needed
-    if current_file_ids and uploaded_file_ids:
-        files_to_delete = [
-            fid for fid in current_file_ids if fid not in uploaded_file_ids
-        ]
-        if files_to_delete:
-            print(f"Cleaning up {len(files_to_delete)} old files...")
-            for file_id in files_to_delete:
-                try:
-                    print(f"Removing file {file_id} from knowledge base...")
-                    remove_file_from_knowledge(file_id)
-                    print(f"Deleting file {file_id} from server...")
-                    delete_file(file_id)
-                except Exception as e:
-                    print(f"Error cleaning up file {file_id}: {e}")
-        else:
-            print("No old files to clean up")
-    else:
-        print("Skipping cleanup - no current files or no successful uploads")
+    
+    print(f"Successfully uploaded {len(uploaded_file_ids)} files to knowledge base")
 
 
 if __name__ == "__main__":
