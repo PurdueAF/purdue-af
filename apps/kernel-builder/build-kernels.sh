@@ -8,7 +8,16 @@ dnf install -y git python3-pip wget --nogpgcheck
 
 # Install micromamba for faster conda operations
 echo "Downloading micromamba..."
-wget -O micromamba "https://micro.mamba.pm/api/micromamba/linux-64/latest"
+# Detect architecture and download appropriate binary
+ARCH=$(uname -m)
+if [ "$ARCH" = "x86_64" ]; then
+    wget -O micromamba "https://micro.mamba.pm/api/micromamba/linux-64/latest"
+elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+    wget -O micromamba "https://micro.mamba.pm/api/micromamba/linux-aarch64/latest"
+else
+    echo "Unsupported architecture: $ARCH"
+    exit 1
+fi
 echo "Setting permissions on micromamba..."
 chmod +x micromamba
 echo "Moving micromamba to /usr/local/bin/"
