@@ -96,60 +96,58 @@ create_job_yaml() {
 	local env_file="$3"
 	local sanitized_name=$(sanitize_env_name "$env_name")
 
-	cat <<EOF
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: kernel-builder-${sanitized_name}-$(date +%s)
-  namespace: cms
-  labels:
-    app: kernel-builder
-    environment: ${env_name}
-spec:
-  template:
-    spec:
-      serviceAccountName: kernel-builder
-      restartPolicy: Never
-      containers:
-        - name: kernel-builder
-          image: rockylinux:8.9
-                        command:
-                - /bin/bash
-                - -c
-                - |
-                  # Copy the build script and execute it for this specific environment
-                  cp /scripts/build-single-kernel.sh /tmp/build-single-kernel.sh
-                  chmod +x /tmp/build-single-kernel.sh
-                  /tmp/build-single-kernel.sh "${env_name}" "${env_dir}" "${env_file}"
-          resources:
-            requests:
-              memory: "4Gi"
-              cpu: "2"
-            limits:
-              memory: "8Gi"
-              cpu: "4"
-          volumeMounts:
-            - name: af-shared-storage
-              mountPath: /work/
-              mountPropagation: HostToContainer
-            - name: scripts
-              mountPath: /scripts/
-              readOnly: true
-      volumes:
-        - name: af-shared-storage
-          persistentVolumeClaim:
-            claimName: af-shared-storage
-        - name: scripts
-          configMap:
-            name: kernel-builder-scripts
-      nodeSelector:
-        cms-af-prod: "true"
-      tolerations:
-        - key: "hub.jupyter.org/dedicated"
-          operator: "Equal"
-          value: "cms-af"
-          effect: "NoSchedule"
-EOF
+	printf 'apiVersion: batch/v1\n'
+	printf 'kind: Job\n'
+	printf 'metadata:\n'
+	printf '  name: kernel-builder-%s-%s\n' "$sanitized_name" "$(date +%s)"
+	printf '  namespace: cms\n'
+	printf '  labels:\n'
+	printf '    app: kernel-builder\n'
+	printf '    environment: %s\n' "$env_name"
+	printf 'spec:\n'
+	printf '  template:\n'
+	printf '    spec:\n'
+	printf '      serviceAccountName: kernel-builder\n'
+	printf '      restartPolicy: Never\n'
+	printf '      containers:\n'
+	printf '        - name: kernel-builder\n'
+	printf '          image: rockylinux:8.9\n'
+	printf '          command:\n'
+	printf '            - /bin/bash\n'
+	printf '            - -c\n'
+	printf '            - |\n'
+	printf '              # Copy the build script and execute it for this specific environment\n'
+	printf '              cp /scripts/build-single-kernel.sh /tmp/build-single-kernel.sh\n'
+	printf '              chmod +x /tmp/build-single-kernel.sh\n'
+	printf '              /tmp/build-single-kernel.sh "%s" "%s" "%s"\n' "$env_name" "$env_dir" "$env_file"
+	printf '          resources:\n'
+	printf '            requests:\n'
+	printf '              memory: "4Gi"\n'
+	printf '              cpu: "2"\n'
+	printf '            limits:\n'
+	printf '              memory: "8Gi"\n'
+	printf '              cpu: "4"\n'
+	printf '          volumeMounts:\n'
+	printf '            - name: af-shared-storage\n'
+	printf '              mountPath: /work/\n'
+	printf '              mountPropagation: HostToContainer\n'
+	printf '            - name: scripts\n'
+	printf '              mountPath: /scripts/\n'
+	printf '              readOnly: true\n'
+	printf '      volumes:\n'
+	printf '        - name: af-shared-storage\n'
+	printf '          persistentVolumeClaim:\n'
+	printf '            claimName: af-shared-storage\n'
+	printf '        - name: scripts\n'
+	printf '          configMap:\n'
+	printf '            name: kernel-builder-scripts\n'
+	printf '      nodeSelector:\n'
+	printf '        cms-af-prod: "true"\n'
+	printf '      tolerations:\n'
+	printf '        - key: "hub.jupyter.org/dedicated"\n'
+	printf '          operator: "Equal"\n'
+	printf '          value: "cms-af"\n'
+	printf '          effect: "NoSchedule"\n'
 }
 
 # Find all directories and create jobs for them
