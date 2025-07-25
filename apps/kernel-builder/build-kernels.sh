@@ -4,7 +4,7 @@
 dnf install -y git conda python3-pip --nogpgcheck
 
 # Install micromamba for faster conda operations
-curl -L -O "https://micro.mamba.pm/api/micromamba/linux-64/latest"
+curl -L -o micromamba "https://micro.mamba.pm/api/micromamba/linux-64/latest"
 chmod +x micromamba
 mv micromamba /usr/local/bin/
 
