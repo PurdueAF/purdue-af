@@ -58,16 +58,33 @@ build_environment() {
 
 		# Check if environment already exists and is up to date
 		if [ -d "$env_path" ]; then
-			echo "Environment $env_name already exists, updating..."
-			# Copy the new environment.yaml for tracking
-			cp "${dir%/}/environment.yaml" "$env_path/"
-			chmod 644 "$env_path/environment.yaml"
-			# Update the existing environment
-			if micromamba env update -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
-				echo "Successfully updated environment: $env_name"
+			echo "Environment $env_name already exists, checking validity..."
+			# Check if the environment is valid by trying to list packages
+			if micromamba list -p "$env_path" >/dev/null 2>&1; then
+				echo "Environment $env_name is valid, updating..."
+				# Copy the new environment.yaml for tracking
+				cp "${dir%/}/environment.yaml" "$env_path/"
+				chmod 644 "$env_path/environment.yaml"
+				# Update the existing environment
+				if micromamba env update -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
+					echo "Successfully updated environment: $env_name"
+				else
+					echo "Failed to update environment: $env_name"
+					return 1
+				fi
 			else
-				echo "Failed to update environment: $env_name"
-				return 1
+				echo "Environment $env_name exists but is invalid. Recreating..."
+				rm -rf "$env_path"
+				mkdir -p "$env_path"
+				cp "${dir%/}/environment.yaml" "$env_path/"
+				chmod 644 "$env_path/environment.yaml"
+				echo "Creating new conda environment: $env_name"
+				if micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
+					echo "Successfully created environment: $env_name"
+				else
+					echo "Failed to create environment: $env_name"
+					return 1
+				fi
 			fi
 		else
 			echo "Environment $env_name does not exist, creating new environment..."
