@@ -59,9 +59,9 @@ plugin:
 virtualNode:
   image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:0.5.2-pre2
   resources:
-    CPUs: 4
-    memGiB: 16
-    pods: 50
+    CPUs: 1000
+    memGiB: 4000
+    pods: 300
   network:
     # Enable tunnel feature (creates wstunnel template ConfigMap)
     enableTunnel: true
