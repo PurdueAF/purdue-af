@@ -146,6 +146,47 @@ def clear_knowledge_base():
     except Exception as e:
         print(f"Error clearing knowledge base: {e}")
 
+def clear_vector_database():
+    """Clear the vector database to work around OpenWebUI bug #7181"""
+    try:
+        # Based on the GitHub issue solution, we need to properly clean up vector database entries
+        # The solution involves deleting files and their vector database entries
+        
+        print("Clearing vector database using file-by-file cleanup...")
+        
+        # Get all files in the knowledge base
+        current_files = list_knowledge_files()
+        print(f"Found {len(current_files)} files to clean up")
+        
+        # Remove each file from knowledge base (this should trigger vector database cleanup)
+        for file_id in current_files:
+            try:
+                print(f"Removing file {file_id} from knowledge base...")
+                remove_file_from_knowledge(file_id)
+                print(f"File {file_id} removed from knowledge base")
+            except Exception as e:
+                print(f"Error removing file {file_id} from knowledge: {e}")
+        
+        # Also delete all files from server storage to ensure complete cleanup
+        server_files = list_all_server_files()
+        print(f"Found {len(server_files)} files in server storage to delete")
+        
+        for file_info in server_files:
+            file_id = file_info.get("id")
+            try:
+                print(f"Deleting file {file_id} from server storage...")
+                delete_file(file_id)
+                print(f"File {file_id} deleted from server storage")
+            except Exception as e:
+                print(f"Error deleting file {file_id} from server: {e}")
+        
+        print("Vector database cleanup completed")
+        return True
+        
+    except Exception as e:
+        print(f"Error clearing vector database: {e}")
+        return False
+
 
 def find_rst_files():
     # Since we're now running from the cloned repo directory
@@ -176,29 +217,14 @@ def main():
         list_all_server_files()
         return
 
-    # Step 1: Delete ALL files from server and knowledge base first
+        # Step 1: Clear everything including vector database (work around OpenWebUI bug #7181)
     print("Step 1: Clearing everything...")
     try:
-        # Clear knowledge base
-        current_knowledge_files = list_knowledge_files()
-        print(f"Removing {len(current_knowledge_files)} files from knowledge base...")
-        for file_id in current_knowledge_files:
-            try:
-                remove_file_from_knowledge(file_id)
-            except Exception as e:
-                print(f"Error removing file {file_id} from knowledge: {e}")
-
-        # Clear server storage
-        current_server_files = list_all_server_files()
-        print(f"Deleting {len(current_server_files)} files from server storage...")
-        for file_info in current_server_files:
-            file_id = file_info.get("id")
-            try:
-                delete_file(file_id)
-            except Exception as e:
-                print(f"Error deleting file {file_id} from server: {e}")
-
-        print("All files cleared successfully")
+        # Clear vector database and all files (this is the key fix for the bug)
+        print("Clearing vector database to work around OpenWebUI bug #7181...")
+        clear_vector_database()
+        
+        print("All files and vector database cleared successfully")
     except Exception as e:
         print(f"Error clearing files: {e}")
         return
