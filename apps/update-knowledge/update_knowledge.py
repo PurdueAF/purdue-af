@@ -183,7 +183,7 @@ def main():
 
     print(f"Successfully uploaded {len(new_file_ids)} files to server")
 
-        # Step 3: Remove old files from knowledge base
+    # Step 3: Remove old files from knowledge base
     if current_knowledge_files:
         print(
             f"Step 3: Removing {len(current_knowledge_files)} old files from knowledge base..."
@@ -196,7 +196,7 @@ def main():
                 print(f"Error removing file {file_id} from knowledge: {e}")
     else:
         print("Step 3: No files to remove from knowledge base")
-    
+
     # Step 3.5: Verify knowledge base is empty
     print("Step 3.5: Verifying knowledge base is empty...")
     try:
@@ -208,7 +208,7 @@ def main():
                 print(f"  - {file_id}")
     except Exception as e:
         print(f"Error verifying knowledge base: {e}")
-    
+
     # Step 4: Delete old files from server storage
     if current_server_files:
         print(
