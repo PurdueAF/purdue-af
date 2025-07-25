@@ -28,7 +28,6 @@ aarch64 | arm64)
 	;;
 esac
 
-
 echo "Downloading micromamba for $PLATFORM..."
 wget -O micromamba.tar.bz2 "https://micro.mamba.pm/api/micromamba/$PLATFORM/latest"
 
