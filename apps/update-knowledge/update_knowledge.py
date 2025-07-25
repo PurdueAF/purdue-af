@@ -48,6 +48,31 @@ def add_file_to_knowledge(file_id, force=False):
         resp.raise_for_status()
     return resp.json()
 
+def add_file_to_knowledge_alternative(file_id):
+    """Alternative method to add file to knowledge base"""
+    # Try different API endpoints or methods
+    endpoints = [
+        f"{API_URL}v1/knowledge/{KNOWLEDGE_ID}/files",
+        f"{API_URL}v1/knowledge/{KNOWLEDGE_ID}/add",
+        f"{API_URL}v1/knowledge/{KNOWLEDGE_ID}/upload"
+    ]
+    
+    for endpoint in endpoints:
+        try:
+            print(f"Trying endpoint: {endpoint}")
+            headers = {**HEADERS, "Content-Type": "application/json"}
+            data = {"file_id": file_id}
+            resp = requests.post(endpoint, headers=headers, json=data)
+            print(f"Status: {resp.status_code}")
+            if resp.status_code == 200:
+                print(f"Success with endpoint: {endpoint}")
+                return resp.json()
+        except Exception as e:
+            print(f"Error with endpoint {endpoint}: {e}")
+            continue
+    
+    return "FAILED"
+
 
 def remove_file_from_knowledge(file_id):
     url = f"{API_URL}v1/knowledge/{KNOWLEDGE_ID}/file/remove"
@@ -193,9 +218,17 @@ def main():
             # Add to knowledge immediately
             result = add_file_to_knowledge(file_id)
             if result == "DUPLICATE":
-                print(f"Warning: Duplicate detected for {file_path}, but continuing...")
-                # Even if duplicate, count it as added since it's in the system
-                added_count += 1
+                print(f"Duplicate detected, but checking if file was actually added...")
+                # Check if the file is actually in the knowledge base despite the duplicate warning
+                try:
+                    current_files = list_knowledge_files()
+                    if file_id in current_files:
+                        print(f"File {file_path} was actually added despite duplicate warning")
+                        added_count += 1
+                    else:
+                        print(f"File {file_path} was not added to knowledge base")
+                except Exception as e:
+                    print(f"Error checking if file was added: {e}")
             else:
                 print(f"File {file_path} added to knowledge")
                 added_count += 1
@@ -205,6 +238,21 @@ def main():
             continue
     
     print(f"Successfully processed {added_count} files")
+    
+    # Final verification
+    print("Final verification: Checking knowledge base contents...")
+    try:
+        final_files = list_knowledge_files()
+        print(f"Files in knowledge base: {len(final_files)}")
+        if final_files:
+            print("Files successfully added to knowledge base:")
+            for file_id in final_files:
+                print(f"  - {file_id}")
+        else:
+            print("WARNING: No files in knowledge base!")
+    except Exception as e:
+        print(f"Error checking final state: {e}")
+    
     print(f"Knowledge base update complete!")
 
 
