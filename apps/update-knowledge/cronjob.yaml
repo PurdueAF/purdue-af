@@ -28,11 +28,6 @@ spec:
                   pip install --no-cache-dir requests python-dotenv gitpython
                   git clone https://github.com/PurdueAF/purdue-af.git /workspace/repo
                   cd /workspace/repo
-                  echo "Current directory: $(pwd)"
-                  echo "Directory contents:"
-                  ls -la
-                  echo "Docs directory contents:"
-                  ls -la docs/ || echo "docs/ directory not found"
                   python /scripts/update_knowledge.py
               resources:
                 requests:
