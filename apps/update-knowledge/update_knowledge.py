@@ -98,6 +98,7 @@ def delete_all_files():
         delete_file(file_id)
     print("All files deleted.")
 
+
 def clear_knowledge_base():
     """Clear all files from the knowledge base"""
     try:
@@ -142,7 +143,7 @@ def main():
     if LIST_ALL_FILES:
         list_all_server_files()
         return
-    
+
     # Step 1: Get current state
     print("Step 1: Getting current state...")
     try:
@@ -151,18 +152,18 @@ def main():
     except Exception as e:
         print(f"Error getting knowledge base files: {e}")
         current_knowledge_files = []
-    
+
     try:
         current_server_files = list_all_server_files()
         print(f"Found {len(current_server_files)} files on server")
     except Exception as e:
         print(f"Error getting server files: {e}")
         current_server_files = []
-    
+
     # Step 2: Upload all "new" files but don't add to knowledge yet
     rst_files = find_rst_files()
     print(f"Step 2: Found {len(rst_files)} .rst files to upload.")
-    
+
     new_file_ids = []
     for file_path in rst_files:
         try:
@@ -173,30 +174,34 @@ def main():
         except Exception as e:
             print(f"Error uploading {file_path}: {e}")
             continue
-    
+
     print(f"Successfully uploaded {len(new_file_ids)} files to server")
-    
+
     # Step 3: Remove old files from knowledge base
     if current_knowledge_files:
-        print(f"Step 3: Removing {len(current_knowledge_files)} old files from knowledge base...")
+        print(
+            f"Step 3: Removing {len(current_knowledge_files)} old files from knowledge base..."
+        )
         for file_id in current_knowledge_files:
             try:
                 print(f"Removing file {file_id} from knowledge base...")
                 remove_file_from_knowledge(file_id)
             except Exception as e:
                 print(f"Error removing file {file_id} from knowledge: {e}")
-    
+
     # Step 4: Delete old files from server storage
     if current_server_files:
-        print(f"Step 4: Deleting {len(current_server_files)} old files from server storage...")
+        print(
+            f"Step 4: Deleting {len(current_server_files)} old files from server storage..."
+        )
         for file_info in current_server_files:
-            file_id = file_info.get('id')
+            file_id = file_info.get("id")
             try:
                 print(f"Deleting file {file_id} from server storage...")
                 delete_file(file_id)
             except Exception as e:
                 print(f"Error deleting file {file_id} from server: {e}")
-    
+
     # Step 5: Add all newly uploaded files to knowledge base
     print(f"Step 5: Adding {len(new_file_ids)} new files to knowledge base...")
     added_count = 0
@@ -211,7 +216,7 @@ def main():
         except Exception as e:
             print(f"Error adding file {file_id} to knowledge: {e}")
             continue
-    
+
     print(f"Successfully added {added_count} files to knowledge base")
     print(f"Knowledge base update complete!")
 
