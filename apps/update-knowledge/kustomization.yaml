@@ -12,4 +12,4 @@ configMapGenerator:
     files:
       - update_knowledge.py
     options:
-      disableNameSuffixHash: true 
+      disableNameSuffixHash: true
