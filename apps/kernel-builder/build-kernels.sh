@@ -4,7 +4,7 @@ echo "Starting kernel builder script..."
 
 # Install required packages
 echo "Installing required packages..."
-dnf install -y git python3-pip wget file diffutils --nogpgcheck
+dnf install -y git python3-pip wget file bzip2 diffutils --nogpgcheck
 
 # Install micromamba for faster conda operations
 echo "Downloading micromamba..."
