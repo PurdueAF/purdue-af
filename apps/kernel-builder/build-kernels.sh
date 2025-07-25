@@ -62,7 +62,12 @@ build_environment() {
 				cp "${dir%/}/environment.yaml" "$env_path/"
 				chmod 644 "$env_path/environment.yaml"
 				# Update the existing environment
-				micromamba env update -f "${dir%/}/environment.yaml" -p "$env_path" --yes
+				if micromamba env update -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
+					echo "Successfully updated environment: $env_name"
+				else
+					echo "Failed to update environment: $env_name"
+					return 1
+				fi
 			fi
 		else
 			echo "Environment $env_name does not exist, creating new environment..."
@@ -76,14 +81,12 @@ build_environment() {
 
 			# Create new conda environment
 			echo "Creating new conda environment: $env_name"
-			micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes
-		fi
-
-		if [ $? -eq 0 ]; then
-			echo "Successfully built environment: $env_name"
-		else
-			echo "Failed to build environment: $env_name"
-			return 1
+			if micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
+				echo "Successfully created environment: $env_name"
+			else
+				echo "Failed to create environment: $env_name"
+				return 1
+			fi
 		fi
 	else
 		echo "No environment.yaml found in $dir"
