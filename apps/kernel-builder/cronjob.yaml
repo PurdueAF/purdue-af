@@ -73,21 +73,6 @@ spec:
                       
                       if [ $? -eq 0 ]; then
                         echo "Successfully built environment: $env_name"
-                        
-                        # Install ipykernel for Jupyter integration
-                        micromamba run -p "$env_path" pip install ipykernel
-                        
-                        # Register the kernel
-                        micromamba run -p "$env_path" python -m ipykernel install \
-                          --name "$env_name" \
-                          --display-name "$env_name" \
-                          --prefix /work/kernels
-                        
-                        # Ensure kernel files are readable by everyone
-                        chmod -R 755 /work/kernels/share/jupyter/kernels/"$env_name"
-                        find /work/kernels/share/jupyter/kernels/"$env_name" -type f -exec chmod 644 {} \;
-                        
-                        echo "Registered kernel: $env_name"
                       else
                         echo "Failed to build environment: $env_name"
                         return 1
@@ -117,8 +102,9 @@ spec:
                   memory: "8Gi"
                   cpu: "4"
               volumeMounts:
-                - name: af-shared-storage
-                  mountPath: /work
+                - name: work
+                  mountPath: /work/
+                  mountPropagation: HostToContainer
           volumes:
             - name: af-shared-storage
               persistentVolumeClaim:
