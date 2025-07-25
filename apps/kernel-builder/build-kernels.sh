@@ -38,21 +38,21 @@ ls -la
 
 # Find the micromamba binary (it might be in a subdirectory)
 if [ -f "micromamba" ]; then
-    echo "Found micromamba in current directory"
+	echo "Found micromamba in current directory"
 elif [ -f "bin/micromamba" ]; then
-    echo "Found micromamba in bin/ directory"
-    mv bin/micromamba micromamba
+	echo "Found micromamba in bin/ directory"
+	mv bin/micromamba micromamba
 else
-    echo "Looking for micromamba binary..."
-    find . -name "micromamba" -type f
-    MICROMAMBA_PATH=$(find . -name "micromamba" -type f | head -1)
-    if [ -n "$MICROMAMBA_PATH" ]; then
-        echo "Found micromamba at: $MICROMAMBA_PATH"
-        mv "$MICROMAMBA_PATH" micromamba
-    else
-        echo "ERROR: Could not find micromamba binary after extraction"
-        exit 1
-    fi
+	echo "Looking for micromamba binary..."
+	find . -name "micromamba" -type f
+	MICROMAMBA_PATH=$(find . -name "micromamba" -type f | head -1)
+	if [ -n "$MICROMAMBA_PATH" ]; then
+		echo "Found micromamba at: $MICROMAMBA_PATH"
+		mv "$MICROMAMBA_PATH" micromamba
+	else
+		echo "ERROR: Could not find micromamba binary after extraction"
+		exit 1
+	fi
 fi
 
 chmod +x micromamba
