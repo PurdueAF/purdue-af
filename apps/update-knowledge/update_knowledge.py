@@ -93,13 +93,26 @@ def delete_all_files():
     print("All files deleted.")
 
 def find_rst_files():
-    project_root = SCRIPT_DIR.parent.parent
-    docs_source = project_root / "docs" / "source"
+    # Since we're now running from the cloned repo directory
+    docs_source = Path("docs") / "source"
+    print(f"Looking for .rst files in: {docs_source.absolute()}")
+    print(f"Current working directory: {Path.cwd()}")
+    
+    if not docs_source.exists():
+        print(f"ERROR: Directory {docs_source.absolute()} does not exist!")
+        print(f"Available directories in current path:")
+        for item in Path.cwd().iterdir():
+            print(f"  - {item}")
+        return []
+    
     rst_files = []
     for file_path in docs_source.rglob("*.rst"):
         # Exclude files from _static, demos, and images directories
         if not any(part in ["_static", "demos", "images"] for part in file_path.parts):
             rst_files.append(file_path)
+            print(f"Found .rst file: {file_path}")
+    
+    print(f"Total .rst files found: {len(rst_files)}")
     return rst_files
 
 def main():
