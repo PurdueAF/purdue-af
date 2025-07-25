@@ -82,8 +82,17 @@ build_environment() {
 				if micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
 					echo "Successfully created environment: $env_name"
 				else
-					echo "Failed to create environment: $env_name"
-					return 1
+					echo "Failed to create environment: $env_name, cleaning up and retrying..."
+					rm -rf "$env_path"
+					mkdir -p "$env_path"
+					cp "${dir%/}/environment.yaml" "$env_path/"
+					chmod 644 "$env_path/environment.yaml"
+					if micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
+						echo "Successfully created environment: $env_name on retry"
+					else
+						echo "Failed to create environment: $env_name even after cleanup"
+						return 1
+					fi
 				fi
 			fi
 		else
@@ -101,8 +110,17 @@ build_environment() {
 			if micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
 				echo "Successfully created environment: $env_name"
 			else
-				echo "Failed to create environment: $env_name"
-				return 1
+				echo "Failed to create environment: $env_name, cleaning up and retrying..."
+				rm -rf "$env_path"
+				mkdir -p "$env_path"
+				cp "${dir%/}/environment.yaml" "$env_path/"
+				chmod 644 "$env_path/environment.yaml"
+				if micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes; then
+					echo "Successfully created environment: $env_name on retry"
+				else
+					echo "Failed to create environment: $env_name even after cleanup"
+					return 1
+				fi
 			fi
 		fi
 	else
