@@ -2,6 +2,7 @@
 nodeName: interlink-hammer
 
 interlink:
+  image: ghcr.io/interlink-hq/interlink/interlink:0.5.2-pre2
   enabled: true
   socket: unix:///var/run/interlink.sock
   address: http://localhost
@@ -12,7 +13,8 @@ interlink:
 plugin:
   enabled: true
   # image: "ghcr.io/interlink-hq/interlink-sidecar-slurm/interlink-sidecar-slurm:0.5.1-pre3"
-  image: "geddes-registry.rcac.purdue.edu/cms/interlink-slurm-plugin:0.5.2-pre1"
+  # image: "geddes-registry.rcac.purdue.edu/cms/interlink-slurm-plugin:0.5.2-pre1"
+  image: ghcr.io/interlink-hq/interlink-sidecar-slurm/interlink-sidecar-slurm:0.5.2-pre4
   #socket: unix:///var/run/plugin.sock
   address: "http://localhost"
   port: 4000
@@ -55,10 +57,27 @@ plugin:
     BashPath: /bin/bash
 
 virtualNode:
+  image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:0.5.2-pre2
   resources:
     CPUs: 4
     memGiB: 16
     pods: 50
+  network:
+    # Enable tunnel feature (creates wstunnel template ConfigMap)
+    enableTunnel: true
+    # Container image for wstunnel
+    tunnelImage: "ghcr.io/erebe/wstunnel:latest"
+    # DNS domain for ingress (e.g. each pod will have its own tunnel at: 
+    # "<podname>.<wildcardDNS>"
+    wildcardDNS: "131.154.98.82.myip.cloud.infn.it"
+    # Path where wstunnel template will be mounted in VK container
+    wstunnelTemplatePath: "/etc/templates/wstunnel.yaml"
+    # Custom wstunnel template content (optional, uses built-in template if empty)
+    # Default template is made to work with nginx ingress controller: 
+    #   https://github.com/interlink-hq/interlink-helm-chart/blob/main/interlink/wstunnel-template_nginx.yaml
+    customTemplate: ""
+    wstunnelCommand: |
+      curl -L https://github.com/erebe/wstunnel/releases/download/v10.4.4/wstunnel_10.4.4_linux_amd64.tar.gz -o wstunnel.tar.gz && tar -xzvf wstunnel.tar.gz && chmod +x wstunnel && ./wstunnel client --http-upgrade-path-prefix %s %s ws://%s:80 > wstunnel_client.log 2>&1 &
 
 extraVolumes:
   - name: plugin-data
