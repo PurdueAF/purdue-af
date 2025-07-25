@@ -91,10 +91,10 @@ sanitize_env_name() {
 
 # Function to create job YAML for a single environment
 create_job_yaml() {
-    local env_name="$1"
-    local env_dir="$2"
-    local env_file="$3"
-    local sanitized_name=$(sanitize_env_name "$env_name")
+	local env_name="$1"
+	local env_dir="$2"
+	local env_file="$3"
+	local sanitized_name=$(sanitize_env_name "$env_name")
 
 	cat <<EOF
 apiVersion: batch/v1
@@ -170,31 +170,31 @@ for dir in */; do
 			continue
 		fi
 
-		        # Check if environment.yaml or environment.yml exists
-        env_file=""
-        if [ -f "${env_dir}/environment.yaml" ]; then
-            env_file="environment.yaml"
-        elif [ -f "${env_dir}/environment.yml" ]; then
-            env_file="environment.yml"
-        fi
-        
-        if [ -n "$env_file" ]; then
-            echo "Found $env_file in $env_dir, creating job..."
-            
-            # Create job YAML
-            job_yaml=$(create_job_yaml "$env_name" "$env_dir" "$env_file")
-            
-            # Apply the job
-            echo "$job_yaml" | kubectl apply -f -
-            
-            if [ $? -eq 0 ]; then
-                echo "Successfully created job for environment: $env_name"
-            else
-                echo "Failed to create job for environment: $env_name"
-            fi
-        else
-            echo "No environment.yaml or environment.yml found in $env_dir, skipping..."
-        fi
+		# Check if environment.yaml or environment.yml exists
+		env_file=""
+		if [ -f "${env_dir}/environment.yaml" ]; then
+			env_file="environment.yaml"
+		elif [ -f "${env_dir}/environment.yml" ]; then
+			env_file="environment.yml"
+		fi
+
+		if [ -n "$env_file" ]; then
+			echo "Found $env_file in $env_dir, creating job..."
+
+			# Create job YAML
+			job_yaml=$(create_job_yaml "$env_name" "$env_dir" "$env_file")
+
+			# Apply the job
+			echo "$job_yaml" | kubectl apply -f -
+
+			if [ $? -eq 0 ]; then
+				echo "Successfully created job for environment: $env_name"
+			else
+				echo "Failed to create job for environment: $env_name"
+			fi
+		else
+			echo "No environment.yaml or environment.yml found in $env_dir, skipping..."
+		fi
 	fi
 done
 
