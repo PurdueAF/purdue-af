@@ -52,22 +52,27 @@ data:
             echo "Environment $env_name is up to date, skipping..."
             return 0
           else
-            echo "Environment $env_name needs update, rebuilding..."
-            rm -rf "$env_path"
+            echo "Environment $env_name needs update, updating existing environment..."
+            # Copy the new environment.yaml for tracking
+            cp "${dir%/}/environment.yaml" "$env_path/"
+            chmod 644 "$env_path/environment.yaml"
+            # Update the existing environment
+            micromamba env update -f "${dir%/}/environment.yaml" -p "$env_path" --yes
           fi
+        else
+          echo "Environment $env_name does not exist, creating new environment..."
+          # Create environment directory with proper permissions
+          mkdir -p "$env_path"
+          chmod 755 "$env_path"
+          
+          # Copy environment.yaml to the environment directory for tracking
+          cp "${dir%/}/environment.yaml" "$env_path/"
+          chmod 644 "$env_path/environment.yaml"
+          
+          # Create new conda environment
+          echo "Creating new conda environment: $env_name"
+          micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes
         fi
-        
-        # Create environment directory with proper permissions
-        mkdir -p "$env_path"
-        chmod 755 "$env_path"
-        
-        # Copy environment.yaml to the environment directory for tracking
-        cp "${dir%/}/environment.yaml" "$env_path/"
-        chmod 644 "$env_path/environment.yaml"
-        
-        # Build the conda environment
-        echo "Building conda environment: $env_name"
-        micromamba env create -f "${dir%/}/environment.yaml" -p "$env_path" --yes
         
         if [ $? -eq 0 ]; then
           echo "Successfully built environment: $env_name"
