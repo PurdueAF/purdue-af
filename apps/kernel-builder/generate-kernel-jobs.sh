@@ -145,38 +145,38 @@ EOF
 # Find all directories and create jobs for them
 echo "Scanning for directories with environment.yaml files..."
 for dir in */; do
-    if [ -d "$dir" ]; then
-        env_name=$(basename "$dir")
-        env_dir="${dir%/}"
-        
-        echo "Processing directory: $env_dir"
-        echo "Environment name: $env_name"
-        
-        # Validate environment name
-        if ! validate_env_name "$env_name"; then
-            echo "Skipping invalid environment: $env_name"
-            continue
-        fi
-        
-        # Check if environment.yaml exists
-        if [ -f "${env_dir}/environment.yaml" ]; then
-            echo "Found environment.yaml in $env_dir, creating job..."
-            
-            # Create job YAML
-            job_yaml=$(create_job_yaml "$env_name" "$env_dir")
-            
-            # Apply the job
-            echo "$job_yaml" | kubectl apply -f -
-            
-            if [ $? -eq 0 ]; then
-                echo "Successfully created job for environment: $env_name"
-            else
-                echo "Failed to create job for environment: $env_name"
-            fi
-        else
-            echo "No environment.yaml found in $env_dir, skipping..."
-        fi
-    fi
+	if [ -d "$dir" ]; then
+		env_name=$(basename "$dir")
+		env_dir="${dir%/}"
+
+		echo "Processing directory: $env_dir"
+		echo "Environment name: $env_name"
+
+		# Validate environment name
+		if ! validate_env_name "$env_name"; then
+			echo "Skipping invalid environment: $env_name"
+			continue
+		fi
+
+		# Check if environment.yaml exists
+		if [ -f "${env_dir}/environment.yaml" ]; then
+			echo "Found environment.yaml in $env_dir, creating job..."
+
+			# Create job YAML
+			job_yaml=$(create_job_yaml "$env_name" "$env_dir")
+
+			# Apply the job
+			echo "$job_yaml" | kubectl apply -f -
+
+			if [ $? -eq 0 ]; then
+				echo "Successfully created job for environment: $env_name"
+			else
+				echo "Failed to create job for environment: $env_name"
+			fi
+		else
+			echo "No environment.yaml found in $env_dir, skipping..."
+		fi
+	fi
 done
 
 # Clean up old jobs (keep only last 10 jobs per environment)
