@@ -3,13 +3,14 @@
 set -e
 
 # Check arguments
-if [ $# -ne 2 ]; then
-	echo "Usage: $0 <environment_name> <environment_directory>"
-	exit 1
+if [ $# -ne 3 ]; then
+    echo "Usage: $0 <environment_name> <environment_directory> <environment_file>"
+    exit 1
 fi
 
 ENV_NAME="$1"
 ENV_DIR="$2"
+ENV_FILE="$3"
 
 echo "Starting single kernel builder for environment: $ENV_NAME"
 
@@ -82,16 +83,17 @@ fi
 
 # Set up environment path
 ENV_PATH="/work/kernels/$ENV_NAME"
-ENV_YAML_PATH="${ENV_DIR}/environment.yaml"
+ENV_YAML_PATH="${ENV_DIR}/${ENV_FILE}"
 
 echo "Environment name: $ENV_NAME"
 echo "Environment path: $ENV_PATH"
-echo "Environment YAML: $ENV_YAML_PATH"
+echo "Environment file: $ENV_FILE"
+echo "Environment file path: $ENV_YAML_PATH"
 
-# Check if environment.yaml exists
+# Check if environment file exists
 if [ ! -f "$ENV_YAML_PATH" ]; then
-	echo "ERROR: environment.yaml not found at $ENV_YAML_PATH"
-	exit 1
+    echo "ERROR: $ENV_FILE not found at $ENV_YAML_PATH"
+    exit 1
 fi
 
 echo "Found environment.yaml, processing environment..."
