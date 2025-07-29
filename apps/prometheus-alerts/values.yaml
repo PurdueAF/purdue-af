@@ -102,10 +102,15 @@ service:
 
 ingress:
   enabled: true
-  hosts: [prometheus-af-alerts.geddes.rcac.purdue.edu]
+  className: public
+  hosts:
+    - host: prometheus-af-alerts.geddes.rcac.purdue.edu
+      paths:
+        - path: /
+          pathType: Prefix
   tls:
-    - hosts: [prometheus-af-alerts.geddes.rcac.purdue.edu]
-  ingressClassName: public
+    - hosts:
+        - prometheus-af-alerts.geddes.rcac.purdue.edu
 # ingress:
 #   enabled: false
 #   className: ""
