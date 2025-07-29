@@ -16,10 +16,6 @@ Each user is provided with a 25GB home directory at first login. These directori
 
 ---
 
-![Purdue AF Registered Users](https://cms.geddes.rcac.purdue.edu/users-graph/purdue-af-registered-users.png?)
-
----
-
 [![Documentation Status](https://readthedocs.org/projects/purdue-af/badge/?version=latest)](https://purdue-af.readthedocs.io/en/latest/?badge=latest)
 
 [![Python](https://github.com/PurdueAF/purdue-af/workflows/Lint%20Python/badge.svg)](https://github.com/PurdueAF/purdue-af/actions?query=workflow%3A%22Lint+Python%22)
