@@ -11,7 +11,7 @@ spec:
       chart: helm/supersonic
       sourceRef:
         kind: GitRepository
-        name: supersonic-interlink
+        name: supersonic
         namespace: cms
       # chart: supersonic
       # version: "0.2.1"

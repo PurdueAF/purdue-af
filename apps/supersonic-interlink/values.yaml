@@ -1,26 +1,31 @@
 serverLoadThreshold: 20
 serverLoadMetric: 'sum by (release) (rate(nv_inference_queue_duration_us{release=~"sonic-interlink"}[30s]) / (rate(nv_inference_exec_count{release=~"sonic-interlink"}[30s]) * 1000 + 0.001))'
 
-triton:
+triton: 
   # image: fastml/triton-torchgeo:21.02-py3-geometric # run2
-  image: /cvmfs/unpacked.cern.ch/registry.hub.docker.com/fastml/triton-torchgeo:22.07-py3-geometric # run3
+  image: fastml/triton-torchgeo:22.07-py3-geometric # run3
   command: ["/bin/sh", "-c"]
-  args:
+  args: 
     - |
       /opt/tritonserver/bin/tritonserver \
-      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoMET/METPUSubtraction/data/models/ \
       --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoBTag/Combined/data/models/ \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoEgamma/EgammaPhotonProducers/data/models/ \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoTauTag/TrainingFiles/data/DeepTauIdSONIC/ \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoMET/METPUSubtraction/data/models/ \
       --model-control-mode=explicit \
-      --load-model=deepmet \
       --allow-gpu-metrics=true \
       --log-verbose=0 \
       --strict-model-config=false \
       --exit-timeout-secs=60
-  # --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoEgamma/EgammaPhotonProducers/data/models/ \
-  # --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoTauTag/TrainingFiles/data/DeepTauIdSONIC/ \
+    # --trace-config mode=opentelemetry
+    # --trace-config=opentelemetry,resource=pod_name=$(hostname)
+    # --trace-config opentelemetry,url=sonic-interlink-opentelemetry-collector:4318/v1/traces
+    # --trace-config rate=100     # 1 in 100 requests
+    # --trace-config level=TIMESTAMPS
+    # --trace-config count=-1
   resources:
-    limits: { cpu: 2, memory: 8G }
-    requests: { cpu: 2, memory: 8G }
+    limits: { nvidia.com/gpu: 1, cpu: 2, memory: 4G}
+    requests: { nvidia.com/gpu: 1, cpu: 2, memory: 4G}
   nodeSelector:
     kubernetes.io/hostname: interlink-hammer
   tolerations:
@@ -44,71 +49,54 @@ triton:
 
 envoy:
   enabled: true
-  loadBalancerPolicy: "ROUND_ROBIN"
-  nodeSelector:
-    cms-af-prod: "true"
+  nodeSelector: {'cms-af-prod': 'true'}
   tolerations:
     - key: hub.jupyter.org/dedicated
       operator: Equal
       value: cms-af
       effect: NoSchedule
+  loadBalancerPolicy: "ROUND_ROBIN"
   service:
     type: LoadBalancer
   ingress:
-    enabled: false
+    enabled: true
+    hostName: sonic-cms.geddes.rcac.purdue.edu
+    ingressClassName: public
   rate_limiter:
     prometheus_based:
-      enabled: true
-    listener_level:
-      enabled: true
-      max_tokens: 5
-      tokens_per_fill: 1
-      fill_interval: 12s
+      enabled: false
+  dynamic_routing:
+    enabled: true
+  lua_filter:
+    enabled: true
+    lua_config: "cfg/envoy-filter-dynamic.lua"
+
 autoscaler:
   enabled: true
   minReplicaCount: 1
-  maxReplicaCount: 11
-  scaleUp:
-    stabilizationWindowSeconds: 30
-    periodSeconds: 15
-    stepsize: 1
-  scaleDown:
-    stabilizationWindowSeconds: 45
-    periodSeconds: 45
-    stepsize: 1
+  maxReplicaCount: 7
 
 ingress:
   enabled: false
 
-nodeSelector: { "cms-af-prod": "true" }
-
-tolerations:
-  - key: hub.jupyter.org/dedicated
-    operator: Equal
-    value: cms-af
-    effect: NoSchedule
-
 prometheus:
-  external:
-    enabled: true
-    url: prometheus-af.geddes.rcac.purdue.edu
-    port: 443
-    scheme: https
+  enabled: true
+  server:
+    useExistingClusterRoleName: sonic-interlink-prometheus-role
+    ingress:
+      enabled: true
+      hosts:
+        - prometheus-cms.geddes.rcac.purdue.edu
+      tls:
+        - hosts:
+            - prometheus-cms.geddes.rcac.purdue.edu
+      ingressClassName: public
+  serviceAccounts:
+    server:
+      name: sonic-interlink-prometheus-sa
 
 grafana:
   enabled: true
-  dashboardProviders:
-    dashboardproviders.yaml:
-      apiVersion: 1
-      providers:
-        - name: "default"
-          orgId: 1
-          folder: ""
-          type: file
-          disableDeletion: false
-          editable: true
-          options:
-            path: /var/lib/grafana/dashboards/default
   dashboardsConfigMaps:
     default: sonic-interlink-grafana-default-dashboard
   datasources:
@@ -118,7 +106,7 @@ grafana:
           type: prometheus
           access: proxy
           isDefault: true
-          url: https://prometheus-af.geddes.rcac.purdue.edu
+          url: http://sonic-interlink-prometheus-server:9090
           jsonData:
             timeInterval: "5s"
             tlsSkipVerify: true
@@ -132,22 +120,34 @@ grafana:
             timeInterval: "5s"
             tlsSkipVerify: true
             serviceMap:
-              datasourceUid: "prometheus"
+              datasourceUid: 'prometheus'
             nodeGraph:
               enabled: true
   ingress:
     enabled: true
-    hosts: [grafana-cms-interlink.geddes.rcac.purdue.edu]
+    hosts:
+      - grafana-cms.geddes.rcac.purdue.edu
     tls:
-      - hosts: [grafana-cms-interlink.geddes.rcac.purdue.edu]
-        secretName: grafana-cms-tls
+      - hosts:
+          - grafana-cms.geddes.rcac.purdue.edu
     ingressClassName: public
   grafana.ini:
     server:
-      root_url: https://grafana-cms-interlink.geddes.rcac.purdue.edu
+      root_url: https://grafana-cms.geddes.rcac.purdue.edu
 
-tracing_sampling_rate: 0.001
 opentelemetry-collector:
-  enabled: false
+  enabled: true
+  config:
+    exporters:
+      otlp:
+        endpoint: http://sonic-interlink-tempo:4317
+      otlphttp: 
+        endpoint: http://sonic-interlink-tempo:4318
+      prometheusremotewrite:
+        endpoint: http://sonic-interlink-prometheus-server:9090/api/v1/write
 tempo:
-  enabled: false
+  enabled: true
+  tempo:
+    metricsGenerator:
+      enabled: true
+      remoteWriteUrl: http://sonic-interlink-prometheus-server:9090/api/v1/write
