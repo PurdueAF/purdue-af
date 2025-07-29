@@ -61,8 +61,8 @@ if "NB_UMASK" in os.environ:
 c.AiExtension.help_message_template = """
 Hello! I am {persona_name}, a JupyterLab AI assistant.
 
-I use open LLM models served by (<a href="https://www.rcac.purdue.edu/knowledge/genaistudio" target="_blank">Purdue GenAI Studio</a>).
-I also have the knowledge of (<a href="https://analysis-facility.physics.purdue.edu/" target="_blank">Purdue AF doucmentation</a>).
+I use open LLM models served by <a href="https://www.rcac.purdue.edu/knowledge/genaistudio" target="_blank">Purdue GenAI Studio</a>.
+I also have the knowledge of <a href="https://analysis-facility.physics.purdue.edu/" target="_blank">Purdue AF doucmentation</a>.
 
 <a href="https://www.rcac.purdue.edu/knowledge/genaistudio/api" target="_blank">How to obtain API key</a>
 
