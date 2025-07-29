@@ -80,60 +80,11 @@ ingress:
   enabled: false
 
 prometheus:
-  enabled: true
-  server:
-    useExistingClusterRoleName: sonic-interlink-prometheus-role
-    ingress:
-      enabled: true
-      hosts:
-        - prometheus-cms.geddes.rcac.purdue.edu
-      tls:
-        - hosts:
-            - prometheus-cms.geddes.rcac.purdue.edu
-      ingressClassName: public
-  serviceAccounts:
-    server:
-      name: sonic-interlink-prometheus-sa
+  enabled: false
+
 
 grafana:
-  enabled: true
-  dashboardsConfigMaps:
-    default: sonic-interlink-grafana-default-dashboard
-  datasources:
-    datasources.yaml:
-      datasources:
-        - name: prometheus
-          type: prometheus
-          access: proxy
-          isDefault: true
-          url: http://sonic-interlink-prometheus-server:9090
-          jsonData:
-            timeInterval: "5s"
-            tlsSkipVerify: true
-        - name: tempo
-          type: tempo
-          url: http://sonic-interlink-tempo:3100
-          access: proxy
-          isDefault: false
-          basicAuth: false
-          jsonData:
-            timeInterval: "5s"
-            tlsSkipVerify: true
-            serviceMap:
-              datasourceUid: "prometheus"
-            nodeGraph:
-              enabled: true
-  ingress:
-    enabled: true
-    hosts:
-      - grafana-cms.geddes.rcac.purdue.edu
-    tls:
-      - hosts:
-          - grafana-cms.geddes.rcac.purdue.edu
-    ingressClassName: public
-  grafana.ini:
-    server:
-      root_url: https://grafana-cms.geddes.rcac.purdue.edu
+  enabled: false
 
 opentelemetry-collector:
   enabled: true
