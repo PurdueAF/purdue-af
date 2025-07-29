@@ -76,28 +76,4 @@ autoscaler:
   minReplicaCount: 1
   maxReplicaCount: 7
 
-ingress:
-  enabled: false
 
-prometheus:
-  enabled: false
-
-grafana:
-  enabled: false
-
-opentelemetry-collector:
-  enabled: true
-  config:
-    exporters:
-      otlp:
-        endpoint: http://sonic-interlink-tempo:4317
-      otlphttp:
-        endpoint: http://sonic-interlink-tempo:4318
-      prometheusremotewrite:
-        endpoint: http://sonic-interlink-prometheus-server:9090/api/v1/write
-tempo:
-  enabled: true
-  tempo:
-    metricsGenerator:
-      enabled: true
-      remoteWriteUrl: http://sonic-interlink-prometheus-server:9090/api/v1/write
