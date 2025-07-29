@@ -69,7 +69,7 @@ virtualNode:
     tunnelImage: "ghcr.io/erebe/wstunnel:latest"
     # DNS domain for ingress (e.g. each pod will have its own tunnel at:
     # "<podname>.<wildcardDNS>"
-    wildcardDNS: "131.154.98.82.myip.cloud.infn.it"
+    wildcardDNS: "geddes.rcac.purdue.edu"
     # Path where wstunnel template will be mounted in VK container
     wstunnelTemplatePath: "/etc/templates/wstunnel.yaml"
     # Custom wstunnel template content (optional, uses built-in template if empty)
