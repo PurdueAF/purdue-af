@@ -6,6 +6,8 @@ metadata:
 spec:
   schedule: "*/5 * * * *" # Run every 5 minutes
   concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
       template:
