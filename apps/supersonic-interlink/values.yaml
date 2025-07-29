@@ -82,7 +82,6 @@ ingress:
 prometheus:
   enabled: false
 
-
 grafana:
   enabled: false
 
