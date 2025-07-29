@@ -30,8 +30,8 @@ triton:
     slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs --no-home --compat"
     slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --gres=gpu:1"
     interlink.virtual-kubelet.io/wstunnel-timeout: "5m"
-    interlink.eu/wstunnel-extra-ports: "8002:http:TCP"
-    slurm-job.vk.io/pre-exec: "echo \"tunneling port 8002\" \n"
+    interlink.eu/wstunnel-extra-ports: "8082:http:TCP"
+    slurm-job.vk.io/pre-exec: "echo \"tunneling port 8082\" \n"
   service:
     labels:
       scrape_metrics: "true"
