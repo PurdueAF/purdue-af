@@ -77,7 +77,11 @@ virtualNode:
     #   https://github.com/interlink-hq/interlink-helm-chart/blob/main/interlink/wstunnel-template_nginx.yaml
     customTemplate: ""
     wstunnelCommand: |
-      curl -L https://github.com/erebe/wstunnel/releases/download/v10.4.4/wstunnel_10.4.4_linux_amd64.tar.gz -o wstunnel.tar.gz && tar -xzvf wstunnel.tar.gz && chmod +x wstunnel && ./wstunnel client --http-upgrade-path-prefix %s %s ws://%s:80 > wstunnel_client.log 2>&1 &
+      export DOWNLOAD_DIR="/depot/cms/purdue-af/interlink" && \
+      curl -L https://github.com/erebe/wstunnel/releases/download/v10.4.4/wstunnel_10.4.4_linux_amd64.tar.gz -o "$DOWNLOAD_DIR/wstunnel.tar.gz" && \
+      tar -xzvf "$DOWNLOAD_DIR/wstunnel.tar.gz" -C "$DOWNLOAD_DIR" && \
+      chmod +x "$DOWNLOAD_DIR/wstunnel" && \
+      "$DOWNLOAD_DIR/wstunnel" client --http-upgrade-path-prefix %s %s ws://%s:80 > "$DOWNLOAD_DIR/wstunnel_client.log" 2>&1 &
 
 extraVolumes:
   - name: plugin-data
