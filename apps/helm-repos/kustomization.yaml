@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - repo-dask.yaml
   - repo-prometheus.yaml
+  - repo-supersonic.yaml
