@@ -75,5 +75,3 @@ autoscaler:
   enabled: true
   minReplicaCount: 1
   maxReplicaCount: 7
-
-
