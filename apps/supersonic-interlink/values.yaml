@@ -60,7 +60,7 @@ envoy:
     type: LoadBalancer
   ingress:
     enabled: true
-    hostName: sonic-cms.geddes.rcac.purdue.edu
+    hostName: sonic-interlink.geddes.rcac.purdue.edu
     ingressClassName: public
   rate_limiter:
     prometheus_based:
