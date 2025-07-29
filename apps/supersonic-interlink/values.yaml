@@ -24,8 +24,8 @@ triton:
     # --trace-config level=TIMESTAMPS
     # --trace-config count=-1
   resources:
-    limits: { nvidia.com/gpu: 1, cpu: 2, memory: 4G }
-    requests: { nvidia.com/gpu: 1, cpu: 2, memory: 4G }
+    limits: { cpu: 2, memory: 4G }
+    requests: { cpu: 2, memory: 4G }
   nodeSelector:
     kubernetes.io/hostname: interlink-hammer
   tolerations:
