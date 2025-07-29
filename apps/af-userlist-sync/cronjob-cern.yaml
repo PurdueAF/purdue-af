@@ -6,6 +6,8 @@ metadata:
 spec:
   schedule: "*/30 * * * *" # Run every 30 minutes
   suspend: false
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
       template:
