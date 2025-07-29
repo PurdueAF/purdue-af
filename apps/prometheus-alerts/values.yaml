@@ -101,16 +101,22 @@ service:
     ipFamilyPolicy: "PreferDualStack"
 
 ingress:
-  enabled: false
-  className: ""
-  labels: {}
-  annotations: {}
-  hosts:
-    - host: alertmanager.domain.com
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
+  enabled: true
+  hosts: [prometheus-af-alerts.geddes.rcac.purdue.edu]
+  tls:
+    - hosts: [prometheus-af-alerts.geddes.rcac.purdue.edu]
+  ingressClassName: public
+# ingress:
+#   enabled: false
+#   className: ""
+#   labels: {}
+#   annotations: {}
+#   hosts:
+#     - host: alertmanager.domain.com
+#       paths:
+#         - path: /
+#           pathType: ImplementationSpecific
+#   tls: []
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
