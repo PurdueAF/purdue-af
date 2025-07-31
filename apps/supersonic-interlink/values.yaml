@@ -78,6 +78,6 @@ autoscaler:
 prometheus:
   external:
     enabled: true
-    url: prometheus-server.cms.svc.cluster.local
-    port: 9090
-    scheme: http
+    url: prometheus-af.geddes.rcac.purdue.edu
+    port: 443
+    scheme: https
