@@ -599,7 +599,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "nv_gpu_utilization{namespace=~\"cms\"}",
+          "expr": "nv_gpu_utilization",
           "hide": false,
           "instant": false,
           "legendFormat": "{{pod}}",
@@ -707,7 +707,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(nv_gpu_power_usage{namespace=~\"cms\"} / nv_gpu_power_limit{namespace=~\"cms\"})",
+          "expr": "(nv_gpu_power_usage / nv_gpu_power_limit)",
           "hide": false,
           "instant": false,
           "legendFormat": "{{pod}}",
@@ -815,7 +815,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "nv_gpu_memory_used_bytes{namespace=~\"cms\"}/nv_gpu_memory_total_bytes{namespace=~\"cms\"}",
+          "expr": "nv_gpu_memory_used_bytes/nv_gpu_memory_total_bytes",
           "hide": false,
           "instant": false,
           "legendFormat": "{{pod}}",
