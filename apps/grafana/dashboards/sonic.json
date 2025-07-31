@@ -101,7 +101,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -1160,8 +1162,12 @@
       {
         "allowCustomValue": false,
         "current": {
-          "text": ["sonic-server"],
-          "value": ["sonic-server"]
+          "text": [
+            "sonic-server"
+          ],
+          "value": [
+            "sonic-server"
+          ]
         },
         "definition": "label_values(nv_inference_exec_count,release)",
         "includeAll": true,
@@ -1172,6 +1178,29 @@
         "query": {
           "qryType": 1,
           "query": "label_values(nv_inference_exec_count,release)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      },
+      {
+        "allowCustomValue": true,
+        "current": {
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "definition": "label_values(nv_inference_exec_count,namespace)",
+        "includeAll": true,
+        "label": "Namespace",
+        "multi": true,
+        "name": "namespace",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(nv_inference_exec_count,namespace)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -1188,5 +1217,5 @@
   "timezone": "",
   "title": "SuperSONIC Dashboard",
   "uid": "abec1090-243e-4a48-951b-29245ad56f50",
-  "version": 10
+  "version": 14
 }
