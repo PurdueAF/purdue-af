@@ -18,14 +18,15 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "liveNow": false,
+  "id": 6,
+  "links": [],
   "panels": [
     {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
-      },
       "description": "",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
       "gridPos": {
         "h": 4,
         "w": 24,
@@ -34,10 +35,16 @@
       },
       "id": 1,
       "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
         "content": "<div style=\"display: flex; align-items: center; background: transparent !important;\">\n  <img src=\"https://github.com/fastmachinelearning/SuperSONIC/blob/main/docs/img/SuperSONIC_small_light_256.png?raw=true\" \n       alt=\"SONIC Logo\" style=\"width: 100px; margin-right: 15px; display: inline-block;\">\n  <div style=\"display: inline-block;\">\n    <h1 style=\"margin: 0; padding: 0;\">SuperSONIC Dashboard</h1>\n   <div style=\"margin: 5px 0;\">\n      <a href=\"https://fastmachinelearning.org/SuperSONIC\" target=\"_blank\" \n         style=\"margin-right: 15px; text-decoration: none;\">\n        <i class=\"fa fa-book\"></i> Documentation\n      </a>\n      <a href=\"https://github.com/fastmachinelearning/SuperSONIC/issues\" target=\"_blank\" \n         style=\"margin-right: 15px; text-decoration: none;\">\n        <i class=\"fa fa-github\"></i> GitHub Issues\n      </a>\n      <a href=\"${prometheus_url_full}\" target=\"_blank\" style=\"text-decoration: none;\">\n        <i class=\"fa fa-link\"></i> Prometheus\n      </a>\n    </div>\n  </div>\n</div>",
         "mode": "html"
       },
-      "pluginVersion": "10.2.3",
+      "pluginVersion": "12.0.1",
+      "title": "",
       "transparent": true,
       "type": "text"
     },
@@ -69,8 +76,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -93,15 +99,19 @@
         "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
+        "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
+        "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "10.2.3",
+      "pluginVersion": "12.0.1",
       "targets": [
         {
           "datasource": {
@@ -110,7 +120,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "count by(release)(nv_gpu_utilization{app=~\"supersonic\"})",
+          "expr": "count by(release)(nv_gpu_utilization{app=~\"supersonic\", release=~\"$release\"})",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -128,6 +138,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Metric and threshold configured in `prometheus.serverLoadMetric` and `prometheus.serverLoadThreshold` parameters. Default metric: inference queue latency. Default threshold: 100ms.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -140,6 +151,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -170,8 +182,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -198,10 +209,12 @@
           "showLegend": false
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.0.1",
       "targets": [
         {
           "datasource": {
@@ -214,7 +227,6 @@
         }
       ],
       "title": "Server Load Metric",
-      "description": "Metric and threshold configured in `prometheus.serverLoadMetric` and `prometheus.serverLoadThreshold` parameters. Default metric: inference queue latency. Default threshold: 100ms.",
       "type": "timeseries"
     },
     {
@@ -222,12 +234,12 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Latency components measured by Triton servers, as well as total latency measured at proxy.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
-          "unit": "ms",
           "custom": {
             "axisBorderShow": false,
             "axisCenteredZero": false,
@@ -235,6 +247,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 100,
             "gradientMode": "opacity",
@@ -265,15 +278,15 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "ms"
         },
         "overrides": [
           {
@@ -316,10 +329,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.0.1",
       "targets": [
         {
           "datasource": {
@@ -327,7 +342,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum (rate(nv_inference_compute_infer_duration_us{app=~\"supersonic\"}[30s])) / sum ((rate(nv_inference_exec_count{app=~\"supersonic\"}[30s]) * 1000))",
+          "expr": "sum (rate(nv_inference_compute_infer_duration_us{app=~\"supersonic\", release=\"$release\"}[30s])) / sum ((rate(nv_inference_exec_count{app=~\"supersonic\", release=\"$release\"}[30s]) * 1000))",
           "instant": false,
           "legendFormat": "Inference",
           "range": true,
@@ -339,7 +354,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum (rate(nv_inference_queue_duration_us{app=~\"supersonic\"}[30s])) / sum ((rate(nv_inference_exec_count{app=~\"supersonic\"}[30s]) * 1000))",
+          "expr": "sum (rate(nv_inference_queue_duration_us{app=~\"supersonic\", release=\"$release\"}[30s])) / sum ((rate(nv_inference_exec_count{app=~\"supersonic\", release=\"$release\"}[30s]) * 1000))",
           "hide": false,
           "instant": false,
           "legendFormat": "Queue",
@@ -352,7 +367,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum (rate(nv_inference_compute_input_duration_us{app=~\"supersonic\"}[30s])) / sum ((rate(nv_inference_exec_count{app=~\"supersonic\"}[30s]) * 1000))",
+          "expr": "sum (rate(nv_inference_compute_input_duration_us{app=~\"supersonic\", release=\"$release\"}[30s])) / sum ((rate(nv_inference_exec_count{app=~\"supersonic\", release=\"$release\"}[30s]) * 1000))",
           "hide": false,
           "instant": false,
           "legendFormat": "Input",
@@ -365,7 +380,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum (rate(nv_inference_compute_output_duration_us{app=~\"supersonic\"}[30s])) / sum ((rate(nv_inference_exec_count{app=~\"supersonic\"}[30s]) * 1000))",
+          "expr": "sum (rate(nv_inference_compute_output_duration_us{app=~\"supersonic\", release=\"$release\"}[30s])) / sum ((rate(nv_inference_exec_count{app=~\"supersonic\", release=\"$release\"}[30s]) * 1000))",
           "hide": false,
           "instant": false,
           "legendFormat": "Output",
@@ -378,7 +393,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix=\"ingress_grpc\", app=~\"supersonic\"}[30s])) / sum(rate(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix=\"ingress_grpc\", app=~\"supersonic\"}[30s]))",
+          "expr": "sum(rate(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix=\"ingress_grpc\", app=~\"supersonic\", release=\"$release\"}[30s])) / sum(rate(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix=\"ingress_grpc\", app=~\"supersonic\", release=\"$release\"}[30s]))",
           "hide": false,
           "instant": false,
           "legendFormat": "Total (measured at proxy)",
@@ -387,7 +402,6 @@
         }
       ],
       "title": "Latency Breakdown",
-      "description": "Latency components measured by Triton servers, as well as total latency measured at proxy.",
       "type": "timeseries"
     },
     {
@@ -407,6 +421,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -437,8 +452,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -464,10 +478,12 @@
           "showLegend": false
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.0.1",
       "targets": [
         {
           "datasource": {
@@ -476,7 +492,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "count by(release)(nv_gpu_utilization{app=~\"supersonic\"})",
+          "expr": "count by(release)(nv_gpu_utilization{app=~\"supersonic\", release=\"$release\"})",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -519,6 +535,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -551,8 +568,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "#EAB839",
@@ -587,11 +603,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "10.2.3",
+      "pluginVersion": "12.0.1",
       "targets": [
         {
           "datasource": {
@@ -599,7 +616,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "nv_gpu_utilization{app=~\"supersonic\"}",
+          "expr": "nv_gpu_utilization{release=\"$release\"}",
           "hide": false,
           "instant": false,
           "legendFormat": "{{pod}}",
@@ -627,6 +644,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -659,8 +677,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "#EAB839",
@@ -695,11 +712,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "10.2.3",
+      "pluginVersion": "12.0.1",
       "targets": [
         {
           "datasource": {
@@ -707,7 +725,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(nv_gpu_power_usage{app=~\"supersonic\"} / nv_gpu_power_limit{app=~\"supersonic\"})",
+          "expr": "(nv_gpu_power_usage{release=\"$release\"} / nv_gpu_power_limit{release=\"$release\"})",
           "hide": false,
           "instant": false,
           "legendFormat": "{{pod}}",
@@ -735,6 +753,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -767,8 +786,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "#EAB839",
@@ -803,11 +821,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "10.2.3",
+      "pluginVersion": "12.0.1",
       "targets": [
         {
           "datasource": {
@@ -815,7 +834,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "nv_gpu_memory_used_bytes{app=~\"supersonic\"}/nv_gpu_memory_total_bytes{app=~\"supersonic\"}",
+          "expr": "nv_gpu_memory_used_bytes{release=\"$release\"}/nv_gpu_memory_total_bytes{release=\"$release\"}",
           "hide": false,
           "instant": false,
           "legendFormat": "{{pod}}",
@@ -857,6 +876,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -888,8 +908,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -912,11 +931,12 @@
           "showLegend": false
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "10.2.3",
+      "pluginVersion": "12.0.1",
       "targets": [
         {
           "datasource": {
@@ -925,7 +945,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum (rate(nv_inference_count{app=~\"supersonic\"}[30s])) by(release)",
+          "expr": "sum (rate(nv_inference_count{app=~\"supersonic\", release=\"$release\"}[30s])) by(release)",
           "instant": false,
           "interval": "",
           "legendFormat": "{{ release }}",
@@ -954,6 +974,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -985,8 +1006,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -1009,11 +1029,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "10.2.3",
+      "pluginVersion": "12.0.1",
       "targets": [
         {
           "datasource": {
@@ -1022,7 +1043,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum (rate(nv_inference_count{app=~\"supersonic\"}[30s])) by(pod)",
+          "expr": "sum (rate(nv_inference_count{app=~\"supersonic\", release=\"$release\"}[30s])) by(pod)",
           "instant": false,
           "interval": "",
           "legendFormat": "{{ pod }}",
@@ -1051,6 +1072,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1082,8 +1104,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -1106,11 +1127,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "10.2.3",
+      "pluginVersion": "12.0.1",
       "targets": [
         {
           "datasource": {
@@ -1119,7 +1141,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum (rate(nv_inference_count{app=~\"supersonic\"}[30s])) by(model)",
+          "expr": "sum (rate(nv_inference_count{app=~\"supersonic\", release=\"$release\"}[30s])) by(model)",
           "instant": false,
           "interval": "",
           "legendFormat": "{{ model }}",
@@ -1131,16 +1153,46 @@
       "type": "timeseries"
     }
   ],
+  "preload": false,
   "refresh": "5s",
-  "schemaVersion": 39,
+  "schemaVersion": 41,
   "tags": [],
+  "templating": {
+    "list": [
+      {
+        "allowCustomValue": false,
+        "current": {
+          "text": [
+            "sonic-server"
+          ],
+          "value": [
+            "sonic-server"
+          ]
+        },
+        "definition": "label_values(nv_inference_exec_count,release)",
+        "includeAll": true,
+        "label": "Release name",
+        "multi": true,
+        "name": "release",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(nv_inference_exec_count,release)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      }
+    ]
+  },
   "time": {
-    "from": "now-1h",
+    "from": "now-30m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "SuperSONIC Dashboard",
-  "version": 1,
-  "weekStart": ""
+  "uid": "abec1090-243e-4a48-951b-29245ad56f50",
+  "version": 10
 }
