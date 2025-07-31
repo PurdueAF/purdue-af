@@ -108,6 +108,8 @@ didFinder:
     auth_host: https://cms-rucio-auth.cern.ch
   xrootd:
     enabled: true
+    image: sslhep/servicex_did_finder_xrootd
+    tag: xrootd-did-x509
   CERNOpenData:
     enabled: false
 gridAccount: dkondrat
