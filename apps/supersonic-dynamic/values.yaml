@@ -40,7 +40,7 @@ envoy:
     enabled: true
     lua_config: "cfg/envoy-filter-dynamic.lua"
 
-autoscaler:
+keda:
   enabled: false
   minReplicaCount: 1
   maxReplicaCount: 11
