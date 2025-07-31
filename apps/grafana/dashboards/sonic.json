@@ -723,7 +723,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(nv_gpu_power_usage{release=\"$release\"} / nv_gpu_power_limit{release=\"$release\"})",
+          "expr": "(nv_gpu_power_usage{release=~\"$release\"} / nv_gpu_power_limit{release=\"$release\"})",
           "hide": false,
           "instant": false,
           "legendFormat": "{{pod}}",
