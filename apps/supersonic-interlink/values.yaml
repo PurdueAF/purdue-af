@@ -74,3 +74,19 @@ autoscaler:
   enabled: true
   minReplicaCount: 1
   maxReplicaCount: 7
+
+prometheus:
+  enabled: true
+  server:
+    useExistingClusterRoleName: sonic-interlink-prometheus-role
+    ingress:
+      enabled: true
+      hosts:
+        - prometheus-cms.geddes.rcac.purdue.edu
+      tls:
+        - hosts:
+            - prometheus-cms.geddes.rcac.purdue.edu
+      ingressClassName: public
+  serviceAccounts:
+    server:
+      name: sonic-interlink-prometheus-sa
