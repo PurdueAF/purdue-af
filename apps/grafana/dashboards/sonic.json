@@ -101,7 +101,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -130,102 +132,6 @@
       ],
       "title": "Number of Triton Servers",
       "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Metric and threshold configured in `prometheus.serverLoadMetric` and `prometheus.serverLoadThreshold` parameters. Default metric: inference queue latency. Default threshold: 100ms.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "dashed"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": "%SERVER_LOAD_THRESHOLD%"
-              }
-            ]
-          },
-          "unit": "ms"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 10,
-        "x": 4,
-        "y": 5
-      },
-      "id": 2,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.0.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sum by (release) (rate(nv_inference_queue_duration_us{app=~\"supersonic\"}[30s]) / (rate(nv_inference_exec_count{app=~\"supersonic\"}[30s]) * 1000 + 0.001))",
-          "legendFormat": "{{release}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Server Load Metric",
-      "type": "timeseries"
     },
     {
       "datasource": {
@@ -315,7 +221,7 @@
       "gridPos": {
         "h": 10,
         "w": 10,
-        "x": 14,
+        "x": 4,
         "y": 5
       },
       "id": 6,
@@ -400,6 +306,104 @@
         }
       ],
       "title": "Latency Breakdown",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 10,
+        "x": 14,
+        "y": 5
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.0.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum (rate(nv_inference_count{app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"}[30s])) by(release)",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "{{ release }}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Inferences per second (all servers, all models)",
       "type": "timeseries"
     },
     {
@@ -916,106 +920,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 6,
+        "w": 12,
         "x": 0,
-        "y": 25
-      },
-      "id": 5,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": false
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.0.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "sum (rate(nv_inference_count{app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"}[30s])) by(release)",
-          "instant": false,
-          "interval": "",
-          "legendFormat": "{{ release }}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Inferences per second (all servers, all models)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 9,
-        "x": 6,
         "y": 25
       },
       "id": 15,
@@ -1112,8 +1018,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 9,
-        "x": 15,
+        "w": 12,
+        "x": 12,
         "y": 25
       },
       "id": 16,
@@ -1160,8 +1066,12 @@
       {
         "allowCustomValue": false,
         "current": {
-          "text": ["sonic-server"],
-          "value": ["sonic-server"]
+          "text": [
+            "sonic-server"
+          ],
+          "value": [
+            "sonic-server"
+          ]
         },
         "definition": "label_values(nv_inference_exec_count,release)",
         "includeAll": true,
@@ -1181,8 +1091,12 @@
       {
         "allowCustomValue": true,
         "current": {
-          "text": "All",
-          "value": ["$__all"]
+          "text": [
+            "cms"
+          ],
+          "value": [
+            "cms"
+          ]
         },
         "definition": "label_values(nv_inference_exec_count,namespace)",
         "includeAll": true,
@@ -1202,12 +1116,12 @@
     ]
   },
   "time": {
-    "from": "now-30m",
+    "from": "now-3h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "SuperSONIC Dashboard",
   "uid": "abec1090-243e-4a48-951b-29245ad56f50",
-  "version": 14
+  "version": 17
 }
