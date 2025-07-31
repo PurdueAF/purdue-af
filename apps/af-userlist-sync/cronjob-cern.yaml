@@ -14,6 +14,12 @@ spec:
         spec:
           serviceAccountName: af-userlist-sync
           restartPolicy: Never
+          nodeSelector: { "cms-af-prod": "true" }
+          tolerations:
+            - key: "hub.jupyter.org/dedicated"
+              operator: "Equal"
+              value: "cms-af"
+              effect: "NoSchedule"
           containers:
             - name: af-userlist-sync-cern
               image: rockylinux:8.9
