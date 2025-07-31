@@ -5,6 +5,6 @@ metadata:
   namespace: cms
 spec:
   interval: 1m
-  url: https://github.com/kondratyevd/ServiceX
+  url: https://github.com/ssl-hep/ServiceX
   ref:
     branch: xrootd-did-x509
