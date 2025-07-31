@@ -599,7 +599,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "nv_gpu_utilization",
+          "expr": "nv_gpu_utilization{app=~\"supersonic\"}",
           "hide": false,
           "instant": false,
           "legendFormat": "{{pod}}",
@@ -707,7 +707,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(nv_gpu_power_usage / nv_gpu_power_limit)",
+          "expr": "(nv_gpu_power_usage{app=~\"supersonic\"} / nv_gpu_power_limit{app=~\"supersonic\"})",
           "hide": false,
           "instant": false,
           "legendFormat": "{{pod}}",
@@ -815,7 +815,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "nv_gpu_memory_used_bytes/nv_gpu_memory_total_bytes",
+          "expr": "nv_gpu_memory_used_bytes{app=~\"supersonic\"}/nv_gpu_memory_total_bytes{app=~\"supersonic\"}",
           "hide": false,
           "instant": false,
           "legendFormat": "{{pod}}",
