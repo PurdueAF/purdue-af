@@ -101,9 +101,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1162,12 +1160,8 @@
       {
         "allowCustomValue": false,
         "current": {
-          "text": [
-            "sonic-server"
-          ],
-          "value": [
-            "sonic-server"
-          ]
+          "text": ["sonic-server"],
+          "value": ["sonic-server"]
         },
         "definition": "label_values(nv_inference_exec_count,release)",
         "includeAll": true,
@@ -1188,9 +1182,7 @@
         "allowCustomValue": true,
         "current": {
           "text": "All",
-          "value": [
-            "$__all"
-          ]
+          "value": ["$__all"]
         },
         "definition": "label_values(nv_inference_exec_count,namespace)",
         "includeAll": true,
