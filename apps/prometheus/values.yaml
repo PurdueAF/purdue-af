@@ -27,6 +27,7 @@ server:
     evaluation_interval: 15s
     scrape_timeout: 15s
 
+  extraFlags: [web.enable-remote-write-receiver]
   extraInitContainers:
     - name: prometheus-data-permission-fix
       image: busybox

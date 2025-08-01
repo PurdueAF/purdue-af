@@ -86,20 +86,11 @@ ingress:
   enabled: false
 
 prometheus:
-  enabled: true
-  server:
-    useExistingClusterRoleName: sonic-server-prometheus-role
-    ingress:
-      enabled: true
-      hosts:
-        - prometheus-cms.geddes.rcac.purdue.edu
-      tls:
-        - hosts:
-            - prometheus-cms.geddes.rcac.purdue.edu
-      ingressClassName: public
-  serviceAccounts:
-    server:
-      name: sonic-server-prometheus-sa
+  external:
+    enabled: true
+    url: prometheus-af.geddes.rcac.purdue.edu
+    port: 443
+    scheme: https
 
 grafana:
   enabled: true
@@ -112,7 +103,7 @@ grafana:
           type: prometheus
           access: proxy
           isDefault: true
-          url: http://sonic-server-prometheus-server:9090
+          url: http://prometheus-server:9090
           jsonData:
             timeInterval: "5s"
             tlsSkipVerify: true
