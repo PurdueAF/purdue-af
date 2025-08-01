@@ -107,6 +107,6 @@ datasources:
           timeInterval: "5s"
           tlsSkipVerify: true
           serviceMap:
-            datasourceUid: 'prometheus'
+            datasourceUid: "prometheus"
           nodeGraph:
             enabled: true
