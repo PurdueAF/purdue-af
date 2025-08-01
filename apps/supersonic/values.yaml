@@ -179,8 +179,8 @@ tempo:
       enabled: true
       remoteWriteUrl: http://sonic-server-prometheus-server:9090/api/v1/write
   overrides:
-    defaults: 
-     metrics_generator:
-       processors:
-         - service-graphs
-         - span-metrics    
+    defaults:
+      metrics_generator:
+        processors:
+          - service-graphs
+          - span-metrics
