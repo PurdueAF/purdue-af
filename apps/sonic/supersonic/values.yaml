@@ -4,7 +4,8 @@ serverLoadMetric: 'sum by (release) (rate(nv_inference_queue_duration_us{release
 triton:
   # image: fastml/triton-torchgeo:21.02-py3-geometric # run2
   # image: fastml/triton-torchgeo:22.07-py3-geometric # run3
-  image: nvcr.io/nvidia/tritonserver:24.11-py3 # enables OTel
+  # image: nvcr.io/nvidia/tritonserver:24.11-py3 # enables OTel
+  image: yongbinfeng/tritonserver:rhel8.9_v4
   command: ["/bin/sh", "-c"]
   args:
     - |
