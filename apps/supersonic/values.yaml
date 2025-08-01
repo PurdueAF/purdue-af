@@ -15,7 +15,7 @@ triton:
       --trace-config mode=opentelemetry \
       --trace-config=opentelemetry,resource=pod_name=$(hostname) \
       --trace-config opentelemetry,url=sonic-server-opentelemetry-collector:4318/v1/traces \
-      --trace-config rate=100 \
+      --trace-config rate=1 \
       --trace-config level=TIMESTAMPS \
       --trace-config count=-1 \
       --allow-gpu-metrics=true \
