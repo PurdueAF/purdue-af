@@ -151,6 +151,26 @@ opentelemetry-collector:
         endpoint: http://sonic-server-tempo:4318
       prometheusremotewrite:
         endpoint: http://sonic-server-prometheus-server:9090/api/v1/write
+    processors:
+      transform:
+        trace_statements:
+        - context: resource
+          conditions:
+            - 'attributes["pod_name"] != nil'
+          statements:
+            - replace_match(resource.attributes["service.name"], "triton-inference-server", resource.attributes["pod_name"])
+        - context: span
+          conditions:
+            - 'name == "ingress"'
+          statements:
+            - set(span.kind, 3)
+            - set(span.kind.string, "Client")
+        - context: span
+          conditions:
+            - name != "ingress"
+          statements:
+            - set(span.kind, 2)
+            - set(span.kind.string, "Server")
 tempo:
   enabled: true
   tempo:
