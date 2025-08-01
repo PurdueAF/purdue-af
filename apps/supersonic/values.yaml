@@ -13,12 +13,12 @@ triton:
       --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoEgamma/EgammaPhotonProducers/data/models/ \
       --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoTauTag/TrainingFiles/data/DeepTauIdSONIC/ \
       --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoMET/METPUSubtraction/data/models/ \
-      --trace-config mode=opentelemetry
-      --trace-config=opentelemetry,resource=pod_name=$(hostname)
-      --trace-config opentelemetry,url=sonic-server-opentelemetry-collector:4318/v1/traces
-      --trace-config rate=100     # 1 in 100 requests
-      --trace-config level=TIMESTAMPS
-      --trace-config count=-1
+      --trace-config mode=opentelemetry \
+      --trace-config=opentelemetry,resource=pod_name=$(hostname) \
+      --trace-config opentelemetry,url=sonic-server-opentelemetry-collector:4318/v1/traces \
+      --trace-config rate=100     # 1 in 100 requests \
+      --trace-config level=TIMESTAMPS \
+      --trace-config count=-1 \
       --allow-gpu-metrics=true \
       --log-verbose=0 \
       --strict-model-config=false \
@@ -146,7 +146,7 @@ opentelemetry-collector:
     exporters:
       otlp:
         endpoint: http://sonic-server-tempo:4317
-      otlphttp:
+      otlphttp: 
         endpoint: http://sonic-server-tempo:4318
       prometheusremotewrite:
         endpoint: http://sonic-server-prometheus-server:9090/api/v1/write
