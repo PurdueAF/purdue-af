@@ -98,6 +98,7 @@ datasources:
         access: proxy
         isDefault: false
       - name: tempo
+        uid: tempo
         type: tempo
         url: http://sonic-server-tempo:3100
         access: proxy
