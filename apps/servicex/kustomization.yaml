@@ -3,7 +3,6 @@ kind: Kustomization
 resources:
   - helmrepo.yaml
   - helmrelease.yaml
-  - gitrepo.yaml
 configMapGenerator:
   - name: servicex-config
     namespace: cms
