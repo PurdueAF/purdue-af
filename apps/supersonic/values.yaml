@@ -67,7 +67,7 @@ envoy:
   lua_filter:
     enabled: true
     lua_config: "cfg/envoy-filter-dynamic.lua"
-  tracing_sampling_rate: 0.01
+  tracing_sampling_rate: 1
 
 keda:
   enabled: true
