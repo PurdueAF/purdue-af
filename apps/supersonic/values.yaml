@@ -173,8 +173,14 @@ opentelemetry-collector:
     #           - set(span.kind.string, "Server")
 tempo:
   enabled: true
-  tag: 1.23.2
   tempo:
+    tag: 1.23.2
     metricsGenerator:
       enabled: true
       remoteWriteUrl: http://sonic-server-prometheus-server:9090/api/v1/write
+  overrides:
+    defaults: 
+     metrics_generator:
+       processors:
+         - service-graphs
+         - span-metrics    
