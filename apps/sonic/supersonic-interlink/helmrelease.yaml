@@ -8,17 +8,17 @@ spec:
   interval: 1m
   chart:
     spec:
-      chart: helm/supersonic
-      sourceRef:
-        kind: GitRepository
-        name: supersonic
-        namespace: cms
-      # chart: supersonic
-      # version: "0.2.1"
+      # chart: helm/supersonic
       # sourceRef:
-      #   kind: HelmRepository
-      #   name: fastml
+      #   kind: GitRepository
+      #   name: supersonic
       #   namespace: cms
+      chart: supersonic
+      version: "0.3.0"
+      sourceRef:
+        kind: HelmRepository
+        name: fastml
+        namespace: cms
       interval: 1m
   valuesFrom:
     - kind: ConfigMap
