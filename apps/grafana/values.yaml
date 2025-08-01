@@ -104,6 +104,7 @@ datasources:
         isDefault: false
         basicAuth: false
         jsonData:
+          httpMethod: "GET"
           timeInterval: "5s"
           tlsSkipVerify: true
           serviceMap:
