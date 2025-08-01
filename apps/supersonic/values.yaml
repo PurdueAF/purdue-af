@@ -16,7 +16,7 @@ triton:
       --trace-config mode=opentelemetry \
       --trace-config=opentelemetry,resource=pod_name=$(hostname) \
       --trace-config opentelemetry,url=sonic-server-opentelemetry-collector:4318/v1/traces \
-      --trace-config rate=1 \
+      --trace-config rate=100 \
       --trace-config level=TIMESTAMPS \
       --trace-config count=-1 \
       --allow-gpu-metrics=true \
@@ -67,7 +67,7 @@ envoy:
   lua_filter:
     enabled: true
     lua_config: "cfg/envoy-filter-dynamic.lua"
-  tracing_sampling_rate: 1
+  tracing_sampling_rate: 0.01
 
 keda:
   enabled: true
