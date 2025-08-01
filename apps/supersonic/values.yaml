@@ -146,7 +146,7 @@ opentelemetry-collector:
     exporters:
       otlp:
         endpoint: http://sonic-server-tempo:4317
-      otlphttp: 
+      otlphttp:
         endpoint: http://sonic-server-tempo:4318
       prometheusremotewrite:
         endpoint: http://sonic-server-prometheus-server:9090/api/v1/write
