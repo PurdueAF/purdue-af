@@ -150,7 +150,7 @@ opentelemetry-collector:
       otlphttp:
         endpoint: http://sonic-server-tempo:4318
       prometheusremotewrite:
-        endpoint: http://sonic-server-prometheus-server:9090/api/v1/write
+        endpoint: http://prometheus-server:9090/api/v1/write
     # processors:
     #   transform:
     #     trace_statements:
@@ -176,4 +176,4 @@ tempo:
   tempo:
     metricsGenerator:
       enabled: true
-      remoteWriteUrl: http://sonic-server-prometheus-server:9090/api/v1/write
+      remoteWriteUrl: http://prometheus-server:9090/api/v1/write
