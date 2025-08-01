@@ -19,7 +19,7 @@ triton:
       --trace-config level=TIMESTAMPS \
       --trace-config count=-1 \
       --allow-gpu-metrics=true \
-      --log-verbose= \
+      --log-verbose=1 \
       --strict-model-config=false \
       --exit-timeout-secs=60
     # --model-control-mode=explicit \
