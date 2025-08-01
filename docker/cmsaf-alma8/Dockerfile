@@ -192,10 +192,10 @@ RUN pip install --no-cache-dir --upgrade \
     jupyterlab-topbar-text==1.1.0 \
     jupyterlab-theme-toggler==1.1.0 \
     dask-gateway==2025.4.0 \
-    jupyter-ai[all]
+    jupyter-ai[all]==2.31.6
 
 COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.12/site-packages/genaistudio
-RUN pip install -e /opt/conda/lib/python3.12/site-packages/genaistudio
+RUN pip install --no-cache-dir -e /opt/conda/lib/python3.12/site-packages/genaistudio
 
 # Install Dask labextension
 RUN git clone https://github.com/kondratyevd/dask-labextension.git
