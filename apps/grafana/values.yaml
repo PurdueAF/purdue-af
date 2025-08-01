@@ -97,3 +97,16 @@ datasources:
         url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
         access: proxy
         isDefault: false
+      - name: tempo
+        type: tempo
+        url: http://sonic-server-tempo:3100
+        access: proxy
+        isDefault: false
+        basicAuth: false
+        jsonData:
+          timeInterval: "5s"
+          tlsSkipVerify: true
+          serviceMap:
+            datasourceUid: 'prometheus'
+          nodeGraph:
+            enabled: true
