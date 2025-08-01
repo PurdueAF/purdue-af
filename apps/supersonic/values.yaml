@@ -173,6 +173,7 @@ opentelemetry-collector:
     #           - set(span.kind.string, "Server")
 tempo:
   enabled: true
+  tag: 1.23.2
   tempo:
     metricsGenerator:
       enabled: true
