@@ -49,65 +49,6 @@
       "type": "text"
     },
     {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 4
-      },
-      "id": 19,
-      "panels": [],
-      "title": "SuperSONIC Overview",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "tempo",
-        "uid": "tempo"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 32,
-        "w": 6,
-        "x": 18,
-        "y": 0
-      },
-      "id": 21,
-      "options": {
-        "edges": {},
-        "nodes": {},
-        "zoomMode": "cooperative"
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "tempo",
-            "uid": "tempo"
-          },
-          "filters": [
-            {
-              "id": "f0a7f7ec",
-              "operator": "=",
-              "scope": "span"
-            }
-          ],
-          "limit": 20,
-          "queryType": "serviceMap",
-          "refId": "A",
-          "serviceMapQuery": "{client!=\"user\"}",
-          "tableType": "traces"
-        }
-      ],
-      "title": "Server Map (all pods in time window)",
-      "transparent": true,
-      "type": "nodeGraph"
-    },
-    {
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -137,7 +78,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 5
+        "y": 4
       },
       "id": 4,
       "options": {
@@ -147,7 +88,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -264,9 +207,9 @@
       },
       "gridPos": {
         "h": 10,
-        "w": 10,
+        "w": 8,
         "x": 4,
-        "y": 5
+        "y": 4
       },
       "id": 6,
       "options": {
@@ -412,9 +355,9 @@
       },
       "gridPos": {
         "h": 10,
-        "w": 10,
-        "x": 14,
-        "y": 5
+        "w": 6,
+        "x": 12,
+        "y": 4
       },
       "id": 5,
       "options": {
@@ -449,6 +392,53 @@
       ],
       "title": "Inferences per second (all servers, all models)",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 26,
+        "w": 6,
+        "x": 18,
+        "y": 4
+      },
+      "id": 21,
+      "options": {
+        "edges": {},
+        "layoutAlgorithm": "layered",
+        "nodes": {},
+        "zoomMode": "cooperative"
+      },
+      "pluginVersion": "12.0.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "filters": [
+            {
+              "id": "f0a7f7ec",
+              "operator": "=",
+              "scope": "span"
+            }
+          ],
+          "limit": 20,
+          "queryType": "serviceMap",
+          "refId": "A",
+          "serviceMapQuery": "{client!=\"user\"}",
+          "tableType": "traces"
+        }
+      ],
+      "title": "Server Map (all pods in time window)",
+      "transparent": true,
+      "type": "nodeGraph"
     },
     {
       "datasource": {
@@ -513,7 +503,7 @@
         "h": 6,
         "w": 4,
         "x": 0,
-        "y": 9
+        "y": 8
       },
       "id": 3,
       "options": {
@@ -550,19 +540,6 @@
       ],
       "title": "Number of Triton Servers",
       "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 15
-      },
-      "id": 20,
-      "panels": [],
-      "title": "GPU Metrics",
-      "type": "row"
     },
     {
       "datasource": {
@@ -636,9 +613,9 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
+        "w": 6,
         "x": 0,
-        "y": 16
+        "y": 14
       },
       "id": 14,
       "options": {
@@ -745,9 +722,9 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 16
+        "w": 6,
+        "x": 6,
+        "y": 14
       },
       "id": 13,
       "options": {
@@ -854,9 +831,9 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 16
+        "w": 6,
+        "x": 12,
+        "y": 14
       },
       "id": 12,
       "options": {
@@ -890,19 +867,6 @@
       ],
       "title": "GPU memory usage",
       "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 24
-      },
-      "id": 18,
-      "panels": [],
-      "title": "Inference Statistics",
-      "type": "row"
     },
     {
       "datasource": {
@@ -964,9 +928,9 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 9,
         "x": 0,
-        "y": 25
+        "y": 22
       },
       "id": 15,
       "options": {
@@ -1062,9 +1026,9 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 25
+        "w": 9,
+        "x": 9,
+        "y": 22
       },
       "id": 16,
       "options": {
@@ -1110,8 +1074,12 @@
       {
         "allowCustomValue": false,
         "current": {
-          "text": ["sonic-server"],
-          "value": ["sonic-server"]
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
         },
         "definition": "label_values(nv_inference_exec_count,release)",
         "includeAll": true,
@@ -1131,8 +1099,12 @@
       {
         "allowCustomValue": true,
         "current": {
-          "text": ["cms"],
-          "value": ["cms"]
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
         },
         "definition": "label_values(nv_inference_exec_count,namespace)",
         "includeAll": true,
@@ -1159,5 +1131,5 @@
   "timezone": "",
   "title": "SuperSONIC Dashboard",
   "uid": "abec1090-243e-4a48-951b-29245ad56f50",
-  "version": 17
+  "version": 20
 }
