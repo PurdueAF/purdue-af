@@ -92,3 +92,21 @@ prometheus:
     url: prometheus-af.geddes.rcac.purdue.edu
     port: 443
     scheme: https
+
+opentelemetry-collector:
+  enabled: true
+  config:
+    exporters:
+      otlp:
+        endpoint: http://sonic-interlink-tempo:4317
+      otlphttp:
+        endpoint: http://sonic-interlink-tempo:4318
+      prometheusremotewrite:
+        endpoint: http://prometheus-server:9090/api/v1/write
+
+tempo:
+  enabled: true
+  tempo:
+    metricsGenerator:
+      enabled: true
+      remoteWriteUrl: http://prometheus-server:9090/api/v1/write
