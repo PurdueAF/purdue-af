@@ -174,7 +174,7 @@ opentelemetry-collector:
 tempo:
   enabled: true
   tempo:
-    tag: 1.23.2
+    tag: 2.8.1
     metricsGenerator:
       enabled: true
       remoteWriteUrl: http://sonic-server-prometheus-server:9090/api/v1/write
