@@ -7,19 +7,19 @@ metadata:
     role: alert-rules
 spec:
   groups:
-  - name: purdue-af.rules
-    rules:
-    - alert: AFHomeDirUtilHigh
-      # fire as soon as the metric >0.7 for ANY username
-      expr: af_home_dir_util{namespace=~"cms", job="af-pod-monitor", username!=""} > 0.7
-      for: 1m           # optional: only fire if it stays >0.7 for 1 minute
-      labels:
-        severity: warning
-      annotations:
-        summary: |
-          Home-dir usage high ({{ $value | printf "%.2f" }})
-        description: |
-          The following users have home-dir utilization > 0.7:
-          {{ range .Alerts.Firing -}}
-            • **{{ .Labels.username }}** at {{ printf "%.2f" .Value }}
-          {{ end }}
+    - name: purdue-af.rules
+      rules:
+        - alert: AFHomeDirUtilHigh
+          # fire as soon as the metric >0.7 for ANY username
+          expr: af_home_dir_util{namespace=~"cms", job="af-pod-monitor", username!=""} > 0.7
+          for: 1m # optional: only fire if it stays >0.7 for 1 minute
+          labels:
+            severity: warning
+          annotations:
+            summary: |
+              Home-dir usage high ({{ $value | printf "%.2f" }})
+            description: |
+              The following users have home-dir utilization > 0.7:
+              {{ range .Alerts.Firing -}}
+                • **{{ .Labels.username }}** at {{ printf "%.2f" .Value }}
+              {{ end }}
