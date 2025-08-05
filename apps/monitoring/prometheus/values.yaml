@@ -289,7 +289,7 @@ serverFiles:
               [__meta_kubernetes_service_label_app_kubernetes_io_name]
             action: keep
             regex: seldon-envoy
-  alerting_rules.yml: |
+  alerting_rules.yml:
     groups:
     - name: af-pod-monitor
       rules:
