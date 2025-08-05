@@ -2,6 +2,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
   name: af-home-util-alert
+  namespace: cms
   labels:
     prometheus: kube-prometheus
     role: alert-rules
