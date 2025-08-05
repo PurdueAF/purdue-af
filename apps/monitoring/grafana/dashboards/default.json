@@ -70,7 +70,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -241,7 +243,9 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -393,7 +397,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -474,7 +480,9 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -640,7 +648,9 @@
         "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -741,7 +751,9 @@
         "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -816,7 +828,9 @@
         "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -911,7 +925,7 @@
       "id": 15,
       "options": {
         "calculate": false,
-        "cellGap": 0,
+        "cellGap": 1,
         "cellValues": {
           "unit": "ms"
         },
@@ -996,7 +1010,10 @@
       "id": 16,
       "options": {
         "calculate": false,
-        "cellGap": 0,
+        "cellGap": 1,
+        "cellValues": {
+          "unit": "ms"
+        },
         "color": {
           "exponent": 0.5,
           "fill": "dark-orange",
@@ -1078,7 +1095,10 @@
       "id": 17,
       "options": {
         "calculate": false,
-        "cellGap": 0,
+        "cellGap": 1,
+        "cellValues": {
+          "unit": "ms"
+        },
         "color": {
           "exponent": 0.5,
           "fill": "dark-orange",
@@ -1160,7 +1180,10 @@
       "id": 18,
       "options": {
         "calculate": false,
-        "cellGap": 0,
+        "cellGap": 1,
+        "cellValues": {
+          "unit": "ms"
+        },
         "color": {
           "exponent": 0.5,
           "fill": "dark-red",
@@ -1278,7 +1301,9 @@
         "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -1484,7 +1509,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -1591,7 +1618,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.0.1",
+      "pluginVersion": "12.1.0",
       "targets": [
         {
           "datasource": {
@@ -1681,7 +1708,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.0.1",
+      "pluginVersion": "12.1.0",
       "targets": [
         {
           "datasource": {
@@ -1771,7 +1798,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.0.1",
+      "pluginVersion": "12.1.0",
       "targets": [
         {
           "datasource": {
@@ -2964,5 +2991,5 @@
   "timezone": "browser",
   "title": "Purdue Analysis Facility Dashboard",
   "uid": "purdue-af-dashboard",
-  "version": 18
+  "version": 27
 }
