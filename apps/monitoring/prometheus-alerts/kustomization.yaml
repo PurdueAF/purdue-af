@@ -1,8 +1,9 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-resources:
-  - helmrelease.yaml
-  - home-util-alert.yaml
+resources: []
+
+  # - helmrelease.yaml
+  # - home-util-alert.yaml
 configMapGenerator:
   - name: prometheus-alerts-config
     namespace: cms

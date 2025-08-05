@@ -290,8 +290,34 @@ serverFiles:
             action: keep
             regex: seldon-envoy
 
+ruleFiles:
+  af-home-dir-util.rules: |
+    groups:
+    - name: af-pod-monitor
+      rules:
+      - alert: AFHomeDirUtilHigh
+        expr: af_home_dir_util{namespace=~"cms",job="af-pod-monitor",username!=""} > 0.7
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: High home-dir usage for {{ $labels.username }}
+          description: |
+            User {{ $labels.username }} is at {{ printf "%.2f" $value }} utilization.
+
 alertmanager:
-  enabled: false
+  enabled: true
+  ingress:
+    enabled: true
+    className: public
+    hosts:
+      - host: prometheus-af-alerts.geddes.rcac.purdue.edu
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - hosts:
+          - prometheus-af-alerts.geddes.rcac.purdue.edu
 pushgateway:
   enabled: false
 kube-state-metrics:
