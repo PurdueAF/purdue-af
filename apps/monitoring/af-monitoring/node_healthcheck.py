@@ -9,7 +9,9 @@ try:
         "af_node_mount_valid", "Storage mount health", ["mount_name", "mount_path"]
     )
     mount_ping_ms = Gauge(
-        "af_node_mount_ping_ms", "Storage mount ping time in milliseconds", ["mount_name", "mount_path"]
+        "af_node_mount_ping_ms",
+        "Storage mount ping time in milliseconds",
+        ["mount_name", "mount_path"],
     )
 except Exception as e:
     print(f"Error defining Gauge metric: {e}")
@@ -39,7 +41,7 @@ mounts = {
 def check_if_directory_exists(path_tuple):
     filename, expected_checksum = path_tuple
     start_time = time.time()
-    
+
     try:
         # Run md5sum with a timeout of 3 seconds
         proc = subprocess.Popen(
