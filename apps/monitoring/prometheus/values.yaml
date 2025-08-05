@@ -291,17 +291,17 @@ serverFiles:
             regex: seldon-envoy
   alerting_rules.yml:
     groups:
-    - name: af-pod-monitor
-      rules:
-      - alert: AFHomeDirUtilHigh
-        expr: af_home_dir_util{namespace=~"cms",job="af-pod-monitor",username!=""} > 0.7
-        for: 1m
-        labels:
-          severity: warning
-        annotations:
-          summary: High home-dir usage for {{ $labels.username }}
-          description: |
-            User {{ $labels.username }} is at {{ printf "%.2f" $value }} utilization.
+      - name: af-pod-monitor
+        rules:
+          - alert: AFHomeDirUtilHigh
+            expr: af_home_dir_util{namespace=~"cms",job="af-pod-monitor",username!=""} > 0.7
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: High home-dir usage for {{ $labels.username }}
+              description: |
+                User {{ $labels.username }} is at {{ printf "%.2f" $value }} utilization.
 
 alertmanager:
   enabled: true
