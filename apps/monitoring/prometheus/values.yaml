@@ -289,6 +289,10 @@ serverFiles:
               [__meta_kubernetes_service_label_app_kubernetes_io_name]
             action: keep
             regex: seldon-envoy
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: ['prometheus-alertmanager.cms.geddes.rcac.purdue.edu:9093']
   alerting_rules.yml:
     groups:
       - name: af-pod-monitor
