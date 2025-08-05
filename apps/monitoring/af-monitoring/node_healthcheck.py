@@ -8,6 +8,9 @@ try:
     mount_valid = Gauge(
         "af_node_mount_valid", "Storage mount health", ["mount_name", "mount_path"]
     )
+    mount_ping_ms = Gauge(
+        "af_node_mount_ping_ms", "Storage mount ping time in milliseconds", ["mount_name", "mount_path"]
+    )
 except Exception as e:
     print(f"Error defining Gauge metric: {e}")
 
@@ -35,6 +38,8 @@ mounts = {
 
 def check_if_directory_exists(path_tuple):
     filename, expected_checksum = path_tuple
+    start_time = time.time()
+    
     try:
         # Run md5sum with a timeout of 3 seconds
         proc = subprocess.Popen(
@@ -49,38 +54,43 @@ def check_if_directory_exists(path_tuple):
             proc.kill()
             stdout, stderr = proc.communicate()
             print(f"Timeout occurred while checking file {filename}")
-            return False
+            return False, 3000  # Return 3000ms for timeout
+
+        # Calculate elapsed time in milliseconds
+        elapsed_ms = (time.time() - start_time) * 1000
 
         # If md5sum returned nonzero, it's an error
         if proc.returncode != 0:
             print(f"md5sum failed for {filename}. Stderr: {stderr.strip()}")
-            return False
+            return False, elapsed_ms
 
         # Parse the checksum from md5sum output
         parts = stdout.strip().split()
         if len(parts) < 1:
             print(f"Could not parse md5sum output for {filename}: {stdout}")
-            return False
+            return False, elapsed_ms
 
         checksum = parts[0]
         if checksum != expected_checksum:
             print(
                 f"Wrong checksum for {filename}. Expected: {expected_checksum}, Got: {checksum}"
             )
-            return False
+            return False, elapsed_ms
 
-        return True
+        return True, elapsed_ms
     except Exception as e:
+        elapsed_ms = (time.time() - start_time) * 1000
         print(f"Error checking file {filename}: {e}")
-        return False
+        return False, elapsed_ms
 
 
 def update_metrics():
     for m_name, m_path in mounts.items():
-        result = check_if_directory_exists(m_path)
+        result, ping_time = check_if_directory_exists(m_path)
         mount_valid.labels(mount_name=m_name, mount_path=m_path[0]).set(
             1 if result else 0
         )
+        mount_ping_ms.labels(mount_name=m_name, mount_path=m_path[0]).set(ping_time)
 
 
 if __name__ == "__main__":
