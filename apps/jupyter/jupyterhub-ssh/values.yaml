@@ -1,7 +1,7 @@
 # Required configuration
 # hubUrl should be a URL like http://hub:8081 or https://jupyter.example.org.
 # Only HTTP(S) traffic will be sent to this URL.
-hubUrl: https://hub:8081
+hubUrl: https://cms.geddes.rcac.purdue.edu
 
 # hostKey is a private SSH key used to encrypt outgoing communication from the
 # jupyterhub-ssh and jupyterhub-sftp pods. If this value is blank, whatever was
