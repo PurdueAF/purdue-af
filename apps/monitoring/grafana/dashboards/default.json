@@ -900,14 +900,24 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red"
-              },
-              {
                 "color": "green",
                 "value": 1
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "orange",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 1000
               }
             ]
-          }
+          },
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -940,7 +950,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (node) (af_node_mount_valid{mount_name=\"/depot/\"})",
+          "expr": "sum by (node) (af_node_mount_ping_ms{mount_name=\"/depot/\"})",
           "interval": "10m",
           "legendFormat": "{{ node }}",
           "refId": "A"
@@ -975,14 +985,24 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red"
-              },
-              {
                 "color": "green",
                 "value": 1
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "orange",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 1000
               }
             ]
-          }
+          },
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -1015,7 +1035,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (node) (af_node_mount_valid{mount_name=\"/work/\"})",
+          "expr": "sum by (node) (af_node_mount_ping_ms{mount_name=\"/work/\"})",
           "interval": "10m",
           "legendFormat": "{{ node }}",
           "refId": "A"
@@ -1050,14 +1070,24 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red"
-              },
-              {
                 "color": "green",
                 "value": 1
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "orange",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 1000
               }
             ]
-          }
+          },
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -1090,7 +1120,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (node) (af_node_mount_valid{mount_name=\"eos\"})",
+          "expr": "sum by (node) (af_node_mount_ping_ms{mount_name=\"eos\"})",
           "interval": "10m",
           "legendFormat": "{{ node }}",
           "refId": "A"
@@ -1125,14 +1155,24 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red"
-              },
-              {
                 "color": "green",
                 "value": 1
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "orange",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 1000
               }
             ]
-          }
+          },
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -1165,7 +1205,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (node) (af_node_mount_valid{mount_name=\"cvmfs\"})",
+          "expr": "sum by (node) (af_node_mount_ping_ms{mount_name=\"cvmfs\"})",
           "interval": "10m",
           "legendFormat": "{{ node }}",
           "refId": "A"
