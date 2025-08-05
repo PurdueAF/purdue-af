@@ -292,7 +292,8 @@ serverFiles:
     alerting:
       alertmanagers:
         - static_configs:
-            - targets: ['prometheus-alertmanager.cms.geddes.rcac.purdue.edu:9093']
+            - targets:
+                ["prometheus-alertmanager.cms.geddes.rcac.purdue.edu:9093"]
   alerting_rules.yml:
     groups:
       - name: af-pod-monitor
