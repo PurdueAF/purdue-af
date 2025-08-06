@@ -180,7 +180,6 @@ RUN mkdir -p /home/${NB_USER}/.globus /home/${NB_USER}/.rnd && \
 
 ENV X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
 
-# Install JupyterLab extensions
 RUN pip install --no-cache-dir --upgrade \
     jupyterlab-git==0.51.2 \
     jupyter-resource-usage==1.1.1 \
@@ -195,13 +194,8 @@ RUN pip install --no-cache-dir --upgrade \
     git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git \
     jupyter-ai[all]==2.31.6
 
-RUN cd /opt/conda/lib/python3.10/site-packages/jupyterlab_prometheus_alerts-*/ && \
-    npm install && \
-    npm run build:all && \
-    jupyter labextension install .
-
-# Enable the server extension
-RUN jupyter server extension enable prometheus_alerts
+RUN jupyter server extension list | grep prometheus_alerts && \
+    jupyter labextension list | grep jupyterlab-prometheus-alerts
 
 COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.12/site-packages/genaistudio
 RUN pip install --no-cache-dir -e /opt/conda/lib/python3.12/site-packages/genaistudio
