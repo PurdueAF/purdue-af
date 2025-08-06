@@ -195,7 +195,7 @@ RUN pip install --no-cache-dir --upgrade \
 
 # Install python-json-logger with a specific version that works with jupyter_events
 RUN pip install --no-cache-dir --target=/opt/conda/lib/python3.10/site-packages \
-    python-json-logger==3.3.0
+    python-json-logger==3.3.0 --upgrade
 
 # Install the extension
 RUN pip install --no-cache-dir --target=/opt/conda/lib/python3.10/site-packages \
