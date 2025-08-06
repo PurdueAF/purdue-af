@@ -78,10 +78,9 @@ server:
       prometheus.io/scrape: "true"
       prometheus.io/port: "9090"
 
-  alerting:
-    alertmanagers:
-      - host: prometheus-alertmanager.cms.svc.cluster.local
-        port: 9093
+  alertmanagers:
+    - host: prometheus-alertmanager.cms.svc.cluster.local
+      port: 9093
 
   retention: 30d
 
