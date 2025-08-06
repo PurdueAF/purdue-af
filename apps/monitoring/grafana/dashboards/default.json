@@ -437,7 +437,7 @@
         {
           "targetBlank": true,
           "title": "Alert Details",
-          "url": "https://cms.geddes.rcac.purdue.edu/grafana/d/e0dac63c-833a-43a6-ada3-1dccca238a63/alerts?orgId=1&from=now-6h&to=now&timezone=browser"
+          "url": "https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-alerts?orgId=1&from=now-6h&to=now&timezone=browser"
         }
       ],
       "options": {
