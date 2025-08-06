@@ -193,14 +193,36 @@ RUN pip install --no-cache-dir --upgrade \
     dask-gateway==2025.4.0 \
     jupyter-ai[all]==2.31.6
 
+# Install python-json-logger 3.3.0 specifically
 RUN pip install --no-cache-dir --target=/opt/conda/lib/python3.10/site-packages \
     python-json-logger==3.3.0
 
+# Install the extension
 RUN pip install --no-cache-dir --target=/opt/conda/lib/python3.10/site-packages \
     git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@e498889c9493b03468e246c1a14a160b2b76d40b
 
-RUN /opt/conda/bin/jupyter server extension enable prometheus_alerts || echo "Extension enablement failed, will be handled at runtime"
+# Debug: Check which Python and Jupyter executables are being used
+RUN echo "=== Python Debug Info ===" && \
+    echo "which python: $(which python)" && \
+    echo "which jupyter: $(which jupyter)" && \
+    echo "sys.executable: $(/opt/conda/bin/python -c 'import sys; print(sys.executable)')" && \
+    echo "jupyter --version: $(/opt/conda/bin/jupyter --version)" && \
+    echo "jupyter server --version: $(/opt/conda/bin/jupyter server --version)" && \
+    echo "=== Module Locations ===" && \
+    /opt/conda/bin/python -c "import prometheus_alerts; print('prometheus_alerts location:', prometheus_alerts.__file__)" && \
+    /opt/conda/bin/python -c "import pythonjsonlogger; print('pythonjsonlogger location:', pythonjsonlogger.__file__)" && \
+    echo "=== Python Path ===" && \
+    /opt/conda/bin/python -c "import sys; print('Python path:'); [print(p) for p in sys.path]"
 
+# Try to enable the extension with explicit Python path
+RUN PYTHONPATH=/opt/conda/lib/python3.10/site-packages /opt/conda/bin/jupyter server extension enable prometheus_alerts || echo "Extension enablement failed, will be handled at runtime"
+
+# Alternative: Try enabling with environment variable
+RUN export PYTHONPATH=/opt/conda/lib/python3.10/site-packages && \
+    /opt/conda/bin/jupyter server extension enable prometheus_alerts || echo "Extension enablement failed, will be handled at runtime"
+
+# Final debug: Check if extension is actually enabled
+RUN /opt/conda/bin/jupyter server extension list | grep prometheus_alerts || echo "Extension not found in list"
 
 COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio
 RUN pip install --no-cache-dir -e /opt/conda/lib/python3.10/site-packages/genaistudio
