@@ -79,8 +79,17 @@ server:
       prometheus.io/port: "9090"
 
   alertmanagers:
-    - host: prometheus-alertmanager.cms.svc.cluster.local
-      port: 9093
+    - ingress:
+        enabled: true
+        className: public
+        hosts:
+          - host: prometheus-af-alerts.geddes.rcac.purdue.edu
+            paths:
+              - path: /
+                pathType: Prefix
+        tls:
+          - hosts:
+              - prometheus-af-alerts.geddes.rcac.purdue.edu
 
   retention: 30d
 
