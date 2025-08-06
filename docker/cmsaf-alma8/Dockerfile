@@ -193,23 +193,23 @@ RUN pip install --no-cache-dir --upgrade \
     dask-gateway==2025.4.0 \
     jupyter-ai[all]==2.31.6
 
+# Install python-json-logger with a specific version that works with jupyter_events
 RUN pip install --no-cache-dir --target=/opt/conda/lib/python3.10/site-packages \
-    python-json-logger \
+    python-json-logger==2.0.7
+
+# Install the extension
+RUN pip install --no-cache-dir --target=/opt/conda/lib/python3.10/site-packages \
     git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@0ca8ae1d98cbb51cbe22e812b129eea236eb66a9
 
-# Debug: Check if the extension is installed
-RUN /opt/conda/bin/python -c "import prometheus_alerts; print('prometheus_alerts location:', prometheus_alerts.__file__)" || echo "prometheus_alerts not found"
+# Debug: Check pythonjsonlogger structure
+RUN /opt/conda/bin/python -c "import pythonjsonlogger; print('pythonjsonlogger contents:'); import os; print(os.listdir(os.path.dirname(pythonjsonlogger.__file__)))"
 
-# Debug: Check what's in the site-packages directory
-RUN ls -la /opt/conda/lib/python3.10/site-packages/ | grep -E "(prometheus|pythonjsonlogger)"
-
-# Debug: Check Python path and try to import
-RUN /opt/conda/bin/python -c "import sys; print('Python path:'); [print(p) for p in sys.path]" && \
-    /opt/conda/bin/python -c "import pythonjsonlogger; print('python-json-logger location:', pythonjsonlogger.__file__)" && \
-    /opt/conda/bin/python -c "import jupyter_events; print('jupyter-events location:', jupyter_events.__file__)"
-
-# Try to enable the extension
 RUN /opt/conda/bin/jupyter server extension enable prometheus_alerts || echo "Extension enablement failed, will be handled at runtime"
+
+# Debug: Check jupyter_events version and requirements
+RUN /opt/conda/bin/python -c "import jupyter_events; print('jupyter_events version:', jupyter_events.__version__)" && \
+    /opt/conda/bin/python -c "import jupyter_events.logger; print('logger module contents:'); import os; print(os.listdir(os.path.dirname(jupyter_events.logger.__file__)))"
+
 COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio
 RUN pip install --no-cache-dir -e /opt/conda/lib/python3.10/site-packages/genaistudio
 
