@@ -80,8 +80,8 @@ server:
 
   alerting:
     alertmanagers:
-      - static_configs:
-          - targets: ["prometheus-alertmanager.cms.geddes.rcac.purdue.edu:9093"]
+      - host: prometheus-alertmanager.cms.svc.cluster.local
+        port: 9093
 
   retention: 30d
 
