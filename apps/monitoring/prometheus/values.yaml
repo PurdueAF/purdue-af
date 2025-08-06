@@ -81,7 +81,7 @@ server:
   alerting:
     alertmanagers:
       - static_configs:
-          - targets: ['prometheus-alertmanager.cms.geddes.rcac.purdue.edu:9093']
+          - targets: ["prometheus-alertmanager.cms.geddes.rcac.purdue.edu:9093"]
 
   retention: 30d
 
