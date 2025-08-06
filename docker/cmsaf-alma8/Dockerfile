@@ -203,24 +203,27 @@ RUN pip install --no-cache-dir \
 # Test the import
 RUN python -c "import prometheus_alerts.server_extension; print('✅ Extension imports successfully')"
 
-# Debug: Check what Python environment jupyter uses for validation
-RUN echo "=== Jupyter Validation Debug ===" && \
-    jupyter --version && \
-    jupyter server --version && \
-    python -c "import sys; print('Python executable:', sys.executable)" && \
-    python -c "import sys; print('Python path:'); [print(p) for p in sys.path]" && \
-    python -c "import prometheus_alerts; print('prometheus_alerts location:', prometheus_alerts.__file__)" && \
-    python -c "import pkg_resources; print('prometheus_alerts package location:', pkg_resources.get_distribution('jupyterlab-prometheus-alerts').location)"
+# Debug: Try to understand the validation process
+RUN echo "=== Validation Process Debug ===" && \
+    python -c "import jupyter_server.extension.manager; print('Extension manager imported')" && \
+    python -c "from jupyter_server.extension.manager import ExtensionManager; print('ExtensionManager imported')" && \
+    python -c "import importlib; print('importlib imported')" && \
+    python -c "import importlib.util; print('importlib.util imported')" && \
+    python -c "spec = importlib.util.find_spec('prometheus_alerts'); print('prometheus_alerts spec:', spec)" && \
+    python -c "import importlib.util; spec = importlib.util.find_spec('prometheus_alerts'); print('prometheus_alerts origin:', spec.origin if spec else 'None')"
 
-# Try to enable the extension with more verbose output
-RUN jupyter server extension enable prometheus_alerts --debug || echo "Extension enablement failed"
+# Try to enable the extension with force flag (if available)
+RUN jupyter server extension enable prometheus_alerts --force || echo "Force enable failed"
 
-# Check if extension appears in the list even if validation failed
+# Alternative: Try enabling without validation
+RUN echo 'c.ServerApp.jpserver_extensions = {"prometheus_alerts": True}' > /opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.py && \
+    echo "✅ Manually added extension to config"
+
+# Verify the config was written
+RUN cat /opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.py
+
+# Check if extension appears in the list
 RUN jupyter server extension list | grep -A 5 -B 5 prometheus_alerts || echo "Extension not found in list"
-
-# Alternative: Try enabling with explicit Python path
-RUN PYTHONPATH=/opt/conda/lib/python3.10/site-packages jupyter server extension enable prometheus_alerts || echo "Extension enablement with PYTHONPATH failed"
-
 
 
 COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio
