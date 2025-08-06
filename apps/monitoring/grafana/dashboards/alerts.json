@@ -1,145 +1,145 @@
 {
-    "annotations": {
-      "list": [
-        {
-          "builtIn": 1,
-          "datasource": {
-            "type": "grafana",
-            "uid": "-- Grafana --"
-          },
-          "enable": true,
-          "hide": true,
-          "iconColor": "rgba(0, 211, 255, 1)",
-          "name": "Annotations & Alerts",
-          "type": "dashboard"
-        }
-      ]
-    },
-    "editable": true,
-    "fiscalYearStartMonth": 0,
-    "graphTooltip": 0,
-    "id": 7,
-    "links": [],
-    "panels": [
+  "annotations": {
+    "list": [
       {
-        "fieldConfig": {
-          "defaults": {},
-          "overrides": []
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
         },
-        "gridPos": {
-          "h": 21,
-          "w": 8,
-          "x": 0,
-          "y": 0
-        },
-        "id": 1,
-        "options": {
-          "alertInstanceLabelFilter": "namespace=\"cms\", severity!~\"^(warning|error|critical)$\"",
-          "alertName": "",
-          "dashboardAlerts": false,
-          "groupBy": [],
-          "groupMode": "default",
-          "maxItems": 20,
-          "showInactiveAlerts": false,
-          "sortOrder": 3,
-          "stateFilter": {
-            "error": true,
-            "firing": true,
-            "noData": false,
-            "normal": false,
-            "pending": true,
-            "recovering": true
-          },
-          "viewMode": "list"
-        },
-        "pluginVersion": "12.1.0",
-        "title": "Info",
-        "type": "alertlist"
-      },
-      {
-        "fieldConfig": {
-          "defaults": {},
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 21,
-          "w": 8,
-          "x": 8,
-          "y": 0
-        },
-        "id": 2,
-        "options": {
-          "alertInstanceLabelFilter": "namespace=\"cms\", severity=\"warning\"",
-          "alertName": "",
-          "dashboardAlerts": false,
-          "groupBy": [],
-          "groupMode": "default",
-          "maxItems": 20,
-          "showInactiveAlerts": false,
-          "sortOrder": 3,
-          "stateFilter": {
-            "error": true,
-            "firing": true,
-            "noData": false,
-            "normal": false,
-            "pending": true,
-            "recovering": true
-          },
-          "viewMode": "list"
-        },
-        "pluginVersion": "12.1.0",
-        "title": "Warnings",
-        "type": "alertlist"
-      },
-      {
-        "fieldConfig": {
-          "defaults": {},
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 21,
-          "w": 8,
-          "x": 16,
-          "y": 0
-        },
-        "id": 3,
-        "options": {
-          "alertInstanceLabelFilter": "namespace=\"cms\", severity=~\"^(error|critical)$\"",
-          "alertName": "",
-          "dashboardAlerts": false,
-          "groupBy": [],
-          "groupMode": "default",
-          "maxItems": 20,
-          "showInactiveAlerts": false,
-          "sortOrder": 3,
-          "stateFilter": {
-            "error": true,
-            "firing": true,
-            "noData": false,
-            "normal": false,
-            "pending": true,
-            "recovering": true
-          },
-          "viewMode": "list"
-        },
-        "pluginVersion": "12.1.0",
-        "title": "Errors",
-        "type": "alertlist"
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
       }
-    ],
-    "preload": false,
-    "schemaVersion": 41,
-    "tags": [],
-    "templating": {
-      "list": []
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 7,
+  "links": [],
+  "panels": [
+    {
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 21,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "alertInstanceLabelFilter": "namespace=\"cms\", severity!~\"^(warning|error|critical)$\"",
+        "alertName": "",
+        "dashboardAlerts": false,
+        "groupBy": [],
+        "groupMode": "default",
+        "maxItems": 20,
+        "showInactiveAlerts": false,
+        "sortOrder": 3,
+        "stateFilter": {
+          "error": true,
+          "firing": true,
+          "noData": false,
+          "normal": false,
+          "pending": true,
+          "recovering": true
+        },
+        "viewMode": "list"
+      },
+      "pluginVersion": "12.1.0",
+      "title": "Info",
+      "type": "alertlist"
     },
-    "time": {
-      "from": "now-6h",
-      "to": "now"
+    {
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 21,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "alertInstanceLabelFilter": "namespace=\"cms\", severity=\"warning\"",
+        "alertName": "",
+        "dashboardAlerts": false,
+        "groupBy": [],
+        "groupMode": "default",
+        "maxItems": 20,
+        "showInactiveAlerts": false,
+        "sortOrder": 3,
+        "stateFilter": {
+          "error": true,
+          "firing": true,
+          "noData": false,
+          "normal": false,
+          "pending": true,
+          "recovering": true
+        },
+        "viewMode": "list"
+      },
+      "pluginVersion": "12.1.0",
+      "title": "Warnings",
+      "type": "alertlist"
     },
-    "timepicker": {},
-    "timezone": "browser",
-    "title": "Alerts",
-    "uid": "e0dac63c-833a-43a6-ada3-1dccca238a63",
-    "version": 9
-  }
+    {
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 21,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "alertInstanceLabelFilter": "namespace=\"cms\", severity=~\"^(error|critical)$\"",
+        "alertName": "",
+        "dashboardAlerts": false,
+        "groupBy": [],
+        "groupMode": "default",
+        "maxItems": 20,
+        "showInactiveAlerts": false,
+        "sortOrder": 3,
+        "stateFilter": {
+          "error": true,
+          "firing": true,
+          "noData": false,
+          "normal": false,
+          "pending": true,
+          "recovering": true
+        },
+        "viewMode": "list"
+      },
+      "pluginVersion": "12.1.0",
+      "title": "Errors",
+      "type": "alertlist"
+    }
+  ],
+  "preload": false,
+  "schemaVersion": 41,
+  "tags": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Alerts",
+  "uid": "e0dac63c-833a-43a6-ada3-1dccca238a63",
+  "version": 9
+}
