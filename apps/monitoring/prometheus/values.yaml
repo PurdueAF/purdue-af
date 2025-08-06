@@ -290,6 +290,10 @@ serverFiles:
           - source_labels:
               [__meta_kubernetes_service_label_app_kubernetes_io_component]
             target_label: "component"
+          - source_labels:
+              [__meta_kubernetes_service_label_app_kubernetes_io_name]
+            action: keep
+            regex: seldon-envoy
   alerting_rules.yml:
     groups:
       - name: af-pod-monitor
@@ -300,9 +304,9 @@ serverFiles:
             labels:
               severity: warning
             annotations:
-              summary: High /home/ usage for {{ $labels.username }}
+              summary: High home-dir usage for {{ $labels.username }}
               description: |
-                User {{ $labels.username }} is at {{ printf "%.2f" (mul $value 100) }}% /home/ utilization.
+                User {{ $labels.username }} is at {{ printf "%.2f" $value }} utilization.
 
 alertmanager:
   enabled: true
