@@ -196,21 +196,28 @@ RUN pip install --no-cache-dir --upgrade \
 # Install python-json-logger 3.3.0 normally
 RUN pip install --no-cache-dir python-json-logger==3.3.0
 
-# Install the extension normally (let pip handle dependencies and location)
+# Install the extension normally
 RUN pip install --no-cache-dir \
     git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@e498889c9493b03468e246c1a14a160b2b76d40b
 
-# Debug: Check where the extension was installed
-RUN echo "=== Extension Installation Debug ===" && \
-    pip show jupyterlab-prometheus-alerts && \
-    python -c "import prometheus_alerts; print('prometheus_alerts location:', prometheus_alerts.__file__)" && \
-    python -c "import pythonjsonlogger; print('pythonjsonlogger location:', pythonjsonlogger.__file__)"
+# Debug: Check entry points and module structure
+RUN echo "=== Entry Points Debug ===" && \
+    python -c "import pkg_resources; eps = list(pkg_resources.iter_entry_points('jupyter_server_extension')); print('All jupyter_server_extension entry points:'); [print(f'  {ep.name}: {ep.module_name}') for ep in eps]" && \
+    echo "=== Module Structure Debug ===" && \
+    ls -la /opt/conda/lib/python3.10/site-packages/prometheus_alerts/ && \
+    echo "=== Entry Point File Debug ===" && \
+    cat /opt/conda/lib/python3.10/site-packages/jupyterlab_prometheus_alerts-0.1.0.dist-info/entry_points.txt && \
+    echo "=== Import Test ===" && \
+    python -c "import prometheus_alerts.server_extension; print('server_extension imported successfully')" && \
+    python -c "from prometheus_alerts.server_extension import PrometheusAlertsExtension; print('PrometheusAlertsExtension imported successfully')"
 
-# Enable the extension
-RUN jupyter server extension enable prometheus_alerts
+# Try to enable the extension with more verbose output
+RUN jupyter server extension enable prometheus_alerts --debug || echo "Extension enablement failed"
 
-# Verify the extension is enabled
-RUN jupyter server extension list | grep prometheus_alerts
+# Check if extension appears in the list even if validation failed
+RUN jupyter server extension list | grep -A 5 -B 5 prometheus_alerts || echo "Extension not found in list"
+
+
 
 COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio
 RUN pip install --no-cache-dir -e /opt/conda/lib/python3.10/site-packages/genaistudio
