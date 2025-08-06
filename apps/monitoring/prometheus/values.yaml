@@ -295,7 +295,7 @@ serverFiles:
       - name: af-pod-monitor
         rules:
           - alert: AFHomeDirUtilHigh
-            expr: af_home_dir_util{namespace=~"cms",job="af-pod-monitor",username!=""} > 0.7
+            expr: af_home_dir_util{namespace=~"cms",job="af-pod-monitor",username!=""} > 0.95
             for: 1m
             labels:
               severity: warning
