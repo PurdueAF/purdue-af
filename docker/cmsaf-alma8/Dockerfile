@@ -195,6 +195,8 @@ RUN pip install --no-cache-dir --upgrade \
     git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git \
     jupyter-ai[all]==2.31.6
 
+RUN jupyter server extension enable prometheus_alerts
+
 COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.12/site-packages/genaistudio
 RUN pip install --no-cache-dir -e /opt/conda/lib/python3.12/site-packages/genaistudio
 
