@@ -200,25 +200,6 @@ RUN pip install --no-cache-dir python-json-logger==3.3.0
 RUN pip install --no-cache-dir \
     git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@fd61c25b2f00df6828f4d63e70890f19e8a0623b
 
-# Test the import
-RUN python -c "import prometheus_alerts.server_extension; print('✅ Extension imports successfully')"
-
-# Create proper JSON config file (not Python)
-RUN echo '{
-  "ServerApp": {
-    "jpserver_extensions": {
-      "prometheus_alerts": true
-    }
-  }
-}' > /opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.json && \
-    echo "✅ Created JSON config file"
-
-# Verify the config
-RUN cat /opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.json
-
-# Check if extension appears in the list
-RUN jupyter server extension list | grep prometheus_alerts || echo "Extension not found in list"
-
 
 
 COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio

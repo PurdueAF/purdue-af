@@ -71,3 +71,12 @@ echo "{
     \"caption\": \"Open grafana panel\",
     \"rank\": 0
 }" >$JIL_PATH/plugin.jupyterlab-settings
+
+# Configure prometheus alerts extension
+echo '{
+  "ServerApp": {
+    "jpserver_extensions": {
+      "prometheus_alerts": true
+    }
+  }
+}' > /opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.json 
