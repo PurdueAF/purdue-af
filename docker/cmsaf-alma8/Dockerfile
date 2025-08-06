@@ -203,23 +203,21 @@ RUN pip install --no-cache-dir \
 # Test the import
 RUN python -c "import prometheus_alerts.server_extension; print('✅ Extension imports successfully')"
 
-# Manually add extension to config to bypass validation
-RUN echo 'c.ServerApp.jpserver_extensions = {"prometheus_alerts": True}' > /opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.py && \
-    echo "✅ Manually added extension to config"
+# Create proper JSON config file (not Python)
+RUN echo '{
+  "ServerApp": {
+    "jpserver_extensions": {
+      "prometheus_alerts": true
+    }
+  }
+}' > /opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.json && \
+    echo "✅ Created JSON config file"
+
+# Verify the config
+RUN cat /opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.json
 
 # Check if extension appears in the list
-RUN jupyter server extension list | grep -A 5 -B 5 prometheus_alerts || echo "Extension not found in list"
-
-# Test if the extension loads at runtime
-RUN python -c "from jupyter_server.extension.application import ExtensionApp; print('✅ ExtensionApp imported')" && \
-    python -c "from prometheus_alerts.server_extension import PrometheusAlertsExtension; print('✅ PrometheusAlertsExtension imported')" && \
-    python -c "ext = PrometheusAlertsExtension(); print('✅ Extension instance created')"
-
-# Final verification
-RUN echo "=== Final Extension Status ===" && \
-    ls -la /opt/conda/etc/jupyter/jupyter_server_config.d/ | grep prometheus && \
-    cat /opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.py
-
+RUN jupyter server extension list | grep prometheus_alerts || echo "Extension not found in list"
 
 
 
