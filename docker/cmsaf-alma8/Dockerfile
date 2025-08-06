@@ -191,9 +191,11 @@ RUN pip install --no-cache-dir --upgrade \
     jupyterlab-topbar-text==1.1.0 \
     jupyterlab-theme-toggler==1.1.0 \
     dask-gateway==2025.4.0 \
-    git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git \
     jupyter-ai[all]==2.31.6
 
+COPY . /tmp/jupyterlab-prometheus-alerts
+WORKDIR /tmp/jupyterlab-prometheus-alerts
+RUN pip install --no-cache-dir -e /opt/conda/lib/python3.10/site-packages/jupyterlab-prometheus-alerts
 RUN jupyter server extension enable prometheus_alerts || echo "Extension enablement failed, will be handled at runtime"
 
 COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.12/site-packages/genaistudio
