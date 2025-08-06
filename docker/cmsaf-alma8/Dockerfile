@@ -193,15 +193,13 @@ RUN pip install --no-cache-dir --upgrade \
     dask-gateway==2025.4.0 \
     jupyter-ai[all]==2.31.6
 
-# Install prometheus alerts extension with explicit target
-RUN pip install --no-cache-dir --target=/opt/conda/lib/python3.12/site-packages \
+RUN pip install --no-cache-dir --target=/opt/conda/lib/python3.10/site-packages \
     git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git
 
-# Enable the server extension (without verification)
 RUN jupyter server extension enable prometheus_alerts || echo "Extension enablement failed, will be handled at runtime"
 
-COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.12/site-packages/genaistudio
-RUN pip install --no-cache-dir -e /opt/conda/lib/python3.12/site-packages/genaistudio
+COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio
+RUN pip install --no-cache-dir -e /opt/conda/lib/python3.10/site-packages/genaistudio
 
 # Install Dask labextension
 RUN git clone https://github.com/kondratyevd/dask-labextension.git
