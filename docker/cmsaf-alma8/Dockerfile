@@ -196,26 +196,30 @@ RUN pip install --no-cache-dir --upgrade \
 # Install python-json-logger 3.3.0 normally
 RUN pip install --no-cache-dir python-json-logger==3.3.0
 
-# Install the extension normally
+# Install the extension with all fixes
 RUN pip install --no-cache-dir \
     git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@fd61c25b2f00df6828f4d63e70890f19e8a0623b
 
-# Debug: Check entry points and module structure
-RUN echo "=== Entry Points Debug ===" && \
-    python -c "import pkg_resources; eps = list(pkg_resources.iter_entry_points('jupyter_server_extension')); print('All jupyter_server_extension entry points:'); [print(f'  {ep.name}: {ep.module_name}') for ep in eps]" && \
-    echo "=== Module Structure Debug ===" && \
-    ls -la /opt/conda/lib/python3.10/site-packages/prometheus_alerts/ && \
-    echo "=== Entry Point File Debug ===" && \
-    cat /opt/conda/lib/python3.10/site-packages/jupyterlab_prometheus_alerts-0.1.0.dist-info/entry_points.txt && \
-    echo "=== Import Test ===" && \
-    python -c "import prometheus_alerts.server_extension; print('server_extension imported successfully')" && \
-    python -c "from prometheus_alerts.server_extension import PrometheusAlertsExtension; print('PrometheusAlertsExtension imported successfully')"
+# Test the import
+RUN python -c "import prometheus_alerts.server_extension; print('✅ Extension imports successfully')"
+
+# Debug: Check what Python environment jupyter uses for validation
+RUN echo "=== Jupyter Validation Debug ===" && \
+    jupyter --version && \
+    jupyter server --version && \
+    python -c "import sys; print('Python executable:', sys.executable)" && \
+    python -c "import sys; print('Python path:'); [print(p) for p in sys.path]" && \
+    python -c "import prometheus_alerts; print('prometheus_alerts location:', prometheus_alerts.__file__)" && \
+    python -c "import pkg_resources; print('prometheus_alerts package location:', pkg_resources.get_distribution('jupyterlab-prometheus-alerts').location)"
 
 # Try to enable the extension with more verbose output
 RUN jupyter server extension enable prometheus_alerts --debug || echo "Extension enablement failed"
 
 # Check if extension appears in the list even if validation failed
 RUN jupyter server extension list | grep -A 5 -B 5 prometheus_alerts || echo "Extension not found in list"
+
+# Alternative: Try enabling with explicit Python path
+RUN PYTHONPATH=/opt/conda/lib/python3.10/site-packages jupyter server extension enable prometheus_alerts || echo "Extension enablement with PYTHONPATH failed"
 
 
 
