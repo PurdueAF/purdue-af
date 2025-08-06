@@ -198,7 +198,7 @@ RUN pip install --no-cache-dir python-json-logger==3.3.0
 
 # Install the extension normally
 RUN pip install --no-cache-dir \
-    git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@61dc2b19edd001f73b81da7d107c35627e39309f
+    git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@fd61c25b2f00df6828f4d63e70890f19e8a0623b
 
 # Debug: Check entry points and module structure
 RUN echo "=== Entry Points Debug ===" && \
