@@ -193,22 +193,14 @@ RUN pip install --no-cache-dir --upgrade \
     dask-gateway==2025.4.0 \
     jupyter-ai[all]==2.31.6
 
-# Install python-json-logger with a specific version that works with jupyter_events
 RUN pip install --no-cache-dir --target=/opt/conda/lib/python3.10/site-packages \
-    python-json-logger==3.3.0 --upgrade
+    python-json-logger==3.3.0
 
-# Install the extension
 RUN pip install --no-cache-dir --target=/opt/conda/lib/python3.10/site-packages \
-    git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@84adbe78a1c78f4e2b9171a706c0146ffbe104b0
-
-# Debug: Check pythonjsonlogger structure
-RUN /opt/conda/bin/python -c "import pythonjsonlogger; print('pythonjsonlogger contents:'); import os; print(os.listdir(os.path.dirname(pythonjsonlogger.__file__)))"
+    git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@e498889c9493b03468e246c1a14a160b2b76d40b
 
 RUN /opt/conda/bin/jupyter server extension enable prometheus_alerts || echo "Extension enablement failed, will be handled at runtime"
 
-# Debug: Check jupyter_events version and requirements
-RUN /opt/conda/bin/python -c "import jupyter_events; print('jupyter_events version:', jupyter_events.__version__)" && \
-    /opt/conda/bin/python -c "import jupyter_events.logger; print('logger module contents:'); import os; print(os.listdir(os.path.dirname(jupyter_events.logger.__file__)))"
 
 COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio
 RUN pip install --no-cache-dir -e /opt/conda/lib/python3.10/site-packages/genaistudio
