@@ -355,7 +355,7 @@ alertmanager:
     receivers:
       - name: jupyterlab
         webhook_configs:
-          - url: "http://purdue-af-1.cms.svc.cluster.local:8888/lab/api/notifications"
+          - url: "http://10.5.39.209:8888/lab/api/notifications"
             send_resolved: false
   ingress:
     enabled: true
