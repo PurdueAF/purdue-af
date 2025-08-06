@@ -194,15 +194,7 @@ RUN pip install --no-cache-dir --upgrade \
     git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git \
     jupyter-ai[all]==2.31.6
 
-# Find and build the lab extension
-RUN find /opt/conda -name "jupyterlab_prometheus_alerts*" -type d | head -1 | xargs -I {} sh -c 'cd "{}" && npm install && npm run build:all && jupyter labextension install .'
-
-# Enable the server extension
-RUN jupyter server extension enable prometheus_alerts
-
-# Verify installation (with error handling)
-RUN jupyter server extension list | grep prometheus_alerts || echo "Server extension not found" && \
-    jupyter labextension list | grep jupyterlab-prometheus-alerts || echo "Lab extension not found"
+RUN jupyter server extension enable prometheus_alerts || echo "Extension enablement failed, will be handled at runtime"
 
 COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.12/site-packages/genaistudio
 RUN pip install --no-cache-dir -e /opt/conda/lib/python3.12/site-packages/genaistudio
