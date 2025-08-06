@@ -299,15 +299,39 @@ serverFiles:
       - name: af-pod-monitor
         rules:
           - alert: AFHomeDirUtilHigh
-            expr: af_home_dir_util{namespace=~"cms",job="af-pod-monitor",username!=""} > 0.95
+            expr: af_home_dir_util{namespace=~"cms",job="af-pod-monitor",username!=""} > 0.90
             for: 1m
             labels:
               severity: warning
             annotations:
-              summary: High home-dir usage for {{ $labels.username }}
+              summary: High /home/ utilization for {{ $labels.username }}
               description: |
-                User {{ $labels.username }} is at {{ printf "%.2f" $value }} utilization.
-
+                User {{ $labels.username }} is at {{ printf "%.2f" $value }} /home/ utilization.
+                If utilization reaches 100%, user's session will stop working!
+                Now is the time to contact the user and make sure they are aware of this.
+          - alert: AFHomeDirUtilVeryHigh
+            expr: af_home_dir_util{namespace=~"cms",job="af-pod-monitor",username!=""} > 0.95
+            for: 1m
+            labels:
+              severity: error
+            annotations:
+              summary: Very high /home/ utilization for {{ $labels.username }}
+              description: |
+                User {{ $labels.username }} is at {{ printf "%.2f" $value }} /home/ utilization.
+                If utilization reaches 100%, user's session will stop working!
+                User {{ $labels.username }} must delete files, or move to /work/ or /depot/ immediately.
+          - alert: AFHomeDirUtilCritical
+            expr: af_home_dir_util{namespace=~"cms",job="af-pod-monitor",username!=""} > 0.99
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: Critical /home/ utilization for {{ $labels.username }}
+              description: |
+                User {{ $labels.username }} is at {{ printf "%.2f" $value }} /home/ utilization.
+                By now they might not be able to use AF at all.
+                The immediate solution is to increase quota for this user (PVC size) by 1 GB,
+                and then ask them to clean up files immediately.
 alertmanager:
   enabled: true
   ingress:
