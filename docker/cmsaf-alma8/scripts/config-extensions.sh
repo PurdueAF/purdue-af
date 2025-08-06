@@ -79,4 +79,4 @@ echo '{
       "prometheus_alerts": true
     }
   }
-}' > /opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.json 
+}' >/opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.json
