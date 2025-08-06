@@ -194,7 +194,7 @@ RUN pip install --no-cache-dir --upgrade \
     jupyter-ai[all]==2.31.6
 
 RUN pip install --no-cache-dir --target=/opt/conda/lib/python3.10/site-packages \
-    git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git
+    git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@436266790bcf9e91445e40ccffd8545a9e35a851
 
 RUN jupyter server extension enable prometheus_alerts || echo "Extension enablement failed, will be handled at runtime"
 
