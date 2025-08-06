@@ -78,11 +78,10 @@ server:
       prometheus.io/scrape: "true"
       prometheus.io/port: "9090"
 
-
   alertmanagers:
-  - static_configs:
-    - targets:
-      - prometheus-alertmanager.cms.svc.cluster.local:9093
+    - static_configs:
+        - targets:
+            - prometheus-alertmanager.cms.svc.cluster.local:9093
 
   retention: 30d
 
