@@ -15,6 +15,7 @@ configMapGenerator:
       - dashboards/default.json
       - dashboards/single-user.json
       - dashboards/sonic.json
+      - dashboards/alerts.json
     options:
       disableNameSuffixHash: true
   - name: grafana-private-dashboards
