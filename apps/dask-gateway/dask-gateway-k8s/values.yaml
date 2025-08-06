@@ -186,9 +186,9 @@ gateway:
           desired_cores = options.worker_cores
           desired_memory = int(options.worker_memory * 2 ** 30)
           return {
-              "worker_cores": 1,
+              "worker_cores": desired_cores,
               "worker_cores_limit": desired_cores,
-              "worker_memory": int(desired_memory * 0.75),
+              "worker_memory": desired_memory,
               "worker_memory_limit": desired_memory,
               "environment": options.env,
               "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
