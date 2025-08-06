@@ -196,7 +196,7 @@ RUN pip install --no-cache-dir --upgrade \
 # Install python-json-logger 3.3.0 normally
 RUN pip install --no-cache-dir python-json-logger==3.3.0
 
-# Install the extension with all fixes
+# Install the extension with the new commit
 RUN pip install --no-cache-dir \
     git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@fd61c25b2f00df6828f4d63e70890f19e8a0623b
 
@@ -209,13 +209,13 @@ RUN echo "=== Validation Process Debug ===" && \
     python -c "from jupyter_server.extension.manager import ExtensionManager; print('ExtensionManager imported')" && \
     python -c "import importlib; print('importlib imported')" && \
     python -c "import importlib.util; print('importlib.util imported')" && \
-    python -c "spec = importlib.util.find_spec('prometheus_alerts'); print('prometheus_alerts spec:', spec)" && \
+    python -c "import importlib.util; spec = importlib.util.find_spec('prometheus_alerts'); print('prometheus_alerts spec:', spec)" && \
     python -c "import importlib.util; spec = importlib.util.find_spec('prometheus_alerts'); print('prometheus_alerts origin:', spec.origin if spec else 'None')"
 
 # Try to enable the extension with force flag (if available)
 RUN jupyter server extension enable prometheus_alerts --force || echo "Force enable failed"
 
-# Alternative: Try enabling without validation
+# Alternative: Try enabling without validation by manually adding to config
 RUN echo 'c.ServerApp.jpserver_extensions = {"prometheus_alerts": True}' > /opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.py && \
     echo "✅ Manually added extension to config"
 
@@ -224,6 +224,9 @@ RUN cat /opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.py
 
 # Check if extension appears in the list
 RUN jupyter server extension list | grep -A 5 -B 5 prometheus_alerts || echo "Extension not found in list"
+
+
+
 
 
 COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio
