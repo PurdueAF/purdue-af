@@ -1,75 +1,76 @@
 {
-  "annotations": {
-    "list": [
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": {
+            "type": "grafana",
+            "uid": "-- Grafana --"
+          },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 0,
+    "id": 7,
+    "links": [],
+    "panels": [
       {
-        "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
         },
-        "enable": true,
-        "hide": true,
-        "iconColor": "rgba(0, 211, 255, 1)",
-        "name": "Annotations & Alerts",
-        "type": "dashboard"
+        "gridPos": {
+          "h": 21,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "id": 1,
+        "options": {
+          "alertInstanceLabelFilter": "namespace=\"cms\"",
+          "alertName": "",
+          "dashboardAlerts": false,
+          "groupBy": [],
+          "groupMode": "default",
+          "maxItems": 20,
+          "showInactiveAlerts": false,
+          "sortOrder": 3,
+          "stateFilter": {
+            "error": true,
+            "firing": true,
+            "noData": false,
+            "normal": false,
+            "pending": true,
+            "recovering": true
+          },
+          "viewMode": "list"
+        },
+        "pluginVersion": "12.1.0",
+        "title": "Alerts",
+        "transparent": true,
+        "type": "alertlist"
       }
-    ]
-  },
-  "editable": true,
-  "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
-  "id": 7,
-  "links": [],
-  "panels": [
-    {
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 21,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
-      "id": 1,
-      "options": {
-        "alertInstanceLabelFilter": "namespace=\"cms\"",
-        "alertName": "",
-        "dashboardAlerts": false,
-        "groupBy": [],
-        "groupMode": "default",
-        "maxItems": 20,
-        "showInactiveAlerts": false,
-        "sortOrder": 1,
-        "stateFilter": {
-          "error": true,
-          "firing": true,
-          "noData": false,
-          "normal": false,
-          "pending": true,
-          "recovering": true
-        },
-        "viewMode": "list"
-      },
-      "pluginVersion": "12.1.0",
-      "title": "New panel",
-      "type": "alertlist"
-    }
-  ],
-  "preload": false,
-  "schemaVersion": 41,
-  "tags": [],
-  "templating": {
-    "list": []
-  },
-  "time": {
-    "from": "now-6h",
-    "to": "now"
-  },
-  "timepicker": {},
-  "timezone": "browser",
-  "title": "Alerts",
-  "uid": "e0dac63c-833a-43a6-ada3-1dccca238a63",
-  "version": 1
-}
+    ],
+    "preload": false,
+    "schemaVersion": 41,
+    "tags": [],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "browser",
+    "title": "Alerts",
+    "uid": "e0dac63c-833a-43a6-ada3-1dccca238a63",
+    "version": 3
+  }
