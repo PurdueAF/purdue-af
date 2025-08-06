@@ -197,7 +197,11 @@ RUN pip install --no-cache-dir --target=/opt/conda/lib/python3.10/site-packages 
     python-json-logger \
     git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@0ca8ae1d98cbb51cbe22e812b129eea236eb66a9
 
-RUN jupyter server extension enable prometheus_alerts || echo "Extension enablement failed, will be handled at runtime"
+RUN /opt/conda/bin/jupyter server extension enable prometheus_alerts || echo "Extension enablement failed, will be handled at runtime"
+
+RUN /opt/conda/bin/python -c "import sys; print('Python path:'); [print(p) for p in sys.path]" && \
+    /opt/conda/bin/python -c "import pythonjsonlogger; print('python-json-logger location:', pythonjsonlogger.__file__)" && \
+    /opt/conda/bin/python -c "import jupyter_events; print('jupyter-events location:', jupyter_events.__file__)"
 
 COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio
 RUN pip install --no-cache-dir -e /opt/conda/lib/python3.10/site-packages/genaistudio
