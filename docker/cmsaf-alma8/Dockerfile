@@ -195,11 +195,11 @@ RUN pip install --no-cache-dir --upgrade \
 
 # Install python-json-logger with a specific version that works with jupyter_events
 RUN pip install --no-cache-dir --target=/opt/conda/lib/python3.10/site-packages \
-    python-json-logger==2.0.7
+    python-json-logger==3.3.0
 
 # Install the extension
 RUN pip install --no-cache-dir --target=/opt/conda/lib/python3.10/site-packages \
-    git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@0ca8ae1d98cbb51cbe22e812b129eea236eb66a9
+    git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@84adbe78a1c78f4e2b9171a706c0146ffbe104b0
 
 # Debug: Check pythonjsonlogger structure
 RUN /opt/conda/bin/python -c "import pythonjsonlogger; print('pythonjsonlogger contents:'); import os; print(os.listdir(os.path.dirname(pythonjsonlogger.__file__)))"
