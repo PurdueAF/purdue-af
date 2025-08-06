@@ -332,8 +332,33 @@ serverFiles:
                 By now they might not be able to use AF at all.
                 The immediate solution is to increase quota for this user (PVC size) by 1 GB,
                 and then ask them to clean up files immediately.
+          - alert: TestNotification
+            expr: af_home_dir_util{namespace=~"cms",job="af-pod-monitor",username="dkondra"} > 0.5
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: Test alert
+              description: |
+                Body of the test alert
 alertmanager:
   enabled: true
+  config:
+    global: {}
+    route:
+      receiver: jupyterlab
+      # one HTTP call per pod
+      group_by: ['pod']
+      group_wait: 15s
+      group_interval: 5m
+      repeat_interval: 1h
+    receivers:
+      - name: jupyterlab
+        webhook_configs:
+          - url: >-
+              http://{{ .GroupLabels.pod }}.cms.svc.cluster.local:8888/
+              lab/api/notifications
+            send_resolved: false
   ingress:
     enabled: true
     className: public
