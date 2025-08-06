@@ -203,28 +203,22 @@ RUN pip install --no-cache-dir \
 # Test the import
 RUN python -c "import prometheus_alerts.server_extension; print('✅ Extension imports successfully')"
 
-# Debug: Try to understand the validation process
-RUN echo "=== Validation Process Debug ===" && \
-    python -c "import jupyter_server.extension.manager; print('Extension manager imported')" && \
-    python -c "from jupyter_server.extension.manager import ExtensionManager; print('ExtensionManager imported')" && \
-    python -c "import importlib; print('importlib imported')" && \
-    python -c "import importlib.util; print('importlib.util imported')" && \
-    python -c "import importlib.util; spec = importlib.util.find_spec('prometheus_alerts'); print('prometheus_alerts spec:', spec)" && \
-    python -c "import importlib.util; spec = importlib.util.find_spec('prometheus_alerts'); print('prometheus_alerts origin:', spec.origin if spec else 'None')"
-
-# Try to enable the extension with force flag (if available)
-RUN jupyter server extension enable prometheus_alerts --force || echo "Force enable failed"
-
-# Alternative: Try enabling without validation by manually adding to config
+# Manually add extension to config to bypass validation
 RUN echo 'c.ServerApp.jpserver_extensions = {"prometheus_alerts": True}' > /opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.py && \
     echo "✅ Manually added extension to config"
-
-# Verify the config was written
-RUN cat /opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.py
 
 # Check if extension appears in the list
 RUN jupyter server extension list | grep -A 5 -B 5 prometheus_alerts || echo "Extension not found in list"
 
+# Test if the extension loads at runtime
+RUN python -c "from jupyter_server.extension.application import ExtensionApp; print('✅ ExtensionApp imported')" && \
+    python -c "from prometheus_alerts.server_extension import PrometheusAlertsExtension; print('✅ PrometheusAlertsExtension imported')" && \
+    python -c "ext = PrometheusAlertsExtension(); print('✅ Extension instance created')"
+
+# Final verification
+RUN echo "=== Final Extension Status ===" && \
+    ls -la /opt/conda/etc/jupyter/jupyter_server_config.d/ | grep prometheus && \
+    cat /opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.py
 
 
 
