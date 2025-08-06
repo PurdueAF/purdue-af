@@ -68,9 +68,6 @@ I also have the knowledge of <a href="https://analysis-facility.physics.purdue.e
 <a href="https://www.rcac.purdue.edu/knowledge/genaistudio/api" target="_blank">How to obtain API key</a>
 
 **WARNING: do not rely exclusively on AI responses, as models may hallucinate.**
-
-The LLM assistant is still in experimental phase. For any problems or suggestions,
-please contact Dmitry Kondratyev at <a href="mailto:dkondra@purdue.edu">dkondra@purdue.edu</a>.
 """
 c.AiExtension.default_language_model = "purdue-cms-af"
 c.AiExtension.allowed_providers = ["genaistudio"]

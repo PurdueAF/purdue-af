@@ -357,7 +357,7 @@ alertmanager:
     receivers:
       - name: jupyterlab
         webhook_configs:
-          - url: "http://10.5.39.243:8888/lab/api/notifications"
+          - url: "http://10.5.39.243:8888/lab/api/events"
             send_resolved: false
   ingress:
     enabled: true
