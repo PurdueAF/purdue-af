@@ -1,0 +1,45 @@
+name: purdue-af image CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_BUILDKIT: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build purdue-af image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/purdue-af/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: local/purdue-af:canary
+
+      - name: Run smoke tests
+        uses: addnab/docker-run-action@v3
+        with:
+          image: local/purdue-af:canary
+          options: >-
+            --rm
+            --entrypoint bash
+            -v ${{ github.workspace }}:/workspace
+          run: |
+            bash /workspace/docker/purdue-af/tests/smoke.sh || bash -lc "cat /etc/jupyter/jupyter_server_config.py; exit 1"
+
+
