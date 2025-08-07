@@ -6,7 +6,7 @@ metadata:
 spec:
   schedule: "0 * * * *" # Run every hour
   concurrencyPolicy: Forbid
-  suspend: true
+  suspend: false
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
   jobTemplate:
