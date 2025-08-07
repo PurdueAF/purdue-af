@@ -198,7 +198,7 @@ RUN pip install --no-cache-dir python-json-logger==3.3.0
 
 # Install the extension with the new commit
 RUN pip install --no-cache-dir \
-    git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@257b8727f32579bd1b13c07559e7bd64008e8c9e
+    git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@c1374c3ee2f6d05f9160fdfafbf5e1a2a8d7385f
 
 
 
