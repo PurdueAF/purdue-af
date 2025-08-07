@@ -6,6 +6,7 @@ metadata:
 resources:
   - rbac.yaml
   - cronjob.yaml
+  - secret.yaml
 configMapGenerator:
   - name: update-knowledge-script
     namespace: cms
