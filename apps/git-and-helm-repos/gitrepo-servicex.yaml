@@ -7,4 +7,4 @@ spec:
   interval: 1m
   url: https://github.com/ssl-hep/ServiceX
   ref:
-    branch: xrootd-did-x509
+    branch: develop
