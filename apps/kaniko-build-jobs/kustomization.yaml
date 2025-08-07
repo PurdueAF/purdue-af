@@ -4,3 +4,4 @@ resources:
   - build-af.yaml
   - build-dask.yaml
   - build-interlink.yaml
+  - secret.yaml
