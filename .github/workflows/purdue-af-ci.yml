@@ -30,6 +30,8 @@ jobs:
           push: false
           load: true
           tags: local/purdue-af:canary
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Run smoke tests
         uses: addnab/docker-run-action@v3
