@@ -40,5 +40,3 @@ echo "[smoke] Healthcheck"
 /etc/jupyter/docker_healthcheck.py || true
 
 echo "All smoke checks passed"
-
-

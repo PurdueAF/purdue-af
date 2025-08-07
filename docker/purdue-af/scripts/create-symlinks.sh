@@ -18,5 +18,3 @@ for project in "${projects[@]}"; do
 		fi
 	fi
 done
-
-

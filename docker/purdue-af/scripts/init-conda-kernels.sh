@@ -105,5 +105,3 @@ for lcg_version in "${!LCG_STACKS[@]}"; do
 done
 
 jupyter kernelspec list
-
-

@@ -20,5 +20,3 @@ fi
 
 # shellcheck disable=SC1091,SC2086
 exec /usr/local/bin/start.sh ${wrapper} jupyter ${DOCKER_STACKS_JUPYTER_CMD} ${NOTEBOOK_ARGS} "$@"
-
-

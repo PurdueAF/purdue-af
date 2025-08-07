@@ -62,5 +62,3 @@ source $bashrc_file
 """ >$NEW_HOME/.profile
 
 cp .bashrc .bash_profile
-
-
