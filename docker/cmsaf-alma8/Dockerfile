@@ -193,14 +193,6 @@ RUN pip install --no-cache-dir --upgrade \
     dask-gateway==2025.4.0 \
     jupyter-ai[all]==2.31.6
 
-# Install python-json-logger 3.3.0 normally
-RUN pip install --no-cache-dir python-json-logger==3.3.0
-
-# Install the extension with the new commit
-RUN pip install --no-cache-dir \
-    git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@c1374c3ee2f6d05f9160fdfafbf5e1a2a8d7385f
-
-
 COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio
 RUN pip install --no-cache-dir -e /opt/conda/lib/python3.10/site-packages/genaistudio
 
