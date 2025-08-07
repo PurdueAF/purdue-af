@@ -200,8 +200,6 @@ RUN pip install --no-cache-dir python-json-logger==3.3.0
 RUN pip install --no-cache-dir \
     git+https://github.com/PurdueAF/jupyterlab-prometheus-alerts.git@c1374c3ee2f6d05f9160fdfafbf5e1a2a8d7385f
 
-RUN jupyter lab clean && \
-    jupyter lab build
 
 COPY docker/cmsaf-alma8/genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio
 RUN pip install --no-cache-dir -e /opt/conda/lib/python3.10/site-packages/genaistudio

@@ -4,7 +4,6 @@
 
 set -e
 
-export PATH="/opt/conda/bin:$PATH"
 
 # The Jupyter command to launch
 # JupyterLab by default
