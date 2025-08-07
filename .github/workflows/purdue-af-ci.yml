@@ -3,8 +3,14 @@ name: purdue-af image CI
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'docker/purdue-af/**'
+      - '.github/workflows/purdue-af-ci.yml'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'docker/purdue-af/**'
+      - '.github/workflows/purdue-af-ci.yml'
 
 jobs:
   build-and-smoke:
