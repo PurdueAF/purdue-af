@@ -5,7 +5,7 @@ metadata:
   namespace: cms
 spec:
   schedule: "*/30 * * * *" # Run every 30 minutes
-  suspend: false
+  suspend: true
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
   jobTemplate:
