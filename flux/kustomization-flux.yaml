@@ -12,3 +12,7 @@ spec:
     kind: GitRepository
     name: purdue-af
     namespace: cms
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
