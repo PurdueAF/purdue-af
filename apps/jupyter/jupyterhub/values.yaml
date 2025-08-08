@@ -158,9 +158,9 @@ singleuser:
       volumeMounts:
         - name: volume-{username}
           mountPath: /home/{username}
-        # - name: work
-        #   mountPath: /work/
-        #   mountPropagation: HostToContainer
+        - name: work
+          mountPath: /work/
+          mountPropagation: HostToContainer
   defaultUrl: "/lab"
   extraEnv:
     JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
@@ -204,9 +204,9 @@ singleuser:
       - name: depot
         mountPath: /depot/cms
         mountPropagation: HostToContainer
-      # - name: work
-      #   mountPath: /work/
-      #   mountPropagation: HostToContainer
+      - name: work
+        mountPath: /work/
+        mountPropagation: HostToContainer
       - name: munge-key
         mountPath: /etc/secrets/munge
         readOnly: false
