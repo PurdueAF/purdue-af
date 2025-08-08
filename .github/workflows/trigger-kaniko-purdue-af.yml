@@ -1,0 +1,47 @@
+name: Trigger Kaniko build for purdue-af
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docker/purdue-af/**'
+
+permissions:
+  contents: write
+
+jobs:
+  trigger-kaniko:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        uses: mikefarah/yq@v4.44.3
+
+      - name: Bump Kaniko Job to new revision
+        env:
+          GIT_SHA: ${{ github.sha }}
+        run: |
+          SHORT_SHA=$(echo "$GIT_SHA" | cut -c1-7)
+          FILE=apps/kaniko-build-jobs/build-purdue-af.yaml
+          # Set metadata.name to include short sha to force a new Job resource
+          yq -i '.metadata.name = "kaniko-build-purdue-af-" + strenv(SHORT_SHA)' "$FILE"
+          # Stamp commit sha as an annotation for traceability
+          yq -i '.metadata.annotations."ci.purdue.af/revision" = strenv(GIT_SHA)' "$FILE"
+          # Optionally tag the output image uniquely (uncomment if desired)
+          # yq -i '(.spec.template.spec.containers[].args[] | select(test("^--destination="))) = "--destination=geddes-registry.rcac.purdue.edu/cms/purdue-af:canary-" + strenv(SHORT_SHA)' "$FILE"
+
+      - name: Commit and push manifest update
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_AUTHOR_NAME: github-actions
+          GIT_AUTHOR_EMAIL: github-actions@github.com
+          GIT_COMMITTER_NAME: github-actions
+          GIT_COMMITTER_EMAIL: github-actions@github.com
+        run: |
+          git add apps/kaniko-build-jobs/build-purdue-af.yaml
+          git commit -m "chore(ci): trigger Kaniko build for purdue-af @ ${GITHUB_SHA} [skip ci]"
+          git push
+
+
