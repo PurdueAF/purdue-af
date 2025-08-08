@@ -4,8 +4,8 @@ metadata:
   name: af-userlist-sync-cern
   namespace: cms
 spec:
-  schedule: "*/30 * * * *" # Run every 30 minutes
-  suspend: true
+  schedule: "*/10 * * * *" # Run every 10 minutes
+  suspend: false
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
   jobTemplate:
