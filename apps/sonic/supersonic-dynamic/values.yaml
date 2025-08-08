@@ -26,6 +26,12 @@ triton:
     enabled: true
     storageType: cvmfs-pvc
     mountPath: /cvmfs
+  nodeSelector: { "cms-af-prod": "true" }
+  tolerations:
+    - key: hub.jupyter.org/dedicated
+      operator: Equal
+      value: cms-af
+      effect: NoSchedule
 
 envoy:
   enabled: true
@@ -39,6 +45,13 @@ envoy:
   lua_filter:
     enabled: true
     lua_config: "cfg/envoy-filter-dynamic.lua"
+  nodeSelector: { "cms-af-prod": "true" }
+  tolerations:
+    - key: hub.jupyter.org/dedicated
+      operator: Equal
+      value: cms-af
+      effect: NoSchedule
+
 
 keda:
   enabled: false
@@ -55,14 +68,6 @@ keda:
 
 ingress:
   enabled: false
-
-nodeSelector: { "cms-af-prod": "true" }
-
-tolerations:
-  - key: hub.jupyter.org/dedicated
-    operator: Equal
-    value: cms-af
-    effect: NoSchedule
 
 prometheus:
   external:
