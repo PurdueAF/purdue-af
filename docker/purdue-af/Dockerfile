@@ -100,6 +100,7 @@ RUN set -x  && \
         --prefix="${CONDA_DIR}" \
         --yes \
         "${PYTHON_SPECIFIER}" \
+        'conda' \
         'mamba' \
         'jupyter_core' && \
     rm micromamba && \
@@ -113,7 +114,7 @@ RUN set -x  && \
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # Copy local files as late as possible to avoid cache busting
-COPY docker/purdue-af/jupyter/start.sh /usr/local/bin/
+COPY --chown=root:root docker/purdue-af/jupyter/start.sh /usr/local/bin/
 
 WORKDIR /tmp
 RUN mamba install --quiet --yes \
@@ -135,7 +136,9 @@ EXPOSE $JUPYTER_PORT
 CMD ["start-notebook.sh"]
 
 # Copy local files as late as possible to avoid cache busting
-COPY docker/purdue-af/jupyter/start-notebook.sh docker/purdue-af/jupyter/start-singleuser.sh /usr/local/bin/
+COPY --chown=root:root docker/purdue-af/jupyter/start-notebook.sh docker/purdue-af/jupyter/start-singleuser.sh /usr/local/bin/
+USER root
+RUN chmod +x /usr/local/bin/start.sh /usr/local/bin/start-notebook.sh /usr/local/bin/start-singleuser.sh
 
 # Copy Jupyter configuration files
 COPY docker/purdue-af/jupyter/jupyter_server_config.py docker/purdue-af/jupyter/docker_healthcheck.py /etc/jupyter/
