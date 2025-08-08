@@ -105,30 +105,8 @@ serverFiles:
       - job_name: "node-exporter"
         static_configs:
           - targets:
-              - "geddes-b013.rcac.purdue.edu:9796"
-              - "geddes-b014.rcac.purdue.edu:9796"
-              - "geddes-b015.rcac.purdue.edu:9796"
-              - "geddes-g000.rcac.purdue.edu:9796"
-              - "geddes-g001.rcac.purdue.edu:9796"
-              - "geddes-g002.rcac.purdue.edu:9796"
-              - "paf-a00.cms.rcac.purdue.edu:9796"
-              - "paf-a01.cms.rcac.purdue.edu:9796"
-              - "paf-a02.cms.rcac.purdue.edu:9796"
-              - "paf-b00.cms.rcac.purdue.edu:9796"
-              - "cms-fe01.rcac.purdue.edu:9796"
-              - "cms-fe00.rcac.purdue.edu:9796"
-              - "vm-hammer-g000.rcac.purdue.edu:9796"
-              - "vm-hammer-g001.rcac.purdue.edu:9796"
-              - "vm-hammer-g002.rcac.purdue.edu:9796"
-              - "vm-hammer-g003.rcac.purdue.edu:9796"
-              - "vm-hammer-g004.rcac.purdue.edu:9796"
-              - "vm-hammer-g005.rcac.purdue.edu:9796"
-              - "vm-hammer-f000.rcac.purdue.edu:9796"
-              - "vm-hammer-f001.rcac.purdue.edu:9796"
-              - "vm-hammer-f002.rcac.purdue.edu:9796"
-              - "vm-hammer-f003.rcac.purdue.edu:9796"
-              - "vm-hammer-f004.rcac.purdue.edu:9796"
-              - "vm-hammer-f005.rcac.purdue.edu:9796"
+              - "geddes-a006.rcac.purdue.edu:9796"
+              - "geddes-a007.rcac.purdue.edu:9796"
       - job_name: "af-pod-monitor"
         kubernetes_sd_configs:
           - role: endpoints
@@ -136,8 +114,6 @@ serverFiles:
               names:
                 - "cms"
         relabel_configs:
-          # - source_labels: [__meta_kubernetes_service_label_app]
-          #   target_label: 'app'
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: "pod"
           - source_labels: [__meta_kubernetes_endpoint_address_target_ip]
@@ -209,33 +185,6 @@ serverFiles:
               [__meta_kubernetes_service_label_app_kubernetes_io_name]
             action: keep
             regex: dask-gateway
-      # - job_name: 'supersonic-monitor-triton'
-      #   metrics_path: '/metrics'
-      #   kubernetes_sd_configs:
-      #     - role: endpoints
-      #       namespaces:
-      #         names:
-      #           - 'cms'
-      #   relabel_configs:
-      #     - source_labels: [__meta_kubernetes_pod_name]
-      #       target_label: 'pod'
-      #     - source_labels: [__meta_kubernetes_namespace]
-      #       target_label: 'namespace'
-      #       replacement: '$1'
-      #     - source_labels: [__meta_kubernetes_pod_node_name]
-      #       target_label: 'node'
-      #     - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
-      #       target_label: 'app'
-      #     - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_instance]
-      #       target_label: 'instance'
-      #     - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component]
-      #       target_label: 'component'
-      #     - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
-      #       action: keep
-      #       regex: supersonic
-      #     - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component]
-      #       action: keep
-      #       regex: triton
       - job_name: "supersonic-monitor-envoy"
         metrics_path: "/stats/prometheus"
         kubernetes_sd_configs:
