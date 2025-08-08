@@ -220,7 +220,7 @@ hub:
   image:
     # name: quay.io/jupyterhub/k8s-hub
     name: geddes-registry.rcac.purdue.edu/cms/k8s-hub
-    tag: 3.3.8
+    tag: 4.2.0
   nodeSelector: { "cms-af-prod": "true" }
   tolerations:
     - key: "hub.jupyter.org/dedicated"
@@ -270,15 +270,18 @@ hub:
           key: cilogon_client_secret
   db:
     pvc:
+      enabled: true
+      size: 1Gi
+      accessModes:
+        - ReadWriteMany
       storageClassName: depot-cloud-block
-  # Using ConfigMap volume mounts for external Python config files
   config:
     PurdueCILogonOAuthenticator:
       auto_login: True
       auto_login_oauth2_authorize: True
-      logout_redirect_url: https://cms.geddes.rcac.purdue.edu/hub
+      logout_redirect_url: https://cmsdev.geddes.rcac.purdue.edu/hub
       admin_users: ["dkondra"]
-      oauth_callback_url: https://cms.geddes.rcac.purdue.edu/hub/oauth_callback
+      oauth_callback_url: https://cmsdev.geddes.rcac.purdue.edu/hub/oauth_callback
       enable_auth_state: true
       allowed_idps:
         https://cern.ch/login:
@@ -294,7 +297,6 @@ hub:
           username_derivation:
             username_claim: eppn
     JupyterHub:
-      authenticator_class: cilogon
       admin_access: True
 scheduling:
   userScheduler:
@@ -307,11 +309,9 @@ scheduling:
         effect: "NoSchedule"
 ingress:
   enabled: true
+  ingressClassName: public
   hosts:
     - cmsdev.geddes.rcac.purdue.edu
-  annotations:
-    kubernetes.io/ingress.class: "public"
-    nginx.ingress.kubernetes.io/proxy-body-size: "0"
 proxy:
   https:
     enabled: true
@@ -325,6 +325,13 @@ proxy:
         port: 2222
         targetPort: sftp
   traefik:
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
     extraPorts:
       - name: ssh
         containerPort: 8022
@@ -358,20 +365,7 @@ proxy:
             entrypoints: [sftp-entrypoint]
             rule: HostSNI(`*`)
             service: sftp-service
-
-  chp:
-    nodeSelector:
-      cms-af-prod: "true"
-    tolerations:
-      - key: "hub.jupyter.org/dedicated"
-        operator: "Equal"
-        value: "cms-af"
-        effect: "NoSchedule"
 cull:
-  #  concurrency: 10
   enabled: true
   every: 600
-  #  maxAge: 0
-  #  removeNamedServers: false
   timeout: 1209600
-#  users: false
