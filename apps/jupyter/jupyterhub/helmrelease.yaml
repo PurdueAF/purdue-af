@@ -18,3 +18,11 @@ spec:
     - kind: ConfigMap
       name: jupyterhub-config
       valuesKey: values.yaml
+    - kind: ConfigMap
+      name: jupyterhub-extra-config
+      valuesKey: custom-spawner.py
+      targetPath: hub.extraFiles.00-custom-spawner.stringData
+    - kind: ConfigMap
+      name: jupyterhub-extra-config
+      valuesKey: set-user-info.py
+      targetPath: hub.extraFiles.01-set-user-info.stringData

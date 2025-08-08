@@ -9,3 +9,10 @@ configMapGenerator:
       - values.yaml
     options:
       disableNameSuffixHash: true
+  - name: jupyterhub-extra-config
+    namespace: cms
+    files:
+      - extraFiles/custom-spawner.py
+      - extraFiles/set-user-info.py
+    options:
+      disableNameSuffixHash: true
