@@ -5,7 +5,7 @@ metadata:
   namespace: cms
 spec:
   schedule: "0 0,12 * * *" # Run at midnight and noon every day
-  suspend: false
+  suspend: true
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
   jobTemplate:
