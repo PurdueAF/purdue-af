@@ -169,6 +169,7 @@ singleuser:
   networkPolicy:
     enabled: false
   storage:
+    type: dynamic
     capacity: 25Gi
     dynamic:
       storageClass: depot-cloud-filesystem
