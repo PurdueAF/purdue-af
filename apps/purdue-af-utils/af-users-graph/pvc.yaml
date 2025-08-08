@@ -9,4 +9,4 @@ spec:
   resources:
     requests:
       storage: 10Mi
-  storageClassName: geddes-standard-multinode
+  storageClassName: depot-cloud-filesystem

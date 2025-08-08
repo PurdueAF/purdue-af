@@ -4,7 +4,7 @@ metadata:
   name: interlink-cache
   namespace: cms
 spec:
-  storageClassName: geddes-standard-multinode
+  storageClassName: depot-cloud-filesystem
   accessModes: [ReadWriteMany]
   resources:
     requests:
