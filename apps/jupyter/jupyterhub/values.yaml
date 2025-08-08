@@ -270,6 +270,12 @@ hub:
         secretKeyRef:
           name: auth-secret
           key: cilogon_client_secret
+    NO_PROXY: "127.0.0.1,localhost,.svc,.cluster.local,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    no_proxy: "127.0.0.1,localhost,.svc,.cluster.local,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    HTTPS_PROXY: ""
+    https_proxy: ""
+    HTTP_PROXY: ""
+    http_proxy: ""
   db:
     pvc:
       accessModes:
