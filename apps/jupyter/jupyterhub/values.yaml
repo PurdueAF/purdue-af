@@ -172,7 +172,7 @@ singleuser:
     capacity: 25Gi
     dynamic:
       storageClass: depot-cloud-block
-      storageAccessModes: [ "ReadWriteOnce" ]
+      storageAccessModes: ["ReadWriteOnce"]
     homeMountPath: /home/{username}
     extraVolumes:
       - name: cvmfs
