@@ -212,11 +212,11 @@ traefik:
     pullPolicy: IfNotPresent
   resources:
     limits:
-      cpu: 2
-      memory: 4Gi
+      cpu: 100m
+      memory: 100Mi
     requests:
-      cpu: 2
-      memory: 4Gi
+      cpu: 100m
+      memory: 100Mi
   loglevel: ERROR
   dashboard: false
   service:
@@ -243,11 +243,11 @@ controller:
   annotations: {}
   resources:
     limits:
-      cpu: 2
-      memory: 4Gi
+      cpu: 100m
+      memory: 100Mi
     requests:
-      cpu: 2
-      memory: 4Gi
+      cpu: 100m
+      memory: 100Mi
   imagePullSecrets: []
   loglevel: ERROR
   completedClusterMaxAge: 86400
