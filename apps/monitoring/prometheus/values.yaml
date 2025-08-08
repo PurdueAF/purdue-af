@@ -336,6 +336,8 @@ serverFiles:
                 and then ask them to clean up files immediately.
 alertmanager:
   enabled: true
+  persistence:
+    storageClass: depot-cloud-filesystem
   config:
     global: {}
   ingress:
