@@ -19,16 +19,16 @@ jobs:
       - name: Install yq
         uses: mikefarah/yq@v4.44.3
 
-      - name: Bump Kaniko Job to new revision
+      - name: Bump Kaniko Job to new revision (labels only)
         env:
           GIT_SHA: ${{ github.sha }}
         run: |
           SHORT_SHA=$(echo "$GIT_SHA" | cut -c1-7)
           FILE=apps/kaniko-build-jobs/build-purdue-af.yaml
-          # Set a label with the revision to force a new Job while keeping a stable name
+          # Ensure stable name, only mutate labels/annotations
+          yq -i '.metadata.name = "kaniko-build-purdue-af"' "$FILE"
           yq -i '.metadata.labels."ci.purdue.af/revision" = strenv(SHORT_SHA)' "$FILE"
           yq -i '.spec.template.metadata.labels."ci.purdue.af/revision" = strenv(SHORT_SHA)' "$FILE"
-          # Stamp commit sha as an annotation for traceability
           yq -i '.metadata.annotations."ci.purdue.af/revision" = strenv(GIT_SHA)' "$FILE"
           # Optionally tag the output image uniquely (uncomment if desired)
           # yq -i '(.spec.template.spec.containers[].args[] | select(test("^--destination="))) = "--destination=geddes-registry.rcac.purdue.edu/cms/purdue-af:canary-" + strenv(SHORT_SHA)' "$FILE"

@@ -1,14 +1,18 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: kaniko-build-purdue-af-
+  name: kaniko-build-purdue-af
   namespace: cms
+  labels: {}
   annotations:
-    ci.purdue.af/revision: ac1ef713ac18810c746d167b5b163162ca6f3369
+    kustomize.toolkit.fluxcd.io/force: "true"
 spec:
   backoffLimit: 0
   completions: 1
+  ttlSecondsAfterFinished: 300
   template:
+    metadata:
+      labels: {}
     spec:
       containers:
         - name: kaniko
