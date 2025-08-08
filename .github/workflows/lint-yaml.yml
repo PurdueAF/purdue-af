@@ -21,19 +21,29 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          persist-credentials: true
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
       - name: Install prettier
         run: npm install -g prettier
-      - name: Format YAML files
+      - name: Check YAML formatting (PRs)
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          find . -name "*.yml" -o -name "*.yaml" | grep -v "docker/dask-gateway-server" | grep -v "templates" | grep -v ".github/workflows" | xargs prettier --check
+      - name: Format YAML files (push)
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/') }}
         run: |
           find . -name "*.yml" -o -name "*.yaml" | grep -v "docker/dask-gateway-server" | grep -v "templates" | grep -v ".github/workflows" | xargs prettier --write
-      - name: Commit changes
+      - name: Commit changes (push)
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/') }}
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
           git add -A
-          git diff --quiet && git diff --staged --quiet || git commit -m "Apply prettier YAML formatting"
-          git push 
+          if ! git diff --quiet --staged; then
+            git commit -m "Apply prettier YAML formatting"
+            git push origin HEAD:${{ github.ref_name }}
+          fi

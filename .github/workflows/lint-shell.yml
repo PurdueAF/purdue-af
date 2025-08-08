@@ -19,18 +19,28 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          persist-credentials: true
       - name: Install shfmt
         run: |
           curl -L https://github.com/mvdan/sh/releases/download/v3.7.0/shfmt_v3.7.0_linux_amd64 -o shfmt
           chmod +x shfmt
           sudo mv shfmt /usr/local/bin/
-      - name: Format shell scripts
+      - name: Check shell formatting (PRs)
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          find . -type f -name '*.sh' -not -path './docker/dask-gateway-server/*' -exec shfmt -d {} +
+      - name: Format shell scripts (push)
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/') }}
         run: |
           find . -type f -name '*.sh' -not -path './docker/dask-gateway-server/*' -exec shfmt -w {} +
-      - name: Commit changes
+      - name: Commit changes (push)
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/') }}
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
           git add -A
-          git diff --quiet && git diff --staged --quiet || git commit -m "Apply shfmt shell script formatting"
-          git push 
+          if ! git diff --quiet --staged; then
+            git commit -m "Apply shfmt shell script formatting"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
