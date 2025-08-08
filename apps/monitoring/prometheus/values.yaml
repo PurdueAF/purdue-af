@@ -92,7 +92,7 @@ serverFiles:
         metrics_path: "/hub/metrics"
         static_configs:
           - targets:
-              - "cms.geddes.rcac.purdue.edu"
+              # - "cms.geddes.rcac.purdue.edu"
               - "cmsdev.geddes.rcac.purdue.edu"
       - job_name: "kube-state-metrics"
         static_configs:
