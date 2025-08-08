@@ -158,9 +158,9 @@ singleuser:
       volumeMounts:
         - name: volume-{username}
           mountPath: /home/{username}
-        - name: work
-          mountPath: /work/
-          mountPropagation: HostToContainer
+        # - name: work
+        #   mountPath: /work/
+        #   mountPropagation: HostToContainer
   defaultUrl: "/lab"
   extraEnv:
     JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
@@ -204,9 +204,9 @@ singleuser:
       - name: depot
         mountPath: /depot/cms
         mountPropagation: HostToContainer
-      - name: work
-        mountPath: /work/
-        mountPropagation: HostToContainer
+      # - name: work
+      #   mountPath: /work/
+      #   mountPropagation: HostToContainer
       - name: munge-key
         mountPath: /etc/secrets/munge
         readOnly: false
@@ -270,12 +270,6 @@ hub:
         secretKeyRef:
           name: auth-secret
           key: cilogon_client_secret
-    # NO_PROXY: "127.0.0.1,localhost,.svc,.cluster.local,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
-    # no_proxy: "127.0.0.1,localhost,.svc,.cluster.local,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
-    # HTTPS_PROXY: ""
-    # https_proxy: ""
-    # HTTP_PROXY: ""
-    # http_proxy: ""
   networkPolicy:
     enabled: false
   db:
