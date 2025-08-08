@@ -90,8 +90,8 @@ RUN mkdir -p "/home/${NB_USER}/work" && \
 # Download and install Micromamba, and initialize Conda prefix
 COPY --chown="${NB_USER}:${NB_GID}" docker/purdue-af/scripts/initial-condarc "${CONDA_DIR}/.condarc"
 WORKDIR /tmp
-# NOTE: for now, reuse the existing tarball path to avoid duplicating the binary in the repo
-COPY docker/cmsaf-alma8/src/micromamba.tar.bz2 /tmp/
+# Use local micromamba tarball copied into this directory
+COPY docker/purdue-af/src/micromamba.tar.bz2 /tmp/
 # wget -qO /tmp/micromamba.tar.bz2 "https://micromamba.snakepit.net/api/micromamba/linux-64/latest" && \
 
 RUN set -x  && \
