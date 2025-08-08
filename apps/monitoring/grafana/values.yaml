@@ -15,11 +15,11 @@ ingress:
   path: /grafana
   pathType: Prefix
   hosts:
-    - cms.geddes.rcac.purdue.edu
+    - cmsdev.geddes.rcac.purdue.edu
   # tls:
   #   - secretName: grafana-tls
   #     hosts:
-  #       - cms.geddes.rcac.purdue.edu
+  #       - cmsdev.geddes.rcac.purdue.edu
 
 # Service configuration
 service:
@@ -45,7 +45,7 @@ resources:
 # Grafana configuration
 grafana.ini:
   server:
-    root_url: https://cms.geddes.rcac.purdue.edu/grafana/
+    root_url: https://cmsdev.geddes.rcac.purdue.edu/grafana/
     serve_from_sub_path: true
   dashboards:
     default_home_dashboard_path: /var/lib/grafana/dashboards/public/default.json
