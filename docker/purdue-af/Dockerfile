@@ -136,6 +136,7 @@ CMD ["start-notebook.sh"]
 
 # Copy local files as late as possible to avoid cache busting
 COPY docker/purdue-af/jupyter/start-notebook.sh docker/purdue-af/jupyter/start-singleuser.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/start.sh /usr/local/bin/start-notebook.sh /usr/local/bin/start-singleuser.sh
 
 # Copy Jupyter configuration files
 COPY docker/purdue-af/jupyter/jupyter_server_config.py docker/purdue-af/jupyter/docker_healthcheck.py /etc/jupyter/
