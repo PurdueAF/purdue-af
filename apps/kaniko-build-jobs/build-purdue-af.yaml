@@ -40,5 +40,3 @@ spec:
           operator: "Equal"
           value: "cms-af"
           effect: "NoSchedule"
-
-
