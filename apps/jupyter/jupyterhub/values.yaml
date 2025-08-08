@@ -270,7 +270,7 @@ hub:
           key: cilogon_client_secret
   db:
     pvc:
-      storageClass: depot-cloud-block
+      storageClassName: depot-cloud-block
   # Using ConfigMap volume mounts for external Python config files
   config:
     PurdueCILogonOAuthenticator:
