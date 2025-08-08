@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: af-shared-storage
+  namespace: cms
+spec:
+  storageClassName: depot-cloud-filesystem
+  accessModes: [ReadWriteMany]
+  resources:
+    requests:
+      storage: 10Gi
