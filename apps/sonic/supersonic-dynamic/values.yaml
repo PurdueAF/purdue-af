@@ -51,6 +51,13 @@ envoy:
       operator: Equal
       value: cms-af
       effect: NoSchedule
+  resources:
+    requests:
+      cpu: 100m
+      memory: 100Mi
+    limits:
+      cpu: 100m
+      memory: 100Mi
 
 keda:
   enabled: false
