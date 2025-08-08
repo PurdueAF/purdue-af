@@ -31,16 +31,16 @@ jobs:
           pip install black isort
       - name: Run black (PRs)
         if: ${{ github.event_name == 'pull_request' }}
-        run: black --check . --exclude docker/dask-gateway-server
+        run: black --check . --exclude 'docker/dask-gateway-server|docker/purdue-af'
       - name: Run isort (PRs)
         if: ${{ github.event_name == 'pull_request' }}
-        run: isort --check-only . --skip docker/dask-gateway-server
+        run: isort --check-only . --skip docker/dask-gateway-server --skip docker/purdue-af
       - name: Run black (push)
         if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/') }}
-        run: black . --exclude docker/dask-gateway-server
+        run: black . --exclude 'docker/dask-gateway-server|docker/purdue-af'
       - name: Run isort (push)
         if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/') }}
-        run: isort . --skip docker/dask-gateway-server
+        run: isort . --skip docker/dask-gateway-server --skip docker/purdue-af
       - name: Commit changes (push)
         if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/') }}
         run: |
