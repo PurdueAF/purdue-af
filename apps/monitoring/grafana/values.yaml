@@ -90,7 +90,7 @@ datasources:
     datasources:
       - name: prometheus
         type: prometheus
-        url: https://prometheus-af.geddes.rcac.purdue.edu:443
+        url: http://prometheus-server.cms.svc.cluster.local:9090
         access: proxy
         isDefault: true
       - name: prometheus-rancher
