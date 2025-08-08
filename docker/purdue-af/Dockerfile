@@ -100,6 +100,7 @@ RUN set -x  && \
         --prefix="${CONDA_DIR}" \
         --yes \
         "${PYTHON_SPECIFIER}" \
+        'conda' \
         'mamba' \
         'jupyter_core' && \
     rm micromamba && \
