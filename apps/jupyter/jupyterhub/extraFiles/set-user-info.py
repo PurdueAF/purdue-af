@@ -69,3 +69,6 @@ c.KubeSpawner.http_timeout = 120
 c.KubeSpawner.start_timeout = 120
 c.KernelSpecManager.ensure_native_kernel = False
 c.JupyterHub.authenticate_prometheus = False
+c.KubeSpawner.k8s_api_request_timeout = 120
+c.KubeSpawner.k8s_api_request_retry_timeout = 120
+c.KubeSpawner.events_enabled = False

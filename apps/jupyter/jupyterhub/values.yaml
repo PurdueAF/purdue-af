@@ -1,4 +1,5 @@
 singleuser:
+  events: false
   podNameTemplate: "purdue-af-{userid}"
   uid: 0
   cmd:
