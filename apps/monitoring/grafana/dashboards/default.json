@@ -31,7 +31,7 @@
       "title": "Purdue AF Login",
       "tooltip": "Login to Purdue AF",
       "type": "link",
-      "url": "https://cms.geddes.rcac.purdue.edu"
+      "url": "https://cmsdev.geddes.rcac.purdue.edu"
     },
     {
       "asDropdown": false,
@@ -474,7 +474,7 @@
         {
           "targetBlank": true,
           "title": "Alert Details",
-          "url": "https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-alerts?orgId=1&from=now-6h&to=now&timezone=browser"
+          "url": "https://cmsdev.geddes.rcac.purdue.edu/grafana/d/purdue-af-alerts?orgId=1&from=now-6h&to=now&timezone=browser"
         }
       ],
       "options": {
