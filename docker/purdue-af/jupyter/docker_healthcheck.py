@@ -19,5 +19,3 @@ url = url + "api"
 r = requests.get(url, verify=False)  # request without SSL verification
 r.raise_for_status()
 print(r.content)
-
-

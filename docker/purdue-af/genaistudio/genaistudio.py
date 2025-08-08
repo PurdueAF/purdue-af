@@ -33,5 +33,3 @@ class PurdueGenAIStudioProvider(BaseProvider, ChatOpenAI):
             error_details = e.json_body.get("error", {})
             return error_details.get("code") == "invalid_api_key"
         return False
-
-
