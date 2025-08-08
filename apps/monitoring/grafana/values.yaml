@@ -6,7 +6,6 @@ persistence:
   enabled: true
   type: pvc
   size: 10Gi
-  storageClassName: depot-cloud-filesystem
 
 # Ingress configuration
 ingress:
