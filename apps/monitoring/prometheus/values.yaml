@@ -336,6 +336,13 @@ serverFiles:
                 and then ask them to clean up files immediately.
 alertmanager:
   enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 100Mi
+    limits:
+      cpu: 100m
+      memory: 100Mi
   persistence:
     storageClass: depot-cloud-filesystem
   config:
