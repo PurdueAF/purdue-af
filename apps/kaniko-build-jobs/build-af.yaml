@@ -3,12 +3,9 @@ kind: Job
 metadata:
   name: kaniko-build-af
   namespace: cms
-  annotations:
-    kustomize.toolkit.fluxcd.io/force: "true"
 spec:
   backoffLimit: 0
   completions: 1
-  ttlSecondsAfterFinished: 300
   template:
     spec:
       containers:

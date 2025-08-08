@@ -25,8 +25,9 @@ jobs:
         run: |
           SHORT_SHA=$(echo "$GIT_SHA" | cut -c1-7)
           FILE=apps/kaniko-build-jobs/build-purdue-af.yaml
-          # Set metadata.name to include short sha to force a new Job resource
-          yq -i '.metadata.name = "kaniko-build-purdue-af-" + strenv(SHORT_SHA)' "$FILE"
+          # Set a label with the revision to force a new Job while keeping a stable name
+          yq -i '.metadata.labels."ci.purdue.af/revision" = strenv(SHORT_SHA)' "$FILE"
+          yq -i '.spec.template.metadata.labels."ci.purdue.af/revision" = strenv(SHORT_SHA)' "$FILE"
           # Stamp commit sha as an annotation for traceability
           yq -i '.metadata.annotations."ci.purdue.af/revision" = strenv(GIT_SHA)' "$FILE"
           # Optionally tag the output image uniquely (uncomment if desired)
