@@ -1,8 +1,10 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: kaniko-build-purdue-af
+  name: kaniko-build-purdue-af-
   namespace: cms
+  annotations:
+    ci.purdue.af/revision: ac1ef713ac18810c746d167b5b163162ca6f3369
 spec:
   backoffLimit: 0
   completions: 1
