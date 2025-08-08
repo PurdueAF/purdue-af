@@ -1,11 +1,9 @@
-eval "$(command conda shell.bash hook 2>/dev/null)"
-conda init bash
 export CONDARC=/home/$NB_USER/.condarc
 echo CONDARC=$CONDARC
 
-jupyter kernelspec remove -y python3
+jupyter kernelspec remove -y python3 || true
 
-conda run -p /depot/cms/kernels/python3 ipython kernel install \
+/depot/cms/kernels/python3/bin/python -m ipykernel install \
 	--prefix=/opt/conda --name="python3" --display-name "Python3 kernel (default)"
 
 kernel_path="/opt/conda/share/jupyter/kernels/python3/"
@@ -28,7 +26,7 @@ mv tmp_kernel.json "$kernel_path/kernel.json"
 #     --prefix=/opt/conda --name="hats2024"  --display-name "HATS 2024"
 
 # For Coffea_latest
-conda run -p /depot/cms/kernels/coffea_latest ipython kernel install \
+/depot/cms/kernels/coffea_latest/bin/python -m ipykernel install \
 	--prefix=/opt/conda --name="coffea_latest" --display-name "coffea_latest"
 
 # kernel_path="/opt/conda/share/jupyter/kernels/hats2024/"
