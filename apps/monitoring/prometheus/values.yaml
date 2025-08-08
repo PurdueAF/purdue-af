@@ -107,6 +107,7 @@ serverFiles:
           - targets:
               - "geddes-a006.rcac.purdue.edu:9796"
               - "geddes-a007.rcac.purdue.edu:9796"
+              - "interlink-hammer.rcac.purdue.edu:9796"
       - job_name: "af-pod-monitor"
         kubernetes_sd_configs:
           - role: endpoints
