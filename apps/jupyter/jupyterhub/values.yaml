@@ -270,8 +270,6 @@ hub:
           key: cilogon_client_secret
   db:
     pvc:
-      enabled: true
-      size: 1Gi
       accessModes:
         - ReadWriteMany
       storageClassName: depot-cloud-block
