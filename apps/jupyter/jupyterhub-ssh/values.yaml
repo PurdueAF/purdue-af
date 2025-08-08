@@ -48,13 +48,7 @@ ssh:
   serviceLabels: {}
   serviceAnnotations: {}
 
-  resources:
-    requests:
-      cpu: 100m
-      memory: 100Mi
-    limits:
-      cpu: 100m
-      memory: 100Mi
+  resources: {}
   imagePullSecrets: []
   nodeSelector: { "cms-af-prod": "true" }
   tolerations:

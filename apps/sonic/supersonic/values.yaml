@@ -64,13 +64,6 @@ envoy:
     enabled: true
     lua_config: "cfg/envoy-filter-dynamic.lua"
   tracing_sampling_rate: 0.01
-  resources:
-    requests:
-      cpu: 100m
-      memory: 100Mi
-    limits:
-      cpu: 100m
-      memory: 100Mi
 
 keda:
   enabled: true

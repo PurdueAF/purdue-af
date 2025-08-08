@@ -87,13 +87,6 @@ spec:
                   fi
 
                   echo "Database backup job completed at $(date)"
-              resources:
-                requests:
-                  memory: "128Mi"
-                  cpu: "100m"
-                limits:
-                  memory: "256Mi"
-                  cpu: "200m"
               volumeMounts:
                 - name: depot
                   mountPath: /depot/cms

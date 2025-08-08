@@ -24,10 +24,6 @@ postgresql:
   #       database: servicex
   #       postgresPassword: leftfoot1
   primary:
-    resources:
-      requests:
-        cpu: 100m
-        memory: 128Mi
     persistence:
       enabled: false
       storageClass: depot-cloud-filesystem

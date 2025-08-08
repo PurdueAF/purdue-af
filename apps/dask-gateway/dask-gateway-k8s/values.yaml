@@ -17,13 +17,6 @@ gateway:
       operator: "Equal"
       value: "cms-af"
       effect: "NoSchedule"
-  resources:
-    limits:
-      cpu: 100m
-      memory: 100Mi
-    requests:
-      cpu: 100m
-      memory: 100Mi
   service:
     annotations:
       metallb.universe.tf/address-pool: geddes-public-pool
@@ -210,13 +203,6 @@ traefik:
     name: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/traefik
     tag: 2.10.4
     pullPolicy: IfNotPresent
-  resources:
-    limits:
-      cpu: 100m
-      memory: 100Mi
-    requests:
-      cpu: 100m
-      memory: 100Mi
   loglevel: ERROR
   dashboard: false
   service:
@@ -241,13 +227,6 @@ traefik:
 controller:
   enabled: true
   annotations: {}
-  resources:
-    limits:
-      cpu: 100m
-      memory: 100Mi
-    requests:
-      cpu: 100m
-      memory: 100Mi
   imagePullSecrets: []
   loglevel: ERROR
   completedClusterMaxAge: 86400
