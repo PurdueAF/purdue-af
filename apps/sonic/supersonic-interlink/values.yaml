@@ -102,6 +102,7 @@ opentelemetry-collector:
         endpoint: http://prometheus-server:9090/api/v1/write
 
 tempo:
+  nameOverride: sonic-interlink-tempo
   enabled: true
   tempo:
     metricsGenerator:
