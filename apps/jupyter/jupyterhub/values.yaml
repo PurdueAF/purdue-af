@@ -303,7 +303,7 @@ scheduling:
 ingress:
   enabled: true
   hosts:
-    - cms.geddes.rcac.purdue.edu
+    - cmsdev.geddes.rcac.purdue.edu
   annotations:
     kubernetes.io/ingress.class: "public"
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
