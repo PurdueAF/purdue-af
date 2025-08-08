@@ -32,8 +32,6 @@ spec:
                   nfs:
                     server: datadepot.rcac.purdue.edu
                     path: /depot/cms
-                    mountOptions:
-                      - vers=3
               - op: add
                 path: /spec/template/spec/volumes/-
                 value:
