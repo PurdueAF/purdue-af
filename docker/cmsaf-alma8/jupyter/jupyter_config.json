@@ -1,9 +1,0 @@
-{
-  "NotebookApp": {
-    "kernel_spec_manager_class": "nb_conda_kernels.CondaKernelSpecManager"
-  },
-  "CondaKernelSpecManager": {
-    "name_format": "{language} [conda env:{environment}]",
-    "env_filter": "/opt/conda|/depot/cms/kernels/python3"
-  }
-}

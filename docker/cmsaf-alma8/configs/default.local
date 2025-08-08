@@ -1,3 +1,0 @@
-CVMFS_HTTP_PROXY="http://squid1.rcac.purdue.edu:3128|http://squid2.rcac.purdue.edu:3128"
-export CMS_LOCAL_SITE=T2_US_Purdue/Purdue-Hammer
-CVMFS_QUOTA_LIMIT=20000
