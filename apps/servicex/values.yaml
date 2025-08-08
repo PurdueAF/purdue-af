@@ -65,11 +65,11 @@ transformer:
 rabbitmq:
   resources:
     requests:
-      cpu: 100m
-      memory: 100Mi
+      cpu: 1
+      memory: 1Gi
     limits:
-      cpu: 100m
-      memory: 100Mi
+      cpu: 1
+      memory: 1Gi
 
 minio:
   image:
