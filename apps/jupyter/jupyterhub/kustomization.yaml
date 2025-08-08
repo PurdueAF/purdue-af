@@ -12,7 +12,7 @@ configMapGenerator:
   - name: jupyterhub-extra-config
     namespace: cms
     files:
-      - extraFiles/custom-spawner.py
-      - extraFiles/set-user-info.py
+      - 00-custom-spawner.py=extraFiles/custom-spawner.py
+      - 01-set-user-info.py=extraFiles/set-user-info.py
     options:
       disableNameSuffixHash: true
