@@ -90,11 +90,8 @@ RUN mkdir -p "/home/${NB_USER}/work" && \
 # Download and install Micromamba, and initialize Conda prefix
 COPY --chown="${NB_USER}:${NB_GID}" docker/purdue-af/scripts/initial-condarc "${CONDA_DIR}/.condarc"
 WORKDIR /tmp
-# Use local micromamba tarball copied into this directory
-COPY docker/purdue-af/src/micromamba.tar.bz2 /tmp/
-# wget -qO /tmp/micromamba.tar.bz2 "https://micromamba.snakepit.net/api/micromamba/linux-64/latest" && \
-
 RUN set -x  && \
+    wget -qO /tmp/micromamba.tar.bz2 "https://micromamba.snakepit.net/api/micromamba/linux-64/latest" && \
     tar -xvjf /tmp/micromamba.tar.bz2 --strip-components=1 bin/micromamba && \
     PYTHON_SPECIFIER="python=${PYTHON_VERSION}" && \
     if [[ "${PYTHON_VERSION}" == "default" ]]; then PYTHON_SPECIFIER="python"; fi && \
