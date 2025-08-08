@@ -63,9 +63,9 @@ def passthrough_auth_state_hook(spawner, auth_state):
 
 c.KubeSpawner.auth_state_hook = passthrough_auth_state_hook
 c.KubeSpawner.notebook_dir = "~"
-c.KubeSpawner.working_dir = "/home/{legacy_escape_username}"
+c.KubeSpawner.working_dir = "/home/{username}"
 c.KubeSpawner.disable_user_config = True
-c.KubeSpawner.http_timeout = 900
-c.KubeSpawner.start_timeout = 900
+c.KubeSpawner.http_timeout = 120
+c.KubeSpawner.start_timeout = 120
 c.KernelSpecManager.ensure_native_kernel = False
 c.JupyterHub.authenticate_prometheus = False

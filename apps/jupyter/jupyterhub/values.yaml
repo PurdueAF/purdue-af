@@ -6,7 +6,7 @@ singleuser:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
     tag: "0.10.5"
   extraLabels:
-    username_unescaped: "{legacy_escape_username}"
+    username_unescaped: "{username}"
     docker_image_tag: "0.10.5"
   startTimeout: 3600
   profileList:
@@ -157,7 +157,7 @@ singleuser:
       image: geddes-registry.rcac.purdue.edu/cms/af-pod-monitor:latest
       volumeMounts:
         - name: volume-{username}
-          mountPath: /home/{legacy_escape_username}
+          mountPath: /home/{username}
         - name: work
           mountPath: /work/
           mountPropagation: HostToContainer
@@ -174,7 +174,7 @@ singleuser:
       storageClass: geddes-standard-multinode
       storageAccessModes:
         - ReadWriteMany
-    homeMountPath: /home/{legacy_escape_username}
+    homeMountPath: /home/{username}
     extraVolumes:
       - name: cvmfs
         persistentVolumeClaim:
