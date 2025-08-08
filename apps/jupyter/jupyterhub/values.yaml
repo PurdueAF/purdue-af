@@ -271,7 +271,7 @@ hub:
   db:
     pvc:
       accessModes:
-        - ReadWriteMany
+        - ReadWriteOnce
       storageClassName: depot-cloud-block
   config:
     PurdueCILogonOAuthenticator:
