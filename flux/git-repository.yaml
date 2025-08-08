@@ -8,6 +8,6 @@ spec:
   timeout: 1m
   url: https://github.com/PurdueAF/purdue-af.git
   ref:
-    branch: main
+    branch: geddes2
   secretRef:
     name: flux-github-token
