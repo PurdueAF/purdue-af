@@ -52,7 +52,6 @@ envoy:
       value: cms-af
       effect: NoSchedule
 
-
 keda:
   enabled: false
   minReplicaCount: 1
