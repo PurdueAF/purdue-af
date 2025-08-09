@@ -814,14 +814,14 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "(\n  sum by (namespace) (kube_resourcequota{namespace=\"cms\", resource=\"requests.cpu\", type=\"used\"}) /\n  sum by (namespace) (kube_resourcequota{namespace=\"cms\", resource=\"requests.cpu\", type=\"hard\"})\n)\n",
+          "expr": "(\n  sum by (namespace) (kube_resourcequota{namespace=\"cms\", resource=\"limits.cpu\", type=\"used\"}) /\n  sum by (namespace) (kube_resourcequota{namespace=\"cms\", resource=\"limits.cpu\", type=\"hard\"})\n)\n",
           "instant": true,
           "interval": "",
           "legendFormat": "{{ namespace }}",
           "refId": "A"
         }
       ],
-      "title": "CPU requests quota",
+      "title": "CPU limits quota",
       "transparent": true,
       "type": "gauge"
     },
@@ -889,14 +889,14 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "(\n  sum by (namespace) (kube_resourcequota{namespace=\"cms\", resource=\"requests.memory\", type=\"used\"}) /\n  sum by (namespace) (kube_resourcequota{namespace=\"cms\", resource=\"requests.memory\", type=\"hard\"})\n)\n",
+          "expr": "(\n  sum by (namespace) (kube_resourcequota{namespace=\"cms\", resource=\"limits.memory\", type=\"used\"}) /\n  sum by (namespace) (kube_resourcequota{namespace=\"cms\", resource=\"limits.memory\", type=\"hard\"})\n)\n",
           "instant": true,
           "interval": "",
           "legendFormat": "{{ namespace }}",
           "refId": "A"
         }
       ],
-      "title": "RAM requests quota",
+      "title": "RAM limits quota",
       "transparent": true,
       "type": "gauge"
     },
