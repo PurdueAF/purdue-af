@@ -17,13 +17,6 @@ gateway:
       operator: "Equal"
       value: "cms-af"
       effect: "NoSchedule"
-  resources:
-    limits:
-      cpu: 2
-      memory: 4Gi
-    requests:
-      cpu: 2
-      memory: 4Gi
   service:
     annotations:
       metallb.universe.tf/address-pool: geddes-public-pool
