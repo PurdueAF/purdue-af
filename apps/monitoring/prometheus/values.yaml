@@ -84,6 +84,7 @@ server:
             - prometheus-alertmanager.cms.svc.cluster.local:9093
 
   retention: 30d
+  retentionSize: 30GB
 
 serverFiles:
   prometheus.yml:
