@@ -6,7 +6,7 @@ metadata:
   labels:
     app: prometheus
 spec:
-  storageClassName: geddes-standard-multinode
+  storageClassName: depot-cloud-filesystem
   accessModes: [ReadWriteMany]
   resources:
     requests:
