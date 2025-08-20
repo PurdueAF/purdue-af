@@ -213,25 +213,7 @@ for dir in */; do
 	fi
 done
 
-# Clean up completed jobs (keep only the current job per environment)
-echo "Cleaning up completed jobs..."
-for env_name in $(kubectl get jobs -n cms -l app=kernel-builder -o jsonpath='{.items[*].metadata.labels.environment}' | tr ' ' '\n' | sort -u); do
-	echo "Checking completed jobs for environment: $env_name"
-	# Get completed jobs (successful or failed)
-	completed_jobs=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name" --field-selector=status.successful=1 -o name 2>/dev/null || echo "")
-	completed_jobs="$completed_jobs $(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name" --field-selector=status.failed=1 -o name 2>/dev/null || echo "")"
 
-	if [ -n "$completed_jobs" ]; then
-		echo "$completed_jobs" | while read job; do
-			if [ -n "$job" ]; then
-				echo "Deleting completed job: $job"
-				kubectl delete -n cms "$job"
-			fi
-		done
-	else
-		echo "No completed jobs to delete for environment: $env_name"
-	fi
-done
 
 # Clean up
 rm -rf /tmp/purdue-af-kernels
