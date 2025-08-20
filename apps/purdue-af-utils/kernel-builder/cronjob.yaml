@@ -4,9 +4,9 @@ metadata:
   name: kernel-builder-generator
   namespace: cms
 spec:
-  schedule: "*/10 * * * *" # Run every 10 minutes
+  schedule: "*/0 * * * *" # Run every 10 minutes
   concurrencyPolicy: Forbid
-  suspend: true
+  suspend: false
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
   jobTemplate:
