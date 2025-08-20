@@ -2,15 +2,16 @@
 
 set -e
 
-# Check arguments
-if [ $# -ne 3 ]; then
-	echo "Usage: $0 <environment_name> <environment_directory> <environment_file>"
+# Check arguments (fourth arg optional: pip uninstall file)
+if [ $# -lt 3 ] || [ $# -gt 4 ]; then
+	echo "Usage: $0 <environment_name> <environment_directory> <environment_file> [pip_uninstall_file]"
 	exit 1
 fi
 
 ENV_NAME="$1"
 ENV_DIR="$2"
 ENV_FILE="$3"
+PIP_UNINSTALL_FILE="$4"
 
 echo "Starting single kernel builder for environment: $ENV_NAME"
 
@@ -89,6 +90,7 @@ echo "Environment name: $ENV_NAME"
 echo "Environment path: $ENV_PATH"
 echo "Environment file: $ENV_FILE"
 echo "Environment file path: $ENV_YAML_PATH"
+echo "PIP uninstall file: $PIP_UNINSTALL_FILE"
 
 # Check if environment file exists
 if [ ! -f "$ENV_YAML_PATH" ]; then
@@ -192,6 +194,21 @@ else
 			ls -la "$ENV_PATH" || echo "Directory does not exist"
 			exit 1
 		fi
+	fi
+fi
+
+# If pip-uninstall.txt was provided and exists under the env directory, uninstall packages from the created env
+if [ -n "$PIP_UNINSTALL_FILE" ]; then
+	PIP_UNINSTALL_PATH="${ENV_DIR}/${PIP_UNINSTALL_FILE}"
+	if [ -f "$PIP_UNINSTALL_PATH" ]; then
+		echo "Uninstalling packages from $PIP_UNINSTALL_PATH"
+		if [ -x "$ENV_PATH/bin/python" ]; then
+			"$ENV_PATH/bin/python" -m pip uninstall -r "$PIP_UNINSTALL_PATH" -y
+		else
+			micromamba run -p "$ENV_PATH" python -m pip uninstall -r "$PIP_UNINSTALL_PATH" -y
+		fi
+	else
+		echo "Pip uninstall file not found at $PIP_UNINSTALL_PATH, skipping."
 	fi
 fi
 

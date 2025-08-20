@@ -94,6 +94,7 @@ create_job_yaml() {
 	local env_name="$1"
 	local env_dir="$2"
 	local env_file="$3"
+	local pip_uninstall_file="$4"
 	local sanitized_name=$(sanitize_env_name "$env_name")
 
 	printf 'apiVersion: batch/v1\n'
@@ -119,7 +120,7 @@ create_job_yaml() {
 	printf '              # Copy the build script and execute it for this specific environment\n'
 	printf '              cp /scripts/build-single-kernel.sh /tmp/build-single-kernel.sh\n'
 	printf '              chmod +x /tmp/build-single-kernel.sh\n'
-	printf '              /tmp/build-single-kernel.sh "%s" "%s" "%s"\n' "$env_name" "$env_dir" "$env_file"
+	printf '              /tmp/build-single-kernel.sh "%s" "%s" "%s" "%s"\n' "$env_name" "$env_dir" "$env_file" "$pip_uninstall_file"
 	printf '          resources:\n'
 	printf '            requests:\n'
 	printf '              memory: "4Gi"\n'
@@ -176,6 +177,12 @@ for dir in */; do
 			env_file="environment.yml"
 		fi
 
+		# Check if pip-uninstall.txt exists
+		pip_uninstall_file=""
+		if [ -f "${env_dir}/pip-uninstall.txt" ]; then
+			pip_uninstall_file="pip-uninstall.txt"
+		fi
+
 		if [ -n "$env_file" ]; then
 			echo "Found $env_file in $env_dir, checking for existing jobs..."
 
@@ -190,7 +197,7 @@ for dir in */; do
 			echo "Creating job for environment: $env_name..."
 
 			# Create job YAML
-			job_yaml=$(create_job_yaml "$env_name" "$env_dir" "$env_file")
+			job_yaml=$(create_job_yaml "$env_name" "$env_dir" "$env_file" "$pip_uninstall_file")
 
 			# Apply the job
 			echo "$job_yaml" | kubectl apply -f -
