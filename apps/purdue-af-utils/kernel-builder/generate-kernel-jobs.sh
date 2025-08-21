@@ -213,8 +213,6 @@ for dir in */; do
 	fi
 done
 
-
-
 # Clean up
 rm -rf /tmp/purdue-af-kernels
 
