@@ -81,30 +81,25 @@ validate_env_name() {
 	return 0
 }
 
-# Function to sanitize environment name for Kubernetes
-sanitize_env_name() {
-	local env_name="$1"
-	# Replace underscores and other invalid characters with hyphens
-	# Remove any leading/trailing non-alphanumeric characters
-	echo "$env_name" | sed 's/[^a-z0-9]/-/g' | sed 's/^[^a-z0-9]*//' | sed 's/[^a-z0-9]*$//' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//'
-}
-
-# Function to create job YAML for a single environment
-create_job_yaml() {
+# Function to create job YAML for a single environment-location pair
+create_job_yaml_location() {
 	local env_name="$1"
 	local env_dir="$2"
 	local env_file="$3"
 	local pip_uninstall_file="$4"
+	local location_root="$5"   # /work/kernels or /depot/cms/kernels
+	local location_label="$6"  # work or depot
 	local sanitized_name=$(sanitize_env_name "$env_name")
 
 	printf 'apiVersion: batch/v1\n'
 	printf 'kind: Job\n'
 	printf 'metadata:\n'
-	printf '  name: kernel-builder-%s\n' "$sanitized_name"
+	printf '  name: kernel-builder-%s-%s\n' "$sanitized_name" "$location_label"
 	printf '  namespace: cms\n'
 	printf '  labels:\n'
 	printf '    app: kernel-builder\n'
 	printf '    environment: %s\n' "$env_name"
+	printf '    location: %s\n' "$location_label"
 	printf 'spec:\n'
 	printf '  template:\n'
 	printf '    spec:\n'
@@ -117,10 +112,10 @@ create_job_yaml() {
 	printf '            - /bin/bash\n'
 	printf '            - -c\n'
 	printf '            - |\n'
-	printf '              # Copy the build script and execute it for this specific environment\n'
+	printf '              # Copy the build script and execute it for this specific environment and location\n'
 	printf '              cp /scripts/build-single-kernel.sh /tmp/build-single-kernel.sh\n'
 	printf '              chmod +x /tmp/build-single-kernel.sh\n'
-	printf '              /tmp/build-single-kernel.sh "%s" "%s" "%s" "%s"\n' "$env_name" "$env_dir" "$env_file" "$pip_uninstall_file"
+	printf '              /tmp/build-single-kernel.sh "%s" "%s" "%s" "%s" "%s"\n' "$env_name" "$env_dir" "$env_file" "$location_root" "$pip_uninstall_file"
 	printf '          resources:\n'
 	printf '            requests:\n'
 	printf '              memory: "4Gi"\n'
@@ -132,6 +127,9 @@ create_job_yaml() {
 	printf '            - name: af-shared-storage\n'
 	printf '              mountPath: /work/\n'
 	printf '              mountPropagation: HostToContainer\n'
+	printf '            - name: depot\n'
+	printf '              mountPath: /depot/cms\n'
+	printf '              mountPropagation: HostToContainer\n'
 	printf '            - name: scripts\n'
 	printf '              mountPath: /scripts/\n'
 	printf '              readOnly: true\n'
@@ -139,6 +137,10 @@ create_job_yaml() {
 	printf '        - name: af-shared-storage\n'
 	printf '          persistentVolumeClaim:\n'
 	printf '            claimName: af-shared-storage\n'
+	printf '        - name: depot\n'
+	printf '          nfs:\n'
+	printf '            server: datadepot.rcac.purdue.edu\n'
+	printf '            path: /depot/cms\n'
 	printf '        - name: scripts\n'
 	printf '          configMap:\n'
 	printf '            name: kernel-builder-scripts\n'
@@ -150,6 +152,16 @@ create_job_yaml() {
 	printf '          value: "cms-af"\n'
 	printf '          effect: "NoSchedule"\n'
 }
+
+# Function to sanitize environment name for Kubernetes
+sanitize_env_name() {
+	local env_name="$1"
+	# Replace underscores and other invalid characters with hyphens
+	# Remove any leading/trailing non-alphanumeric characters
+	echo "$env_name" | sed 's/[^a-z0-9]/-/g' | sed 's/^[^a-z0-9]*//' | sed 's/[^a-z0-9]*$//' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//'
+}
+
+
 
 # Find all directories and create jobs for them
 echo "Scanning for directories with environment.yaml files..."
@@ -194,18 +206,35 @@ for dir in */; do
 				continue
 			fi
 
-			echo "Creating job for environment: $env_name..."
+			echo "Creating jobs for environment: $env_name (work and depot)..."
 
-			# Create job YAML
-			job_yaml=$(create_job_yaml "$env_name" "$env_dir" "$env_file" "$pip_uninstall_file")
+			# Check per-location running jobs
+			existing_job_work=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name,location=work" --field-selector=status.successful!=1,status.failed!=1 -o name 2>/dev/null || echo "")
+			existing_job_depot=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name,location=depot" --field-selector=status.successful!=1,status.failed!=1 -o name 2>/dev/null || echo "")
 
-			# Apply the job
-			echo "$job_yaml" | kubectl apply -f -
-
-			if [ $? -eq 0 ]; then
-				echo "Successfully created job for environment: $env_name"
+			# Apply jobs conditionally per location
+			if [ -z "$existing_job_work" ]; then
+				job_yaml_work=$(create_job_yaml_location "$env_name" "$env_dir" "$env_file" "$pip_uninstall_file" "/work/kernels" "work")
+				echo "$job_yaml_work" | kubectl apply -f -
+				if [ $? -eq 0 ]; then
+					echo "Successfully created job (work) for environment: $env_name"
+				else
+					echo "Failed to create job (work) for environment: $env_name"
+				fi
 			else
-				echo "Failed to create job for environment: $env_name"
+				echo "Skipping (work) for $env_name - job already running or pending"
+			fi
+
+			if [ -z "$existing_job_depot" ]; then
+				job_yaml_depot=$(create_job_yaml_location "$env_name" "$env_dir" "$env_file" "$pip_uninstall_file" "/depot/cms/kernels" "depot")
+				echo "$job_yaml_depot" | kubectl apply -f -
+				if [ $? -eq 0 ]; then
+					echo "Successfully created job (depot) for environment: $env_name"
+				else
+					echo "Failed to create job (depot) for environment: $env_name"
+				fi
+			else
+				echo "Skipping (depot) for $env_name - job already running or pending"
 			fi
 		else
 			echo "No environment.yaml or environment.yml found in $env_dir, skipping..."
