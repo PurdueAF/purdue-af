@@ -14,38 +14,48 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 USER root
 
-# Install OS dependencies
-RUN dnf -y update && \
-    dnf -y install epel-release dnf-plugins-core && \
-    dnf config-manager --set-enabled powertools && \
-    # Install OSG repository
-    dnf -y install https://repo.opensciencegrid.org/osg/3.6/osg-3.6-el8-release-latest.rpm && \
-    # Install other repositories
-    dnf -y install https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/t/tini-0.19.0-1.el8.x86_64.rpm && \
-    # Install packages
-    dnf -y install \
-        'dnf-command(config-manager)' \
-        sudo wget perl which git bzip2 \
-        openssh-server openssh-clients openssl-devel \
-        emacs vim-enhanced jq xterm-resize \
-        libXft libXpm libXext libSM mesa-libGL libnsl.x86_64 \
-        glibc-locale-source glibc-langpack-en \
-        stress apptainer compat-openssl10 \
-        s3cmd htop \
-        boost-devel diffutils ncurses-compat-libs cmake \
-        glibc-static \
-        python3-gfal2 && \
-    # Add CUDA repository
-    dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo && \
-    dnf -y install cuda-toolkit-12-4 libcudnn8-8.9.7.29-1+cuda12.2 libcurl-devel && \
-    dnf clean all && \
-    rm -rf /var/cache/dnf && \
-    rm /usr/bin/vi && \
-    ln -s /usr/bin/vim /usr/bin/vi && \
-    localedef -c -f UTF-8 -i en_US en_US.UTF-8
-# cudnn9-cuda-12-4-9.1.1.17-1.x86_64.rpm
-# libcudnn9-cuda-12-9.7.1.26-1.x86_64.rpm
-RUN yum install -y vo-client voms-clients vo-client myproxy patch && yum clean all && rm -rf /var/cache/yum
+RUN set -euo pipefail \
+ && dnf -y upgrade \
+ && dnf -y install dnf-plugins-core epel-release \
+ && dnf config-manager --set-enabled powertools \
+ && dnf -y install \
+      'dnf-command(config-manager)' \
+      sudo wget perl which git bzip2 \
+      openssh-server openssh-clients openssl-devel \
+      emacs vim-enhanced jq xterm-resize \
+      libXft libXpm libXext libSM mesa-libGL libnsl.x86_64 \
+      glibc-locale-source glibc-langpack-en \
+      stress apptainer compat-openssl10 \
+      s3cmd htop \
+      boost-devel diffutils ncurses-compat-libs cmake \
+      glibc-static libcurl-devel \
+      python3-gfal2 voms-clients myproxy patch \
+ && dnf -y --enablerepo=epel install tini \
+ # CUDA repo + packages
+ && dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo \
+ && dnf -y install cuda-toolkit-12-4 libcudnn8-8.9.7.29-1+cuda12.2 \
+ # cleanup & small quality-of-life
+ && dnf clean all \
+ && rm -rf /var/cache/dnf \
+ && rm -f /usr/bin/vi && ln -s /usr/bin/vim /usr/bin/vi \
+ && localedef -c -f UTF-8 -i en_US en_US.UTF-8
+
+COPY docker/purdue-af/osg/igtf-ca-certs-1.136-1.osg24.el8.noarch.rpm docker/purdue-af/osg/vo-client-138-2.osg24.el8.noarch.rpm /tmp/
+RUN dnf -y --disablerepo='*' install --nogpgcheck --setopt=install_weak_deps=False \
+        /tmp/igtf-ca-certs-1.136-1.osg24.el8.noarch.rpm \
+        /tmp/vo-client-138-2.osg24.el8.noarch.rpm && \
+     rm -f /tmp/*.rpm && dnf clean all && rm -rf /var/cache/dnf
+
+# Install Slurm
+COPY slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
+COPY slurm/slurm-configs /etc/slurm
+RUN dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
+    rm -rf /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
+    groupadd -g 1033 slurm && \
+    adduser -u 2000 -g 1033 slurm && \
+    chown -R slurm:slurm /etc/slurm/ && \
+    mkdir -p /var/log/slurm && \
+    chown -R slurm:slurm /var/log/slurm
 
 # Configure environment
 ENV CONDA_DIR=/opt/conda \
@@ -158,17 +168,6 @@ CMD /etc/jupyter/docker_healthcheck.py || exit 1
 
 # # Install the Julia kernel via IJulia
 # RUN julia -e 'using Pkg; Pkg.add("IJulia"); using IJulia; IJulia.installkernel("Julia", "--depwarn=no")'
-
-# Install Slurm
-COPY slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
-COPY slurm/slurm-configs /etc/slurm
-RUN dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
-    rm -rf /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
-    groupadd -g 1033 slurm && \
-    adduser -u 2000 -g 1033 slurm && \
-    chown -R slurm:slurm /etc/slurm/ && \
-    mkdir -p /var/log/slurm && \
-    chown -R slurm:slurm /var/log/slurm
 
 # Configure XrootD, grid certificates, VOMS
 RUN mkdir -p /etc/cvmfs /etc/cvmfs/SITECONF/JobConfig/ /etc/cvmfs/SITECONF/PhEDEx
