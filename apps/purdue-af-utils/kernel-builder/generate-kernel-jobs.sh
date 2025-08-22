@@ -218,22 +218,34 @@ for dir in */; do
 		if [ -n "$env_file" ]; then
 			echo "Found $env_file in $env_dir, checking for existing jobs..."
 
-			# Check if there's already a running job for this environment
-			existing_jobs=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name" --field-selector=status.successful!=1,status.failed!=1 -o name 2>/dev/null || echo "")
+			echo "Checking existing jobs for environment: $env_name..."
 
-			if [ -n "$existing_jobs" ]; then
-				echo "Skipping $env_name - job already running or pending"
-				continue
+			# Check for failed jobs and delete them
+			failed_jobs_work=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name,location=work" --field-selector=status.failed=1 -o name 2>/dev/null || echo "")
+			failed_jobs_depot=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name,location=depot" --field-selector=status.failed=1 -o name 2>/dev/null || echo "")
+
+			if [ -n "$failed_jobs_work" ]; then
+				echo "Found failed work job(s) for $env_name, deleting them..."
+				echo "$failed_jobs_work" | xargs -r kubectl delete -n cms
 			fi
+
+			if [ -n "$failed_jobs_depot" ]; then
+				echo "Found failed depot job(s) for $env_name, deleting them..."
+				echo "$failed_jobs_depot" | xargs -r kubectl delete -n cms
+			fi
+
+			# Check for successful jobs
+			successful_jobs_work=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name,location=work" --field-selector=status.successful=1 -o name 2>/dev/null || echo "")
+			successful_jobs_depot=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name,location=depot" --field-selector=status.successful=1 -o name 2>/dev/null || echo "")
+
+			# Check for running/pending jobs
+			running_jobs_work=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name,location=work" --field-selector=status.successful!=1,status.failed!=1 -o name 2>/dev/null || echo "")
+			running_jobs_depot=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name,location=depot" --field-selector=status.successful!=1,status.failed!=1 -o name 2>/dev/null || echo "")
 
 			echo "Creating jobs for environment: $env_name (work and depot)..."
 
-			# Check per-location running jobs
-			existing_job_work=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name,location=work" --field-selector=status.successful!=1,status.failed!=1 -o name 2>/dev/null || echo "")
-			existing_job_depot=$(kubectl get jobs -n cms -l "app=kernel-builder,environment=$env_name,location=depot" --field-selector=status.successful!=1,status.failed!=1 -o name 2>/dev/null || echo "")
-
-			# Apply jobs conditionally per location
-			if [ -z "$existing_job_work" ]; then
+			# Create work job if no running or successful job exists
+			if [ -z "$running_jobs_work" ] && [ -z "$successful_jobs_work" ]; then
 				job_yaml_work=$(create_job_yaml_location "$env_name" "$env_dir" "$env_file" "$pip_uninstall_file" "/work/kernels" "work")
 				echo "$job_yaml_work" | kubectl apply -f -
 				if [ $? -eq 0 ]; then
@@ -242,10 +254,15 @@ for dir in */; do
 					echo "Failed to create job (work) for environment: $env_name"
 				fi
 			else
-				echo "Skipping (work) for $env_name - job already running or pending"
+				if [ -n "$running_jobs_work" ]; then
+					echo "Skipping (work) for $env_name - job already running or pending"
+				else
+					echo "Skipping (work) for $env_name - job already completed successfully"
+				fi
 			fi
 
-			if [ -z "$existing_job_depot" ]; then
+			# Create depot job if no running or successful job exists
+			if [ -z "$running_jobs_depot" ] && [ -z "$successful_jobs_depot" ]; then
 				job_yaml_depot=$(create_job_yaml_location "$env_name" "$env_dir" "$env_file" "$pip_uninstall_file" "/depot/cms/kernels" "depot")
 				echo "$job_yaml_depot" | kubectl apply -f -
 				if [ $? -eq 0 ]; then
@@ -254,7 +271,11 @@ for dir in */; do
 					echo "Failed to create job (depot) for environment: $env_name"
 				fi
 			else
-				echo "Skipping (depot) for $env_name - job already running or pending"
+				if [ -n "$running_jobs_depot" ]; then
+					echo "Skipping (depot) for $env_name - job already running or pending"
+				else
+					echo "Skipping (depot) for $env_name - job already completed successfully"
+				fi
 			fi
 		else
 			echo "No environment.yaml or environment.yml found in $env_dir, skipping..."

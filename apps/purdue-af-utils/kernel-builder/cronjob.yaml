@@ -4,9 +4,9 @@ metadata:
   name: kernel-builder-generator
   namespace: cms
 spec:
-  schedule: "*/3 * * * *" # Run every 3 minutes
+  schedule: "0 0 30 2 *" # Never (February 30th doesn't exist)
   concurrencyPolicy: Forbid
-  suspend: false
+  suspend: true
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 0
   jobTemplate:
