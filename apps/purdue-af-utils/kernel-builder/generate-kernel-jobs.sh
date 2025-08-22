@@ -67,9 +67,9 @@ echo "Moving micromamba to /usr/local/bin/"
 mv micromamba /usr/local/bin/
 
 # Clone the repository
-echo "Cloning purdue-af-kernels repository..."
-git clone https://github.com/PurdueAF/purdue-af-kernels.git /tmp/purdue-af-kernels
-cd /tmp/purdue-af-kernels
+echo "Cloning purdue-af-conda-envs repository..."
+git clone https://github.com/PurdueAF/purdue-af-conda-envs.git /tmp/purdue-af-conda-envs
+cd /tmp/purdue-af-conda-envs
 
 # Function to validate environment name
 validate_env_name() {
@@ -87,8 +87,8 @@ create_job_yaml_location() {
 	local env_dir="$2"
 	local env_file="$3"
 	local pip_uninstall_file="$4"
-	local location_root="$5"   # /work/kernels or /depot/cms/kernels
-	local location_label="$6"  # work or depot
+	local location_root="$5"  # /work/kernels or /depot/cms/kernels
+	local location_label="$6" # work or depot
 	local sanitized_name=$(sanitize_env_name "$env_name")
 
 	printf 'apiVersion: batch/v1\n'
@@ -100,7 +100,11 @@ create_job_yaml_location() {
 	printf '    app: kernel-builder\n'
 	printf '    environment: %s\n' "$env_name"
 	printf '    location: %s\n' "$location_label"
+	printf '  annotations:\n'
+	printf '    kernel-builder.af/fingerprint: "%s"\n' "$(compute_env_fingerprint "$env_dir" "$env_file" "$pip_uninstall_file")"
 	printf 'spec:\n'
+	printf '  backoffLimit: 0\n'
+	printf '  ttlSecondsAfterFinished: 300\n'
 	printf '  template:\n'
 	printf '    spec:\n'
 	printf '      serviceAccountName: kernel-builder\n'
@@ -161,7 +165,23 @@ sanitize_env_name() {
 	echo "$env_name" | sed 's/[^a-z0-9]/-/g' | sed 's/^[^a-z0-9]*//' | sed 's/[^a-z0-9]*$//' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//'
 }
 
+# Function to compute environment fingerprint for triggering job recreation
+compute_env_fingerprint() {
+	local env_dir="$1"
+	local env_file="$2"
+	local pip_uninstall_file="$3"
 
+	local yaml_sha pipun_sha
+	yaml_sha=$(sha256sum "${env_dir}/${env_file}" | awk '{print $1}')
+	if [ -n "$pip_uninstall_file" ] && [ -f "${env_dir}/${pip_uninstall_file}" ]; then
+		pipun_sha=$(sha256sum "${env_dir}/${pip_uninstall_file}" | awk '{print $1}')
+	else
+		pipun_sha="none"
+	fi
+
+	# Combine both hashes for a unique fingerprint
+	printf '%s-%s' "$yaml_sha" "$pipun_sha" | sha256sum | awk '{print $1}'
+}
 
 # Find all directories and create jobs for them
 echo "Scanning for directories with environment.yaml files..."
@@ -243,6 +263,6 @@ for dir in */; do
 done
 
 # Clean up
-rm -rf /tmp/purdue-af-kernels
+rm -rf /tmp/purdue-af-conda-envs
 
 echo "Kernel job generation completed"
