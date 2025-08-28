@@ -575,11 +575,11 @@ except Exception as e:
     exit(1)
 \"
 "; then
-    echo "ERROR: Invalid YAML file detected!"
-    echo "=== YAML FILE CONTENTS ==="
-    cat "$ENV_YAML_COPY"
-    echo "=== END YAML CONTENTS ==="
-    exit 1
+	echo "ERROR: Invalid YAML file detected!"
+	echo "=== YAML FILE CONTENTS ==="
+	cat "$ENV_YAML_COPY"
+	echo "=== END YAML CONTENTS ==="
+	exit 1
 fi
 
 echo "✓ YAML file validated successfully"
