@@ -403,6 +403,78 @@ export CONDA_ALWAYS_YES='true'
 	fi
 }
 
+# Helper: create environment using --prefix to avoid activation issues
+create_env_via_activation() {
+	local env_path="$1"
+	local yaml_path="$2"
+	local output_file="$USER_TMP/conda_create_output.log"
+	local error_file="$USER_TMP/conda_create_error.log"
+
+	# Try mamba first, then fall back to conda if mamba fails
+	if sudo -E -u "$TARGET_USERNAME" bash -c "
+cd '$USER_TMP'
+export PWD='$USER_TMP'
+export SHELL='/bin/bash'
+export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
+export CONDA_ROOT_PREFIX='$USER_CONDA'
+export CONDA_PKGS_DIRS='$USER_PKGS'
+export CONDA_ENVS_PATH='$USER_ENVS'
+export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
+export PIP_CACHE_DIR='$USER_TMP/pip-cache'
+export TMPDIR='$USER_TMP/conda-tmp'
+export TEMP='$USER_TMP/conda-tmp'
+export TMP='$USER_TMP/conda-tmp'
+export HOME='$USER_TMP'
+export XDG_CACHE_HOME='$USER_TMP/.cache'
+export CONDA_ALWAYS_COPY='1'
+export CONDA_ALWAYS_YES='true'
+# Use --prefix instead of activation to avoid PATH conflicts
+/opt/conda/bin/mamba env create --file '$yaml_path' --prefix '$env_path'
+" >"$output_file" 2>"$error_file"; then
+		return 0
+	else
+		local exit_code=$?
+		echo "Mamba env create failed with exit code: $exit_code, trying conda fallback..."
+		echo "=== MAMBA ERROR OUTPUT ==="
+		cat "$error_file"
+		echo "=== MAMBA STANDARD OUTPUT ==="
+		cat "$output_file"
+
+		# Fallback to conda env create
+		if sudo -E -u "$TARGET_USERNAME" bash -c "
+cd '$USER_TMP'
+export PWD='$USER_TMP'
+export SHELL='/bin/bash'
+export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
+export CONDA_ROOT_PREFIX='$USER_CONDA'
+export CONDA_PKGS_DIRS='$USER_PKGS'
+export CONDA_ENVS_PATH='$USER_ENVS'
+export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
+export PIP_CACHE_DIR='$USER_TMP/pip-cache'
+export TMPDIR='$USER_TMP/conda-tmp'
+export TEMP='$USER_TMP/conda-tmp'
+export TMP='$USER_TMP/conda-tmp'
+export HOME='$USER_TMP'
+export XDG_CACHE_HOME='$USER_TMP/.cache'
+export CONDA_ALWAYS_COPY='1'
+export CONDA_ALWAYS_YES='true'
+# Use --prefix instead of activation to avoid PATH conflicts
+/opt/conda/bin/conda env create --file '$yaml_path' --prefix '$env_path'
+" >"$output_file" 2>"$error_file"; then
+			echo "Conda fallback succeeded"
+			return 0
+		else
+			local conda_exit_code=$?
+			echo "Conda fallback also failed with exit code: $conda_exit_code"
+			echo "=== CONDA ERROR OUTPUT ==="
+			cat "$error_file"
+			echo "=== CONDA STANDARD OUTPUT ==="
+			cat "$output_file"
+			return $conda_exit_code
+		fi
+	fi
+}
+
 # Function to run commands within a conda environment
 run_in_env() {
 	local env_path="$1"
@@ -477,8 +549,40 @@ fi
 ENV_YAML_COPY="${USER_TMP}/env/environment.yaml"
 $RUN_AS_UID mkdir -p "$(dirname "$ENV_YAML_COPY")"
 $RUN_AS_UID cp "$ENV_YAML_PATH" "$ENV_YAML_COPY"
-# Normalize line endings to avoid YAML parse issues
-$RUN_AS_UID bash -c "sed -i 's/\r$//' '$ENV_YAML_COPY'"
+
+# Normalize line endings and validate YAML format
+echo "Validating and normalizing environment.yaml file..."
+$RUN_AS_UID bash -c "
+# Remove carriage returns and normalize line endings
+sed -i 's/\r$//' '$ENV_YAML_COPY'
+# Remove any trailing whitespace
+sed -i 's/[[:space:]]*$//' '$ENV_YAML_COPY'
+# Ensure file ends with newline
+sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' '$ENV_YAML_COPY'
+"
+
+# Validate YAML syntax using Python
+if ! $RUN_AS_UID bash -c "
+export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
+python -c \"
+import yaml
+try:
+    with open('$ENV_YAML_COPY', 'r') as f:
+        yaml.safe_load(f)
+    print('YAML validation passed')
+except Exception as e:
+    print(f'YAML validation failed: {e}')
+    exit(1)
+\"
+"; then
+    echo "ERROR: Invalid YAML file detected!"
+    echo "=== YAML FILE CONTENTS ==="
+    cat "$ENV_YAML_COPY"
+    echo "=== END YAML CONTENTS ==="
+    exit 1
+fi
+
+echo "✓ YAML file validated successfully"
 
 # Check if environment already exists and is valid
 if [ -d "$ENV_PATH" ]; then
@@ -491,7 +595,7 @@ if [ -d "$ENV_PATH" ]; then
 		else
 			echo "ERROR: Failed to update environment, recreating..."
 			rm -rf "$ENV_PATH"
-			if run_conda env create --file "$ENV_YAML_COPY" --prefix "$ENV_PATH"; then
+			if create_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
 				echo "✓ Environment recreated successfully"
 			else
 				echo "ERROR: Failed to recreate environment: $ENV_NAME"
@@ -501,7 +605,7 @@ if [ -d "$ENV_PATH" ]; then
 	else
 		echo "Recreating invalid environment: $ENV_NAME"
 		rm -rf "$ENV_PATH"
-		if run_conda env create --file "$ENV_YAML_COPY" --prefix "$ENV_PATH"; then
+		if create_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
 			echo "✓ Environment created successfully"
 		else
 			echo "ERROR: Failed to create environment: $ENV_NAME"
@@ -511,7 +615,7 @@ if [ -d "$ENV_PATH" ]; then
 else
 	echo "Creating new environment: $ENV_NAME"
 
-	if run_conda env create --file "$ENV_YAML_COPY" --prefix "$ENV_PATH"; then
+	if create_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
 		echo "✓ Environment created successfully"
 	else
 		echo "ERROR: Failed to create environment: $ENV_NAME"
