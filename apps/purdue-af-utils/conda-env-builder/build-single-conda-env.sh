@@ -573,11 +573,11 @@ else
     exit 1
 fi
 "; then
-    echo "ERROR: YAML structure validation failed!"
-    echo "=== YAML FILE CONTENTS ==="
-    cat "$ENV_YAML_COPY"
-    echo "=== END YAML CONTENTS ==="
-    exit 1
+	echo "ERROR: YAML structure validation failed!"
+	echo "=== YAML FILE CONTENTS ==="
+	cat "$ENV_YAML_COPY"
+	echo "=== END YAML CONTENTS ==="
+	exit 1
 fi
 
 echo "✓ YAML file validated successfully"
