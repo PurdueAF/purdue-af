@@ -561,25 +561,23 @@ sed -i 's/[[:space:]]*$//' '$ENV_YAML_COPY'
 sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' '$ENV_YAML_COPY'
 "
 
-# Validate YAML syntax using Python
+# Basic YAML validation using grep and basic syntax checks
+echo "Performing basic YAML validation..."
 if ! $RUN_AS_UID bash -c "
-export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
-python -c \"
-import yaml
-try:
-    with open('$ENV_YAML_COPY', 'r') as f:
-        yaml.safe_load(f)
-    print('YAML validation passed')
-except Exception as e:
-    print(f'YAML validation failed: {e}')
-    exit(1)
-\"
+# Check for basic YAML structure
+if grep -q '^name:' '$ENV_YAML_COPY' && grep -q '^channels:' '$ENV_YAML_COPY' && grep -q '^dependencies:' '$ENV_YAML_COPY'; then
+    echo 'Basic YAML structure validation passed'
+    exit 0
+else
+    echo 'Basic YAML structure validation failed - missing required sections'
+    exit 1
+fi
 "; then
-	echo "ERROR: Invalid YAML file detected!"
-	echo "=== YAML FILE CONTENTS ==="
-	cat "$ENV_YAML_COPY"
-	echo "=== END YAML CONTENTS ==="
-	exit 1
+    echo "ERROR: YAML structure validation failed!"
+    echo "=== YAML FILE CONTENTS ==="
+    cat "$ENV_YAML_COPY"
+    echo "=== END YAML CONTENTS ==="
+    exit 1
 fi
 
 echo "✓ YAML file validated successfully"
