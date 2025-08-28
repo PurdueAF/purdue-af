@@ -115,7 +115,7 @@ gateway:
       c.KubeBackend.api_url = 'http://dask-gateway-k8s.geddes.rcac.purdue.edu:80/api'
 
       c.ClusterConfig.cluster_max_cores = 401
-      c.ClusterConfig.cluster_max_memory = '404 G'
+      c.ClusterConfig.cluster_max_memory = '1200 G'
       c.ClusterConfig.cluster_max_workers = 400
       c.ClusterConfig.idle_timeout = 3600
 
