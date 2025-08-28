@@ -1,19 +1,19 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: kernel-builder-generator
+  name: conda-env-builder-generator
   namespace: cms
 spec:
-  schedule: "0 0 30 2 *" # Never (February 30th doesn't exist)
+  schedule: "*/10 * * * *" # every 10 min
   concurrencyPolicy: Forbid
-  suspend: true
+  suspend: false
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 0
   jobTemplate:
     spec:
       template:
         spec:
-          serviceAccountName: kernel-builder
+          serviceAccountName: conda-env-builder
           restartPolicy: Never
           containers:
             - name: job-generator
@@ -23,9 +23,9 @@ spec:
                 - -c
                 - |
                   # Copy the generator script and execute it
-                  cp /scripts/generate-kernel-jobs.sh /tmp/generate-kernel-jobs.sh
-                  chmod +x /tmp/generate-kernel-jobs.sh
-                  /tmp/generate-kernel-jobs.sh
+                  cp /scripts/generate-conda-env-jobs.sh /tmp/generate-conda-env-jobs.sh
+                  chmod +x /tmp/generate-conda-env-jobs.sh
+                  /tmp/generate-conda-env-jobs.sh
               resources:
                 requests:
                   memory: "1Gi"
@@ -40,7 +40,7 @@ spec:
           volumes:
             - name: scripts
               configMap:
-                name: kernel-builder-scripts
+                name: conda-env-builder-scripts
           nodeSelector:
             cms-af-prod: "true"
           tolerations:

@@ -6,11 +6,11 @@ resources:
   - rbac.yaml
 
 configMapGenerator:
-  - name: kernel-builder-scripts
+  - name: conda-env-builder-scripts
     namespace: cms
     files:
-      - generate-kernel-jobs.sh
-      - build-single-kernel.sh
+      - generate-conda-env-jobs.sh
+      - build-single-conda-env.sh
     options:
       disableNameSuffixHash: true
 
