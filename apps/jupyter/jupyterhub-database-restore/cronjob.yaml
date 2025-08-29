@@ -91,4 +91,3 @@ spec:
             - name: hub-db
               persistentVolumeClaim:
                 claimName: hub-db-dir
-
