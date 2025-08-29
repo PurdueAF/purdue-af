@@ -884,7 +884,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Value #cpuLimit"
+              "options": "Value #cpuRequest"
             },
             "properties": [
               {
@@ -892,7 +892,7 @@
               },
               {
                 "id": "displayName",
-                "value": "CPU lim."
+                "value": "CPU req."
               },
               {
                 "id": "max"
@@ -919,7 +919,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Value #gpuLimit"
+              "options": "Value #gpuRequest"
             },
             "properties": [
               {
@@ -927,7 +927,7 @@
               },
               {
                 "id": "displayName",
-                "value": "GPU lim."
+                "value": "GPU req."
               },
               {
                 "id": "max"
@@ -954,7 +954,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Value #memLimit"
+              "options": "Value #memRequest"
             },
             "properties": [
               {
@@ -962,7 +962,7 @@
               },
               {
                 "id": "displayName",
-                "value": "Memory lim."
+                "value": "Memory req."
               },
               {
                 "id": "max"
@@ -1002,7 +1002,7 @@
           {
             "matcher": {
               "id": "byRegexp",
-              "options": ".*Limit"
+              "options": ".*Request"
             },
             "properties": [
               {
@@ -1091,43 +1091,43 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "kube_pod_container_resource_limits{namespace=~\"$namespace\",pod=~\"purdue-af-.*\",resource=\"cpu\",container=\"notebook\"}",
+          "expr": "kube_pod_container_resource_requests{namespace=~\"$namespace\",pod=~\"purdue-af-.*\",resource=\"cpu\",container=\"notebook\"}",
           "format": "table",
           "instant": true,
           "interval": "",
           "legendFormat": "",
-          "refId": "cpuLimit"
+          "refId": "cpuRequest"
         },
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "kube_pod_container_resource_limits{namespace=~\"$namespace\",pod=~\"purdue-af-.*\",resource=\"nvidia_com_mig_1g_5gb\",container=\"notebook\"}",
+          "expr": "kube_pod_container_resource_requests{namespace=~\"$namespace\",pod=~\"purdue-af-.*\",resource=\"nvidia_com_mig_1g_5gb\",container=\"notebook\"}",
           "format": "table",
           "instant": true,
           "interval": "",
           "legendFormat": "",
-          "refId": "gpuLimit"
+          "refId": "gpuRequest"
         },
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "kube_pod_container_resource_limits{namespace=~\"$namespace\",pod=~\"purdue-af-.*\",resource=\"memory\",container=\"notebook\"}",
+          "expr": "kube_pod_container_resource_requests{namespace=~\"$namespace\",pod=~\"purdue-af-.*\",resource=\"memory\",container=\"notebook\"}",
           "format": "table",
           "instant": true,
           "interval": "",
           "legendFormat": "",
-          "refId": "memLimit"
+          "refId": "memRequest"
         },
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=~\"$namespace\",pod=~\"purdue-af-.*\", container=\"notebook\"}[5m])\n) by (pod)\n    /\nsum by (pod)(\n    kube_pod_container_resource_limits{namespace=~\"$namespace\",pod=~\"purdue-af-.*\", resource=\"cpu\", container=\"notebook\"}\n)\n",
+          "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=~\"$namespace\",pod=~\"purdue-af-.*\", container=\"notebook\"}[5m])\n) by (pod)\n    /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=~\"$namespace\",pod=~\"purdue-af-.*\", resource=\"cpu\", container=\"notebook\"}\n)\n",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1139,7 +1139,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=~\"$namespace\", pod=~\"purdue-af-.*\", container=\"notebook\"}\n) /\nsum by (pod)(\n    kube_pod_container_resource_limits{namespace=~\"$namespace\", pod=~\"purdue-af-.*\", resource=\"memory\", container=\"notebook\"}\n)\n",
+          "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=~\"$namespace\", pod=~\"purdue-af-.*\", container=\"notebook\"}\n) /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=~\"$namespace\", pod=~\"purdue-af-.*\", resource=\"memory\", container=\"notebook\"}\n)\n",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1194,7 +1194,7 @@
           "id": "filterFieldsByName",
           "options": {
             "exclude": {
-              "pattern": "^(pod|.*podStatus|.*#userId|.*gpuLimit)$"
+              "pattern": "^(pod|.*podStatus|.*#userId|.*gpuRequest)$"
             },
             "include": {
               "pattern": "^(Value.*|userId|username|username 1|node|node 1|docker_image_tag|docker_image_tag 1)$"
@@ -1205,12 +1205,12 @@
           "id": "organize",
           "options": {
             "indexByName": {
-              "Value #cpuLimit": 14,
+              "Value #cpuRequest": 14,
               "Value #daskWorkers": 13,
               "Value #gpuMemUtilCurrent": 10,
               "Value #gpuUtilCurrent": 9,
               "Value #homeStorageUtil": 11,
-              "Value #memLimit": 15,
+              "Value #memRequest": 15,
               "Value #podAge": 5,
               "Value #podCpuUtilCurrent": 7,
               "Value #podMemUtilCurrent": 8,

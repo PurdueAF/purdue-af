@@ -1,19 +1,3 @@
-.. admonition:: Announcement
-
-   The Purdue Analysis Facility will be undergoing maintenance from August 14th to August 15th.
-
-    The following resources will be unavailable:
-
-    * Purdue AF interface
-    * /home/ and /work/ directories at the Analysis Facility
-    * Dask Gateway instances
-
-    The following resources will remain available:
-    
-    * Hammer and other Purdue clusters
-    * Depot and EOS storage
-    * Slurm
-
 Purdue Analysis Facility
 ======================================
 

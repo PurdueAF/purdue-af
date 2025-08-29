@@ -1,10 +1,7 @@
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
-
+# genaistudio/pyproject.toml
 [project]
 name = "genaistudio"
-version = "0.0.0"
-description = "Placeholder for editable install in purdue-af image"
+version = "0.0.1"
 
-
+[project.entry-points."jupyter_ai.model_providers"]
+genaistudio = "genaistudio:PurdueGenAIStudioProvider"

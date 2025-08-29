@@ -3,14 +3,16 @@ echo CONDARC=$CONDARC
 
 jupyter kernelspec remove -y python3 || true
 
-/depot/cms/kernels/python3/bin/python -m ipykernel install \
+env_default_dir=/work/kernels/
+
+$env_default_dir/python3/bin/python -m ipykernel install \
 	--prefix=/opt/conda --name="python3" --display-name "Python3 kernel (default)"
 
 kernel_path="/opt/conda/share/jupyter/kernels/python3/"
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/depot/cms/purdue-af/lhapdf/lib:/depot/cms/purdue-af/combine/HiggsAnalysis/CombinedLimit/build/lib
 PYTHONPATH=$PYTHONPATH:/depot/cms/purdue-af/lhapdf/lib/python3.10/site-packages:/depot/cms/purdue-af/combine/HiggsAnalysis/CombinedLimit/build/lib/python
-PATH=/depot/cms/kernels/python3/bin/:/depot/cms/purdue-af/combine/HiggsAnalysis/CombinedLimit/build/bin:$PATH:/depot/cms/purdue-af/lhapdf/bin
-CPLUS_INCLUDE_PATH=/depot/cms/kernels/python3/x86_64-conda-linux-gnu/sysroot/usr/include
+PATH=$env_default_dir/python3/bin/:/depot/cms/purdue-af/combine/HiggsAnalysis/CombinedLimit/build/bin:$PATH:/depot/cms/purdue-af/lhapdf/bin
+CPLUS_INCLUDE_PATH=$env_default_dir/python3/x86_64-conda-linux-gnu/sysroot/usr/include
 export CPLUS_INCLUDE_PATH=$CPLUS_INCLUDE_PATH
 
 LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
@@ -22,11 +24,11 @@ LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
 mv tmp_kernel.json "$kernel_path/kernel.json"
 
 # For HATS 2024 workshop
-# conda run -p /depot/cms/kernels/hats2024 ipython kernel install \
+# conda run -p $env_default_dir/hats2024 ipython kernel install \
 #     --prefix=/opt/conda --name="hats2024"  --display-name "HATS 2024"
 
 # For Coffea_latest
-/depot/cms/kernels/coffea_latest/bin/python -m ipykernel install \
+$env_default_dir/coffea_latest/bin/python -m ipykernel install \
 	--prefix=/opt/conda --name="coffea_latest" --display-name "coffea_latest"
 
 # kernel_path="/opt/conda/share/jupyter/kernels/hats2024/"

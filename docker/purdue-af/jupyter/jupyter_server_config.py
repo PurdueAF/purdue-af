@@ -69,5 +69,5 @@ I also have the knowledge of <a href="https://analysis-facility.physics.purdue.e
 
 **WARNING: do not rely exclusively on AI responses, as models may hallucinate.**
 """
-c.AiExtension.default_language_model = "purdue-cms-af"
+c.AiExtension.default_language_model = "genaistudio:purdue-cms-af"
 c.AiExtension.allowed_providers = ["genaistudio"]
