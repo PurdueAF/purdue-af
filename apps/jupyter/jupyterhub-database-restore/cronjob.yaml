@@ -13,7 +13,7 @@ spec:
       template:
         spec:
           securityContext:
-            runAsUser: 616617
+            runAsUser: 0
           nodeSelector: { "cms-af-prod": "true" }
           tolerations:
             - key: "hub.jupyter.org/dedicated"
@@ -24,7 +24,7 @@ spec:
             - name: database-restore
               image: bitnami/kubectl:latest
               securityContext:
-                runAsUser: 616617
+                runAsUser: 0
               command:
                 - /bin/bash
                 - -ce
