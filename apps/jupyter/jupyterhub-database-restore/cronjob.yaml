@@ -1,0 +1,94 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: jupyterhub-database-restore
+  namespace: cms
+spec:
+  schedule: "*/10 * * * *" # Run every 10 minutes (suspended by default)
+  suspend: true
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          securityContext:
+            runAsUser: 616617
+          nodeSelector: { "cms-af-prod": "true" }
+          tolerations:
+            - key: "hub.jupyter.org/dedicated"
+              operator: "Equal"
+              value: "cms-af"
+              effect: "NoSchedule"
+          containers:
+            - name: database-restore
+              image: bitnami/kubectl:latest
+              securityContext:
+                runAsUser: 616617
+              command:
+                - /bin/bash
+                - -ce
+                - |
+                  set -euo pipefail
+
+                  BACKUP_DIR="/depot/cms/purdue-af/backups"
+                  TARGET_DIR="/hub-db-dir"
+                  TARGET_FILE="${TARGET_DIR}/jupyterhub.sqlite"
+
+                  echo "Starting database restore at $(date)"
+                  echo "Looking for latest backup in ${BACKUP_DIR}"
+
+                  if [ ! -d "${BACKUP_DIR}" ]; then
+                    echo "ERROR: Backup directory ${BACKUP_DIR} does not exist or is not mounted"
+                    exit 1
+                  fi
+
+                  # Find the newest backup file
+                  LATEST_BACKUP=$(ls -t ${BACKUP_DIR}/jupyterhub-*.sqlite 2>/dev/null | head -n 1 || true)
+
+                  if [ -z "${LATEST_BACKUP}" ]; then
+                    echo "ERROR: No backup files found in ${BACKUP_DIR}"
+                    exit 1
+                  fi
+
+                  echo "Latest backup: ${LATEST_BACKUP}"
+
+                  # Ensure target directory exists
+                  mkdir -p "${TARGET_DIR}"
+
+                  # If a current DB exists, back it up with timestamp suffix
+                  if [ -f "${TARGET_FILE}" ]; then
+                    TS=$(date +%Y%m%d-%H%M%S)
+                    BAK_FILE="${TARGET_FILE}.bak-${TS}"
+                    echo "Existing DB found. Backing up current DB to ${BAK_FILE}"
+                    cp -f "${TARGET_FILE}" "${BAK_FILE}"
+                  fi
+
+                  echo "Copying ${LATEST_BACKUP} -> ${TARGET_FILE}"
+                  cp -f "${LATEST_BACKUP}" "${TARGET_FILE}"
+
+                  # Basic validation: ensure file exists and non-empty
+                  if [ -f "${TARGET_FILE}" ] && [ -s "${TARGET_FILE}" ]; then
+                    echo "Database restore completed successfully: ${TARGET_FILE}"
+                  else
+                    echo "ERROR: Restored file missing or empty"
+                    exit 1
+                  fi
+
+                  echo "Database restore job completed at $(date)"
+              volumeMounts:
+                - name: depot
+                  mountPath: /depot/cms
+                  mountPropagation: HostToContainer
+                - name: hub-db
+                  mountPath: /hub-db-dir
+          restartPolicy: OnFailure
+          volumes:
+            - name: depot
+              nfs:
+                server: datadepot.rcac.purdue.edu
+                path: /depot/cms
+            - name: hub-db
+              persistentVolumeClaim:
+                claimName: hub-db-dir
+
