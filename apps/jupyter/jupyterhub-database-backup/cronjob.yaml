@@ -5,7 +5,7 @@ metadata:
   namespace: cms
 spec:
   schedule: "0 0,12 * * *" # Run at midnight and noon every day
-  suspend: false
+  suspend: true
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
   jobTemplate:
@@ -87,13 +87,6 @@ spec:
                   fi
 
                   echo "Database backup job completed at $(date)"
-              resources:
-                requests:
-                  memory: "128Mi"
-                  cpu: "100m"
-                limits:
-                  memory: "256Mi"
-                  cpu: "200m"
               volumeMounts:
                 - name: depot
                   mountPath: /depot/cms
