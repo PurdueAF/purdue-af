@@ -220,13 +220,7 @@ COPY docker/purdue-af/scripts/eos-connect.sh docker/purdue-af/jupyter/jupyter_co
 RUN mkdir -p /etc/cvmfs/
 COPY docker/purdue-af/configs/default.local /etc/cvmfs/
 
-RUN pip install --no-cache-dir --upgrade \
-    opentelemetry-distro \
-    opentelemetry-instrumentation \
-    opentelemetry-instrumentation-requests \
-    opentelemetry-instrumentation-urllib3 \
-    opentelemetry-instrumentation-aiohttp-client \
-    opentelemetry-instrumentation-tornado
+RUN pip install --no-cache-dir --upgrade pyroscope-io
 
 # Switch back to NB_USER
 USER ${NB_USER}
