@@ -117,6 +117,7 @@ gateway:
       c.DaskGateway.address = ':8000'
       c.KubeBackend.api_url = 'http://dask-gateway-k8s.geddes.rcac.purdue.edu:80/api'
       c.KubeBackend.common_annotations = {"instrumentation.opentelemetry.io/inject-python": "true"}
+      c.KubeBackend.common_labels = {"test-label": "test-value"}
 
       c.ClusterConfig.cluster_max_cores = 401
       c.ClusterConfig.cluster_max_memory = '1200 G'
