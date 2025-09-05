@@ -2,7 +2,6 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-
 pyroscope:
   replicaCount: 1
 
@@ -23,8 +22,7 @@ pyroscope:
 
   extraLabels: {}
 
-  extraEnvVars:
-    {}
+  extraEnvVars: {}
     # The following environment variables are set by the Helm chart.
     # JAEGER_AGENT_HOST: jaeger-agent.jaeger.svc.cluster.local.
 
@@ -73,8 +71,7 @@ pyroscope:
     enabled: true
     maxUnavailable: 1
 
-  securityContext:
-    {}
+  securityContext: {}
     # capabilities:
     #   drop:
     #   - ALL
@@ -93,8 +90,7 @@ pyroscope:
     port: 7946
     port_name: memberlist
 
-  resources:
-    {}
+  resources: {}
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -136,13 +132,11 @@ pyroscope:
     # subPath: ""
     # existingClaim:
 
-  extraVolumes:
-    []
+  extraVolumes: []
     # - name: backup-volume
     #   emptydir: {}
 
-  extraVolumeMounts:
-    []
+  extraVolumeMounts: []
     # - name: testing
     #   mountPath: /var/lib/testing
     #   readOnly: false
@@ -183,8 +177,7 @@ pyroscope:
     {{- end }}
 
   # -- Allows to add tenant specific overrides to the default limit configuration.
-  tenantOverrides:
-    {}
+  tenantOverrides: {}
     # "foo":
     #   ingestion_rate_mb: 1
     #   ingestion_burst_size_mb: 2
@@ -205,11 +198,11 @@ alloy:
       profiles.grafana.com/cpu.port_name: "http-metrics"
       profiles.grafana.com/goroutine.scrape: "true"
       profiles.grafana.com/goroutine.port_name: "http-metrics"
-      profiles.grafana.com/service_repository: 'https://github.com/grafana/alloy'
-      profiles.grafana.com/service_git_ref: 'v1.8.1'
+      profiles.grafana.com/service_repository: "https://github.com/grafana/alloy"
+      profiles.grafana.com/service_git_ref: "v1.8.1"
 
   alloy:
-    stabilityLevel: "public-preview"  # This needs to be set for some of our resources until verison v1.2 is released
+    stabilityLevel: "public-preview" # This needs to be set for some of our resources until verison v1.2 is released
     configMap:
       create: false
       name: alloy-config-pyroscope
