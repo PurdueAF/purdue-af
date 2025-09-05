@@ -111,6 +111,9 @@ gateway:
             mountPropagation: HostToContainer
   extraConfig:
     config: |
+      import subprocess
+      subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "opentelemetry-instrumentation-tornado"])
+
       c.DaskGateway.address = ':8000'
       c.KubeBackend.api_url = 'http://dask-gateway-k8s.geddes.rcac.purdue.edu:80/api'
 
@@ -181,6 +184,9 @@ gateway:
             "user": user.name,
             #"queue": "root.community.cms"
           }
+          c.KubeClusterConfig.scheduler_extra_pod_annotations = {"instrumentation.opentelemetry.io/inject-python": "true"}
+          c.KubeClusterConfig.worker_extra_pod_annotations = {"instrumentation.opentelemetry.io/inject-python": "true"}
+
 
           setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
           desired_cores = options.worker_cores
