@@ -225,7 +225,8 @@ RUN pip install --no-cache-dir --upgrade \
     opentelemetry-instrumentation \
     opentelemetry-instrumentation-requests \
     opentelemetry-instrumentation-urllib3 \
-    opentelemetry-instrumentation-aiohttp-client 
+    opentelemetry-instrumentation-aiohttp-client \
+    opentelemetry-instrumentation-tornado
 
 # Switch back to NB_USER
 USER ${NB_USER}
