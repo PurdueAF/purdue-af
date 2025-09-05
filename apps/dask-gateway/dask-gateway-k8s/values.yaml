@@ -39,7 +39,14 @@ gateway:
       pullPolicy:
     imagePullSecrets: []
     namespace: cms
-    environment: {}
+
+    # --- ADDED: default env so workers pick up Pyroscope ---
+    environment:
+      PYROSCOPE_SERVER: "http://pyroscope.cms.svc.cluster.local:4040"
+      PYROSCOPE_APP: "dask-gateway"
+      DASK_DISTRIBUTED__WORKER__PRELOAD: '["/tmp/pyro_preload.py"]'
+    # -------------------------------------------------------
+
     scheduler:
       cores:
         request: 2
@@ -149,7 +156,6 @@ gateway:
           gid_number = result [u'gidNumber']
           return uid_number, gid_number            
 
-
       from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
 
       def options_handler(options, user):
@@ -182,7 +188,26 @@ gateway:
             #"queue": "root.community.cms"
           }
 
-          setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
+          # --- CHANGED: extend worker_setup to install pyroscope & write preload ---
+          setup_cmd = (
+              "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
+              # install Pyroscope agent into the selected conda env
+              f"{options.conda_env}/bin/pip install --no-cache-dir pyroscope-io; "
+              # write a tiny preload script that starts the profiler
+              "cat > /tmp/pyro_preload.py <<'PYRO'\n"
+              "def dask_setup(worker):\n"
+              "    import os, socket\n"
+              "    import pyroscope\n"
+              "    server = os.environ.get('PYROSCOPE_SERVER', 'http://pyroscope.cms.svc.cluster.local:4040')\n"
+              "    app = os.environ.get('PYROSCOPE_APP', 'dask-gateway')\n"
+              "    pyroscope.configure(\n"
+              "        application_name=f\"{app};worker_host={socket.gethostname()}\",\n"
+              "        server_address=server,\n"
+              "    )\n"
+              "PYRO\n"
+          )
+          # -----------------------------------------------------------------------
+
           desired_cores = options.worker_cores
           desired_memory = int(options.worker_memory * 2 ** 30)
           return {
