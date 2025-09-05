@@ -116,8 +116,6 @@ gateway:
 
       c.DaskGateway.address = ':8000'
       c.KubeBackend.api_url = 'http://dask-gateway-k8s.geddes.rcac.purdue.edu:80/api'
-      c.KubeBackend.common_annotations = {"instrumentation.opentelemetry.io/inject-python": "true"}
-      c.KubeBackend.common_labels = {"test-label": "test-value"}
 
       c.ClusterConfig.cluster_max_cores = 401
       c.ClusterConfig.cluster_max_memory = '1200 G'
@@ -186,6 +184,9 @@ gateway:
             "user": user.name,
             #"queue": "root.community.cms"
           }
+          c.KubeClusterConfig.scheduler_extra_pod_annotations = {"instrumentation.opentelemetry.io/inject-python": "true"}
+          c.KubeClusterConfig.worker_extra_pod_annotations = {"instrumentation.opentelemetry.io/inject-python": "true"}
+
 
           setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
           desired_cores = options.worker_cores
