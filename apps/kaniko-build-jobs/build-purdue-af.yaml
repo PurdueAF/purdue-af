@@ -7,7 +7,7 @@ metadata:
     ci.purdue.af/revision: ""
   annotations:
     kustomize.toolkit.fluxcd.io/force: "true"
-    ci.purdue.af/revision: fcaeb197eabca22a131b1935e58ebca83adb731b
+    ci.purdue.af/revision: 3f83b89aa4de4cdfe6f4f82d25d6126503ca7f38
 spec:
   backoffLimit: 0
   completions: 1
