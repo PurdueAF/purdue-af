@@ -48,11 +48,56 @@ gateway:
 
       from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
 
+      # ---- Pyroscope wiring (workers) ----
+      # We create a preload script on the Slurm node at worker startup that
+      # configures the Pyroscope Python agent and tag the profile with hostname.
+      # The script path is referenced via DASK_DISTRIBUTED__WORKER__PRELOAD.
+      PYROSCOPE_SERVICE = f"http://pyroscope.{NAMESPACE}.svc.cluster.local:4040"
+      PRELOAD_PATH = "~/.dask-gateway/pyro_preload.py"
+
       def options_handler(options):
+          # Base setup (keep your temp dir behavior)
           setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
 
-          options.env["PATH"]=f"{options.conda_env}/bin/:"+options.env.pop("PATH")
-          options.env["CPLUS_INCLUDE_PATH"]=f"{options.conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
+          # Make sure the chosen conda env is at the front of PATH and includes headers
+          options.env["PATH"] = f"{options.conda_env}/bin/:" + options.env.pop("PATH")
+          options.env["CPLUS_INCLUDE_PATH"] = f"{options.conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
+
+          # --- Worker-specific setup for Pyroscope ---
+          # 1) Ensure the preload file exists on the Slurm node.
+          # 2) Ensure pyroscope-io is available in the worker env (no-op if already installed).
+          worker_setup_pyroscope = f"""
+          set -e
+          mkdir -p $HOME/.dask-gateway
+          cat > {PRELOAD_PATH} <<'PYRO'
+          import os, socket
+          try:
+              import pyroscope
+              app = os.environ.get("PYROSCOPE_APP", "dask-gateway")
+              server = os.environ.get("PYROSCOPE_SERVER", "{PYROSCOPE_SERVICE}")
+              pyroscope.configure(
+                  application_name=f"{{app}};worker_host={{socket.gethostname()}}",
+                  server_address=server,
+              )
+          except Exception as e:
+              # Don't fail the worker if profiling can't start
+              pass
+          PYRO
+          chmod 0644 {PRELOAD_PATH}
+
+          if ! {options.conda_env}/bin/python -c "import pyroscope" >/dev/null 2>&1; then
+              {options.conda_env}/bin/pip install --no-cache-dir --upgrade pyroscope-io >/dev/null 2>&1 || true
+          fi
+          """
+
+          # Merge with your existing setup
+          worker_setup = setup_cmd + worker_setup_pyroscope
+          scheduler_setup = setup_cmd  # Scheduler doesn't need profiling
+
+          # Provide env to workers: tell Dask to preload the script + point to Pyroscope
+          options.env["DASK_DISTRIBUTED__WORKER__PRELOAD"] = f'["{PRELOAD_PATH}"]'
+          options.env["PYROSCOPE_SERVER"] = PYROSCOPE_SERVICE
+          options.env["PYROSCOPE_APP"] = "dask-gateway"
 
           return {
               "worker_cores": options.worker_cores,
@@ -65,15 +110,23 @@ gateway:
               "worker_cmd": f"{options.conda_env}/bin/dask-worker",
               "account": "cms",
               "time": "1-00:00:00",
-              "scheduler_setup": setup_cmd,
-              "worker_setup": setup_cmd,
+              "scheduler_setup": scheduler_setup,
+              "worker_setup": worker_setup,
               "staging_directory": "/depot/cms/users/{username}/.dask-gateway/"
           }
+
       c.Backend.cluster_options = Options(
           String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
           Integer("worker_cores", default=1, min=1, max=16, label="Cores per worker"),
           Float("worker_memory", default=4, min=1, max=64, label="Memory per worker (GiB)"),
-          Mapping("env", {"X509_USER_PROXY": "", "WORKDIR": ""}, label="Environment variables"),
+          # Default env you already had + Pyroscope env/preload for workers
+          Mapping("env", {
+              "X509_USER_PROXY": "",
+              "WORKDIR": "",
+              "DASK_DISTRIBUTED__WORKER__PRELOAD": f'["{PRELOAD_PATH}"]',
+              "PYROSCOPE_SERVER": f"{PYROSCOPE_SERVICE}",
+              "PYROSCOPE_APP": "dask-gateway",
+          }, label="Environment variables"),
           handler=options_handler,
       )
 traefik:
