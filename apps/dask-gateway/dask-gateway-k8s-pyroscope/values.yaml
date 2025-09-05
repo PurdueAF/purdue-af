@@ -1,0 +1,322 @@
+gateway:
+  replicas: 1
+  prefix: /
+  loglevel: INFO
+  image:
+    name: ghcr.io/dask/dask-gateway-server
+    tag: 2024.1.0
+    pullPolicy: IfNotPresent
+  auth:
+    type: simple
+    simple:
+      password: null
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  resources:
+    limits:
+      cpu: 2
+      memory: 4Gi
+    requests:
+      cpu: 2
+      memory: 4Gi
+  service:
+    annotations:
+      metallb.universe.tf/address-pool: geddes-public-pool
+  env:
+    - name: NAMESPACE
+      value: cms
+    - name: RELEASE_NAME
+      value: dask-gateway-k8s-pyroscope
+  backend:
+    image:
+      name: ghcr.io/dask/dask-gateway
+      tag: 2024.1.0
+      pullPolicy:
+    imagePullSecrets: []
+    namespace: cms
+
+    # Pyroscope for workers
+    environment:
+      PYROSCOPE_SERVER: "http://pyroscope.cms.svc.cluster.local:4040"
+      PYROSCOPE_APP: "dask-gateway"
+      DASK_DISTRIBUTED__WORKER__PRELOAD: '["/tmp/pyro_preload.py"]'
+
+    scheduler:
+      cores:
+        request: 2
+        limit: 4
+      memory:
+        request: 4G
+        limit: 8G
+      extraPodConfig:
+        nodeSelector:
+          cms-af-prod: "true"
+        tolerations:
+          - key: "hub.jupyter.org/dedicated"
+            operator: "Equal"
+            value: "cms-af"
+            effect: "NoSchedule"
+        volumes:
+          - name: depot
+            nfs:
+              server: datadepot.rcac.purdue.edu
+              path: /depot/cms
+          - name: work
+            persistentVolumeClaim:
+              claimName: af-shared-storage
+      extraContainerConfig:
+        volumeMounts:
+          - name: depot
+            mountPath: /depot/cms
+            mountPropagation: HostToContainer
+          - name: work
+            mountPath: /work/
+            mountPropagation: HostToContainer
+    worker:
+      extraPodConfig:
+        # schedulerName: yunikorn
+        nodeSelector:
+          cms-af-prod: "true"
+        tolerations:
+          - key: "hub.jupyter.org/dedicated"
+            operator: "Equal"
+            value: "cms-af"
+            effect: "NoSchedule"
+        volumes:
+          - name: cvmfs
+            persistentVolumeClaim:
+              claimName: cvmfs
+          - name: eos
+            hostPath:
+              path: /eos
+          - name: depot
+            nfs:
+              server: datadepot.rcac.purdue.edu
+              path: /depot/cms
+          - name: work
+            persistentVolumeClaim:
+              claimName: af-shared-storage
+      extraContainerConfig:
+        volumeMounts:
+          - name: cvmfs
+            mountPath: /cvmfs
+            mountPropagation: HostToContainer
+          - name: eos
+            mountPath: /eos
+            mountPropagation: HostToContainer
+          - name: depot
+            mountPath: /depot/cms
+            mountPropagation: HostToContainer
+          - name: work
+            mountPath: /work/
+            mountPropagation: HostToContainer
+  extraConfig:
+    config: |
+      c.DaskGateway.address = ':8000'
+      c.KubeBackend.api_url = 'http://dask-gateway-k8s-pyroscope.geddes.rcac.purdue.edu:80/api'
+
+      c.ClusterConfig.cluster_max_cores = 401
+      c.ClusterConfig.cluster_max_memory = '1200 G'
+      c.ClusterConfig.cluster_max_workers = 400
+      c.ClusterConfig.idle_timeout = 3600
+
+      def ldap_lookup(username):
+          import subprocess
+          import pkg_resources
+          import sys
+
+          try:
+              pkg_resources.get_distribution('ldap3')
+          except pkg_resources.DistributionNotFound:
+              subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "ldap3"])
+
+          from ldap3 import Server, Connection, SUBTREE
+          url = "geddes-aux.rcac.purdue.edu"
+          baseDN = "ou=People,dc=rcac,dc=purdue,dc=edu"
+          search_filter = "(uid={0}*)"
+          attrs = ['uidNumber','gidNumber']
+          s = Server(host= url ,use_ssl= True, get_info= 'ALL')
+          conn = Connection(s, version = 3, authentication = "ANONYMOUS")
+          conn.start_tls()
+          conn.search(
+              search_base = baseDN,
+              search_filter = search_filter.format(username),
+              search_scope = SUBTREE,
+              attributes = attrs
+          )
+          ldap_result_id = json.loads(conn.response_to_json())
+          result = ldap_result_id[u'entries'][0][u'attributes']
+          uid_number = result[u'uidNumber']
+          gid_number = result [u'gidNumber']
+          return uid_number, gid_number            
+
+      from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
+
+      # Minimal scheduler setup; keep as-is
+      c.KubeClusterConfig.scheduler_setup = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; echo '[scheduler_setup] DASK_TEMPORARY_DIRECTORY set'"
+
+      # Move Pyroscope preload creation & install into a GLOBAL worker_setup (not inside options_handler)
+      c.KubeClusterConfig.worker_setup = r"""
+      set -euxo pipefail
+      echo "[worker_setup] starting at $(date)"
+      echo "[worker_setup] uname: $(uname -a)"
+      echo "[worker_setup] id: $(id)"
+      echo "[worker_setup] PATH: ${PATH}"
+
+      export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER
+      echo "[worker_setup] DASK_TEMPORARY_DIRECTORY=${DASK_TEMPORARY_DIRECTORY}"
+
+      echo "[worker_setup] which python: $(which python || true)"
+      echo "[worker_setup] which pip: $(which pip || true)"
+      python -V || true
+      pip -V || true
+
+      echo "[worker_setup] installing pyroscope-io…"
+      pip install --no-cache-dir pyroscope-io
+
+      echo "[worker_setup] writing /tmp/pyro_preload.py"
+      cat > /tmp/pyro_preload.py <<'PYRO'
+      def dask_setup(worker):
+          import os, socket, sys
+          print("[pyro_preload] dask_setup entered", file=sys.stderr)
+          try:
+              import pyroscope
+          except Exception as e:
+              print(f"[pyro_preload] failed to import pyroscope: {e}", file=sys.stderr)
+              return
+          server = os.environ.get("PYROSCOPE_SERVER", "http://pyroscope.cms.svc.cluster.local:4040")
+          app = os.environ.get("PYROSCOPE_APP", "dask-gateway")
+          print(f"[pyro_preload] configuring pyroscope server={server} app={app}", file=sys.stderr)
+          pyroscope.configure(
+              application_name=f"{app};worker_host={socket.gethostname()}",
+              server_address=server,
+          )
+          print("[pyro_preload] pyroscope configured", file=sys.stderr)
+      PYRO
+
+      chmod 0644 /tmp/pyro_preload.py
+      echo "[worker_setup] /tmp listing:"
+      ls -l /tmp || true
+      echo "[worker_setup] done at $(date)"
+      """
+
+      def options_handler(options, user):
+          if user.name=="jovyan":
+            uid, gid = 1000, 1000
+          elif ("-cern" in user.name) or ("-fnal" in user.name):
+              if not options.env:
+                raise ValueError("'env' must be specified in new_cluster(), for example env=dict(os.environ)")
+              if ("NB_UID" not in options.env) or ("NB_GID" not in options.env):
+                  raise ValueError(
+                      "NB_UID and NB_GID variables must exist in 'env'"
+                  )
+              uid, gid = int(options.env["NB_UID"]), int(options.env["NB_GID"])
+          else:
+              uid,gid = ldap_lookup(user.name)
+
+          if "NVIDIA_VISIBLE_DEVICES" in options.env:
+              del options.env["NVIDIA_VISIBLE_DEVICES"]
+
+          # Ensure user's conda env is first in PATH so 'pip' resolves there
+          options.env["PATH"]=f"{options.conda_env}/bin/:"+options.env.pop("PATH")
+          options.env["CPLUS_INCLUDE_PATH"]=f"{options.conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
+
+          extra_pod_config = {"securityContext": {"runAsUser": uid, "runAsGroup": gid,}}
+          c.KubeClusterConfig.scheduler_extra_pod_config.update(extra_pod_config)
+          c.KubeClusterConfig.worker_extra_pod_config.update(extra_pod_config)
+          c.KubeClusterConfig.scheduler_extra_pod_labels = {"user": user.name}
+          c.KubeClusterConfig.worker_extra_pod_labels = {"user": user.name}
+
+          setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; echo '[options_handler] set DASK_TEMPORARY_DIRECTORY'"
+
+          desired_cores = options.worker_cores
+          desired_memory = int(options.worker_memory * 2 ** 30)
+          return {
+              "worker_cores": desired_cores,
+              "worker_cores_limit": desired_cores,
+              "worker_memory": desired_memory,
+              "worker_memory_limit": desired_memory,
+              "environment": options.env,
+              "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
+              "worker_cmd": f"{options.conda_env}/bin/dask-worker",
+              "time": "1-00:00:00",
+              "scheduler_setup": setup_cmd,
+              # NOTE: worker_setup now comes from c.KubeClusterConfig.worker_setup above
+          }
+
+      c.Backend.cluster_options = Options(
+          String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
+          Float("worker_cores", default=1, min=0.1, max=64, label="Cores per worker"),
+          Float("worker_memory", default=4, min=0.1, max=64, label="Memory per worker (GiB)"),
+          Mapping("env", {}, label="Environment variables"),
+          handler=options_handler,
+      )
+traefik:
+  replicas: 1
+  image:
+    name: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/traefik
+    tag: 2.10.4
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 2
+      memory: 4Gi
+    requests:
+      cpu: 2
+      memory: 4Gi
+  loglevel: ERROR
+  dashboard: false
+  service:
+    type: LoadBalancer
+    annotations:
+      metallb.universe.tf/address-pool: geddes-private-pool
+    ports:
+      web:
+        port: 80
+        nodePort: null
+      tcp:
+        port: 8786
+        nodePort: null
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+
+controller:
+  enabled: true
+  annotations: {}
+  resources:
+    limits:
+      cpu: 2
+      memory: 4Gi
+    requests:
+      cpu: 2
+      memory: 4Gi
+  imagePullSecrets: []
+  loglevel: ERROR
+  completedClusterMaxAge: 86400
+  completedClusterCleanupPeriod: 600
+  backoffBaseDelay: 0.1
+  backoffMaxDelay: 300
+  k8sApiRateLimit: 50
+  k8sApiRateLimitBurst: 100
+  image:
+    name: ghcr.io/dask/dask-gateway-server
+    tag: 2024.1.0
+    pullPolicy: IfNotPresent
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  affinity: {}
