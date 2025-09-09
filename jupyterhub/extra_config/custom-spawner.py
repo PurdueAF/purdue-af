@@ -95,16 +95,6 @@ c.KubeSpawner.environment.setdefault(
     "https://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu",
 )
 
-try:
-    import pyroscope
-
-    pyroscope.configure(
-        application_name="purdue-af",
-        server_address="http://pyroscope.cms.svc.cluster.local:4040",
-    )
-except Exception as e:
-    print(f"Warning: Failed to configure pyroscope: {e}")
-
 # if ("-cern" in os.environ["NB_USER"]) or ("-fnal" in os.environ["NB_USER"]):
 #     c.KubeSpawner.environment.setdefault("DASK_LABEXTENSION__FACTORY__KWARGS__ADDRESS", "http://dask-gateway-k8s.geddes.rcac.purdue.edu")
 #     c.KubeSpawner.environment.setdefault("DASK_LABEXTENSION__FACTORY__KWARGS__PROXY_ADDRESS", "api-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8000")

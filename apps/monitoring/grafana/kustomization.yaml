@@ -22,5 +22,6 @@ configMapGenerator:
     namespace: cms
     files:
       - dashboards/users-overview.json
+      - dashboards/pyroscope.json
     options:
       disableNameSuffixHash: true
