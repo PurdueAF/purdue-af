@@ -483,6 +483,8 @@ $RUN_AS_UID bash -c "
 sed -i 's/\r$//' '$ENV_YAML_COPY'
 # Remove any trailing whitespace
 sed -i 's/[[:space:]]*$//' '$ENV_YAML_COPY'
+# Comment out the name field to avoid conflicts with --prefix
+sed -i 's/^name:/# name:/' '$ENV_YAML_COPY'
 # Ensure file ends with newline
 sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' '$ENV_YAML_COPY'
 "
@@ -490,8 +492,8 @@ sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' '$ENV_YAML_COPY'
 # Basic YAML validation using grep and basic syntax checks
 echo "Performing basic YAML validation..."
 if ! $RUN_AS_UID bash -c "
-# Check for basic YAML structure
-if grep -q '^name:' '$ENV_YAML_COPY' && grep -q '^channels:' '$ENV_YAML_COPY' && grep -q '^dependencies:' '$ENV_YAML_COPY'; then
+# Check for basic YAML structure (name field may be commented out)
+if (grep -q '^name:' '$ENV_YAML_COPY' || grep -q '^# name:' '$ENV_YAML_COPY') && grep -q '^channels:' '$ENV_YAML_COPY' && grep -q '^dependencies:' '$ENV_YAML_COPY'; then
     echo 'Basic YAML structure validation passed'
     exit 0
 else
