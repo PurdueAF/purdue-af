@@ -146,8 +146,14 @@ ls -la "$USER_TMP/.cache/conda/" 2>/dev/null || echo "Cache directory not access
 ls -la "$USER_TMP/.cache/conda/notices" 2>/dev/null || echo "Notices directory not accessible"
 
 # Verify writability
-[ -w "$USER_TMP" ] || { echo "ERROR: $USER_TMP not writable"; exit 1; }
-[ -w "$USER_TMP/conda-tmp" ] || { echo "ERROR: $USER_TMP/conda-tmp not writable"; exit 1; }
+[ -w "$USER_TMP" ] || {
+	echo "ERROR: $USER_TMP not writable"
+	exit 1
+}
+[ -w "$USER_TMP/conda-tmp" ] || {
+	echo "ERROR: $USER_TMP/conda-tmp not writable"
+	exit 1
+}
 
 # Create conda configuration file (expand variables now so .condarc has absolute paths)
 $RUN_AS_UID bash -c "cat >'${USER_TMP}/.condarc' <<EOF
