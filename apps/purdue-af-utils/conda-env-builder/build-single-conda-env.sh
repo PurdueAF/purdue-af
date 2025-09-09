@@ -337,33 +337,8 @@ env_needs_change() {
 	local output_file="$USER_TMP/dry_run_output.log"
 	local error_file="$USER_TMP/dry_run_error.log"
 
-	# Try mamba first with --dry-run --offline
+	# Use conda for dry-run (more reliable than mamba on mixed filesystems)
 	if sudo -E -u "$TARGET_USERNAME" bash -c "
-cd '$USER_TMP'
-export PWD='$USER_TMP'
-export SHELL='/bin/bash'
-export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
-export CONDA_PKGS_DIRS='$USER_PKGS'
-export CONDA_ENVS_PATH='$USER_ENVS'
-export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
-export PIP_CACHE_DIR='$USER_TMP/pip-cache'
-export TMPDIR='$USER_TMP/conda-tmp'
-export TEMP='$USER_TMP/conda-tmp'
-export TMP='$USER_TMP/conda-tmp'
-export HOME='$USER_TMP'
-export XDG_CACHE_HOME='$USER_TMP/.cache'
-export CONDA_ALWAYS_COPY='1'
-export CONDA_ALWAYS_YES='true'
-/opt/conda/bin/mamba env update --dry-run --offline --prefix '$prefix' --file '$yaml_path'
-" >"$output_file" 2>"$error_file"; then
-		# Check if output indicates no changes needed
-		if grep -q -E "(All requested packages already installed|Transaction will be empty|Nothing to do)" "$output_file"; then
-			return 1 # No changes needed
-		fi
-		return 0 # Changes needed
-	else
-		# Mamba failed, try conda with same flags
-		if sudo -E -u "$TARGET_USERNAME" bash -c "
 cd '$USER_TMP'
 export PWD='$USER_TMP'
 export SHELL='/bin/bash'
@@ -381,15 +356,14 @@ export CONDA_ALWAYS_COPY='1'
 export CONDA_ALWAYS_YES='true'
 /opt/conda/bin/conda env update --dry-run --offline --prefix '$prefix' --file '$yaml_path'
 " >"$output_file" 2>"$error_file"; then
-			# Check if output indicates no changes needed
-			if grep -q -E "(All requested packages already installed|Transaction will be empty|Nothing to do)" "$output_file"; then
-				return 1 # No changes needed
-			fi
-			return 0 # Changes needed
-		else
-			# Both failed, assume changes needed
-			return 0
+		# Check if output indicates no changes needed
+		if grep -q -E "(All requested packages already installed|Transaction will be empty|Nothing to do)" "$output_file"; then
+			return 1 # No changes needed
 		fi
+		return 0 # Changes needed
+	else
+		# Dry-run failed, assume changes needed
+		return 0
 	fi
 }
 
@@ -528,67 +502,9 @@ update_env_via_activation() {
 	local output_file="$USER_TMP/conda_update_output.log"
 	local error_file="$USER_TMP/conda_update_error.log"
 
-	# Try mamba first with --offline, then fall back to online if needed
+	# Use conda for updates (more reliable than mamba on mixed filesystems)
+	# Try offline first, then online if needed
 	if sudo -E -u "$TARGET_USERNAME" bash -c "
-cd '$USER_TMP'
-export PWD='$USER_TMP'
-export SHELL='/bin/bash'
-export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
-export CONDA_PKGS_DIRS='$USER_PKGS'
-export CONDA_ENVS_PATH='$USER_ENVS'
-export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
-export PIP_CACHE_DIR='$USER_TMP/pip-cache'
-export TMPDIR='$USER_TMP/conda-tmp'
-export TEMP='$USER_TMP/conda-tmp'
-export TMP='$USER_TMP/conda-tmp'
-export HOME='$USER_TMP'
-export XDG_CACHE_HOME='$USER_TMP/.cache'
-export CONDA_ALWAYS_COPY='1'
-export CONDA_ALWAYS_YES='true'
-# Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/mamba env update --offline --file '$yaml_path' --prefix '$env_path'
-" >"$output_file" 2>"$error_file"; then
-		return 0
-	else
-		local exit_code=$?
-		echo "Mamba offline update failed with exit code: $exit_code, trying mamba online..."
-		echo "=== MAMBA OFFLINE ERROR OUTPUT ==="
-		cat "$error_file"
-		echo "=== MAMBA OFFLINE STANDARD OUTPUT ==="
-		cat "$output_file"
-
-		# Try mamba online (remove --offline)
-		if sudo -E -u "$TARGET_USERNAME" bash -c "
-cd '$USER_TMP'
-export PWD='$USER_TMP'
-export SHELL='/bin/bash'
-export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
-export CONDA_PKGS_DIRS='$USER_PKGS'
-export CONDA_ENVS_PATH='$USER_ENVS'
-export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
-export PIP_CACHE_DIR='$USER_TMP/pip-cache'
-export TMPDIR='$USER_TMP/conda-tmp'
-export TEMP='$USER_TMP/conda-tmp'
-export TMP='$USER_TMP/conda-tmp'
-export HOME='$USER_TMP'
-export XDG_CACHE_HOME='$USER_TMP/.cache'
-export CONDA_ALWAYS_COPY='1'
-export CONDA_ALWAYS_YES='true'
-# Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/mamba env update --file '$yaml_path' --prefix '$env_path'
-" >"$output_file" 2>"$error_file"; then
-			echo "Mamba online update succeeded"
-			return 0
-		else
-			local mamba_online_exit_code=$?
-			echo "Mamba online update failed with exit code: $mamba_online_exit_code, trying conda fallback..."
-			echo "=== MAMBA ONLINE ERROR OUTPUT ==="
-			cat "$error_file"
-			echo "=== MAMBA ONLINE STANDARD OUTPUT ==="
-			cat "$output_file"
-
-			# Fallback to conda env update (offline first, then online)
-			if sudo -E -u "$TARGET_USERNAME" bash -c "
 cd '$USER_TMP'
 export PWD='$USER_TMP'
 export SHELL='/bin/bash'
@@ -607,11 +523,18 @@ export CONDA_ALWAYS_YES='true'
 # Use --prefix instead of activation to avoid PATH conflicts
 /opt/conda/bin/conda env update --offline --file '$yaml_path' --prefix '$env_path'
 " >"$output_file" 2>"$error_file"; then
-				echo "Conda offline fallback succeeded"
-				return 0
-			else
-				# Try conda online
-				if sudo -E -u "$TARGET_USERNAME" bash -c "
+		echo "Conda offline update succeeded"
+		return 0
+	else
+		local exit_code=$?
+		echo "Conda offline update failed with exit code: $exit_code, trying online..."
+		echo "=== CONDA OFFLINE ERROR OUTPUT ==="
+		cat "$error_file"
+		echo "=== CONDA OFFLINE STANDARD OUTPUT ==="
+		cat "$output_file"
+
+		# Try conda online (remove --offline)
+		if sudo -E -u "$TARGET_USERNAME" bash -c "
 cd '$USER_TMP'
 export PWD='$USER_TMP'
 export SHELL='/bin/bash'
@@ -630,18 +553,16 @@ export CONDA_ALWAYS_YES='true'
 # Use --prefix instead of activation to avoid PATH conflicts
 /opt/conda/bin/conda env update --file '$yaml_path' --prefix '$env_path'
 " >"$output_file" 2>"$error_file"; then
-					echo "Conda online fallback succeeded"
-					return 0
-				else
-					local conda_exit_code=$?
-					echo "All conda/mamba attempts failed with exit code: $conda_exit_code"
-					echo "=== CONDA ERROR OUTPUT ==="
-					cat "$error_file"
-					echo "=== CONDA STANDARD OUTPUT ==="
-					cat "$output_file"
-					return $conda_exit_code
-				fi
-			fi
+			echo "Conda online update succeeded"
+			return 0
+		else
+			local conda_exit_code=$?
+			echo "All conda attempts failed with exit code: $conda_exit_code"
+			echo "=== CONDA ERROR OUTPUT ==="
+			cat "$error_file"
+			echo "=== CONDA STANDARD OUTPUT ==="
+			cat "$output_file"
+			return $conda_exit_code
 		fi
 	fi
 }
@@ -653,67 +574,9 @@ create_env_via_activation() {
 	local output_file="$USER_TMP/conda_create_output.log"
 	local error_file="$USER_TMP/conda_create_error.log"
 
-	# Try mamba first with --offline, then fall back to online if needed
+	# Use conda for creates (more reliable than mamba on mixed filesystems)
+	# Try offline first, then online if needed
 	if sudo -E -u "$TARGET_USERNAME" bash -c "
-cd '$USER_TMP'
-export PWD='$USER_TMP'
-export SHELL='/bin/bash'
-export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
-export CONDA_PKGS_DIRS='$USER_PKGS'
-export CONDA_ENVS_PATH='$USER_ENVS'
-export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
-export PIP_CACHE_DIR='$USER_TMP/pip-cache'
-export TMPDIR='$USER_TMP/conda-tmp'
-export TEMP='$USER_TMP/conda-tmp'
-export TMP='$USER_TMP/conda-tmp'
-export HOME='$USER_TMP'
-export XDG_CACHE_HOME='$USER_TMP/.cache'
-export CONDA_ALWAYS_COPY='1'
-export CONDA_ALWAYS_YES='true'
-# Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/mamba env create --offline --file '$yaml_path' --prefix '$env_path'
-" >"$output_file" 2>"$error_file"; then
-		return 0
-	else
-		local exit_code=$?
-		echo "Mamba offline create failed with exit code: $exit_code, trying mamba online..."
-		echo "=== MAMBA OFFLINE ERROR OUTPUT ==="
-		cat "$error_file"
-		echo "=== MAMBA OFFLINE STANDARD OUTPUT ==="
-		cat "$output_file"
-
-		# Try mamba online (remove --offline)
-		if sudo -E -u "$TARGET_USERNAME" bash -c "
-cd '$USER_TMP'
-export PWD='$USER_TMP'
-export SHELL='/bin/bash'
-export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
-export CONDA_PKGS_DIRS='$USER_PKGS'
-export CONDA_ENVS_PATH='$USER_ENVS'
-export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
-export PIP_CACHE_DIR='$USER_TMP/pip-cache'
-export TMPDIR='$USER_TMP/conda-tmp'
-export TEMP='$USER_TMP/conda-tmp'
-export TMP='$USER_TMP/conda-tmp'
-export HOME='$USER_TMP'
-export XDG_CACHE_HOME='$USER_TMP/.cache'
-export CONDA_ALWAYS_COPY='1'
-export CONDA_ALWAYS_YES='true'
-# Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/mamba env create --file '$yaml_path' --prefix '$env_path'
-" >"$output_file" 2>"$error_file"; then
-			echo "Mamba online create succeeded"
-			return 0
-		else
-			local mamba_online_exit_code=$?
-			echo "Mamba online create failed with exit code: $mamba_online_exit_code, trying conda fallback..."
-			echo "=== MAMBA ONLINE ERROR OUTPUT ==="
-			cat "$error_file"
-			echo "=== MAMBA ONLINE STANDARD OUTPUT ==="
-			cat "$output_file"
-
-			# Fallback to conda env create (offline first, then online)
-			if sudo -E -u "$TARGET_USERNAME" bash -c "
 cd '$USER_TMP'
 export PWD='$USER_TMP'
 export SHELL='/bin/bash'
@@ -732,11 +595,18 @@ export CONDA_ALWAYS_YES='true'
 # Use --prefix instead of activation to avoid PATH conflicts
 /opt/conda/bin/conda env create --offline --file '$yaml_path' --prefix '$env_path'
 " >"$output_file" 2>"$error_file"; then
-				echo "Conda offline fallback succeeded"
-				return 0
-			else
-				# Try conda online
-				if sudo -E -u "$TARGET_USERNAME" bash -c "
+		echo "Conda offline create succeeded"
+		return 0
+	else
+		local exit_code=$?
+		echo "Conda offline create failed with exit code: $exit_code, trying online..."
+		echo "=== CONDA OFFLINE ERROR OUTPUT ==="
+		cat "$error_file"
+		echo "=== CONDA OFFLINE STANDARD OUTPUT ==="
+		cat "$output_file"
+
+		# Try conda online (remove --offline)
+		if sudo -E -u "$TARGET_USERNAME" bash -c "
 cd '$USER_TMP'
 export PWD='$USER_TMP'
 export SHELL='/bin/bash'
@@ -755,18 +625,16 @@ export CONDA_ALWAYS_YES='true'
 # Use --prefix instead of activation to avoid PATH conflicts
 /opt/conda/bin/conda env create --file '$yaml_path' --prefix '$env_path'
 " >"$output_file" 2>"$error_file"; then
-					echo "Conda online fallback succeeded"
-					return 0
-				else
-					local conda_exit_code=$?
-					echo "All conda/mamba attempts failed with exit code: $conda_exit_code"
-					echo "=== CONDA ERROR OUTPUT ==="
-					cat "$error_file"
-					echo "=== CONDA STANDARD OUTPUT ==="
-					cat "$output_file"
-					return $conda_exit_code
-				fi
-			fi
+			echo "Conda online create succeeded"
+			return 0
+		else
+			local conda_exit_code=$?
+			echo "All conda attempts failed with exit code: $conda_exit_code"
+			echo "=== CONDA ERROR OUTPUT ==="
+			cat "$error_file"
+			echo "=== CONDA STANDARD OUTPUT ==="
+			cat "$output_file"
+			return $conda_exit_code
 		fi
 	fi
 }
