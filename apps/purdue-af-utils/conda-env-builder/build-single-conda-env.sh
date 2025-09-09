@@ -337,7 +337,7 @@ env_needs_change() {
 	local output_file="$USER_TMP/dry_run_output.log"
 	local error_file="$USER_TMP/dry_run_error.log"
 
-	# Try mamba first with --dry-run --offline --freeze-installed
+	# Try mamba first with --dry-run --offline
 	if sudo -E -u "$TARGET_USERNAME" bash -c "
 cd '$USER_TMP'
 export PWD='$USER_TMP'
@@ -354,7 +354,7 @@ export HOME='$USER_TMP'
 export XDG_CACHE_HOME='$USER_TMP/.cache'
 export CONDA_ALWAYS_COPY='1'
 export CONDA_ALWAYS_YES='true'
-/opt/conda/bin/mamba env update --dry-run --offline --freeze-installed --prefix '$prefix' --file '$yaml_path'
+/opt/conda/bin/mamba env update --dry-run --offline --prefix '$prefix' --file '$yaml_path'
 " >"$output_file" 2>"$error_file"; then
 		# Check if output indicates no changes needed
 		if grep -q -E "(All requested packages already installed|Transaction will be empty|Nothing to do)" "$output_file"; then
@@ -379,7 +379,7 @@ export HOME='$USER_TMP'
 export XDG_CACHE_HOME='$USER_TMP/.cache'
 export CONDA_ALWAYS_COPY='1'
 export CONDA_ALWAYS_YES='true'
-/opt/conda/bin/conda env update --dry-run --offline --freeze-installed --prefix '$prefix' --file '$yaml_path'
+/opt/conda/bin/conda env update --dry-run --offline --prefix '$prefix' --file '$yaml_path'
 " >"$output_file" 2>"$error_file"; then
 			# Check if output indicates no changes needed
 			if grep -q -E "(All requested packages already installed|Transaction will be empty|Nothing to do)" "$output_file"; then
@@ -528,7 +528,7 @@ update_env_via_activation() {
 	local output_file="$USER_TMP/conda_update_output.log"
 	local error_file="$USER_TMP/conda_update_error.log"
 
-	# Try mamba first with --freeze-installed --offline, then fall back to online if needed
+	# Try mamba first with --offline, then fall back to online if needed
 	if sudo -E -u "$TARGET_USERNAME" bash -c "
 cd '$USER_TMP'
 export PWD='$USER_TMP'
@@ -546,7 +546,7 @@ export XDG_CACHE_HOME='$USER_TMP/.cache'
 export CONDA_ALWAYS_COPY='1'
 export CONDA_ALWAYS_YES='true'
 # Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/mamba env update --freeze-installed --offline --file '$yaml_path' --prefix '$env_path'
+/opt/conda/bin/mamba env update --offline --file '$yaml_path' --prefix '$env_path'
 " >"$output_file" 2>"$error_file"; then
 		return 0
 	else
@@ -575,7 +575,7 @@ export XDG_CACHE_HOME='$USER_TMP/.cache'
 export CONDA_ALWAYS_COPY='1'
 export CONDA_ALWAYS_YES='true'
 # Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/mamba env update --freeze-installed --file '$yaml_path' --prefix '$env_path'
+/opt/conda/bin/mamba env update --file '$yaml_path' --prefix '$env_path'
 " >"$output_file" 2>"$error_file"; then
 			echo "Mamba online update succeeded"
 			return 0
@@ -605,7 +605,7 @@ export XDG_CACHE_HOME='$USER_TMP/.cache'
 export CONDA_ALWAYS_COPY='1'
 export CONDA_ALWAYS_YES='true'
 # Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/conda env update --freeze-installed --offline --file '$yaml_path' --prefix '$env_path'
+/opt/conda/bin/conda env update --offline --file '$yaml_path' --prefix '$env_path'
 " >"$output_file" 2>"$error_file"; then
 				echo "Conda offline fallback succeeded"
 				return 0
@@ -628,7 +628,7 @@ export XDG_CACHE_HOME='$USER_TMP/.cache'
 export CONDA_ALWAYS_COPY='1'
 export CONDA_ALWAYS_YES='true'
 # Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/conda env update --freeze-installed --file '$yaml_path' --prefix '$env_path'
+/opt/conda/bin/conda env update --file '$yaml_path' --prefix '$env_path'
 " >"$output_file" 2>"$error_file"; then
 					echo "Conda online fallback succeeded"
 					return 0
@@ -653,7 +653,7 @@ create_env_via_activation() {
 	local output_file="$USER_TMP/conda_create_output.log"
 	local error_file="$USER_TMP/conda_create_error.log"
 
-	# Try mamba first with --freeze-installed --offline, then fall back to online if needed
+	# Try mamba first with --offline, then fall back to online if needed
 	if sudo -E -u "$TARGET_USERNAME" bash -c "
 cd '$USER_TMP'
 export PWD='$USER_TMP'
@@ -671,7 +671,7 @@ export XDG_CACHE_HOME='$USER_TMP/.cache'
 export CONDA_ALWAYS_COPY='1'
 export CONDA_ALWAYS_YES='true'
 # Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/mamba env create --freeze-installed --offline --file '$yaml_path' --prefix '$env_path'
+/opt/conda/bin/mamba env create --offline --file '$yaml_path' --prefix '$env_path'
 " >"$output_file" 2>"$error_file"; then
 		return 0
 	else
@@ -700,7 +700,7 @@ export XDG_CACHE_HOME='$USER_TMP/.cache'
 export CONDA_ALWAYS_COPY='1'
 export CONDA_ALWAYS_YES='true'
 # Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/mamba env create --freeze-installed --file '$yaml_path' --prefix '$env_path'
+/opt/conda/bin/mamba env create --file '$yaml_path' --prefix '$env_path'
 " >"$output_file" 2>"$error_file"; then
 			echo "Mamba online create succeeded"
 			return 0
@@ -730,7 +730,7 @@ export XDG_CACHE_HOME='$USER_TMP/.cache'
 export CONDA_ALWAYS_COPY='1'
 export CONDA_ALWAYS_YES='true'
 # Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/conda env create --freeze-installed --offline --file '$yaml_path' --prefix '$env_path'
+/opt/conda/bin/conda env create --offline --file '$yaml_path' --prefix '$env_path'
 " >"$output_file" 2>"$error_file"; then
 				echo "Conda offline fallback succeeded"
 				return 0
@@ -753,7 +753,7 @@ export XDG_CACHE_HOME='$USER_TMP/.cache'
 export CONDA_ALWAYS_COPY='1'
 export CONDA_ALWAYS_YES='true'
 # Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/conda env create --freeze-installed --file '$yaml_path' --prefix '$env_path'
+/opt/conda/bin/conda env create --file '$yaml_path' --prefix '$env_path'
 " >"$output_file" 2>"$error_file"; then
 					echo "Conda online fallback succeeded"
 					return 0
