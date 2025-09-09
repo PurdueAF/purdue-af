@@ -80,17 +80,9 @@ ln -sf /opt/conda/bin/pip /usr/local/bin/pip
 ls -la /usr/local/bin/conda /usr/local/bin/mamba /usr/local/bin/python /usr/local/bin/pip >/dev/null 2>&1 || echo "Warning: Some symlinks failed to create"
 
 # Verify conda installation
-if ! /opt/conda/bin/conda --version >/dev/null 2>&1; then
-	echo "ERROR: conda is not properly installed or not accessible"
-	exit 1
-fi
 /opt/conda/bin/conda --version
 
 # Verify mamba installation
-if ! /opt/conda/bin/mamba --version >/dev/null 2>&1; then
-	echo "ERROR: mamba is not properly installed or not accessible"
-	exit 1
-fi
 /opt/conda/bin/mamba --version
 
 # Ensure 'conda env' subcommand is available
@@ -207,7 +199,13 @@ if [ ! -w "$USER_TMP/conda-tmp" ]; then
 	exit 1
 fi
 
-# Let conda/mamba manage internal subdirectories - no need to create them manually
+# Create the specific cache subdirectories that conda expects
+$RUN_AS_UID bash -c "
+mkdir -p '$USER_PKGS/cache' '$USER_PKGS/envs' '$USER_PKGS/pkgs' 2>/dev/null || true
+mkdir -p '$USER_ENVS/.conda' 2>/dev/null || true
+mkdir -p '$USER_PKGS/cache/repodata' 2>/dev/null || true
+mkdir -p '$USER_PKGS/cache/pkgs' 2>/dev/null || true
+"
 chown -R "$TARGET_USERNAME:$TARGET_USERNAME" "$USER_PKGS" "$USER_ENVS"
 chmod -R 755 "$USER_PKGS" "$USER_ENVS"
 
@@ -224,14 +222,15 @@ envs_dirs:
 channels:
   - conda-forge
   - defaults
-# Use strict channel priority and current repodata for stable solves and no-op optimization
-channel_priority: strict
-repodata_fns: [current_repodata.json]
+channel_priority: flexible
 use_lockfiles: false
+# Set package cache timeout to 0 to disable caching
+pkg_cache_timeout: 0
 # Disable aggressive caching
 aggressive_update_packages: []
-# Avoid hardlinks on network filesystems - keep copy mode for reliability
+# Avoid hardlinks on network filesystems
 always_copy: true
+allow_softlinks: true
 # Disable conda activation hooks to prevent PATH conflicts
 auto_activate_base: false
 env_prompt: '({name})'
@@ -239,6 +238,7 @@ EOF"
 
 # Verify conda is working
 $RUN_AS_UID bash -c "
+export CONDA_ROOT_PREFIX='$USER_CONDA'
 export CONDA_PKGS_DIRS='$USER_PKGS'
 export CONDA_ENVS_PATH='$USER_ENVS'
 export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
@@ -254,6 +254,7 @@ export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
 
 # Test conda env subcommand specifically
 $RUN_AS_UID bash -c "
+export CONDA_ROOT_PREFIX='$USER_CONDA'
 export CONDA_PKGS_DIRS='$USER_PKGS'
 export CONDA_ENVS_PATH='$USER_ENVS'
 export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
@@ -330,171 +331,6 @@ export _CE_CONDA_PIP_EXE='$ENV_PATH/bin/pip'
 	fi
 }
 
-# Helper: check if environment needs changes using dry-run
-env_needs_change() {
-	local prefix="$1"
-	local yaml_path="$2"
-	local output_file="$USER_TMP/dry_run_output.log"
-	local error_file="$USER_TMP/dry_run_error.log"
-
-	# Use conda for dry-run (more reliable than mamba on mixed filesystems)
-	if sudo -E -u "$TARGET_USERNAME" bash -c "
-cd '$USER_TMP'
-export PWD='$USER_TMP'
-export SHELL='/bin/bash'
-export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
-export CONDA_PKGS_DIRS='$USER_PKGS'
-export CONDA_ENVS_PATH='$USER_ENVS'
-export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
-export PIP_CACHE_DIR='$USER_TMP/pip-cache'
-export TMPDIR='$USER_TMP/conda-tmp'
-export TEMP='$USER_TMP/conda-tmp'
-export TMP='$USER_TMP/conda-tmp'
-export HOME='$USER_TMP'
-export XDG_CACHE_HOME='$USER_TMP/.cache'
-export CONDA_ALWAYS_COPY='1'
-export CONDA_ALWAYS_YES='true'
-/opt/conda/bin/conda env update --dry-run --offline --prefix '$prefix' --file '$yaml_path'
-" >"$output_file" 2>"$error_file"; then
-		# Check if output indicates no changes needed
-		if grep -q -E "(All requested packages already installed|Transaction will be empty|Nothing to do)" "$output_file"; then
-			return 1 # No changes needed
-		fi
-		return 0 # Changes needed
-	else
-		# Dry-run failed, assume changes needed
-		return 0
-	fi
-}
-
-# Helper: detect filesystem types for ENV and PKGS directories
-detect_filesystem_types() {
-	local env_path="$1"
-	local pkgs_path="$2"
-
-	# Get filesystem type for environment path (or its parent if env doesn't exist)
-	local env_check_path="$env_path"
-	if [ ! -d "$env_path" ]; then
-		env_check_path="$(dirname "$env_path")"
-	fi
-
-	# Detect filesystem types
-	ENV_FS=$(stat -f -c %T "$env_check_path" 2>/dev/null || echo "unknown")
-	PKGS_FS=$(stat -f -c %T "$pkgs_path" 2>/dev/null || echo "unknown")
-
-	echo "Filesystem detection: ENV_FS=$ENV_FS, PKGS_FS=$PKGS_FS"
-
-	# Check if we need relocation (different FS or network/overlay FS)
-	if [ "$ENV_FS" != "$PKGS_FS" ] || [[ "$ENV_FS" =~ (nfs|smb|cifs|fuseblk|overlay) ]]; then
-		return 0 # Need relocation
-	else
-		return 1 # No relocation needed
-	fi
-}
-
-# Helper: update/create environment using local build + conda-pack relocation for network FS
-update_env_via_relocation() {
-	local env_path="$1"
-	local yaml_path="$2"
-	local env_name="$3"
-
-	echo "Using local build + relocation for network/overlay filesystem..."
-
-	# Ensure conda-pack is installed
-	echo "Installing conda-pack..."
-	if ! $RUN_AS_UID bash -c "
-cd '$USER_TMP'
-export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
-export CONDA_PKGS_DIRS='$USER_PKGS'
-export CONDA_ENVS_PATH='$USER_ENVS'
-export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
-export PIP_CACHE_DIR='$USER_TMP/pip-cache'
-export TMPDIR='$USER_TMP/conda-tmp'
-export TEMP='$USER_TMP/conda-tmp'
-export TMP='$USER_TMP/conda-tmp'
-export HOME='$USER_TMP'
-export XDG_CACHE_HOME='$USER_TMP/.cache'
-export CONDA_ALWAYS_COPY='1'
-export CONDA_ALWAYS_YES='true'
-/opt/conda/bin/conda install -y -c conda-forge conda-pack
-" >"$USER_TMP/conda_pack_install.log" 2>"$USER_TMP/conda_pack_error.log"; then
-		echo "Failed to install conda-pack, falling back to direct update"
-		return 1
-	fi
-
-	# Set up local build directory
-	local LOCAL_BUILD_PREFIX="$USER_TMP/envbuild-$env_name"
-	local PACK_TGZ="$USER_TMP/$env_name.tar.gz"
-
-	# Clean up any existing build
-	$RUN_AS_UID rm -rf "$LOCAL_BUILD_PREFIX" "$PACK_TGZ" 2>/dev/null || true
-
-	# Create/update environment at local build prefix
-	echo "Building environment locally at $LOCAL_BUILD_PREFIX..."
-	if update_env_via_activation "$LOCAL_BUILD_PREFIX" "$yaml_path"; then
-		echo "Local build succeeded"
-	else
-		echo "Local build failed, trying create..."
-		if create_env_via_activation "$LOCAL_BUILD_PREFIX" "$yaml_path"; then
-			echo "Local create succeeded"
-		else
-			echo "Local build/create failed"
-			return 1
-		fi
-	fi
-
-	# Pack the environment
-	echo "Packing environment..."
-	if $RUN_AS_UID bash -c "
-cd '$USER_TMP'
-export PATH='$LOCAL_BUILD_PREFIX/bin:/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
-export CONDA_PKGS_DIRS='$USER_PKGS'
-export CONDA_ENVS_PATH='$USER_ENVS'
-export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
-export PIP_CACHE_DIR='$USER_TMP/pip-cache'
-export TMPDIR='$USER_TMP/conda-tmp'
-export TEMP='$USER_TMP/conda-tmp'
-export TMP='$USER_TMP/conda-tmp'
-export HOME='$USER_TMP'
-export XDG_CACHE_HOME='$USER_TMP/.cache'
-export CONDA_ALWAYS_COPY='1'
-export CONDA_ALWAYS_YES='true'
-/opt/conda/bin/conda-pack -p '$LOCAL_BUILD_PREFIX' -o '$PACK_TGZ'
-" >"$USER_TMP/conda_pack_output.log" 2>"$USER_TMP/conda_pack_error.log"; then
-		echo "Environment packed successfully"
-	else
-		echo "Failed to pack environment"
-		cat "$USER_TMP/conda_pack_error.log"
-		return 1
-	fi
-
-	# Extract to target location
-	echo "Extracting to target location $env_path..."
-	$RUN_AS_UID rm -rf "$env_path" 2>/dev/null || true
-	$RUN_AS_UID mkdir -p "$env_path"
-
-	if $RUN_AS_UID bash -c "cd '$env_path' && tar -xzf '$PACK_TGZ'"; then
-		echo "Extraction succeeded"
-	else
-		echo "Failed to extract environment"
-		return 1
-	fi
-
-	# Run conda-unpack to fix paths
-	echo "Running conda-unpack..."
-	if $RUN_AS_UID bash -c "cd '$env_path' && ./bin/conda-unpack"; then
-		echo "conda-unpack succeeded"
-	else
-		echo "conda-unpack failed, but environment may still work"
-	fi
-
-	# Clean up
-	$RUN_AS_UID rm -rf "$LOCAL_BUILD_PREFIX" "$PACK_TGZ" 2>/dev/null || true
-
-	echo "Relocation completed successfully"
-	return 0
-}
-
 # Helper: update environment using --prefix to avoid activation issues
 update_env_via_activation() {
 	local env_path="$1"
@@ -502,13 +338,13 @@ update_env_via_activation() {
 	local output_file="$USER_TMP/conda_update_output.log"
 	local error_file="$USER_TMP/conda_update_error.log"
 
-	# Use conda for updates (more reliable than mamba on mixed filesystems)
-	# Try offline first, then online if needed
+	# Try mamba first, then fall back to conda if mamba fails
 	if sudo -E -u "$TARGET_USERNAME" bash -c "
 cd '$USER_TMP'
 export PWD='$USER_TMP'
 export SHELL='/bin/bash'
 export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
+export CONDA_ROOT_PREFIX='$USER_CONDA'
 export CONDA_PKGS_DIRS='$USER_PKGS'
 export CONDA_ENVS_PATH='$USER_ENVS'
 export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
@@ -521,24 +357,24 @@ export XDG_CACHE_HOME='$USER_TMP/.cache'
 export CONDA_ALWAYS_COPY='1'
 export CONDA_ALWAYS_YES='true'
 # Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/conda env update --offline --file '$yaml_path' --prefix '$env_path'
+/opt/conda/bin/mamba env update --file '$yaml_path' --prefix '$env_path'
 " >"$output_file" 2>"$error_file"; then
-		echo "Conda offline update succeeded"
 		return 0
 	else
 		local exit_code=$?
-		echo "Conda offline update failed with exit code: $exit_code, trying online..."
-		echo "=== CONDA OFFLINE ERROR OUTPUT ==="
+		echo "Mamba env update failed with exit code: $exit_code, trying conda fallback..."
+		echo "=== MAMBA ERROR OUTPUT ==="
 		cat "$error_file"
-		echo "=== CONDA OFFLINE STANDARD OUTPUT ==="
+		echo "=== MAMBA STANDARD OUTPUT ==="
 		cat "$output_file"
 
-		# Try conda online (remove --offline)
+		# Fallback to conda env update
 		if sudo -E -u "$TARGET_USERNAME" bash -c "
 cd '$USER_TMP'
 export PWD='$USER_TMP'
 export SHELL='/bin/bash'
 export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
+export CONDA_ROOT_PREFIX='$USER_CONDA'
 export CONDA_PKGS_DIRS='$USER_PKGS'
 export CONDA_ENVS_PATH='$USER_ENVS'
 export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
@@ -553,11 +389,11 @@ export CONDA_ALWAYS_YES='true'
 # Use --prefix instead of activation to avoid PATH conflicts
 /opt/conda/bin/conda env update --file '$yaml_path' --prefix '$env_path'
 " >"$output_file" 2>"$error_file"; then
-			echo "Conda online update succeeded"
+			echo "Conda fallback succeeded"
 			return 0
 		else
 			local conda_exit_code=$?
-			echo "All conda attempts failed with exit code: $conda_exit_code"
+			echo "Conda fallback also failed with exit code: $conda_exit_code"
 			echo "=== CONDA ERROR OUTPUT ==="
 			cat "$error_file"
 			echo "=== CONDA STANDARD OUTPUT ==="
@@ -574,13 +410,13 @@ create_env_via_activation() {
 	local output_file="$USER_TMP/conda_create_output.log"
 	local error_file="$USER_TMP/conda_create_error.log"
 
-	# Use conda for creates (more reliable than mamba on mixed filesystems)
-	# Try offline first, then online if needed
+	# Try mamba first, then fall back to conda if mamba fails
 	if sudo -E -u "$TARGET_USERNAME" bash -c "
 cd '$USER_TMP'
 export PWD='$USER_TMP'
 export SHELL='/bin/bash'
 export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
+export CONDA_ROOT_PREFIX='$USER_CONDA'
 export CONDA_PKGS_DIRS='$USER_PKGS'
 export CONDA_ENVS_PATH='$USER_ENVS'
 export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
@@ -593,24 +429,24 @@ export XDG_CACHE_HOME='$USER_TMP/.cache'
 export CONDA_ALWAYS_COPY='1'
 export CONDA_ALWAYS_YES='true'
 # Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/conda env create --offline --file '$yaml_path' --prefix '$env_path'
+/opt/conda/bin/mamba env create --file '$yaml_path' --prefix '$env_path'
 " >"$output_file" 2>"$error_file"; then
-		echo "Conda offline create succeeded"
 		return 0
 	else
 		local exit_code=$?
-		echo "Conda offline create failed with exit code: $exit_code, trying online..."
-		echo "=== CONDA OFFLINE ERROR OUTPUT ==="
+		echo "Mamba env create failed with exit code: $exit_code, trying conda fallback..."
+		echo "=== MAMBA ERROR OUTPUT ==="
 		cat "$error_file"
-		echo "=== CONDA OFFLINE STANDARD OUTPUT ==="
+		echo "=== MAMBA STANDARD OUTPUT ==="
 		cat "$output_file"
 
-		# Try conda online (remove --offline)
+		# Fallback to conda env create
 		if sudo -E -u "$TARGET_USERNAME" bash -c "
 cd '$USER_TMP'
 export PWD='$USER_TMP'
 export SHELL='/bin/bash'
 export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
+export CONDA_ROOT_PREFIX='$USER_CONDA'
 export CONDA_PKGS_DIRS='$USER_PKGS'
 export CONDA_ENVS_PATH='$USER_ENVS'
 export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
@@ -625,11 +461,11 @@ export CONDA_ALWAYS_YES='true'
 # Use --prefix instead of activation to avoid PATH conflicts
 /opt/conda/bin/conda env create --file '$yaml_path' --prefix '$env_path'
 " >"$output_file" 2>"$error_file"; then
-			echo "Conda online create succeeded"
+			echo "Conda fallback succeeded"
 			return 0
 		else
 			local conda_exit_code=$?
-			echo "All conda attempts failed with exit code: $conda_exit_code"
+			echo "Conda fallback also failed with exit code: $conda_exit_code"
 			echo "=== CONDA ERROR OUTPUT ==="
 			cat "$error_file"
 			echo "=== CONDA STANDARD OUTPUT ==="
@@ -651,6 +487,7 @@ run_in_env() {
 	cmd_string+="export PWD='$USER_TMP' && "
 	cmd_string+="export SHELL='/bin/bash' && "
 	cmd_string+="export PATH='$env_path/bin:/opt/conda/bin:/usr/local/bin:/usr/bin:/bin' && "
+	cmd_string+="export CONDA_ROOT_PREFIX='$USER_CONDA' && "
 	cmd_string+="export CONDA_PKGS_DIRS='$USER_PKGS' && "
 	cmd_string+="export CONDA_ENVS_PATH='$USER_ENVS' && "
 	cmd_string+="export CONDA_CONFIG_FILE='${USER_TMP}/.condarc' && "
@@ -749,103 +586,38 @@ echo "✓ YAML file validated successfully"
 if [ -d "$ENV_PATH" ]; then
 	# Verify it's actually a valid conda environment by checking for conda-meta
 	if [ -d "$ENV_PATH/conda-meta" ] && [ -f "$ENV_PATH/conda-meta/history" ]; then
-		echo "Checking if environment needs updates: $ENV_NAME"
+		echo "Updating existing environment: $ENV_NAME"
 
-		# Fast no-op detection
-		if ! env_needs_change "$ENV_PATH" "$ENV_YAML_COPY"; then
-			echo "No changes. Skipping update."
+		if update_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
+			echo "✓ Environment updated successfully"
 		else
-			echo "Changes required. Updating environment: $ENV_NAME"
-
-			# Check if we need relocation for network/overlay filesystems
-			if detect_filesystem_types "$ENV_PATH" "$USER_PKGS"; then
-				echo "Using relocation path for network/overlay filesystem"
-				if update_env_via_relocation "$ENV_PATH" "$ENV_YAML_COPY" "$ENV_NAME"; then
-					echo "✓ Environment updated successfully via relocation"
-				else
-					echo "ERROR: Failed to update environment via relocation, trying direct update..."
-					if update_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
-						echo "✓ Environment updated successfully via direct update"
-					else
-						echo "ERROR: Failed to update environment, recreating..."
-						rm -rf "$ENV_PATH"
-						if create_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
-							echo "✓ Environment recreated successfully"
-						else
-							echo "ERROR: Failed to recreate environment: $ENV_NAME"
-							exit 1
-						fi
-					fi
-				fi
+			echo "ERROR: Failed to update environment, recreating..."
+			rm -rf "$ENV_PATH"
+			if create_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
+				echo "✓ Environment recreated successfully"
 			else
-				echo "Using direct update for local filesystem"
-				if update_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
-					echo "✓ Environment updated successfully"
-				else
-					echo "ERROR: Failed to update environment, recreating..."
-					rm -rf "$ENV_PATH"
-					if create_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
-						echo "✓ Environment recreated successfully"
-					else
-						echo "ERROR: Failed to recreate environment: $ENV_NAME"
-						exit 1
-					fi
-				fi
+				echo "ERROR: Failed to recreate environment: $ENV_NAME"
+				exit 1
 			fi
 		fi
 	else
 		echo "Recreating invalid environment: $ENV_NAME"
 		rm -rf "$ENV_PATH"
-
-		# Check if we need relocation for network/overlay filesystems
-		if detect_filesystem_types "$ENV_PATH" "$USER_PKGS"; then
-			echo "Using relocation path for network/overlay filesystem"
-			if update_env_via_relocation "$ENV_PATH" "$ENV_YAML_COPY" "$ENV_NAME"; then
-				echo "✓ Environment created successfully via relocation"
-			else
-				echo "ERROR: Failed to create environment via relocation, trying direct create..."
-				if create_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
-					echo "✓ Environment created successfully via direct create"
-				else
-					echo "ERROR: Failed to create environment: $ENV_NAME"
-					exit 1
-				fi
-			fi
-		else
-			echo "Using direct create for local filesystem"
-			if create_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
-				echo "✓ Environment created successfully"
-			else
-				echo "ERROR: Failed to create environment: $ENV_NAME"
-				exit 1
-			fi
-		fi
-	fi
-else
-	echo "Creating new environment: $ENV_NAME"
-
-	# Check if we need relocation for network/overlay filesystems
-	if detect_filesystem_types "$ENV_PATH" "$USER_PKGS"; then
-		echo "Using relocation path for network/overlay filesystem"
-		if update_env_via_relocation "$ENV_PATH" "$ENV_YAML_COPY" "$ENV_NAME"; then
-			echo "✓ Environment created successfully via relocation"
-		else
-			echo "ERROR: Failed to create environment via relocation, trying direct create..."
-			if create_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
-				echo "✓ Environment created successfully via direct create"
-			else
-				echo "ERROR: Failed to create environment: $ENV_NAME"
-				exit 1
-			fi
-		fi
-	else
-		echo "Using direct create for local filesystem"
 		if create_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
 			echo "✓ Environment created successfully"
 		else
 			echo "ERROR: Failed to create environment: $ENV_NAME"
 			exit 1
 		fi
+	fi
+else
+	echo "Creating new environment: $ENV_NAME"
+
+	if create_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
+		echo "✓ Environment created successfully"
+	else
+		echo "ERROR: Failed to create environment: $ENV_NAME"
+		exit 1
 	fi
 fi
 
