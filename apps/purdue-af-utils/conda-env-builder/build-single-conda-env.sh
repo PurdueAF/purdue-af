@@ -478,8 +478,10 @@ $RUN_AS_UID cp "$ENV_YAML_PATH" "$ENV_YAML_COPY"
 
 # Process and validate YAML file using Python for proper YAML handling
 echo "Processing and validating environment.yaml file..."
-if ! $RUN_AS_UID bash -c "
-python3 -c \"
+
+# Create a temporary Python script for YAML processing
+YAML_PROCESSOR="${USER_TMP}/yaml_processor.py"
+$RUN_AS_UID bash -c "cat > '$YAML_PROCESSOR' << 'EOF'
 import yaml
 import sys
 
@@ -510,12 +512,15 @@ try:
     print('YAML processing completed successfully')
     
 except yaml.YAMLError as e:
-    print(f'ERROR: YAML parsing failed: {e}')
+    print('ERROR: YAML parsing failed:', str(e))
     sys.exit(1)
 except Exception as e:
-    print(f'ERROR: YAML processing failed: {e}')
+    print('ERROR: YAML processing failed:', str(e))
     sys.exit(1)
-"; then
+EOF"
+
+# Run the YAML processor
+if ! $RUN_AS_UID python3 "$YAML_PROCESSOR"; then
 	echo "ERROR: YAML processing failed!"
 	echo "=== YAML FILE CONTENTS ==="
 	cat "$ENV_YAML_COPY"
