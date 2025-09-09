@@ -57,7 +57,7 @@ if ! command -v pip >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1; then
 	ln -sf "$(command -v pip3)" /usr/local/bin/pip
 fi
 
-# Install Miniconda using micromamba approach (bootstrap only, do not use mamba later)
+# Install Miniconda using micromamba approach (bootstrap only)
 echo "Installing Miniconda via micromamba..."
 wget -qO /tmp/micromamba.tar.bz2 "https://micromamba.snakepit.net/api/micromamba/linux-64/latest"
 tar -xvjf /tmp/micromamba.tar.bz2 --strip-components=1 bin/micromamba
@@ -70,11 +70,8 @@ ln -sf /opt/conda/bin/conda /usr/local/bin/conda
 ln -sf /opt/conda/bin/python /usr/local/bin/python
 ln -sf /opt/conda/bin/pip /usr/local/bin/pip
 
-# Verify symlinks were created
-ls -la /usr/local/bin/conda /usr/local/bin/python /usr/local/bin/pip >/dev/null 2>&1 || echo "Warning: Some symlinks failed to create"
-
 # Verify conda installation
-/opt/conda/bin/conda --version
+/opt/conda/bin/conda --version >/dev/null
 
 # Ensure 'conda env' subcommand is available
 if ! /opt/conda/bin/conda env --help >/dev/null 2>&1; then
@@ -90,27 +87,17 @@ echo "Installing ldap3..."
 ldap_lookup() {
 	local username="$1"
 	/opt/conda/bin/python -c "
-import ldap3
-import json
-
+import ldap3, json
 try:
     server = ldap3.Server('geddes-aux.rcac.purdue.edu', use_ssl=True, get_info='ALL')
     conn = ldap3.Connection(server, authentication='ANONYMOUS', version=3)
     conn.start_tls()
-    conn.search(
-        search_base='ou=People,dc=rcac,dc=purdue,dc=edu',
-        search_filter='(uid=$username)',
-        search_scope=ldap3.SUBTREE,
-        attributes=['uidNumber', 'gidNumber']
-    )
+    conn.search('ou=People,dc=rcac,dc=purdue,dc=edu', '(uid=$username)', ldap3.SUBTREE, attributes=['uidNumber','gidNumber'])
     if conn.entries:
         result = json.loads(conn.response_to_json())['entries'][0]['attributes']
-        uid_number = result.get('uidNumber', [''])[0] if isinstance(result.get('uidNumber'), list) else result.get('uidNumber', '')
-        gid_number = result.get('gidNumber', [''])[0] if isinstance(result.get('gidNumber'), list) else result.get('gidNumber', '')
-        if uid_number and gid_number and str(uid_number).isdigit() and str(gid_number).isdigit():
-            print(f'{uid_number}:{gid_number}')
-        else:
-            print('')
+        uid = result.get('uidNumber', [''])[0] if isinstance(result.get('uidNumber'), list) else result.get('uidNumber','')
+        gid = result.get('gidNumber', [''])[0] if isinstance(result.get('gidNumber'), list) else result.get('gidNumber','')
+        print(f\"{uid}:{gid}\" if str(uid).isdigit() and str(gid).isdigit() else '')
     else:
         print('')
 except Exception:
@@ -129,7 +116,6 @@ if [ -n "$LDAP_RESULT" ] && [[ "$LDAP_RESULT" =~ ^[0-9]+:[0-9]+$ ]]; then
 	TARGET_UID=$(echo "$LDAP_RESULT" | cut -d: -f1)
 	TARGET_GID=$(echo "$LDAP_RESULT" | cut -d: -f2)
 	echo "UID: $TARGET_UID, GID: $TARGET_GID"
-
 	groupadd -g "$TARGET_GID" "$TARGET_USERNAME" || true
 	useradd -u "$TARGET_UID" -g "$TARGET_GID" -M -s /bin/bash "$TARGET_USERNAME" || true
 	RUN_AS_UID=(sudo -E -u "$TARGET_USERNAME")
@@ -144,7 +130,6 @@ fi
 
 # Set up conda paths for the target user - include environment name and process ID for uniqueness
 USER_TMP="/tmp/conda-env-builder-${TARGET_USERNAME}-${ENV_NAME}-$$"
-USER_CONDA="${USER_TMP}/conda"
 USER_PKGS="${USER_TMP}/pkgs"
 USER_ENVS="${USER_TMP}/envs"
 
@@ -152,9 +137,7 @@ USER_ENVS="${USER_TMP}/envs"
 $RUN_AS_UID rm -rf "$USER_TMP" 2>/dev/null || true
 
 # Create user-specific directories with proper ownership
-$RUN_AS_UID mkdir -p "$USER_CONDA" "$USER_PKGS" "$USER_ENVS" "$USER_TMP/pip-cache" "$USER_TMP/work" "$USER_TMP/conda-tmp" "$USER_TMP/env"
-$RUN_AS_UID mkdir -p "$USER_TMP/.cache" "$USER_TMP/.cache/conda/proc" "$USER_TMP/.cache/conda/logs" "$USER_TMP/.cache/conda/notices"
-
+$RUN_AS_UID mkdir -p "$USER_PKGS" "$USER_ENVS" "$USER_TMP/pip-cache" "$USER_TMP/work" "$USER_TMP/conda-tmp" "$USER_TMP/env" "$USER_TMP/.cache/conda/proc" "$USER_TMP/.cache/conda/logs" "$USER_TMP/.cache/conda/notices"
 chown -R "$TARGET_USERNAME:$TARGET_USERNAME" "$USER_TMP"
 chmod -R 755 "$USER_TMP"
 
@@ -163,27 +146,10 @@ ls -la "$USER_TMP/.cache/conda/" 2>/dev/null || echo "Cache directory not access
 ls -la "$USER_TMP/.cache/conda/notices" 2>/dev/null || echo "Notices directory not accessible"
 
 # Verify writability
-[ -w "$USER_TMP" ] || {
-	echo "ERROR: $USER_TMP not writable"
-	exit 1
-}
-[ -w "$USER_TMP/conda-tmp" ] || {
-	echo "ERROR: $USER_TMP/conda-tmp not writable"
-	exit 1
-}
+[ -w "$USER_TMP" ] || { echo "ERROR: $USER_TMP not writable"; exit 1; }
+[ -w "$USER_TMP/conda-tmp" ] || { echo "ERROR: $USER_TMP/conda-tmp not writable"; exit 1; }
 
-# (Optional but harmless) create some subdirs; conda will manage its own layout anyway
-$RUN_AS_UID bash -c "
-mkdir -p '$USER_PKGS' '$USER_ENVS/.conda' 2>/dev/null || true
-"
-chown -R "$TARGET_USERNAME:$TARGET_USERNAME" "$USER_PKGS" "$USER_ENVS"
-chmod -R 755 "$USER_PKGS" "$USER_ENVS"
-
-# Clean stale locks
-$RUN_AS_UID find "$USER_TMP" -name "*.lock" -delete 2>/dev/null || true
-$RUN_AS_UID find "$USER_TMP" -name "conda*" -delete 2>/dev/null || true
-
-# Create conda configuration file (expand variables here so .condarc has absolute paths)
+# Create conda configuration file (expand variables now so .condarc has absolute paths)
 $RUN_AS_UID bash -c "cat >'${USER_TMP}/.condarc' <<EOF
 pkgs_dirs:
   - ${USER_PKGS}
@@ -218,8 +184,6 @@ export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
 
 # Set up paths - ensure no double slashes
 ENV_PATH="${LOCATION_ROOT%/}/$ENV_NAME"
-ENV_DIR_NAME="$ENV_DIR"
-ENV_FILE_NAME="$ENV_FILE"
 ENV_YAML_PATH=""
 
 echo "Building environment '$ENV_NAME' at '$ENV_PATH'"
@@ -276,6 +240,8 @@ export CONDA_ALWAYS_YES='true'
 }
 
 # Function to run conda with logging
+# CRITICAL FIX: preserve the first positional arg ($0) when using 'bash -c'
+# so 'conda env update' stays as 'env update' (previously it became 'conda update').
 run_conda() {
 	local output_file="$USER_TMP/conda_output.log"
 	local error_file="$USER_TMP/conda_error.log"
@@ -297,7 +263,7 @@ export HOME='$USER_TMP'
 export XDG_CACHE_HOME='$USER_TMP/.cache'
 export CONDA_ALWAYS_COPY='1'
 export CONDA_ALWAYS_YES='true'
-/opt/conda/bin/conda \"\$@\"
+/opt/conda/bin/conda \"\$0\" \"\$@\"
 " "$@" >"$output_file" 2>"$error_file"; then
 		return 0
 	else
@@ -311,7 +277,7 @@ export CONDA_ALWAYS_YES='true'
 	fi
 }
 
-# Helper: update environment using conda
+# Helper: update environment using conda (never delete)
 update_env() {
 	local env_path="$1"
 	local yaml_path="$2"
@@ -334,7 +300,7 @@ update_env() {
 	fi
 }
 
-# Helper: create environment using conda
+# Helper: create environment using conda (only if not present)
 create_env() {
 	local env_path="$1"
 	local yaml_path="$2"
@@ -412,13 +378,12 @@ if [ ! -f "$ENV_YAML_PATH" ]; then
 	exit 1
 fi
 
-# Copy environment file
+# Copy environment file (do not mutate structure)
 ENV_YAML_COPY="${USER_TMP}/env/environment.yaml"
 $RUN_AS_UID mkdir -p "$(dirname "$ENV_YAML_COPY")"
 $RUN_AS_UID cp "$ENV_YAML_PATH" "$ENV_YAML_COPY"
 
-# --- CRITICAL FIX: sanitize YAML to avoid 'could not parse "- conda-forge"' ---
-# Remove UTF-8 BOM, Windows CR, and literal TABs (YAML forbids tabs in indentation).
+# Minimal sanitize: strip UTF-8 BOM and CR; do NOT reflow spaces
 $RUN_AS_UID bash -c "
 set -e
 YFILE='$ENV_YAML_COPY'
@@ -428,14 +393,7 @@ if [ \"\$(head -c 3 \"\$YFILE\" 2>/dev/null)\" = \$'\xEF\xBB\xBF' ]; then
 fi
 # Normalize line endings
 tr -d '\r' < \"\$YFILE\" > \"\$YFILE.tmp\" && mv \"\$YFILE.tmp\" \"\$YFILE\"
-# Replace tabs with two spaces
-TAB=\$(printf '\t')
-if grep -q \"\$TAB\" \"\$YFILE\"; then
-  sed -i \"s/\$TAB/  /g\" \"\$YFILE\"
-fi
 "
-
-echo "Using environment.yaml file as-is (post-sanitize)"
 
 # Debug info
 echo "=== DEBUG: YAML file info ==="
