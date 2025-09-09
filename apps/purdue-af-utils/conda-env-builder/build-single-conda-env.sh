@@ -358,9 +358,9 @@ export CONDA_ALWAYS_YES='true'
 " >"$output_file" 2>"$error_file"; then
 		# Check if output indicates no changes needed
 		if grep -q -E "(All requested packages already installed|Transaction will be empty|Nothing to do)" "$output_file"; then
-			return 1  # No changes needed
+			return 1 # No changes needed
 		fi
-		return 0  # Changes needed
+		return 0 # Changes needed
 	else
 		# Mamba failed, try conda with same flags
 		if sudo -E -u "$TARGET_USERNAME" bash -c "
@@ -383,9 +383,9 @@ export CONDA_ALWAYS_YES='true'
 " >"$output_file" 2>"$error_file"; then
 			# Check if output indicates no changes needed
 			if grep -q -E "(All requested packages already installed|Transaction will be empty|Nothing to do)" "$output_file"; then
-				return 1  # No changes needed
+				return 1 # No changes needed
 			fi
-			return 0  # Changes needed
+			return 0 # Changes needed
 		else
 			# Both failed, assume changes needed
 			return 0
@@ -397,24 +397,24 @@ export CONDA_ALWAYS_YES='true'
 detect_filesystem_types() {
 	local env_path="$1"
 	local pkgs_path="$2"
-	
+
 	# Get filesystem type for environment path (or its parent if env doesn't exist)
 	local env_check_path="$env_path"
 	if [ ! -d "$env_path" ]; then
 		env_check_path="$(dirname "$env_path")"
 	fi
-	
+
 	# Detect filesystem types
 	ENV_FS=$(stat -f -c %T "$env_check_path" 2>/dev/null || echo "unknown")
 	PKGS_FS=$(stat -f -c %T "$pkgs_path" 2>/dev/null || echo "unknown")
-	
+
 	echo "Filesystem detection: ENV_FS=$ENV_FS, PKGS_FS=$PKGS_FS"
-	
+
 	# Check if we need relocation (different FS or network/overlay FS)
 	if [ "$ENV_FS" != "$PKGS_FS" ] || [[ "$ENV_FS" =~ (nfs|smb|cifs|fuseblk|overlay) ]]; then
-		return 0  # Need relocation
+		return 0 # Need relocation
 	else
-		return 1  # No relocation needed
+		return 1 # No relocation needed
 	fi
 }
 
@@ -423,9 +423,9 @@ update_env_via_relocation() {
 	local env_path="$1"
 	local yaml_path="$2"
 	local env_name="$3"
-	
+
 	echo "Using local build + relocation for network/overlay filesystem..."
-	
+
 	# Ensure conda-pack is installed
 	echo "Installing conda-pack..."
 	if ! $RUN_AS_UID bash -c "
@@ -447,14 +447,14 @@ export CONDA_ALWAYS_YES='true'
 		echo "Failed to install conda-pack, falling back to direct update"
 		return 1
 	fi
-	
+
 	# Set up local build directory
 	local LOCAL_BUILD_PREFIX="$USER_TMP/envbuild-$env_name"
 	local PACK_TGZ="$USER_TMP/$env_name.tar.gz"
-	
+
 	# Clean up any existing build
 	$RUN_AS_UID rm -rf "$LOCAL_BUILD_PREFIX" "$PACK_TGZ" 2>/dev/null || true
-	
+
 	# Create/update environment at local build prefix
 	echo "Building environment locally at $LOCAL_BUILD_PREFIX..."
 	if update_env_via_activation "$LOCAL_BUILD_PREFIX" "$yaml_path"; then
@@ -468,7 +468,7 @@ export CONDA_ALWAYS_YES='true'
 			return 1
 		fi
 	fi
-	
+
 	# Pack the environment
 	echo "Packing environment..."
 	if $RUN_AS_UID bash -c "
@@ -493,19 +493,19 @@ export CONDA_ALWAYS_YES='true'
 		cat "$USER_TMP/conda_pack_error.log"
 		return 1
 	fi
-	
+
 	# Extract to target location
 	echo "Extracting to target location $env_path..."
 	$RUN_AS_UID rm -rf "$env_path" 2>/dev/null || true
 	$RUN_AS_UID mkdir -p "$env_path"
-	
+
 	if $RUN_AS_UID bash -c "cd '$env_path' && tar -xzf '$PACK_TGZ'"; then
 		echo "Extraction succeeded"
 	else
 		echo "Failed to extract environment"
 		return 1
 	fi
-	
+
 	# Run conda-unpack to fix paths
 	echo "Running conda-unpack..."
 	if $RUN_AS_UID bash -c "cd '$env_path' && ./bin/conda-unpack"; then
@@ -513,10 +513,10 @@ export CONDA_ALWAYS_YES='true'
 	else
 		echo "conda-unpack failed, but environment may still work"
 	fi
-	
+
 	# Clean up
 	$RUN_AS_UID rm -rf "$LOCAL_BUILD_PREFIX" "$PACK_TGZ" 2>/dev/null || true
-	
+
 	echo "Relocation completed successfully"
 	return 0
 }
@@ -882,13 +882,13 @@ if [ -d "$ENV_PATH" ]; then
 	# Verify it's actually a valid conda environment by checking for conda-meta
 	if [ -d "$ENV_PATH/conda-meta" ] && [ -f "$ENV_PATH/conda-meta/history" ]; then
 		echo "Checking if environment needs updates: $ENV_NAME"
-		
+
 		# Fast no-op detection
 		if ! env_needs_change "$ENV_PATH" "$ENV_YAML_COPY"; then
 			echo "No changes. Skipping update."
 		else
 			echo "Changes required. Updating environment: $ENV_NAME"
-			
+
 			# Check if we need relocation for network/overlay filesystems
 			if detect_filesystem_types "$ENV_PATH" "$USER_PKGS"; then
 				echo "Using relocation path for network/overlay filesystem"
@@ -928,7 +928,7 @@ if [ -d "$ENV_PATH" ]; then
 	else
 		echo "Recreating invalid environment: $ENV_NAME"
 		rm -rf "$ENV_PATH"
-		
+
 		# Check if we need relocation for network/overlay filesystems
 		if detect_filesystem_types "$ENV_PATH" "$USER_PKGS"; then
 			echo "Using relocation path for network/overlay filesystem"
@@ -955,7 +955,7 @@ if [ -d "$ENV_PATH" ]; then
 	fi
 else
 	echo "Creating new environment: $ENV_NAME"
-	
+
 	# Check if we need relocation for network/overlay filesystems
 	if detect_filesystem_types "$ENV_PATH" "$USER_PKGS"; then
 		echo "Using relocation path for network/overlay filesystem"
