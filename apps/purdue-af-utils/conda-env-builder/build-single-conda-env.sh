@@ -64,26 +64,20 @@ wget -qO /tmp/micromamba.tar.bz2 "https://micromamba.snakepit.net/api/micromamba
 tar -xvjf /tmp/micromamba.tar.bz2 --strip-components=1 bin/micromamba
 chmod +x micromamba
 
-# Install miniconda first, then mamba into it
+# Install miniconda first
 ./micromamba install --root-prefix="/opt/conda" --prefix="/opt/conda" --yes 'conda' 'pip' 'conda-env'
-# Now install mamba into the conda environment (from conda-forge channel)
-/opt/conda/bin/conda install -c conda-forge -y mamba
 rm micromamba
 
-# Create system-wide symlinks to make conda and mamba available everywhere
+# Create system-wide symlinks to make conda available everywhere
 ln -sf /opt/conda/bin/conda /usr/local/bin/conda
-ln -sf /opt/conda/bin/mamba /usr/local/bin/mamba
 ln -sf /opt/conda/bin/python /usr/local/bin/python
 ln -sf /opt/conda/bin/pip /usr/local/bin/pip
 
 # Verify symlinks were created
-ls -la /usr/local/bin/conda /usr/local/bin/mamba /usr/local/bin/python /usr/local/bin/pip >/dev/null 2>&1 || echo "Warning: Some symlinks failed to create"
+ls -la /usr/local/bin/conda /usr/local/bin/python /usr/local/bin/pip >/dev/null 2>&1 || echo "Warning: Some symlinks failed to create"
 
 # Verify conda installation
 /opt/conda/bin/conda --version
-
-# Verify mamba installation
-/opt/conda/bin/mamba --version
 
 # Ensure 'conda env' subcommand is available
 if ! /opt/conda/bin/conda env --help >/dev/null 2>&1; then
@@ -91,7 +85,7 @@ if ! /opt/conda/bin/conda env --help >/dev/null 2>&1; then
 	/opt/conda/bin/conda install -y conda-env
 fi
 
-# Install ldap3 using the newly installed mamba's pip
+# Install ldap3 using the newly installed conda's pip
 echo "Installing ldap3..."
 /opt/conda/bin/pip install ldap3
 
@@ -222,23 +216,17 @@ envs_dirs:
 channels:
   - conda-forge
   - defaults
-channel_priority: flexible
+channel_priority: strict
+repodata_fns:
+  - current_repodata.json
 use_lockfiles: false
-# Set package cache timeout to 0 to disable caching
-pkg_cache_timeout: 0
-# Disable aggressive caching
-aggressive_update_packages: []
-# Avoid hardlinks on network filesystems
 always_copy: true
-allow_softlinks: true
-# Disable conda activation hooks to prevent PATH conflicts
 auto_activate_base: false
 env_prompt: '({name})'
 EOF"
 
 # Verify conda is working
 $RUN_AS_UID bash -c "
-export CONDA_ROOT_PREFIX='$USER_CONDA'
 export CONDA_PKGS_DIRS='$USER_PKGS'
 export CONDA_ENVS_PATH='$USER_ENVS'
 export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
@@ -254,7 +242,6 @@ export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
 
 # Test conda env subcommand specifically
 $RUN_AS_UID bash -c "
-export CONDA_ROOT_PREFIX='$USER_CONDA'
 export CONDA_PKGS_DIRS='$USER_PKGS'
 export CONDA_ENVS_PATH='$USER_ENVS'
 export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
@@ -288,6 +275,50 @@ if [ ! -d "$ENV_PATH" ]; then
 	$RUN_AS_UID mkdir -p "$ENV_PATH"
 fi
 
+# Function to check if environment needs updates (no-op detector)
+check_env_needs_update() {
+	local env_path="$1"
+	local yaml_path="$2"
+	
+	echo "Checking if environment needs updates..."
+	
+	local output_file="$USER_TMP/conda_dry_run.log"
+	local error_file="$USER_TMP/conda_dry_run_error.log"
+	
+	if sudo -E -u "$TARGET_USERNAME" bash -c "
+cd '$USER_TMP'
+export PWD='$USER_TMP'
+export SHELL='/bin/bash'
+export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
+export CONDA_PKGS_DIRS='$USER_PKGS'
+export CONDA_ENVS_PATH='$USER_ENVS'
+export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
+export PIP_CACHE_DIR='$USER_TMP/pip-cache'
+export TMPDIR='$USER_TMP/conda-tmp'
+export TEMP='$USER_TMP/conda-tmp'
+export TMP='$USER_TMP/conda-tmp'
+export HOME='$USER_TMP'
+export XDG_CACHE_HOME='$USER_TMP/.cache'
+export CONDA_ALWAYS_COPY='1'
+export CONDA_ALWAYS_YES='true'
+
+/opt/conda/bin/conda env update --prefix '$env_path' --file '$yaml_path' --freeze-installed --offline --dry-run
+" >"$output_file" 2>"$error_file"; then
+		# Check if output indicates no changes needed
+		if grep -q "All requested packages already installed\|Transaction will be empty" "$output_file"; then
+			echo "No changes detected; skipping update."
+			return 1  # No changes needed
+		else
+			echo "Changes detected, proceeding with update..."
+			return 0  # Changes needed
+		fi
+	else
+		# Dry run failed (likely offline), proceed with real update
+		echo "Dry run failed (likely offline), proceeding with update..."
+		return 0  # Proceed with update
+	fi
+}
+
 # Function to run conda with fallback pip handling
 run_conda() {
 	# Capture the output and error to examine what happened
@@ -300,7 +331,6 @@ export PWD='$USER_TMP'
 export SHELL='/bin/bash'
 # Set a clean PATH to avoid conflicts with existing conda installations
 export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
-export CONDA_ROOT_PREFIX='$USER_CONDA'
 export CONDA_PKGS_DIRS='$USER_PKGS'
 export CONDA_ENVS_PATH='$USER_ENVS'
 export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
@@ -331,147 +361,43 @@ export _CE_CONDA_PIP_EXE='$ENV_PATH/bin/pip'
 	fi
 }
 
-# Helper: update environment using --prefix to avoid activation issues
-update_env_via_activation() {
+# Helper: update environment using conda
+update_env() {
 	local env_path="$1"
 	local yaml_path="$2"
-	local output_file="$USER_TMP/conda_update_output.log"
-	local error_file="$USER_TMP/conda_update_error.log"
-
-	# Try mamba first, then fall back to conda if mamba fails
-	if sudo -E -u "$TARGET_USERNAME" bash -c "
-cd '$USER_TMP'
-export PWD='$USER_TMP'
-export SHELL='/bin/bash'
-export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
-export CONDA_ROOT_PREFIX='$USER_CONDA'
-export CONDA_PKGS_DIRS='$USER_PKGS'
-export CONDA_ENVS_PATH='$USER_ENVS'
-export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
-export PIP_CACHE_DIR='$USER_TMP/pip-cache'
-export TMPDIR='$USER_TMP/conda-tmp'
-export TEMP='$USER_TMP/conda-tmp'
-export TMP='$USER_TMP/conda-tmp'
-export HOME='$USER_TMP'
-export XDG_CACHE_HOME='$USER_TMP/.cache'
-export CONDA_ALWAYS_COPY='1'
-export CONDA_ALWAYS_YES='true'
-# Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/mamba env update --file '$yaml_path' --prefix '$env_path'
-" >"$output_file" 2>"$error_file"; then
+	
+	echo "Updating environment at $env_path..."
+	
+	# First try offline update
+	if run_conda env update --prefix "$env_path" --file "$yaml_path" --freeze-installed --offline -y; then
+		echo "✓ Environment updated successfully (offline)"
 		return 0
 	else
-		local exit_code=$?
-		echo "Mamba env update failed with exit code: $exit_code, trying conda fallback..."
-		echo "=== MAMBA ERROR OUTPUT ==="
-		cat "$error_file"
-		echo "=== MAMBA STANDARD OUTPUT ==="
-		cat "$output_file"
-
-		# Fallback to conda env update
-		if sudo -E -u "$TARGET_USERNAME" bash -c "
-cd '$USER_TMP'
-export PWD='$USER_TMP'
-export SHELL='/bin/bash'
-export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
-export CONDA_ROOT_PREFIX='$USER_CONDA'
-export CONDA_PKGS_DIRS='$USER_PKGS'
-export CONDA_ENVS_PATH='$USER_ENVS'
-export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
-export PIP_CACHE_DIR='$USER_TMP/pip-cache'
-export TMPDIR='$USER_TMP/conda-tmp'
-export TEMP='$USER_TMP/conda-tmp'
-export TMP='$USER_TMP/conda-tmp'
-export HOME='$USER_TMP'
-export XDG_CACHE_HOME='$USER_TMP/.cache'
-export CONDA_ALWAYS_COPY='1'
-export CONDA_ALWAYS_YES='true'
-# Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/conda env update --file '$yaml_path' --prefix '$env_path'
-" >"$output_file" 2>"$error_file"; then
-			echo "Conda fallback succeeded"
+		echo "Offline update failed, trying online update..."
+		# Fallback to online update
+		if run_conda env update --prefix "$env_path" --file "$yaml_path" --freeze-installed -y; then
+			echo "✓ Environment updated successfully (online)"
 			return 0
 		else
-			local conda_exit_code=$?
-			echo "Conda fallback also failed with exit code: $conda_exit_code"
-			echo "=== CONDA ERROR OUTPUT ==="
-			cat "$error_file"
-			echo "=== CONDA STANDARD OUTPUT ==="
-			cat "$output_file"
-			return $conda_exit_code
+			echo "ERROR: Failed to update environment"
+			return 1
 		fi
 	fi
 }
 
-# Helper: create environment using --prefix to avoid activation issues
-create_env_via_activation() {
+# Helper: create environment using conda
+create_env() {
 	local env_path="$1"
 	local yaml_path="$2"
-	local output_file="$USER_TMP/conda_create_output.log"
-	local error_file="$USER_TMP/conda_create_error.log"
-
-	# Try mamba first, then fall back to conda if mamba fails
-	if sudo -E -u "$TARGET_USERNAME" bash -c "
-cd '$USER_TMP'
-export PWD='$USER_TMP'
-export SHELL='/bin/bash'
-export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
-export CONDA_ROOT_PREFIX='$USER_CONDA'
-export CONDA_PKGS_DIRS='$USER_PKGS'
-export CONDA_ENVS_PATH='$USER_ENVS'
-export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
-export PIP_CACHE_DIR='$USER_TMP/pip-cache'
-export TMPDIR='$USER_TMP/conda-tmp'
-export TEMP='$USER_TMP/conda-tmp'
-export TMP='$USER_TMP/conda-tmp'
-export HOME='$USER_TMP'
-export XDG_CACHE_HOME='$USER_TMP/.cache'
-export CONDA_ALWAYS_COPY='1'
-export CONDA_ALWAYS_YES='true'
-# Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/mamba env create --file '$yaml_path' --prefix '$env_path'
-" >"$output_file" 2>"$error_file"; then
+	
+	echo "Creating environment at $env_path..."
+	
+	if run_conda env create --prefix "$env_path" --file "$yaml_path" -y; then
+		echo "✓ Environment created successfully"
 		return 0
 	else
-		local exit_code=$?
-		echo "Mamba env create failed with exit code: $exit_code, trying conda fallback..."
-		echo "=== MAMBA ERROR OUTPUT ==="
-		cat "$error_file"
-		echo "=== MAMBA STANDARD OUTPUT ==="
-		cat "$output_file"
-
-		# Fallback to conda env create
-		if sudo -E -u "$TARGET_USERNAME" bash -c "
-cd '$USER_TMP'
-export PWD='$USER_TMP'
-export SHELL='/bin/bash'
-export PATH='/opt/conda/bin:/usr/local/bin:/usr/bin:/bin'
-export CONDA_ROOT_PREFIX='$USER_CONDA'
-export CONDA_PKGS_DIRS='$USER_PKGS'
-export CONDA_ENVS_PATH='$USER_ENVS'
-export CONDA_CONFIG_FILE='${USER_TMP}/.condarc'
-export PIP_CACHE_DIR='$USER_TMP/pip-cache'
-export TMPDIR='$USER_TMP/conda-tmp'
-export TEMP='$USER_TMP/conda-tmp'
-export TMP='$USER_TMP/conda-tmp'
-export HOME='$USER_TMP'
-export XDG_CACHE_HOME='$USER_TMP/.cache'
-export CONDA_ALWAYS_COPY='1'
-export CONDA_ALWAYS_YES='true'
-# Use --prefix instead of activation to avoid PATH conflicts
-/opt/conda/bin/conda env create --file '$yaml_path' --prefix '$env_path'
-" >"$output_file" 2>"$error_file"; then
-			echo "Conda fallback succeeded"
-			return 0
-		else
-			local conda_exit_code=$?
-			echo "Conda fallback also failed with exit code: $conda_exit_code"
-			echo "=== CONDA ERROR OUTPUT ==="
-			cat "$error_file"
-			echo "=== CONDA STANDARD OUTPUT ==="
-			cat "$output_file"
-			return $conda_exit_code
-		fi
+		echo "ERROR: Failed to create environment"
+		return 1
 	fi
 }
 
@@ -583,37 +509,23 @@ fi
 echo "✓ YAML file validated successfully"
 
 # Check if environment already exists and is valid
-if [ -d "$ENV_PATH" ]; then
-	# Verify it's actually a valid conda environment by checking for conda-meta
-	if [ -d "$ENV_PATH/conda-meta" ] && [ -f "$ENV_PATH/conda-meta/history" ]; then
-		echo "Updating existing environment: $ENV_NAME"
-
-		if update_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
+if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/conda-meta" ] && [ -f "$ENV_PATH/conda-meta/history" ]; then
+	echo "Updating existing environment: $ENV_NAME"
+	
+	# Check if updates are needed (no-op detector)
+	if check_env_needs_update "$ENV_PATH" "$ENV_YAML_COPY"; then
+		# Updates are needed, proceed with update
+		if update_env "$ENV_PATH" "$ENV_YAML_COPY"; then
 			echo "✓ Environment updated successfully"
 		else
-			echo "ERROR: Failed to update environment, recreating..."
-			rm -rf "$ENV_PATH"
-			if create_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
-				echo "✓ Environment recreated successfully"
-			else
-				echo "ERROR: Failed to recreate environment: $ENV_NAME"
-				exit 1
-			fi
-		fi
-	else
-		echo "Recreating invalid environment: $ENV_NAME"
-		rm -rf "$ENV_PATH"
-		if create_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
-			echo "✓ Environment created successfully"
-		else
-			echo "ERROR: Failed to create environment: $ENV_NAME"
+			echo "ERROR: Failed to update environment: $ENV_NAME"
 			exit 1
 		fi
 	fi
 else
 	echo "Creating new environment: $ENV_NAME"
-
-	if create_env_via_activation "$ENV_PATH" "$ENV_YAML_COPY"; then
+	
+	if create_env "$ENV_PATH" "$ENV_YAML_COPY"; then
 		echo "✓ Environment created successfully"
 	else
 		echo "ERROR: Failed to create environment: $ENV_NAME"
