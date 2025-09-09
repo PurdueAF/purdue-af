@@ -50,8 +50,8 @@ if ! rpm -q git wget bzip2 sudo python3-pip which >/dev/null 2>&1; then
 	}
 fi
 
-# Install ldap3 for LDAP lookups
-pip3 install ldap3
+# Install required Python packages for LDAP lookups and YAML processing
+pip3 install ldap3 PyYAML
 
 # Ensure pip is available on PATH
 if ! command -v pip >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1; then
@@ -476,32 +476,47 @@ ENV_YAML_COPY="${USER_TMP}/env/environment.yaml"
 $RUN_AS_UID mkdir -p "$(dirname "$ENV_YAML_COPY")"
 $RUN_AS_UID cp "$ENV_YAML_PATH" "$ENV_YAML_COPY"
 
-# Normalize line endings and validate YAML format
-echo "Validating and normalizing environment.yaml file..."
-$RUN_AS_UID bash -c "
-# Remove carriage returns and normalize line endings
-sed -i 's/\r$//' '$ENV_YAML_COPY'
-# Remove any trailing whitespace
-sed -i 's/[[:space:]]*$//' '$ENV_YAML_COPY'
-# Comment out the name field to avoid conflicts with --prefix
-sed -i 's/^name:/# name:/' '$ENV_YAML_COPY'
-# Ensure file ends with newline
-sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' '$ENV_YAML_COPY'
-"
-
-# Basic YAML validation using grep and basic syntax checks
-echo "Performing basic YAML validation..."
+# Process and validate YAML file using Python for proper YAML handling
+echo "Processing and validating environment.yaml file..."
 if ! $RUN_AS_UID bash -c "
-# Check for basic YAML structure (name field may be commented out)
-if (grep -q '^name:' '$ENV_YAML_COPY' || grep -q '^# name:' '$ENV_YAML_COPY') && grep -q '^channels:' '$ENV_YAML_COPY' && grep -q '^dependencies:' '$ENV_YAML_COPY'; then
-    echo 'Basic YAML structure validation passed'
-    exit 0
-else
-    echo 'Basic YAML structure validation failed - missing required sections'
-    exit 1
-fi
+python3 -c \"
+import yaml
+import sys
+
+try:
+    # Read the original YAML file
+    with open('$ENV_YAML_COPY', 'r') as f:
+        content = f.read()
+    
+    # Parse the YAML
+    env_data = yaml.safe_load(content)
+    
+    # Validate required sections exist
+    if 'channels' not in env_data:
+        print('ERROR: Missing channels section in YAML')
+        sys.exit(1)
+    if 'dependencies' not in env_data:
+        print('ERROR: Missing dependencies section in YAML')
+        sys.exit(1)
+    
+    # Remove the name field to avoid conflicts with --prefix
+    if 'name' in env_data:
+        del env_data['name']
+    
+    # Write the processed YAML back
+    with open('$ENV_YAML_COPY', 'w') as f:
+        yaml.dump(env_data, f, default_flow_style=False, sort_keys=False)
+    
+    print('YAML processing completed successfully')
+    
+except yaml.YAMLError as e:
+    print(f'ERROR: YAML parsing failed: {e}')
+    sys.exit(1)
+except Exception as e:
+    print(f'ERROR: YAML processing failed: {e}')
+    sys.exit(1)
 "; then
-	echo "ERROR: YAML structure validation failed!"
+	echo "ERROR: YAML processing failed!"
 	echo "=== YAML FILE CONTENTS ==="
 	cat "$ENV_YAML_COPY"
 	echo "=== END YAML CONTENTS ==="
