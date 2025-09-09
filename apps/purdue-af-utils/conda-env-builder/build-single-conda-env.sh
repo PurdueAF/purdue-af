@@ -279,12 +279,12 @@ fi
 check_env_needs_update() {
 	local env_path="$1"
 	local yaml_path="$2"
-	
+
 	echo "Checking if environment needs updates..."
-	
+
 	local output_file="$USER_TMP/conda_dry_run.log"
 	local error_file="$USER_TMP/conda_dry_run_error.log"
-	
+
 	if sudo -E -u "$TARGET_USERNAME" bash -c "
 cd '$USER_TMP'
 export PWD='$USER_TMP'
@@ -307,15 +307,15 @@ export CONDA_ALWAYS_YES='true'
 		# Check if output indicates no changes needed
 		if grep -q "All requested packages already installed\|Transaction will be empty" "$output_file"; then
 			echo "No changes detected; skipping update."
-			return 1  # No changes needed
+			return 1 # No changes needed
 		else
 			echo "Changes detected, proceeding with update..."
-			return 0  # Changes needed
+			return 0 # Changes needed
 		fi
 	else
 		# Dry run failed (likely offline), proceed with real update
 		echo "Dry run failed (likely offline), proceeding with update..."
-		return 0  # Proceed with update
+		return 0 # Proceed with update
 	fi
 }
 
@@ -365,9 +365,9 @@ export _CE_CONDA_PIP_EXE='$ENV_PATH/bin/pip'
 update_env() {
 	local env_path="$1"
 	local yaml_path="$2"
-	
+
 	echo "Updating environment at $env_path..."
-	
+
 	# First try offline update
 	if run_conda env update --prefix "$env_path" --file "$yaml_path" --freeze-installed --offline -y; then
 		echo "✓ Environment updated successfully (offline)"
@@ -389,9 +389,9 @@ update_env() {
 create_env() {
 	local env_path="$1"
 	local yaml_path="$2"
-	
+
 	echo "Creating environment at $env_path..."
-	
+
 	if run_conda env create --prefix "$env_path" --file "$yaml_path" -y; then
 		echo "✓ Environment created successfully"
 		return 0
@@ -511,7 +511,7 @@ echo "✓ YAML file validated successfully"
 # Check if environment already exists and is valid
 if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/conda-meta" ] && [ -f "$ENV_PATH/conda-meta/history" ]; then
 	echo "Updating existing environment: $ENV_NAME"
-	
+
 	# Check if updates are needed (no-op detector)
 	if check_env_needs_update "$ENV_PATH" "$ENV_YAML_COPY"; then
 		# Updates are needed, proceed with update
@@ -524,7 +524,7 @@ if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/conda-meta" ] && [ -f "$ENV_PATH/conda-
 	fi
 else
 	echo "Creating new environment: $ENV_NAME"
-	
+
 	if create_env "$ENV_PATH" "$ENV_YAML_COPY"; then
 		echo "✓ Environment created successfully"
 	else
