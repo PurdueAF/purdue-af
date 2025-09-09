@@ -114,7 +114,7 @@ else
 	TARGET_GID="18951"
 fi
 groupadd -g "$TARGET_GID" "$TARGET_USERNAME" 2>/dev/null || true
-useradd  -u "$TARGET_UID" -g "$TARGET_GID" -M -s /bin/bash "$TARGET_USERNAME" 2>/dev/null || true
+useradd -u "$TARGET_UID" -g "$TARGET_GID" -M -s /bin/bash "$TARGET_USERNAME" 2>/dev/null || true
 RUN_AS_UID=(sudo -E -u "$TARGET_USERNAME")
 
 # -------------------------------
@@ -168,7 +168,7 @@ ENV_PATH="${LOCATION_ROOT%/}/$ENV_NAME"
 
 PARENT_DIR=$(dirname "$ENV_PATH")
 [ -d "$PARENT_DIR" ] || $RUN_AS_UID mkdir -p "$PARENT_DIR"
-[ -d "$ENV_PATH" ]   || $RUN_AS_UID mkdir -p "$ENV_PATH"
+[ -d "$ENV_PATH" ] || $RUN_AS_UID mkdir -p "$ENV_PATH"
 
 BUILD_DIR="/tmp/conda-env-builds-$(date +%s)-$$"
 $RUN_AS_UID find /tmp -maxdepth 1 -name "conda-env-builder-${TARGET_USERNAME}-*" -type d -mmin +10 -exec rm -rf {} \; 2>/dev/null || true
@@ -185,7 +185,10 @@ if ! $RUN_AS_UID bash -c "cd '$WORK_DIR' && [ -d '${ENV_DIR}' ]"; then
 	exit 1
 fi
 ENV_YAML_PATH="${WORK_DIR}/${ENV_DIR}/${ENV_FILE}"
-[ -f "$ENV_YAML_PATH" ] || { echo "ERROR: Environment file not found at $ENV_YAML_PATH"; exit 1; }
+[ -f "$ENV_YAML_PATH" ] || {
+	echo "ERROR: Environment file not found at $ENV_YAML_PATH"
+	exit 1
+}
 
 ENV_YAML_COPY="${USER_TMP}/env/environment.yaml"
 $RUN_AS_UID mkdir -p "$(dirname "$ENV_YAML_COPY")"
@@ -337,7 +340,7 @@ if [ -n "$PIP_UNINSTALL_FILE" ] && [ -f "${WORK_DIR}/${ENV_DIR}/${PIP_UNINSTALL_
 		else
 			echo "Skipping $package (not installed)"
 		fi
-	done < "${WORK_DIR}/${ENV_DIR}/${PIP_UNINSTALL_FILE}"
+	done <"${WORK_DIR}/${ENV_DIR}/${PIP_UNINSTALL_FILE}"
 	echo "Pip uninstall completed"
 fi
 
