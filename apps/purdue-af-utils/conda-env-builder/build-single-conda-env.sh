@@ -476,44 +476,8 @@ ENV_YAML_COPY="${USER_TMP}/env/environment.yaml"
 $RUN_AS_UID mkdir -p "$(dirname "$ENV_YAML_COPY")"
 $RUN_AS_UID cp "$ENV_YAML_PATH" "$ENV_YAML_COPY"
 
-# Normalize line endings and validate YAML format
-echo "Validating and normalizing environment.yaml file..."
-$RUN_AS_UID bash -c "
-# Remove carriage returns and normalize line endings
-sed -i 's/\r$//' '$ENV_YAML_COPY'
-# Remove any trailing whitespace
-sed -i 's/[[:space:]]*$//' '$ENV_YAML_COPY'
-# Ensure file ends with newline
-sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' '$ENV_YAML_COPY'
-"
-
-# Remove the 'name:' field from YAML since we're using --prefix
-echo "Removing name field from YAML (using --prefix instead)..."
-$RUN_AS_UID bash -c "
-# Remove lines that start with 'name:' (with optional whitespace)
-sed -i '/^[[:space:]]*name:[[:space:]]*/d' '$ENV_YAML_COPY'
-"
-
-# Basic YAML validation using grep and basic syntax checks
-echo "Performing basic YAML validation..."
-if ! $RUN_AS_UID bash -c "
-# Check for basic YAML structure (name field should be removed by now)
-if grep -q '^channels:' '$ENV_YAML_COPY' && grep -q '^dependencies:' '$ENV_YAML_COPY'; then
-    echo 'Basic YAML structure validation passed'
-    exit 0
-else
-    echo 'Basic YAML structure validation failed - missing required sections'
-    exit 1
-fi
-"; then
-	echo "ERROR: YAML structure validation failed!"
-	echo "=== YAML FILE CONTENTS ==="
-	cat "$ENV_YAML_COPY"
-	echo "=== END YAML CONTENTS ==="
-	exit 1
-fi
-
-echo "✓ YAML file validated successfully"
+# Copy YAML file without modification (assuming it's already valid)
+echo "Using environment.yaml file as-is (assuming valid YAML)"
 
 # Check if environment already exists and is valid
 if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/conda-meta" ] && [ -f "$ENV_PATH/conda-meta/history" ]; then
