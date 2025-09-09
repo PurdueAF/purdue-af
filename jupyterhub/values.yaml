@@ -168,7 +168,7 @@ singleuser:
     NAMESPACE: "cms"
 
     PYROSCOPE_SERVER: "http://pyroscope.cms.svc.cluster.local:4040"
-    PYROSCOPE_APP: "purdue-af" 
+    PYROSCOPE_APP: "purdue-af"
 
   extraFiles:
     pyroscope-for-jupyter-server:
