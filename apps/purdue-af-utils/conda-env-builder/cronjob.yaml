@@ -4,7 +4,7 @@ metadata:
   name: conda-env-builder-generator
   namespace: cms
 spec:
-  schedule: "*/5 * * * *" # every 5 min
+  schedule: "0 * * * *" # every hour
   concurrencyPolicy: Forbid
   suspend: false
   successfulJobsHistoryLimit: 1
