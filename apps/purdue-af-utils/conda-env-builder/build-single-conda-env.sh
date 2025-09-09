@@ -479,6 +479,21 @@ $RUN_AS_UID cp "$ENV_YAML_PATH" "$ENV_YAML_COPY"
 # Copy YAML file without modification (assuming it's already valid)
 echo "Using environment.yaml file as-is (assuming valid YAML)"
 
+# Debug: Show the YAML file contents and permissions
+echo "=== DEBUG: YAML file info ==="
+echo "Source file: $ENV_YAML_PATH"
+echo "Target file: $ENV_YAML_COPY"
+echo "File size: $(wc -c < "$ENV_YAML_COPY")"
+echo "File permissions: $(ls -la "$ENV_YAML_COPY")"
+echo "First 10 lines of YAML file:"
+head -10 "$ENV_YAML_COPY"
+echo "=== END DEBUG ==="
+
+# Debug: Show the YAML file contents for troubleshooting
+echo "=== YAML FILE CONTENTS ==="
+cat "$ENV_YAML_COPY"
+echo "=== END YAML CONTENTS ==="
+
 # Check if environment already exists and is valid
 if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/conda-meta" ] && [ -f "$ENV_PATH/conda-meta/history" ]; then
 	echo "Updating existing environment: $ENV_NAME"
