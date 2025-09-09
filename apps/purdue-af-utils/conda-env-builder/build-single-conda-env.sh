@@ -163,8 +163,14 @@ ls -la "$USER_TMP/.cache/conda/" 2>/dev/null || echo "Cache directory not access
 ls -la "$USER_TMP/.cache/conda/notices" 2>/dev/null || echo "Notices directory not accessible"
 
 # Verify writability
-[ -w "$USER_TMP" ] || { echo "ERROR: $USER_TMP not writable"; exit 1; }
-[ -w "$USER_TMP/conda-tmp" ] || { echo "ERROR: $USER_TMP/conda-tmp not writable"; exit 1; }
+[ -w "$USER_TMP" ] || {
+	echo "ERROR: $USER_TMP not writable"
+	exit 1
+}
+[ -w "$USER_TMP/conda-tmp" ] || {
+	echo "ERROR: $USER_TMP/conda-tmp not writable"
+	exit 1
+}
 
 # (Optional but harmless) create some subdirs; conda will manage its own layout anyway
 $RUN_AS_UID bash -c "
