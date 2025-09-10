@@ -295,7 +295,7 @@ if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/conda-meta" ]; then
 	# Get the script directory to locate sitecustomize.py
 	SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 	SITECUSTOMIZE_SOURCE="${SCRIPT_DIR}/sitecustomize.py"
-	
+
 	if [ -f "$SITECUSTOMIZE_SOURCE" ]; then
 		# Construct site-packages path directly
 		SITE_PACKAGES_DIR="${ENV_PATH}/lib/python*/site-packages"
