@@ -11,6 +11,7 @@ configMapGenerator:
     files:
       - generate-conda-env-jobs.sh
       - build-single-conda-env.sh
+      - sitecustomize.py
     options:
       disableNameSuffixHash: true
 

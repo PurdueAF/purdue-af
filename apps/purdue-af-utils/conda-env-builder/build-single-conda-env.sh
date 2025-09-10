@@ -292,11 +292,14 @@ fi
 # -------------------------------
 echo "Installing sitecustomize.py for pyroscope monitoring..."
 if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/conda-meta" ]; then
-	# Get the script directory to locate sitecustomize.py
-	SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-	SITECUSTOMIZE_SOURCE="${SCRIPT_DIR}/sitecustomize.py"
-
-	if [ -f "$SITECUSTOMIZE_SOURCE" ]; then
+	# Look for sitecustomize.py in the Kubernetes context (mounted at /scripts/)
+	# This is where Flux mounts the configMap files
+	SITECUSTOMIZE_SOURCE="/scripts/sitecustomize.py"
+	
+	# Debug output
+	echo "DEBUG: Looking for sitecustomize.py at: $SITECUSTOMIZE_SOURCE"
+	
+	if [ -n "$SITECUSTOMIZE_SOURCE" ] && [ -f "$SITECUSTOMIZE_SOURCE" ]; then
 		# Construct site-packages path directly
 		SITE_PACKAGES_DIR="${ENV_PATH}/lib/python*/site-packages"
 		# Use shell globbing to find the actual python version directory
@@ -315,6 +318,7 @@ if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/conda-meta" ]; then
 		fi
 	else
 		echo "⚠ sitecustomize.py not found at $SITECUSTOMIZE_SOURCE"
+		echo "DEBUG: Expected sitecustomize.py to be mounted at /scripts/sitecustomize.py from configMap"
 	fi
 else
 	echo "⚠ Environment not found, skipping sitecustomize.py installation"
