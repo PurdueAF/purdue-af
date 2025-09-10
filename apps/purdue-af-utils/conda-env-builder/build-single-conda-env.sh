@@ -219,7 +219,6 @@ tr -d '\r' < \"\$YFILE\" > \"\$YFILE.tmp\" && mv \"\$YFILE.tmp\" \"\$YFILE\"
 if grep -qP '\t' \"\$YFILE\"; then sed -i $'s/\t/  /g' \"\$YFILE\"; fi
 "
 
-
 # -------------------------------
 # run conda EXACTLY as the target user (not root)
 # Use sudo -H -u USER -g "#GID" and a clean env (env -i).
