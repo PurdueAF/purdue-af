@@ -7,12 +7,12 @@ set -euo pipefail
 # ============================================================
 
 cleanup() {
-  local exit_code=$?
-  if [ $exit_code -ne 0 ] && [ -n "${WORK_DIR:-}" ] && [ -d "$WORK_DIR" ]; then
-    echo "Script failed with exit code $exit_code, cleaning up work directory..."
-    $RUN_AS_UID rm -rf "$WORK_DIR" 2>/dev/null || true
-  fi
-  exit $exit_code
+	local exit_code=$?
+	if [ $exit_code -ne 0 ] && [ -n "${WORK_DIR:-}" ] && [ -d "$WORK_DIR" ]; then
+		echo "Script failed with exit code $exit_code, cleaning up work directory..."
+		$RUN_AS_UID rm -rf "$WORK_DIR" 2>/dev/null || true
+	fi
+	exit $exit_code
 }
 trap cleanup EXIT
 
@@ -20,8 +20,8 @@ trap cleanup EXIT
 # args
 # -------------------------------
 if [ $# -lt 4 ] || [ $# -gt 5 ]; then
-  echo "Usage: $0 <environment_name> <environment_directory> <environment_file> <location_root> [pip_uninstall_file]"
-  exit 1
+	echo "Usage: $0 <environment_name> <environment_directory> <environment_file> <location_root> [pip_uninstall_file]"
+	exit 1
 fi
 ENV_NAME="$1"
 ENV_DIR="$2"
@@ -36,24 +36,24 @@ echo "Building conda environment: $ENV_NAME at $LOCATION_ROOT"
 # -------------------------------
 echo "Installing required packages..."
 for mirror in "https://mirrors.rockylinux.org" "https://mirror.rockylinux.org" "https://dl.rockylinux.org"; do
-  if dnf install -y git wget bzip2 sudo python3-pip which --nogpgcheck --setopt=mirrorlist="${mirror}/mirrorlist?arch=x86_64&repo=baseos-8" 2>/dev/null; then
-    echo "Successfully installed packages using mirror: $mirror"
-    break
-  else
-    echo "Failed to install packages using mirror: $mirror, trying next..."
-  fi
+	if dnf install -y git wget bzip2 sudo python3-pip which --nogpgcheck --setopt=mirrorlist="${mirror}/mirrorlist?arch=x86_64&repo=baseos-8" 2>/dev/null; then
+		echo "Successfully installed packages using mirror: $mirror"
+		break
+	else
+		echo "Failed to install packages using mirror: $mirror, trying next..."
+	fi
 done
 if ! rpm -q git wget bzip2 sudo python3-pip which >/dev/null 2>&1; then
-  echo "All mirrors failed, trying default dnf configuration..."
-  dnf install -y git wget bzip2 sudo python3-pip which --nogpgcheck || {
-    echo "ERROR: Failed to install required packages even with fallbacks"
-    exit 1
-  }
+	echo "All mirrors failed, trying default dnf configuration..."
+	dnf install -y git wget bzip2 sudo python3-pip which --nogpgcheck || {
+		echo "ERROR: Failed to install required packages even with fallbacks"
+		exit 1
+	}
 fi
 
 pip3 install -q ldap3
 if ! command -v pip >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1; then
-  ln -sf "$(command -v pip3)" /usr/local/bin/pip
+	ln -sf "$(command -v pip3)" /usr/local/bin/pip
 fi
 
 # -------------------------------
@@ -72,8 +72,8 @@ ln -sf /opt/conda/bin/pip /usr/local/bin/pip
 /opt/conda/bin/conda --version >/dev/null
 
 if ! /opt/conda/bin/conda env --help >/dev/null 2>&1; then
-  echo "'conda env' not available, installing conda-env..."
-  /opt/conda/bin/conda install -y conda-env
+	echo "'conda env' not available, installing conda-env..."
+	/opt/conda/bin/conda install -y conda-env
 fi
 
 /opt/conda/bin/pip install -q ldap3
@@ -82,8 +82,8 @@ fi
 # LDAP lookup for target user
 # -------------------------------
 ldap_lookup() {
-  local username="$1"
-  /opt/conda/bin/python -c "
+	local username="$1"
+	/opt/conda/bin/python -c "
 import ldap3, json
 try:
     server = ldap3.Server('geddes-aux.rcac.purdue.edu', use_ssl=True, get_info='ALL')
@@ -105,17 +105,17 @@ except Exception:
 TARGET_USERNAME="dkondra"
 LDAP_RESULT=$(ldap_lookup "$TARGET_USERNAME" | tr -d ' \t\r\n')
 if [ -n "$LDAP_RESULT" ] && [[ "$LDAP_RESULT" =~ ^[0-9]+:[0-9]+$ ]]; then
-  TARGET_UID=${LDAP_RESULT%%:*}
-  TARGET_GID=${LDAP_RESULT##*:}
-  echo "Using LDAP UID:GID -> $TARGET_UID:$TARGET_GID"
+	TARGET_UID=${LDAP_RESULT%%:*}
+	TARGET_GID=${LDAP_RESULT##*:}
+	echo "Using LDAP UID:GID -> $TARGET_UID:$TARGET_GID"
 else
-  TARGET_UID="616617"
-  TARGET_GID="18951"
-  echo "LDAP unavailable, fallback UID:GID -> $TARGET_UID:$TARGET_GID"
+	TARGET_UID="616617"
+	TARGET_GID="18951"
+	echo "LDAP unavailable, fallback UID:GID -> $TARGET_UID:$TARGET_GID"
 fi
 # Create group/user if needed
 groupadd -g "$TARGET_GID" "$TARGET_USERNAME" 2>/dev/null || true
-useradd  -u "$TARGET_UID" -g "$TARGET_GID" -M -s /bin/bash "$TARGET_USERNAME" 2>/dev/null || true
+useradd -u "$TARGET_UID" -g "$TARGET_GID" -M -s /bin/bash "$TARGET_USERNAME" 2>/dev/null || true
 
 # Convenience runner for simple filesystem ops
 RUN_AS_UID=(sudo -H -u "$TARGET_USERNAME")
@@ -158,28 +158,28 @@ EOF"
 ENV_PATH="${LOCATION_ROOT%/}/$ENV_NAME"
 PARENT_DIR=$(dirname "$ENV_PATH")
 [ -d "$PARENT_DIR" ] || "${RUN_AS_UID[@]}" mkdir -p "$PARENT_DIR"
-[ -d "$ENV_PATH" ]   || "${RUN_AS_UID[@]}" mkdir -p "$ENV_PATH"
+[ -d "$ENV_PATH" ] || "${RUN_AS_UID[@]}" mkdir -p "$ENV_PATH"
 
 ## --- SMALL ADDITION: pick a pkgs dir on the SAME FS as ENV (to allow hardlinks) ---
 # Default to the tmp-based pkgs dir (safe for NFS; uses copies).
 PKGS_DIR_FOR_RUN="$USER_PKGS"
-CONDA_ALWAYS_COPY_RUN="1"   # copy by default (safer on network FS)
+CONDA_ALWAYS_COPY_RUN="1" # copy by default (safer on network FS)
 
 # Try a pkgs dir under the env's parent; if it's the same filesystem and not network-like,
 # we allow hardlinks for speed (set CONDA_ALWAYS_COPY_RUN=0).
 PKGS_SAMEFS_DIR="$(dirname "$ENV_PATH")/.conda-pkgs-$TARGET_USERNAME"
 if "${RUN_AS_UID[@]}" mkdir -p "$PKGS_SAMEFS_DIR" 2>/dev/null; then
-  chown -R "$TARGET_USERNAME:$TARGET_USERNAME" "$PKGS_SAMEFS_DIR" || true
+	chown -R "$TARGET_USERNAME:$TARGET_USERNAME" "$PKGS_SAMEFS_DIR" || true
 fi
 
 # Compare filesystem IDs; enable hardlinks only when on the same local FS.
 FSID_ENV=$(stat -fc %d "$ENV_PATH" 2>/dev/null || echo 0)
 FSID_PKGS=$(stat -fc %d "$PKGS_SAMEFS_DIR" 2>/dev/null || echo 1)
 FSTYPE_ENV=$(stat -f -c %T "$ENV_PATH" 2>/dev/null || echo unknown)
-if [ -d "$PKGS_SAMEFS_DIR" ] && [ "$FSID_ENV" = "$FSID_PKGS" ] \
-   && ! [[ "$FSTYPE_ENV" =~ (nfs|cifs|smb|fuse|overlay) ]]; then
-  PKGS_DIR_FOR_RUN="$PKGS_SAMEFS_DIR"
-  CONDA_ALWAYS_COPY_RUN="0"   # allow hardlinks (fast)
+if [ -d "$PKGS_SAMEFS_DIR" ] && [ "$FSID_ENV" = "$FSID_PKGS" ] &&
+	! [[ "$FSTYPE_ENV" =~ (nfs|cifs|smb|fuse|overlay) ]]; then
+	PKGS_DIR_FOR_RUN="$PKGS_SAMEFS_DIR"
+	CONDA_ALWAYS_COPY_RUN="0" # allow hardlinks (fast)
 fi
 
 echo "conda-env-builder: PKGS_DIR_FOR_RUN=${PKGS_DIR_FOR_RUN}"
@@ -196,11 +196,14 @@ WORK_DIR="${BUILD_DIR}/work"
 "${RUN_AS_UID[@]}" git clone https://github.com/PurdueAF/purdue-af-conda-envs.git "$WORK_DIR"
 
 if ! "${RUN_AS_UID[@]}" bash -c "cd '$WORK_DIR' && [ -d '${ENV_DIR}' ]"; then
-  echo "ERROR: Environment directory ${ENV_DIR} not found!"
-  exit 1
+	echo "ERROR: Environment directory ${ENV_DIR} not found!"
+	exit 1
 fi
 ENV_YAML_PATH="${WORK_DIR}/${ENV_DIR}/${ENV_FILE}"
-[ -f "$ENV_YAML_PATH" ] || { echo "ERROR: Environment file not found at $ENV_YAML_PATH"; exit 1; }
+[ -f "$ENV_YAML_PATH" ] || {
+	echo "ERROR: Environment file not found at $ENV_YAML_PATH"
+	exit 1
+}
 
 ENV_YAML_COPY="${USER_TMP}/env/environment.yaml"
 "${RUN_AS_UID[@]}" mkdir -p "$(dirname "$ENV_YAML_COPY")"
@@ -229,34 +232,36 @@ echo "=== END DEBUG ==="
 # Use sudo -H -u USER -g "#GID" and a clean env (env -i).
 # -------------------------------
 run_conda_as_target() {
-  # args: <config_file> <global_flags_string> <subcommand...>
-  local cfg="$1"; shift
-  local global_flags="$1"; shift
-  # shellcheck disable=SC2086
-  sudo -H -u "$TARGET_USERNAME" -g "#$TARGET_GID" env -i \
-    HOME="$USER_TMP" USER="$TARGET_USERNAME" LOGNAME="$TARGET_USERNAME" \
-    PATH="/opt/conda/bin:/usr/local/bin:/usr/bin:/bin" \
-    CONDA_PKGS_DIRS="$PKGS_DIR_FOR_RUN" \
-    CONDA_ENVS_PATH="$USER_ENVS" \
-    CONDA_CONFIG_FILE="$cfg" PIP_CACHE_DIR="$USER_TMP/pip-cache" \
-    TMPDIR="$USER_TMP/conda-tmp" TEMP="$USER_TMP/conda-tmp" TMP="$USER_TMP/conda-tmp" \
-    CONDA_ALWAYS_COPY="$CONDA_ALWAYS_COPY_RUN" \
-    CONDA_ALWAYS_YES="true" \
-    /opt/conda/bin/conda $global_flags "$@"
+	# args: <config_file> <global_flags_string> <subcommand...>
+	local cfg="$1"
+	shift
+	local global_flags="$1"
+	shift
+	# shellcheck disable=SC2086
+	sudo -H -u "$TARGET_USERNAME" -g "#$TARGET_GID" env -i \
+		HOME="$USER_TMP" USER="$TARGET_USERNAME" LOGNAME="$TARGET_USERNAME" \
+		PATH="/opt/conda/bin:/usr/local/bin:/usr/bin:/bin" \
+		CONDA_PKGS_DIRS="$PKGS_DIR_FOR_RUN" \
+		CONDA_ENVS_PATH="$USER_ENVS" \
+		CONDA_CONFIG_FILE="$cfg" PIP_CACHE_DIR="$USER_TMP/pip-cache" \
+		TMPDIR="$USER_TMP/conda-tmp" TEMP="$USER_TMP/conda-tmp" TMP="$USER_TMP/conda-tmp" \
+		CONDA_ALWAYS_COPY="$CONDA_ALWAYS_COPY_RUN" \
+		CONDA_ALWAYS_YES="true" \
+		/opt/conda/bin/conda $global_flags "$@"
 }
 
 conda_env_update() {
-  local env_path="$1" yaml_path="$2" cfg="$3" offline="$4"
-  local flags=""
-  [ "$offline" = "1" ] && flags="--offline"
-  run_conda_as_target "$cfg" "$flags" env update --prefix "$env_path" --file "$yaml_path" -q
+	local env_path="$1" yaml_path="$2" cfg="$3" offline="$4"
+	local flags=""
+	[ "$offline" = "1" ] && flags="--offline"
+	run_conda_as_target "$cfg" "$flags" env update --prefix "$env_path" --file "$yaml_path" -q
 }
 
 conda_env_create() {
-  local env_path="$1" yaml_path="$2" cfg="$3" offline="$4"
-  local flags=""
-  [ "$offline" = "1" ] && flags="--offline"
-  run_conda_as_target "$cfg" "$flags" env create --prefix "$env_path" --file "$yaml_path" -q
+	local env_path="$1" yaml_path="$2" cfg="$3" offline="$4"
+	local flags=""
+	[ "$offline" = "1" ] && flags="--offline"
+	run_conda_as_target "$cfg" "$flags" env create --prefix "$env_path" --file "$yaml_path" -q
 }
 
 # Quick debug of the identity that will run conda
@@ -269,48 +274,51 @@ sudo -H -u "$TARGET_USERNAME" -g "#$TARGET_GID" env -i HOME="$USER_TMP" PATH="/u
 # 2) If that fails, retry online.
 # -------------------------------
 if [ -d "$ENV_PATH/conda-meta" ] && [ -f "$ENV_PATH/conda-meta/history" ]; then
-  echo "Updating existing environment: $ENV_NAME"
-  if conda_env_update "$ENV_PATH" "$ENV_YAML_COPY" "${USER_TMP}/.condarc.offline" "1"; then
-    echo "✓ Environment updated (offline)"
-  else
-    echo "Offline update failed, retrying online..."
-    if conda_env_update "$ENV_PATH" "$ENV_YAML_COPY" "${USER_TMP}/.condarc" "0"; then
-      echo "✓ Environment updated (online)"
-    else
-      echo "ERROR: Failed to update environment"
-      exit 1
-    fi
-  fi
+	echo "Updating existing environment: $ENV_NAME"
+	if conda_env_update "$ENV_PATH" "$ENV_YAML_COPY" "${USER_TMP}/.condarc.offline" "1"; then
+		echo "✓ Environment updated (offline)"
+	else
+		echo "Offline update failed, retrying online..."
+		if conda_env_update "$ENV_PATH" "$ENV_YAML_COPY" "${USER_TMP}/.condarc" "0"; then
+			echo "✓ Environment updated (online)"
+		else
+			echo "ERROR: Failed to update environment"
+			exit 1
+		fi
+	fi
 else
-  echo "Creating new environment: $ENV_NAME"
-  if conda_env_create "$ENV_PATH" "$ENV_YAML_COPY" "${USER_TMP}/.condarc.offline" "1"; then
-    echo "✓ Environment created (offline)"
-  else
-    echo "Offline create failed, retrying online..."
-    if conda_env_create "$ENV_PATH" "$ENV_YAML_COPY" "${USER_TMP}/.condarc" "0"; then
-      echo "✓ Environment created (online)"
-    else
-      echo "ERROR: Failed to create environment"
-      exit 1
-    fi
-  fi
+	echo "Creating new environment: $ENV_NAME"
+	if conda_env_create "$ENV_PATH" "$ENV_YAML_COPY" "${USER_TMP}/.condarc.offline" "1"; then
+		echo "✓ Environment created (offline)"
+	else
+		echo "Offline create failed, retrying online..."
+		if conda_env_create "$ENV_PATH" "$ENV_YAML_COPY" "${USER_TMP}/.condarc" "0"; then
+			echo "✓ Environment created (online)"
+		else
+			echo "ERROR: Failed to create environment"
+			exit 1
+		fi
+	fi
 fi
 
 # -------------------------------
 # optional: pip uninstall list (run as target user)
 # -------------------------------
 if [ -n "$PIP_UNINSTALL_FILE" ] && [ -f "${WORK_DIR}/${ENV_DIR}/${PIP_UNINSTALL_FILE}" ]; then
-  echo "Uninstalling packages from ${PIP_UNINSTALL_FILE}"
-  while IFS= read -r package || [ -n "$package" ]; do
-    package=$(echo "$package" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    [[ -z "$package" || "$package" =~ ^[[:space:]]*# ]] && continue
-    sudo -H -u "$TARGET_USERNAME" -g "#$TARGET_GID" env -i HOME="$USER_TMP" PATH="$ENV_PATH/bin:/opt/conda/bin:/usr/local/bin:/usr/bin:/bin" \
-      python -m pip show "$package" >/dev/null 2>&1 || { echo "Skipping $package (not installed)"; continue; }
-    echo "Uninstalling $package..."
-    sudo -H -u "$TARGET_USERNAME" -g "#$TARGET_GID" env -i HOME="$USER_TMP" PATH="$ENV_PATH/bin:/opt/conda/bin:/usr/local/bin:/usr/bin:/bin" \
-      python -m pip uninstall "$package" -y || echo "⚠ Failed to uninstall $package"
-  done < "${WORK_DIR}/${ENV_DIR}/${PIP_UNINSTALL_FILE}"
-  echo "Pip uninstall completed"
+	echo "Uninstalling packages from ${PIP_UNINSTALL_FILE}"
+	while IFS= read -r package || [ -n "$package" ]; do
+		package=$(echo "$package" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+		[[ -z "$package" || "$package" =~ ^[[:space:]]*# ]] && continue
+		sudo -H -u "$TARGET_USERNAME" -g "#$TARGET_GID" env -i HOME="$USER_TMP" PATH="$ENV_PATH/bin:/opt/conda/bin:/usr/local/bin:/usr/bin:/bin" \
+			python -m pip show "$package" >/dev/null 2>&1 || {
+			echo "Skipping $package (not installed)"
+			continue
+		}
+		echo "Uninstalling $package..."
+		sudo -H -u "$TARGET_USERNAME" -g "#$TARGET_GID" env -i HOME="$USER_TMP" PATH="$ENV_PATH/bin:/opt/conda/bin:/usr/local/bin:/usr/bin:/bin" \
+			python -m pip uninstall "$package" -y || echo "⚠ Failed to uninstall $package"
+	done <"${WORK_DIR}/${ENV_DIR}/${PIP_UNINSTALL_FILE}"
+	echo "Pip uninstall completed"
 fi
 
 # -------------------------------
@@ -325,13 +333,13 @@ fi
 
 # Verify as the target user (to catch NFS root-squash issues)
 if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/conda-meta" ]; then
-  if sudo -H -u "$TARGET_USERNAME" -g "#$TARGET_GID" env -i HOME="$USER_TMP" PATH="$ENV_PATH/bin:/usr/bin:/bin" python --version >/dev/null 2>&1; then
-    echo "✓ Environment verification passed"
-  else
-    echo "⚠ Environment verification failed (permission or PATH issue)"
-  fi
+	if sudo -H -u "$TARGET_USERNAME" -g "#$TARGET_GID" env -i HOME="$USER_TMP" PATH="$ENV_PATH/bin:/usr/bin:/bin" python --version >/dev/null 2>&1; then
+		echo "✓ Environment verification passed"
+	else
+		echo "⚠ Environment verification failed (permission or PATH issue)"
+	fi
 else
-  echo "⚠ Environment verification failed - missing required directories"
+	echo "⚠ Environment verification failed - missing required directories"
 fi
 
 echo "✓ Environment build completed: $ENV_NAME"
