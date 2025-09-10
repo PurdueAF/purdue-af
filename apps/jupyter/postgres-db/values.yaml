@@ -1,0 +1,69 @@
+# PostgreSQL configuration for JupyterHub database
+global:
+  postgresql:
+    auth:
+      postgresPassword: "jupyterhub-postgres-password"
+      username: "jupyterhub"
+      password: "jupyterhub-password"
+      database: "jupyterhub"
+
+# Primary PostgreSQL configuration
+primary:
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: geddes-standard-multinode
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1
+      memory: 2Gi
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  # Enable metrics for monitoring
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: cms
+      interval: 30s
+
+# Service configuration
+service:
+  type: ClusterIP
+  ports:
+    postgresql: 5432
+
+# Security context
+securityContext:
+  enabled: true
+  fsGroup: 1001
+  runAsUser: 1001
+  runAsNonRoot: true
+
+# Pod security context
+podSecurityContext:
+  enabled: true
+  fsGroup: 1001
+
+# Network policy
+networkPolicy:
+  enabled: true
+  allowExternal: false
+  ingressNSMatchLabels:
+    name: cms
+
+# Backup configuration (optional)
+backup:
+  enabled: false
+
+# Read replicas (disabled for single instance)
+readReplicas:
+  replicaCount: 0
