@@ -13,3 +13,4 @@ resources:
   - helmrepo-jupyterhub.yaml
   - helmrepo-jupyterhub-ssh.yaml
   - helmrepo-servicex.yaml
+  - helmrepo-cnpg.yaml
