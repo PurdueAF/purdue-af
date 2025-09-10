@@ -3,6 +3,7 @@ import sys
 
 try:
     import pyroscope
+
     srv = os.getenv("PYROSCOPE_SERVER")
     app = os.getenv("PYROSCOPE_APP", "jupyter-server")
     if srv:
