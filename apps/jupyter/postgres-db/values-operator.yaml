@@ -2,9 +2,7 @@
 config:
   clusterWide: true
 
-# Webhook configuration - disable to avoid internal network issues
-webhook:
-  enabled: false
+webhook: {}
 
 # Resource limits and requests
 resources:
