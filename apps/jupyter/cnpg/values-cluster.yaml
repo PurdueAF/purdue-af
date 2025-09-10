@@ -1,63 +1,55 @@
-# PostgreSQL Cluster Configuration for JupyterHub
-name: cnpg-cluster
-namespace: cms
+cluster:
+  # Number of instances
+  instances: 1
 
-# PostgreSQL version
-postgresql:
-  parameters:
-    max_connections: "100"
-    shared_buffers: "256MB"
-    effective_cache_size: "1GB"
-    maintenance_work_mem: "64MB"
-    checkpoint_completion_target: "0.9"
-    wal_buffers: "16MB"
-    default_statistics_target: "100"
-    random_page_cost: "1.1"
-    effective_io_concurrency: "200"
-    work_mem: "4MB"
-    min_wal_size: "1GB"
-    max_wal_size: "4GB"
-  pg_hba:
-    - "host all all 0.0.0.0/0 md5"
-    - "host all all ::/0 md5"
+  # Storage configuration
+  storage:
+    size: 20Gi
+    storageClass: ""
 
-# Storage configuration
-storage:
-  size: 20Gi
-  storageClass: ""
+  # Resource limits and requests
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
 
-# Resource limits and requests
-resources:
-  requests:
-    memory: "512Mi"
-    cpu: "250m"
-  limits:
-    memory: "1Gi"
-    cpu: "500m"
+  # The instances' log level
+  logLevel: "warning"
 
-# Number of instances
-instances: 1
+  # PostgreSQL configuration
+  postgresql:
+    parameters:
+      max_connections: "100"
+      shared_buffers: "256MB"
+      effective_cache_size: "1GB"
+      maintenance_work_mem: "64MB"
+      checkpoint_completion_target: "0.9"
+      wal_buffers: "16MB"
+      default_statistics_target: "100"
+      random_page_cost: "1.1"
+      effective_io_concurrency: "200"
+      work_mem: "4MB"
+      min_wal_size: "1GB"
+      max_wal_size: "4GB"
+    pg_hba:
+      - "host all all 0.0.0.0/0 md5"
+      - "host all all ::/0 md5"
 
-# Backup configuration
-backup:
-  enabled: true
-  retentionPolicy: "30d"
-
-# Monitoring
-monitoring:
-  enabled: true
-
-# Security (pg_hba configuration moved to postgresql section above)
-
-# Service configuration
-service:
-  type: ClusterIP
-  port: 5432
-
-# Database initialization
-bootstrap:
+  # Database initialization
   initdb:
     database: jupyterhub
     owner: jupyterhub
     secret:
       name: cnpg-cluster-credentials
+
+  # Monitoring
+  monitoring:
+    enabled: true
+
+# Backup configuration
+backups:
+  enabled: true
+  retentionPolicy: "30d"
