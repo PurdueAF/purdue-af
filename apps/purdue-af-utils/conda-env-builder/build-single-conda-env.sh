@@ -149,8 +149,6 @@ always_copy: true
 auto_activate_base: false
 env_prompt: '({name})'
 EOF"
-# offline variant (to fast-path no-op when cache is warm)
-"${RUN_AS_UID[@]}" bash -c "cp '${USER_TMP}/.condarc' '${USER_TMP}/.condarc.offline' && echo 'offline: true' >> '${USER_TMP}/.condarc.offline'"
 
 # -------------------------------
 # target paths / fetch env repo
@@ -168,9 +166,7 @@ CONDA_ALWAYS_COPY_RUN="1" # copy by default (safer on network FS)
 # Try a pkgs dir under the env's parent; if it's the same filesystem and not network-like,
 # we allow hardlinks for speed (set CONDA_ALWAYS_COPY_RUN=0).
 PKGS_SAMEFS_DIR="$(dirname "$ENV_PATH")/.conda-pkgs-$TARGET_USERNAME"
-if "${RUN_AS_UID[@]}" mkdir -p "$PKGS_SAMEFS_DIR" 2>/dev/null; then
-	chown -R "$TARGET_USERNAME:$TARGET_USERNAME" "$PKGS_SAMEFS_DIR" || true
-fi
+"${RUN_AS_UID[@]}" mkdir -p "$PKGS_SAMEFS_DIR" 2>/dev/null || true
 
 # Compare filesystem IDs; enable hardlinks only when on the same local FS.
 FSID_ENV=$(stat -fc %d "$ENV_PATH" 2>/dev/null || echo 0)
@@ -223,27 +219,6 @@ tr -d '\r' < \"\$YFILE\" > \"\$YFILE.tmp\" && mv \"\$YFILE.tmp\" \"\$YFILE\"
 if grep -qP '\t' \"\$YFILE\"; then sed -i $'s/\t/  /g' \"\$YFILE\"; fi
 "
 
-# -------------------------------
-# add pyroscope-io to conda packages
-# -------------------------------
-echo "Adding pyroscope-io to conda packages..."
-"${RUN_AS_UID[@]}" bash -c "
-# Check if pyroscope-io is already in the dependencies
-if ! grep -q 'pyroscope-io' '$ENV_YAML_COPY'; then
-    # Add pyroscope-io to the dependencies list
-    if grep -q '^dependencies:' '$ENV_YAML_COPY'; then
-        # Find the dependencies section and add pyroscope-io
-        sed -i '/^dependencies:/a\\  - pyroscope-io' '$ENV_YAML_COPY'
-    else
-        # If no dependencies section exists, create one
-        echo 'dependencies:' >> '$ENV_YAML_COPY'
-        echo '  - pyroscope-io' >> '$ENV_YAML_COPY'
-    fi
-    echo 'Added pyroscope-io to environment dependencies'
-else
-    echo 'pyroscope-io already present in environment dependencies'
-fi
-"
 
 # -------------------------------
 # run conda EXACTLY as the target user (not root)
@@ -269,50 +244,48 @@ run_conda_as_target() {
 }
 
 conda_env_update() {
-	local env_path="$1" yaml_path="$2" cfg="$3" offline="$4"
-	local flags=""
-	[ "$offline" = "1" ] && flags="--offline"
-	run_conda_as_target "$cfg" "$flags" env update --prefix "$env_path" --file "$yaml_path" -q
+	local env_path="$1" yaml_path="$2" cfg="$3"
+	run_conda_as_target "$cfg" "" env update --prefix "$env_path" --file "$yaml_path" -q
 }
 
 conda_env_create() {
-	local env_path="$1" yaml_path="$2" cfg="$3" offline="$4"
-	local flags=""
-	[ "$offline" = "1" ] && flags="--offline"
-	run_conda_as_target "$cfg" "$flags" env create --prefix "$env_path" --file "$yaml_path" -q
+	local env_path="$1" yaml_path="$2" cfg="$3"
+	run_conda_as_target "$cfg" "" env create --prefix "$env_path" --file "$yaml_path" -q
 }
 
 # -------------------------------
 # create or update (NEVER delete)
-# 1) Try offline (fast no-op if cache warm).
-# 2) If that fails, retry online.
 # -------------------------------
 if [ -d "$ENV_PATH/conda-meta" ] && [ -f "$ENV_PATH/conda-meta/history" ]; then
 	echo "Updating existing environment: $ENV_NAME"
-	if conda_env_update "$ENV_PATH" "$ENV_YAML_COPY" "${USER_TMP}/.condarc.offline" "1"; then
-		echo "✓ Environment updated (offline)"
+	if conda_env_update "$ENV_PATH" "$ENV_YAML_COPY" "${USER_TMP}/.condarc"; then
+		echo "✓ Environment updated"
 	else
-		echo "Offline update failed, retrying online..."
-		if conda_env_update "$ENV_PATH" "$ENV_YAML_COPY" "${USER_TMP}/.condarc" "0"; then
-			echo "✓ Environment updated (online)"
-		else
-			echo "ERROR: Failed to update environment"
-			exit 1
-		fi
+		echo "ERROR: Failed to update environment"
+		exit 1
 	fi
 else
 	echo "Creating new environment: $ENV_NAME"
-	if conda_env_create "$ENV_PATH" "$ENV_YAML_COPY" "${USER_TMP}/.condarc.offline" "1"; then
-		echo "✓ Environment created (offline)"
+	if conda_env_create "$ENV_PATH" "$ENV_YAML_COPY" "${USER_TMP}/.condarc"; then
+		echo "✓ Environment created"
 	else
-		echo "Offline create failed, retrying online..."
-		if conda_env_create "$ENV_PATH" "$ENV_YAML_COPY" "${USER_TMP}/.condarc" "0"; then
-			echo "✓ Environment created (online)"
-		else
-			echo "ERROR: Failed to create environment"
-			exit 1
-		fi
+		echo "ERROR: Failed to create environment"
+		exit 1
 	fi
+fi
+
+# -------------------------------
+# install pyroscope-io via pip
+# -------------------------------
+echo "Installing pyroscope-io via pip..."
+if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/conda-meta" ]; then
+	sudo -H -u "$TARGET_USERNAME" -g "#$TARGET_GID" env -i HOME="$USER_TMP" PATH="$ENV_PATH/bin:/opt/conda/bin:/usr/local/bin:/usr/bin:/bin" \
+		python -m pip install pyroscope-io --quiet || {
+		echo "⚠ Failed to install pyroscope-io via pip"
+	}
+	echo "✓ pyroscope-io installed via pip"
+else
+	echo "⚠ Environment not found, skipping pyroscope-io installation"
 fi
 
 # -------------------------------
@@ -326,7 +299,6 @@ if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/conda-meta" ]; then
 	if [ -n "$SITE_PACKAGES_DIR" ] && [ -d "$SITE_PACKAGES_DIR" ]; then
 		# Copy sitecustomize.py to site-packages
 		"${RUN_AS_UID[@]}" cp "$(dirname "$0")/sitecustomize.py" "$SITE_PACKAGES_DIR/"
-		"${RUN_AS_UID[@]}" chmod 644 "$SITE_PACKAGES_DIR/sitecustomize.py"
 		echo "✓ sitecustomize.py installed to $SITE_PACKAGES_DIR"
 	else
 		echo "⚠ Could not find site-packages directory in environment"
