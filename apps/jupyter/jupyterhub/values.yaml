@@ -4,15 +4,15 @@ singleuser:
   cmd:
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
-    tag: "0.10.2"
+    tag: "0.10.5"
   extraLabels:
-    username_unescaped: "{legacy_escape_username}"
-    docker_image_tag: "0.10.2"
+    username_unescaped: "{username}"
+    docker_image_tag: "0.10.5"
   startTimeout: 3600
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
       default: true
-      description: "If you are starting a session with a GPU, please shut it down when finished in order to release the GPU."
+      description: "The CPU and memory request below are <em>desired</em> values. The actual CPU and memory allocation may be smaller if AF is under heavy load, but you are always guaranteed at least 4 cores and 16 GB of memory.<br>If you are starting a session with a GPU, please shut it down when finished in order to release the GPU."
       kubespawner_override:
         node_selector: { "cms-af-prod": "true" }
         # lifecycle_hooks:
@@ -31,28 +31,28 @@ singleuser:
             1:
               display_name: "4"
               kubespawner_override:
-                cpu_limit: 4
+                cpu_limit: 256
                 cpu_guarantee: 4
             2:
               display_name: "16"
               kubespawner_override:
-                cpu_limit: 16
+                cpu_limit: 256
                 cpu_guarantee: 16
             3:
               display_name: "32"
               kubespawner_override:
-                cpu_limit: 32
+                cpu_limit: 256
                 cpu_guarantee: 32
             4:
               display_name: "64"
               kubespawner_override:
-                cpu_limit: 64
+                cpu_limit: 256
                 cpu_guarantee: 64
-            # 5:
-            #   display_name: "128"
-            #   kubespawner_override:
-            #     cpu_limit: 128
-            #     cpu_guarantee: 128
+            5:
+              display_name: "128"
+              kubespawner_override:
+                cpu_limit: 256
+                cpu_guarantee: 128
         gpu:
           display_name: "GPUs"
           choices:
@@ -83,28 +83,28 @@ singleuser:
             1:
               display_name: "16 GB"
               kubespawner_override:
-                mem_limit: "16G"
+                mem_limit: "256G"
                 mem_guarantee: "16G"
             2:
               display_name: "32 GB"
               kubespawner_override:
-                mem_limit: "32G"
+                mem_limit: "256G"
                 mem_guarantee: "32G"
             3:
               display_name: "64 GB"
               kubespawner_override:
-                mem_limit: "64G"
+                mem_limit: "256G"
                 mem_guarantee: "64G"
             4:
               display_name: "128 GB"
               kubespawner_override:
-                mem_limit: "128G"
+                mem_limit: "256G"
                 mem_guarantee: "128G"
             # 5:
             #   display_name: "256 GB"
             #   kubespawner_override:
             #     mem_limit: "256G"
-            #     mem_guarantee: "256G"
+            #     mem_guarantee: "16G"
 
     - display_name: Minimal JupyterLab interface
       default: false
@@ -122,7 +122,7 @@ singleuser:
       default: false
       description: "Contains the latest features but may be unstable - use at your own risk."
       kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8:0.10.3"
+        image: "geddes-registry.rcac.purdue.edu/cms/purdue-af:canary"
         node_selector:
           cms-af-prod: "true"
         cpu_guarantee: 4
@@ -133,24 +133,6 @@ singleuser:
           # nvidia.com/mig-7g.40gb: 1
           nvidia.com/mig-1g.5gb: 1
       profile_options:
-        lcg_stack:
-          display_name: "LCG Stack"
-          choices:
-            1:
-              display_name: "None"
-              default: true
-              kubespawner_override:
-                environment:
-                  LCG_PATH: ""
-                  LCG_NAME: ""
-                  LCG_DISPLAY_NAME: ""
-            2:
-              display_name: "LCG_106a_cuda"
-              kubespawner_override:
-                environment:
-                  LCG_PATH: "/cvmfs/sft.cern.ch/lcg/views/LCG_106a_cuda/x86_64-el8-gcc11-opt"
-                  LCG_NAME: "lcg_106a_cuda"
-                  LCG_DISPLAY_NAME: "LCG 106a CUDA"
         gpu:
           display_name: "GPUs"
           choices:
@@ -175,7 +157,7 @@ singleuser:
       image: geddes-registry.rcac.purdue.edu/cms/af-pod-monitor:latest
       volumeMounts:
         - name: volume-{username}
-          mountPath: /home/{legacy_escape_username}
+          mountPath: /home/{username}
         - name: work
           mountPath: /work/
           mountPropagation: HostToContainer
@@ -187,12 +169,14 @@ singleuser:
   networkPolicy:
     enabled: false
   storage:
+    type: dynamic
     capacity: 25Gi
     dynamic:
       storageClass: geddes-standard-multinode
-      storageAccessModes:
-        - ReadWriteMany
-    homeMountPath: /home/{legacy_escape_username}
+      storageAccessModes: ["ReadWriteMany"]
+      pvcNameTemplate: claim-{username}
+      volumeNameTemplate: volume-{username}
+    homeMountPath: /home/{username}
     extraVolumes:
       - name: cvmfs
         persistentVolumeClaim:
@@ -236,8 +220,9 @@ prePuller:
     enabled: false
 hub:
   image:
-    name: quay.io/jupyterhub/k8s-hub
-    tag: 3.3.8
+    # name: quay.io/jupyterhub/k8s-hub
+    name: geddes-registry.rcac.purdue.edu/docker-hub-cache/jupyterhub/k8s-hub
+    tag: 4.0.0
   nodeSelector: { "cms-af-prod": "true" }
   tolerations:
     - key: "hub.jupyter.org/dedicated"
@@ -252,21 +237,27 @@ hub:
       cpu: 1
       memory: 2Gi
   extraVolumes:
-    - name: purdue-auth
+    - name: hub-extra-config
+      configMap:
+        name: jupyterhub-extra-config
+    - name: af-auth-purdue
       secret:
-        secretName: purdue-auth
-    - name: cern-auth
+        secretName: af-auth-purdue
+    - name: af-auth-cern
       secret:
-        secretName: cern-auth
+        secretName: af-auth-cern
     - name: auth-secret
       secret:
         secretName: auth-secret
   extraVolumeMounts:
-    - mountPath: /etc/secrets/purdue-auth/
-      name: purdue-auth
+    - name: hub-extra-config
+      mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d
       readOnly: true
-    - mountPath: /etc/secrets/cern-auth/
-      name: cern-auth
+    - mountPath: /etc/secrets/af-auth-purdue/
+      name: af-auth-purdue
+      readOnly: true
+    - mountPath: /etc/secrets/af-auth-cern/
+      name: af-auth-cern
       readOnly: true
   extraEnv:
     CILOGON_CLIENT_ID:
@@ -279,147 +270,13 @@ hub:
         secretKeyRef:
           name: auth-secret
           key: cilogon_client_secret
-  extraFiles:
-    00-custom-spawner:
-      mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d/custom-spawner.py
-      stringData: |
-        from oauthenticator.cilogon import CILogonOAuthenticator
-        from tornado import web
-        import os
-
-        class PurdueCILogonOAuthenticator(CILogonOAuthenticator):
-            async def authenticate(self, handler, data=None):
-                import pprint
-                ret = await super().authenticate(handler, data)
-                print("in auth:")
-                pprint.pprint(ret)
-                username, domain = ret['auth_state']['cilogon_user']['eppn'].split("@")
-                fixedUsername = None
-
-                if domain == 'purdue.edu':
-                    fixedUsername = username
-                    with open('/etc/secrets/purdue-auth/purdue-auth.txt') as file:
-                        if not f"{username}\n" in file.readlines():
-                            raise web.HTTPError(
-                                500, f"Access denied! User {username} is not in the list of authorized users."
-                            )
-
-                elif domain == 'cern.ch':
-                    fixedUsername = username + "-cern"
-                    # with open('/etc/secrets/cern-auth/cern-auth.txt') as file:
-                    #     if not f"{username}\n" in file.readlines():
-                    #         raise web.HTTPError(
-                    #             500, "Access denied! Only CMS members are allowed to log in with CERN credentials."
-                    #         )
-                
-                elif domain == 'fnal.gov':
-                        fixedUsername = username + "-fnal"
-                else:
-                    raise web.HTTPError(500, "Failed to get username from CILogon")
-                
-                ret['name'] = fixedUsername
-                ret['domain'] = domain
-                os.environ["USERNAME"] = fixedUsername
-                return ret
-
-        def passthrough_post_auth_hook(authenticator, handler, authentication):
-            import pprint
-            print("in post auth:")
-            pprint.pprint(authentication)
-            if authentication['auth_state'] is None:
-                authentication['auth_state'] = {}
-            authentication['auth_state']['name'] = authentication['name']
-            authentication['auth_state']['domain'] = authentication['domain']
-            return authentication
-
-
-        c.JupyterHub.authenticator_class = PurdueCILogonOAuthenticator
-        c.PurdueCILogonOAuthenticator.post_auth_hook = passthrough_post_auth_hook
-
-        if os.environ["POD_NAMESPACE"]=="cms":
-            c.KubeSpawner.environment.setdefault("DASK_GATEWAY__ADDRESS", "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu")
-            c.KubeSpawner.environment.setdefault("DASK_GATEWAY__PROXY_ADDRESS", "api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000")
-
-
-        c.KubeSpawner.environment.setdefault("DASK_LABEXTENSION__FACTORY__MODULE", "dask_gateway")
-        c.KubeSpawner.environment.setdefault("DASK_LABEXTENSION__FACTORY__CLASS", "GatewayCluster")
-        c.KubeSpawner.environment.setdefault("DASK_LABEXTENSION__FACTORY__KWARGS__ADDRESS", "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu")
-        c.KubeSpawner.environment.setdefault("DASK_LABEXTENSION__FACTORY__KWARGS__PROXY_ADDRESS", "api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000")
-        c.KubeSpawner.environment.setdefault("DASK_LABEXTENSION__FACTORY__KWARGS__PUBLIC_ADDRESS", "https://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu")
-
-    01-set-user-info:
-      mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d/set-user-info.py
-      stringData: |
-        from ldap3 import Server, Connection, SUBTREE
-        import json
-        import os
-
-        NAMESPACE = os.environ["POD_NAMESPACE"]
-
-        def ldap_lookup(username):
-            url = "geddes-aux.rcac.purdue.edu"
-            baseDN = "ou=People,dc=rcac,dc=purdue,dc=edu"
-            search_filter = "(uid={0}*)"
-            attrs = ['uidNumber','gidNumber']
-            s = Server(host= url ,use_ssl= True, get_info= 'ALL')
-            conn = Connection(s, version = 3, authentication = "ANONYMOUS")
-            conn.start_tls()
-            conn.search(
-                search_base = baseDN,
-                search_filter = search_filter.format(username),
-                search_scope = SUBTREE,
-                attributes = attrs
-            )
-            ldap_result_id = json.loads(conn.response_to_json())
-            print(ldap_result_id)
-            result = ldap_result_id[u'entries'][0][u'attributes']
-            uid_number = result[u'uidNumber']
-            gid_number = result [u'gidNumber']
-            print("UID",+ uid_number)
-            print("GID", + gid_number)            
-            return uid_number, gid_number
-
-        def passthrough_auth_state_hook(spawner, auth_state):
-            spawner.userdata = {
-                "name": auth_state['name'],
-                "domain": auth_state['domain']
-            }
-            domain = spawner.userdata['domain']
-            username = spawner.userdata['name']
-            spawner.environment["NB_USER"] = username
-
-            if domain == "purdue.edu":
-                uid,gid = ldap_lookup(username)
-                spawner.environment["NB_UID"] = str(uid)
-                spawner.environment["NB_GID"] = str(gid)
-            elif NAMESPACE=="cms":
-                # in prod instance do the user mapping
-                af_id = int(spawner.user.id)
-                if af_id > 399:
-                    # raise Exception(
-                    print(
-                        f"Error while trying to create an external user with AF ID {af_id}."
-                        "We ran out of accounts for external users!"
-                    )
-                    spawner.environment["NB_UID"] = "1000"
-                    spawner.environment["NB_GID"] = "1000"
-                username = 'paf{:04d}'.format(af_id)
-                uid, gid = ldap_lookup(username)
-                spawner.environment["NB_UID"] = str(uid)
-                spawner.environment["NB_GID"] = str(gid)
-            else:
-                # in dev instance skip user mapping
-                spawner.environment["NB_UID"] = "1000"
-                spawner.environment["NB_GID"] = "1000"
-
-        c.KubeSpawner.auth_state_hook = passthrough_auth_state_hook
-        c.KubeSpawner.notebook_dir = "~"
-        c.KubeSpawner.working_dir = "/home/{legacy_escape_username}"
-        c.KubeSpawner.disable_user_config = True
-        c.KubeSpawner.http_timeout = 600
-        c.KubeSpawner.start_timeout = 600
-        c.KernelSpecManager.ensure_native_kernel = False
-        c.JupyterHub.authenticate_prometheus = False
+  networkPolicy:
+    enabled: false
+  db:
+    pvc:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: geddes-standard-singlenode
   config:
     PurdueCILogonOAuthenticator:
       auto_login: True
@@ -442,7 +299,6 @@ hub:
           username_derivation:
             username_claim: eppn
     JupyterHub:
-      authenticator_class: cilogon
       admin_access: True
 scheduling:
   userScheduler:
@@ -455,11 +311,9 @@ scheduling:
         effect: "NoSchedule"
 ingress:
   enabled: true
+  ingressClassName: public
   hosts:
     - cms.geddes.rcac.purdue.edu
-  annotations:
-    kubernetes.io/ingress.class: "public"
-    nginx.ingress.kubernetes.io/proxy-body-size: "0"
 proxy:
   https:
     enabled: true
@@ -473,6 +327,13 @@ proxy:
         port: 2222
         targetPort: sftp
   traefik:
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
     extraPorts:
       - name: ssh
         containerPort: 8022
@@ -506,21 +367,7 @@ proxy:
             entrypoints: [sftp-entrypoint]
             rule: HostSNI(`*`)
             service: sftp-service
-
-  chp:
-    nodeSelector:
-      cms-af-prod: "true"
-    tolerations:
-      - key: "hub.jupyter.org/dedicated"
-        operator: "Equal"
-        value: "cms-af"
-        effect: "NoSchedule"
 cull:
-  #  concurrency: 10
   enabled: true
   every: 600
-  #  maxAge: 0
-  #  removeNamedServers: false
   timeout: 1209600
-#  users: false
-
