@@ -292,20 +292,29 @@ fi
 # -------------------------------
 echo "Installing sitecustomize.py for pyroscope monitoring..."
 if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/conda-meta" ]; then
-	# Construct site-packages path directly
-	SITE_PACKAGES_DIR="${ENV_PATH}/lib/python*/site-packages"
-	# Use shell globbing to find the actual python version directory
-	for site_packages in ${SITE_PACKAGES_DIR}; do
-		if [ -d "$site_packages" ]; then
-			# Copy sitecustomize.py to site-packages
-			"${RUN_AS_UID[@]}" cp "$(dirname "$0")/sitecustomize.py" "$site_packages/"
-			echo "✓ sitecustomize.py installed to $site_packages"
-			break
+	# Get the script directory to locate sitecustomize.py
+	SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+	SITECUSTOMIZE_SOURCE="${SCRIPT_DIR}/sitecustomize.py"
+	
+	if [ -f "$SITECUSTOMIZE_SOURCE" ]; then
+		# Construct site-packages path directly
+		SITE_PACKAGES_DIR="${ENV_PATH}/lib/python*/site-packages"
+		# Use shell globbing to find the actual python version directory
+		INSTALLED=false
+		for site_packages in ${SITE_PACKAGES_DIR}; do
+			if [ -d "$site_packages" ]; then
+				# Copy sitecustomize.py to site-packages as target user
+				"${RUN_AS_UID[@]}" cp "$SITECUSTOMIZE_SOURCE" "$site_packages/"
+				echo "✓ sitecustomize.py installed to $site_packages"
+				INSTALLED=true
+				break
+			fi
+		done
+		if [ "$INSTALLED" = "false" ]; then
+			echo "⚠ Could not find site-packages directory in environment"
 		fi
-	done
-	# Check if we found and installed to any site-packages directory
-	if [ ! -f "${SITE_PACKAGES_DIR}/sitecustomize.py" ]; then
-		echo "⚠ Could not find site-packages directory in environment"
+	else
+		echo "⚠ sitecustomize.py not found at $SITECUSTOMIZE_SOURCE"
 	fi
 else
 	echo "⚠ Environment not found, skipping sitecustomize.py installation"
