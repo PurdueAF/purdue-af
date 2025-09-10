@@ -223,9 +223,28 @@ tr -d '\r' < \"\$YFILE\" > \"\$YFILE.tmp\" && mv \"\$YFILE.tmp\" \"\$YFILE\"
 if grep -qP '\t' \"\$YFILE\"; then sed -i $'s/\t/  /g' \"\$YFILE\"; fi
 "
 
-echo "=== DEBUG: YAML file head ==="
-head -20 "$ENV_YAML_COPY" || true
-echo "=== END DEBUG ==="
+
+# -------------------------------
+# add pyroscope-io to conda packages
+# -------------------------------
+echo "Adding pyroscope-io to conda packages..."
+"${RUN_AS_UID[@]}" bash -c "
+# Check if pyroscope-io is already in the dependencies
+if ! grep -q 'pyroscope-io' '$ENV_YAML_COPY'; then
+    # Add pyroscope-io to the dependencies list
+    if grep -q '^dependencies:' '$ENV_YAML_COPY'; then
+        # Find the dependencies section and add pyroscope-io
+        sed -i '/^dependencies:/a\\  - pyroscope-io' '$ENV_YAML_COPY'
+    else
+        # If no dependencies section exists, create one
+        echo 'dependencies:' >> '$ENV_YAML_COPY'
+        echo '  - pyroscope-io' >> '$ENV_YAML_COPY'
+    fi
+    echo 'Added pyroscope-io to environment dependencies'
+else
+    echo 'pyroscope-io already present in environment dependencies'
+fi
+"
 
 # -------------------------------
 # run conda EXACTLY as the target user (not root)
@@ -264,9 +283,6 @@ conda_env_create() {
 	run_conda_as_target "$cfg" "$flags" env create --prefix "$env_path" --file "$yaml_path" -q
 }
 
-# Quick debug of the identity that will run conda
-echo "DEBUG (target id):"
-sudo -H -u "$TARGET_USERNAME" -g "#$TARGET_GID" env -i HOME="$USER_TMP" PATH="/usr/bin:/bin" id || true
 
 # -------------------------------
 # create or update (NEVER delete)
@@ -299,6 +315,26 @@ else
 			exit 1
 		fi
 	fi
+fi
+
+# -------------------------------
+# install sitecustomize.py for pyroscope monitoring
+# -------------------------------
+echo "Installing sitecustomize.py for pyroscope monitoring..."
+SITECUSTOMIZE_DIR="${ENV_PATH}/lib/python*/site-packages"
+if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/conda-meta" ]; then
+	# Find the site-packages directory
+	SITE_PACKAGES_DIR=$(find "$ENV_PATH" -name "site-packages" -type d | head -1)
+	if [ -n "$SITE_PACKAGES_DIR" ] && [ -d "$SITE_PACKAGES_DIR" ]; then
+		# Copy sitecustomize.py to site-packages
+		"${RUN_AS_UID[@]}" cp "$(dirname "$0")/sitecustomize.py" "$SITE_PACKAGES_DIR/"
+		"${RUN_AS_UID[@]}" chmod 644 "$SITE_PACKAGES_DIR/sitecustomize.py"
+		echo "✓ sitecustomize.py installed to $SITE_PACKAGES_DIR"
+	else
+		echo "⚠ Could not find site-packages directory in environment"
+	fi
+else
+	echo "⚠ Environment not found, skipping sitecustomize.py installation"
 fi
 
 # -------------------------------
