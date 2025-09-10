@@ -1,5 +1,5 @@
 # PostgreSQL Cluster Configuration for JupyterHub
-name: jupyterhub-postgres
+name: cnpg-cluster
 namespace: cms
 
 # PostgreSQL version
@@ -60,4 +60,4 @@ bootstrap:
     database: jupyterhub
     owner: jupyterhub
     secret:
-      name: jupyterhub-postgres-credentials
+      name: cnpg-cluster-credentials

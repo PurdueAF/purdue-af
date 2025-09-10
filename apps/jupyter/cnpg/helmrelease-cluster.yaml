@@ -1,7 +1,7 @@
 apiVersion: helm.toolkit.fluxcd.io/v2beta1
 kind: HelmRelease
 metadata:
-  name: jupyterhub-postgres
+  name: cnpg-cluster
   namespace: cms
 spec:
   interval: 1m
@@ -16,5 +16,5 @@ spec:
       interval: 1m
   valuesFrom:
     - kind: ConfigMap
-      name: jupyterhub-postgres-config
+      name: cnpg-cluster-config
       valuesKey: values.yaml

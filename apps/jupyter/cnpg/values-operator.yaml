@@ -1,0 +1,9 @@
+# CloudNative PG Operator Configuration
+config:
+  clusterWide: false
+
+webhook: {}
+
+# Monitoring configuration
+monitoring:
+  enabled: true

@@ -10,7 +10,7 @@ configMapGenerator:
       - values.yaml=values-operator.yaml
     options:
       disableNameSuffixHash: true
-  - name: jupyterhub-postgres-config
+  - name: cnpg-cluster-config
     namespace: cms
     files:
       - values.yaml=values-cluster.yaml
