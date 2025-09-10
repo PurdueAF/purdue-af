@@ -2,6 +2,10 @@
 name: jupyterhub-postgres
 namespace: cms
 
+# Disable webhook validation to avoid internal network issues
+annotations:
+  cnpg.io/validation: "disabled"
+
 # PostgreSQL version
 postgresql:
   parameters:
