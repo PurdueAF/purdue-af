@@ -295,10 +295,10 @@ if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/conda-meta" ]; then
 	# Look for sitecustomize.py in the Kubernetes context (mounted at /scripts/)
 	# This is where Flux mounts the configMap files
 	SITECUSTOMIZE_SOURCE="/scripts/sitecustomize.py"
-	
+
 	# Debug output
 	echo "DEBUG: Looking for sitecustomize.py at: $SITECUSTOMIZE_SOURCE"
-	
+
 	if [ -n "$SITECUSTOMIZE_SOURCE" ] && [ -f "$SITECUSTOMIZE_SOURCE" ]; then
 		# Construct site-packages path directly
 		SITE_PACKAGES_DIR="${ENV_PATH}/lib/python*/site-packages"
