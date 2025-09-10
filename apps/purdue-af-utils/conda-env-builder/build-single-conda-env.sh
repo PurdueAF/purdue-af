@@ -223,7 +223,6 @@ tr -d '\r' < \"\$YFILE\" > \"\$YFILE.tmp\" && mv \"\$YFILE.tmp\" \"\$YFILE\"
 if grep -qP '\t' \"\$YFILE\"; then sed -i $'s/\t/  /g' \"\$YFILE\"; fi
 "
 
-
 # -------------------------------
 # add pyroscope-io to conda packages
 # -------------------------------
@@ -282,7 +281,6 @@ conda_env_create() {
 	[ "$offline" = "1" ] && flags="--offline"
 	run_conda_as_target "$cfg" "$flags" env create --prefix "$env_path" --file "$yaml_path" -q
 }
-
 
 # -------------------------------
 # create or update (NEVER delete)
