@@ -51,5 +51,4 @@ cluster:
 
 # Backup configuration
 backups:
-  enabled: true
-  retentionPolicy: "30d"
+  enabled: false
