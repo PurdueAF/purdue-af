@@ -105,6 +105,11 @@ gateway:
             persistentVolumeClaim:
               claimName: conda-envs
       extraContainerConfig:
+        env:
+          - name: DASK_DISTRIBUTED__WORKER__PRELOAD
+            value: /work/projects/purdue-af/dask_setup.py
+          - name: DASK_DISTRIBUTED__WORKER__PRELOAD__ARGV
+            value: '[]'
         volumeMounts:
           - name: cvmfs
             mountPath: /cvmfs
