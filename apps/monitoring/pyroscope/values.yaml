@@ -191,15 +191,6 @@ alloy:
   controller:
     type: "statefulset"
     replicas: 1
-    podAnnotations:
-      profiles.grafana.com/memory.scrape: "true"
-      profiles.grafana.com/memory.port_name: "http-metrics"
-      profiles.grafana.com/cpu.scrape: "true"
-      profiles.grafana.com/cpu.port_name: "http-metrics"
-      profiles.grafana.com/goroutine.scrape: "true"
-      profiles.grafana.com/goroutine.port_name: "http-metrics"
-      profiles.grafana.com/service_repository: "https://github.com/grafana/alloy"
-      profiles.grafana.com/service_git_ref: "v1.8.1"
 
   alloy:
     stabilityLevel: "public-preview" # This needs to be set for some of our resources until verison v1.2 is released
@@ -217,13 +208,6 @@ agent:
   controller:
     type: "statefulset"
     replicas: 1
-    podAnnotations:
-      profiles.grafana.com/memory.scrape: "true"
-      profiles.grafana.com/memory.port_name: "http-metrics"
-      profiles.grafana.com/cpu.scrape: "true"
-      profiles.grafana.com/cpu.port_name: "http-metrics"
-      profiles.grafana.com/goroutine.scrape: "true"
-      profiles.grafana.com/goroutine.port_name: "http-metrics"
   agent:
     configMap:
       create: false
