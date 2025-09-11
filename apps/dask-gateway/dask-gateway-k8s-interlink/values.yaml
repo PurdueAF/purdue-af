@@ -63,6 +63,9 @@ gateway:
           - name: work
             persistentVolumeClaim:
               claimName: af-shared-storage
+          - name: conda-envs
+            persistentVolumeClaim:
+              claimName: conda-envs
       extraContainerConfig:
         volumeMounts:
           - name: depot
@@ -70,6 +73,9 @@ gateway:
             mountPropagation: HostToContainer
           - name: work
             mountPath: /work/
+            mountPropagation: HostToContainer
+          - name: conda-envs
+            mountPath: /conda-envs/
             mountPropagation: HostToContainer
     worker:
       extraPodConfig:
@@ -93,6 +99,9 @@ gateway:
           - name: work
             persistentVolumeClaim:
               claimName: af-shared-storage
+          - name: conda-envs
+            persistentVolumeClaim:
+              claimName: conda-envs
       extraContainerConfig:
         volumeMounts:
           - name: cvmfs
@@ -106,6 +115,9 @@ gateway:
             mountPropagation: HostToContainer
           - name: work
             mountPath: /work/
+            mountPropagation: HostToContainer
+          - name: conda-envs
+            mountPath: /conda-envs/
             mountPropagation: HostToContainer
   extraConfig:
     config: |
