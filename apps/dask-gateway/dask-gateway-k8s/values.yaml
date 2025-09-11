@@ -214,9 +214,6 @@ gateway:
           setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
           desired_cores = options.worker_cores
           desired_memory = int(options.worker_memory * 2 ** 30)
-          worker_cmd = f"{options.conda_env}/bin/dask-worker"
-          ds_path = "/work/projects/purdue-af/dask_setup.py"
-          worker_cmd = worker_cmd + f" --preload {ds_path}"
           return {
               "worker_cores": desired_cores,
               "worker_cores_limit": desired_cores,
@@ -224,7 +221,7 @@ gateway:
               "worker_memory_limit": desired_memory,
               "environment": options.env,
               "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
-              "worker_cmd": worker_cmd,
+              "worker_cmd": f"{options.conda_env}/bin/dask-worker",
               "time": "1-00:00:00",
               "scheduler_setup": setup_cmd,
               "worker_setup": setup_cmd,
