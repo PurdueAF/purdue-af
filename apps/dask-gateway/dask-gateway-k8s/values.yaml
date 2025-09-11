@@ -215,11 +215,26 @@ gateway:
           desired_cores = options.worker_cores
           desired_memory = int(options.worker_memory * 2 ** 30)
           import glob
+          import subprocess, json
           # Build worker command and preload dask_setup.py only if it exists in the env
           worker_cmd = f"{options.conda_env}/bin/dask-worker"
-          print(f"{options.conda_env}/lib/python*/site-packages/dask_setup.py")
-          ds_matches = glob.glob(f"{options.conda_env}/lib/python*/site-packages/dask_setup.py")
-          print(ds_matches)
+          # Try resolving with the env's python (better mirrors worker environment); print debug output
+          ds_matches = []
+          try:
+              py_snippet = (
+                  "import glob, json; "
+                  f"print(json.dumps(glob.glob(r'{options.conda_env}/lib/python*/site-packages/dask_setup.py')))"
+              )
+              out = subprocess.check_output([
+                  f"{options.conda_env}/bin/python", "-c", py_snippet
+              ], text=True).strip()
+              print("[dask-setup] subprocess glob output:", out)
+              if out:
+                  ds_matches = json.loads(out)
+          except Exception as e:
+              print("[dask-setup] subprocess glob failed:", e)
+              ds_matches = glob.glob(f"{options.conda_env}/lib/python*/site-packages/dask_setup.py")
+              print("[dask-setup] in-process glob matches:", ds_matches)
           worker_setup_cmd = setup_cmd
           if ds_matches:
               worker_cmd = worker_cmd + f" --preload {ds_matches[0]}"
