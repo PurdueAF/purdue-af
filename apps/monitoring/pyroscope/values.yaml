@@ -198,14 +198,13 @@ alloy:
 ingress:
   enabled: true
   className: public
-  path: /pyroscope
-  pathType: Prefix
+  pathType: ImplementationSpecific
   # Additional labels to add to the ingress resource
   labels: {}
   # Additional annotations to add to the ingress resource
   annotations: {}
   hosts:
-    - cms.geddes.rcac.purdue.edu
+    - pyroscope-cms.geddes.rcac.purdue.edu
   tls:
     - hosts:
-        - cms.geddes.rcac.purdue.edu
+        - pyroscope-cms.geddes.rcac.purdue.edu
