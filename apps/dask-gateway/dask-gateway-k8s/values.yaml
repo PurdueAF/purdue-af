@@ -109,7 +109,7 @@ gateway:
           - name: DASK_DISTRIBUTED__WORKER__PRELOAD
             value: '["/etc/dask/preload/worker_pyroscope.py"]'
           - name: DASK_DISTRIBUTED__WORKER__PRELOAD_ARGV
-            value: '[[]]'
+            value: "[[]]"
         volumeMounts:
           - name: cvmfs
             mountPath: /cvmfs
