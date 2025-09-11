@@ -217,18 +217,12 @@ gateway:
           import glob
           # Build worker command and preload sitecustomize only if it exists in the env
           worker_cmd = f"{options.conda_env}/bin/dask-worker"
-          # Always preload a simple test module created at worker startup
-          worker_cmd = worker_cmd + " --preload /tmp/dask-preload-test.py"
+          # Always preload simple inline Python text
+          python_preload = "import sys; sys.stdout.write('[dask-preload] worker starting\\n')"
+          worker_cmd = worker_cmd + f' --preload "{python_preload}"'
           sc_matches = glob.glob(f"{options.conda_env}/lib/python*/site-packages/sitecustomize.py")
           if sc_matches:
               worker_cmd = worker_cmd + " --preload sitecustomize"
-
-          # Create the simple preload file in the worker container before the worker starts
-          worker_setup_cmd = (
-              setup_cmd
-              + 'printf "def dask_setup(worker):\\n    print(\\"[dask-preload] worker starting\\")\\n" '
-              + '> /tmp/dask-preload-test.py; '
-          )
 
           return {
               "worker_cores": desired_cores,
@@ -240,7 +234,7 @@ gateway:
               "worker_cmd": worker_cmd,
               "time": "1-00:00:00",
               "scheduler_setup": setup_cmd,
-              "worker_setup": worker_setup_cmd,
+              "worker_setup": setup_cmd,
           }
       c.Backend.cluster_options = Options(
           String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
