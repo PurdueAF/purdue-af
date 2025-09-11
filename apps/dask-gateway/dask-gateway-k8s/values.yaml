@@ -215,11 +215,12 @@ gateway:
           desired_cores = options.worker_cores
           desired_memory = int(options.worker_memory * 2 ** 30)
           import glob
-          # Build worker command and preload sitecustomize only if it exists in the env
+          # Build worker command and preload dask_setup.py only if it exists in the env
           worker_cmd = f"{options.conda_env}/bin/dask-worker"
-          sc_matches = glob.glob(f"{options.conda_env}/lib/python*/site-packages/sitecustomize.py")
-          if sc_matches:
-              worker_cmd = worker_cmd + " --preload sitecustomize"
+          ds_matches = glob.glob(f"{options.conda_env}/lib/python*/site-packages/dask_setup.py")
+          worker_setup_cmd = setup_cmd
+          if ds_matches:
+              worker_cmd = worker_cmd + f" --preload {ds_matches[0]}"
 
           return {
               "worker_cores": desired_cores,
@@ -231,7 +232,7 @@ gateway:
               "worker_cmd": worker_cmd,
               "time": "1-00:00:00",
               "scheduler_setup": setup_cmd,
-              "worker_setup": setup_cmd,
+              "worker_setup": worker_setup_cmd,
           }
       c.Backend.cluster_options = Options(
           String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
