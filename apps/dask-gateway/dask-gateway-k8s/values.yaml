@@ -217,9 +217,6 @@ gateway:
           import glob
           # Build worker command and preload sitecustomize only if it exists in the env
           worker_cmd = f"{options.conda_env}/bin/dask-worker"
-          # Always preload simple inline Python text
-          python_preload = "import sys; sys.stdout.write('[dask-preload] worker starting\\n')"
-          worker_cmd = worker_cmd + f' --preload "{python_preload}"'
           sc_matches = glob.glob(f"{options.conda_env}/lib/python*/site-packages/sitecustomize.py")
           if sc_matches:
               worker_cmd = worker_cmd + " --preload sitecustomize"
