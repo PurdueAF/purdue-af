@@ -194,6 +194,23 @@ gateway:
             #"queue": "root.community.cms"
           }
 
+          c.KubeClusterConfig.scheduler_extra_pod_annotations = {
+              "profiles.grafana.com/memory.scrape": "true",
+              "profiles.grafana.com/memory.port": "8080",
+              "profiles.grafana.com/cpu.scrape": "true",
+              "profiles.grafana.com/cpu.port": "8080",
+              "profiles.grafana.com/goroutine.scrape": "true",
+              "profiles.grafana.com/goroutine.port": "8080",
+          }
+          c.KubeClusterConfig.worker_extra_pod_annotations = {
+              "profiles.grafana.com/memory.scrape": "true",
+              "profiles.grafana.com/memory.port": "8080",
+              "profiles.grafana.com/cpu.scrape": "true",
+              "profiles.grafana.com/cpu.port": "8080",
+              "profiles.grafana.com/goroutine.scrape": "true",
+              "profiles.grafana.com/goroutine.port": "8080",
+          }
+
           setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
           desired_cores = options.worker_cores
           desired_memory = int(options.worker_memory * 2 ** 30)
