@@ -196,14 +196,16 @@ alloy:
       enabled: true
 
 ingress:
-  enabled: false
-  className: ""
-  pathType: ImplementationSpecific
+  enabled: true
+  className: public
+  path: /pyroscope
+  pathType: Prefix
   # Additional labels to add to the ingress resource
   labels: {}
   # Additional annotations to add to the ingress resource
   annotations: {}
-  # hosts:
-  #   - localhost
-  # tls:
-  #   - secretName: certificate
+  hosts:
+    - cms.geddes.rcac.purdue.edu
+  tls:
+    - hosts:
+        - cms.geddes.rcac.purdue.edu
