@@ -214,15 +214,10 @@ gateway:
           setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
           desired_cores = options.worker_cores
           desired_memory = int(options.worker_memory * 2 ** 30)
-          # Build worker command and preload dask_setup.py using the env's Python version
+          # Build worker command and preload the module `dask_setup` from the env
           worker_cmd = f"{options.conda_env}/bin/dask-worker"
           worker_setup_cmd = setup_cmd
-          import subprocess
-          py_ver = subprocess.check_output([
-              f"{options.conda_env}/bin/python", "-c", "import sys;print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-          ], text=True).strip()
-          dask_setup_path = f"{options.conda_env}/lib/python{py_ver}/site-packages/dask_setup.py"
-          worker_cmd = worker_cmd + f" --preload {dask_setup_path}"
+          worker_cmd = worker_cmd + " --preload dask_setup"
 
           return {
               "worker_cores": desired_cores,
