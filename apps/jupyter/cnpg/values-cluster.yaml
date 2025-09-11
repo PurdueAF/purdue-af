@@ -1,6 +1,6 @@
 cluster:
   # Number of instances
-  instances: 1
+  instances: 3
 
   # Storage configuration
   storage:
