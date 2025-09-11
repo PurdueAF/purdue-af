@@ -17,7 +17,6 @@ pyroscope:
     # Allows to override the image tag, which defaults to the appVersion in the chart metadata
     tag: ""
 
-  podAnnotations: {}
   extraArgs:
     log.level: debug
 
@@ -51,6 +50,11 @@ pyroscope:
     # The name of the service account to use.
     # If not set and create is true, a name is generated using the fullname template
     name: ""
+
+  podAnnotations:
+    profiles.grafana.com/memory.scrape: "false"
+    profiles.grafana.com/cpu.scrape: "false"
+    profiles.grafana.com/goroutine.scrape: "false"
 
   podSecurityContext:
     fsGroup: 10001
@@ -178,7 +182,10 @@ alloy:
   controller:
     type: "statefulset"
     replicas: 1
-    podAnnotations: {}
+    podAnnotations:
+      profiles.grafana.com/memory.scrape: "false"
+      profiles.grafana.com/cpu.scrape: "false"
+      profiles.grafana.com/goroutine.scrape: "false"
 
   alloy:
     stabilityLevel: "public-preview" # This needs to be set for some of our resources until verison v1.2 is released
