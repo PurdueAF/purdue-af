@@ -180,7 +180,6 @@ alloy:
     replicas: 1
     podAnnotations: {}
 
-
   alloy:
     stabilityLevel: "public-preview" # This needs to be set for some of our resources until verison v1.2 is released
     configMap:
@@ -188,8 +187,6 @@ alloy:
       name: alloy-config-pyroscope
     clustering:
       enabled: true
-    
-
 
 ingress:
   enabled: false
