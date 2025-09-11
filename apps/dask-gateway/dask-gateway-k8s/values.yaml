@@ -219,7 +219,8 @@ gateway:
           worker_cmd = f"{options.conda_env}/bin/dask-worker"
           sc_matches = glob.glob(f"{options.conda_env}/lib/python*/site-packages/sitecustomize.py")
           if sc_matches:
-              worker_cmd = worker_cmd + " --preload sitecustomize"
+              # pass absolute path including .py to --preload
+              worker_cmd = worker_cmd + f" --preload {sc_matches[0]}"
 
           return {
               "worker_cores": desired_cores,
