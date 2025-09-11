@@ -51,17 +51,6 @@ pyroscope:
     # If not set and create is true, a name is generated using the fullname template
     name: ""
 
-  podAnnotations:
-    # Scrapes itself see https://grafana.com/docs/pyroscope/latest/deploy-kubernetes/helm/#optional-scrape-your-own-workloads-profiles
-    profiles.grafana.com/memory.scrape: "true"
-    profiles.grafana.com/memory.port_name: http2
-    profiles.grafana.com/cpu.scrape: "true"
-    profiles.grafana.com/cpu.port_name: http2
-    profiles.grafana.com/goroutine.scrape: "true"
-    profiles.grafana.com/goroutine.port_name: http2
-    # profiles.grafana.com/block.scrape: "true"
-    # profiles.grafana.com/mutex.scrape: "true"
-
   podSecurityContext:
     fsGroup: 10001
     runAsUser: 10001
