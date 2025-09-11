@@ -107,9 +107,9 @@ gateway:
       extraContainerConfig:
         env:
           - name: DASK_DISTRIBUTED__WORKER__PRELOAD
-            value: /work/projects/purdue-af/dask_setup.py
-          - name: DASK_DISTRIBUTED__WORKER__PRELOAD__ARGV
-            value: "[]"
+            value: '["/etc/dask/preload/worker_pyroscope.py"]'
+          - name: DASK_DISTRIBUTED__WORKER__PRELOAD_ARGV
+            value: '[[]]'
         volumeMounts:
           - name: cvmfs
             mountPath: /cvmfs
