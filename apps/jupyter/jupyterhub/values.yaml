@@ -5,17 +5,13 @@ singleuser:
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
     tag: "0.10.5"
-    tag: "0.10.5"
   extraLabels:
-    username_unescaped: "{username}"
-    docker_image_tag: "0.10.5"
     username_unescaped: "{username}"
     docker_image_tag: "0.10.5"
   startTimeout: 3600
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
       default: true
-      description: "The CPU and memory request below are <em>desired</em> values. The actual CPU and memory allocation may be smaller if AF is under heavy load, but you are always guaranteed at least 4 cores and 16 GB of memory.<br>If you are starting a session with a GPU, please shut it down when finished in order to release the GPU."
       description: "The CPU and memory request below are <em>desired</em> values. The actual CPU and memory allocation may be smaller if AF is under heavy load, but you are always guaranteed at least 4 cores and 16 GB of memory.<br>If you are starting a session with a GPU, please shut it down when finished in order to release the GPU."
       kubespawner_override:
         node_selector: { "cms-af-prod": "true" }
@@ -163,7 +159,6 @@ singleuser:
       volumeMounts:
         - name: volume-{username}
           mountPath: /home/{username}
-          mountPath: /home/{username}
         - name: work
           mountPath: /work/
           mountPropagation: HostToContainer
@@ -175,7 +170,6 @@ singleuser:
   networkPolicy:
     enabled: false
   storage:
-    type: dynamic
     type: dynamic
     capacity: 25Gi
     dynamic:
@@ -230,9 +224,6 @@ hub:
     # name: quay.io/jupyterhub/k8s-hub
     name: geddes-registry.rcac.purdue.edu/docker-hub-cache/jupyterhub/k8s-hub
     tag: 4.0.0
-    # name: quay.io/jupyterhub/k8s-hub
-    name: geddes-registry.rcac.purdue.edu/docker-hub-cache/jupyterhub/k8s-hub
-    tag: 4.0.0
   nodeSelector: { "cms-af-prod": "true" }
   tolerations:
     - key: "hub.jupyter.org/dedicated"
@@ -258,10 +249,7 @@ hub:
       secret:
         secretName: af-auth-purdue
     - name: af-auth-cern
-        secretName: af-auth-purdue
-    - name: af-auth-cern
       secret:
-        secretName: af-auth-cern
         secretName: af-auth-cern
     - name: auth-secret
       secret:
@@ -340,7 +328,6 @@ scheduling:
 ingress:
   enabled: true
   ingressClassName: public
-  ingressClassName: public
   hosts:
     - cmsdev.geddes.rcac.purdue.edu
 proxy:
@@ -356,13 +343,6 @@ proxy:
         port: 2222
         targetPort: sftp
   traefik:
-    nodeSelector:
-      cms-af-prod: "true"
-    tolerations:
-      - key: "hub.jupyter.org/dedicated"
-        operator: "Equal"
-        value: "cms-af"
-        effect: "NoSchedule"
     nodeSelector:
       cms-af-prod: "true"
     tolerations:
