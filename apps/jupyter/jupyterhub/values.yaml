@@ -284,8 +284,7 @@ hub:
           key: cilogon_client_secret
   networkPolicy:
     enabled: false
-  existingSecret:
-    name: jupyterhub-db-password
+  existingSecret: jupyterhub-db-password
   db:
     type: postgres
     url: "postgresql+psycopg2://postgres@cnpg-cluster-rw.cms.svc.cluster.local:5432/jupyterhub"
