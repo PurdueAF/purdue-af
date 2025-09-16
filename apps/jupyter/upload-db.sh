@@ -11,5 +11,9 @@ docker run --rm -v "/Users/kondratyevd/Documents/purdue-af/purdue-af":/data dimi
 	postgresql://"$PGUSER":"$PGPASS"@host.docker.internal:5432/jupyterhub
 
 # optional: verify
-# docker run --rm -e PGPASSWORD="$PGPASS" postgres:16-alpine \
-#   psql -h host.docker.internal -U "$PGUSER" -d jupyterhub -c '\dt'
+docker run --rm -e PGPASSWORD="$PGPASS" postgres:16-alpine \
+  psql -h host.docker.internal -U "$PGUSER" -d jupyterhub -c '\dt'
+
+# optional: verify on cluster
+kubectl run pgtest --rm -i --tty --image=postgres:16 -n cms -- \
+  psql "postgresql://postgres@cnpg-cluster-rw.cms.svc.cluster.local:5432/jupyterhub"
