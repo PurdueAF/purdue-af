@@ -1,0 +1,54 @@
+cluster:
+  # Number of instances
+  instances: 3
+
+  # Storage configuration
+  storage:
+    size: 20Gi
+    storageClass: ""
+
+  # Resource limits and requests
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+
+  # The instances' log level
+  logLevel: "warning"
+
+  # PostgreSQL configuration
+  postgresql:
+    parameters:
+      max_connections: "100"
+      shared_buffers: "256MB"
+      effective_cache_size: "1GB"
+      maintenance_work_mem: "64MB"
+      checkpoint_completion_target: "0.9"
+      wal_buffers: "16MB"
+      default_statistics_target: "100"
+      random_page_cost: "1.1"
+      effective_io_concurrency: "200"
+      work_mem: "4MB"
+      min_wal_size: "1GB"
+      max_wal_size: "4GB"
+    pg_hba:
+      - "host all all 0.0.0.0/0 md5"
+      - "host all all ::/0 md5"
+
+  # Database initialization
+  initdb:
+    database: jupyterhub
+    owner: jupyterhub
+    secret:
+      name: cnpg-cluster-credentials
+
+  # Monitoring
+  monitoring:
+    enabled: true
+
+# Backup configuration
+backups:
+  enabled: false

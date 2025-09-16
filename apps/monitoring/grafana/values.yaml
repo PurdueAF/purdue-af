@@ -112,3 +112,8 @@ datasources:
             datasourceUid: "prometheus"
           nodeGraph:
             enabled: true
+      - name: pyroscope
+        type: grafana-pyroscope-datasource
+        url: http://pyroscope.cms.svc.cluster.local:4040
+        jsonData:
+          minStep: 15s
