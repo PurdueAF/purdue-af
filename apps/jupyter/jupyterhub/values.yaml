@@ -224,6 +224,8 @@ hub:
     # name: quay.io/jupyterhub/k8s-hub
     name: geddes-registry.rcac.purdue.edu/docker-hub-cache/jupyterhub/k8s-hub
     tag: 4.0.0
+  extraArgs:
+    - --upgrade-db
   nodeSelector: { "cms-af-prod": "true" }
   tolerations:
     - key: "hub.jupyter.org/dedicated"
