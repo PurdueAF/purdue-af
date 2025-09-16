@@ -5,7 +5,7 @@ cluster:
   # Storage configuration
   storage:
     size: 20Gi
-    storageClass: ""
+    storageClass: "depot-cloud-filesystem"
 
   # Resource limits and requests
   resources:
