@@ -272,11 +272,15 @@ hub:
           key: cilogon_client_secret
   networkPolicy:
     enabled: false
+  existingSecret:
+    name: jupyterhub-db-password
   db:
-    pvc:
-      accessModes:
-        - ReadWriteOnce
-      storageClassName: geddes-standard-singlenode
+    type: postgres
+    url: "postgresql+psycopg2://postgres@cnpg-cluster-rw.cms.svc.cluster.local:5432/jupyterhub"
+    # pvc:
+    #   accessModes:
+    #     - ReadWriteOnce
+    #   storageClassName: geddes-standard-singlenode
   config:
     PurdueCILogonOAuthenticator:
       auto_login: True
