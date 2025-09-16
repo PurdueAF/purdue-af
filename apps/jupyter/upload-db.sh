@@ -7,8 +7,8 @@ PGPASS="$(kubectl -n cms get secret cnpg-cluster-superuser -o jsonpath='{.data.p
 
 # Run pgloader from Docker (use host.docker.internal on macOS)
 docker run --rm -v "/Users/kondratyevd/Documents/purdue-af/purdue-af":/data dimitri/pgloader:latest \
-  pgloader /data/apps/jupyter/jupyterhub-2025sep16-noon.sqlite \
-  postgresql://"$PGUSER":"$PGPASS"@host.docker.internal:5432/jupyterhub
+	pgloader /data/apps/jupyter/jupyterhub-2025sep16-noon.sqlite \
+	postgresql://"$PGUSER":"$PGPASS"@host.docker.internal:5432/jupyterhub
 
 # optional: verify
 # docker run --rm -e PGPASSWORD="$PGPASS" postgres:16-alpine \
