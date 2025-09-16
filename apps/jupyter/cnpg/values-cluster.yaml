@@ -4,7 +4,7 @@ cluster:
 
   # Storage configuration
   storage:
-    size: 20Gi
+    size: 1Gi
     storageClass: ""
 
   # Resource limits and requests
