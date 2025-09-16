@@ -242,10 +242,6 @@ hub:
       configMap:
         name: jupyterhub-extra-config
     - name: af-auth-purdue
-    - name: hub-extra-config
-      configMap:
-        name: jupyterhub-extra-config
-    - name: af-auth-purdue
       secret:
         secretName: af-auth-purdue
     - name: af-auth-cern
@@ -260,14 +256,7 @@ hub:
       readOnly: true
     - mountPath: /etc/secrets/af-auth-purdue/
       name: af-auth-purdue
-    - name: hub-extra-config
-      mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d
       readOnly: true
-    - mountPath: /etc/secrets/af-auth-purdue/
-      name: af-auth-purdue
-      readOnly: true
-    - mountPath: /etc/secrets/af-auth-cern/
-      name: af-auth-cern
     - mountPath: /etc/secrets/af-auth-cern/
       name: af-auth-cern
       readOnly: true
