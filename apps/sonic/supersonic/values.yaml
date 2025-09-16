@@ -84,9 +84,9 @@ ingress:
 prometheus:
   external:
     enabled: true
-    url: prometheus-af.geddes.rcac.purdue.edu
-    port: 443
-    scheme: https
+    url: http://prometheus-server.cms.svc.cluster.local:9090
+    port: 9090
+    scheme: http
 
 grafana:
   enabled: true
@@ -99,7 +99,7 @@ grafana:
           type: prometheus
           access: proxy
           isDefault: true
-          url: https://prometheus-af.geddes.rcac.purdue.edu
+          url: http://prometheus-server.cms.svc.cluster.local:9090
           jsonData:
             timeInterval: "5s"
             tlsSkipVerify: true

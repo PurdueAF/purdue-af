@@ -105,6 +105,7 @@ singleuser:
             #   kubespawner_override:
             #     mem_limit: "256G"
             #     mem_guarantee: "16G"
+            #     mem_guarantee: "16G"
 
     - display_name: Minimal JupyterLab interface
       default: false
@@ -122,7 +123,7 @@ singleuser:
       default: false
       description: "Contains the latest features but may be unstable - use at your own risk."
       kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/purdue-af:canary"
+        image: "geddes-registry.rcac.purdue.edu/cms/purdue-af:0.11.0"
         node_selector:
           cms-af-prod: "true"
         cpu_guarantee: 4
@@ -172,7 +173,7 @@ singleuser:
     type: dynamic
     capacity: 25Gi
     dynamic:
-      storageClass: geddes-standard-multinode
+      storageClass: depot-cloud-filesystem
       storageAccessModes: ["ReadWriteMany"]
       pvcNameTemplate: claim-{username}
       volumeNameTemplate: volume-{username}
@@ -241,6 +242,10 @@ hub:
       configMap:
         name: jupyterhub-extra-config
     - name: af-auth-purdue
+    - name: hub-extra-config
+      configMap:
+        name: jupyterhub-extra-config
+    - name: af-auth-purdue
       secret:
         secretName: af-auth-purdue
     - name: af-auth-cern
@@ -255,7 +260,14 @@ hub:
       readOnly: true
     - mountPath: /etc/secrets/af-auth-purdue/
       name: af-auth-purdue
+    - name: hub-extra-config
+      mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d
       readOnly: true
+    - mountPath: /etc/secrets/af-auth-purdue/
+      name: af-auth-purdue
+      readOnly: true
+    - mountPath: /etc/secrets/af-auth-cern/
+      name: af-auth-cern
     - mountPath: /etc/secrets/af-auth-cern/
       name: af-auth-cern
       readOnly: true
@@ -284,9 +296,9 @@ hub:
     PurdueCILogonOAuthenticator:
       auto_login: True
       auto_login_oauth2_authorize: True
-      logout_redirect_url: https://cms.geddes.rcac.purdue.edu/hub
+      logout_redirect_url: https://cmsdev.geddes.rcac.purdue.edu/hub
       admin_users: ["dkondra"]
-      oauth_callback_url: https://cms.geddes.rcac.purdue.edu/hub/oauth_callback
+      oauth_callback_url: https://cmsdev.geddes.rcac.purdue.edu/hub/oauth_callback
       enable_auth_state: true
       allowed_idps:
         https://cern.ch/login:
@@ -316,7 +328,7 @@ ingress:
   enabled: true
   ingressClassName: public
   hosts:
-    - cms.geddes.rcac.purdue.edu
+    - cmsdev.geddes.rcac.purdue.edu
 proxy:
   https:
     enabled: true
