@@ -2,7 +2,8 @@
 nodeName: interlink-hammer
 
 interlink:
-  image: ghcr.io/interlink-hq/interlink/interlink:0.5.2-pre2
+  # image: ghcr.io/interlink-hq/interlink/interlink:0.5.2-pre2
+  image: ghcr.io/interlink-hq/interlink/interlink:latest
   enabled: true
   socket: unix:///var/run/interlink.sock
   address: http://localhost
@@ -57,7 +58,8 @@ plugin:
     BashPath: /bin/bash
 
 virtualNode:
-  image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:0.5.2-pre2
+  # image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:0.5.2-pre2
+  image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:latest
   resources:
     CPUs: 1000
     memGiB: 4000
