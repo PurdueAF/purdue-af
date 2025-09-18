@@ -30,12 +30,6 @@ spec:
                 - /bin/sh
                 - -c
                 - |
-                  # Install sqlite3 if not available
-                  if ! command -v sqlite3 >/dev/null 2>&1; then
-                    echo "Installing sqlite3..."
-                    apk add --no-cache sqlite3
-                  fi
-
                   # Get current timestamp for filename
                   if [ "$(date +%H)" -lt 12 ]; then
                     TIMESTAMP="midnight"
@@ -70,26 +64,6 @@ spec:
                   kubectl cp cms/${HUB_POD}:/srv/jupyterhub/jupyterhub.sqlite ${BACKUP_PATH}
 
                   if [ $? -eq 0 ]; then
-                    # Check user count in the database before proceeding
-                    echo "Checking user count in database..."
-                    echo "Backup file path: ${BACKUP_PATH}"
-                    echo "Backup file exists: $([ -f "${BACKUP_PATH}" ] && echo "yes" || echo "no")"
-                    echo "Backup file size: $(ls -la "${BACKUP_PATH}" 2>/dev/null | awk '{print $5}' || echo "unknown")"
-                    
-                    USER_COUNT=$(sqlite3 ${BACKUP_PATH} "SELECT COUNT(*) FROM users;" 2>/dev/null)
-                    SQLITE_EXIT_CODE=$?
-                    
-                    if [ $SQLITE_EXIT_CODE -eq 0 ] && [ -n "$USER_COUNT" ]; then
-                      echo "Number of users in database: ${USER_COUNT}"
-                      
-                      if [ "$USER_COUNT" -eq 0 ]; then
-                        echo "ERROR: No users found in database. Aborting backup."
-                        rm -f "${BACKUP_PATH}"
-                        exit 1
-                      fi
-                    else
-                      echo "WARNING: Could not query user count from database (exit code: $SQLITE_EXIT_CODE). Proceeding with backup anyway."
-                    fi
                     # Check if the backup file exists and has content
                     if [ -f "${BACKUP_PATH}" ] && [ -s "${BACKUP_PATH}" ]; then
                       echo "Database backup completed successfully: ${BACKUP_PATH}"
