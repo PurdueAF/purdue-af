@@ -6,7 +6,7 @@ singleuser:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
     tag: "0.10.5"
   extraLabels:
-    username_unescaped: "{username}"
+    username_unescaped: "{escaped_username}"
     docker_image_tag: "0.10.5"
   startTimeout: 3600
   profileList:
@@ -156,8 +156,8 @@ singleuser:
     - name: af-pod-monitor
       image: geddes-registry.rcac.purdue.edu/cms/af-pod-monitor:latest
       volumeMounts:
-        - name: volume-{username}
-          mountPath: /home/{username}
+        - name: volume-{escaped_username}
+          mountPath: /home/{escaped_username}
         - name: work
           mountPath: /work/
           mountPropagation: HostToContainer
@@ -193,22 +193,20 @@ singleuser:
         except Exception as e:
             pass
             # sys.__stderr__.write("pyroscope: init failed: %s\n" % e)
-      
   extraEnv:
     JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
     CHOWN_HOME: "yes"
     NAMESPACE: "cms"
+    PYROSCOPE_SERVER: "http://pyroscope.cms.svc.cluster.local:4040"
+    PYROSCOPE_APP: "purdue-af"
   networkPolicy:
     enabled: false
   storage:
-    type: dynamic
     capacity: 25Gi
     dynamic:
       storageClass: geddes-standard-multinode
       storageAccessModes: ["ReadWriteMany"]
-      pvcNameTemplate: claim-{username}
-      volumeNameTemplate: volume-{username}
-    homeMountPath: /home/{username}
+    homeMountPath: /home/{escaped_username}
     extraVolumes:
       - name: cvmfs
         persistentVolumeClaim:
@@ -220,6 +218,9 @@ singleuser:
         nfs:
           server: datadepot.rcac.purdue.edu
           path: /depot/cms
+      - name: conda-envs
+        persistentVolumeClaim:
+          claimName: conda-envs
       - name: work
         persistentVolumeClaim:
           claimName: af-shared-storage
@@ -239,6 +240,9 @@ singleuser:
       - name: work
         mountPath: /work/
         mountPropagation: HostToContainer
+      - name: conda-envs
+        mountPath: /conda-envs/
+        mountPropagation: HostToContainer
       - name: munge-key
         mountPath: /etc/secrets/munge
         readOnly: false
@@ -256,6 +260,14 @@ hub:
     name: geddes-registry.rcac.purdue.edu/docker-hub-cache/jupyterhub/k8s-hub
     tag: 4.0.0
   nodeSelector: { "cms-af-prod": "true" }
+  db:
+    type: sqlite-pvc
+    pvc:
+      annotations:
+        helm.sh/resource-policy: keep
+      selector:
+        matchLabels:
+          purdue-af-db: "true"
   tolerations:
     - key: "hub.jupyter.org/dedicated"
       operator: "Equal"
@@ -269,9 +281,6 @@ hub:
       cpu: 1
       memory: 2Gi
   extraVolumes:
-    - name: hub-extra-config
-      configMap:
-        name: jupyterhub-extra-config
     - name: af-auth-purdue
       secret:
         secretName: af-auth-purdue
@@ -282,9 +291,6 @@ hub:
       secret:
         secretName: auth-secret
   extraVolumeMounts:
-    - name: hub-extra-config
-      mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d
-      readOnly: true
     - mountPath: /etc/secrets/af-auth-purdue/
       name: af-auth-purdue
       readOnly: true
@@ -302,16 +308,11 @@ hub:
         secretKeyRef:
           name: auth-secret
           key: cilogon_client_secret
-  networkPolicy:
-    enabled: false
-  db:
-    type: sqlite-pvc
-    pvc:
-      annotations:
-        helm.sh/resource-policy: keep
-      selector:
-        matchLabels:
-          purdue-af-db: "true" 
+  extraFiles:
+    00-custom-spawner:
+      mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d/custom-spawner.py
+    01-set-user-info:
+      mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d/set-user-info.py
   config:
     PurdueCILogonOAuthenticator:
       auto_login: True
@@ -334,6 +335,7 @@ hub:
           username_derivation:
             username_claim: eppn
     JupyterHub:
+      authenticator_class: cilogon
       admin_access: True
 scheduling:
   userScheduler:
@@ -349,6 +351,9 @@ ingress:
   ingressClassName: public
   hosts:
     - cms.geddes.rcac.purdue.edu
+  annotations:
+    kubernetes.io/ingress.class: "public"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
 proxy:
   https:
     enabled: true
@@ -402,6 +407,14 @@ proxy:
             entrypoints: [sftp-entrypoint]
             rule: HostSNI(`*`)
             service: sftp-service
+  chp:
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
 cull:
   enabled: true
   every: 600
