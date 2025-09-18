@@ -193,7 +193,7 @@ singleuser:
         except Exception as e:
             pass
             # sys.__stderr__.write("pyroscope: init failed: %s\n" % e)
-      
+
   extraEnv:
     JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
     CHOWN_HOME: "yes"
@@ -311,7 +311,7 @@ hub:
         helm.sh/resource-policy: keep
       selector:
         matchLabels:
-          purdue-af-db: "true" 
+          purdue-af-db: "true"
   config:
     PurdueCILogonOAuthenticator:
       auto_login: True
