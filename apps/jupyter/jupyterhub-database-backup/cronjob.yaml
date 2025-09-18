@@ -27,7 +27,7 @@ spec:
               securityContext:
                 runAsUser: 616617
               command:
-                - /bin/bash
+                - /bin/sh
                 - -c
                 - |
                   # Get current timestamp for filename
