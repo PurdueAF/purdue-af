@@ -23,7 +23,7 @@ spec:
               effect: "NoSchedule"
           containers:
             - name: database-backup
-              image: rancher/kubectl:v1.32.9-arm64
+              image: alpine/kubectl:1.34.1
               securityContext:
                 runAsUser: 616617
               command:
