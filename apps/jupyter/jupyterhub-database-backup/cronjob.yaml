@@ -23,7 +23,7 @@ spec:
               effect: "NoSchedule"
           containers:
             - name: database-backup
-              image: bitnami/kubectl:latest
+              image: rancher/kubectl:latest
               securityContext:
                 runAsUser: 616617
               command:
