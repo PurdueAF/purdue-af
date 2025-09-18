@@ -201,7 +201,7 @@ singleuser:
         except Exception as e:
             pass
             # sys.__stderr__.write("pyroscope: init failed: %s\n" % e)
-            
+
   networkPolicy:
     enabled: false
   storage:
