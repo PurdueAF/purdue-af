@@ -72,9 +72,14 @@ spec:
                   if [ $? -eq 0 ]; then
                     # Check user count in the database before proceeding
                     echo "Checking user count in database..."
-                    USER_COUNT=$(sqlite3 ${BACKUP_PATH} "SELECT COUNT(*) FROM users;" 2>/dev/null)
+                    echo "Backup file path: ${BACKUP_PATH}"
+                    echo "Backup file exists: $([ -f "${BACKUP_PATH}" ] && echo "yes" || echo "no")"
+                    echo "Backup file size: $(ls -la "${BACKUP_PATH}" 2>/dev/null | awk '{print $5}' || echo "unknown")"
                     
-                    if [ $? -eq 0 ] && [ -n "$USER_COUNT" ]; then
+                    USER_COUNT=$(sqlite3 ${BACKUP_PATH} "SELECT COUNT(*) FROM users;" 2>/dev/null)
+                    SQLITE_EXIT_CODE=$?
+                    
+                    if [ $SQLITE_EXIT_CODE -eq 0 ] && [ -n "$USER_COUNT" ]; then
                       echo "Number of users in database: ${USER_COUNT}"
                       
                       if [ "$USER_COUNT" -eq 0 ]; then
@@ -83,7 +88,7 @@ spec:
                         exit 1
                       fi
                     else
-                      echo "WARNING: Could not query user count from database. Proceeding with backup anyway."
+                      echo "WARNING: Could not query user count from database (exit code: $SQLITE_EXIT_CODE). Proceeding with backup anyway."
                     fi
                     # Check if the backup file exists and has content
                     if [ -f "${BACKUP_PATH}" ] && [ -s "${BACKUP_PATH}" ]; then
