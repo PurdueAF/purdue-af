@@ -177,6 +177,8 @@ singleuser:
       mountPath: /opt/conda/lib/python3.10/site-packages/sitecustomize.py
       stringData: |
         import os
+        import sys
+
         try:
             import pyroscope
             srv = os.getenv("PYROSCOPE_SERVER")
@@ -186,12 +188,20 @@ singleuser:
                     application_name=app,
                     server_address=srv,
                     sample_rate=int(os.getenv("PYROSCOPE_SAMPLE_RATE", "100")),
-                    oncpu=True, gil_only=True, detect_subprocesses=False,
-                    tags={"component": "jupyter-server", "hub_user": os.getenv("JUPYTERHUB_USER","unknown")},
+                    oncpu=True,
+                    gil_only=True,
+                    detect_subprocesses=False,
+                    tags={
+                        "component": "jupyter-server",
+                        "hub_user": os.getenv("JUPYTERHUB_USER", "unknown"),
+                    },
                 )
-                print("[pyroscope] sitecustomize configured:", app)
+                # Optional: write to stderr instead of stdout, or remove entirely
+                # sys.__stderr__.write("pyroscope: configured for %s\n" % app)
         except Exception as e:
-            print("[pyroscope] sitecustomize failed:", e)
+            pass
+            # sys.__stderr__.write("pyroscope: init failed: %s\n" % e)
+            
   networkPolicy:
     enabled: false
   storage:
@@ -254,6 +264,14 @@ hub:
     name: geddes-registry.rcac.purdue.edu/cms/k8s-hub
     tag: 3.3.8
   nodeSelector: { "cms-af-prod": "true" }
+  db:
+    type: sqlite-pvc
+    pvc:
+      annotations:
+        helm.sh/resource-policy: keep
+      selector:
+        matchLabels:
+          purdue-af-db: "true"
   tolerations:
     - key: "hub.jupyter.org/dedicated"
       operator: "Equal"
