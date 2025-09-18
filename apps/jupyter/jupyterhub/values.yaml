@@ -162,6 +162,38 @@ singleuser:
           mountPath: /work/
           mountPropagation: HostToContainer
   defaultUrl: "/lab"
+  extraFiles:
+    pyroscope-for-jupyter-server:
+      # Put it in a standard Jupyter config location the server reads on startup
+      # (Jupyter searches ~/.jupyter, /usr/local/etc/jupyter, /etc/jupyter, …)
+      mountPath: /opt/conda/lib/python3.10/site-packages/sitecustomize.py
+      stringData: |
+        import os
+        import sys
+
+        try:
+            import pyroscope
+            srv = os.getenv("PYROSCOPE_SERVER")
+            app = os.getenv("PYROSCOPE_APP", "jupyter-server")
+            if srv:
+                pyroscope.configure(
+                    application_name=app,
+                    server_address=srv,
+                    sample_rate=int(os.getenv("PYROSCOPE_SAMPLE_RATE", "100")),
+                    oncpu=True,
+                    gil_only=True,
+                    detect_subprocesses=False,
+                    tags={
+                        "component": "jupyter-server",
+                        "hub_user": os.getenv("JUPYTERHUB_USER", "unknown"),
+                    },
+                )
+                # Optional: write to stderr instead of stdout, or remove entirely
+                # sys.__stderr__.write("pyroscope: configured for %s\n" % app)
+        except Exception as e:
+            pass
+            # sys.__stderr__.write("pyroscope: init failed: %s\n" % e)
+      
   extraEnv:
     JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
     CHOWN_HOME: "yes"
@@ -272,14 +304,14 @@ hub:
           key: cilogon_client_secret
   networkPolicy:
     enabled: false
-  existingSecret: jupyterhub-db-password
   db:
-    type: postgres
-    url: "postgresql+psycopg2://postgres@cnpg-cluster-rw.cms.svc.cluster.local:5432/jupyterhub"
-    # pvc:
-    #   accessModes:
-    #     - ReadWriteOnce
-    #   storageClassName: geddes-standard-singlenode
+    type: sqlite-pvc
+    pvc:
+      annotations:
+        helm.sh/resource-policy: keep
+      selector:
+        matchLabels:
+          purdue-af-db: "true" 
   config:
     PurdueCILogonOAuthenticator:
       auto_login: True
