@@ -107,7 +107,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -168,7 +170,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -341,7 +345,9 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -465,7 +471,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
+        "w": 3,
         "x": 0,
         "y": 5
       },
@@ -478,7 +484,7 @@
         }
       ],
       "options": {
-        "alertInstanceLabelFilter": "namespace=\"cms\", severity=~\"^(warning|error|critical)$\"",
+        "alertInstanceLabelFilter": "namespace=\"cms\", severity=\"warning\"",
         "alertName": "",
         "dashboardAlerts": false,
         "groupBy": [],
@@ -497,7 +503,50 @@
         "viewMode": "stat"
       },
       "pluginVersion": "12.1.0",
-      "title": "Warnings / Errors",
+      "title": "Warnings",
+      "transparent": true,
+      "type": "alertlist"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 3,
+        "y": 5
+      },
+      "id": 45,
+      "links": [
+        {
+          "targetBlank": true,
+          "title": "Alert Details",
+          "url": "https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-alerts?orgId=1&from=now-6h&to=now&timezone=browser"
+        }
+      ],
+      "options": {
+        "alertInstanceLabelFilter": "namespace=\"cms\", severity=~\"^(error|critical)$\"",
+        "alertName": "",
+        "dashboardAlerts": false,
+        "groupBy": [],
+        "groupMode": "default",
+        "maxItems": 20,
+        "showInactiveAlerts": false,
+        "sortOrder": 1,
+        "stateFilter": {
+          "error": true,
+          "firing": true,
+          "noData": false,
+          "normal": false,
+          "pending": true,
+          "recovering": true
+        },
+        "viewMode": "stat"
+      },
+      "pluginVersion": "12.1.0",
+      "title": "Errors",
       "transparent": true,
       "type": "alertlist"
     },
@@ -558,7 +607,9 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -724,7 +775,9 @@
         "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -799,7 +852,9 @@
         "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -874,7 +929,9 @@
         "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -1345,7 +1402,9 @@
         "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -1551,7 +1610,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
