@@ -194,7 +194,7 @@ RUN pip install --no-cache-dir --upgrade \
     jupyter-ai[all]==3.0.0b7
 
 COPY docker/purdue-af/genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio
-RUN pip install --no-cache-dir -e /opt/conda/lib/python3.10/site-packages/genaistudio
+RUN pip install --no-cache-dir --upgrade -e /opt/conda/lib/python3.10/site-packages/genaistudio
 
 # Install Dask labextension
 RUN git clone https://github.com/kondratyevd/dask-labextension.git
