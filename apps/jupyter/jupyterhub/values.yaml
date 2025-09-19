@@ -316,11 +316,6 @@ hub:
         secretKeyRef:
           name: auth-secret
           key: cilogon_client_secret
-  # extraFiles:
-  #   00-custom-spawner:
-  #     mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d/custom-spawner.py
-  #   01-set-user-info:
-  #     mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d/set-user-info.py
   config:
     PurdueCILogonOAuthenticator:
       auto_login: True
