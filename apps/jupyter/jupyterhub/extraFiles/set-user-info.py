@@ -63,7 +63,7 @@ def passthrough_auth_state_hook(spawner, auth_state):
 
 c.KubeSpawner.auth_state_hook = passthrough_auth_state_hook
 c.KubeSpawner.notebook_dir = "~"
-c.KubeSpawner.working_dir = "/home/{escape_username}"
+c.KubeSpawner.working_dir = "/home/{escaped_username}"
 c.KubeSpawner.disable_user_config = True
 c.KubeSpawner.http_timeout = 600
 c.KubeSpawner.start_timeout = 600
