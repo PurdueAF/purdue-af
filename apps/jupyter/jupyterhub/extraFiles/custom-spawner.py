@@ -11,19 +11,7 @@ class PurdueCILogonOAuthenticator(CILogonOAuthenticator):
         ret = await super().authenticate(handler, data)
         print("in auth:")
         pprint.pprint(ret)
-        # --- minimal, robust lookup of user@domain ---
-        if ret.get("auth_state") is None:
-            ret["auth_state"] = {}
-        astate = ret["auth_state"]
-        userinfo = astate.get("userinfo") or astate.get("cilogon_user") or {}
-        ident = (
-            userinfo.get("eppn")
-            or userinfo.get("email")
-            or userinfo.get("eduperson_principal_name")
-        )
-        if not ident or "@" not in ident:
-            raise web.HTTPError(500, "Failed to get username from CILogon")
-        username, domain = ident.split("@", 1)
+        username, domain = ret["auth_state"]["cilogon_user"]["eppn"].split("@")
         fixedUsername = None
 
         if domain == "purdue.edu":
