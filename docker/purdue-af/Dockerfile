@@ -191,7 +191,7 @@ RUN pip install --no-cache-dir --upgrade \
     jupyterlab-topbar-text==1.1.0 \
     jupyterlab-theme-toggler==1.1.0 \
     dask-gateway==2025.4.0 \
-    jupyter-ai[all]==3.0.0b7
+    jupyter-ai[all]==2.31.6
 
 COPY docker/purdue-af/genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio
 RUN pip install --no-cache-dir --upgrade -e /opt/conda/lib/python3.10/site-packages/genaistudio
