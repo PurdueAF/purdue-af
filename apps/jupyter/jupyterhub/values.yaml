@@ -206,7 +206,7 @@ singleuser:
     dynamic:
       storageClass: geddes-standard-multinode
       storageAccessModes: ["ReadWriteMany"]
-    homeMountPath: /home/{escaped_username}
+    homeMountPath: /home/{username}
     extraVolumes:
       - name: cvmfs
         persistentVolumeClaim:
