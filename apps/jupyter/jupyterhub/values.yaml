@@ -6,7 +6,7 @@ singleuser:
     name: "geddes-registry.rcac.purdue.edu/cms/cmsaf-alma8"
     tag: "0.10.5"
   extraLabels:
-    username_unescaped: "{escaped_username}"
+    username_unescaped: "{username}"
     docker_image_tag: "0.10.5"
   startTimeout: 3600
   profileList:
