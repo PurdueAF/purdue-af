@@ -263,6 +263,7 @@ hub:
   db:
     type: sqlite-pvc
     pvc:
+      storageClassName: ""
       annotations:
         helm.sh/resource-policy: keep
       selector:
