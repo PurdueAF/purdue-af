@@ -156,7 +156,7 @@ singleuser:
     - name: af-pod-monitor
       image: geddes-registry.rcac.purdue.edu/cms/af-pod-monitor:latest
       volumeMounts:
-        - name: volume-{escaped_username}
+        - name: volume-{username}
           mountPath: /home/{escaped_username}
         - name: work
           mountPath: /work/
