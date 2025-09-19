@@ -91,7 +91,7 @@ prometheus:
     scheme: https
 
 opentelemetry-collector:
-  enabled: true
+  enabled: false
   config:
     exporters:
       otlp:
@@ -103,7 +103,7 @@ opentelemetry-collector:
 
 tempo:
   nameOverride: sonic-interlink-tempo
-  enabled: true
+  enabled: false
   tempo:
     metricsGenerator:
       enabled: true
