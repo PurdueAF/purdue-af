@@ -63,11 +63,21 @@ c.AiExtension.help_message_template = """
 Hello! I am {persona_name}, a JupyterLab AI assistant.
 
 I use open LLM models served by <a href="https://www.rcac.purdue.edu/knowledge/genaistudio" target="_blank">Purdue GenAI Studio</a>.
-I also have the knowledge of <a href="https://analysis-facility.physics.purdue.edu/" target="_blank">Purdue AF doucmentation</a>.
+I also have the knowledge of <a href="https://analysis-facility.physics.purdue.edu/" target="_blank">Purdue AF documentation</a>.
 
 <a href="https://www.rcac.purdue.edu/knowledge/genaistudio/api" target="_blank">How to obtain API key</a>
 
 **WARNING: do not rely exclusively on AI responses, as models may hallucinate.**
 """
+
+# Keep your custom provider & model as the default for the Chat UI (and Magics, optionally)
 c.AiExtension.default_language_model = "genaistudio:purdue-cms-af"
+c.AiMagics.default_language_model = "genaistudio:purdue-cms-af"  # optional but handy
+
+# Restrict the visible providers to your custom one
 c.AiExtension.allowed_providers = ["genaistudio"]
+
+# # If the env var is set, pre-wire it so users don't have to paste it into the UI
+# c.AiExtension.default_api_keys = {
+#     "GENAISTUDIO_API_KEY": os.environ.get("GENAISTUDIO_API_KEY", "")
+# }

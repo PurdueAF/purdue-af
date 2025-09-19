@@ -1,35 +1,60 @@
-from jupyter_ai_magics.providers import (BaseProvider, EnvAuthStrategy,
-                                         TextField)
+# ✅ jupyter-ai 3.x style custom provider
+
+from jupyter_ai_magics import BaseProvider               # <- import from top-level (not .providers)
+from jupyter_ai_magics.providers import EnvAuthStrategy, TextField
 from langchain_openai import ChatOpenAI
 
 
 class PurdueGenAIStudioProvider(BaseProvider, ChatOpenAI):
     id = "genaistudio"
     name = "PurdueGenAIStudio"
+
+    # Jupyter AI will populate this into the kwarg named by `model_id_key`
     models = [
-        # "gemma3:27b",
-        # "llama3.1:latest",
-        # "llama3.2:latest",
-        # "llama3.3:70b",
         "purdue-cms-af",
+        # add others if/when exposed by your backend
     ]
-    model_id_key = "model_name"
-    pypi_package_deps = ["langchain_openai"]
+
+    # LangChain's ChatOpenAI now expects `model=` (not `model_name`)
+    model_id_key = "model"
+
+    # Jupyter AI will pass the env var to the kwarg named here.
+    # ChatOpenAI now expects `api_key=` (not `openai_api_key`)
     auth_strategy = EnvAuthStrategy(
-        name="GENAISTUDIO_API_KEY", keyword_param="openai_api_key"
+        name="GENAISTUDIO_API_KEY",
+        keyword_param="api_key",
     )
 
+    # Newer langchain-openai expects `base_url=` (not `openai_api_base`)
     def __init__(self, **kwargs):
-        super().__init__(openai_api_base="https://genai.rcac.purdue.edu/api", **kwargs)
+        super().__init__(base_url="https://genai.rcac.purdue.edu/api", **kwargs)
 
     @classmethod
     def is_api_key_exc(cls, e: Exception):
         """
-        Determine if the exception is an OpenAI API key error.
+        Return True if `e` looks like an auth / invalid API key error
+        across OpenAI Python SDK versions.
         """
-        import openai
+        try:
+            import openai
+        except Exception:
+            return False
 
-        if isinstance(e, openai.AuthenticationError):
-            error_details = e.json_body.get("error", {})
-            return error_details.get("code") == "invalid_api_key"
+        # v1 SDK (modern): openai.AuthenticationError, may have .status_code/.code
+        if isinstance(e, getattr(openai, "AuthenticationError", tuple())):
+            code = getattr(e, "code", None)
+            status = getattr(e, "status_code", None)
+            msg = str(e).lower()
+            return (
+                code == "invalid_api_key"
+                or status == 401
+                or "invalid api key" in msg
+                or "no api key" in msg
+            )
+
+        # very old v0 SDK compatibility (json_body shape)
+        if hasattr(e, "json_body"):
+            err = (getattr(e, "json_body", {}) or {}).get("error", {})
+            return err.get("code") == "invalid_api_key"
+
         return False
