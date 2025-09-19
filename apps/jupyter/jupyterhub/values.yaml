@@ -9,7 +9,7 @@ singleuser:
     username_unescaped: "{escaped_username}"
     docker_image_tag: "0.10.5"
   startTimeout: 3600
-  notebookDir: /home/{escaped_username}
+  notebookDir: /home/{username}
   profileList:
     - display_name: "JupyterLab based on CERN Alma8"
       default: true
