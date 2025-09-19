@@ -257,7 +257,7 @@ prePuller:
 hub:
   image:
     # name: quay.io/jupyterhub/k8s-hub
-    name: geddes-registry.rcac.purdue.edu/docker-hub-cache/jupyterhub/k8s-hub
+    name: geddes-registry.rcac.purdue.edu/docker-hub-cache/jupyterhub/k8s-hub-slim
     # tag is set in helmrelease
     # tag: 4.2.0
   nodeSelector: { "cms-af-prod": "true" }
