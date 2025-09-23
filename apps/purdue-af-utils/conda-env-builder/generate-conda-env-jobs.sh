@@ -105,6 +105,7 @@ create_job_yaml_location() {
 	printf '    conda-env-builder.af/fingerprint: "%s"\n' "$(compute_env_fingerprint "$env_dir" "$env_file" "$pip_uninstall_file")"
 	printf 'spec:\n'
 	printf '  backoffLimit: 0\n'
+	printf '  activeDeadlineSeconds: 7200\n'
 	printf '  ttlSecondsAfterFinished: 1200\n'
 	printf '  template:\n'
 	printf '    spec:\n'
