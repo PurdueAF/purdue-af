@@ -23,7 +23,7 @@ configMapGenerator:
       disableNameSuffixHash: true
   - name: jupyterhub-ssh-config
     files:
-      - values.yaml=../../production/jupyter/values-jupyterhub-ssh-dev.yaml
+      - values.yaml=../../production/jupyter/values-jupyterhub-ssh.yaml
     options:
       disableNameSuffixHash: true
 
