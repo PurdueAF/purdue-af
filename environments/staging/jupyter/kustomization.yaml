@@ -1,14 +1,18 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../../apps/jupyter/jupyterhub/helmrelease.yaml
-  - ../../../apps/jupyter/jupyterhub/secret-auth.yaml
-  - ../../../apps/jupyter/jupyterhub/secret-munge-key.yaml
-  - ../../../apps/jupyter/jupyterhub/helmrepo.yaml
-  - ../../../apps/jupyter/jupyterhub-database-backup/cronjob.yaml
-  - ../../../apps/jupyter/jupyterhub-database-backup/rbac.yaml
-  - ../../../apps/jupyter/jupyterhub-ssh/helmrelease.yaml
-  - ../../../apps/jupyter/jupyterhub-ssh/helmrepo.yaml
+  - ../../../apps/jupyterhub/jupyterhub/helmrelease.yaml
+  - ../../../apps/jupyterhub/jupyterhub/secret-auth.yaml
+  - ../../../apps/jupyterhub/jupyterhub/secret-munge-key.yaml
+  - ../../../apps/jupyterhub/jupyterhub/helmrepo.yaml
+  # - ../../../apps/jupyterhub/database-backup/cronjob.yaml
+  # - ../../../apps/jupyterhub/database-backup/rbac.yaml
+  - ../../../apps/jupyterhub/jupyterhub-ssh/helmrelease.yaml
+  - ../../../apps/jupyterhub/jupyterhub-ssh/helmrepo.yaml
+  - ../../../apps/jupyterhub/jupyterhub/userlist-sync/cronjob-purdue.yaml
+  - ../../../apps/jupyterhub/jupyterhub/userlist-sync/cronjob-cern.yaml
+  - ../../../apps/jupyterhub/jupyterhub/userlist-sync/configmap.yaml
+  - ../../../apps/jupyterhub/jupyterhub/userlist-sync/rbac.yaml
 
 configMapGenerator:
   - name: jupyterhub-config
@@ -18,25 +22,12 @@ configMapGenerator:
       disableNameSuffixHash: true
   - name: jupyterhub-extra-config
     files:
-      - 00-custom-spawner.py=../../../apps/jupyter/jupyterhub/extraFiles/custom-spawner.py
-      - 01-set-user-info.py=../../../apps/jupyter/jupyterhub/extraFiles/set-user-info.py
+      - 00-custom-spawner.py=../../../apps/jupyterhub/jupyterhub/extraFiles/custom-spawner.py
+      - 01-set-user-info.py=../../../apps/jupyterhub/jupyterhub/extraFiles/set-user-info.py
     options:
       disableNameSuffixHash: true
   - name: jupyterhub-ssh-config
     files:
-      - values.yaml=../../production/jupyter/values-jupyterhub-ssh.yaml
+      - values.yaml=../../production/jupyterhub/values-jupyterhub-ssh.yaml
     options:
       disableNameSuffixHash: true
-
-patches:
-  - target:
-      group: batch
-      version: v1
-      kind: CronJob
-    patch: |
-      apiVersion: batch/v1
-      kind: CronJob
-      metadata:
-        name: suspend-all-cronjobs # dummy
-      spec:
-        suspend: true
