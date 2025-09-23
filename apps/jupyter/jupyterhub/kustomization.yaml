@@ -6,13 +6,11 @@ resources:
   - secret-munge-key.yaml
 configMapGenerator:
   - name: jupyterhub-config
-    namespace: cms
     files:
       - values.yaml
     options:
       disableNameSuffixHash: true
   - name: jupyterhub-extra-config
-    namespace: cms
     files:
       - 00-custom-spawner.py=extraFiles/custom-spawner.py
       - 01-set-user-info.py=extraFiles/set-user-info.py
