@@ -4,6 +4,7 @@ resources:
   - ../../apps/jupyter/jupyterhub/helmrelease.yaml
   - ../../apps/jupyter/jupyterhub/secret-auth.yaml
   - ../../apps/jupyter/jupyterhub/secret-munge-key.yaml
+  - ../../apps/jupyter/jupyterhub/helmrepo.yaml
 
 configMapGenerator:
   - name: jupyterhub-config
