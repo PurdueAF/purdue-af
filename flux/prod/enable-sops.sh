@@ -1,5 +1,7 @@
 # age-keygen -o ~/.config/sops/age/keys.txt
 # cat ~/.config/sops/age/keys.txt | grep 'public key'
+
+# prod
 kubectl -n cms create secret generic sops-age \
 	--from-file=age.agekey=$HOME/.config/sops/age/keys.txt
 
