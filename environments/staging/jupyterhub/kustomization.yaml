@@ -9,10 +9,10 @@ resources:
   # - ../../../apps/jupyterhub/database-backup/rbac.yaml
   - ../../../apps/jupyterhub/jupyterhub-ssh/helmrelease.yaml
   - ../../../apps/jupyterhub/jupyterhub-ssh/helmrepo.yaml
-  - ../../../apps/jupyterhub/jupyterhub/userlist-sync/cronjob-purdue.yaml
-  - ../../../apps/jupyterhub/jupyterhub/userlist-sync/cronjob-cern.yaml
-  - ../../../apps/jupyterhub/jupyterhub/userlist-sync/configmap.yaml
-  - ../../../apps/jupyterhub/jupyterhub/userlist-sync/rbac.yaml
+  - ../../../apps/jupyterhub/userlist-sync/cronjob-purdue.yaml
+  - ../../../apps/jupyterhub/userlist-sync/cronjob-cern.yaml
+  - ../../../apps/jupyterhub/userlist-sync/configmap.yaml
+  - ../../../apps/jupyterhub/userlist-sync/rbac.yaml
 
 configMapGenerator:
   - name: jupyterhub-config
