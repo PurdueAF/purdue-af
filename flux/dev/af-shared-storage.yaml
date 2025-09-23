@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: cms-dev
+  name: af-shared-storage
+spec:
+  storageClassName: geddes-standard-multinode
+  accessModes: [ReadWriteMany]
+  resources:
+    requests:
+      storage: 1Gi
