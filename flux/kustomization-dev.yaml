@@ -6,7 +6,7 @@ metadata:
 spec:
   interval: 1m
   timeout: 1m
-  path: "./apps/"
+  path: "./environments/staging/"
   prune: true
   sourceRef:
     kind: GitRepository
