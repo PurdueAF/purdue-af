@@ -8,6 +8,7 @@ resources:
   - ../../../apps/jupyter/jupyterhub-database-backup/cronjob.yaml
   - ../../../apps/jupyter/jupyterhub-database-backup/rbac.yaml
   - ../../../apps/jupyter/jupyterhub-ssh/helmrelease.yaml
+  - ../../../apps/jupyter/jupyterhub-ssh/helmrepo.yaml
 
 configMapGenerator:
   - name: jupyterhub-config
