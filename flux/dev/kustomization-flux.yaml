@@ -16,3 +16,12 @@ spec:
     provider: sops
     secretRef:
       name: sops-age
+  patches:
+    - patch: |
+        apiVersion: networking.k8s.io/v1
+        kind: Ingress
+        metadata:
+          name: delete-all-ingresses
+        $patch: delete
+      target:
+        kind: Ingress
