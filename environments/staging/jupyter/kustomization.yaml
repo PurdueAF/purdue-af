@@ -5,6 +5,8 @@ resources:
   - ../../apps/jupyter/jupyterhub/secret-auth.yaml
   - ../../apps/jupyter/jupyterhub/secret-munge-key.yaml
   - ../../apps/jupyter/jupyterhub/helmrepo.yaml
+  - ../../apps/jupyter/jupyterhub-database-backup/cronjob.yaml
+  - ../../apps/jupyter/jupyterhub-database-backup/rbac.yaml
 
 configMapGenerator:
   - name: jupyterhub-config
@@ -18,3 +20,16 @@ configMapGenerator:
       - 01-set-user-info.py=../../apps/jupyter/jupyterhub/extraFiles/set-user-info.py
     options:
       disableNameSuffixHash: true
+
+patches:
+  - target:
+      group: batch
+      version: v1
+      kind: CronJob
+    patch: |
+      apiVersion: batch/v1
+      kind: CronJob
+      metadata:
+        name: suspend-all-cronjobs # dummy
+      spec:
+        suspend: true
