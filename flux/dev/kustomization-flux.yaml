@@ -16,12 +16,40 @@ spec:
     provider: sops
     secretRef:
       name: sops-age
+
   patches:
-    - patch: |
+    # Remove ALL Ingresses
+    - target:
+        kind: Ingress
+      patch: |
         apiVersion: networking.k8s.io/v1
         kind: Ingress
         metadata:
-          name: delete-all-ingresses
+          name: delete-all-ingresses # dummy, required for SM patch shape
         $patch: delete
-      target:
-        kind: Ingress
+
+    # Suspend ALL CronJobs
+    - target:
+        group: batch
+        version: v1
+        kind: CronJob
+      patch: |
+        apiVersion: batch/v1
+        kind: CronJob
+        metadata:
+          name: suspend-all-cronjobs # dummy
+        spec:
+          suspend: true
+
+    # Suspend ALL Jobs
+    - target:
+        group: batch
+        version: v1
+        kind: Job
+      patch: |
+        apiVersion: batch/v1
+        kind: Job
+        metadata:
+          name: suspend-all-jobs # dummy
+        spec:
+          suspend: true
