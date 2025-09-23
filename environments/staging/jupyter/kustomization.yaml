@@ -1,12 +1,12 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../apps/jupyter/jupyterhub/helmrelease.yaml
-  - ../../apps/jupyter/jupyterhub/secret-auth.yaml
-  - ../../apps/jupyter/jupyterhub/secret-munge-key.yaml
-  - ../../apps/jupyter/jupyterhub/helmrepo.yaml
-  - ../../apps/jupyter/jupyterhub-database-backup/cronjob.yaml
-  - ../../apps/jupyter/jupyterhub-database-backup/rbac.yaml
+  - ../../../apps/jupyter/jupyterhub/helmrelease.yaml
+  - ../../../apps/jupyter/jupyterhub/secret-auth.yaml
+  - ../../../apps/jupyter/jupyterhub/secret-munge-key.yaml
+  - ../../../apps/jupyter/jupyterhub/helmrepo.yaml
+  - ../../../apps/jupyter/jupyterhub-database-backup/cronjob.yaml
+  - ../../../apps/jupyter/jupyterhub-database-backup/rbac.yaml
 
 configMapGenerator:
   - name: jupyterhub-config
@@ -16,8 +16,8 @@ configMapGenerator:
       disableNameSuffixHash: true
   - name: jupyterhub-extra-config
     files:
-      - 00-custom-spawner.py=../../apps/jupyter/jupyterhub/extraFiles/custom-spawner.py
-      - 01-set-user-info.py=../../apps/jupyter/jupyterhub/extraFiles/set-user-info.py
+      - 00-custom-spawner.py=../../../apps/jupyter/jupyterhub/extraFiles/custom-spawner.py
+      - 01-set-user-info.py=../../../apps/jupyter/jupyterhub/extraFiles/set-user-info.py
     options:
       disableNameSuffixHash: true
 
