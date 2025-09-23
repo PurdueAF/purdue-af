@@ -7,17 +7,23 @@ resources:
   - ../../../apps/jupyter/jupyterhub/helmrepo.yaml
   - ../../../apps/jupyter/jupyterhub-database-backup/cronjob.yaml
   - ../../../apps/jupyter/jupyterhub-database-backup/rbac.yaml
+  - ../../../apps/jupyter/jupyterhub-ssh/helmrelease.yaml
 
 configMapGenerator:
   - name: jupyterhub-config
     files:
-      - values.yaml=values-jupyterhub.yaml
+      - values.yaml=values-jupyterhub-dev.yaml
     options:
       disableNameSuffixHash: true
   - name: jupyterhub-extra-config
     files:
       - 00-custom-spawner.py=../../../apps/jupyter/jupyterhub/extraFiles/custom-spawner.py
       - 01-set-user-info.py=../../../apps/jupyter/jupyterhub/extraFiles/set-user-info.py
+    options:
+      disableNameSuffixHash: true
+  - name: jupyterhub-ssh-config
+    files:
+      - values.yaml=../../production/jupyter/values-jupyterhub-ssh-dev.yaml
     options:
       disableNameSuffixHash: true
 
