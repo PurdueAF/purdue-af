@@ -51,7 +51,7 @@ plugin:
     SingularityDefaultOptions:
       - "--nv"
       - "--no-eval"
-    Namespace: "cms"
+    Namespace: "cms" # FIXME
     Tsocks: false
     TsocksPath: "$WORK/tsocks-1.8beta5+ds1/libtsocks.so"
     TsocksLoginNode: "login01"

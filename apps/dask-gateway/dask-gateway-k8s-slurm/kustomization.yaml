@@ -5,7 +5,6 @@ resources:
   - helmrelease.yaml
 configMapGenerator:
   - name: dask-gateway-k8s-slurm-config
-    namespace: cms
     files:
       - values.yaml
     options:

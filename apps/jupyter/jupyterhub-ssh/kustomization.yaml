@@ -4,7 +4,6 @@ resources:
   - helmrelease.yaml
 configMapGenerator:
   - name: jupyterhub-ssh-config
-    namespace: cms
     files:
       - values.yaml
     options:

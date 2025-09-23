@@ -5,7 +5,6 @@ resources:
   - cache-pvc.yaml
 configMapGenerator:
   - name: interlink-config
-    namespace: cms
     files:
       - values.yaml
     options:

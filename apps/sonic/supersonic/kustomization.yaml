@@ -4,7 +4,6 @@ resources:
   - helmrelease.yaml
 configMapGenerator:
   - name: supersonic-config
-    namespace: cms
     files:
       - values.yaml
     options:

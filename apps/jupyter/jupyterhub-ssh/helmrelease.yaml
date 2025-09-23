@@ -2,7 +2,6 @@ apiVersion: helm.toolkit.fluxcd.io/v2beta1
 kind: HelmRelease
 metadata:
   name: cmshub-ssh
-  namespace: cms
 spec:
   interval: 5m
   chart:
@@ -12,7 +11,6 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: jupyterhub-ssh
-        namespace: cms
       interval: 1m
   valuesFrom:
     - kind: ConfigMap
@@ -28,7 +26,6 @@ spec:
               apiVersion: apps/v1
               kind: Deployment
               metadata:
-                namespace: cms
                 name: doesNotMatter
               spec:
                 selector:

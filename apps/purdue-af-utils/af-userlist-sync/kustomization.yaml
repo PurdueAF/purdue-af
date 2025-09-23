@@ -6,5 +6,3 @@ resources:
   - cronjob-cern.yaml
   - configmap.yaml
   - rbac.yaml
-
-namespace: cms

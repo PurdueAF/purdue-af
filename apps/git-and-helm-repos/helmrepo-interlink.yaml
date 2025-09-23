@@ -2,7 +2,6 @@ apiVersion: source.toolkit.fluxcd.io/v1beta2
 kind: HelmRepository
 metadata:
   name: interlink
-  namespace: cms
 spec:
   interval: 1h
   type: oci

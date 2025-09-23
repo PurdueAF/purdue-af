@@ -6,13 +6,11 @@ resources:
   - daemonset.yaml
 configMapGenerator:
   - name: af-monitor-config
-    namespace: cms
     files:
       - metrics_server.py
     options:
       disableNameSuffixHash: true
   - name: af-node-monitor-config
-    namespace: cms
     files:
       - node_healthcheck.py
     options:

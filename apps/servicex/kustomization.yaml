@@ -4,7 +4,6 @@ resources:
   - helmrelease.yaml
 configMapGenerator:
   - name: servicex-config
-    namespace: cms
     files:
       - values.yaml
     options:

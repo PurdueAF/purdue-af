@@ -196,7 +196,7 @@ singleuser:
   extraEnv:
     JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
     CHOWN_HOME: "yes"
-    NAMESPACE: "cms"
+    NAMESPACE: "cms" # FIXME
     PYROSCOPE_SERVER: "http://pyroscope.cms.svc.cluster.local:4040"
     PYROSCOPE_APP: "purdue-af"
   networkPolicy:

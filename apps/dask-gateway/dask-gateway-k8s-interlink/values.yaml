@@ -29,7 +29,7 @@ gateway:
       metallb.universe.tf/address-pool: geddes-public-pool
   env:
     - name: NAMESPACE
-      value: cms
+      value: cms # FIXME
     - name: RELEASE_NAME
       value: dask-gateway-k8s-interlink
   backend:
@@ -38,7 +38,7 @@ gateway:
       tag: 2024.1.0
       pullPolicy:
     imagePullSecrets: []
-    namespace: cms
+    namespace: cms # FIXME
     environment: {}
     scheduler:
       cores:

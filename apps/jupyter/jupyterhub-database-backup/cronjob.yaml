@@ -2,7 +2,6 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: jupyterhub-database-backup
-  namespace: cms
 spec:
   schedule: "0 0,12 * * *" # Run at midnight and noon every day
   suspend: false

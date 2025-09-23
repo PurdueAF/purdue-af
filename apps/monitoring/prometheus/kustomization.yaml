@@ -8,7 +8,6 @@ resources:
   - rbac.yaml
 configMapGenerator:
   - name: prometheus-config
-    namespace: cms
     files:
       - values.yaml
     options:

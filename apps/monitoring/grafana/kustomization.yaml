@@ -4,13 +4,11 @@ resources:
   - helmrelease.yaml
 configMapGenerator:
   - name: grafana-config
-    namespace: cms
     files:
       - values.yaml
     options:
       disableNameSuffixHash: true
   - name: grafana-public-dashboards
-    namespace: cms
     files:
       - dashboards/default.json
       - dashboards/single-user.json
@@ -19,7 +17,6 @@ configMapGenerator:
     options:
       disableNameSuffixHash: true
   - name: grafana-private-dashboards
-    namespace: cms
     files:
       - dashboards/users-overview.json
       - dashboards/pyroscope.json
