@@ -30,9 +30,13 @@ spec:
               spec:
                 selector:
                   matchLabels:
-                    app.kubernetes.io/instance: cmshub-ssh
+                    app.kubernetes.io/instance: jupyterhub-ssh
                     app.kubernetes.io/name: jupyterhub-ssh
                 template:
+                  metadata:
+                    labels:
+                      app.kubernetes.io/instance: jupyterhub-ssh
+                      app.kubernetes.io/name: jupyterhub-ssh
                   spec:
                     volumes:
                     - name: cvmfs
