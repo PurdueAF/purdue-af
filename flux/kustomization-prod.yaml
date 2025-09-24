@@ -6,7 +6,7 @@ metadata:
 spec:
   interval: 1m
   timeout: 1m
-  path: "./apps/"
+  path: "./deploy/production/"
   prune: true
   sourceRef:
     kind: GitRepository
@@ -14,6 +14,7 @@ spec:
   targetNamespace: cms
   postBuild:
     substitute:
+      enable_ingresses: "true"
       namespace: "cms"
       jupyterhub_db_pv_selector: '{matchLabels: {purdue-af-db: "true"}}'
       jupyterhub_db_storage_class: ""
