@@ -2,7 +2,6 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: update-knowledge-trigger
-  namespace: cms
 spec:
   schedule: "0 * * * *" # Run every hour
   concurrencyPolicy: Forbid
