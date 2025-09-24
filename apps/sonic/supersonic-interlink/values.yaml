@@ -57,7 +57,7 @@ envoy:
   service:
     type: LoadBalancer
   ingress:
-    enabled: true
+    enabled: ${enable_ingresses}
     hostName: sonic-interlink.geddes.rcac.purdue.edu
     ingressClassName: public
   rate_limiter:
