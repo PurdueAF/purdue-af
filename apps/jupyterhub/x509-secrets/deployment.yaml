@@ -12,7 +12,7 @@ spec:
       labels:
         app: af-x509-secrets
     spec:
-      # serviceAccountName: {{ template "servicex.fullname" . }}
+      serviceAccountName: af-x509-secrets
       initContainers:
         - name: take-data-dir-ownership
           image: alpine:3.6

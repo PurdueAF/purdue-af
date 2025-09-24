@@ -13,7 +13,8 @@ resources:
   - ../../../apps/jupyterhub/userlist-sync/cronjob-cern.yaml
   - ../../../apps/jupyterhub/userlist-sync/configmap.yaml
   - ../../../apps/jupyterhub/userlist-sync/rbac.yaml
-  - ../../../apps/jupyterhub/x509-secrets/deplyment.yaml
+  - ../../../apps/jupyterhub/x509-secrets/deployment.yaml
+  - ../../../apps/jupyterhub/x509-secrets/rbac.yaml
 
 configMapGenerator:
   - name: jupyterhub-config
