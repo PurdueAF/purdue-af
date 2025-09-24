@@ -9,16 +9,16 @@ resources:
 configMapGenerator:
   - name: supersonic-config
     files:
-      - values.yaml=../../production/sonic/values-supersonic.yaml
+      - values.yaml=values-supersonic.yaml
     options:
       disableNameSuffixHash: true
   - name: supersonic-interlink-config
     files:
-      - values.yaml=../../production/sonic/values-supersonic-interlink.yaml
+      - values.yaml=values-supersonic-interlink.yaml
     options:
       disableNameSuffixHash: true
   - name: supersonic-dynamic-config
     files:
-      - values.yaml=../../production/sonic/values-supersonic-dynamic.yaml
+      - values.yaml=values-supersonic-dynamic.yaml
     options:
       disableNameSuffixHash: true

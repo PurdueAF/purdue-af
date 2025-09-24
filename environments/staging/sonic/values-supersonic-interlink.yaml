@@ -1,0 +1,110 @@
+serverLoadThreshold: 20
+serverLoadMetric: 'sum by (release) (rate(nv_inference_queue_duration_us{release=~"sonic-interlink"}[30s]) / (rate(nv_inference_exec_count{release=~"sonic-interlink"}[30s]) * 1000 + 0.001))'
+
+triton:
+  image: /cvmfs/unpacked.cern.ch/nvcr.io/nvidia/tritonserver:24.11-py3
+  command: ["/bin/sh", "-c"]
+  args:
+    - |
+      /opt/tritonserver/bin/tritonserver \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoBTag/Combined/data/models/ \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoTauTag/TrainingFiles/data/DeepTauIdSONIC/ \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoMET/METPUSubtraction/data/models/ \
+      --trace-config mode=opentelemetry \
+      --trace-config=opentelemetry,resource=pod_name=$(hostname) \
+      --trace-config opentelemetry,url=sonic-interlink-opentelemetry-collector:4318/v1/traces \
+      --trace-config rate=100 \
+      --trace-config level=TIMESTAMPS \
+      --trace-config count=-1 \
+      --allow-gpu-metrics=true \
+      --log-verbose=0 \
+      --strict-model-config=false \
+      --exit-timeout-secs=60
+
+  resources:
+    limits: { cpu: 2, memory: 4G }
+    requests: { cpu: 2, memory: 4G }
+  nodeSelector:
+    kubernetes.io/hostname: interlink-hammer
+  tolerations:
+    - key: virtual-node.interlink/no-schedule
+      operator: Exists
+  annotations:
+    slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs --no-home --compat"
+    slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --gres=gpu:1"
+    interlink.virtual-kubelet.io/wstunnel-timeout: "5m"
+    # interlink.eu/wstunnel-extra-ports: "8000:http:TCP"
+    slurm-job.vk.io/pre-exec: "echo \"tunneling port 8000\" \n"
+  service:
+    labels:
+      scrape_metrics: "true"
+    annotations:
+      metallb.universe.tf/address-pool: geddes-private-pool
+  modelRepository:
+    enabled: true
+    storageType: cvmfs-pvc
+    mountPath: /cvmfs
+
+envoy:
+  enabled: true
+  nodeSelector: { "cms-af-prod": "true" }
+  tolerations:
+    - key: hub.jupyter.org/dedicated
+      operator: Equal
+      value: cms-af
+      effect: NoSchedule
+  loadBalancerPolicy: "ROUND_ROBIN"
+  service:
+    type: LoadBalancer
+  ingress:
+    enabled: false
+    hostName: sonic-interlink.geddes.rcac.purdue.edu
+    ingressClassName: public
+  rate_limiter:
+    prometheus_based:
+      enabled: false
+  dynamic_routing:
+    enabled: true
+  lua_filter:
+    enabled: true
+    lua_config: "cfg/envoy-filter-dynamic.lua"
+  tracing_sampling_rate: 0.01
+
+keda:
+  enabled: true
+  minReplicaCount: 1
+  maxReplicaCount: 11
+  scaleUp:
+    stabilizationWindowSeconds: 30
+    periodSeconds: 15
+    stepsize: 1
+  scaleDown:
+    stabilizationWindowSeconds: 45
+    periodSeconds: 45
+    stepsize: 1
+
+prometheus:
+  external:
+    enabled: true
+    url: prometheus-af.geddes.rcac.purdue.edu
+    port: 443
+    scheme: https
+
+opentelemetry-collector:
+  enabled: false
+  config:
+    exporters:
+      otlp:
+        endpoint: http://sonic-interlink-tempo:4317
+      otlphttp:
+        endpoint: http://sonic-interlink-tempo:4318
+      prometheusremotewrite:
+        endpoint: http://prometheus-server:9090/api/v1/write
+
+tempo:
+  nameOverride: sonic-interlink-tempo
+  enabled: false
+  tempo:
+    metricsGenerator:
+      enabled: true
+      remoteWriteUrl: http://prometheus-server:9090/api/v1/write
