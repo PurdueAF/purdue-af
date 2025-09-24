@@ -16,7 +16,7 @@ echo "Starting conda-env job generator..."
 echo "Installing required packages..."
 # Try multiple mirror sources to handle Rocky Linux mirror issues
 for mirror in "https://mirrors.rockylinux.org" "https://mirror.rockylinux.org" "https://dl.rockylinux.org"; do
-	if dnf install -y git python3-pip wget file bzip2 diffutils which --nogpgcheck --setopt=mirrorlist="${mirror}/mirrorlist?arch=x86_64&repo=baseos-8" 2>/dev/null; then
+	if dnf install -y git python3-pip wget file bzip2 diffutils which --nogpgcheck --setopt=mirrorlist="$${mirror}/mirrorlist?arch=x86_64&repo=baseos-8" 2>/dev/null; then
 		echo "Successfully installed packages using mirror: $mirror"
 		break
 	else
@@ -206,9 +206,9 @@ compute_env_fingerprint() {
 	local pip_uninstall_file="$3"
 
 	local yaml_sha pipun_sha
-	yaml_sha=$(sha256sum "${env_dir}/${env_file}" | awk '{print $1}')
-	if [ -n "$pip_uninstall_file" ] && [ -f "${env_dir}/${pip_uninstall_file}" ]; then
-		pipun_sha=$(sha256sum "${env_dir}/${pip_uninstall_file}" | awk '{print $1}')
+	yaml_sha=$(sha256sum "$${env_dir}/$${env_file}" | awk '{print $1}')
+	if [ -n "$pip_uninstall_file" ] && [ -f "$${env_dir}/$${pip_uninstall_file}" ]; then
+		pipun_sha=$(sha256sum "$${env_dir}/$${pip_uninstall_file}" | awk '{print $1}')
 	else
 		pipun_sha="none"
 	fi
@@ -258,7 +258,7 @@ create_job_for_location() {
 	local pip_uninstall_file="$4"
 	local location_label="$5"
 
-	local location_root="${LOCATIONS[$location_label]}"
+	local location_root="$${LOCATIONS[$location_label]}"
 	if [ -z "$location_root" ]; then
 		echo "ERROR: Unknown location label: $location_label"
 		return 1
@@ -280,7 +280,7 @@ echo "Scanning for directories with environment.yaml files..."
 for dir in */; do
 	if [ -d "$dir" ]; then
 		env_name=$(basename "$dir")
-		env_dir="${dir%/}"
+		env_dir="$${dir%/}"
 
 		echo "Processing directory: $env_dir"
 		echo "Environment name: $env_name"
@@ -295,15 +295,15 @@ for dir in */; do
 
 		# Check if environment.yaml or environment.yml exists
 		env_file=""
-		if [ -f "${env_dir}/environment.yaml" ]; then
+		if [ -f "$${env_dir}/environment.yaml" ]; then
 			env_file="environment.yaml"
-		elif [ -f "${env_dir}/environment.yml" ]; then
+		elif [ -f "$${env_dir}/environment.yml" ]; then
 			env_file="environment.yml"
 		fi
 
 		# Check if pip-uninstall.txt exists
 		pip_uninstall_file=""
-		if [ -f "${env_dir}/pip-uninstall.txt" ]; then
+		if [ -f "$${env_dir}/pip-uninstall.txt" ]; then
 			pip_uninstall_file="pip-uninstall.txt"
 		fi
 
@@ -311,7 +311,7 @@ for dir in */; do
 			echo "Found $env_file in $env_dir, checking for existing jobs..."
 
 			# Process each location defined in LOCATIONS array
-			for location_label in "${!LOCATIONS[@]}"; do
+			for location_label in "$${!LOCATIONS[@]}"; do
 				echo "Processing location: $location_label"
 
 				# Check if we need to create a job for this location

@@ -8,7 +8,7 @@ set -euo pipefail
 
 cleanup() {
 	local exit_code=$?
-	if [ $exit_code -ne 0 ] && [ -n "${WORK_DIR:-}" ] && [ -d "$WORK_DIR" ]; then
+	if [ $exit_code -ne 0 ] && [ -n "$${WORK_DIR:-}" ] && [ -d "$WORK_DIR" ]; then
 		echo "Script failed with exit code $exit_code, cleaning up work directory..."
 		$RUN_AS_UID rm -rf "$WORK_DIR" 2>/dev/null || true
 	fi
@@ -27,7 +27,7 @@ ENV_NAME="$1"
 ENV_DIR="$2"
 ENV_FILE="$3"
 LOCATION_ROOT="$4"
-PIP_UNINSTALL_FILE="${5:-}"
+PIP_UNINSTALL_FILE="$${5:-}"
 
 echo "Building conda environment: $ENV_NAME at $LOCATION_ROOT"
 
@@ -36,7 +36,7 @@ echo "Building conda environment: $ENV_NAME at $LOCATION_ROOT"
 # -------------------------------
 echo "Installing required packages..."
 for mirror in "https://mirrors.rockylinux.org" "https://mirror.rockylinux.org" "https://dl.rockylinux.org"; do
-	if dnf install -y git wget bzip2 sudo python3-pip which --nogpgcheck --setopt=mirrorlist="${mirror}/mirrorlist?arch=x86_64&repo=baseos-8" 2>/dev/null; then
+	if dnf install -y git wget bzip2 sudo python3-pip which --nogpgcheck --setopt=mirrorlist="$${mirror}/mirrorlist?arch=x86_64&repo=baseos-8" 2>/dev/null; then
 		echo "Successfully installed packages using mirror: $mirror"
 		break
 	else
@@ -105,8 +105,8 @@ except Exception:
 TARGET_USERNAME="dkondra"
 LDAP_RESULT=$(ldap_lookup "$TARGET_USERNAME" | tr -d ' \t\r\n')
 if [ -n "$LDAP_RESULT" ] && [[ "$LDAP_RESULT" =~ ^[0-9]+:[0-9]+$ ]]; then
-	TARGET_UID=${LDAP_RESULT%%:*}
-	TARGET_GID=${LDAP_RESULT##*:}
+	TARGET_UID=$${LDAP_RESULT%%:*}
+	TARGET_GID=$${LDAP_RESULT##*:}
 	echo "Using LDAP UID:GID -> $TARGET_UID:$TARGET_GID"
 else
 	TARGET_UID="616617"
@@ -123,21 +123,21 @@ RUN_AS_UID=(sudo -H -u "$TARGET_USERNAME")
 # -------------------------------
 # per-run workspace / config
 # -------------------------------
-USER_TMP="/tmp/conda-env-builder-${TARGET_USERNAME}-${ENV_NAME}-$$"
-USER_PKGS="${USER_TMP}/pkgs"
-USER_ENVS="${USER_TMP}/envs"
+USER_TMP="/tmp/conda-env-builder-$${TARGET_USERNAME}-$${ENV_NAME}-$$"
+USER_PKGS="$${USER_TMP}/pkgs"
+USER_ENVS="$${USER_TMP}/envs"
 
-"${RUN_AS_UID[@]}" rm -rf "$USER_TMP" 2>/dev/null || true
-"${RUN_AS_UID[@]}" mkdir -p "$USER_PKGS" "$USER_ENVS" "$USER_TMP/pip-cache" "$USER_TMP/work" "$USER_TMP/conda-tmp" "$USER_TMP/env" "$USER_TMP/.cache/conda/proc" "$USER_TMP/.cache/conda/logs" "$USER_TMP/.cache/conda/notices"
+"$${RUN_AS_UID[@]}" rm -rf "$USER_TMP" 2>/dev/null || true
+"$${RUN_AS_UID[@]}" mkdir -p "$USER_PKGS" "$USER_ENVS" "$USER_TMP/pip-cache" "$USER_TMP/work" "$USER_TMP/conda-tmp" "$USER_TMP/env" "$USER_TMP/.cache/conda/proc" "$USER_TMP/.cache/conda/logs" "$USER_TMP/.cache/conda/notices"
 chown -R "$TARGET_USERNAME:$TARGET_USERNAME" "$USER_TMP"
 chmod -R 755 "$USER_TMP"
 
 # .condarc with expanded absolute paths
-"${RUN_AS_UID[@]}" bash -c "cat >'${USER_TMP}/.condarc' <<EOF
+"$${RUN_AS_UID[@]}" bash -c "cat >'$${USER_TMP}/.condarc' <<EOF
 pkgs_dirs:
-  - ${USER_PKGS}
+  - $${USER_PKGS}
 envs_dirs:
-  - ${USER_ENVS}
+  - $${USER_ENVS}
 channels:
   - conda-forge
   - defaults
@@ -153,10 +153,10 @@ EOF"
 # -------------------------------
 # target paths / fetch env repo
 # -------------------------------
-ENV_PATH="${LOCATION_ROOT%/}/$ENV_NAME"
+ENV_PATH="$${LOCATION_ROOT%/}/$ENV_NAME"
 PARENT_DIR=$(dirname "$ENV_PATH")
-[ -d "$PARENT_DIR" ] || "${RUN_AS_UID[@]}" mkdir -p "$PARENT_DIR"
-[ -d "$ENV_PATH" ] || "${RUN_AS_UID[@]}" mkdir -p "$ENV_PATH"
+[ -d "$PARENT_DIR" ] || "$${RUN_AS_UID[@]}" mkdir -p "$PARENT_DIR"
+[ -d "$ENV_PATH" ] || "$${RUN_AS_UID[@]}" mkdir -p "$ENV_PATH"
 
 ## --- SMALL ADDITION: pick a pkgs dir on the SAME FS as ENV (to allow hardlinks) ---
 # Default to the tmp-based pkgs dir (safe for NFS; uses copies).
@@ -166,7 +166,7 @@ CONDA_ALWAYS_COPY_RUN="1" # copy by default (safer on network FS)
 # Try a pkgs dir under the env's parent; if it's the same filesystem and not network-like,
 # we allow hardlinks for speed (set CONDA_ALWAYS_COPY_RUN=0).
 PKGS_SAMEFS_DIR="$(dirname "$ENV_PATH")/.conda-pkgs-$TARGET_USERNAME"
-"${RUN_AS_UID[@]}" mkdir -p "$PKGS_SAMEFS_DIR" 2>/dev/null || true
+"$${RUN_AS_UID[@]}" mkdir -p "$PKGS_SAMEFS_DIR" 2>/dev/null || true
 
 # Compare filesystem IDs; enable hardlinks only when on the same local FS.
 FSID_ENV=$(stat -fc %d "$ENV_PATH" 2>/dev/null || echo 0)
@@ -178,35 +178,35 @@ if [ -d "$PKGS_SAMEFS_DIR" ] && [ "$FSID_ENV" = "$FSID_PKGS" ] &&
 	CONDA_ALWAYS_COPY_RUN="0" # allow hardlinks (fast)
 fi
 
-echo "conda-env-builder: PKGS_DIR_FOR_RUN=${PKGS_DIR_FOR_RUN}"
-echo "conda-env-builder: CONDA_ALWAYS_COPY_RUN=${CONDA_ALWAYS_COPY_RUN} (0=hardlink ok, 1=copy)"
+echo "conda-env-builder: PKGS_DIR_FOR_RUN=$${PKGS_DIR_FOR_RUN}"
+echo "conda-env-builder: CONDA_ALWAYS_COPY_RUN=$${CONDA_ALWAYS_COPY_RUN} (0=hardlink ok, 1=copy)"
 ## --- END ADDITION ---
 
 BUILD_DIR="/tmp/conda-env-builds-$(date +%s)-$$"
-"${RUN_AS_UID[@]}" find /tmp -maxdepth 1 -name "conda-env-builder-${TARGET_USERNAME}-*" -type d -mmin +10 -exec rm -rf {} \; 2>/dev/null || true
-"${RUN_AS_UID[@]}" find /tmp -maxdepth 1 -name "conda-env-builds-*" -type d -mmin +10 -exec rm -rf {} \; 2>/dev/null || true
-"${RUN_AS_UID[@]}" mkdir -p "$BUILD_DIR"
-WORK_DIR="${BUILD_DIR}/work"
-"${RUN_AS_UID[@]}" mkdir -p "$WORK_DIR"
+"$${RUN_AS_UID[@]}" find /tmp -maxdepth 1 -name "conda-env-builder-$${TARGET_USERNAME}-*" -type d -mmin +10 -exec rm -rf {} \; 2>/dev/null || true
+"$${RUN_AS_UID[@]}" find /tmp -maxdepth 1 -name "conda-env-builds-*" -type d -mmin +10 -exec rm -rf {} \; 2>/dev/null || true
+"$${RUN_AS_UID[@]}" mkdir -p "$BUILD_DIR"
+WORK_DIR="$${BUILD_DIR}/work"
+"$${RUN_AS_UID[@]}" mkdir -p "$WORK_DIR"
 
-"${RUN_AS_UID[@]}" git clone https://github.com/PurdueAF/purdue-af-conda-envs.git "$WORK_DIR"
+"$${RUN_AS_UID[@]}" git clone https://github.com/PurdueAF/purdue-af-conda-envs.git "$WORK_DIR"
 
-if ! "${RUN_AS_UID[@]}" bash -c "cd '$WORK_DIR' && [ -d '${ENV_DIR}' ]"; then
-	echo "ERROR: Environment directory ${ENV_DIR} not found!"
+if ! "$${RUN_AS_UID[@]}" bash -c "cd '$WORK_DIR' && [ -d '$${ENV_DIR}' ]"; then
+	echo "ERROR: Environment directory $${ENV_DIR} not found!"
 	exit 1
 fi
-ENV_YAML_PATH="${WORK_DIR}/${ENV_DIR}/${ENV_FILE}"
+ENV_YAML_PATH="$${WORK_DIR}/$${ENV_DIR}/$${ENV_FILE}"
 [ -f "$ENV_YAML_PATH" ] || {
 	echo "ERROR: Environment file not found at $ENV_YAML_PATH"
 	exit 1
 }
 
-ENV_YAML_COPY="${USER_TMP}/env/environment.yaml"
-"${RUN_AS_UID[@]}" mkdir -p "$(dirname "$ENV_YAML_COPY")"
-"${RUN_AS_UID[@]}" cp "$ENV_YAML_PATH" "$ENV_YAML_COPY"
+ENV_YAML_COPY="$${USER_TMP}/env/environment.yaml"
+"$${RUN_AS_UID[@]}" mkdir -p "$(dirname "$ENV_YAML_COPY")"
+"$${RUN_AS_UID[@]}" cp "$ENV_YAML_PATH" "$ENV_YAML_COPY"
 
 # sanitize YAML (strip BOM/CR; keep spaces; replace tab with 2 spaces)
-"${RUN_AS_UID[@]}" bash -c "
+"$${RUN_AS_UID[@]}" bash -c "
 set -e
 YFILE='$ENV_YAML_COPY'
 # Strip UTF-8 BOM
@@ -257,7 +257,7 @@ conda_env_create() {
 # -------------------------------
 if [ -d "$ENV_PATH/conda-meta" ] && [ -f "$ENV_PATH/conda-meta/history" ]; then
 	echo "Updating existing environment: $ENV_NAME"
-	if conda_env_update "$ENV_PATH" "$ENV_YAML_COPY" "${USER_TMP}/.condarc"; then
+	if conda_env_update "$ENV_PATH" "$ENV_YAML_COPY" "$${USER_TMP}/.condarc"; then
 		echo "✓ Environment updated"
 	else
 		echo "ERROR: Failed to update environment"
@@ -265,7 +265,7 @@ if [ -d "$ENV_PATH/conda-meta" ] && [ -f "$ENV_PATH/conda-meta/history" ]; then
 	fi
 else
 	echo "Creating new environment: $ENV_NAME"
-	if conda_env_create "$ENV_PATH" "$ENV_YAML_COPY" "${USER_TMP}/.condarc"; then
+	if conda_env_create "$ENV_PATH" "$ENV_YAML_COPY" "$${USER_TMP}/.condarc"; then
 		echo "✓ Environment created"
 	else
 		echo "ERROR: Failed to create environment"
@@ -301,13 +301,13 @@ if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/conda-meta" ]; then
 
 	if [ -n "$SITECUSTOMIZE_SOURCE" ] && [ -f "$SITECUSTOMIZE_SOURCE" ]; then
 		# Construct site-packages path directly
-		SITE_PACKAGES_DIR="${ENV_PATH}/lib/python*/site-packages"
+		SITE_PACKAGES_DIR="$${ENV_PATH}/lib/python*/site-packages"
 		# Use shell globbing to find the actual python version directory
 		INSTALLED=false
-		for site_packages in ${SITE_PACKAGES_DIR}; do
+		for site_packages in $${SITE_PACKAGES_DIR}; do
 			if [ -d "$site_packages" ]; then
 				# Copy sitecustomize.py to site-packages as target user
-				"${RUN_AS_UID[@]}" cp "$SITECUSTOMIZE_SOURCE" "$site_packages/"
+				"$${RUN_AS_UID[@]}" cp "$SITECUSTOMIZE_SOURCE" "$site_packages/"
 				echo "✓ sitecustomize.py installed to $site_packages"
 				INSTALLED=true
 				break
@@ -327,8 +327,8 @@ fi
 # -------------------------------
 # optional: pip uninstall list (run as target user)
 # -------------------------------
-if [ -n "$PIP_UNINSTALL_FILE" ] && [ -f "${WORK_DIR}/${ENV_DIR}/${PIP_UNINSTALL_FILE}" ]; then
-	echo "Uninstalling packages from ${PIP_UNINSTALL_FILE}"
+if [ -n "$PIP_UNINSTALL_FILE" ] && [ -f "$${WORK_DIR}/$${ENV_DIR}/$${PIP_UNINSTALL_FILE}" ]; then
+	echo "Uninstalling packages from $${PIP_UNINSTALL_FILE}"
 	while IFS= read -r package || [ -n "$package" ]; do
 		package=$(echo "$package" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 		[[ -z "$package" || "$package" =~ ^[[:space:]]*# ]] && continue
@@ -340,19 +340,19 @@ if [ -n "$PIP_UNINSTALL_FILE" ] && [ -f "${WORK_DIR}/${ENV_DIR}/${PIP_UNINSTALL_
 		echo "Uninstalling $package..."
 		sudo -H -u "$TARGET_USERNAME" -g "#$TARGET_GID" env -i HOME="$USER_TMP" PATH="$ENV_PATH/bin:/opt/conda/bin:/usr/local/bin:/usr/bin:/bin" \
 			python -m pip uninstall "$package" -y || echo "⚠ Failed to uninstall $package"
-	done <"${WORK_DIR}/${ENV_DIR}/${PIP_UNINSTALL_FILE}"
+	done <"$${WORK_DIR}/$${ENV_DIR}/$${PIP_UNINSTALL_FILE}"
 	echo "Pip uninstall completed"
 fi
 
 # -------------------------------
 # cleanup & verification
 # -------------------------------
-"${RUN_AS_UID[@]}" rm -rf "$WORK_DIR"
-"${RUN_AS_UID[@]}" find "$BUILD_DIR" -name "*.tmp" -delete 2>/dev/null || true
-"${RUN_AS_UID[@]}" find "$BUILD_DIR" -name "*.lock" -delete 2>/dev/null || true
-"${RUN_AS_UID[@]}" find "$BUILD_DIR" -name "*.cache" -delete 2>/dev/null || true
-"${RUN_AS_UID[@]}" find /tmp -maxdepth 1 -name "conda-env-builder-${TARGET_USERNAME}-*" -type d -mmin +5 -exec rm -rf {} \; 2>/dev/null || true
-"${RUN_AS_UID[@]}" find /tmp -maxdepth 1 -name "conda-env-builds-*" -type d -mmin +5 -exec rm -rf {} \; 2>/dev/null || true
+"$${RUN_AS_UID[@]}" rm -rf "$WORK_DIR"
+"$${RUN_AS_UID[@]}" find "$BUILD_DIR" -name "*.tmp" -delete 2>/dev/null || true
+"$${RUN_AS_UID[@]}" find "$BUILD_DIR" -name "*.lock" -delete 2>/dev/null || true
+"$${RUN_AS_UID[@]}" find "$BUILD_DIR" -name "*.cache" -delete 2>/dev/null || true
+"$${RUN_AS_UID[@]}" find /tmp -maxdepth 1 -name "conda-env-builder-$${TARGET_USERNAME}-*" -type d -mmin +5 -exec rm -rf {} \; 2>/dev/null || true
+"$${RUN_AS_UID[@]}" find /tmp -maxdepth 1 -name "conda-env-builds-*" -type d -mmin +5 -exec rm -rf {} \; 2>/dev/null || true
 
 # Verify as the target user (to catch NFS root-squash issues)
 if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/conda-meta" ]; then
