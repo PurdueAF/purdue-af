@@ -40,7 +40,7 @@ server:
           mountPath: /prometheus
 
   ingress:
-    enabled: true
+    enabled: ${enable_ingresses}
     hosts: [prometheus-af.geddes.rcac.purdue.edu]
     tls:
       - hosts: [prometheus-af.geddes.rcac.purdue.edu]
@@ -340,7 +340,7 @@ alertmanager:
   config:
     global: {}
   ingress:
-    enabled: true
+    enabled: ${enable_ingresses}
     className: public
     hosts:
       - host: prometheus-af-alerts.geddes.rcac.purdue.edu

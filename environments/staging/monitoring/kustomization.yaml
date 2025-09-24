@@ -27,7 +27,7 @@ configMapGenerator:
       disableNameSuffixHash: true
   - name: grafana-config
     files:
-      - values.yaml=values-grafana.yaml
+      - values.yaml=../../production/monitoring/values-grafana.yaml
     options:
       disableNameSuffixHash: true
   - name: grafana-public-dashboards
@@ -46,11 +46,11 @@ configMapGenerator:
       disableNameSuffixHash: true
   - name: prometheus-config
     files:
-      - values.yaml=values-prometheus.yaml
+      - values.yaml=../../production/monitoring/values-prometheus.yaml
     options:
       disableNameSuffixHash: true
   - name: pyroscope-config
     files:
-      - values.yaml=values-pyroscope.yaml
+      - values.yaml=../../production/monitoring/values-pyroscope.yaml
     options:
       disableNameSuffixHash: true
