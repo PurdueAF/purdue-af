@@ -31,6 +31,8 @@ resources:
   - ../../apps/interlink/gitrepo.yaml
   - ../../apps/interlink/helmrepo.yaml
 
+  - ../../apps/jupyterhub/af-x509-secrets/deployment.yaml
+  - ../../apps/jupyterhub/af-x509-secrets/rbac.yaml
   - ../../apps/jupyterhub/jupyterhub/helmrelease.yaml
   - ../../apps/jupyterhub/jupyterhub/secret-auth.yaml
   - ../../apps/jupyterhub/jupyterhub/secret-munge-key.yaml
@@ -43,8 +45,6 @@ resources:
   - ../../apps/jupyterhub/userlist-sync/cronjob-cern.yaml
   - ../../apps/jupyterhub/userlist-sync/configmap.yaml
   - ../../apps/jupyterhub/userlist-sync/rbac.yaml
-  - ../../apps/jupyterhub/x509-secrets/deployment.yaml
-  - ../../apps/jupyterhub/x509-secrets/rbac.yaml
 
   - ../../apps/monitoring/helmrepo-grafana.yaml
   - ../../apps/monitoring/helmrepo-prometheus.yaml
