@@ -29,7 +29,7 @@ gateway:
       metallb.universe.tf/address-pool: geddes-public-pool
   env:
     - name: NAMESPACE
-      value: cms
+      value: ${namespace}
     - name: RELEASE_NAME
       value: dask-gateway-k8s-slurm
   extraConfig:

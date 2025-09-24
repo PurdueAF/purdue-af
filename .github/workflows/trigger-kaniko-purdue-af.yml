@@ -43,6 +43,6 @@ jobs:
         run: |
           git add apps/kaniko-build-jobs/build-purdue-af.yaml
           git commit -m "chore(ci): trigger Kaniko build for purdue-af @ ${GITHUB_SHA} [skip ci]"
-          git push
+          git push HEAD:${GITHUB_HEAD_REF}
 
 

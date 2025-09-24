@@ -22,8 +22,14 @@ triton:
       --exit-timeout-secs=60
 
   resources:
-    limits: { nvidia.com/gpu: 1, cpu: 2, memory: 4G }
-    requests: { nvidia.com/gpu: 1, cpu: 2, memory: 4G }
+    limits:
+      nvidia.com/gpu: ${sonic_gpus_initial}
+      cpu: 2
+      memory: 4G
+    requests:
+      nvidia.com/gpu: ${sonic_gpus_initial}
+      cpu: 2
+      memory: 4G
   nodeSelector: { "cms-af-prod": "true" }
   tolerations:
     - key: hub.jupyter.org/dedicated
@@ -52,7 +58,7 @@ envoy:
   service:
     type: LoadBalancer
   ingress:
-    enabled: true
+    enabled: ${enable_ingresses}
     hostName: sonic-cms.geddes.rcac.purdue.edu
     ingressClassName: public
   rate_limiter:
@@ -117,7 +123,7 @@ grafana:
             nodeGraph:
               enabled: true
   ingress:
-    enabled: true
+    enabled: ${enable_ingresses}
     hosts:
       - grafana-cms.geddes.rcac.purdue.edu
     tls:

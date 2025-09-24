@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: af-monitor
-  namespace: cms
 spec:
   replicas: 1
   selector:

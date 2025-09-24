@@ -1,0 +1,9 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: servicex
+spec:
+  interval: 1m
+  url: https://github.com/ssl-hep/ServiceX
+  ref:
+    branch: develop

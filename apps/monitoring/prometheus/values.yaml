@@ -40,7 +40,7 @@ server:
           mountPath: /prometheus
 
   ingress:
-    enabled: true
+    enabled: ${enable_ingresses}
     hosts: [prometheus-af.geddes.rcac.purdue.edu]
     tls:
       - hosts: [prometheus-af.geddes.rcac.purdue.edu]
@@ -135,7 +135,7 @@ serverFiles:
           - role: endpoints
             namespaces:
               names:
-                - "cms"
+                - ${namespace}
         relabel_configs:
           # - source_labels: [__meta_kubernetes_service_label_app]
           #   target_label: 'app'
@@ -170,7 +170,7 @@ serverFiles:
           - role: endpoints
             namespaces:
               names:
-                - "cms"
+                - ${namespace}
         relabel_configs:
           - source_labels: [__meta_kubernetes_service_label_app]
             target_label: "app"
@@ -193,7 +193,7 @@ serverFiles:
           - role: endpoints
             namespaces:
               names:
-                - "cms"
+                - ${namespace}
         relabel_configs:
           - source_labels: [__meta_kubernetes_service_label_app]
             target_label: "app"
@@ -216,7 +216,7 @@ serverFiles:
       #     - role: endpoints
       #       namespaces:
       #         names:
-      #           - 'cms'
+      #           - ${namespace}
       #   relabel_configs:
       #     - source_labels: [__meta_kubernetes_pod_name]
       #       target_label: 'pod'
@@ -243,7 +243,7 @@ serverFiles:
           - role: endpoints
             namespaces:
               names:
-                - "cms"
+                - ${namespace}
         relabel_configs:
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: "pod"
@@ -275,7 +275,7 @@ serverFiles:
           - role: endpoints
             namespaces:
               names:
-                - "cms"
+                - ${namespace}
         relabel_configs:
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: "pod"
@@ -340,7 +340,7 @@ alertmanager:
   config:
     global: {}
   ingress:
-    enabled: true
+    enabled: ${enable_ingresses}
     className: public
     hosts:
       - host: prometheus-af-alerts.geddes.rcac.purdue.edu

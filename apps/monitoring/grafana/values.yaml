@@ -9,7 +9,7 @@ persistence:
 
 # Ingress configuration
 ingress:
-  enabled: true
+  enabled: ${enable_ingresses}
   ingressClassName: public
   path: /grafana
   pathType: Prefix

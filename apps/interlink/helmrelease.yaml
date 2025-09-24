@@ -2,7 +2,6 @@ apiVersion: helm.toolkit.fluxcd.io/v2beta1
 kind: HelmRelease
 metadata:
   name: interlink
-  namespace: cms
 spec:
   interval: 1m
   chart:
@@ -12,13 +11,11 @@ spec:
       # sourceRef:
       #   kind: GitRepository
       #   name: interlink
-      #   namespace: cms
       chart: interlink
       version: "0.5.3-pre3"
       sourceRef:
         kind: HelmRepository
         name: interlink
-        namespace: cms
       interval: 1m
   valuesFrom:
     - kind: ConfigMap

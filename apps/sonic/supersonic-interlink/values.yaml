@@ -31,7 +31,7 @@ triton:
       operator: Exists
   annotations:
     slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs --no-home --compat"
-    slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --gres=gpu:1"
+    slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --gres=gpu:${sonic_gpus_initial}"
     interlink.virtual-kubelet.io/wstunnel-timeout: "5m"
     # interlink.eu/wstunnel-extra-ports: "8000:http:TCP"
     slurm-job.vk.io/pre-exec: "echo \"tunneling port 8000\" \n"
@@ -57,7 +57,7 @@ envoy:
   service:
     type: LoadBalancer
   ingress:
-    enabled: true
+    enabled: ${enable_ingresses}
     hostName: sonic-interlink.geddes.rcac.purdue.edu
     ingressClassName: public
   rate_limiter:

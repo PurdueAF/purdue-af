@@ -1,0 +1,7 @@
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: jupyterhub-ssh
+spec:
+  interval: 1h
+  url: https://yuvipanda.github.io/jupyterhub-ssh/

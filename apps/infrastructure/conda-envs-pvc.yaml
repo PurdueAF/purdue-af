@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: conda-envs
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  storageClassName: geddes-standard-multinode
+  accessModes: [ReadWriteMany]
+  resources:
+    requests:
+      storage: 40Gi

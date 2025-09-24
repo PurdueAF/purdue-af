@@ -2,7 +2,6 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: prometheus-metrics
-  namespace: cms
 spec:
   selector:
     matchLabels:
@@ -14,7 +13,6 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: prometheus-metrics-dask-gateway
-  namespace: cms
 spec:
   selector:
     matchLabels:

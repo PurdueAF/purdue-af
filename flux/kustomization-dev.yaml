@@ -1,0 +1,27 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: purdue-af-flux
+  namespace: cms-dev
+spec:
+  interval: 1m
+  timeout: 1m
+  path: "./deploy/staging/"
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: purdue-af
+  targetNamespace: cms-dev
+  postBuild:
+    substitute:
+      enable_ingresses: "false"
+      namespace: "cms-dev"
+      jupyterhub_db_pv_selector: ""
+      jupyterhub_db_storage_class: "geddes-standard-singlenode"
+      sonic_gpus_initial: "0"
+      af_shared_storage_size: "1Gi"
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age

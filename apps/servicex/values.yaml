@@ -7,7 +7,7 @@ app:
       cpu: 1
       memory: 1Gi
   ingress:
-    enabled: true
+    enabled: ${enable_ingresses}
     class: public
     host: geddes.rcac.purdue.edu
 noCerts: false
@@ -85,11 +85,11 @@ minio:
     ports:
       api: 9000
   ingress:
-    enabled: true
+    enabled: ${enable_ingresses}
     hostname: servicex-minio.geddes.rcac.purdue.edu
     ingressClassName: public
   apiIngress:
-    enabled: true
+    enabled: ${enable_ingresses}
     hostname: "servicex-minio-api.geddes.rcac.purdue.edu"
     ingressClassName: public
   resources:
