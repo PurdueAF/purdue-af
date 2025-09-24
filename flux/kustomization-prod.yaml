@@ -17,7 +17,7 @@ spec:
       namespace: "cms"
       jupyterhub_db_pv_selector: '{matchLabels: {purdue-af-db: "true"}}'
       jupyterhub_db_storage_class: ""
-      sonic_gpus_initial: 1
+      sonic_gpus_initial: "1"
   decryption:
     provider: sops
     secretRef:

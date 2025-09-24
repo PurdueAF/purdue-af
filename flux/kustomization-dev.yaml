@@ -18,7 +18,7 @@ spec:
       namespace: "cms-dev"
       jupyterhub_db_pv_selector: ""
       jupyterhub_db_storage_class: "geddes-standard-multinode"
-      sonic_gpus_initial: 0
+      sonic_gpus_initial: "0"
   decryption:
     provider: sops
     secretRef:
