@@ -340,7 +340,7 @@ alertmanager:
   config:
     global: {}
   ingress:
-    enabled: false
+    enabled: true
     className: public
     hosts:
       - host: prometheus-af-alerts.geddes.rcac.purdue.edu

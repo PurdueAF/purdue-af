@@ -196,7 +196,7 @@ alloy:
       enabled: true
 
 ingress:
-  enabled: false
+  enabled: true
   className: public
   pathType: ImplementationSpecific
   # Additional labels to add to the ingress resource
