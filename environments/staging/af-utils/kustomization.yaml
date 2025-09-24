@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../apps/af-utils/af-users-graph/pvc.yaml
+  - ../../../apps/af-utils/af-users-graph/deployment.yaml
+  - ../../../apps/af-utils/af-users-graph/service.yaml
+  # - ../../../apps/af-utils/af-users-graph/ingress.yaml
+  # - ../../../apps/af-utils/af-users-graph/cronjob.yaml
+  # - ../../../apps/af-utils/conda-env-builder/cronjob.yaml
+  - ../../../apps/af-utils/conda-env-builder/rbac.yaml
+  - ../../../apps/af-utils/flux-github-alert/github-provider.yaml
+  - ../../../apps/af-utils/flux-github-alert/github-alert.yaml
+  - ../../../apps/af-utils/update-knowledge/rbac.yaml
+  # - ../../../apps/af-utils/update-knowledge/cronjob.yaml
+  - ../../../apps/af-utils/update-knowledge/secret.yaml
+
+configMapGenerator:
+  - name: af-users-graph-script
+    files:
+      - ../../../apps/af-utils/af-users-graph/plot-af-users.py
+    options:
+      disableNameSuffixHash: true
+  - name: af-users-graph-nginx-config
+    files:
+      - ../../../apps/af-utils/af-users-graph/nginx.conf
+    options:
+      disableNameSuffixHash: true
+  - name: conda-env-builder-scripts
+    namespace: cms
+    files:
+      - ../../../apps/af-utils/conda-env-builder/generate-conda-env-jobs.sh
+      - ../../../apps/af-utils/conda-env-builder/build-single-conda-env.sh
+      - ../../../apps/af-utils/conda-env-builder/sitecustomize.py
+    options:
+      disableNameSuffixHash: true
+  - name: update-knowledge-script
+    namespace: cms
+    files:
+      - ../../../apps/af-utils/update-knowledge/update_knowledge.py
+    options:
+      disableNameSuffixHash: true
