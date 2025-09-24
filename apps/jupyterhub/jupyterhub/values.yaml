@@ -349,6 +349,12 @@ scheduling:
         effect: "NoSchedule"
 ingress:
   enabled: ${enable_ingresses}
+  ingressClassName: public
+  hosts:
+    - cms.geddes.rcac.purdue.edu
+  annotations:
+    kubernetes.io/ingress.class: "public"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
 proxy:
   https:
     enabled: true
