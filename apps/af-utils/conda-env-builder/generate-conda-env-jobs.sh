@@ -96,7 +96,7 @@ create_job_yaml_location() {
 	printf 'kind: Job\n'
 	printf 'metadata:\n'
 	printf '  name: conda-env-builder-%s-%s\n' "$sanitized_name" "$location_label"
-	printf '  namespace: cms\n'
+	printf '  namespace: ${namespace}\n'
 	printf '  labels:\n'
 	printf '    app: conda-env-builder\n'
 	printf '    environment: %s\n' "$env_name"
@@ -225,17 +225,17 @@ check_and_manage_jobs() {
 	echo "Checking jobs for environment: $env_name at location: $location_label"
 
 	# Check for failed jobs and delete them
-	local failed_jobs=$(kubectl get jobs -n cms -l "app=conda-env-builder,environment=$env_name,location=$location_label" --field-selector=status.failed=1 -o name 2>/dev/null || echo "")
+	local failed_jobs=$(kubectl get jobs -n ${namespace} -l "app=conda-env-builder,environment=$env_name,location=$location_label" --field-selector=status.failed=1 -o name 2>/dev/null || echo "")
 	if [ -n "$failed_jobs" ]; then
 		echo "Found failed $location_label job(s) for $env_name, deleting them..."
-		echo "$failed_jobs" | xargs -r kubectl delete -n cms
+		echo "$failed_jobs" | xargs -r kubectl delete -n ${namespace}
 	fi
 
 	# Check for successful jobs
-	local successful_jobs=$(kubectl get jobs -n cms -l "app=conda-env-builder,environment=$env_name,location=$location_label" --field-selector=status.successful=1 -o name 2>/dev/null || echo "")
+	local successful_jobs=$(kubectl get jobs -n ${namespace} -l "app=conda-env-builder,environment=$env_name,location=$location_label" --field-selector=status.successful=1 -o name 2>/dev/null || echo "")
 
 	# Check for running/pending jobs
-	local running_jobs=$(kubectl get jobs -n cms -l "app=conda-env-builder,environment=$env_name,location=$location_label" --field-selector=status.successful!=1,status.failed!=1 -o name 2>/dev/null || echo "")
+	local running_jobs=$(kubectl get jobs -n ${namespace} -l "app=conda-env-builder,environment=$env_name,location=$location_label" --field-selector=status.successful!=1,status.failed!=1 -o name 2>/dev/null || echo "")
 
 	# Return status: 0 if job should be created, 1 if job exists
 	if [ -z "$running_jobs" ] && [ -z "$successful_jobs" ]; then

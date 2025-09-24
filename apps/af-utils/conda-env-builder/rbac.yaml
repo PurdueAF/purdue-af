@@ -2,13 +2,11 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: conda-env-builder
-  namespace: cms
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: conda-env-builder-role
-  namespace: cms
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
@@ -24,11 +22,9 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: conda-env-builder-rolebinding
-  namespace: cms
 subjects:
   - kind: ServiceAccount
     name: conda-env-builder
-    namespace: cms
 roleRef:
   kind: Role
   name: conda-env-builder-role
