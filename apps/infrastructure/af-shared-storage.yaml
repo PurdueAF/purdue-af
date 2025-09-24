@@ -3,9 +3,11 @@ kind: PersistentVolumeClaim
 metadata:
   namespace: cms-dev
   name: af-shared-storage
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
 spec:
   storageClassName: geddes-standard-multinode
   accessModes: [ReadWriteMany]
   resources:
     requests:
-      storage: 1Gi
+      storage: ${af_shared_storage_size}

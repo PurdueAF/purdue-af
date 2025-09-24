@@ -8,6 +8,7 @@ spec:
   timeout: 1m
   path: "./deploy/staging/"
   prune: true
+  wait: true
   sourceRef:
     kind: GitRepository
     name: purdue-af
@@ -19,6 +20,7 @@ spec:
       jupyterhub_db_pv_selector: ""
       jupyterhub_db_storage_class: "geddes-standard-singlenode"
       sonic_gpus_initial: "0"
+      af_shared_storage_size: "1Gi"
   decryption:
     provider: sops
     secretRef:

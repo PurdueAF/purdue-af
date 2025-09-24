@@ -22,7 +22,9 @@ resources:
   - ../../apps/dask-gateway/dask-gateway-k8s-slurm/helmrelease.yaml
   - ../../apps/dask-gateway/dask-gateway-k8s-slurm/ingress.yaml
 
-  - ../../infrastructure/cvmfs-pvc.yaml
+  - ../../apps/infrastructure/af-shared-storage.yaml
+  - ../../apps/infrastructure/conda-envs-pvc.yaml
+  - ../../apps/infrastructure/cvmfs-pvc.yaml
 
   - ../../apps/interlink/helmrelease.yaml
   - ../../apps/interlink/cache-pvc.yaml
