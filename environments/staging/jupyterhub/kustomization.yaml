@@ -19,7 +19,7 @@ resources:
 configMapGenerator:
   - name: jupyterhub-config
     files:
-      - values.yaml=values-jupyterhub.yaml
+      - values.yaml=../../production/jupyterhub/values-jupyterhub.yaml
     options:
       disableNameSuffixHash: true
   - name: jupyterhub-extra-config

@@ -196,7 +196,7 @@ singleuser:
   extraEnv:
     JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
     CHOWN_HOME: "yes"
-    NAMESPACE: "cms" # FIXME
+    NAMESPACE: ${namespace}
     PYROSCOPE_SERVER: "http://pyroscope.cms.svc.cluster.local:4040"
     PYROSCOPE_APP: "purdue-af"
   networkPolicy:
@@ -264,12 +264,10 @@ hub:
   db:
     type: sqlite-pvc
     pvc:
-      storageClassName: ""
+      storageClassName: ${jupyterhub_db_storage_class}
       annotations:
         helm.sh/resource-policy: keep
-      selector:
-        matchLabels:
-          purdue-af-db: "true"
+      selector: ${jupyterhub_db_pv_selector}
   tolerations:
     - key: "hub.jupyter.org/dedicated"
       operator: "Equal"
@@ -350,13 +348,7 @@ scheduling:
         value: "cms-af"
         effect: "NoSchedule"
 ingress:
-  enabled: true
-  ingressClassName: public
-  hosts:
-    - cms.geddes.rcac.purdue.edu
-  annotations:
-    kubernetes.io/ingress.class: "public"
-    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+  enabled: ${enable_ingresses}
 proxy:
   https:
     enabled: true

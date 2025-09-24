@@ -15,6 +15,9 @@ spec:
   postBuild:
     substitute:
       enable_ingresses: "false"
+      namespace: "cms-dev"
+      jupyterhub_db_pv_selector: ""
+      jupyterhub_db_storage_class: "geddes-standard-multinode"
   decryption:
     provider: sops
     secretRef:

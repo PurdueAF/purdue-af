@@ -1,0 +1,118 @@
+# Grafana Helm Chart Values
+# https://github.com/grafana/helm-charts/tree/main/charts/grafana
+
+# Persistence configuration
+persistence:
+  enabled: true
+  type: pvc
+  size: 10Gi
+
+# Ingress configuration
+ingress:
+  enabled: ${enable_ingresses}
+  ingressClassName: public
+  path: /grafana
+  pathType: Prefix
+  hosts:
+    - cms.geddes.rcac.purdue.edu
+  # tls:
+  #   - secretName: grafana-tls
+  #     hosts:
+  #       - cms.geddes.rcac.purdue.edu
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 472
+  fsGroup: 472
+
+# Resources
+resources:
+  requests:
+    cpu: 2000m
+    memory: 4Gi
+  limits:
+    cpu: 2000m
+    memory: 4Gi
+
+# Grafana configuration
+grafana.ini:
+  server:
+    root_url: https://cms.geddes.rcac.purdue.edu/grafana/
+    serve_from_sub_path: true
+  dashboards:
+    default_home_dashboard_path: /var/lib/grafana/dashboards/public/default.json
+  auth.anonymous:
+    enabled: true
+    org_name: Main Org.
+    org_role: Viewer
+    hide_version: true
+
+# Dashboard and datasource provisioning
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: "public"
+        orgId: 1
+        folder: "Public Dashboards"
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 10
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards/public
+      - name: "private"
+        orgId: 1
+        folder: "Private Dashboards"
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 10
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards/private
+
+# Use ConfigMap for dashboards
+dashboardsConfigMaps:
+  public: grafana-public-dashboards
+  private: grafana-private-dashboards
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: prometheus
+        type: prometheus
+        url: https://prometheus-af.geddes.rcac.purdue.edu:443
+        access: proxy
+        isDefault: true
+      - name: prometheus-rancher
+        type: prometheus
+        url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
+        access: proxy
+        isDefault: false
+      - name: tempo
+        type: tempo
+        url: http://sonic-server-tempo:3100
+        access: proxy
+        isDefault: false
+        basicAuth: false
+        jsonData:
+          httpMethod: "GET"
+          timeInterval: "5s"
+          tlsSkipVerify: true
+          serviceMap:
+            datasourceUid: "prometheus"
+          nodeGraph:
+            enabled: true
+      - name: pyroscope
+        type: grafana-pyroscope-datasource
+        url: http://pyroscope.cms.svc.cluster.local:4040
+        jsonData:
+          minStep: 15s
