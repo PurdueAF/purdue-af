@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../apps/sonic/helmrepo.yaml
+  - ../../../apps/sonic/gitrepo.yaml
+  - ../../../apps/sonic/supersonic/helmrelease.yaml
+  - ../../../apps/sonic/supersonic-interlink/helmrelease.yaml
+  - ../../../apps/sonic/supersonic-dynamic/helmrelease.yaml
+configMapGenerator:
+  - name: supersonic-config
+    files:
+      - values.yaml=../../production/sonic/values-supersonic.yaml
+    options:
+      disableNameSuffixHash: true
+  - name: supersonic-interlink-config
+    files:
+      - values.yaml=../../production/sonic/values-supersonic-interlink.yaml
+    options:
+      disableNameSuffixHash: true
+  - name: supersonic-dynamic-config
+    files:
+      - values.yaml=../../production/sonic/values-supersonic-dynamic.yaml
+    options:
+      disableNameSuffixHash: true
