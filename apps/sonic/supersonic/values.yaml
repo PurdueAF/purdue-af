@@ -22,7 +22,7 @@ triton:
       --exit-timeout-secs=60
 
   resources:
-    limits: 
+    limits:
       nvidia.com/gpu: ${sonic_gpus_initial}
       cpu: 2
       memory: 4G
