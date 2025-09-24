@@ -6,8 +6,8 @@ resources:
   - ../../apps/af-utils/af-users-graph/service.yaml
   - ../../apps/af-utils/af-users-graph/ingress.yaml
   - ../../apps/af-utils/af-users-graph/cronjob.yaml
-  - ../../apps/af-utils/conda-env-builder/cronjob.yaml
-  - ../../apps/af-utils/conda-env-builder/rbac.yaml
+  # - ../../apps/af-utils/conda-env-builder/cronjob.yaml
+  # - ../../apps/af-utils/conda-env-builder/rbac.yaml
   - ../../apps/af-utils/flux-github-alert/github-provider.yaml
   - ../../apps/af-utils/flux-github-alert/github-alert.yaml
   - ../../apps/af-utils/update-knowledge/rbac.yaml
@@ -82,11 +82,11 @@ configMapGenerator:
     files:
       - ../../apps/af-utils/af-users-graph/nginx.conf
 
-  - name: conda-env-builder-scripts
-    files:
-      - ../../apps/af-utils/conda-env-builder/generate-conda-env-jobs.sh
-      - ../../apps/af-utils/conda-env-builder/build-single-conda-env.sh
-      - ../../apps/af-utils/conda-env-builder/sitecustomize.py
+  # - name: conda-env-builder-scripts
+  #   files:
+  #     - ../../apps/af-utils/conda-env-builder/generate-conda-env-jobs.sh
+  #     - ../../apps/af-utils/conda-env-builder/build-single-conda-env.sh
+  #     - ../../apps/af-utils/conda-env-builder/sitecustomize.py
 
   - name: update-knowledge-script
     files:
