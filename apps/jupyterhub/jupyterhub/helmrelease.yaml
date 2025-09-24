@@ -16,3 +16,9 @@ spec:
     - kind: ConfigMap
       name: jupyterhub-config
       valuesKey: values.yaml
+  upgrade:
+    remediation:
+      retries: -1
+  install:
+    remediation:
+      retries: -1
