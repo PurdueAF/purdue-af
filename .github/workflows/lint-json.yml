@@ -36,4 +36,4 @@ jobs:
           git checkout ${GITHUB_HEAD_REF}
           git add -A
           git diff --quiet && git diff --staged --quiet || git commit -m "Apply prettier JSON formatting"
-          git push HEAD:${GITHUB_HEAD_REF}
+          git push origin ${GITHUB_HEAD_REF}
