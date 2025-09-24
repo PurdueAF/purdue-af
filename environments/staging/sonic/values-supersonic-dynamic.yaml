@@ -2,7 +2,6 @@ serverLoadThreshold: 20
 serverLoadMetric: 'sum by (release) (rate(nv_inference_queue_duration_us{release=~"supersonic-dynamic"}[30s]) / (rate(nv_inference_exec_count{release=~"supersonic-dynamic"}[30s]) * 1000 + 0.001))'
 
 triton:
-  replicas: 0
   image: fastml/triton-torchgeo:22.07-py3-geometric # run3
   command: ["/bin/sh", "-c"]
   args:
@@ -16,8 +15,8 @@ triton:
       --strict-model-config=false \
       --exit-timeout-secs=60
   resources:
-    limits: { nvidia.com/gpu: 1, cpu: 2, memory: 8G }
-    requests: { nvidia.com/gpu: 1, cpu: 2, memory: 8G }
+    limits: { cpu: 2, memory: 8G }
+    requests: { cpu: 2, memory: 8G }
   service:
     labels:
       scrape_metrics: "true"

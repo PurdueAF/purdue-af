@@ -2,7 +2,6 @@ serverLoadThreshold: 20
 serverLoadMetric: 'sum by (release) (rate(nv_inference_queue_duration_us{release=~"sonic-server"}[30s]) / (rate(nv_inference_exec_count{release=~"sonic-server"}[30s]) * 1000 + 0.001))'
 
 triton:
-  replicas: 0
   image: nvcr.io/nvidia/tritonserver:24.11-py3
   command: ["/bin/sh", "-c"]
   args:
@@ -23,8 +22,8 @@ triton:
       --exit-timeout-secs=60
 
   resources:
-    limits: { nvidia.com/gpu: 1, cpu: 2, memory: 4G }
-    requests: { nvidia.com/gpu: 1, cpu: 2, memory: 4G }
+    limits: { cpu: 2, memory: 4G }
+    requests: { cpu: 2, memory: 4G }
   nodeSelector: { "cms-af-prod": "true" }
   tolerations:
     - key: hub.jupyter.org/dedicated
