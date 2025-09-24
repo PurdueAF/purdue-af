@@ -33,10 +33,7 @@ spec:
         - name: x509-secrets
           image: sslhep/x509-secrets:develop
           command: ["bash", "-c"]
-          args:
-            [
-              "python3 x509_updater.py --secret x509-proxy --voms cms",
-            ]
+          args: ["python3 x509_updater.py --secret x509-proxy --voms cms"]
           env:
             - name: MY_POD_NAME
               valueFrom:
