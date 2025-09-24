@@ -34,4 +34,5 @@ jobs:
           git config --local user.name "GitHub Action"
           git add -A
           git diff --quiet && git diff --staged --quiet || git commit -m "Apply prettier JSON formatting"
+          git checkout ${GITHUB_HEAD_REF}
           git push HEAD:${GITHUB_HEAD_REF}
