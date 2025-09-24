@@ -14,8 +14,7 @@ spec:
   targetNamespace: cms-dev
   postBuild:
     substitute:
-      # quote: '"'
-      enableIngresses: "false"
+      enable_ingresses: "false"
   decryption:
     provider: sops
     secretRef:
