@@ -1,11 +1,12 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - helmrelease.yaml
-  - cache-pvc.yaml
+  - ../../../apps/interlink/helmrelease.yaml
+  - ../../../apps/interlink/cache-pvc.yaml
+
 configMapGenerator:
   - name: interlink-config
     files:
-      - values.yaml
+      - values.yaml=../../production/interlink/values.yaml
     options:
       disableNameSuffixHash: true
