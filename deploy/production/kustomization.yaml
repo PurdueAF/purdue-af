@@ -1,0 +1,196 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../apps/af-utils/af-users-graph/pvc.yaml
+  - ../../apps/af-utils/af-users-graph/deployment.yaml
+  - ../../apps/af-utils/af-users-graph/service.yaml
+  - ../../apps/af-utils/af-users-graph/ingress.yaml
+  - ../../apps/af-utils/af-users-graph/cronjob.yaml
+  - ../../apps/af-utils/conda-env-builder/cronjob.yaml
+  - ../../apps/af-utils/conda-env-builder/rbac.yaml
+  - ../../apps/af-utils/flux-github-alert/github-provider.yaml
+  - ../../apps/af-utils/flux-github-alert/github-alert.yaml
+  - ../../apps/af-utils/update-knowledge/rbac.yaml
+  - ../../apps/af-utils/update-knowledge/cronjob.yaml
+  - ../../apps/af-utils/update-knowledge/secret.yaml
+
+  - ../../apps/dask-gateway/helmrepo.yaml
+  - ../../apps/dask-gateway/dask-gateway-k8s/helmrelease.yaml
+  - ../../apps/dask-gateway/dask-gateway-k8s/ingress.yaml
+  - ../../apps/dask-gateway/dask-gateway-k8s-interlink/helmrelease.yaml
+  - ../../apps/dask-gateway/dask-gateway-k8s-interlink/ingress.yaml
+  - ../../apps/dask-gateway/dask-gateway-k8s-slurm/helmrelease.yaml
+  - ../../apps/dask-gateway/dask-gateway-k8s-slurm/ingress.yaml
+
+  - ../../infrastructure/cvmfs-pvc.yaml
+
+  - ../../apps/interlink/helmrelease.yaml
+  - ../../apps/interlink/cache-pvc.yaml
+  - ../../apps/interlink/gitrepo.yaml
+  - ../../apps/interlink/helmrepo.yaml
+
+  - ../../apps/jupyterhub/jupyterhub/helmrelease.yaml
+  - ../../apps/jupyterhub/jupyterhub/secret-auth.yaml
+  - ../../apps/jupyterhub/jupyterhub/secret-munge-key.yaml
+  - ../../apps/jupyterhub/jupyterhub/helmrepo.yaml
+  - ../../apps/jupyterhub/database-backup/cronjob.yaml
+  - ../../apps/jupyterhub/database-backup/rbac.yaml
+  - ../../apps/jupyterhub/jupyterhub-ssh/helmrelease.yaml
+  - ../../apps/jupyterhub/jupyterhub-ssh/helmrepo.yaml
+  - ../../apps/jupyterhub/userlist-sync/cronjob-purdue.yaml
+  - ../../apps/jupyterhub/userlist-sync/cronjob-cern.yaml
+  - ../../apps/jupyterhub/userlist-sync/configmap.yaml
+  - ../../apps/jupyterhub/userlist-sync/rbac.yaml
+  - ../../apps/jupyterhub/x509-secrets/deployment.yaml
+  - ../../apps/jupyterhub/x509-secrets/rbac.yaml
+
+  - ../../apps/monitoring/helmrepo-grafana.yaml
+  - ../../apps/monitoring/helmrepo-prometheus.yaml
+  - ../../apps/monitoring/af-monitoring/services.yaml
+  - ../../apps/monitoring/af-monitoring/deployment.yaml
+  - ../../apps/monitoring/af-monitoring/daemonset.yaml
+  - ../../apps/monitoring/grafana/helmrelease.yaml
+  - ../../apps/monitoring/prometheus/helmrelease.yaml
+  - ../../apps/monitoring/prometheus/servicemonitors.yaml
+  - ../../apps/monitoring/prometheus/pod-monitor-svc.yaml
+  - ../../apps/monitoring/prometheus/pvc.yaml
+  - ../../apps/monitoring/prometheus/rbac.yaml
+  - ../../apps/monitoring/pyroscope/helmrelease.yaml
+
+  - ../../apps/servicex/helmrelease.yaml
+  - ../../apps/servicex/gitrepo.yaml
+  - ../../apps/servicex/helmrepo.yaml
+
+  - ../../apps/sonic/helmrepo.yaml
+  - ../../apps/sonic/gitrepo-supersonic.yaml
+  - ../../apps/sonic/gitrepo-supersonic-dynamic.yaml
+  - ../../apps/sonic/supersonic/helmrelease.yaml
+  - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
+  - ../../apps/sonic/supersonic-dynamic/helmrelease.yaml
+
+configMapGenerator:
+  - name: af-users-graph-script
+    files:
+      - ../../apps/af-utils/af-users-graph/plot-af-users.py
+    options:
+      disableNameSuffixHash: true
+  - name: af-users-graph-nginx-config
+    files:
+      - ../../apps/af-utils/af-users-graph/nginx.conf
+    options:
+      disableNameSuffixHash: true
+  - name: conda-env-builder-scripts
+    namespace: cms
+    files:
+      - ../../apps/af-utils/conda-env-builder/generate-conda-env-jobs.sh
+      - ../../apps/af-utils/conda-env-builder/build-single-conda-env.sh
+      - ../../apps/af-utils/conda-env-builder/sitecustomize.py
+    options:
+      disableNameSuffixHash: true
+  - name: update-knowledge-script
+    namespace: cms
+    files:
+      - ../../apps/af-utils/update-knowledge/update_knowledge.py
+    options:
+      disableNameSuffixHash: true
+
+  - name: dask-gateway-k8s-config
+    files:
+      - values.yaml=../../apps/dask-gateway/dask-gateway-k8s/values.yaml
+    options:
+      disableNameSuffixHash: true
+  - name: dask-gateway-k8s-interlink-config
+    files:
+      - values.yaml=../../apps/dask-gateway/dask-gateway-k8s-interlink/values.yaml
+    options:
+      disableNameSuffixHash: true
+  - name: dask-gateway-k8s-slurm-config
+    files:
+      - values.yaml=../../apps/dask-gateway/dask-gateway-k8s-slurm/values.yaml
+    options:
+      disableNameSuffixHash: true
+
+  - name: interlink-config
+    files:
+      - values.yaml=../../apps/interlink/values.yaml
+    options:
+      disableNameSuffixHash: true
+
+  - name: jupyterhub-config
+    files:
+      - values.yaml=../../apps/jupyterhub/jupyterhub/values.yaml
+    options:
+      disableNameSuffixHash: true
+  - name: jupyterhub-extra-config
+    files:
+      - 00-custom-spawner.py=../../apps/jupyterhub/jupyterhub/extraFiles/custom-spawner.py
+      - 01-set-user-info.py=../../apps/jupyterhub/jupyterhub/extraFiles/set-user-info.py
+    options:
+      disableNameSuffixHash: true
+  - name: jupyterhub-ssh-config
+    files:
+      - values.yaml=../../apps/jupyterhub/jupyterhub-ssh/values.yaml
+    options:
+      disableNameSuffixHash: true
+
+  - name: af-monitor-config
+    files:
+      - ../../apps/monitoring/af-monitoring/metrics_server.py
+    options:
+      disableNameSuffixHash: true
+  - name: af-node-monitor-config
+    files:
+      - ../../apps/monitoring/af-monitoring/node_healthcheck.py
+    options:
+      disableNameSuffixHash: true
+  - name: grafana-config
+    files:
+      - values.yaml=../../apps/monitoring/grafana/values.yaml
+    options:
+      disableNameSuffixHash: true
+  - name: grafana-public-dashboards
+    files:
+      - ../../apps/monitoring/grafana/dashboards/default.json
+      - ../../apps/monitoring/grafana/dashboards/single-user.json
+      - ../../apps/monitoring/grafana/dashboards/sonic.json
+      - ../../apps/monitoring/grafana/dashboards/alerts.json
+    options:
+      disableNameSuffixHash: true
+  - name: grafana-private-dashboards
+    files:
+      - ../../apps/monitoring/grafana/dashboards/users-overview.json
+      - ../../apps/monitoring/grafana/dashboards/pyroscope.json
+    options:
+      disableNameSuffixHash: true
+  - name: prometheus-config
+    files:
+      - values.yaml=../../apps/monitoring/prometheus/values.yaml
+    options:
+      disableNameSuffixHash: true
+  - name: pyroscope-config
+    files:
+      - values.yaml=../../apps/monitoring/pyroscope/values.yaml
+    options:
+      disableNameSuffixHash: true
+
+  - name: servicex-config
+    files:
+      - values.yaml=../../apps/servicex/values.yaml
+    options:
+      disableNameSuffixHash: true
+
+  - name: supersonic-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic/values.yaml
+    options:
+      disableNameSuffixHash: true
+  - name: supersonic-interlink-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic-interlink/values.yaml
+    options:
+      disableNameSuffixHash: true
+  - name: supersonic-dynamic-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic-dynamic/values.yaml
+    options:
+      disableNameSuffixHash: true
