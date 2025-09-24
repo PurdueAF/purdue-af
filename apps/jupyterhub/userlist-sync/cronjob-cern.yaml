@@ -139,10 +139,10 @@ spec:
                   memory: "512Mi"
                   cpu: "500m"
               volumeMounts:
-                - name: x509-proxy
+                - name: af-x509-proxy
                   mountPath: /etc/grid-security-ro
                   readOnly: true
           volumes:
-            - name: x509-proxy
+            - name: af-x509-proxy
               secret:
-                secretName: x509-proxy
+                secretName: af-x509-proxy
