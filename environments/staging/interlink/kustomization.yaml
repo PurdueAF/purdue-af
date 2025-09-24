@@ -3,6 +3,8 @@ kind: Kustomization
 resources:
   - ../../../apps/interlink/helmrelease.yaml
   - ../../../apps/interlink/cache-pvc.yaml
+  - ../../../apps/interlink/gitrepo.yaml
+  - ../../../apps/interlink/helmrepo.yaml
 
 configMapGenerator:
   - name: interlink-config
