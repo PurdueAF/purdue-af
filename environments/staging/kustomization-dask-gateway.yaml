@@ -12,16 +12,16 @@ resources:
 configMapGenerator:
   - name: dask-gateway-k8s-config
     files:
-      - values.yaml=../../production/dask-gateway/values-dask-gateway-k8s.yaml
+      - values.yaml=../../../apps/dask-gateway/dask-gateway-k8s/values.yaml
     options:
       disableNameSuffixHash: true
   - name: dask-gateway-k8s-interlink-config
     files:
-      - values.yaml=../../production/dask-gateway/values-dask-gateway-k8s-interlink.yaml
+      - values.yaml=../../../apps/dask-gateway/dask-gateway-k8s-interlink/values.yaml
     options:
       disableNameSuffixHash: true
   - name: dask-gateway-k8s-slurm-config
     files:
-      - values.yaml=../../production/dask-gateway/values-dask-gateway-k8s-slurm.yaml
+      - values.yaml=../../../apps/dask-gateway/dask-gateway-k8s-slurm/values.yaml
     options:
       disableNameSuffixHash: true

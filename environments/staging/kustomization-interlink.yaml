@@ -8,6 +8,6 @@ resources:
 configMapGenerator:
   - name: interlink-config
     files:
-      - values.yaml=../../production/interlink/values.yaml
+      - values.yaml=../../../apps/interlink/values.yaml
     options:
       disableNameSuffixHash: true

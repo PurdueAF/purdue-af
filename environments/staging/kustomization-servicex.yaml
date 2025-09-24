@@ -7,6 +7,6 @@ resources:
 configMapGenerator:
   - name: servicex-config
     files:
-      - values.yaml=values-servicex.yaml
+      - values.yaml=../../../apps/servicex/values.yaml
     options:
       disableNameSuffixHash: true
