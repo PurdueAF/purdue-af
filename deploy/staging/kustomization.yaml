@@ -14,12 +14,12 @@ resources:
   # - ../../apps/af-utils/update-knowledge/cronjob.yaml
   - ../../apps/af-utils/update-knowledge/secret.yaml
 
-  - ../../apps/dask-gateway/helmrepo.yaml
-  - ../../apps/dask-gateway/dask-gateway-k8s/helmrelease.yaml
+  # - ../../apps/dask-gateway/helmrepo.yaml
+  # - ../../apps/dask-gateway/dask-gateway-k8s/helmrelease.yaml
   # - ../../apps/dask-gateway/dask-gateway-k8s/ingress.yaml
-  - ../../apps/dask-gateway/dask-gateway-k8s-interlink/helmrelease.yaml
+  # - ../../apps/dask-gateway/dask-gateway-k8s-interlink/helmrelease.yaml
   # - ../../apps/dask-gateway/dask-gateway-k8s-interlink/ingress.yaml
-  - ../../apps/dask-gateway/dask-gateway-k8s-slurm/helmrelease.yaml
+  # - ../../apps/dask-gateway/dask-gateway-k8s-slurm/helmrelease.yaml
   # - ../../apps/dask-gateway/dask-gateway-k8s-slurm/ingress.yaml
 
   - ../../apps/infrastructure/af-shared-storage.yaml
