@@ -2,7 +2,6 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: af-x509-secrets
-  namespace: default
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -11,7 +10,7 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["create"]
+    verbs: ["get", "create", "update", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -24,4 +23,3 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: af-x509-secrets
-    namespace: default
