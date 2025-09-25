@@ -7,7 +7,7 @@ global:
 
 apiServer:
   # Node port for the API Server K8 service
-  nodePort: 30502
+  nodePort: 30511
 
   # Port (internal) the service will be accessible on. To port forward this service
   # try `kubectl port-forward -n conda-store service/conda-store-api-server <port>:8080`
