@@ -25,6 +25,7 @@ resources:
   - ../../apps/infrastructure/af-shared-storage.yaml
   - ../../apps/infrastructure/conda-envs-pvc.yaml
   - ../../apps/infrastructure/cvmfs-pvc.yaml
+  - ../../apps/infrastructure/docker-secret.yaml
 
   - ../../apps/interlink/helmrelease.yaml
   - ../../apps/interlink/cache-pvc.yaml
