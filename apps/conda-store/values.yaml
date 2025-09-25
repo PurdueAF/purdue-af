@@ -20,7 +20,7 @@ apiServer:
   image:
     repository: quansight/conda-store-server
     pullPolicy: IfNotPresent
-    tag: latest
+    tag: 2025.2.2
 
   # Config for the conda-store-server. For all available options, see the
   # docs at https://conda.store/conda-store/references/configuration-options
@@ -94,7 +94,7 @@ uiServer:
   image:
     repository: ghcr.io/conda-incubator/conda-store-ui
     pullPolicy: IfNotPresent
-    tag: latest
+    tag: 2024.11.1
 
   appEnv:
     # publically accessible URL for the conda store server api instance
@@ -140,7 +140,7 @@ worker:
   image:
     repository: quansight/conda-store-server
     pullPolicy: IfNotPresent
-    tag: latest
+    tag: 2025.2.2
 
   # Volume attached to the worker volumes that contains conda environments
   # and packages. This will bind to the worker with a PVC. To bind your
