@@ -194,11 +194,11 @@ worker:
     c.CondaStoreWorker.watch_paths = ["/opt/environments"]
     c.CondaStoreWorker.concurrency = 4
 
-  resources: {}
-  # resources:
-  #   limits:
-  #     cpu: 100m
-  #     memory: 128Mi
-  #   requests:
-  #     cpu: 100m
-  #     memory: 128Mi
+  # resources: {}
+  resources:
+    limits:
+      cpu: 1
+      memory: 1Gi
+    requests:
+      cpu: 1
+      memory: 2Gi
