@@ -21,7 +21,7 @@ spec:
               effect: "NoSchedule"
           containers:
             - name: af-userlist-sync-purdue
-              image: gitlab-registry.cern.ch/linuxsupport/alma8-base:20250501-1
+              image: rockylinux:8.9
               command:
                 - /bin/bash
                 - -c
