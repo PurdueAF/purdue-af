@@ -27,7 +27,7 @@ spec:
         patches:
           - target:
               kind: PersistentVolumeClaim
-              name: conda-store-worker-claim 
+              name: conda-store-worker-claim
             patch: |
               - op: add
                 path: /spec/storageClassName
