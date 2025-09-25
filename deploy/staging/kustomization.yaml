@@ -71,12 +71,14 @@ resources:
   - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
   - ../../apps/sonic/supersonic-dynamic/helmrelease.yaml
 
-  - ../../apps/conda-store/postgres.yaml
-  - ../../apps/conda-store/redis.yaml
-  - ../../apps/conda-store/conda-store-server.yaml
-  - ../../apps/conda-store/conda-store-worker.yaml
-  - ../../apps/conda-store/minio.yaml
-  - ../../apps/conda-store/ingress.yaml
+  # - ../../apps/conda-store/postgres.yaml
+  # - ../../apps/conda-store/redis.yaml
+  # - ../../apps/conda-store/conda-store-server.yaml
+  # - ../../apps/conda-store/conda-store-worker.yaml
+  # - ../../apps/conda-store/minio.yaml
+  # - ../../apps/conda-store/ingress.yaml
+  - ../../apps/conda-store/gitrepo.yaml
+  - ../../apps/conda-store/helmrelease.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
@@ -179,4 +181,5 @@ configMapGenerator:
 
   - name: conda-store-config
     files:
-      - ../../apps/conda-store/files/conda_store_config.py
+      # - ../../apps/conda-store/files/conda_store_config.py
+      - values.yaml=../../apps/conda-store/values.yaml

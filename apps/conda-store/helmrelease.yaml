@@ -1,0 +1,18 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: conda-store
+spec:
+  suspend: false
+  interval: 1m
+  chart:
+    spec:
+      chart: conda-store-server/install/conda-store
+      sourceRef:
+        kind: GitRepository
+        name: conda-store
+      interval: 1m
+  valuesFrom:
+    - kind: ConfigMap
+      name: conda-store-config
+      valuesKey: values.yaml
