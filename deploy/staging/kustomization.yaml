@@ -25,6 +25,7 @@ resources:
   - ../../apps/infrastructure/af-shared-storage.yaml
   - ../../apps/infrastructure/conda-envs-pvc.yaml
   - ../../apps/infrastructure/cvmfs-pvc.yaml
+  - ../../apps/infrastructure/docker-secret.yaml
 
   - ../../apps/interlink/helmrelease.yaml
   - ../../apps/interlink/cache-pvc.yaml
@@ -69,6 +70,13 @@ resources:
   - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
   - ../../apps/sonic/supersonic-dynamic/helmrelease.yaml
+
+  - ../../apps/conda-store/postgres.yaml
+  - ../../apps/conda-store/redis.yaml
+  - ../../apps/conda-store/conda-store-server.yaml
+  - ../../apps/conda-store/conda-store-worker.yaml
+  - ../../apps/conda-store/minio.yaml
+  - ../../apps/conda-store/ingress.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
@@ -168,3 +176,7 @@ configMapGenerator:
   - name: supersonic-dynamic-config
     files:
       - values.yaml=../../apps/sonic/supersonic-dynamic/values.yaml
+
+  - name: conda-store-config
+    files:
+      - ../../apps/conda-store/files/conda_store_config.py

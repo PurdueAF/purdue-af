@@ -1,0 +1,67 @@
+# Copyright (c) conda-store development team. All rights reserved.
+# Use of this source code is governed by a BSD-style
+# license that can be found in the LICENSE file.
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app: conda-store-worker-claim
+  name: conda-store-worker-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: conda-store-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: conda-store-worker
+  template:
+    metadata:
+      labels:
+        app: conda-store-worker
+    spec:
+      initContainers:
+        - name: volume-permissions
+          image: quansight/conda-store-server:2025.2.2
+          command:
+            - bash
+            - -c
+            - |
+              chown -R 1000:1000 /opt/conda-store/
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: storage
+              mountPath: "/opt/conda-store/"
+      containers:
+        - name: conda-store-server
+          image: quansight/conda-store-server:2025.2.2
+          args:
+            - "conda-store-worker"
+            - "--config"
+            - "/etc/conda-store/conda_store_config.py"
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: config
+              mountPath: "/etc/conda-store/"
+              readOnly: true
+            - name: storage
+              mountPath: "/opt/conda-store/"
+      restartPolicy: Always
+      volumes:
+        - name: config
+          configMap:
+            name: conda-store-config
+        - name: storage
+          persistentVolumeClaim:
+            claimName: conda-store-worker-claim

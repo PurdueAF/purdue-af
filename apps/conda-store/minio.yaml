@@ -1,0 +1,70 @@
+# Copyright (c) conda-store development team. All rights reserved.
+# Use of this source code is governed by a BSD-style
+# license that can be found in the LICENSE file.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: conda-store-minio
+spec:
+  type: NodePort
+  ports:
+    - name: "9000"
+      nodePort: 30901
+      port: 9000
+      targetPort: 9000
+  selector:
+    app: conda-store-minio
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: conda-store-minio-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: conda-store-minio
+  labels:
+    app: conda-store-minio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: conda-store-minio
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: conda-store-minio
+    spec:
+      containers:
+        - name: conda-store-minio
+          image: minio/minio:RELEASE.2021-08-25T00-41-18Z
+          args:
+            - "-c"
+            - "mkdir -p /data/conda-store && /usr/bin/minio server /data"
+          command:
+            - "sh"
+          env:
+            - name: MINIO_ACCESS_KEY
+              value: admin
+            - name: MINIO_SECRET_KEY
+              value: password
+          ports:
+            - containerPort: 9000
+          volumeMounts:
+            - mountPath: /data
+              name: conda-store-minio-claim
+      restartPolicy: Always
+      volumes:
+        - name: conda-store-minio-claim
+          persistentVolumeClaim:
+            claimName: conda-store-minio-claim

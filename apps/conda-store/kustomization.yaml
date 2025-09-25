@@ -1,0 +1,16 @@
+# Copyright (c) conda-store development team. All rights reserved.
+# Use of this source code is governed by a BSD-style
+# license that can be found in the LICENSE file.
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # - minio.yaml
+  - postgres.yaml
+  - redis.yaml
+  - conda-store-server.yaml
+  - conda-store-worker.yaml
+configMapGenerator:
+  - name: conda-store-config
+    files:
+      - files/conda_store_config.py

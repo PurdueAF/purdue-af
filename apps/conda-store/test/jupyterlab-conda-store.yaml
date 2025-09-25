@@ -1,0 +1,14 @@
+# Copyright (c) conda-store development team. All rights reserved.
+# Use of this source code is governed by a BSD-style
+# license that can be found in the LICENSE file.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: jupyterlab-conda-store
+spec:
+  containers:
+    - name: jupyterlab
+      image: localhost:30500/conda-store-dynamic/jupyterlab/numpy:latest
+      command:
+        ["jupyter", "lab", "--ip", "0.0.0.0", "--port", "8000", "--allow-root"]
