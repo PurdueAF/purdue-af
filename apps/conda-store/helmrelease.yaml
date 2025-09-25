@@ -22,3 +22,13 @@ spec:
     - kind: ConfigMap
       name: conda-store-config
       valuesKey: values.yaml
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: PersistentVolumeClaim
+              name: conda-store-worker-claim 
+            patch: |
+              - op: add
+                path: /spec/storageClassName
+                value: geddes-standard-multinode
