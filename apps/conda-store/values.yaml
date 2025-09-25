@@ -92,9 +92,9 @@ uiServer:
 
   # Image to use for the ui server
   image:
-    repository: ghcr.io/conda-incubator/conda-store-ui
+    repository: geddes-registry.rcac.purdue.edu/cms/conda-store-ui
     pullPolicy: IfNotPresent
-    tag: 2024.11.1
+    tag: latest
 
   appEnv:
     # publically accessible URL for the conda store server api instance
