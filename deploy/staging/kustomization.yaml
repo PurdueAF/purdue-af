@@ -79,6 +79,7 @@ resources:
   # - ../../apps/conda-store/ingress.yaml
   - ../../apps/conda-store/gitrepo.yaml
   - ../../apps/conda-store/helmrelease.yaml
+  - ../../apps/conda-store/secrets.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
