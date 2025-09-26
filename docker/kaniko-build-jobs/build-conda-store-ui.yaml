@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: kaniko-build-af
+  name: kaniko-build-conda-store-ui
 spec:
   backoffLimit: 0
   completions: 1
@@ -11,20 +11,18 @@ spec:
         - name: kaniko
           image: gcr.io/kaniko-project/executor:latest
           args:
-            - "--context=git://github.com/PurdueAF/purdue-af.git#refs/heads/dev"
-            - "--dockerfile=docker/purdue-af/Dockerfile"
-            - "--destination=geddes-registry.rcac.purdue.edu/cms/purdue-af:0.11.0"
+            - "--context=git://github.com/conda-incubator/conda-store-ui"
+            - "--dockerfile=Dockerfile"
+            - "--destination=geddes-registry.rcac.purdue.edu/cms/conda-store-ui:latest"
             - "--cache=true"
             # - "--no-push"
           resources:
             requests:
-              memory: "256Gi"
-              cpu: "16"
-              # nvidia.com/mig-7g.40gb: 1
+              memory: "4Gi"
+              cpu: "4"
             limits:
-              memory: "256Gi"
-              cpu: "16"
-              # nvidia.com/mig-/7g.40gb: 1
+              memory: "8Gi"
+              cpu: "8"
           volumeMounts:
             - name: docker-config
               mountPath: /kaniko/.docker/

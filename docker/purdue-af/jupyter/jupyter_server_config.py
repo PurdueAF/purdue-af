@@ -59,15 +59,15 @@ if "GEN_CERT" in os.environ:
 if "NB_UMASK" in os.environ:
     os.umask(int(os.environ["NB_UMASK"], 8))
 
-c.AiExtension.help_message_template = """
-Hello! I am {persona_name}, a JupyterLab AI assistant.
+# c.AiExtension.help_message_template = """
+# Hello! I am {persona_name}, a JupyterLab AI assistant.
 
-I use open LLM models served by <a href="https://www.rcac.purdue.edu/knowledge/genaistudio" target="_blank">Purdue GenAI Studio</a>.
-I also have the knowledge of <a href="https://analysis-facility.physics.purdue.edu/" target="_blank">Purdue AF doucmentation</a>.
+# I use open LLM models served by <a href="https://www.rcac.purdue.edu/knowledge/genaistudio" target="_blank">Purdue GenAI Studio</a>.
+# I also have the knowledge of <a href="https://analysis-facility.physics.purdue.edu/" target="_blank">Purdue AF doucmentation</a>.
 
-<a href="https://www.rcac.purdue.edu/knowledge/genaistudio/api" target="_blank">How to obtain API key</a>
+# <a href="https://www.rcac.purdue.edu/knowledge/genaistudio/api" target="_blank">How to obtain API key</a>
 
-**WARNING: do not rely exclusively on AI responses, as models may hallucinate.**
-"""
-c.AiExtension.default_language_model = "genaistudio:purdue-cms-af"
-c.AiExtension.allowed_providers = ["genaistudio"]
+# **WARNING: do not rely exclusively on AI responses, as models may hallucinate.**
+# """
+# c.AiExtension.default_language_model = "genaistudio:purdue-cms-af"
+# c.AiExtension.allowed_providers = ["genaistudio"]
