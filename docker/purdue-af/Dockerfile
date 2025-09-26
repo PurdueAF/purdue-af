@@ -187,14 +187,14 @@ RUN pip install --no-cache-dir --upgrade \
     jupyter-archive==3.4.0 \
     jupyterlab_favorites==3.2.2 \
     purdue-af-shutdown-button==0.1.0 \
-    purdue-af-grafana-iframe==0.1.0 \
+    # purdue-af-grafana-iframe==0.1.0 \
     jupyterlab-topbar-text==1.1.0 \
     jupyterlab-theme-toggler==1.1.0 \
-    dask-gateway==2025.4.0 \
-    jupyter-ai[all]==2.31.6
+    dask-gateway==2025.4.0
+    # \jupyter-ai[all]==2.31.6
 
-COPY docker/purdue-af/genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio
-RUN pip install --no-cache-dir --upgrade -e /opt/conda/lib/python3.10/site-packages/genaistudio
+# COPY docker/purdue-af/genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio
+# RUN pip install --no-cache-dir --upgrade -e /opt/conda/lib/python3.10/site-packages/genaistudio
 
 # Install Dask labextension
 RUN git clone https://github.com/kondratyevd/dask-labextension.git

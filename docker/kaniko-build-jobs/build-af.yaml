@@ -11,7 +11,7 @@ spec:
         - name: kaniko
           image: gcr.io/kaniko-project/executor:latest
           args:
-            - "--context=git://github.com/PurdueAF/purdue-af.git"
+            - "--context=git://github.com/PurdueAF/purdue-af.git#refs/heads/dev"
             - "--dockerfile=docker/purdue-af/Dockerfile"
             - "--destination=geddes-registry.rcac.purdue.edu/cms/purdue-af:0.11.0"
             - "--cache=true"
