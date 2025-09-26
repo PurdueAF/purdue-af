@@ -220,7 +220,7 @@ COPY docker/purdue-af/scripts/eos-connect.sh docker/purdue-af/jupyter/jupyter_co
 RUN mkdir -p /etc/cvmfs/
 COPY docker/purdue-af/configs/default.local /etc/cvmfs/
 
-RUN pip install --no-cache-dir --upgrade pyroscope-io
+RUN pip install --no-cache-dir --upgrade pyroscope-io==0.8.11
 
 # Switch back to NB_USER
 USER ${NB_USER}
