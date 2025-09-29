@@ -84,7 +84,6 @@ resources:
   # - ../../apps/conda-store/conda-store-minio-secret.yaml
   # - ../../apps/conda-store/conda-store-redis-secret.yaml
 
-
 generatorOptions:
   disableNameSuffixHash: true
 
