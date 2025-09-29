@@ -8,7 +8,6 @@ spec:
   timeout: 1m
   path: "./deploy/staging/"
   prune: true
-  # wait: true
   sourceRef:
     kind: GitRepository
     name: purdue-af
