@@ -46,7 +46,12 @@ triton:
     storageType: cvmfs-pvc
     mountPath: /cvmfs
   readinessProbe:
-    command: ["/bin/sh","-c","grpcurl -plaintext -d '{}' localhost:8001 inference.GRPCInferenceService/ServerReady >/dev/null 2>&1 && [ ! -f /tmp/shutdown ]"]
+    command:
+      [
+        "/bin/sh",
+        "-c",
+        "grpcurl -plaintext -d '{}' localhost:8001 inference.GRPCInferenceService/ServerReady >/dev/null 2>&1 && [ ! -f /tmp/shutdown ]",
+      ]
 envoy:
   enabled: true
   nodeSelector: { "cms-af-prod": "true" }
