@@ -76,12 +76,12 @@ resources:
   # - ../../apps/conda-store/conda-store-server.yaml
   # - ../../apps/conda-store/conda-store-worker.yaml
   # - ../../apps/conda-store/minio.yaml
-  - ../../apps/conda-store/ingress.yaml
-  - ../../apps/conda-store/gitrepo.yaml
-  - ../../apps/conda-store/helmrelease.yaml
-  - ../../apps/conda-store/conda-store-postgres-secret.yaml
-  - ../../apps/conda-store/conda-store-minio-secret.yaml
-  - ../../apps/conda-store/conda-store-redis-secret.yaml
+  # - ../../apps/conda-store/ingress.yaml
+  # - ../../apps/conda-store/gitrepo.yaml
+  # - ../../apps/conda-store/helmrelease.yaml
+  # - ../../apps/conda-store/conda-store-postgres-secret.yaml
+  # - ../../apps/conda-store/conda-store-minio-secret.yaml
+  # - ../../apps/conda-store/conda-store-redis-secret.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
