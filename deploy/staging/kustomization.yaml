@@ -71,7 +71,6 @@ resources:
   - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
   - ../../apps/sonic/supersonic-dynamic/helmrelease.yaml
 
-
 generatorOptions:
   disableNameSuffixHash: true
 
