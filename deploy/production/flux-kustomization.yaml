@@ -8,7 +8,7 @@ spec:
   timeout: 1m
   path: "./deploy/production/"
   prune: true
-  wait: true
+  # wait: true
   sourceRef:
     kind: GitRepository
     name: purdue-af
