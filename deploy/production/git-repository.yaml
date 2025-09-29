@@ -8,6 +8,6 @@ spec:
   timeout: 1m
   url: https://github.com/PurdueAF/purdue-af.git
   ref:
-    branch: main
+    tag: 2025.9.1
   secretRef:
     name: flux-github-token
