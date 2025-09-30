@@ -2,7 +2,8 @@
 Writing on EOS
 ================================
 
-Use gfal command documented in `Tier2 Purdue CMS site <https://www.physics.purdue.edu/Tier2/user-info/tutorials/dfs_commands.php>`_ . In order to use gfal on the facility, you should first apply these commands on your terminal:
+**Using gfal:**
+ | gfal command is documented in `Tier2 Purdue CMS site <https://www.physics.purdue.edu/Tier2/user-info/tutorials/dfs_commands.php>`_ . In order to use gfal on the facility, you should first apply these commands on your terminal:
 
 .. code-block::
 
@@ -11,7 +12,9 @@ Use gfal command documented in `Tier2 Purdue CMS site <https://www.physics.purdu
 
 After these commands, gfal command should work.
 
-Using xrdcp and xrdfs is more straightforward and only requires a valid grid certificate:
+
+**Using xrdcp and xrdfs:**
+ | This is more straightforward and only requires a valid grid certificate:
 
 .. code-block::
 
