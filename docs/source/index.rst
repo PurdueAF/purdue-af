@@ -85,6 +85,7 @@ tools and features for fast, efficient, collaborative HEP research.
     guide-binderhub
     guide-mc-gen
     guide-demos
+    guide-eos-write
 
 .. toctree::
     :hidden:
