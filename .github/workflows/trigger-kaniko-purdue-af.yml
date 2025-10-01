@@ -40,9 +40,15 @@ jobs:
           GIT_AUTHOR_EMAIL: github-actions@github.com
           GIT_COMMITTER_NAME: github-actions
           GIT_COMMITTER_EMAIL: github-actions@github.com
+        if: ${{ github.ref_type == 'branch' }}
         run: |
+          git config --local user.email "$GIT_AUTHOR_EMAIL"
+          git config --local user.name "$GIT_AUTHOR_NAME"
+          REF_NAME="${GITHUB_REF_NAME}"
+          git fetch origin "$REF_NAME"
+          git checkout -B "$REF_NAME" "origin/$REF_NAME" || git checkout -B "$REF_NAME"
           git add apps/kaniko-build-jobs/build-purdue-af.yaml
-          git commit -m "chore(ci): trigger Kaniko build for purdue-af @ ${GITHUB_SHA} [skip ci]"
-          git push HEAD:${GITHUB_HEAD_REF}
+          git diff --quiet && git diff --staged --quiet || git commit -m "chore(ci): trigger Kaniko build for purdue-af @ ${GITHUB_SHA} [skip ci]"
+          git push origin "$REF_NAME"
 
 
