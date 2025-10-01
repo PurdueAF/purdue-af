@@ -1,18 +1,20 @@
 ## Continuous Deployment
 
-The components of the Analysis Facility can be roughly divided into "core" and "experimental";
-the "core" components are intended to be stable and reliable, while the "experimental" components
-are subject to rapid prototyping.
+The components of the Analysis Facility are divided into **core** and **experimental**:
 
-The deployment strategy is as follows:
+- **Core**: stable and reliable services
+- **Experimental**: subject to rapid prototyping
 
-- the "core" components are deployed from the head of the main branch into staging namespace `cms-dev`
-- the "core" components are also deployed into production namespace `cms` from the latest explicitly tagged commit
-- the "experimental" components are deployed from the head of the main branch into the production namespace
+### Deployment strategy
 
-Updates to the deployed components happen as follows:
-- To update a core component, we push directly to main branch and make sure that everything looks good in the
-  staging namespace. Then, we tag the successful commit using `YYYY.MM.v` versioning scheme, which triggers
-  deployment into production namespace.
-- To apply a hot fix, we branch out of the tagged commit, apply the fix and tag it with a newer version. The fix should be merged into main branch later.
-- To update an experimental component, we just push to main branch.
+- Core components are deployed from the head of the `main` branch into the staging namespace `cms-dev`.
+- Core components are also deployed into the production namespace `cms` from the latest explicitly tagged commit.
+- Experimental components are deployed from the head of the `main` branch into the production namespace.
+
+### Update process
+
+- To update a core component, push directly to the `main` branch and verify everything looks good in the
+  staging namespace. Then tag the successful commit using the `YYYY.MM.v` versioning scheme, which triggers
+  deployment into the production namespace.
+- To apply a hot fix, branch from the tagged commit, apply the fix, and tag it with a newer version. The fix should be merged back into `main` later.
+- To update an experimental component, push to the `main` branch.
