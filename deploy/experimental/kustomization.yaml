@@ -1,0 +1,64 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # - ../../apps/af-utils/conda-env-builder/cronjob.yaml
+  # - ../../apps/af-utils/conda-env-builder/rbac.yaml
+  - ../../apps/af-utils/update-knowledge/rbac.yaml
+  - ../../apps/af-utils/update-knowledge/cronjob.yaml
+  - ../../apps/af-utils/update-knowledge/secret.yaml
+
+  - ../../apps/dask-gateway/dask-gateway-k8s-interlink/helmrelease.yaml
+  - ../../apps/dask-gateway/dask-gateway-k8s-interlink/ingress.yaml
+
+  - ../../apps/interlink/helmrelease.yaml
+  - ../../apps/interlink/cache-pvc.yaml
+  - ../../apps/interlink/gitrepo.yaml
+  - ../../apps/interlink/helmrepo.yaml
+
+  - ../../apps/monitoring/pyroscope/helmrelease.yaml
+
+  - ../../apps/servicex/helmrelease.yaml
+  - ../../apps/servicex/gitrepo.yaml
+  - ../../apps/servicex/helmrepo.yaml
+
+  - ../../apps/sonic/gitrepo-supersonic-dynamic.yaml
+  - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
+  - ../../apps/sonic/supersonic-dynamic/helmrelease.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  # - name: conda-env-builder-scripts
+  #   files:
+  #     - ../../apps/af-utils/conda-env-builder/generate-conda-env-jobs.sh
+  #     - ../../apps/af-utils/conda-env-builder/build-single-conda-env.sh
+  #     - ../../apps/af-utils/conda-env-builder/sitecustomize.py
+
+  - name: update-knowledge-script
+    files:
+      - ../../apps/af-utils/update-knowledge/update_knowledge.py
+
+  - name: dask-gateway-k8s-interlink-config
+    files:
+      - values.yaml=../../apps/dask-gateway/dask-gateway-k8s-interlink/values.yaml
+
+  - name: interlink-config
+    files:
+      - values.yaml=../../apps/interlink/values.yaml
+
+  - name: pyroscope-config
+    files:
+      - values.yaml=../../apps/monitoring/pyroscope/values.yaml
+
+  - name: servicex-config
+    files:
+      - values.yaml=../../apps/servicex/values.yaml
+
+  - name: supersonic-interlink-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic-interlink/values.yaml
+
+  - name: supersonic-dynamic-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic-dynamic/values.yaml

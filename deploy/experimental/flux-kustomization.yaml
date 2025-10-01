@@ -1,0 +1,24 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: purdue-af-flux-experimental
+  namespace: cms
+spec:
+  interval: 1m
+  timeout: 1m
+  path: "./deploy/experimental/"
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: purdue-af-experimental
+  targetNamespace: cms
+  postBuild:
+    substitute:
+      enable_ingresses: "true"
+      namespace: "cms"
+      sonic_gpus_initial: "1"
+      x509_secret_name: "af-x509-proxy"
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
