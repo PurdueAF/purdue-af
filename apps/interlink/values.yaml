@@ -102,3 +102,7 @@ podScheduling:
       operator: "Equal"
       value: "cms-af"
       effect: "NoSchedule"
+
+serviceAccount:
+  create: false
+  name: interlink-sa
