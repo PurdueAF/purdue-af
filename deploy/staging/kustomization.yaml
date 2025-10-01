@@ -169,8 +169,3 @@ configMapGenerator:
   - name: supersonic-dynamic-config
     files:
       - values.yaml=../../apps/sonic/supersonic-dynamic/values.yaml
-
-  - name: conda-store-config
-    files:
-      # - ../../apps/conda-store/files/conda_store_config.py
-      - values.yaml=../../apps/conda-store/values.yaml
