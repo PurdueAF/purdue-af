@@ -4,21 +4,12 @@ resources:
   - ../../apps/af-utils/af-users-graph/pvc.yaml
   - ../../apps/af-utils/af-users-graph/deployment.yaml
   - ../../apps/af-utils/af-users-graph/service.yaml
-  # - ../../apps/af-utils/af-users-graph/ingress.yaml
-  # - ../../apps/af-utils/af-users-graph/cronjob.yaml
-  # - ../../apps/af-utils/conda-env-builder/cronjob.yaml
-  # - ../../apps/af-utils/conda-env-builder/rbac.yaml
   - ../../apps/af-utils/flux-github-alert/github-provider.yaml
   - ../../apps/af-utils/flux-github-alert/github-alert.yaml
-  - ../../apps/af-utils/update-knowledge/rbac.yaml
-  # - ../../apps/af-utils/update-knowledge/cronjob.yaml
-  - ../../apps/af-utils/update-knowledge/secret.yaml
 
   # - ../../apps/dask-gateway/helmrepo.yaml
   # - ../../apps/dask-gateway/dask-gateway-k8s/helmrelease.yaml
   # - ../../apps/dask-gateway/dask-gateway-k8s/ingress.yaml
-  # - ../../apps/dask-gateway/dask-gateway-k8s-interlink/helmrelease.yaml
-  # - ../../apps/dask-gateway/dask-gateway-k8s-interlink/ingress.yaml
   # - ../../apps/dask-gateway/dask-gateway-k8s-slurm/helmrelease.yaml
   # - ../../apps/dask-gateway/dask-gateway-k8s-slurm/ingress.yaml
 
@@ -27,19 +18,12 @@ resources:
   - ../../apps/infrastructure/cvmfs-pvc.yaml
   - ../../apps/infrastructure/docker-secret.yaml
 
-  - ../../apps/interlink/helmrelease.yaml
-  - ../../apps/interlink/cache-pvc.yaml
-  - ../../apps/interlink/gitrepo.yaml
-  - ../../apps/interlink/helmrepo.yaml
-
   - ../../apps/jupyterhub/af-x509-secrets/deployment.yaml
   - ../../apps/jupyterhub/af-x509-secrets/rbac.yaml
   - ../../apps/jupyterhub/jupyterhub/helmrelease.yaml
   - ../../apps/jupyterhub/jupyterhub/secret-auth.yaml
   - ../../apps/jupyterhub/jupyterhub/secret-munge-key.yaml
   - ../../apps/jupyterhub/jupyterhub/helmrepo.yaml
-  # - ../../apps/jupyterhub/database-backup/cronjob.yaml
-  # - ../../apps/jupyterhub/database-backup/rbac.yaml
   - ../../apps/jupyterhub/jupyterhub-ssh/helmrelease.yaml
   - ../../apps/jupyterhub/jupyterhub-ssh/helmrepo.yaml
   - ../../apps/jupyterhub/userlist-sync/cronjob-purdue.yaml
@@ -58,18 +42,10 @@ resources:
   - ../../apps/monitoring/prometheus/pod-monitor-svc.yaml
   - ../../apps/monitoring/prometheus/pvc.yaml
   - ../../apps/monitoring/prometheus/rbac.yaml
-  - ../../apps/monitoring/pyroscope/helmrelease.yaml
-
-  - ../../apps/servicex/helmrelease.yaml
-  - ../../apps/servicex/gitrepo.yaml
-  - ../../apps/servicex/helmrepo.yaml
 
   - ../../apps/sonic/helmrepo.yaml
   - ../../apps/sonic/gitrepo-supersonic.yaml
-  - ../../apps/sonic/gitrepo-supersonic-dynamic.yaml
   - ../../apps/sonic/supersonic/helmrelease.yaml
-  # - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
-  - ../../apps/sonic/supersonic-dynamic/helmrelease.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
@@ -83,31 +59,13 @@ configMapGenerator:
     files:
       - ../../apps/af-utils/af-users-graph/nginx.conf
 
-  # - name: conda-env-builder-scripts
-  #   files:
-  #     - ../../apps/af-utils/conda-env-builder/generate-conda-env-jobs.sh
-  #     - ../../apps/af-utils/conda-env-builder/build-single-conda-env.sh
-  #     - ../../apps/af-utils/conda-env-builder/sitecustomize.py
-
-  - name: update-knowledge-script
-    files:
-      - ../../apps/af-utils/update-knowledge/update_knowledge.py
-
   - name: dask-gateway-k8s-config
     files:
       - values.yaml=../../apps/dask-gateway/dask-gateway-k8s/values.yaml
 
-  - name: dask-gateway-k8s-interlink-config
-    files:
-      - values.yaml=../../apps/dask-gateway/dask-gateway-k8s-interlink/values.yaml
-
   - name: dask-gateway-k8s-slurm-config
     files:
       - values.yaml=../../apps/dask-gateway/dask-gateway-k8s-slurm/values.yaml
-
-  - name: interlink-config
-    files:
-      - values.yaml=../../apps/interlink/values.yaml
 
   - name: jupyterhub-config
     files:
@@ -150,22 +108,6 @@ configMapGenerator:
     files:
       - values.yaml=../../apps/monitoring/prometheus/values.yaml
 
-  - name: pyroscope-config
-    files:
-      - values.yaml=../../apps/monitoring/pyroscope/values.yaml
-
-  - name: servicex-config
-    files:
-      - values.yaml=../../apps/servicex/values.yaml
-
   - name: supersonic-config
     files:
       - values.yaml=../../apps/sonic/supersonic/values.yaml
-
-  # - name: supersonic-interlink-config
-  #   files:
-  #     - values.yaml=../../apps/sonic/supersonic-interlink/values.yaml
-
-  - name: supersonic-dynamic-config
-    files:
-      - values.yaml=../../apps/sonic/supersonic-dynamic/values.yaml
