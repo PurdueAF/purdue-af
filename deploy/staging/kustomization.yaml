@@ -68,7 +68,7 @@ resources:
   - ../../apps/sonic/gitrepo-supersonic.yaml
   - ../../apps/sonic/gitrepo-supersonic-dynamic.yaml
   - ../../apps/sonic/supersonic/helmrelease.yaml
-  - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
+  # - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
   - ../../apps/sonic/supersonic-dynamic/helmrelease.yaml
 
 generatorOptions:
@@ -162,9 +162,9 @@ configMapGenerator:
     files:
       - values.yaml=../../apps/sonic/supersonic/values.yaml
 
-  - name: supersonic-interlink-config
-    files:
-      - values.yaml=../../apps/sonic/supersonic-interlink/values.yaml
+  # - name: supersonic-interlink-config
+  #   files:
+  #     - values.yaml=../../apps/sonic/supersonic-interlink/values.yaml
 
   - name: supersonic-dynamic-config
     files:
