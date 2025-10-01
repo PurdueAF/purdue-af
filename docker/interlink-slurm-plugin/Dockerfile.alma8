@@ -2,10 +2,10 @@ FROM golang:1.22 as build-stage
 
 WORKDIR /app
 
-# Clone and build the interlink-slurm-plugin
-RUN git clone https://github.com/interlink-hq/interlink-slurm-plugin.git /app
-RUN git fetch --tags && git checkout 0.5.2
-RUN CGO_ENABLED=0 GOOS=linux go build -o bin/slurm-sidecar cmd/main.go
+RUN git clone https://github.com/interlink-hq/interlink-slurm-plugin.git /app && \
+    git fetch --tags && \
+    git checkout 0.5.2 && \
+    CGO_ENABLED=0 GOOS=linux go build -o bin/slurm-sidecar cmd/main.go
 
 # Deploy the application binary into a lean image
 FROM gitlab-registry.cern.ch/linuxsupport/alma8-base:20250501-1
@@ -13,29 +13,23 @@ FROM gitlab-registry.cern.ch/linuxsupport/alma8-base:20250501-1
 # Settings for all images
 ENV TIMEZONE=America/New_York
 
-# Install system packages and SLURM
+# Install system packages
 RUN yum update -y && \
     yum upgrade -y && \
     yum install -y \
         https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm \
-        curl sudo wget bzip2 && \
-    yum clean all && \
-    rm -rf /var/cache/yum
-
-# Set time zone
-RUN rm -f /etc/localtime && \
-    ln -sn /usr/share/zoneinfo/${TIMEZONE} /etc/localtime \
-    && echo ${TIMEZONE} > /etc/timezone
-
-# Set locale
-RUN yum install -y glibc-locale-source glibc-langpack-en && \
+        curl sudo wget bzip2 \
+        glibc-locale-source glibc-langpack-en \
+        munge && \
+    rm -f /etc/localtime && \
+    ln -sn /usr/share/zoneinfo/${TIMEZONE} /etc/localtime && \
+    echo ${TIMEZONE} > /etc/timezone && \
     localedef -c -f UTF-8 -i en_US en_US.UTF-8 && \
     export LC_ALL=en_US.UTF-8 && \
     yum clean all && \
     rm -rf /var/cache/yum
 
-# Install SLURM using the same approach as dask-gateway-server
-# Copy SLURM RPM and configuration files
+# Install SLURM
 COPY slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
 COPY slurm/slurm-configs /etc/slurm
 
@@ -47,13 +41,10 @@ RUN dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
     mkdir -p /var/log/slurm && \
     chown -R slurm:slurm /var/log/slurm
 
-# Install munge for SLURM authentication
-RUN yum install -y munge && \
-    yum clean all
-
-# Startup configuration
 COPY docker/interlink-slurm-plugin/startup.sh /etc/startup.sh
-RUN chmod 555 /etc/startup.sh
+
+RUN chmod 555 /etc/startup.sh && \
+    mkdir -p /cvmfs/grid.cern.ch/etc/grid-security
 
 WORKDIR /root
 
@@ -61,6 +52,4 @@ COPY --from=build-stage /app/bin/slurm-sidecar /sidecar/slurm-sidecar
 
 ENV SLURMCONFIGPATH=/root/SlurmConfig.yaml
 
-RUN mkdir -p /cvmfs/grid.cern.ch/etc/grid-security
-
-CMD ["/bin/sh", "-c", "/etc/startup.sh && SHARED_FS=true /sidecar/slurm-sidecar"] 
+ENTRYPOINT ["/bin/sh", "-c", "/etc/startup.sh && SHARED_FS=true /sidecar/slurm-sidecar "]
