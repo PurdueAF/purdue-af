@@ -18,9 +18,9 @@ resources:
 
   - ../../apps/monitoring/pyroscope/helmrelease.yaml
 
-  - ../../apps/servicex/helmrelease.yaml
-  - ../../apps/servicex/gitrepo.yaml
-  - ../../apps/servicex/helmrepo.yaml
+  # - ../../apps/servicex/helmrelease.yaml
+  # - ../../apps/servicex/gitrepo.yaml
+  # - ../../apps/servicex/helmrepo.yaml
 
   - ../../apps/sonic/gitrepo-supersonic-dynamic.yaml
   - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
