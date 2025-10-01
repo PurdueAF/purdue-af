@@ -38,6 +38,14 @@ triton:
     enabled: true
     storageType: cvmfs-pvc
     mountPath: /cvmfs
+  startupProbe:
+    reset: false
+    initialDelaySeconds: 300
+    periodSeconds: 10
+    failureThreshold: 12
+    httpGet:
+      path: /v2/health/ready
+      port: http
 
 envoy:
   enabled: true
