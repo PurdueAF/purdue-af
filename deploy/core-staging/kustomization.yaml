@@ -43,10 +43,6 @@ resources:
   - ../../apps/monitoring/prometheus/pvc.yaml
   - ../../apps/monitoring/prometheus/rbac.yaml
 
-  - ../../apps/sonic/helmrepo.yaml
-  - ../../apps/sonic/gitrepo-supersonic.yaml
-  - ../../apps/sonic/supersonic/helmrelease.yaml
-
 generatorOptions:
   disableNameSuffixHash: true
 
@@ -107,7 +103,3 @@ configMapGenerator:
   - name: prometheus-config
     files:
       - values.yaml=../../apps/monitoring/prometheus/values.yaml
-
-  - name: supersonic-config
-    files:
-      - values.yaml=../../apps/sonic/supersonic/values.yaml

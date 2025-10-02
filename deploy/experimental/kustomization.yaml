@@ -22,7 +22,10 @@ resources:
   # - ../../apps/servicex/gitrepo.yaml
   # - ../../apps/servicex/helmrepo.yaml
 
+  - ../../apps/sonic/helmrepo.yaml
+  - ../../apps/sonic/gitrepo-supersonic.yaml
   - ../../apps/sonic/gitrepo-supersonic-dynamic.yaml
+  - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
   - ../../apps/sonic/supersonic-dynamic/helmrelease.yaml
 
@@ -55,6 +58,10 @@ configMapGenerator:
   - name: servicex-config
     files:
       - values.yaml=../../apps/servicex/values.yaml
+
+  - name: supersonic-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic/values.yaml
 
   - name: supersonic-interlink-config
     files:
