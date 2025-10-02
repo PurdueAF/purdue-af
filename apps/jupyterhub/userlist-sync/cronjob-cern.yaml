@@ -145,4 +145,4 @@ spec:
           volumes:
             - name: af-x509-proxy
               secret:
-                secretName: af-x509-proxy
+                secretName: ${x509_secret_name}
