@@ -38,14 +38,6 @@ triton:
       operator: Equal
       value: cms-af
       effect: NoSchedule
-  startupProbe:
-    reset: false
-    initialDelaySeconds: 300
-    periodSeconds: 10
-    failureThreshold: 12
-    httpGet:
-      path: /v2/health/ready
-      port: http
 
 envoy:
   enabled: true
