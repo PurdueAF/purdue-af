@@ -14,8 +14,8 @@ interlink:
 plugin:
   enabled: true
   # image: "ghcr.io/interlink-hq/interlink-sidecar-slurm/interlink-sidecar-slurm:0.5.1-pre3"
-  # image: "geddes-registry.rcac.purdue.edu/cms/interlink-slurm-plugin:0.5.2"
-  image: ghcr.io/interlink-hq/interlink-sidecar-slurm/interlink-sidecar-slurm:0.5.2
+  image: "geddes-registry.rcac.purdue.edu/cms/interlink-slurm-plugin:0.5.2"
+  # image: ghcr.io/interlink-hq/interlink-sidecar-slurm/interlink-sidecar-slurm:0.5.2
   #socket: unix:///var/run/plugin.sock
   address: "http://localhost"
   port: 4000
