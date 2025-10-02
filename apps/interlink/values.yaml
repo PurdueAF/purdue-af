@@ -47,6 +47,7 @@ plugin:
     ScancelPath: "/usr/bin/scancel"
     SqueuePath: "/usr/bin/squeue"
     CommandPrefix: ""
+    ContainerRuntime: "singularity"
     SingularityPrefix: ""
     SingularityDefaultOptions:
       - "--nv"
