@@ -22,11 +22,11 @@ triton:
     limits:
       nvidia.com/gpu: ${sonic_gpus_initial}
       cpu: 2
-      memory: 4G
+      memory: 8G
     requests:
       nvidia.com/gpu: ${sonic_gpus_initial}
       cpu: 2
-      memory: 4G
+      memory: 8G
   nodeSelector: { "cms-af-prod": "true" }
   tolerations:
     - key: hub.jupyter.org/dedicated
