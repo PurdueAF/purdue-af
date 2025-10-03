@@ -77,7 +77,7 @@ minio:
   #   repository: bitnami/minio
   #   tag: 2025.2.28
   persistence:
-    enabled: true
+    enabled: false
     storageClass: geddes-standard-multinode
     accessModes: [ReadWriteMany]
     size: 10Gi
