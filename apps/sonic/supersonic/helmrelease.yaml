@@ -17,6 +17,12 @@ spec:
         kind: HelmRepository
         name: fastml
       interval: 1m
+  install:
+    remediation:
+      retries: -1
+  upgrade:
+    remediation:
+      retries: -1
   valuesFrom:
     - kind: ConfigMap
       name: supersonic-config
