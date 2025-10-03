@@ -28,7 +28,7 @@ envoy:
   external_config:
     load_from_configmap: true
     configmap_name: "supersonic-dev-config"
-    configmap_key: "envoy-config.yaml" 
+    configmap_key: "envoy-config.yaml"
 
 prometheus:
   enabled: false
