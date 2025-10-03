@@ -22,7 +22,7 @@ spec:
       retries: -1
   upgrade:
     remediation:
-      retries: -1 
+      retries: -1
   valuesFrom:
     - kind: ConfigMap
       name: supersonic-interlink-config
