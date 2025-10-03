@@ -24,7 +24,7 @@ triton:
 envoy:
   enabled: true
   load_external_config: true
-  external_config_path: "tests/envoy-config-test.yaml"
+  external_config_path: "envoy-config.yaml"
   replicas: 1
   image: "envoyproxy/envoy:v1.30.9"
 
