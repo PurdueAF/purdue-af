@@ -23,10 +23,12 @@ triton:
 
 envoy:
   enabled: true
-  load_external_config: true
-  external_config_path: "envoy-config.yaml"
   replicas: 1
   image: "envoyproxy/envoy:v1.30.9"
+  external_config:
+    load_from_configmap: true
+    configmap_name: "supersonic-dev-config"
+    configmap_key: "envoy-config.yaml" 
 
 prometheus:
   enabled: false
