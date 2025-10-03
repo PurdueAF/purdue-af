@@ -72,3 +72,7 @@ configMapGenerator:
   - name: supersonic-dynamic-config
     files:
       - values.yaml=../../apps/sonic/supersonic-dynamic/values.yaml
+
+  - name: supersonic-dev-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic-dev/values.yaml
