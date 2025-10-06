@@ -62,9 +62,9 @@ envoy:
     ingressClassName: public
   rate_limiter:
     prometheus_based:
-      enabled: true
-    # listener_level:
-    #   enabled: true
+      enabled: false
+    listener_level:
+      enabled: false
   dynamic_routing:
     enabled: true
   lua_filter:
