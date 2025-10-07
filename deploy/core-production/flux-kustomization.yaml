@@ -22,6 +22,7 @@ spec:
       jupyterhub_db_storage_class: '""'
       sonic_gpus_initial: "1"
       af_shared_storage_size: "40Ti"
+      af_shared_storage_class: "geddes-standard-multinode"
       x509_secret_name: "af-x509-proxy"
   decryption:
     provider: sops
