@@ -26,12 +26,11 @@ triton:
       value: cms-af
       effect: NoSchedule
   readinessProbe:
-    initialDelaySeconds: 30
+    initialDelaySeconds: 0
     failureThreshold: 20
-    command: ["/bin/sh", "-c", "curl -sf http://localhost:8000/v2/health/ready"]
+    command: ["curl -sf http://localhost:8000/v2/health/ready"]
   startupProbe:
-    initialDelaySeconds: 30
-    periodSeconds: 10
+    initialDelaySeconds: 0
     failureThreshold: 20
 
 envoy:
