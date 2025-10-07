@@ -12,6 +12,12 @@ spec:
         kind: HelmRepository
         name: jupyterhub-ssh
       interval: 1m
+  install:
+    remediation:
+      retries: -1
+  upgrade:
+    remediation:
+      retries: -1
   valuesFrom:
     - kind: ConfigMap
       name: jupyterhub-ssh-config
