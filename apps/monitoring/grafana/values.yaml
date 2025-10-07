@@ -6,7 +6,7 @@ persistence:
   enabled: true
   type: pvc
   size: 10Gi
-  storageClass: ${multinode_storage_class}
+  storageClassName: ${multinode_storage_class}
 
 # Ingress configuration
 ingress:
