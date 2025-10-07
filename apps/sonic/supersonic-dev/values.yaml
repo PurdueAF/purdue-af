@@ -28,7 +28,7 @@ triton:
   readinessProbe:
     initialDelaySeconds: 0
     failureThreshold: 20
-    command: ["curl -sf http://localhost:8000/v2/health/ready"]
+    command: ["/bin/sh", "-c", "curl -sf http://localhost:8000/v2/health/ready"]
   startupProbe:
     initialDelaySeconds: 0
     failureThreshold: 20
