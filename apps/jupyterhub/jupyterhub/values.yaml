@@ -204,7 +204,7 @@ singleuser:
   storage:
     capacity: 25Gi
     dynamic:
-      storageClass: geddes-standard-multinode
+      storageClass: ${multinode_storage_class}
       storageAccessModes: ["ReadWriteMany"]
     homeMountPath: /home/{username}
     extraVolumes:

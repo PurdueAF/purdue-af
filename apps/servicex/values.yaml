@@ -30,7 +30,7 @@ postgresql:
         memory: 128Mi
     persistence:
       enabled: false
-      storageClass: geddes-standard-multinode
+      storageClass: ${multinode_storage_class}
       accessModes: [ReadWriteMany]
 
 objectStore:
@@ -78,7 +78,7 @@ minio:
   #   tag: 2025.2.28
   persistence:
     enabled: false
-    storageClass: geddes-standard-multinode
+    storageClass: ${multinode_storage_class}
     accessModes: [ReadWriteMany]
     size: 10Gi
   service:
