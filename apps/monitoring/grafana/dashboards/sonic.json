@@ -637,7 +637,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "nv_gpu_utilization{release=~\"$release\", namespace=~\"$namespace\"}",
+          "expr": "avg_over_time(nv_gpu_utilization{release=~\"$release\", namespace=~\"$namespace\"}[5m])",
           "hide": false,
           "instant": false,
           "legendFormat": "{{pod}}",
@@ -746,7 +746,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(nv_gpu_power_usage{release=~\"$release\", namespace=~\"$namespace\"} / nv_gpu_power_limit{release=~\"$release\", namespace=~\"$namespace\"})",
+          "expr": "(avg_over_time(nv_gpu_power_usage{release=~\"$release\", namespace=~\"$namespace\"}[5m]) / avg_over_time(nv_gpu_power_limit{release=~\"$release\", namespace=~\"$namespace\"}[5m]))",
           "hide": false,
           "instant": false,
           "legendFormat": "{{pod}}",
