@@ -3,6 +3,8 @@ kind: Kustomization
 metadata:
   name: purdue-af-flux-experimental
   namespace: cms
+  annotations:
+    cluster: geddes
 spec:
   interval: 1m
   timeout: 1m

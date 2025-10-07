@@ -3,6 +3,8 @@ kind: GitRepository
 metadata:
   name: purdue-af
   namespace: cms-dev
+  annotations:
+    cluster: geddes
 spec:
   interval: 30s
   timeout: 1m
