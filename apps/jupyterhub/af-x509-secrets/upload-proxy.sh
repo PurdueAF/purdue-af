@@ -1,3 +1,3 @@
 pip install servicex-cli
-servicex --namespace cms-dev init --cert-dir ~/.globus
+servicex --namespace cms init --cert-dir ~/.globus
 # change namespace if needed
