@@ -19,6 +19,8 @@ spec:
       enable_ingresses: "true"
       namespace: "cms"
       sonic_gpus_initial: "1"
+      multinode_storage_class: "geddes-standard-multinode"
+      singlenode_storage_class: "geddes-standard-singlenode"
       x509_secret_name: "af-x509-proxy"
   decryption:
     provider: sops

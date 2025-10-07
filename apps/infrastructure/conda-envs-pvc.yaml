@@ -5,7 +5,7 @@ metadata:
   annotations:
     kustomize.toolkit.fluxcd.io/prune: disabled
 spec:
-  storageClassName: geddes-standard-multinode
+  storageClassName: ${multinode_storage_class}
   accessModes: [ReadWriteMany]
   resources:
     requests:
