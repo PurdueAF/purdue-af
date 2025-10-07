@@ -19,7 +19,7 @@ spec:
       enable_ingresses: "false"
       namespace: "cms"
       jupyterhub_db_pv_selector: ""
-      jupyterhub_db_storage_class: ""
+      jupyterhub_db_storage_class: "depot-cloud-block"
       sonic_gpus_initial: "0"
       af_shared_storage_size: "1Gi"
       multinode_storage_class: "depot-cloud-filesystem"
