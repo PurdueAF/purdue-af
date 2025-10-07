@@ -1,0 +1,29 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: purdue-af-flux
+  namespace: cms
+  annotations:
+    cluster: geddes2
+spec:
+  interval: 1m
+  timeout: 1m
+  path: "./deploy/core-geddes2/"
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: purdue-af-geddes
+  targetNamespace: cms
+  postBuild:
+    substitute:
+      enable_ingresses: "false"
+      namespace: "cms"
+      jupyterhub_db_pv_selector: ""
+      jupyterhub_db_storage_class: ""
+      sonic_gpus_initial: "0"
+      af_shared_storage_size: "1Gi"
+      x509_secret_name: "af-x509-proxy-dev"
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age

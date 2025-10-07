@@ -1,0 +1,15 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: purdue-af-geddes
+  namespace: cms
+  annotations:
+    cluster: geddes2
+spec:
+  interval: 30s
+  timeout: 1m
+  url: https://github.com/PurdueAF/purdue-af.git
+  ref:
+    branch: main
+  secretRef:
+    name: flux-github-token
