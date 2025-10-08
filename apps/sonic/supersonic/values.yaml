@@ -41,7 +41,8 @@ triton:
     enabled: true
     storageType: cvmfs-pvc
     mountPath: /cvmfs
-  # readinessProbe:
+  readinessProbe:
+    successThreshold: 3
   #   reset: true
 
 envoy:
