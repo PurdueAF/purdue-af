@@ -79,3 +79,7 @@ configMapGenerator:
     files:
       - values.yaml=../../apps/sonic/supersonic-dev/values.yaml
       - envoy-config.yaml=../../apps/sonic/supersonic-dev/envoy-config.yaml
+
+  - name: supersonic-alma9-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic-alma9/values.yaml
