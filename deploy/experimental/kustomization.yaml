@@ -31,6 +31,8 @@ resources:
   - ../../apps/sonic/supersonic-dev/gitrepo.yaml
   - ../../apps/sonic/supersonic-dev/helmrelease.yaml
 
+  - ../../apps/sonic/supersonic-alma9/helmrelease.yaml
+
 generatorOptions:
   disableNameSuffixHash: true
 
