@@ -59,7 +59,7 @@ envoy:
     type: LoadBalancer
   ingress:
     enabled: ${enable_ingresses}
-    hostName: sonic-cms.geddes.rcac.purdue.edu
+    hostName: sonic-alma9.geddes.rcac.purdue.edu
     ingressClassName: public
   rate_limiter:
     prometheus_based:
@@ -96,7 +96,7 @@ prometheus:
     scheme: https
 
 grafana:
-  enabled: true
+  enabled: false
   dashboardsConfigMaps:
     default: supersonic-alma9-grafana-default-dashboard
   datasources:
@@ -124,7 +124,7 @@ grafana:
             nodeGraph:
               enabled: true
   ingress:
-    enabled: ${enable_ingresses}
+    enabled: false
     hosts:
       - grafana-cms.geddes.rcac.purdue.edu
     tls:
