@@ -318,9 +318,9 @@ hub:
     PurdueCILogonOAuthenticator:
       auto_login: True
       auto_login_oauth2_authorize: True
-      logout_redirect_url: https://cms.geddes.rcac.purdue.edu/hub
+      logout_redirect_url: ${jupyterhub_logout_redirect_url}
       admin_users: ["dkondra"]
-      oauth_callback_url: https://cms.geddes.rcac.purdue.edu/hub/oauth_callback
+      oauth_callback_url: ${jupyterhub_oauth_callback_url}
       enable_auth_state: true
       allowed_idps:
         https://cern.ch/login:
@@ -348,10 +348,10 @@ scheduling:
         value: "cms-af"
         effect: "NoSchedule"
 ingress:
-  enabled: ${enable_ingresses}
+  enabled: ${jupyterhub_enable_ingress}
   ingressClassName: public
   hosts:
-    - cms.geddes.rcac.purdue.edu
+    - ${jupyterhub_host}
   annotations:
     kubernetes.io/ingress.class: "public"
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
