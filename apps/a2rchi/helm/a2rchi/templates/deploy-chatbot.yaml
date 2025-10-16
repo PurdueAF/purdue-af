@@ -12,13 +12,6 @@ spec:
       labels:
         app: a2rchi-chatbot
     spec:
-      initContainers:
-        - name: init-config
-          image: busybox:1.36
-          command: ["sh", "-c", "set -e; mkdir -p /root/A2rchi/configs; if [ -f /root/A2rchi/purdue-af.yaml ]; then cp -f /root/A2rchi/purdue-af.yaml /root/A2rchi/configs/; fi; ls -la /root/A2rchi; ls -la /root/A2rchi/configs || true"]
-          volumeMounts:
-            - name: config
-              mountPath: /root/A2rchi
       containers:
         - name: chatbot
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
@@ -38,14 +31,31 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: config
+            - name: a2rchi-prompts
               mountPath: /root/A2rchi
+              readOnly: true
+            - name: a2rchi-configs
+              mountPath: /root/A2rchi/configs
+              readOnly: true
             - name: secrets
               mountPath: /secrets
       volumes:
-        - name: config
+        - name: a2rchi-prompts
           configMap:
             name: a2rchi-config
+            items:
+              - key: main.prompt
+                path: main.prompt
+              - key: condense.prompt
+                path: condense.prompt
+              - key: summary.prompt
+                path: summary.prompt
+        - name: a2rchi-configs
+          configMap:
+            name: a2rchi-config
+            items:
+              - key: purdue-af.yaml
+                path: purdue-af.yaml
         - name: secrets
           projected:
             sources:
