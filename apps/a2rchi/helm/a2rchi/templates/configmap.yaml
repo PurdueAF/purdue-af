@@ -8,7 +8,18 @@ data:
     name: purdue-af
     global:
       DATA_PATH: "/root/A2rchi/data/"
+      ACCOUNTS_PATH: "/root/A2rchi/accounts/"
+      ACCEPTED_FILES: [".txt", ".html", ".pdf"]
+      LOCAL_VSTORE_PATH: "/root/A2rchi/vstore/"
+      ROLES: ["user", "assistant", "system"]
       verbosity: 3
+    utils:
+      sso:
+        enabled: false
+      git:
+        enabled: false
+      jira:
+        enabled: false
     data_manager:
       collection_name: purdue-af
       embedding_name: HuggingFaceEmbeddings
@@ -41,6 +52,18 @@ data:
           enabled: false
           visible: true
           input_lists: []
+        git:
+          enabled: false
+          visible: true
+        sso:
+          enabled: false
+          visible: true
+        jira:
+          enabled: false
+          visible: false
+        redmine:
+          enabled: false
+          visible: false
     a2rchi:
       pipelines: [QAPipeline]
       pipeline_map:
