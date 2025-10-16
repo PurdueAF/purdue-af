@@ -10,20 +10,89 @@ data:
       DATA_PATH: "/root/A2rchi/data/"
       ACCOUNTS_PATH: "/root/A2rchi/accounts/"
       ACCEPTED_FILES: [".txt", ".html", ".pdf"]
-      LOCAL_VSTORE_PATH: "/root/A2rchi/vstore/"
-      ROLES: ["user", "assistant", "system"]
+      LOGGING:
+        input_output_filename: "chain_input_output.log"
       verbosity: 3
-    utils:
-      sso:
-        enabled: false
-      git:
-        enabled: false
-      jira:
-        enabled: false
+    services:
+      benchmarking:
+        out_dir: "."
+        queries_path: "queries"
+        modes: ["LINKS", "RAGAS"]
+        mode_settings:
+          sources_settings:
+            default_match_field: "display_name"
+          ragas_settings:
+            enabled_metrics: ["answer_relevancy", "faithfulness", "context_precision", "context_recall"]
+            provider: "OpenAI"
+            evaluation_model_settings:
+              model_name: "gpt-4"
+              base_url: ""
+            embedding_model: "OpenAI"
+            timeout: 180
+            batch_size: false
+      piazza:
+        network_id: ""
+        update_time: 60
+      mattermost:
+        update_time: 60
+      chat_app:
+        trained_on: "Purdue AF"
+        port: 7861
+        external_port: 80
+        host: "0.0.0.0"
+        hostname: "{{ .Values.ingress.host }}"
+        template_folder: "/opt/A2rchi/src/interfaces/chat_app/templates/"
+        static_folder: "/opt/A2rchi/src/interfaces/chat_app/static/"
+        num_responses_until_feedback: 3
+        include_copy_button: true
+        enable_debug_chroma_endpoints: false
+        flask_debug_mode: false
+      uploader_app:
+        port: 5001
+        external_port: 5003
+        host: "0.0.0.0"
+        template_folder: "/opt/A2rchi/src/interfaces/uploader_app/templates/"
+        verify_urls: true
+        flask_debug_mode: false
+      grader_app:
+        port: 7861
+        external_port: 7862
+        host: "0.0.0.0"
+        hostname: "localhost"
+        template_folder: "/opt/A2rchi/src/interfaces/grader_app/templates/"
+        num_problems: 1
+        local_rubric_dir: ""
+        local_users_csv_dir: ""
+        flask_debug_mode: false
+      chromadb:
+        use_HTTP_chromadb_client: true
+        chromadb_host: "chromadb"
+        chromadb_port: 8000
+        chromadb_external_port: 8000
+        local_vstore_path: "/root/A2rchi/vstore/"
+      grafana:
+        external_port: 3000
+      postgres:
+        port: 5432
+        user: "postgres"
+        database: "postgres"
+        host: "postgres"
+      redmine_mailbox:
+        url: ""
+        project: ""
+        redmine_update_time: 10
+        answer_tag: "-- A2rchi -- Resolving email was sent"
+        imap4_port: 143
+        mailbox_update_time: 10
     data_manager:
       collection_name: purdue-af
       embedding_name: HuggingFaceEmbeddings
       embedding_class_map:
+        OpenAIEmbeddings:
+          class: OpenAIEmbeddings
+          kwargs:
+            model: text-embedding-3-small
+          similarity_score_reference: 10
         HuggingFaceEmbeddings:
           class: HuggingFaceEmbeddings
           kwargs:
@@ -52,66 +121,192 @@ data:
           enabled: false
           visible: true
           input_lists: []
+          scraper:
+            reset_data: true
+            verify_urls: false
+            enable_warnings: false
         git:
           enabled: false
           visible: true
         sso:
           enabled: false
           visible: true
+          sso_class: CERNSSOScraper
+          sso_class_map:
+            CERNSSOScraper:
+              class: CERNSSOScraper
+              kwargs:
+                headless: true
+                max_depth: 2
         jira:
           enabled: false
+          url: ""
           visible: false
+          projects: []
+          anonymize_data: true
+          max_tickets: 1e10
         redmine:
           enabled: false
+          url: ""
+          project: ""
           visible: false
+          anonymize_data: true
+      utils:
+        anonymizer:
+          nlp_model: en_core_web_sm
+          excluded_words: ["John", "Jane", "Doe"]
+          greeting_patterns: ["^(hi|hello|hey|greetings|dear)\\b", "^\\w+,\\s*"]
+          signoff_patterns: ["\\b(regards|sincerely|best regards|cheers|thank you)\\b", "^\\s*[-~]+\\s*$"]
+          email_pattern: "[\\w\\.-]+@[\\w\\.-]+\\.\\w+"
+          username_pattern: "\\[~[^\\]]+\\]"
     a2rchi:
       pipelines: [QAPipeline]
       pipeline_map:
         QAPipeline:
+          max_tokens: 10000
           prompts:
             required:
               condense_prompt: "/root/A2rchi/condense.prompt"
               chat_prompt: "/root/A2rchi/main.prompt"
           models:
             required:
-              chat_model: {{- if eq .Values.model.backend "ollama" }} OllamaInterface {{- else if eq .Values.model.backend "openai" }} OpenAIGPT4 {{- else if eq .Values.model.backend "anthropic" }} AnthropicLLM {{- else }} HuggingFaceOpenLLM {{- end }}
               condense_model: {{- if eq .Values.model.backend "ollama" }} OllamaInterface {{- else if eq .Values.model.backend "openai" }} OpenAIGPT4 {{- else if eq .Values.model.backend "anthropic" }} AnthropicLLM {{- else }} HuggingFaceOpenLLM {{- end }}
+              chat_model: {{- if eq .Values.model.backend "ollama" }} OllamaInterface {{- else if eq .Values.model.backend "openai" }} OpenAIGPT4 {{- else if eq .Values.model.backend "anthropic" }} AnthropicLLM {{- else }} HuggingFaceOpenLLM {{- end }}
+        GradingPipeline:
+          max_tokens: 10000
+          prompts:
+            required:
+              final_grade_prompt: null
+            optional:
+              summary_prompt: null
+              analysis_prompt: null
+          models:
+            required:
+              final_grade_model: HuggingFaceOpenLLM
+            optional:
+              summary_model: HuggingFaceOpenLLM
+              analysis_model: HuggingFaceOpenLLM
+        ImageProcessingPipeline:
+          max_tokens: 10000
+          prompts:
+            required:
+              image_processing_prompt: null
+          models:
+            required:
+              image_processing_model: HuggingFaceImageLLM
       model_class_map:
-        OllamaInterface:
+        AnthropicLLM:
+          class: AnthropicLLM
           kwargs:
-            base_url: {{ .Values.model.ollama.baseUrl | quote }}
-        OpenAIGPT4: { kwargs: {} }
-        AnthropicLLM: { kwargs: {} }
-        HuggingFaceOpenLLM: { kwargs: {} }
-    services:
-      chat_app:
-        trained_on: "Purdue AF"
-        host: "0.0.0.0"
-        port: 7861
-        external_port: 80
-        hostname: "{{ .Values.ingress.host }}"
-        template_folder: "/opt/A2rchi/src/interfaces/chat_app/templates/"
-        static_folder: "/opt/A2rchi/src/interfaces/chat_app/static/"
-        include_copy_button: true
-        enable_debug_chroma_endpoints: false
-        num_responses_until_feedback: 3
-      chromadb:
-        use_HTTP_chromadb_client: true
-        chromadb_host: "chromadb"
-        chromadb_port: 8000
-        local_vstore_path: "/root/A2rchi/vstore/"
-      postgres:
-        host: "postgres"
-        port: 5432
-        database: "postgres"
-        user: "postgres"
-      redmine_mailbox:
+            model_name: claude-3-opus-20240229
+            temperature: 1
+        OpenAIGPT4:
+          class: OpenAILLM
+          kwargs:
+            model_name: gpt-4
+            temperature: 1
+        OpenAIGPT35:
+          class: OpenAILLM
+          kwargs:
+            model_name: gpt-3.5-turbo
+            temperature: 1
+        DumbLLM:
+          class: DumbLLM
+          kwargs:
+            sleep_time_mean: 3
+            filler: "I am a dummy LLM response."
+        LlamaLLM:
+          class: LlamaLLM
+          kwargs:
+            base_model: meta-llama/Llama-2-7b-chat-hf
+            peft_model: null
+            enable_salesforce_content_safety: false
+            quantization: true
+            max_new_tokens: 4096
+            seed: null
+            do_sample: true
+            min_length: null
+            use_cache: true
+            top_p: 0.9
+            temperature: 0.6
+            top_k: 50
+            repetition_penalty: 1.0
+            length_penalty: 1
+            max_padding_length: null
+        HuggingFaceOpenLLM:
+          class: HuggingFaceOpenLLM
+          kwargs:
+            base_model: Qwen/Qwen2.5-7B-Instruct-1M
+            peft_model: null
+            enable_salesforce_content_safety: false
+            quantization: true
+            max_new_tokens: 4096
+            seed: null
+            do_sample: true
+            min_length: null
+            use_cache: true
+            top_p: 0.9
+            temperature: 0.6
+            top_k: 50
+            repetition_penalty: 1.0
+            length_penalty: 1
+            max_padding_length: null
+        HuggingFaceImageLLM:
+          class: HuggingFaceImageLLM
+          kwargs:
+            base_model: Qwen/Qwen2.5-VL-7B-Instruct
+            quantization: true
+            min_pixels: 175616
+            max_pixels: 1003520
+            max_new_tokens: 4096
+            seed: null
+            do_sample: false
+            min_length: null
+            use_cache: true
+            top_k: 50
+            repetition_penalty: 1.0
+            length_penalty: 1
+        VLLM:
+          class: VLLM
+          kwargs:
+            base_model: deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
+            seed: null
+            enable_salesforce_content_safety: false
+            max_new_tokens: 4096
+            top_p: 0.95
+            temperature: 0.6
+            top_k: 50
+            repetition_penalty: 1.0
+            tensor_parallel_size: 1
+            gpu_memory_utilization: 0.7
+            trust_remote_code: true
+            tokenizer_mode: auto
+            max_model_len: 10000
+        OllamaInterface:
+          class: OllamaInterface
+          kwargs:
+            base_model: gemma3
+            temperature: 1
+            max_tokens: 1000
+            url: {{ .Values.model.ollama.baseUrl | quote }}
+      chain_update_time: 10
+    utils:
+      sso:
+        enabled: false
+        sso_class: CERNSSOScraper
+        sso_class_map:
+          CERNSSOScraper:
+            class: CERNSSOScraper
+            kwargs:
+              headless: true
+              max_depth: 2
+      git:
+        enabled: false
+      jira:
+        enabled: false
         url: ""
-        project: ""
-        redmine_update_time: 10
-        answer_tag: "-- A2rchi -- Resolving email was sent"
-        imap4_port: 143
-        mailbox_update_time: 10
+        projects: []
+        anonymize_data: true
   main.prompt: |
     You are A2RCHI for Purdue AF. Answer succinctly with citations when available.
   condense.prompt: |
