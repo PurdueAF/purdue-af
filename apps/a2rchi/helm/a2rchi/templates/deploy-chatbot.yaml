@@ -70,8 +70,6 @@ spec:
                 path: main.prompt
               - key: condense.prompt
                 path: condense.prompt
-              - key: summary.prompt
-                path: summary.prompt
         - name: a2rchi-config
           configMap:
             name: a2rchi-config
