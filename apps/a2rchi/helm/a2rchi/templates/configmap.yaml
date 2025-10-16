@@ -9,6 +9,7 @@ data:
     global:
       DATA_PATH: "/root/A2rchi/data/"
       LOCAL_VSTORE_PATH: "/root/A2rchi/vstore/"
+      verbosity: 3
     utils: {}
     data_manager:
       sources:
