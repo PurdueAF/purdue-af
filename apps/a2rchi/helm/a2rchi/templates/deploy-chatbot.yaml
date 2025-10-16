@@ -22,6 +22,13 @@ spec:
           env:
             - name: PG_PASSWORD_FILE
               value: /secrets/pg_password
+            {{- if and (eq .Values.model.backend "huggingface") .Values.model.huggingface.secretName }}
+            - name: HUGGINGFACEHUB_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.model.huggingface.secretName }}
+                  key: HUGGINGFACEHUB_API_TOKEN
+            {{- end }}
             - name: PGHOST
               value: postgres
             - name: PGPORT
