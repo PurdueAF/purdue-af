@@ -34,8 +34,11 @@ spec:
             - name: a2rchi-prompts
               mountPath: /root/A2rchi
               readOnly: true
-            - name: a2rchi-configs
+            - name: configs-dir
               mountPath: /root/A2rchi/configs
+            - name: a2rchi-config
+              mountPath: /root/A2rchi/configs/purdue-af.yaml
+              subPath: purdue-af.yaml
               readOnly: true
             - name: secrets
               mountPath: /secrets
@@ -50,12 +53,14 @@ spec:
                 path: condense.prompt
               - key: summary.prompt
                 path: summary.prompt
-        - name: a2rchi-configs
+        - name: a2rchi-config
           configMap:
             name: a2rchi-config
             items:
               - key: purdue-af.yaml
                 path: purdue-af.yaml
+        - name: configs-dir
+          emptyDir: {}
         - name: secrets
           projected:
             sources:
