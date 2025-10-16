@@ -8,16 +8,9 @@ data:
     name: purdue-af
     global:
       DATA_PATH: "/root/A2rchi/data/"
-      LOCAL_VSTORE_PATH: "/root/A2rchi/vstore/"
       verbosity: 3
-    utils: {}
     data_manager:
       collection_name: purdue-af
-      sources:
-        links:
-          enabled: false
-          visible: true
-          input_lists: []
       embedding_name: HuggingFaceEmbeddings
       embedding_class_map:
         HuggingFaceEmbeddings:
@@ -43,6 +36,11 @@ data:
       bm25:
         k1: 0.5
         b: 0.75
+      sources:
+        links:
+          enabled: false
+          visible: true
+          input_lists: []
     a2rchi:
       pipelines: [QAPipeline]
       pipeline_map:
@@ -78,6 +76,7 @@ data:
         use_HTTP_chromadb_client: true
         chromadb_host: "chromadb"
         chromadb_port: 8000
+        local_vstore_path: "/root/A2rchi/vstore/"
       postgres:
         host: "postgres"
         port: 5432
