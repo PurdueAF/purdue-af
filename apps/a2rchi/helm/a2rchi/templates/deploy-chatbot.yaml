@@ -22,8 +22,18 @@ spec:
           env:
             - name: PG_PASSWORD_FILE
               value: /secrets/pg_password
-            {{- if and (eq .Values.model.backend "huggingface") .Values.model.huggingface.secretName }}
+            {{- if .Values.model.huggingface.secretName }}
             - name: HUGGINGFACEHUB_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.model.huggingface.secretName }}
+                  key: HUGGINGFACEHUB_API_TOKEN
+            - name: HUGGINGFACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.model.huggingface.secretName }}
+                  key: HUGGINGFACEHUB_API_TOKEN
+            - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.model.huggingface.secretName }}
