@@ -12,6 +12,7 @@ WORKDIR /app
 RUN python -m pip install --upgrade pip && \
     git clone https://github.com/mit-submit/A2rchi.git /opt/A2rchi && \
     pip install -r /opt/A2rchi/requirements/requirements-base.txt && \
+    pip install -r /opt/A2rchi/requirements/cpu-requirementsHEADER.txt && \
     pip install -e /opt/A2rchi
 
 # Ensure the in-repo src layout is on the import path
