@@ -1,0 +1,62 @@
+{{- if .Values.chromadb.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: a2rchi-chromadb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: a2rchi-chromadb
+  template:
+    metadata:
+      labels:
+        app: a2rchi-chromadb
+    spec:
+      containers:
+        - name: chromadb
+          image: {{ .Values.chromadb.image }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          resources:
+            {{- toYaml .Values.chromadb.resources | nindent 12 }}
+          {{- if .Values.chromadb.persistence.enabled }}
+          volumeMounts:
+            - name: data
+              mountPath: /chroma/chroma
+      {{- end }}
+      {{- if .Values.chromadb.persistence.enabled }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: a2rchi-chromadb
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chromadb
+spec:
+  type: ClusterIP
+  selector:
+    app: a2rchi-chromadb
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+{{- if .Values.chromadb.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: a2rchi-chromadb
+spec:
+  accessModes: ["ReadWriteMany"]
+  storageClassName: {{ .Values.chromadb.persistence.storageClass | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.chromadb.persistence.size }}
+{{- end }}
+{{- end }}
+

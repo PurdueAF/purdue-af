@@ -5,4 +5,5 @@ resources:
   - build-purdue-af.yaml
   - build-dask.yaml
   - build-interlink.yaml
+  - build-a2rchi.yaml
   - secret.yaml

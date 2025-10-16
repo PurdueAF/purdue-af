@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: a2rchi-chatbot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: a2rchi-chatbot
+  template:
+    metadata:
+      labels:
+        app: a2rchi-chatbot
+    spec:
+      containers:
+        - name: chatbot
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.port }}
+          env:
+            - name: A2RCHI_CONFIG_PATH
+              value: /config/config.yaml
+            - name: PGHOST
+              value: postgres
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              value: postgres
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: a2rchi-postgres
+                  key: POSTGRES_PASSWORD
+            - name: CHROMA_HOST
+              value: chromadb
+            - name: CHROMA_PORT
+              value: "8000"
+            - name: A2RCHI_MODEL_BACKEND
+              value: {{ .Values.model.backend | quote }}
+            - name: OLLAMA_BASE_URL
+              value: {{ .Values.model.ollama.baseUrl | quote }}
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.envSecret.name }}
+                  key: OPENAI_API_KEY
+                  optional: true
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.envSecret.name }}
+                  key: ANTHROPIC_API_KEY
+                  optional: true
+            - name: HUGGINGFACEHUB_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.envSecret.name }}
+                  key: HUGGINGFACEHUB_API_TOKEN
+                  optional: true
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /config
+      volumes:
+        - name: config
+          configMap:
+            name: a2rchi-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: a2rchi
+spec:
+  selector:
+    app: a2rchi-chatbot
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.port }}
+

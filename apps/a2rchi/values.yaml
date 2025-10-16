@@ -1,0 +1,30 @@
+ingress:
+  enabled: ${enable_ingresses}
+  class: public
+  host: a2rchi.geddes.rcac.purdue.edu
+
+image:
+  repository: geddes-registry.rcac.purdue.edu/cms/a2rchi
+  tag: latest
+
+model:
+  backend: ollama
+  ollama:
+    baseUrl: "https://genai.rcac.purdue.edu/ollama"
+
+postgres:
+  enabled: true
+  persistence:
+    enabled: false
+    storageClass: ${multinode_storage_class}
+
+chromadb:
+  enabled: true
+  persistence:
+    enabled: false
+    storageClass: ${multinode_storage_class}
+
+envSecret:
+  create: false
+  name: a2rchi-secrets
+

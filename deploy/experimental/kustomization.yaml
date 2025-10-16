@@ -33,6 +33,8 @@ resources:
 
   - ../../apps/sonic/supersonic-alma9/helmrelease.yaml
 
+  - ../../apps/a2rchi/helmrelease.yaml
+
 generatorOptions:
   disableNameSuffixHash: true
 
@@ -83,3 +85,7 @@ configMapGenerator:
   - name: supersonic-alma9-config
     files:
       - values.yaml=../../apps/sonic/supersonic-alma9/values.yaml
+
+  - name: a2rchi-config
+    files:
+      - values.yaml=../../apps/a2rchi/values.yaml

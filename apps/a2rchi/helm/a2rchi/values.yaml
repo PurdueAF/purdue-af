@@ -1,0 +1,73 @@
+image:
+  repository: geddes-registry.rcac.purdue.edu/cms/a2rchi
+  tag: latest
+  pullPolicy: IfNotPresent
+
+ingress:
+  enabled: true
+  class: public
+  host: a2rchi.geddes.rcac.purdue.edu
+
+service:
+  type: ClusterIP
+  port: 7861
+
+model:
+  backend: ollama # one of: ollama|openai|anthropic|huggingface
+  ollama:
+    baseUrl: "https://genai.rcac.purdue.edu/ollama"
+  openai:
+    model: gpt-4o-mini
+    baseUrl: ""
+  anthropic:
+    model: claude-3-5-sonnet
+  huggingface:
+    tokenRequired: false
+
+envSecret:
+  create: false
+  name: a2rchi-secrets
+  keys:
+    PG_PASSWORD: ""
+    OPENAI_API_KEY: ""
+    ANTHROPIC_API_KEY: ""
+    HUGGINGFACEHUB_API_TOKEN: ""
+
+postgres:
+  enabled: true
+  image: bitnami/postgresql:17.4.0
+  persistence:
+    enabled: false
+    storageClass: "${multinode_storage_class}"
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+chromadb:
+  enabled: true
+  image: chromadb/chroma:0.5.18
+  persistence:
+    enabled: false
+    storageClass: "${multinode_storage_class}"
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: 2
+    memory: 2Gi
+
