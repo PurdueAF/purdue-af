@@ -20,6 +20,10 @@ spec:
       namespace: "cms"
       jupyterhub_db_pv_selector: '{matchLabels: {purdue-af-db: "true"}}'
       jupyterhub_db_storage_class: '""'
+      jupyterhub_enable_ingress: "true"
+      jupyterhub_logout_redirect_url: "https://cms.geddes.rcac.purdue.edu/hub"
+      jupyterhub_oauth_callback_url: "https://cms.geddes.rcac.purdue.edu/hub/oauth_callback"
+      jupyterhub_host: "cms.geddes.rcac.purdue.edu"
       sonic_gpus_initial: "1"
       af_shared_storage_size: "40Ti"
       multinode_storage_class: "geddes-standard-multinode"
