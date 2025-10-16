@@ -40,6 +40,8 @@ spec:
               mountPath: /root/A2rchi/configs/purdue-af.yaml
               subPath: purdue-af.yaml
               readOnly: true
+            - name: a2rchi-data
+              mountPath: /root/A2rchi/data
             - name: secrets
               mountPath: /secrets
       volumes:
@@ -60,6 +62,8 @@ spec:
               - key: purdue-af.yaml
                 path: purdue-af.yaml
         - name: configs-dir
+          emptyDir: {}
+        - name: a2rchi-data
           emptyDir: {}
         - name: secrets
           projected:
