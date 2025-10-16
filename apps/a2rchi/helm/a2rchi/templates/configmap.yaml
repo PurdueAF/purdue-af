@@ -51,6 +51,7 @@ data:
         static_folder: "/opt/A2rchi/src/interfaces/chat_app/static/"
         include_copy_button: true
         enable_debug_chroma_endpoints: false
+        num_responses_until_feedback: 3
       chromadb:
         use_HTTP_chromadb_client: true
         chromadb_host: "chromadb"
