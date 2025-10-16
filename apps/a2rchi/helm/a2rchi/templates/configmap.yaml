@@ -4,7 +4,7 @@ metadata:
   name: a2rchi-config
 data:
   # Upstream expects configs under /root/A2rchi/configs and prompts at /root/A2rchi/*.prompt
-  configs/purdue-af.yaml: |
+  purdue-af.yaml: |
     name: purdue-af
     global:
       DATA_PATH: "/root/A2rchi/data/"
