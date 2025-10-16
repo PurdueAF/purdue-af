@@ -22,3 +22,4 @@ spec:
     - kind: ConfigMap
       name: a2rchi-config
       valuesKey: values.yaml
+

@@ -10,10 +10,13 @@ WORKDIR /app
 
 # Install A2RCHI CLI and services
 RUN git clone https://github.com/mit-submit/A2rchi.git /opt/A2rchi && \
-    pip install -e /opt/A2rchi
+    pip install -e /opt/A2rchi && \
+    pip install uvicorn[standard]
 
 EXPOSE 7861
 
 # Minimal runtime; the chart defines config and env.
-CMD ["a2rchi", "serve", "--service", "chatbot"]
+# Allow overriding the ASGI app module via A2RCHI_APP_MODULE if needed.
+ENV A2RCHI_APP_MODULE=a2rchi.apps.chat_app.main:app
+CMD ["sh", "-c", "uvicorn ${A2RCHI_APP_MODULE} --host 0.0.0.0 --port 7861"]
 

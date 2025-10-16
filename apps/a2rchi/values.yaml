@@ -27,3 +27,4 @@ chromadb:
 envSecret:
   create: false
   name: a2rchi-secrets
+

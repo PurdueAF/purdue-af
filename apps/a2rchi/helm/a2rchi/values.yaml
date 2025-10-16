@@ -35,7 +35,7 @@ envSecret:
 
 postgres:
   enabled: true
-  image: bitnami/postgresql:17.4.0
+  image: docker.io/bitnamilegacy/postgresql:14.5.0-debian-11-r35
   persistence:
     enabled: false
     storageClass: "${multinode_storage_class}"
@@ -70,3 +70,4 @@ resources:
   limits:
     cpu: 2
     memory: 2Gi
+
