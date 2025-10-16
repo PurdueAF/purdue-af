@@ -3,43 +3,66 @@ kind: ConfigMap
 metadata:
   name: a2rchi-config
 data:
-  config.yaml: |
-    name: a2rchi
+  # Upstream expects configs under /root/A2rchi/configs and prompts at /root/A2rchi/*.prompt
+  configs.yaml: |
+    name: purdue-af
+    global:
+      DATA_PATH: "/root/A2rchi/data/"
+      LOCAL_VSTORE_PATH: "/root/A2rchi/vstore/"
+    utils: {}
     data_manager:
       sources:
         links:
+          enabled: false
           visible: true
           input_lists: []
       embedding_name: HuggingFaceEmbeddings
+      embedding_class_map:
+        HuggingFaceEmbeddings: { similarity_score_reference: 1.0 }
       chunk_size: 1000
     a2rchi:
-      pipelines:
-        - QAPipeline
+      pipelines: [QAPipeline]
       pipeline_map:
         QAPipeline:
           prompts:
             required:
-              condense_prompt: /app/prompts/condense.prompt
-              chat_prompt: /app/prompts/qa.prompt
+              condense_prompt: "/root/A2rchi/condense.prompt"
+              chat_prompt: "/root/A2rchi/main.prompt"
           models:
             required:
-              chat_model: {{- if eq .Values.model.backend "ollama" }} Ollama {{- else if eq .Values.model.backend "openai" }} OpenAI {{- else if eq .Values.model.backend "anthropic" }} Anthropic {{- else }} HuggingFace {{- end }}
-              condense_model: {{- if eq .Values.model.backend "ollama" }} Ollama {{- else if eq .Values.model.backend "openai" }} OpenAI {{- else if eq .Values.model.backend "anthropic" }} Anthropic {{- else }} HuggingFace {{- end }}
+              chat_model: {{- if eq .Values.model.backend "ollama" }} OllamaInterface {{- else if eq .Values.model.backend "openai" }} OpenAIGPT4 {{- else if eq .Values.model.backend "anthropic" }} AnthropicLLM {{- else }} HuggingFaceOpenLLM {{- end }}
+              condense_model: {{- if eq .Values.model.backend "ollama" }} OllamaInterface {{- else if eq .Values.model.backend "openai" }} OpenAIGPT4 {{- else if eq .Values.model.backend "anthropic" }} AnthropicLLM {{- else }} HuggingFaceOpenLLM {{- end }}
+      model_class_map:
+        OllamaInterface:
+          kwargs:
+            base_url: {{ .Values.model.ollama.baseUrl | quote }}
+        OpenAIGPT4: { kwargs: {} }
+        AnthropicLLM: { kwargs: {} }
+        HuggingFaceOpenLLM: { kwargs: {} }
     services:
       chat_app:
         trained_on: "Purdue AF"
+        host: "0.0.0.0"
+        port: 7861
+        external_port: 80
         hostname: "{{ .Values.ingress.host }}"
+        template_folder: "/opt/A2rchi/src/interfaces/chat_app/templates/"
+        static_folder: "/opt/A2rchi/src/interfaces/chat_app/static/"
+        include_copy_button: true
+        enable_debug_chroma_endpoints: false
       chromadb:
-        chromadb_host: chromadb
-    model_class_map:
-      Ollama:
-        kwargs:
-          base_url: {{ .Values.model.ollama.baseUrl | quote }}
-      OpenAI:
-        kwargs:
-          base_url: {{ .Values.model.openai.baseUrl | quote }}
-      Anthropic:
-        kwargs: {}
-      HuggingFaceEmbeddings:
-        kwargs: {}
+        use_HTTP_chromadb_client: true
+        chromadb_host: "chromadb"
+        chromadb_port: 8000
+      postgres:
+        host: "postgres"
+        port: 5432
+        database: "postgres"
+        user: "postgres"
+  main.prompt: |
+    You are A2RCHI for Purdue AF. Answer succinctly with citations when available.
+  condense.prompt: |
+    Rewrite the user question to be a standalone query preserving context.
+  summary.prompt: |
+    Summarize the conversation.
 
