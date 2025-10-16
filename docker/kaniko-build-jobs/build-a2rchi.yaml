@@ -26,10 +26,10 @@ spec:
             - "--cache-repo=geddes-registry.rcac.purdue.edu/cms/a2rchi-cache"
           resources:
             requests:
-              memory: "8Gi"
+              memory: "16Gi"
               cpu: "2"
             limits:
-              memory: "16Gi"
+              memory: "32Gi"
               cpu: "4"
           volumeMounts:
             - name: docker-config
