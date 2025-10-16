@@ -11,7 +11,7 @@ WORKDIR /app
 # Install A2RCHI CLI and services
 RUN git clone https://github.com/mit-submit/A2rchi.git /opt/A2rchi && \
     pip install -e /opt/A2rchi && \
-    pip install uvicorn[standard] flask flask-cors mistune numpy psycopg2-binary pygments chromadb langchain-chroma
+    pip install -r /opt/A2rchi/requirements/requirements-base.txt
 
 # Ensure the in-repo src layout is on the import path
 ENV PYTHONPATH=/opt/A2rchi/src:${PYTHONPATH}
