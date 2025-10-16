@@ -59,6 +59,13 @@ data:
         port: 5432
         database: "postgres"
         user: "postgres"
+      redmine_mailbox:
+        url: ""
+        project: ""
+        redmine_update_time: 10
+        answer_tag: "-- A2rchi -- Resolving email was sent"
+        imap4_port: 143
+        mailbox_update_time: 10
   main.prompt: |
     You are A2RCHI for Purdue AF. Answer succinctly with citations when available.
   condense.prompt: |
