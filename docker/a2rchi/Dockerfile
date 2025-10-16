@@ -13,6 +13,9 @@ RUN git clone https://github.com/mit-submit/A2rchi.git /opt/A2rchi && \
     pip install -e /opt/A2rchi && \
     pip install uvicorn[standard]
 
+# Ensure the in-repo src layout is on the import path
+ENV PYTHONPATH=/opt/A2rchi/src:${PYTHONPATH}
+
 EXPOSE 7861
 
 # Minimal runtime; the chart defines config and env.
