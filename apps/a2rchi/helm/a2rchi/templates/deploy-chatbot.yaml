@@ -37,6 +37,8 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.model.huggingface.secretName }}
                   key: HUGGINGFACEHUB_API_TOKEN
+            {{- end }}  
+            {{- if .Values.model.openai.secretName }}
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
