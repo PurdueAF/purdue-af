@@ -69,7 +69,52 @@ config:
           query_embedding_instructions: null
       chunk_size: 1000
       chunk_overlap: 0
+      reset_collection: true
       num_documents_to_retrieve: 5
+      stemming:
+        enabled: false
+      distance_metric: cosine
+      use_hybrid_search: false
+      bm25_weight: 0.6
+      semantic_weight: 0.4
+      bm25:
+        k1: 0.5
+        b: 0.75
+      sources:
+        links:
+          enabled: false
+          visible: true
+          input_lists: []
+          scraper:
+            reset_data: true
+            verify_urls: false
+            enable_warnings: false
+        git:
+          enabled: false
+          visible: true
+        sso:
+          enabled: false
+          visible: true
+          sso_class: CERNSSOScraper
+          sso_class_map:
+            CERNSSOScraper:
+              class: CERNSSOScraper
+              kwargs:
+                headless: true
+                max_depth: 2
+        jira:
+          enabled: false
+          url: ""
+          visible: false
+          projects: []
+          anonymize_data: true
+          max_tickets: 1e10
+        redmine:
+          enabled: false
+          url: ""
+          project: ""
+          visible: false
+          anonymize_data: true
 
     a2rchi:
       pipelines: ["QAPipeline"]
