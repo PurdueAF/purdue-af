@@ -44,6 +44,18 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.model.openai.secretName }}
                   key: OPENAI_API_KEY
+            - name: OPENAI_API_KEY_FILE
+              value: /secrets/OPENAI_API_KEY
+            - name: OPENAI_API_KEY_FILE
+              value: /secrets/OPENAI_API_KEY
+            {{- end }}
+            {{- if .Values.model.huggingface.secretName }}
+            - name: HUGGING_FACE_HUB_TOKEN_FILE
+              value: /secrets/HUGGINGFACEHUB_API_TOKEN
+            {{- end }}
+            {{- if .Values.model.anthropic.secretName }}
+            - name: ANTHROPIC_API_KEY_FILE
+              value: /secrets/ANTHROPIC_API_KEY
             {{- end }}
             - name: PGHOST
               value: postgres
@@ -96,6 +108,27 @@ spec:
                   items:
                     - key: POSTGRES_PASSWORD
                       path: pg_password
+              {{- if .Values.model.openai.secretName }}
+              - secret:
+                  name: {{ .Values.model.openai.secretName }}
+                  items:
+                    - key: OPENAI_API_KEY
+                      path: OPENAI_API_KEY
+              {{- end }}
+              {{- if .Values.model.huggingface.secretName }}
+              - secret:
+                  name: {{ .Values.model.huggingface.secretName }}
+                  items:
+                    - key: HUGGINGFACEHUB_API_TOKEN
+                      path: HUGGINGFACEHUB_API_TOKEN
+              {{- end }}
+              {{- if .Values.model.anthropic.secretName }}
+              - secret:
+                  name: {{ .Values.model.anthropic.secretName }}
+                  items:
+                    - key: ANTHROPIC_API_KEY
+                      path: ANTHROPIC_API_KEY
+              {{- end }}
 ---
 apiVersion: v1
 kind: Service
