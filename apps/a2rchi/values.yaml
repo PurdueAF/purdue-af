@@ -92,6 +92,15 @@ config:
         enable_debug_chroma_endpoints: false
         flask_debug_mode: false
       chromadb:
+        use_HTTP_chromadb_client: true
         chromadb_host: "chromadb"
+        chromadb_port: 8000
+        chromadb_external_port: 8000
+        local_vstore_path: "/root/A2rchi/vstore/"
+      postgres:
+        port: 5432
+        user: "postgres"
+        database: "postgres"
+        host: "postgres"
       redmine_mailbox:
         answer_tag: ""
