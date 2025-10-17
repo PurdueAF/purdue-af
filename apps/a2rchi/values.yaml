@@ -87,6 +87,10 @@ config:
         trained_on: ""
         template_folder: "/opt/A2rchi/src/interfaces/chat_app/templates/"
         static_folder: "/opt/A2rchi/src/interfaces/chat_app/static/"
+        num_responses_until_feedback: 3
+        include_copy_button: true
+        enable_debug_chroma_endpoints: false
+        flask_debug_mode: false
       chromadb:
         chromadb_host: "chromadb"
       redmine_mailbox:
