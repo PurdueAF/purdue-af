@@ -80,8 +80,10 @@ config:
 
     services:
       chat_app:
+        host: "a2rchi.geddes.rcac.purdue.edu"
+        port: 80
         trained_on: ""
-        hostname: ""
+        hostname: "a2rchi.geddes.rcac.purdue.edu"
       chromadb:
         chromadb_host: "chromadb"
       redmine_mailbox:
