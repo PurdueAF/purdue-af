@@ -12,11 +12,57 @@ spec:
       labels:
         app: a2rchi-chatbot
     spec:
+      initContainers:
+        - name: install-a2rchi
+          image: python:3.11-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              echo "Installing system dependencies..."
+              apt-get update && apt-get install -y --no-install-recommends \
+                git curl ca-certificates build-essential cmake gcc g++ python3-dev \
+                && rm -rf /var/lib/apt/lists/*
+              
+              echo "Upgrading pip..."
+              python -m pip install --upgrade pip
+              
+              echo "Cloning A2RCHI repository..."
+              git clone https://github.com/mit-submit/A2rchi.git /opt/A2rchi
+              
+              echo "Installing A2RCHI dependencies into shared prefix /opt/a2rchi/python..."
+              mkdir -p /opt/a2rchi/python
+              PIP_PREFIX=/opt/a2rchi/python
+              pip install --prefix ${PIP_PREFIX} -r /opt/A2rchi/requirements/requirements-base.txt
+              pip install --prefix ${PIP_PREFIX} -r /opt/A2rchi/requirements/cpu-requirementsHEADER.txt
+              
+              echo "Installing A2RCHI (editable) into shared prefix..."
+              pip install --prefix ${PIP_PREFIX} -e /opt/A2rchi
+              
+              echo "A2RCHI installation completed!"
+          volumeMounts:
+            - name: a2rchi-install
+              mountPath: /opt
+          resources:
+            requests:
+              cpu: "4"
+              memory: "4Gi"
+            limits:
+              cpu: "8"
+              memory: "8Gi"
       containers:
         - name: chatbot
-          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["python", "/opt/A2rchi/src/bin/service_chat.py"]
+          image: python:3.11-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              echo "Starting A2RCHI chatbot service..."
+              export PYTHONPATH=/opt/A2rchi:${PYTHONPATH}
+              # Use shared prefix installed packages
+              export PATH=/opt/a2rchi/python/bin:${PATH}
+              export PYTHONPATH=/opt/a2rchi/python/lib/python3.11/site-packages:${PYTHONPATH}
+              exec python /opt/A2rchi/src/bin/service_chat.py
           ports:
             - containerPort: {{ .Values.service.port }}
           env:
@@ -48,6 +94,8 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
+            - name: a2rchi-install
+              mountPath: /opt
             - name: a2rchi-prompts
               mountPath: /root/A2rchi
               readOnly: true
@@ -62,6 +110,8 @@ spec:
             - name: secrets
               mountPath: /secrets
       volumes:
+        - name: a2rchi-install
+          emptyDir: {}
         - name: a2rchi-prompts
           configMap:
             name: a2rchi-config

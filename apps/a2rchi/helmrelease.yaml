@@ -13,9 +13,11 @@ spec:
         name: purdue-af-experimental
       interval: 1m
   install:
+    timeout: 30m0s
     remediation:
       retries: -1
   upgrade:
+    timeout: 30m0s
     remediation:
       retries: -1
   values:
@@ -28,9 +30,11 @@ spec:
       tag: latest
       pullPolicy: IfNotPresent
     model:
-      backend: ollama
-      ollama:
-        baseUrl: "https://genai.rcac.purdue.edu/ollama"
+      backend: openai
+      openai:
+        model: gpt-oss:latest
+        baseUrl: "https://genai.rcac.purdue.edu/api"
+        secretName: "a2rchi-openai-token"
     postgres:
       enabled: true
       persistence:

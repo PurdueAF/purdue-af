@@ -13,18 +13,18 @@ service:
   port: 7861
 
 model:
-  backend: ollama # one of: ollama|openai|anthropic|huggingface
+  backend: openai # one of: openai|anthropic|huggingface|ollama
   ollama:
     baseUrl: "https://genai.rcac.purdue.edu/ollama"
+    secretName: "" # Set to "a2rchi-ollama-token" to enable authentication
   openai:
-    model: gpt-4o-mini
-    baseUrl: ""
+    model: gpt-oss:latest
+    baseUrl: "https://genai.rcac.purdue.edu/api"
+    secretName: "a2rchi-openai-token" # Set to enable authentication
   anthropic:
     model: claude-3-5-sonnet
   huggingface:
     tokenRequired: false
-    # If set, the deployment will read HUGGINGFACEHUB_API_TOKEN from this Secret
-    # Secret must contain key: HUGGINGFACEHUB_API_TOKEN
     secretName: "a2rchi-hf-token"
 
 envSecret:

@@ -195,97 +195,10 @@ data:
             required:
               image_processing_model: HuggingFaceImageLLM
       model_class_map:
-        AnthropicLLM:
-          class: AnthropicLLM
-          kwargs:
-            model_name: claude-3-opus-20240229
-            temperature: 1
-        OpenAIGPT4:
-          class: OpenAILLM
-          kwargs:
-            model_name: gpt-4
-            temperature: 1
-        OpenAIGPT35:
-          class: OpenAILLM
-          kwargs:
-            model_name: gpt-3.5-turbo
-            temperature: 1
-        DumbLLM:
-          class: DumbLLM
-          kwargs:
-            sleep_time_mean: 3
-            filler: "I am a dummy LLM response."
-        LlamaLLM:
-          class: LlamaLLM
-          kwargs:
-            base_model: meta-llama/Llama-2-7b-chat-hf
-            peft_model: null
-            enable_salesforce_content_safety: false
-            quantization: true
-            max_new_tokens: 4096
-            seed: null
-            do_sample: true
-            min_length: null
-            use_cache: true
-            top_p: 0.9
-            temperature: 0.6
-            top_k: 50
-            repetition_penalty: 1.0
-            length_penalty: 1
-            max_padding_length: null
-        HuggingFaceOpenLLM:
-          class: HuggingFaceOpenLLM
-          kwargs:
-            base_model: Qwen/Qwen2.5-7B-Instruct-1M
-            peft_model: null
-            enable_salesforce_content_safety: false
-            quantization: true
-            max_new_tokens: 4096
-            seed: null
-            do_sample: true
-            min_length: null
-            use_cache: true
-            top_p: 0.9
-            temperature: 0.6
-            top_k: 50
-            repetition_penalty: 1.0
-            length_penalty: 1
-            max_padding_length: null
-        HuggingFaceImageLLM:
-          class: HuggingFaceImageLLM
-          kwargs:
-            base_model: Qwen/Qwen2.5-VL-7B-Instruct
-            quantization: true
-            min_pixels: 175616
-            max_pixels: 1003520
-            max_new_tokens: 4096
-            seed: null
-            do_sample: false
-            min_length: null
-            use_cache: true
-            top_k: 50
-            repetition_penalty: 1.0
-            length_penalty: 1
-        VLLM:
-          class: VLLM
-          kwargs:
-            base_model: deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
-            seed: null
-            enable_salesforce_content_safety: false
-            max_new_tokens: 4096
-            top_p: 0.95
-            temperature: 0.6
-            top_k: 50
-            repetition_penalty: 1.0
-            tensor_parallel_size: 1
-            gpu_memory_utilization: 0.7
-            trust_remote_code: true
-            tokenizer_mode: auto
-            max_model_len: 10000
         OllamaInterface:
           class: OllamaInterface
           kwargs:
-            base_model: gemma3
+            base_model: {{ .Values.model.ollama.model }}
             temperature: 1
             max_tokens: 1000
             url: {{ .Values.model.ollama.baseUrl | quote }}
