@@ -16,7 +16,7 @@ model:
   backend: openai # one of: openai|anthropic|huggingface|ollama
   ollama:
     baseUrl: "https://genai.rcac.purdue.edu/ollama"
-    secretName: "" 
+    secretName: ""
   openai:
     model: gpt-oss:latest
     baseUrl: "https://genai.rcac.purdue.edu/api"

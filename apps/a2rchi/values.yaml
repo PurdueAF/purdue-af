@@ -9,7 +9,7 @@ image:
   pullPolicy: IfNotPresent
 
 model:
-  backend: openai 
+  backend: openai
   openai:
     model: gpt-oss:latest
     baseUrl: "https://genai.rcac.purdue.edu/api"
