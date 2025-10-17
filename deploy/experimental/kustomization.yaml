@@ -35,6 +35,7 @@ resources:
 
   - ../../apps/a2rchi/helmrelease.yaml
   - ../../apps/a2rchi/secret-hf-token.yaml
+  - ../../apps/a2rchi/secret-openai-api-key.yaml
 
 generatorOptions:
   disableNameSuffixHash: true

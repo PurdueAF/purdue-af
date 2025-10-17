@@ -37,6 +37,11 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.model.huggingface.secretName }}
                   key: HUGGINGFACEHUB_API_TOKEN
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.model.openai.secretName }}
+                  key: OPENAI_API_KEY
             {{- end }}
             - name: PGHOST
               value: postgres

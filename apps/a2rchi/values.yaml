@@ -9,10 +9,11 @@ image:
   pullPolicy: IfNotPresent
 
 model:
-  backend: ollama
-  ollama:
+  backend: openai 
+  openai:
     model: gpt-oss:latest
-    baseUrl: "https://genai.rcac.purdue.edu/ollama"
+    baseUrl: "https://genai.rcac.purdue.edu/api"
+    secretName: "a2rchi-openai-api-key"
 
 postgres:
   enabled: true
