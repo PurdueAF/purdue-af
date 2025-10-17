@@ -90,6 +90,8 @@ config:
           kwargs:
             model_name: gpt-oss:latest
     utils:
+      sso:
+        enabled: false
     services:
       chat_app:
         host: "0.0.0.0"
