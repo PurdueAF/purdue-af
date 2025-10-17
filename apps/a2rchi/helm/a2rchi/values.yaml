@@ -12,20 +12,20 @@ service:
   type: ClusterIP
   port: 7861
 
-# model:
-#   backend: openai # one of: openai|anthropic|huggingface|ollama
-#   ollama:
-#     baseUrl: "https://genai.rcac.purdue.edu/ollama"
-#     secretName: ""
-#   openai:
-#     model: gpt-oss:latest
-#     baseUrl: "https://genai.rcac.purdue.edu/api"
-#     secretName: ""
-#   anthropic:
-#     model: claude-3-5-sonnet
-#   huggingface:
-#     tokenRequired: false
-#     secretName: "a2rchi-hf-token"
+model:
+  backend: openai # one of: openai|anthropic|huggingface|ollama
+  ollama:
+    baseUrl: "https://genai.rcac.purdue.edu/ollama"
+    secretName: ""
+  openai:
+    model: gpt-oss:latest
+    baseUrl: "https://genai.rcac.purdue.edu/api"
+    secretName: ""
+  anthropic:
+    model: claude-3-5-sonnet
+  huggingface:
+    tokenRequired: false
+    secretName: "a2rchi-hf-token"
 
 envSecret:
   create: false
