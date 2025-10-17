@@ -20,10 +20,10 @@ spec:
             # - "--no-push"
           resources:
             requests:
-              memory: "8Gi"
+              memory: "16Gi"
               cpu: "4"
             limits:
-              memory: "16Gi"
+              memory: "32Gi"
               cpu: "8"
           volumeMounts:
             - name: docker-config
