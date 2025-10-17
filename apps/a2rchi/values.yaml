@@ -33,7 +33,7 @@ envSecret:
 
 config:
   a2rchiConfigYaml: |
-    name: purdue-af
+    name: a2rchi-purdue-af
     global:
       DATA_PATH: "/root/A2rchi/data/"
       ACCOUNTS_PATH: "/root/A2rchi/accounts/"
@@ -45,7 +45,8 @@ config:
     data_manager:
       sources:
         links:
-          input_lists: []
+          input_lists:
+            - examples/deployments/basic-gpu/miscellanea.list
           scraper:
             reset_data: true
             verify_urls: false
@@ -65,8 +66,8 @@ config:
           max_tokens: 10000
           prompts:
             required:
-              condense_prompt: "/root/A2rchi/condense.prompt"
-              chat_prompt: "/root/A2rchi/main.prompt"
+              condense_prompt: "examples/deployments/basic-gpu/condense.prompt"
+              chat_prompt: "examples/deployments/basic-gpu/qa.prompt"
           models:
             required:
               condense_model: "OpenAIGPT4"
@@ -76,17 +77,10 @@ config:
           class: OpenAIGPT4
           kwargs:
             model_name: gpt-oss:latest
-            base_url: "https://genai.rcac.purdue.edu/api"
 
     services:
       chat_app:
-        trained_on: "Purdue AF documentation"
-        hostname: "a2rchi.geddes.rcac.purdue.edu"
-        port: 7861
-        host: "0.0.0.0"
-        template_folder: "/opt/A2rchi/src/interfaces/chat_app/templates/"
-        static_folder: "/opt/A2rchi/src/interfaces/chat_app/static/"
+        trained_on: ""
+        hostname: ""
       chromadb:
         chromadb_host: "chromadb"
-        chromadb_port: 8000
-        use_HTTP_chromadb_client: true
