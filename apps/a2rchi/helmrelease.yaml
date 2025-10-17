@@ -13,11 +13,9 @@ spec:
         name: purdue-af-experimental
       interval: 1m
   install:
-    timeout: 30m0s
     remediation:
       retries: -1
   upgrade:
-    timeout: 30m0s
     remediation:
       retries: -1
   valuesFrom:
