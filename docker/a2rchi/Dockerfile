@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m pip install --upgrade pip
 
 # Clone A2RCHI repository
-RUN git clone https://github.com/mit-submit/A2rchi.git /opt/A2rchi
+RUN git clone https://github.com/kondratyevd/A2rchi.git /opt/A2rchi
 
 # Install A2RCHI dependencies
 RUN pip install -r /opt/A2rchi/requirements/requirements-base.txt && \

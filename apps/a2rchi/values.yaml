@@ -8,12 +8,12 @@ image:
   tag: latest
   pullPolicy: IfNotPresent
 
-model:
-  backend: openai
-  openai:
-    model: gpt-oss:latest
-    baseUrl: "https://genai.rcac.purdue.edu/api"
-    secretName: "a2rchi-openai-api-key"
+# model:
+#   backend: openai
+#   openai:
+#     model: gpt-oss:latest
+#     baseUrl: "https://genai.rcac.purdue.edu/api"
+#     secretName: "a2rchi-openai-api-key"
 
 postgres:
   enabled: true
@@ -134,6 +134,7 @@ config:
           class: OpenAIGPT4
           kwargs:
             model_name: gpt-oss:latest
+            base_url: "https://genai.rcac.purdue.edu/api"
     utils:
       sso:
         enabled: false
