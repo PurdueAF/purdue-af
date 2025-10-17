@@ -77,7 +77,7 @@ config:
           class: OpenAIGPT4
           kwargs:
             model_name: gpt-oss:latest
-
+    utils:
     services:
       chat_app:
         host: "0.0.0.0"
