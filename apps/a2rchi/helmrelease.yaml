@@ -20,31 +20,7 @@ spec:
     timeout: 30m0s
     remediation:
       retries: -1
-  values:
-    ingress:
-      enabled: ${enable_ingresses}
-      class: public
-      host: a2rchi.geddes.rcac.purdue.edu
-    image:
-      repository: geddes-registry.rcac.purdue.edu/cms/a2rchi
-      tag: latest
-      pullPolicy: IfNotPresent
-    model:
-      backend: openai
-      openai:
-        model: gpt-oss:latest
-        baseUrl: "https://genai.rcac.purdue.edu/api"
-        secretName: "a2rchi-openai-token"
-    postgres:
-      enabled: true
-      persistence:
-        enabled: false
-        storageClass: ${multinode_storage_class}
-    chromadb:
-      enabled: true
-      persistence:
-        enabled: false
-        storageClass: ${multinode_storage_class}
-    envSecret:
-      create: false
-      name: a2rchi-secrets
+  valuesFrom:
+    - kind: ConfigMap
+      name: a2rchi-config
+      valuesKey: values.yaml
