@@ -51,6 +51,8 @@ spec:
               value: "5432"
             - name: PGDATABASE
               value: postgres
+            - name:  OPENAI_LOG
+              value: debug
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
