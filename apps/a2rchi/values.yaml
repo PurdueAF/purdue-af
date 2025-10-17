@@ -84,3 +84,5 @@ config:
         hostname: ""
       chromadb:
         chromadb_host: "chromadb"
+      redmine_mailbox:
+        answer_tag: ""
