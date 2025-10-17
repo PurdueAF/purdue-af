@@ -54,7 +54,19 @@ config:
       utils:
         anonymizer:
           nlp_model: en_core_web_sm
-      embedding_name: "OpenAIEmbeddings"
+      collection_name: purdue-af
+      embedding_name: HuggingFaceEmbeddings
+      embedding_class_map:
+        HuggingFaceEmbeddings:
+          class: HuggingFaceEmbeddings
+          kwargs:
+            model_name: sentence-transformers/all-MiniLM-L6-v2
+            model_kwargs:
+              device: cpu
+            encode_kwargs:
+              normalize_embeddings: true
+          similarity_score_reference: 10
+          query_embedding_instructions: null
       chunk_size: 1000
       chunk_overlap: 0
       num_documents_to_retrieve: 5
