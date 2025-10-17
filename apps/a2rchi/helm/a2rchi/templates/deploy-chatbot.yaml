@@ -60,8 +60,8 @@ spec:
             - name: configs-dir
               mountPath: /root/A2rchi/configs
             - name: a2rchi-config
-              mountPath: /root/A2rchi/configs/purdue-af.yaml
-              subPath: purdue-af.yaml
+              mountPath: /root/A2rchi/configs/a2rchi-config.yaml
+              subPath: a2rchi-config.yaml
               readOnly: true
             - name: a2rchi-data
               mountPath: /root/A2rchi/data
@@ -80,8 +80,8 @@ spec:
           configMap:
             name: a2rchi-config
             items:
-              - key: purdue-af.yaml
-                path: purdue-af.yaml
+              - key: a2rchi-config.yaml
+                path: a2rchi-config.yaml
         - name: configs-dir
           emptyDir: {}
         - name: a2rchi-data
