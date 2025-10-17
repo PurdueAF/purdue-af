@@ -6,6 +6,7 @@ ingress:
 image:
   repository: geddes-registry.rcac.purdue.edu/cms/a2rchi
   tag: latest
+  pullPolicy: IfNotPresent
 
 model:
   backend: ollama
