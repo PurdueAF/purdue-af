@@ -29,6 +29,9 @@ spec:
                 - /bin/sh
                 - -c
                 - |
+
+                  kubectl get pods -n cms -l app=jupyterhub,component=hub
+
                   # Get current timestamp for filename
                   if [ "$(date +%H)" -lt 12 ]; then
                     TIMESTAMP="midnight"
