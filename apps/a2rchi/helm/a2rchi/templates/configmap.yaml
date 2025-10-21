@@ -3,43 +3,10 @@ kind: ConfigMap
 metadata:
   name: a2rchi-config
 data:
-  config.yaml: |
-    name: a2rchi
-    data_manager:
-      sources:
-        links:
-          visible: true
-          input_lists: []
-      embedding_name: HuggingFaceEmbeddings
-      chunk_size: 1000
-    a2rchi:
-      pipelines:
-        - QAPipeline
-      pipeline_map:
-        QAPipeline:
-          prompts:
-            required:
-              condense_prompt: /app/prompts/condense.prompt
-              chat_prompt: /app/prompts/qa.prompt
-          models:
-            required:
-              chat_model: {{- if eq .Values.model.backend "ollama" }} Ollama {{- else if eq .Values.model.backend "openai" }} OpenAI {{- else if eq .Values.model.backend "anthropic" }} Anthropic {{- else }} HuggingFace {{- end }}
-              condense_model: {{- if eq .Values.model.backend "ollama" }} Ollama {{- else if eq .Values.model.backend "openai" }} OpenAI {{- else if eq .Values.model.backend "anthropic" }} Anthropic {{- else }} HuggingFace {{- end }}
-    services:
-      chat_app:
-        trained_on: "Purdue AF"
-        hostname: "{{ .Values.ingress.host }}"
-      chromadb:
-        chromadb_host: chromadb
-    model_class_map:
-      Ollama:
-        kwargs:
-          base_url: {{ .Values.model.ollama.baseUrl | quote }}
-      OpenAI:
-        kwargs:
-          base_url: {{ .Values.model.openai.baseUrl | quote }}
-      Anthropic:
-        kwargs: {}
-      HuggingFaceEmbeddings:
-        kwargs: {}
+  a2rchi-config.yaml: |
+{{ .Values.config.a2rchiConfigYaml | indent 4 }}
+  main.prompt: |
+{{ .Values.config.mainPrompt | indent 4 }}
+  condense.prompt: |
+{{ .Values.config.condensePrompt | indent 4 }}
 

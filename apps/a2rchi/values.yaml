@@ -1,16 +1,19 @@
 ingress:
-  enabled: ${enable_ingresses}
+  enabled: false
   class: public
   host: a2rchi.geddes.rcac.purdue.edu
 
 image:
   repository: geddes-registry.rcac.purdue.edu/cms/a2rchi
   tag: latest
+  pullPolicy: IfNotPresent
 
 model:
-  backend: ollama
-  ollama:
-    baseUrl: "https://genai.rcac.purdue.edu/ollama"
+  backend: openai
+  openai:
+    model: gpt-oss:latest
+    baseUrl: "https://genai.rcac.purdue.edu/api"
+    secretName: "a2rchi-openai-api-key"
 
 postgres:
   enabled: true
@@ -28,3 +31,136 @@ envSecret:
   create: false
   name: a2rchi-secrets
 
+config:
+  a2rchiConfigYaml: |
+    name: a2rchi-purdue-af
+    global:
+      DATA_PATH: "/root/A2rchi/data/"
+      ACCOUNTS_PATH: "/root/A2rchi/accounts/"
+      ACCEPTED_FILES: [".txt", ".pdf"]
+      LOGGING:
+        input_output_filename: "chain_input_output.log"
+      verbosity: 3
+
+    data_manager:
+      sources:
+        links:
+          input_lists:
+            - examples/deployments/basic-gpu/miscellanea.list
+          scraper:
+            reset_data: true
+            verify_urls: false
+            enable_warnings: false
+      utils:
+        anonymizer:
+          nlp_model: en_core_web_sm
+      collection_name: purdue-af
+      embedding_name: HuggingFaceEmbeddings
+      embedding_class_map:
+        HuggingFaceEmbeddings:
+          class: HuggingFaceEmbeddings
+          kwargs:
+            model_name: sentence-transformers/all-MiniLM-L6-v2
+            model_kwargs:
+              device: cpu
+            encode_kwargs:
+              normalize_embeddings: true
+          similarity_score_reference: 10
+          query_embedding_instructions: null
+      chunk_size: 1000
+      chunk_overlap: 0
+      reset_collection: true
+      num_documents_to_retrieve: 5
+      stemming:
+        enabled: false
+      distance_metric: cosine
+      use_hybrid_search: false
+      bm25_weight: 0.6
+      semantic_weight: 0.4
+      bm25:
+        k1: 0.5
+        b: 0.75
+      sources:
+        links:
+          enabled: false
+          visible: true
+          input_lists: []
+          scraper:
+            reset_data: true
+            verify_urls: false
+            enable_warnings: false
+        git:
+          enabled: false
+          visible: true
+        sso:
+          enabled: false
+          visible: true
+          sso_class: CERNSSOScraper
+          sso_class_map:
+            CERNSSOScraper:
+              class: CERNSSOScraper
+              kwargs:
+                headless: true
+                max_depth: 2
+        jira:
+          enabled: false
+          url: ""
+          visible: false
+          projects: []
+          anonymize_data: true
+          max_tickets: 1e10
+        redmine:
+          enabled: false
+          url: ""
+          project: ""
+          visible: false
+          anonymize_data: true
+
+    a2rchi:
+      pipelines: ["QAPipeline"]
+      pipeline_map:
+        QAPipeline:
+          max_tokens: 10000
+          prompts:
+            required:
+              condense_prompt: "examples/deployments/basic-gpu/condense.prompt"
+              chat_prompt: "examples/deployments/basic-gpu/qa.prompt"
+          models:
+            required:
+              condense_model: "OpenAIGPT4"
+              chat_model: "OpenAIGPT4"
+      model_class_map:
+        OpenAIGPT4:
+          class: OpenAIGPT4
+          kwargs:
+            model_name: gpt-oss:latest
+            base_url: "https://genai.rcac.purdue.edu/api"
+    utils:
+      sso:
+        enabled: false
+    services:
+      chat_app:
+        host: "0.0.0.0"
+        port: 7861
+        hostname: "a2rchi.geddes.rcac.purdue.edu"
+        external_port: 80
+        trained_on: ""
+        template_folder: "/opt/A2rchi/src/interfaces/chat_app/templates/"
+        static_folder: "/opt/A2rchi/src/interfaces/chat_app/static/"
+        num_responses_until_feedback: 3
+        include_copy_button: true
+        enable_debug_chroma_endpoints: false
+        flask_debug_mode: false
+      chromadb:
+        use_HTTP_chromadb_client: true
+        chromadb_host: "chromadb"
+        chromadb_port: 8000
+        chromadb_external_port: 8000
+        local_vstore_path: "/root/A2rchi/vstore/"
+      postgres:
+        port: 5432
+        user: "postgres"
+        database: "postgres"
+        host: "postgres"
+      redmine_mailbox:
+        answer_tag: ""

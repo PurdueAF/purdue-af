@@ -2,18 +2,11 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: kaniko-build-a2rchi
-  labels:
-    ci.purdue.af/revision: ""
-  annotations:
-    kustomize.toolkit.fluxcd.io/force: "true"
 spec:
   backoffLimit: 0
   completions: 1
   ttlSecondsAfterFinished: 300
   template:
-    metadata:
-      labels:
-        ci.purdue.af/revision: ""
     spec:
       containers:
         - name: kaniko
@@ -24,13 +17,14 @@ spec:
             - "--destination=geddes-registry.rcac.purdue.edu/cms/a2rchi:latest"
             - "--cache=true"
             - "--cache-repo=geddes-registry.rcac.purdue.edu/cms/a2rchi-cache"
+            # - "--no-push"
           resources:
             requests:
-              memory: "8Gi"
-              cpu: "2"
+              memory: "32Gi"
+              cpu: "16"
             limits:
-              memory: "16Gi"
-              cpu: "4"
+              memory: "64Gi"
+              cpu: "32"
           volumeMounts:
             - name: docker-config
               mountPath: /kaniko/.docker/
@@ -46,4 +40,3 @@ spec:
           operator: "Equal"
           value: "cms-af"
           effect: "NoSchedule"
-

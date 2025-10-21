@@ -13,16 +13,19 @@ service:
   port: 7861
 
 model:
-  backend: ollama # one of: ollama|openai|anthropic|huggingface
+  backend: openai # one of: openai|anthropic|huggingface|ollama
   ollama:
     baseUrl: "https://genai.rcac.purdue.edu/ollama"
+    secretName: ""
   openai:
-    model: gpt-4o-mini
-    baseUrl: ""
+    model: gpt-oss:latest
+    baseUrl: "https://genai.rcac.purdue.edu/api"
+    secretName: ""
   anthropic:
     model: claude-3-5-sonnet
   huggingface:
     tokenRequired: false
+    secretName: "a2rchi-hf-token"
 
 envSecret:
   create: false
@@ -35,7 +38,7 @@ envSecret:
 
 postgres:
   enabled: true
-  image: bitnami/postgresql:17.4.0
+  image: docker.io/bitnamilegacy/postgresql:14.5.0-debian-11-r35
   persistence:
     enabled: false
     storageClass: "${multinode_storage_class}"
@@ -50,7 +53,7 @@ postgres:
 
 chromadb:
   enabled: true
-  image: chromadb/chroma:0.5.18
+  image: chromadb/chroma:0.4.13
   persistence:
     enabled: false
     storageClass: "${multinode_storage_class}"
@@ -71,3 +74,88 @@ resources:
     cpu: 2
     memory: 2Gi
 
+config:
+  a2rchiConfigYaml: |
+    name: my_deployment
+    global:
+      DATA_PATH: "/root/data/"
+      ACCOUNTS_PATH: "/root/.accounts/"
+      ACCEPTED_FILES: [".txt", ".pdf"]
+      LOGGING:
+        input_output_filename: "chain_input_output.log"
+      verbosity: 3
+
+    data_manager:
+      sources:
+        links:
+          input_lists:
+            - examples/deployments/basic-gpu/miscellanea.list
+          scraper:
+            reset_data: true
+            verify_urls: false
+            enable_warnings: false
+      utils:
+        anonymizer:
+          nlp_model: en_core_web_sm
+      embedding_name: "OpenAIEmbeddings"
+      chunk_size: 1000
+      chunk_overlap: 0
+      num_documents_to_retrieve: 5
+
+    a2rchi:
+      pipelines: ["QAPipeline"]
+      pipeline_map:
+        QAPipeline:
+          max_tokens: 10000
+          prompts:
+            required:
+              condense_prompt: "examples/deployments/basic-gpu/condense.prompt"
+              chat_prompt: "examples/deployments/basic-gpu/qa.prompt"
+          models:
+            required:
+              condense_model: "OpenAIGPT4"
+              chat_model: "OpenAIGPT4"
+      model_class_map:
+        OpenAIGPT4:
+          class: OpenAIGPT4
+          kwargs:
+            model_name: gpt-4
+
+    services:
+      chat_app:
+        trained_on: "Course documentation"
+        hostname: "example.mit.edu"
+      chromadb:
+        chromadb_host: "chromadb"
+  mainPrompt: |
+    # Prompt used to query LLM with appropriate context and question.
+    # This prompt is specific to subMIT and likely will not perform well for other applications, where it is recommended to write your own prompt and change it in the config
+    # 
+    # All final prompts must have the following tags in them, which will be filled with the appropriate information:
+    #      Question: {question}
+    #      Context: {context}
+    #
+    You are a conversational chatbot named A2rchi who helps people navigate a computing cluster named SubMIT.
+    You will be provided context in the form of relevant documents, such as previous communication between sys admins and Guides, a summary of the problem that the user is trying to solve and the important elements of the conversation, and the most recent chat history between you and the user to help you answer their questions. 
+    Using your Linux and computing knowledge, answer the question at the end.
+    Unless otherwise indicated, assume the users are not well versed in computing.
+    Please do not assume that SubMIT machines have anything installed on top of native Linux except if the context mentions it.
+    If you don't know, say "I don't know", if you need to ask a follow up question, please do.
+
+    Context: {retriever_output}
+    Question: {question}
+    Chat History: {history}
+    Helpful Answer:
+  condensePrompt: |
+    # Prompt used to condense a chat history and a follow up question into a stand alone question. 
+    # This is a very general prompt for condensing histories, so for base installs it will not need to be modified
+    # 
+    # All condensing prompts must have the following tags in them, which will be filled with the appropriate information:
+    #      {chat_history}
+    #      {question}
+    #
+    Given the following conversation between you (the AI named A2rchi), a human user who needs help, and an expert, and a follow up question, rephrase the follow up question to be a standalone question, in its original language.
+
+    Chat History: {history}
+    Follow Up Input: {question}
+    Standalone question:
