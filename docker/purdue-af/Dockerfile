@@ -91,7 +91,7 @@ RUN echo "auth requisite pam_deny.so" >> /etc/pam.d/su && \
 USER ${NB_USER}
 
 # Pin python version here, or set it to "default"
-ARG PYTHON_VERSION=3.10
+ARG PYTHON_VERSION=3.14
 
 # Setup work directory for backward-compatibility
 RUN mkdir -p "/home/${NB_USER}/work" && \
@@ -128,7 +128,7 @@ COPY --chown=root:root docker/purdue-af/jupyter/start.sh /usr/local/bin/
 
 WORKDIR /tmp
 RUN mamba install --quiet --yes \
-        notebook jupyterhub jupyterlab=4.4.7 "nodejs>=20.0.0" \
+        notebook jupyterhub jupyterlab=4.4.10 "nodejs>=20.0.0" \
         nb_conda_kernels metakernel rucio-clients pytest lz4 ipywidgets ipympl bokeh==2.4.2 \
         julia &&\
     jupyter notebook --generate-config && \
