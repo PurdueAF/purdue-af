@@ -3,7 +3,7 @@ echo CONDARC=$CONDARC
 
 jupyter kernelspec remove -y python3 || true
 
-env_default_dir=/conda-envs/
+env_default_dir=/depot/cms/kernels/
 
 $env_default_dir/python3/bin/python -m ipykernel install \
 	--prefix=/opt/conda --name="python3" --display-name "Python3 kernel (default)"

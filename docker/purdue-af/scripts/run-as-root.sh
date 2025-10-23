@@ -41,7 +41,7 @@ conda deactivate
 echo "
 # To activate the \"default\" conda environment in this Terminal, run the following command:
 #
-#     conda activate /conda-envs/python3
+#     conda activate /depot/cms/kernels/python3
 #
 # This environment corresponds to \"Python3 kernel (default)\" in Jupyter notebooks.
 "
