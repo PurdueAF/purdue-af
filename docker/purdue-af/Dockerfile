@@ -91,7 +91,7 @@ RUN echo "auth requisite pam_deny.so" >> /etc/pam.d/su && \
 USER ${NB_USER}
 
 # Pin python version here, or set it to "default"
-ARG PYTHON_VERSION=3.13
+ARG PYTHON_VERSION=3.10
 
 # Setup work directory for backward-compatibility
 RUN mkdir -p "/home/${NB_USER}/work" && \
