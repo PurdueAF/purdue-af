@@ -110,8 +110,8 @@ RUN set -x  && \
         --prefix="${CONDA_DIR}" \
         --yes \
         "${PYTHON_SPECIFIER}" \
-        'conda==23.7.4' \
-        'mamba==2.2.0' \
+        'conda==25.9.0' \
+        'mamba==2.3.3' \
         'jupyter_core' && \
     rm micromamba && \
     mamba clean --all -f -y && \
