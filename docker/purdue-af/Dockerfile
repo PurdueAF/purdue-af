@@ -29,13 +29,14 @@ RUN set -euo pipefail \
       s3cmd htop \
       boost-devel diffutils ncurses-compat-libs cmake \
       glibc-static libcurl-devel \
-      gfal2-util-scripts python3-gfal2 python3.10 voms-clients myproxy patch \
+      gfal2-util-scripts python3-gfal2 voms-clients myproxy patch \
  && dnf -y --enablerepo=epel install tini \
  # CUDA repo + packages
  && dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo \
  && dnf -y install cuda-toolkit-12-4 libcudnn8-8.9.7.29-1+cuda12.2 \
  # cleanup & small quality-of-life
  && dnf clean all \
+ && ln -s /usr/bin/python3 /usr/bin/python \
  && rm -rf /var/cache/dnf \
  && rm -f /usr/bin/vi && ln -s /usr/bin/vim /usr/bin/vi \
  && localedef -c -f UTF-8 -i en_US en_US.UTF-8
