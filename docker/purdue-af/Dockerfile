@@ -29,7 +29,7 @@ RUN set -euo pipefail \
       s3cmd htop \
       boost-devel diffutils ncurses-compat-libs cmake \
       glibc-static libcurl-devel \
-      gfal2-util-scripts python3-gfal2 python==3.10 voms-clients myproxy patch \
+      gfal2-util-scripts python3-gfal2 python3.10 voms-clients myproxy patch \
  && dnf -y --enablerepo=epel install tini \
  # CUDA repo + packages
  && dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo \
