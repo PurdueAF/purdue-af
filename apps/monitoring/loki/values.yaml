@@ -8,16 +8,6 @@ singleBinary:
     type: ClusterIP
     port: 3100
     annotations: {}
-  ingress:
-    enabled: ${enable_ingresses}
-    ingressClassName: public
-    path: /
-    pathType: Prefix
-    hosts:
-      - loki-cms.geddes.rcac.purdue.edu
-    tls:
-      - hosts:
-          - loki-cms.geddes.rcac.purdue.edu
   resources:
     requests:
       cpu: 1000m
@@ -133,6 +123,17 @@ loki:
 
 gateway:
   enabled: false
+
+ingress:
+  enabled: ${enable_ingresses}
+  ingressClassName: public
+  path: /
+  pathType: Prefix
+  hosts:
+    - loki-cms.geddes.rcac.purdue.edu
+  tls:
+    - hosts:
+        - loki-cms.geddes.rcac.purdue.edu
 
 # Turn off the ruler so those placeholder buckets are never used
 ruler:
