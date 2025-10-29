@@ -16,11 +16,8 @@ try:
             detect_subprocesses=False,
             tags={
                 "component": "jupyter-server",
-                "hub_user": os.getenv("JUPYTERHUB_USER", "unknown"),
+                "user": os.getenv("NB_USER", "unknown"),
             },
         )
-        # Optional: write to stderr instead of stdout, or remove entirely
-        # sys.__stderr__.write("pyroscope: configured for %s\n" % app)
 except Exception as e:
     pass
-    # sys.__stderr__.write("pyroscope: init failed: %s\n" % e)
