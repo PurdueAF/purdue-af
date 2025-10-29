@@ -40,11 +40,6 @@ alloy:
     }
 
     loki.process "pods" {
-      stage.static_labels {
-        values = {
-          namespace = "cms"
-        }
-      }
       forward_to = [loki.write.default.receiver]
     }
 
