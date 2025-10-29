@@ -40,6 +40,27 @@ securityContext:
 initChownData:
   enabled: false
 
+# Mount writable tmp dirs for paths that fail on root-squash NFS
+extraVolumes:
+  - name: grafana-plugins-tmp
+    emptyDir: {}
+  - name: grafana-png-tmp
+    emptyDir: {}
+  - name: grafana-pdf-tmp
+    emptyDir: {}
+  - name: grafana-csv-tmp
+    emptyDir: {}
+
+extraVolumeMounts:
+  - name: grafana-plugins-tmp
+    mountPath: /var/lib/grafana/plugins
+  - name: grafana-png-tmp
+    mountPath: /var/lib/grafana/png
+  - name: grafana-pdf-tmp
+    mountPath: /var/lib/grafana/pdf
+  - name: grafana-csv-tmp
+    mountPath: /var/lib/grafana/csv
+
 # Resources
 resources:
   requests:
