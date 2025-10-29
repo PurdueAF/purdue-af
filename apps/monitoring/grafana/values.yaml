@@ -7,6 +7,8 @@ persistence:
   type: pvc
   size: 10Gi
   storageClassName: ${multinode_storage_class}
+  accessModes:
+    - ReadWriteMany
 
 # Ingress configuration
 ingress:
@@ -32,6 +34,11 @@ securityContext:
   runAsNonRoot: true
   runAsUser: 472
   fsGroup: 472
+  fsGroupChangePolicy: OnRootMismatch
+
+# Disable init chown on NFS/root-squash volumes; rely on fsGroup instead
+initChownData:
+  enabled: false
 
 # Resources
 resources:
