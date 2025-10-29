@@ -42,7 +42,7 @@ alloy:
     loki.process "pods" {
       stage.static_labels {
         values = {
-          cluster = "cms"
+          namespace = "cms"
         }
       }
       forward_to = [loki.write.default.receiver]
