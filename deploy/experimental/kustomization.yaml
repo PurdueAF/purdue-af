@@ -17,6 +17,7 @@ resources:
   - ../../apps/interlink/rbac.yaml
 
   - ../../apps/monitoring/pyroscope/helmrelease.yaml
+  - ../../apps/monitoring/loki/helmrelease.yaml
 
   - ../../apps/servicex/helmrelease.yaml
   - ../../apps/servicex/gitrepo.yaml
@@ -62,6 +63,10 @@ configMapGenerator:
   - name: pyroscope-config
     files:
       - values.yaml=../../apps/monitoring/pyroscope/values.yaml
+
+  - name: loki-config
+    files:
+      - values.yaml=../../apps/monitoring/loki/values.yaml
 
   - name: servicex-config
     files:

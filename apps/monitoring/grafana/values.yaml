@@ -117,3 +117,10 @@ datasources:
         url: http://pyroscope.cms.svc.cluster.local:4040
         jsonData:
           minStep: 15s
+      - name: loki
+        type: loki
+        url: http://loki.cms.svc.cluster.local:3100
+        access: proxy
+        isDefault: false
+        jsonData:
+          maxLines: 1000
