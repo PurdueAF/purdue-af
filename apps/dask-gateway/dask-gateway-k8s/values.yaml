@@ -98,7 +98,7 @@ gateway:
       extraContainerConfig:
         env:
           - name: DASK_DISTRIBUTED__WORKER__PRELOAD
-            value: '["/work/projects/purdue-af/dask_setup.py"]'
+            value: '["/work/projects/purdue-af/dask_pyroscope_preload.py"]'
           - name: DASK_DISTRIBUTED__WORKER__PRELOAD_ARGV
             value: "[[]]"
         volumeMounts:
