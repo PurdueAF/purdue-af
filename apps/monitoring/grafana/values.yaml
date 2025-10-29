@@ -100,6 +100,10 @@ resources:
     cpu: 2000m
     memory: 4Gi
 
+# Ensure rollout does not run two pods concurrently to avoid PVC multi-attach
+deploymentStrategy:
+  type: Recreate
+
 # Grafana configuration
 grafana.ini:
   server:
