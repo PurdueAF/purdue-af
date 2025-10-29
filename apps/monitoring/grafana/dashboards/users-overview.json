@@ -1079,7 +1079,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_replace(\n  time() - kube_pod_created{namespace=~\"$namespace\",pod=~\"purdue-af-.*\"},\n  \"userId\", \"$1\", \"pod\", \"purdue-af-(.*)\"\n)\n",
+          "expr": "label_replace(\n  time() - kube_pod_created{namespace=~\"$namespace\",pod=~\"purdue-af-(?!agent|broker).*\"},\n  \"userId\", \"$1\", \"pod\", \"purdue-af-(.*)\"\n)\n",
           "format": "table",
           "instant": true,
           "interval": "",
