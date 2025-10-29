@@ -22,5 +22,3 @@ spec:
     - kind: ConfigMap
       name: alloy-config
       valuesKey: values.yaml
-
-

@@ -53,5 +53,3 @@ alloy:
         url = "http://loki.cms.svc.cluster.local:3100/loki/api/v1/push"
       }
     }
-
-
