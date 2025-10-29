@@ -54,7 +54,7 @@ loki:
   tracing:
     enabled: false
   ui:
-    enabled: false
+    enabled: true
 
   # REAL Loki runtime config goes here
   structuredConfig:
