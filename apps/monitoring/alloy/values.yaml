@@ -1,0 +1,57 @@
+# Chart: grafana/alloy
+
+controller:
+  type: daemonset
+  replicas: 1
+  service:
+    enabled: false
+  tolerations: []
+  nodeSelector: {}
+
+serviceAccount:
+  create: true
+
+rbac:
+  create: true
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+alloy:
+  # River configuration: collect Kubernetes pod logs and send to Loki
+  config: |
+    logging {
+      level = "info"
+      format = "logfmt"
+    }
+
+    discovery.kubernetes "pods" {
+      role = "pod"
+    }
+
+    loki.source.kubernetes "pods" {
+      targets    = discovery.kubernetes.pods.targets
+      forward_to = [loki.process.pods.receiver]
+    }
+
+    loki.process "pods" {
+      stage.static_labels {
+        values = {
+          cluster = "cms"
+        }
+      }
+      forward_to = [loki.write.default.receiver]
+    }
+
+    loki.write "default" {
+      endpoint {
+        url = "http://loki.cms.svc.cluster.local:3100/loki/api/v1/push"
+      }
+    }
+
+

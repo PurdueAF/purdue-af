@@ -18,6 +18,7 @@ resources:
 
   - ../../apps/monitoring/pyroscope/helmrelease.yaml
   - ../../apps/monitoring/loki/helmrelease.yaml
+  - ../../apps/monitoring/alloy/helmrelease.yaml
 
   - ../../apps/servicex/helmrelease.yaml
   - ../../apps/servicex/gitrepo.yaml
@@ -67,6 +68,10 @@ configMapGenerator:
   - name: loki-config
     files:
       - values.yaml=../../apps/monitoring/loki/values.yaml
+
+  - name: alloy-config
+    files:
+      - values.yaml=../../apps/monitoring/alloy/values.yaml
 
   - name: servicex-config
     files:
