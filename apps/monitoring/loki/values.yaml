@@ -114,7 +114,7 @@ loki:
       max_line_size_truncate: false
       per_stream_rate_limit: 3MB
       per_stream_rate_limit_burst: 15MB
-      volume_enabled: false
+      volume_enabled: true
 
     compactor:
       working_directory: /var/loki/compactor
