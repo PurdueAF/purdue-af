@@ -40,6 +40,11 @@ alloy:
     }
 
     loki.process "pods" {
+      static_labels {
+        values = {
+          app="jupyterhub"
+        }
+      }
       forward_to = [loki.write.default.receiver]
     }
 
