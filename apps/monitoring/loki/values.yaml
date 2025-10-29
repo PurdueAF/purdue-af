@@ -74,9 +74,14 @@ loki:
       grpc_listen_port: 9096
 
     # Use memberlist for ring instead of Consul
-    ring:
-      kvstore:
-        store: memberlist
+    common:
+      ring:
+        kvstore:
+          store: memberlist
+
+    memberlist:
+      abort_if_cluster_join_fails: false
+      join_members: []
 
     schema_config:
       configs:
