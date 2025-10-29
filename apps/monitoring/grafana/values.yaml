@@ -61,6 +61,36 @@ extraVolumeMounts:
   - name: grafana-csv-tmp
     mountPath: /var/lib/grafana/csv
 
+# Add an init container that sets permissive mode on the PVC root without chown
+extraInitContainers:
+  - name: init-chmod-data
+    image: docker.io/library/busybox:1.36
+    imagePullPolicy: IfNotPresent
+    command:
+      - sh
+      - -c
+      - >-
+        mkdir -p /var/lib/grafana &&
+        chmod -R 0777 /var/lib/grafana || true &&
+        ls -ld /var/lib/grafana || true
+    securityContext:
+      runAsUser: 0
+      runAsNonRoot: false
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      seccompProfile:
+        type: RuntimeDefault
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+    volumeMounts:
+      - name: storage
+        mountPath: /var/lib/grafana
+
 # Resources
 resources:
   requests:
