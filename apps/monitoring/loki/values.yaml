@@ -155,3 +155,6 @@ write:
 backend:
   enabled: false
   replicas: 0
+
+canary:
+  enabled: false

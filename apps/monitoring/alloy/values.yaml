@@ -5,8 +5,28 @@ controller:
   replicas: 1
   service:
     enabled: false
-  tolerations: []
-  nodeSelector: {}
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  nodeSelector:
+    cms-af-prod: "true"
+  extraVolumes:
+    - name: varlog
+      hostPath:
+        path: /var/log
+    - name: dockercontainers
+      hostPath:
+        path: /var/lib/docker/containers
+        # If you use containerd only, you can omit this
+  extraVolumeMounts:
+    - name: varlog
+      mountPath: /var/log
+      readOnly: true
+    - name: dockercontainers
+      mountPath: /var/lib/docker/containers
+      readOnly: true
 
 serviceAccount:
   create: true
@@ -40,11 +60,6 @@ alloy:
     }
 
     loki.process "pods" {
-      static_labels {
-        values = {
-          app="jupyterhub"
-        }
-      }
       forward_to = [loki.write.default.receiver]
     }
 
