@@ -101,6 +101,9 @@ loki:
       wal:
         dir: /var/loki/wal
 
+    distributor:
+      replication_factor: 1
+
     limits_config:
       allow_structured_metadata: true
       reject_old_samples: true
