@@ -7,6 +7,21 @@ controller:
     enabled: false
   tolerations: []
   nodeSelector: {}
+  # Enable eBPF by sharing PID namespace with host and mounting required host paths
+  hostPID: true
+  extraVolumes:
+    - name: sys
+      hostPath:
+        path: /sys
+    - name: bpf
+      hostPath:
+        path: /sys/fs/bpf
+    - name: debugfs
+      hostPath:
+        path: /sys/kernel/debug
+    - name: lib-modules
+      hostPath:
+        path: /lib/modules
 
 serviceAccount:
   create: true
@@ -87,3 +102,25 @@ alloy:
         url = "http://pyroscope.pyroscope.svc.cluster.local:4040"
       }
     }
+
+  # Mount host paths into the Alloy container and grant capabilities for eBPF
+  extraVolumeMounts:
+    - name: sys
+      mountPath: /sys
+      readOnly: true
+    - name: bpf
+      mountPath: /sys/fs/bpf
+    - name: debugfs
+      mountPath: /sys/kernel/debug
+    - name: lib-modules
+      mountPath: /lib/modules
+      readOnly: true
+  securityContext:
+    privileged: true
+    capabilities:
+      add:
+        - BPF
+        - PERFMON
+        - SYS_ADMIN
+        - SYS_RESOURCE
+        - SYS_PTRACE
