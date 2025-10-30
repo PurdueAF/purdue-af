@@ -100,9 +100,9 @@ loki:
     ingester:
       wal:
         dir: /var/loki/wal
-
-    distributor:
-      replication_factor: 1
+      lifecycler:
+        ring:
+          replication_factor: 1
 
     limits_config:
       allow_structured_metadata: true
