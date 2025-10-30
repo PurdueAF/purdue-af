@@ -7,21 +7,6 @@ controller:
     enabled: false
   tolerations: []
   nodeSelector: {}
-  # Enable eBPF by sharing PID namespace with host and mounting required host paths
-  hostPID: true
-  extraVolumes:
-    - name: sys
-      hostPath:
-        path: /sys
-    - name: bpf
-      hostPath:
-        path: /sys/fs/bpf
-    - name: debugfs
-      hostPath:
-        path: /sys/kernel/debug
-    - name: lib-modules
-      hostPath:
-        path: /lib/modules
 
 serviceAccount:
   create: true
@@ -69,58 +54,6 @@ alloy:
       }
     }
 
-    // eBPF profiling for Dask Gateway scheduler/workers → Pyroscope
-    // Requires Alloy to run with eBPF permissions (privileged or CAP_BPF) and
-    // access to /sys/fs/bpf, /sys/kernel/debug and kernel modules. Ensure the
-    // DaemonSet has the appropriate securityContext and mounts at deploy time.
+    // eBPF profiling removed due to cluster policy; Alloy is used only for logs
 
-    // Discover all pods; narrow to Dask components via selectors below
-    pyroscope.ebpf "dask" {
-      targets = discovery.kubernetes.pods.targets
 
-      // Limit profiling scope to Dask scheduler/workers
-      selectors = [
-        {
-          match_labels = {
-            "dask.org/component" = "worker"
-          }
-        },
-        {
-          match_labels = {
-            "dask.org/component" = "scheduler"
-          }
-        }
-      ]
-
-      sampling_rate = 97
-      forward_to    = [pyroscope.write.default.receiver]
-    }
-
-    // Send profiles to Pyroscope
-    pyroscope.write "default" {
-      endpoint {
-        url = "http://pyroscope.pyroscope.svc.cluster.local:4040"
-      }
-    }
-
-  # Mount host paths into the Alloy container and grant capabilities for eBPF
-  extraVolumeMounts:
-    - name: sys
-      mountPath: /sys
-      readOnly: true
-    - name: bpf
-      mountPath: /sys/fs/bpf
-    - name: debugfs
-      mountPath: /sys/kernel/debug
-    - name: lib-modules
-      mountPath: /lib/modules
-      readOnly: true
-  securityContext:
-    privileged: true
-    capabilities:
-      add:
-        - BPF
-        - PERFMON
-        - SYS_ADMIN
-        - SYS_RESOURCE
-        - SYS_PTRACE

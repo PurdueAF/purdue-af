@@ -178,7 +178,7 @@ pyroscope:
   # -- Grafana Agent Configuration.
 
 alloy:
-  enabled: true
+  enabled: false
   controller:
     type: "statefulset"
     replicas: 1
