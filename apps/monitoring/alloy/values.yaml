@@ -55,5 +55,3 @@ alloy:
     }
 
     // eBPF profiling removed due to cluster policy; Alloy is used only for logs
-
-
