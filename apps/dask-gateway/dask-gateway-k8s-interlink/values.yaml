@@ -189,7 +189,7 @@ gateway:
             #"queue": "root.community.cms"
           }
 
-          setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
+          setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; export DASK_DISTRIBUTED__WORKER__PROFILE__INTERVAL=1000000000; export DASK_DISTRIBUTED__SCHEDULER__PROFILE__INTERVAL=1000000000; "
           desired_cores = options.worker_cores
           desired_memory = int(options.worker_memory * 2 ** 30)
           return {

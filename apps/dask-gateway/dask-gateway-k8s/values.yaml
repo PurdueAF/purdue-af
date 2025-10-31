@@ -101,6 +101,8 @@ gateway:
             value: '["/work/projects/purdue-af/dask_pyroscope_preload.py"]'
           - name: DASK_DISTRIBUTED__WORKER__PRELOAD_ARGV
             value: "[[]]"
+          - name: DASK_DISTRIBUTED__WORKER__PROFILE__INTERVAL
+            value: "1000000000"
         volumeMounts:
           - name: cvmfs
             mountPath: /cvmfs
@@ -204,7 +206,7 @@ gateway:
           #     "profiles.grafana.com/goroutine.port": "8080",
           # }
 
-          setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
+          setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; export DASK_DISTRIBUTED__WORKER__PROFILE__INTERVAL=1000000000; export DASK_DISTRIBUTED__SCHEDULER__PROFILE__INTERVAL=1000000000; "
           desired_cores = options.worker_cores
           desired_memory = int(options.worker_memory * 2 ** 30)
           return {

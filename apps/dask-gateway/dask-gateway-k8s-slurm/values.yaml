@@ -49,7 +49,7 @@ gateway:
       from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
 
       def options_handler(options):
-          setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
+          setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; export DASK_DISTRIBUTED__WORKER__PROFILE__INTERVAL=1000000000; export DASK_DISTRIBUTED__SCHEDULER__PROFILE__INTERVAL=1000000000; "
 
           options.env["PATH"]=f"{options.conda_env}/bin/:"+options.env.pop("PATH")
           options.env["CPLUS_INCLUDE_PATH"]=f"{options.conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
