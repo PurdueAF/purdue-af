@@ -156,5 +156,5 @@ backend:
   enabled: false
   replicas: 0
 
-canary:
+lokiCanary:
   enabled: false
