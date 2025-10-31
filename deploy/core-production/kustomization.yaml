@@ -40,6 +40,7 @@ resources:
   - ../../apps/monitoring/af-monitoring/deployment.yaml
   - ../../apps/monitoring/af-monitoring/daemonset.yaml
   - ../../apps/monitoring/grafana/helmrelease.yaml
+  - ../../apps/monitoring/grafana/plugins-provisioning-cm.yaml
   - ../../apps/monitoring/prometheus/helmrelease.yaml
   - ../../apps/monitoring/prometheus/servicemonitors.yaml
   - ../../apps/monitoring/prometheus/pod-monitor-svc.yaml
