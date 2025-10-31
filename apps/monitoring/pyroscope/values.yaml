@@ -18,8 +18,8 @@ pyroscope:
     tag: ""
 
   extraArgs:
-    log.level: info
-    max_query_length: 30d
+    - "--max_query_length=30d"
+    - "--log.level=info"
 
   extraLabels: {}
 
