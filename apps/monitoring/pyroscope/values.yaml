@@ -18,8 +18,7 @@ pyroscope:
     tag: ""
 
   extraArgs:
-    - "--max_query_length=30d"
-    - "--log.level=info"
+    log.level: info
 
   extraLabels: {}
 
@@ -166,6 +165,8 @@ pyroscope:
   # -- Contains Pyroscope's configuration as a string.
   # @default -- The config depends on other values been set, details can be found in [`values.yaml`](./values.yaml)
   config: |
+    limits:
+      max_query_length: 30d
     {{- if .Values.minio.enabled }}
     storage:
       backend: s3
