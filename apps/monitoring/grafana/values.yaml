@@ -91,6 +91,18 @@ extraInitContainers:
       - name: storage
         mountPath: /var/lib/grafana
 
+extraConfigmapMounts:
+  - name: grafana-plugins-provisioning
+    mountPath: /etc/grafana/provisioning/plugins
+    configMap: grafana-plugins-provisioning
+    readOnly: true
+
+envValueFrom:
+  OPENAI_API_KEY:
+    secretKeyRef:
+      name: a2rchi-openai-api-key
+      key: OPENAI_API_KEY
+
 # Resources
 resources:
   requests:
@@ -186,3 +198,7 @@ datasources:
         isDefault: false
         jsonData:
           maxLines: 1000
+
+plugins:
+  - grafana-llm-app
+  - grafana-pyroscope-app

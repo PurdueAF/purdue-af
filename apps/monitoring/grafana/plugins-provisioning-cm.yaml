@@ -1,0 +1,22 @@
+# configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-plugins-provisioning
+data:
+  apps.yaml: |
+    apiVersion: 1
+    apps:
+      - type: grafana-llm-app
+        disabled: false
+        jsonData:
+          openAI:
+            # YOUR custom OpenAI-compatible base URL (Azure OpenAI, vLLM, OpenRouter/gateway, etc.)
+            url: https://genai.rcac.purdue.edu/api
+          # Optional but recommended: default model “roles” used by features like Explain Flame Graph
+          modelMappings:
+            base: gpt-oss:latest
+            large: gpt-oss:latest
+        secureJsonData:
+          # reference the env var injected by Helm values
+          openAIKey: ${OPENAI_API_KEY}
