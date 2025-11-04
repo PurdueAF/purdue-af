@@ -131,7 +131,7 @@ WORKDIR /tmp
 RUN mamba install --quiet --yes \
         notebook jupyterhub jupyterlab=4.4.10 "nodejs>=20.0.0" \
         nb_conda_kernels metakernel rucio-clients pytest lz4 ipywidgets ipympl bokeh==2.4.2 \
-        julia jupyter-sshd-proxy==0.3.0&&\
+        julia jupyter-sshd-proxy==0.3.0 openssh &&\
     jupyter notebook --generate-config && \
     mamba clean --all -f -y && \
     npm cache clean --force && \
