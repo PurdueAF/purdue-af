@@ -131,7 +131,7 @@ WORKDIR /tmp
 RUN mamba install --quiet --yes \
         notebook jupyterhub jupyterlab=4.4.10 "nodejs>=20.0.0" \
         nb_conda_kernels metakernel rucio-clients pytest lz4 ipywidgets ipympl bokeh==2.4.2 \
-        julia jupyter-sshd-proxy==0.3.0 openssh &&\
+        julia openssh &&\
     jupyter notebook --generate-config && \
     mamba clean --all -f -y && \
     npm cache clean --force && \
@@ -221,7 +221,7 @@ COPY docker/purdue-af/scripts/eos-connect.sh docker/purdue-af/jupyter/jupyter_co
 RUN mkdir -p /etc/cvmfs/
 COPY docker/purdue-af/configs/default.local /etc/cvmfs/
 
-RUN pip install --no-cache-dir --upgrade pyroscope-io==0.8.11
+RUN pip install --no-cache-dir --upgrade pyroscope-io==0.8.11 jupyter-sshd-proxy==0.3.0
 
 # Switch back to NB_USER
 USER ${NB_USER}
