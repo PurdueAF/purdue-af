@@ -1,7 +1,7 @@
 apiVersion: helm.toolkit.fluxcd.io/v2beta1
 kind: HelmRelease
 metadata:
-  name: supersonic-dev
+  name: supersonic-2508-nvidia
 spec:
   # suspend: true
   interval: 1m
@@ -10,7 +10,7 @@ spec:
       chart: helm/supersonic
       sourceRef:
         kind: GitRepository
-        name: supersonic-dev
+        name: supersonic-2508-nvidia
       # chart: supersonic
       # version: "0.2.1"
       # sourceRef:
@@ -25,5 +25,5 @@ spec:
       retries: -1
   valuesFrom:
     - kind: ConfigMap
-      name: supersonic-dev-config
+      name: supersonic-2508-nvidia-config
       valuesKey: values.yaml

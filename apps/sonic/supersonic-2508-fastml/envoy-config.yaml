@@ -48,5 +48,5 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: supersonic-dev-triton
+                      address: supersonic-2508-fastml-triton
                       port_value: 8001

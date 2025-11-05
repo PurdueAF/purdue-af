@@ -30,8 +30,10 @@ resources:
   - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
   - ../../apps/sonic/supersonic-dynamic/gitrepo.yaml
   - ../../apps/sonic/supersonic-dynamic/helmrelease.yaml
-  - ../../apps/sonic/supersonic-dev/gitrepo.yaml
-  - ../../apps/sonic/supersonic-dev/helmrelease.yaml
+  - ../../apps/sonic/supersonic-2508-fastml/gitrepo.yaml
+  - ../../apps/sonic/supersonic-2508-fastml/helmrelease.yaml
+  - ../../apps/sonic/supersonic-2508-nvidia/gitrepo.yaml
+  - ../../apps/sonic/supersonic-2508-nvidia/helmrelease.yaml
 
   - ../../apps/sonic/supersonic-alma9/helmrelease.yaml
 
@@ -89,10 +91,15 @@ configMapGenerator:
     files:
       - values.yaml=../../apps/sonic/supersonic-dynamic/values.yaml
 
-  - name: supersonic-dev-config
+  - name: supersonic-2508-fastml-config
     files:
-      - values.yaml=../../apps/sonic/supersonic-dev/values.yaml
-      - envoy-config.yaml=../../apps/sonic/supersonic-dev/envoy-config.yaml
+      - values.yaml=../../apps/sonic/supersonic-2508-fastml/values.yaml
+      - envoy-config.yaml=../../apps/sonic/supersonic-2508-fastml/envoy-config.yaml
+
+  - name: supersonic-2508-nvidia-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic-2508-nvidia/values.yaml
+      - envoy-config.yaml=../../apps/sonic/supersonic-2508-nvidia/envoy-config.yaml
 
   - name: supersonic-alma9-config
     files:
