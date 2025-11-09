@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN git clone https://github.com/interlink-hq/interlink-slurm-plugin.git /app && \
     git fetch --tags && \
-    git checkout 0.5.2 && \
+    git checkout 0.5.3-pre1 && \
     CGO_ENABLED=0 GOOS=linux go build -o bin/slurm-sidecar cmd/main.go
 
 # Deploy the application binary into a lean image
