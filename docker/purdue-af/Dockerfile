@@ -111,6 +111,10 @@ RUN pixi install --environment base-env && \
 ENV BASE_ENV_DIR="/srv/base-env/.pixi/envs/base-env"
 ENV PATH="${BASE_ENV_DIR}/bin:${PATH}"
 
+RUN echo "${NB_USER} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/notebook && \
+    echo "Defaults secure_path=\"${PATH}\"" >> /etc/sudoers.d/notebook && \
+    chmod 0440 /etc/sudoers.d/notebook
+
 # Configure container startup
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
