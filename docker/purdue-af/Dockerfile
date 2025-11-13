@@ -134,9 +134,7 @@ CMD ["start-notebook.sh"]
 # Copy local files as late as possible to avoid cache busting
 COPY --chown=root:root docker/purdue-af/jupyter/start-notebook.sh docker/purdue-af/jupyter/start-singleuser.sh /usr/local/bin/
 USER root
-RUN echo "${NB_USER} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/notebook && \
-    echo "Defaults secure_path=\"${PATH}\"" >> /etc/sudoers.d/notebook && \
-    chmod 0440 /etc/sudoers.d/notebook
+RUN ln -s /srv/base-env/.pixi/envs/base-env/bin/jupyterhub-singleuser /usr/local/bin/jupyterhub-singleuser
 RUN chmod +x /usr/local/bin/start.sh /usr/local/bin/start-notebook.sh /usr/local/bin/start-singleuser.sh
 
 # Copy Jupyter configuration files
