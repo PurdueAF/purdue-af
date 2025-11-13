@@ -9,7 +9,7 @@ env_default_dir=/depot/cms/kernels/
 base_env_dir=/srv/base-env/.pixi/envs/base-env/
 
 $env_default_dir/python3/bin/python -m ipykernel install \
-	--prefix=$base_env_dir --name="python3" --display-name "Python3 kernel (default)"
+	--prefix=/usr/share/jupyter/kernels --name="python3" --display-name "Python3 kernel (default)"
 
 kernel_path="$base_env_dir/share/jupyter/kernels/python3/"
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/depot/cms/purdue-af/lhapdf/lib:/depot/cms/purdue-af/combine/HiggsAnalysis/CombinedLimit/build/lib
@@ -28,7 +28,7 @@ mv tmp_kernel.json "$kernel_path/kernel.json"
 
 # For Coffea_latest
 $env_default_dir/coffea_latest/bin/python -m ipykernel install \
-	--prefix=$base_env_dir --name="coffea_latest" --display-name "coffea_latest"
+	--prefix=/usr/share/jupyter/kernels --name="coffea_latest" --display-name "coffea_latest"
 
 # ------------------
 

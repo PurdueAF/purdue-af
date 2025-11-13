@@ -1,7 +1,10 @@
+# earlier: /opt/conda
+base_env_dir=/srv/base-env/.pixi/envs/base-env/
+
 # Configure jupyterlab-unfold extension
-mkdir -p /opt/conda/share/jupyter/lab/settings
+mkdir -p $base_env_dir/share/jupyter/lab/settings
 echo "{\"jupyterlab-unfold:jupyterlab-unfold-settings\": {\"singleClickToUnfold\": false}}" \
-	>/opt/conda/share/jupyter/lab/settings/overrides.json
+	$base_env_dir/share/jupyter/lab/settings/overrides.json
 
 # Configure topbar extension
 NEW_HOME=/home/$NB_USER
@@ -72,11 +75,11 @@ echo "{
     \"rank\": 0
 }" >$JIL_PATH/plugin.jupyterlab-settings
 
-# # Configure prometheus alerts extension
-# echo '{
-#   "ServerApp": {
-#     "jpserver_extensions": {
-#       "prometheus_alerts": true
-#     }
-#   }
-# }' >/opt/conda/etc/jupyter/jupyter_server_config.d/prometheus_alerts.json
+# Configure prometheus alerts extension
+echo '{
+  "ServerApp": {
+    "jpserver_extensions": {
+      "prometheus_alerts": true
+    }
+  }
+}' >$base_env_dir/etc/jupyter/jupyter_server_config.d/prometheus_alerts.json
