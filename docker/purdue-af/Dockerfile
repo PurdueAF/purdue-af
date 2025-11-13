@@ -111,6 +111,9 @@ RUN pixi install --environment base-env && \
 ENV BASE_ENV_DIR="/srv/base-env/.pixi/envs/base-env"
 ENV PATH="${BASE_ENV_DIR}/bin:${PATH}"
 
+RUN ls -ltr /srv/base-env/.pixi/envs/base-env/bin/jupyterhub-singleuser
+RUN ls -ltr /srv/base-env/.pixi/envs/base-env/bin/
+
 # Configure container startup
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
@@ -134,7 +137,6 @@ CMD ["start-notebook.sh"]
 # Copy local files as late as possible to avoid cache busting
 COPY --chown=root:root docker/purdue-af/jupyter/start-notebook.sh docker/purdue-af/jupyter/start-singleuser.sh /usr/local/bin/
 USER root
-RUN ln -s /srv/base-env/.pixi/envs/base-env/bin/jupyterhub-singleuser /usr/local/bin/jupyterhub-singleuser
 RUN chmod +x /usr/local/bin/start.sh /usr/local/bin/start-notebook.sh /usr/local/bin/start-singleuser.sh
 
 # Copy Jupyter configuration files
