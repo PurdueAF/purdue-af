@@ -1,0 +1,49 @@
+[workspace]
+name = "base-env"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+# Core runtime
+python        = "3.10.*"
+conda         = "==25.9.0"
+mamba         = "==2.3.3"
+jupyter_core  = "*"
+
+# Jupyter pieces
+notebook      = "*"
+jupyterhub    = "*"
+jupyterlab    = "==4.4.10"
+nodejs        = ">=20"
+
+# Kernel discovery / misc
+nb_conda_kernels = "*"
+metakernel       = "*"
+
+# Other tools
+rucio-clients = "*"
+pytest        = "*"
+lz4           = "*"
+ipywidgets    = "*"
+ipympl        = "*"
+bokeh         = "==2.4.2"
+julia         = "*"
+openssh       = "*"
+
+[pypi-dependencies]
+jupyterlab-git            = "==0.51.2"
+jupyter-resource-usage    = "==1.2.0"
+jupyterlab_iframe         = "==0.5.0"
+jupyter-archive           = "==3.4.0"
+jupyterlab_favorites      = "==3.2.2"
+purdue-af-shutdown-button = "==0.1.0"
+jupyterlab-topbar-text    = "==1.1.0"
+jupyterlab-theme-toggler  = "==1.1.0"
+dask-gateway              = "==2025.4.0"
+pyroscope-io              = "==0.8.11"
+jupyter-sshd-proxy        = "==0.3.0"
+
+dask-labextension = { git = "https://github.com/kondratyevd/dask-labextension.git" }
+
+[environments]
+base-env = { features = [] }

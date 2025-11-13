@@ -59,15 +59,13 @@ RUN dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
     chown -R slurm:slurm /var/log/slurm
 
 # Configure environment
-ENV CONDA_DIR=/opt/conda \
-    SHELL=/bin/bash \
+ENV SHELL=/bin/bash \
     NB_USER="${NB_USER}" \
     NB_UID=${NB_UID} \
     NB_GID=${NB_GID} \
     LANG=en_US.UTF-8 \
     LANGUAGE=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8 \
-    PATH="/opt/conda/bin:${PATH}" \
     HOME="/home/${NB_USER}"
 
 # Copy a script that we will use to correct permissions after running certain commands
@@ -75,51 +73,43 @@ COPY --chown=root:root docker/purdue-af/scripts/fix-permissions /usr/local/bin/f
 RUN chmod a+rx /usr/local/bin/fix-permissions
 
 # Enable prompt color in the skeleton .bashrc before creating the default NB_USER
-RUN sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashrc && \
-    echo 'eval "$(command conda shell.bash hook 2> /dev/null)"' >> /etc/skel/.bashrc
+RUN sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashrc
 
 # Create NB_USER with UID=1000 and GID=100, and set permissions
 RUN echo "auth requisite pam_deny.so" >> /etc/pam.d/su && \
     sed -i.bak -e 's/^%admin/#%admin/' /etc/sudoers && \
     sed -i.bak -e 's/^%sudo/#%sudo/' /etc/sudoers && \
     useradd -l -m -s /bin/bash -N -u "${NB_UID}" "${NB_USER}" && \
-    mkdir -p "${CONDA_DIR}" && \
-    chown "${NB_USER}:${NB_GID}" "${CONDA_DIR}" && \
-    chmod g+w /etc/passwd && \
-    fix-permissions "${HOME}" && \
-    fix-permissions "${CONDA_DIR}"
+    chmod g+w /etc/passwd 
 
 USER ${NB_USER}
 
-# Pin python version here, or set it to "default"
 ARG PYTHON_VERSION=3.10
 
 # Setup work directory for backward-compatibility
 RUN mkdir -p "/home/${NB_USER}/work" && \
     fix-permissions "/home/${NB_USER}"
 
-# Download and install Micromamba, and initialize Conda prefix
-COPY --chown="${NB_USER}:${NB_GID}" docker/purdue-af/scripts/initial-condarc "${CONDA_DIR}/.condarc"
+# Install Pixi for NB_USER
 WORKDIR /tmp
-RUN set -x  && \
-    wget -qO /tmp/micromamba.tar.bz2 "https://micromamba.snakepit.net/api/micromamba/linux-64/latest" && \
-    tar -xvjf /tmp/micromamba.tar.bz2 --strip-components=1 bin/micromamba && \
-    PYTHON_SPECIFIER="python=${PYTHON_VERSION}" && \
-    if [[ "${PYTHON_VERSION}" == "default" ]]; then PYTHON_SPECIFIER="python"; fi && \
-    ./micromamba install \
-        --root-prefix="${CONDA_DIR}" \
-        --prefix="${CONDA_DIR}" \
-        --yes \
-        "${PYTHON_SPECIFIER}" \
-        'conda==25.9.0' \
-        'mamba==2.3.3' \
-        'jupyter_core' && \
-    rm micromamba && \
-    mamba clean --all -f -y && \
-    fix-permissions "${CONDA_DIR}" && \
-    fix-permissions "/home/${NB_USER}"
-# mamba list python | grep '^python ' | tr -s ' ' | cut -d ' ' -f 1,2 >> "${CONDA_DIR}/conda-meta/pinned" && \
+RUN curl -fsSL https://pixi.sh/install.sh | bash
 
+# Set PIXI_HOME and put pixi on PATH for build
+ENV PIXI_HOME="/home/${NB_USER}/.pixi"
+ENV PATH="${PIXI_HOME}/bin:${PATH}"
+
+# Copy pixi project (service env definition)
+COPY --chown="${NB_USER}:${NB_GID}" docker/purdue-af/pixi.toml /srv/base-env/
+WORKDIR /srv/base-env
+
+# Install base-env into the default pixi location
+RUN pixi install --environment base-env && \
+    fix-permissions "/srv/base-env/.pixi" && \
+    fix-permissions "${HOME}"
+
+# Point BASE_ENV_DIR at the installed environment and use it by default
+ENV BASE_ENV_DIR="/srv/base-env/.pixi/envs/base-env"
+ENV PATH="${BASE_ENV_DIR}/bin:${PATH}"
 
 # Configure container startup
 ENTRYPOINT ["/usr/bin/tini", "--"]
@@ -127,17 +117,12 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 # Copy local files as late as possible to avoid cache busting
 COPY --chown=root:root docker/purdue-af/jupyter/start.sh /usr/local/bin/
 
-WORKDIR /tmp
-RUN mamba install --quiet --yes \
-        notebook jupyterhub jupyterlab=4.4.10 "nodejs>=20.0.0" \
-        nb_conda_kernels metakernel rucio-clients pytest lz4 ipywidgets ipympl bokeh==2.4.2 \
-        julia openssh &&\
-    jupyter notebook --generate-config && \
-    mamba clean --all -f -y && \
-    npm cache clean --force && \
+# Use jupyter from base-env to generate config and do light cleanup
+RUN jupyter notebook --generate-config && \
+    npm cache clean --force || true && \
     jupyter lab clean && \
     rm -rf "/home/${NB_USER}/.cache/yarn" && \
-    fix-permissions "${CONDA_DIR}" && \
+    fix-permissions "${BASE_ENV_DIR}" && \
     fix-permissions "/home/${NB_USER}"
 
 ENV JUPYTER_PORT=8888
@@ -155,20 +140,17 @@ RUN chmod +x /usr/local/bin/start.sh /usr/local/bin/start-notebook.sh /usr/local
 COPY docker/purdue-af/jupyter/jupyter_server_config.py docker/purdue-af/jupyter/docker_healthcheck.py /etc/jupyter/
 
 # Fix permissions on /etc/jupyter as root
-USER root
 RUN sed -re "s/c.ServerApp/c.NotebookApp/g" \
     /etc/jupyter/jupyter_server_config.py > /etc/jupyter/jupyter_notebook_config.py && \
     fix-permissions /etc/jupyter/
 
 # Healthcheck configuration
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
-CMD /etc/jupyter/docker_healthcheck.py || exit 1
+ CMD /etc/jupyter/docker_healthcheck.py || exit 1
 
 # # Set LD_LIBRARY_PATH to avoid crashes due to library mismatches
-# ENV LD_LIBRARY_PATH="/opt/conda/envs/julia_env/lib:$LD_LIBRARY_PATH"
-
-# # Install the Julia kernel via IJulia
-# RUN julia -e 'using Pkg; Pkg.add("IJulia"); using IJulia; IJulia.installkernel("Julia", "--depwarn=no")'
+# # (Adjust for Pixi-based julia env if you wire that up)
+# # ENV LD_LIBRARY_PATH="/opt/base-env/envs/julia_env/lib:$LD_LIBRARY_PATH"
 
 # Configure XrootD, grid certificates, VOMS
 RUN mkdir -p /etc/cvmfs /etc/cvmfs/SITECONF/JobConfig/ /etc/cvmfs/SITECONF/PhEDEx
@@ -180,33 +162,6 @@ RUN mkdir -p /home/${NB_USER}/.globus /home/${NB_USER}/.rnd && \
     chmod 700 /home/${NB_USER}/.globus
 
 ENV X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
-
-RUN pip install --no-cache-dir --upgrade \
-    jupyterlab-git==0.51.2 \
-    jupyter-resource-usage==1.1.1 \
-    jupyterlab_iframe==0.5.0 \
-    jupyter-archive==3.4.0 \
-    jupyterlab_favorites==3.2.2 \
-    purdue-af-shutdown-button==0.1.0 \
-    # purdue-af-grafana-iframe==0.1.0 \
-    jupyterlab-topbar-text==1.1.0 \
-    jupyterlab-theme-toggler==1.1.0 \
-    dask-gateway==2025.4.0
-    # \jupyter-ai[all]==2.31.6
-
-# COPY docker/purdue-af/genaistudio /opt/conda/lib/python3.10/site-packages/genaistudio
-# RUN pip install --no-cache-dir --upgrade -e /opt/conda/lib/python3.10/site-packages/genaistudio
-
-# Install Dask labextension
-RUN git clone https://github.com/kondratyevd/dask-labextension.git
-WORKDIR /tmp/dask-labextension
-RUN pip install --no-cache-dir .
-WORKDIR /tmp
-RUN rm -rf dask-labextension
-
-# Configure JupyterLab extensions
-RUN jupyter labextension disable "@jupyterlab/apputils-extension:announcements"
-# RUN jupyter nbextension enable --py --sys-prefix ipympl
 
 # Scripts that run before session start
 COPY --chown=root:root docker/purdue-af/scripts/run-as-root.sh \
@@ -221,11 +176,6 @@ COPY docker/purdue-af/scripts/eos-connect.sh docker/purdue-af/jupyter/jupyter_co
 RUN mkdir -p /etc/cvmfs/
 COPY docker/purdue-af/configs/default.local /etc/cvmfs/
 
-RUN pip install --no-cache-dir --upgrade pyroscope-io==0.8.11 jupyter-sshd-proxy==0.3.0
-
 # Switch back to NB_USER
 USER ${NB_USER}
-
 WORKDIR "${HOME}"
-
-
