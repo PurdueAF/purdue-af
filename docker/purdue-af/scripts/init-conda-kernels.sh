@@ -23,7 +23,6 @@ env_default_dir=/depot/cms/kernels/
 # 	"$kernel_path/kernel.json" >tmp_kernel.json
 # mv tmp_kernel.json "$kernel_path/kernel.json"
 
-
 # # For Coffea_latest
 # $env_default_dir/coffea_latest/bin/python -m ipykernel install \
 # 	--prefix=/opt/conda --name="coffea_latest" --display-name "coffea_latest"
