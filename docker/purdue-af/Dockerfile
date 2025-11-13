@@ -111,9 +111,6 @@ RUN pixi install --environment base-env && \
 ENV BASE_ENV_DIR="/srv/base-env/.pixi/envs/base-env"
 ENV PATH="${BASE_ENV_DIR}/bin:${PATH}"
 
-RUN ls -ltr /srv/base-env/.pixi/envs/base-env/bin/jupyterhub-singleuser
-RUN ls -ltr /srv/base-env/.pixi/envs/base-env/bin/
-
 # Configure container startup
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
