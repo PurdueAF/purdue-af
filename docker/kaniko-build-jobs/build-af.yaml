@@ -3,7 +3,7 @@ kind: Job
 metadata:
   name: kaniko-build-af
 spec:
-  backoffLimit: 0
+  backoffLimit: 10
   completions: 1
   template:
     spec:
