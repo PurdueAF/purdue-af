@@ -19,10 +19,7 @@ mkdir -p /work/users/$NB_USER
 chmod 755 /work/users/$NB_USER
 chown $NB_UID:users /work/users/$NB_USER
 
-# The following configs are for Pixi environments other than base-env (any user-created environments);
-# these environments will be detached and stored in shared cache directory.
 export PIXI_CACHE_DIR="/work/users/${NB_USER}/.pixi-cache/"
-pixi config set detached-environments true --global
 
 mv /etc/slurm/slist /usr/bin
 
