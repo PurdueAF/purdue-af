@@ -101,6 +101,10 @@ RUN curl -fsSL https://pixi.sh/install.sh | bash && \
 ENV BASE_ENV_DIR="${PIXI_HOME}/.pixi/envs/base-env"
 ENV PATH="${BASE_ENV_DIR}/bin:${PATH}"
 
+# The following configs are for Pixi environments other than base-env (any user-created environments);
+# these environments will be detached and stored in shared cache directory.
+ENV PIXI_CACHE_DIR="/work/.pixi-cache/"
+RUN pixi config set detached-environments true --global
 
 # ------------------------------------------------------------
 
