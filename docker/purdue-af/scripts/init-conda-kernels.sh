@@ -6,7 +6,6 @@ jupyter kernelspec remove -y python3 || true
 env_default_dir=/depot/cms/kernels/
 
 # used to be: /opt/conda
-# base_env_dir=/srv/base-env/.pixi/envs/base-env/
 base_env_dir=/usr/
 
 $env_default_dir/python3/bin/python -m ipykernel install \
