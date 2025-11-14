@@ -76,6 +76,7 @@ echo "{
 }" >$JIL_PATH/plugin.jupyterlab-settings
 
 # Configure prometheus alerts extension
+mkdir -p $base_env_dir/etc/jupyter/jupyter_server_config.d
 echo '{
   "ServerApp": {
     "jpserver_extensions": {
