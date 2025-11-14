@@ -93,13 +93,14 @@ ENV PATH="${PIXI_HOME}/bin:${PATH}"
 
 WORKDIR "${PIXI_HOME}"
 COPY --chown=root:root docker/purdue-af/pixi.toml "${PIXI_HOME}/"
+COPY --chown=root:root docker/purdue-af/pixi-wrapper "/usr/local/bin/pixi"
 
 RUN curl -fsSL https://pixi.sh/install.sh | bash && \
     pixi install --environment base-env && \
     rm -rf "${HOME}/.cache/rattler"
 
 ENV BASE_ENV_DIR="${PIXI_HOME}/.pixi/envs/base-env"
-ENV PATH="${BASE_ENV_DIR}/bin:${PATH}"
+ENV PATH="$/usr/local/bin:${BASE_ENV_DIR}/bin:${PATH}"
 
 
 # ------------------------------------------------------------

@@ -25,7 +25,6 @@ export PIXI_CACHE_DIR="/work/users/${NB_USER}/.pixi-cache/"
 pixi config set detached-environments true --global
 
 mv /etc/slurm/slist /usr/bin
-export PATH=/etc/jupyter/dask/:$PATH
 
 cp /cvmfs/cms.cern.ch/SITECONF/T2_US_Purdue/storage.json /etc/cvmfs/ || true
 
@@ -37,6 +36,7 @@ bashrc_af_text='''
 
 echo "
 # Purdue AF is gradually migrading from Conda/Mamba to Pixi.
+#
 # To activate a Pixi environment:
 #     cd /path/to/project/containing/pixi.toml
 #     pixi shell

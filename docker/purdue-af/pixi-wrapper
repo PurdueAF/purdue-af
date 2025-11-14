@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REAL_PIXI="/opt/pixi/bin/pixi"
+HOME_PREFIX="/home/"
+
+SUBCMD="${1:-}"
+
+is_project_env_command() {
+  case "$SUBCMD" in
+    install|add|remove|update|sync|shell|run|task)
+      return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_global_env_command() {
+  case "$SUBCMD" in
+    global)
+      return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+find_project_root() {
+  local dir="$PWD"
+  while [[ "$dir" != "/" ]]; do
+    if [[ -f "$dir/pixi.toml" || -f "$dir/pyproject.toml" ]]; then
+      echo "$dir"
+      return
+    fi
+    dir="$(dirname "$dir")"
+  done
+  echo "$PWD"
+}
+
+block_project_env_if_in_home() {
+  local project_dir
+  project_dir="$(find_project_root)"
+
+  if [[ "$project_dir" == ${HOME_PREFIX}* ]]; then
+    echo "Error: Pixi environments are not allowed for projects under ${HOME_PREFIX}." >&2
+    echo "Project directory: ${project_dir}" >&2
+    echo "Please move the project to a non-/home filesystem (e.g. /work/, /depot/) and try again." >&2
+    exit 1
+  fi
+}
+
+block_global_env_if_in_home() {
+  local pixi_home="${PIXI_HOME:-"$HOME/.pixi"}"
+
+  if [[ "$pixi_home" == ${HOME_PREFIX}* ]]; then
+    echo "Error: Pixi global environments are not allowed under ${HOME_PREFIX}." >&2
+    echo "Current PIXI_HOME: ${pixi_home}" >&2
+    echo "Set PIXI_HOME to a non-/home location (e.g. /work/, /depot/) and retry." >&2
+    exit 1
+  fi
+}
+
+if is_project_env_command; then
+  block_project_env_if_in_home
+elif is_global_env_command; then
+  block_global_env_if_in_home
+fi
+
+exec "$REAL_PIXI" "$@"
+EOF
