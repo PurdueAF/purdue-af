@@ -8,7 +8,7 @@ SUBCMD="${1:-}"
 
 is_project_env_command() {
   case "$SUBCMD" in
-    install|add|remove|update|sync|shell|run|task)
+    add|build|init|install|import|reinstall|remove|shell|shell-hook|update|upgrade|upload)
       return 0 ;;
     *) return 1 ;;
   esac

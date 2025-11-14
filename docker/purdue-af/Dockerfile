@@ -100,7 +100,7 @@ RUN curl -fsSL https://pixi.sh/install.sh | bash && \
     rm -rf "${HOME}/.cache/rattler"
 
 ENV BASE_ENV_DIR="${PIXI_HOME}/.pixi/envs/base-env"
-ENV PATH="$/usr/local/bin:${BASE_ENV_DIR}/bin:${PATH}"
+ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PATH}"
 
 
 # ------------------------------------------------------------
