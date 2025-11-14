@@ -10,4 +10,4 @@ if [[ "${NOTEBOOK_ARGS} $*" != *"--ip="* ]]; then
 fi
 
 # shellcheck disable=SC1091,SC2086
-. /usr/local/bin/start.sh /srv/base-env/.pixi/envs/base-env/bin/jupyterhub-singleuser ${NOTEBOOK_ARGS} "$@"
+. /usr/local/bin/start.sh ${BASE_ENV_DIR}/bin/jupyterhub-singleuser ${NOTEBOOK_ARGS} "$@"

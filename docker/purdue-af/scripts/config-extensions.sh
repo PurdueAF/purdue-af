@@ -1,5 +1,5 @@
 # earlier: /opt/conda
-base_env_dir=/opt/pixi/envs/base-env/
+base_env_dir=/opt/pixi/.pixi/envs/base-env/
 
 # Configure jupyterlab-unfold extension
 mkdir -p $base_env_dir/share/jupyter/lab/settings
