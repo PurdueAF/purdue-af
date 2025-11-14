@@ -11,6 +11,7 @@ mamba         = "==2.3.3"
 jupyter_core  = "*"
 
 # Jupyter pieces
+jupyter       = "*"
 notebook      = "*"
 jupyterhub    = "*"
 jupyterlab    = "==4.4.10"
