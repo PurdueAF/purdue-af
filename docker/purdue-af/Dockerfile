@@ -95,7 +95,8 @@ WORKDIR "${PIXI_HOME}"
 COPY --chown=root:root docker/purdue-af/pixi.toml "${PIXI_HOME}/"
 
 RUN curl -fsSL https://pixi.sh/install.sh | bash && \
-    pixi install --environment base-env
+    pixi install --environment base-env && \
+    pixi clean cache
 
 ENV BASE_ENV_DIR="${PIXI_HOME}/.pixi/envs/base-env"
 ENV PATH="${BASE_ENV_DIR}/bin:${PATH}"
