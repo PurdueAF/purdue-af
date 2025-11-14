@@ -97,23 +97,8 @@ COPY --chown=root:root docker/purdue-af/pixi.toml "${PIXI_HOME}/"
 RUN curl -fsSL https://pixi.sh/install.sh | bash && \
     pixi install --environment base-env
 
-ENV BASE_ENV_DIR="${PIXI_HOME}/envs/base-env"
+ENV BASE_ENV_DIR="${PIXI_HOME}/.pixi/envs/base-env"
 ENV PATH="${BASE_ENV_DIR}/bin:${PATH}"
-
-# ------------------------------------------------------------
-
-# Configure Jupyter
-RUN jupyter notebook --generate-config && \
-    npm cache clean --force || true && \
-    jupyter lab clean && \
-    rm -rf "${HOME}/.cache/yarn"
-
-COPY docker/purdue-af/jupyter/jupyter_server_config.py docker/purdue-af/jupyter/docker_healthcheck.py /etc/jupyter/
-COPY docker/purdue-af/scripts/eos-connect.sh docker/purdue-af/jupyter/jupyter_config.json /etc/jupyter/
-
-RUN sed -re "s/c.ServerApp/c.NotebookApp/g" \
-    /etc/jupyter/jupyter_server_config.py > /etc/jupyter/jupyter_notebook_config.py && \
-    fix-permissions /etc/jupyter/ && fix-permissions "${HOME}"
 
 
 # ------------------------------------------------------------
@@ -133,25 +118,41 @@ ENV X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
 
 # ------------------------------------------------------------
 
-# Scripts that run before session start
+# Jupyter scripts
+
+COPY docker/purdue-af/jupyter/jupyter_server_config.py \
+    docker/purdue-af/jupyter/docker_healthcheck.py \
+    docker/purdue-af/scripts/eos-connect.sh \
+    docker/purdue-af/jupyter/jupyter_config.json \
+    /etc/jupyter/
 COPY --chown=root:root docker/purdue-af/scripts/run-as-root.sh \
     docker/purdue-af/scripts/init-conda-kernels.sh \
     docker/purdue-af/scripts/config-extensions.sh \
     docker/purdue-af/scripts/create-symlinks.sh \
     /usr/local/bin/before-notebook.d/
-RUN chmod +x /usr/local/bin/before-notebook.d/*
-
-# Copy Jupyter startup scripts
 COPY --chown=root:root \
     docker/purdue-af/jupyter/start.sh \
     docker/purdue-af/jupyter/start-notebook.sh \
     docker/purdue-af/jupyter/start-singleuser.sh \
     /usr/local/bin/
-RUN chmod +x /usr/local/bin/*
 
+RUN chmod +x /usr/local/bin/* && \
+    chmod +x /usr/local/bin/before-notebook.d/* && \
+    sed -re "s/c.ServerApp/c.NotebookApp/g" \
+        /etc/jupyter/jupyter_server_config.py > /etc/jupyter/jupyter_notebook_config.py && \
+    fix-permissions /etc/jupyter/ && fix-permissions "${HOME}"
 
-# Switch back to NB_USER
+# ------------------------------------------------------------
+
+# Container setup as NB_USER
+
 USER ${NB_USER}
+
+RUN jupyter notebook --generate-config && \
+    npm cache clean --force || true && \
+    jupyter lab clean && \
+    rm -rf "${HOME}/.cache/yarn"
+
 WORKDIR "${HOME}"
 ENV JUPYTER_PORT=8888
 EXPOSE $JUPYTER_PORT
