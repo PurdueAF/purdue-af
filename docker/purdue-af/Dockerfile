@@ -88,19 +88,19 @@ RUN sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashr
     chmod g+w /etc/passwd 
 
 # Install base environment using Pixi
-ENV PIXI_HOME="/opt/pixi"
-ENV PATH="${PIXI_HOME}/bin:${PATH}"
+ENV PIXI_HOME="/opt/pixi" \
+    BASE_ENV_DIR="${PIXI_HOME}/.pixi/envs/base-env"
 
 WORKDIR "${PIXI_HOME}"
 COPY --chown=root:root docker/purdue-af/pixi.toml "${PIXI_HOME}/"
 COPY --chown=root:root docker/purdue-af/pixi-wrapper "/usr/local/bin/pixi"
 
-RUN curl -fsSL https://pixi.sh/install.sh | bash && \
+RUN PATH="${PIXI_HOME}/bin:${PATH}" \
+    curl -fsSL https://pixi.sh/install.sh | bash && \
     pixi install --environment base-env && \
     rm -rf "${HOME}/.cache/rattler"
 
-ENV BASE_ENV_DIR="${PIXI_HOME}/.pixi/envs/base-env"
-ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PATH}"
+ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}"
 
 
 # ------------------------------------------------------------
@@ -128,7 +128,7 @@ COPY docker/purdue-af/jupyter/jupyter_server_config.py \
     docker/purdue-af/jupyter/jupyter_config.json \
     /etc/jupyter/
 COPY --chown=root:root docker/purdue-af/scripts/run-as-root.sh \
-    docker/purdue-af/scripts/init-conda-kernels.sh \
+    docker/purdue-af/scripts/init-kernels.sh \
     docker/purdue-af/scripts/config-extensions.sh \
     docker/purdue-af/scripts/create-symlinks.sh \
     /usr/local/bin/before-notebook.d/
@@ -156,8 +156,7 @@ RUN jupyter notebook --generate-config && \
     rm -rf "${HOME}/.cache/yarn"
 
 WORKDIR "${HOME}"
-ENV JUPYTER_PORT=8888
-EXPOSE $JUPYTER_PORT
+EXPOSE 8888
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["start-notebook.sh"]
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
