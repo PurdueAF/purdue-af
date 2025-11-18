@@ -241,6 +241,8 @@ singleuser:
         mountPropagation: HostToContainer
   cloudMetadata:
     blockWithIptables: false
+  extraPodConfig:
+    enableServiceLinks: false
 prePuller:
   hook:
     enabled: false
