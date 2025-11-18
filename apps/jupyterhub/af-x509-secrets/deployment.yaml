@@ -13,6 +13,7 @@ spec:
       labels:
         app: af-x509-secrets
     spec:
+      enableServiceLinks: false
       serviceAccountName: af-x509-secrets
       initContainers:
         - name: take-data-dir-ownership

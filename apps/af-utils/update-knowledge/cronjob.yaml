@@ -12,6 +12,7 @@ spec:
     spec:
       template:
         spec:
+          enableServiceLinks: false
           serviceAccountName: update-knowledge
           restartPolicy: OnFailure
           nodeSelector: { "cms-af-prod": "true" }

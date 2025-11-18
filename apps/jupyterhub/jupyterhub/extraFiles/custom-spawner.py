@@ -58,6 +58,12 @@ def passthrough_post_auth_hook(authenticator, handler, authentication):
 c.JupyterHub.authenticator_class = PurdueCILogonOAuthenticator
 c.PurdueCILogonOAuthenticator.post_auth_hook = passthrough_post_auth_hook
 
+# Disable automatic service environment variable injection for all user pods
+# This prevents unrelated service environment variables from being injected
+c.KubeSpawner.extra_pod_config = {
+    "enableServiceLinks": False
+}
+
 if os.environ["POD_NAMESPACE"] == "cms":
     # c.KubeSpawner.service_account = "dask-sa"
     # c.KubeSpawner.automount_service_account_token = True

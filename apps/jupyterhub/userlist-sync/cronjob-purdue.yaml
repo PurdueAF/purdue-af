@@ -11,6 +11,7 @@ spec:
     spec:
       template:
         spec:
+          enableServiceLinks: false
           serviceAccountName: af-userlist-sync
           restartPolicy: Never
           nodeSelector: { "cms-af-prod": "true" }

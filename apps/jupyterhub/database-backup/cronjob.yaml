@@ -11,6 +11,7 @@ spec:
     spec:
       template:
         spec:
+          enableServiceLinks: false
           serviceAccountName: database-backup
           securityContext:
             runAsUser: 616617

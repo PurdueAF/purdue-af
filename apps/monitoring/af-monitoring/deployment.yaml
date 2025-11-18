@@ -12,6 +12,7 @@ spec:
       labels:
         app: af-monitor
     spec:
+      enableServiceLinks: false
       nodeSelector: { "cms-af-prod": "true" }
       tolerations:
         - key: "hub.jupyter.org/dedicated"
@@ -38,8 +39,6 @@ spec:
           volumeMounts:
             - name: scripts
               mountPath: /scripts
-              configMap:
-                name: af-monitor-config
             - name: work
               mountPath: /work/
               mountPropagation: HostToContainer

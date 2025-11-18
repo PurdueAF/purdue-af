@@ -12,6 +12,7 @@ spec:
     spec:
       template:
         spec:
+          enableServiceLinks: false
           serviceAccountName: conda-env-builder
           restartPolicy: Never
           containers:

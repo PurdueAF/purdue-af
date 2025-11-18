@@ -11,6 +11,7 @@ spec:
       labels:
         name: af-node-monitor
     spec:
+      enableServiceLinks: false
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:

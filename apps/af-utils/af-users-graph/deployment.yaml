@@ -12,6 +12,7 @@ spec:
       labels:
         app: af-users-graph
     spec:
+      enableServiceLinks: false
       nodeSelector: { "cms-af-prod": "true" }
       tolerations:
         - key: "hub.jupyter.org/dedicated"
