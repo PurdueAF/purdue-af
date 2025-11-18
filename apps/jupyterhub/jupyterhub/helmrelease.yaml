@@ -22,18 +22,3 @@ spec:
   install:
     remediation:
       retries: -1
-  postRenderers:
-    - kustomize:
-        patches:
-          - target:
-              kind: Deployment
-              name: "hub"
-            patch: |
-              apiVersion: apps/v1
-              kind: Deployment
-              metadata:
-                name: hub
-              spec:
-                template:
-                  spec:
-                    enableServiceLinks: false
