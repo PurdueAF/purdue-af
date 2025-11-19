@@ -101,8 +101,6 @@ RUN chmod +x /usr/local/bin/pixi && \
     pixi install --environment base-env && \
     rm -rf "${HOME}/.cache/rattler"
 
-ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}"
-
 
 # ------------------------------------------------------------
 
@@ -150,6 +148,7 @@ RUN chmod +x /usr/local/bin/* && \
 # Container setup as NB_USER
 
 USER ${NB_USER}
+ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}"
 
 RUN jupyter notebook --generate-config && \
     npm cache clean --force || true && \
