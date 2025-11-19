@@ -83,10 +83,10 @@ touch $bashrc_file
 # Initialize conda if available (installed via pixi in base-env)
 # PATH is already set in Dockerfile ENV, so conda should be available
 if command -v conda >/dev/null 2>&1; then
-    # Run conda init bash and append to bashrc if not already initialized
-    if ! grep -q "# >>> conda initialize >>>" "$bashrc_file"; then
-        conda init bash >> "$bashrc_file" 2>&1 || true
-    fi
+	# Run conda init bash and append to bashrc if not already initialized
+	if ! grep -q "# >>> conda initialize >>>" "$bashrc_file"; then
+		conda init bash >>"$bashrc_file" 2>&1 || true
+	fi
 fi
 
 extra_bashrc="source /home/$NB_USER/.bashrc_af"
