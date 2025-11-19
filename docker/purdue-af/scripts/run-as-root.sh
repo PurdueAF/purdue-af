@@ -46,16 +46,20 @@ alias eos-connect="source /etc/jupyter/eos-connect.sh"
 '''
 echo "$bashrc_af_text" >$bashrc_af_file
 
-# Initialize conda in bashrc_af if available (installed via pixi in base-env)
+bashrc_file=$NEW_HOME/.bashrc
+touch $bashrc_file
+
+# Initialize conda in bashrc_af
 if command -v conda >/dev/null 2>&1; then
 	if ! grep -q "# >>> conda initialize >>>" "$bashrc_af_file"; then
-		conda init bash >>"$bashrc_af_file" 2>&1 || true
+		conda init bash >/dev/null 2>&1 || true
+		if grep -q "# >>> conda initialize >>>" "$bashrc_file"; then
+			sed -n '/# >>> conda initialize >>>/,/# <<< conda initialize <<</p' "$bashrc_file" >>"$bashrc_af_file"
+			sed -i '/# >>> conda initialize >>>/,/# <<< conda initialize <<</d' "$bashrc_file"
+		fi
 		echo "conda deactivate" >>"$bashrc_af_file"
 	fi
 fi
-
-bashrc_file=$NEW_HOME/.bashrc
-touch $bashrc_file
 
 extra_bashrc="source /home/$NB_USER/.bashrc_af"
 grep -qxF "$extra_bashrc" "$bashrc_file" || echo "$extra_bashrc" >>"$bashrc_file"
