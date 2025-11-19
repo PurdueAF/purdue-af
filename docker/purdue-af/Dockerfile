@@ -152,7 +152,8 @@ ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}"
 
 USER ${NB_USER}
 
-RUN jupyter notebook --generate-config && \
+RUN export PATH="${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}" && \
+    jupyter notebook --generate-config && \
     npm cache clean --force || true && \
     jupyter lab clean && \
     rm -rf "${HOME}/.cache/yarn"
