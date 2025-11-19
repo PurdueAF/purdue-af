@@ -50,13 +50,10 @@ bashrc_file=$NEW_HOME/.bashrc
 touch $bashrc_file
 
 # Initialize conda if available (installed via pixi in base-env)
-# PATH is already set in Dockerfile ENV, so conda should be available
 if command -v conda >/dev/null 2>&1; then
-	# Run conda init bash and append to bashrc if not already initialized
 	if ! grep -q "# >>> conda initialize >>>" "$bashrc_file"; then
+		conda config --system --set auto_activate_base false 2>&1 || true
 		conda init bash >>"$bashrc_file" 2>&1 || true
-		# Deactivate base environment that conda init activates by default
-		echo "conda deactivate" >>"$bashrc_file"
 	fi
 fi
 
