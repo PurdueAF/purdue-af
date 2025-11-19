@@ -143,12 +143,14 @@ RUN chmod +x /usr/local/bin/* && \
         /etc/jupyter/jupyter_server_config.py > /etc/jupyter/jupyter_notebook_config.py && \
     fix-permissions /etc/jupyter/ && fix-permissions "${HOME}"
 
+# Set PATH before switching user so it's available to all users
+ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}"
+
 # ------------------------------------------------------------
 
 # Container setup as NB_USER
 
 USER ${NB_USER}
-ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}"
 
 RUN jupyter notebook --generate-config && \
     npm cache clean --force || true && \
