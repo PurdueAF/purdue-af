@@ -9,6 +9,7 @@ python        = "3.10.*"
 conda         = "==25.9.0"
 mamba         = "==2.3.3"
 jupyter_core  = "*"
+jupyter       = "*"
 
 # Jupyter pieces
 notebook      = "*"

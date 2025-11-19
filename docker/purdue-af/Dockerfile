@@ -99,6 +99,15 @@ RUN chmod +x /usr/local/bin/pixi && \
     PATH="${PIXI_HOME}/bin:${PATH}" \
     curl -fsSL https://pixi.sh/install.sh | bash && \
     pixi install --environment base-env && \
+    # DEBUG: Verify pixi installation - remove this block once issue is resolved
+    echo "=== DEBUG: Verifying pixi installation ===" && \
+    echo "PIXI_HOME=${PIXI_HOME}" && \
+    echo "BASE_ENV_DIR=${BASE_ENV_DIR}" && \
+    test -d "${BASE_ENV_DIR}" && echo "Base env directory EXISTS: ${BASE_ENV_DIR}" || echo "Base env directory NOT FOUND: ${BASE_ENV_DIR}" && \
+    test -d "${BASE_ENV_DIR}/bin" && echo "Base env bin directory EXISTS" || echo "Base env bin directory NOT FOUND" && \
+    ls -la "${BASE_ENV_DIR}/bin/" 2>&1 | grep -E "(jupyter|python|npm)" | head -5 || echo "No jupyter/python/npm found in bin directory" && \
+    echo "=== DEBUG: End pixi verification ===" && \
+    # DEBUG: End verification block
     rm -rf "${HOME}/.cache/rattler"
 
 
@@ -152,11 +161,48 @@ ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}"
 
 USER ${NB_USER}
 
-RUN export PATH="${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}" && \
-    jupyter notebook --generate-config && \
-    npm cache clean --force || true && \
-    jupyter lab clean && \
+# DEBUG: Start debugging section - remove this entire block once issue is resolved
+# Use full paths to pixi environment binaries and verify installation
+RUN echo "=== DEBUG: Environment and Path Information ===" && \
+    echo "PIXI_HOME=${PIXI_HOME}" && \
+    echo "BASE_ENV_DIR=${BASE_ENV_DIR}" && \
+    echo "PATH=${PATH}" && \
+    echo "" && \
+    echo "=== DEBUG: Checking pixi environment directory ===" && \
+    ls -la /opt/pixi/.pixi/envs/base-env/ 2>&1 | head -10 || echo "Directory does not exist" && \
+    echo "" && \
+    echo "=== DEBUG: Checking pixi bin directory ===" && \
+    ls -la /opt/pixi/.pixi/envs/base-env/bin/ 2>&1 | head -20 || echo "Bin directory does not exist" && \
+    echo "" && \
+    echo "=== DEBUG: Checking for jupyter executable ===" && \
+    test -f /opt/pixi/.pixi/envs/base-env/bin/jupyter && echo "jupyter binary EXISTS" || echo "jupyter binary NOT FOUND" && \
+    test -f /opt/pixi/.pixi/envs/base-env/bin/python && echo "python binary EXISTS" || echo "python binary NOT FOUND" && \
+    test -f /opt/pixi/.pixi/envs/base-env/bin/npm && echo "npm binary EXISTS" || echo "npm binary NOT FOUND" && \
+    echo "" && \
+    echo "=== DEBUG: Testing which commands ===" && \
+    which jupyter 2>&1 || echo "which jupyter: not found" && \
+    which python 2>&1 || echo "which python: not found" && \
+    which npm 2>&1 || echo "which npm: not found" && \
+    echo "" && \
+    echo "=== DEBUG: Testing python -m jupyter ===" && \
+    /opt/pixi/.pixi/envs/base-env/bin/python -m jupyter --version 2>&1 || echo "python -m jupyter: failed" && \
+    echo "" && \
+    echo "=== DEBUG: End of debugging, starting actual commands ===" && \
+    export JUPYTER_BIN="/opt/pixi/.pixi/envs/base-env/bin/jupyter" && \
+    export PYTHON_BIN="/opt/pixi/.pixi/envs/base-env/bin/python" && \
+    export NPM_BIN="/opt/pixi/.pixi/envs/base-env/bin/npm" && \
+    if [ -f "$JUPYTER_BIN" ]; then \
+        echo "Using jupyter binary: $JUPYTER_BIN" && \
+        "$JUPYTER_BIN" notebook --generate-config && \
+        "$JUPYTER_BIN" lab clean; \
+    else \
+        echo "Using python -m jupyter fallback: $PYTHON_BIN" && \
+        "$PYTHON_BIN" -m jupyter notebook --generate-config && \
+        "$PYTHON_BIN" -m jupyter lab clean; \
+    fi && \
+    "$NPM_BIN" cache clean --force || true && \
     rm -rf "${HOME}/.cache/yarn"
+# DEBUG: End debugging section
 
 WORKDIR "${HOME}"
 EXPOSE 8888
