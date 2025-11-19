@@ -31,6 +31,15 @@ touch $bashrc_af_file
 bashrc_af_text='''
 #!/bin/bash
 
+# Ensure PATH includes system paths and pixi environment
+# Prepend pixi paths, ensure system paths are always included at the end
+SYSTEM_PATHS="/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin"
+if [ -z "${PATH}" ]; then
+    export PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${SYSTEM_PATHS}"
+else
+    export PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}:${SYSTEM_PATHS}"
+fi
+
 echo "
 # Purdue AF is gradually migrading from Conda/Mamba to Pixi.
 #
