@@ -31,9 +31,9 @@ spec:
                 - -c
                 - |
                   set -euo pipefail
-                  
+
                   echo "Starting database backup at $$(date)"
-                  
+
                   # List available pods for debugging
                   echo "Searching for JupyterHub hub pods..."
                   kubectl get pods -n cms -l app=jupyterhub,component=hub
