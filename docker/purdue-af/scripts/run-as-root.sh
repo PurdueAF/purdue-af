@@ -59,15 +59,25 @@ bashrc_file=$NEW_HOME/.bashrc
 touch $bashrc_file
 
 # Initialize conda in bashrc_af
-if command -v conda >/dev/null 2>&1; then
-	if ! grep -q "# >>> conda initialize >>>" "$bashrc_af_file"; then
-		conda init bash >/dev/null 2>&1 || true
-		if grep -q "# >>> conda initialize >>>" "$bashrc_file"; then
-			sed -n '/# >>> conda initialize >>>/,/# <<< conda initialize <<</p' "$bashrc_file" >>"$bashrc_af_file"
-			sed -i '/# >>> conda initialize >>>/,/# <<< conda initialize <<</d' "$bashrc_file"
-		fi
-		echo "conda deactivate" >>"$bashrc_af_file"
-	fi
+CONDA_BASE="/opt/pixi/.pixi/envs/base-env"
+if [ -f "$CONDA_BASE/bin/conda" ]; then
+	cat >>"$bashrc_af_file" <<'EOF'
+
+# >>> conda initialize >>>
+__conda_setup="$('/opt/pixi/.pixi/envs/base-env/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__conda_setup"
+else
+    if [ -f "/opt/pixi/.pixi/envs/base-env/etc/profile.d/conda.sh" ]; then
+        . "/opt/pixi/.pixi/envs/base-env/etc/profile.d/conda.sh"
+    else
+        export PATH="/opt/pixi/.pixi/envs/base-env/bin:$PATH"
+    fi
+fi
+unset __conda_setup
+# <<< conda initialize <<<
+[ -n "${CONDA_DEFAULT_ENV:-}" ] && conda deactivate 2>/dev/null || true
+EOF
 fi
 
 extra_bashrc="source /home/$NB_USER/.bashrc_af"
