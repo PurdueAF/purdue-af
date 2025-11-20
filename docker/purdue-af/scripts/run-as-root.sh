@@ -41,22 +41,22 @@ else
 fi
 
 echo "
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                                                                               ║
-║     Purdue AF is migrating from Conda/Mamba to Pixi, as it is much            ║
-║     faster and addresses multiple issues we have had with Conda.              ║
-║     See pixi.sh for Pixi documentation.                                       ║
-║                                                                               ║
-║         To activate a Pixi environment (the project must NOT be in /home/):   ║
-║             cd /path/to/project/containing/pixi.toml                          ║
-║             pixi shell                                                        ║
-║                                                                               ║
-║         To deactivate a Pixi environment:                                     ║
-║             exit                                                              ║
-║                                                                               ║
-║     Conda commands are still available for backward compatibility.            ║
-║                                                                               ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║     Purdue AF is migrating from Conda/Mamba to Pixi, as it is much           ║
+║     faster and addresses multiple issues we have had with Conda.             ║
+║     See pixi.sh for Pixi documentation.                                      ║
+║                                                                              ║
+║     To activate a Pixi environment (the project must NOT be in /home/):      ║
+║         cd /path/to/project/containing/pixi.toml                             ║
+║         pixi shell                                                           ║
+║                                                                              ║
+║     To deactivate a Pixi environment:                                        ║
+║         exit                                                                 ║
+║                                                                              ║
+║     Conda commands are still available for backward compatibility.           ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 "
 
 alias eos-connect="source /etc/jupyter/eos-connect.sh"
