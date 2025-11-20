@@ -41,7 +41,10 @@ else
 fi
 
 echo "
-# Purdue AF is gradually migrading from Conda/Mamba to Pixi.
+# ============================================================================
+# 
+# Purdue AF is migrating from Conda/Mamba to Pixi, as it is much faster and
+# addresses multiple issues with Conda. See pixi.sh for Pixi documentation.
 #
 # To activate a Pixi environment:
 #     cd /path/to/project/containing/pixi.toml
@@ -49,6 +52,11 @@ echo "
 #
 # To deactivate a Pixi environment:
 #     exit
+#
+# 
+# Conda commands are still available for backward compatibility.
+#
+# ============================================================================
 "
 
 alias eos-connect="source /etc/jupyter/eos-connect.sh"
