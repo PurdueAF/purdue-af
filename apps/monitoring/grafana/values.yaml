@@ -172,6 +172,11 @@ datasources:
         url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
         access: proxy
         isDefault: false
+      - name: prometheus-hammer
+        type: prometheus
+        url: http://grafana.cms.rcac.purdue.edu:9090
+        access: proxy
+        isDefault: false
       - name: tempo
         type: tempo
         url: http://sonic-server-tempo:3100
