@@ -98,6 +98,7 @@ configMapGenerator:
       - ../../apps/monitoring/grafana/dashboards/single-user.json
       - ../../apps/monitoring/grafana/dashboards/sonic.json
       - ../../apps/monitoring/grafana/dashboards/alerts.json
+      - ../../apps/monitoring/grafana/dashboards/gpus.json
 
   - name: grafana-private-dashboards
     files:
