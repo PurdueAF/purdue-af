@@ -3,14 +3,14 @@ cp /etc/secrets/munge/munge.key /etc/munge/
 chown munge:munge /etc/munge/munge.key
 chmod 400 /etc/munge/munge.key
 md5sum /etc/munge/munge.key >/etc/jupyter/test.txt
-sudo su -l munge -s /usr/sbin/munged
+su -l munge -s /usr/sbin/munged
 
 NEW_HOME=/home/$NB_USER
+mkdir -p $NEW_HOME/.jupyter
 rm -rf $NEW_HOME/.jupyter/migrated
 touch $NEW_HOME/.jupyter/migrated
 chmod 777 $NEW_HOME/.jupyter/migrated
 mkdir -p $NEW_HOME/.jupyter/lab/workspaces
-mkdir -p $NEW_HOME/.local
 mkdir -p $NEW_HOME/.local/share
 mkdir -p $NEW_HOME/.config/dask
 chown -R $NB_USER:users $NEW_HOME/.[^.]*
@@ -25,20 +25,35 @@ mv /etc/slurm/slist /usr/bin
 
 cp /cvmfs/cms.cern.ch/SITECONF/T2_US_Purdue/storage.json /etc/cvmfs/ || true
 
-bashrc_af_file=$NEW_HOME/.bashrc_af
-touch $bashrc_af_file
+bashrc_af_file=$NEW_HOME/.bashrc_af && touch $bashrc_af_file
 
-bashrc_af_text='''
+cat >"$bashrc_af_file" <<EOF
 #!/bin/bash
 
 # Ensure PATH includes system paths and pixi environment
 # Prepend pixi paths, ensure system paths are always included at the end
 SYSTEM_PATHS="/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin"
-if [ -z "${PATH}" ]; then
-    export PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${SYSTEM_PATHS}"
+if [ -z "\${PATH}" ]; then
+    export PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:\${SYSTEM_PATHS}"
 else
-    export PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}:${SYSTEM_PATHS}"
+    export PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:\${PATH}:\${SYSTEM_PATHS}"
 fi
+
+export NB_USER="${NB_USER}"
+export NB_UID="${NB_UID}"
+export NB_GID="${NB_GID}"
+export PIXI_HOME="/opt/pixi"
+export PIXI_CACHE_DIR="/work/users/${NB_USER}/.pixi-cache/"
+export PYROSCOPE_SERVER="http://pyroscope.cms.svc.cluster.local:4040"
+export PYROSCOPE_APP="purdue-af"
+export DASK_GATEWAY__ADDRESS="http://dask-gateway-k8s.geddes.rcac.purdue.edu"
+export DASK_GATEWAY__PROXY_ADDRESS="api-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8000"
+export DASK_LABEXTENSION__FACTORY__MODULE="dask_gateway"
+export DASK_LABEXTENSION__FACTORY__CLASS="GatewayCluster"
+export DASK_LABEXTENSION__FACTORY__KWARGS__ADDRESS="http://dask-gateway-k8s.geddes.rcac.purdue.edu"
+export DASK_LABEXTENSION__FACTORY__KWARGS__PROXY_ADDRESS="api-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8000"
+export DASK_LABEXTENSION__FACTORY__KWARGS__PUBLIC_ADDRESS="https://dask-gateway-k8s.geddes.rcac.purdue.edu"
+export X509_CERT_DIR="/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates"
 
 echo "
 ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -60,8 +75,7 @@ echo "
 "
 
 alias eos-connect="source /etc/jupyter/eos-connect.sh"
-'''
-echo "$bashrc_af_text" >$bashrc_af_file
+EOF
 
 bashrc_file=$NEW_HOME/.bashrc
 touch $bashrc_file
@@ -90,6 +104,10 @@ fi
 
 extra_bashrc="source /home/$NB_USER/.bashrc_af"
 grep -qxF "$extra_bashrc" "$bashrc_file" || echo "$extra_bashrc" >>"$bashrc_file"
+
+# Make .bashrc_af read-only for user (system-managed file)
+chown root:root $bashrc_af_file
+chmod 644 $bashrc_af_file
 
 echo """
 bash
