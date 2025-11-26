@@ -77,5 +77,10 @@ GPU support in common ML libraries
 
   See `PyTorch / CUDA tutorial <https://cnvrg.io/pytorch-cuda/>`_.
 
+- **XGBoost**:
+  
+  You can enable GPU support in XGBoost by specifying the ``device`` parameter as ``cuda``.
+  Please refer to the `XGBoost GPU documentation <https://xgboost.readthedocs.io/en/stable/gpu/index.html>`_ for more details.
+
 If you experience any issues, or missing any ML libraries, please
 :doc:`contact Purdue AF support <doc-support>`.
