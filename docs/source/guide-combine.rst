@@ -8,14 +8,21 @@ statistical analysis of experimental data.
 Combine can be used either in a CMSSW environment or in standalone mode.
 At Purdue AF, we recommend using **standalone mode** because some CMSSW releases
 are not compatible with the operating system, and loading other operating systems
- — while possible via Singularity — can cause unexpected issues.
+— while possible via Singularity — can cause unexpected issues.
 
 Combine in pre-installed environments
 --------------------------------------
 
 Standalone Combine is pre-installed in the two centrally managed Conda environments
-- ``/depot/cms/kernels/python3`` and ``/depot/cms/kernels/coffea_latest``; it is enough to
-it is enough to activate either of these environments to use Combine.
+- ``/depot/cms/kernels/python3`` and ``/depot/cms/kernels/coffea_latest``;
+it is enough to activate either of these environments to use Combine:
+
+.. code-block:: shell
+
+   $ conda activate /depot/cms/kernels/python3
+   (/depot/cms/kernels/python3) $ combine -M Significance -d datacard.txt
+   <<< Combine >>> 
+   <<< v10.3.3 >>>
 
 Combine in custom environments
 ------------------------------
