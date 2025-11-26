@@ -127,10 +127,10 @@ COPY docker/purdue-af/jupyter/jupyter_server_config.py \
     docker/purdue-af/jupyter/jupyter_config.json \
     /etc/jupyter/
 COPY --chown=root:root docker/purdue-af/scripts/run-as-root.sh \
-    docker/purdue-af/scripts/init-kernels.sh \
     docker/purdue-af/scripts/config-extensions.sh \
     docker/purdue-af/scripts/create-symlinks.sh \
     /usr/local/bin/before-notebook.d/
+# docker/purdue-af/scripts/init-kernels.sh \
 COPY --chown=root:root \
     docker/purdue-af/jupyter/start.sh \
     docker/purdue-af/jupyter/start-notebook.sh \
