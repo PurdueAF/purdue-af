@@ -42,11 +42,11 @@ gateway:
     environment: {}
     scheduler:
       cores:
-        request: 2
-        limit: 4
+        request: 4
+        limit: 8
       memory:
-        request: 4G
-        limit: 8G
+        request: 16G
+        limit: 32G
       extraPodConfig:
         nodeSelector:
           cms-af-prod: "true"
