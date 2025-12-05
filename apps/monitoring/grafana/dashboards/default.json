@@ -107,7 +107,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -168,7 +170,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -341,7 +345,9 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -601,7 +607,9 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -767,7 +775,9 @@
         "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -842,7 +852,9 @@
         "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -917,7 +929,9 @@
         "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -1388,7 +1402,9 @@
         "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -1594,7 +1610,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -2556,7 +2574,7 @@
         "x": 0,
         "y": 63
       },
-      "id": 33,
+      "id": 36,
       "options": {
         "legend": {
           "calcs": [],
@@ -2577,13 +2595,15 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "avg by (cluster_name) (\n  sum by (pod, cluster_name) (\n    label_replace(\n      container_memory_working_set_bytes{pod=~\"dask-worker-.*\", container=\"dask-worker\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n  /\n  sum by (pod, cluster_name) (\n    label_replace(\n      kube_pod_container_resource_limits{pod=~\"dask-worker-.*\", resource=\"memory\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n)\n",
+          "editorMode": "code",
+          "expr": "max by (cluster_name) (\n  sum by (pod, cluster_name) (\n    label_replace(\n      rate(container_cpu_usage_seconds_total{pod=~\"dask-worker-.*\", container=\"dask-worker\"}[5m]),\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n  /\n  sum by (pod, cluster_name) (\n    label_replace(\n      kube_pod_container_resource_limits{pod=~\"dask-worker-.*\", resource=\"cpu\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n)\n",
           "interval": "",
           "legendFormat": "{{ cluster_name }}",
+          "range": true,
           "refId": "A"
         }
       ],
-      "title": "Average worker memory utilization per Dask cluster",
+      "title": "Peak CPU utilization among workers in each Dask cluster",
       "type": "timeseries"
     },
     {
@@ -2676,7 +2696,7 @@
           "refId": "A"
         }
       ],
-      "title": "Maximum memory utilization among workers in each Dask cluster",
+      "title": "Peak memory utilization among workers in each Dask cluster",
       "type": "timeseries"
     },
     {
@@ -2724,13 +2744,12 @@
             }
           },
           "mappings": [],
-          "max": 1,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           },
-          "unit": "percentunit"
+          "unit": "CPU"
         },
         "overrides": []
       },
@@ -2761,9 +2780,11 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "avg by (cluster_name) (\n  sum by (pod, cluster_name) (\n    label_replace(\n      rate(container_cpu_usage_seconds_total{pod=~\"dask-worker-.*\", container=\"dask-worker\"}[5m]),\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n  /\n  sum by (pod, cluster_name) (\n    label_replace(\n      kube_pod_container_resource_limits{pod=~\"dask-worker-.*\", resource=\"cpu\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n)\n",
+          "editorMode": "code",
+          "expr": "avg by (cluster_name) (\n  sum by (pod, cluster_name) (\n    label_replace(\n      rate(container_cpu_usage_seconds_total{pod=~\"dask-worker-.*\", container=\"dask-worker\"}[5m]),\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n  # /\n  # sum by (pod, cluster_name) (\n  #   label_replace(\n  #     kube_pod_container_resource_limits{pod=~\"dask-worker-.*\", resource=\"cpu\"},\n  #     \"cluster_name\",\n  #     \"$1\",\n  #     \"pod\",\n  #     \"dask-worker-([0-9a-f]{32})-.*\"\n  #   )\n  # )\n)\n",
           "interval": "",
           "legendFormat": "{{ cluster_name }}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -2815,13 +2836,12 @@
             }
           },
           "mappings": [],
-          "max": 1,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           },
-          "unit": "percentunit"
+          "unit": "bytes"
         },
         "overrides": []
       },
@@ -2831,7 +2851,7 @@
         "x": 12,
         "y": 75
       },
-      "id": 36,
+      "id": 33,
       "options": {
         "legend": {
           "calcs": [],
@@ -2853,14 +2873,14 @@
             "uid": "prometheus-rancher"
           },
           "editorMode": "code",
-          "expr": "max by (cluster_name) (\n  sum by (pod, cluster_name) (\n    label_replace(\n      rate(container_cpu_usage_seconds_total{pod=~\"dask-worker-.*\", container=\"dask-worker\"}[5m]),\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n  /\n  sum by (pod, cluster_name) (\n    label_replace(\n      kube_pod_container_resource_limits{pod=~\"dask-worker-.*\", resource=\"cpu\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n)\n",
+          "expr": "avg by (cluster_name) (\n  sum by (pod, cluster_name) (\n    label_replace(\n      container_memory_working_set_bytes{pod=~\"dask-worker-.*\", container=\"dask-worker\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  ))\n#   /\n#   sum by (pod, cluster_name) (\n#     label_replace(\n#       kube_pod_container_resource_limits{pod=~\"dask-worker-.*\", resource=\"memory\"},\n#       \"cluster_name\",\n#       \"$1\",\n#       \"pod\",\n#       \"dask-worker-([0-9a-f]{32})-.*\"\n#     )\n#   )\n# )\n",
           "interval": "",
           "legendFormat": "{{ cluster_name }}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Maximum CPU utilization among workers in each Dask cluster",
+      "title": "Average worker memory utilization per Dask cluster",
       "type": "timeseries"
     },
     {
