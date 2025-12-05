@@ -2603,7 +2603,7 @@
           "refId": "A"
         }
       ],
-      "title": "Peak CPU utilization among workers in each Dask cluster",
+      "title": "Maximum CPU utilization among workers in each Dask cluster",
       "type": "timeseries"
     },
     {
@@ -2696,7 +2696,7 @@
           "refId": "A"
         }
       ],
-      "title": "Peak memory utilization among workers in each Dask cluster",
+      "title": "Maximum memory utilization among workers in each Dask cluster",
       "type": "timeseries"
     },
     {
