@@ -4,8 +4,8 @@ metadata:
   name: perf-analyzer-job
   namespace: cms
 spec:
-  parallelism: 1
-  completions: 1
+  parallelism: 10
+  completions: 10
   backoffLimit: 0
   template:
     spec:
@@ -19,15 +19,15 @@ spec:
             - "-c"
             - |
               echo "Running perf_analyzer..."
-              perf_analyzer -m particlenet_AK4_PT -i grpc -u supersonic-2508-nvidia:8001 \
+              perf_analyzer -m particlenet_AK4_PT -i grpc -u  sonic-interlink:8001 \
                 --async -p 1 -b 100 --concurrency-range=1:1  \
                 --shape pf_points__0:2,100 --shape pf_features__1:20,100 --shape pf_mask__2:1,100 --shape sv_points__3:2,10 --shape sv_features__4:11,10 --shape sv_mask__5:1,10 \
-                --request-count=10000
+                --request-count=100000
 
           resources:
             requests:
               cpu: 1
-              memory: "2G"
+              memory: "16G"
             limits:
               cpu: 1
-              memory: "2G"
+              memory: "16G"
