@@ -40,7 +40,7 @@ server:
           mountPath: /prometheus
 
   ingress:
-    enabled: ${enable_ingresses}
+    enabled: false
     hosts: [prometheus-af.geddes.rcac.purdue.edu]
     tls:
       - hosts: [prometheus-af.geddes.rcac.purdue.edu]

@@ -88,9 +88,9 @@ keda:
 prometheus:
   external:
     enabled: true
-    url: prometheus-af.geddes.rcac.purdue.edu
-    port: 443
-    scheme: https
+    url: prometheus-server
+    port: 9090
+    scheme: http
 
 opentelemetry-collector:
   enabled: false
