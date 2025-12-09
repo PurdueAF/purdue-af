@@ -431,7 +431,7 @@
             "uid": "P7FECBCB34F03A058"
           },
           "editorMode": "code",
-          "expr": "count(\n  max_over_time(\n    (DCGM_FI_DEV_GPU_UTIL > 0)[${__range}:]\n  ) > 0\n)\nor on() vector(0)",
+          "expr": "count(\n  max_over_time(\n    (DCGM_FI_DEV_GPU_UTIL > 0)[$__range:]\n  ) > 0\n)\nor on() vector(0)",
           "legendFormat": " ",
           "range": true,
           "refId": "A"
@@ -495,7 +495,7 @@
             "uid": "P2395B6A8B70B4D03"
           },
           "editorMode": "code",
-          "expr": "count(\n  max_over_time(\n    (DCGM_FI_DEV_GPU_UTIL{\n      kubernetes_node=~\"paf.*\"\n    } > 0)[${__range}:]\n  ) > 0\n)\nor on() vector(0)",
+          "expr": "count(\n  max_over_time(\n    (DCGM_FI_DEV_GPU_UTIL{\n      kubernetes_node=~\"paf.*\"\n    } > 0)[$__range:]\n  ) > 0\n)\nor on() vector(0)",
           "legendFormat": " ",
           "range": true,
           "refId": "A"
@@ -559,7 +559,7 @@
             "uid": "P2395B6A8B70B4D03"
           },
           "editorMode": "code",
-          "expr": "count(\n  max_over_time(\n    (DCGM_FI_PROF_GR_ENGINE_ACTIVE{\n      kubernetes_node=~\"(geddes-g000|geddes-g001|geddes-g002)\"\n    } > 0)[${__range}:]\n  ) > 0\n)\nor on() vector(0)",
+          "expr": "count(\n  max_over_time(\n    (DCGM_FI_PROF_GR_ENGINE_ACTIVE{\n      kubernetes_node=~\"(geddes-g000|geddes-g001|geddes-g002)\"\n    } > 0)[$__range:]\n  ) > 0\n)\nor on() vector(0)",
           "legendFormat": " ",
           "range": true,
           "refId": "A"
