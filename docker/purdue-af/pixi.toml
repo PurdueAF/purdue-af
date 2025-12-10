@@ -43,6 +43,7 @@ jupyterlab-theme-toggler  = "==1.1.0"
 dask-gateway              = "==2025.4.0"
 pyroscope-io              = "==0.8.11"
 jupyter-sshd-proxy        = "==0.3.0"
+pixi-kernel               = "==0.7.1"
 
 dask-labextension = { git = "https://github.com/kondratyevd/dask-labextension.git" }
 

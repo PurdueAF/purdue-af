@@ -19,6 +19,10 @@ mkdir -p /work/users/$NB_USER
 chmod 755 /work/users/$NB_USER
 chown $NB_UID:users /work/users/$NB_USER
 
+# Make /opt/pixi writable by NB_USER
+chown -R $NB_USER:users /opt/pixi
+chmod -R g+w /opt/pixi
+
 export PIXI_CACHE_DIR="/work/users/${NB_USER}/.pixi-cache/"
 
 mv /etc/slurm/slist /usr/bin
