@@ -25,6 +25,10 @@ chmod -R g+w /opt/pixi
 
 export PIXI_CACHE_DIR="/work/users/${NB_USER}/.pixi-cache/"
 
+# Remove pixi-kernel kernelspecs for R kernels
+jupyter kernelspec remove -y pixi-kernel-ir || true
+jupyter kernelspec remove -y pixi-kernel-ark || true
+
 mv /etc/slurm/slist /usr/bin
 
 cp /cvmfs/cms.cern.ch/SITECONF/T2_US_Purdue/storage.json /etc/cvmfs/ || true
