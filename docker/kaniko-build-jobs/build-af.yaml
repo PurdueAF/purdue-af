@@ -3,7 +3,7 @@ kind: Job
 metadata:
   name: kaniko-build-af
 spec:
-  backoffLimit: 10
+  backoffLimit: 0
   completions: 1
   template:
     spec:
@@ -28,7 +28,7 @@ spec:
           volumeMounts:
             - name: docker-config
               mountPath: /kaniko/.docker/
-      restartPolicy: Never
+      restartPolicy: OnFailure
       volumes:
         - name: docker-config
           secret:
