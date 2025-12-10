@@ -12,7 +12,7 @@ spec:
       #   kind: GitRepository
       #   name: interlink
       chart: interlink
-      version: "0.6.0"
+      version: "0.6.1-pre1"
       sourceRef:
         kind: HelmRepository
         name: interlink

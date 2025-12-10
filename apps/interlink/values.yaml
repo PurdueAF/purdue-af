@@ -65,6 +65,9 @@ virtualNode:
     CPUs: 1000
     memGiB: 4000
     pods: 300
+
+  disableCSR: true
+
   network:
     # Enable tunnel feature (creates wstunnel template ConfigMap)
     enableTunnel: true
