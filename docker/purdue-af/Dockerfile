@@ -99,6 +99,12 @@ RUN chmod +x /usr/local/bin/pixi && \
     PATH="${PIXI_HOME}/bin:${PATH}" \
     curl -fsSL https://pixi.sh/install.sh | bash && \
     pixi install --environment base-env && \
+    echo "=== Verifying Pixi environment installation ===" && \
+    echo "PIXI_HOME: ${PIXI_HOME}" && \
+    echo "BASE_ENV_DIR: ${BASE_ENV_DIR}" && \
+    ls -la "${BASE_ENV_DIR}/bin/jupyter" && \
+    "${BASE_ENV_DIR}/bin/jupyter" --version && \
+    echo "=== Pixi environment verified ===" && \
     rm -rf "${HOME}/.cache/rattler" && \
     # Remove unused kernelspecs
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/python3" || true && \
@@ -148,7 +154,7 @@ RUN chmod +x /usr/local/bin/* && \
     fix-permissions /etc/jupyter/ && fix-permissions "${HOME}"
 
 # Set PATH before switching user so it's available to all users
-ENV PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}"
+ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}"
 
 # ------------------------------------------------------------
 
@@ -156,9 +162,14 @@ ENV PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}
 
 USER ${NB_USER}
 
-RUN /opt/pixi/.pixi/envs/base-env/bin/jupyter notebook --generate-config && \
+RUN echo "=== Running as ${NB_USER} ===" && \
+    echo "PATH: ${PATH}" && \
+    echo "BASE_ENV_DIR: ${BASE_ENV_DIR}" && \
+    echo "PIXI_HOME: ${PIXI_HOME}" && \
+    ls -la "${BASE_ENV_DIR}/bin/jupyter" || echo "WARNING: jupyter not found at ${BASE_ENV_DIR}/bin/jupyter" && \
+    "${BASE_ENV_DIR}/bin/jupyter" notebook --generate-config && \
     npm cache clean --force || true && \
-    /opt/pixi/.pixi/envs/base-env/bin/jupyter lab clean && \
+    "${BASE_ENV_DIR}/bin/jupyter" lab clean && \
     rm -rf "${HOME}/.cache/yarn"
 
 WORKDIR "${HOME}"
