@@ -127,10 +127,7 @@ RUN chmod +x /usr/local/bin/pixi && \
     rm -rf "${HOME}/.cache/rattler" || true && \
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/python3" || true && \
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ir" || true && \
-    rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ark" || true && \
-    if [ -d "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3" ]; then \
-        mv "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3" "${BASE_ENV_DIR}/share/jupyter/kernels/python3"; \
-    fi
+    rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ark" || true
 
 
 # ------------------------------------------------------------
