@@ -158,6 +158,7 @@ gateway:
 
 
       from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
+      import os.path
 
       def options_handler(options, user):
           if user.name=="jovyan":
@@ -177,8 +178,51 @@ gateway:
           if "NVIDIA_VISIBLE_DEVICES" in options.env:
               del options.env["NVIDIA_VISIBLE_DEVICES"]
           
-          options.env["PATH"]=f"{options.conda_env}/bin/:"+options.env.pop("PATH")
-          options.env["CPLUS_INCLUDE_PATH"]=f"{options.conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
+          # Determine which conda environment to use
+          conda_env = None
+          
+          # Check if pixi_project is provided (and not empty string)
+          pixi_project = getattr(options, 'pixi_project', None)
+          if pixi_project and pixi_project.strip():
+              # If pixi_project is provided, conda_env should not be explicitly set
+              # Check if user explicitly provided a conda_env
+              user_conda_env = getattr(options, 'conda_env', None)
+              if user_conda_env and user_conda_env.strip():
+                  raise ValueError("pixi-project and conda-env are mutually exclusive. Please specify only one.")
+              
+              # Validate pixi project
+              pixi_project = pixi_project.strip()
+              pixi_env = getattr(options, 'pixi_env', 'default')
+              
+              # Check if pixi.toml exists
+              pixi_toml_path = os.path.join(pixi_project, 'pixi.toml')
+              if not os.path.exists(pixi_toml_path):
+                  raise ValueError(f"pixi.toml not found in {pixi_project}. Please provide a valid pixi project directory.")
+              
+              # Check if environment exists
+              env_path = os.path.join(pixi_project, '.pixi', 'envs', pixi_env)
+              if not os.path.exists(env_path):
+                  raise ValueError(f"Pixi environment '{pixi_env}' not found at {env_path}. Please build the environment first by running 'pixi install' in {pixi_project}.")
+              
+              # Verify it's a conda environment (check for bin/python or bin/python3)
+              bin_python = os.path.join(env_path, 'bin', 'python')
+              bin_python3 = os.path.join(env_path, 'bin', 'python3')
+              if not (os.path.exists(bin_python) or os.path.exists(bin_python3)):
+                  raise ValueError(f"Environment at {env_path} does not appear to be a valid conda environment.")
+              
+              conda_env = env_path
+          else:
+              # Use conda_env (must be specified if pixi_project is not provided)
+              user_conda_env = getattr(options, 'conda_env', None)
+              if not user_conda_env or not user_conda_env.strip():
+                  raise ValueError("Either conda_env or pixi_project must be specified")
+              conda_env = user_conda_env.strip()
+
+          # Set up environment variables and commands using the conda_env path
+          options.env["PATH"]=f"{conda_env}/bin/:"+options.env.pop("PATH")
+          options.env["CPLUS_INCLUDE_PATH"]=f"{conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
+          worker_cmd = f"{conda_env}/bin/dask-worker"
+          scheduler_cmd = f"{conda_env}/bin/dask-scheduler"
 
           extra_pod_config = {"securityContext": {"runAsUser": uid, "runAsGroup": gid,}}
           c.KubeClusterConfig.scheduler_extra_pod_config.update(extra_pod_config)
@@ -215,14 +259,16 @@ gateway:
               "worker_memory": desired_memory,
               "worker_memory_limit": desired_memory,
               "environment": options.env,
-              "scheduler_cmd": f"{options.conda_env}/bin/dask-scheduler",
-              "worker_cmd": f"{options.conda_env}/bin/dask-worker",
+              "scheduler_cmd": scheduler_cmd,
+              "worker_cmd": worker_cmd,
               "time": "1-00:00:00",
               "scheduler_setup": setup_cmd,
               "worker_setup": setup_cmd,
           }
       c.Backend.cluster_options = Options(
-          String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
+          String("conda_env", default="", label="Conda environment"),
+          String("pixi_project", default="", label="Pixi project directory (mutually exclusive with conda-env)"),
+          String("pixi_env", default="default", label="Pixi environment name"),
           Float("worker_cores", default=1, min=0.1, max=64, label="Cores per worker"),
           Float("worker_memory", default=4, min=0.1, max=64, label="Memory per worker (GiB)"),
           Mapping("env", {}, label="Environment variables"),
