@@ -46,6 +46,21 @@ if [ -d "${PIXI_GLOBAL}" ] && [ -f "${PIXI_GLOBAL}/pixi.toml" ] && [ -f "${PIXI_
 	"${PIXI_GLOBAL_PYTHON}" -m ipykernel install --name python3 --display-name "Python (pixi global)" --prefix "${BASE_ENV_DIR}"
 fi
 
+# Install LCG 106b_cuda kernel
+LCG_106B_CUDA_PATH="/cvmfs/sft.cern.ch/lcg/views/LCG_106b_cuda/x86_64-el8-gcc11-opt/setup.sh"
+if [ -f "$LCG_106B_CUDA_PATH" ]; then
+	source "$LCG_106B_CUDA_PATH"
+	python -m ipykernel install --name "lcg_106b_cuda" --display-name "LCG_106b_cuda"
+
+	# Update kernel.json with environment variables
+	kernel_path="/usr/local/share/jupyter/kernels/lcg_106b_cuda/"
+	if [ -f "$kernel_path/kernel.json" ] && command -v jq >/dev/null 2>&1; then
+		jq '.env = {"PATH": env.PATH, "PYTHONPATH": env.PYTHONPATH, "LD_LIBRARY_PATH": env.LD_LIBRARY_PATH, "CPLUS_INCLUDE_PATH": env.CPLUS_INCLUDE_PATH}' \
+			"$kernel_path/kernel.json" >"$kernel_path/kernel.json.tmp"
+		mv "$kernel_path/kernel.json.tmp" "$kernel_path/kernel.json"
+	fi
+fi
+
 # Setup system files
 mv /etc/slurm/slist /usr/bin
 cp /cvmfs/cms.cern.ch/SITECONF/T2_US_Purdue/storage.json /etc/cvmfs/ || true
