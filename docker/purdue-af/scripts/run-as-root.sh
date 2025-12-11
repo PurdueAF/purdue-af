@@ -35,10 +35,8 @@ mkdir -p /work/users/$NB_USER
 chmod 755 /work/users/$NB_USER
 chown $NB_UID:users /work/users/$NB_USER
 
-# Update kernel display names
-BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env"
-
 # Update pixi-kernel-python3 display name
+BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env"
 KERNEL_JSON="${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3/kernel.json"
 if [ -f "${KERNEL_JSON}" ]; then
 	if command -v jq >/dev/null 2>&1; then
@@ -49,15 +47,16 @@ if [ -f "${KERNEL_JSON}" ]; then
 	fi
 fi
 
-# Update python3 kernel display name
-KERNEL_JSON="${BASE_ENV_DIR}/share/jupyter/kernels/python3/kernel.json"
-if [ -f "${KERNEL_JSON}" ]; then
-	if command -v jq >/dev/null 2>&1; then
-		jq '.display_name = "Python (pixi global)"' "${KERNEL_JSON}" >"${KERNEL_JSON}.tmp" &&
-			mv "${KERNEL_JSON}.tmp" "${KERNEL_JSON}"
-	else
-		sed -i 's/"display_name": "[^"]*"/"display_name": "Python (pixi global)"/' "${KERNEL_JSON}"
-	fi
+# Install python3 kernel from pixi global env
+PIXI_GLOBAL="/work/projects/purdue-af/pixi"
+if [ -d "${PIXI_GLOBAL}" ] && [ -f "${PIXI_GLOBAL}/pixi.toml" ]; then
+	ORIGINAL_DIR=$(pwd)
+	cd "${PIXI_GLOBAL}" || exit 1
+	# Remove existing python3 kernel if it exists
+	jupyter kernelspec remove -y python3 2>/dev/null || true
+	# Install new kernel using pixi
+	pixi run python -m ipykernel install --name python3 --display-name "Python (pixi global)" --prefix "${BASE_ENV_DIR}"
+	cd "${ORIGINAL_DIR}" || exit 1
 fi
 
 export PIXI_CACHE_DIR="/work/users/${NB_USER}/.pixi-cache/"
