@@ -35,10 +35,6 @@ mkdir -p /work/users/$NB_USER
 chmod 755 /work/users/$NB_USER
 chown $NB_UID:users /work/users/$NB_USER
 
-# Make /opt/pixi writable by NB_USER
-chown -R $NB_USER:users /opt/pixi
-chmod -R g+w /opt/pixi
-
 # Move pixi-kernel-created kernel to python3 directory
 BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env"
 if [ -d "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3" ]; then

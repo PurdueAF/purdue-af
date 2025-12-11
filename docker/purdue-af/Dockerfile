@@ -169,7 +169,9 @@ RUN chmod +x /usr/local/bin/* && \
     chmod +x /usr/local/bin/before-notebook.d/* && \
     sed -re "s/c.ServerApp/c.NotebookApp/g" \
         /etc/jupyter/jupyter_server_config.py > /etc/jupyter/jupyter_notebook_config.py && \
-    fix-permissions /etc/jupyter/ && fix-permissions "${HOME}"
+    fix-permissions /etc/jupyter/ && \
+    fix-permissions "${HOME}" && \
+    fix-permissions "${PIXI_HOME}"
 
 # Set PATH before switching user so it's available to all users
 ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}"
