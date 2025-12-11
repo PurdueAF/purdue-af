@@ -96,6 +96,7 @@ COPY --chown=root:root docker/purdue-af/pixi.toml "${PIXI_HOME}/"
 COPY --chown=root:root docker/purdue-af/pixi-wrapper /usr/local/bin/pixi
 
 RUN chmod +x /usr/local/bin/pixi && \
+    rm -rf "${HOME}/.cache/rattler" || true && \
     PATH="${PIXI_HOME}/bin:${PATH}" \
     curl -fsSL https://pixi.sh/install.sh | bash && \
     pixi install --environment base-env && \
@@ -105,12 +106,10 @@ RUN chmod +x /usr/local/bin/pixi && \
     ls -la "${BASE_ENV_DIR}/bin/jupyter" && \
     "${BASE_ENV_DIR}/bin/jupyter" --version && \
     echo "=== Pixi environment verified ===" && \
-    rm -rf "${HOME}/.cache/rattler" && \
-    # Remove unused kernelspecs
+    rm -rf "${HOME}/.cache/rattler" || true && \
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/python3" || true && \
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ir" || true && \
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ark" || true && \
-    # Move pixi-kernel-created kernel to python3 directory
     if [ -d "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3" ]; then \
         mv "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3" "${BASE_ENV_DIR}/share/jupyter/kernels/python3"; \
     fi
