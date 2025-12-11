@@ -35,11 +35,29 @@ mkdir -p /work/users/$NB_USER
 chmod 755 /work/users/$NB_USER
 chown $NB_UID:users /work/users/$NB_USER
 
-# Move pixi-kernel-created kernel to python3 directory
+# Update kernel display names
 BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env"
-if [ -d "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3" ]; then
-	rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/python3" || true
-	mv "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3" "${BASE_ENV_DIR}/share/jupyter/kernels/python3"
+
+# Update pixi-kernel-python3 display name
+KERNEL_JSON="${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3/kernel.json"
+if [ -f "${KERNEL_JSON}" ]; then
+	if command -v jq >/dev/null 2>&1; then
+		jq '.display_name = "Python (pixi project-aware)"' "${KERNEL_JSON}" > "${KERNEL_JSON}.tmp" && \
+		mv "${KERNEL_JSON}.tmp" "${KERNEL_JSON}"
+	else
+		sed -i 's/"display_name": "[^"]*"/"display_name": "Python (pixi project-aware)"/' "${KERNEL_JSON}"
+	fi
+fi
+
+# Update python3 kernel display name
+KERNEL_JSON="${BASE_ENV_DIR}/share/jupyter/kernels/python3/kernel.json"
+if [ -f "${KERNEL_JSON}" ]; then
+	if command -v jq >/dev/null 2>&1; then
+		jq '.display_name = "Python (pixi global)"' "${KERNEL_JSON}" > "${KERNEL_JSON}.tmp" && \
+		mv "${KERNEL_JSON}.tmp" "${KERNEL_JSON}"
+	else
+		sed -i 's/"display_name": "[^"]*"/"display_name": "Python (pixi global)"/' "${KERNEL_JSON}"
+	fi
 fi
 
 export PIXI_CACHE_DIR="/work/users/${NB_USER}/.pixi-cache/"
