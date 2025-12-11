@@ -156,10 +156,9 @@ ENV PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}
 
 USER ${NB_USER}
 
-RUN PATH="/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}" \
-    jupyter notebook --generate-config && \
+RUN /opt/pixi/.pixi/envs/base-env/bin/jupyter notebook --generate-config && \
     npm cache clean --force || true && \
-    jupyter lab clean && \
+    /opt/pixi/.pixi/envs/base-env/bin/jupyter lab clean && \
     rm -rf "${HOME}/.cache/yarn"
 
 WORKDIR "${HOME}"
