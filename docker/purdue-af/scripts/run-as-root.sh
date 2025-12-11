@@ -50,13 +50,10 @@ fi
 # Install python3 kernel from pixi global env
 PIXI_GLOBAL="/work/pixi/global"
 if [ -d "${PIXI_GLOBAL}" ] && [ -f "${PIXI_GLOBAL}/pixi.toml" ]; then
-	ORIGINAL_DIR=$(pwd)
-	cd "${PIXI_GLOBAL}" || exit 1
 	# Remove existing python3 kernel if it exists
 	jupyter kernelspec remove -y python3 2>/dev/null || true
-	# Install new kernel using pixi
-	pixi run python -m ipykernel install --name python3 --display-name "Python (pixi global)" --prefix "${BASE_ENV_DIR}"
-	cd "${ORIGINAL_DIR}" || exit 1
+	# Install new kernel using pixi from the global project
+	pixi run -p "${PIXI_GLOBAL}" python -m ipykernel install --name python3 --display-name "Python (pixi global)" --prefix "${BASE_ENV_DIR}"
 fi
 
 export PIXI_CACHE_DIR="/work/users/${NB_USER}/.pixi-cache/"
