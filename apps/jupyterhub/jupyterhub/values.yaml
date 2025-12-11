@@ -125,10 +125,10 @@ singleuser:
         image: "geddes-registry.rcac.purdue.edu/cms/purdue-af:0.12.0"
         node_selector:
           cms-af-prod: "true"
-        cpu_guarantee: 4
-        cpu_limit: 4
-        mem_guarantee: 16G
-        mem_limit: 16G
+        cpu_guarantee: 8
+        cpu_limit: 16
+        mem_guarantee: 32G
+        mem_limit: 64G
         extra_resource_limits:
           # nvidia.com/mig-7g.40gb: 1
           nvidia.com/mig-1g.5gb: 1
