@@ -42,8 +42,8 @@ BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env"
 KERNEL_JSON="${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3/kernel.json"
 if [ -f "${KERNEL_JSON}" ]; then
 	if command -v jq >/dev/null 2>&1; then
-		jq '.display_name = "Python (pixi project-aware)"' "${KERNEL_JSON}" > "${KERNEL_JSON}.tmp" && \
-		mv "${KERNEL_JSON}.tmp" "${KERNEL_JSON}"
+		jq '.display_name = "Python (pixi project-aware)"' "${KERNEL_JSON}" >"${KERNEL_JSON}.tmp" &&
+			mv "${KERNEL_JSON}.tmp" "${KERNEL_JSON}"
 	else
 		sed -i 's/"display_name": "[^"]*"/"display_name": "Python (pixi project-aware)"/' "${KERNEL_JSON}"
 	fi
@@ -53,8 +53,8 @@ fi
 KERNEL_JSON="${BASE_ENV_DIR}/share/jupyter/kernels/python3/kernel.json"
 if [ -f "${KERNEL_JSON}" ]; then
 	if command -v jq >/dev/null 2>&1; then
-		jq '.display_name = "Python (pixi global)"' "${KERNEL_JSON}" > "${KERNEL_JSON}.tmp" && \
-		mv "${KERNEL_JSON}.tmp" "${KERNEL_JSON}"
+		jq '.display_name = "Python (pixi global)"' "${KERNEL_JSON}" >"${KERNEL_JSON}.tmp" &&
+			mv "${KERNEL_JSON}.tmp" "${KERNEL_JSON}"
 	else
 		sed -i 's/"display_name": "[^"]*"/"display_name": "Python (pixi global)"/' "${KERNEL_JSON}"
 	fi
