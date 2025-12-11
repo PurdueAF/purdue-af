@@ -4,14 +4,14 @@
 export PROFILE="${PROFILE:-1}"
 
 if [ "${PROFILE:-0}" = "1" ]; then
-    PROFILE_LOG="${PROFILE_LOG:-/tmp/run-as-root-profile.log}"
-    SCRIPT_START=$(date +%s.%N 2>/dev/null || date +%s)
-    
-    # Simple approach: use set -x with timestamped PS4
-    # Output will show each command with line number and timestamp
-    PS4='+ [$(date +%s.%N 2>/dev/null || date +%s)] Line $LINENO: '
-    exec 3>&2 2> >(tee "$PROFILE_LOG" >&3 | sed -u 's/^+/[PROFILE] +/')
-    set -x
+	PROFILE_LOG="${PROFILE_LOG:-/tmp/run-as-root-profile.log}"
+	SCRIPT_START=$(date +%s.%N 2>/dev/null || date +%s)
+
+	# Simple approach: use set -x with timestamped PS4
+	# Output will show each command with line number and timestamp
+	PS4='+ [$(date +%s.%N 2>/dev/null || date +%s)] Line $LINENO: '
+	exec 3>&2 2> >(tee "$PROFILE_LOG" >&3 | sed -u 's/^+/[PROFILE] +/')
+	set -x
 fi
 
 mkdir -p /etc/munge/
@@ -42,8 +42,8 @@ chmod -R g+w /opt/pixi
 # Move pixi-kernel-created kernel to python3 directory
 BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env"
 if [ -d "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3" ]; then
-    rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/python3" || true
-    mv "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3" "${BASE_ENV_DIR}/share/jupyter/kernels/python3"
+	rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/python3" || true
+	mv "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3" "${BASE_ENV_DIR}/share/jupyter/kernels/python3"
 fi
 
 export PIXI_CACHE_DIR="/work/users/${NB_USER}/.pixi-cache/"
@@ -145,15 +145,15 @@ cp .bashrc .bash_profile
 
 # Finalize profiling if enabled
 if [ "${PROFILE:-0}" = "1" ]; then
-    set +x
-    exec 2>&3 3>&-
-    SCRIPT_END=$(date +%s.%N 2>/dev/null || date +%s)
-    TOTAL_TIME=$(awk "BEGIN {printf \"%.6f\", $SCRIPT_END - $SCRIPT_START}" 2>/dev/null || echo "0")
-    echo "" >&2
-    echo "[PROFILE] ========================================" >&2
-    echo "[PROFILE] Total execution time: ${TOTAL_TIME}s" >&2
-    echo "[PROFILE] Detailed log with timestamps: $PROFILE_LOG" >&2
-    echo "[PROFILE] Each line shows: [timestamp] Line N: command" >&2
-    echo "[PROFILE] Calculate elapsed time by subtracting consecutive timestamps" >&2
-    echo "[PROFILE] ========================================" >&2
+	set +x
+	exec 2>&3 3>&-
+	SCRIPT_END=$(date +%s.%N 2>/dev/null || date +%s)
+	TOTAL_TIME=$(awk "BEGIN {printf \"%.6f\", $SCRIPT_END - $SCRIPT_START}" 2>/dev/null || echo "0")
+	echo "" >&2
+	echo "[PROFILE] ========================================" >&2
+	echo "[PROFILE] Total execution time: ${TOTAL_TIME}s" >&2
+	echo "[PROFILE] Detailed log with timestamps: $PROFILE_LOG" >&2
+	echo "[PROFILE] Each line shows: [timestamp] Line N: command" >&2
+	echo "[PROFILE] Calculate elapsed time by subtracting consecutive timestamps" >&2
+	echo "[PROFILE] ========================================" >&2
 fi
