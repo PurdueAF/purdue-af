@@ -48,7 +48,7 @@ if [ -f "${KERNEL_JSON}" ]; then
 fi
 
 # Install python3 kernel from pixi global env
-PIXI_GLOBAL="/work/projects/purdue-af/pixi"
+PIXI_GLOBAL="/work/pixi"
 if [ -d "${PIXI_GLOBAL}" ] && [ -f "${PIXI_GLOBAL}/pixi.toml" ]; then
 	ORIGINAL_DIR=$(pwd)
 	cd "${PIXI_GLOBAL}" || exit 1
