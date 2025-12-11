@@ -99,13 +99,31 @@ RUN chmod +x /usr/local/bin/pixi && \
     rm -rf "${HOME}/.cache/rattler" || true && \
     PATH="${PIXI_HOME}/bin:${PATH}" \
     curl -fsSL https://pixi.sh/install.sh | bash && \
+    echo "=== Before pixi install ===" && \
+    ls -la "${PIXI_HOME}" && \
     pixi install --environment base-env && \
+    echo "=== After pixi install ===" && \
+    echo "Checking PIXI_HOME structure:" && \
+    find "${PIXI_HOME}" -maxdepth 3 -type d 2>&1 | head -20 && \
+    echo "Checking if BASE_ENV_DIR exists:" && \
+    ls -la "${BASE_ENV_DIR}" 2>&1 || echo "BASE_ENV_DIR does not exist yet" && \
+    echo "Checking .pixi directory:" && \
+    ls -la "${PIXI_HOME}/.pixi" 2>&1 || echo ".pixi directory does not exist" && \
+    echo "Checking .pixi/envs:" && \
+    ls -la "${PIXI_HOME}/.pixi/envs" 2>&1 || echo ".pixi/envs does not exist" && \
     echo "=== Verifying Pixi environment installation ===" && \
     echo "PIXI_HOME: ${PIXI_HOME}" && \
     echo "BASE_ENV_DIR: ${BASE_ENV_DIR}" && \
-    ls -la "${BASE_ENV_DIR}/bin/jupyter" && \
-    "${BASE_ENV_DIR}/bin/jupyter" --version && \
-    echo "=== Pixi environment verified ===" && \
+    if [ -d "${BASE_ENV_DIR}" ]; then \
+        ls -la "${BASE_ENV_DIR}/bin/jupyter" && \
+        "${BASE_ENV_DIR}/bin/jupyter" --version && \
+        echo "=== Pixi environment verified ==="; \
+    else \
+        echo "ERROR: BASE_ENV_DIR does not exist after pixi install"; \
+        echo "Trying to find where pixi installed the environment:"; \
+        find "${PIXI_HOME}" -name "jupyter" -type f 2>&1 | head -10; \
+        exit 1; \
+    fi && \
     rm -rf "${HOME}/.cache/rattler" || true && \
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/python3" || true && \
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ir" || true && \
