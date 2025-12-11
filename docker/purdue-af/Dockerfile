@@ -169,10 +169,20 @@ RUN echo "=== Running as ${NB_USER} ===" && \
     echo "PATH: ${PATH}" && \
     echo "BASE_ENV_DIR: ${BASE_ENV_DIR}" && \
     echo "PIXI_HOME: ${PIXI_HOME}" && \
-    ls -la "${BASE_ENV_DIR}/bin/jupyter" || echo "WARNING: jupyter not found at ${BASE_ENV_DIR}/bin/jupyter" && \
-    "${BASE_ENV_DIR}/bin/jupyter" notebook --generate-config && \
+    echo "=== Checking if BASE_ENV_DIR exists ===" && \
+    ls -la "${BASE_ENV_DIR}" || echo "ERROR: BASE_ENV_DIR does not exist" && \
+    echo "=== Checking if bin directory exists ===" && \
+    ls -la "${BASE_ENV_DIR}/bin" 2>&1 || echo "ERROR: bin directory does not exist" && \
+    echo "=== Checking for jupyter binary ===" && \
+    ls -la "${BASE_ENV_DIR}/bin/jupyter" 2>&1 || echo "ERROR: jupyter binary not found" && \
+    echo "=== Checking if PIXI_HOME exists ===" && \
+    ls -la "${PIXI_HOME}" 2>&1 || echo "ERROR: PIXI_HOME does not exist" && \
+    echo "=== Checking pixi binary ===" && \
+    which pixi || echo "ERROR: pixi not in PATH" && \
+    echo "=== Attempting to use jupyter ===" && \
+    /opt/pixi/.pixi/envs/base-env/bin/jupyter notebook --generate-config && \
     npm cache clean --force || true && \
-    "${BASE_ENV_DIR}/bin/jupyter" lab clean && \
+    /opt/pixi/.pixi/envs/base-env/bin/jupyter lab clean && \
     rm -rf "${HOME}/.cache/yarn"
 
 WORKDIR "${HOME}"
