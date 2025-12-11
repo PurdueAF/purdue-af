@@ -99,7 +99,11 @@ RUN chmod +x /usr/local/bin/pixi && \
     PATH="${PIXI_HOME}/bin:${PATH}" \
     curl -fsSL https://pixi.sh/install.sh | bash && \
     pixi install --environment base-env && \
-    rm -rf "${HOME}/.cache/rattler"
+    rm -rf "${HOME}/.cache/rattler" && \
+    # Remove unused kernelspecs
+    rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/python3" || true && \
+    rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ir" || true && \
+    rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ark" || true
 
 
 # ------------------------------------------------------------
