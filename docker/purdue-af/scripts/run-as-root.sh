@@ -49,7 +49,14 @@ fi
 # Install LCG 106b_cuda kernel
 LCG_106B_CUDA_PATH="/cvmfs/sft.cern.ch/lcg/views/LCG_106b_cuda/x86_64-el8-gcc11-opt/setup.sh"
 if [ -f "$LCG_106B_CUDA_PATH" ]; then
+	# Save entire environment before sourcing LCG
+	# Use comm -3 to find variables added by LCG, but simpler: save all and restore all
+	env >/tmp/original_env_106b_cuda
+
+	# Source LCG setup (this modifies the environment)
 	source "$LCG_106B_CUDA_PATH"
+
+	# Install the kernel
 	python -m ipykernel install --name "lcg_106b_cuda" --display-name "LCG_106b_cuda"
 
 	# Update kernel.json with environment variables
@@ -59,6 +66,33 @@ if [ -f "$LCG_106B_CUDA_PATH" ]; then
 			"$kernel_path/kernel.json" >"$kernel_path/kernel.json.tmp"
 		mv "$kernel_path/kernel.json.tmp" "$kernel_path/kernel.json"
 	fi
+
+	# Restore entire environment from saved state
+	# Get list of variables that were added by LCG (present now but not in original)
+	env | cut -d= -f1 | sort >/tmp/current_vars
+	cut -d= -f1 /tmp/original_env_106b_cuda | sort >/tmp/original_vars
+	
+	# Unset variables that were added by LCG
+	comm -13 /tmp/original_vars /tmp/current_vars | while read -r var; do
+		[ -n "$var" ] && unset "$var" 2>/dev/null || true
+	done
+	
+	# Restore original variables
+	while IFS= read -r line; do
+		[ -z "$line" ] && continue
+		[[ "$line" =~ ^# ]] && continue
+		# Handle lines that may have = in the value
+		if [[ "$line" =~ ^([^=]+)=(.*)$ ]]; then
+			key="${BASH_REMATCH[1]}"
+			value="${BASH_REMATCH[2]}"
+			export "$key=$value"
+		fi
+	done < /tmp/original_env_106b_cuda
+	
+	rm -f /tmp/current_vars /tmp/original_vars
+
+	# Clean up
+	rm -f /tmp/original_env_106b_cuda
 fi
 
 # Setup system files
