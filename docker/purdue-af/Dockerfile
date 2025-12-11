@@ -148,7 +148,7 @@ RUN chmod +x /usr/local/bin/* && \
     fix-permissions /etc/jupyter/ && fix-permissions "${HOME}"
 
 # Set PATH before switching user so it's available to all users
-ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}"
+ENV PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}"
 
 # ------------------------------------------------------------
 
@@ -156,7 +156,7 @@ ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}"
 
 USER ${NB_USER}
 
-RUN PATH="${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}" \
+RUN PATH="/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}" \
     jupyter notebook --generate-config && \
     npm cache clean --force || true && \
     jupyter lab clean && \
