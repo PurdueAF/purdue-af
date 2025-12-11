@@ -109,7 +109,11 @@ RUN chmod +x /usr/local/bin/pixi && \
     # Remove unused kernelspecs
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/python3" || true && \
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ir" || true && \
-    rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ark" || true
+    rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ark" || true && \
+    # Move pixi-kernel-created kernel to python3 directory
+    if [ -d "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3" ]; then \
+        mv "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3" "${BASE_ENV_DIR}/share/jupyter/kernels/python3"; \
+    fi
 
 
 # ------------------------------------------------------------
