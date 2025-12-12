@@ -27,7 +27,7 @@ resources:
   - ../../apps/sonic/helmrepo.yaml
   - ../../apps/sonic/gitrepo.yaml
   - ../../apps/sonic/supersonic/helmrelease.yaml
-  - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
+  # - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
   - ../../apps/sonic/supersonic-dynamic/gitrepo.yaml
   - ../../apps/sonic/supersonic-dynamic/helmrelease.yaml
   - ../../apps/sonic/supersonic-2508-fastml/gitrepo.yaml
