@@ -90,7 +90,7 @@ ingress:
 prometheus:
   external:
     enabled: true
-    url: prometheus-server.cms.svc.cluster.local
+    url: prometheus-server
     port: 9090
     scheme: http
 
@@ -105,7 +105,7 @@ grafana:
           type: prometheus
           access: proxy
           isDefault: true
-          url: http://prometheus-server.cms.svc.cluster.local:9090
+          url: http://prometheus-server:9090
           jsonData:
             timeInterval: "5s"
             tlsSkipVerify: true

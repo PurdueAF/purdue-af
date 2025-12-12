@@ -77,7 +77,7 @@ ingress:
 prometheus:
   external:
     enabled: true
-    url: prometheus-server.cms.svc.cluster.local
+    url: prometheus-server
     port: 9090
     scheme: http
 
