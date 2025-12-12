@@ -47,7 +47,7 @@ triton:
     #   failureThreshold: 12
     httpGet:
       path: /v2/health/ready
-      port: 8000
+      port: "8000"
 
 envoy:
   enabled: true
