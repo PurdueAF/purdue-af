@@ -41,7 +41,7 @@ triton:
   readinessProbe:
     successThreshold: 3
   startupProbe:
-  #   reset: false
+    #   reset: false
     initialDelaySeconds: 300
   #   periodSeconds: 10
   #   failureThreshold: 12
