@@ -36,6 +36,7 @@ resources:
   - ../../apps/sonic/supersonic-2508-nvidia/helmrelease.yaml
 
   - ../../apps/sonic/supersonic-alma9/helmrelease.yaml
+  - ../../apps/sonic/prometheus-networkpolicy.yaml
 
   - ../../apps/a2rchi/helmrelease.yaml
   - ../../apps/a2rchi/secret-hf-token.yaml
