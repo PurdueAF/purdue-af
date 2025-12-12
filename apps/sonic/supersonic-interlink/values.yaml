@@ -40,14 +40,14 @@ triton:
     mountPath: /cvmfs
   readinessProbe:
     successThreshold: 3
-  # startupProbe:
+  startupProbe:
   #   reset: false
   # initialDelaySeconds: 300
   #   periodSeconds: 10
   #   failureThreshold: 12
-  #   httpGet:
-  #     path: /v2/health/ready
-  #     port: http
+    httpGet:
+      path: /v2/health/ready
+      port: 8000
 
 envoy:
   enabled: true
