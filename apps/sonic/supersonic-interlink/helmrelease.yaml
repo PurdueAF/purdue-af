@@ -27,3 +27,13 @@ spec:
     - kind: ConfigMap
       name: supersonic-interlink-config
       valuesKey: values.yaml
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: ScaledObject
+              name: "sonic-interlink-keda-so"
+            patch: |
+              - op: add
+                path: /spec/triggers/0/metadata/timeout
+                value: "60000"
