@@ -4,6 +4,7 @@ metadata:
   name: af-userlist-sync-purdue
 spec:
   schedule: "*/30 * * * *" # Run every 30 minutes
+  concurrencyPolicy: Forbid
   suspend: false
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
