@@ -1,6 +1,0 @@
-apiVersion: v2
-name: a2rchi
-description: Purdue AF - A2RCHI deployment (chatbot, chromadb, postgres)
-type: application
-version: 0.1.0
-appVersion: "1.2.0"

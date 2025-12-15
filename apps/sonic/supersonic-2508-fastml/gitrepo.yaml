@@ -1,9 +1,0 @@
-apiVersion: source.toolkit.fluxcd.io/v1
-kind: GitRepository
-metadata:
-  name: supersonic-2508-fastml
-spec:
-  interval: 1m
-  url: https://github.com/fastmachinelearning/SuperSONIC
-  ref:
-    branch: envoy-config

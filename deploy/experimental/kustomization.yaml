@@ -1,12 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  # - ../../apps/af-utils/conda-env-builder/cronjob.yaml
-  # - ../../apps/af-utils/conda-env-builder/rbac.yaml
-  - ../../apps/af-utils/update-knowledge/rbac.yaml
-  - ../../apps/af-utils/update-knowledge/cronjob.yaml
-  - ../../apps/af-utils/update-knowledge/secret.yaml
-
   - ../../apps/dask-gateway/dask-gateway-k8s-interlink/helmrelease.yaml
   - ../../apps/dask-gateway/dask-gateway-k8s-interlink/ingress.yaml
 
@@ -30,32 +24,13 @@ resources:
   - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
   - ../../apps/sonic/supersonic-dynamic/gitrepo.yaml
   - ../../apps/sonic/supersonic-dynamic/helmrelease.yaml
-  - ../../apps/sonic/supersonic-2508-fastml/gitrepo.yaml
-  - ../../apps/sonic/supersonic-2508-fastml/helmrelease.yaml
-  - ../../apps/sonic/supersonic-2508-nvidia/gitrepo.yaml
-  - ../../apps/sonic/supersonic-2508-nvidia/helmrelease.yaml
-
-  - ../../apps/sonic/supersonic-alma9/helmrelease.yaml
+ 
   - ../../apps/sonic/prometheus-networkpolicy.yaml
-
-  - ../../apps/a2rchi/helmrelease.yaml
-  - ../../apps/a2rchi/secret-hf-token.yaml
-  - ../../apps/a2rchi/secret-openai-api-key.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
 
 configMapGenerator:
-  # - name: conda-env-builder-scripts
-  #   files:
-  #     - ../../apps/af-utils/conda-env-builder/generate-conda-env-jobs.sh
-  #     - ../../apps/af-utils/conda-env-builder/build-single-conda-env.sh
-  #     - ../../apps/af-utils/conda-env-builder/sitecustomize.py
-
-  - name: update-knowledge-script
-    files:
-      - ../../apps/af-utils/update-knowledge/update_knowledge.py
-
   - name: dask-gateway-k8s-interlink-config
     files:
       - values.yaml=../../apps/dask-gateway/dask-gateway-k8s-interlink/values.yaml
@@ -91,21 +66,3 @@ configMapGenerator:
   - name: supersonic-dynamic-config
     files:
       - values.yaml=../../apps/sonic/supersonic-dynamic/values.yaml
-
-  - name: supersonic-2508-fastml-config
-    files:
-      - values.yaml=../../apps/sonic/supersonic-2508-fastml/values.yaml
-      - envoy-config.yaml=../../apps/sonic/supersonic-2508-fastml/envoy-config.yaml
-
-  - name: supersonic-2508-nvidia-config
-    files:
-      - values.yaml=../../apps/sonic/supersonic-2508-nvidia/values.yaml
-      - envoy-config.yaml=../../apps/sonic/supersonic-2508-nvidia/envoy-config.yaml
-
-  - name: supersonic-alma9-config
-    files:
-      - values.yaml=../../apps/sonic/supersonic-alma9/values.yaml
-
-  - name: a2rchi-config
-    files:
-      - values.yaml=../../apps/a2rchi/values.yaml
