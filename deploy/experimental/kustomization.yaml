@@ -24,7 +24,7 @@ resources:
   - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
   - ../../apps/sonic/supersonic-dynamic/gitrepo.yaml
   - ../../apps/sonic/supersonic-dynamic/helmrelease.yaml
- 
+
   - ../../apps/sonic/prometheus-networkpolicy.yaml
 
 generatorOptions:
