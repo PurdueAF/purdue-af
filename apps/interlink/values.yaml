@@ -61,7 +61,7 @@ plugin:
 
 virtualNode:
   # image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:0.5.2-pre2
-  image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:latest
+  image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:0.6.1-pre2
   resources:
     CPUs: 1000
     memGiB: 4000
