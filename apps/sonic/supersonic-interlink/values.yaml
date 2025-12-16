@@ -77,7 +77,7 @@ envoy:
 keda:
   enabled: true
   minReplicaCount: 1
-  maxReplicaCount: 11
+  maxReplicaCount: 2
   scaleUp:
     stabilizationWindowSeconds: 30
     periodSeconds: 15
