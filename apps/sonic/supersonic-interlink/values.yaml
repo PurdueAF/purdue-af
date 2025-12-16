@@ -42,7 +42,7 @@ triton:
     successThreshold: 3
   startupProbe:
     #   reset: false
-    initialDelaySeconds: 300
+    # initialDelaySeconds: 300
     #   periodSeconds: 10
     #   failureThreshold: 12
     httpGet:
