@@ -23,12 +23,14 @@ Pixi offers several advantages over Conda:
   across both Conda and PyPI packages (Conda, on the other hand, does not cross-check
   PyPI and Conda dependencies, which may lead to conflicts).
 * **Better reproducibility**:
+
   * Configuration files (``pixi.toml``) are always used to define environments;
     they are automatically updated when a package is manually installed on top of an
     existing environment.
     In Conda, manual installation of a package would lead to discrepancy between the
     environment itself and the ``environment.yaml`` file that describes it.
   * Lock files ensure exact package versions across different systems.
+
 * **More robust**: Conda is very sensitive to environment variables and easily breaks
   system paths; Pixi is not as fragile.
 
@@ -92,11 +94,14 @@ Pixi-based projects must be located outside of ``/home/`` to avoid ``/home/`` st
 You can use the following locations:
 
 * **Purdue users**:
+
   * ``/depot/cms/users/<username>/``
   * ``/depot/cms/<group-name>/``
   * ``/work/users/<username>/``
   * ``/work/projects/<project-name>/``
+
 * **Non-Purdue users** (CERN/FNAL):
+
   * ``/work/users/<username>/``
   * ``/work/projects/<project-name>/``
 
@@ -190,6 +195,7 @@ Pixi kernels in Jupyter
 
 Instead of one-to-one mapping between environments and Jupyter kernels, we provide two
 special Pixi kernels:
+
 - "global" kernel: always uses the global environment at ``/work/pixi/global/``. This environment
   is built with all the common HEP packages and ML libraries and can be used as a starting point
   for new projects.
