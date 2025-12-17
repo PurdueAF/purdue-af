@@ -6,7 +6,9 @@ management. Pixi is significantly faster than Conda and addresses multiple issue
 we have experienced with Conda. This guide will help you to start using Pixi in you
 projects.
 
-Please read this guide carefully, and 
+Please read this guide carefully, and try to create Pixi environments in your projects.
+Once you are confortable with the basec setup, you can explore more advanced Pixi features
+at the official `Pixi documentation website <https://pixi.sh>`_.
 
 
 Why migrate to Pixi?
