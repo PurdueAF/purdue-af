@@ -89,13 +89,13 @@ This section contains the instructions for creating Dask Gateway clusters using 
          import dask_gateway
          from dask_gateway import Gateway
 
-         # To submit jobs via SLURM (Purdue users only!)
+         # To submit jobs via Kubernetes (all users)
          gateway = Gateway()
 
-         # To submit jobs via Kubernetes (all users)
+         # To submit jobs via SLURM (Purdue users only!)
          # gateway = Gateway(
-         #     "http://dask-gateway-k8s.geddes.rcac.purdue.edu/",
-         #     proxy_address="traefik-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8786",
+         #     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
+         #     proxy_address="traefik-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8786",
          # )
 
          # You may need to update some environment variables before creating a cluster.
@@ -317,13 +317,13 @@ Below are the different ways to connect a client to a cluster created elsewhere:
 
          from dask_gateway import Gateway
 
-         # If submitting workers as SLURM jobs (Purdue users only):
+         # If submitting workers as Kubernetes pods (all users):
          gateway = Gateway()
 
-         # If submitting workers as Kubernetes pods (all users):
+         # If submitting workers as SLURM jobs (Purdue users only):
          # gateway = Gateway(
-         #     "http://dask-gateway-k8s.geddes.rcac.purdue.edu/",
-         #     proxy_address="traefik-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8786",
+         #     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
+         #     proxy_address="traefik-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8786",
          # )
 
          clusters = gateway.list_clusters()
@@ -361,13 +361,13 @@ Below are the different ways to connect a client to a cluster created elsewhere:
 
          from dask_gateway import Gateway
 
-         # If submitting workers as SLURM jobs (Purdue users only):
+         # If submitting workers as Kubernetes pods (all users):
          gateway = Gateway()
 
-         # If submitting workers as Kubernetes pods (all users):
+         # If submitting workers as SLURM jobs (Purdue users only):
          # gateway = Gateway(
-         #     "http://dask-gateway-k8s.geddes.rcac.purdue.edu/",
-         #     proxy_address="traefik-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8786",
+         #     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
+         #     proxy_address="traefik-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8786",
          # )
 
          # To find the cluster name:
