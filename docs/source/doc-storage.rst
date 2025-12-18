@@ -85,7 +85,7 @@ Which storage volume should I use?
 
    Your ``/home/<username>/`` directory (root directory of JupyterLab file browser) has a strict quota of 25 GB.
    If you go over this limit, you will not be able to start a session on Purdue AF.
-   Rather than storing your data, Conda environments, etc. in your home directory, consider using other storage volumes listed below.
+   Rather than storing your data, Pixi or Conda environments, etc. in your home directory, consider using other storage volumes listed below.
 
    You can check your current ``/home/`` directory usage with the following command: ``bash du -sh $HOME``.
 
@@ -115,17 +115,16 @@ Below are common storage use cases with recommendations on which storage volume 
     - Purdue users should use **Depot** (``/depot/cms``). If the outputs need to be accessible by other users, use a group directory (e.g. ``/depot/cms/top/``).
     - Non-Purdue users should use **/work/ storage**: ``/work/users/<username>/`` or ``/work/projects/<project-name>``.
 
-- **Storing custom Conda environments:**
+- **Storing custom Pixi or Conda environments:**
 
-  - Before creating custom environments, try our :doc:`pre-installed environments <doc-software>`.
-  - In order for Conda environments to appear as JupyterLab kernels, they must be stored in publicly readable directories, so ``/depot/cms/user/`` will NOT work.
-  - Possible locations for your Conda environments are:
+  - In order for Pixi or Conda environments to appear as JupyterLab kernels, they must be stored in publicly readable directories, so ``/depot/cms/user/`` will NOT work.
+  - Possible locations for your Pixi or Conda environments are:
 
     - group directories at Depot (for example, ``/depot/cms/top/``)
     - personal directories at work storage: ``/work/users/<username>/``
     - shared project directories at work storage: ``/work/projects/<project-name>/``
 
-  - If using Slurm jobs or Dask Gateway workers, make sure that the directory where Conda environments are stored is visible from them (see table above).
+  - If using Slurm jobs or Dask Gateway workers, make sure that the directory where Pixi or Conda environments are stored is visible from them (see table above).
 
 
 .. warning::

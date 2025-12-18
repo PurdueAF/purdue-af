@@ -66,25 +66,21 @@ After the session has started, review the available storage options:
    * Detailed description of storage options: :doc:`doc-storage`.
    * :doc:`guide-cern-eos`
 
-4. Review kernels and Conda envs
------------------------------------------
+4. Review kernels and Pixi/Conda environments
+----------------------------------------------
 
-There are two pre-installed Python3 kernels that include all of the most common
-packages used in HEP analyses (see :doc:`full list of packages <doc-software>`).
-The "default" Python3 kernel will be automatically selected when you create
-a new Jupyter notebook.
+The analysis software at Purdue AF is managed via Pixi and Conda environments,
+Jupyter kernels, as well as LCG stacks and Apptainer/Singularity images available via CVMFS.
 
-When working in a Terminal instead of a Jupyter Notebook,
-you need to activate the environment explicitly, e.g.:
+To get started, you can use the "global" Pixi environment which contains all
+common HEP analysis packages and ML libraries. It is located at ``/work/pixi/global/``
+and available as a Jupyter kernel across the facility.
 
-.. code-block:: shell
-
-   conda activate /depot/cms/kernels/python3
+See :doc:`doc-software` for more details.
 
 If you need a package that is missing from the pre-installed kernels, please
 :doc:`contact Purdue AF support <doc-support>`.
 
-You can also :doc:`create and share custom kernels <guide-conda>`.
 
 5. Set up GitHub access
 ---------------------------

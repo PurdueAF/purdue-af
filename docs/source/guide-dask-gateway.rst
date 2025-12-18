@@ -104,7 +104,7 @@ This section contains the instructions for creating Dask Gateway clusters using 
 
          # Create the cluster
          cluster = gateway.new_cluster(
-            conda_env = "/depot/cms/kernels/python3", # path to conda env
+            pixi_project = "/path/to/pixi/project", # path to pixi project (directory containing pixi.toml file)
             worker_cores = 1,    # cores per worker
             worker_memory = 4,   # memory per worker in GB
             env = dict(os.environ), # pass environment as a dictionary
@@ -118,7 +118,7 @@ This section contains the instructions for creating Dask Gateway clusters using 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 There are multiple ways to ensure that the workers have access to specific storage volumes,
-Conda environments, Python packages, C++ libraries, etc.
+Pixi or Conda environments, Python packages, C++ libraries, etc.
 
 *  **Shared storage**
 
@@ -145,12 +145,12 @@ Conda environments, Python packages, C++ libraries, etc.
    +------------+---------------+--------------------+--------------------+
 
 
-* **Conda environments / Jupyter kernels**
+* **Pixi or Conda environments / Jupyter kernels**
 
-  Any Conda environment that is used in your analysis can be propagated to Dask workers.
+  Any Pixi or Conda environment that is used in your analysis can be propagated to Dask workers.
   The only caveat is that the workers must have read access to the storage volume where the
   environment is stored (see table above). For example, SLURM workers will not be able to see
-  Conda environments located in ``/work/`` storage.
+  Pixi or Conda environments located in ``/work/`` storage.
 
   .. tabs::
 
@@ -167,14 +167,35 @@ Conda environments, Python packages, C++ libraries, etc.
            :align: center
 
      .. group-tab:: Jupyter Notebook
-         
-        The path to conda environment is specified in the ``conda_env``
+
+        The path to pixi project is specified in the ``pixi_project``
         argument of ``new_cluster()``:
 
         .. code-block:: python
 
            cluster = gateway.new_cluster(
-              conda_env = "/depot/cms/kernels/python3",
+              pixi_project = "/path/to/pixi/project", # path to pixi project (directory containing pixi.toml file)
+              # ...
+           )
+
+        If you are using a multi-environment Pixi project, you can specify the environment name
+        in the ``pixi_env`` argument (``default`` if not specified):
+
+        .. code-block:: python
+
+           cluster = gateway.new_cluster(
+              pixi_project = "/path/to/pixi/project", # path to pixi project (directory containing pixi.toml file)
+              pixi_env = "my-env", # pixi environment name
+              # ...
+           )
+
+        If using Conda environment, you can specify the environment name in the ``conda_env``
+        argument (mutually exclusive with ``pixi_project`` and ``pixi_env`` - see above):
+
+        .. code-block:: python
+
+           cluster = gateway.new_cluster(
+              conda_env = "/path/to/conda/environment", # path to conda environment
               # ...
            )
 
@@ -245,7 +266,7 @@ Conda environments, Python packages, C++ libraries, etc.
                   # other environment variables...
                }  
 
-3. Monitoring 
+1. Monitoring 
 ^^^^^^^^^^^^^^^
 
 Monitoring your Dask jobs is possible in two ways:

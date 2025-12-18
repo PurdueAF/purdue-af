@@ -12,10 +12,10 @@ The screenshot below shows the main elements of the interface:
 
 #. **File browser** - your home directory with symlinks to different storage volumes (Depot, CVMFS, ``/work/``, etc. - learn more :doc:`here <doc-storage>`).
 #. **Exstensions** - left sidebar contains useful extesions: an interactive :doc:`Dask Gateway <guide-dask-gateway>` interface, and a Git extension for interactive work with GitHub or GitLab repositories.
-#. **Launcher** - features buttons to create Python and ROOT C++ notebooks with different Conda environments, open terminals, create new text files, etc.
+#. **Launcher** - features buttons to create Python and ROOT C++ notebooks with different Pixi or Conda environments, open terminals, create new text files, etc.
    New launcher window can be opened by clicking the ``+`` button in the file browser or next to any open tab.
 #. **Top bar** - contains Purdue AF release version, your username, dark theme switch, and the shutdown button.
-#. **Terminal** - standard Bash terminal, useful for any cases that require a command line interface, such as ``voms-proxy-init``. You can also activate Conda environments here, run shell or Python scripts, use ROOT console, etc.
+#. **Terminal** - standard Bash terminal, useful for any cases that require a command line interface. 
 #. **File editor** - simple IDE with syntax highlight for most common programming languages.
 
 .. note::
@@ -36,20 +36,9 @@ JupyterLab is especially well suited for developing analysis workflows in Python
   Jupyter Notebooks support a wide range of plugins and widgets, which allows for a more
   interactive experience comparing to simple Python scripts.
 * To execute the code in a Jupyter Notebook, we always need to specify a **kernel**.
-  At Purdue AF, Jupyter kernels are derived from **Conda environments**. Read more about
-  creating Conda environments and Jupyter kernels :doc:`here <guide-conda>`.
-* We provide a :doc:`curated "default" Conda environment <doc-software>`, which should work 
-  for most applications, unless your code relies on a specific
-  version of ``pytorch`` or ``tensorflow``, or uses ``coffea==2024.X.X``.
-
-  For ``coffea 2024.x`` workflows, we also provide a pre-installed ``coffea_latest`` environment.
-
-  .. important::
-
-     In most cases, you will not need to create your own Conda environment.
-     Try using the default environment first, and :doc:`contact Purdue AF admins <doc-support>`
-     if there are any packages missing.
-
+  At Purdue AF, Jupyter kernels are derived from Pixi or Conda environments. Read more :doc:`here <doc-software>`.
+* We provide a :doc:`curated "global" Pixi environment <doc-software>`, which should work 
+  for most applications, unless your code relies on a very specific package version.
 * Analysis code written in Python can be accelerated via parallelization. We recommend using
   :doc:`Dask <guide-dask>` for parallelization and distributed computing.
   For scaling out to multiple computing nodes, consider using :doc:`Dask Gateway <guide-dask-gateway>`.
@@ -85,13 +74,7 @@ at Purdue AF:
   for efficient columnar particle physics analyses. Coffea implements all common
   tools used in modern HEP analyses, and has a large and active support community.
 
-  In the default curated ``Python3 (default)`` kernel, we provide ``coffea==0.7.21``.
-
-  Newer Coffea releases use calendar versioning scheme, e.g. ``coffea==2024.9.0``;
-  these versions are incompatible with ``0.7.x`` and older versions.
-  To access one of the latest Coffea versions, you can either use ``coffea_latest`` kernel,
-  or :doc:`create your own kernel <guide-conda>`. If you want to use ``coffea_latest`` but
-  missing some packages, please :doc:`contact Purdue AF admins <doc-support>` and we will install them for you.
+  The latest version of Coffea is pre-installed in the global Pixi environment at ``/work/pixi/global/``.
 
 * `PocketCoffea <https://pocketcoffea.readthedocs.io/en/stable/>`_ is a slim declarative
   framework built on top of Coffea. It allows to define an analysis with a few configuration
@@ -101,8 +84,8 @@ at Purdue AF:
 
 * `RDataFrame <https://root.cern.ch/doc/master/group__tutorial__dataframe.html>`_ is
   another common HEP analysis framework based on ROOT. RDataFrame analysis can
-  be written in either C++ or Python. Purdue AF supports RDataFrame in any Conda
-  environment where ROOT is installed, including default and ``coffea_latest`` environments.
+  be written in either C++ or Python. Purdue AF supports RDataFrame in any Pixi or Conda
+  environment where ROOT is installed.
 
 Scaling out
 ------------

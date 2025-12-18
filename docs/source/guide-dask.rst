@@ -6,12 +6,8 @@ using `Dask <https://docs.dask.org/en/stable/>`_ library. Dask includes multiple
 with different use cases; here we will focus only on ``dask.distributed`` (or simply ``distributed``)
 submodule.
 
-.. note::
-
-   The ``distributed`` package is already installed in the default ``Python3`` kernel
-   (corresponding to Conda environment ``/depot/cms/kernels/python3```).
-
-   To use ``distributed`` in your own private kernel: ``conda install distributed``.
+You can add the ``distributed`` package to your Pixi environment by running
+``pixi add distributed`` in your Pixi project directory.
 
 Parallelization example
 ========================
@@ -79,12 +75,6 @@ Dask Gateway provides a way to scale out to multiple compute nodes,
 using either SLURM batch scheduler or Kubernetes in the backend. With Dask Gateway, you
 should be able to quickly scale **up to 400 cores** and **800 GB RAM**,
 depending on availability of resources.
-
-.. note::
-
-   Default Python3 kernel / conda environment has all necessary software installed.
-   If you want to use Dask Gateway in your own custom environment, make sure
-   that it contains ``dask-gateway``, ``ipykernel`` and ``ipywidgets`` packages.
 
 Please refer to the following page for detailed documentation about
 Dask Gateway at Purdue Analysis Facility: :doc:`guide-dask-gateway`.
