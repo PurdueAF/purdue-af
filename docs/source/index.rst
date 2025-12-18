@@ -74,7 +74,6 @@ tools and features for fast, efficient, collaborative HEP research.
     :maxdepth: 1
 
     guide-conda-to-pixi
-    guide-conda
     guide-upload
     guide-ssh-access
     guide-combine
