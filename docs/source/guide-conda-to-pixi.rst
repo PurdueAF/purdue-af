@@ -222,3 +222,53 @@ if your Pixi project is using a `multi-environment setup <https://pixi.sh/dev/wo
 As with Conda environments, the Pixi environment location must be visible to Dask workers,
 which means ``/depot/*/`` if you are using Dask Gateway with Slurm backend;
 ``/depot/*/`` or ``/work/*/`` if you are using Dask Gateway with Kubernetes backend.
+
+
+Combine in Pixi environments
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You can easily install Combine in your own Pixi environment by adding a "task"
+(custom command) to your Pixi project. All you nned to do ia to copy the following
+code block to the ``[tasks]`` section of the ``pixi.toml`` file:
+
+.. code-block:: toml
+
+   [tasks]
+   install_combine = """
+   sh -c '
+   set -e
+
+   # Delete existing Combine installation, if present
+   rm -rf HiggsAnalysis/CombinedLimit
+
+   # Clone latest Combine version from GitHub
+   git clone https://github.com/cms-analysis/HiggsAnalysis-CombinedLimit.git HiggsAnalysis/CombinedLimit
+   cd HiggsAnalysis/CombinedLimit
+
+   # Get the Python major.minor version from the active pixi env
+   PY_VER=$(python - << \"PY\"
+   import sys
+   print(f\"{sys.version_info.major}.{sys.version_info.minor}\")
+   PY
+   )
+
+   # Install Combine into the environment
+   cmake -S . -B build \
+   -DCMAKE_INSTALL_PREFIX=\"$CONDA_PREFIX\" \
+   -DCMAKE_INSTALL_PYTHONDIR=\"lib/python${PY_VER}/site-packages\" \
+   -DUSE_VDT=OFF
+   cmake --build build -j\"$(nproc --ignore=2)\"
+   cmake --install build
+
+   cd -
+   '
+   """
+
+Then, once your environment is built, you can install Combine by running the following
+command:
+
+.. code-block:: shell
+
+   pixi run install_combine
+
+Once installed, you can use Combine commands in your project.
