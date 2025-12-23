@@ -122,7 +122,7 @@ singleuser:
       default: false
       description: "Contains the latest features but may be unstable - use at your own risk."
       kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/purdue-af:0.12.0"
+        image: "geddes-registry.rcac.purdue.edu/cms/purdue-af:0.12.0-debug"
         node_selector:
           cms-af-prod: "true"
         cpu_guarantee: 8
