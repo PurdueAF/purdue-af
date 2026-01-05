@@ -97,10 +97,19 @@ COPY --chown=root:root docker/purdue-af/pixi-wrapper /usr/local/bin/pixi
 
 RUN chmod +x /usr/local/bin/pixi && \
     rm -rf "${HOME}/.cache/rattler" || true && \
+    mkdir -p "${PIXI_HOME}/bin" && \
+    PIXI_VERSION="0.62.2" && \
+    curl -fsSL --retry 3 --retry-delay 2 \
+        -o /tmp/pixi.tar.gz \
+        "https://github.com/prefix-dev/pixi/releases/download/v${PIXI_VERSION}/pixi-x86_64-unknown-linux-musl.tar.gz" && \
+    tar -xzf /tmp/pixi.tar.gz -C "${PIXI_HOME}/bin" pixi && \
+    chmod +x "${PIXI_HOME}/bin/pixi" && \
+    rm -f /tmp/pixi.tar.gz && \
     PATH="${PIXI_HOME}/bin:${PATH}" \
-    curl -fsSL https://pixi.sh/install.sh | bash && \
+    "${PIXI_HOME}/bin/pixi" --version && \
     echo "=== Before pixi install ===" && \
     ls -la "${PIXI_HOME}" && \
+    PATH="${PIXI_HOME}/bin:${PATH}" \
     pixi install --environment base-env && \
     echo "=== After pixi install ===" && \
     echo "Checking PIXI_HOME structure:" && \
