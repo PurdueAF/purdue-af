@@ -46,6 +46,16 @@ if [ -d "${PIXI_GLOBAL}" ] && [ -f "${PIXI_GLOBAL}/pixi.toml" ] && [ -f "${PIXI_
 	"${PIXI_GLOBAL_PYTHON}" -m ipykernel install --name python3 --display-name "Python (pixi global)" --prefix "${BASE_ENV_DIR}"
 fi
 
+# Fix DNS resolution for pixi: IPv6 is enabled but unreachable in Kubernetes
+# DNS returns IPv6 addresses first, causing pixi's Rust DNS resolver to fail
+# Solution: Add IPv4 address to /etc/hosts (Kubernetes overwrites /etc/hosts, so we must do this at runtime)
+if ! grep -q "conda.anaconda.org" /etc/hosts 2>/dev/null; then
+	echo "# Fix for pixi DNS resolution: IPv6 connectivity broken in K8s cluster" >> /etc/hosts
+	echo "# conda.anaconda.org IPv4 addresses" >> /etc/hosts
+	echo "104.19.144.37 conda.anaconda.org" >> /etc/hosts
+	echo "104.19.145.37 conda.anaconda.org" >> /etc/hosts
+fi
+
 # Setup system files
 mv /etc/slurm/slist /usr/bin
 cp /cvmfs/cms.cern.ch/SITECONF/T2_US_Purdue/storage.json /etc/cvmfs/ || true

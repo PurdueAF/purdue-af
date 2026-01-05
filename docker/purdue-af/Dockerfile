@@ -73,15 +73,10 @@ ENV SHELL=/bin/bash \
     LC_ALL=en_US.UTF-8 \
     HOME="/home/${NB_USER}"
 
-# Fix DNS resolution for pixi: IPv6 is enabled but unreachable in Kubernetes
-# DNS returns IPv6 addresses first, causing pixi's Rust DNS resolver to fail
-# Solution: Add IPv4 address to /etc/hosts and configure IPv4 preference
-RUN echo "# Fix for pixi DNS resolution: IPv6 connectivity broken in K8s cluster" >> /etc/hosts && \
-    echo "# conda.anaconda.org IPv4 addresses (resolved at build time)" >> /etc/hosts && \
-    echo "104.19.144.37 conda.anaconda.org" >> /etc/hosts && \
-    echo "104.19.145.37 conda.anaconda.org" >> /etc/hosts && \
-    # Configure getaddrinfo to prefer IPv4 over IPv6 (RFC 3484) \
-    echo "# Prefer IPv4 over IPv6 for DNS resolution" > /etc/gai.conf && \
+# Configure getaddrinfo to prefer IPv4 over IPv6 (RFC 3484)
+# This helps system tools prefer IPv4 when both IPv4 and IPv6 are available
+# Note: The actual fix for pixi DNS is in run-as-root.sh (Kubernetes overwrites /etc/hosts at runtime)
+RUN echo "# Prefer IPv4 over IPv6 for DNS resolution" > /etc/gai.conf && \
     echo "precedence ::ffff:0:0/96  100" >> /etc/gai.conf
 
 # Copy a script that we will use to correct permissions after running certain commands
