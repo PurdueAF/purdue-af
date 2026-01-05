@@ -17,7 +17,7 @@ resources:
   - ../../apps/infrastructure/cvmfs-pvc.yaml
   - ../../apps/infrastructure/docker-secret.yaml
 
-  - ../../apps/jupyterhub/af-x509-secrets/deployment.yaml
+  - ../../apps/jupyterhub/af-x509-secrets/cronjob.yaml
   - ../../apps/jupyterhub/af-x509-secrets/rbac.yaml
   - ../../apps/jupyterhub/jupyterhub/helmrelease.yaml
   - ../../apps/jupyterhub/jupyterhub/secret-auth.yaml
