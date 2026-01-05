@@ -113,32 +113,9 @@ RUN chmod +x /usr/local/bin/pixi && \
     rm -f /tmp/pixi.tar.gz && \
     PATH="${PIXI_HOME}/bin:${PATH}" \
     "${PIXI_HOME}/bin/pixi" --version && \
-    echo "=== Before pixi install ===" && \
-    ls -la "${PIXI_HOME}" && \
     PATH="${PIXI_HOME}/bin:${PATH}" \
     pixi install --environment base-env && \
-    echo "=== After pixi install ===" && \
-    echo "Checking PIXI_HOME structure:" && \
-    find "${PIXI_HOME}" -maxdepth 3 -type d 2>&1 | head -20 && \
-    echo "Checking if BASE_ENV_DIR exists:" && \
-    ls -la "${BASE_ENV_DIR}" 2>&1 || echo "BASE_ENV_DIR does not exist yet" && \
-    echo "Checking .pixi directory:" && \
-    ls -la "${PIXI_HOME}/.pixi" 2>&1 || echo ".pixi directory does not exist" && \
-    echo "Checking .pixi/envs:" && \
-    ls -la "${PIXI_HOME}/.pixi/envs" 2>&1 || echo ".pixi/envs does not exist" && \
-    echo "=== Verifying Pixi environment installation ===" && \
-    echo "PIXI_HOME: ${PIXI_HOME}" && \
-    echo "BASE_ENV_DIR: ${BASE_ENV_DIR}" && \
-    if [ -d "${BASE_ENV_DIR}" ]; then \
-        ls -la "${BASE_ENV_DIR}/bin/jupyter" && \
-        "${BASE_ENV_DIR}/bin/jupyter" --version && \
-        echo "=== Pixi environment verified ==="; \
-    else \
-        echo "ERROR: BASE_ENV_DIR does not exist after pixi install"; \
-        echo "Trying to find where pixi installed the environment:"; \
-        find "${PIXI_HOME}" -name "jupyter" -type f 2>&1 | head -10; \
-        exit 1; \
-    fi && \
+    [ -d "${BASE_ENV_DIR}" ] || (echo "ERROR: BASE_ENV_DIR does not exist after pixi install" && exit 1) && \
     rm -rf "${HOME}/.cache/rattler" || true && \
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ir" || true && \
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ark" || true
@@ -196,22 +173,7 @@ ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}"
 
 USER ${NB_USER}
 
-RUN echo "=== Running as ${NB_USER} ===" && \
-    echo "PATH: ${PATH}" && \
-    echo "BASE_ENV_DIR: ${BASE_ENV_DIR}" && \
-    echo "PIXI_HOME: ${PIXI_HOME}" && \
-    echo "=== Checking if BASE_ENV_DIR exists ===" && \
-    ls -la "${BASE_ENV_DIR}" || echo "ERROR: BASE_ENV_DIR does not exist" && \
-    echo "=== Checking if bin directory exists ===" && \
-    ls -la "${BASE_ENV_DIR}/bin" 2>&1 || echo "ERROR: bin directory does not exist" && \
-    echo "=== Checking for jupyter binary ===" && \
-    ls -la "${BASE_ENV_DIR}/bin/jupyter" 2>&1 || echo "ERROR: jupyter binary not found" && \
-    echo "=== Checking if PIXI_HOME exists ===" && \
-    ls -la "${PIXI_HOME}" 2>&1 || echo "ERROR: PIXI_HOME does not exist" && \
-    echo "=== Checking pixi binary ===" && \
-    which pixi || echo "ERROR: pixi not in PATH" && \
-    echo "=== Attempting to use jupyter ===" && \
-    /opt/pixi/.pixi/envs/base-env/bin/jupyter notebook --generate-config && \
+RUN /opt/pixi/.pixi/envs/base-env/bin/jupyter notebook --generate-config && \
     npm cache clean --force || true && \
     /opt/pixi/.pixi/envs/base-env/bin/jupyter lab clean && \
     rm -rf "${HOME}/.cache/yarn"
