@@ -37,7 +37,7 @@ spec:
           command: ["bash", "-c"]
           args:
             [
-              "pip install 'urllib3<2' 'kubernetes>=24.2.0' && python3 x509_updater.py --secret ${x509_secret_name} --voms cms",
+              "pip install 'urllib3>=2.0.0,<3' 'kubernetes>=28.0.0' && python3 x509_updater.py --secret ${x509_secret_name} --voms cms",
             ]
           resources:
             requests:
