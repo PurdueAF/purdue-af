@@ -50,10 +50,10 @@ fi
 # DNS returns IPv6 addresses first, causing pixi's Rust DNS resolver to fail
 # Solution: Add IPv4 address to /etc/hosts (Kubernetes overwrites /etc/hosts, so we must do this at runtime)
 if ! grep -q "conda.anaconda.org" /etc/hosts 2>/dev/null; then
-	echo "# Fix for pixi DNS resolution: IPv6 connectivity broken in K8s cluster" >> /etc/hosts
-	echo "# conda.anaconda.org IPv4 addresses" >> /etc/hosts
-	echo "104.19.144.37 conda.anaconda.org" >> /etc/hosts
-	echo "104.19.145.37 conda.anaconda.org" >> /etc/hosts
+	echo "# Fix for pixi DNS resolution: IPv6 connectivity broken in K8s cluster" >>/etc/hosts
+	echo "# conda.anaconda.org IPv4 addresses" >>/etc/hosts
+	echo "104.19.144.37 conda.anaconda.org" >>/etc/hosts
+	echo "104.19.145.37 conda.anaconda.org" >>/etc/hosts
 fi
 
 # Setup system files
