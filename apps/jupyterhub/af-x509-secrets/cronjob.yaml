@@ -79,4 +79,3 @@ spec:
             # to this dir and set the correct permissions
             - name: grid-certs-rw-copy
               emptyDir: {}
-
