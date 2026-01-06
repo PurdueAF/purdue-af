@@ -6,7 +6,7 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: af-x509-secrets-role
+  name: af-x509-secrets-role-${namespace}
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
@@ -15,7 +15,7 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: af-x509-secrets-binding
+  name: af-x509-secrets-binding-${namespace}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
