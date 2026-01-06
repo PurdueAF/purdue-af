@@ -13,7 +13,7 @@ spec:
       template:
         spec:
           enableServiceLinks: false
-          serviceAccountName: af-x509-secrets
+          serviceAccountName: af-x509-secrets-${namespace}
           restartPolicy: Never
           nodeSelector: { "cms-af-prod": "true" }
           tolerations:
