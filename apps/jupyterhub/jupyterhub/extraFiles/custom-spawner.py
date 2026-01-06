@@ -72,7 +72,7 @@ if os.environ["POD_NAMESPACE"] == "cms":
     )
     c.KubeSpawner.environment.setdefault(
         "DASK_GATEWAY__PROXY_ADDRESS",
-        "api-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8000",
+        "traefik-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8786",
     )
 
 
