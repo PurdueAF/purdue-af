@@ -48,21 +48,37 @@ fi
 
 # Fix DNS resolution for pixi: IPv6 is enabled but unreachable in Kubernetes
 # DNS returns IPv6 addresses first, causing pixi's Rust DNS resolver to fail
-# Solution: Add IPv4 addresses to /etc/hosts for all pixi-related domains
+# Solution: Dynamically resolve and add IPv4 addresses to /etc/hosts for pixi-related domains
 # (Kubernetes overwrites /etc/hosts, so we must do this at runtime)
 if ! grep -q "# Fix for pixi DNS resolution" /etc/hosts 2>/dev/null; then
+	# List of domains used by pixi (conda channels, PyPI, prefix.dev, GitHub)
+	PIXI_DOMAINS=(
+		"conda.anaconda.org"
+		"anaconda.org"
+		"repo.anaconda.com"
+		"repo.continuum.io"
+		"prefix.dev"
+		"conda-mapping.prefix.dev"
+		"pypi.org"
+		"pypi.python.org"
+		"files.pythonhosted.org"
+		"github.com"
+		"raw.githubusercontent.com"
+		"api.github.com"
+	)
+
 	echo "" >>/etc/hosts
 	echo "# Fix for pixi DNS resolution: IPv6 connectivity broken in K8s cluster" >>/etc/hosts
-	echo "# Adding IPv4 addresses for pixi-related domains to force IPv4 resolution" >>/etc/hosts
-	# conda.anaconda.org (conda-forge channel)
-	echo "104.19.144.37 conda.anaconda.org" >>/etc/hosts
-	echo "104.19.145.37 conda.anaconda.org" >>/etc/hosts
-	# conda-mapping.prefix.dev (pixi conda-pypi mapping service)
-	echo "104.26.12.188 conda-mapping.prefix.dev" >>/etc/hosts
-	# prefix.dev (pixi main domain)
-	echo "34.90.252.205 prefix.dev" >>/etc/hosts
-	# anaconda.org (fallback)
-	echo "104.19.145.37 anaconda.org" >>/etc/hosts
+	echo "# Dynamically resolved IPv4 addresses for pixi-related domains" >>/etc/hosts
+
+	# Resolve each domain to IPv4 and add to /etc/hosts
+	for domain in "${PIXI_DOMAINS[@]}"; do
+		# Use getent to get IPv4 address (ahostsv4 returns IPv4 only)
+		ipv4=$(getent ahostsv4 "$domain" 2>/dev/null | head -1 | awk '{print $1}')
+		if [ -n "$ipv4" ]; then
+			echo "$ipv4 $domain" >>/etc/hosts
+		fi
+	done
 fi
 
 # Setup system files
