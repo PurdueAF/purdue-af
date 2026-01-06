@@ -12,7 +12,7 @@ singleuser:
   profileList:
     - display_name: "Purdue AF 0.12.0 – Pixi-based environment management."
       default: true
-      description: "Please refer to the Purdue AF documentation for instructions on how to switch from Conda to Pixi: <a href=\"https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html\" target=\"_blank\">https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html</a>."
+      description: 'Please refer to the Purdue AF documentation for instructions on how to switch from Conda to Pixi: <a href="https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html" target="_blank">https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html</a>.'
       kubespawner_override:
         image: "geddes-registry.rcac.purdue.edu/cms/purdue-af:0.12.0"
         node_selector: { "cms-af-prod": "true" }
