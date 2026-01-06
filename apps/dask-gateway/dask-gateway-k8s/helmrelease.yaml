@@ -54,3 +54,10 @@ spec:
                   name: work
                   mountPath: /work/
                   mountPropagation: HostToContainer
+          - target:
+              kind: Service
+              name: "api-.*"
+            patch: |
+              - op: add
+                path: /spec/type
+                value: LoadBalancer
