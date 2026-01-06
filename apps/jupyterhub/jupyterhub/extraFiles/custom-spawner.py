@@ -88,7 +88,7 @@ c.KubeSpawner.environment.setdefault(
 )
 c.KubeSpawner.environment.setdefault(
     "DASK_LABEXTENSION__FACTORY__KWARGS__PROXY_ADDRESS",
-    "api-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8000",
+    "traefik-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8786",
 )
 c.KubeSpawner.environment.setdefault(
     "DASK_LABEXTENSION__FACTORY__KWARGS__PUBLIC_ADDRESS",
