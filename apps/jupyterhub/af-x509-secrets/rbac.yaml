@@ -23,4 +23,4 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: af-x509-secrets
-    namespace: cms
+    namespace: ${namespace}
