@@ -102,22 +102,22 @@ export DASK_LABEXTENSION__FACTORY__KWARGS__PUBLIC_ADDRESS="https://dask-gateway-
 export X509_CERT_DIR="/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates"
 
 echo "
-╔════════════════════════════════════════════════════════════════════════════════════════╗
-║                                                                                        ║
-║     Purdue AF is migrating from Conda/Mamba to Pixi, as it is much faster and          ║
-║     addresses multiple issues we have had with Conda.                                  ║
-║                                                                             	 		 ║
-║     See instructions for migrating from Conda to Pixi:          						 ║
-║     	https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html  ║
-║                                                                              			 ║
-║     To activate a Pixi environment (the project must NOT be in /home/):      			 ║
-║         cd /path/to/project/containing/pixi.toml                            			 ║
-║         pixi shell                                                           			 ║
-║                                                                             	 		 ║
-║     To deactivate a Pixi environment:                                       			 ║
-║         exit                                                                			 ║
-║                                                                             			 ║
-╚════════════════════════════════════════════════════════════════════════════════════════╝
+╔═════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                                                         ║
+║     Purdue AF is migrating from Conda/Mamba to Pixi, as it is much faster and           ║
+║     addresses multiple issues we have had with Conda.                                   ║
+║                                                                                         ║
+║     See instructions for migrating from Conda to Pixi:                                  ║
+║         https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html ║
+║                                                                                         ║
+║     To activate a Pixi environment (the project must NOT be in /home/):                 ║
+║         cd /path/to/project/containing/pixi.toml                                        ║
+║         pixi shell                                                                      ║
+║                                                                                         ║
+║     To deactivate a Pixi environment:                                                   ║
+║         exit                                                                            ║
+║                                                                                         ║
+╚═════════════════════════════════════════════════════════════════════════════════════════╝
 "
 
 alias eos-connect="source /etc/jupyter/eos-connect.sh"
