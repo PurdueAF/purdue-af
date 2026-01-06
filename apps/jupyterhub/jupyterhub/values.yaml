@@ -12,7 +12,7 @@ singleuser:
   profileList:
     - display_name: "Purdue AF 0.12.0 – Pixi-based environment management."
       default: true
-      description: "Please refer to the Purdue AF documentation for instructions on how to switch from Conda to Pixi: https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html<br>The CPU and memory request below are <em>desired</em> values. The actual CPU and memory allocation may be smaller if AF is under heavy load, but you are always guaranteed at least 4 cores and 16 GB of memory.<br>If you are starting a session with a GPU, please shut it down when finished in order to release the GPU."
+      description: "Please refer to the Purdue AF documentation for instructions on how to switch from Conda to Pixi: <a href=\"https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html\" target=\"_blank\">https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html</a>."
       kubespawner_override:
         image: "geddes-registry.rcac.purdue.edu/cms/purdue-af:0.12.0"
         node_selector: { "cms-af-prod": "true" }
