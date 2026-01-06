@@ -181,18 +181,18 @@ gateway:
           # Determine which conda environment to use
           conda_env = None
           
-          # Check if pixi_env is provided (and not empty string)
-          pixi_env = getattr(options, 'pixi_env', None)
-          if pixi_env and pixi_env.strip():
-              # If pixi_env is provided, conda_env should not be explicitly set
+          # Check if pixi_project is provided (and not empty string)
+          pixi_project = getattr(options, 'pixi_project', None)
+          if pixi_project and pixi_project.strip():
+              # If pixi_project is provided, conda_env should not be explicitly set
               # Check if user explicitly provided a conda_env
               user_conda_env = getattr(options, 'conda_env', None)
               if user_conda_env and user_conda_env.strip():
                   raise ValueError("pixi-env and conda-env are mutually exclusive. Please specify only one.")
               
               # Validate pixi project directory
-              pixi_project_dir = pixi_env.strip()
-              pixi_env_name = 'default'  # Always use "default" environment
+              pixi_project_dir = pixi_project.strip()
+              pixi_project_name = getattr(options, 'pixi_env', 'default')
               
               # Check if pixi.toml exists
               pixi_toml_path = os.path.join(pixi_project_dir, 'pixi.toml')
@@ -200,7 +200,7 @@ gateway:
                   raise ValueError(f"pixi.toml not found in {pixi_project_dir}. Please provide a valid pixi project directory.")
               
               # Check if environment exists
-              env_path = os.path.join(pixi_project_dir, '.pixi', 'envs', pixi_env_name)
+              env_path = os.path.join(pixi_project_dir, '.pixi', 'envs', pixi_project_name)
               if not os.path.exists(env_path):
                   raise ValueError(f"Pixi environment 'default' not found at {env_path}. Please build the environment first by running 'pixi install' in {pixi_project_dir}.")
               
@@ -212,10 +212,10 @@ gateway:
               
               conda_env = env_path
           else:
-              # Use conda_env (must be specified if pixi_env is not provided)
+              # Use conda_env (must be specified if pixi_project is not provided)
               user_conda_env = getattr(options, 'conda_env', None)
               if not user_conda_env or not user_conda_env.strip():
-                  raise ValueError("Either conda_env or pixi_env must be specified")
+                  raise ValueError("Either conda_env or pixi_project must be specified")
               conda_env = user_conda_env.strip()
 
           # Set up environment variables and commands using the conda_env path
@@ -267,7 +267,8 @@ gateway:
           }
       c.Backend.cluster_options = Options(
           String("conda_env", default="", label="Conda environment"),
-          String("pixi_env", default="", label="Pixi project directory (mutually exclusive with conda-env)"),
+          String("pixi_project", default="", label="Pixi project name (mutually exclusive with conda-env)"),
+          String("pixi_env", default="default", label="Pixi environment within project (default: 'default')"),
           Float("worker_cores", default=1, min=0.1, max=64, label="Cores per worker"),
           Float("worker_memory", default=4, min=0.1, max=64, label="Memory per worker (GiB)"),
           Mapping("env", {}, label="Environment variables"),
