@@ -91,8 +91,8 @@ singleuser:
                 mem_limit: "256G"
                 mem_guarantee: "128G"
 
-    - display_name: "Purdue AF 0.11.0 – Conda-based environment management (will be deprecated soon)"
-      default: true
+    - display_name: "Purdue AF 0.11.0 – Conda-based (will be deprecated soon)"
+      default: false
       description: ""
       kubespawner_override:
         image: "geddes-registry.rcac.purdue.edu/cms/purdue-af:0.11.0"
