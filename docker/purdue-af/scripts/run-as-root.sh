@@ -48,12 +48,21 @@ fi
 
 # Fix DNS resolution for pixi: IPv6 is enabled but unreachable in Kubernetes
 # DNS returns IPv6 addresses first, causing pixi's Rust DNS resolver to fail
-# Solution: Add IPv4 address to /etc/hosts (Kubernetes overwrites /etc/hosts, so we must do this at runtime)
-if ! grep -q "conda.anaconda.org" /etc/hosts 2>/dev/null; then
+# Solution: Add IPv4 addresses to /etc/hosts for all pixi-related domains
+# (Kubernetes overwrites /etc/hosts, so we must do this at runtime)
+if ! grep -q "# Fix for pixi DNS resolution" /etc/hosts 2>/dev/null; then
+	echo "" >>/etc/hosts
 	echo "# Fix for pixi DNS resolution: IPv6 connectivity broken in K8s cluster" >>/etc/hosts
-	echo "# conda.anaconda.org IPv4 addresses" >>/etc/hosts
+	echo "# Adding IPv4 addresses for pixi-related domains to force IPv4 resolution" >>/etc/hosts
+	# conda.anaconda.org (conda-forge channel)
 	echo "104.19.144.37 conda.anaconda.org" >>/etc/hosts
 	echo "104.19.145.37 conda.anaconda.org" >>/etc/hosts
+	# conda-mapping.prefix.dev (pixi conda-pypi mapping service)
+	echo "104.26.12.188 conda-mapping.prefix.dev" >>/etc/hosts
+	# prefix.dev (pixi main domain)
+	echo "34.90.252.205 prefix.dev" >>/etc/hosts
+	# anaconda.org (fallback)
+	echo "104.19.145.37 anaconda.org" >>/etc/hosts
 fi
 
 # Setup system files
@@ -93,22 +102,22 @@ export DASK_LABEXTENSION__FACTORY__KWARGS__PUBLIC_ADDRESS="https://dask-gateway-
 export X509_CERT_DIR="/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates"
 
 echo "
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║     Purdue AF is migrating from Conda/Mamba to Pixi, as it is much           ║
-║     faster and addresses multiple issues we have had with Conda.             ║
-║     See pixi.sh for Pixi documentation.                                      ║
-║                                                                              ║
-║     To activate a Pixi environment (the project must NOT be in /home/):      ║
-║         cd /path/to/project/containing/pixi.toml                             ║
-║         pixi shell                                                           ║
-║                                                                              ║
-║     To deactivate a Pixi environment:                                        ║
-║         exit                                                                 ║
-║                                                                              ║
-║     Conda commands are still available for backward compatibility.           ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+╔════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                                                        ║
+║     Purdue AF is migrating from Conda/Mamba to Pixi, as it is much faster and          ║
+║     addresses multiple issues we have had with Conda.                                  ║
+║                                                                             	 		 ║
+║     See instructions for migrating from Conda to Pixi:          						 ║
+║     	https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html  ║
+║                                                                              			 ║
+║     To activate a Pixi environment (the project must NOT be in /home/):      			 ║
+║         cd /path/to/project/containing/pixi.toml                            			 ║
+║         pixi shell                                                           			 ║
+║                                                                             	 		 ║
+║     To deactivate a Pixi environment:                                       			 ║
+║         exit                                                                			 ║
+║                                                                             			 ║
+╚════════════════════════════════════════════════════════════════════════════════════════╝
 "
 
 alias eos-connect="source /etc/jupyter/eos-connect.sh"
