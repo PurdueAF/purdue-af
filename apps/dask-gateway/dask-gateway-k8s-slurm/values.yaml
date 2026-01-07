@@ -49,7 +49,7 @@ gateway:
       from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
       import os.path
 
-      def options_handler(options):
+      def options_handler(options, user=None):
           # Determine which conda environment to use
           conda_env = None
           
@@ -69,7 +69,15 @@ gateway:
               # Check if pixi.toml exists
               pixi_toml_path = os.path.join(pixi_project_dir, 'pixi.toml')
               if not os.path.exists(pixi_toml_path):
-                  raise ValueError(f"pixi.toml not found in {pixi_project_dir}. Please provide a valid pixi project directory.")
+                  # Provide more diagnostic information
+                  dir_exists = os.path.exists(pixi_project_dir)
+                  dir_is_dir = os.path.isdir(pixi_project_dir) if dir_exists else False
+                  raise ValueError(
+                      f"pixi.toml not found in {pixi_project_dir}. "
+                      f"Please provide a valid pixi project directory. "
+                      f"Directory exists: {dir_exists}, Is directory: {dir_is_dir}, "
+                      f"Full path checked: {pixi_toml_path}"
+                  )
               
               # Check if environment exists
               env_path = os.path.join(pixi_project_dir, '.pixi', 'envs', pixi_project_name)
