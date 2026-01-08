@@ -66,32 +66,23 @@ gateway:
               pixi_project_dir = pixi_project.strip()
               pixi_project_name = getattr(options, 'pixi_env', 'default')
               
-              # Check if pixi.toml exists
+              # Construct the environment path (always done, even if we can't validate)
+              env_path = os.path.join(pixi_project_dir, '.pixi', 'envs', pixi_project_name)
+              
+              # Validate pixi project if accessible
               # For SLURM backend, gateway server may not have access to user directories,
               # but files will be accessible on SLURM nodes where jobs run
-              pixi_toml_path = os.path.join(pixi_project_dir, 'pixi.toml')
               try:
+                  pixi_toml_path = os.path.join(pixi_project_dir, 'pixi.toml')
                   if not os.path.exists(pixi_toml_path):
                       raise ValueError(f"pixi.toml not found in {pixi_project_dir}. Please provide a valid pixi project directory.")
-              except (PermissionError, OSError):
-                  # Gateway server can't access user directories, skip validation
-                  # Files will be validated/accessible on SLURM nodes
-                  pass
-              
-              # Check if environment exists
-              env_path = os.path.join(pixi_project_dir, '.pixi', 'envs', pixi_project_name)
-              try:
+                  
+                  # Check if environment exists
                   if not os.path.exists(env_path):
                       raise ValueError(f"Pixi environment 'default' not found at {env_path}. Please build the environment first by running 'pixi install' in {pixi_project_dir}.")
-                  
-                  # Verify it's a conda environment (check for bin/python or bin/python3)
-                  bin_python = os.path.join(env_path, 'bin', 'python')
-                  bin_python3 = os.path.join(env_path, 'bin', 'python3')
-                  if not (os.path.exists(bin_python) or os.path.exists(bin_python3)):
-                      raise ValueError(f"Environment at {env_path} does not appear to be a valid conda environment.")
-              except (PermissionError, OSError):
-                  # Gateway server can't access user directories, skip validation
-                  # Files will be validated/accessible on SLURM nodes
+              except Exception:
+                  # Gateway server can't access user directories or validation failed, skip validation
+                  # Files will be validated/accessible on SLURM nodes where jobs run
                   pass
               
               conda_env = env_path
