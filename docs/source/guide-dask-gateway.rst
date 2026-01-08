@@ -95,7 +95,7 @@ This section contains the instructions for creating Dask Gateway clusters using 
          # To submit jobs via SLURM (Purdue users only!)
          # gateway = Gateway(
          #     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
-         #     proxy_address="traefik-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8786",
+         #     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
          # )
 
          # You may need to update some environment variables before creating a cluster.
@@ -344,7 +344,7 @@ Below are the different ways to connect a client to a cluster created elsewhere:
          # If submitting workers as SLURM jobs (Purdue users only):
          # gateway = Gateway(
          #     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
-         #     proxy_address="traefik-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8786",
+         #     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
          # )
 
          clusters = gateway.list_clusters()
@@ -388,7 +388,7 @@ Below are the different ways to connect a client to a cluster created elsewhere:
          # If submitting workers as SLURM jobs (Purdue users only):
          # gateway = Gateway(
          #     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
-         #     proxy_address="traefik-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8786",
+         #     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
          # )
 
          # To find the cluster name:
