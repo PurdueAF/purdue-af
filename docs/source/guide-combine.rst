@@ -13,8 +13,34 @@ are not compatible with the operating system, and loading other operating system
 Combine in Pixi environments
 ------------------------------
 
-You can easily install Combine in your own Pixi environment by adding a "task"
-(custom command) to your Pixi project. All you nned to do ia to copy the following
+Install from conda-forge (recommended)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You can easily install Combine from a ``conda-forge`` distribution into
+your own Pixi environment by adding a ``cms-combine`` package
+to your Pixi project by running the following command in the project directory
+(which contains the ``pixi.toml`` file):
+
+.. code-block:: shell
+
+   pixi add cms-combine==10.4.2
+
+OR add the package explicitly to the ``[dependencies]`` section of the ``pixi.toml`` file:
+
+.. code-block:: toml
+
+   [dependencies]
+   cms-combine = "==10.4.2"
+
+
+Install from source
+~~~~~~~~~~~~~~~~~~~
+
+You can also install Combine from source by adding a "task"
+(custom command) to your Pixi project. This could be useful of you want to test
+some features in an unreleased version of Combine.
+
+All you need to do is to copy the following
 code block to the ``[tasks]`` section of the ``pixi.toml`` file:
 
 .. code-block:: toml
@@ -57,7 +83,10 @@ command:
 
    pixi run install_combine
 
-Once installed, you can use Combine commands in your project.
+.. warning::
+   For this to work, your environment must have the following packages installed:
+   ``root=6.34``, ``gsl``, ``boost-cpp``, ``vdt``, ``eigen``, ``tbb``, ``cmake``, ``ninja``.
+
 
 Combine in pre-installed Conda environments
 --------------------------------------------
@@ -76,7 +105,10 @@ it is enough to activate either of these environments to use Combine:
 Combine in custom Conda environments
 -------------------------------------
 
-If you want to use Combine in a Conda environment, you can use the following instructions:
+If you want to use Combine in a Conda environment, you can similarly install it from conda-forge
+by adding the ``combine`` package to the ``environment.yaml`` file.
+
+To install Combine from source into a Conda environment, you can follow the instructions below:
 
 .. code-block:: bash
 
@@ -102,17 +134,3 @@ If you want to use Combine in a Conda environment, you can use the following ins
 
 After installation, to use Combine in a new Terminal, you will only need to activate the environment.
 
-Troubleshooting
-----------------
-
-If you encounter errors while trying to use Combine in Conda, you can try the following:
-
-- Print out ``PATH``, ``LD_LIBRARY_PATH`` and ``PYTHONPATH`` environment variables.
-  They should contain the paths to the Combine build directory
-  (e.g. ``/depot/cms/purdue-af/combine/HiggsAnalysis/CombinedLimit/build/`` for centrally managed environments).
-
-- For custom environments:
-
-  - Make sure that your environment is activated and contains all Combine dependencies listed above;
-  - Re-run the installation commands and make sure that ``$CONDA_PREFIX`` points to the
-    environment where you want Combine installed.
