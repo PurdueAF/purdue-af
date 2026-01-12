@@ -23,6 +23,7 @@ chmod 777 "$NEW_HOME/.jupyter/migrated"
 mkdir -p "$NEW_HOME/.jupyter/lab/workspaces"
 mkdir -p "$NEW_HOME/.local/share"
 mkdir -p "$NEW_HOME/.config/dask"
+chown -R $NB_USER:users $NEW_HOME/.[^.]*
 
 # Setup work directory
 mkdir -p "/work/users/$NB_USER"
