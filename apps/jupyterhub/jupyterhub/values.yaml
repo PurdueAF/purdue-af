@@ -232,7 +232,7 @@ singleuser:
     pyroscope-for-jupyter-server:
       # Put it in a standard Jupyter config location the server reads on startup
       # (Jupyter searches ~/.jupyter, /usr/local/etc/jupyter, /etc/jupyter, …)
-      mountPath: /opt/conda/lib/python3.10/site-packages/sitecustomize.py
+      mountPath: /opt/pixi/.pixi/envs/default/lib/python3.10/site-packages/sitecustomize.py
       stringData: |
         import os
         import sys
