@@ -115,9 +115,11 @@ Troubleshooting
 If connection fails, you can usually extract useful informantion from the IDE console.
 
 Some known caveats are:
+
 * Your AF home directory must NOT be group-writable for SSH keys to work.
   Check it with ``ls -ld /home/<username>/`` and make sure the group permissions do not
   include ``w``.
+
 * If you see errors like ``websocat: command not found``, check that ``websocat`` command is available on your
   local machine: ``which websocat``. If it is not available, you need to install websocat; if
   it is available but you are still seeing the same error, change the ``ProxyCommand`` in the ``~/.ssh/config`` file

@@ -50,6 +50,7 @@ tools and features for fast, efficient, collaborative HEP research.
 
     doc-getting-started
     doc-interface
+    doc-login-methods
     doc-storage
     doc-software
     doc-gpus
@@ -58,8 +59,6 @@ tools and features for fast, efficient, collaborative HEP research.
     doc-support
     doc-contributing
 
-    .. doc-login-methods
-    .. doc-interface
 
 .. toctree::
     :hidden:

@@ -75,7 +75,7 @@ the particular choice of a method depends on the use case.
 
 
 Option 1 (recommended): Create a Conda environment from a YAML file
-----------------------------------------------------------------
+---------------------------------------------------------------------------
 
 The main benefits of this approach are the reproducibility and portability of
 the resulting environment - it can be easily rebuilt anywhere from the same YAML
