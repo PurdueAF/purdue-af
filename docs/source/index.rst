@@ -78,7 +78,7 @@ tools and features for fast, efficient, collaborative HEP research.
     guide-ssh-access
     guide-combine
     guide-roofit-cuda
-    guide-vscode
+    guide-ide-connection
     guide-dask
     guide-dask-gateway
     guide-rucio
