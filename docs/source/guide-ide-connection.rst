@@ -28,22 +28,22 @@ you will be able to connect using instructions from step 5, as long as you have 
 
 #. Add the following host entry to ``~/.ssh/config`` on your local machine:
 
-.. code-block:: ssh
+   .. code-block:: ssh
 
-   Host PurdueAF
-       HostName cms.geddes.rcac.purdue.edu
-       User USERNAME
-       IdentityFile ~/.ssh/id_ed25519
-       IdentitiesOnly yes
-       ProxyCommand websocat --binary -H="Authorization: token TOKEN" asyncstdio: wss://%h/user/USERNAME/sshd/
+      Host PurdueAF
+          HostName cms.geddes.rcac.purdue.edu
+          User USERNAME
+          IdentityFile ~/.ssh/id_ed25519
+          IdentitiesOnly yes
+          ProxyCommand websocat --binary -H="Authorization: token TOKEN" asyncstdio: wss://%h/user/USERNAME/sshd/
 
 #. Replace ``USERNAME`` in two places with your Purdue AF username:
 
-   * If you are using Purdue account, this is your username.
+   * If you are using Purdue account, this is your Purdue Career accountusername.
    * If you are using CERN account, this is your CERN username followed by ``-cern``.
    * If you are using FNAL account, this is your FNAL username followed by ``-fnal``.
 
-You will also need to replace ``TOKEN`` with the JupyterHub token that you will obtain in the next steps.
+You will also need to replace ``TOKEN`` with the JupyterHub token that you will obtain in the next step.
 
 3. Start a Purdue AF session and obtain a JupyterHub token
 -----------------------------------------------------------
