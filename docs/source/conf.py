@@ -73,7 +73,6 @@ html_css_files = ["custom.css"]
 html_theme = "furo"
 html_logo = "images/cms_logo.png"
 html_theme_options = {
-    "top_of_page_button": None,
     "footer_icons": [
         {
             "name": "GitHub",
