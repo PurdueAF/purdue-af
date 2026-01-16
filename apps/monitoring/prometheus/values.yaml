@@ -73,6 +73,7 @@ server:
 
   service:
     enabled: true
+    type: LoadBalancer
     servicePort: 9090
     annotations:
       prometheus.io/scrape: "true"

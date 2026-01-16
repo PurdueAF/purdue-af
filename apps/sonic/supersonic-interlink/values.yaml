@@ -91,7 +91,7 @@ keda:
 prometheus:
   external:
     enabled: true
-    url: prometheus-server.cms.svc.cluster.local
+    url: prometheus-server.cms.geddes.rcac.purdue.edu
     port: 9090
     scheme: http
 
@@ -104,7 +104,7 @@ opentelemetry-collector:
       otlphttp:
         endpoint: http://sonic-interlink-tempo:4318
       prometheusremotewrite:
-        endpoint: http://prometheus-server.cms.svc.cluster.local:9090/api/v1/write
+        endpoint: http://prometheus-server.cms.geddes.rcac.purdue.edu:9090/api/v1/write
 
 tempo:
   nameOverride: sonic-interlink-tempo
@@ -112,4 +112,4 @@ tempo:
   tempo:
     metricsGenerator:
       enabled: true
-      remoteWriteUrl: http://prometheus-server.cms.svc.cluster.local:9090/api/v1/write
+      remoteWriteUrl: http://prometheus-server.cms.geddes.rcac.purdue.edu:9090/api/v1/write
