@@ -65,15 +65,6 @@ envoy:
     enabled: ${enable_ingresses}
     hostName: sonic-interlink.geddes.rcac.purdue.edu
     ingressClassName: public
-  rate_limiter:
-    prometheus_based:
-      enabled: false
-  dynamic_routing:
-    enabled: true
-  lua_filter:
-    enabled: true
-    lua_config: "cfg/envoy-filter-dynamic.lua"
-  tracing_sampling_rate: 0.01
 
 keda:
   enabled: true
@@ -94,22 +85,3 @@ prometheus:
     url: prometheus-server.cms.geddes.rcac.purdue.edu
     port: 9090
     scheme: http
-
-opentelemetry-collector:
-  enabled: false
-  config:
-    exporters:
-      otlp:
-        endpoint: http://sonic-interlink-tempo:4317
-      otlphttp:
-        endpoint: http://sonic-interlink-tempo:4318
-      prometheusremotewrite:
-        endpoint: http://prometheus-server.cms.geddes.rcac.purdue.edu:9090/api/v1/write
-
-tempo:
-  nameOverride: sonic-interlink-tempo
-  enabled: false
-  tempo:
-    metricsGenerator:
-      enabled: true
-      remoteWriteUrl: http://prometheus-server.cms.geddes.rcac.purdue.edu:9090/api/v1/write
