@@ -16,7 +16,7 @@ triton:
       --exit-timeout-secs=60
 
   resources:
-    limits: { cpu: 2, memory: 130G }
+    limits: { cpu: 2, memory: 130G } # large memory request to ensure 1 server per node
     requests: { cpu: 2, memory: 130G }
   nodeSelector:
     kubernetes.io/hostname: interlink-hammer
