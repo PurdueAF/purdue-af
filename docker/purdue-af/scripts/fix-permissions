@@ -19,6 +19,7 @@ set -e
 
 for d in "$@"; do
     find "${d}" \
+        -not -type l \
         ! \( \
             -group "${NB_GID}" \
             -a -perm -g+rwX \
