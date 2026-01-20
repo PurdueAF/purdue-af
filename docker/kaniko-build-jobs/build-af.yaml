@@ -13,7 +13,7 @@ spec:
           args:
             - "--context=git://github.com/PurdueAF/purdue-af.git#refs/heads/main"
             - "--dockerfile=docker/purdue-af/Dockerfile"
-            - "--destination=geddes-registry.rcac.purdue.edu/cms/purdue-af:0.12.0"
+            - "--destination=geddes-registry.rcac.purdue.edu/cms/purdue-af:0.12.1"
             - "--cache=true"
             # - "--no-push"
           resources:
