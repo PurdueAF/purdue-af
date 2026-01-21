@@ -16,8 +16,8 @@ triton:
       --exit-timeout-secs=60
 
   resources:
-    limits: { cpu: 2, memory: 130G } # large memory request to ensure 1 server per node
-    requests: { cpu: 2, memory: 130G }
+    limits: { cpu: 2, memory: 8G }
+    requests: { cpu: 2, memory: 8G }
   nodeSelector:
     kubernetes.io/hostname: interlink-hammer
   tolerations:
@@ -25,9 +25,9 @@ triton:
       operator: Exists
   annotations:
     slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs --no-home --compat"
-    slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --time=1-00:00:00" # no GPUs
-    # slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --gres=gpu:${sonic_gpus_initial}"
-    interlink.virtual-kubelet.io/wstunnel-timeout: "15m"
+    # slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --time=1-00:00:00" # no GPUs
+    slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --gres=gpu:${sonic_gpus_initial}"
+    interlink.virtual-kubelet.io/wstunnel-timeout: "5m"
     # interlink.eu/wstunnel-extra-ports: "8000:http:TCP"
     slurm-job.vk.io/pre-exec: "echo \"tunneling port 8000\" \n"
   service:
