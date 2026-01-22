@@ -32,7 +32,7 @@ spec:
         patches:
           - target:
               kind: Deployment
-              name: "interlink-hammer-node"
+              name: "interlink-hammer-purdueaf-node"
             patch: |
               - op: add
                 path: /spec/template/spec/volumes/-

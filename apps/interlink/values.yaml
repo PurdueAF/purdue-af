@@ -1,5 +1,5 @@
 # values-incluster.yaml
-nodeName: interlink-hammer
+nodeName: interlink-hammer-purdueaf
 
 interlink:
   # image: ghcr.io/interlink-hq/interlink/interlink:0.5.2-pre2
