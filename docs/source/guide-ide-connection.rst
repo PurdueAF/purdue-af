@@ -18,7 +18,30 @@ you will be able to connect using instructions from step 5, as long as you have 
 #. In VSCode/Cursor/Antigravity, click on the Extensions icon in the left sidebar.
 #. Search for ``Remote - SSH`` extension by Anysphere and install it.
 
-2. Configure SSH keys on local machine
+2. Install ``websocat`` command on your local machine
+------------------------------------------------------
+
+#. Check if you have ``websocat`` command on your local machine: ``which websocat``.
+   If the output of this command is not empty, skip this step.
+#. Install ``websocat`` on your local machine.
+
+   On Linux, run the following commands:
+
+   .. code-block:: shell
+
+      sudo wget -qO /usr/local/bin/websocat https://github.com/vi/websocat/releases/latest/download/websocat.x86_64-unknown-linux-musl
+      sudo chmod a+x /usr/local/bin/websocat
+
+   On macOS, run the following command:
+
+   .. code-block:: shell
+
+      brew install websocat
+
+   Once installed, check if the command is available: ``which websocat``.
+
+
+3. Configure SSH keys on local machine
 -----------------------------------------
 
 #. You may already have the SSH key pair generated: look for ``~/.ssh/id_ed25519`` and ``~/.ssh/id_ed25519.pub`` files on your local machine.
@@ -45,7 +68,7 @@ you will be able to connect using instructions from step 5, as long as you have 
 
 You will also need to replace ``TOKEN`` with the JupyterHub token that you will obtain in the next step.
 
-3. Start a Purdue AF session and obtain a JupyterHub token
+4. Start a Purdue AF session and obtain a JupyterHub token
 -----------------------------------------------------------
 
 #. In your web browser, open `Purdue AF <https://cms.geddes.rcac.purdue.edu>`_ and log in.
@@ -55,12 +78,20 @@ You will also need to replace ``TOKEN`` with the JupyterHub token that you will 
 #. Click ``Request new API token``.
 #. Copy the token string and use it to replace ``TOKEN`` in the ``~/.ssh/config`` file.
 
-4. Configure SSH access on the Purdue AF side
+5. Configure SSH access on the Purdue AF side
 ---------------------------------------------------
 
 This is the last step that we need to enable your AF session to authorize connections from your local machine.
 
 On your **local machine**, run this to copy your public key to the clipboard:
+
+On Linux:
+
+.. code-block:: shell
+
+   cat ~/.ssh/id_ed25519.pub | xclip -selection clipboard
+
+On macOS:
 
 .. code-block:: shell
 
@@ -76,8 +107,19 @@ prompts for input, paste your public key (``Ctrl-V``) and press ``Ctrl-D`` to fi
    cat >> ~/.ssh/authorized_keys
    chmod 600 ~/.ssh/authorized_keys
 
+6. Verify home directory permissions on AF side
+------------------------------------------------
 
-5. Connect from your IDE
+Your home directory must have exactly the following permissions:
+
+.. code-block:: shell
+
+   $ ls -ld ~/
+   drwxr-xr-x <username> ... ... ... /home/<username>/
+
+If the permissions are different, run ``chmod 755 ~/`` to fix them.   
+
+7. Connect from your IDE
 -------------------------
 
 #. In your IDE (VSCode, Cursor, etc.), open the command palette (usually ``Ctrl-Shift-P`` or ``Cmd-Shift-P``).
@@ -90,7 +132,7 @@ prompts for input, paste your public key (``Ctrl-V``) and press ``Ctrl-D`` to fi
    tools will also have access to your remote files, so you can use them to generate and debug code,
    but always be careful not to let them run dangerous commands, e.g. deleting important files.
 
-6. Install extensions on the AF side (optional)
+7. Install extensions on the AF side (optional)
 ------------------------------------------------
 
 After the connection succeeds, you can install extensions on the remote VSCode server that
