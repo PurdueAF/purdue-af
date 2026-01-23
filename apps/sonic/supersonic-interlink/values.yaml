@@ -19,7 +19,7 @@ triton:
     limits: { cpu: 2, memory: 8G }
     requests: { cpu: 2, memory: 8G }
   nodeSelector:
-    kubernetes.io/hostname: interlink-hammer
+    kubernetes.io/hostname: interlink-hammer-purdueaf
   tolerations:
     - key: virtual-node.interlink/no-schedule
       operator: Exists
