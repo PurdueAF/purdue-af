@@ -9,8 +9,8 @@ and others as standalone IDEs (e.g. Cursor, Antigravity) built on top of VSCode.
 
 Purdue AF allows to connect to your AF session from any VSCode-based IDE and take advantage
 of these features.
-Please follow the instructions below; you will only need to run steps 1-4 once, and then
-you will be able to connect using instructions from step 5, as long as you have an AF session running.
+Please follow the instructions below; you will only need to run steps 1-6 once, and then
+you will be able to connect using instructions from step 7, as long as you have an AF session running.
 
 1. Install Remote-SSH extension in your IDE
 --------------------------------------------
@@ -132,7 +132,7 @@ If the permissions are different, run ``chmod 755 ~/`` to fix them.
    tools will also have access to your remote files, so you can use them to generate and debug code,
    but always be careful not to let them run dangerous commands, e.g. deleting important files.
 
-7. Install extensions on the AF side (optional)
+8. Install extensions on the AF side (optional)
 ------------------------------------------------
 
 After the connection succeeds, you can install extensions on the remote VSCode server that
