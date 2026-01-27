@@ -1,5 +1,5 @@
 [workspace]
-authors = ["Dmitry <kondratyev.d.95@gmail.com>"]
+authors = ["Dmitry Kondratyev"]
 channels = ["conda-forge"]
 name = "pixi-global"
 platforms = ["linux-64"]
