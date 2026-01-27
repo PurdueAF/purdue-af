@@ -16,7 +16,7 @@ In addition to project-specific Pixi environments, we provide a global Pixi envi
 which contains all common HEP analysis packages and ML libraries; the environment is
 located at ``/work/pixi/global/``.
 
-.. admonition:: pixi.toml config for the global environment
+.. admonition:: List of packages in the global environment (pixi.toml configuration)
    :class: toggle
 
    .. literalinclude:: pixi-global.toml
