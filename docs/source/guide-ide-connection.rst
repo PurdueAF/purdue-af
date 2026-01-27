@@ -16,7 +16,7 @@ you will be able to connect using instructions from step 7, as long as you have 
 --------------------------------------------
 
 #. In VSCode/Cursor/Antigravity, click on the Extensions icon in the left sidebar.
-#. Search for ``Remote - SSH`` extension by Anysphere and install it.
+#. Search for ``Remote - SSH`` extension by Microsoft or Anysphere and install it.
 
 2. Install ``websocat`` command on your local machine
 ------------------------------------------------------
