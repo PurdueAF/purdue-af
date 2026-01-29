@@ -125,7 +125,7 @@ grafana.ini:
     default_home_dashboard_path: /var/lib/grafana/dashboards/public/default.json
   auth.anonymous:
     enabled: true
-    org_name: Public
+    org_name: "Main Org."
     org_role: Viewer
     hide_version: true
 
