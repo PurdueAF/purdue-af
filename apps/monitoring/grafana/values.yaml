@@ -97,11 +97,11 @@ extraConfigmapMounts:
     configMap: grafana-plugins-provisioning
     readOnly: true
 
-envValueFrom:
-  OPENAI_API_KEY:
-    secretKeyRef:
-      name: a2rchi-openai-api-key
-      key: OPENAI_API_KEY
+# envValueFrom:
+#   OPENAI_API_KEY:
+#     secretKeyRef:
+#       name: a2rchi-openai-api-key
+#       key: OPENAI_API_KEY
 
 # Resources
 resources:
@@ -125,7 +125,7 @@ grafana.ini:
     default_home_dashboard_path: /var/lib/grafana/dashboards/public/default.json
   auth.anonymous:
     enabled: true
-    org_name: Main Org.
+    org_name: Public
     org_role: Viewer
     hide_version: true
 
