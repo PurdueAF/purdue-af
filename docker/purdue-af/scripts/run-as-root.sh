@@ -25,6 +25,11 @@ mkdir -p "$NEW_HOME/.local/share"
 mkdir -p "$NEW_HOME/.config/dask"
 chown -R $NB_USER:users $NEW_HOME/.[^.]*
 chmod 755 "$NEW_HOME"
+# .ssh: directory 700 (required by SSH); key/authorized_keys files 600 (not 700)
+if [ -d "$NEW_HOME/.ssh" ]; then
+	chmod 700 "$NEW_HOME/.ssh"
+	chmod 600 "$NEW_HOME/.ssh"/* 2>/dev/null || true
+fi
 
 # Setup work directory
 mkdir -p "/work/users/$NB_USER"
