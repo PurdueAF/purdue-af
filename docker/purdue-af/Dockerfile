@@ -179,11 +179,11 @@ ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}"
 
 USER ${NB_USER}
 
-# Use pixi run so jupyter/code-server are found from base-env (avoids path issues in Kaniko)
-RUN pixi run -e base-env jupyter notebook --generate-config && \
+# Use installed env binaries (no pixi run — avoids network/solve in this layer; Kaniko has no outbound DNS)
+RUN "${BASE_ENV_DIR}/bin/jupyter" notebook --generate-config && \
     npm cache clean --force || true && \
-    pixi run -e base-env jupyter lab clean || true && \
-    pixi run -e base-env code-server --install-extension ms-python.python && \
+    "${BASE_ENV_DIR}/bin/jupyter" lab clean || true && \
+    ("${BASE_ENV_DIR}/bin/code-server" --install-extension ms-python.python || true) && \
     rm -rf "${HOME}/.cache/yarn"
 
 WORKDIR "${HOME}"
