@@ -10,6 +10,7 @@ conda         = "==25.9.0"
 mamba         = "==2.3.3"
 jupyter_core  = "*"
 jupyter       = "*"
+code-server   = "*"
 
 # Jupyter pieces
 notebook      = "*"
