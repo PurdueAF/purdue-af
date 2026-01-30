@@ -181,7 +181,7 @@ USER ${NB_USER}
 
 RUN /opt/pixi/.pixi/envs/base-env/bin/jupyter notebook --generate-config && \
     npm cache clean --force || true && \
-    /opt/pixi/.pixi/envs/base-env/bin/jupyter lab clean && \
+    /opt/pixi/.pixi/envs/base-env/bin/jupyter lab clean || true && \
     code-server --install-extension ms-python.python && \
     rm -rf "${HOME}/.cache/yarn"
 
