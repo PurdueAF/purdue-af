@@ -12,6 +12,7 @@ jupyter_core  = "*"
 jupyter       = "*"
 code-server   = "*"
 jupyter-vscode-proxy = "*"
+jupyter-server-proxy = "*"
 
 # Jupyter pieces
 notebook      = "*"
