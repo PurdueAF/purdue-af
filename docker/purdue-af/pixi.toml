@@ -11,6 +11,7 @@ mamba         = "==2.3.3"
 jupyter_core  = "*"
 jupyter       = "*"
 code-server   = "*"
+jupyter-vscode-proxy = "*"
 
 # Jupyter pieces
 notebook      = "*"
