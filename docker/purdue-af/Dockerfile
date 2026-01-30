@@ -173,19 +173,20 @@ RUN chmod +x /usr/local/bin/* && \
 # Set PATH before switching user so it's available to all users
 ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}"
 
+# Jupyter/code-server setup as root so pixi env is visible (Kaniko may not pass PATH to RUN as NB_USER)
+RUN HOME="/home/${NB_USER}" \
+    "${BASE_ENV_DIR}/bin/jupyter" notebook --generate-config && \
+    "${BASE_ENV_DIR}/bin/npm" cache clean --force || true && \
+    HOME="/home/${NB_USER}" "${BASE_ENV_DIR}/bin/jupyter" lab clean || true && \
+    HOME="/home/${NB_USER}" "${BASE_ENV_DIR}/bin/code-server" --install-extension ms-python.python && \
+    rm -rf "/home/${NB_USER}/.cache/yarn" && \
+    fix-permissions "/home/${NB_USER}"
+
 # ------------------------------------------------------------
 
 # Container setup as NB_USER
 
 USER ${NB_USER}
-
-# Explicit PATH so pixi env binaries are visible (e.g. under Kaniko when ENV may not apply to RUN)
-RUN export PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}" && \
-    jupyter notebook --generate-config && \
-    npm cache clean --force || true && \
-    jupyter lab clean || true && \
-    code-server --install-extension ms-python.python && \
-    rm -rf "${HOME}/.cache/yarn"
 
 WORKDIR "${HOME}"
 EXPOSE 8888
