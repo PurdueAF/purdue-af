@@ -183,6 +183,7 @@ RUN /opt/pixi/.pixi/envs/base-env/bin/jupyter notebook --generate-config && \
     npm cache clean --force || true && \
     /opt/pixi/.pixi/envs/base-env/bin/jupyter lab clean || true && \
     code-server --install-extension ms-python.python && \
+    code-server --install-extension ms-toolsai.jupyter && \
     rm -rf "${HOME}/.cache/yarn"
 
 WORKDIR "${HOME}"
