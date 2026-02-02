@@ -86,10 +86,13 @@ echo '{
 }' >$base_env_dir/etc/jupyter/jupyter_server_config.d/prometheus_alerts.json
 
 # Configure code-server
-CODE_SERVER_CONFIG_DIR=$NEW_HOME/.config/code-server
-mkdir -p "$CODE_SERVER_CONFIG_DIR"
-cat >"$CODE_SERVER_CONFIG_DIR/config.yaml" <<'EOF'
-extensions-dir: ~/.local/share/code-server/extensions
-user-data-dir: ~/.local/share/code-server
-EOF
-chown -R $NB_USER:users "$CODE_SERVER_CONFIG_DIR"
+# CODE_SERVER_CONFIG_DIR=$NEW_HOME/.config/code-server
+# mkdir -p "$CODE_SERVER_CONFIG_DIR"
+# cat >"$CODE_SERVER_CONFIG_DIR/config.yaml" <<'EOF'
+# extensions-dir: ~/.local/share/code-server/extensions
+# user-data-dir: ~/.local/share/code-server
+# EOF
+# chown -R $NB_USER:users "$CODE_SERVER_CONFIG_DIR"
+code-server --extensions-dir $NEW_HOME/.local/share/code-server/extensions --user-data-dir $NEW_HOME/.local/share/code-server
+code-server --install-extension ms-python.python
+code-server --install-extension ms-toolsai.jupyter
