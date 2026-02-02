@@ -7,4 +7,4 @@ spec:
   url: https://github.com/ssl-hep/ServiceX
   ref:
     # tag: v1.7.2-rc.1
-    branch: develop
+    branch: 1132_helm_annotations
