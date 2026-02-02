@@ -40,6 +40,13 @@ postgresql:
       enabled: false
       storageClass: ${multinode_storage_class}
       accessModes: [ReadWriteMany]
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
 
 objectStore:
   publicURL: servicex-minio-api.geddes.rcac.purdue.edu
@@ -104,7 +111,13 @@ rabbitmq:
     limits:
       cpu: 1
       memory: 1Gi
-
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
 minio:
   # image:
   #   registry: geddes-registry.rcac.purdue.edu/docker-hub-cache
@@ -133,6 +146,14 @@ minio:
     limits:
       cpu: 1
       memory: 1Gi
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+
 minioCleanup:
   enabled: true
 didFinder:
