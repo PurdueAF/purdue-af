@@ -52,6 +52,21 @@ codeGen:
     defaultScienceContainerTag: uproot5
     compressionAlgorithm: LZMA
     compressionLevel: 9
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+  rdataframe:
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
   uproot:
     enabled: false
   python:
@@ -59,6 +74,10 @@ codeGen:
   atlasr21:
     enabled: false
   atlasr22:
+    enabled: false
+  atlasr25:
+    enabled: false
+  topcp:
     enabled: false
   cmssw-5-3-32:
     enabled: false
@@ -69,6 +88,13 @@ transformer:
   #   existingClaim: "claim-dkondra"
   #   subdir: /servicex/
   # cachePrefix: "'xcache.cms.rcac.purdue.edu'"
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
 
 rabbitmq:
   resources:
@@ -114,10 +140,24 @@ didFinder:
     enabled: false
     rucio_host: http://cms-rucio.cern.ch
     auth_host: https://cms-rucio-auth.cern.ch
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
   xrootd:
     enabled: true
     image: sslhep/servicex-did-finder-xrootd
     tag: xrootd-did-x509
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
   CERNOpenData:
     enabled: false
 gridAccount: dkondrat
@@ -128,3 +168,10 @@ x509Secrets:
   tag: override-voms-file
   pullPolicy: Always
   vomsOrg: cms
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
