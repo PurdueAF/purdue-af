@@ -40,13 +40,13 @@ postgresql:
       enabled: false
       storageClass: ${multinode_storage_class}
       accessModes: [ReadWriteMany]
-  nodeSelector:
-    cms-af-prod: "true"
-  tolerations:
-    - key: "hub.jupyter.org/dedicated"
-      operator: "Equal"
-      value: "cms-af"
-      effect: "NoSchedule"
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
 
 objectStore:
   publicURL: servicex-minio-api.geddes.rcac.purdue.edu
