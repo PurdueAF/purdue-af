@@ -7,15 +7,15 @@ spec:
   interval: 1m
   chart:
     spec:
-      # chart: helm/servicex
-      # sourceRef:
-      #   kind: GitRepository
-      #   name: servicex
-      chart: servicex
-      version: "1132_helm_annotations"
+      chart: helm/servicex
       sourceRef:
-        kind: HelmRepository
-        name: ssl-hep
+        kind: GitRepository
+        name: servicex
+      # chart: servicex
+      # version: "1.8.1"
+      # sourceRef:
+      #   kind: HelmRepository
+      #   name: ssl-hep
       interval: 1m
   install:
     remediation:

@@ -10,6 +10,7 @@ app:
     enabled: ${enable_ingresses}
     class: public
     host: geddes.rcac.purdue.edu
+  tag: 1132_helm_annotations
   nodeSelector:
     cms-af-prod: "true"
   tolerations:
