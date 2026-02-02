@@ -1,11 +1,11 @@
 app:
   resources:
     requests:
-      cpu: 1
-      memory: 1Gi
+      cpu: 2
+      memory: 2Gi
     limits:
-      cpu: 1
-      memory: 1Gi
+      cpu: 4
+      memory: 4Gi
   ingress:
     enabled: ${enable_ingresses}
     class: public
