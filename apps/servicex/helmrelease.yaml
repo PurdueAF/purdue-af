@@ -12,7 +12,7 @@ spec:
       #   kind: GitRepository
       #   name: servicex
       chart: servicex
-      version: "1.8.1"
+      version: "1132_helm_annotations"
       sourceRef:
         kind: HelmRepository
         name: ssl-hep
