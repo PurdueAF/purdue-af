@@ -6,5 +6,5 @@ spec:
   interval: 1m
   url: https://github.com/ssl-hep/ServiceX
   ref:
-    tag: v1.7.2-rc.1
-    # branch: develop
+    # tag: v1.7.2-rc.1
+    branch: develop
