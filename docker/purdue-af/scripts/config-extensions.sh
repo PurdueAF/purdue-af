@@ -86,19 +86,19 @@ echo '{
 }' >$base_env_dir/etc/jupyter/jupyter_server_config.d/prometheus_alerts.json
 
 # Configure code-server (config only; server is launched elsewhere)
-CODE_SERVER_CONFIG_DIR=$NEW_HOME/.config/code-server
-mkdir -p "$CODE_SERVER_CONFIG_DIR"
-cat >"$CODE_SERVER_CONFIG_DIR/config.yaml" <<'EOF'
-extensions-dir: ~/.local/share/code-server/extensions
-user-data-dir: ~/.local/share/code-server
-EOF
-chown -R $NB_USER:users "$CODE_SERVER_CONFIG_DIR"
+# CODE_SERVER_CONFIG_DIR=$NEW_HOME/.config/code-server
+# mkdir -p "$CODE_SERVER_CONFIG_DIR"
+# cat >"$CODE_SERVER_CONFIG_DIR/config.yaml" <<'EOF'
+# extensions-dir: ~/.local/share/code-server/extensions
+# user-data-dir: ~/.local/share/code-server
+# EOF
+# chown -R $NB_USER:users "$CODE_SERVER_CONFIG_DIR"
 
 # Pre-install code-server extensions into the notebook user's dirs
-CODE_EXT_DIR=$NEW_HOME/.local/share/code-server/extensions
-CODE_DATA_DIR=$NEW_HOME/.local/share/code-server
-mkdir -p "$CODE_EXT_DIR" "$CODE_DATA_DIR"
-chown -R $NB_USER:users "$NEW_HOME/.local/share/code-server"
-code-server --extensions-dir "$CODE_EXT_DIR" --user-data-dir "$CODE_DATA_DIR" --install-extension ms-python.python
-code-server --extensions-dir "$CODE_EXT_DIR" --user-data-dir "$CODE_DATA_DIR" --install-extension ms-toolsai.jupyter
-chown -R $NB_USER:users "$NEW_HOME/.local/share/code-server"
+export CODE_EXTENSIONSDIR="$HOME/.local/share/code-server/extensions"
+export CODE_USERDATADIR="$HOME/.local/share/code-server"
+mkdir -p "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
+chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
+code-server --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension ms-python.python
+code-server --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension ms-toolsai.jupyter
+chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
