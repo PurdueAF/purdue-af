@@ -191,3 +191,9 @@ CMD ["start-notebook.sh"]
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
     CMD /etc/jupyter/docker_healthcheck.py || exit 1
 
+# Download Jupyter Hub VS Code extension for use in the image
+USER root
+RUN mkdir -p /etc/vscode-extensions && \
+    curl -fSL "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-toolsai/vsextensions/jupyter-hub/2024.10.1002831100/vspackage" \
+    -o /etc/vscode-extensions/jupyter-hub.vsix
+USER ${NB_USER}
