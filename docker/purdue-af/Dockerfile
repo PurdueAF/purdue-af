@@ -191,11 +191,3 @@ CMD ["start-notebook.sh"]
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
     CMD /etc/jupyter/docker_healthcheck.py || exit 1
 
-# Download Jupyter Hub VS Code extension for use in the image
-# Marketplace returns gzip for curl; decompress to get the actual .vsix (zip) or code-server fails with "truncated zip"
-USER root
-RUN mkdir -p /etc/vscode-extensions && \
-    curl -fSL "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-toolsai/vsextensions/jupyter-hub/2024.10.1002831100/vspackage" \
-    -o /etc/vscode-extensions/jupyter-hub.vsix.gz && \
-    gunzip -f /etc/vscode-extensions/jupyter-hub.vsix.gz
-USER ${NB_USER}

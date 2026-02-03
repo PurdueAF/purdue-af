@@ -94,13 +94,11 @@ echo '{
 # EOF
 # chown -R $NB_USER:users "$CODE_SERVER_CONFIG_DIR"
 
-# Pre-install code-server extensions into the notebook user's dirs (use full path; before-notebook.d may not have pixi env on PATH)
-CODE_SERVER="${base_env_dir}/bin/code-server"
+# Pre-install code-server extensions into the notebook user's dirs
 export CODE_EXTENSIONSDIR="$HOME/.local/share/code-server/extensions"
 export CODE_USERDATADIR="$HOME/.local/share/code-server"
 mkdir -p "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
-"$CODE_SERVER" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension ms-python.python
-"$CODE_SERVER" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension ms-toolsai.jupyter
-"$CODE_SERVER" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension /etc/vscode-extensions/jupyter-hub.vsix
+code-server --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension ms-python.python
+code-server --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension ms-toolsai.jupyter
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
