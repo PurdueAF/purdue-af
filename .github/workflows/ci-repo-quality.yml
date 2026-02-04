@@ -22,6 +22,9 @@ jobs:
   repo-quality:
     runs-on: ubuntu-latest
     continue-on-error: true
+    env:
+      PYTEST_VERSION: '8.4.0'
+      COVERAGE_VERSION: '7.6.1'
     steps:
       - uses: actions/checkout@v4
 
@@ -34,7 +37,13 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          pip install pytest coverage
+          pip install "pytest==${PYTEST_VERSION}" "coverage==${COVERAGE_VERSION}"
+
+      - name: Tool versions
+        run: |
+          set -euo pipefail
+          pytest --version
+          python -m coverage --version
 
       - name: Run pytest (advisory)
         shell: bash
