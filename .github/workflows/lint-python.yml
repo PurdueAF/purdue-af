@@ -22,7 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          pip install black isort pytest
+          pip install black isort
 
       - name: Run black/isort/py_compile (check-only, advisory)
         shell: bash
@@ -44,15 +44,3 @@ jobs:
           black --check "${files[@]}"
           isort --profile black --check-only "${files[@]}"
           python -m py_compile "${files[@]}"
-
-      - name: Run pytest (advisory)
-        shell: bash
-        run: |
-          set +e
-          pytest -q
-          rc=$?
-          if [ "$rc" -eq 5 ]; then
-            echo 'pytest collected no tests; treating as informational.'
-            exit 0
-          fi
-          exit "$rc"

@@ -22,7 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          pip install pytest
+          pip install pytest pytest-cov
 
       - name: Python syntax smoke (advisory)
         shell: bash
@@ -61,7 +61,13 @@ jobs:
         shell: bash
         run: |
           set +e
-          pytest -q
+          pytest -q tests/unit \
+            --cov=apps/monitoring/af-monitoring/metrics_server.py \
+            --cov=apps/monitoring/af-monitoring/node_healthcheck.py \
+            --cov=docker/af-pod-monitor/pod-metrics-exporter.py \
+            --cov=docker/purdue-af/jupyter/docker_healthcheck.py \
+            --cov-report=term-missing \
+            --cov-fail-under=70
           rc=$?
           if [ "$rc" -eq 5 ]; then
             echo 'pytest collected no tests; treating as informational.'
