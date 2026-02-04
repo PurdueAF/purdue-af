@@ -11,6 +11,11 @@ c = get_config()  # noqa: F821
 c.ServerApp.ip = "0.0.0.0"
 c.ServerApp.open_browser = False
 c.ServerApp.disable_check_xsrf = True
+c.ServerApp.tornado_settings = {
+    "headers": {
+        "Permissions-Policy": "clipboard-read=(self), clipboard-write=(self)",
+    }
+}
 
 # to output both image/svg+xml and application/pdf plot formats in the notebook file
 c.InlineBackend.figure_formats = {"png", "jpeg", "svg", "pdf"}
