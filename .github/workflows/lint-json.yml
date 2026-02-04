@@ -1,7 +1,6 @@
 name: Lint JSON
 
 on:
-  push:
   pull_request:
 
 permissions:

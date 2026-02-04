@@ -8,7 +8,7 @@ Deliver exactly one draft PR from `codex/ci` to `main` with minimal CI/CD harden
 - preserves safe daily branch sync (`main` merged into `codex/ci`, no force-push).
 
 Success means:
-- `.github/workflows/lint-*.yml` workflows are check-only and run on every push + pull_request,
+- `.github/workflows/lint-*.yml` workflows are check-only and run on `pull_request` (single run per change),
 - new workflows exist for integrity, GitOps deployability, and nightly advisory security,
 - optional repo-quality workflow is selected and included,
 - README shows A-E category badges,

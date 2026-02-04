@@ -1,7 +1,6 @@
 name: Lint YAML
 
 on:
-  push:
   pull_request:
 
 permissions:

@@ -1,7 +1,6 @@
 name: Lint Python
 
 on:
-  push:
   pull_request:
 
 permissions:

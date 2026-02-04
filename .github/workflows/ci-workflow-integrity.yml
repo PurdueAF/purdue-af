@@ -1,7 +1,6 @@
 name: CI Workflow Integrity
 
 on:
-  push:
   pull_request:
 
 permissions:

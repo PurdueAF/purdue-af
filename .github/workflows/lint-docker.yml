@@ -1,7 +1,6 @@
 name: Container Reliability
 
 on:
-  push:
   pull_request:
 
 permissions:

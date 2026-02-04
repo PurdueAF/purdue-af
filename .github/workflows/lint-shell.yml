@@ -1,7 +1,6 @@
 name: Lint Shell Scripts
 
 on:
-  push:
   pull_request:
 
 permissions:

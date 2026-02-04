@@ -1,7 +1,6 @@
 name: CI Repo Quality
 
 on:
-  push:
   pull_request:
 
 permissions:
