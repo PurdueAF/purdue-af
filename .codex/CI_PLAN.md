@@ -1,18 +1,20 @@
 # CI/CD Campaign Plan (Current State)
 
-## Mission and Success Criteria
-Deliver exactly one draft PR from `codex/ci` to `main` with minimal CI/CD hardening that:
-- converts formatter-based CI to check-only behavior,
-- adds advisory-first integrity/deploy/security coverage,
-- keeps one source of truth in this file,
-- preserves safe daily branch sync (`main` merged into `codex/ci`, no force-push).
+## Mission
+Deliver one draft PR from `codex/ci` to `main` with a stable advisory-first CI baseline, then optimize test depth, integration realism, and security signal without broad refactors.
 
-Success means:
-- `.github/workflows/lint-*.yml` workflows are check-only and run on `pull_request` (single run per change),
-- new workflows exist for integrity, GitOps deployability, and nightly advisory security,
-- optional repo-quality workflow is selected and included,
-- README shows A-E category badges,
-- no changes touch out-of-scope paths.
+## Current Status
+- PR branch: `codex/ci`
+- Delivery model: single PR `codex/ci -> main`
+- Existing CI baseline is green on PR checks.
+- Formatter/linter workflows are check-only (no CI writeback commits).
+
+## Success Criteria
+- CI remains stable on `pull_request` runs for all configured workflows.
+- Optimization phase adds meaningful unit and integration coverage for repo-owned code.
+- Security checks include nightly advisory plus PR-time advisory signal.
+- `README.md` keeps A-E category badges aligned with active workflows.
+- `.codex/CI_PLAN.md` remains the single source of truth.
 
 ## In-Scope / Out-of-Scope Paths
 In scope:
@@ -32,78 +34,84 @@ Out of scope:
 - `.cursor/**`
 
 Approved exception:
-- `slurm/**` is used as a dependency-only trigger for container reliability jobs because maintained Dockerfiles copy `slurm/` artifacts.
+- `slurm/**` is used as a dependency-only trigger in container reliability path filters because maintained Dockerfiles copy `slurm/` artifacts.
 
-## Target Check Architecture
+## Active Workflow Surface
+- `.github/workflows/ci-workflow-integrity.yml`
+- `.github/workflows/lint-python.yml`
+- `.github/workflows/lint-shell.yml`
+- `.github/workflows/lint-json.yml`
+- `.github/workflows/lint-yaml.yml`
+- `.github/workflows/ci-repo-quality.yml`
+- `.github/workflows/lint-docker.yml`
+- `.github/workflows/ci-gitops-deployability.yml`
+- `.github/workflows/nightly-security-advisory.yml`
+
+## Check Architecture
 ### A) CI System Integrity (advisory)
-- Workflow: `.github/workflows/ci-workflow-integrity.yml`
-- Checks: `actionlint` + workflow YAML parse.
-- Risk mapped: malformed workflows, invalid action definitions, skipped CI due syntax/runtime issues.
+- Workflow: `ci-workflow-integrity.yml`
+- Checks: actionlint + workflow YAML parse.
+- Risk: broken workflow definitions and silent CI drift.
 
-### B) Repo-Owned Code Quality / Tests (advisory additions)
-- Workflows:
-  - `.github/workflows/lint-python.yml`
-  - `.github/workflows/lint-shell.yml`
-  - `.github/workflows/lint-json.yml`
-  - `.github/workflows/lint-yaml.yml`
-  - `.github/workflows/ci-repo-quality.yml` (selected)
-- Checks: black/isort check-only, py_compile, pytest (advisory), shellcheck/shfmt/bash -n, JSON/YAML parse checks.
-- Risk mapped: runtime and script regressions.
+### B) Repo Quality and Tests (advisory)
+- Workflows: `lint-python.yml`, `lint-shell.yml`, `lint-json.yml`, `lint-yaml.yml`, `ci-repo-quality.yml`
+- Checks: black/isort check-only, py_compile, pytest advisory, shellcheck/shfmt/bash -n, JSON/YAML parse.
+- Risk: script/runtime regressions.
 
-### C) Container Reliability (advisory additions)
-- Workflow: `.github/workflows/lint-docker.yml`
-- Checks: hadolint (check-only), advisory docker build/smoke for maintained Dockerfiles via `.github/scripts/container-smoke.sh`.
-- Risk mapped: container build/runtime breakage.
+### C) Container Reliability (advisory)
+- Workflow: `lint-docker.yml`
+- Checks: hadolint, targeted docker build jobs, smoke checks via `.github/scripts/container-smoke.sh`.
+- Risk: image build/runtime regressions.
 
-### D) GitOps/K8s Deployability (advisory)
-- Workflow: `.github/workflows/ci-gitops-deployability.yml`
-- Checks: `kustomize build --load-restrictor LoadRestrictionsNone` for all deploy overlays + `kubeconform` schema validation.
-- Risk mapped: Flux reconciliation failures from invalid manifests.
+### D) GitOps Deployability (advisory)
+- Workflow: `ci-gitops-deployability.yml`
+- Checks: kustomize render + kubeconform schema validation.
+- Risk: Flux reconciliation failures from invalid manifests.
 
-### E) Nightly Advisory Security
-- Workflow: `.github/workflows/nightly-security-advisory.yml`
-- Checks: Trivy filesystem scan (HIGH/CRITICAL).
-- Risk mapped: security posture drift.
+### E) Security Posture (advisory)
+- Workflow: `nightly-security-advisory.yml`
+- Checks: nightly Trivy filesystem scan.
+- Risk: security drift in dependencies/configuration.
 
-## Advisory vs Future Blocking Milestones
-- M0 (this campaign): all newly introduced validations advisory.
-- M1: promote workflow integrity + repo-quality checks to blocking after stable baseline.
-- M2: promote container + GitOps checks to blocking after stable baseline.
-- M3: keep nightly security advisory unless explicitly promoted.
+## Optimization Workstreams (Current)
+### Worker 1: Coverage Optimizer
+File lane:
+- `tests/unit/**`
+- `tests/conftest.py`
+- `.github/workflows/lint-python.yml`
+- `.github/workflows/ci-repo-quality.yml`
+Goal:
+- Increase meaningful Python test coverage and publish coverage in CI (advisory threshold first).
 
-## Agent Lane Ownership (File Level)
-- Coordinator: `.codex/CI_PLAN.md`, `README.md`, branch/PR/sync operations.
-- Agent A: `.github/workflows/ci-workflow-integrity.yml` (+ selection recommendation in chat).
-- Agent B: `.github/workflows/lint-python.yml`, `.github/workflows/lint-shell.yml`, `.github/workflows/ci-repo-quality.yml`, optional B helper scripts.
-- Agent C: `.github/workflows/lint-json.yml`, `.github/workflows/lint-yaml.yml`.
-- Agent D: `.github/workflows/lint-docker.yml`, `.github/scripts/container-smoke.sh`.
-- Agent E: `.github/workflows/ci-gitops-deployability.yml`, `.github/workflows/nightly-security-advisory.yml`.
+### Worker 2: Integration Scenarios
+File lane:
+- `tests/integration/**`
+- `tests/fixtures/**`
+- `.github/workflows/ci-integration-scenarios.yml` (new)
+- `.github/scripts/integration/**`
+Goal:
+- Add realistic automated integration scenarios with deterministic mocks and PR advisory execution.
 
-## Phased Rollout and Rollback
-Rollout:
-1. First commit creates this file.
-2. Add/convert workflows in lane-owned files only.
-3. Keep PR draft until baseline checks stabilize.
-4. Daily sync by merging `main` into `codex/ci`.
+### Worker 3: Security and Runtime Optimizer
+File lane:
+- `.github/workflows/nightly-security-advisory.yml`
+- `.github/workflows/ci-security-advisory.yml` (new)
+- `.github/workflows/lint-docker.yml`
+- `.github/workflows/ci-gitops-deployability.yml`
+Goal:
+- Add PR-time advisory security checks and reduce CI runtime/noise safely.
 
-Rollback:
-- Revert only unstable workflow files in small commits.
-- Keep advisory mode active during stabilization.
-
-## Reproducible Runbook (from clean main)
-1. `git fetch origin`
-2. `git switch main && git pull --ff-only origin main`
-3. `git switch -c codex/ci` (or `git switch codex/ci`)
-4. Commit #1: `.codex/CI_PLAN.md`
-5. Apply lane-scoped workflow changes
-6. `git push -u origin codex/ci`
-7. Open one draft PR `codex/ci -> main`
-8. Daily sync: `git fetch origin && git switch codex/ci && git merge --no-ff origin/main`
+## Branch and Sync Rules
+- No side branches.
+- No force-push on shared campaign work.
+- Daily sync: merge `main` into `codex/ci` (no rebase).
+- Keep PR draft until optimization baseline is stable.
 
 ## Constraint Challenge Protocol
-If a hard constraint appears to conflict with delivery, create an `EXCEPTION REQUEST` with:
+If any hard constraint must be challenged, submit an `EXCEPTION REQUEST` with:
 1) challenged constraint,
 2) concrete risk if unchanged,
-3) minimal exception,
+3) minimal exception requested,
 4) rollback path.
-Do not implement exception changes before explicit user approval.
+
+No exception is implemented without explicit user approval.
