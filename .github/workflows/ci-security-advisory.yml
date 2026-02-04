@@ -1,0 +1,166 @@
+name: CI Security Advisory
+
+on:
+  pull_request:
+    paths:
+      - 'deploy/**'
+      - 'docker/**'
+      - '.github/workflows/**'
+      - '**/requirements*.txt'
+      - '**/pyproject.toml'
+      - '**/poetry.lock'
+      - '**/Pipfile'
+      - '**/Pipfile.lock'
+      - '**/go.mod'
+      - '**/go.sum'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-security-advisory-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  detect-security-scope:
+    runs-on: ubuntu-latest
+    outputs:
+      vuln_surface: ${{ steps.filter.outputs.vuln_surface }}
+      config_surface: ${{ steps.filter.outputs.config_surface }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            vuln_surface:
+              - 'docker/**'
+              - '**/requirements*.txt'
+              - '**/pyproject.toml'
+              - '**/poetry.lock'
+              - '**/Pipfile'
+              - '**/Pipfile.lock'
+              - '**/go.mod'
+              - '**/go.sum'
+            config_surface:
+              - 'deploy/**'
+              - 'docker/**'
+              - '.github/workflows/**'
+
+  trivy-security-advisory:
+    needs: detect-security-scope
+    if: needs.detect-security-scope.outputs.vuln_surface == 'true' || needs.detect-security-scope.outputs.config_surface == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem vulnerability scan (advisory)
+        if: needs.detect-security-scope.outputs.vuln_surface == 'true'
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: json
+          output: trivy-pr-fs.json
+          skip-dirs: docker/dask-gateway-server,docs,docs/source/demos,docker/kaniko-build-jobs,slurm,.cursor
+
+      - name: Run Trivy configuration scan (advisory)
+        if: needs.detect-security-scope.outputs.config_surface == 'true'
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          format: json
+          output: trivy-pr-config.json
+          skip-dirs: docker/dask-gateway-server,docs,docs/source/demos,docker/kaniko-build-jobs,slurm,.cursor
+
+      - name: Publish PR Trivy summary (advisory)
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from collections import Counter
+          from pathlib import Path
+
+          summary_path = Path(os.environ['GITHUB_STEP_SUMMARY'])
+          reports = (
+              ('Filesystem vulnerability scan', Path('trivy-pr-fs.json'), 'Vulnerabilities'),
+              ('Configuration misconfiguration scan', Path('trivy-pr-config.json'), 'Misconfigurations'),
+          )
+
+          total_high_critical = 0
+
+          with summary_path.open('a', encoding='utf-8') as summary:
+              summary.write('### PR Trivy Advisory Summary\n\n')
+
+              for label, report_path, finding_key in reports:
+                  if not report_path.exists():
+                      summary.write(f'- {label}: skipped (out of scope)\n')
+                      continue
+
+                  payload = json.loads(report_path.read_text(encoding='utf-8'))
+                  results = payload.get('Results', []) if isinstance(payload, dict) else payload
+
+                  severity_counts = Counter()
+                  target_counts = Counter()
+
+                  for result in results:
+                      target = result.get('Target', 'unknown-target')
+                      for finding in result.get(finding_key) or []:
+                          severity = (finding.get('Severity') or 'UNKNOWN').upper()
+                          severity_counts[severity] += 1
+                          target_counts[target] += 1
+
+                  high_critical = severity_counts.get('HIGH', 0) + severity_counts.get('CRITICAL', 0)
+                  total_high_critical += high_critical
+
+                  summary.write(f'\n#### {label}\n\n')
+                  summary.write(f'- HIGH/CRITICAL findings: **{high_critical}**\n')
+                  summary.write(f'- Targets with findings: **{len(target_counts)}**\n\n')
+
+                  if high_critical == 0:
+                      summary.write('No HIGH/CRITICAL findings detected.\n')
+                      continue
+
+                  summary.write('| Severity | Count |\n')
+                  summary.write('|---|---:|\n')
+                  for severity in ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'):
+                      count = severity_counts.get(severity, 0)
+                      if count:
+                          summary.write(f'| {severity} | {count} |\n')
+
+                  summary.write('\n| Top targets | Findings |\n')
+                  summary.write('|---|---:|\n')
+                  for target, count in target_counts.most_common(10):
+                      summary.write(f'| `{target}` | {count} |\n')
+
+          if total_high_critical > 0:
+              print(f'::warning::PR Trivy found {total_high_critical} HIGH/CRITICAL findings. See summary and artifacts.')
+          else:
+              print('::notice::PR Trivy found no HIGH/CRITICAL findings in scope.')
+          PY
+
+      - name: Upload PR Trivy artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-pr-security-${{ github.run_id }}
+          path: |
+            trivy-pr-fs.json
+            trivy-pr-config.json
+          if-no-files-found: ignore
+          retention-days: 7

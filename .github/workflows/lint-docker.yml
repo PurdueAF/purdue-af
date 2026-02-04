@@ -2,6 +2,17 @@ name: Container Reliability
 
 on:
   pull_request:
+    paths:
+      - 'docker/af-pod-monitor/**'
+      - 'docker/interlink-slurm-plugin/**'
+      - 'docker/purdue-af/**'
+      - 'slurm/**'
+      - '.github/scripts/container-smoke.sh'
+      - '.github/workflows/lint-docker.yml'
+
+concurrency:
+  group: lint-docker-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -10,6 +21,7 @@ jobs:
   detect-docker-changes:
     runs-on: ubuntu-latest
     outputs:
+      dockerfiles: ${{ steps.filter.outputs.dockerfiles }}
       af_pod_monitor: ${{ steps.filter.outputs.af_pod_monitor }}
       interlink_slurm_plugin: ${{ steps.filter.outputs.interlink_slurm_plugin }}
       purdue_af: ${{ steps.filter.outputs.purdue_af }}
@@ -20,22 +32,26 @@ jobs:
         id: filter
         with:
           filters: |
+            dockerfiles:
+              - 'docker/af-pod-monitor/Dockerfile'
+              - 'docker/interlink-slurm-plugin/Dockerfile.alma8'
+              - 'docker/purdue-af/Dockerfile'
+              - '.github/workflows/lint-docker.yml'
             af_pod_monitor:
               - 'docker/af-pod-monitor/**'
-              - '.github/workflows/lint-docker.yml'
               - '.github/scripts/container-smoke.sh'
             interlink_slurm_plugin:
               - 'docker/interlink-slurm-plugin/**'
               - 'slurm/**'
-              - '.github/workflows/lint-docker.yml'
               - '.github/scripts/container-smoke.sh'
             purdue_af:
               - 'docker/purdue-af/**'
               - 'slurm/**'
-              - '.github/workflows/lint-docker.yml'
               - '.github/scripts/container-smoke.sh'
 
   lint-dockerfiles:
+    needs: detect-docker-changes
+    if: needs.detect-docker-changes.outputs.dockerfiles == 'true'
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:

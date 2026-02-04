@@ -2,12 +2,63 @@ name: CI GitOps Deployability
 
 on:
   pull_request:
+    paths:
+      - 'deploy/**'
+      - '.github/workflows/ci-gitops-deployability.yml'
+
+concurrency:
+  group: ci-gitops-deployability-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
+  detect-gitops-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run_all: ${{ steps.scope.outputs.run_all }}
+      core_production: ${{ steps.filter.outputs.core_production }}
+      core_staging: ${{ steps.filter.outputs.core_staging }}
+      core_geddes2: ${{ steps.filter.outputs.core_geddes2 }}
+      experimental: ${{ steps.filter.outputs.experimental }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            core_production:
+              - 'deploy/core-production/**'
+            core_staging:
+              - 'deploy/core-staging/**'
+            core_geddes2:
+              - 'deploy/core-geddes2/**'
+            experimental:
+              - 'deploy/experimental/**'
+            deploy_shared:
+              - 'deploy/**'
+              - '!deploy/core-production/**'
+              - '!deploy/core-staging/**'
+              - '!deploy/core-geddes2/**'
+              - '!deploy/experimental/**'
+            workflow:
+              - '.github/workflows/ci-gitops-deployability.yml'
+
+      - id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.filter.outputs.deploy_shared }}" = 'true' ] || [ "${{ steps.filter.outputs.workflow }}" = 'true' ]; then
+            echo "run_all=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_all=false" >> "$GITHUB_OUTPUT"
+          fi
+
   gitops-validate:
+    needs: detect-gitops-changes
+    if: needs.detect-gitops-changes.outputs.run_all == 'true' || needs.detect-gitops-changes.outputs.core_production == 'true' || needs.detect-gitops-changes.outputs.core_staging == 'true' || needs.detect-gitops-changes.outputs.core_geddes2 == 'true' || needs.detect-gitops-changes.outputs.experimental == 'true'
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -27,26 +78,71 @@ jobs:
           chmod +x /tmp/kubeconform
           sudo mv /tmp/kubeconform /usr/local/bin/kubeconform
 
-      - name: Render overlays with kustomize (advisory)
+      - name: Render and validate selected overlays (advisory)
+        shell: bash
+        env:
+          RUN_ALL: ${{ needs.detect-gitops-changes.outputs.run_all }}
+          CORE_PRODUCTION: ${{ needs.detect-gitops-changes.outputs.core_production }}
+          CORE_STAGING: ${{ needs.detect-gitops-changes.outputs.core_staging }}
+          CORE_GEDDES2: ${{ needs.detect-gitops-changes.outputs.core_geddes2 }}
+          EXPERIMENTAL: ${{ needs.detect-gitops-changes.outputs.experimental }}
         run: |
           set -euo pipefail
-          overlays=(
-            deploy/core-production
-            deploy/core-staging
-            deploy/core-geddes2
-            deploy/experimental
-          )
 
+          overlays=()
+          if [ "$RUN_ALL" = 'true' ]; then
+            overlays=(
+              deploy/core-production
+              deploy/core-staging
+              deploy/core-geddes2
+              deploy/experimental
+            )
+          else
+            [ "$CORE_PRODUCTION" = 'true' ] && overlays+=(deploy/core-production)
+            [ "$CORE_STAGING" = 'true' ] && overlays+=(deploy/core-staging)
+            [ "$CORE_GEDDES2" = 'true' ] && overlays+=(deploy/core-geddes2)
+            [ "$EXPERIMENTAL" = 'true' ] && overlays+=(deploy/experimental)
+          fi
+
+          if [ "${#overlays[@]}" -eq 0 ]; then
+            echo 'No in-scope overlay changes detected; skipping render/validation.'
+            {
+              echo '### GitOps Deployability Summary'
+              echo
+              echo '- No in-scope overlay changes detected.'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo '### GitOps Deployability Summary'
+            echo
+            echo '| Overlay | Render | Kubeconform |'
+            echo '|---|---|---|'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          status=0
           for overlay in "${overlays[@]}"; do
-            out="/tmp/$(echo "$overlay" | tr '/' '_').yaml"
-            echo "Rendering $overlay -> $out"
-            kustomize build --load-restrictor LoadRestrictionsNone "$overlay" > "$out"
+            rendered="/tmp/$(echo "$overlay" | tr '/' '_').yaml"
+            render_status='ok'
+            kubeconform_status='ok'
+
+            echo "Rendering $overlay -> $rendered"
+            if ! kustomize build --load-restrictor LoadRestrictionsNone "$overlay" > "$rendered"; then
+              render_status='failed'
+              kubeconform_status='skipped'
+              status=1
+            fi
+
+            if [ "$render_status" = 'ok' ]; then
+              echo "Validating $rendered"
+              if ! kubeconform -summary -strict -ignore-missing-schemas -skip Secret "$rendered"; then
+                kubeconform_status='failed'
+                status=1
+              fi
+            fi
+
+            echo "| \`$overlay\` | $render_status | $kubeconform_status |" >> "$GITHUB_STEP_SUMMARY"
           done
 
-      - name: Validate rendered manifests with kubeconform (advisory)
-        run: |
-          set -euo pipefail
-          for rendered in /tmp/deploy_core-production.yaml /tmp/deploy_core-staging.yaml /tmp/deploy_core-geddes2.yaml /tmp/deploy_experimental.yaml; do
-            echo "Validating $rendered"
-            kubeconform -summary -strict -ignore-missing-schemas -skip Secret "$rendered"
-          done
+          exit "$status"
