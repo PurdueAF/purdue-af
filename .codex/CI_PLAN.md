@@ -68,7 +68,7 @@ Approved exception:
 ### C) Container Reliability (advisory)
 - Workflow: `lint-docker.yml`
 - Checks: hadolint, targeted Docker Buildx jobs with GitHub Actions layer cache, smoke checks via `.github/scripts/container-smoke.sh`.
-- Execution model: path-scoped change detection, no per-job timeout cap on Docker build jobs, root-context `.dockerignore` optimization, and advisory summaries in run output.
+- Execution model: path-scoped change detection, 120-minute per-job timeout cap for Docker build jobs, root-context `.dockerignore` optimization, BuildKit plain progress logging, and advisory summaries in run output.
 - Risk: image build/runtime regressions.
 
 ### D) GitOps Deployability (advisory)
