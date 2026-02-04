@@ -34,9 +34,45 @@ find_project_root() {
   echo "$PWD"
 }
 
+# Echo the project directory implied by --manifest-path in "$@", or nothing if absent/invalid.
+get_manifest_path_dir() {
+  local args=("$@")
+  local i path dir
+  for (( i = 0; i < ${#args[@]}; i++ )); do
+    if [[ "${args[i]}" == "--manifest-path" ]]; then
+      if (( i + 1 < ${#args[@]} )); then
+        path="${args[i+1]}"
+        break
+      fi
+    elif [[ "${args[i]}" == --manifest-path=* ]]; then
+      path="${args[i]#--manifest-path=}"
+      break
+    fi
+  done
+  if [[ -z "${path:-}" ]]; then
+    return
+  fi
+  # Derive project dir: if path looks like a manifest file, use its directory; else treat as directory.
+  if [[ "$path" == *"/pixi.toml" || "$path" == *"/pyproject.toml" ]]; then
+    dir="$(dirname "$path")"
+  else
+    dir="$path"
+  fi
+  echo "$dir"
+}
+
 block_project_env_if_in_home() {
-  local project_dir
-  project_dir="$(find_project_root)"
+  local project_dir manifest_dir
+  manifest_dir="$(get_manifest_path_dir "$@")"
+
+  if [[ -n "$manifest_dir" ]]; then
+    if [[ "$manifest_dir" != ${HOME_PREFIX}* ]]; then
+      return
+    fi
+    project_dir="$manifest_dir"
+  else
+    project_dir="$(find_project_root)"
+  fi
 
   if [[ "$project_dir" == ${HOME_PREFIX}* ]]; then
     echo "Error: Pixi environments are not allowed for projects under ${HOME_PREFIX}." >&2
@@ -58,10 +94,9 @@ block_global_env_if_in_home() {
 }
 
 if is_project_env_command; then
-  block_project_env_if_in_home
+  block_project_env_if_in_home "$@"
 elif is_global_env_command; then
   block_global_env_if_in_home
 fi
 
 exec "$REAL_PIXI" "$@"
-EOF
