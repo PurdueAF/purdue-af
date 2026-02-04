@@ -6,8 +6,9 @@ Deliver one draft PR from `codex/ci` to `main` with a stable advisory-first CI b
 ## Current Status
 - PR branch: `codex/ci`
 - Delivery model: single PR `codex/ci -> main`
-- Existing CI baseline is green on PR checks.
-- Formatter/linter workflows are check-only (no CI writeback commits).
+- PR #21 is open against `main` (not draft).
+- Existing CI baseline is green on fast PR checks; container build jobs are the long pole.
+- Lint workflows are check-only; formatter autofix workflow can commit formatting-only fixes to PR branches.
 
 ## Success Criteria
 - CI remains stable on `pull_request` runs for all configured workflows.
@@ -60,21 +61,25 @@ Approved exception:
 ### B) Repo Quality and Tests (advisory)
 - Workflows: `lint-python.yml`, `lint-shell.yml`, `lint-json.yml`, `lint-yaml.yml`, `ci-format-autofix.yml`, `ci-repo-quality.yml`, `ci-integration-scenarios.yml`
 - Checks: black/isort check-only, py_compile, pytest unit advisory with coverage threshold, shellcheck/shfmt/bash -n, JSON/YAML parse, auto-format commits for changed Python/shell/JSON/YAML files, integration scenario matrix tests via mocked container/monitoring flows.
+- Execution model: fast workflows are path-scoped with PR concurrency cancellation; formatter/lint tool versions are pinned for deterministic behavior.
 - Risk: script/runtime regressions.
 
 ### C) Container Reliability (advisory)
 - Workflow: `lint-docker.yml`
 - Checks: hadolint, targeted Docker Buildx jobs with GitHub Actions layer cache, smoke checks via `.github/scripts/container-smoke.sh`.
+- Execution model: path-scoped change detection, explicit job timeouts, and advisory summaries in run output.
 - Risk: image build/runtime regressions.
 
 ### D) GitOps Deployability (advisory)
 - Workflow: `ci-gitops-deployability.yml`
 - Checks: kustomize render + kubeconform schema validation.
+- Execution model: overlay-scoped detection, explicit job timeouts, and advisory plan/result summaries in run output.
 - Risk: Flux reconciliation failures from invalid manifests.
 
 ### E) Security Posture (advisory)
 - Workflows: `nightly-security-advisory.yml`, `ci-security-advisory.yml`
 - Checks: nightly Trivy filesystem scan plus PR-time advisory Trivy vulnerability/config scans with run summaries and artifacts.
+- Execution model: path-scoped PR scans, explicit scan timeouts, and summary tables for scan scope/outcomes.
 - Risk: security drift in dependencies/configuration.
 
 ## Optimization Workstreams (Current)
@@ -109,7 +114,6 @@ Goal:
 - No side branches.
 - No force-push on shared campaign work.
 - Daily sync: merge `main` into `codex/ci` (no rebase).
-- Keep PR draft until optimization baseline is stable.
 
 ## Constraint Challenge Protocol
 If any hard constraint must be challenged, submit an `EXCEPTION REQUEST` with:
