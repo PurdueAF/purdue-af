@@ -27,6 +27,11 @@ read -rs KEY
 echo ""
 [[ -z "${KEY:-}" ]] && exit 0
 
+# Persist key so config-extensions.sh can re-inject it when config is recreated on startup
+CONTINUE_DIR="$(dirname "$CONFIG")"
+mkdir -p "$CONTINUE_DIR"
+printf '%s' "$KEY" > "$CONTINUE_DIR/api-key.txt"
+
 # Replace every apiKey line (preserve indentation); avoid embedding KEY in subshells
 tmp=$(mktemp)
 trap 'rm -f "$tmp"' EXIT
