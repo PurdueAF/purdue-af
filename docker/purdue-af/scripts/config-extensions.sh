@@ -85,20 +85,18 @@ echo '{
   }
 }' >$base_env_dir/etc/jupyter/jupyter_server_config.d/prometheus_alerts.json
 
-# Configure code-server (config only; server is launched elsewhere)
-# CODE_SERVER_CONFIG_DIR=$NEW_HOME/.config/code-server
-# mkdir -p "$CODE_SERVER_CONFIG_DIR"
-# cat >"$CODE_SERVER_CONFIG_DIR/config.yaml" <<'EOF'
-# extensions-dir: ~/.local/share/code-server/extensions
-# user-data-dir: ~/.local/share/code-server
-# EOF
-# chown -R $NB_USER:users "$CODE_SERVER_CONFIG_DIR"
 
-# Pre-install code-server extensions into the notebook user's dirs
+# Pre-install code-server extensions into the notebook user's dirs; fail if CLI is unavailable
+CODE_SERVER_BIN="${base_env_dir%/}/bin/code-server"
+if [ ! -x "$CODE_SERVER_BIN" ]; then
+  echo "ERROR: code-server CLI not found or not executable at $CODE_SERVER_BIN" >&2
+  exit 1
+fi
+
 export CODE_EXTENSIONSDIR="$NEW_HOME/.local/share/code-server/extensions"
 export CODE_USERDATADIR="$NEW_HOME/.local/share/code-server"
 mkdir -p "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
-code-server --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension ms-python.python
-code-server --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension ms-toolsai.jupyter
+"$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension ms-python.python
+"$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension ms-toolsai.jupyter
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
