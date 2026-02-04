@@ -2,6 +2,19 @@ name: Lint Python
 
 on:
   pull_request:
+    paths:
+      - '**/*.py'
+      - '.github/workflows/lint-python.yml'
+      - '!docker/dask-gateway-server/**'
+      - '!docker/kaniko-build-jobs/**'
+      - '!docs/**'
+      - '!slurm/**'
+      - '!.cursor/**'
+      - '!.git/**'
+
+concurrency:
+  group: lint-python-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

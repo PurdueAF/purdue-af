@@ -2,6 +2,19 @@ name: Lint JSON
 
 on:
   pull_request:
+    paths:
+      - '**/*.json'
+      - '.github/workflows/lint-json.yml'
+      - '!docker/dask-gateway-server/**'
+      - '!docker/kaniko-build-jobs/**'
+      - '!docs/**'
+      - '!slurm/**'
+      - '!.cursor/**'
+      - '!.git/**'
+
+concurrency:
+  group: lint-json-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

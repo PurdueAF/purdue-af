@@ -2,6 +2,12 @@ name: CI Workflow Integrity
 
 on:
   pull_request:
+    paths:
+      - '.github/workflows/**'
+
+concurrency:
+  group: ci-workflow-integrity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

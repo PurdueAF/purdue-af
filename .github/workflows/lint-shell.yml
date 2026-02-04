@@ -2,6 +2,21 @@ name: Lint Shell Scripts
 
 on:
   pull_request:
+    paths:
+      - '**/*.sh'
+      - '**/pixi-wrapper'
+      - '**/fix-permissions'
+      - '.github/workflows/lint-shell.yml'
+      - '!docker/dask-gateway-server/**'
+      - '!docker/kaniko-build-jobs/**'
+      - '!docs/**'
+      - '!slurm/**'
+      - '!.cursor/**'
+      - '!.git/**'
+
+concurrency:
+  group: lint-shell-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

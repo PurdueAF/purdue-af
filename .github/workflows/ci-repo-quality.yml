@@ -2,6 +2,18 @@ name: CI Repo Quality
 
 on:
   pull_request:
+    paths:
+      - 'tests/unit/**'
+      - 'tests/conftest.py'
+      - 'apps/monitoring/af-monitoring/metrics_server.py'
+      - 'apps/monitoring/af-monitoring/node_healthcheck.py'
+      - 'docker/af-pod-monitor/pod-metrics-exporter.py'
+      - 'docker/purdue-af/jupyter/docker_healthcheck.py'
+      - '.github/workflows/ci-repo-quality.yml'
+
+concurrency:
+  group: ci-repo-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -23,39 +35,6 @@ jobs:
           set -euo pipefail
           python -m pip install --upgrade pip
           pip install pytest coverage
-
-      - name: Python syntax smoke (advisory)
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t py_files < <(find . -type f -name '*.py' \
-            -not -path './docker/dask-gateway-server/*' \
-            -not -path './docker/kaniko-build-jobs/*' \
-            -not -path './docs/*' \
-            -not -path './slurm/*' \
-            -not -path './.cursor/*' \
-            -not -path './.git/*' | sort)
-
-          if [ "${#py_files[@]}" -gt 0 ]; then
-            python -m py_compile "${py_files[@]}"
-          fi
-
-      - name: Shell syntax smoke (advisory)
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t sh_files < <(find . -type f \
-            \( -name '*.sh' -o -name 'pixi-wrapper' -o -name 'fix-permissions' \) \
-            -not -path './docker/dask-gateway-server/*' \
-            -not -path './docker/kaniko-build-jobs/*' \
-            -not -path './docs/*' \
-            -not -path './slurm/*' \
-            -not -path './.cursor/*' \
-            -not -path './.git/*' | sort)
-
-          for f in "${sh_files[@]}"; do
-            bash -n "$f"
-          done
 
       - name: Run pytest (advisory)
         shell: bash
