@@ -85,12 +85,11 @@ echo '{
   }
 }' >$base_env_dir/etc/jupyter/jupyter_server_config.d/prometheus_alerts.json
 
-
 # Pre-install code-server extensions into the notebook user's dirs; fail if CLI is unavailable
 CODE_SERVER_BIN="${base_env_dir%/}/bin/code-server"
 if [ ! -x "$CODE_SERVER_BIN" ]; then
-  echo "ERROR: code-server CLI not found or not executable at $CODE_SERVER_BIN" >&2
-  exit 1
+	echo "ERROR: code-server CLI not found or not executable at $CODE_SERVER_BIN" >&2
+	exit 1
 fi
 
 export CODE_EXTENSIONSDIR="$NEW_HOME/.local/share/code-server/extensions"
