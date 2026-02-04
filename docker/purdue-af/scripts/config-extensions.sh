@@ -111,7 +111,6 @@ chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
 
 # Continue extension config (from bundled file)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p "$NEW_HOME/.continue"
-cp "$SCRIPT_DIR/continue-config.yaml" "$NEW_HOME/.continue/config.yaml"
+cp /etc/jupyter/continue-config.yaml "$NEW_HOME/.continue/config.yaml"
 chown -R $NB_USER:users "$NEW_HOME/.continue"

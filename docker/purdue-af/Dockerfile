@@ -150,10 +150,10 @@ COPY docker/purdue-af/jupyter/jupyter_server_config.py \
     docker/purdue-af/jupyter/docker_healthcheck.py \
     docker/purdue-af/scripts/eos-connect.sh \
     docker/purdue-af/jupyter/jupyter_config.json \
+    docker/purdue-af/scripts/continue-config.yaml \
     /etc/jupyter/
 COPY --chown=root:root docker/purdue-af/scripts/run-as-root.sh \
     docker/purdue-af/scripts/config-extensions.sh \
-    docker/purdue-af/scripts/continue-config.yaml \
     docker/purdue-af/scripts/create-symlinks.sh \
     /usr/local/bin/before-notebook.d/
 # docker/purdue-af/scripts/init-kernels.sh \
