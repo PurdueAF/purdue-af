@@ -80,8 +80,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build af-pod-monitor image (advisory)
-        run: docker build -f docker/af-pod-monitor/Dockerfile -t local/af-pod-monitor:${{ github.sha }} docker/af-pod-monitor
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build af-pod-monitor image with cache (advisory)
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/af-pod-monitor
+          file: docker/af-pod-monitor/Dockerfile
+          load: true
+          tags: local/af-pod-monitor:${{ github.sha }}
+          cache-from: type=gha,scope=af-pod-monitor
+          cache-to: type=gha,mode=max,scope=af-pod-monitor,ignore-error=true
+          provenance: false
 
       - name: Smoke test af-pod-monitor image (advisory)
         run: .github/scripts/container-smoke.sh local/af-pod-monitor:${{ github.sha }} af-pod-monitor
@@ -94,8 +105,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build interlink-slurm-plugin image (advisory)
-        run: docker build -f docker/interlink-slurm-plugin/Dockerfile.alma8 -t local/interlink-slurm-plugin:${{ github.sha }} .
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build interlink-slurm-plugin image with cache (advisory)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/interlink-slurm-plugin/Dockerfile.alma8
+          load: true
+          tags: local/interlink-slurm-plugin:${{ github.sha }}
+          cache-from: type=gha,scope=interlink-slurm-plugin
+          cache-to: type=gha,mode=max,scope=interlink-slurm-plugin,ignore-error=true
+          provenance: false
 
       - name: Smoke test interlink-slurm-plugin image (advisory)
         run: .github/scripts/container-smoke.sh local/interlink-slurm-plugin:${{ github.sha }} interlink-slurm-plugin
@@ -108,8 +130,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build purdue-af image (advisory)
-        run: docker build -f docker/purdue-af/Dockerfile -t local/purdue-af:${{ github.sha }} .
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build purdue-af image with cache (advisory)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/purdue-af/Dockerfile
+          load: true
+          tags: local/purdue-af:${{ github.sha }}
+          cache-from: type=gha,scope=purdue-af
+          cache-to: type=gha,mode=max,scope=purdue-af,ignore-error=true
+          provenance: false
 
       - name: Smoke test purdue-af image (advisory)
         run: .github/scripts/container-smoke.sh local/purdue-af:${{ github.sha }} purdue-af

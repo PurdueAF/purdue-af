@@ -62,7 +62,7 @@ Approved exception:
 
 ### C) Container Reliability (advisory)
 - Workflow: `lint-docker.yml`
-- Checks: hadolint, targeted docker build jobs, smoke checks via `.github/scripts/container-smoke.sh`.
+- Checks: hadolint, targeted Docker Buildx jobs with GitHub Actions layer cache, smoke checks via `.github/scripts/container-smoke.sh`.
 - Risk: image build/runtime regressions.
 
 ### D) GitOps Deployability (advisory)
