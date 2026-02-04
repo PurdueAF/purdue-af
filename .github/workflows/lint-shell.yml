@@ -41,7 +41,7 @@ jobs:
             exit 0
           fi
 
-          shellcheck -S error "${files[@]}"
+          shellcheck -S error -s bash "${files[@]}"
           shfmt -d "${files[@]}"
 
           for f in "${files[@]}"; do

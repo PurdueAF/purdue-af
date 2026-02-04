@@ -19,9 +19,7 @@ class PurdueGenAIStudioProvider(BaseProvider, ChatOpenAI):
     )
 
     def __init__(self, **kwargs):
-        super().__init__(
-            openai_api_base="https://genai.rcac.purdue.edu/api", **kwargs
-        )
+        super().__init__(openai_api_base="https://genai.rcac.purdue.edu/api", **kwargs)
 
     @classmethod
     def is_api_key_exc(cls, e: Exception):
