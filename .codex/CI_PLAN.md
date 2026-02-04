@@ -31,6 +31,9 @@ Out of scope:
 - `slurm/**`
 - `.cursor/**`
 
+Approved exception:
+- `slurm/**` is used as a dependency-only trigger for container reliability jobs because maintained Dockerfiles copy `slurm/` artifacts.
+
 ## Target Check Architecture
 ### A) CI System Integrity (advisory)
 - Workflow: `.github/workflows/ci-workflow-integrity.yml`

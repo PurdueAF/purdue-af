@@ -26,10 +26,12 @@ jobs:
               - '.github/scripts/container-smoke.sh'
             interlink_slurm_plugin:
               - 'docker/interlink-slurm-plugin/**'
+              - 'slurm/**'
               - '.github/workflows/lint-docker.yml'
               - '.github/scripts/container-smoke.sh'
             purdue_af:
               - 'docker/purdue-af/**'
+              - 'slurm/**'
               - '.github/workflows/lint-docker.yml'
               - '.github/scripts/container-smoke.sh'
 
@@ -63,7 +65,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build af-pod-monitor image (advisory)
-        run: docker build -f docker/af-pod-monitor/Dockerfile -t local/af-pod-monitor:${{ github.sha }} .
+        run: docker build -f docker/af-pod-monitor/Dockerfile -t local/af-pod-monitor:${{ github.sha }} docker/af-pod-monitor
 
       - name: Smoke test af-pod-monitor image (advisory)
         run: .github/scripts/container-smoke.sh local/af-pod-monitor:${{ github.sha }} af-pod-monitor

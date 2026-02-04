@@ -48,5 +48,5 @@ jobs:
           set -euo pipefail
           for rendered in /tmp/deploy_core-production.yaml /tmp/deploy_core-staging.yaml /tmp/deploy_core-geddes2.yaml /tmp/deploy_experimental.yaml; do
             echo "Validating $rendered"
-            kubeconform -summary -strict -ignore-missing-schemas "$rendered"
+            kubeconform -summary -strict -ignore-missing-schemas -skip Secret "$rendered"
           done

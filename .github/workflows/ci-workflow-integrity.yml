@@ -13,14 +13,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install actionlint
-        run: |
-          set -euo pipefail
-          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.4
-          echo "$PWD/bin" >> "$GITHUB_PATH"
-
       - name: Run actionlint (advisory)
-        run: actionlint -color
+        uses: rhysd/actionlint@v1
+        with:
+          args: -color
 
       - name: Validate workflow YAML parse (advisory)
         run: |

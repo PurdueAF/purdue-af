@@ -31,7 +31,7 @@ if [[ $krb_ticket = "" ]]; then
 			echo " > Kerberos authentication failed!"
 			echo ""
 			return 1
-			else:
+		else
 			echo " > Kerberos authentication complete!"
 			echo ""
 		fi
