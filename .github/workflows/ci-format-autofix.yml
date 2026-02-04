@@ -3,6 +3,15 @@ name: CI Format Autofix
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+    paths:
+      - '**/*.py'
+      - '**/*.sh'
+      - '**/*.json'
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '**/pixi-wrapper'
+      - '**/fix-permissions'
+      - '.github/workflows/ci-format-autofix.yml'
 
 concurrency:
   group: ci-format-autofix-${{ github.event.pull_request.number || github.ref }}
@@ -15,6 +24,7 @@ jobs:
   autofix-format:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
