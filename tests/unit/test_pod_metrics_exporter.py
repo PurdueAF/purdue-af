@@ -72,7 +72,9 @@ def test_update_metrics_home_branch_parses_df_and_ignores_stat_errors(
         "Filesystem 1K-blocks Used Available Use% Mounted on\n"
         "/dev/sda1 1000 250 750 25% /home\n"
     ).encode("utf-8")
-    monkeypatch.setattr(module.subprocess, "check_output", lambda *_args, **_kwargs: df_output)
+    monkeypatch.setattr(
+        module.subprocess, "check_output", lambda *_args, **_kwargs: df_output
+    )
 
     def _raise_stat(_directory):
         raise OSError("stat unavailable")

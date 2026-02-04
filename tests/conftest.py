@@ -56,7 +56,9 @@ def prometheus_stub() -> ModuleType:
 def module_loader(monkeypatch: pytest.MonkeyPatch) -> Callable[..., object]:
     counter = 0
 
-    def _load(relative_path: str, *, extra_modules: dict[str, object] | None = None) -> object:
+    def _load(
+        relative_path: str, *, extra_modules: dict[str, object] | None = None
+    ) -> object:
         nonlocal counter
         counter += 1
         module_name = f"test_module_{counter}"

@@ -22,7 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          pip install pytest pytest-cov
+          pip install pytest coverage
 
       - name: Python syntax smoke (advisory)
         shell: bash
@@ -61,16 +61,17 @@ jobs:
         shell: bash
         run: |
           set +e
-          pytest -q tests/unit \
-            --cov=apps/monitoring/af-monitoring/metrics_server.py \
-            --cov=apps/monitoring/af-monitoring/node_healthcheck.py \
-            --cov=docker/af-pod-monitor/pod-metrics-exporter.py \
-            --cov=docker/purdue-af/jupyter/docker_healthcheck.py \
-            --cov-report=term-missing \
-            --cov-fail-under=70
+          python -m coverage run -m pytest -q tests/unit
           rc=$?
+          set -e
           if [ "$rc" -eq 5 ]; then
             echo 'pytest collected no tests; treating as informational.'
             exit 0
           fi
-          exit "$rc"
+          if [ "$rc" -ne 0 ]; then
+            exit "$rc"
+          fi
+          python -m coverage report \
+            --show-missing \
+            --fail-under=70 \
+            --include="apps/monitoring/af-monitoring/metrics_server.py,apps/monitoring/af-monitoring/node_healthcheck.py,docker/af-pod-monitor/pod-metrics-exporter.py,docker/purdue-af/jupyter/docker_healthcheck.py"

@@ -22,7 +22,7 @@ class ContainerSmokeBehaviorMatrixIntegrationTest(unittest.TestCase):
                     temp_path = Path(temp_dir)
                     docker_wrapper = temp_path / "docker"
                     docker_wrapper.write_text(
-                        f"#!/usr/bin/env bash\nexec \"{MOCK_DOCKER_SCRIPT}\" \"$@\"\n",
+                        f'#!/usr/bin/env bash\nexec "{MOCK_DOCKER_SCRIPT}" "$@"\n',
                         encoding="utf-8",
                     )
                     docker_wrapper.chmod(0o755)

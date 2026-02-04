@@ -36,7 +36,9 @@ def test_check_if_directory_exists_reports_success_for_matching_checksum(
     monkeypatch.setattr(module.time, "time", lambda: next(times))
     monkeypatch.setattr(module.subprocess, "Popen", _fake_popen)
 
-    valid, elapsed_ms = module.check_if_directory_exists(("/tmp/validate.txt", "abc123"))
+    valid, elapsed_ms = module.check_if_directory_exists(
+        ("/tmp/validate.txt", "abc123")
+    )
 
     assert valid is True
     assert elapsed_ms == pytest.approx(200.0)
@@ -70,7 +72,9 @@ def test_check_if_directory_exists_returns_timeout_result(
     proc = FakeProc()
     monkeypatch.setattr(module.subprocess, "Popen", lambda *_args, **_kwargs: proc)
 
-    valid, elapsed_ms = module.check_if_directory_exists(("/tmp/validate.txt", "abc123"))
+    valid, elapsed_ms = module.check_if_directory_exists(
+        ("/tmp/validate.txt", "abc123")
+    )
 
     assert valid is False
     assert elapsed_ms == 3000

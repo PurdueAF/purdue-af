@@ -23,7 +23,9 @@ class _FakePath:
         return iter([_FakeJsonFile(self.payload)])
 
 
-def test_healthcheck_queries_jupyter_api_and_prints_response(monkeypatch, module_loader) -> None:
+def test_healthcheck_queries_jupyter_api_and_prints_response(
+    monkeypatch, module_loader
+) -> None:
     captured = {}
     payload = json.dumps({"url": "https://af.example/"}).encode("utf-8")
 
