@@ -1,0 +1,173 @@
+name: CI Format Autofix
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ci-format-autofix-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  autofix-format:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Detect changed Python files
+        id: py_changes
+        uses: tj-actions/changed-files@v45
+        with:
+          separator: "\n"
+          files: |
+            **/*.py
+          files_ignore: |
+            docker/dask-gateway-server/**
+            docs/**
+            docs/source/demos/**
+            docker/kaniko-build-jobs/**
+            slurm/**
+            .cursor/**
+            .git/**
+
+      - name: Detect changed shell files
+        id: sh_changes
+        uses: tj-actions/changed-files@v45
+        with:
+          separator: "\n"
+          files: |
+            **/*.sh
+            **/pixi-wrapper
+            **/fix-permissions
+          files_ignore: |
+            docker/dask-gateway-server/**
+            docs/**
+            docs/source/demos/**
+            docker/kaniko-build-jobs/**
+            slurm/**
+            .cursor/**
+            .git/**
+
+      - name: Detect changed JSON/YAML files
+        id: data_changes
+        uses: tj-actions/changed-files@v45
+        with:
+          separator: "\n"
+          files: |
+            **/*.json
+            **/*.yml
+            **/*.yaml
+          files_ignore: |
+            docker/dask-gateway-server/**
+            docs/**
+            docs/source/demos/**
+            docker/kaniko-build-jobs/**
+            slurm/**
+            .cursor/**
+            .git/**
+            .github/workflows/**
+
+      - name: Set up Python
+        if: steps.py_changes.outputs.any_changed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Auto-format Python files
+        if: steps.py_changes.outputs.any_changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install black isort
+
+          mapfile -t py_files <<'EOF'
+          ${{ steps.py_changes.outputs.all_changed_files }}
+          EOF
+
+          files=()
+          for f in "${py_files[@]}"; do
+            [ -f "$f" ] && files+=("$f")
+          done
+
+          if [ "${#files[@]}" -gt 0 ]; then
+            black "${files[@]}"
+            isort --profile black "${files[@]}"
+          fi
+
+      - name: Install shell formatter
+        if: steps.sh_changes.outputs.any_changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHFMT_VERSION=3.10.0
+          curl -fsSL "https://github.com/mvdan/sh/releases/download/v${SHFMT_VERSION}/shfmt_v${SHFMT_VERSION}_linux_amd64" -o /tmp/shfmt
+          chmod +x /tmp/shfmt
+          sudo mv /tmp/shfmt /usr/local/bin/shfmt
+
+      - name: Auto-format shell files
+        if: steps.sh_changes.outputs.any_changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t sh_files <<'EOF'
+          ${{ steps.sh_changes.outputs.all_changed_files }}
+          EOF
+
+          files=()
+          for f in "${sh_files[@]}"; do
+            [ -f "$f" ] && files+=("$f")
+          done
+
+          if [ "${#files[@]}" -gt 0 ]; then
+            shfmt -w "${files[@]}"
+          fi
+
+      - name: Set up Node.js
+        if: steps.data_changes.outputs.any_changed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Auto-format JSON/YAML files
+        if: steps.data_changes.outputs.any_changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global prettier
+
+          mapfile -t data_files <<'EOF'
+          ${{ steps.data_changes.outputs.all_changed_files }}
+          EOF
+
+          files=()
+          for f in "${data_files[@]}"; do
+            [ -f "$f" ] && files+=("$f")
+          done
+
+          if [ "${#files[@]}" -gt 0 ]; then
+            prettier --write "${files[@]}"
+          fi
+
+      - name: Commit and push formatting fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No formatter changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "ci: auto-format fixable lint issues"
+          git push origin "HEAD:${{ github.head_ref }}"

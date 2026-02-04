@@ -35,6 +35,7 @@ Out of scope:
 
 Approved exception:
 - `slurm/**` is used as a dependency-only trigger in container reliability path filters because maintained Dockerfiles copy `slurm/` artifacts.
+- CI auto-commit is enabled for formatter-only fixes in `ci-format-autofix.yml` to reduce lint iteration noise.
 
 ## Active Workflow Surface
 - `.github/workflows/ci-workflow-integrity.yml`
@@ -42,6 +43,7 @@ Approved exception:
 - `.github/workflows/lint-shell.yml`
 - `.github/workflows/lint-json.yml`
 - `.github/workflows/lint-yaml.yml`
+- `.github/workflows/ci-format-autofix.yml`
 - `.github/workflows/ci-repo-quality.yml`
 - `.github/workflows/ci-integration-scenarios.yml`
 - `.github/workflows/lint-docker.yml`
@@ -56,8 +58,8 @@ Approved exception:
 - Risk: broken workflow definitions and silent CI drift.
 
 ### B) Repo Quality and Tests (advisory)
-- Workflows: `lint-python.yml`, `lint-shell.yml`, `lint-json.yml`, `lint-yaml.yml`, `ci-repo-quality.yml`, `ci-integration-scenarios.yml`
-- Checks: black/isort check-only, py_compile, pytest unit advisory with coverage threshold, shellcheck/shfmt/bash -n, JSON/YAML parse, integration scenario matrix tests via mocked container/monitoring flows.
+- Workflows: `lint-python.yml`, `lint-shell.yml`, `lint-json.yml`, `lint-yaml.yml`, `ci-format-autofix.yml`, `ci-repo-quality.yml`, `ci-integration-scenarios.yml`
+- Checks: black/isort check-only, py_compile, pytest unit advisory with coverage threshold, shellcheck/shfmt/bash -n, JSON/YAML parse, auto-format commits for changed Python/shell/JSON/YAML files, integration scenario matrix tests via mocked container/monitoring flows.
 - Risk: script/runtime regressions.
 
 ### C) Container Reliability (advisory)
