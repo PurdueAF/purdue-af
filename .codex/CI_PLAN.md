@@ -43,8 +43,10 @@ Approved exception:
 - `.github/workflows/lint-json.yml`
 - `.github/workflows/lint-yaml.yml`
 - `.github/workflows/ci-repo-quality.yml`
+- `.github/workflows/ci-integration-scenarios.yml`
 - `.github/workflows/lint-docker.yml`
 - `.github/workflows/ci-gitops-deployability.yml`
+- `.github/workflows/ci-security-advisory.yml`
 - `.github/workflows/nightly-security-advisory.yml`
 
 ## Check Architecture
@@ -54,8 +56,8 @@ Approved exception:
 - Risk: broken workflow definitions and silent CI drift.
 
 ### B) Repo Quality and Tests (advisory)
-- Workflows: `lint-python.yml`, `lint-shell.yml`, `lint-json.yml`, `lint-yaml.yml`, `ci-repo-quality.yml`
-- Checks: black/isort check-only, py_compile, pytest advisory, shellcheck/shfmt/bash -n, JSON/YAML parse.
+- Workflows: `lint-python.yml`, `lint-shell.yml`, `lint-json.yml`, `lint-yaml.yml`, `ci-repo-quality.yml`, `ci-integration-scenarios.yml`
+- Checks: black/isort check-only, py_compile, pytest unit advisory with coverage threshold, shellcheck/shfmt/bash -n, JSON/YAML parse, integration scenario matrix tests via mocked container/monitoring flows.
 - Risk: script/runtime regressions.
 
 ### C) Container Reliability (advisory)
@@ -69,8 +71,8 @@ Approved exception:
 - Risk: Flux reconciliation failures from invalid manifests.
 
 ### E) Security Posture (advisory)
-- Workflow: `nightly-security-advisory.yml`
-- Checks: nightly Trivy filesystem scan.
+- Workflows: `nightly-security-advisory.yml`, `ci-security-advisory.yml`
+- Checks: nightly Trivy filesystem scan plus PR-time advisory Trivy vulnerability/config scans with run summaries and artifacts.
 - Risk: security drift in dependencies/configuration.
 
 ## Optimization Workstreams (Current)
