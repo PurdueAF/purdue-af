@@ -101,7 +101,9 @@ CODE_SERVER_USER_SETTINGS="$CODE_USERDATADIR/User"
 mkdir -p "$CODE_SERVER_USER_SETTINGS"
 echo '{
   "chat.disableAIFeatures": true,
-  "chat.commandCenter.enabled": false
+  "chat.commandCenter.enabled": false,
+  "window.autoDetectColorScheme": true,
+  "window.menuBarVisibility": "classic"
 }' >"$CODE_SERVER_USER_SETTINGS/settings.json"
 
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
@@ -116,7 +118,7 @@ mkdir -p "$CONTINUE_DIR"
 cp /etc/jupyter/continue-config.yaml "$CONTINUE_DIR/config.yaml"
 # If user previously saved an API key, inject it into all apiKey fields so config survives image startup
 if [[ -s "$CONTINUE_DIR/api-key.txt" ]]; then
-	KEY=$(tr -d '\n\r' <"$CONTINUE_DIR/api-key.txt")
+	KEY=$(tr -d '\n\r' < "$CONTINUE_DIR/api-key.txt")
 	if [[ -n "$KEY" ]]; then
 		tmp=$(mktemp)
 		while IFS= read -r line; do
@@ -125,7 +127,7 @@ if [[ -s "$CONTINUE_DIR/api-key.txt" ]]; then
 			else
 				printf '%s\n' "$line"
 			fi
-		done <"$CONTINUE_DIR/config.yaml" >"$tmp"
+		done < "$CONTINUE_DIR/config.yaml" > "$tmp"
 		mv "$tmp" "$CONTINUE_DIR/config.yaml"
 	fi
 fi
