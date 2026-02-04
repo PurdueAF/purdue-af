@@ -1,0 +1,20 @@
+name: Local Config
+version: 1.0.0
+schema: v1
+models:
+  - name: Llama 3.1 70B instruct
+    provider: openai
+    model: llama3.1:70b-instruct-q4_K_M
+    roles:
+      - chat
+      - edit
+      - apply
+    apiBase: https://genai.rcac.purdue.edu/api/
+    apiKey:
+  - name: Qwen3-Coder Latest
+    provider: openai
+    model: qwen3-coder:latest
+    roles:
+      - autocomplete
+    apiBase: https://genai.rcac.purdue.edu/api/
+    apiKey:

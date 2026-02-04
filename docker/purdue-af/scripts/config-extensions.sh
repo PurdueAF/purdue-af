@@ -110,14 +110,8 @@ chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
 "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension continue.continue@1.3.30
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
 
-# Continue extension config (default placeholders; override via env or edit)
+# Continue extension config (from bundled file)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p "$NEW_HOME/.continue"
-cat >"$NEW_HOME/.continue/config.yaml" <<'EOF'
-models:
-  - name: "OpenAI-compatible"
-    provider: "openai"
-    model: "gpt-4.1-mini"
-    apiBase: "https://YOUR-ENDPOINT.example.com/v1"
-    apiKey: "YOUR_KEY"
-EOF
+cp "$SCRIPT_DIR/continue-config.yaml" "$NEW_HOME/.continue/config.yaml"
 chown -R $NB_USER:users "$NEW_HOME/.continue"
