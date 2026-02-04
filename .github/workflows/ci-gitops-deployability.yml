@@ -16,6 +16,7 @@ permissions:
 jobs:
   detect-gitops-changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       run_all: ${{ steps.scope.outputs.run_all }}
       core_production: ${{ steps.filter.outputs.core_production }}
@@ -56,10 +57,48 @@ jobs:
             echo "run_all=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Publish GitOps validation plan
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_all="${{ steps.scope.outputs.run_all }}"
+          {
+            echo '### GitOps Deployability Plan'
+            echo
+            echo "- Full overlay run: \`$run_all\`"
+            echo
+            echo '| Overlay | Decision |'
+            echo '|---|---|'
+            if [ "$run_all" = 'true' ] || [ "${{ steps.filter.outputs.core_production }}" = 'true' ]; then
+              echo '| `deploy/core-production` | run |'
+            else
+              echo '| `deploy/core-production` | skipped |'
+            fi
+            if [ "$run_all" = 'true' ] || [ "${{ steps.filter.outputs.core_staging }}" = 'true' ]; then
+              echo '| `deploy/core-staging` | run |'
+            else
+              echo '| `deploy/core-staging` | skipped |'
+            fi
+            if [ "$run_all" = 'true' ] || [ "${{ steps.filter.outputs.core_geddes2 }}" = 'true' ]; then
+              echo '| `deploy/core-geddes2` | run |'
+            else
+              echo '| `deploy/core-geddes2` | skipped |'
+            fi
+            if [ "$run_all" = 'true' ] || [ "${{ steps.filter.outputs.experimental }}" = 'true' ]; then
+              echo '| `deploy/experimental` | run |'
+            else
+              echo '| `deploy/experimental` | skipped |'
+            fi
+            echo
+            echo '- Mode: advisory (gitops-validate uses continue-on-error).'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   gitops-validate:
     needs: detect-gitops-changes
     if: needs.detect-gitops-changes.outputs.run_all == 'true' || needs.detect-gitops-changes.outputs.core_production == 'true' || needs.detect-gitops-changes.outputs.core_staging == 'true' || needs.detect-gitops-changes.outputs.core_geddes2 == 'true' || needs.detect-gitops-changes.outputs.experimental == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -110,6 +149,7 @@ jobs:
               echo '### GitOps Deployability Summary'
               echo
               echo '- No in-scope overlay changes detected.'
+              echo '- Mode: advisory (job continue-on-error=true).'
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -144,5 +184,17 @@ jobs:
 
             echo "| \`$overlay\` | $render_status | $kubeconform_status |" >> "$GITHUB_STEP_SUMMARY"
           done
+
+          if [ "$status" -eq 0 ]; then
+            overall_result='pass'
+          else
+            overall_result='issues-detected'
+          fi
+
+          {
+            echo
+            echo "- Overall result: **$overall_result**"
+            echo '- Mode: advisory (job continue-on-error=true).'
+          } >> "$GITHUB_STEP_SUMMARY"
 
           exit "$status"

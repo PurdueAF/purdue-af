@@ -15,11 +15,13 @@ permissions:
 jobs:
   trivy-filesystem:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
       - name: Run Trivy filesystem scan (advisory)
+        id: fs_scan
         uses: aquasecurity/trivy-action@0.33.1
         with:
           scan-type: fs
@@ -35,6 +37,8 @@ jobs:
       - name: Publish nightly Trivy summary (advisory)
         if: always()
         shell: bash
+        env:
+          FS_SCAN_OUTCOME: ${{ steps.fs_scan.outcome || 'unknown' }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -46,12 +50,18 @@ jobs:
           report_path = Path('trivy-nightly-fs.json')
           summary_path = Path(os.environ['GITHUB_STEP_SUMMARY'])
           title = 'Nightly Trivy Vulnerability Summary'
+          scan_outcome = os.environ.get('FS_SCAN_OUTCOME', 'unknown')
 
           with summary_path.open('a', encoding='utf-8') as summary:
               summary.write(f'### {title}\n\n')
+              summary.write('| Scan | Step outcome | Report |\n')
+              summary.write('|---|---|---|\n')
+              summary.write(f'| Filesystem vulnerability scan | `{scan_outcome}` | {"present" if report_path.exists() else "missing"} |\n\n')
 
               if not report_path.exists():
                   summary.write('- Trivy report was not generated.\n')
+                  summary.write('- Overall result: **scan-step-failed**\n')
+                  summary.write('- Mode: advisory (job continue-on-error=true).\n')
                   print('::warning::Nightly Trivy report was not generated.')
                   raise SystemExit(0)
 
@@ -75,6 +85,8 @@ jobs:
 
               if high_critical == 0:
                   summary.write('No HIGH/CRITICAL vulnerabilities found in scope.\n')
+                  summary.write('- Overall result: **clear**\n')
+                  summary.write('- Mode: advisory (job continue-on-error=true).\n')
                   print('::notice::Nightly Trivy found no HIGH/CRITICAL vulnerabilities.')
                   raise SystemExit(0)
 
@@ -89,6 +101,10 @@ jobs:
               summary.write('|---|---:|\n')
               for target, count in target_counts.most_common(10):
                   summary.write(f'| `{target}` | {count} |\n')
+
+              summary.write('\n')
+              summary.write('- Overall result: **findings-detected**\n')
+              summary.write('- Mode: advisory (job continue-on-error=true).\n')
 
           print(f'::warning::Nightly Trivy found {high_critical} HIGH/CRITICAL vulnerabilities. See summary and artifact.')
           PY
