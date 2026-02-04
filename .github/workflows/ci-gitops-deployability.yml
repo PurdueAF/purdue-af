@@ -1,0 +1,53 @@
+name: CI GitOps Deployability
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gitops-validate:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kustomize
+        uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: '5.4.2'
+
+      - name: Install kubeconform
+        run: |
+          set -euo pipefail
+          KUBECONFORM_VERSION=0.6.7
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" -o /tmp/kubeconform.tar.gz
+          tar -xzf /tmp/kubeconform.tar.gz -C /tmp kubeconform
+          chmod +x /tmp/kubeconform
+          sudo mv /tmp/kubeconform /usr/local/bin/kubeconform
+
+      - name: Render overlays with kustomize (advisory)
+        run: |
+          set -euo pipefail
+          overlays=(
+            deploy/core-production
+            deploy/core-staging
+            deploy/core-geddes2
+            deploy/experimental
+          )
+
+          for overlay in "${overlays[@]}"; do
+            out="/tmp/$(echo "$overlay" | tr '/' '_').yaml"
+            echo "Rendering $overlay -> $out"
+            kustomize build --load-restrictor LoadRestrictionsNone "$overlay" > "$out"
+          done
+
+      - name: Validate rendered manifests with kubeconform (advisory)
+        run: |
+          set -euo pipefail
+          for rendered in /tmp/deploy_core-production.yaml /tmp/deploy_core-staging.yaml /tmp/deploy_core-geddes2.yaml /tmp/deploy_experimental.yaml; do
+            echo "Validating $rendered"
+            kubeconform -summary -strict -ignore-missing-schemas "$rendered"
+          done

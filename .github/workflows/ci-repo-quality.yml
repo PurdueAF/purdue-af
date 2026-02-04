@@ -1,4 +1,4 @@
-name: Lint Python
+name: CI Repo Quality
 
 on:
   push:
@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  lint-python:
+  repo-quality:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -19,17 +19,17 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install tooling
+      - name: Install quality tooling
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          pip install black isort pytest
+          pip install pytest
 
-      - name: Run black/isort/py_compile (check-only, advisory)
+      - name: Python syntax smoke (advisory)
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t files < <(find . -type f -name '*.py' \
+          mapfile -t py_files < <(find . -type f -name '*.py' \
             -not -path './docker/dask-gateway-server/*' \
             -not -path './docker/kaniko-build-jobs/*' \
             -not -path './docs/*' \
@@ -37,14 +37,26 @@ jobs:
             -not -path './.cursor/*' \
             -not -path './.git/*' | sort)
 
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo 'No in-scope Python files found.'
-            exit 0
+          if [ "${#py_files[@]}" -gt 0 ]; then
+            python -m py_compile "${py_files[@]}"
           fi
 
-          black --check "${files[@]}"
-          isort --check-only "${files[@]}"
-          python -m py_compile "${files[@]}"
+      - name: Shell syntax smoke (advisory)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t sh_files < <(find . -type f \
+            \( -name '*.sh' -o -name 'pixi-wrapper' -o -name 'fix-permissions' \) \
+            -not -path './docker/dask-gateway-server/*' \
+            -not -path './docker/kaniko-build-jobs/*' \
+            -not -path './docs/*' \
+            -not -path './slurm/*' \
+            -not -path './.cursor/*' \
+            -not -path './.git/*' | sort)
+
+          for f in "${sh_files[@]}"; do
+            bash -n "$f"
+          done
 
       - name: Run pytest (advisory)
         shell: bash

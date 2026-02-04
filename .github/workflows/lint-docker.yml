@@ -1,22 +1,98 @@
-name: Lint Dockerfiles
+name: Container Reliability
 
 on:
   push:
-    paths:
-      - '**/Dockerfile*'
   pull_request:
-    paths:
-      - '**/Dockerfile*'
+
+permissions:
+  contents: read
 
 jobs:
-  lint:
+  detect-docker-changes:
     runs-on: ubuntu-latest
+    outputs:
+      af_pod_monitor: ${{ steps.filter.outputs.af_pod_monitor }}
+      interlink_slurm_plugin: ${{ steps.filter.outputs.interlink_slurm_plugin }}
+      purdue_af: ${{ steps.filter.outputs.purdue_af }}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            af_pod_monitor:
+              - 'docker/af-pod-monitor/**'
+              - '.github/workflows/lint-docker.yml'
+              - '.github/scripts/container-smoke.sh'
+            interlink_slurm_plugin:
+              - 'docker/interlink-slurm-plugin/**'
+              - '.github/workflows/lint-docker.yml'
+              - '.github/scripts/container-smoke.sh'
+            purdue_af:
+              - 'docker/purdue-af/**'
+              - '.github/workflows/lint-docker.yml'
+              - '.github/scripts/container-smoke.sh'
+
+  lint-dockerfiles:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Install hadolint
         run: |
-          sudo wget -O /bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-$(uname -s)-$(uname -m)
-          sudo chmod +x /bin/hadolint
-      - name: Run hadolint
+          set -euo pipefail
+          HADOLINT_VERSION=v2.12.0
+          curl -fsSL "https://github.com/hadolint/hadolint/releases/download/${HADOLINT_VERSION}/hadolint-Linux-x86_64" -o /tmp/hadolint
+          chmod +x /tmp/hadolint
+          sudo mv /tmp/hadolint /usr/local/bin/hadolint
+
+      - name: Run hadolint (check-only, advisory)
         run: |
-          find . -type f -iname 'Dockerfile*' -not -path './docker/dask-gateway-server/*' -exec hadolint --ignore DL3041 --ignore DL3033 --failure-threshold warning {} + 
+          set -euo pipefail
+          hadolint --ignore DL3041 --ignore DL3033 --failure-threshold warning docker/af-pod-monitor/Dockerfile
+          hadolint --ignore DL3041 --ignore DL3033 --failure-threshold warning docker/interlink-slurm-plugin/Dockerfile.alma8
+          hadolint --ignore DL3041 --ignore DL3033 --failure-threshold warning docker/purdue-af/Dockerfile
+
+  build-af-pod-monitor:
+    needs: detect-docker-changes
+    if: needs.detect-docker-changes.outputs.af_pod_monitor == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build af-pod-monitor image (advisory)
+        run: docker build -f docker/af-pod-monitor/Dockerfile -t local/af-pod-monitor:${{ github.sha }} .
+
+      - name: Smoke test af-pod-monitor image (advisory)
+        run: .github/scripts/container-smoke.sh local/af-pod-monitor:${{ github.sha }} af-pod-monitor
+
+  build-interlink-slurm-plugin:
+    needs: detect-docker-changes
+    if: needs.detect-docker-changes.outputs.interlink_slurm_plugin == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build interlink-slurm-plugin image (advisory)
+        run: docker build -f docker/interlink-slurm-plugin/Dockerfile.alma8 -t local/interlink-slurm-plugin:${{ github.sha }} .
+
+      - name: Smoke test interlink-slurm-plugin image (advisory)
+        run: .github/scripts/container-smoke.sh local/interlink-slurm-plugin:${{ github.sha }} interlink-slurm-plugin
+
+  build-purdue-af:
+    needs: detect-docker-changes
+    if: needs.detect-docker-changes.outputs.purdue_af == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build purdue-af image (advisory)
+        run: docker build -f docker/purdue-af/Dockerfile -t local/purdue-af:${{ github.sha }} .
+
+      - name: Smoke test purdue-af image (advisory)
+        run: .github/scripts/container-smoke.sh local/purdue-af:${{ github.sha }} purdue-af

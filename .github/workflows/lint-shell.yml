@@ -2,39 +2,49 @@ name: Lint Shell Scripts
 
 on:
   push:
-    paths:
-      - '**.sh'
   pull_request:
-    paths:
-      - '**.sh'
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
-  lint:
+  lint-shell:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install shfmt
+
+      - name: Install shell tooling
         run: |
-          curl -L https://github.com/mvdan/sh/releases/download/v3.7.0/shfmt_v3.7.0_linux_amd64 -o shfmt
-          chmod +x shfmt
-          sudo mv shfmt /usr/local/bin/
-      - name: Format shell scripts
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          SHFMT_VERSION=3.10.0
+          curl -fsSL "https://github.com/mvdan/sh/releases/download/v${SHFMT_VERSION}/shfmt_v${SHFMT_VERSION}_linux_amd64" -o /tmp/shfmt
+          chmod +x /tmp/shfmt
+          sudo mv /tmp/shfmt /usr/local/bin/shfmt
+
+      - name: Run shellcheck/shfmt/bash -n (check-only, advisory)
+        shell: bash
         run: |
-          find . -type f -name '*.sh' -not -path './docker/dask-gateway-server/*' -exec shfmt -w {} +
-      - name: Commit changes
-        if: ${{ github.event_name == 'pull_request' || github.ref_type == 'branch' }}
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          REF_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          git fetch origin "$REF_NAME"
-          git checkout -B "$REF_NAME" "origin/$REF_NAME" || git checkout -B "$REF_NAME"
-          git add -A
-          git diff --quiet && git diff --staged --quiet || git commit -m "Apply shfmt shell script formatting"
-          git push origin "$REF_NAME"
+          set -euo pipefail
+          mapfile -t files < <(find . -type f \
+            \( -name '*.sh' -o -name 'pixi-wrapper' -o -name 'fix-permissions' \) \
+            -not -path './docker/dask-gateway-server/*' \
+            -not -path './docker/kaniko-build-jobs/*' \
+            -not -path './docs/*' \
+            -not -path './slurm/*' \
+            -not -path './.cursor/*' \
+            -not -path './.git/*' | sort)
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo 'No in-scope shell files found.'
+            exit 0
+          fi
+
+          shellcheck "${files[@]}"
+          shfmt -d "${files[@]}"
+
+          for f in "${files[@]}"; do
+            bash -n "$f"
+          done
