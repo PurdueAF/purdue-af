@@ -95,7 +95,29 @@ fi
 export CODE_EXTENSIONSDIR="$NEW_HOME/.local/share/code-server/extensions"
 export CODE_USERDATADIR="$NEW_HOME/.local/share/code-server"
 mkdir -p "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
+
+# Disable default GitHub chat in code-server
+CODE_SERVER_USER_SETTINGS="$CODE_USERDATADIR/User"
+mkdir -p "$CODE_SERVER_USER_SETTINGS"
+echo '{
+  "chat.disableAIFeatures": true,
+  "chat.commandCenter.enabled": false
+}' >"$CODE_SERVER_USER_SETTINGS/settings.json"
+
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
 "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension ms-python.python
 "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension ms-toolsai.jupyter
+"$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension continue.continue
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
+
+# Continue extension config (default placeholders; override via env or edit)
+mkdir -p "$NEW_HOME/.continue"
+cat >"$NEW_HOME/.continue/config.yaml" <<'EOF'
+models:
+  - name: "OpenAI-compatible"
+    provider: "openai"
+    model: "gpt-4.1-mini"
+    apiBase: "https://YOUR-ENDPOINT.example.com/v1"
+    apiKey: "YOUR_KEY"
+EOF
+chown -R $NB_USER:users "$NEW_HOME/.continue"
