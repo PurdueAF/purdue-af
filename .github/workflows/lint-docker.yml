@@ -115,7 +115,7 @@ jobs:
           {
             echo '### Dockerfile Lint Advisory Summary'
             echo
-            echo "- Hadolint outcome: `${{ steps.hadolint.outcome }}`"
+            echo "- Hadolint outcome: ${{ steps.hadolint.outcome }}"
             echo '- Mode: advisory (job continue-on-error=true).'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -153,8 +153,8 @@ jobs:
           {
             echo '### af-pod-monitor Container Advisory Summary'
             echo
-            echo "- Build outcome: `${{ steps.build_image.outcome }}`"
-            echo "- Smoke test outcome: `${{ steps.smoke_test.outcome }}`"
+            echo "- Build outcome: ${{ steps.build_image.outcome }}"
+            echo "- Smoke test outcome: ${{ steps.smoke_test.outcome }}"
             echo '- Mode: advisory (job continue-on-error=true).'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -192,8 +192,8 @@ jobs:
           {
             echo '### interlink-slurm-plugin Container Advisory Summary'
             echo
-            echo "- Build outcome: `${{ steps.build_image.outcome }}`"
-            echo "- Smoke test outcome: `${{ steps.smoke_test.outcome }}`"
+            echo "- Build outcome: ${{ steps.build_image.outcome }}"
+            echo "- Smoke test outcome: ${{ steps.smoke_test.outcome }}"
             echo '- Mode: advisory (job continue-on-error=true).'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -231,7 +231,7 @@ jobs:
           {
             echo '### purdue-af Container Advisory Summary'
             echo
-            echo "- Build outcome: `${{ steps.build_image.outcome }}`"
-            echo "- Smoke test outcome: `${{ steps.smoke_test.outcome }}`"
+            echo "- Build outcome: ${{ steps.build_image.outcome }}"
+            echo "- Smoke test outcome: ${{ steps.smoke_test.outcome }}"
             echo '- Mode: advisory (job continue-on-error=true).'
           } >> "$GITHUB_STEP_SUMMARY"

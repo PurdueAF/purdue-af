@@ -66,29 +66,29 @@ jobs:
           {
             echo '### GitOps Deployability Plan'
             echo
-            echo "- Full overlay run: \`$run_all\`"
+            echo "- Full overlay run: $run_all"
             echo
             echo '| Overlay | Decision |'
             echo '|---|---|'
             if [ "$run_all" = 'true' ] || [ "${{ steps.filter.outputs.core_production }}" = 'true' ]; then
-              echo '| `deploy/core-production` | run |'
+              echo '| deploy/core-production | run |'
             else
-              echo '| `deploy/core-production` | skipped |'
+              echo '| deploy/core-production | skipped |'
             fi
             if [ "$run_all" = 'true' ] || [ "${{ steps.filter.outputs.core_staging }}" = 'true' ]; then
-              echo '| `deploy/core-staging` | run |'
+              echo '| deploy/core-staging | run |'
             else
-              echo '| `deploy/core-staging` | skipped |'
+              echo '| deploy/core-staging | skipped |'
             fi
             if [ "$run_all" = 'true' ] || [ "${{ steps.filter.outputs.core_geddes2 }}" = 'true' ]; then
-              echo '| `deploy/core-geddes2` | run |'
+              echo '| deploy/core-geddes2 | run |'
             else
-              echo '| `deploy/core-geddes2` | skipped |'
+              echo '| deploy/core-geddes2 | skipped |'
             fi
             if [ "$run_all" = 'true' ] || [ "${{ steps.filter.outputs.experimental }}" = 'true' ]; then
-              echo '| `deploy/experimental` | run |'
+              echo '| deploy/experimental | run |'
             else
-              echo '| `deploy/experimental` | skipped |'
+              echo '| deploy/experimental | skipped |'
             fi
             echo
             echo '- Mode: advisory (gitops-validate uses continue-on-error).'
