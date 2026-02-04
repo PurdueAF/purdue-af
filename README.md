@@ -18,8 +18,17 @@ Each user is provided with a 25GB home directory at first login. These directori
 
 [![Documentation Status](https://readthedocs.org/projects/purdue-af/badge/?version=latest)](https://purdue-af.readthedocs.io/en/latest/?badge=latest)
 
-[![Workflow Integrity](https://github.com/PurdueAF/purdue-af/actions/workflows/ci-workflow-integrity.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/ci-workflow-integrity.yml)
-[![Repo Quality](https://github.com/PurdueAF/purdue-af/actions/workflows/ci-repo-quality.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/ci-repo-quality.yml)
-[![Container Reliability](https://github.com/PurdueAF/purdue-af/actions/workflows/lint-docker.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/lint-docker.yml)
-[![GitOps Deployability](https://github.com/PurdueAF/purdue-af/actions/workflows/ci-gitops-deployability.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/ci-gitops-deployability.yml)
-[![Nightly Security](https://github.com/PurdueAF/purdue-af/actions/workflows/nightly-security-advisory.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/nightly-security-advisory.yml)
+### Runtime Status
+
+[![Workflow Integrity](https://github.com/PurdueAF/purdue-af/actions/workflows/ci-workflow-integrity.yml/badge.svg?branch=main)](https://github.com/PurdueAF/purdue-af/actions/workflows/ci-workflow-integrity.yml)
+[![Repo Quality](https://github.com/PurdueAF/purdue-af/actions/workflows/ci-repo-quality.yml/badge.svg?branch=main)](https://github.com/PurdueAF/purdue-af/actions/workflows/ci-repo-quality.yml)
+[![Container Reliability](https://github.com/PurdueAF/purdue-af/actions/workflows/lint-docker.yml/badge.svg?branch=main)](https://github.com/PurdueAF/purdue-af/actions/workflows/lint-docker.yml)
+[![GitOps Deployability](https://github.com/PurdueAF/purdue-af/actions/workflows/ci-gitops-deployability.yml/badge.svg?branch=main)](https://github.com/PurdueAF/purdue-af/actions/workflows/ci-gitops-deployability.yml)
+[![Nightly Security](https://github.com/PurdueAF/purdue-af/actions/workflows/nightly-security-advisory.yml/badge.svg?branch=main)](https://github.com/PurdueAF/purdue-af/actions/workflows/nightly-security-advisory.yml)
+
+### Policy Badges
+
+[![Coverage Gate](https://img.shields.io/badge/Coverage%20Gate-%3E%3D70%25%20%28advisory%29-4c1)](https://github.com/PurdueAF/purdue-af/actions/workflows/ci-repo-quality.yml)
+[![Security Scans](https://img.shields.io/badge/Security%20Scans-PR%20%2B%20Nightly-0366d6)](https://github.com/PurdueAF/purdue-af/actions/workflows/ci-security-advisory.yml)
+[![Validation Mode](https://img.shields.io/badge/Validation%20Mode-Advisory--first-f59e0b)](https://github.com/PurdueAF/purdue-af/actions)
+[![Autofix](https://img.shields.io/badge/Autofix-Python%2FShell%2FJSON%2FYAML-7c3aed)](https://github.com/PurdueAF/purdue-af/actions/workflows/ci-format-autofix.yml)
