@@ -123,7 +123,6 @@ jobs:
     needs: detect-docker-changes
     if: needs.detect-docker-changes.outputs.af_pod_monitor == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -162,7 +161,6 @@ jobs:
     needs: detect-docker-changes
     if: needs.detect-docker-changes.outputs.interlink_slurm_plugin == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -201,7 +199,6 @@ jobs:
     needs: detect-docker-changes
     if: needs.detect-docker-changes.outputs.purdue_af == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
