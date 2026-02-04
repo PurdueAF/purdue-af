@@ -171,7 +171,7 @@ RUN chmod +x /usr/local/bin/* && \
     fix-permissions "${PIXI_HOME}"
 
 # Set PATH before switching user so it's available to all users
-ENV PATH="/usr/local/bin:${BASE_ENV_DIR}/bin:${PIXI_HOME}/bin:${PATH}"
+ENV PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}"
 
 # ------------------------------------------------------------
 
