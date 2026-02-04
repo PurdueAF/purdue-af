@@ -1,0 +1,57 @@
+[
+  {
+    "name": "checksum_match",
+    "mode": "normal",
+    "filename": "/depot/cms/purdue-af/validate-mount.txt",
+    "expected_checksum": "13dede34ee8dc7e5b70c9cd06ac15467",
+    "md5_stdout": "13dede34ee8dc7e5b70c9cd06ac15467  /depot/cms/purdue-af/validate-mount.txt\n",
+    "md5_stderr": "",
+    "returncode": 0,
+    "start_time": 1000.0,
+    "end_time": 1000.123,
+    "expected_result": true,
+    "expected_ping_ms": 123.0,
+    "expect_killed": false
+  },
+  {
+    "name": "checksum_mismatch",
+    "mode": "normal",
+    "filename": "/work/projects/purdue-af/validate-mount.txt",
+    "expected_checksum": "f4cb7f2740ba3e87edfbda6c70fa94c2",
+    "md5_stdout": "00000000000000000000000000000000  /work/projects/purdue-af/validate-mount.txt\n",
+    "md5_stderr": "",
+    "returncode": 0,
+    "start_time": 2000.0,
+    "end_time": 2000.05,
+    "expected_result": false,
+    "expected_ping_ms": 50.0,
+    "expect_killed": false
+  },
+  {
+    "name": "md5_error_returncode",
+    "mode": "normal",
+    "filename": "/eos/purdue/store/user/dkondrat/test.root",
+    "expected_checksum": "18864b0de8ae5a6a8d3b459a7999b431",
+    "md5_stdout": "",
+    "md5_stderr": "No such file or directory",
+    "returncode": 1,
+    "start_time": 3000.0,
+    "end_time": 3000.08,
+    "expected_result": false,
+    "expected_ping_ms": 80.0,
+    "expect_killed": false
+  },
+  {
+    "name": "md5_timeout",
+    "mode": "timeout",
+    "filename": "/cvmfs/cms.cern.ch/SITECONF/T2_US_Purdue/Purdue-Hadoop/JobConfig/site-local-config.xml",
+    "expected_checksum": "3b570d80272b7188c13cef51e58b7151",
+    "md5_stdout": "",
+    "md5_stderr": "",
+    "returncode": 124,
+    "start_time": 4000.0,
+    "expected_result": false,
+    "expected_ping_ms": 3000,
+    "expect_killed": true
+  }
+]

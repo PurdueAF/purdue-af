@@ -1,0 +1,102 @@
+[
+  {
+    "name": "af_pod_monitor_success",
+    "image": "ghcr.io/purdue-af/af-pod-monitor:test",
+    "profile": "af-pod-monitor",
+    "mock": {
+      "inspect_exit": 0,
+      "run_exit": 0
+    },
+    "expected": {
+      "exit_code": 0,
+      "stdout_contains": [
+        "Smoke checks passed for profile: af-pod-monitor"
+      ],
+      "stderr_contains": [],
+      "log_lines": [
+        "image inspect ghcr.io/purdue-af/af-pod-monitor:test",
+        "run --rm --entrypoint python ghcr.io/purdue-af/af-pod-monitor:test -c import prometheus_client"
+      ]
+    }
+  },
+  {
+    "name": "interlink_slurm_plugin_failure",
+    "image": "ghcr.io/purdue-af/interlink-slurm-plugin:test",
+    "profile": "interlink-slurm-plugin",
+    "mock": {
+      "inspect_exit": 0,
+      "run_exit": 1,
+      "run_stderr": "missing /sidecar/slurm-sidecar"
+    },
+    "expected": {
+      "exit_code": 1,
+      "stdout_contains": [],
+      "stderr_contains": [
+        "missing /sidecar/slurm-sidecar"
+      ],
+      "log_lines": [
+        "image inspect ghcr.io/purdue-af/interlink-slurm-plugin:test",
+        "run --rm --entrypoint /bin/sh ghcr.io/purdue-af/interlink-slurm-plugin:test -lc test -x /sidecar/slurm-sidecar"
+      ]
+    }
+  },
+  {
+    "name": "unknown_profile_rejected",
+    "image": "ghcr.io/purdue-af/custom:test",
+    "profile": "unknown-profile",
+    "mock": {
+      "inspect_exit": 0,
+      "run_exit": 0
+    },
+    "expected": {
+      "exit_code": 2,
+      "stdout_contains": [],
+      "stderr_contains": [
+        "Unknown profile: unknown-profile"
+      ],
+      "log_lines": [
+        "image inspect ghcr.io/purdue-af/custom:test"
+      ]
+    }
+  },
+  {
+    "name": "inspect_failure_short_circuit",
+    "image": "ghcr.io/purdue-af/purdue-af:test",
+    "profile": "purdue-af",
+    "mock": {
+      "inspect_exit": 1,
+      "inspect_stderr": "image not found",
+      "run_exit": 0
+    },
+    "expected": {
+      "exit_code": 1,
+      "stdout_contains": [],
+      "stderr_contains": [
+        "image not found"
+      ],
+      "log_lines": [
+        "image inspect ghcr.io/purdue-af/purdue-af:test"
+      ]
+    }
+  },
+  {
+    "name": "purdue_af_success",
+    "image": "ghcr.io/purdue-af/purdue-af:test",
+    "profile": "purdue-af",
+    "mock": {
+      "inspect_exit": 0,
+      "run_exit": 0
+    },
+    "expected": {
+      "exit_code": 0,
+      "stdout_contains": [
+        "Smoke checks passed for profile: purdue-af"
+      ],
+      "stderr_contains": [],
+      "log_lines": [
+        "image inspect ghcr.io/purdue-af/purdue-af:test",
+        "run --rm --entrypoint /bin/bash ghcr.io/purdue-af/purdue-af:test -lc python --version && jupyter --version >/dev/null"
+      ]
+    }
+  }
+]
