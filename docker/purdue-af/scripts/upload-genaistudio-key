@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Prompts for GenAI Studio API key and writes it into every apiKey field in the config file
+set +e
+
+# Colors (only when stdout is a TTY)
+if [[ -t 1 ]]; then
+  R='\033[0m'
+  B='\033[1m'
+  D='\033[2m'
+  C='\033[36m'
+  G='\033[32m'
+  U='\033[4m'
+else
+  R= B= D= C= G= U=
+fi
+
+CONFIG="${HOME:-}/.continue/config.yaml"
+[[ ! -f "$CONFIG" ]] && exit 0
+
+echo ""
+echo -e "${C}${B}GenAI Studio API key${R}"
+echo -e "${D}Get your key in account settings: ${U}https://genai.rcac.purdue.edu${R}"
+echo -e "${D}Key is hidden as you paste.${R}"
+echo ""
+echo -ne "${C}Paste key and press Enter: ${R}"
+read -rs KEY
+echo ""
+[[ -z "${KEY:-}" ]] && exit 0
+
+# Replace every apiKey line (preserve indentation); avoid embedding KEY in subshells
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
+while IFS= read -r line; do
+  if [[ "$line" =~ ^([[:space:]]*apiKey:)[[:space:]]*(.*)$ ]]; then
+    printf '%s %s\n' "${BASH_REMATCH[1]}" "$KEY"
+  else
+    printf '%s\n' "$line"
+  fi
+done < "$CONFIG" > "$tmp"
+mv "$tmp" "$CONFIG"
+
+echo -e "${G}✓${R} API key saved to config."
+echo ""
+exit 0

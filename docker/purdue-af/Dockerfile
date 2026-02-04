@@ -161,6 +161,7 @@ COPY --chown=root:root \
     docker/purdue-af/jupyter/start.sh \
     docker/purdue-af/jupyter/start-notebook.sh \
     docker/purdue-af/jupyter/start-singleuser.sh \
+    docker/purdue-af/scripts/upload-genaistudio-key \
     /usr/local/bin/
 
 RUN chmod +x /usr/local/bin/* && \
