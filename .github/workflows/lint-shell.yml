@@ -42,7 +42,10 @@ jobs:
           fi
 
           shellcheck -S error -s bash "${files[@]}"
-          shfmt -d "${files[@]}"
+          mapfile -t shfmt_files < <(printf '%s\n' "${files[@]}" | grep -E '\.sh$' || true)
+          if [ "${#shfmt_files[@]}" -gt 0 ]; then
+            shfmt -d "${shfmt_files[@]}"
+          fi
 
           for f in "${files[@]}"; do
             bash -n "$f"

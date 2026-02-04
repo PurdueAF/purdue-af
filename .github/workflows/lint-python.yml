@@ -42,7 +42,7 @@ jobs:
           fi
 
           black --check "${files[@]}"
-          isort --check-only "${files[@]}"
+          isort --profile black --check-only "${files[@]}"
           python -m py_compile "${files[@]}"
 
       - name: Run pytest (advisory)
