@@ -103,7 +103,11 @@ echo '{
   "chat.disableAIFeatures": true,
   "chat.commandCenter.enabled": false,
   "window.autoDetectColorScheme": true,
-  "window.menuBarVisibility": "classic"
+  "window.menuBarVisibility": "classic",
+  "files.exclude": {
+    ".*": true,
+    "~*": true
+  }
 }' >"$CODE_SERVER_USER_SETTINGS/settings.json"
 
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
