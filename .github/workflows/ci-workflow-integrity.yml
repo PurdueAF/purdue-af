@@ -1,0 +1,49 @@
+name: CI Workflow Integrity
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+
+concurrency:
+  group: ci-workflow-integrity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  workflow-integrity:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install actionlint
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.4 "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run actionlint (advisory)
+        run: actionlint -color
+
+      - name: Validate workflow YAML parse (advisory)
+        run: |
+          set -euo pipefail
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pyyaml
+          python3 - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          workflows = sorted(Path('.github/workflows').glob('*.y*ml'))
+          if not workflows:
+              raise SystemExit('No workflow files found in .github/workflows')
+
+          for wf in workflows:
+              with wf.open('r', encoding='utf-8') as f:
+                  list(yaml.safe_load_all(f))
+          print(f'Parsed {len(workflows)} workflow file(s).')
+          PY

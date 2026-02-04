@@ -1,5 +1,4 @@
-from jupyter_ai_magics.providers import (BaseProvider, EnvAuthStrategy,
-                                         TextField)
+from jupyter_ai_magics.providers import BaseProvider, EnvAuthStrategy, TextField
 from langchain_openai import ChatOpenAI
 
 
