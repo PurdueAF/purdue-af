@@ -158,6 +158,8 @@ jobs:
           fi
 
       - name: Commit and push formatting fixes
+        env:
+          PR_HEAD_REF: ${{ github.head_ref }}
         shell: bash
         run: |
           set -euo pipefail
@@ -170,4 +172,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "ci: auto-format fixable lint issues"
-          git push origin "HEAD:${{ github.head_ref }}"
+          git push origin "HEAD:${PR_HEAD_REF}"
