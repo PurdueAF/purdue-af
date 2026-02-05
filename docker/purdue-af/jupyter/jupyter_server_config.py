@@ -11,6 +11,8 @@ c = get_config()  # noqa: F821
 c.ServerApp.ip = "0.0.0.0"
 c.ServerApp.open_browser = False
 c.ServerApp.disable_check_xsrf = True
+# Reduce log noise (e.g. "Setting new xsrf cookie" on every request)
+c.ServerApp.log_level = "WARN"
 c.ServerApp.tornado_settings = {
     "headers": {
         "Permissions-Policy": "clipboard-read=(self), clipboard-write=(self)",
