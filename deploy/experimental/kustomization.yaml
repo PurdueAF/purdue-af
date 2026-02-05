@@ -1,8 +1,8 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../apps/dask-gateway/dask-gateway-k8s-interlink/helmrelease.yaml
-  - ../../apps/dask-gateway/dask-gateway-k8s-interlink/ingress.yaml
+  # - ../../apps/dask-gateway/dask-gateway-k8s-interlink/helmrelease.yaml
+  # - ../../apps/dask-gateway/dask-gateway-k8s-interlink/ingress.yaml
 
   - ../../apps/interlink/helmrelease.yaml
   - ../../apps/interlink/cache-pvc.yaml
@@ -11,8 +11,8 @@ resources:
   - ../../apps/interlink/rbac.yaml
 
   - ../../apps/monitoring/pyroscope/helmrelease.yaml
-  - ../../apps/monitoring/loki/helmrelease.yaml
-  - ../../apps/monitoring/alloy/helmrelease.yaml
+  # - ../../apps/monitoring/loki/helmrelease.yaml
+  # - ../../apps/monitoring/alloy/helmrelease.yaml
 
   - ../../apps/servicex/helmrelease.yaml
   - ../../apps/servicex/gitrepo.yaml
@@ -22,8 +22,8 @@ resources:
   - ../../apps/sonic/gitrepo.yaml
   - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
-  - ../../apps/sonic/supersonic-dynamic/gitrepo.yaml
-  - ../../apps/sonic/supersonic-dynamic/helmrelease.yaml
+  # - ../../apps/sonic/supersonic-dynamic/gitrepo.yaml
+  # - ../../apps/sonic/supersonic-dynamic/helmrelease.yaml
 
   - ../../apps/sonic/prometheus-networkpolicy.yaml
 
