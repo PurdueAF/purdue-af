@@ -11,10 +11,13 @@ models:
       - apply
     apiBase: https://genai.rcac.purdue.edu/api/
     apiKey:
-  - name: Qwen3-Coder Latest
+  - name: Qwen3 4B
     provider: openai
-    model: qwen3-coder:latest
+    model: qwen3:4b
     roles:
       - autocomplete
-    apiBase: https://genai.rcac.purdue.edu/api/
+    apiBase: https://genai.rcac.purdue.edu/api/chat/
     apiKey:
+    requestOptions:
+      extraBodyProperties:
+        think: false

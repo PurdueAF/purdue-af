@@ -107,7 +107,8 @@ echo '{
   "files.exclude": {
     ".*": true,
     "~*": true
-  }
+  },
+  "continue.enableNextEdit": false
 }' >"$CODE_SERVER_USER_SETTINGS/settings.json"
 
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
