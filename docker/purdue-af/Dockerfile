@@ -1,7 +1,8 @@
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
+# Multi-stage build: base -> system -> stack -> runtime
 ARG OWNER=jupyter
-FROM gitlab-registry.cern.ch/linuxsupport/alma8-base:20250501-1
+FROM gitlab-registry.cern.ch/linuxsupport/alma8-base:20250501-1 AS base
 
 LABEL maintainer="Dmitry Kondratyev <dkondra@purdue.edu>"
 ARG NB_USER="jovyan"
@@ -15,6 +16,16 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 USER root
 
 # ------------------------------------------------------------
+# Stage: system (dnf, OSG, Slurm, user; no pixi)
+# ------------------------------------------------------------
+FROM base AS system
+
+# ARGs are not inherited across stages
+ARG NB_USER="jovyan"
+ARG NB_UID="1000"
+ARG NB_GID="100"
+
+USER root
 
 # Install system dependencies
 RUN set -euo pipefail \
@@ -89,17 +100,19 @@ RUN echo "# Prefer IPv4 over IPv6 for DNS resolution" > /etc/gai.conf && \
 COPY --chown=root:root docker/purdue-af/scripts/fix-permissions /usr/local/bin/fix-permissions
 RUN chmod a+rx /usr/local/bin/fix-permissions
 
-# ------------------------------------------------------------
-
 # Create NB_USER with UID=1000 and GID=100, and set permissions
 RUN sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashrc && \
     echo "auth requisite pam_deny.so" >> /etc/pam.d/su && \
     sed -i.bak -e 's/^%admin/#%admin/' /etc/sudoers && \
     sed -i.bak -e 's/^%sudo/#%sudo/' /etc/sudoers && \
     useradd -l -m -s /bin/bash -N -u "${NB_UID}" "${NB_USER}" && \
-    chmod g+w /etc/passwd 
+    chmod g+w /etc/passwd
 
-# Install base environment using Pixi
+# ------------------------------------------------------------
+# Stage: stack (all pixi + extensions + config generation)
+# ------------------------------------------------------------
+FROM system AS stack
+
 ENV PIXI_HOME="/opt/pixi" \
     BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env"
 
@@ -126,9 +139,31 @@ RUN chmod +x /usr/local/bin/pixi && \
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ir" || true && \
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ark" || true
 
+# Extension / config setup as NB_USER (no installs in runtime)
+USER ${NB_USER}
+RUN /opt/pixi/.pixi/envs/base-env/bin/jupyter notebook --generate-config && \
+    npm cache clean --force || true && \
+    /opt/pixi/.pixi/envs/base-env/bin/jupyter lab clean || true && \
+    rm -rf "${HOME}/.cache/yarn"
 
 # ------------------------------------------------------------
+# Stage: runtime (lightweight; COPY only, no builds or installation routines)
+# ------------------------------------------------------------
+FROM system AS runtime
 
+# Re-declare for COPY path (ARGs not inherited; default matches system stage)
+ARG NB_USER="jovyan"
+
+ENV PIXI_HOME="/opt/pixi" \
+    BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env" \
+    X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
+
+# Copy pixi env and generated config from stack (path uses NB_USER for custom builds)
+COPY --from=stack /opt/pixi /opt/pixi
+COPY --from=stack /home/${NB_USER}/.jupyter /home/${NB_USER}/.jupyter
+
+# Pixi wrapper in final image (same path as before)
+COPY --chown=root:root docker/purdue-af/pixi-wrapper /usr/local/bin/pixi
 
 # Configure XrootD, grid certificates, VOMS
 RUN mkdir -p /etc/cvmfs /etc/cvmfs/SITECONF/JobConfig/ /etc/cvmfs/SITECONF/PhEDEx
@@ -139,13 +174,8 @@ COPY docker/purdue-af/configs/default.local /etc/cvmfs/
 RUN mkdir -p "${HOME}/.globus" "${HOME}/.rnd" && \
     chown -R ${NB_USER}:${NB_GID} "${HOME}/.globus" "${HOME}/.rnd" && \
     chmod 700 "${HOME}/.globus"
-ENV X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
 
-
-# ------------------------------------------------------------
-
-# Jupyter scripts
-
+# Jupyter scripts and configs
 COPY docker/purdue-af/jupyter/jupyter_server_config.py \
     docker/purdue-af/jupyter/docker_healthcheck.py \
     docker/purdue-af/scripts/eos-connect.sh \
@@ -156,7 +186,6 @@ COPY --chown=root:root docker/purdue-af/scripts/run-as-root.sh \
     docker/purdue-af/scripts/config-extensions.sh \
     docker/purdue-af/scripts/create-symlinks.sh \
     /usr/local/bin/before-notebook.d/
-# docker/purdue-af/scripts/init-kernels.sh \
 COPY --chown=root:root \
     docker/purdue-af/jupyter/start.sh \
     docker/purdue-af/jupyter/start-notebook.sh \
@@ -164,7 +193,8 @@ COPY --chown=root:root \
     docker/purdue-af/scripts/upload-genaistudio-key \
     /usr/local/bin/
 
-RUN chmod +x /usr/local/bin/* && \
+RUN chmod +x /usr/local/bin/pixi && \
+    chmod +x /usr/local/bin/* && \
     chmod +x /usr/local/bin/before-notebook.d/* && \
     sed -re "s/c.ServerApp/c.NotebookApp/g" \
         /etc/jupyter/jupyter_server_config.py > /etc/jupyter/jupyter_notebook_config.py && \
@@ -175,21 +205,10 @@ RUN chmod +x /usr/local/bin/* && \
 # Set PATH before switching user so it's available to all users
 ENV PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}"
 
-# ------------------------------------------------------------
-
-# Container setup as NB_USER
-
 USER ${NB_USER}
-
-RUN /opt/pixi/.pixi/envs/base-env/bin/jupyter notebook --generate-config && \
-    npm cache clean --force || true && \
-    /opt/pixi/.pixi/envs/base-env/bin/jupyter lab clean || true && \
-    rm -rf "${HOME}/.cache/yarn"
-
 WORKDIR "${HOME}"
 EXPOSE 8888
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["start-notebook.sh"]
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
     CMD /etc/jupyter/docker_healthcheck.py || exit 1
-
