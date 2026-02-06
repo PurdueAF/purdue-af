@@ -10,15 +10,15 @@ conda         = "==25.9.0"
 mamba         = "==2.3.3"
 jupyter_core  = "*"
 jupyter       = "*"
-code-server   = "4.10.1"
+code-server   = "4.108.2"
 jupyter-vscode-proxy = "*"
 jupyter-server-proxy = "*"
 
 # Jupyter pieces
 notebook      = "*"
 jupyterhub    = "*"
-jupyterlab    = "==4.4.10"
-nodejs        = ">=20"
+jupyterlab    = "==4.5.3"
+nodejs        = "22.*"
 
 # Kernel discovery / misc
 nb_conda_kernels = "*"
