@@ -18,14 +18,6 @@ resources:
   - ../../apps/servicex/gitrepo.yaml
   - ../../apps/servicex/helmrepo.yaml
 
-  - ../../apps/sonic/helmrepo.yaml
-  - ../../apps/sonic/gitrepo.yaml
-  - ../../apps/sonic/supersonic/helmrelease.yaml
-  - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
-  # - ../../apps/sonic/supersonic-dynamic/gitrepo.yaml
-  # - ../../apps/sonic/supersonic-dynamic/helmrelease.yaml
-
-  - ../../apps/sonic/prometheus-networkpolicy.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
@@ -54,15 +46,3 @@ configMapGenerator:
   - name: servicex-config
     files:
       - values.yaml=../../apps/servicex/values.yaml
-
-  - name: supersonic-config
-    files:
-      - values.yaml=../../apps/sonic/supersonic/values.yaml
-
-  - name: supersonic-interlink-config
-    files:
-      - values.yaml=../../apps/sonic/supersonic-interlink/values.yaml
-
-  - name: supersonic-dynamic-config
-    files:
-      - values.yaml=../../apps/sonic/supersonic-dynamic/values.yaml
