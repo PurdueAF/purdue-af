@@ -221,6 +221,7 @@ gateway:
           # Set up environment variables and commands using the conda_env path
           options.env["PATH"]=f"{conda_env}/bin/:"+options.env.pop("PATH")
           options.env["CPLUS_INCLUDE_PATH"]=f"{conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
+          options.env["XRD_REQUESTTIMEOUT"]=300
           worker_cmd = f"{conda_env}/bin/dask-worker"
           scheduler_cmd = f"{conda_env}/bin/dask-scheduler"
 
