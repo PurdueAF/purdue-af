@@ -18,7 +18,6 @@ resources:
   - ../../apps/servicex/gitrepo.yaml
   - ../../apps/servicex/helmrepo.yaml
 
-
 generatorOptions:
   disableNameSuffixHash: true
 
