@@ -11,26 +11,34 @@ RUN git clone https://github.com/interlink-hq/interlink-slurm-plugin.git /app &&
 FROM gitlab-registry.cern.ch/linuxsupport/alma8-base:20250501-1
 
 
-# Install system packages
+# Install system packages and munge 0.5.18 from source (EPEL may not have 0.5.18)
 RUN yum update -y && \
     yum install -y \
         https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm \
-        wget sudo \
-        munge==0.5.18 && \
-    yum clean all && \
-    rm -rf /var/cache/yum
+        wget sudo bzip2-devel zlib-devel && \
+    yum clean all && rm -rf /var/cache/yum
 
-# Install SLURM
+# Install munge 0.5.18 from source and Slurm
 COPY slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
 COPY slurm/slurm-configs /etc/slurm
-
-RUN dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
+RUN set -euo pipefail && \
+    curl -fsSL --retry 3 --retry-delay 2 \
+        -o /tmp/munge.tar.xz \
+        "https://github.com/dun/munge/releases/download/munge-0.5.18/munge-0.5.18.tar.xz" && \
+    tar -xJf /tmp/munge.tar.xz -C /tmp && \
+    cd /tmp/munge-0.5.18 && \
+    ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var && \
+    make -j"$(nproc)" && make install && \
+    groupadd -r -g 981 munge && useradd -r -u 981 -g munge -d /var/lib/munge -s /sbin/nologin munge && \
+    mkdir -p /etc/munge /var/lib/munge && \
+    chown -R munge:munge /etc/munge /var/lib/munge && \
+    cd / && rm -rf /tmp/munge-0.5.18 /tmp/munge.tar.xz && \
+    dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
     rm -rf /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
-    groupadd -g 1033 slurm && \
-    adduser -u 2000 -g 1033 slurm && \
+    groupadd -g 1033 slurm && adduser -u 2000 -g 1033 slurm && \
     chown -R slurm:slurm /etc/slurm/ && \
-    mkdir -p /var/log/slurm && \
-    chown -R slurm:slurm /var/log/slurm
+    mkdir -p /var/log/slurm && chown -R slurm:slurm /var/log/slurm && \
+    dnf clean all && rm -rf /var/cache/dnf
 
 COPY docker/interlink-slurm-plugin/startup.sh /etc/startup.sh
 
