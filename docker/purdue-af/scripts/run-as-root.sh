@@ -52,18 +52,21 @@ if [ -d "${PIXI_GLOBAL}" ] && [ -f "${PIXI_GLOBAL}/pixi.toml" ] && [ -f "${PIXI_
 	jupyter kernelspec remove -y python3 2>/dev/null || true
 	"${PIXI_GLOBAL_PYTHON}" -m ipykernel install --name python3 --display-name "Python (pixi global)" --prefix "${BASE_ENV_DIR}"
 
-	# Ensure the "pixi global" kernel sets sysroot include paths on launch
+	# Write kernel spec with env-based sysroot include paths (no bash wrapper)
 	PY3_KERNEL_JSON="${BASE_ENV_DIR}/share/jupyter/kernels/python3/kernel.json"
 	PIXI_GLOBAL_PREFIX="${PIXI_GLOBAL}/.pixi/envs/default"
 	PIXI_GLOBAL_SYSROOT_INC="${PIXI_GLOBAL_PREFIX}/x86_64-conda-linux-gnu/sysroot/usr/include"
-	if [ -f "${PY3_KERNEL_JSON}" ]; then
-		PIXI_GLOBAL_KERNEL_CMD="export C_INCLUDE_PATH=\"${PIXI_GLOBAL_SYSROOT_INC}\"; export CPLUS_INCLUDE_PATH=\"${PIXI_GLOBAL_SYSROOT_INC}\"; export PATH=\"${PIXI_GLOBAL_PREFIX}/bin:\$PATH\"; exec \"${PIXI_GLOBAL_PREFIX}/bin/python\" -m ipykernel_launcher -f \"{connection_file}\""
-		if command -v jq >/dev/null 2>&1; then
-			jq --arg cmd "${PIXI_GLOBAL_KERNEL_CMD}" '.argv=["/bin/bash","-c",$cmd]' "${PY3_KERNEL_JSON}" >"${PY3_KERNEL_JSON}.tmp" &&
-				mv "${PY3_KERNEL_JSON}.tmp" "${PY3_KERNEL_JSON}"
-		else
-			echo "Warning: jq not found; cannot patch ${PY3_KERNEL_JSON} for pixi global kernel env vars." >&2
-		fi
+	PIXI_GLOBAL_BIN="${PIXI_GLOBAL_PREFIX}/bin"
+	if [ -f "${PY3_KERNEL_JSON}" ] && command -v jq >/dev/null 2>&1; then
+		jq \
+			--arg python "${PIXI_GLOBAL_BIN}/python" \
+			--arg inc "${PIXI_GLOBAL_SYSROOT_INC}" \
+			--arg path_val "${PIXI_GLOBAL_BIN}:\${PATH}" \
+			'.argv = [$python, "-m", "ipykernel_launcher", "-f", "{connection_file}"] | .display_name = "Python (pixi global)" | .language = "python" | .metadata = {"debugger": true} | .env = {"C_INCLUDE_PATH": $inc, "CPLUS_INCLUDE_PATH": $inc, "PATH": $path_val}' \
+			"${PY3_KERNEL_JSON}" >"${PY3_KERNEL_JSON}.tmp" &&
+			mv "${PY3_KERNEL_JSON}.tmp" "${PY3_KERNEL_JSON}"
+	elif [ -f "${PY3_KERNEL_JSON}" ]; then
+		echo "Warning: jq not found; cannot write pixi global kernel spec with env at ${PY3_KERNEL_JSON}." >&2
 	fi
 fi
 
