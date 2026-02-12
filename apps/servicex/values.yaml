@@ -53,10 +53,7 @@ objectStore:
 
 codeGen:
   uproot-raw:
-    image: sslhep/servicex_code_gen_raw_uproot
-    tag: uproot-compression
     enabled: true
-    defaultScienceContainerTag: uproot5
     compressionAlgorithm: LZMA
     compressionLevel: 9
     nodeSelector:
@@ -170,8 +167,6 @@ didFinder:
         effect: "NoSchedule"
   xrootd:
     enabled: true
-    image: sslhep/servicex-did-finder-xrootd
-    tag: xrootd-did-x509
     nodeSelector:
       cms-af-prod: "true"
     tolerations:
@@ -183,10 +178,6 @@ didFinder:
     enabled: false
 gridAccount: dkondrat
 x509Secrets:
-  # image: sslhep/x509-secrets
-  # tag: 2025-03-update
-  image: geddes-registry.rcac.purdue.edu/docker-hub-cache/ponyisi/x509-secrets
-  tag: override-voms-file
   pullPolicy: Always
   vomsOrg: cms
   nodeSelector:
