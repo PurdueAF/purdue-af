@@ -78,3 +78,5 @@ if "NB_UMASK" in os.environ:
 # """
 # c.AiExtension.default_language_model = "genaistudio:purdue-cms-af"
 # c.AiExtension.allowed_providers = ["genaistudio"]
+
+c.KernelSpecManager.ensure_native_kernel = False

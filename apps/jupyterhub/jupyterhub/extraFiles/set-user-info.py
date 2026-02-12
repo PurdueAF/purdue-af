@@ -68,5 +68,4 @@ c.KubeSpawner.working_dir = "/home/{username}"
 c.KubeSpawner.disable_user_config = True
 c.KubeSpawner.http_timeout = 600
 c.KubeSpawner.start_timeout = 600
-c.KernelSpecManager.ensure_native_kernel = False
 c.JupyterHub.authenticate_prometheus = False
