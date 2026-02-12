@@ -15,7 +15,7 @@ FROM gitlab-registry.cern.ch/linuxsupport/alma8-base:20250501-1
 RUN yum update -y && \
     yum install -y \
         https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm \
-        wget sudo bzip2-devel zlib-devel && \
+        wget sudo gcc make bzip2-devel zlib-devel && \
     yum clean all && rm -rf /var/cache/yum
 
 # Install munge 0.5.18 from source and Slurm
