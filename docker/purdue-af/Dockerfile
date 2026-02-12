@@ -34,7 +34,7 @@ RUN set -euo pipefail \
  && dnf config-manager --set-enabled powertools \
  && dnf -y install \
       'dnf-command(config-manager)' \
-      sudo wget perl which git bzip2 \
+      sudo wget perl which git bzip2 bzip2-devel zlib-devel \
       openssh-server openssh-clients openssl-devel \
       emacs vim-enhanced jq xterm-resize \
       libXft libXpm libXext libSM mesa-libGL libnsl.x86_64 \
@@ -62,17 +62,29 @@ RUN dnf -y --disablerepo='*' install --nogpgcheck --setopt=install_weak_deps=Fal
         /tmp/vo-client-138-2.osg24.el8.noarch.rpm && \
      rm -f /tmp/*.rpm && dnf clean all && rm -rf /var/cache/dnf
 
-# Install Slurm
+# Install munge 0.5.18 from source and Slurm
 COPY slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
 COPY slurm/slurm-configs /etc/slurm
-RUN dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
-    rm -rf /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
-    groupadd -g 1033 slurm && \
-    adduser -u 2000 -g 1033 slurm && \
-    chown -R slurm:slurm /etc/slurm/ && \
-    mkdir -p /var/log/slurm && \
-    chown -R slurm:slurm /var/log/slurm && \
-    dnf clean all && rm -rf /var/cache/dnf
+RUN set -euo pipefail \
+ && curl -fsSL --retry 3 --retry-delay 2 \
+    -o /tmp/munge.tar.xz \
+    "https://github.com/dun/munge/releases/download/munge-0.5.18/munge-0.5.18.tar.xz" \
+ && tar -xJf /tmp/munge.tar.xz -C /tmp \
+ && cd /tmp/munge-0.5.18 \
+ && ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var \
+ && make -j"$(nproc)" && make install \
+ && groupadd -r -g 981 munge && useradd -r -u 981 -g munge -d /var/lib/munge -s /sbin/nologin munge \
+ && mkdir -p /etc/munge /var/lib/munge \
+ && chown -R munge:munge /etc/munge /var/lib/munge \
+ && cd / && rm -rf /tmp/munge-0.5.18 /tmp/munge.tar.xz \
+ && dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm \
+ && rm -rf /etc/slurm-24.05.1-1.el8.x86_64.rpm \
+ && groupadd -g 1033 slurm \
+ && adduser -u 2000 -g 1033 slurm \
+ && chown -R slurm:slurm /etc/slurm/ \
+ && mkdir -p /var/log/slurm \
+ && chown -R slurm:slurm /var/log/slurm \
+ && dnf clean all && rm -rf /var/cache/dnf
 
 # Configure environment
 ENV SHELL=/bin/bash \
