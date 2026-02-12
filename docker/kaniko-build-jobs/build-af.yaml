@@ -34,7 +34,7 @@ spec:
           secret:
             secretName: docker-config
       nodeSelector:
-        cms-af-prod: "true"
+        cms-af-dev: "true"
       tolerations:
         - key: "hub.jupyter.org/dedicated"
           operator: "Equal"
