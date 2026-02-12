@@ -80,41 +80,6 @@ if [ -d "${PIXI_GLOBAL}" ] && [ -f "${PIXI_GLOBAL}/pixi.toml" ] && [ -f "${PIXI_
 	fi
 fi
 
-# Fix DNS resolution for pixi: IPv6 is enabled but unreachable in Kubernetes
-# DNS returns IPv6 addresses first, causing pixi's Rust DNS resolver to fail
-# Solution: Dynamically resolve and add IPv4 addresses to /etc/hosts for pixi-related domains
-# (Kubernetes overwrites /etc/hosts, so we must do this at runtime)
-# if ! grep -q "# Fix for pixi DNS resolution" /etc/hosts 2>/dev/null; then
-# 	# List of domains used by pixi (conda channels, PyPI, prefix.dev, GitHub)
-# 	PIXI_DOMAINS=(
-# 		"conda.anaconda.org"
-# 		"anaconda.org"
-# 		"repo.anaconda.com"
-# 		"repo.continuum.io"
-# 		"prefix.dev"
-# 		"conda-mapping.prefix.dev"
-# 		"pypi.org"
-# 		"pypi.python.org"
-# 		"files.pythonhosted.org"
-# 		"github.com"
-# 		"raw.githubusercontent.com"
-# 		"api.github.com"
-# 	)
-
-# 	echo "" >>/etc/hosts
-# 	echo "# Fix for pixi DNS resolution: IPv6 connectivity broken in K8s cluster" >>/etc/hosts
-# 	echo "# Dynamically resolved IPv4 addresses for pixi-related domains" >>/etc/hosts
-
-# 	# Resolve each domain to IPv4 and add to /etc/hosts
-# 	for domain in "${PIXI_DOMAINS[@]}"; do
-# 		# Use getent to get IPv4 address (ahostsv4 returns IPv4 only)
-# 		ipv4=$(getent ahostsv4 "$domain" 2>/dev/null | head -1 | awk '{print $1}')
-# 		if [ -n "$ipv4" ]; then
-# 			echo "$ipv4 $domain" >>/etc/hosts
-# 		fi
-# 	done
-# fi
-
 # Setup system files
 mv /etc/slurm/slist /usr/bin
 cp /cvmfs/cms.cern.ch/SITECONF/T2_US_Purdue/storage.json /etc/cvmfs/ || true

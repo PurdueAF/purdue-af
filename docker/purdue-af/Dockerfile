@@ -97,18 +97,6 @@ ENV SHELL=/bin/bash \
     LC_ALL=en_US.UTF-8 \
     HOME="/home/${NB_USER}"
 
-# Configure getaddrinfo to prefer IPv4 over IPv6 globally (RFC 3484)
-# This helps system tools prefer IPv4 when both IPv4 and IPv6 are available
-# Note: The actual fix for pixi DNS is in run-as-root.sh (Kubernetes overwrites /etc/hosts at runtime)
-RUN echo "# Prefer IPv4 over IPv6 for DNS resolution" > /etc/gai.conf && \
-    echo "# Give IPv4-mapped IPv6 addresses (::ffff:0:0/96) highest precedence" >> /etc/gai.conf && \
-    echo "precedence ::ffff:0:0/96  100" >> /etc/gai.conf && \
-    echo "# Lower precedence for native IPv6 addresses" >> /etc/gai.conf && \
-    echo "precedence ::1/128        50" >> /etc/gai.conf && \
-    echo "precedence 2002::/16      30" >> /etc/gai.conf && \
-    echo "precedence ::/96          20" >> /etc/gai.conf && \
-    echo "precedence ::/0           10" >> /etc/gai.conf
-
 # Copy a script that we will use to correct permissions after running certain commands
 COPY --chown=root:root docker/purdue-af/scripts/fix-permissions /usr/local/bin/fix-permissions
 RUN chmod a+rx /usr/local/bin/fix-permissions
