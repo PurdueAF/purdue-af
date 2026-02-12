@@ -16,7 +16,7 @@ RUN yum update -y && \
     yum install -y \
         https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm \
         wget sudo \
-        munge && \
+        munge==0.5.18 && \
     yum clean all && \
     rm -rf /var/cache/yum
 
