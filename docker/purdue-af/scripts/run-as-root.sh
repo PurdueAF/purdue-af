@@ -47,30 +47,37 @@ if [ -f "${KERNEL_JSON}" ]; then
 	fi
 fi
 
-# Install pixi-global kernel as python3 in user space (~/.local/share/jupyter)
+# Install pixi-global kernel as python3 in both base env and user space (JupyterLab vs VSCode discovery)
 if [ -d "${PIXI_GLOBAL}" ] && [ -f "${PIXI_GLOBAL}/pixi.toml" ] && [ -f "${PIXI_GLOBAL_PYTHON}" ]; then
-	USER_KERNEL_DIR="${NEW_HOME}/.local/share/jupyter/kernels"
-	mkdir -p "${USER_KERNEL_DIR}"
-	env HOME="${NEW_HOME}" jupyter kernelspec remove -y python3 2>/dev/null || true
-	env HOME="${NEW_HOME}" "${PIXI_GLOBAL_PYTHON}" -m ipykernel install --user --name python3 --display-name "Python (pixi global)"
-
-	# Write kernel spec with env-based sysroot include paths (no bash wrapper)
-	PY3_KERNEL_JSON="${USER_KERNEL_DIR}/python3/kernel.json"
 	PIXI_GLOBAL_PREFIX="${PIXI_GLOBAL}/.pixi/envs/default"
 	PIXI_GLOBAL_SYSROOT_INC="${PIXI_GLOBAL_PREFIX}/x86_64-conda-linux-gnu/sysroot/usr/include"
 	PIXI_GLOBAL_BIN="${PIXI_GLOBAL_PREFIX}/bin"
-	if [ -f "${PY3_KERNEL_JSON}" ] && command -v jq >/dev/null 2>&1; then
+
+	# 1) Install and patch in base env (single source of truth)
+	jupyter kernelspec remove -y python3 2>/dev/null || true
+	"${PIXI_GLOBAL_PYTHON}" -m ipykernel install --name python3 --display-name "Python (pixi global)" --prefix "${BASE_ENV_DIR}"
+	BASE_PY3_KERNEL_JSON="${BASE_ENV_DIR}/share/jupyter/kernels/python3/kernel.json"
+	if [ -f "${BASE_PY3_KERNEL_JSON}" ] && command -v jq >/dev/null 2>&1; then
 		jq \
 			--arg python "${PIXI_GLOBAL_BIN}/python" \
 			--arg inc "${PIXI_GLOBAL_SYSROOT_INC}" \
 			--arg path_val "${PIXI_GLOBAL_BIN}:\${PATH}" \
 			'.argv = [$python, "-m", "ipykernel_launcher", "-f", "{connection_file}"] | .display_name = "Python (pixi global)" | .language = "python" | .metadata = {"debugger": true} | .env = {"C_INCLUDE_PATH": $inc, "CPLUS_INCLUDE_PATH": $inc, "PATH": $path_val}' \
-			"${PY3_KERNEL_JSON}" >"${PY3_KERNEL_JSON}.tmp" &&
-			mv "${PY3_KERNEL_JSON}.tmp" "${PY3_KERNEL_JSON}"
-	elif [ -f "${PY3_KERNEL_JSON}" ]; then
-		echo "Warning: jq not found; cannot write pixi global kernel spec with env at ${PY3_KERNEL_JSON}." >&2
+			"${BASE_PY3_KERNEL_JSON}" >"${BASE_PY3_KERNEL_JSON}.tmp" &&
+			mv "${BASE_PY3_KERNEL_JSON}.tmp" "${BASE_PY3_KERNEL_JSON}"
+	elif [ -f "${BASE_PY3_KERNEL_JSON}" ]; then
+		echo "Warning: jq not found; cannot write pixi global kernel spec at ${BASE_PY3_KERNEL_JSON}." >&2
 	fi
-	chown -R "${NB_USER}:users" "${USER_KERNEL_DIR}"
+
+	# 2) Mirror same kernel to user space (~/.local/share/jupyter) for VSCode-style discovery
+	BASE_PY3_KERNEL="${BASE_ENV_DIR}/share/jupyter/kernels/python3"
+	USER_KERNEL_DIR="${NEW_HOME}/.local/share/jupyter/kernels"
+	if [ -d "${BASE_PY3_KERNEL}" ]; then
+		mkdir -p "${USER_KERNEL_DIR}"
+		rm -rf "${USER_KERNEL_DIR}/python3"
+		cp -r "${BASE_PY3_KERNEL}" "${USER_KERNEL_DIR}/python3"
+		chown -R "${NB_USER}:users" "${USER_KERNEL_DIR}"
+	fi
 fi
 
 # Fix DNS resolution for pixi: IPv6 is enabled but unreachable in Kubernetes
