@@ -10,7 +10,7 @@ conda         = "==25.9.0"
 mamba         = "==2.3.3"
 jupyter_core  = "*"
 jupyter       = "*"
-code-server   = "4.108.2"
+code-server   = "==4.108.2"
 jupyter-vscode-proxy = "*"
 jupyter-server-proxy = "*"
 
