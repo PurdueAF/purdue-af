@@ -3,9 +3,8 @@ kind: Pod
 metadata:
   name: test-interlink-hammer
   annotations:
-    # slurm-job.vk.io/pre-exec:
     slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs"
-    slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --gres=gpu:1"
+    slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes"
 spec:
   nodeSelector:
     kubernetes.io/hostname: interlink-hammer
@@ -16,7 +15,7 @@ spec:
     - name: slurm-data
       nfs:
         server: datadepot.rcac.purdue.edu
-        path: /depot/cms/purdue-af/interlink
+        path: /depot/itap/interlink
   containers:
     - name: test
       image: busybox:1.35
@@ -24,11 +23,10 @@ spec:
       args:
         - |
           echo 'Hello from virtual node interlink-hammer!'
-          ls -l /cvmfs/cms.cern.ch/el9_amd64_gcc12/cms/cmssw/CMSSW_14_1_0_pre7/external/el9_amd64_gcc12/data/RecoBTag/Combined/
           sleep 300
       volumeMounts:
         - name: slurm-data
-          mountPath: /depot/cms/purdue-af/interlink/
+          mountPath: /depot/itap/interlink/
       resources:
         requests:
           memory: "100M"
@@ -36,4 +34,37 @@ spec:
         limits:
           memory: "200M"
           cpu: "1"
+      readinessProbe:
+        exec:
+          command:
+            - sh
+            - -c
+            - "true"
+        initialDelaySeconds: 10
+        periodSeconds: 10
+        timeoutSeconds: 1
+        successThreshold: 1
+        failureThreshold: 30
+      startupProbe:
+        exec:
+          command:
+            - sh
+            - -c
+            - "true"
+        initialDelaySeconds: 10
+        periodSeconds: 10
+        timeoutSeconds: 1
+        successThreshold: 1
+        failureThreshold: 30
+      # livenessProbe:
+      #   exec:
+      #     command:
+      #       - sh
+      #       - -c
+      #       - "true"
+      #   initialDelaySeconds: 10
+      #   periodSeconds: 10
+      #   timeoutSeconds: 1
+      #   successThreshold: 1
+      #   failureThreshold: 30
   restartPolicy: Never

@@ -15,7 +15,7 @@ spec:
     - name: slurm-data
       nfs:
         server: datadepot.rcac.purdue.edu
-        path: /depot/cms/purdue-af/interlink
+        path: /depot/itap/interlink
   containers:
     - name: sonic
       image: fastml/triton-torchgeo:22.07-py3-geometric
@@ -33,7 +33,7 @@ spec:
           --exit-timeout-secs=60
       volumeMounts:
         - name: slurm-data
-          mountPath: /depot/cms/purdue-af/interlink/
+          mountPath: /depot/itap/interlink/
       resources:
         limits: { cpu: 2, memory: 8G }
         requests: { cpu: 2, memory: 8G }
