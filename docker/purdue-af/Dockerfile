@@ -150,7 +150,9 @@ RUN chmod +x /usr/local/bin/pixi && \
     [ -d "${BASE_ENV_DIR}" ] || (echo "ERROR: BASE_ENV_DIR does not exist after pixi install" && exit 1) && \
     rm -rf "${HOME}/.cache/rattler" || true && \
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ir" || true && \
-    rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ark" || true
+    rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ark" || true && \
+    cp "${BASE_ENV_DIR}/lib/python3.10/site-packages/jupyter_vscode_proxy/icons/vscode.svg" \
+       "${BASE_ENV_DIR}/lib/python3.10/site-packages/jupyter_vscode_proxy/icons/code-server.svg"
 
 # Extension / config setup as NB_USER (no installs in runtime)
 USER ${NB_USER}
