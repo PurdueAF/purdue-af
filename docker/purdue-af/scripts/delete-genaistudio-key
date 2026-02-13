@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Removes GenAI Studio API key from the persisted file and clears apiKey in the config
+set +e
+
+# Colors (only when stdout is a TTY)
+if [[ -t 1 ]]; then
+  R='\033[0m'
+  B='\033[1m'
+  D='\033[2m'
+  C='\033[36m'
+  G='\033[32m'
+else
+  R= B= D= C= G=
+fi
+
+CONFIG="${HOME:-}/.continue/config.yaml"
+CONTINUE_DIR="$(dirname "$CONFIG")"
+KEY_FILE="$CONTINUE_DIR/api-key.txt"
+
+deleted=0
+
+# Remove persisted key file so config-extensions.sh won't re-inject on next startup
+if [[ -f "$KEY_FILE" ]]; then
+  rm -f "$KEY_FILE"
+  deleted=1
+fi
+
+# Clear every apiKey line in config (preserve indentation)
+if [[ -f "$CONFIG" ]]; then
+  tmp=$(mktemp)
+  trap 'rm -f "$tmp"' EXIT
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^([[:space:]]*apiKey:)[[:space:]]*(.*)$ ]]; then
+      printf '%s\n' "${BASH_REMATCH[1]}"
+    else
+      printf '%s\n' "$line"
+    fi
+  done < "$CONFIG" > "$tmp"
+  mv "$tmp" "$CONFIG"
+  deleted=1
+fi
+
+if [[ $deleted -eq 1 ]]; then
+  echo ""
+  echo -e "${C}${B}GenAI Studio API key${R}"
+  echo -e "${G}✓${R} API key removed from config."
+  echo ""
+else
+  echo ""
+  echo -e "${C}${B}GenAI Studio API key${R}"
+  echo -e "${D}No saved key found.${R}"
+  echo ""
+fi
+exit 0

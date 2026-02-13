@@ -194,6 +194,7 @@ COPY --chown=root:root \
     docker/purdue-af/jupyter/start-notebook.sh \
     docker/purdue-af/jupyter/start-singleuser.sh \
     docker/purdue-af/scripts/upload-genaistudio-key \
+    docker/purdue-af/scripts/delete-genaistudio-key \
     /usr/local/bin/
 
 RUN chmod +x /usr/local/bin/pixi && \
