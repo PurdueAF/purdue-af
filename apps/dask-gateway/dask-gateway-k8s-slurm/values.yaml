@@ -42,7 +42,7 @@ gateway:
       c.DaskGateway.address = ':8786'
       c.SlurmBackend.api_url = f'http://api-{RELEASE_NAME}.{NAMESPACE}.geddes.rcac.purdue.edu:8000/api'
       c.SlurmBackend.cluster_start_timeout = 60*5
-      c.SlurmBackend.cluster_heartbeat_period = 60
+      c.SlurmBackend.cluster_heartbeat_period = 60*2
       c.SlurmBackend.worker_start_timeout = 60*5
       c.ClusterConfig.idle_timeout = 3600*24
 
