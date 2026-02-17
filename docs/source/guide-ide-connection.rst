@@ -40,6 +40,11 @@ you will be able to connect using instructions from step 7, as long as you have 
 
    Once installed, check if the command is available: ``which websocat``.
 
+   On Windows:
+
+   * Download pre-built binaries from https://github.com/vi/websocat/releases/latest/download/websocat.x86_64-pc-windows-msvc.exe
+   * Move the binary to any directory you can access from the command line: ``C:\path\to\websocat.exe``
+
 
 3. Configure SSH keys on local machine
 -----------------------------------------
@@ -60,7 +65,11 @@ you will be able to connect using instructions from step 7, as long as you have 
           IdentitiesOnly yes
           ProxyCommand websocat --binary -H="Authorization: token TOKEN" asyncstdio: wss://%h/user/USERNAME/sshd/
 
-#. Replace ``USERNAME`` in two places with your Purdue AF username:
+#. If you are on Windows, make two small changes to the entry above:
+   * Replace ``websocat`` with full path to ``websocat.exe`` from the previous step.
+   * Replace ``asyncstdio:`` with ``stdio:``
+
+#. Replace ``USERNAME`` (in two places!) with your Purdue AF username:
 
    * If you are using Purdue account, this is your Purdue Career accountusername.
    * If you are using CERN account, this is your CERN username followed by ``-cern``.
@@ -96,6 +105,14 @@ On macOS:
 .. code-block:: shell
 
    cat ~/.ssh/id_ed25519.pub | pbcopy
+
+On Windows:
+
+.. code-block:: shell
+
+   type %USERPROFILE%\.ssh\id_ed25519.pub | clip
+   - OR, if using Git Bash or other shell -
+   cat ~/.ssh/id_ed25519.pub | clip
 
 On the **AF session**, run the following commands one by one. When the ``cat`` command
 prompts for input, paste your public key (``Ctrl-V``) and press ``Ctrl-D`` to finish:
