@@ -1,0 +1,140 @@
+serverLoadThreshold: 100
+
+triton:
+  # image: nvcr.io/nvidia/tritonserver:24.11-py3
+  image: fastml/triton-torchgeo:22.07-py3-geometric
+  # image: fastml/triton-torchgeo:25.08-py3-geometric
+  command: ["/bin/sh", "-c"]
+  args:
+    - |
+      /opt/tritonserver/bin/tritonserver \
+      --model-repository=/work/users/ppalit-cern/CMSSW_16_0_0_pre4/src/RecoTauTag-TrainingFiles/DeepTauIdSONIC/ \
+      --allow-gpu-metrics=true \
+      --log-verbose=0 \
+      --strict-model-config=false \
+      --exit-timeout-secs=60
+
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      cpu: 2
+      memory: 8G
+    requests:
+      nvidia.com/gpu: 1
+      cpu: 2
+      memory: 8G
+  nodeSelector: { "cms-af-prod": "true" }
+  tolerations:
+    - key: hub.jupyter.org/dedicated
+      operator: Equal
+      value: cms-af
+      effect: NoSchedule
+  service:
+    labels:
+      scrape_metrics: "true"
+    annotations:
+      metallb.universe.tf/address-pool: geddes-private-pool
+  modelRepository:
+    enabled: true
+    storageType: pvc
+    pvc:
+      claimName: af-shared-storage
+    mountPath: /work/
+  readinessProbe:
+    successThreshold: 3
+  #   reset: true
+
+envoy:
+  enabled: true
+  nodeSelector: { "cms-af-prod": "true" }
+  tolerations:
+    - key: hub.jupyter.org/dedicated
+      operator: Equal
+      value: cms-af
+      effect: NoSchedule
+  loadBalancerPolicy: "ROUND_ROBIN"
+  service:
+    type: LoadBalancer
+  ingress:
+    enabled: true
+    hostName: sonic-cms.geddes.rcac.purdue.edu
+    ingressClassName: public
+  rate_limiter:
+    prometheus_based:
+      enabled: false
+    listener_level:
+      enabled: false
+  dynamic_routing:
+    enabled: true
+  lua_filter:
+    enabled: true
+    lua_config: "cfg/envoy-filter-dynamic.lua"
+
+keda:
+  enabled: true
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  scaleUp:
+    stabilizationWindowSeconds: 30
+    periodSeconds: 15
+    stepsize: 1
+  scaleDown:
+    stabilizationWindowSeconds: 45
+    periodSeconds: 45
+    stepsize: 1
+
+ingress:
+  enabled: false
+
+prometheus:
+  enabled: true
+  server:
+    extraFlags: [web.enable-remote-write-receiver]
+    useExistingClusterRoleName: sonic-hackathon-prometheus-role 
+    configMapOverrideName: prometheus-config
+
+  serviceAccounts:
+    server:
+      create: false
+      name: sonic-hackathon-prometheus-sa
+  
+
+grafana:
+  enabled: true
+  dashboardsConfigMaps:
+    default: sonic-hackathon-grafana-default-dashboard
+  datasources:
+    datasources.yaml:
+      datasources:
+        - name: prometheus
+          type: prometheus
+          access: proxy
+          isDefault: true
+          url: http://sonic-hackathon-prometheus-server:9090 
+          jsonData:
+            timeInterval: "5s"
+            tlsSkipVerify: true
+        - name: tempo
+          type: tempo
+          url: http://sonic-hackathon-tempo:3100
+          access: proxy
+          isDefault: false
+          basicAuth: false
+          jsonData:
+            timeInterval: "5s"
+            tlsSkipVerify: true
+            serviceMap:
+              datasourceUid: "prometheus"
+            nodeGraph:
+              enabled: true
+  ingress:
+    enabled: true
+    hosts:
+      - sonic-hackathon-grafana.geddes.rcac.purdue.edu
+    tls:
+      - hosts:
+          - sonic-hackathon-grafana.geddes.rcac.purdue.edu
+    ingressClassName: public
+  grafana.ini:
+    server:
+      root_url: https://sonic-hackathon-grafana.geddes.rcac.purdue.edu

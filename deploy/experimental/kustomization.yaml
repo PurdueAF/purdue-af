@@ -18,6 +18,9 @@ resources:
   - ../../apps/servicex/gitrepo.yaml
   - ../../apps/servicex/helmrepo.yaml
 
+  - ../../apps/sonic/sonic-hackathon/helmrelease.yaml
+  - ../../apps/sonic/sonic-hackathon/helmrepo.yaml
+
 generatorOptions:
   disableNameSuffixHash: true
 
@@ -45,3 +48,7 @@ configMapGenerator:
   - name: servicex-config
     files:
       - values.yaml=../../apps/servicex/values.yaml
+
+  - name: sonic-hackathon-config
+    files:
+      - values.yaml=../../apps/sonic/sonic-hackathon/values.yaml
