@@ -90,14 +90,13 @@ prometheus:
   enabled: true
   server:
     extraFlags: [web.enable-remote-write-receiver]
-    useExistingClusterRoleName: sonic-hackathon-prometheus-role 
+    useExistingClusterRoleName: sonic-hackathon-prometheus-role
     configMapOverrideName: prometheus-config
 
   serviceAccounts:
     server:
       create: false
       name: sonic-hackathon-prometheus-sa
-  
 
 grafana:
   enabled: true
@@ -110,7 +109,7 @@ grafana:
           type: prometheus
           access: proxy
           isDefault: true
-          url: http://sonic-hackathon-prometheus-server:9090 
+          url: http://sonic-hackathon-prometheus-server:9090
           jsonData:
             timeInterval: "5s"
             tlsSkipVerify: true
