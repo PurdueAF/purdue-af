@@ -25,7 +25,6 @@ spec:
           command: ["/bin/bash", "-c"]
           args:
             - |
-              apt-get update && apt-get install -y fio
               pip install prometheus_client
               python /scripts/metrics_server.py
           ports:
