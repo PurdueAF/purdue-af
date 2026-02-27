@@ -49,8 +49,6 @@ mounts = {
 }
 
 # Mounts to run throughput checks on, and their probe file paths
-# The probe file must exist and be >= 1GB (create once with:
-#   dd if=/dev/zero of=<path> bs=1M count=1024)
 throughput_probes = {
     "/depot/": "/depot/cms/purdue-af/.storage-monitoring-probe-1gb",
     "/work/": "/work/projects/purdue-af/.storage-monitoring-probe-1gb",
