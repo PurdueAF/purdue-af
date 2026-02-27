@@ -59,7 +59,7 @@ throughput_probes = {
 
 # Directories to run metadata (ls) latency checks on
 metadata_probes = {
-    "/depot/": "/depot/cms/users/",
+    "/depot/": "/depot/cms/",
     "/work/": "/work/users/",
     "eos": "/eos/purdue/store/user/",
 }
