@@ -49,6 +49,7 @@ mounts = {
 throughput_probes = {
     "/depot/": "/depot/cms/purdue-af/.storage-monitoring-probe-1gb",
     "/work/": "/work/projects/purdue-af/.storage-monitoring-probe-1gb",
+    "eos": "/eos/purdue/store/user/dkondrat/.storage-monitoring-probe-1gb",
 }
 
 # How often to run the heavy fio check, in iterations of the main loop (120s each)
