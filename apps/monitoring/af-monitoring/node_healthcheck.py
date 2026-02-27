@@ -1,3 +1,4 @@
+import json
 import subprocess
 import time
 
@@ -11,6 +12,11 @@ try:
     mount_ping_ms = Gauge(
         "af_node_mount_ping_ms",
         "Storage mount ping time in milliseconds",
+        ["mount_name", "mount_path"],
+    )
+    mount_data_rate_gbps = Gauge(
+        "af_node_mount_data_rate_gbps",
+        "Storage mount sequential read throughput in Gbps",
         ["mount_name", "mount_path"],
     )
 except Exception as e:
@@ -36,6 +42,19 @@ mounts = {
         "3b570d80272b7188c13cef51e58b7151",
     ),
 }
+
+# Mounts to run throughput checks on, and their probe file paths
+# The probe file must exist and be >= 1GB (create once with:
+#   dd if=/dev/zero of=<path> bs=1M count=1024)
+throughput_probes = {
+    "/depot/": "/depot/cms/purdue-af/.storage-monitoring-probe-1gb",
+    "/work/": "/work/projects/purdue-af/.storage-monitoring-probe-1gb",
+}
+
+# How often to run the heavy fio check, in iterations of the main loop (120s each)
+# Default: every 15 iterations = every 30 minutes
+FIO_INTERVAL = 15
+fio_counter = 0
 
 
 def check_if_directory_exists(path_tuple):
@@ -86,13 +105,56 @@ def check_if_directory_exists(path_tuple):
         return False, elapsed_ms
 
 
+def check_read_throughput(mount_name, probe_file):
+    print(f"Running fio throughput check for {mount_name} using {probe_file}")
+    try:
+        result = subprocess.run(
+            [
+                "fio",
+                "--name=read_test",
+                f"--filename={probe_file}",
+                "--rw=read",
+                "--bs=1M",
+                "--size=1G",
+                "--numjobs=1",
+                "--readonly",
+                "--output-format=json",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        data = json.loads(result.stdout)
+        bw_bytes = data["jobs"][0]["read"]["bw_bytes"]
+        gbps = bw_bytes / 1e9
+        print(f"Throughput for {mount_name}: {gbps:.2f} Gbps")
+        return gbps
+    except Exception as e:
+        print(f"fio error for {mount_name} ({probe_file}): {e}")
+        return None
+
+
 def update_metrics():
+    global fio_counter
+
+    # Lightweight health checks (every iteration)
     for m_name, m_path in mounts.items():
         result, ping_time = check_if_directory_exists(m_path)
         mount_valid.labels(mount_name=m_name, mount_path=m_path[0]).set(
             1 if result else 0
         )
         mount_ping_ms.labels(mount_name=m_name, mount_path=m_path[0]).set(ping_time)
+
+    # Heavy throughput checks (every FIO_INTERVAL iterations)
+    if fio_counter % FIO_INTERVAL == 0:
+        for m_name, probe_file in throughput_probes.items():
+            gbps = check_read_throughput(m_name, probe_file)
+            if gbps is not None:
+                mount_data_rate_gbps.labels(
+                    mount_name=m_name, mount_path=probe_file
+                ).set(gbps)
+
+    fio_counter += 1
 
 
 if __name__ == "__main__":
