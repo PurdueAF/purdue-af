@@ -60,6 +60,7 @@ metadata_probes = {
     "/depot/": "/depot/cms/",
     "/work/": "/work/users/",
     "eos": "/eos/purdue/store/user/",
+    "cvmfs": "/cvmfs/cms.cern.ch/",
 }
 
 METADATA_TIMEOUT_S = 10
