@@ -106,11 +106,11 @@ extraConfigmapMounts:
 # Resources
 resources:
   requests:
-    cpu: 2000m
-    memory: 4Gi
+    cpu: 4000m
+    memory: 8Gi
   limits:
-    cpu: 2000m
-    memory: 4Gi
+    cpu: 4000m
+    memory: 8Gi
 
 # Ensure rollout does not run two pods concurrently to avoid PVC multi-attach
 deploymentStrategy:
