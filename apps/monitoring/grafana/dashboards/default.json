@@ -1998,10 +1998,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P7FECBCB34F03A058"
+            "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "slurm_info_job_user{instance=\"hammer-osg:9100\"}",
+          "expr": "slurm_info_job_user",
           "interval": "",
           "legendFormat": "{{user}}",
           "range": true,
@@ -2099,10 +2099,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P7FECBCB34F03A058"
+            "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "slurm_info_core_user{instance=\"hammer-osg:9100\"}",
+          "expr": "slurm_info_core_user",
           "interval": "",
           "legendFormat": "{{user}}",
           "range": true,
