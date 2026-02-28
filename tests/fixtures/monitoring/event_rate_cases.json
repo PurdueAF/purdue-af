@@ -1,0 +1,12 @@
+[
+  {
+    "name": "valid_event_rate",
+    "fixture_file": "event_rate_valid.txt",
+    "expected_gauge_value": 128.5
+  },
+  {
+    "name": "invalid_event_rate",
+    "fixture_file": "event_rate_invalid.txt",
+    "expected_gauge_value": 0
+  }
+]

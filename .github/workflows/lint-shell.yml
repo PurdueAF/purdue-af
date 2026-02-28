@@ -1,40 +1,76 @@
 name: Lint Shell Scripts
 
 on:
-  push:
-    paths:
-      - '**.sh'
   pull_request:
     paths:
-      - '**.sh'
+      - '**/*.sh'
+      - '**/pixi-wrapper'
+      - '**/fix-permissions'
+      - '.github/workflows/lint-shell.yml'
+      - '!docker/dask-gateway-server/**'
+      - '!docker/kaniko-build-jobs/**'
+      - '!docs/**'
+      - '!slurm/**'
+      - '!.cursor/**'
+      - '!.git/**'
+
+concurrency:
+  group: lint-shell-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
-  lint:
+  lint-shell:
     runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      SHELLCHECK_VERSION: '0.10.0'
+      SHFMT_VERSION: '3.10.0'
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install shfmt
+
+      - name: Install shell tooling
         run: |
-          curl -L https://github.com/mvdan/sh/releases/download/v3.7.0/shfmt_v3.7.0_linux_amd64 -o shfmt
-          chmod +x shfmt
-          sudo mv shfmt /usr/local/bin/
-      - name: Format shell scripts
+          set -euo pipefail
+          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" -o /tmp/shellcheck.tar.xz
+          tar -xJf /tmp/shellcheck.tar.xz -C /tmp
+          sudo mv "/tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
+          curl -fsSL "https://github.com/mvdan/sh/releases/download/v${SHFMT_VERSION}/shfmt_v${SHFMT_VERSION}_linux_amd64" -o /tmp/shfmt
+          chmod +x /tmp/shfmt
+          sudo mv /tmp/shfmt /usr/local/bin/shfmt
+
+      - name: Tool versions
         run: |
-          find . -type f -name '*.sh' -not -path './docker/dask-gateway-server/*' -exec shfmt -w {} +
-      - name: Commit changes
-        if: ${{ github.event_name == 'pull_request' || github.ref_type == 'branch' }}
+          set -euo pipefail
+          shellcheck --version
+          shfmt --version
+
+      - name: Run shellcheck/shfmt/bash -n (check-only, advisory)
+        shell: bash
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          REF_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          git fetch origin "$REF_NAME"
-          git checkout -B "$REF_NAME" "origin/$REF_NAME" || git checkout -B "$REF_NAME"
-          git add -A
-          git diff --quiet && git diff --staged --quiet || git commit -m "Apply shfmt shell script formatting"
-          git push origin "$REF_NAME"
+          set -euo pipefail
+          mapfile -t files < <(find . -type f \
+            \( -name '*.sh' -o -name 'pixi-wrapper' -o -name 'fix-permissions' \) \
+            -not -path './docker/dask-gateway-server/*' \
+            -not -path './docker/kaniko-build-jobs/*' \
+            -not -path './docs/*' \
+            -not -path './slurm/*' \
+            -not -path './.cursor/*' \
+            -not -path './.git/*' | sort)
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo 'No in-scope shell files found.'
+            exit 0
+          fi
+
+          shellcheck -S error -s bash "${files[@]}"
+          mapfile -t shfmt_files < <(printf '%s\n' "${files[@]}" | grep -E '\.sh$' || true)
+          if [ "${#shfmt_files[@]}" -gt 0 ]; then
+            shfmt -d "${shfmt_files[@]}"
+          fi
+
+          for f in "${files[@]}"; do
+            bash -n "$f"
+          done

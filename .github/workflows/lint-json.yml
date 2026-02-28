@@ -1,41 +1,50 @@
 name: Lint JSON
 
 on:
-  push:
-    paths:
-      - '**.json'
   pull_request:
     paths:
-      - '**.json'
+      - '**/*.json'
+      - '.github/workflows/lint-json.yml'
+      - '!docker/dask-gateway-server/**'
+      - '!docker/kaniko-build-jobs/**'
+      - '!docs/**'
+      - '!slurm/**'
+      - '!.cursor/**'
+      - '!.git/**'
+
+concurrency:
+  group: lint-json-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
-  lint:
+  json-parse:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install prettier
-        run: npm install -g prettier
-      - name: Format JSON files
+
+      - name: Validate JSON files (check-only, advisory)
+        shell: bash
         run: |
-          find . -name "*.json" | grep -v "docker/dask-gateway-server" | xargs prettier --write
-      - name: Commit changes
-        if: ${{ github.event_name == 'pull_request' || github.ref_type == 'branch' }}
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          REF_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          git fetch origin "$REF_NAME"
-          git checkout -B "$REF_NAME" "origin/$REF_NAME" || git checkout -B "$REF_NAME"
-          git add -A
-          git diff --quiet && git diff --staged --quiet || git commit -m "Apply prettier JSON formatting"
-          git push origin "$REF_NAME"
+          set -euo pipefail
+          mapfile -t files < <(find . -type f -name '*.json' \
+            -not -path './docker/dask-gateway-server/*' \
+            -not -path './docker/kaniko-build-jobs/*' \
+            -not -path './docs/*' \
+            -not -path './slurm/*' \
+            -not -path './.cursor/*' \
+            -not -path './.git/*' | sort)
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo 'No in-scope JSON files found.'
+            exit 0
+          fi
+
+          for f in "${files[@]}"; do
+            python3 -m json.tool "$f" >/dev/null
+          done
+
+          echo "Validated ${#files[@]} JSON file(s)."

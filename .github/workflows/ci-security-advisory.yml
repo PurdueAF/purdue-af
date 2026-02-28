@@ -1,0 +1,238 @@
+name: CI Security Advisory
+
+on:
+  pull_request:
+    paths:
+      - 'deploy/**'
+      - 'docker/**'
+      - '.github/workflows/**'
+      - '**/requirements*.txt'
+      - '**/pyproject.toml'
+      - '**/poetry.lock'
+      - '**/Pipfile'
+      - '**/Pipfile.lock'
+      - '**/go.mod'
+      - '**/go.sum'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-security-advisory-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  detect-security-scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      vuln_surface: ${{ steps.filter.outputs.vuln_surface }}
+      config_surface: ${{ steps.filter.outputs.config_surface }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            vuln_surface:
+              - 'docker/**'
+              - '**/requirements*.txt'
+              - '**/pyproject.toml'
+              - '**/poetry.lock'
+              - '**/Pipfile'
+              - '**/Pipfile.lock'
+              - '**/go.mod'
+              - '**/go.sum'
+            config_surface:
+              - 'deploy/**'
+              - 'docker/**'
+              - '.github/workflows/**'
+
+      - name: Publish security scan plan
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### Security Advisory Scan Plan'
+            echo
+            echo '| Scan | Decision |'
+            echo '|---|---|'
+            if [ "${{ steps.filter.outputs.vuln_surface }}" = 'true' ]; then
+              echo '| Filesystem vulnerability scan | run |'
+            else
+              echo '| Filesystem vulnerability scan | skipped |'
+            fi
+            if [ "${{ steps.filter.outputs.config_surface }}" = 'true' ]; then
+              echo '| Configuration misconfiguration scan | run |'
+            else
+              echo '| Configuration misconfiguration scan | skipped |'
+            fi
+            echo
+            echo '- Workflow mode: advisory (scan job uses continue-on-error).'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  trivy-security-advisory:
+    needs: detect-security-scope
+    if: needs.detect-security-scope.outputs.vuln_surface == 'true' || needs.detect-security-scope.outputs.config_surface == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem vulnerability scan (advisory)
+        id: fs_scan
+        if: needs.detect-security-scope.outputs.vuln_surface == 'true'
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: json
+          output: trivy-pr-fs.json
+          skip-dirs: docker/dask-gateway-server,docs,docs/source/demos,docker/kaniko-build-jobs,slurm,.cursor
+
+      - name: Run Trivy configuration scan (advisory)
+        id: config_scan
+        if: needs.detect-security-scope.outputs.config_surface == 'true'
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          format: json
+          output: trivy-pr-config.json
+          skip-dirs: docker/dask-gateway-server,docs,docs/source/demos,docker/kaniko-build-jobs,slurm,.cursor
+
+      - name: Publish PR Trivy summary (advisory)
+        if: always()
+        shell: bash
+        env:
+          VULN_SURFACE: ${{ needs.detect-security-scope.outputs.vuln_surface }}
+          CONFIG_SURFACE: ${{ needs.detect-security-scope.outputs.config_surface }}
+          FS_SCAN_OUTCOME: ${{ steps.fs_scan.outcome || 'skipped' }}
+          CONFIG_SCAN_OUTCOME: ${{ steps.config_scan.outcome || 'skipped' }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from collections import Counter
+          from pathlib import Path
+
+          summary_path = Path(os.environ['GITHUB_STEP_SUMMARY'])
+          reports = (
+              (
+                  'Filesystem vulnerability scan',
+                  Path('trivy-pr-fs.json'),
+                  'Vulnerabilities',
+                  os.environ.get('VULN_SURFACE', 'false') == 'true',
+                  os.environ.get('FS_SCAN_OUTCOME', 'skipped'),
+              ),
+              (
+                  'Configuration misconfiguration scan',
+                  Path('trivy-pr-config.json'),
+                  'Misconfigurations',
+                  os.environ.get('CONFIG_SURFACE', 'false') == 'true',
+                  os.environ.get('CONFIG_SCAN_OUTCOME', 'skipped'),
+              ),
+          )
+
+          total_high_critical = 0
+          missing_reports = 0
+
+          with summary_path.open('a', encoding='utf-8') as summary:
+              summary.write('### PR Trivy Advisory Summary\n\n')
+              summary.write('| Scan | Scope | Step outcome | Report |\n')
+              summary.write('|---|---|---|---|\n')
+
+              for label, report_path, _, in_scope, outcome in reports:
+                  scope_status = 'run' if in_scope else 'skipped'
+                  report_status = 'present' if report_path.exists() else 'missing'
+                  summary.write(f'| {label} | {scope_status} | `{outcome}` | {report_status} |\n')
+                  if in_scope and not report_path.exists():
+                      missing_reports += 1
+
+              for label, report_path, finding_key, in_scope, _ in reports:
+                  if not in_scope:
+                      summary.write(f'\n#### {label}\n\nSkipped by path scope.\n')
+                      continue
+
+                  if not report_path.exists():
+                      summary.write(f'\n#### {label}\n\nReport missing (scan did not produce expected output).\n')
+                      continue
+
+                  payload = json.loads(report_path.read_text(encoding='utf-8'))
+                  results = payload.get('Results', []) if isinstance(payload, dict) else payload
+
+                  severity_counts = Counter()
+                  target_counts = Counter()
+
+                  for result in results:
+                      target = result.get('Target', 'unknown-target')
+                      for finding in result.get(finding_key) or []:
+                          severity = (finding.get('Severity') or 'UNKNOWN').upper()
+                          severity_counts[severity] += 1
+                          target_counts[target] += 1
+
+                  high_critical = severity_counts.get('HIGH', 0) + severity_counts.get('CRITICAL', 0)
+                  total_high_critical += high_critical
+
+                  summary.write(f'\n#### {label}\n\n')
+                  summary.write(f'- HIGH/CRITICAL findings: **{high_critical}**\n')
+                  summary.write(f'- Targets with findings: **{len(target_counts)}**\n\n')
+
+                  if high_critical == 0:
+                      summary.write('No HIGH/CRITICAL findings detected.\n')
+                      continue
+
+                  summary.write('| Severity | Count |\n')
+                  summary.write('|---|---:|\n')
+                  for severity in ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'):
+                      count = severity_counts.get(severity, 0)
+                      if count:
+                          summary.write(f'| {severity} | {count} |\n')
+
+                  summary.write('\n| Top targets | Findings |\n')
+                  summary.write('|---|---:|\n')
+                  for target, count in target_counts.most_common(10):
+                      summary.write(f'| `{target}` | {count} |\n')
+
+              if missing_reports > 0:
+                  overall_result = 'report-missing'
+              elif total_high_critical > 0:
+                  overall_result = 'findings-detected'
+              else:
+                  overall_result = 'clear'
+
+              summary.write('\n')
+              summary.write(f'- Overall result: **{overall_result}**\n')
+              summary.write('- Mode: advisory (job continue-on-error=true).\n')
+
+          if missing_reports > 0:
+              print(f'::warning::PR Trivy missing report files: {missing_reports}. See summary and artifacts.')
+          elif total_high_critical > 0:
+              print(f'::warning::PR Trivy found {total_high_critical} HIGH/CRITICAL findings. See summary and artifacts.')
+          else:
+              print('::notice::PR Trivy found no HIGH/CRITICAL findings in scope.')
+          PY
+
+      - name: Upload PR Trivy artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-pr-security-${{ github.run_id }}
+          path: |
+            trivy-pr-fs.json
+            trivy-pr-config.json
+          if-no-files-found: ignore
+          retention-days: 7

@@ -1,0 +1,119 @@
+name: Nightly Security Advisory
+
+on:
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-security-advisory-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  trivy-filesystem:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan (advisory)
+        id: fs_scan
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: json
+          output: trivy-nightly-fs.json
+          skip-dirs: docker/dask-gateway-server,docs,docs/source/demos,docker/kaniko-build-jobs,slurm,.cursor
+
+      - name: Publish nightly Trivy summary (advisory)
+        if: always()
+        shell: bash
+        env:
+          FS_SCAN_OUTCOME: ${{ steps.fs_scan.outcome || 'unknown' }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from collections import Counter
+          from pathlib import Path
+
+          report_path = Path('trivy-nightly-fs.json')
+          summary_path = Path(os.environ['GITHUB_STEP_SUMMARY'])
+          title = 'Nightly Trivy Vulnerability Summary'
+          scan_outcome = os.environ.get('FS_SCAN_OUTCOME', 'unknown')
+
+          with summary_path.open('a', encoding='utf-8') as summary:
+              summary.write(f'### {title}\n\n')
+              summary.write('| Scan | Step outcome | Report |\n')
+              summary.write('|---|---|---|\n')
+              summary.write(f'| Filesystem vulnerability scan | `{scan_outcome}` | {"present" if report_path.exists() else "missing"} |\n\n')
+
+              if not report_path.exists():
+                  summary.write('- Trivy report was not generated.\n')
+                  summary.write('- Overall result: **scan-step-failed**\n')
+                  summary.write('- Mode: advisory (job continue-on-error=true).\n')
+                  print('::warning::Nightly Trivy report was not generated.')
+                  raise SystemExit(0)
+
+              payload = json.loads(report_path.read_text(encoding='utf-8'))
+              results = payload.get('Results', []) if isinstance(payload, dict) else payload
+
+              severity_counts = Counter()
+              target_counts = Counter()
+
+              for result in results:
+                  target = result.get('Target', 'unknown-target')
+                  for vuln in result.get('Vulnerabilities') or []:
+                      severity = (vuln.get('Severity') or 'UNKNOWN').upper()
+                      severity_counts[severity] += 1
+                      target_counts[target] += 1
+
+              high_critical = severity_counts.get('HIGH', 0) + severity_counts.get('CRITICAL', 0)
+
+              summary.write(f'- HIGH/CRITICAL findings: **{high_critical}**\n')
+              summary.write(f'- Targets with findings: **{len(target_counts)}**\n\n')
+
+              if high_critical == 0:
+                  summary.write('No HIGH/CRITICAL vulnerabilities found in scope.\n')
+                  summary.write('- Overall result: **clear**\n')
+                  summary.write('- Mode: advisory (job continue-on-error=true).\n')
+                  print('::notice::Nightly Trivy found no HIGH/CRITICAL vulnerabilities.')
+                  raise SystemExit(0)
+
+              summary.write('| Severity | Count |\n')
+              summary.write('|---|---:|\n')
+              for severity in ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'):
+                  count = severity_counts.get(severity, 0)
+                  if count:
+                      summary.write(f'| {severity} | {count} |\n')
+
+              summary.write('\n| Top targets | Findings |\n')
+              summary.write('|---|---:|\n')
+              for target, count in target_counts.most_common(10):
+                  summary.write(f'| `{target}` | {count} |\n')
+
+              summary.write('\n')
+              summary.write('- Overall result: **findings-detected**\n')
+              summary.write('- Mode: advisory (job continue-on-error=true).\n')
+
+          print(f'::warning::Nightly Trivy found {high_critical} HIGH/CRITICAL vulnerabilities. See summary and artifact.')
+          PY
+
+      - name: Upload nightly Trivy artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-nightly-fs-${{ github.run_id }}
+          path: trivy-nightly-fs.json
+          if-no-files-found: ignore
+          retention-days: 14
