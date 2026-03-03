@@ -87,16 +87,11 @@ ingress:
   enabled: false
 
 prometheus:
-  enabled: true
-  server:
-    extraFlags: [web.enable-remote-write-receiver]
-    useExistingClusterRoleName: supersonic-prometheus-role
-    configMapOverrideName: prometheus-config
-
-  serviceAccounts:
-    server:
-      create: false
-      name: supersonic-prometheus-sa
+  external:
+    enabled: true
+    url: rancher-monitoring-prometheus.cattle-monitoring-system
+    port: 9090
+    scheme: http
 
 grafana:
   enabled: true
