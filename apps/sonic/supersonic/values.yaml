@@ -11,7 +11,7 @@ triton:
       --model-repository=/work/triton_models/ \
       --allow-gpu-metrics=true \
       --log-verbose=0 \
-      --strict-model-config=false \
+      --disable-auto-complete-config \
       --exit-timeout-secs=60
 
   resources:
