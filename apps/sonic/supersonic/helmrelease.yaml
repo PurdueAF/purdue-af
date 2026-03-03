@@ -1,7 +1,7 @@
 apiVersion: helm.toolkit.fluxcd.io/v2beta1
 kind: HelmRelease
 metadata:
-  name: sonic-hackathon
+  name: supersonic
 spec:
   suspend: false
   interval: 1m
@@ -25,14 +25,14 @@ spec:
       retries: -1
   valuesFrom:
     - kind: ConfigMap
-      name: sonic-hackathon-config
+      name: supersonic-config
       valuesKey: values.yaml
   postRenderers:
     - kustomize:
         patches:
           - target:
               kind: ScaledObject
-              name: "sonic-hackathon-keda-so"
+              name: "supersonic-keda-so"
             patch: |
               - op: add
                 path: /spec/triggers/0/metadata/timeout
