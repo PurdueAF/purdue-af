@@ -15,7 +15,7 @@ resources:
   # - ../../apps/monitoring/alloy/helmrelease.yaml
 
   - ../../apps/servicex/helmrelease.yaml
-  - ../../apps/servicex/gitrepo.yaml
+  # - ../../apps/servicex/gitrepo.yaml
   - ../../apps/servicex/helmrepo.yaml
 
   - ../../apps/sonic/supersonic/helmrelease.yaml
