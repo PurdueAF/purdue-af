@@ -1,5 +1,8 @@
 import json
+import os
+import signal
 import subprocess
+import threading
 import time
 
 from prometheus_client import Gauge, start_http_server
@@ -64,6 +67,10 @@ metadata_probes = {
 }
 
 METADATA_TIMEOUT_S = 10
+# Max time to wait for a killed process to exit (avoids hanging on D-state / stuck mounts)
+WAIT_AFTER_KILL_S = 2
+# Max wall-clock time for one full update_metrics() iteration; prevents indefinite hang
+ITERATION_TIMEOUT_S = 600
 
 # How often to run the heavy fio check, in iterations of the main loop (120s each)
 # Default: every 15 iterations = every 30 minutes
@@ -71,12 +78,23 @@ FIO_INTERVAL = 15
 fio_counter = 0
 
 
+def _wait_after_kill(proc, timeout_s=WAIT_AFTER_KILL_S):
+    """Wait for process to exit after kill; never block indefinitely (e.g. D-state on stuck mount)."""
+    try:
+        proc.wait(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        proc.kill()  # SIGKILL if still alive
+        try:
+            proc.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            pass  # abandon; process may be in kernel D-state
+
+
 def check_if_directory_exists(path_tuple):
     filename, expected_checksum = path_tuple
     start_time = time.time()
 
     try:
-        # Run md5sum with a timeout of 3 seconds
         proc = subprocess.Popen(
             ["/usr/bin/md5sum", filename],
             stdout=subprocess.PIPE,
@@ -87,19 +105,16 @@ def check_if_directory_exists(path_tuple):
             stdout, stderr = proc.communicate(timeout=3)
         except subprocess.TimeoutExpired:
             proc.kill()
-            stdout, stderr = proc.communicate()
+            _wait_after_kill(proc)
             print(f"Timeout occurred while checking file {filename}")
             return False, 3000  # Return 3000ms for timeout
 
-        # Calculate elapsed time in milliseconds
         elapsed_ms = (time.time() - start_time) * 1000
 
-        # If md5sum returned nonzero, it's an error
         if proc.returncode != 0:
             print(f"md5sum failed for {filename}. Stderr: {stderr.strip()}")
             return False, elapsed_ms
 
-        # Parse the checksum from md5sum output
         parts = stdout.strip().split()
         if len(parts) < 1:
             print(f"Could not parse md5sum output for {filename}: {stdout}")
@@ -122,7 +137,7 @@ def check_if_directory_exists(path_tuple):
 def check_read_throughput(mount_name, probe_file):
     print(f"Running fio throughput check for {mount_name} using {probe_file}")
     try:
-        result = subprocess.run(
+        proc = subprocess.Popen(
             [
                 "fio",
                 "--name=read_test",
@@ -134,11 +149,25 @@ def check_read_throughput(mount_name, probe_file):
                 "--readonly",
                 "--output-format=json",
             ],
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=120,
+            start_new_session=True,
         )
-        data = json.loads(result.stdout)
+        try:
+            stdout, stderr = proc.communicate(timeout=120)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except (ProcessLookupError, OSError):
+                proc.kill()
+            _wait_after_kill(proc, timeout_s=5)
+            print(f"fio timed out for {mount_name} ({probe_file})")
+            return None
+        if proc.returncode != 0:
+            print(f"fio failed for {mount_name}: {stderr.strip() if stderr else 'unknown'}")
+            return None
+        data = json.loads(stdout)
         bw_bytes = data["jobs"][0]["read"]["bw_bytes"]
         gbps = bw_bytes / 1e9
         print(f"Throughput for {mount_name}: {gbps:.2f} Gbps")
@@ -152,21 +181,25 @@ def check_metadata_latency(mount_name, probe_dir):
     print(f"Running metadata latency check for {mount_name} in {probe_dir}")
     start_time = time.time()
     try:
-        result = subprocess.run(
+        proc = subprocess.Popen(
             ["ls", "-la", probe_dir],
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=METADATA_TIMEOUT_S,
         )
+        try:
+            stdout, stderr = proc.communicate(timeout=METADATA_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            _wait_after_kill(proc)
+            elapsed_ms = (time.time() - start_time) * 1000
+            print(f"Metadata check timed out for {mount_name} ({probe_dir})")
+            return elapsed_ms
         elapsed_ms = (time.time() - start_time) * 1000
-        if result.returncode != 0:
-            print(f"ls failed for {probe_dir}: {result.stderr.strip()}")
+        if proc.returncode != 0:
+            print(f"ls failed for {probe_dir}: {stderr.strip()}")
             return None
         print(f"Metadata latency for {mount_name}: {elapsed_ms:.1f} ms")
-        return elapsed_ms
-    except subprocess.TimeoutExpired:
-        elapsed_ms = (time.time() - start_time) * 1000
-        print(f"Metadata check timed out for {mount_name} ({probe_dir})")
         return elapsed_ms
     except Exception as e:
         print(f"Metadata check error for {mount_name} ({probe_dir}): {e}")
@@ -208,5 +241,12 @@ if __name__ == "__main__":
     # Start the HTTP server to expose the metrics
     start_http_server(8000)
     while True:
-        update_metrics()
+        thread = threading.Thread(target=update_metrics, daemon=True)
+        thread.start()
+        thread.join(timeout=ITERATION_TIMEOUT_S)
+        if thread.is_alive():
+            print(
+                f"Iteration did not finish within {ITERATION_TIMEOUT_S}s "
+                "(stuck mount or filesystem?); continuing to next cycle."
+            )
         time.sleep(120)
