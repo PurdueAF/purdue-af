@@ -29,14 +29,13 @@ Other User Interfaces
 
 In addition to JupyterLab, Purdue AF provides other user interfaces for analysis development.
 
-* **Web-based Visual Studio Code (code-server)** interface
+.. |vscode-logo| image:: images/vscode-logo.jpeg
+   :height: 20px
 
-  To open the web-based **Visual Studio Code (code-server)** interface, click on the button with VSCode logo
+* **Web-based Visual Studio Code (code-server)** interface |vscode-logo|
+
+  To open the web-based VSCode interface, click on the button with VSCode logo
   in the JupyterLab Launcher (the button is not shown in the screenshot above).
-
-  .. image:: images/vscode-logo.jpeg
-     :width: 40
-     :align: right
 
 * :doc:`Connection from local VSCode-based IDEs <guide-vscode>`
 * :doc:`SSH connection from local terminal <guide-ssh-access>`
