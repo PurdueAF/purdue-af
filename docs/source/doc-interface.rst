@@ -36,7 +36,7 @@ In addition to JupyterLab, Purdue AF provides other user interfaces for analysis
 
   .. image:: images/vscode-logo.jpeg
      :width: 40
-     :align: left
+     :align: right
 
 * :doc:`Connection from local VSCode-based IDEs <guide-vscode>`
 * :doc:`SSH connection from local terminal <guide-ssh-access>`
