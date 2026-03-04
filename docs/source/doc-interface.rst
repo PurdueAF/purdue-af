@@ -24,6 +24,23 @@ The screenshot below shows the main elements of the interface:
    when you shut down and restart the AF session. 
 
 
+Other User Interfaces
+---------------------
+
+In addition to JupyterLab, Purdue AF provides other user interfaces for analysis development.
+
+* **Web-based Visual Studio Code (code-server)** interface
+
+  To open the web-based **Visual Studio Code (code-server)** interface, click on the button with VSCode logo
+  in the JupyterLab Launcher (the button is not shown in the screenshot above).
+
+  .. image:: images/vscode-logo.jpeg
+     :width: 40
+     :align: left
+
+* :doc:`Connection from local VSCode-based IDEs <guide-vscode>`
+* :doc:`SSH connection from local terminal <guide-ssh-access>`
+
 Python code development
 ------------------------
 
