@@ -10,7 +10,6 @@ app:
     enabled: ${enable_ingresses}
     class: public
     host: geddes.rcac.purdue.edu
-  tag: 1132_helm_annotations
   nodeSelector:
     cms-af-prod: "true"
   tolerations:
@@ -22,10 +21,6 @@ noCerts: false
 postgres:
   enabled: true
 postgresql:
-  # image:
-  #   registry: geddes-registry.rcac.purdue.edu/docker-hub-cache
-  #   repository: bitnami/postgresql
-  #   tag: 17.4.0
   # global:
   #   postgresql:
   #     auth:
@@ -119,10 +114,6 @@ rabbitmq:
       value: "cms-af"
       effect: "NoSchedule"
 minio:
-  # image:
-  #   registry: geddes-registry.rcac.purdue.edu/docker-hub-cache
-  #   repository: bitnami/minio
-  #   tag: 2025.2.28
   persistence:
     enabled: false
     storageClass: ${multinode_storage_class}
