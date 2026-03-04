@@ -165,9 +165,7 @@ def check_read_throughput(mount_name, probe_file):
             print(f"fio timed out for {mount_name} ({probe_file})")
             return None
         if proc.returncode != 0:
-            print(
-                f"fio failed for {mount_name}: {stderr.strip() if stderr else 'unknown'}"
-            )
+            print(f"fio failed for {mount_name}: {stderr.strip() if stderr else 'unknown'}")
             return None
         data = json.loads(stdout)
         bw_bytes = data["jobs"][0]["read"]["bw_bytes"]
