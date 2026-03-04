@@ -11,7 +11,7 @@ The screenshot below shows the main elements of the interface:
    :align: center
 
 #. **File browser** - your home directory with symlinks to different storage volumes (Depot, CVMFS, ``/work/``, etc. - learn more :doc:`here <doc-storage>`).
-#. **Exstensions** - left sidebar contains useful extesions: an interactive :doc:`Dask Gateway <guide-dask-gateway>` interface, and a Git extension for interactive work with GitHub or GitLab repositories.
+#. **Exstensions** - left sidebar contains useful extesions, such as a Git extension for interactive work with GitHub or GitLab repositories.
 #. **Launcher** - features buttons to create Python and ROOT C++ notebooks with different Pixi or Conda environments, open terminals, create new text files, etc.
    New launcher window can be opened by clicking the ``+`` button in the file browser or next to any open tab.
 #. **Top bar** - contains Purdue AF release version, your username, dark theme switch, and the shutdown button.

@@ -4,20 +4,13 @@ Dask Gateway at Purdue AF
 Dask Gateway is a service that allows to manage Dask clusters in a milti-tenant environment
 such as the Purdue Analysis Facility.
 
-To make Dask Gateway useful in a variety of analysis workflows, we provide four ways to work with it:
-
-* The Dask Gateway cluster creation can be done in two ways:
-
-  * **Interactively** from the Dask Labextension interface
-  * **Manually** in a Jupyter Notebook
-
-* For each of these methods, we allow to create two types of clusters:
+There are two types of Dask Gateway clusters that can be created:
 
   * **Dask Gateway cluster with SLURM backend**: workers are submitted to Purdue Hammer cluster.
     This is available to **Purdue users only** due to Purdue data access policies.
 
-    With this method, users can potentially create **hundreds of workers**, but in practice
-    requesting more than 100 workers is usually associated with some wait time due to competiton with
+    With this method, users can create **hundreds of workers**, although requesting more than 200-300 workers
+    is usually associated with some wait time due to competition with
     CMS production jobs and other users.
 
   * **Dask Gateway cluster with Kubernetes backend**: workers are submitted to Purdue Geddes cluster.
@@ -52,67 +45,48 @@ To make Dask Gateway useful in a variety of analysis workflows, we provide four 
 1. Creating Dask Gateway clusters 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This section contains the instructions for creating Dask Gateway clusters using the methods described above.
+To create a Dask Gateway cluster, you need to first connect to the Gateway server
+via a ``Gateway`` object, and then use ``Gateway.new_cluster()`` method.
 
-.. tabs::
+Calling ``Gateway()`` without arguments will connect you to the server with **Kubernetes backend**.
+In order to use the **SLURM** backend, you need to specify the server URL explicitly
+(see code below).
 
-   .. group-tab:: Interactive JupyterLab extension
+While it is possible to create a cluster in a Python script, we recommend that you instead
+do it from a separate Jupyter Notebook - that way the same cluster can be reused multiple
+times without restarting.
 
-      1. Click on the Dask logo in the left sidebar of JupyterLab interface.
-      2. Click on ``[+ NEW]`` button to open the dialog window with cluster settings.
-      3. In the dialog window, select cluster type, kernel, and desired worker resources.
-      4. Click the ``[Apply]`` button and wait for ~1 min, the cluster info will appear in the sidebar.
-      5. The sidebar should automatically connect to Dask dashboards;
-         you can open different dashboards by clicking on yellow buttons in the sidebar,
-         and rearrange the tabs as desired.
-      
-      .. image:: images/dask-gateway.png
-         :width: 700
-         :align: center
+.. code-block:: python
 
-   .. group-tab:: Jupyter Notebook
+   import os
+   import dask_gateway
+   from dask_gateway import Gateway
 
-      To create a Dask Gateway cluster manually, you need to connect to the Gateway server
-      via a ``Gateway`` object, and then use ``Gateway.new_cluster()`` method.
+   # To submit jobs via Kubernetes (all users)
+   gateway = Gateway()
 
-      Calling ``Gateway()`` without arguments will connect you to the server with **SLURM backend**.
-      In order to use the **Kubernetes** backend, you need to specify the server URL explicitly
-      (see code below).
+   # To submit jobs via SLURM (Purdue users only!)
+   # gateway = Gateway(
+   #     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
+   #     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
+   # )
 
-      While it is possible to create a cluster in a Python script, we recommend that you instead
-      do it from a separate Jupyter Notebook - that way the same cluster can be reused multiple
-      times without restarting.
+   # You may need to update some environment variables before creating a cluster.
+   # For example:
+   os.environ["X509_USER_PROXY"] = "/path-to-voms-proxy/"
 
-      .. code-block:: python
+   # Create the cluster
+   cluster = gateway.new_cluster(
+      pixi_project = "/path/to/pixi/project", # path to pixi project (directory containing pixi.toml file)
+      # conda_env = "/path/to/conda/environment", # path to conda environment - can be used instead of pixi_project
+      worker_cores = 1,    # cores per worker
+      worker_memory = 4,   # memory per worker in GB
+      env = dict(os.environ), # pass environment as a dictionary
+   )
 
-         import os
-         import dask_gateway
-         from dask_gateway import Gateway
-
-         # To submit jobs via Kubernetes (all users)
-         gateway = Gateway()
-
-         # To submit jobs via SLURM (Purdue users only!)
-         # gateway = Gateway(
-         #     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
-         #     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
-         # )
-
-         # You may need to update some environment variables before creating a cluster.
-         # For example:
-         os.environ["X509_USER_PROXY"] = "/path-to-voms-proxy/"
-
-         # Create the cluster
-         cluster = gateway.new_cluster(
-            pixi_project = "/path/to/pixi/project", # path to pixi project (directory containing pixi.toml file)
-            worker_cores = 1,    # cores per worker
-            worker_memory = 4,   # memory per worker in GB
-            env = dict(os.environ), # pass environment as a dictionary
-         )
-
-         # If working in Jupyter Notebook, the following will create a widget
-         # which can be used to scale the cluster interactively:
-         cluster
+   # If working in Jupyter Notebook, the following will create a widget
+   # which can be used to scale the cluster interactively:
+   cluster
 
 2. Shared environments and storage volumes 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -152,52 +126,36 @@ Pixi or Conda environments, Python packages, C++ libraries, etc.
   environment is stored (see table above). For example, SLURM workers will not be able to see
   Pixi or Conda environments located in ``/work/`` storage.
 
-  .. tabs::
+  The path to pixi project is specified in the ``pixi_project``
+  argument of ``new_cluster()``:
 
-     .. group-tab:: Interactive JupyterLab extension
+  .. code-block:: python
 
-        The Conda environment / Jupyter kernel can be selected from a drop-down list
-        in the dialog window that appears when you click on ``[+NEW]`` button.
+     cluster = gateway.new_cluster(
+        pixi_project = "/path/to/pixi/project", # path to pixi project (directory containing pixi.toml file)
+        # ...
+     )
 
-        To make your Conda environment appear as a kernel,
-        it must have the ``ipykernel`` package installed.
+  If you are using a multi-environment Pixi project, you can specify the environment name
+  in the ``pixi_env`` argument (``default`` if not specified):
 
-        .. image:: images/dask-gateway-dialog.png
-           :width: 400
-           :align: center
+  .. code-block:: python
 
-     .. group-tab:: Jupyter Notebook
+     cluster = gateway.new_cluster(
+        pixi_project = "/path/to/pixi/project", # path to pixi project (directory containing pixi.toml file)
+        pixi_env = "my-env", # pixi environment name
+        # ...
+     )
 
-        The path to pixi project is specified in the ``pixi_project``
-        argument of ``new_cluster()``:
+  If using Conda environment, you can specify the environment name in the ``conda_env``
+  argument (mutually exclusive with ``pixi_project`` and ``pixi_env`` - see above):
 
-        .. code-block:: python
+  .. code-block:: python
 
-           cluster = gateway.new_cluster(
-              pixi_project = "/path/to/pixi/project", # path to pixi project (directory containing pixi.toml file)
-              # ...
-           )
-
-        If you are using a multi-environment Pixi project, you can specify the environment name
-        in the ``pixi_env`` argument (``default`` if not specified):
-
-        .. code-block:: python
-
-           cluster = gateway.new_cluster(
-              pixi_project = "/path/to/pixi/project", # path to pixi project (directory containing pixi.toml file)
-              pixi_env = "my-env", # pixi environment name
-              # ...
-           )
-
-        If using Conda environment, you can specify the environment name in the ``conda_env``
-        argument (mutually exclusive with ``pixi_project`` and ``pixi_env`` - see above):
-
-        .. code-block:: python
-
-           cluster = gateway.new_cluster(
-              conda_env = "/path/to/conda/environment", # path to conda environment
-              # ...
-           )
+     cluster = gateway.new_cluster(
+        conda_env = "/path/to/conda/environment", # path to conda environment
+        # ...
+     )
 
 *  **Environment variables**
 
@@ -207,66 +165,37 @@ Pixi or Conda environments, Python packages, C++ libraries, etc.
    * Enable imports from C++ libraries by amending the ``LD_LIBRARY_PATH`` variable.
    * Allow workers to read data via XRootD by specifying path to VOMS proxy via ``X509_USER_PROXY`` variable.
 
-   These and other environment variables can be passed to Dask workers as follows:
+   The ``gateway.new_cluster()`` command takes ``env`` argument which can be used
+   to pass any set of environment variables to workers. The most straightforward
+   way to use this is to pass the entire local environment as follows:
 
-   .. tabs::
+   .. code-block:: python
 
-      .. group-tab:: Interactive JupyterLab extension
+      os.environ["X509_USER_PROXY"] = "/path-to-proxy"
 
-         When a Dask Gateway cluster is created via the JupyterLab extension,
-         there is no direct interface to pass environment to workers.
+      cluster = gateway.new_cluster(
+         #...
+         env = dict(os.environ)
+      )
 
-         Instead, we use the following workaround to override the
-         worker environment:
+   .. important::
 
-         1. Create a file ``~/.config/dask/labextension.yaml``
-         2. Add any environment variables in the following way:
+      For CERN and FNAL users, the dictionary passed to ``env`` argument must
+      contain elements ``"NB_UID"`` and ``"NB_GID"``. **This is already satisfied when
+      you pass** ``env = dict(os.environ)``, **so no further action is needed.**
+      
+      However, if you want to pass a custom environment
+      to workers, you can add the required elements as follows:
 
-            .. code-block:: yaml
+      .. code-block:: python
 
-               # contents of labextension.yaml
-               labextension:
-                  env_override:
-                     KEY1: VALUE1
-                     X509_USER_PROXY: "/path-to-proxy/"
-                     # any other variables..
-         
-         3. **Shut down and restart the Analysis Facility session**
-         4. Create a new cluster by clicking the ``[+NEW]`` button in the left sidebar.
+         env = {
+            "NB_UID": os.environ["NB_UID"],
+            "NB_GID": os.environ["NB_GID"],
+            # other environment variables...
+         }  
 
-      .. group-tab:: Jupyter Notebook
-
-         The ``gateway.new_cluster()`` command takes ``env`` argument which can be used
-         to pass any set of environment variables to workers. The most straightforward
-         way to use this is to pass the entire local environment as follows:
-
-         .. code-block:: python
-
-            os.environ["X509_USER_PROXY"] = "/path-to-proxy"
-
-            cluster = gateway.new_cluster(
-               #...
-               env = dict(os.environ)
-            )
-
-         .. important::
-
-            For CERN and FNAL users, the dictionary passed to ``env`` argument must
-            contain elements ``"NB_UID"`` and ``"NB_GID"``. **This is already satisfied when
-            you pass** ``env = dict(os.environ)``, **so no further action is needed.**
-            
-            However, if you want to pass a custom environment
-            to workers, you can add the required elements as follows:
-
-            .. code-block:: python
-
-               env = {
-                  "NB_UID": os.environ["NB_UID"],
-                  "NB_GID": os.environ["NB_GID"],
-                  # other environment variables...
-               }  
-
-1. Monitoring 
+3. Monitoring 
 ^^^^^^^^^^^^^^^
 
 Monitoring your Dask jobs is possible in two ways:
@@ -281,34 +210,15 @@ Monitoring your Dask jobs is possible in two ways:
       monitoring dashboard
    </a>
 
-Instructions to open Dask cluster dashboards for different Gateway setups:
+When a cluster is created in a Jupyter Notebook, you can extract the link to the dashboard
+either from a Dask Gateway widget, or from ``cluster.dashboard_link``.
 
-.. tabs::
+To create a widget, simply execute a cell containing a reference to the cluster object,
+as shown in the screenshot.
 
-  .. group-tab:: Interactive JupyterLab extension
-
-     When a cluster is created via the Dask Labextension interface,
-     the extension should connect to monitoring dashboards automatically;
-     you can open various dashboards by clicking on the yellow buttons in the sidebar.
-
-     Alternatively, you can copy the URL from the window at the top of the Labextension
-     sidebar, and open the Dask dashboard in a separate web browser tab.
-
-     .. image:: images/dask-gateway.png
-        :width: 700
-        :align: center
-
-  .. group-tab:: Jupyter Notebook
-         
-     When a cluster is created in a Jupyter Notebook, you can extract the link to the dashboard
-     either from a Dask Gateway widget, or from ``cluster.dashboard_link``.
-
-     To create a widget, simply execute a cell containing a reference to the cluster object,
-     as shown in the screenshot.
-
-     .. image:: images/dask-gateway-widget.png
-        :width: 700
-        :align: center
+.. image:: images/dask-gateway-widget.png
+   :width: 700
+   :align: center
 
 
 4. Cluster discovery and connecting a client 
@@ -336,41 +246,26 @@ Below are the different ways to connect a client to a cluster created elsewhere:
 
       .. code-block:: python
 
-         from dask_gateway import Gateway
+       	from dask_gateway import Gateway
 
-         # If submitting workers as Kubernetes pods (all users):
-         gateway = Gateway()
+     	   # If submitting workers as Kubernetes pods (all users):
+     	   gateway = Gateway()
 
-         # If submitting workers as SLURM jobs (Purdue users only):
-         # gateway = Gateway(
-         #     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
-         #     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
-         # )
+     	   # If submitting workers as SLURM jobs (Purdue users only):
+     	   # gateway = Gateway(
+     	   #     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
+     	   #     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
+     	   # )
 
-         clusters = gateway.list_clusters()
-         # for example, select the first of existing clusters
-         cluster_name = clusters[0].name
-         cluster = gateway.connect(cluster_name).get_client()
+     	   clusters = gateway.list_clusters()
+     	   # for example, select the first of existing clusters
+     	   cluster_name = clusters[0].name
+     	   cluster = gateway.connect(cluster_name).get_client()
 
       .. caution::
 
          If you have more than one Dask Gateway cluster running, automatic detection
          may be ambiguous.
-
-   .. tab:: **Client code injection from extension**
-
-      If you created the cluster via the interactive extension, you can obtain
-      the client code simply by clicking on the ``<>`` symbol in the cluster widget.
-      This action will paste the client code into a new cell in the most
-      recently used Jupyter notebook.
-
-      .. image:: images/dask-gateway-labextension-widget.png
-         :width: 300
-         :align: center
-
-      .. image:: images/dask-gateway-code-injection.png
-         :width: 700
-         :align: center
 
    .. tab:: **Manual connection**
 
@@ -382,21 +277,21 @@ Below are the different ways to connect a client to a cluster created elsewhere:
 
          from dask_gateway import Gateway
 
-         # If submitting workers as Kubernetes pods (all users):
-         gateway = Gateway()
+      	# If submitting workers as Kubernetes pods (all users):
+     	   gateway = Gateway()
 
-         # If submitting workers as SLURM jobs (Purdue users only):
-         # gateway = Gateway(
-         #     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
-         #     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
-         # )
+     	   # If submitting workers as SLURM jobs (Purdue users only):
+     	   # gateway = Gateway(
+     	   #     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
+     	   #     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
+     	   # )
 
-         # To find the cluster name:
-         print(gateway.list_clusters())
+     	   # To find the cluster name:
+     	   print(gateway.list_clusters())
 
-         # replace with actual cluster name:
-         cluster_name = "17dfaa3c10dc48719f5dd8371893f3e5"
-         client = gateway.connect(cluster_name).get_client()
+     	   # replace with actual cluster name:
+     	   cluster_name = "17dfaa3c10dc48719f5dd8371893f3e5"
+     	   client = gateway.connect(cluster_name).get_client()
 
 
 5. Cluster lifetime and timeouts
