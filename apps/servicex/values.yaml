@@ -87,7 +87,10 @@ codeGen:
     enabled: false
 
 transformer:
-  memoryLimit: 4Gi
+  cpuRequest: 1
+  memoryRequest: 4Gi
+  cpuLimit: 2
+  memoryLimit: 8Gi
   # persistence:
   #   existingClaim: "claim-dkondra"
   #   subdir: /servicex/
