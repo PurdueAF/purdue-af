@@ -6,40 +6,40 @@ such as the Purdue Analysis Facility.
 
 There are two types of Dask Gateway clusters that can be created:
 
-  * **Dask Gateway cluster with SLURM backend**: workers are submitted to Purdue Hammer cluster.
-    This is available to **Purdue users only** due to Purdue data access policies.
+* **Dask Gateway cluster with SLURM backend**: workers are submitted to Purdue Hammer cluster.
+   This is available to **Purdue users only** due to Purdue data access policies.
 
-    With this method, users can create **hundreds of workers**, although requesting more than 200-300 workers
-    is usually associated with some wait time due to competition with
-    CMS production jobs and other users.
+   With this method, users can create **hundreds of workers**, although requesting more than 200-300 workers
+   is usually associated with some wait time due to competition with
+   CMS production jobs and other users.
 
-  * **Dask Gateway cluster with Kubernetes backend**: workers are submitted to Purdue Geddes cluster.
-    This is available to **all users**.
+* **Dask Gateway cluster with Kubernetes backend**: workers are submitted to Purdue Geddes cluster.
+   This is available to **all users**.
 
-    With this method, the workers are scheduled almost instantly, but for now we restrict
-    the total per-user resource usage to **400 cores, 800 GB RAM** due to limited resources
-    in the Analysis Facility.
+   With this method, the workers are scheduled almost instantly, but for now we restrict
+   the total per-user resource usage to **400 cores, 800 GB RAM** due to limited resources
+   in the Analysis Facility.
 
-  The pros and cons of the Dask Gateway backends are summarized in the following table:
+The pros and cons of the Dask Gateway backends are summarized in the following table:
 
-  +----------+-----------------------------+---------------------------------+
-  |          | Dask Gateway + SLURM        | Dask Gateway + Kubernetes       |
-  +==========+=============================+=================================+
-  | **Pros** | * SLURM is familiar to      | * Fast scheduling of resources  |
-  |          |   current users             |                                 |
-  |          |                             |                                 |
-  |          | * Easy to access logs and   | * Detailed monitoring           |
-  |          |   worker info via ``squeue``|                                 |
-  |          |                             | * Available to CERN/FNAL users  |
-  |          |                             |                                 |
-  +----------+-----------------------------+---------------------------------+
-  | **Cons** | * Unavailable to CERN/FNAL  | * Limited total amount of       |
-  |          |   users                     |   resources                     |
-  |          |                             |                                 |
-  |          | * Scheduling workers can be | * Retreiving detailed worker    |
-  |          |   slow due to competition   |   info can be non-trivial for   |
-  |          |   with CMS production jobs  |   users (but easy for admins)   |
-  +----------+-----------------------------+---------------------------------+
++----------+-----------------------------+---------------------------------+
+|          | Dask Gateway + SLURM        | Dask Gateway + Kubernetes       |
++==========+=============================+=================================+
+| **Pros** | * SLURM is familiar to      | * Fast scheduling of resources  |
+|          |   current users             |                                 |
+|          |                             |                                 |
+|          | * Easy to access logs and   | * Detailed monitoring           |
+|          |   worker info via ``squeue``|                                 |
+|          |                             | * Available to CERN/FNAL users  |
+|          |                             |                                 |
++----------+-----------------------------+---------------------------------+
+| **Cons** | * Unavailable to CERN/FNAL  | * Limited total amount of       |
+|          |   users                     |   resources                     |
+|          |                             |                                 |
+|          | * Scheduling workers can be | * Retreiving detailed worker    |
+|          |   slow due to competition   |   info can be non-trivial for   |
+|          |   with CMS production jobs  |   users (but easy for admins)   |
++----------+-----------------------------+---------------------------------+
 
 
 1. Creating Dask Gateway clusters 
