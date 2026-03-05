@@ -127,11 +127,16 @@ RESULTS_DIR = Path(os.getenv("RESULTS_DIR", "/af-node-monitor/results"))
 POD_NAMESPACE = os.getenv("POD_NAMESPACE", "default")
 
 JOB_INTERVAL_S = float(os.getenv("JOB_INTERVAL_S", "600"))  # 10 minutes
-JOB_TTL_SECONDS = int(os.getenv("JOB_TTL_SECONDS", "120"))  # 2 minutes
+JOB_TTL_SECONDS = int(os.getenv("JOB_TTL_SECONDS", "120"))  # currently unused
 JOB_ACTIVE_DEADLINE_SECONDS = int(os.getenv("JOB_ACTIVE_DEADLINE_SECONDS", "180"))
 JOB_BACKOFF_LIMIT = int(os.getenv("JOB_BACKOFF_LIMIT", "0"))
 
-JOB_RETENTION_S = float(os.getenv("JOB_RETENTION_S", "120"))  # 2 minutes
+JOB_SUCCESS_RETENTION_S = float(
+    os.getenv("JOB_SUCCESS_RETENTION_S", "0")
+)  # delete successful Jobs immediately
+JOB_FAILED_RETENTION_S = float(
+    os.getenv("JOB_FAILED_RETENTION_S", "60")
+)  # keep failed Jobs for 1 minute
 JOB_MAX_RUNTIME_S = float(os.getenv("JOB_MAX_RUNTIME_S", "300"))  # 5 minutes
 
 RESULT_STALE_WINDOW_S = float(
@@ -563,8 +568,25 @@ def _cleanup_finished_jobs(now: float) -> None:
             continue
 
         finished_ago = now - completion_time.timestamp()
-        if finished_ago < JOB_RETENTION_S:
-            continue
+        # Classify Job outcome.
+        succeeded = bool(getattr(status, "succeeded", 0))
+        failed = bool(getattr(status, "failed", 0))
+        for cond in getattr(status, "conditions", []) or []:
+            ctype = getattr(cond, "type", "")
+            cstatus = getattr(cond, "status", "")
+            if ctype == "Complete" and cstatus == "True":
+                succeeded = True
+            if ctype == "Failed" and cstatus == "True":
+                failed = True
+
+        if succeeded and not failed:
+            # Successful Jobs: delete immediately (or after optional small delay).
+            if finished_ago < JOB_SUCCESS_RETENTION_S:
+                continue
+        else:
+            # Failed or unknown outcome: keep briefly for inspection.
+            if finished_ago < JOB_FAILED_RETENTION_S:
+                continue
 
         try:
             _batch_v1.delete_namespaced_job(
