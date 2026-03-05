@@ -132,7 +132,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -165,7 +167,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 12,
         "w": 9,
         "x": 15,
         "y": 2
@@ -177,7 +179,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "# Announcements\n\n* This is a new monitoring dashboard for Purdue Analysis Facility\nand Purdue CMS Tier-2.\n\n* If you want any other metrics added, please send your suggestions to Dmitry Kondratyev.\n\n* For Purdue AF documentation, visit https://analysis-facility.physics.purdue.edu.\n\n* To report issues with Purdue AF, send an email to cms-af@groups.purdue.edu.\n",
+        "content": "# Announcements\n---\n<!-- * This is a new monitoring dashboard for Purdue Analysis Facility\nand Purdue CMS Tier-2.\n\n* If you want any other metrics added, please send your suggestions to Dmitry Kondratyev. -->\n\n* For Purdue AF documentation, visit https://analysis-facility.physics.purdue.edu.\n\n* To report issues with Purdue AF, send an email to cms-af@groups.purdue.edu.\n",
         "mode": "markdown"
       },
       "pluginVersion": "12.1.0",
@@ -411,7 +413,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -437,31 +441,6 @@
       "title": "",
       "transparent": true,
       "type": "stat"
-    },
-    {
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 2,
-        "w": 12,
-        "x": 12,
-        "y": 10
-      },
-      "id": 20,
-      "options": {
-        "code": {
-          "language": "plaintext",
-          "showLineNumbers": false,
-          "showMiniMap": false
-        },
-        "content": "## Storage ↓",
-        "mode": "markdown"
-      },
-      "pluginVersion": "12.1.0",
-      "title": "",
-      "type": "text"
     },
     {
       "datasource": {
@@ -503,7 +482,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -571,7 +552,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -638,7 +621,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -705,7 +690,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -732,157 +719,29 @@
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
-      },
       "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "axisPlacement": "auto",
-            "fillOpacity": 70,
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineWidth": 1
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "semi-dark-green",
-                "value": 0
-              },
-              {
-                "color": "semi-dark-yellow",
-                "value": 1000
-              },
-              {
-                "color": "semi-dark-orange",
-                "value": 5000
-              },
-              {
-                "color": "semi-dark-red",
-                "value": 9000
-              }
-            ]
-          },
-          "unit": "ms"
-        },
+        "defaults": {},
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
-        "w": 6,
+        "h": 2,
+        "w": 12,
         "x": 12,
-        "y": 12
+        "y": 14
       },
-      "id": 18,
+      "id": 20,
       "options": {
-        "colWidth": 0.97,
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
         },
-        "rowHeight": 0.97,
-        "showValue": "never",
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
+        "content": "## Storage ↓",
+        "mode": "markdown"
       },
       "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "avg by (mount_name) (af_node_mount_metadata_latency_ms)",
-          "interval": "10m",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Storage responsiveness (avg over AF nodes)",
-      "type": "status-history"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "semi-dark-red",
-                "value": 0
-              },
-              {
-                "color": "semi-dark-orange",
-                "value": 0.05
-              },
-              {
-                "color": "semi-dark-yellow",
-                "value": 0.1
-              },
-              {
-                "color": "semi-dark-green",
-                "value": 0.15
-              }
-            ]
-          },
-          "unit": "Gbits"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 18,
-        "y": 12
-      },
-      "id": 19,
-      "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "sizing": "auto"
-      },
-      "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "avg by (mount_name) (af_node_mount_data_rate_gbps)",
-          "interval": "5m",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Reading data rate (avg over AF nodes)",
-      "type": "gauge"
+      "title": "",
+      "type": "text"
     },
     {
       "datasource": {
@@ -915,7 +774,9 @@
       },
       "id": 8,
       "options": {
-        "displayLabels": ["value"],
+        "displayLabels": [
+          "value"
+        ],
         "legend": {
           "displayMode": "list",
           "placement": "right",
@@ -924,7 +785,9 @@
         },
         "pieType": "pie",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -984,7 +847,9 @@
       },
       "id": 7,
       "options": {
-        "displayLabels": ["value"],
+        "displayLabels": [
+          "value"
+        ],
         "legend": {
           "displayMode": "list",
           "placement": "right",
@@ -992,7 +857,9 @@
         },
         "pieType": "pie",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -1019,6 +886,157 @@
       ],
       "title": "GPUs: A100 40GB",
       "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "P1809F7CD0C75ACF3"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "axisPlacement": "auto",
+            "fillOpacity": 70,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "semi-dark-green",
+                "value": 0
+              },
+              {
+                "color": "semi-dark-yellow",
+                "value": 1000
+              },
+              {
+                "color": "semi-dark-orange",
+                "value": 5000
+              },
+              {
+                "color": "semi-dark-red",
+                "value": 9000
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 12,
+        "y": 16
+      },
+      "id": 18,
+      "options": {
+        "colWidth": 0.97,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "rowHeight": 0.97,
+        "showValue": "never",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "avg by (mount_name) (af_node_mount_metadata_latency_ms)",
+          "interval": "10m",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Storage responsiveness (avg over AF nodes)",
+      "type": "status-history"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "P1809F7CD0C75ACF3"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "semi-dark-red",
+                "value": 0
+              },
+              {
+                "color": "semi-dark-yellow",
+                "value": 0.05
+              },
+              {
+                "color": "semi-dark-green",
+                "value": 0.1
+              }
+            ]
+          },
+          "unit": "Gbits"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 18,
+        "y": 16
+      },
+      "id": 19,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "avg by (mount_name) (af_node_mount_data_rate_gbps)",
+          "interval": "5m",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Reading data rate (avg over AF nodes)",
+      "type": "gauge"
     }
   ],
   "preload": false,
@@ -1036,5 +1054,5 @@
   "timezone": "browser",
   "title": "PHYS 390 Display",
   "uid": "3d10a559-f20a-4ab0-9e4b-a677d3ca3a11",
-  "version": 72
+  "version": 76
 }

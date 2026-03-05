@@ -356,7 +356,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (node) (\n  kube_pod_container_resource_requests{\n    namespace=~\"cms(-dev)?\",\n    resource=\"cpu\"\n  }\n)\n  /\nsum(kube_node_status_capacity{resource=\"cpu\"}) by (node)\n",
+          "expr": "sum by (node) (\n  kube_pod_container_resource_requests{\n    namespace=~\"cms(-dev)?\",\n    resource=\"cpu\"\n  }\n  * on(node) group_left()\n  kube_node_spec_taint{value=\"cms-af\"}\n)\n/\nsum by (node) (\n  kube_node_status_capacity{resource=\"cpu\"}\n  * on(node) group_left()\n  kube_node_spec_taint{value=\"cms-af\"}\n)",
           "instant": true,
           "interval": "",
           "legendFormat": "{{ node }}",
@@ -616,7 +616,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (node) (\n  kube_pod_container_resource_requests{\n    namespace=~\"cms(-dev)?\",\n    resource=\"memory\"\n  }\n)\n  /\nsum by (node) (\n  label_replace(\n      label_replace(\n      (\n        sum(node_memory_MemTotal_bytes{instance!=\"hammer-adm.rcac.purdue.edu:9100\"}) by (instance)\n      ),\n      \"node\", \"$1\", \"instance\", \"(.*).rcac.purdue.edu:9796\"\n    ),\n    \"node\", \"$1\", \"node\", \"(.*).cms\"\n  )\n)\n",
+          "expr": "sum by (node) (\n  kube_pod_container_resource_requests{\n    namespace=~\"cms(-dev)?\",\n    resource=\"memory\"\n  }\n  * on(node) group_left()\n  kube_node_spec_taint{value=\"cms-af\"}\n)\n/\nsum by (node) (\n  kube_node_status_capacity{resource=\"memory\"}\n  * on(node) group_left()\n  kube_node_spec_taint{value=\"cms-af\"}\n)",
           "instant": true,
           "interval": "",
           "legendFormat": "{{ node }}",
