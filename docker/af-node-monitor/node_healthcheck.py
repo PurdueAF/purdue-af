@@ -667,9 +667,7 @@ def update_metrics() -> None:
                 else:
                     mount_ping_ms.labels(**labels).set(_timeout_ping_ms())
 
-                mount_metadata_latency_ms.labels(**labels).set(
-                    _timeout_metadata_ms()
-                )
+                mount_metadata_latency_ms.labels(**labels).set(_timeout_metadata_ms())
 
                 mount_data_rate_gbps.labels(**labels).set(0.0)
                 mount_timeout_total.labels(check_type="job_result", **labels).inc()
