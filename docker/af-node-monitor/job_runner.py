@@ -242,6 +242,7 @@ def main() -> None:
             "metadata_ms": meta_ms,
             "throughput_gbps": 0.0,
             "last_fio_ts": last_fio_ts,
+            "node": NODE_NAME or "",
         }
         _write_result_atomic(result_path, result)
         return
@@ -282,6 +283,7 @@ def main() -> None:
             float(throughput_gbps) if throughput_gbps is not None else 0.0
         ),
         "last_fio_ts": last_fio_ts,
+        "node": NODE_NAME or "",
     }
     print(f"[job_runner] Final result for '{MOUNT_NAME}': {result}")
     _write_result_atomic(result_path, result)

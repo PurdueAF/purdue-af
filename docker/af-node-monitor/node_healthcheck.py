@@ -627,11 +627,16 @@ def update_metrics() -> None:
         mount_path = cfg["mount_path"]
         for node_name in nodes:
             data = _load_result(m_name, node_name)
+            # Use node from result JSON (job pod's node); fallback to discovery
+            # so the metric always reflects the node that produced the data.
+            node_for_label = (
+                (data.get("node") or "").strip() if data else ""
+            ) or (node_name or "unknown")
 
             labels = {
                 "mount_name": m_name,
                 "mount_path": mount_path,
-                "node": node_name or "unknown",
+                "node": node_for_label,
             }
 
             if data and data.get("_storage_error"):
