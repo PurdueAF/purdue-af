@@ -6,7 +6,6 @@ from typing import Any, Dict
 
 from prometheus_client import Counter, Gauge, start_http_server
 
-
 MOUNTS: Dict[str, Dict[str, Any]] = {
     "/depot/": {
         "mount_path": "/depot/",
@@ -129,9 +128,7 @@ def update_metrics() -> None:
         meta_ms = data.get("metadata_ms")
         gbps = data.get("throughput_gbps")
 
-        mount_valid.labels(mount_name=m_name, mount_path=mount_path).set(
-            1 if ok else 0
-        )
+        mount_valid.labels(mount_name=m_name, mount_path=mount_path).set(1 if ok else 0)
 
         if timeout:
             # Values in JSON already represent timeout semantics; enforce speed 0.
@@ -153,9 +150,9 @@ def update_metrics() -> None:
                     mount_name=m_name, mount_path=mount_path
                 ).set(_timeout_metadata_ms())
 
-            mount_data_rate_gbps.labels(
-                mount_name=m_name, mount_path=mount_path
-            ).set(0.0)
+            mount_data_rate_gbps.labels(mount_name=m_name, mount_path=mount_path).set(
+                0.0
+            )
             mount_timeout_total.labels(
                 mount_name=m_name, mount_path=mount_path, check_type="job_result"
             ).inc()
@@ -175,9 +172,9 @@ def update_metrics() -> None:
                     mount_name=m_name, mount_path=mount_path
                 ).set(float(gbps))
 
-            mount_last_success_ts.labels(
-                mount_name=m_name, mount_path=mount_path
-            ).set(timestamp)
+            mount_last_success_ts.labels(mount_name=m_name, mount_path=mount_path).set(
+                timestamp
+            )
 
 
 if __name__ == "__main__":
@@ -186,4 +183,3 @@ if __name__ == "__main__":
         update_metrics()
         monitor_last_iteration_ts.set(time.time())
         time.sleep(CHECK_INTERVAL_S)
-
