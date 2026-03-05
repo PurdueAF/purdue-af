@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: af-node-monitor-storage
+spec:
+  storageClassName: ${multinode_storage_class}
+  accessModes: [ReadWriteMany]
+  resources:
+    requests:
+      storage: ${af_shared_storage_size}
+

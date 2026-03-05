@@ -38,7 +38,7 @@ spec:
           command: ["python", "/scripts/node_healthcheck.py"]
           env:
             - name: RESULTS_DIR
-              value: "/work/af-node-monitor/results"
+              value: "/af-node-monitor/results"
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
@@ -58,9 +58,8 @@ spec:
             - name: depot
               mountPath: /depot/cms
               mountPropagation: HostToContainer
-            - name: work
-              mountPath: /work/
-              mountPropagation: HostToContainer
+            - name: af-node-monitor-storage
+              mountPath: /af-node-monitor
       volumes:
         - name: scripts
           configMap:
@@ -75,6 +74,6 @@ spec:
           nfs:
             server: datadepot.rcac.purdue.edu
             path: /depot/cms
-        - name: work
+        - name: af-node-monitor-storage
           persistentVolumeClaim:
-            claimName: af-shared-storage
+            claimName: af-node-monitor-storage

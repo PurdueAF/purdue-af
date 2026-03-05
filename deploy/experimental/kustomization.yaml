@@ -23,6 +23,7 @@ resources:
 
   - ../../apps/monitoring/af-monitoring/daemonset.yaml
   - ../../apps/monitoring/af-monitoring/af-node-monitor-rbac.yaml
+  - ../../apps/infrastructure/af-node-monitor-storage.yaml
 
 generatorOptions:
   disableNameSuffixHash: true

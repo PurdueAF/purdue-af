@@ -28,7 +28,7 @@ MOUNTS: Dict[str, Dict[str, Any]] = {
         "volumes": [
             {
                 "name": "results",
-                "persistentVolumeClaim": {"claimName": "af-shared-storage"},
+                "persistentVolumeClaim": {"claimName": "af-node-monitor-storage"},
             },
             {
                 "name": "depot",
@@ -39,7 +39,7 @@ MOUNTS: Dict[str, Dict[str, Any]] = {
             },
         ],
         "volume_mounts": [
-            {"name": "results", "mountPath": "/work"},
+            {"name": "results", "mountPath": "/af-node-monitor"},
             {
                 "name": "depot",
                 "mountPath": "/depot/cms",
@@ -59,11 +59,11 @@ MOUNTS: Dict[str, Dict[str, Any]] = {
         "volumes": [
             {
                 "name": "results",
-                "persistentVolumeClaim": {"claimName": "af-shared-storage"},
+                "persistentVolumeClaim": {"claimName": "af-node-monitor-storage"},
             }
         ],
         "volume_mounts": [
-            {"name": "results", "mountPath": "/work"},
+            {"name": "results", "mountPath": "/af-node-monitor"},
         ],
     },
     "eos": {
@@ -78,12 +78,12 @@ MOUNTS: Dict[str, Dict[str, Any]] = {
         "volumes": [
             {
                 "name": "results",
-                "persistentVolumeClaim": {"claimName": "af-shared-storage"},
+                "persistentVolumeClaim": {"claimName": "af-node-monitor-storage"},
             },
             {"name": "eos", "hostPath": {"path": "/eos"}},
         ],
         "volume_mounts": [
-            {"name": "results", "mountPath": "/work"},
+            {"name": "results", "mountPath": "/af-node-monitor"},
             {
                 "name": "eos",
                 "mountPath": "/eos",
@@ -102,12 +102,12 @@ MOUNTS: Dict[str, Dict[str, Any]] = {
         "volumes": [
             {
                 "name": "results",
-                "persistentVolumeClaim": {"claimName": "af-shared-storage"},
+                "persistentVolumeClaim": {"claimName": "af-node-monitor-storage"},
             },
             {"name": "cvmfs", "persistentVolumeClaim": {"claimName": "cvmfs"}},
         ],
         "volume_mounts": [
-            {"name": "results", "mountPath": "/work"},
+            {"name": "results", "mountPath": "/af-node-monitor"},
             {
                 "name": "cvmfs",
                 "mountPath": "/cvmfs",
@@ -122,7 +122,7 @@ METADATA_TIMEOUT_S = float(os.getenv("METADATA_TIMEOUT_S", "10"))
 FIO_TIMEOUT_S = float(os.getenv("FIO_TIMEOUT_S", "120"))
 
 CHECK_INTERVAL_S = float(os.getenv("CHECK_INTERVAL_S", "120"))
-RESULTS_DIR = Path(os.getenv("RESULTS_DIR", "/work/af-node-monitor/results"))
+RESULTS_DIR = Path(os.getenv("RESULTS_DIR", "/af-node-monitor/results"))
 
 POD_NAMESPACE = os.getenv("POD_NAMESPACE", "default")
 
@@ -249,7 +249,15 @@ def _load_result(mount_name: str, node_name: str) -> Dict[str, Any] | None:
         with path.open("r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
+        # Per-node result file not present yet.
         return None
+    except OSError as e:
+        # Underlying storage (PVC) likely unavailable; signal caller to skip metrics.
+        print(
+            f"[node_healthcheck] Storage error reading result for {mount_name} "
+            f"from {path}: {e}"
+        )
+        return {"_storage_error": True}
     except Exception as e:
         print(f"Error reading result for {mount_name} from {path}: {e}")
         return None
@@ -600,6 +608,10 @@ def update_metrics() -> None:
                 "mount_path": mount_path,
                 "node": node_name or "unknown",
             }
+
+            if data and data.get("_storage_error"):
+                # Results PVC is unavailable; skip metrics entirely so they appear empty.
+                continue
 
             if not data:
                 # No result yet - treat as timeout/error with last metrics preserved

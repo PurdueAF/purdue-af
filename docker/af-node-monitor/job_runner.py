@@ -26,7 +26,7 @@ FIO_INTERVAL_S = float(_get_env("FIO_INTERVAL_S", "1800"))  # 30 minutes default
 
 ENABLE_FIO = _get_env("ENABLE_FIO", "false").lower() in {"1", "true", "yes"}
 
-RESULTS_DIR = Path(_get_env("RESULTS_DIR", "/work/af-node-monitor/results"))
+RESULTS_DIR = Path(_get_env("RESULTS_DIR", "/af-node-monitor/results"))
 NODE_NAME = os.getenv("NODE_NAME") or ""
 
 
