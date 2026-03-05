@@ -1,15 +1,15 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: af-node-monitor
+  name: af-node-monitor-eos-worker
 spec:
   selector:
     matchLabels:
-      name: af-node-monitor
+      name: af-node-monitor-eos-worker
   template:
     metadata:
       labels:
-        name: af-node-monitor
+        name: af-node-monitor-eos-worker
     spec:
       enableServiceLinks: false
       affinity:
@@ -32,41 +32,52 @@ spec:
           value: "cms-af"
           effect: "NoSchedule"
       containers:
-        - name: af-node-monitor
+        - name: mount-worker
           image: geddes-registry.rcac.purdue.edu/cms/af-node-monitor:0.1.0
-          command: ["python", "/scripts/node_healthcheck.py"]
-          ports:
-            - containerPort: 8000
-              name: metrics
+          command: ["python", "/scripts/mount_worker.py"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 256Mi
+          env:
+            - name: MOUNT_NAME
+              value: "eos"
+            - name: CHECK_FILE
+              value: "/eos/purdue/store/user/dkondrat/test.root"
+            - name: CHECKSUM
+              value: "18864b0de8ae5a6a8d3b459a7999b431"
+            - name: METADATA_DIR
+              value: "/eos/purdue/store/user/"
+            - name: FIO_FILE
+              value: "/eos/purdue/store/user/dkondrat/.storage-monitoring-probe-1gb"
+            - name: ENABLE_FIO
+              value: "true"
           volumeMounts:
             - name: scripts
               mountPath: /scripts
-            - name: cvmfs
-              mountPath: /cvmfs
-              mountPropagation: HostToContainer
             - name: eos
               mountPath: /eos
-              mountPropagation: HostToContainer
-            - name: depot
-              mountPath: /depot/cms
-              mountPropagation: HostToContainer
-            - name: work
-              mountPath: /work/
               mountPropagation: HostToContainer
       volumes:
         - name: scripts
           configMap:
-            name: af-node-monitor-config
-        - name: cvmfs
-          persistentVolumeClaim:
-            claimName: cvmfs
+            name: af-node-monitor-worker-config
         - name: eos
           hostPath:
             path: /eos
-        - name: depot
-          nfs:
-            server: datadepot.rcac.purdue.edu
-            path: /depot/cms
-        - name: work
-          persistentVolumeClaim:
-            claimName: af-shared-storage
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: af-node-monitor-eos-worker
+spec:
+  selector:
+    name: af-node-monitor-eos-worker
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+

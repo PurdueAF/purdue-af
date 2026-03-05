@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kaniko-build-af-node-monitor
+spec:
+  backoffLimit: 0
+  completions: 1
+  template:
+    spec:
+      containers:
+        - name: kaniko
+          image: gcr.io/kaniko-project/executor:latest
+          args:
+            - "--context=git://github.com/PurdueAF/purdue-af.git"
+            - "--dockerfile=docker/af-node-monitor/Dockerfile"
+            - "--destination=geddes-registry.rcac.purdue.edu/cms/af-node-monitor:0.1.0"
+            - "--cache=true"
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "2"
+            limits:
+              memory: "4Gi"
+              cpu: "4"
+          volumeMounts:
+            - name: docker-config
+              mountPath: /kaniko/.docker/
+      restartPolicy: Never
+      volumes:
+        - name: docker-config
+          secret:
+            secretName: docker-config
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
+

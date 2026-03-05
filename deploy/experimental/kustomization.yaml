@@ -21,7 +21,10 @@ resources:
   - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic/helmrepo.yaml
 
-  - ../../apps/monitoring/af-monitoring/mount_workers.yaml
+  - ../../apps/monitoring/af-monitoring/workers/depot.yaml
+  - ../../apps/monitoring/af-monitoring/workers/work.yaml
+  - ../../apps/monitoring/af-monitoring/workers/eos.yaml
+  - ../../apps/monitoring/af-monitoring/workers/cvmfs.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
@@ -57,4 +60,4 @@ configMapGenerator:
 
   - name: af-node-monitor-worker-config
     files:
-      - ../../apps/monitoring/af-monitoring/mount_worker.py
+      - ../../docker/af-node-monitor/mount_worker.py

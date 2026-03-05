@@ -81,7 +81,7 @@ configMapGenerator:
 
   - name: af-node-monitor-config
     files:
-      - ../../apps/monitoring/af-monitoring/node_healthcheck.py
+      - ../../docker/af-node-monitor/node_healthcheck.py
 
   - name: grafana-config
     files:
