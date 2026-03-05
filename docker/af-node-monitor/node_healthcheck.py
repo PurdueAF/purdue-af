@@ -184,11 +184,6 @@ try:
         "Total number of timeouts contacting mount workers or running checks",
         ["mount_name", "mount_path", "node", "check_type"],
     )
-    mount_error_total = Counter(
-        "af_node_mount_error_total",
-        "Total number of errors contacting mount workers or running checks",
-        ["mount_name", "mount_path", "node", "check_type"],
-    )
     mount_last_success_ts = Gauge(
         "af_node_mount_last_success_timestamp_seconds",
         "Unix timestamp of last successful metrics update for mount",
