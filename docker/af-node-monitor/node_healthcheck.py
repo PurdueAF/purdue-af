@@ -282,9 +282,10 @@ def _list_target_nodes() -> List[str]:
                     continue
                 ready = False
                 for cond in conditions:
-                    if getattr(cond, "type", "") == "Ready" and getattr(
-                        cond, "status", ""
-                    ) == "True":
+                    if (
+                        getattr(cond, "type", "") == "Ready"
+                        and getattr(cond, "status", "") == "True"
+                    ):
                         ready = True
                         break
                 if ready:
@@ -568,13 +569,12 @@ def _cleanup_finished_jobs(now: float) -> None:
                 f"after {int(finished_ago)}s"
             )
         except ApiException as e:  # type: ignore[misc]
-            print(
-                f"[node_healthcheck] Failed to delete Job {metadata.name}: {e}"
-            )
+            print(f"[node_healthcheck] Failed to delete Job {metadata.name}: {e}")
         except Exception as e:  # pragma: no cover - defensive
             print(
                 f"[node_healthcheck] Unexpected error deleting Job {metadata.name}: {e}"
             )
+
 
 def update_metrics() -> None:
     now = time.time()
