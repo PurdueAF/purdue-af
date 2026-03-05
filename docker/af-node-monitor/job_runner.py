@@ -82,9 +82,17 @@ def _check_ping() -> Tuple[bool, bool, float | None]:
         cmd = ["/usr/bin/md5sum", CHECK_FILE]
     else:
         cmd = ["cat", CHECK_FILE]
-    ok, timeout, _ = _run_subprocess(cmd, PING_TIMEOUT_S)
+    ok, timeout, reason = _run_subprocess(cmd, PING_TIMEOUT_S)
     elapsed_ms = (time.time() - start) * 1000
     if not ok or timeout:
+        msg = "[job_runner] Ping check failed"
+        if timeout:
+            msg += f": timeout after {elapsed_ms:.1f} ms"
+        elif reason:
+            msg += f": {reason}"
+        else:
+            msg += ": non-zero exit code"
+        print(msg)
         return False, timeout, elapsed_ms
 
     if CHECKSUM:
@@ -98,6 +106,11 @@ def _check_ping() -> Tuple[bool, bool, float | None]:
         )
         parts = proc.stdout.strip().split()
         if not parts or parts[0] != CHECKSUM:
+            actual = parts[0] if parts else "<missing>"
+            print(
+                "[job_runner] Ping checksum mismatch: "
+                f"expected={CHECKSUM}, actual={actual}"
+            )
             return False, False, elapsed_ms
 
     return True, False, elapsed_ms
@@ -107,11 +120,20 @@ def _check_metadata() -> Tuple[bool, bool, float | None]:
     if not METADATA_DIR:
         return True, False, None
     start = time.time()
-    ok, timeout, _ = _run_subprocess(
+    ok, timeout, reason = _run_subprocess(
         ["ls", "-la", METADATA_DIR],
         METADATA_TIMEOUT_S,
     )
     elapsed_ms = (time.time() - start) * 1000
+    if not ok or timeout:
+        msg = "[job_runner] Metadata check failed"
+        if timeout:
+            msg += f": timeout after {elapsed_ms:.1f} ms"
+        elif reason:
+            msg += f": {reason}"
+        else:
+            msg += ": non-zero exit code"
+        print(msg)
     return ok, timeout, elapsed_ms
 
 
