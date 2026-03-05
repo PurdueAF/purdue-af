@@ -5,7 +5,6 @@ from typing import Any, Dict
 import requests
 from prometheus_client import Gauge, start_http_server
 
-
 MOUNTS: Dict[str, Dict[str, Any]] = {
     # mount_name: {mount_path label, worker_url}
     "/depot/": {
@@ -104,9 +103,9 @@ def update_metrics() -> None:
             mount_metadata_latency_ms.labels(
                 mount_name=m_name, mount_path=mount_path
             ).set(_timeout_metadata_ms())
-            mount_data_rate_gbps.labels(
-                mount_name=m_name, mount_path=mount_path
-            ).set(0.0)
+            mount_data_rate_gbps.labels(mount_name=m_name, mount_path=mount_path).set(
+                0.0
+            )
             continue
 
         timeout = bool(data.get("timeout", False))
@@ -116,9 +115,7 @@ def update_metrics() -> None:
         meta_ms = data.get("metadata_ms")
         gbps = data.get("throughput_gbps")
 
-        mount_valid.labels(mount_name=m_name, mount_path=mount_path).set(
-            1 if ok else 0
-        )
+        mount_valid.labels(mount_name=m_name, mount_path=mount_path).set(1 if ok else 0)
 
         if timeout:
             mount_ping_ms.labels(mount_name=m_name, mount_path=mount_path).set(
@@ -127,9 +124,9 @@ def update_metrics() -> None:
             mount_metadata_latency_ms.labels(
                 mount_name=m_name, mount_path=mount_path
             ).set(_timeout_metadata_ms())
-            mount_data_rate_gbps.labels(
-                mount_name=m_name, mount_path=mount_path
-            ).set(0.0)
+            mount_data_rate_gbps.labels(mount_name=m_name, mount_path=mount_path).set(
+                0.0
+            )
             continue
 
         if ping_ms is not None:
@@ -143,9 +140,9 @@ def update_metrics() -> None:
             ).set(float(meta_ms))
 
         if gbps is not None:
-            mount_data_rate_gbps.labels(
-                mount_name=m_name, mount_path=mount_path
-            ).set(float(gbps))
+            mount_data_rate_gbps.labels(mount_name=m_name, mount_path=mount_path).set(
+                float(gbps)
+            )
 
 
 if __name__ == "__main__":
