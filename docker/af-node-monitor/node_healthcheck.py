@@ -660,18 +660,16 @@ def update_metrics() -> None:
             mount_valid.labels(**labels).set(1 if ok else 0)
 
             if timeout:
-                # Values in JSON already represent timeout semantics; enforce speed 0.
+                # On timeout, expose worst-case latency semantics for both ping and metadata,
+                # regardless of any partial measurements in the JSON.
                 if ping_ms is not None:
                     mount_ping_ms.labels(**labels).set(float(ping_ms))
                 else:
                     mount_ping_ms.labels(**labels).set(_timeout_ping_ms())
 
-                if meta_ms is not None:
-                    mount_metadata_latency_ms.labels(**labels).set(float(meta_ms))
-                else:
-                    mount_metadata_latency_ms.labels(**labels).set(
-                        _timeout_metadata_ms()
-                    )
+                mount_metadata_latency_ms.labels(**labels).set(
+                    _timeout_metadata_ms()
+                )
 
                 mount_data_rate_gbps.labels(**labels).set(0.0)
                 mount_timeout_total.labels(check_type="job_result", **labels).inc()
