@@ -37,8 +37,8 @@ spec:
           command: ["/bin/bash", "-c"]
           args:
             - |
-              apt-get update && apt-get install -y fio
-              pip install prometheus_client
+              apt-get update && apt-get install -y fio && rm -rf /var/lib/apt/lists/*
+              pip install prometheus_client requests
               python /scripts/node_healthcheck.py
           ports:
             - containerPort: 8000

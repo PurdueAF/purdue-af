@@ -21,6 +21,8 @@ resources:
   - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic/helmrepo.yaml
 
+  - ../../apps/monitoring/af-monitoring/mount_workers.yaml
+
 generatorOptions:
   disableNameSuffixHash: true
 
@@ -52,3 +54,7 @@ configMapGenerator:
   - name: supersonic-config
     files:
       - values.yaml=../../apps/sonic/supersonic/values.yaml
+
+  - name: af-node-monitor-worker-config
+    files:
+      - ../../apps/monitoring/af-monitoring/mount_worker.py

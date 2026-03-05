@@ -1,0 +1,347 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: af-node-monitor-depot-worker
+spec:
+  selector:
+    matchLabels:
+      name: af-node-monitor-depot-worker
+  template:
+    metadata:
+      labels:
+        name: af-node-monitor-depot-worker
+    spec:
+      enableServiceLinks: false
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: cms-af-prod
+                    operator: In
+                    values:
+                      - "true"
+              - matchExpressions:
+                  - key: cms-af-dev
+                    operator: In
+                    values:
+                      - "true"
+      tolerations:
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
+      containers:
+        - name: mount-worker
+          image: python:3.11-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              apt-get update && apt-get install -y fio && rm -rf /var/lib/apt/lists/*
+              python /scripts/mount_worker.py
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 256Mi
+          env:
+            - name: MOUNT_NAME
+              value: "/depot/"
+            - name: CHECK_FILE
+              value: "/depot/cms/purdue-af/validate-mount.txt"
+            - name: CHECKSUM
+              value: "13dede34ee8dc7e5b70c9cd06ac15467"
+            - name: METADATA_DIR
+              value: "/depot/cms/"
+            - name: FIO_FILE
+              value: "/depot/cms/purdue-af/.storage-monitoring-probe-1gb"
+            - name: ENABLE_FIO
+              value: "true"
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: depot
+              mountPath: /depot/cms
+              mountPropagation: HostToContainer
+      volumes:
+        - name: scripts
+          configMap:
+            name: af-node-monitor-worker-config
+        - name: depot
+          nfs:
+            server: datadepot.rcac.purdue.edu
+            path: /depot/cms
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: af-node-monitor-depot-worker
+spec:
+  selector:
+    name: af-node-monitor-depot-worker
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: af-node-monitor-work-worker
+spec:
+  selector:
+    matchLabels:
+      name: af-node-monitor-work-worker
+  template:
+    metadata:
+      labels:
+        name: af-node-monitor-work-worker
+    spec:
+      enableServiceLinks: false
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: cms-af-prod
+                    operator: In
+                    values:
+                      - "true"
+              - matchExpressions:
+                  - key: cms-af-dev
+                    operator: In
+                    values:
+                      - "true"
+      tolerations:
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
+      containers:
+        - name: mount-worker
+          image: python:3.11-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              apt-get update && apt-get install -y fio && rm -rf /var/lib/apt/lists/*
+              python /scripts/mount_worker.py
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 256Mi
+          env:
+            - name: MOUNT_NAME
+              value: "/work/"
+            - name: CHECK_FILE
+              value: "/work/projects/purdue-af/validate-mount.txt"
+            - name: CHECKSUM
+              value: "f4cb7f2740ba3e87edfbda6c70fa94c2"
+            - name: METADATA_DIR
+              value: "/work/users/"
+            - name: FIO_FILE
+              value: "/work/projects/purdue-af/.storage-monitoring-probe-1gb"
+            - name: ENABLE_FIO
+              value: "true"
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: work
+              mountPath: /work/
+              mountPropagation: HostToContainer
+      volumes:
+        - name: scripts
+          configMap:
+            name: af-node-monitor-worker-config
+        - name: work
+          persistentVolumeClaim:
+            claimName: af-shared-storage
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: af-node-monitor-work-worker
+spec:
+  selector:
+    name: af-node-monitor-work-worker
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: af-node-monitor-eos-worker
+spec:
+  selector:
+    matchLabels:
+      name: af-node-monitor-eos-worker
+  template:
+    metadata:
+      labels:
+        name: af-node-monitor-eos-worker
+    spec:
+      enableServiceLinks: false
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: cms-af-prod
+                    operator: In
+                    values:
+                      - "true"
+              - matchExpressions:
+                  - key: cms-af-dev
+                    operator: In
+                    values:
+                      - "true"
+      tolerations:
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
+      containers:
+        - name: mount-worker
+          image: python:3.11-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              apt-get update && apt-get install -y fio && rm -rf /var/lib/apt/lists/*
+              python /scripts/mount_worker.py
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 256Mi
+          env:
+            - name: MOUNT_NAME
+              value: "eos"
+            - name: CHECK_FILE
+              value: "/eos/purdue/store/user/dkondrat/test.root"
+            - name: CHECKSUM
+              value: "18864b0de8ae5a6a8d3b459a7999b431"
+            - name: METADATA_DIR
+              value: "/eos/purdue/store/user/"
+            - name: FIO_FILE
+              value: "/eos/purdue/store/user/dkondrat/.storage-monitoring-probe-1gb"
+            - name: ENABLE_FIO
+              value: "true"
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: eos
+              mountPath: /eos
+              mountPropagation: HostToContainer
+      volumes:
+        - name: scripts
+          configMap:
+            name: af-node-monitor-worker-config
+        - name: eos
+          hostPath:
+            path: /eos
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: af-node-monitor-eos-worker
+spec:
+  selector:
+    name: af-node-monitor-eos-worker
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: af-node-monitor-cvmfs-worker
+spec:
+  selector:
+    matchLabels:
+      name: af-node-monitor-cvmfs-worker
+  template:
+    metadata:
+      labels:
+        name: af-node-monitor-cvmfs-worker
+    spec:
+      enableServiceLinks: false
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: cms-af-prod
+                    operator: In
+                    values:
+                      - "true"
+              - matchExpressions:
+                  - key: cms-af-dev
+                    operator: In
+                    values:
+                      - "true"
+      tolerations:
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
+      containers:
+        - name: mount-worker
+          image: python:3.11-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              apt-get update && apt-get install -y fio && rm -rf /var/lib/apt/lists/*
+              python /scripts/mount_worker.py
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 256Mi
+          env:
+            - name: MOUNT_NAME
+              value: "cvmfs"
+            - name: CHECK_FILE
+              value: "/cvmfs/cms.cern.ch/SITECONF/T2_US_Purdue/Purdue-Hadoop/JobConfig/site-local-config.xml"
+            - name: CHECKSUM
+              value: "3b570d80272b7188c13cef51e58b7151"
+            - name: METADATA_DIR
+              value: "/cvmfs/cms.cern.ch/"
+            - name: ENABLE_FIO
+              value: "false"
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: cvmfs
+              mountPath: /cvmfs
+              mountPropagation: HostToContainer
+      volumes:
+        - name: scripts
+          configMap:
+            name: af-node-monitor-worker-config
+        - name: cvmfs
+          persistentVolumeClaim:
+            claimName: cvmfs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: af-node-monitor-cvmfs-worker
+spec:
+  selector:
+    name: af-node-monitor-cvmfs-worker
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+
