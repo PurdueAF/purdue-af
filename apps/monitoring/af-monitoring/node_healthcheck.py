@@ -88,9 +88,7 @@ def check_if_directory_exists(mount_name, path_tuple):
         elapsed_ms = (time.time() - start_time) * 1000
 
         if result.returncode != 0:
-            print(
-                f"Mount {mount_name}: error (md5sum failed: {result.stderr.strip()})"
-            )
+            print(f"Mount {mount_name}: error (md5sum failed: {result.stderr.strip()})")
             return False, elapsed_ms
 
         parts = result.stdout.strip().split()
@@ -162,9 +160,7 @@ def check_metadata_latency(mount_name, probe_dir):
         )
         elapsed_ms = (time.time() - start_time) * 1000
         if result.returncode != 0:
-            print(
-                f"Mount {mount_name}: error (ls failed: {result.stderr.strip()})"
-            )
+            print(f"Mount {mount_name}: error (ls failed: {result.stderr.strip()})")
             return None
         print(f"Mount {mount_name}: reached, metadata latency {elapsed_ms:.1f} ms")
         return elapsed_ms
