@@ -25,6 +25,13 @@ FIO_TIMEOUT_S = float(_get_env("FIO_TIMEOUT_S", "120"))
 
 ENABLE_FIO = _get_env("ENABLE_FIO", "false").lower() in {"1", "true", "yes"}
 
+# How often to run fio throughput checks (seconds). Between runs, we reuse the
+# last reported throughput value from Prometheus; workers only decide whether
+# to attempt fio, not how often metrics are scraped.
+FIO_INTERVAL_S = float(_get_env("FIO_INTERVAL_S", "1800"))
+
+_last_fio_ts: float | None = None
+
 SERVER_PORT = int(_get_env("WORKER_PORT", "8080"))
 
 
@@ -99,7 +106,15 @@ def check_metadata() -> tuple[bool, bool, float | None]:
 
 def check_throughput() -> tuple[bool, bool, float | None]:
     """Return (ok, timeout, gbps)."""
+    global _last_fio_ts
+
     if not ENABLE_FIO or not FIO_FILE:
+        return True, False, None
+
+    now = time.time()
+    if _last_fio_ts is not None and (now - _last_fio_ts) < FIO_INTERVAL_S:
+        # Skip fio; reuse previous throughput metric value. From the orchestrator's
+        # point of view, this is a successful check with no new throughput sample.
         return True, False, None
 
     try:
@@ -124,6 +139,7 @@ def check_throughput() -> tuple[bool, bool, float | None]:
         data = json.loads(result.stdout)
         bw_bytes = data["jobs"][0]["read"]["bw_bytes"]
         gbps = bw_bytes / 1e9
+        _last_fio_ts = now
         return True, False, gbps
     except subprocess.TimeoutExpired:
         return False, True, None
