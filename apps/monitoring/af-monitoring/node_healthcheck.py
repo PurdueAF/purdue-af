@@ -2,9 +2,17 @@ import json
 import os
 import signal
 import subprocess
+import sys
 import threading
 import time
 
+# Ensure logs appear immediately in container (no TTY = block buffering otherwise)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(line_buffering=True)
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(line_buffering=True)
+
+print("af-node-monitor: loading prometheus_client", flush=True)
 from prometheus_client import Gauge, start_http_server
 
 # Define the Gauge metric with labels for mount name and mount path
@@ -240,15 +248,20 @@ def update_metrics():
 
 
 if __name__ == "__main__":
-    # Start the HTTP server to expose the metrics
-    start_http_server(8000)
-    while True:
-        thread = threading.Thread(target=update_metrics, daemon=True)
-        thread.start()
-        thread.join(timeout=ITERATION_TIMEOUT_S)
-        if thread.is_alive():
-            print(
-                f"Iteration did not finish within {ITERATION_TIMEOUT_S}s "
-                "(stuck mount or filesystem?); continuing to next cycle."
-            )
-        time.sleep(120)
+    try:
+        print("af-node-monitor starting", flush=True)
+        start_http_server(8000)
+        print("metrics server listening on :8000", flush=True)
+        while True:
+            thread = threading.Thread(target=update_metrics, daemon=True)
+            thread.start()
+            thread.join(timeout=ITERATION_TIMEOUT_S)
+            if thread.is_alive():
+                print(
+                    f"Iteration did not finish within {ITERATION_TIMEOUT_S}s "
+                    "(stuck mount or filesystem?); continuing to next cycle."
+                )
+            time.sleep(120)
+    except Exception as e:
+        print(f"af-node-monitor fatal: {e}", flush=True)
+        raise
