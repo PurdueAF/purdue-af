@@ -21,6 +21,7 @@ resources:
   - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic/helmrepo.yaml
 
+  - ../../apps/monitoring/af-monitoring/daemonset.yaml
   - ../../apps/monitoring/af-monitoring/workers/depot.yaml
   - ../../apps/monitoring/af-monitoring/workers/work.yaml
   - ../../apps/monitoring/af-monitoring/workers/eos.yaml
