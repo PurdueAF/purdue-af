@@ -1,18 +1,7 @@
 import json
-import os
-import signal
 import subprocess
-import sys
-import threading
 import time
 
-# Ensure logs appear immediately in container (no TTY = block buffering otherwise)
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(line_buffering=True)
-if hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(line_buffering=True)
-
-print("af-node-monitor: loading prometheus_client", flush=True)
 from prometheus_client import Gauge, start_http_server
 
 # Define the Gauge metric with labels for mount name and mount path
@@ -74,11 +63,9 @@ metadata_probes = {
     "cvmfs": "/cvmfs/cms.cern.ch/",
 }
 
+PING_TIMEOUT_S = 3
 METADATA_TIMEOUT_S = 10
-# Max time to wait for a killed process to exit (avoids hanging on D-state / stuck mounts)
-WAIT_AFTER_KILL_S = 2
-# Max wall-clock time for one full update_metrics() iteration; prevents indefinite hang
-ITERATION_TIMEOUT_S = 600
+FIO_TIMEOUT_S = 120
 
 # How often to run the heavy fio check, in iterations of the main loop (120s each)
 # Default: every 15 iterations = every 30 minutes
@@ -86,66 +73,55 @@ FIO_INTERVAL = 15
 fio_counter = 0
 
 
-def _wait_after_kill(proc, timeout_s=WAIT_AFTER_KILL_S):
-    """Wait for process to exit after kill; never block indefinitely (e.g. D-state on stuck mount)."""
-    try:
-        proc.wait(timeout=timeout_s)
-    except subprocess.TimeoutExpired:
-        proc.kill()  # SIGKILL if still alive
-        try:
-            proc.wait(timeout=1)
-        except subprocess.TimeoutExpired:
-            pass  # abandon; process may be in kernel D-state
-
-
-def check_if_directory_exists(path_tuple):
+def check_if_directory_exists(mount_name, path_tuple):
+    """Check mount by verifying file checksum. Never blocks; uses PING_TIMEOUT_S."""
     filename, expected_checksum = path_tuple
     start_time = time.time()
 
     try:
-        proc = subprocess.Popen(
+        result = subprocess.run(
             ["/usr/bin/md5sum", filename],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
+            timeout=PING_TIMEOUT_S,
         )
-        try:
-            stdout, stderr = proc.communicate(timeout=3)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            _wait_after_kill(proc)
-            print(f"Timeout occurred while checking file {filename}")
-            return False, 3000  # Return 3000ms for timeout
-
         elapsed_ms = (time.time() - start_time) * 1000
 
-        if proc.returncode != 0:
-            print(f"md5sum failed for {filename}. Stderr: {stderr.strip()}")
+        if result.returncode != 0:
+            print(
+                f"Mount {mount_name}: error (md5sum failed: {result.stderr.strip()})"
+            )
             return False, elapsed_ms
 
-        parts = stdout.strip().split()
+        parts = result.stdout.strip().split()
         if len(parts) < 1:
-            print(f"Could not parse md5sum output for {filename}: {stdout}")
+            print(f"Mount {mount_name}: error (could not parse md5sum output)")
             return False, elapsed_ms
 
         checksum = parts[0]
         if checksum != expected_checksum:
             print(
-                f"Wrong checksum for {filename}. Expected: {expected_checksum}, Got: {checksum}"
+                f"Mount {mount_name}: error (wrong checksum: expected {expected_checksum}, got {checksum})"
             )
             return False, elapsed_ms
 
+        print(f"Mount {mount_name}: reached ({elapsed_ms:.1f} ms)")
         return True, elapsed_ms
+
+    except subprocess.TimeoutExpired:
+        elapsed_ms = (time.time() - start_time) * 1000
+        print(f"Mount {mount_name}: timed out after {PING_TIMEOUT_S}s")
+        return False, min(elapsed_ms, PING_TIMEOUT_S * 1000)
     except Exception as e:
         elapsed_ms = (time.time() - start_time) * 1000
-        print(f"Error checking file {filename}: {e}")
+        print(f"Mount {mount_name}: error ({e})")
         return False, elapsed_ms
 
 
 def check_read_throughput(mount_name, probe_file):
-    print(f"Running fio throughput check for {mount_name} using {probe_file}")
+    """Run fio read test. Never blocks; uses FIO_TIMEOUT_S."""
     try:
-        proc = subprocess.Popen(
+        result = subprocess.run(
             [
                 "fio",
                 "--name=read_test",
@@ -157,62 +133,47 @@ def check_read_throughput(mount_name, probe_file):
                 "--readonly",
                 "--output-format=json",
             ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
-            start_new_session=True,
+            timeout=FIO_TIMEOUT_S,
         )
-        try:
-            stdout, stderr = proc.communicate(timeout=120)
-        except subprocess.TimeoutExpired:
-            try:
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-            except (ProcessLookupError, OSError):
-                proc.kill()
-            _wait_after_kill(proc, timeout_s=5)
-            print(f"fio timed out for {mount_name} ({probe_file})")
-            return None
-        if proc.returncode != 0:
-            print(
-                f"fio failed for {mount_name}: {stderr.strip() if stderr else 'unknown'}"
-            )
-            return None
-        data = json.loads(stdout)
+        data = json.loads(result.stdout)
         bw_bytes = data["jobs"][0]["read"]["bw_bytes"]
         gbps = bw_bytes / 1e9
-        print(f"Throughput for {mount_name}: {gbps:.2f} Gbps")
+        print(f"Mount {mount_name}: reached, throughput {gbps:.2f} Gbps")
         return gbps
+    except subprocess.TimeoutExpired:
+        print(f"Mount {mount_name}: timed out after {FIO_TIMEOUT_S}s (fio)")
+        return None
     except Exception as e:
-        print(f"fio error for {mount_name} ({probe_file}): {e}")
+        print(f"Mount {mount_name}: error (fio: {e})")
         return None
 
 
 def check_metadata_latency(mount_name, probe_dir):
-    print(f"Running metadata latency check for {mount_name} in {probe_dir}")
+    """Run ls on probe dir to measure metadata latency. Never blocks; uses METADATA_TIMEOUT_S."""
     start_time = time.time()
     try:
-        proc = subprocess.Popen(
+        result = subprocess.run(
             ["ls", "-la", probe_dir],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
+            timeout=METADATA_TIMEOUT_S,
         )
-        try:
-            stdout, stderr = proc.communicate(timeout=METADATA_TIMEOUT_S)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            _wait_after_kill(proc)
-            elapsed_ms = (time.time() - start_time) * 1000
-            print(f"Metadata check timed out for {mount_name} ({probe_dir})")
-            return elapsed_ms
         elapsed_ms = (time.time() - start_time) * 1000
-        if proc.returncode != 0:
-            print(f"ls failed for {probe_dir}: {stderr.strip()}")
+        if result.returncode != 0:
+            print(
+                f"Mount {mount_name}: error (ls failed: {result.stderr.strip()})"
+            )
             return None
-        print(f"Metadata latency for {mount_name}: {elapsed_ms:.1f} ms")
+        print(f"Mount {mount_name}: reached, metadata latency {elapsed_ms:.1f} ms")
         return elapsed_ms
+    except subprocess.TimeoutExpired:
+        elapsed_ms = (time.time() - start_time) * 1000
+        print(f"Mount {mount_name}: timed out after {METADATA_TIMEOUT_S}s (metadata)")
+        return elapsed_ms  # expose timeout duration as latency
     except Exception as e:
-        print(f"Metadata check error for {mount_name} ({probe_dir}): {e}")
+        print(f"Mount {mount_name}: error (metadata: {e})")
         return None
 
 
@@ -221,7 +182,7 @@ def update_metrics():
 
     # Lightweight health checks (every iteration)
     for m_name, m_path in mounts.items():
-        result, ping_time = check_if_directory_exists(m_path)
+        result, ping_time = check_if_directory_exists(m_name, m_path)
         mount_valid.labels(mount_name=m_name, mount_path=m_path[0]).set(
             1 if result else 0
         )
@@ -248,20 +209,8 @@ def update_metrics():
 
 
 if __name__ == "__main__":
-    try:
-        print("af-node-monitor starting", flush=True)
-        start_http_server(8000)
-        print("metrics server listening on :8000", flush=True)
-        while True:
-            thread = threading.Thread(target=update_metrics, daemon=True)
-            thread.start()
-            thread.join(timeout=ITERATION_TIMEOUT_S)
-            if thread.is_alive():
-                print(
-                    f"Iteration did not finish within {ITERATION_TIMEOUT_S}s "
-                    "(stuck mount or filesystem?); continuing to next cycle."
-                )
-            time.sleep(120)
-    except Exception as e:
-        print(f"af-node-monitor fatal: {e}", flush=True)
-        raise
+    # Start the HTTP server to expose the metrics
+    start_http_server(8000)
+    while True:
+        update_metrics()
+        time.sleep(120)

@@ -39,7 +39,7 @@ spec:
             - |
               apt-get update && apt-get install -y fio
               pip install prometheus_client
-              exec python -u /scripts/node_healthcheck.py
+              python /scripts/node_healthcheck.py
           ports:
             - containerPort: 8000
               name: metrics
