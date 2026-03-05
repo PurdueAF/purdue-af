@@ -132,6 +132,7 @@ JOB_ACTIVE_DEADLINE_SECONDS = int(os.getenv("JOB_ACTIVE_DEADLINE_SECONDS", "180"
 JOB_BACKOFF_LIMIT = int(os.getenv("JOB_BACKOFF_LIMIT", "0"))
 
 JOB_RETENTION_S = float(os.getenv("JOB_RETENTION_S", "120"))  # 2 minutes
+JOB_MAX_RUNTIME_S = float(os.getenv("JOB_MAX_RUNTIME_S", "300"))  # 5 minutes
 
 RESULT_STALE_WINDOW_S = float(
     os.getenv("RESULT_STALE_WINDOW_S", str(3 * JOB_INTERVAL_S))
@@ -514,8 +515,36 @@ def _cleanup_finished_jobs(now: float) -> None:
         if not status or not metadata or not metadata.name:
             continue
 
-        if getattr(status, "active", 0):
-            # Still running.
+        start_time = getattr(status, "start_time", None)
+        active = getattr(status, "active", 0) or 0
+
+        # Force-kill long-running Jobs.
+        if active and start_time is not None:
+            runtime = now - start_time.timestamp()
+            if runtime > JOB_MAX_RUNTIME_S:
+                try:
+                    _batch_v1.delete_namespaced_job(
+                        name=metadata.name,
+                        namespace=POD_NAMESPACE,
+                        propagation_policy="Background",
+                        body=client.V1DeleteOptions(grace_period_seconds=0),
+                    )
+                    print(
+                        f"[node_healthcheck] Force-deleted long-running Job "
+                        f"{metadata.name} after {int(runtime)}s"
+                    )
+                except ApiException as e:  # type: ignore[misc]
+                    print(
+                        f"[node_healthcheck] Failed to force-delete Job {metadata.name}: {e}"
+                    )
+                except Exception as e:  # pragma: no cover - defensive
+                    print(
+                        f"[node_healthcheck] Unexpected error force-deleting Job {metadata.name}: {e}"
+                    )
+                continue
+
+        if active:
+            # Still running but within allowed runtime.
             continue
 
         completion_time = getattr(status, "completion_time", None)
