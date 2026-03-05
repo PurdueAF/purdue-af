@@ -172,7 +172,9 @@ def main() -> None:
         f"[job_runner] Starting checks for mount '{MOUNT_NAME}' (key='{mount_key}') "
         f"on node '{NODE_NAME or 'unknown'}'"
     )
-    print(f"[job_runner] CHECK_FILE={CHECK_FILE}, METADATA_DIR={METADATA_DIR}, FIO_FILE={FIO_FILE}, ENABLE_FIO={ENABLE_FIO}")
+    print(
+        f"[job_runner] CHECK_FILE={CHECK_FILE}, METADATA_DIR={METADATA_DIR}, FIO_FILE={FIO_FILE}, ENABLE_FIO={ENABLE_FIO}"
+    )
 
     prev = _load_previous_result(result_path)
     last_fio_ts = prev.get("last_fio_ts")
@@ -182,15 +184,21 @@ def main() -> None:
         last_fio_ts = None
 
     if prev:
-        print(f"[job_runner] Previous result: ok={prev.get('ok')}, timeout={prev.get('timeout')}, "
-              f"throughput_gbps={prev.get('throughput_gbps')}, last_fio_ts={last_fio_ts}")
+        print(
+            f"[job_runner] Previous result: ok={prev.get('ok')}, timeout={prev.get('timeout')}, "
+            f"throughput_gbps={prev.get('throughput_gbps')}, last_fio_ts={last_fio_ts}"
+        )
 
     # Responsiveness first.
     ping_ok, ping_timeout, ping_ms = _check_ping()
     meta_ok, meta_timeout, meta_ms = _check_metadata()
 
-    print(f"[job_runner] Ping result: ok={ping_ok}, timeout={ping_timeout}, ping_ms={ping_ms}")
-    print(f"[job_runner] Metadata result: ok={meta_ok}, timeout={meta_timeout}, metadata_ms={meta_ms}")
+    print(
+        f"[job_runner] Ping result: ok={ping_ok}, timeout={ping_timeout}, ping_ms={ping_ms}"
+    )
+    print(
+        f"[job_runner] Metadata result: ok={meta_ok}, timeout={meta_timeout}, metadata_ms={meta_ms}"
+    )
 
     timeout = ping_timeout or meta_timeout
     ok = ping_ok and meta_ok and not timeout
@@ -201,7 +209,9 @@ def main() -> None:
     if not ok:
         # Responsiveness failed or timed out; report timeout with speed 0.
         timeout = True
-        print("[job_runner] Responsiveness failed or timed out; reporting timeout with throughput 0.0")
+        print(
+            "[job_runner] Responsiveness failed or timed out; reporting timeout with throughput 0.0"
+        )
         result = {
             "timestamp": now,
             "ok": False,
@@ -215,11 +225,15 @@ def main() -> None:
         return
 
     # Responsiveness ok; decide whether to run fio.
-    will_run_fio = ENABLE_FIO and FIO_FILE and (
-        last_fio_ts is None or (now - last_fio_ts) >= FIO_INTERVAL_S
+    will_run_fio = (
+        ENABLE_FIO
+        and FIO_FILE
+        and (last_fio_ts is None or (now - last_fio_ts) >= FIO_INTERVAL_S)
     )
-    print(f"[job_runner] FIO decision: ENABLE_FIO={ENABLE_FIO}, FIO_FILE={FIO_FILE}, "
-          f"last_fio_ts={last_fio_ts}, will_run_fio={bool(will_run_fio)}")
+    print(
+        f"[job_runner] FIO decision: ENABLE_FIO={ENABLE_FIO}, FIO_FILE={FIO_FILE}, "
+        f"last_fio_ts={last_fio_ts}, will_run_fio={bool(will_run_fio)}"
+    )
 
     fio_ok, fio_timeout, fio_gbps, new_last_fio_ts = _check_throughput(last_fio_ts)
     if new_last_fio_ts is not None:
@@ -231,8 +245,10 @@ def main() -> None:
     timeout = fio_timeout
     ok = ok and fio_ok and not timeout
 
-    print(f"[job_runner] FIO result: ok={fio_ok}, timeout={fio_timeout}, "
-          f"throughput_gbps={fio_gbps}, new_last_fio_ts={new_last_fio_ts}")
+    print(
+        f"[job_runner] FIO result: ok={fio_ok}, timeout={fio_timeout}, "
+        f"throughput_gbps={fio_gbps}, new_last_fio_ts={new_last_fio_ts}"
+    )
 
     result = {
         "timestamp": now,

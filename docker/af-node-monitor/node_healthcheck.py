@@ -128,9 +128,7 @@ POD_NAMESPACE = os.getenv("POD_NAMESPACE", "default")
 
 JOB_INTERVAL_S = float(os.getenv("JOB_INTERVAL_S", "600"))  # 10 minutes
 JOB_TTL_SECONDS = int(os.getenv("JOB_TTL_SECONDS", "120"))  # 2 minutes
-JOB_ACTIVE_DEADLINE_SECONDS = int(
-    os.getenv("JOB_ACTIVE_DEADLINE_SECONDS", "180")
-)
+JOB_ACTIVE_DEADLINE_SECONDS = int(os.getenv("JOB_ACTIVE_DEADLINE_SECONDS", "180"))
 JOB_BACKOFF_LIMIT = int(os.getenv("JOB_BACKOFF_LIMIT", "0"))
 
 JOB_RETENTION_S = float(os.getenv("JOB_RETENTION_S", "120"))  # 2 minutes
@@ -337,7 +335,10 @@ def _mount_job_env(mount_name: str, cfg: Dict[str, Any]) -> list[dict[str, Any]]
             {"name": "PING_TIMEOUT_S", "value": str(PING_TIMEOUT_S)},
             {"name": "METADATA_TIMEOUT_S", "value": str(METADATA_TIMEOUT_S)},
             {"name": "FIO_TIMEOUT_S", "value": str(FIO_TIMEOUT_S)},
-            {"name": "FIO_INTERVAL_S", "value": str(env_cfg.get("fio_interval_s", 1800))},
+            {
+                "name": "FIO_INTERVAL_S",
+                "value": str(env_cfg.get("fio_interval_s", 1800)),
+            },
             {"name": "RESULTS_DIR", "value": str(RESULTS_DIR)},
             {
                 "name": "NODE_NAME",
@@ -562,7 +563,9 @@ def update_metrics() -> None:
             if not data:
                 # No result yet - treat as timeout/error with last metrics preserved
                 mount_valid.labels(**labels).set(0)
-                mount_timeout_total.labels(check_type="no_recent_result", **labels).inc()
+                mount_timeout_total.labels(
+                    check_type="no_recent_result", **labels
+                ).inc()
                 continue
 
             timestamp = float(data.get("timestamp", 0))
