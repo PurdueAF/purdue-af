@@ -121,7 +121,7 @@ PING_TIMEOUT_S = float(os.getenv("PING_TIMEOUT_S", "3"))
 METADATA_TIMEOUT_S = float(os.getenv("METADATA_TIMEOUT_S", "10"))
 FIO_TIMEOUT_S = float(os.getenv("FIO_TIMEOUT_S", "120"))
 
-CHECK_INTERVAL_S = float(os.getenv("CHECK_INTERVAL_S", "120"))
+CHECK_INTERVAL_S = float(os.getenv("CHECK_INTERVAL_S", "600"))
 RESULTS_DIR = Path(os.getenv("RESULTS_DIR", "/af-node-monitor/results"))
 
 POD_NAMESPACE = os.getenv("POD_NAMESPACE", "default")
