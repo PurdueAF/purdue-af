@@ -21,8 +21,9 @@ resources:
   - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic/helmrepo.yaml
 
-  - ../../apps/monitoring/af-monitoring/daemonset.yaml
+  - ../../apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml
   - ../../apps/monitoring/af-monitoring/af-node-monitor-rbac.yaml
+  - ../../apps/monitoring/af-monitoring/services.yaml
   - ../../apps/infrastructure/af-node-monitor-storage.yaml
 
 generatorOptions:

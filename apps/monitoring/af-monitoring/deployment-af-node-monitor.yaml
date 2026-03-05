@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: af-node-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: af-node-monitor
+  template:
+    metadata:
+      labels:
+        name: af-node-monitor
+    spec:
+      serviceAccountName: af-node-monitor
+      enableServiceLinks: false
+      containers:
+        - name: af-node-monitor
+          image: geddes-registry.rcac.purdue.edu/cms/af-node-monitor:0.1.0
+          command: ["python", "/scripts/node_healthcheck.py"]
+          env:
+            - name: RESULTS_DIR
+              value: "/af-node-monitor/results"
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          ports:
+            - containerPort: 8000
+              name: metrics
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: af-node-monitor-storage
+              mountPath: /af-node-monitor
+      volumes:
+        - name: scripts
+          configMap:
+            name: af-node-monitor-config
+        - name: af-node-monitor-storage
+          persistentVolumeClaim:
+            claimName: af-node-monitor-storage

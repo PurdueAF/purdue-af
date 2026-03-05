@@ -34,7 +34,9 @@ resources:
   - ../../apps/monitoring/helmrepo-prometheus.yaml
   - ../../apps/monitoring/af-monitoring/services.yaml
   - ../../apps/monitoring/af-monitoring/deployment.yaml
-  - ../../apps/monitoring/af-monitoring/daemonset.yaml
+  - ../../apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml
+  - ../../apps/monitoring/af-monitoring/af-node-monitor-rbac.yaml
+  - ../../apps/infrastructure/af-node-monitor-storage.yaml
   - ../../apps/monitoring/grafana/helmrelease.yaml
   - ../../apps/monitoring/prometheus/helmrelease.yaml
   - ../../apps/monitoring/prometheus/servicemonitors.yaml
@@ -81,7 +83,7 @@ configMapGenerator:
 
   - name: af-node-monitor-config
     files:
-      - ../../apps/monitoring/af-monitoring/node_healthcheck.py
+      - ../../docker/af-node-monitor/node_healthcheck.py
 
   - name: grafana-config
     files:

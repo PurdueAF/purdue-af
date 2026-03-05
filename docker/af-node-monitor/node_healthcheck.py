@@ -132,7 +132,9 @@ RESULTS_DIR = Path(os.getenv("RESULTS_DIR", "/af-node-monitor/results"))
 POD_NAMESPACE = os.getenv("POD_NAMESPACE", "default")
 
 JOB_INTERVAL_S = float(os.getenv("JOB_INTERVAL_S", "600"))  # 10 minutes
-JOB_TTL_SECONDS = int(os.getenv("JOB_TTL_SECONDS", "120"))  # currently unused
+JOB_TTL_SECONDS = int(
+    os.getenv("JOB_TTL_SECONDS", "120")
+)  # ttlSecondsAfterFinished for Jobs
 JOB_ACTIVE_DEADLINE_SECONDS = int(os.getenv("JOB_ACTIVE_DEADLINE_SECONDS", "180"))
 JOB_BACKOFF_LIMIT = int(os.getenv("JOB_BACKOFF_LIMIT", "0"))
 
