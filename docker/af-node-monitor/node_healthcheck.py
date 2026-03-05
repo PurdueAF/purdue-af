@@ -126,11 +126,16 @@ RESULTS_DIR = Path(os.getenv("RESULTS_DIR", "/work/af-node-monitor/results"))
 
 POD_NAMESPACE = os.getenv("POD_NAMESPACE", "default")
 
-JOB_TTL_SECONDS = int(os.getenv("JOB_TTL_SECONDS", "600"))
+JOB_INTERVAL_S = float(os.getenv("JOB_INTERVAL_S", "600"))  # 10 minutes
+JOB_TTL_SECONDS = int(os.getenv("JOB_TTL_SECONDS", "120"))  # 2 minutes
 JOB_ACTIVE_DEADLINE_SECONDS = int(
     os.getenv("JOB_ACTIVE_DEADLINE_SECONDS", "180")
 )
 JOB_BACKOFF_LIMIT = int(os.getenv("JOB_BACKOFF_LIMIT", "0"))
+
+RESULT_STALE_WINDOW_S = float(
+    os.getenv("RESULT_STALE_WINDOW_S", str(3 * JOB_INTERVAL_S))
+)
 
 JOB_IMAGE = os.getenv(
     "JOB_IMAGE", "geddes-registry.rcac.purdue.edu/cms/af-node-monitor:0.1.0"
@@ -448,7 +453,7 @@ def _ensure_jobs(now: float) -> None:
     for mount_name, cfg in MOUNTS.items():
         for node_name in nodes:
             last_ts = _last_job_start_ts[mount_name].get(node_name, 0.0)
-            if now - last_ts < CHECK_INTERVAL_S:
+            if now - last_ts < JOB_INTERVAL_S:
                 continue
             if _has_active_job(mount_name, node_name):
                 continue
@@ -502,8 +507,8 @@ def update_metrics() -> None:
                 continue
 
             timestamp = float(data.get("timestamp", 0))
-            # Consider stale if older than 3 * CHECK_INTERVAL_S
-            if now - timestamp > 3 * CHECK_INTERVAL_S:
+            # Consider stale if older than configured stale window
+            if now - timestamp > RESULT_STALE_WINDOW_S:
                 mount_valid.labels(**labels).set(0)
                 mount_timeout_total.labels(check_type="stale_result", **labels).inc()
                 continue
