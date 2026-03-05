@@ -133,6 +133,8 @@ JOB_ACTIVE_DEADLINE_SECONDS = int(
 )
 JOB_BACKOFF_LIMIT = int(os.getenv("JOB_BACKOFF_LIMIT", "0"))
 
+JOB_RETENTION_S = float(os.getenv("JOB_RETENTION_S", "120"))  # 2 minutes
+
 RESULT_STALE_WINDOW_S = float(
     os.getenv("RESULT_STALE_WINDOW_S", str(3 * JOB_INTERVAL_S))
 )
@@ -408,7 +410,6 @@ def _build_job_manifest(
             "labels": labels,
         },
         "spec": {
-            "ttlSecondsAfterFinished": JOB_TTL_SECONDS,
             "backoffLimit": JOB_BACKOFF_LIMIT,
             "activeDeadlineSeconds": JOB_ACTIVE_DEADLINE_SECONDS,
             "template": {
@@ -478,11 +479,69 @@ def _ensure_jobs(now: float) -> None:
                 )
 
 
+def _cleanup_finished_jobs(now: float) -> None:
+    _init_k8s()
+    if not _k8s_ready or _batch_v1 is None:
+        return
+
+    try:
+        jobs = _batch_v1.list_namespaced_job(
+            namespace=POD_NAMESPACE, label_selector="app=af-node-monitor"
+        )
+    except ApiException as e:  # type: ignore[misc]
+        print(f"[node_healthcheck] Error listing Jobs for cleanup: {e}")
+        return
+    except Exception as e:  # pragma: no cover - defensive
+        print(f"[node_healthcheck] Unexpected error listing Jobs for cleanup: {e}")
+        return
+
+    for job in jobs.items:
+        status = job.status
+        metadata = job.metadata
+        if not status or not metadata or not metadata.name:
+            continue
+
+        if getattr(status, "active", 0):
+            # Still running.
+            continue
+
+        completion_time = getattr(status, "completion_time", None)
+        if completion_time is None:
+            completion_time = getattr(status, "start_time", None)
+        if completion_time is None:
+            continue
+
+        finished_ago = now - completion_time.timestamp()
+        if finished_ago < JOB_RETENTION_S:
+            continue
+
+        try:
+            _batch_v1.delete_namespaced_job(
+                name=metadata.name,
+                namespace=POD_NAMESPACE,
+                propagation_policy="Background",
+            )
+            print(
+                f"[node_healthcheck] Deleted finished Job {metadata.name} "
+                f"after {int(finished_ago)}s"
+            )
+        except ApiException as e:  # type: ignore[misc]
+            print(
+                f"[node_healthcheck] Failed to delete Job {metadata.name}: {e}"
+            )
+        except Exception as e:  # pragma: no cover - defensive
+            print(
+                f"[node_healthcheck] Unexpected error deleting Job {metadata.name}: {e}"
+            )
+
 def update_metrics() -> None:
     now = time.time()
 
     # Ensure per-mount per-node Jobs are running.
     _ensure_jobs(now)
+
+    # Explicitly clean up finished Jobs after a short retention.
+    _cleanup_finished_jobs(now)
 
     nodes = _list_target_nodes()
     if not nodes:
