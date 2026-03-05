@@ -629,9 +629,9 @@ def update_metrics() -> None:
             data = _load_result(m_name, node_name)
             # Use node from result JSON (job pod's node); fallback to discovery
             # so the metric always reflects the node that produced the data.
-            node_for_label = ((data.get("node") or "").strip() if data else "") or (
-                node_name or "unknown"
-            )
+            node_for_label = (
+                (data.get("node") or "").strip() if data else ""
+            ) or (node_name or "unknown")
 
             labels = {
                 "mount_name": m_name,
