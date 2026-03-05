@@ -60,10 +60,15 @@ MOUNTS: Dict[str, Dict[str, Any]] = {
             {
                 "name": "results",
                 "persistentVolumeClaim": {"claimName": "af-node-monitor-storage"},
-            }
+            },
+            {
+                "name": "work",
+                "persistentVolumeClaim": {"claimName": "af-shared-storage"},
+            },
         ],
         "volume_mounts": [
             {"name": "results", "mountPath": "/af-node-monitor"},
+            {"name": "work", "mountPath": "/work"},
         ],
     },
     "eos": {
