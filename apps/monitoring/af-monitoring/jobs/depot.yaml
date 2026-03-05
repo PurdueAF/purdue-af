@@ -74,4 +74,3 @@ spec:
               nfs:
                 server: datadepot.rcac.purdue.edu
                 path: /depot/cms
-

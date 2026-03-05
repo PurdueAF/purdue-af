@@ -110,7 +110,9 @@ def _check_metadata() -> Tuple[bool, bool, float | None]:
     return ok, timeout, elapsed_ms
 
 
-def _check_throughput(last_fio_ts: float | None) -> Tuple[bool, bool, float | None, float | None]:
+def _check_throughput(
+    last_fio_ts: float | None,
+) -> Tuple[bool, bool, float | None, float | None]:
     """Return (ok, timeout, gbps, new_last_fio_ts)."""
     now = time.time()
 
@@ -225,7 +227,9 @@ def main() -> None:
         "timeout": timeout,
         "ping_ms": ping_ms,
         "metadata_ms": meta_ms,
-        "throughput_gbps": float(throughput_gbps) if throughput_gbps is not None else 0.0,
+        "throughput_gbps": (
+            float(throughput_gbps) if throughput_gbps is not None else 0.0
+        ),
         "last_fio_ts": last_fio_ts,
     }
     print(f"[job_runner] Final result for '{MOUNT_NAME}': {result}")
@@ -234,4 +238,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

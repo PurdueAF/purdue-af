@@ -71,4 +71,3 @@ spec:
             - name: cvmfs
               persistentVolumeClaim:
                 claimName: cvmfs
-

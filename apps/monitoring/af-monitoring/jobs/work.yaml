@@ -67,4 +67,3 @@ spec:
             - name: results
               persistentVolumeClaim:
                 claimName: af-shared-storage
-
