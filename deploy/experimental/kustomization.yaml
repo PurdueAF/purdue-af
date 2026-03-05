@@ -22,10 +22,10 @@ resources:
   - ../../apps/sonic/supersonic/helmrepo.yaml
 
   - ../../apps/monitoring/af-monitoring/daemonset.yaml
-  - ../../apps/monitoring/af-monitoring/workers/depot.yaml
-  - ../../apps/monitoring/af-monitoring/workers/work.yaml
-  - ../../apps/monitoring/af-monitoring/workers/eos.yaml
-  - ../../apps/monitoring/af-monitoring/workers/cvmfs.yaml
+  - ../../apps/monitoring/af-monitoring/jobs/depot.yaml
+  - ../../apps/monitoring/af-monitoring/jobs/work.yaml
+  - ../../apps/monitoring/af-monitoring/jobs/eos.yaml
+  - ../../apps/monitoring/af-monitoring/jobs/cvmfs.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
@@ -63,6 +63,3 @@ configMapGenerator:
     files:
       - ../../docker/af-node-monitor/node_healthcheck.py
 
-  - name: af-node-monitor-worker-config
-    files:
-      - ../../docker/af-node-monitor/mount_worker.py

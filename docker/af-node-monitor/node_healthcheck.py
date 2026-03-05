@@ -1,37 +1,24 @@
+import json
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Dict, Tuple
+from pathlib import Path
+from typing import Any, Dict
 
-import requests
 from prometheus_client import Counter, Gauge, start_http_server
 
 
 MOUNTS: Dict[str, Dict[str, Any]] = {
-    # mount_name: {mount_path label, worker_url}
     "/depot/": {
         "mount_path": "/depot/",
-        "worker_url": os.getenv(
-            "DEPOT_WORKER_URL", "http://af-node-monitor-depot-worker:8080/check"
-        ),
     },
     "/work/": {
         "mount_path": "/work/",
-        "worker_url": os.getenv(
-            "WORK_WORKER_URL", "http://af-node-monitor-work-worker:8080/check"
-        ),
     },
     "eos": {
         "mount_path": "eos",
-        "worker_url": os.getenv(
-            "EOS_WORKER_URL", "http://af-node-monitor-eos-worker:8080/check"
-        ),
     },
     "cvmfs": {
         "mount_path": "cvmfs",
-        "worker_url": os.getenv(
-            "CVMFS_WORKER_URL", "http://af-node-monitor-cvmfs-worker:8080/check"
-        ),
     },
 }
 
@@ -39,8 +26,8 @@ PING_TIMEOUT_S = float(os.getenv("PING_TIMEOUT_S", "3"))
 METADATA_TIMEOUT_S = float(os.getenv("METADATA_TIMEOUT_S", "10"))
 FIO_TIMEOUT_S = float(os.getenv("FIO_TIMEOUT_S", "120"))
 
-HTTP_TIMEOUT_S = float(os.getenv("HTTP_TIMEOUT_S", "15"))
 CHECK_INTERVAL_S = float(os.getenv("CHECK_INTERVAL_S", "120"))
+RESULTS_DIR = Path(os.getenv("RESULTS_DIR", "/work/af-node-monitor/results"))
 
 
 try:
@@ -94,86 +81,85 @@ def _timeout_metadata_ms() -> float:
     return METADATA_TIMEOUT_S * 1000.0
 
 
-def _call_worker(url: str) -> Dict[str, Any] | None:
+def _result_path(mount_name: str) -> Path:
+    key = mount_name.strip("/").replace("/", "_") or "root"
+    return RESULTS_DIR / f"{key}.json"
+
+
+def _load_result(mount_name: str) -> Dict[str, Any] | None:
+    path = _result_path(mount_name)
     try:
-        resp = requests.get(url, timeout=HTTP_TIMEOUT_S)
-        if resp.status_code != 200:
-            print(f"Worker {url} returned status {resp.status_code}")
-            return None
-        return resp.json()
-    except requests.Timeout:
-        print(f"Worker {url} timed out after {HTTP_TIMEOUT_S}s")
-        return {"timeout": True}
+        with path.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return None
     except Exception as e:
-        print(f"Worker {url} error: {e}")
+        print(f"Error reading result for {mount_name} from {path}: {e}")
         return None
 
 
-def _process_mount(m_name: str, cfg: Dict[str, Any]) -> Tuple[str, Dict[str, Any] | None, float]:
-    start = time.time()
-    url = cfg["worker_url"]
-    data = _call_worker(url)
-    elapsed = time.time() - start
-    return m_name, data, elapsed
-
-
 def update_metrics() -> None:
-    start_iteration = time.time()
+    now = time.time()
 
-    # Call all workers in parallel to keep iteration time bounded.
-    futures = []
-    with ThreadPoolExecutor(max_workers=len(MOUNTS)) as executor:
-        for m_name, cfg in MOUNTS.items():
-            futures.append(executor.submit(_process_mount, m_name, cfg))
+    for m_name, cfg in MOUNTS.items():
+        mount_path = cfg["mount_path"]
+        data = _load_result(m_name)
 
-        for fut in as_completed(futures):
-            m_name, data, _elapsed = fut.result()
-            cfg = MOUNTS[m_name]
-            mount_path = cfg["mount_path"]
+        if not data:
+            # No result yet - treat as timeout/error with last metrics preserved
+            mount_valid.labels(mount_name=m_name, mount_path=mount_path).set(0)
+            mount_timeout_total.labels(
+                mount_name=m_name, mount_path=mount_path, check_type="no_recent_result"
+            ).inc()
+            continue
 
-            if data is None:
-                # Treat as error: mark invalid, set timeout-like values
-                mount_valid.labels(mount_name=m_name, mount_path=mount_path).set(0)
+        timestamp = float(data.get("timestamp", 0))
+        # Consider stale if older than 3 * CHECK_INTERVAL_S
+        if now - timestamp > 3 * CHECK_INTERVAL_S:
+            mount_valid.labels(mount_name=m_name, mount_path=mount_path).set(0)
+            mount_timeout_total.labels(
+                mount_name=m_name, mount_path=mount_path, check_type="stale_result"
+            ).inc()
+            continue
+
+        timeout = bool(data.get("timeout", False))
+        ok = bool(data.get("ok", False)) and not timeout
+
+        ping_ms = data.get("ping_ms")
+        meta_ms = data.get("metadata_ms")
+        gbps = data.get("throughput_gbps")
+
+        mount_valid.labels(mount_name=m_name, mount_path=mount_path).set(
+            1 if ok else 0
+        )
+
+        if timeout:
+            # Values in JSON already represent timeout semantics; enforce speed 0.
+            if ping_ms is not None:
+                mount_ping_ms.labels(mount_name=m_name, mount_path=mount_path).set(
+                    float(ping_ms)
+                )
+            else:
                 mount_ping_ms.labels(mount_name=m_name, mount_path=mount_path).set(
                     _timeout_ping_ms()
                 )
+
+            if meta_ms is not None:
+                mount_metadata_latency_ms.labels(
+                    mount_name=m_name, mount_path=mount_path
+                ).set(float(meta_ms))
+            else:
                 mount_metadata_latency_ms.labels(
                     mount_name=m_name, mount_path=mount_path
                 ).set(_timeout_metadata_ms())
-                mount_data_rate_gbps.labels(
-                    mount_name=m_name, mount_path=mount_path
-                ).set(0.0)
-                mount_error_total.labels(
-                    mount_name=m_name, mount_path=mount_path, check_type="worker_http"
-                ).inc()
-                continue
 
-            timeout = bool(data.get("timeout", False))
-            ok = bool(data.get("ok", False)) and not timeout
-
-            ping_ms = data.get("ping_ms")
-            meta_ms = data.get("metadata_ms")
-            gbps = data.get("throughput_gbps")
-
-            mount_valid.labels(mount_name=m_name, mount_path=mount_path).set(
-                1 if ok else 0
-            )
-
-            if timeout:
-                mount_ping_ms.labels(mount_name=m_name, mount_path=mount_path).set(
-                    _timeout_ping_ms()
-                )
-                mount_metadata_latency_ms.labels(
-                    mount_name=m_name, mount_path=mount_path
-                ).set(_timeout_metadata_ms())
-                mount_data_rate_gbps.labels(
-                    mount_name=m_name, mount_path=mount_path
-                ).set(0.0)
-                mount_timeout_total.labels(
-                    mount_name=m_name, mount_path=mount_path, check_type="worker_http"
-                ).inc()
-                continue
-
+            mount_data_rate_gbps.labels(
+                mount_name=m_name, mount_path=mount_path
+            ).set(0.0)
+            mount_timeout_total.labels(
+                mount_name=m_name, mount_path=mount_path, check_type="job_result"
+            ).inc()
+        else:
             if ping_ms is not None:
                 mount_ping_ms.labels(mount_name=m_name, mount_path=mount_path).set(
                     float(ping_ms)
@@ -189,10 +175,9 @@ def update_metrics() -> None:
                     mount_name=m_name, mount_path=mount_path
                 ).set(float(gbps))
 
-            if ok:
-                mount_last_success_ts.labels(
-                    mount_name=m_name, mount_path=mount_path
-                ).set(time.time())
+            mount_last_success_ts.labels(
+                mount_name=m_name, mount_path=mount_path
+            ).set(timestamp)
 
 
 if __name__ == "__main__":

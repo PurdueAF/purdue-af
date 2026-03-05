@@ -1,0 +1,77 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: af-node-monitor-depot
+spec:
+  schedule: "*/2 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 180
+      template:
+        spec:
+          restartPolicy: Never
+          enableServiceLinks: false
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: cms-af-prod
+                        operator: In
+                        values:
+                          - "true"
+                  - matchExpressions:
+                      - key: cms-af-dev
+                        operator: In
+                        values:
+                          - "true"
+          tolerations:
+            - key: "hub.jupyter.org/dedicated"
+              operator: "Equal"
+              value: "cms-af"
+              effect: "NoSchedule"
+          containers:
+            - name: depot-check
+              image: geddes-registry.rcac.purdue.edu/cms/af-node-monitor:0.1.0
+              command: ["python", "/opt/af-node-monitor/job_runner.py"]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+              env:
+                - name: MOUNT_NAME
+                  value: "/depot/"
+                - name: CHECK_FILE
+                  value: "/depot/cms/purdue-af/validate-mount.txt"
+                - name: CHECKSUM
+                  value: "13dede34ee8dc7e5b70c9cd06ac15467"
+                - name: METADATA_DIR
+                  value: "/depot/cms/"
+                - name: FIO_FILE
+                  value: "/depot/cms/purdue-af/.storage-monitoring-probe-1gb"
+                - name: ENABLE_FIO
+                  value: "true"
+                - name: RESULTS_DIR
+                  value: "/work/af-node-monitor/results"
+              volumeMounts:
+                - name: results
+                  mountPath: /work
+                - name: depot
+                  mountPath: /depot/cms
+                  mountPropagation: HostToContainer
+          volumes:
+            - name: results
+              persistentVolumeClaim:
+                claimName: af-shared-storage
+            - name: depot
+              nfs:
+                server: datadepot.rcac.purdue.edu
+                path: /depot/cms
+

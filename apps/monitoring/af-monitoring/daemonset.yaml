@@ -35,6 +35,9 @@ spec:
         - name: af-node-monitor
           image: geddes-registry.rcac.purdue.edu/cms/af-node-monitor:0.1.0
           command: ["python", "/scripts/node_healthcheck.py"]
+          env:
+            - name: RESULTS_DIR
+              value: "/work/af-node-monitor/results"
           ports:
             - containerPort: 8000
               name: metrics

@@ -1,0 +1,74 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: af-node-monitor-cvmfs
+spec:
+  schedule: "*/2 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 180
+      template:
+        spec:
+          restartPolicy: Never
+          enableServiceLinks: false
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: cms-af-prod
+                        operator: In
+                        values:
+                          - "true"
+                  - matchExpressions:
+                      - key: cms-af-dev
+                        operator: In
+                        values:
+                          - "true"
+          tolerations:
+            - key: "hub.jupyter.org/dedicated"
+              operator: "Equal"
+              value: "cms-af"
+              effect: "NoSchedule"
+          containers:
+            - name: cvmfs-check
+              image: geddes-registry.rcac.purdue.edu/cms/af-node-monitor:0.1.0
+              command: ["python", "/opt/af-node-monitor/job_runner.py"]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+              env:
+                - name: MOUNT_NAME
+                  value: "cvmfs"
+                - name: CHECK_FILE
+                  value: "/cvmfs/cms.cern.ch/SITECONF/T2_US_Purdue/Purdue-Hadoop/JobConfig/site-local-config.xml"
+                - name: CHECKSUM
+                  value: "3b570d80272b7188c13cef51e58b7151"
+                - name: METADATA_DIR
+                  value: "/cvmfs/cms.cern.ch/"
+                - name: ENABLE_FIO
+                  value: "false"
+                - name: RESULTS_DIR
+                  value: "/work/af-node-monitor/results"
+              volumeMounts:
+                - name: results
+                  mountPath: /work
+                - name: cvmfs
+                  mountPath: /cvmfs
+                  mountPropagation: HostToContainer
+          volumes:
+            - name: results
+              persistentVolumeClaim:
+                claimName: af-shared-storage
+            - name: cvmfs
+              persistentVolumeClaim:
+                claimName: cvmfs
+
