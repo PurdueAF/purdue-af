@@ -443,6 +443,7 @@ def _build_job_manifest(
             "labels": labels,
         },
         "spec": {
+            "ttlSecondsAfterFinished": JOB_TTL_SECONDS,
             "backoffLimit": JOB_BACKOFF_LIMIT,
             "activeDeadlineSeconds": JOB_ACTIVE_DEADLINE_SECONDS,
             "template": {
