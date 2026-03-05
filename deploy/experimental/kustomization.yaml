@@ -59,6 +59,10 @@ configMapGenerator:
     files:
       - values.yaml=../../apps/sonic/supersonic/values.yaml
 
+  - name: af-node-monitor-config
+    files:
+      - ../../docker/af-node-monitor/node_healthcheck.py
+
   - name: af-node-monitor-worker-config
     files:
       - ../../docker/af-node-monitor/mount_worker.py
