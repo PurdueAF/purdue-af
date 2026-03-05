@@ -22,10 +22,7 @@ resources:
   - ../../apps/sonic/supersonic/helmrepo.yaml
 
   - ../../apps/monitoring/af-monitoring/daemonset.yaml
-  - ../../apps/monitoring/af-monitoring/jobs/depot.yaml
-  - ../../apps/monitoring/af-monitoring/jobs/work.yaml
-  - ../../apps/monitoring/af-monitoring/jobs/eos.yaml
-  - ../../apps/monitoring/af-monitoring/jobs/cvmfs.yaml
+  - ../../apps/monitoring/af-monitoring/af-node-monitor-rbac.yaml
 
 generatorOptions:
   disableNameSuffixHash: true

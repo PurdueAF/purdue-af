@@ -11,6 +11,7 @@ spec:
       labels:
         name: af-node-monitor
     spec:
+      serviceAccountName: af-node-monitor
       enableServiceLinks: false
       affinity:
         nodeAffinity:
@@ -38,6 +39,10 @@ spec:
           env:
             - name: RESULTS_DIR
               value: "/work/af-node-monitor/results"
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           ports:
             - containerPort: 8000
               name: metrics

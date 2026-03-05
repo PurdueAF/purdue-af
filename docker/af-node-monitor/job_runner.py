@@ -27,11 +27,16 @@ FIO_INTERVAL_S = float(_get_env("FIO_INTERVAL_S", "1800"))  # 30 minutes default
 ENABLE_FIO = _get_env("ENABLE_FIO", "false").lower() in {"1", "true", "yes"}
 
 RESULTS_DIR = Path(_get_env("RESULTS_DIR", "/work/af-node-monitor/results"))
+NODE_NAME = os.getenv("NODE_NAME") or ""
 
 
 def _sanitized_mount_name(name: str) -> str:
     # Replace slashes and other problematic chars for filesystem paths.
     return name.strip("/").replace("/", "_") or "root"
+
+
+def _sanitized_node_name(name: str) -> str:
+    return name.strip().replace("/", "_") if name else ""
 
 
 def _load_previous_result(path: Path) -> Dict[str, Any]:
@@ -156,9 +161,17 @@ def _check_throughput(
 
 def main() -> None:
     mount_key = _sanitized_mount_name(MOUNT_NAME)
-    result_path = RESULTS_DIR / f"{mount_key}.json"
+    node_key = _sanitized_node_name(NODE_NAME)
+    if node_key:
+        result_path = RESULTS_DIR / f"{mount_key}__{node_key}.json"
+    else:
+        # Backwards-compatible path for legacy CronJobs without NODE_NAME.
+        result_path = RESULTS_DIR / f"{mount_key}.json"
 
-    print(f"[job_runner] Starting checks for mount '{MOUNT_NAME}' (key='{mount_key}')")
+    print(
+        f"[job_runner] Starting checks for mount '{MOUNT_NAME}' (key='{mount_key}') "
+        f"on node '{NODE_NAME or 'unknown'}'"
+    )
     print(f"[job_runner] CHECK_FILE={CHECK_FILE}, METADATA_DIR={METADATA_DIR}, FIO_FILE={FIO_FILE}, ENABLE_FIO={ENABLE_FIO}")
 
     prev = _load_previous_result(result_path)

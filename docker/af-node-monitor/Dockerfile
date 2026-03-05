@@ -6,7 +6,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends fio ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir prometheus_client requests
+RUN pip install --no-cache-dir prometheus_client requests kubernetes
 
 WORKDIR /opt/af-node-monitor
 
