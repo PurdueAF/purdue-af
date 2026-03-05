@@ -255,7 +255,7 @@ def _load_result(mount_name: str, node_name: str) -> Dict[str, Any] | None:
 
 
 def _list_target_nodes() -> List[str]:
-    """Return a cached list of AF node names based on labels."""
+    """Return a cached list of Ready AF node names based on labels."""
     _init_k8s()
     if not _k8s_ready or _core_v1 is None:
         return []
@@ -274,7 +274,19 @@ def _list_target_nodes() -> List[str]:
         for selector in label_sets:
             resp = _core_v1.list_node(label_selector=selector)
             for node in resp.items:
-                if node.metadata and node.metadata.name:
+                if not node.metadata or not node.metadata.name:
+                    continue
+                conditions = getattr(node.status, "conditions", None)
+                if not conditions:
+                    continue
+                ready = False
+                for cond in conditions:
+                    if getattr(cond, "type", "") == "Ready" and getattr(
+                        cond, "status", ""
+                    ) == "True":
+                        ready = True
+                        break
+                if ready:
                     names.add(node.metadata.name)
     except ApiException as e:  # type: ignore[misc]
         print(f"[node_healthcheck] Error listing nodes: {e}")
