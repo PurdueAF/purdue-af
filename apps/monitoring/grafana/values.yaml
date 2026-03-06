@@ -50,6 +50,9 @@ extraVolumes:
     emptyDir: {}
   - name: grafana-csv-tmp
     emptyDir: {}
+  - name: work
+    persistentVolumeClaim:
+      claimName: af-shared-storage
 
 extraVolumeMounts:
   - name: grafana-plugins-tmp
@@ -60,6 +63,10 @@ extraVolumeMounts:
     mountPath: /var/lib/grafana/pdf
   - name: grafana-csv-tmp
     mountPath: /var/lib/grafana/csv
+  - name: work
+    mountPath: /work/
+    mountPropagation: HostToContainer
+    readOnly: true
 
 # Add an init container that sets permissive mode on the PVC root without chown
 extraInitContainers:
@@ -91,10 +98,32 @@ extraInitContainers:
       - name: storage
         mountPath: /var/lib/grafana
 
+extraContainers: |
+  - name: announcements-server
+    image: nginxinc/nginx-unprivileged:alpine
+    ports:
+      - containerPort: 8080
+    volumeMounts:
+      - name: work
+        mountPath: /work/
+        mountPropagation: HostToContainer
+        readOnly: true
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        cpu: 50m
+        memory: 32Mi
+
 extraConfigmapMounts:
   - name: grafana-plugins-provisioning
     mountPath: /etc/grafana/provisioning/plugins
     configMap: grafana-plugins-provisioning
+    readOnly: true
+  - name: announcements-nginx-conf
+    mountPath: /etc/nginx/conf.d
+    configMap: announcements-nginx-conf
     readOnly: true
 
 # envValueFrom:
@@ -128,6 +157,8 @@ grafana.ini:
     org_name: "Main Org."
     org_role: Viewer
     hide_version: true
+  plugins:
+    allow_loading_unsigned_plugins: marcusolsson-dynamictext-panel
 
 # Dashboard and datasource provisioning
 dashboardProviders:
@@ -203,6 +234,14 @@ datasources:
         isDefault: false
         jsonData:
           maxLines: 1000
+      - name: Infinity
+        type: yesoreyeram-infinity-datasource
+        uid: infinity
+        access: proxy
+        editable: false
+        jsonData:
+          allowedHosts:
+            - "http://localhost:8080"
 
 plugins:
   - grafana-llm-app

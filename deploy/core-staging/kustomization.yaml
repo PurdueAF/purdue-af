@@ -96,3 +96,7 @@ configMapGenerator:
   - name: prometheus-config
     files:
       - values.yaml=../../apps/monitoring/prometheus/values.yaml
+
+  - name: nginx-config
+    files:
+      - ../../apps/monitoring/grafana/nginx-conf.yaml
