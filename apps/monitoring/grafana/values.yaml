@@ -50,9 +50,9 @@ extraVolumes:
     emptyDir: {}
   - name: grafana-csv-tmp
     emptyDir: {}
-  - name: work
-    persistentVolumeClaim:
-      claimName: af-shared-storage
+  - name: announcements-nginx-conf
+    configMap:
+      name: announcements-nginx-conf
 
 extraVolumeMounts:
   - name: grafana-plugins-tmp
@@ -63,10 +63,7 @@ extraVolumeMounts:
     mountPath: /var/lib/grafana/pdf
   - name: grafana-csv-tmp
     mountPath: /var/lib/grafana/csv
-  - name: work
-    mountPath: /work/
-    mountPropagation: HostToContainer
-    readOnly: true
+
 
 # Add an init container that sets permissive mode on the PVC root without chown
 extraInitContainers:
@@ -108,6 +105,9 @@ extraContainers: |
         mountPath: /work/
         mountPropagation: HostToContainer
         readOnly: true
+      - name: announcements-nginx-conf
+        mountPath: /etc/nginx/conf.d
+        readOnly: true
     resources:
       requests:
         cpu: 100m
@@ -120,10 +120,6 @@ extraConfigmapMounts:
   - name: grafana-plugins-provisioning
     mountPath: /etc/grafana/provisioning/plugins
     configMap: grafana-plugins-provisioning
-    readOnly: true
-  - name: announcements-nginx-conf
-    mountPath: /etc/nginx/conf.d
-    configMap: nginx-config
     readOnly: true
 
 # envValueFrom:
