@@ -123,7 +123,7 @@ extraConfigmapMounts:
     readOnly: true
   - name: announcements-nginx-conf
     mountPath: /etc/nginx/conf.d
-    configMap: nginx-conf
+    configMap: nginx-config
     readOnly: true
 
 # envValueFrom:
