@@ -1006,7 +1006,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "avg by (mount_name) (af_node_mount_data_rate_gbps)",
+          "expr": "avg by (mount_name) (af_node_mount_data_rate_gbps{mount_name!=\"cvmfs\"})",
           "interval": "5m",
           "legendFormat": "__auto",
           "range": true,
