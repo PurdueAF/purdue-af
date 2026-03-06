@@ -132,7 +132,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -458,7 +460,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -525,7 +529,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -593,7 +599,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -660,7 +668,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -727,7 +737,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -809,7 +821,9 @@
       },
       "id": 8,
       "options": {
-        "displayLabels": ["value"],
+        "displayLabels": [
+          "value"
+        ],
         "legend": {
           "displayMode": "list",
           "placement": "right",
@@ -818,7 +832,9 @@
         },
         "pieType": "pie",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -878,7 +894,9 @@
       },
       "id": 7,
       "options": {
-        "displayLabels": ["value"],
+        "displayLabels": [
+          "value"
+        ],
         "legend": {
           "displayMode": "list",
           "placement": "right",
@@ -886,7 +904,9 @@
         },
         "pieType": "pie",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -921,65 +941,64 @@
       },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
           "custom": {
-            "axisPlacement": "auto",
-            "fillOpacity": 70,
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
-            "lineWidth": 1
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "semi-dark-green",
-                "value": 0
-              },
-              {
-                "color": "semi-dark-yellow",
-                "value": 1000
-              },
-              {
-                "color": "semi-dark-orange",
-                "value": 5000
-              },
-              {
-                "color": "semi-dark-red",
-                "value": 9000
-              }
-            ]
-          },
-          "unit": "ms"
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
+        "h": 8,
         "w": 6,
         "x": 12,
         "y": 15
       },
       "id": 18,
       "options": {
-        "colWidth": 0.97,
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
+        "calculate": false,
+        "cellGap": 2,
+        "cellValues": {
+          "unit": "ms"
         },
-        "rowHeight": 0.97,
-        "showValue": "never",
+        "color": {
+          "exponent": 0.8,
+          "fill": "#C4162A",
+          "max": 10000,
+          "min": 0,
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "RdYlGn",
+          "steps": 128
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto",
+          "value": "Ping"
+        },
         "tooltip": {
-          "hideZeros": false,
           "mode": "single",
-          "sort": "none"
+          "showColorScale": false,
+          "yHistogram": false
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "reverse": false
         }
       },
       "pluginVersion": "12.1.0",
@@ -994,7 +1013,7 @@
         }
       ],
       "title": "Storage responsiveness (avg over AF nodes)",
-      "type": "status-history"
+      "type": "heatmap"
     },
     {
       "datasource": {
@@ -1030,7 +1049,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
+        "h": 8,
         "w": 6,
         "x": 18,
         "y": 15
@@ -1041,7 +1060,9 @@
         "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -1079,5 +1100,5 @@
   "timezone": "browser",
   "title": "PHYS 390 Display",
   "uid": "phys390-dashboard",
-  "version": 6
+  "version": 12
 }
