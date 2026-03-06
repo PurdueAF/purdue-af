@@ -51,8 +51,7 @@ extraVolumes:
   - name: grafana-csv-tmp
     emptyDir: {}
   - name: work
-    persistentVolumeClaim:
-      claimName: af-shared-storage
+    existingClaim: af-shared-storage
   - name: announcements-nginx-conf
     configMap:
       name: announcements-nginx-conf
