@@ -35,6 +35,7 @@ resources:
   - ../../apps/monitoring/af-monitoring/services.yaml
   - ../../apps/monitoring/af-monitoring/deployment.yaml
   - ../../apps/monitoring/grafana/helmrelease.yaml
+  - ../../apps/monitoring/grafana/announcements-nginx-conf.yaml
   - ../../apps/monitoring/prometheus/helmrelease.yaml
   - ../../apps/monitoring/prometheus/servicemonitors.yaml
   - ../../apps/monitoring/prometheus/pod-monitor-svc.yaml
@@ -96,7 +97,3 @@ configMapGenerator:
   - name: prometheus-config
     files:
       - values.yaml=../../apps/monitoring/prometheus/values.yaml
-
-  - name: announcements-nginx-conf
-    files:
-      - ../../apps/monitoring/grafana/announcements-nginx-conf.yaml
