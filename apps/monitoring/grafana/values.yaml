@@ -64,7 +64,6 @@ extraVolumeMounts:
   - name: grafana-csv-tmp
     mountPath: /var/lib/grafana/csv
 
-
 # Add an init container that sets permissive mode on the PVC root without chown
 extraInitContainers:
   - name: init-chmod-data
