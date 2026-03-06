@@ -157,8 +157,6 @@ grafana.ini:
     org_name: "Main Org."
     org_role: Viewer
     hide_version: true
-  plugins:
-    allow_loading_unsigned_plugins: marcusolsson-dynamictext-panel
 
 # Dashboard and datasource provisioning
 dashboardProviders:
@@ -246,3 +244,5 @@ datasources:
 plugins:
   - grafana-llm-app
   - grafana-pyroscope-app
+  - marcusolsson-dynamictext-panel
+  - yesoreyeram-infinity-datasource
