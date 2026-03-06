@@ -56,6 +56,9 @@ extraVolumes:
   - name: announcements-nginx-conf
     configMap:
       name: announcements-nginx-conf
+      items:
+        - key: default.conf
+          path: default.conf
 
 extraVolumeMounts:
   - name: grafana-plugins-tmp
