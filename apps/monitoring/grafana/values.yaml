@@ -55,7 +55,7 @@ extraVolumes:
       claimName: af-shared-storage
   - name: announcements-nginx-conf
     configMap:
-      name: nginx-config
+      name: announcements-nginx-conf
 
 extraVolumeMounts:
   - name: grafana-plugins-tmp
