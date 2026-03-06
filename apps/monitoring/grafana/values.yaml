@@ -69,6 +69,10 @@ extraVolumeMounts:
     mountPath: /var/lib/grafana/pdf
   - name: grafana-csv-tmp
     mountPath: /var/lib/grafana/csv
+  - name: work
+    mountPath: /work/
+    mountPropagation: HostToContainer
+    readOnly: true
 
 # Add an init container that sets permissive mode on the PVC root without chown
 extraInitContainers:
