@@ -106,7 +106,7 @@ gateway:
               "scheduler_partition": "hammer-nodes",
               # "scheduler_reservation": "CMSLOCAL",
               "worker_partition": "hammer-nodes",
-              "worker_cmd": f"{conda_env}/bin/dask-worker",
+              "worker_cmd": f"{conda_env}/bin/dask-worker --preload /depot/cms/purdue-af/dask_pyroscope_preload_slurm.py",
               "account": "cms",
               "time": "1-00:00:00",
               "scheduler_setup": setup_cmd,
