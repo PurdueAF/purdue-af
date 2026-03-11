@@ -44,7 +44,12 @@ postgresql:
         effect: "NoSchedule"
 
 objectStore:
-  publicURL: servicex-minio-api.geddes.rcac.purdue.edu
+  internal: false
+  enabled: true
+  access_key: 87D4Y1BUYBTOR5B48C8U
+  secret_key: 7U4NNymciA9cQ2YXbHEKNd4ZT4kiwM6oasHSZdd2
+  publicURL: s3-prod.geddes.rcac.purdue.edu              
+  # publicURL: servicex-minio-api.geddes.rcac.purdue.edu
 
 codeGen:
   uproot-raw:
