@@ -1,8 +1,9 @@
 serverLoadThreshold: 100
 
 triton:
+  image: nvcr.io/nvidia/tritonserver:25.12-py3
   # image: nvcr.io/nvidia/tritonserver:24.11-py3
-  image: fastml/triton-torchgeo:22.07-py3-geometric
+  # image: fastml/triton-torchgeo:22.07-py3-geometric
   # image: fastml/triton-torchgeo:25.08-py3-geometric
   command: ["/bin/sh", "-c"]
   args:
