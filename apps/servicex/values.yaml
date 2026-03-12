@@ -1,16 +1,15 @@
 env:
-# S3-Prod authentication:
-- name: MINIO_ACCESS_KEY
-  valueFrom:
-    secretKeyRef:
-      name: s3-prod-secrets
-      key: access_key
-- name: MINIO_SECRET_KEY
-  valueFrom:
-    secretKeyRef:
-      name: s3-prod-secrets
-      key: secret_key
-
+  # S3-Prod authentication:
+  - name: MINIO_ACCESS_KEY
+    valueFrom:
+      secretKeyRef:
+        name: s3-prod-secrets
+        key: access_key
+  - name: MINIO_SECRET_KEY
+    valueFrom:
+      secretKeyRef:
+        name: s3-prod-secrets
+        key: secret_key
 
 app:
   resources:
