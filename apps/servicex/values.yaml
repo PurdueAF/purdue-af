@@ -8,8 +8,8 @@ env:
   - name: MINIO_SECRET_KEY
     valueFrom:
       secretKeyRef:
-        name: s3-prod-secrets
-        key: secret_key
+        name:  s3-prod-secrets
+        key:  secret_key
 
 app:
   resources:
