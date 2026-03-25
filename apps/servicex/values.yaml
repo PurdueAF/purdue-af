@@ -119,6 +119,9 @@ rabbitmq:
       value: "cms-af"
       effect: "NoSchedule"
 minio:
+  auth:
+    rootUser: testuser
+    rootPassword: testpass
   persistence:
     enabled: false
     storageClass: ${multinode_storage_class}
