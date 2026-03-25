@@ -47,7 +47,7 @@ objectStore:
   enabled: true
   internal: false
   publicClientUseTLS: false
-  publicURL: s3-prod.geddes.rcac.purdue.edu
+  publicURL: s3.rcac.purdue.edu
   useTLS: false
 
 codeGen:
