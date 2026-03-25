@@ -44,12 +44,11 @@ postgresql:
         effect: "NoSchedule"
 
 objectStore:
-  internal: false
   enabled: true
-  access_key: 87D4Y1BUYBTOR5B48C8U
-  secret_key: 7U4NNymciA9cQ2YXbHEKNd4ZT4kiwM6oasHSZdd2
+  internal: false
+  publicClientUseTLS: false
   publicURL: s3-prod.geddes.rcac.purdue.edu
-  # publicURL: servicex-minio-api.geddes.rcac.purdue.edu
+  useTLS: false
 
 codeGen:
   uproot-raw:
@@ -119,9 +118,6 @@ rabbitmq:
       value: "cms-af"
       effect: "NoSchedule"
 minio:
-  auth:
-    rootUser: U2X557GIAC1WQT7B7XPT
-    rootPassword: N4cNFgzM2KTw2DcCYGAt0vCQAdPpattrO3wZDNBI
   persistence:
     enabled: false
     storageClass: ${multinode_storage_class}
