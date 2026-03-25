@@ -120,8 +120,8 @@ rabbitmq:
       effect: "NoSchedule"
 minio:
   auth:
-    rootUser: testuser
-    rootPassword: testpass
+    rootUser: U2X557GIAC1WQT7B7XPT
+    rootPassword: N4cNFgzM2KTw2DcCYGAt0vCQAdPpattrO3wZDNBI
   persistence:
     enabled: false
     storageClass: ${multinode_storage_class}
