@@ -3,8 +3,7 @@ kind: HelmRelease
 metadata:
   name: servicex
 spec:
-  # suspend: false
-  suspend: true
+  suspend: false
   interval: 1m
   chart:
     spec:
