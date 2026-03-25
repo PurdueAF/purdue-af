@@ -48,7 +48,7 @@ objectStore:
   internal: false
   # publicClientUseTLS: false
   publicURL: s3.rcac.purdue.edu:443
-  # useTLS: false
+  useTLS: true
 
 codeGen:
   uproot-raw:
