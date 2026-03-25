@@ -46,9 +46,9 @@ postgresql:
 objectStore:
   enabled: true
   internal: false
-  # publicClientUseTLS: false
-  publicURL: s3.rcac.purdue.edu
-  # useTLS: false
+  publicClientUseTLS: false
+  publicURL: s3.rcac.purdue.edu:443
+  useTLS: false
 
 codeGen:
   uproot-raw:
