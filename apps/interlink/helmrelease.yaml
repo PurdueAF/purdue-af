@@ -46,3 +46,10 @@ spec:
                   name: munge-key
                   mountPath: /etc/secrets/munge
                   readOnly: true
+              - op: add
+                path: /spec/template/spec/containers/0/resources
+                value:
+                  limits:
+                    memory: 4Gi
+                  requests:
+                    memory: 4Gi
