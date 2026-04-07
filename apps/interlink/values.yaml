@@ -88,7 +88,7 @@ virtualNode:
       curl -L https://github.com/erebe/wstunnel/releases/download/v10.4.4/wstunnel_10.4.4_linux_amd64.tar.gz -o "$DOWNLOAD_DIR/wstunnel.tar.gz" && \
       tar -xzvf "$DOWNLOAD_DIR/wstunnel.tar.gz" -C "$DOWNLOAD_DIR" && \
       chmod +x "$DOWNLOAD_DIR/wstunnel" && \
-      "$DOWNLOAD_DIR/wstunnel" client --http-upgrade-path-prefix %s %s ws://%s:80 > "$DOWNLOAD_DIR/wstunnel_client.log" 2>&1 &
+      "$DOWNLOAD_DIR/wstunnel" client --http-upgrade-path-prefix --log-lvl DEBUG %s %s ws://%s:80 2>&1 | tee -a "$DOWNLOAD_DIR/wstunnel_client.log" &
 
 extraVolumes:
   - name: plugin-data
