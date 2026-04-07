@@ -3,7 +3,7 @@ nodeName: interlink-hammer-purdueaf
 
 interlink:
   # image: ghcr.io/interlink-hq/interlink/interlink:0.5.2-pre2
-  image: ghcr.io/interlink-hq/interlink/interlink:0.6.1-pre5
+  image: ghcr.io/interlink-hq/interlink/interlink:0.6.1-pre4
   enabled: true
   socket: unix:///var/run/interlink.sock
   address: http://localhost
