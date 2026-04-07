@@ -17,7 +17,7 @@ plugin:
   image: "geddes-registry.rcac.purdue.edu/cms/interlink-slurm-plugin:0.6.1-pre1"
   # image: ghcr.io/interlink-hq/interlink-sidecar-slurm/interlink-sidecar-slurm:0.5.2
   #socket: unix:///var/run/plugin.sock
-  address: "http://localhost"
+  address: "http://0.0.0.0"
   port: 4000
   privileged: false
   extraVolumeMounts:
