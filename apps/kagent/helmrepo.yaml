@@ -5,4 +5,4 @@ metadata:
 spec:
   interval: 1h
   type: oci
-  url: oci://ghcr.io/kagent-dev/kagent/helm/kagent
+  url: oci://ghcr.io/kagent-dev/kagent/helm
