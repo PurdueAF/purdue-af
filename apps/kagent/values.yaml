@@ -1,3 +1,8 @@
+# Namespace UX: controller.watchNamespaces limits the UI namespace list to this env only.
+# apps/kagent/controller-namespace-cluster-rbac.yaml grants Get on that Namespace (required
+# for /api/namespaces). The create-agent form still initializes to "default" in upstream UI;
+# choose your release namespace from the combobox (only that namespace is listed once the API succeeds).
+
 providers:
   default: openAI
   openAI:

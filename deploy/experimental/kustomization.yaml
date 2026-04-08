@@ -23,6 +23,7 @@ resources:
   - ../../apps/sonic/supersonic/helmrepo.yaml
 
   - ../../apps/kagent/helmrepo.yaml
+  - ../../apps/kagent/controller-namespace-cluster-rbac.yaml
   - ../../apps/kagent/agent-rbac.yaml
   - ../../apps/kagent/secret-kagent-openai.yaml
   - ../../apps/kagent/modelconfigs-extra.yaml
