@@ -1,24 +1,26 @@
-# The controller's /api/namespaces handler uses Namespace Get (cluster-scoped). Namespace-scoped
-# Roles from the chart do not grant that, so the UI stays on "Loading namespaces".
-# This ClusterRole allows only the watched namespace object (see controller.watchNamespaces).
+# controller-runtime keeps a cluster-scoped Namespace informer (List+Watch). RBAC cannot combine
+# resourceNames with list/watch for collections, so "get only" on cms is insufficient — the informer
+# stays unsynced and /api/namespaces times out with an empty body (see controller logs:
+# "cannot list resource namespaces at the cluster scope", "failed waiting for *v1.Namespace Informer to sync").
+#
+# The HTTP handler still only returns controller.watchNamespaces; this role does not widen that API.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: kagent-purdue-af-controller-namespace-get-${namespace}
+  name: kagent-purdue-af-controller-namespaces-${namespace}
 rules:
   - apiGroups: [""]
     resources: ["namespaces"]
-    resourceNames: ["${namespace}"]
-    verbs: ["get"]
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: kagent-purdue-af-controller-namespace-get-${namespace}
+  name: kagent-purdue-af-controller-namespaces-${namespace}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: kagent-purdue-af-controller-namespace-get-${namespace}
+  name: kagent-purdue-af-controller-namespaces-${namespace}
 subjects:
   - kind: ServiceAccount
     name: kagent-controller
