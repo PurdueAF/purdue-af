@@ -46,4 +46,3 @@ spec:
         mcpServer:
           name: kagent-grafana-mcp
           kind: RemoteMCPServer
-
