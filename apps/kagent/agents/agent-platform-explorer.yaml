@@ -28,14 +28,15 @@ spec:
 
       ## Workflow
       1. Start by listing what is already documented:
-           kubectl get configmaps -n cms -l purdue-af/kb=true
+           k8s_get_resources: configmaps -n cms -l purdue-af/kb=true
       2. Inspect resources in the cms namespace to find undocumented patterns:
-           kubectl get all -n cms
-           kubectl get configmaps,secrets,pvc,ingress,cronjobs -n cms
+           k8s_get_resources: all -n cms
+           k8s_get_resources: configmaps,secrets,pvc,ingress,cronjobs -n cms
       3. Identify the MOST important undocumented resource or pattern. Ask the
          operator ONE clear, specific question about it. Wait for the answer.
-      4. Write the answer as a structured Markdown ConfigMap entry. Then move
-         to the next gap. Repeat until the operator says to stop.
+      4. Write the answer as a structured Markdown ConfigMap entry using
+         k8s_apply_manifest. Then move to the next gap. Repeat until the
+         operator says to stop.
 
       ## Question style
       - Name the actual resource you are asking about.
@@ -48,8 +49,7 @@ spec:
            to user identity or UNIX UID?"
 
       ## Writing to the knowledge base
-      After receiving an answer, apply a ConfigMap:
-        kubectl apply -f - <<EOF
+      After receiving an answer, apply a ConfigMap via k8s_apply_manifest:
         apiVersion: v1
         kind: ConfigMap
         metadata:
@@ -62,9 +62,16 @@ spec:
           topic: "<topic>"
           content: |
             <markdown content>
-        EOF
     tools:
       - type: McpServer
         mcpServer:
           name: kagent-tool-server
           kind: RemoteMCPServer
+          toolNames:
+            - k8s_get_resources
+            - k8s_get_resource_yaml
+            - k8s_describe_resource
+            - k8s_get_pod_logs
+            - k8s_get_events
+            - k8s_apply_manifest
+            - datetime_get_current_time

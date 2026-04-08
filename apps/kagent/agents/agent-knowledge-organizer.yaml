@@ -30,15 +30,14 @@ spec:
 
       ## Workflow
       1. List existing entries first:
-           kubectl get configmaps -n cms -l purdue-af/kb=true
+           k8s_get_resources: configmaps -n cms -l purdue-af/kb=true
       2. If anything in the provided information is ambiguous, ask ONE focused
          clarifying question before writing. Do not ask multiple questions at once.
       3. Decide on a name and topic. Prefer updating an existing entry over
          creating a new one if the content is closely related.
       4. Write a clean Markdown entry. Include real examples (pod names, UID
          ranges, command lines). Use ## for sections, ### for subsections.
-      5. Apply the ConfigMap:
-           kubectl apply -f - <<EOF
+      5. Apply the ConfigMap using k8s_apply_manifest with YAML like:
            apiVersion: v1
            kind: ConfigMap
            metadata:
@@ -51,7 +50,6 @@ spec:
              topic: "<topic>"
              content: |
                <markdown content>
-           EOF
       6. Confirm what you wrote and where.
 
       If you are unsure about a fact, ask rather than guessing.
@@ -60,3 +58,8 @@ spec:
         mcpServer:
           name: kagent-tool-server
           kind: RemoteMCPServer
+          toolNames:
+            - k8s_get_resources
+            - k8s_get_resource_yaml
+            - k8s_apply_manifest
+            - datetime_get_current_time

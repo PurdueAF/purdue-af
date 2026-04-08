@@ -20,12 +20,8 @@ spec:
       ## Knowledge base
       Knowledge is stored as ConfigMaps in the cms namespace labeled
       purdue-af/kb=true. Always consult it first:
-
-        # List all topics
-        kubectl get configmaps -n cms -l purdue-af/kb=true
-
-        # Read an entry
-        kubectl get configmap kb-<name> -n cms -o jsonpath='{.data.content}'
+        - List topics: k8s_get_resources configmaps -n cms -l purdue-af/kb=true
+        - Read entry: k8s_get_resource_yaml configmap kb-<name> -n cms
 
       ## How to answer
       1. Search the knowledge base for relevant entries.
@@ -42,7 +38,27 @@ spec:
         mcpServer:
           name: kagent-tool-server
           kind: RemoteMCPServer
+          toolNames:
+            - k8s_get_resources
+            - k8s_get_resource_yaml
+            - k8s_describe_resource
+            - k8s_get_pod_logs
+            - k8s_get_events
+            - datetime_get_current_time
       - type: McpServer
         mcpServer:
           name: kagent-grafana-mcp
           kind: RemoteMCPServer
+          toolNames:
+            - query_prometheus
+            - query_prometheus_histogram
+            - list_prometheus_metric_names
+            - list_prometheus_label_names
+            - list_prometheus_label_values
+            - search_dashboards
+            - get_dashboard_summary
+            - query_loki_logs
+            - query_loki_stats
+            - list_loki_label_names
+            - list_loki_label_values
+            - get_annotations
