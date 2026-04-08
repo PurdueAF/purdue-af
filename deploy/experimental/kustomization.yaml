@@ -26,7 +26,6 @@ resources:
   - ../../apps/kagent/controller-namespace-cluster-rbac.yaml
   - ../../apps/kagent/controller-cms-rbac.yaml
   - ../../apps/kagent/agent-rbac.yaml
-  - ../../apps/kagent/cms-agent-rbac.yaml
   - ../../apps/kagent/secret-kagent-openai.yaml
   - ../../apps/kagent/secret-kagent-grafana-mcp-token.yaml
   - ../../apps/kagent/modelconfigs-extra.yaml
