@@ -1,10 +1,3 @@
-# Purdue AF overrides for kagent (experimental). Upstream defaults: helm show values on the chart.
-#
-# OpenAI API key: apps/kagent/secret-kagent-openai.yaml (encrypt with sops before deploy).
-# Custom API base URL: set kagent_openai_base_url in deploy/experimental/flux-kustomization.yaml.
-#
-# Agent workloads use ServiceAccount kagent-agent-readonly; the controller keeps chart writer Role in-namespace.
-
 providers:
   default: openAI
   openAI:
@@ -13,7 +6,7 @@ providers:
     apiKeySecretRef: kagent-openai
     apiKeySecretKey: OPENAI_API_KEY
     config:
-      baseUrl: ${kagent_openai_base_url}
+      baseUrl: https://genai.rcac.purdue.edu/api
 
 rbac:
   clusterScoped: false
@@ -33,6 +26,9 @@ controller:
     - ${namespace}
   agentDeployment:
     serviceAccountName: kagent-agent-readonly
+  env:
+    - name: OPENAI_API_BASE
+      value: https://genai.rcac.purdue.edu/api
 
 tools:
   grafana-mcp:
