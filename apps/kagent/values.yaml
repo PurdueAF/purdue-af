@@ -37,9 +37,19 @@ controller:
 
 tools:
   grafana-mcp:
-    enabled: false
+    enabled: true
   querydoc:
     enabled: false
+
+grafana-mcp:
+  grafana:
+    url: http://grafana.${namespace}.svc.cluster.local/grafana/api
+    secretRef: kagent-grafana-mcp-token
+  image:
+    registry: geddes-registry.rcac.purdue.edu
+    repository: docker-hub-cache/mcp/grafana
+    tag: latest
+    pullPolicy: IfNotPresent
 
 agents:
   helm-agent:
