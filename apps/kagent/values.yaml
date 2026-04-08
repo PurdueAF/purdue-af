@@ -67,3 +67,9 @@ agents:
     enabled: false
   cilium-debug-agent:
     enabled: false
+  k8s-agent:
+    enabled: false
+  observability-agent:
+    enabled: false
+  promql-agent:
+    enabled: false
