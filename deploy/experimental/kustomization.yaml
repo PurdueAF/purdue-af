@@ -24,12 +24,17 @@ resources:
 
   - ../../apps/kagent/helmrepo.yaml
   - ../../apps/kagent/controller-namespace-cluster-rbac.yaml
+  - ../../apps/kagent/controller-cms-rbac.yaml
   - ../../apps/kagent/agent-rbac.yaml
+  - ../../apps/kagent/cms-agent-rbac.yaml
   - ../../apps/kagent/secret-kagent-openai.yaml
   - ../../apps/kagent/secret-kagent-grafana-mcp-token.yaml
   - ../../apps/kagent/modelconfigs-extra.yaml
   - ../../apps/kagent/helmrelease.yaml
   - ../../apps/kagent/ingress.yaml
+  - ../../apps/kagent/agents/agent-knowledge-organizer.yaml
+  - ../../apps/kagent/agents/agent-platform-explorer.yaml
+  - ../../apps/kagent/agents/agent-platform-assistant.yaml
 
   - ../../apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml
   - ../../apps/monitoring/af-monitoring/af-node-monitor-rbac.yaml

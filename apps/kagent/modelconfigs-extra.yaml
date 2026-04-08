@@ -3,34 +3,6 @@
 apiVersion: kagent.dev/v1alpha2
 kind: ModelConfig
 metadata:
-  name: llama4-latest
-  labels:
-    purdue-af/component: kagent
-spec:
-  provider: OpenAI
-  model: llama4:latest
-  apiKeySecret: kagent-openai
-  apiKeySecretKey: OPENAI_API_KEY
-  openAI:
-    baseUrl: https://genai.rcac.purdue.edu/api
----
-apiVersion: kagent.dev/v1alpha2
-kind: ModelConfig
-metadata:
-  name: qwen2-5-72b
-  labels:
-    purdue-af/component: kagent
-spec:
-  provider: OpenAI
-  model: qwen2.5:72b
-  apiKeySecret: kagent-openai
-  apiKeySecretKey: OPENAI_API_KEY
-  openAI:
-    baseUrl: https://genai.rcac.purdue.edu/api
----
-apiVersion: kagent.dev/v1alpha2
-kind: ModelConfig
-metadata:
   name: gemma3-27b
   labels:
     purdue-af/component: kagent

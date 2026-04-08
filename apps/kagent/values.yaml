@@ -7,7 +7,7 @@ providers:
   default: openAI
   openAI:
     provider: OpenAI
-    model: gpt-oss:latest
+    model: gemma3:27b
     apiKeySecretRef: kagent-openai
     apiKeySecretKey: OPENAI_API_KEY
     config:
@@ -29,6 +29,7 @@ database:
 controller:
   watchNamespaces:
     - ${namespace}
+    - cms
   agentDeployment:
     serviceAccountName: kagent-agent-readonly
   env:

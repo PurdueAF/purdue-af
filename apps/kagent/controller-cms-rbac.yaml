@@ -1,0 +1,61 @@
+# Grants the kagent controller (SA: kagent-controller in cms namespace)
+# explicit permissions to manage agent pods and kagent CRDs in cms.
+# The Helm chart may already cover some of this; these bindings are additive.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kagent-controller-cms
+  namespace: cms
+rules:
+  # Lifecycle of agent runner pods
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/exec"]
+    verbs: ["get", "list", "watch", "create", "delete", "patch"]
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets", "serviceaccounts"]
+    verbs: ["get", "list", "watch"]
+  # kagent CRDs (Agent, Session, RemoteMCPServer, ModelConfig, …)
+  - apiGroups: ["kagent.dev"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kagent-controller-cms
+  namespace: cms
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kagent-controller-cms
+subjects:
+  - kind: ServiceAccount
+    name: kagent-controller
+    namespace: ${namespace}
+---
+# Grants kagent-tools write access to knowledge base ConfigMaps in cms.
+# kubectl ops from agents run under the kagent-tools SA, not the agent pod SA.
+# Confirmed: kagent-tools SA lives in cms namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kagent-tools-kb-writer
+  namespace: cms
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kagent-tools-kb-writer
+  namespace: cms
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kagent-tools-kb-writer
+subjects:
+  - kind: ServiceAccount
+    name: kagent-tools
+    namespace: cms
