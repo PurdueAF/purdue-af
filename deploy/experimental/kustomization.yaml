@@ -22,6 +22,12 @@ resources:
   - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic/helmrepo.yaml
 
+  - ../../apps/kagent/helmrepo.yaml
+  - ../../apps/kagent/agent-rbac.yaml
+  - ../../apps/kagent/secret-kagent-openai.yaml
+  - ../../apps/kagent/helmrelease.yaml
+  - ../../apps/kagent/ingress.yaml
+
   - ../../apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml
   - ../../apps/monitoring/af-monitoring/af-node-monitor-rbac.yaml
   - ../../apps/monitoring/af-monitoring/services.yaml
@@ -58,6 +64,10 @@ configMapGenerator:
   - name: supersonic-config
     files:
       - values.yaml=../../apps/sonic/supersonic/values.yaml
+
+  - name: kagent-config
+    files:
+      - values.yaml=../../apps/kagent/values.yaml
 
   - name: af-node-monitor-config
     files:

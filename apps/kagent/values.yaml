@@ -1,0 +1,56 @@
+# Purdue AF overrides for kagent (experimental). Upstream defaults: helm show values on the chart.
+#
+# OpenAI API key: apps/kagent/secret-kagent-openai.yaml (encrypt with sops before deploy).
+# Custom API base URL: set kagent_openai_base_url in deploy/experimental/flux-kustomization.yaml.
+#
+# Agent workloads use ServiceAccount kagent-agent-readonly; the controller keeps chart writer Role in-namespace.
+
+providers:
+  default: openAI
+  openAI:
+    provider: OpenAI
+    model: gpt-oss:latest
+    apiKeySecretRef: kagent-openai
+    apiKeySecretKey: OPENAI_API_KEY
+    config:
+      baseUrl: ${kagent_openai_base_url}
+
+labels:
+  app.kubernetes.io/part-of: purdue-af
+  purdue-af/component: kagent
+
+rbac:
+  clusterScoped: false
+
+database:
+  postgres:
+    bundled:
+      storageClassName: ${singlenode_storage_class}
+
+controller:
+  watchNamespaces:
+    - ${namespace}
+  agentDeployment:
+    serviceAccountName: kagent-agent-readonly
+
+tools:
+  grafana-mcp:
+    enabled: false
+  querydoc:
+    enabled: false
+
+agents:
+  helm-agent:
+    enabled: false
+  istio-agent:
+    enabled: false
+  argo-rollouts-agent:
+    enabled: false
+  kgateway-agent:
+    enabled: false
+  cilium-policy-agent:
+    enabled: false
+  cilium-manager-agent:
+    enabled: false
+  cilium-debug-agent:
+    enabled: false

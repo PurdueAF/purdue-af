@@ -18,6 +18,8 @@ spec:
     substitute:
       enable_ingresses: "true"
       namespace: "cms"
+      # OpenAI-compatible base; client appends /chat/completions → https://genai.rcac.purdue.edu/api/chat/completions
+      kagent_openai_base_url: "https://genai.rcac.purdue.edu/api"
       multinode_storage_class: "geddes-standard-multinode"
       singlenode_storage_class: "geddes-standard-singlenode"
       x509_secret_name: "af-x509-proxy"

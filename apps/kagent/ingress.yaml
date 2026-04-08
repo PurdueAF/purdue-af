@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kagent-ui
+spec:
+  ingressClassName: public
+  rules:
+    - host: purdue-af-kagent.geddes.rcac.purdue.edu
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kagent-ui
+                port:
+                  number: 8080

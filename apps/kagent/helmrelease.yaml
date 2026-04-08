@@ -1,0 +1,25 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: kagent
+spec:
+  suspend: false
+  interval: 1m
+  chart:
+    spec:
+      chart: kagent
+      version: "0.8.6"
+      sourceRef:
+        kind: HelmRepository
+        name: kagent
+      interval: 1m
+  install:
+    remediation:
+      retries: -1
+  upgrade:
+    remediation:
+      retries: -1
+  valuesFrom:
+    - kind: ConfigMap
+      name: kagent-config
+      valuesKey: values.yaml
