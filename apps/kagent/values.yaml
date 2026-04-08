@@ -15,10 +15,6 @@ providers:
     config:
       baseUrl: ${kagent_openai_base_url}
 
-labels:
-  app.kubernetes.io/part-of: purdue-af
-  purdue-af/component: kagent
-
 rbac:
   clusterScoped: false
 
