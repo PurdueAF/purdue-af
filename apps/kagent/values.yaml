@@ -22,6 +22,11 @@ database:
   postgres:
     bundled:
       storageClassName: ${singlenode_storage_class}
+      image:
+        registry: geddes-registry.rcac.purdue.edu
+        repository: docker-hub-cache/library
+        name: postgres
+        tag: "18"
 
 controller:
   watchNamespaces:
