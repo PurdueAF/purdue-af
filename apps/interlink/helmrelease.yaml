@@ -50,6 +50,6 @@ spec:
                 path: /spec/template/spec/containers/0/resources
                 value:
                   limits:
-                    memory: 4Gi
+                    memory: 16Gi
                   requests:
-                    memory: 4Gi
+                    memory: 16Gi
