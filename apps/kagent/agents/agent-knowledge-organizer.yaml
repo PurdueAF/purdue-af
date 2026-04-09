@@ -37,23 +37,27 @@ spec:
          creating a new one if the content is closely related.
       4. Write a clean Markdown entry. Include real examples (pod names, UID
          ranges, command lines). Use ## for sections, ### for subsections.
-      5. Save to the knowledge base using k8s_apply_manifest with a JSON
-         manifest (NOT YAML — JSON handles colons and special chars reliably):
-           {
-             "apiVersion": "v1",
-             "kind": "ConfigMap",
-             "metadata": {
-               "name": "kb-<topic>-<subtopic>",
-               "namespace": "cms",
-               "labels": {"purdue-af/kb": "true"}
-             },
-             "data": {
-               "title": "<title>",
-               "topic": "<topic>",
-               "content": "<markdown as a single JSON string, newlines as \\n>"
-             }
-           }
-         Use \\n for newlines and \\\" for quotes inside the content string.
+      5. Save to the knowledge base using k8s_apply_manifest. Use this exact
+         YAML structure — content MUST be a double-quoted string with \n for
+         newlines. NEVER use the `|` block scalar for content.
+
+           apiVersion: v1
+           kind: ConfigMap
+           metadata:
+             name: kb-<topic>-<subtopic>
+             namespace: cms
+             labels:
+               purdue-af/kb: "true"
+           data:
+             title: "<title>"
+             topic: "<topic>"
+             content: "## Section\n\nBody text here.\n\n### Subsection\nMore text."
+
+         Rules for the content value:
+         - Always double-quoted
+         - Newlines as \n
+         - Any double quotes inside as \"
+         - Everything on ONE line after content:
       6. Confirm what you wrote and where.
 
       If you are unsure about a fact, ask rather than guessing.
