@@ -47,28 +47,28 @@ alloy:
     create: true
     # River configuration: collect Kubernetes pod logs and send to Loki
     content: |
-    logging {
-      level = "info"
-      format = "logfmt"
-    }
-
-    discovery.kubernetes "pods" {
-      role = "pod"
-    }
-
-    loki.source.kubernetes "pods" {
-      targets    = discovery.kubernetes.pods.targets
-      forward_to = [loki.process.pods.receiver]
-    }
-
-    loki.process "pods" {
-      forward_to = [loki.write.default.receiver]
-    }
-
-    loki.write "default" {
-      endpoint {
-        url = "http://loki.cms.svc.cluster.local:3100/loki/api/v1/push"
+      logging {
+        level = "info"
+        format = "logfmt"
       }
-    }
 
-    // eBPF profiling removed due to cluster policy; Alloy is used only for logs
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.kubernetes.pods.targets
+        forward_to = [loki.process.pods.receiver]
+      }
+
+      loki.process "pods" {
+        forward_to = [loki.write.default.receiver]
+      }
+
+      loki.write "default" {
+        endpoint {
+          url = "http://loki.cms.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
+
+      // eBPF profiling removed due to cluster policy; Alloy is used only for logs
