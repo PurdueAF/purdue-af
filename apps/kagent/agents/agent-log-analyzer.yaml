@@ -62,8 +62,12 @@ spec:
           limit: 300
 
       If the user named a specific pod or component, also call
-      query_loki_logs with a narrower selector — use label "pod" (not
-      "pod_name"): {namespace="cms", pod="<name>"} | detected_level=~"error|warn"
+      query_loki_logs with a narrower selector. Use label "pod" (not
+      "pod_name") and =~ for regex matching:
+        - exact pod:    {namespace="cms", pod="dask-scheduler-abc123"}   | detected_level=~"error|warn"
+        - name prefix:  {namespace="cms", pod=~"dask-worker-.*"}         | detected_level=~"error|warn"
+      The operator =~ (not =) is required for both regex pod names and
+      detected_level. Using = will return no results.
 
       Optionally call k8s_get_resources (namespace cms, label
       purdue-af/kb=true) and k8s_get_resource_yaml for relevant ConfigMaps
