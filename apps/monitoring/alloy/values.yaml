@@ -77,6 +77,18 @@ alloy:
           source_labels = ["__meta_kubernetes_node_name"]
           target_label  = "node"
         }
+        // dask scheduler/worker pods carry username in the 'user' label
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_user"]
+          regex         = "(.+)"
+          target_label  = "username"
+        }
+        // purdue-af (jupyterhub singleuser) pods carry username in 'username_unescaped'
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_username_unescaped"]
+          regex         = "(.+)"
+          target_label  = "username"
+        }
       }
 
       loki.source.kubernetes "pods" {
