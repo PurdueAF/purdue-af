@@ -40,11 +40,12 @@ spec:
       metadata.annotations["purdue-af/content"]. Skip this step if there
       are no KB ConfigMaps.
 
-      Step 5 — optional follow-up queries.
-      If the user asked about a specific pod or component and you have not
-      yet queried it directly, call query_loki_logs once more with a
-      narrower logql (e.g. add pod="<name>" to the selector). Otherwise
-      skip this step.
+      Step 5 — optional follow-up query.
+      If the user asked about a specific pod and you have not yet queried
+      it directly, call query_loki_logs once more with a narrower logql.
+      The correct Loki label for pod name is "pod" (not "pod_name").
+      Example: {namespace="cms", pod="purdue-af-1"} |~ "(?i)(error|warn)"
+      Otherwise skip this step.
 
       Step 6 — write the markdown digest below. This is your final message.
       Output ONLY the markdown. Do not output JSON, tool call descriptions,
@@ -65,7 +66,9 @@ spec:
 
       If a log pattern is from a user pod (name matches purdue-af-<digits>),
       note that it is a user environment issue, not a platform failure.
-      If there are no notable events, say so clearly.
+      If Loki returned no results or only known-noise lines (e.g. 404 GET
+      /metrics from a Prometheus scraper), say so clearly — do NOT invent
+      errors or issues that are not present in the actual log data.
     tools:
       - type: McpServer
         mcpServer:
