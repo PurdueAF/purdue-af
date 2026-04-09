@@ -43,8 +43,10 @@ resources:
     memory: 256Mi
 
 alloy:
-  # River configuration: collect Kubernetes pod logs and send to Loki
-  config: |
+  configMap:
+    create: true
+    # River configuration: collect Kubernetes pod logs and send to Loki
+    content: |
     logging {
       level = "info"
       format = "logfmt"
