@@ -51,6 +51,7 @@ configMapGenerator:
   - name: interlink-config
     files:
       - values.yaml=../../apps/interlink/values.yaml
+      - template_traefik.yaml=../../apps/interlink/template_traefik.yaml
 
   - name: pyroscope-config
     files:
@@ -79,4 +80,18 @@ configMapGenerator:
   - name: af-node-monitor-config
     files:
       - ../../docker/af-node-monitor/node_healthcheck.py
+
+replacements:
+  - source:
+      kind: ConfigMap
+      name: interlink-config
+      fieldPath: data.template_traefik\.yaml
+    targets:
+      - select:
+          kind: HelmRelease
+          name: interlink
+        fieldPaths:
+          - spec.values.virtualNode.network.customTemplate
+        options:
+          create: true
 
