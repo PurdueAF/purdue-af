@@ -133,6 +133,8 @@ gateway:
 ingress:
   enabled: ${enable_ingresses}
   ingressClassName: public
+  annotations:
+    nginx.ingress.kubernetes.io/app-root: /ui
   path: /
   pathType: Prefix
   hosts:
