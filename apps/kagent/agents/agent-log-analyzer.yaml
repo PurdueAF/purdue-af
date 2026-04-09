@@ -1,7 +1,7 @@
 apiVersion: kagent.dev/v1alpha2
 kind: Agent
 metadata:
-  name: log-analyzer
+  name: cms-log-digest
   namespace: cms
   labels:
     purdue-af/component: kagent
@@ -70,7 +70,12 @@ spec:
       to read metadata.annotations["purdue-af/content"] for KB context.
 
       Once you have the log data, write your markdown reply to the user
-      following the format shown above. The markdown reply is your response.
+      following the format shown above.
+
+      STOP after writing the 💡 Notes section. Do not call any tool to
+      submit, return, wrap, or deliver the reply. Your text output is
+      displayed directly to the user — no further tool call is needed or
+      allowed. Calling any tool after writing the digest is an error.
     tools:
       - type: McpServer
         mcpServer:
