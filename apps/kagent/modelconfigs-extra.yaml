@@ -13,3 +13,17 @@ spec:
   apiKeySecretKey: OPENAI_API_KEY
   openAI:
     baseUrl: https://genai.rcac.purdue.edu/api
+---
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: llama33-70b
+  labels:
+    purdue-af/component: kagent
+spec:
+  provider: OpenAI
+  model: llama3.3:70b
+  apiKeySecret: kagent-openai
+  apiKeySecretKey: OPENAI_API_KEY
+  openAI:
+    baseUrl: https://genai.rcac.purdue.edu/api

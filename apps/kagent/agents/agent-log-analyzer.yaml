@@ -1,7 +1,7 @@
 apiVersion: kagent.dev/v1alpha2
 kind: Agent
 metadata:
-  name: cms-healthcheck
+  name: log-analyzer
   namespace: cms
   labels:
     purdue-af/component: kagent
@@ -11,7 +11,7 @@ spec:
     what needs attention, what is known noise, and what is worth watching.
   type: Declarative
   declarative:
-    modelConfig: gemma3-27b
+    modelConfig: llama33-70b
     systemMessage: |
       You are a helpful assistant for the Purdue Analysis Facility platform.
       Follow these steps exactly when the user asks for a health check or
