@@ -12,21 +12,14 @@ controller:
       effect: "NoSchedule"
   nodeSelector:
     cms-af-prod: "true"
-  extraVolumes:
-    - name: varlog
-      hostPath:
-        path: /var/log
-    - name: dockercontainers
-      hostPath:
-        path: /var/lib/docker/containers
-        # If you use containerd only, you can omit this
-  extraVolumeMounts:
-    - name: varlog
-      mountPath: /var/log
-      readOnly: true
-    - name: dockercontainers
-      mountPath: /var/lib/docker/containers
-      readOnly: true
+  # Raise inotify instance limit before Alloy starts; loki.source.kubernetes
+  # creates one inotify instance per tracked pod and the kernel default (128) is too low.
+  initContainers:
+    - name: set-inotify-limits
+      image: busybox
+      securityContext:
+        privileged: true
+      command: ["sysctl", "-w", "fs.inotify.max_user_instances=8192"]
 
 serviceAccount:
   create: true
