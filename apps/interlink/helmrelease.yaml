@@ -27,10 +27,10 @@ spec:
     - kind: ConfigMap
       name: interlink-config
       valuesKey: values.yaml
-    - kind: ConfigMap
-      name: interlink-config
-      valuesKey: template_traefik.yaml
-      targetPath: virtualNode.network.customTemplate
+  values:
+    virtualNode:
+      network:
+        customTemplate: ""
   postRenderers:
     - kustomize:
         patches:
