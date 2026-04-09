@@ -49,19 +49,17 @@ spec:
            to user identity or UNIX UID?"
 
       ## Writing to the knowledge base
-      After receiving an answer, apply a ConfigMap via k8s_apply_manifest:
-        apiVersion: v1
-        kind: ConfigMap
-        metadata:
-          name: kb-<topic>-<subtopic>
-          namespace: cms
-          labels:
-            purdue-af/kb: "true"
-        data:
-          title: "<title>"
-          topic: "<topic>"
-          content: |
-            <markdown content>
+      After receiving an answer, use the shell tool with this exact pattern
+      (avoids YAML encoding issues with Markdown content):
+        cat > /tmp/kb-content.md << 'HEREDOC'
+        <markdown content>
+        HEREDOC
+        kubectl create configmap kb-<topic>-<subtopic> \
+          --from-literal=title="<title>" \
+          --from-literal=topic="<topic>" \
+          --from-file=content=/tmp/kb-content.md \
+          -n cms -o yaml --dry-run=client | kubectl apply -f -
+        kubectl label configmap kb-<topic>-<subtopic> -n cms purdue-af/kb=true --overwrite
     tools:
       - type: McpServer
         mcpServer:
@@ -73,5 +71,5 @@ spec:
             - k8s_describe_resource
             - k8s_get_pod_logs
             - k8s_get_events
-            - k8s_apply_manifest
+            - shell
             - datetime_get_current_time
