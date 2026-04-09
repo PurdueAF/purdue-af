@@ -78,7 +78,7 @@ spec:
             # Keep container alive
             tail -f /dev/null
         securityContext:
-          privileged: true
+          privileged: false
           capabilities:
             add: ["NET_ADMIN", "NET_RAW", "SYS_ADMIN"]
 
