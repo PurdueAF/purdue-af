@@ -36,11 +36,11 @@ rbac:
 
 resources:
   limits:
-    cpu: 500m
-    memory: 512Mi
+    cpu: 1000m
+    memory: 2Gi
   requests:
     cpu: 100m
-    memory: 256Mi
+    memory: 512Mi
 
 alloy:
   configMap:
@@ -54,6 +54,9 @@ alloy:
 
       discovery.kubernetes "pods" {
         role = "pod"
+        namespaces {
+          names = ["cms"]
+        }
       }
 
       discovery.relabel "pods" {
