@@ -12,14 +12,6 @@ controller:
       effect: "NoSchedule"
   nodeSelector:
     cms-af-prod: "true"
-  # Raise inotify instance limit before Alloy starts; loki.source.kubernetes
-  # creates one inotify instance per tracked pod and the kernel default (128) is too low.
-  initContainers:
-    - name: set-inotify-limits
-      image: busybox
-      securityContext:
-        privileged: true
-      command: ["sysctl", "-w", "fs.inotify.max_user_instances=8192"]
 
 serviceAccount:
   create: true
