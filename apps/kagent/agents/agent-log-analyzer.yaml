@@ -28,7 +28,7 @@ spec:
       Step 3 — pull recent warning and error lines.
       Call query_loki_logs with these exact arguments:
         datasourceUid: <uid you found in step 2>
-        logql: {namespace="cms"} |~ "(?i)(error|warn|failed|exception)"
+        logql: {namespace="cms"} | detected_level=~"error|warn"
         from: now-1h
         to: now
         limit: 300
@@ -44,7 +44,7 @@ spec:
       If the user asked about a specific pod and you have not yet queried
       it directly, call query_loki_logs once more with a narrower logql.
       The correct Loki label for pod name is "pod" (not "pod_name").
-      Example: {namespace="cms", pod="purdue-af-1"} |~ "(?i)(error|warn)"
+      Example: {namespace="cms", pod="purdue-af-1"} | detected_level=~"error|warn"
       Otherwise skip this step.
 
       Step 6 — your final message IS the markdown digest. Write it directly
