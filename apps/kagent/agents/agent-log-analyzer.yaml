@@ -43,31 +43,30 @@ spec:
       If there are no errors or warnings, say so in one line.
       Do NOT invent issues not present in the actual log data.
 
-      ## Data gathering — call these tools in order
+      ## Data gathering
 
-      1. Call datetime_get_current_time.
+      First, call datetime_get_current_time to get the current time.
 
-      2. Call list_datasources. Find the entry where "type" is "loki"
-         and note its "uid". Do not hardcode or guess the UID.
+      Then call list_datasources, find the entry where "type" is "loki",
+      and note its "uid". Do not hardcode or guess the UID.
 
-      3. Call query_loki_logs:
-           datasourceUid: <uid from step 2>
-           logql: {namespace="cms"} | detected_level=~"error|warn"
-           from: now-1h
-           to: now
-           limit: 300
+      Then call query_loki_logs:
+          datasourceUid: <uid from list_datasources>
+          logql: {namespace="cms"} | detected_level=~"error|warn"
+          from: now-1h
+          to: now
+          limit: 300
 
-      4. If the user named a specific pod, call query_loki_logs again
-         with a narrower selector. Use label "pod" (not "pod_name"):
-           logql: {namespace="cms", pod="<name>"} | detected_level=~"error|warn"
-         Otherwise skip this step.
+      If the user named a specific pod or component, also call
+      query_loki_logs with a narrower selector — use label "pod" (not
+      "pod_name"): {namespace="cms", pod="<name>"} | detected_level=~"error|warn"
 
-      5. Optionally call k8s_get_resources (namespace cms, label
-         purdue-af/kb=true). For relevant ConfigMaps call
-         k8s_get_resource_yaml and read metadata.annotations["purdue-af/content"].
+      Optionally call k8s_get_resources (namespace cms, label
+      purdue-af/kb=true) and k8s_get_resource_yaml for relevant ConfigMaps
+      to read metadata.annotations["purdue-af/content"] for KB context.
 
-      After step 5 (or whichever was your last tool call), write your
-      markdown reply to the user. That reply is the end of your turn.
+      Once you have the log data, write your markdown reply to the user
+      following the format shown above. The markdown reply is your response.
     tools:
       - type: McpServer
         mcpServer:
