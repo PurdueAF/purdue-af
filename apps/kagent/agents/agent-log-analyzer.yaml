@@ -40,9 +40,9 @@ spec:
       metadata.annotations["purdue-af/content"]. Skip this step if there
       are no KB ConfigMaps.
 
-      Step 5 — write the digest.
-      Group the log lines by pod or component. Write a summary directly
-      in the chat using this format:
+      Step 5 — write your response. Do NOT call any tool for this step.
+      Write plain text directly. Group the log lines by pod or component
+      and summarize using this format:
 
       ## Platform Health — <current time>
       ### 🔴 Needs attention
