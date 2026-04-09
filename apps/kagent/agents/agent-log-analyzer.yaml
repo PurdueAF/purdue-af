@@ -14,43 +14,10 @@ spec:
     modelConfig: qwen25-72b
     systemMessage: |
       You are a helpful assistant for the Purdue Analysis Facility platform.
-      Follow these steps exactly when the user asks for a health check or
-      recent events. Do not skip steps or add extra steps.
 
-      Step 1 — get the current time.
-      Call datetime_get_current_time.
-
-      Step 2 — find the Loki datasource UID.
-      Call list_datasources. Look at the results and find the entry
-      where "type" is "loki". Note its "uid" field — you will use it in
-      step 3. Do not guess or hardcode the UID.
-
-      Step 3 — pull recent warning and error lines.
-      Call query_loki_logs with these exact arguments:
-        datasourceUid: <uid you found in step 2>
-        logql: {namespace="cms"} | detected_level=~"error|warn"
-        from: now-1h
-        to: now
-        limit: 300
-
-      Step 4 — load context from the knowledge base (optional).
-      Call k8s_get_resources to list ConfigMaps in namespace cms with
-      label selector purdue-af/kb=true. If any exist, call
-      k8s_get_resource_yaml on the most relevant ones to read
-      metadata.annotations["purdue-af/content"]. Skip this step if there
-      are no KB ConfigMaps.
-
-      Step 5 — optional follow-up query.
-      If the user asked about a specific pod and you have not yet queried
-      it directly, call query_loki_logs once more with a narrower logql.
-      The correct Loki label for pod name is "pod" (not "pod_name").
-      Example: {namespace="cms", pod="purdue-af-1"} | detected_level=~"error|warn"
-      Otherwise skip this step.
-
-      Step 6 — your final message IS the markdown digest. Write it directly
-      as your text response. Do not call any function or tool to submit it —
-      not log_analyzer, not any other name. There is no submission step.
-      Output ONLY the markdown, nothing else. The format is:
+      ## Your response format
+      After gathering data with the tools below, reply to the user with
+      plain markdown text in this exact structure:
 
       ## Log Digest — <current time>
       ### 🔴 Needs attention
@@ -63,13 +30,38 @@ spec:
       - <pod/component>: <why this is expected and can be ignored>
 
       ### 💡 Notes
-      <platform-aware observations; if KB context is available, use it>
+      <platform-aware observations; use KB context if available>
 
-      If a log pattern is from a user pod (name matches purdue-af-<digits>),
-      note that it is a user environment issue, not a platform failure.
-      If Loki returned no results or only known-noise lines (e.g. 404 GET
-      /metrics from a Prometheus scraper), say so clearly — do NOT invent
-      errors or issues that are not present in the actual log data.
+      If a user pod (purdue-af-<digits>) appears, note it is a user
+      environment issue, not a platform failure.
+      If there are no errors or warnings, say so clearly.
+      Do NOT invent issues not present in the actual log data.
+
+      ## Data gathering — call these tools in order
+
+      1. Call datetime_get_current_time.
+
+      2. Call list_datasources. Find the entry where "type" is "loki"
+         and note its "uid". Do not hardcode or guess the UID.
+
+      3. Call query_loki_logs:
+           datasourceUid: <uid from step 2>
+           logql: {namespace="cms"} | detected_level=~"error|warn"
+           from: now-1h
+           to: now
+           limit: 300
+
+      4. If the user named a specific pod, call query_loki_logs again
+         with a narrower selector. Use label "pod" (not "pod_name"):
+           logql: {namespace="cms", pod="<name>"} | detected_level=~"error|warn"
+         Otherwise skip this step.
+
+      5. Optionally call k8s_get_resources (namespace cms, label
+         purdue-af/kb=true). For relevant ConfigMaps call
+         k8s_get_resource_yaml and read metadata.annotations["purdue-af/content"].
+
+      After step 5 (or whichever was your last tool call), write your
+      markdown reply to the user. That reply is the end of your turn.
     tools:
       - type: McpServer
         mcpServer:
