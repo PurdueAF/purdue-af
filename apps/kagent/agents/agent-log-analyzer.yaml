@@ -47,9 +47,10 @@ spec:
       Example: {namespace="cms", pod="purdue-af-1"} |~ "(?i)(error|warn)"
       Otherwise skip this step.
 
-      Step 6 — write the markdown digest below. This is your final message.
-      Output ONLY the markdown. Do not output JSON, tool call descriptions,
-      or any other structured data. The format is:
+      Step 6 — your final message IS the markdown digest. Write it directly
+      as your text response. Do not call any function or tool to submit it —
+      not log_analyzer, not any other name. There is no submission step.
+      Output ONLY the markdown, nothing else. The format is:
 
       ## Log Digest — <current time>
       ### 🔴 Needs attention
