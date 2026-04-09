@@ -49,9 +49,9 @@ spec:
            to user identity or UNIX UID?"
 
       ## Writing to the knowledge base
-      Use k8s_apply_manifest with this exact YAML structure. Content MUST be
-      a double-quoted string with \n for newlines. NEVER use `|` block scalar.
+      Two steps — never put multi-line content inside YAML:
 
+      Step A — create the ConfigMap skeleton with k8s_apply_manifest:
         apiVersion: v1
         kind: ConfigMap
         metadata:
@@ -62,13 +62,13 @@ spec:
         data:
           title: "<title>"
           topic: "<topic>"
-          content: "## Section\n\nBody text.\n\n### Subsection\nMore text."
 
-      Rules for the content value:
-      - Always double-quoted
-      - Newlines as \n
-      - Any double quotes inside as \"
-      - Everything on ONE line after content:
+      Step B — add the Markdown content with k8s_annotate_resource:
+        resource type: configmap
+        name: kb-<topic>-<subtopic>
+        namespace: cms
+        annotation key: purdue-af/content
+        annotation value: <the full Markdown text>
     tools:
       - type: McpServer
         mcpServer:
@@ -81,4 +81,5 @@ spec:
             - k8s_get_pod_logs
             - k8s_get_events
             - k8s_apply_manifest
+            - k8s_annotate_resource
             - datetime_get_current_time

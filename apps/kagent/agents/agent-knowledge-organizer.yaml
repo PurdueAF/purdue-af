@@ -31,16 +31,18 @@ spec:
       ## Workflow
       1. List existing entries first:
            k8s_get_resources: configmaps -n cms -l purdue-af/kb=true
+         To read an entry's content, use k8s_get_resource_yaml on the ConfigMap
+         and look at metadata.annotations["purdue-af/content"].
       2. If anything in the provided information is ambiguous, ask ONE focused
          clarifying question before writing. Do not ask multiple questions at once.
       3. Decide on a name and topic. Prefer updating an existing entry over
          creating a new one if the content is closely related.
       4. Write a clean Markdown entry. Include real examples (pod names, UID
          ranges, command lines). Use ## for sections, ### for subsections.
-      5. Save to the knowledge base using k8s_apply_manifest. Use this exact
-         YAML structure — content MUST be a double-quoted string with \n for
-         newlines. NEVER use the `|` block scalar for content.
+      5. Save to the knowledge base in TWO steps:
 
+         Step A — create the ConfigMap skeleton with k8s_apply_manifest.
+         Only title and topic go here. NO content field.
            apiVersion: v1
            kind: ConfigMap
            metadata:
@@ -51,13 +53,15 @@ spec:
            data:
              title: "<title>"
              topic: "<topic>"
-             content: "## Section\n\nBody text here.\n\n### Subsection\nMore text."
 
-         Rules for the content value:
-         - Always double-quoted
-         - Newlines as \n
-         - Any double quotes inside as \"
-         - Everything on ONE line after content:
+         Step B — add the Markdown content as an annotation with
+         k8s_annotate_resource. Pass the full Markdown text as the annotation
+         value. This avoids YAML encoding entirely.
+           resource type: configmap
+           name: kb-<topic>-<subtopic>
+           namespace: cms
+           annotation key: purdue-af/content
+           annotation value: <the full Markdown text>
       6. Confirm what you wrote and where.
 
       If you are unsure about a fact, ask rather than guessing.
@@ -70,4 +74,5 @@ spec:
             - k8s_get_resources
             - k8s_get_resource_yaml
             - k8s_apply_manifest
+            - k8s_annotate_resource
             - datetime_get_current_time

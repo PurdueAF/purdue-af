@@ -22,6 +22,8 @@ spec:
       purdue-af/kb=true. Always consult it first:
         - List topics: k8s_get_resources configmaps -n cms -l purdue-af/kb=true
         - Read entry: k8s_get_resource_yaml configmap kb-<name> -n cms
+          The Markdown content is in metadata.annotations["purdue-af/content"].
+          The data fields contain title and topic only.
 
       ## How to answer
       1. Search the knowledge base for relevant entries.
