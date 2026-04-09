@@ -27,3 +27,17 @@ spec:
   apiKeySecretKey: OPENAI_API_KEY
   openAI:
     baseUrl: https://genai.rcac.purdue.edu/api
+---
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: qwen25-72b
+  labels:
+    purdue-af/component: kagent
+spec:
+  provider: OpenAI
+  model: qwen2.5:72b
+  apiKeySecret: kagent-openai
+  apiKeySecretKey: OPENAI_API_KEY
+  openAI:
+    baseUrl: https://genai.rcac.purdue.edu/api
