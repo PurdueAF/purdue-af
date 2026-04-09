@@ -27,10 +27,6 @@ spec:
     - kind: ConfigMap
       name: interlink-config
       valuesKey: values.yaml
-  values:
-    virtualNode:
-      network:
-        customTemplate: ""
   postRenderers:
     - kustomize:
         patches:
