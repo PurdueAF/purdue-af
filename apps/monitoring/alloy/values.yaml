@@ -34,15 +34,14 @@ serviceAccount:
 rbac:
   create: true
 
-resources:
-  limits:
-    cpu: 1000m
-    memory: 2Gi
-  requests:
-    cpu: 100m
-    memory: 512Mi
-
 alloy:
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 100m
+      memory: 512Mi
   configMap:
     create: true
     # River configuration: collect Kubernetes pod logs and send to Loki
