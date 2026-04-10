@@ -11,8 +11,8 @@ resources:
   - ../../apps/interlink/rbac.yaml
 
   - ../../apps/monitoring/pyroscope/helmrelease.yaml
-  - ../../apps/monitoring/loki/helmrelease.yaml
-  - ../../apps/monitoring/alloy/helmrelease.yaml
+  # - ../../apps/monitoring/loki/helmrelease.yaml
+  # - ../../apps/monitoring/alloy/helmrelease.yaml
 
   - ../../apps/servicex/helmrelease.yaml
   # - ../../apps/servicex/gitrepo.yaml
