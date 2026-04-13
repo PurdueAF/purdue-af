@@ -11,6 +11,10 @@ spec:
     what needs attention, what is known noise, and what is worth watching.
   type: Declarative
   declarative:
+    # Pin SA so the controller never creates a per-agent ServiceAccount named after
+    # this Agent (avoids create/prune thrash if global default is inconsistent).
+    deployment:
+      serviceAccountName: kagent-agent-readonly
     modelConfig: gpt-oss-latest
     systemMessage: |
       You are a helpful assistant for the Purdue Analysis Facility platform.
