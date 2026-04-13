@@ -83,7 +83,7 @@ spec:
     tools:
       - type: McpServer
         mcpServer:
-          name: kagent-tool-server
+          name: kagent-cms-tool-server
           kind: RemoteMCPServer
           toolNames:
             - k8s_get_resources

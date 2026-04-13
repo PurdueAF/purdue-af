@@ -33,9 +33,8 @@ subjects:
     name: kagent-controller
     namespace: ${namespace}
 ---
-# Grants kagent-tools write access to knowledge base ConfigMaps in cms.
-# kubectl ops from agents run under the kagent-tools SA, not the agent pod SA.
-# Confirmed: kagent-tools SA lives in cms namespace.
+# Grants kagent-tools (chart SA: kagent-tools-cms) write access to knowledge base ConfigMaps in cms.
+# kubectl ops from agents run under that SA, not the agent pod SA.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -57,5 +56,5 @@ roleRef:
   name: kagent-tools-kb-writer
 subjects:
   - kind: ServiceAccount
-    name: kagent-tools
+    name: kagent-tools-cms
     namespace: cms
