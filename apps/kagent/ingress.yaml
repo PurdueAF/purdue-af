@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: kagent-ui
+  name: kagent-cms-ui
 spec:
   ingressClassName: public
   rules:
@@ -12,6 +12,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: kagent-ui
+                name: kagent-cms-ui
                 port:
                   number: 8080
