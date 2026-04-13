@@ -52,8 +52,8 @@ objectStore:
 codeGen:
   uproot-raw:
     enabled: true
-    compressionAlgorithm: LZMA
-    compressionLevel: 1
+    compressionAlgorithm: ZSTD
+    compressionLevel: 0
     nodeSelector:
       cms-af-prod: "true"
     tolerations:
