@@ -53,7 +53,7 @@ codeGen:
   uproot-raw:
     enabled: true
     compressionAlgorithm: LZMA
-    compressionLevel: 9
+    compressionLevel: 1
     nodeSelector:
       cms-af-prod: "true"
     tolerations:
