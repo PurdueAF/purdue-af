@@ -15,8 +15,8 @@ data:
             url: https://genai.rcac.purdue.edu/api
           # Optional but recommended: default model “roles” used by features like Explain Flame Graph
           modelMappings:
-            base: gpt-oss:latest
-            large: gpt-oss:latest
+            base: gpt-oss-120b
+            large: gpt-oss:120b
         secureJsonData:
           # reference the env var injected by Helm values
           openAIKey: ${OPENAI_API_KEY}

@@ -45,12 +45,12 @@ spec:
 apiVersion: kagent.dev/v1alpha2
 kind: ModelConfig
 metadata:
-  name: gpt-oss-latest
+  name: gpt-oss-120b
   labels:
     purdue-af/component: kagent
 spec:
   provider: OpenAI
-  model: gpt-oss:latest
+  model: gpt-oss:120b
   apiKeySecret: kagent-openai
   apiKeySecretKey: OPENAI_API_KEY
   openAI:

@@ -15,7 +15,7 @@ spec:
     # this Agent (avoids create/prune thrash if global default is inconsistent).
     deployment:
       serviceAccountName: kagent-agent-readonly
-    modelConfig: gpt-oss-latest
+    modelConfig: gpt-oss-120b
     systemMessage: |
       You are a helpful assistant for the Purdue Analysis Facility platform.
 
