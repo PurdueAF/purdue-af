@@ -7,7 +7,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: kagent-purdue-af-controller-namespaces-${namespace}
+  name: kagent-cms-controller-namespaces-${namespace}
 rules:
   - apiGroups: [""]
     resources: ["namespaces"]
@@ -16,11 +16,11 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: kagent-purdue-af-controller-namespaces-${namespace}
+  name: kagent-cms-controller-namespaces-${namespace}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: kagent-purdue-af-controller-namespaces-${namespace}
+  name: kagent-cms-controller-namespaces-${namespace}
 subjects:
   - kind: ServiceAccount
     name: kagent-controller
