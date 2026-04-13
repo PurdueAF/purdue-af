@@ -11,7 +11,7 @@ spec:
     what needs attention, what is known noise, and what is worth watching.
   type: Declarative
   declarative:
-    modelConfig: qwen25-72b
+    modelConfig: gpt-oss-latest
     systemMessage: |
       You are a helpful assistant for the Purdue Analysis Facility platform.
 
