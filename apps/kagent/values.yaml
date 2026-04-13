@@ -37,8 +37,10 @@ controller:
     - name: OPENAI_API_BASE
       value: https://genai.rcac.purdue.edu/api
 
+kagent-tools:
+  nameOverride: kagent-tools-cms
+
 tools:
-  fullnameOverride: kagent-cms-tools
   grafana-mcp:
     enabled: true
   querydoc:
