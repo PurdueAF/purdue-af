@@ -31,7 +31,6 @@ resources:
   - ../../apps/kagent/modelconfigs-extra.yaml
   - ../../apps/kagent/helmrelease.yaml
   - ../../apps/kagent/ingress.yaml
-  - ../../apps/kagent/agents/agent-knowledge-organizer.yaml
   - ../../apps/kagent/agents/agent-log-analyzer.yaml
 
   - ../../apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml
