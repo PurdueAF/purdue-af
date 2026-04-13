@@ -38,6 +38,7 @@ controller:
       value: https://genai.rcac.purdue.edu/api
 
 tools:
+  fullnameOverride: kagent-cms-tools
   grafana-mcp:
     enabled: true
   querydoc:
