@@ -38,7 +38,7 @@ controller:
       value: https://genai.rcac.purdue.edu/api
 
 kagent-tools:
-  nameOverride: kagent-tools-cms
+  nameOverride: tools-cms
 
 tools:
   grafana-mcp:
