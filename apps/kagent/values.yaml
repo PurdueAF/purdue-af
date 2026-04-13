@@ -39,6 +39,8 @@ controller:
 
 kagent-tools:
   nameOverride: tools-cms
+kmcp:
+  nameOverride: kmcp-cms
 
 tools:
   grafana-mcp:
