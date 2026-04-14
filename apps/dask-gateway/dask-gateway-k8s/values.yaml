@@ -226,8 +226,8 @@ gateway:
           options.env["XRD_CONNECTIONWINDOW"]="300"
           options.env["XRD_CONNECTIONRETRY"]="5"
           options.env["XRD_STREAMTIMEOUT"]="300"
-          worker_cmd = f"{conda_env}/bin/dask-worker"
-          scheduler_cmd = f"{conda_env}/bin/dask-scheduler"
+          worker_cmd = [f"{conda_env}/bin/dask", "worker"]
+          scheduler_cmd = [f"{conda_env}/bin/dask", "scheduler"]
 
           extra_pod_config = {"securityContext": {"runAsUser": uid, "runAsGroup": gid,}}
           c.KubeClusterConfig.scheduler_extra_pod_config.update(extra_pod_config)
