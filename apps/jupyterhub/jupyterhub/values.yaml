@@ -188,7 +188,7 @@ singleuser:
       default: false
       description: "Contains the latest features but may be unstable - use at your own risk."
       kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/purdue-af:0.12.2"
+        image: "geddes-registry.rcac.purdue.edu/cms/purdue-af:0.12.3"
         node_selector:
           cms-af-prod: "true"
         cpu_guarantee: 8
@@ -229,22 +229,18 @@ singleuser:
           mountPropagation: HostToContainer
   defaultUrl: "/lab"
   extraFiles:
-    pyroscope-for-jupyter-server:
-      # Put it in a standard Jupyter config location the server reads on startup
-      # (Jupyter searches ~/.jupyter, /usr/local/etc/jupyter, /etc/jupyter, …)
+    monitoring-setup:
       mountPath: /opt/pixi/.pixi/envs/default/lib/python3.10/site-packages/sitecustomize.py
       stringData: |
         import os
-        import sys
 
+        # ── Pyroscope (continuous profiling) ─────────────────────────────────
         try:
             import pyroscope
-
             srv = os.getenv("PYROSCOPE_SERVER")
-            app = os.getenv("PYROSCOPE_APP", "jupyter-server")
             if srv:
                 pyroscope.configure(
-                    application_name=app,
+                    application_name=os.getenv("PYROSCOPE_APP", "jupyter-server"),
                     server_address=srv,
                     sample_rate=int(os.getenv("PYROSCOPE_SAMPLE_RATE", "100")),
                     oncpu=True,
@@ -255,7 +251,35 @@ singleuser:
                         "user": os.getenv("NB_USER", "unknown"),
                     },
                 )
-        except Exception as e:
+        except Exception:
+            pass
+
+        # ── OpenTelemetry (distributed tracing) ──────────────────────────────
+        try:
+            endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+            if endpoint:
+                from opentelemetry import trace
+                from opentelemetry.sdk.resources import Resource
+                from opentelemetry.sdk.trace import TracerProvider
+                from opentelemetry.sdk.trace.export import BatchSpanProcessor
+                from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+                from opentelemetry.instrumentation.requests import RequestsInstrumentor
+                from opentelemetry.instrumentation.urllib3 import URLLib3Instrumentor
+
+                resource = Resource.create({
+                    "service.name": os.getenv("OTEL_SERVICE_NAME", "jupyter-server"),
+                    "user": os.getenv("NB_USER", "unknown"),
+                })
+                provider = TracerProvider(resource=resource)
+                provider.add_span_processor(
+                    BatchSpanProcessor(
+                        OTLPSpanExporter(endpoint=f"{endpoint}/v1/traces")
+                    )
+                )
+                trace.set_global_tracer_provider(provider)
+                RequestsInstrumentor().instrument()
+                URLLib3Instrumentor().instrument()
+        except Exception:
             pass
   extraEnv:
     JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
@@ -263,6 +287,8 @@ singleuser:
     NAMESPACE: ${namespace}
     PYROSCOPE_SERVER: "http://pyroscope.cms.svc.cluster.local:4040"
     PYROSCOPE_APP: "purdue-af"
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo.cms.svc.cluster.local:4318"
+    OTEL_SERVICE_NAME: "jupyter-server"
   networkPolicy:
     enabled: false
   storage:
