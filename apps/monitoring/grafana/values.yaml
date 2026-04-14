@@ -196,47 +196,59 @@ datasources:
     apiVersion: 1
     datasources:
       - name: prometheus
+        uid: prometheus
         type: prometheus
         url: http://prometheus-server:9090
         access: proxy
         isDefault: true
       - name: prometheus-rancher
+        uid: prometheus-rancher
         type: prometheus
         url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
         access: proxy
         isDefault: false
       - name: prometheus-hammer
+        uid: prometheus-hammer
         type: prometheus
         url: http://grafana.cms.rcac.purdue.edu:9090
         access: proxy
         isDefault: false
       - name: tempo
+        uid: tempo
         type: tempo
         url: http://tempo.cms.svc.cluster.local:3100
         access: proxy
         isDefault: false
         basicAuth: false
         jsonData:
-          httpMethod: "GET"
-          timeInterval: "5s"
+          httpMethod: GET
+          timeInterval: 5s
           tlsSkipVerify: true
-          serviceMap:
-            datasourceUid: "prometheus"
           nodeGraph:
             enabled: true
+          serviceMap:
+            datasourceUid: prometheus
+          tracesToMetrics:
+            datasourceUid: prometheus
+          tracesToLogs:
+            datasourceUid: loki
       - name: mimir
+        uid: mimir
         type: prometheus
         url: http://mimir-gateway.cms.svc.cluster.local/prometheus
         access: proxy
         isDefault: false
         jsonData:
-          timeInterval: "15s"
+          httpMethod: POST
+          timeInterval: 15s
+          manageAlerts: false
       - name: pyroscope
         type: grafana-pyroscope-datasource
         url: http://pyroscope.cms.svc.cluster.local:4040
         jsonData:
           minStep: 15s
       - name: loki
+        uid: loki
         type: loki
         url: http://loki.cms.svc.cluster.local:3100
         access: proxy
