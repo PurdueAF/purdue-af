@@ -212,7 +212,7 @@ datasources:
         isDefault: false
       - name: tempo
         type: tempo
-        url: http://sonic-server-tempo:3100
+        url: http://tempo.cms.svc.cluster.local:3100
         access: proxy
         isDefault: false
         basicAuth: false
@@ -224,6 +224,13 @@ datasources:
             datasourceUid: "prometheus"
           nodeGraph:
             enabled: true
+      - name: mimir
+        type: prometheus
+        url: http://mimir-gateway.cms.svc.cluster.local/prometheus
+        access: proxy
+        isDefault: false
+        jsonData:
+          timeInterval: "15s"
       - name: pyroscope
         type: grafana-pyroscope-datasource
         url: http://pyroscope.cms.svc.cluster.local:4040

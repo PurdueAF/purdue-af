@@ -1,0 +1,247 @@
+# Chart: grafana/mimir-distributed 6.0.5
+
+# Disable minio (use filesystem backend)
+minio:
+  enabled: false
+
+# Disable rollout operator (not needed without zone-aware replication)
+rollout_operator:
+  enabled: false
+
+# Disable alertmanager and ruler components
+alertmanager:
+  enabled: false
+
+ruler:
+  enabled: false
+
+ruler_querier:
+  enabled: false
+
+ruler_query_frontend:
+  enabled: false
+
+ruler_query_scheduler:
+  enabled: false
+
+# Disable all caches
+chunks-cache:
+  enabled: false
+
+index-cache:
+  enabled: false
+
+metadata-cache:
+  enabled: false
+
+results-cache:
+  enabled: false
+
+# Global extra volume: shared blocks PVC (ReadWriteMany) for ingester, compactor, store-gateway
+global:
+  extraVolumes:
+    - name: mimir-blocks
+      persistentVolumeClaim:
+        claimName: mimir-blocks-pvc
+  extraVolumeMounts:
+    - name: mimir-blocks
+      mountPath: /blocks
+
+# Scale everything down to 1 replica for a minimal single-node setup
+ingester:
+  replicas: 1
+  zoneAwareReplication:
+    enabled: false
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  persistentVolume:
+    size: 20Gi
+    storageClass: ${multinode_storage_class}
+
+distributor:
+  replicas: 1
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+querier:
+  replicas: 1
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+query_frontend:
+  replicas: 1
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+query_scheduler:
+  replicas: 1
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+compactor:
+  replicas: 1
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  persistentVolume:
+    size: 20Gi
+    storageClass: ${multinode_storage_class}
+
+store_gateway:
+  replicas: 1
+  zoneAwareReplication:
+    enabled: false
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  persistentVolume:
+    size: 20Gi
+    storageClass: ${multinode_storage_class}
+
+# Gateway: single entry point for reads and writes
+gateway:
+  enabled: true
+  replicas: 1
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  ingress:
+    enabled: ${enable_ingresses}
+    ingressClassName: public
+    annotations: {}
+    hosts:
+      - host: mimir-cms.geddes.rcac.purdue.edu
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - hosts:
+          - mimir-cms.geddes.rcac.purdue.edu
+
+# Mimir runtime configuration
+mimir:
+  structuredConfig:
+    multitenancy_enabled: false
+
+    common:
+      storage:
+        backend: filesystem
+        filesystem:
+          dir: /blocks
+
+    blocks_storage:
+      backend: filesystem
+      filesystem:
+        dir: /blocks
+      tsdb:
+        dir: /data/tsdb
+
+    compactor:
+      data_dir: /data/compactor
+
+    ingester:
+      ring:
+        replication_factor: 1
+
+    store_gateway:
+      sharding_ring:
+        replication_factor: 1
+
+    limits:
+      ingestion_rate: 100000
+      ingestion_burst_size: 200000
+      max_global_series_per_user: 0
+      max_fetched_chunks_per_query: 0

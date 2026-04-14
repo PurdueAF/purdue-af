@@ -13,6 +13,9 @@ resources:
   - ../../apps/monitoring/pyroscope/helmrelease.yaml
   - ../../apps/monitoring/loki/helmrelease.yaml
   - ../../apps/monitoring/alloy/helmrelease.yaml
+  - ../../apps/monitoring/tempo/helmrelease.yaml
+  - ../../apps/monitoring/mimir/helmrelease.yaml
+  - ../../apps/monitoring/mimir/blocks-pvc.yaml
 
   - ../../apps/servicex/helmrelease.yaml
   # - ../../apps/servicex/gitrepo.yaml
@@ -62,6 +65,14 @@ configMapGenerator:
   - name: alloy-config
     files:
       - values.yaml=../../apps/monitoring/alloy/values.yaml
+
+  - name: tempo-config
+    files:
+      - values.yaml=../../apps/monitoring/tempo/values.yaml
+
+  - name: mimir-config
+    files:
+      - values.yaml=../../apps/monitoring/mimir/values.yaml
 
   - name: servicex-config
     files:

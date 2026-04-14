@@ -1,0 +1,67 @@
+# Chart: grafana/tempo 1.24.4
+
+replicas: 1
+
+tempo:
+  retention: 720h
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+  metricsGenerator:
+    enabled: true
+    remoteWriteUrl: "http://prometheus-server.cms.svc.cluster.local:9090/api/v1/write"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+persistence:
+  enabled: true
+  size: 20Gi
+  storageClassName: ${multinode_storage_class}
+  accessModes:
+    - ReadWriteOnce
+
+securityContext:
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  runAsNonRoot: true
+
+serviceAccount:
+  create: true
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 3100
+  annotations: {}
+
+ingress:
+  enabled: ${enable_ingresses}
+  ingressClassName: public
+  annotations: {}
+  hosts:
+    - host: tempo-cms.geddes.rcac.purdue.edu
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - tempo-cms.geddes.rcac.purdue.edu
+
+nodeSelector:
+  cms-af-prod: "true"
+
+tolerations:
+  - key: "hub.jupyter.org/dedicated"
+    operator: "Equal"
+    value: "cms-af"
+    effect: "NoSchedule"

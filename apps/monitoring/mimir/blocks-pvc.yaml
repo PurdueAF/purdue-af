@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mimir-blocks-pvc
+  namespace: cms
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: geddes-standard-multinode
+  resources:
+    requests:
+      storage: 100Gi

@@ -91,6 +91,11 @@ server:
 
 serverFiles:
   prometheus.yml:
+    remote_write:
+      - url: "http://mimir-gateway.cms.svc.cluster.local/api/v1/push"
+        queue_config:
+          max_samples_per_send: 10000
+          max_shards: 10
     scrape_configs:
       - job_name: "jupyterhub"
         metrics_path: "/hub/metrics"
