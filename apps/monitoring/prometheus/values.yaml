@@ -32,7 +32,7 @@ server:
   extraFlags: [web.enable-remote-write-receiver]
   extraInitContainers:
     - name: prometheus-data-permission-fix
-      image: busybox
+      image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.36
       command: ["/bin/chmod", "-R", "777", "/prometheus"]
       securityContext:
         runAsUser: 0
