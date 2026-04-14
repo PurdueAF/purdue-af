@@ -86,11 +86,14 @@ spec:
       - name: wstunnel
         image: ghcr.io/erebe/wstunnel:latest
         imagePullPolicy: IfNotPresent
+        env:
+          - name: RUST_LOG
+            value: warn
         command: ["bash","-c"]
         args:
           - >
             ./wstunnel server
-            --log-lvl WARN
+            --log-lvl error
             --dns-resolver-prefer-ipv4
             --restrict-http-upgrade-path-prefix {{.RandomPassword}}
             --restrict-to 127.0.0.1:51820
