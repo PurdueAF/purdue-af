@@ -74,28 +74,3 @@ if os.environ["POD_NAMESPACE"] == "cms":
         "DASK_GATEWAY__PROXY_ADDRESS",
         "traefik-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8786",
     )
-
-
-c.KubeSpawner.environment.setdefault(
-    "DASK_LABEXTENSION__FACTORY__MODULE", "dask_gateway"
-)
-c.KubeSpawner.environment.setdefault(
-    "DASK_LABEXTENSION__FACTORY__CLASS", "GatewayCluster"
-)
-c.KubeSpawner.environment.setdefault(
-    "DASK_LABEXTENSION__FACTORY__KWARGS__ADDRESS",
-    "http://dask-gateway-k8s.geddes.rcac.purdue.edu",
-)
-c.KubeSpawner.environment.setdefault(
-    "DASK_LABEXTENSION__FACTORY__KWARGS__PROXY_ADDRESS",
-    "traefik-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8786",
-)
-c.KubeSpawner.environment.setdefault(
-    "DASK_LABEXTENSION__FACTORY__KWARGS__PUBLIC_ADDRESS",
-    "https://dask-gateway-k8s.geddes.rcac.purdue.edu",
-)
-
-# if ("-cern" in os.environ["NB_USER"]) or ("-fnal" in os.environ["NB_USER"]):
-#     c.KubeSpawner.environment.setdefault("DASK_LABEXTENSION__FACTORY__KWARGS__ADDRESS", "http://dask-gateway-k8s.geddes.rcac.purdue.edu")
-#     c.KubeSpawner.environment.setdefault("DASK_LABEXTENSION__FACTORY__KWARGS__PROXY_ADDRESS", "api-dask-gateway-k8s.cms.geddes.rcac.purdue.edu:8000")
-#     c.KubeSpawner.environment.setdefault("DASK_LABEXTENSION__FACTORY__KWARGS__PUBLIC_ADDRESS", "https://dask-gateway-k8s.geddes.rcac.purdue.edu")

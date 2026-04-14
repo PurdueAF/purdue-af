@@ -53,7 +53,5 @@ opentelemetry-instrumentation-urllib3  = ">=0.40b0"
 jupyter-sshd-proxy        = "==0.3.0"
 pixi-kernel               = "==0.7.1"
 
-dask-labextension = { git = "https://github.com/kondratyevd/dask-labextension.git" }
-
 [environments]
 base-env = { features = [] }
