@@ -22,3 +22,21 @@ spec:
     - kind: ConfigMap
       name: mimir-config
       valuesKey: values.yaml
+  # Patch gateway image to use Geddes registry mirror (chart doesn't expose registry key)
+  postRenderers:
+    - kustomize:
+        patches:
+          - patch: |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: mimir-gateway
+              spec:
+                template:
+                  spec:
+                    containers:
+                      - name: gateway
+                        image: geddes-registry.rcac.purdue.edu/docker-hub-cache/nginxinc/nginx-unprivileged:1.29-alpine
+            target:
+              kind: Deployment
+              name: mimir-gateway

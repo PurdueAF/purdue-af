@@ -35,18 +35,6 @@ securityContext:
   fsGroup: 10001
   runAsNonRoot: true
 
-# Fix permissions on the PVC root before Tempo starts (CephFS doesn't honor fsGroup)
-extraInitContainers:
-  - name: fix-permissions
-    image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.36
-    command: ["/bin/sh", "-c", "mkdir -p /var/tempo/traces /var/tempo/wal /var/tempo/generator && chmod -R 777 /var/tempo"]
-    securityContext:
-      runAsUser: 0
-      runAsNonRoot: false
-    volumeMounts:
-      - name: storage
-        mountPath: /var/tempo
-
 serviceAccount:
   create: true
   name: ""

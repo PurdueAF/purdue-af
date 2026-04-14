@@ -282,6 +282,10 @@ mimir:
       sharding_ring:
         replication_factor: 1
 
+    # Disable Kafka-based ingest storage; use ring-based ingestion instead
+    ingest_storage:
+      enabled: false
+
     limits:
       ingestion_rate: 100000
       ingestion_burst_size: 200000
