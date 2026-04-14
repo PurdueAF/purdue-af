@@ -94,6 +94,9 @@ gateway:
             persistentVolumeClaim:
               claimName: af-shared-storage
       extraContainerConfig:
+        env:
+          - name: DASK_LOGGING__DISTRIBUTED
+            value: warning
         volumeMounts:
           - name: cvmfs
             mountPath: /cvmfs

@@ -97,6 +97,8 @@ gateway:
               claimName: af-shared-storage
       extraContainerConfig:
         env:
+          - name: DASK_LOGGING__DISTRIBUTED
+            value: warning
           - name: DASK_DISTRIBUTED__WORKER__PRELOAD
             value: '["/work/projects/purdue-af/dask_pyroscope_preload.py"]'
           - name: DASK_DISTRIBUTED__WORKER__PRELOAD_ARGV
