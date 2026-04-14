@@ -136,6 +136,7 @@ def _vlog(msg: str) -> None:
     if os.getenv("AF_NODE_MONITOR_VERBOSE", "").lower() in ("1", "true", "yes"):
         print(msg)
 
+
 JOB_INTERVAL_S = float(os.getenv("JOB_INTERVAL_S", "600"))  # 10 minutes
 JOB_TTL_SECONDS = int(
     os.getenv("JOB_TTL_SECONDS", "120")
