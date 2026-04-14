@@ -78,7 +78,7 @@ ingester:
   extraInitContainers:
     - name: fix-permissions
       image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.36
-      command: ["/bin/sh", "-c", "mkdir -p /data/tsdb && chmod 777 /data /blocks"]
+      command: ["/bin/sh", "-c", "mkdir -p /data/tsdb && chmod -R 777 /data /blocks"]
       securityContext:
         runAsUser: 0
         runAsNonRoot: false
@@ -178,7 +178,7 @@ compactor:
   extraInitContainers:
     - name: fix-permissions
       image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.36
-      command: ["/bin/sh", "-c", "mkdir -p /data/compactor && chmod 777 /data /blocks"]
+      command: ["/bin/sh", "-c", "mkdir -p /data/compactor && chmod -R 777 /data /blocks"]
       securityContext:
         runAsUser: 0
         runAsNonRoot: false
@@ -212,7 +212,7 @@ store_gateway:
   extraInitContainers:
     - name: fix-permissions
       image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.36
-      command: ["/bin/sh", "-c", "mkdir -p /data/tsdb-sync && chmod 777 /data /blocks"]
+      command: ["/bin/sh", "-c", "mkdir -p /data/tsdb-sync && chmod -R 777 /data /blocks"]
       securityContext:
         runAsUser: 0
         runAsNonRoot: false
@@ -275,6 +275,9 @@ mimir:
       data_dir: /data/compactor
 
     ingester:
+      # Chart default disables Push gRPC for ingest-storage + Kafka; we run ring-based
+      # ingestion (ingest_storage.enabled: false), so Push gRPC must stay enabled.
+      push_grpc_method_enabled: true
       ring:
         replication_factor: 1
 
