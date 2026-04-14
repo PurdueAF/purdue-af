@@ -1,9 +1,26 @@
 import json
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, Tuple
+
+
+def _af_node_monitor_verbose() -> bool:
+    return os.getenv("AF_NODE_MONITOR_VERBOSE", "").lower() in ("1", "true", "yes")
+
+
+# When quiet, redirect OS fds 1/2 so inherited stdio and os.write(2, ...)
+# don't pollute Job logs (kubectl / Loki). Replacing sys.stdout alone is not enough.
+if not _af_node_monitor_verbose():
+    _dn = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(_dn, 1)
+    os.dup2(_dn, 2)
+    if _dn > 2:
+        os.close(_dn)
+    sys.stdout = open(1, "w", encoding="utf-8", closefd=False)
+    sys.stderr = open(2, "w", encoding="utf-8", closefd=False)
 
 
 def _get_env(name: str, default: str | None = None, required: bool = False) -> str:
@@ -31,8 +48,7 @@ NODE_NAME = os.getenv("NODE_NAME") or ""
 
 
 def _vlog(msg: str) -> None:
-    if os.getenv("AF_NODE_MONITOR_VERBOSE", "").lower() in ("1", "true", "yes"):
-        print(msg)
+    print(msg)
 
 
 def _sanitized_mount_name(name: str) -> str:
