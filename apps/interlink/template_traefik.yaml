@@ -90,7 +90,7 @@ spec:
         args:
           - >
             ./wstunnel server
-            --log-lvl DEBUG
+            --log-lvl WARN
             --dns-resolver-prefer-ipv4
             --restrict-http-upgrade-path-prefix {{.RandomPassword}}
             --restrict-to 127.0.0.1:51820

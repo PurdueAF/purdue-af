@@ -218,7 +218,7 @@ serverFiles:
             action: keep
             regex: dask-gateway
           - source_labels: [__address__]
-            regex: ".*:8786$"
+            regex: ".*:(80|8000|8786|8788)$"
             action: drop
       # - job_name: 'supersonic-monitor-triton'
       #   metrics_path: '/metrics'
