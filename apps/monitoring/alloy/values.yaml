@@ -32,7 +32,7 @@ alloy:
     # River configuration: collect Kubernetes pod logs and send to Loki
     content: |
       logging {
-        level = "info"
+        level = "warn"
         format = "logfmt"
       }
 
