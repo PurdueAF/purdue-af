@@ -29,7 +29,8 @@ ssh:
 
   config:
     JupyterHubSSH:
-      debug: true
+      # Quieter than the chart default; upstream only toggles DEBUG vs INFO.
+      debug: false
       host_key_path: /etc/jupyterhub-ssh/config/hostKey
 
   image:

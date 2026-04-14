@@ -1,7 +1,7 @@
 gateway:
   replicas: 1
   prefix: /
-  loglevel: INFO
+  loglevel: WARN
   image:
     name: ghcr.io/dask/dask-gateway-server
     tag: 2024.1.0

@@ -1,7 +1,7 @@
 gateway:
   replicas: 1
   prefix: /
-  loglevel: INFO
+  loglevel: WARN
   image:
     name: geddes-registry.rcac.purdue.edu/cms/dask-gateway-server
     tag: 2023.9.0-purdue.v4
