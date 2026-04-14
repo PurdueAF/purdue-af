@@ -4,6 +4,10 @@
 minio:
   enabled: false
 
+# Disable Kafka (not needed; we use ring-based ingestion, not ingest storage)
+kafka:
+  enabled: false
+
 # Disable rollout operator (not needed without zone-aware replication)
 rollout_operator:
   enabled: false
@@ -37,8 +41,10 @@ metadata-cache:
 results-cache:
   enabled: false
 
-# Global extra volume: shared blocks PVC (ReadWriteMany) for ingester, compactor, store-gateway
+# Global extra volume: shared blocks PVC (ReadWriteMany) mounted in all components
 global:
+  image:
+    registry: geddes-registry.rcac.purdue.edu/docker-hub-cache
   extraVolumes:
     - name: mimir-blocks
       persistentVolumeClaim:
@@ -69,6 +75,18 @@ ingester:
   persistentVolume:
     size: 20Gi
     storageClass: ${multinode_storage_class}
+  extraInitContainers:
+    - name: fix-permissions
+      image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.36
+      command: ["/bin/sh", "-c", "mkdir -p /data/tsdb && chmod 777 /data /blocks"]
+      securityContext:
+        runAsUser: 0
+        runAsNonRoot: false
+      volumeMounts:
+        - name: storage
+          mountPath: /data
+        - name: mimir-blocks
+          mountPath: /blocks
 
 distributor:
   replicas: 1
@@ -157,6 +175,18 @@ compactor:
   persistentVolume:
     size: 20Gi
     storageClass: ${multinode_storage_class}
+  extraInitContainers:
+    - name: fix-permissions
+      image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.36
+      command: ["/bin/sh", "-c", "mkdir -p /data/compactor && chmod 777 /data /blocks"]
+      securityContext:
+        runAsUser: 0
+        runAsNonRoot: false
+      volumeMounts:
+        - name: storage
+          mountPath: /data
+        - name: mimir-blocks
+          mountPath: /blocks
 
 store_gateway:
   replicas: 1
@@ -179,6 +209,18 @@ store_gateway:
   persistentVolume:
     size: 20Gi
     storageClass: ${multinode_storage_class}
+  extraInitContainers:
+    - name: fix-permissions
+      image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.36
+      command: ["/bin/sh", "-c", "mkdir -p /data/tsdb-sync && chmod 777 /data /blocks"]
+      securityContext:
+        runAsUser: 0
+        runAsNonRoot: false
+      volumeMounts:
+        - name: storage
+          mountPath: /data
+        - name: mimir-blocks
+          mountPath: /blocks
 
 # Gateway: single entry point for reads and writes
 gateway:
