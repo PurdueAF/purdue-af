@@ -377,7 +377,7 @@ def _mount_job_env(mount_name: str, cfg: Dict[str, Any]) -> list[dict[str, Any]]
             {"name": "RESULTS_DIR", "value": str(RESULTS_DIR)},
             {
                 "name": "AF_NODE_MONITOR_VERBOSE",
-                "value": os.getenv("AF_NODE_MONITOR_VERBOSE", ""),
+                "value": os.getenv("AF_NODE_MONITOR_VERBOSE", "false"),
             },
             {
                 "name": "NODE_NAME",

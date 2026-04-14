@@ -97,7 +97,7 @@ def _check_ping() -> Tuple[bool, bool, float | None]:
             msg += f": {reason}"
         else:
             msg += ": non-zero exit code"
-        print(msg)
+        _vlog(msg)
         return False, timeout, elapsed_ms
 
     if CHECKSUM:
@@ -112,7 +112,7 @@ def _check_ping() -> Tuple[bool, bool, float | None]:
         parts = proc.stdout.strip().split()
         if not parts or parts[0] != CHECKSUM:
             actual = parts[0] if parts else "<missing>"
-            print(
+            _vlog(
                 "[job_runner] Ping checksum mismatch: "
                 f"expected={CHECKSUM}, actual={actual}"
             )
@@ -138,7 +138,7 @@ def _check_metadata() -> Tuple[bool, bool, float | None]:
             msg += f": {reason}"
         else:
             msg += ": non-zero exit code"
-        print(msg)
+        _vlog(msg)
     return ok, timeout, elapsed_ms
 
 
@@ -236,7 +236,7 @@ def main() -> None:
     if not ok:
         # Responsiveness failed or timed out; report timeout with speed 0.
         timeout = True
-        print(
+        _vlog(
             "[job_runner] Responsiveness failed or timed out; reporting timeout with throughput 0.0"
         )
         result = {
