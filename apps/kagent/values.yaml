@@ -52,6 +52,8 @@ grafana-mcp:
   grafana:
     url: http://grafana.${namespace}.svc.cluster.local/grafana
     secretRef: kagent-grafana-mcp-token
+  config:
+    GRAFANA_ORG_ID: "1"
   image:
     registry: geddes-registry.rcac.purdue.edu
     repository: docker-hub-cache/mcp/grafana
