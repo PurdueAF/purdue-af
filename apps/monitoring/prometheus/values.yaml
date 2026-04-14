@@ -168,6 +168,9 @@ serverFiles:
           - source_labels: [__meta_kubernetes_service_label_scrape_metrics]
             action: keep
             regex: "true"
+          - source_labels: [__address__]
+            regex: ".*:(8888|8889)$"
+            action: drop
       - job_name: "envoy-monitor"
         metrics_path: "/stats/prometheus"
         kubernetes_sd_configs:
