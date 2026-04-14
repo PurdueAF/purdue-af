@@ -212,6 +212,9 @@ serverFiles:
               [__meta_kubernetes_service_label_app_kubernetes_io_name]
             action: keep
             regex: dask-gateway
+          - source_labels: [__address__]
+            regex: ".*:8786$"
+            action: drop
       # - job_name: 'supersonic-monitor-triton'
       #   metrics_path: '/metrics'
       #   kubernetes_sd_configs:
