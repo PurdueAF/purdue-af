@@ -131,6 +131,11 @@ RESULTS_DIR = Path(os.getenv("RESULTS_DIR", "/af-node-monitor/results"))
 
 POD_NAMESPACE = os.getenv("POD_NAMESPACE", "default")
 
+
+def _vlog(msg: str) -> None:
+    if os.getenv("AF_NODE_MONITOR_VERBOSE", "").lower() in ("1", "true", "yes"):
+        print(msg)
+
 JOB_INTERVAL_S = float(os.getenv("JOB_INTERVAL_S", "600"))  # 10 minutes
 JOB_TTL_SECONDS = int(
     os.getenv("JOB_TTL_SECONDS", "120")
@@ -236,7 +241,7 @@ def _init_k8s() -> None:
         _core_v1 = client.CoreV1Api()
         _batch_v1 = client.BatchV1Api()
         _k8s_ready = True
-        print("[node_healthcheck] Kubernetes client initialized")
+        _vlog("[node_healthcheck] Kubernetes client initialized")
     except Exception as e:  # pragma: no cover - defensive
         print(f"[node_healthcheck] Failed to initialize Kubernetes client: {e}")
         _k8s_ready = False
@@ -370,6 +375,10 @@ def _mount_job_env(mount_name: str, cfg: Dict[str, Any]) -> list[dict[str, Any]]
             },
             {"name": "RESULTS_DIR", "value": str(RESULTS_DIR)},
             {
+                "name": "AF_NODE_MONITOR_VERBOSE",
+                "value": os.getenv("AF_NODE_MONITOR_VERBOSE", ""),
+            },
+            {
                 "name": "NODE_NAME",
                 "valueFrom": {"fieldRef": {"fieldPath": "spec.nodeName"}},
             },
@@ -494,7 +503,7 @@ def _ensure_jobs(now: float) -> None:
             try:
                 _batch_v1.create_namespaced_job(namespace=POD_NAMESPACE, body=body)
                 _last_job_start_ts[mount_name][node_name] = now
-                print(
+                _vlog(
                     "[node_healthcheck] Created Job "
                     f"{body['metadata']['name']} for mount='{mount_name}' node='{node_name}'"
                 )
@@ -546,7 +555,7 @@ def _cleanup_finished_jobs(now: float) -> None:
                         propagation_policy="Background",
                         body=client.V1DeleteOptions(grace_period_seconds=0),
                     )
-                    print(
+                    _vlog(
                         f"[node_healthcheck] Force-deleted long-running Job "
                         f"{metadata.name} after {int(runtime)}s"
                     )
@@ -597,7 +606,7 @@ def _cleanup_finished_jobs(now: float) -> None:
                 namespace=POD_NAMESPACE,
                 propagation_policy="Background",
             )
-            print(
+            _vlog(
                 f"[node_healthcheck] Deleted finished Job {metadata.name} "
                 f"after {int(finished_ago)}s"
             )

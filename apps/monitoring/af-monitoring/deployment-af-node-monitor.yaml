@@ -21,6 +21,8 @@ spec:
           env:
             - name: RESULTS_DIR
               value: "/af-node-monitor/results"
+            - name: AF_NODE_MONITOR_VERBOSE
+              value: "false"
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
