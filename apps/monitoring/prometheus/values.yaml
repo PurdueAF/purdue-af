@@ -97,6 +97,7 @@ serverFiles:
               - "cms.geddes.rcac.purdue.edu"
               - "cmsdev.geddes.rcac.purdue.edu"
       - job_name: "kube-state-metrics"
+        honor_timestamps: false
         static_configs:
           - targets:
               - "rancher-monitoring-kube-state-metrics.cattle-monitoring-system.svc.cluster.local:8080"
