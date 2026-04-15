@@ -448,6 +448,12 @@ ingress:
   annotations:
     kubernetes.io/ingress.class: "public"
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    # Pass Sec-Fetch-Mode through the WebSocket upgrade so JupyterHub's
+    # XSRF utility can identify the fetch mode and suppress the spurious
+    # "Skipping XSRF check for insecure request" warning (jupyterhub/_xsrf_utils.py).
+    # nginx drops this Fetch-metadata header during HTTP→WebSocket reconstruction.
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Sec-Fetch-Mode $http_sec_fetch_mode;
 proxy:
   https:
     enabled: true
