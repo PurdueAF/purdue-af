@@ -10,6 +10,7 @@ interlink:
   port: 3000
   logging:
     verboseLogging: false
+    errorsOnlyLogging: true
 
 plugin:
   enabled: true
