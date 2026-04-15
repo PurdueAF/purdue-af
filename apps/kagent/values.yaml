@@ -4,6 +4,10 @@
 # choose your release namespace from the combobox (only that namespace is listed once the API succeeds).
 fullnameOverride: kagent-cms
 
+# Pin runtime image tags to the chart version so the controller and agent Deployments
+# do not oscillate between stale agent images (e.g. 0.7.x) and IMAGE_TAG from the chart.
+tag: "0.8.6"
+
 providers:
   default: openAI
   openAI:
@@ -31,6 +35,8 @@ controller:
   watchNamespaces:
     - ${namespace}
     - cms
+  agentImage:
+    tag: "0.8.6"
   agentDeployment:
     serviceAccountName: kagent-agent-readonly
   env:

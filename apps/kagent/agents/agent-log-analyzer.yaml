@@ -16,6 +16,8 @@ spec:
     deployment:
       serviceAccountName: kagent-agent-readonly
       replicas: 1
+      # Keep in sync with Helm chart appVersion / controller ConfigMap IMAGE_TAG (helmrelease version).
+      image: cr.kagent.dev/kagent-dev/kagent/app:0.8.6
       imagePullPolicy: IfNotPresent
     modelConfig: gpt-oss-120b
     systemMessage: |
