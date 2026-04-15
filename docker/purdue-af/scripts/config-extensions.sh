@@ -1,10 +1,18 @@
 # earlier: /opt/conda
 base_env_dir=/opt/pixi/.pixi/envs/base-env/
 
-# Configure jupyterlab-unfold extension
+# Configure JupyterLab overrides (single-click unfold, disable PyPI extension manager)
 mkdir -p $base_env_dir/share/jupyter/lab/settings
-echo "{\"jupyterlab-unfold:jupyterlab-unfold-settings\": {\"singleClickToUnfold\": false}}" \
-	$base_env_dir/share/jupyter/lab/settings/overrides.json
+cat > $base_env_dir/share/jupyter/lab/settings/overrides.json << 'OVERRIDES_EOF'
+{
+  "jupyterlab-unfold:jupyterlab-unfold-settings": {
+    "singleClickToUnfold": false
+  },
+  "@jupyterlab/extensionmanager-extension:plugin": {
+    "enabled": false
+  }
+}
+OVERRIDES_EOF
 
 # Configure topbar extension
 NEW_HOME=/home/$NB_USER
@@ -75,16 +83,6 @@ echo "{
     \"rank\": 0
 }" >$JIL_PATH/plugin.jupyterlab-settings
 
-# Configure prometheus alerts extension
-mkdir -p $base_env_dir/etc/jupyter/jupyter_server_config.d
-echo '{
-  "ServerApp": {
-    "jpserver_extensions": {
-      "prometheus_alerts": true
-    }
-  }
-}' >$base_env_dir/etc/jupyter/jupyter_server_config.d/prometheus_alerts.json
-
 # Pre-install code-server extensions into the notebook user's dirs; fail if CLI is unavailable
 CODE_SERVER_BIN="${base_env_dir%/}/bin/code-server"
 if [ ! -x "$CODE_SERVER_BIN" ]; then
@@ -112,10 +110,24 @@ echo '{
 }' >"$CODE_SERVER_USER_SETTINGS/settings.json"
 
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
-"$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension ms-python.python
-"$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension ms-toolsai.jupyter
-"$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension continue.continue@1.3.30
-"$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" --install-extension renan-r-santos.pixi-code
+
+# Install extension only if not already present; avoids ~3 s CLI overhead per extension on warm starts
+_cs_install_if_missing() {
+	local spec="$1"
+	local id="${spec%@*}"   # strip @version suffix for the presence check
+	if "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
+			--list-extensions 2>/dev/null | grep -qi "^${id}$"; then
+		echo "code-server extension '${spec}' already installed, skipping."
+	else
+		"$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
+			--install-extension "$spec"
+	fi
+}
+
+_cs_install_if_missing ms-python.python
+_cs_install_if_missing ms-toolsai.jupyter
+_cs_install_if_missing continue.continue@1.3.30
+_cs_install_if_missing renan-r-santos.pixi-code
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
 
 # Continue extension config (from bundled file)
