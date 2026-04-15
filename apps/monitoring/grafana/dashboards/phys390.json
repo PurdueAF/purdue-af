@@ -410,7 +410,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P1809F7CD0C75ACF3"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "expr": "slurm_info_job_user",
@@ -538,7 +538,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P1809F7CD0C75ACF3"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "expr": "(\n  sum by (namespace) (kube_resourcequota{namespace=\"cms\", resource=\"requests.cpu\", type=\"hard\"}) -\n  sum by (namespace) (kube_resourcequota{namespace=\"cms\", resource=\"requests.cpu\", type=\"used\"})\n)\n",
@@ -673,7 +673,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P1809F7CD0C75ACF3"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "expr": "7216 - sum(slurm_info_core_user)",
@@ -740,7 +740,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P1809F7CD0C75ACF3"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "expr": "16089000 - (sum (slurm_info_ram_user))\n",
@@ -833,7 +833,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P1809F7CD0C75ACF3"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -901,7 +901,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P1809F7CD0C75ACF3"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "expr": "label_replace(\n  sum by (resource)(kube_pod_container_resource_requests{\n    namespace=\"cms\", pod=~\"purdue-af-.*\", resource=~\"nvidia_com_mig_7g_40gb\"\n  }),\n  \"state\", \"Used\", \"\", \"\"\n)\nor\nlabel_replace(\n  (\n    sum by (resource)(kube_node_status_allocatable{resource=~\"nvidia_com_mig_7g_40gb\"}\n      * on(node) group_left() kube_node_spec_taint{value=\"cms-af\"})\n    -\n    sum by (resource)(kube_pod_container_resource_requests{\n      namespace=\"cms\", pod=~\"purdue-af-.*\", resource=~\"nvidia_com_mig_7g_40gb\"\n    })\n  ),\n  \"state\", \"Free\", \"\", \"\"\n)",
@@ -917,7 +917,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -998,7 +998,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
