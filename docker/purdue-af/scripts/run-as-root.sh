@@ -15,15 +15,33 @@ chmod 400 /etc/munge/munge.key
 su -l munge -s /usr/sbin/munged
 
 # Setup user home directory
+# Gated by a versioned sentinel so chown/mkdir only run once per user.
+# Bump _HOME_SETUP_VER whenever new directories are added here.
+_HOME_SETUP_VER=1
+_HOME_SETUP_SENTINEL="$NEW_HOME/.jupyter/.af-home-setup-v${_HOME_SETUP_VER}"
+if [ ! -f "$_HOME_SETUP_SENTINEL" ]; then
+	mkdir -p "$NEW_HOME/.jupyter/lab/workspaces"
+	mkdir -p "$NEW_HOME/.local/share"
+	mkdir -p "$NEW_HOME/.config/dask"
+	chown "$NB_USER:users" \
+		"$NEW_HOME/.jupyter" \
+		"$NEW_HOME/.jupyter/lab" \
+		"$NEW_HOME/.jupyter/lab/workspaces" \
+		"$NEW_HOME/.local" \
+		"$NEW_HOME/.local/share" \
+		"$NEW_HOME/.config" \
+		"$NEW_HOME/.config/dask" \
+		2>/dev/null || true
+	touch "$_HOME_SETUP_SENTINEL"
+	chown "$NB_USER:users" "$_HOME_SETUP_SENTINEL"
+fi
+chmod 755 "$NEW_HOME"
+# Recreate the migrated flag every start — prevents the Jupyter migration dialog
+# and is cheap (3 ops on a single small file).
 mkdir -p "$NEW_HOME/.jupyter"
 rm -rf "$NEW_HOME/.jupyter/migrated"
 touch "$NEW_HOME/.jupyter/migrated"
 chmod 777 "$NEW_HOME/.jupyter/migrated"
-mkdir -p "$NEW_HOME/.jupyter/lab/workspaces"
-mkdir -p "$NEW_HOME/.local/share"
-mkdir -p "$NEW_HOME/.config/dask"
-chown -R $NB_USER:users $NEW_HOME/.[^.]*
-chmod 755 "$NEW_HOME"
 # .ssh: directory 700 (required by SSH); key/authorized_keys files 600 (not 700)
 if [ -d "$NEW_HOME/.ssh" ]; then
 	chmod 700 "$NEW_HOME/.ssh"
@@ -52,20 +70,31 @@ if [ -d "${PIXI_GLOBAL}" ] && [ -f "${PIXI_GLOBAL}/pixi.toml" ] && [ -f "${PIXI_
 	PIXI_GLOBAL_SYSROOT_INC="${PIXI_GLOBAL_PREFIX}/x86_64-conda-linux-gnu/sysroot/usr/include"
 	PIXI_GLOBAL_BIN="${PIXI_GLOBAL_PREFIX}/bin"
 
-	# 1) Install and patch in base env (single source of truth)
-	jupyter kernelspec remove -y python3 2>/dev/null || true
-	"${PIXI_GLOBAL_PYTHON}" -m ipykernel install --name python3 --display-name "Python (pixi global)" --prefix "${BASE_ENV_DIR}"
 	BASE_PY3_KERNEL_JSON="${BASE_ENV_DIR}/share/jupyter/kernels/python3/kernel.json"
+
+	# 1) Install and patch in base env — skip if kernel already points to the correct Python
+	_needs_install=true
 	if [ -f "${BASE_PY3_KERNEL_JSON}" ] && command -v jq >/dev/null 2>&1; then
-		jq \
-			--arg python "${PIXI_GLOBAL_BIN}/python" \
-			--arg inc "${PIXI_GLOBAL_SYSROOT_INC}" \
-			--arg path_val "${PIXI_GLOBAL_BIN}:\${PATH}" \
-			'.argv = [$python, "-m", "ipykernel_launcher", "-f", "{connection_file}"] | .display_name = "Python (pixi global)" | .language = "python" | .metadata = {"debugger": true} | .env = {"C_INCLUDE_PATH": $inc, "CPLUS_INCLUDE_PATH": $inc, "PATH": $path_val}' \
-			"${BASE_PY3_KERNEL_JSON}" >"${BASE_PY3_KERNEL_JSON}.tmp" &&
-			mv "${BASE_PY3_KERNEL_JSON}.tmp" "${BASE_PY3_KERNEL_JSON}"
-	elif [ -f "${BASE_PY3_KERNEL_JSON}" ]; then
-		echo "Warning: jq not found; cannot write pixi global kernel spec at ${BASE_PY3_KERNEL_JSON}." >&2
+		_current_python=$(jq -r '.argv[0] // empty' "${BASE_PY3_KERNEL_JSON}" 2>/dev/null)
+		if [ "${_current_python}" = "${PIXI_GLOBAL_BIN}/python" ]; then
+			_needs_install=false
+		fi
+	fi
+
+	if [ "${_needs_install}" = "true" ]; then
+		jupyter kernelspec remove -y python3 2>/dev/null || true
+		"${PIXI_GLOBAL_PYTHON}" -m ipykernel install --name python3 --display-name "Python (pixi global)" --prefix "${BASE_ENV_DIR}"
+		if [ -f "${BASE_PY3_KERNEL_JSON}" ] && command -v jq >/dev/null 2>&1; then
+			jq \
+				--arg python "${PIXI_GLOBAL_BIN}/python" \
+				--arg inc "${PIXI_GLOBAL_SYSROOT_INC}" \
+				--arg path_val "${PIXI_GLOBAL_BIN}:\${PATH}" \
+				'.argv = [$python, "-m", "ipykernel_launcher", "-f", "{connection_file}"] | .display_name = "Python (pixi global)" | .language = "python" | .metadata = {"debugger": true} | .env = {"C_INCLUDE_PATH": $inc, "CPLUS_INCLUDE_PATH": $inc, "PATH": $path_val}' \
+				"${BASE_PY3_KERNEL_JSON}" >"${BASE_PY3_KERNEL_JSON}.tmp" &&
+				mv "${BASE_PY3_KERNEL_JSON}.tmp" "${BASE_PY3_KERNEL_JSON}"
+		elif [ -f "${BASE_PY3_KERNEL_JSON}" ]; then
+			echo "Warning: jq not found; cannot write pixi global kernel spec at ${BASE_PY3_KERNEL_JSON}." >&2
+		fi
 	fi
 
 	# 2) Mirror same kernel to user space (~/.local/share/jupyter) for VSCode-style discovery
