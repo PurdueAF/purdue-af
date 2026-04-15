@@ -1,8 +1,11 @@
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
-# Multi-stage build: base -> system -> stack -> runtime
-ARG OWNER=jupyter
-FROM gitlab-registry.cern.ch/linuxsupport/alma8-base:20250501-1 AS base
+# Multi-stage build: system -> stack -> runtime
+
+# ------------------------------------------------------------
+# Stage: system (dnf, OSG, Slurm, user; no pixi)
+# ------------------------------------------------------------
+FROM gitlab-registry.cern.ch/linuxsupport/alma8-base:20250501-1 AS system
 
 LABEL maintainer="Dmitry Kondratyev <dkondra@purdue.edu>"
 ARG NB_USER="jovyan"
@@ -12,18 +15,6 @@ ARG NB_GID="100"
 # Fix: https://github.com/hadolint/hadolint/wiki/DL4006
 # Fix: https://github.com/koalaman/shellcheck/wiki/SC3014
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-
-USER root
-
-# ------------------------------------------------------------
-# Stage: system (dnf, OSG, Slurm, user; no pixi)
-# ------------------------------------------------------------
-FROM base AS system
-
-# ARGs are not inherited across stages
-ARG NB_USER="jovyan"
-ARG NB_UID="1000"
-ARG NB_GID="100"
 
 USER root
 
@@ -114,6 +105,8 @@ RUN sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashr
 # ------------------------------------------------------------
 FROM system AS stack
 
+ARG PIXI_VERSION="0.62.2"
+
 ENV PIXI_HOME="/opt/pixi" \
     BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env"
 
@@ -124,7 +117,6 @@ COPY --chown=root:root docker/purdue-af/pixi-wrapper /usr/local/bin/pixi
 RUN chmod +x /usr/local/bin/pixi && \
     rm -rf "${HOME}/.cache/rattler" || true && \
     mkdir -p "${PIXI_HOME}/bin" && \
-    PIXI_VERSION="0.62.2" && \
     curl -fsSL --retry 3 --retry-delay 2 \
         -o /tmp/pixi.tar.gz \
         "https://github.com/prefix-dev/pixi/releases/download/v${PIXI_VERSION}/pixi-x86_64-unknown-linux-musl.tar.gz" && \
@@ -142,13 +134,6 @@ RUN chmod +x /usr/local/bin/pixi && \
     cp "${BASE_ENV_DIR}/lib/python3.10/site-packages/jupyter_vscode_proxy/icons/vscode.svg" \
        "${BASE_ENV_DIR}/lib/python3.10/site-packages/jupyter_vscode_proxy/icons/code-server.svg"
 
-# Extension / config setup as NB_USER (no installs in runtime)
-USER ${NB_USER}
-RUN /opt/pixi/.pixi/envs/base-env/bin/jupyter notebook --generate-config && \
-    npm cache clean --force || true && \
-    /opt/pixi/.pixi/envs/base-env/bin/jupyter lab clean || true && \
-    rm -rf "${HOME}/.cache/yarn"
-
 # ------------------------------------------------------------
 # Stage: runtime (lightweight; COPY only, no builds or installation routines)
 # ------------------------------------------------------------
@@ -161,9 +146,8 @@ ENV PIXI_HOME="/opt/pixi" \
     BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env" \
     X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
 
-# Copy pixi env and generated config from stack (path uses NB_USER for custom builds)
+# Copy pixi env from stack stage
 COPY --from=stack /opt/pixi /opt/pixi
-COPY --from=stack /home/${NB_USER}/.jupyter /home/${NB_USER}/.jupyter
 
 # Pixi wrapper in final image (same path as before)
 COPY --chown=root:root docker/purdue-af/pixi-wrapper /usr/local/bin/pixi
@@ -200,11 +184,8 @@ COPY --chown=root:root \
 RUN chmod +x /usr/local/bin/pixi && \
     chmod +x /usr/local/bin/* && \
     chmod +x /usr/local/bin/before-notebook.d/* && \
-    sed -re "s/c.ServerApp/c.NotebookApp/g" \
-        /etc/jupyter/jupyter_server_config.py > /etc/jupyter/jupyter_notebook_config.py && \
     fix-permissions /etc/jupyter/ && \
-    fix-permissions "${HOME}" && \
-    fix-permissions "${PIXI_HOME}"
+    fix-permissions "${HOME}"
 
 # Set PATH before switching user so it's available to all users
 ENV PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}"
