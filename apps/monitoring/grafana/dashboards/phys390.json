@@ -606,7 +606,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P2395B6A8B70B4D03"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "expr": "(\n  sum by (namespace) (kube_resourcequota{namespace=\"cms\", resource=\"requests.memory\", type=\"hard\"}) -\n  sum by (namespace) (kube_resourcequota{namespace=\"cms\", resource=\"requests.memory\", type=\"used\"})\n)\n",

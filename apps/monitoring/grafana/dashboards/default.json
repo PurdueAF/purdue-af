@@ -2588,7 +2588,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P2395B6A8B70B4D03"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "expr": "avg by (cluster_name) (\n  sum by (pod, cluster_name) (\n    label_replace(\n      rate(container_cpu_usage_seconds_total{pod=~\"dask-worker-.*\", container=\"dask-worker\"}[5m]),\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n  /\n  sum by (pod, cluster_name) (\n    label_replace(\n      kube_pod_container_resource_limits{pod=~\"dask-worker-.*\", resource=\"cpu\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n)\n",
@@ -2693,7 +2693,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P2395B6A8B70B4D03"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "expr": "avg by (cluster_name) (\n  sum by (pod, cluster_name) (\n    label_replace(\n      container_memory_working_set_bytes{pod=~\"dask-worker-.*\", container=\"dask-worker\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n  /\n  sum by (pod, cluster_name) (\n    label_replace(\n      kube_pod_container_resource_limits{pod=~\"dask-worker-.*\", resource=\"memory\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n)\n",
@@ -2798,7 +2798,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P2395B6A8B70B4D03"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "expr": "avg by (cluster_name) (\n  sum by (pod, cluster_name) (\n    label_replace(\n      rate(container_cpu_usage_seconds_total{pod=~\"dask-worker-.*\", container=\"dask-worker\"}[5m]),\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n)\n",
@@ -2902,7 +2902,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P2395B6A8B70B4D03"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "expr": "avg by (cluster_name) (\n  sum by (pod, cluster_name) (\n    label_replace(\n      container_memory_working_set_bytes{pod=~\"dask-worker-.*\", container=\"dask-worker\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n)\n",
@@ -3115,7 +3115,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P2395B6A8B70B4D03"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -3197,7 +3197,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P2395B6A8B70B4D03"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "expr": "sum(increase(container_cpu_cfs_throttled_periods_total\n{namespace=\"cms\", pod=~\"purdue-af-.*\"}[5m])) by (pod) /\nsum(increase(container_cpu_cfs_periods_total{namespace=\"cms\"}[5m])) by (pod)",
@@ -3212,7 +3212,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P2395B6A8B70B4D03"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -3294,7 +3294,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P2395B6A8B70B4D03"
+            "uid": "prometheus"
           },
           "editorMode": "code",
           "expr": "sum(increase(container_cpu_cfs_throttled_periods_total\n{namespace=\"cms\", pod=~\"dask-worker.*\"}[5m])) by (pod) /\nsum(increase(container_cpu_cfs_periods_total{namespace=\"cms\"}[5m])) by (pod)",
