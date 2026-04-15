@@ -108,6 +108,12 @@ gateway:
         env:
           - name: DASK_LOGGING__DISTRIBUTED
             value: warning
+          # Suppress FutureWarnings from coffea (e.g. nanoevents vector migration)
+          # that fire on every worker import. Targeted to coffea only; user-code
+          # warnings from other modules are unaffected.
+          # Format: ignore::category:module (module is a substring/regex match)
+          - name: PYTHONWARNINGS
+            value: "ignore::FutureWarning:coffea"
           - name: DASK_DISTRIBUTED__WORKER__PRELOAD
             value: '["/work/projects/purdue-af/dask_pyroscope_preload.py"]'
           - name: DASK_DISTRIBUTED__WORKER__PRELOAD_ARGV

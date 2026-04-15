@@ -67,6 +67,8 @@ gateway:
         env:
           - name: DASK_LOGGING__DISTRIBUTED
             value: warning
+          - name: PYTHONWARNINGS
+            value: "ignore::FutureWarning:coffea"
         volumeMounts:
           - name: depot
             mountPath: /depot/cms
@@ -100,6 +102,8 @@ gateway:
         env:
           - name: DASK_LOGGING__DISTRIBUTED
             value: warning
+          - name: PYTHONWARNINGS
+            value: "ignore::FutureWarning:coffea"
         volumeMounts:
           - name: cvmfs
             mountPath: /cvmfs
