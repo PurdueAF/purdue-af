@@ -54,6 +54,12 @@ spec:
                   name: work
                   mountPath: /work/
                   mountPropagation: HostToContainer
+              - op: add
+                path: /spec/template/spec/containers/0/volumeMounts/-
+                value:
+                  name: cvmfs
+                  mountPath: /cvmfs
+                  mountPropagation: HostToContainer
           - target:
               kind: Service
               name: "api-.*"
