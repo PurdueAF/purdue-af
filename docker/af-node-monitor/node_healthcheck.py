@@ -137,6 +137,11 @@ def _vlog(msg: str) -> None:
         print(msg)
 
 
+def _elog(msg: str) -> None:
+    # Always emit errors, even when verbose logging is disabled.
+    print(msg)
+
+
 JOB_INTERVAL_S = float(os.getenv("JOB_INTERVAL_S", "600"))  # 10 minutes
 JOB_TTL_SECONDS = int(
     os.getenv("JOB_TTL_SECONDS", "120")
@@ -346,6 +351,37 @@ def _has_active_job(mount_name: str, node_name: str) -> bool:
         if status and getattr(status, "active", 0):
             return True
     return False
+
+
+def _list_active_job_keys() -> set[tuple[str, str]]:
+    """Return {(mount_name, node_name)} keys that currently have active Jobs."""
+    _init_k8s()
+    if not _k8s_ready or _batch_v1 is None:
+        return set()
+
+    keys: set[tuple[str, str]] = set()
+    try:
+        jobs = _batch_v1.list_namespaced_job(
+            namespace=POD_NAMESPACE, label_selector="app=af-node-monitor"
+        )
+    except ApiException as e:  # type: ignore[misc]
+        _elog(f"[node_healthcheck] Error listing Jobs for active index: {e}")
+        return set()
+    except Exception as e:  # pragma: no cover - defensive
+        _elog(f"[node_healthcheck] Unexpected error listing Jobs for active index: {e}")
+        return set()
+
+    for job in jobs.items:
+        status = job.status
+        if not status or not getattr(status, "active", 0):
+            continue
+        labels = getattr(job.metadata, "labels", None) or {}
+        mount_key = labels.get("mount", "")
+        node_key = labels.get("node", "")
+        if not mount_key or not node_key:
+            continue
+        keys.add((mount_key, node_key))
+    return keys
 
 
 def _mount_job_env(mount_name: str, cfg: Dict[str, Any]) -> list[dict[str, Any]]:
@@ -632,6 +668,7 @@ def update_metrics() -> None:
     if not nodes:
         # Fallback: still try to read legacy per-mount results.
         nodes = [""]
+    active_job_keys = _list_active_job_keys()
 
     for m_name, cfg in MOUNTS.items():
         mount_path = cfg["mount_path"]
@@ -662,7 +699,9 @@ def update_metrics() -> None:
                 mount_data_rate_gbps.labels(**labels).set(0.0)
 
                 check_type = "no_recent_result"
-                if node_name and _has_active_job(m_name, node_name):
+                mount_key = _sanitized_mount_name(m_name)
+                node_key = _sanitized_node_name(node_name)
+                if node_key and (mount_key, node_key) in active_job_keys:
                     # Distinguish the case where a Job exists but has not produced output
                     # yet (for example stuck Pending/ContainerCreating).
                     check_type = "job_never_started"
@@ -716,6 +755,9 @@ def update_metrics() -> None:
 if __name__ == "__main__":
     start_http_server(8000)
     while True:
-        update_metrics()
-        monitor_last_iteration_ts.set(time.time())
+        try:
+            update_metrics()
+            monitor_last_iteration_ts.set(time.time())
+        except Exception as e:
+            _elog(f"[node_healthcheck] update_metrics failed: {e}")
         time.sleep(CHECK_INTERVAL_S)
