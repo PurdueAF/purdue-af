@@ -654,17 +654,28 @@ def update_metrics() -> None:
                 continue
 
             if not data:
-                # No result yet - treat as timeout/error with last metrics preserved
+                # No result yet: expose timeout semantics for latency/throughput gauges
+                # so alerts/dashboards see an explicit failure signal.
                 mount_valid.labels(**labels).set(0)
-                mount_timeout_total.labels(
-                    check_type="no_recent_result", **labels
-                ).inc()
+                mount_ping_ms.labels(**labels).set(_timeout_ping_ms())
+                mount_metadata_latency_ms.labels(**labels).set(_timeout_metadata_ms())
+                mount_data_rate_gbps.labels(**labels).set(0.0)
+
+                check_type = "no_recent_result"
+                if node_name and _has_active_job(m_name, node_name):
+                    # Distinguish the case where a Job exists but has not produced output
+                    # yet (for example stuck Pending/ContainerCreating).
+                    check_type = "job_never_started"
+                mount_timeout_total.labels(check_type=check_type, **labels).inc()
                 continue
 
             timestamp = float(data.get("timestamp", 0))
             # Consider stale if older than configured stale window
             if now - timestamp > RESULT_STALE_WINDOW_S:
                 mount_valid.labels(**labels).set(0)
+                mount_ping_ms.labels(**labels).set(_timeout_ping_ms())
+                mount_metadata_latency_ms.labels(**labels).set(_timeout_metadata_ms())
+                mount_data_rate_gbps.labels(**labels).set(0.0)
                 mount_timeout_total.labels(check_type="stale_result", **labels).inc()
                 continue
 
