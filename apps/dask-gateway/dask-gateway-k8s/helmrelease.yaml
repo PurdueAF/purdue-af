@@ -43,6 +43,12 @@ spec:
                   persistentVolumeClaim:
                     claimName: af-shared-storage
               - op: add
+                path: /spec/template/spec/volumes/-
+                value:
+                  name: cvmfs
+                  persistentVolumeClaim:
+                    claimName: cvmfs
+              - op: add
                 path: /spec/template/spec/containers/0/volumeMounts/-
                 value:
                   name: depot
