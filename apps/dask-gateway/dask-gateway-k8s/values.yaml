@@ -130,6 +130,9 @@ gateway:
       c.ClusterConfig.cluster_max_memory = '1200 G'
       c.ClusterConfig.cluster_max_workers = 200
       c.ClusterConfig.idle_timeout = 3600
+      c.Backend.cluster_start_timeout = 180
+      c.Backend.worker_start_timeout = 180
+      c.Backend.worker_start_failure_limit = 8
 
       def ldap_lookup(username):
           import subprocess
@@ -231,7 +234,8 @@ gateway:
           options.env["XRD_CONNECTIONWINDOW"]="300"
           options.env["XRD_CONNECTIONRETRY"]="5"
           options.env["XRD_STREAMTIMEOUT"]="300"
-          worker_cmd = [f"{conda_env}/bin/dask", "worker"]
+          options.env["DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT"]="60s"
+          worker_cmd = [f"{conda_env}/bin/dask", "worker", "--death-timeout", "180"]
           scheduler_cmd = [f"{conda_env}/bin/dask", "scheduler"]
 
           extra_pod_config = {"securityContext": {"runAsUser": uid, "runAsGroup": gid,}}
@@ -285,7 +289,7 @@ gateway:
           handler=options_handler,
       )
 traefik:
-  replicas: 1
+  replicas: 2
   image:
     name: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/traefik
     tag: 2.10.4
