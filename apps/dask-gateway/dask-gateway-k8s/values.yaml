@@ -63,6 +63,9 @@ gateway:
           - name: work
             persistentVolumeClaim:
               claimName: af-shared-storage
+          - name: cvmfs
+            persistentVolumeClaim:
+              claimName: cvmfs
       extraContainerConfig:
         env:
           - name: DASK_LOGGING__DISTRIBUTED
@@ -73,6 +76,9 @@ gateway:
             mountPropagation: HostToContainer
           - name: work
             mountPath: /work/
+            mountPropagation: HostToContainer
+          - name: cvmfs
+            mountPath: /cvmfs
             mountPropagation: HostToContainer
     worker:
       extraPodConfig:
