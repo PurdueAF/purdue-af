@@ -3,7 +3,7 @@ base_env_dir=/opt/pixi/.pixi/envs/base-env/
 
 # Configure JupyterLab overrides (single-click unfold, disable PyPI extension manager)
 mkdir -p $base_env_dir/share/jupyter/lab/settings
-cat > $base_env_dir/share/jupyter/lab/settings/overrides.json << 'OVERRIDES_EOF'
+cat >$base_env_dir/share/jupyter/lab/settings/overrides.json <<'OVERRIDES_EOF'
 {
   "jupyterlab-unfold:jupyterlab-unfold-settings": {
     "singleClickToUnfold": false
@@ -114,9 +114,9 @@ chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
 # Install extension only if not already present; avoids ~3 s CLI overhead per extension on warm starts
 _cs_install_if_missing() {
 	local spec="$1"
-	local id="${spec%@*}"   # strip @version suffix for the presence check
+	local id="${spec%@*}" # strip @version suffix for the presence check
 	if "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
-			--list-extensions 2>/dev/null | grep -qi "^${id}$"; then
+		--list-extensions 2>/dev/null | grep -qi "^${id}$"; then
 		echo "code-server extension '${spec}' already installed, skipping."
 	else
 		"$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
