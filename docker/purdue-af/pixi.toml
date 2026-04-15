@@ -21,8 +21,9 @@ jupyterlab    = "==4.5.6"
 nodejs        = "22.*"
 
 # Kernel discovery / misc
-nb_conda_kernels = "*"
-metakernel       = "*"
+nb_conda_kernels      = "*"
+metakernel            = "*"
+importlib-metadata    = "<8.8"   # opentelemetry-api requires <8.8.0
 
 # Other tools
 rucio-clients = "*"
