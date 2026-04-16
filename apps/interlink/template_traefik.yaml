@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{.Name}}
-  namespace: sonic-wstunnel
+  namespace: {{.Namespace}}
 spec:
   replicas: 1
   selector:
@@ -79,8 +79,6 @@ spec:
             tail -f /dev/null
         securityContext:
           privileged: false
-          capabilities:
-            add: ["NET_ADMIN", "NET_RAW", "SYS_ADMIN"]
 
       # ===== WSTunnel Container =====
       - name: wstunnel
@@ -128,8 +126,6 @@ spec:
         image: ghcr.io/linuxserver/wireguard:latest
         securityContext:
           privileged: false
-          capabilities:
-            add: ["NET_ADMIN","NET_RAW"]
         volumeMounts:
           - name: dev-net-tun
             mountPath: /dev/net/tun
@@ -167,7 +163,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{.Name}}-wg-config
-  namespace: sonic-wstunnel
+  namespace: {{.Namespace}}
 data:
   # Server-side WireGuard; bound to localhost because wstunnel delivers traffic to 127.0.0.1:51820
   wg0.conf: |
@@ -196,7 +192,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{.Name}}
-  namespace: sonic-wstunnel
+  namespace: {{.Namespace}}
 spec:
   type: ClusterIP
   selector:
@@ -217,7 +213,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{.Name}}
-  namespace: sonic-wstunnel
+  namespace: {{.Namespace}}
   annotations:
     # Traefik-specific annotations for WebSocket
     traefik.ingress.kubernetes.io/router.entrypoints: web
