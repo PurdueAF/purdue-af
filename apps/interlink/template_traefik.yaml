@@ -127,8 +127,8 @@ spec:
         securityContext:
           privileged: false
         volumeMounts:
-          - name: dev-net-tun
-            mountPath: /dev/net/tun
+          # - name: dev-net-tun
+          #   mountPath: /dev/net/tun
           - name: wg-config
             mountPath: /etc/wireguard
             readOnly: true
@@ -150,10 +150,10 @@ spec:
       nodeSelector:
         kubernetes.io/os: linux
       volumes:
-        - name: dev-net-tun
-          hostPath:
-            path: /dev/net/tun
-            type: CharDevice
+        # - name: dev-net-tun
+        #   hostPath:
+        #     path: /dev/net/tun
+        #     type: CharDevice
         - name: wg-config
           configMap:
             name: {{.Name}}-wg-config
