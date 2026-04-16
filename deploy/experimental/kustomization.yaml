@@ -90,17 +90,17 @@ configMapGenerator:
     files:
       - ../../docker/af-node-monitor/node_healthcheck.py
 
-# replacements:
-#   - source:
-#       kind: ConfigMap
-#       name: interlink-config
-#       fieldPath: data.template_traefik\.yaml
-#     targets:
-#       - select:
-#           kind: HelmRelease
-#           name: interlink
-#         fieldPaths:
-#           - spec.values.virtualNode.network.customTemplate
-#         options:
-#           create: true
+replacements:
+  - source:
+      kind: ConfigMap
+      name: interlink-config
+      fieldPath: data.template_traefik\.yaml
+    targets:
+      - select:
+          kind: HelmRelease
+          name: interlink
+        fieldPaths:
+          - spec.values.virtualNode.network.customTemplate
+        options:
+          create: true
 
