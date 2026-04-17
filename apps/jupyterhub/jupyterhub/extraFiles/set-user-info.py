@@ -61,6 +61,12 @@ def passthrough_auth_state_hook(spawner, auth_state):
         spawner.environment["NB_UID"] = "1000"
         spawner.environment["NB_GID"] = "1000"
 
+    # Pixi CLI and pixi-kernel run `pixi info`, which may create $PIXI_HOME/envs and
+    # other layout. Keep /opt/pixi read-only; store per-user Pixi state on /work.
+    spawner.environment["PIXI_HOME"] = (
+        f"/work/users/{spawner.environment['NB_USER']}/.pixi-home"
+    )
+
 
 c.KubeSpawner.auth_state_hook = passthrough_auth_state_hook
 c.KubeSpawner.notebook_dir = "~"

@@ -52,6 +52,9 @@ fi
 mkdir -p "/work/users/$NB_USER"
 chmod 755 "/work/users/$NB_USER"
 chown "$NB_UID:users" "/work/users/$NB_USER"
+# Writable Pixi user home (CLI global layout); image stack under /opt/pixi may be read-only.
+mkdir -p "/work/users/$NB_USER/.pixi-home"
+chown "$NB_UID:users" "/work/users/$NB_USER/.pixi-home"
 
 # Update pixi-kernel-python3 display name
 KERNEL_JSON="${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3/kernel.json"
@@ -131,7 +134,7 @@ fi
 export NB_USER="${NB_USER}"
 export NB_UID="${NB_UID}"
 export NB_GID="${NB_GID}"
-export PIXI_HOME="/opt/pixi"
+export PIXI_HOME="/work/users/${NB_USER}/.pixi-home"
 export PIXI_CACHE_DIR="/work/users/${NB_USER}/.pixi-cache/"
 export PYROSCOPE_SERVER="http://pyroscope.cms.svc.cluster.local:4040"
 export PYROSCOPE_APP="purdue-af"
