@@ -141,6 +141,7 @@ gateway:
       c.ClusterConfig.cluster_max_cores = 201
       c.ClusterConfig.cluster_max_memory = '1200 G'
       c.ClusterConfig.cluster_max_workers = 200
+      c.ClusterConfig.adaptive_period = 15
       c.ClusterConfig.idle_timeout = 3600
       c.Backend.cluster_start_timeout = 180
       c.Backend.worker_start_timeout = 180
