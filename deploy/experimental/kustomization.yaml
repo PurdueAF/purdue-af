@@ -78,5 +78,3 @@ configMapGenerator:
   - name: af-node-monitor-config
     files:
       - ../../docker/af-node-monitor/node_healthcheck.py
-
-
