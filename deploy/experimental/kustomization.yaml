@@ -4,11 +4,11 @@ resources:
   # - ../../apps/dask-gateway/dask-gateway-k8s-interlink/helmrelease.yaml
   # - ../../apps/dask-gateway/dask-gateway-k8s-interlink/ingress.yaml
 
-  - ../../apps/interlink/helmrelease.yaml
-  - ../../apps/interlink/cache-pvc.yaml
-  - ../../apps/interlink/gitrepo.yaml
-  - ../../apps/interlink/helmrepo.yaml
-  - ../../apps/interlink/rbac.yaml
+  # - ../../apps/interlink/helmrelease.yaml
+  # - ../../apps/interlink/cache-pvc.yaml
+  # - ../../apps/interlink/gitrepo.yaml
+  # - ../../apps/interlink/helmrepo.yaml
+  # - ../../apps/interlink/rbac.yaml
 
   - ../../apps/monitoring/pyroscope/helmrelease.yaml
   - ../../apps/monitoring/loki/helmrelease.yaml
@@ -49,10 +49,10 @@ configMapGenerator:
     files:
       - values.yaml=../../apps/dask-gateway/dask-gateway-k8s-interlink/values.yaml
 
-  - name: interlink-config
-    files:
-      - values.yaml=../../apps/interlink/values.yaml
-      - template_traefik.yaml=../../apps/interlink/template_traefik.yaml
+  # - name: interlink-config
+  #   files:
+  #     - values.yaml=../../apps/interlink/values.yaml
+  #     - template_traefik.yaml=../../apps/interlink/template_traefik.yaml
 
   - name: pyroscope-config
     files:
@@ -90,17 +90,17 @@ configMapGenerator:
     files:
       - ../../docker/af-node-monitor/node_healthcheck.py
 
-replacements:
-  - source:
-      kind: ConfigMap
-      name: interlink-config
-      fieldPath: data.template_traefik\.yaml
-    targets:
-      - select:
-          kind: HelmRelease
-          name: interlink
-        fieldPaths:
-          - spec.values.virtualNode.network.customTemplate
-        options:
-          create: true
+# replacements:
+#   - source:
+#       kind: ConfigMap
+#       name: interlink-config
+#       fieldPath: data.template_traefik\.yaml
+#     targets:
+#       - select:
+#           kind: HelmRelease
+#           name: interlink
+#         fieldPaths:
+#           - spec.values.virtualNode.network.customTemplate
+#         options:
+#           create: true
 
