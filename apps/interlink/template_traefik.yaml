@@ -76,7 +76,8 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: ws-{{.Name}}.{{.WildcardDNS}}
+  # - host: ws-{{.Name}}.{{.WildcardDNS}}
+  - host: {{.Name}}-{{.Namespace}}.{{.WildcardDNS}}
     http:
       paths:
       - path: /
