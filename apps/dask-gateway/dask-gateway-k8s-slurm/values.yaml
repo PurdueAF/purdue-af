@@ -113,7 +113,8 @@ gateway:
                   "/depot/cms/purdue-af/dask_pyroscope_preload_slurm.py",
               ],
               "account": "cms",
-              "time": "1-00:00:00",
+              # "time": "1-00:00:00",
+              "time": "0-04:00:00",
               "scheduler_setup": setup_cmd,
               "worker_setup": setup_cmd,
               "staging_directory": "/depot/cms/users/{username}/.dask-gateway/"
