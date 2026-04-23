@@ -1,0 +1,65 @@
+name: CI Repo Quality
+
+on:
+  pull_request:
+    paths:
+      - 'tests/unit/**'
+      - 'tests/conftest.py'
+      - 'apps/monitoring/af-monitoring/metrics_server.py'
+      - 'apps/monitoring/af-monitoring/node_healthcheck.py'
+      - 'docker/af-pod-monitor/pod-metrics-exporter.py'
+      - 'docker/purdue-af/jupyter/docker_healthcheck.py'
+      - '.github/workflows/ci-repo-quality.yml'
+
+concurrency:
+  group: ci-repo-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  repo-quality:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      PYTEST_VERSION: '8.4.0'
+      COVERAGE_VERSION: '7.6.1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install quality tooling
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install "pytest==${PYTEST_VERSION}" "coverage==${COVERAGE_VERSION}"
+
+      - name: Tool versions
+        run: |
+          set -euo pipefail
+          pytest --version
+          python -m coverage --version
+
+      - name: Run pytest (advisory)
+        shell: bash
+        run: |
+          set +e
+          python -m coverage run -m pytest -q tests/unit
+          rc=$?
+          set -e
+          if [ "$rc" -eq 5 ]; then
+            echo 'pytest collected no tests; treating as informational.'
+            exit 0
+          fi
+          if [ "$rc" -ne 0 ]; then
+            exit "$rc"
+          fi
+          python -m coverage report \
+            --show-missing \
+            --fail-under=70 \
+            --include="apps/monitoring/af-monitoring/metrics_server.py,apps/monitoring/af-monitoring/node_healthcheck.py,docker/af-pod-monitor/pod-metrics-exporter.py,docker/purdue-af/jupyter/docker_healthcheck.py"

@@ -1,0 +1,31 @@
+name: CI Integration Scenarios
+
+on:
+  pull_request:
+    paths:
+      - tests/integration/**
+      - tests/fixtures/**
+      - .github/scripts/integration/**
+      - .github/scripts/container-smoke.sh
+      - apps/monitoring/af-monitoring/metrics_server.py
+      - apps/monitoring/af-monitoring/node_healthcheck.py
+      - .github/workflows/ci-integration-scenarios.yml
+
+permissions:
+  contents: read
+
+jobs:
+  integration-scenarios:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run integration scenarios (advisory)
+        run: bash .github/scripts/integration/run-integration-scenarios.sh

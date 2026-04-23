@@ -1,0 +1,126 @@
+# CI/CD Campaign Plan (Current State)
+
+## Mission
+Deliver one draft PR from `codex/ci` to `main` with a stable advisory-first CI baseline, then optimize test depth, integration realism, and security signal without broad refactors.
+
+## Current Status
+- PR branch: `codex/ci`
+- Delivery model: single PR `codex/ci -> main`
+- PR #21 is open against `main` (not draft).
+- Existing CI baseline is green on fast PR checks; container build jobs are the long pole.
+- Root-context Docker builds are cache-enabled and use a repo-level `.dockerignore` to reduce context size.
+- Lint workflows are check-only; formatter autofix workflow can commit formatting-only fixes to PR branches.
+
+## Success Criteria
+- CI remains stable on `pull_request` runs for all configured workflows.
+- Optimization phase adds meaningful unit and integration coverage for repo-owned code.
+- Security checks include nightly advisory plus PR-time advisory signal.
+- `README.md` keeps A-E category badges aligned with active workflows.
+- `.codex/CI_PLAN.md` remains the single source of truth.
+
+## In-Scope / Out-of-Scope Paths
+In scope:
+- `.github/**`
+- `apps/**`
+- `deploy/**`
+- `docker/**` (except exclusions)
+- `README.md`
+- `.codex/CI_PLAN.md`
+
+Out of scope:
+- `docker/dask-gateway-server/**`
+- `docs/**`
+- `docs/source/demos/**`
+- `docker/kaniko-build-jobs/**`
+- `slurm/**`
+- `.cursor/**`
+
+Approved exception:
+- `slurm/**` is used as a dependency-only trigger in container reliability path filters because maintained Dockerfiles copy `slurm/` artifacts.
+- CI auto-commit is enabled for formatter-only fixes in `ci-format-autofix.yml` to reduce lint iteration noise.
+
+## Active Workflow Surface
+- `.github/workflows/ci-workflow-integrity.yml`
+- `.github/workflows/lint-python.yml`
+- `.github/workflows/lint-shell.yml`
+- `.github/workflows/lint-json.yml`
+- `.github/workflows/lint-yaml.yml`
+- `.github/workflows/ci-format-autofix.yml`
+- `.github/workflows/ci-repo-quality.yml`
+- `.github/workflows/ci-integration-scenarios.yml`
+- `.github/workflows/lint-docker.yml`
+- `.github/workflows/ci-gitops-deployability.yml`
+- `.github/workflows/ci-security-advisory.yml`
+- `.github/workflows/nightly-security-advisory.yml`
+
+## Check Architecture
+### A) CI System Integrity (advisory)
+- Workflow: `ci-workflow-integrity.yml`
+- Checks: actionlint + workflow YAML parse.
+- Risk: broken workflow definitions and silent CI drift.
+
+### B) Repo Quality and Tests (advisory)
+- Workflows: `lint-python.yml`, `lint-shell.yml`, `lint-json.yml`, `lint-yaml.yml`, `ci-format-autofix.yml`, `ci-repo-quality.yml`, `ci-integration-scenarios.yml`
+- Checks: black/isort check-only, py_compile, pytest unit advisory with coverage threshold, shellcheck/shfmt/bash -n, JSON/YAML parse, auto-format commits for changed Python/shell/JSON/YAML files, integration scenario matrix tests via mocked container/monitoring flows.
+- Execution model: fast workflows are path-scoped with PR concurrency cancellation; formatter/lint tool versions are pinned for deterministic behavior.
+- Risk: script/runtime regressions.
+
+### C) Container Reliability (advisory)
+- Workflow: `lint-docker.yml`
+- Checks: hadolint, targeted Docker Buildx jobs with GitHub Actions layer cache, smoke checks via `.github/scripts/container-smoke.sh`.
+- Execution model: path-scoped change detection, 120-minute per-job timeout cap for Docker build jobs, root-context `.dockerignore` optimization, BuildKit plain progress logging, and advisory summaries in run output.
+- Risk: image build/runtime regressions.
+
+### D) GitOps Deployability (advisory)
+- Workflow: `ci-gitops-deployability.yml`
+- Checks: kustomize render + kubeconform schema validation.
+- Execution model: overlay-scoped detection, explicit job timeouts, and advisory plan/result summaries in run output.
+- Risk: Flux reconciliation failures from invalid manifests.
+
+### E) Security Posture (advisory)
+- Workflows: `nightly-security-advisory.yml`, `ci-security-advisory.yml`
+- Checks: nightly Trivy filesystem scan plus PR-time advisory Trivy vulnerability/config scans with run summaries and artifacts.
+- Execution model: path-scoped PR scans, explicit scan timeouts, and summary tables for scan scope/outcomes.
+- Risk: security drift in dependencies/configuration.
+
+## Optimization Workstreams (Current)
+### Worker 1: Coverage Optimizer
+File lane:
+- `tests/unit/**`
+- `tests/conftest.py`
+- `.github/workflows/lint-python.yml`
+- `.github/workflows/ci-repo-quality.yml`
+Goal:
+- Increase meaningful Python test coverage and publish coverage in CI (advisory threshold first).
+
+### Worker 2: Integration Scenarios
+File lane:
+- `tests/integration/**`
+- `tests/fixtures/**`
+- `.github/workflows/ci-integration-scenarios.yml` (new)
+- `.github/scripts/integration/**`
+Goal:
+- Add realistic automated integration scenarios with deterministic mocks and PR advisory execution.
+
+### Worker 3: Security and Runtime Optimizer
+File lane:
+- `.github/workflows/nightly-security-advisory.yml`
+- `.github/workflows/ci-security-advisory.yml` (new)
+- `.github/workflows/lint-docker.yml`
+- `.github/workflows/ci-gitops-deployability.yml`
+Goal:
+- Add PR-time advisory security checks and reduce CI runtime/noise safely.
+
+## Branch and Sync Rules
+- No side branches.
+- No force-push on shared campaign work.
+- Daily sync: merge `main` into `codex/ci` (no rebase).
+
+## Constraint Challenge Protocol
+If any hard constraint must be challenged, submit an `EXCEPTION REQUEST` with:
+1) challenged constraint,
+2) concrete risk if unchanged,
+3) minimal exception requested,
+4) rollback path.
+
+No exception is implemented without explicit user approval.
