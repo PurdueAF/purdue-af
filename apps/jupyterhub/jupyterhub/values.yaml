@@ -316,8 +316,8 @@ singleuser:
         persistentVolumeClaim:
           claimName: af-shared-storage
       - name: munge-key
-        secret:
-          secretName: munge-key
+        persistentVolumeClaim:
+          claimName: munge-key
     extraVolumeMounts:
       - name: cvmfs
         mountPath: /cvmfs
@@ -335,7 +335,7 @@ singleuser:
         mountPath: /work/
         mountPropagation: HostToContainer
       - name: munge-key
-        mountPath: /etc/secrets/munge
+        mountPath: /etc/munge
         readOnly: false
         mountPropagation: HostToContainer
   cloudMetadata:

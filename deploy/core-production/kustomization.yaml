@@ -23,7 +23,7 @@ resources:
   - ../../apps/jupyterhub/af-x509-secrets/rbac.yaml
   - ../../apps/jupyterhub/jupyterhub/helmrelease.yaml
   - ../../apps/jupyterhub/jupyterhub/secret-auth.yaml
-  - ../../apps/jupyterhub/jupyterhub/secret-munge-key.yaml
+  - ../../apps/jupyterhub/jupyterhub/pvc-munge-key.yaml
   - ../../apps/jupyterhub/jupyterhub/helmrepo.yaml
   - ../../apps/jupyterhub/database-backup/cronjob.yaml
   - ../../apps/jupyterhub/database-backup/rbac.yaml

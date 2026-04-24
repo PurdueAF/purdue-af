@@ -9,7 +9,6 @@ export PIXI_CACHE_DIR="/work/users/${NB_USER}/.pixi-cache/"
 
 # Setup munge authentication
 mkdir -p /etc/munge/
-cp /etc/secrets/munge/munge.key /etc/munge/
 chown munge:munge /etc/munge/munge.key
 chmod 400 /etc/munge/munge.key
 su -l munge -s /usr/sbin/munged
