@@ -57,8 +57,8 @@ RUN dnf -y --disablerepo='*' install --nogpgcheck --setopt=install_weak_deps=Fal
 COPY slurm/slurm-25.11.4-1.el8.x86_64.rpm /etc/
 COPY slurm/slurm-configs /etc/slurm
 RUN set -euo pipefail \
- && dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm \
- && rm -rf /etc/slurm-24.05.1-1.el8.x86_64.rpm \
+ && dnf localinstall -y /etc/slurm-25.11.4-1.el8.x86_64.rpm \
+ && rm -rf /etc/slurm-25.11.4-1.el8.x86_64.rpm \
  && groupadd -g 1033 slurm || true \
  && adduser -u 2000 -g 1033 slurm || true \
  && chown -R slurm:slurm /etc/slurm/ \
