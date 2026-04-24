@@ -168,5 +168,10 @@ sidecar:
   rules:
     enabled: false
 
+memcachedExporter:
+  image:
+    repository: geddes-registry.rcac.purdue.edu/docker-hub-cache/prom/memcached-exporter
+    tag: v0.15.3
+
 test:
   enabled: false

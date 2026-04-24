@@ -184,4 +184,9 @@ x509Secrets:
       operator: "Equal"
       value: "cms-af"
       effect: "NoSchedule"
+
+scheduledTasks:
+  image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/python
+  tag: "3.10"
+
 secrets: servicex-secrets
