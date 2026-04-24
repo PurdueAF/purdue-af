@@ -335,7 +335,7 @@ singleuser:
         mountPath: /work/
         mountPropagation: HostToContainer
       - name: munge-key
-        mountPath: /etc/munge
+        mountPath: /etc/secrets/munge
         readOnly: false
         mountPropagation: HostToContainer
   cloudMetadata:
