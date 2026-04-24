@@ -53,8 +53,8 @@ RUN dnf -y --disablerepo='*' install --nogpgcheck --setopt=install_weak_deps=Fal
         /tmp/vo-client-138-2.osg24.el8.noarch.rpm && \
      rm -f /tmp/*.rpm && dnf clean all && rm -rf /var/cache/dnf
 
-# Install Slurm, then munge 0.5.18 from source (ensure 0.5.18 wins over any RPM)
-COPY slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
+# Install Slurm
+COPY slurm/slurm-25.11.4-1.el8.x86_64.rpm /etc/
 COPY slurm/slurm-configs /etc/slurm
 RUN set -euo pipefail \
  && dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm \
@@ -64,18 +64,6 @@ RUN set -euo pipefail \
  && chown -R slurm:slurm /etc/slurm/ \
  && mkdir -p /var/log/slurm \
  && chown -R slurm:slurm /var/log/slurm \
- && curl -fsSL --retry 3 --retry-delay 2 \
-    -o /tmp/munge.tar.xz \
-    "https://github.com/dun/munge/releases/download/munge-0.5.18/munge-0.5.18.tar.xz" \
- && tar -xJf /tmp/munge.tar.xz -C /tmp \
- && cd /tmp/munge-0.5.18 \
- && ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var \
- && make -j"$(nproc)" && make install \
- && groupadd -r -g 981 munge || true \
- && useradd -r -u 981 -g munge -d /var/lib/munge -s /sbin/nologin munge || true \
- && mkdir -p /etc/munge /var/lib/munge \
- && chown -R munge:munge /etc/munge /var/lib/munge \
- && cd / && rm -rf /tmp/munge-0.5.18 /tmp/munge.tar.xz \
  && dnf clean all && rm -rf /var/cache/dnf
 
 # Configure environment
