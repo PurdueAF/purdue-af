@@ -38,7 +38,10 @@ class _SuppressXSRFSkipNoise(logging.Filter):
 
 class _SuppressPixiKernelMetadataNoise(logging.Filter):
     def filter(self, record):
-        return "Failed to get Pixi environment name from notebook metadata" not in record.getMessage()
+        return (
+            "Failed to get Pixi environment name from notebook metadata"
+            not in record.getMessage()
+        )
 
 
 # JupyterHub logs skipped XSRF checks on ``Sec-Fetch-Mode: unspecified`` via
