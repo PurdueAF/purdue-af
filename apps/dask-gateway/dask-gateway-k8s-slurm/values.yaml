@@ -128,6 +128,25 @@ gateway:
           Mapping("env", {"X509_USER_PROXY": "", "WORKDIR": ""}, label="Environment variables"),
           handler=options_handler,
       )
+
+      # Per-user cap (not in upstream Dask Gateway): at most one active cluster per user.
+      from dask_gateway_server.backends.jobqueue.slurm import SlurmBackend
+      from dask_gateway_server.backends.base import PublicException
+
+      _max_active_clusters_per_user = 1
+      _orig_slurm_start_cluster = SlurmBackend.start_cluster
+
+      async def _slurm_start_cluster_limited(self, user, cluster_options):
+          if _max_active_clusters_per_user:
+              busy = await self.list_clusters(username=user.name)
+              if len(busy) >= _max_active_clusters_per_user:
+                  raise PublicException(
+                      f"You may only have {_max_active_clusters_per_user} active Dask Gateway cluster(s) at a time. "
+                      "Stop your existing cluster or wait for it to finish shutting down before creating another."
+                  )
+          return await _orig_slurm_start_cluster(self, user, cluster_options)
+
+      SlurmBackend.start_cluster = _slurm_start_cluster_limited
 traefik:
   replicas: 1
   image:
