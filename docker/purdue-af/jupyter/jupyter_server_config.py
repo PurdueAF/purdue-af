@@ -28,17 +28,8 @@ class _SuppressXSRFSkipNoise(logging.Filter):
         return "Skipping XSRF check for insecure request" not in record.getMessage()
 
 
-class _SuppressPixiKernelMetadataNoise(logging.Filter):
-    def filter(self, record):
-        return (
-            "Failed to get Pixi environment name from notebook metadata"
-            not in record.getMessage()
-        )
-
-
 # XSRF skip lines go to tornado.application, not ServerApp
 logging.getLogger("tornado.application").addFilter(_SuppressXSRFSkipNoise())
-logging.getLogger("ServerApp").addFilter(_SuppressPixiKernelMetadataNoise())
 
 # to output both image/svg+xml and application/pdf plot formats in the notebook file
 c.InlineBackend.figure_formats = {"png", "jpeg", "svg", "pdf"}
