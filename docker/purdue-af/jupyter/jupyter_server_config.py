@@ -11,23 +11,18 @@ from jupyter_core.paths import jupyter_data_dir
 c = get_config()  # noqa: F821
 c.ServerApp.ip = "0.0.0.0"
 c.ServerApp.open_browser = False
-# Tornado expects seconds (see tornado.websocket); avoid huge values like 30000.
-c.ServerApp.websocket_ping_interval = 30
-c.ServerApp.websocket_ping_timeout = 30
-# Reduce log noise (e.g. "Setting new xsrf cookie" on every request)
+# Quieter default logging
 c.ServerApp.log_level = "WARN"
 c.ServerApp.tornado_settings = {
-    # Ensures ping values win over anything merged earlier into app settings.
-    "websocket_ping_interval": 30,
-    "websocket_ping_timeout": 30,
+    # WebSocketMixin uses ms; default timeout (90s) > interval → Tornado warning
+    "ws_ping_interval": 30000,
+    "ws_ping_timeout": 30000,
     "headers": {
         "Permissions-Policy": "clipboard-read=(self), clipboard-write=(self)",
     },
 }
 
-# Hidden paths (e.g. ``.local/...``) are rejected early; without this, the handler
-# could finish the 404 response and fall through — triggering a second finish and
-# ``Cannot write() after finish()`` (see jupyter-server ``ContentsHandler.get``).
+# Avoid double-finish on hidden paths (jupyter-server ContentsHandler.get)
 c.FileContentsManager.allow_hidden = True
 
 
@@ -44,10 +39,8 @@ class _SuppressPixiKernelMetadataNoise(logging.Filter):
         )
 
 
-# JupyterHub logs skipped XSRF checks on ``Sec-Fetch-Mode: unspecified`` via
-# ``tornado.log.app_log`` (logger ``tornado.application``), not ``ServerApp``.
+# XSRF skip lines go to tornado.application, not ServerApp
 logging.getLogger("tornado.application").addFilter(_SuppressXSRFSkipNoise())
-# Pixi-kernel provisioner errors are logged on the ``ServerApp`` logger.
 logging.getLogger("ServerApp").addFilter(_SuppressPixiKernelMetadataNoise())
 
 # to output both image/svg+xml and application/pdf plot formats in the notebook file
