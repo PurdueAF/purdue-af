@@ -4,22 +4,31 @@
 import os
 import stat
 import subprocess
+import logging
 
 from jupyter_core.paths import jupyter_data_dir
 
 c = get_config()  # noqa: F821
 c.ServerApp.ip = "0.0.0.0"
 c.ServerApp.open_browser = False
+c.ServerApp.websocket_ping_interval = 30000
+c.ServerApp.websocket_ping_timeout = 30000
 # Reduce log noise (e.g. "Setting new xsrf cookie" on every request)
 c.ServerApp.log_level = "WARN"
 c.ServerApp.tornado_settings = {
-    # Keep ping settings consistent to avoid runtime clamping warnings.
-    "websocket_ping_interval": 30000,
-    "websocket_ping_timeout": 30000,
     "headers": {
         "Permissions-Policy": "clipboard-read=(self), clipboard-write=(self)",
     },
 }
+
+
+class _SuppressXSRFSkipNoise(logging.Filter):
+    def filter(self, record):
+        return "Skipping XSRF check for insecure request" not in record.getMessage()
+
+
+# Keep XSRF enabled, but suppress very noisy websocket/info warnings.
+logging.getLogger("ServerApp").addFilter(_SuppressXSRFSkipNoise())
 
 # to output both image/svg+xml and application/pdf plot formats in the notebook file
 c.InlineBackend.figure_formats = {"png", "jpeg", "svg", "pdf"}
