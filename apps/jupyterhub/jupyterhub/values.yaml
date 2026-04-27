@@ -1,7 +1,7 @@
 singleuser:
   podNameTemplate: "purdue-af-{userid}"
   uid: 0
-  cmd:
+  cmd: "start-singleuser.sh"
   image:
     name: "geddes-registry.rcac.purdue.edu/cms/purdue-af"
     tag: "0.12.2"

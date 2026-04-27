@@ -10,10 +10,12 @@ from jupyter_core.paths import jupyter_data_dir
 c = get_config()  # noqa: F821
 c.ServerApp.ip = "0.0.0.0"
 c.ServerApp.open_browser = False
-c.ServerApp.disable_check_xsrf = True
 # Reduce log noise (e.g. "Setting new xsrf cookie" on every request)
 c.ServerApp.log_level = "WARN"
 c.ServerApp.tornado_settings = {
+    # Keep ping settings consistent to avoid runtime clamping warnings.
+    "websocket_ping_interval": 30000,
+    "websocket_ping_timeout": 30000,
     "headers": {
         "Permissions-Policy": "clipboard-read=(self), clipboard-write=(self)",
     }
