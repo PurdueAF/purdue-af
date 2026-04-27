@@ -14,9 +14,8 @@ c.ServerApp.open_browser = False
 # Quieter default logging
 c.ServerApp.log_level = "WARN"
 c.ServerApp.tornado_settings = {
-    # WebSocketMixin uses ms; default timeout (90s) > interval → Tornado warning
+    # ms; leave ws_ping_timeout unset (default 90s) so interval≠timeout
     "ws_ping_interval": 30000,
-    "ws_ping_timeout": 30000,
     "headers": {
         "Permissions-Policy": "clipboard-read=(self), clipboard-write=(self)",
     },
@@ -39,9 +38,19 @@ class _SuppressPixiKernelMetadataNoise(logging.Filter):
         )
 
 
+class _SuppressTornadoWebsocketPingClampNoise(logging.Filter):
+    def filter(self, record):
+        msg = record.getMessage()
+        return "cannot be longer than the websocket_ping_interval" not in msg
+
+
 # XSRF skip lines go to tornado.application, not ServerApp
 logging.getLogger("tornado.application").addFilter(_SuppressXSRFSkipNoise())
 logging.getLogger("ServerApp").addFilter(_SuppressPixiKernelMetadataNoise())
+logging.getLogger("ServerApp").addFilter(_SuppressTornadoWebsocketPingClampNoise())
+logging.getLogger("TerminalsExtensionApp").addFilter(
+    _SuppressTornadoWebsocketPingClampNoise()
+)
 
 # to output both image/svg+xml and application/pdf plot formats in the notebook file
 c.InlineBackend.figure_formats = {"png", "jpeg", "svg", "pdf"}
