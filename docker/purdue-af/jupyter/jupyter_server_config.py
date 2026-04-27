@@ -18,7 +18,7 @@ c.ServerApp.tornado_settings = {
     "websocket_ping_timeout": 30000,
     "headers": {
         "Permissions-Policy": "clipboard-read=(self), clipboard-write=(self)",
-    }
+    },
 }
 
 # to output both image/svg+xml and application/pdf plot formats in the notebook file
