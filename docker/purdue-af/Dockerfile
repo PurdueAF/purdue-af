@@ -122,10 +122,6 @@ RUN chmod +x /usr/local/bin/pixi && \
     cp "${BASE_ENV_DIR}/lib/python3.10/site-packages/jupyter_vscode_proxy/icons/vscode.svg" \
        "${BASE_ENV_DIR}/lib/python3.10/site-packages/jupyter_vscode_proxy/icons/code-server.svg"
 
-# WebSocketMixin must not shadow Tornado 6.5+ WebSocketHandler.ping_* (seconds vs ms).
-COPY docker/purdue-af/jupyter/patches/jupyter_server_base_websocket.py \
-    "${BASE_ENV_DIR}/lib/python3.10/site-packages/jupyter_server/base/websocket.py"
-
 # ------------------------------------------------------------
 # Stage: runtime (lightweight; COPY only, no builds or installation routines)
 # ------------------------------------------------------------
