@@ -22,7 +22,7 @@ nodejs        = "22.*"
 
 # Kernel discovery / misc
 nb_conda_kernels      = "==2.5.1"
-metakernel            = "==1.0.0"
+metakernel            = "==0.32.0"
 importlib-metadata    = "<8.8"   # opentelemetry-api requires <8.8.0
 
 # Other tools
