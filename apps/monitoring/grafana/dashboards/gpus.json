@@ -99,7 +99,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P7FECBCB34F03A058"
+        "uid": "prometheus-rancher"
       },
       "fieldConfig": {
         "defaults": {
@@ -147,7 +147,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P7FECBCB34F03A058"
+            "uid": "prometheus-rancher"
           },
           "editorMode": "code",
           "expr": "count(DCGM_FI_DEV_GPU_UTIL)",
@@ -379,7 +379,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P7FECBCB34F03A058"
+        "uid": "prometheus-rancher"
       },
       "fieldConfig": {
         "defaults": {
@@ -428,7 +428,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P7FECBCB34F03A058"
+            "uid": "prometheus-rancher"
           },
           "editorMode": "code",
           "expr": "count(\n  max_over_time(\n    (DCGM_FI_DEV_GPU_UTIL > 0)[$__range:]\n  ) > 0\n)\nor on() vector(0)",
@@ -571,7 +571,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P7FECBCB34F03A058"
+        "uid": "prometheus-rancher"
       },
       "fieldConfig": {
         "defaults": {
@@ -653,7 +653,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P7FECBCB34F03A058"
+            "uid": "prometheus-rancher"
           },
           "editorMode": "code",
           "expr": "label_replace(\n  DCGM_FI_DEV_GPU_UTIL,\n  \"host\",\n  \"$1\",\n  \"Hostname\",\n  \"^(.*)\\\\.rcac\\\\.purdue\\\\.edu$\"\n)",
@@ -862,7 +862,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P7FECBCB34F03A058"
+        "uid": "prometheus-rancher"
       },
       "fieldConfig": {
         "defaults": {
@@ -945,7 +945,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P7FECBCB34F03A058"
+            "uid": "prometheus-rancher"
           },
           "editorMode": "code",
           "expr": "label_replace(\n  DCGM_FI_DEV_FB_USED,\n  \"host\",\n  \"$1\",\n  \"Hostname\",\n  \"^(.*)\\\\.rcac\\\\.purdue\\\\.edu$\"\n)",
