@@ -14,8 +14,6 @@ c.ServerApp.open_browser = False
 # Quieter default logging
 c.ServerApp.log_level = "WARN"
 c.ServerApp.tornado_settings = {
-    # ms; leave ws_ping_timeout unset (default 90s) so interval≠timeout
-    "ws_ping_interval": 30000,
     "headers": {
         "Permissions-Policy": "clipboard-read=(self), clipboard-write=(self)",
     },
@@ -38,19 +36,9 @@ class _SuppressPixiKernelMetadataNoise(logging.Filter):
         )
 
 
-class _SuppressTornadoWebsocketPingClampNoise(logging.Filter):
-    def filter(self, record):
-        msg = record.getMessage()
-        return "cannot be longer than the websocket_ping_interval" not in msg
-
-
 # XSRF skip lines go to tornado.application, not ServerApp
 logging.getLogger("tornado.application").addFilter(_SuppressXSRFSkipNoise())
 logging.getLogger("ServerApp").addFilter(_SuppressPixiKernelMetadataNoise())
-logging.getLogger("ServerApp").addFilter(_SuppressTornadoWebsocketPingClampNoise())
-logging.getLogger("TerminalsExtensionApp").addFilter(
-    _SuppressTornadoWebsocketPingClampNoise()
-)
 
 # to output both image/svg+xml and application/pdf plot formats in the notebook file
 c.InlineBackend.figure_formats = {"png", "jpeg", "svg", "pdf"}
@@ -113,3 +101,36 @@ if "NB_UMASK" in os.environ:
 # c.AiExtension.allowed_providers = ["genaistudio"]
 
 c.KernelSpecManager.ensure_native_kernel = False
+
+
+def _patch_websocket_protocol_ping_units():
+    """WebSocketMixin uses ms; Tornado protocol expects seconds (see tornado.websocket)."""
+    try:
+        from tornado.websocket import WebSocketHandler
+    except ImportError:
+        return
+    _orig = WebSocketHandler.get_websocket_protocol
+
+    def _wrapped(self):
+        proto = _orig(self)
+        if proto is None:
+            return None
+        p = getattr(proto, "params", None)
+        if p is None:
+            return proto
+        if p.ping_interval is not None and p.ping_interval > 500:
+            p.ping_interval /= 1000.0
+        if p.ping_timeout is not None and p.ping_timeout > 500:
+            p.ping_timeout /= 1000.0
+        if (
+            p.ping_interval is not None
+            and p.ping_timeout is not None
+            and p.ping_timeout > p.ping_interval
+        ):
+            p.ping_timeout = p.ping_interval
+        return proto
+
+    WebSocketHandler.get_websocket_protocol = _wrapped
+
+
+_patch_websocket_protocol_ping_units()

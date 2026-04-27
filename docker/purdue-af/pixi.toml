@@ -19,6 +19,7 @@ jupyter_server = "==2.16.0"
 notebook      = "==7.5.5"
 jupyterhub    = "==5.4.4"
 jupyterlab    = "==4.5.6"
+ipyparallel   = "==9.1.0"
 nodejs        = "22.*"
 
 # Kernel discovery / misc

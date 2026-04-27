@@ -86,6 +86,7 @@ if [ -d "${PIXI_GLOBAL}" ] && [ -f "${PIXI_GLOBAL}/pixi.toml" ] && [ -f "${PIXI_
 
 	if [ "${_needs_install}" = "true" ]; then
 		jupyter kernelspec remove -y python3 2>/dev/null || true
+		export JUPYTER_PATH="${BASE_ENV_DIR}/share/jupyter${JUPYTER_PATH:+:${JUPYTER_PATH}}"
 		"${PIXI_GLOBAL_PYTHON}" -m ipykernel install --name python3 --display-name "Python (pixi global)" --prefix "${BASE_ENV_DIR}"
 		if [ -f "${BASE_PY3_KERNEL_JSON}" ] && command -v jq >/dev/null 2>&1; then
 			jq \
