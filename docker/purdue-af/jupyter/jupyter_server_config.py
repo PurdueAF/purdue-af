@@ -1,10 +1,10 @@
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
 # mypy: ignore-errors
+import logging
 import os
 import stat
 import subprocess
-import logging
 
 from jupyter_core.paths import jupyter_data_dir
 
