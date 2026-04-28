@@ -23,7 +23,7 @@ spec:
               effect: "NoSchedule"
           initContainers:
             - name: take-data-dir-ownership
-              image: alpine:3.6
+              image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/alpine:3.6
               command: ["/bin/sh", "-c"]
               args:
                 [

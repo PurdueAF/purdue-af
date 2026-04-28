@@ -179,6 +179,7 @@ didFinder:
     enabled: false
 gridAccount: dkondrat
 x509Secrets:
+  initImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/alpine:3.6
   pullPolicy: Always
   vomsOrg: cms
   nodeSelector:
