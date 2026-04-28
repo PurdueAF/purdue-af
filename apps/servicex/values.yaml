@@ -102,6 +102,10 @@ transformer:
       effect: "NoSchedule"
 
 rabbitmq:
+  image:
+    registry: geddes-registry.rcac.purdue.edu
+    repository: docker-hub-cache/bitnamilegacy/rabbitmq
+    tag: 3.11.18-debian-11-r0
   resources:
     requests:
       cpu: 1
