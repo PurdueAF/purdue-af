@@ -21,6 +21,10 @@ noCerts: false
 postgres:
   enabled: true
 postgresql:
+  image:
+    registry: geddes-registry.rcac.purdue.edu
+    repository: docker-hub-cache/bitnamilegacy/postgresql
+    tag: 14.5.0-debian-11-r35
   # global:
   #   postgresql:
   #     auth:
