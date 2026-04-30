@@ -1,0 +1,143 @@
+# Chart: stevehipwell/thanos 1.23.0 (Thanos v0.41.0)
+# Long-term metrics: Prometheus remote_write -> receive router; Query + Store + Compact + Receive
+# share a filesystem object store on RWX PVC (thanos-data-pvc).
+
+image:
+  repository: geddes-registry.rcac.purdue.edu/docker-hub-cache/thanos/thanos
+  tag: v0.41.0
+
+objstoreConfig:
+  create: true
+  value: |-
+    type: FILESYSTEM
+    config:
+      directory: /var/thanos/bucket
+
+query:
+  enabled: true
+  replicas: 1
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  ingress:
+    enabled: ${enable_ingresses}
+    ingressClassName: public
+    annotations: {}
+    path: /
+    hosts:
+      - thanos-cms.geddes.rcac.purdue.edu
+    tls:
+      - hosts:
+          - thanos-cms.geddes.rcac.purdue.edu
+
+storeGateway:
+  replicas: 1
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  extraVolumes:
+    - name: thanos-objstore
+      persistentVolumeClaim:
+        claimName: thanos-data-pvc
+  extraVolumeMounts:
+    - name: thanos-objstore
+      mountPath: /var/thanos/bucket
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+
+compact:
+  enabled: true
+  replicas: 1
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  extraVolumes:
+    - name: thanos-objstore
+      persistentVolumeClaim:
+        claimName: thanos-data-pvc
+  extraVolumeMounts:
+    - name: thanos-objstore
+      mountPath: /var/thanos/bucket
+  persistence:
+    enabled: true
+    storageClass: ${multinode_storage_class}
+    size: 20Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+
+receive:
+  enabled: true
+  replicationFactor: 1
+  retention: 336h
+  ingestor:
+    replicas: 1
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+    extraVolumes:
+      - name: thanos-objstore
+        persistentVolumeClaim:
+          claimName: thanos-data-pvc
+    extraVolumeMounts:
+      - name: thanos-objstore
+        mountPath: /var/thanos/bucket
+    persistence:
+      enabled: true
+      storageClass: ${multinode_storage_class}
+      size: 20Gi
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+  router:
+    replicas: 1
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi

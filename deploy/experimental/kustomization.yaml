@@ -8,8 +8,9 @@ resources:
   - ../../apps/monitoring/loki/helmrelease.yaml
   - ../../apps/monitoring/alloy/helmrelease.yaml
   - ../../apps/monitoring/tempo/helmrelease.yaml
-  - ../../apps/monitoring/mimir/helmrelease.yaml
-  - ../../apps/monitoring/mimir/blocks-pvc.yaml
+  - ../../apps/monitoring/helmrepo-stevehipwell.yaml
+  - ../../apps/monitoring/thanos/helmrelease.yaml
+  - ../../apps/monitoring/thanos/data-pvc.yaml
 
   - ../../apps/servicex/helmrelease.yaml
   # - ../../apps/servicex/gitrepo.yaml
@@ -59,9 +60,9 @@ configMapGenerator:
     files:
       - values.yaml=../../apps/monitoring/tempo/values.yaml
 
-  - name: mimir-config
+  - name: thanos-config
     files:
-      - values.yaml=../../apps/monitoring/mimir/values.yaml
+      - values.yaml=../../apps/monitoring/thanos/values.yaml
 
   - name: servicex-config
     files:

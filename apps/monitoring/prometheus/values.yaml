@@ -92,7 +92,8 @@ server:
 serverFiles:
   prometheus.yml:
     remote_write:
-      - url: "http://mimir-gateway.cms.svc.cluster.local/api/v1/push"
+      - url: "http://thanos-receive-router.cms.svc.cluster.local:19291/api/v1/receive"
+        remote_timeout: 60s
         queue_config:
           max_samples_per_send: 10000
           max_shards: 10
