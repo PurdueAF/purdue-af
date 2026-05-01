@@ -186,6 +186,5 @@ following command in a Terminal to finish GitHub authentication:
 ----------------------------------------
 
 * :doc:`Subsrcibe to the mailing list (Purdue users only) <doc-support>`
-* Join the Purdue AF support channel on CERN Mattermost:  
-  `https://mattermost.web.cern.ch/cms-exp/channels/purdue-analysis-facility <https://mattermost.web.cern.ch/cms-exp/channels/purdue-analysis-facility>`_  
+* Join the `Purdue AF support channel on CERN Mattermost <https://mattermost.web.cern.ch/cms-exp/channels/purdue-analysis-facility>`_  
   (CERN login required)
