@@ -146,11 +146,10 @@ export X509_CERT_DIR="/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates"
 echo "
 ╔═════════════════════════════════════════════════════════════════════════════════════════╗
 ║                                                                                         ║
-║     Purdue AF is migrating from Conda/Mamba to Pixi, as it is much faster and           ║
-║     addresses multiple issues we have had with Conda.                                   ║
+║             Join Purdue AF support channel on CERN Mattermost:                          ║
+║       https://mattermost.web.cern.ch/cms-exp/channels/purdue-analysis-facility          ║
 ║                                                                                         ║
-║     See instructions for migrating from Conda to Pixi:                                  ║
-║         https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html ║
+╠═════════════════════════════════════════════════════════════════════════════════════════╣
 ║                                                                                         ║
 ║     To activate a Pixi environment (the project must NOT be in /home/):                 ║
 ║         cd /path/to/project/containing/pixi.toml                                        ║
