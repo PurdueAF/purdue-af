@@ -182,12 +182,11 @@ following command in a Terminal to finish GitHub authentication:
 
       voms-proxy-init --rfc --voms cms -valid 192:00
 
-7. Subscribe to Purdue AF mailing list
+7. Join user support channels
 ----------------------------------------
 
-:doc:`Instructions to subsrcibe to the mailing list <doc-support>`.
+:doc:`Subsrcibe to the mailing list (Purdue users only) <doc-support>`.
 
-.. warning:: 
-
-   Currently only possible for users with Purdue email accounts.
-
+Join the Purdue AF support channel on CERN Mattermost:
+`https://mattermost.web.cern.ch/cms-exp/channels/purdue-analysis-facility <https://mattermost.web.cern.ch/cms-exp/channels/purdue-analysis-facility>`_
+(CERN login required)
