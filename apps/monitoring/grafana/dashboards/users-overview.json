@@ -1043,7 +1043,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "af_home_dir_util{namespace=~\"$namespace\",job=\"af-pod-monitor\",username!=\"\"}",
+          "expr": "af_home_dir_util{namespace=~\"cms\",job=\"af-pod-monitor\",username!=\"\"}",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1055,7 +1055,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "af_work_dir_util{namespace=~\"$namespace\",job=\"af-pod-monitor\",username!=\"\"}",
+          "expr": "af_work_dir_util{namespace=~\"cms\",job=\"af-pod-monitor\",username!=\"\"}",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1067,7 +1067,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "time() - af_home_dir_last_accessed{namespace=~\"$namespace\", job=\"af-pod-monitor\",username!=\"\"}",
+          "expr": "time() - af_home_dir_last_accessed{namespace=~\"cms\", job=\"af-pod-monitor\",username!=\"\"}",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1079,7 +1079,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_replace(\n  time() - kube_pod_created{namespace=~\"$namespace\",pod=~\"purdue-af-.*\",pod!~\"purdue-af-(agent|broker).*\"},\n  \"userId\", \"$1\", \"pod\", \"purdue-af-(.*)\"\n)\n",
+          "expr": "label_replace(\n  time() - kube_pod_created{namespace=~\"cms\",pod=~\"purdue-af-.*\",pod!~\"purdue-af-(agent|broker).*\"},\n  \"userId\", \"$1\", \"pod\", \"purdue-af-(.*)\"\n)\n",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1091,7 +1091,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "kube_pod_container_resource_requests{namespace=~\"$namespace\",pod=~\"purdue-af-.*\",resource=\"cpu\",container=\"notebook\"}",
+          "expr": "kube_pod_container_resource_requests{namespace=~\"cms\",pod=~\"purdue-af-.*\",resource=\"cpu\",container=\"notebook\"}",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1103,7 +1103,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "kube_pod_container_resource_requests{namespace=~\"$namespace\",pod=~\"purdue-af-.*\",resource=\"nvidia_com_mig_1g_5gb\",container=\"notebook\"}",
+          "expr": "kube_pod_container_resource_requests{namespace=~\"cms\",pod=~\"purdue-af-.*\",resource=\"nvidia_com_mig_1g_5gb\",container=\"notebook\"}",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1115,7 +1115,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "kube_pod_container_resource_requests{namespace=~\"$namespace\",pod=~\"purdue-af-.*\",resource=\"memory\",container=\"notebook\"}",
+          "expr": "kube_pod_container_resource_requests{namespace=~\"cms\",pod=~\"purdue-af-.*\",resource=\"memory\",container=\"notebook\"}",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1127,7 +1127,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=~\"$namespace\",pod=~\"purdue-af-.*\", container=\"notebook\"}[5m])\n) by (pod)\n    /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=~\"$namespace\",pod=~\"purdue-af-.*\", resource=\"cpu\", container=\"notebook\"}\n)\n",
+          "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=~\"cms\",pod=~\"purdue-af-.*\", container=\"notebook\"}[5m])\n) by (pod)\n    /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=~\"cms\",pod=~\"purdue-af-.*\", resource=\"cpu\", container=\"notebook\"}\n)\n",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1139,7 +1139,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=~\"$namespace\", pod=~\"purdue-af-.*\", container=\"notebook\"}\n) /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=~\"$namespace\", pod=~\"purdue-af-.*\", resource=\"memory\", container=\"notebook\"}\n)\n",
+          "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=~\"cms\", pod=~\"purdue-af-.*\", container=\"notebook\"}\n) /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=~\"cms\", pod=~\"purdue-af-.*\", resource=\"memory\", container=\"notebook\"}\n)\n",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1151,7 +1151,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{\n  namespace=~\"$namespace\",\n  pod=~\"purdue-af-.*\",\n  kubernetes_node=~\"geddes-g00.*\"\n})\n",
+          "expr": "sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{\n  namespace=~\"cms\",\n  pod=~\"purdue-af-.*\",\n  kubernetes_node=~\"geddes-g00.*\"\n})\n",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1163,7 +1163,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum by (pod) (\n  ( DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00.*\",namespace=~\"$namespace\",pod=~\"purdue-af-.*\"}\n    / ( \n      DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00.*\",namespace=~\"$namespace\",pod=~\"purdue-af-.*\"} +\n      DCGM_FI_DEV_FB_FREE{kubernetes_node=~\"geddes-g00.*\",namespace=~\"$namespace\",pod=~\"purdue-af-.*\"}\n    )\n  )\n)\n",
+          "expr": "sum by (pod) (\n  ( DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00.*\",namespace=~\"cms\",pod=~\"purdue-af-.*\"}\n    / ( \n      DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00.*\",namespace=~\"cms\",pod=~\"purdue-af-.*\"} +\n      DCGM_FI_DEV_FB_FREE{kubernetes_node=~\"geddes-g00.*\",namespace=~\"cms\",pod=~\"purdue-af-.*\"}\n    )\n  )\n)\n",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1175,7 +1175,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (pod) (dask_scheduler_workers{job=\"af-pod-monitor\",namespace=~\"$namespace\",pod=~\"purdue-af-.*\",})\n",
+          "expr": "sum by (pod) (dask_scheduler_workers{job=\"af-pod-monitor\",namespace=~\"cms\",pod=~\"purdue-af-.*\",})\n",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1244,33 +1244,7 @@
   "refresh": "10s",
   "schemaVersion": 39,
   "tags": [],
-  "templating": {
-    "list": [
-      {
-        "current": {
-          "selected": true,
-          "text": "cms",
-          "value": "cms"
-        },
-        "datasource": {
-          "type": "prometheus",
-          "uid": "prometheus"
-        },
-        "definition": "",
-        "hide": 0,
-        "includeAll": false,
-        "multi": false,
-        "name": "namespace",
-        "options": [],
-        "query": "label_values(kube_pod_labels{namespace=~\"cms(-dev)?\",pod=~\"purdue-af-.*\"}, namespace)",
-        "refresh": 1,
-        "regex": "",
-        "skipUrlSync": false,
-        "sort": 3,
-        "type": "query"
-      }
-    ]
-  },
+  "templating": {},
   "time": {
     "from": "now-6h",
     "to": "now"
