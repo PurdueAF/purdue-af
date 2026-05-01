@@ -1,3 +1,8 @@
+.. admonition:: 📧 Join the Purdue AF Mattermost channel (CERN Mattermost)
+  
+   `https://mattermost.web.cern.ch/cms-exp/channels/purdue-analysis-facility <https://mattermost.web.cern.ch/cms-exp/channels/purdue-analysis-facility>`_
+    (CERN login required)
+
 Purdue Analysis Facility
 ======================================
 
