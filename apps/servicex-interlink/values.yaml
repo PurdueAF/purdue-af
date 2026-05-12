@@ -102,7 +102,7 @@ transformer:
   tolerations:
     - key: virtual-node.interlink/no-schedule
       operator: Exists
-  annotations:
+  podAnnotations:
     slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs --no-home --compat"
     slurm-job.vk.io/flags: "--uid=616617 -A cms  --time=0-01:00:00"
     interlink.virtual-kubelet.io/wstunnel-timeout: "5m"
