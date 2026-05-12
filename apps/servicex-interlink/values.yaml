@@ -89,6 +89,7 @@ codeGen:
     enabled: false
 
 transformer:
+  outputDir: /tmp/servicex
   cpuRequest: 1
   memoryRequest: 4Gi
   cpuLimit: 2
@@ -103,7 +104,7 @@ transformer:
     - key: virtual-node.interlink/no-schedule
       operator: Exists
   podAnnotations:
-    slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs --no-home --compat"
+    slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs --bind /tmp:/tmp --no-home --compat"
     slurm-job.vk.io/flags: "--uid=616617 -A cms  --time=0-01:00:00"
     interlink.virtual-kubelet.io/wstunnel-timeout: "5m"
     # interlink.eu/wstunnel-extra-ports: "8000:http:TCP,8001:grpc:TCP,8002:metrics:TCP"

@@ -73,6 +73,10 @@ configMapGenerator:
     files:
       - values.yaml=../../apps/servicex-interlink/values.yaml
 
+  - name: servicex-interlink-transformer-manager-patch
+    files:
+      - patch-transformer-manager.py=../../apps/servicex-interlink/patch-transformer-manager.py
+
   - name: supersonic-config
     files:
       - values.yaml=../../apps/sonic/supersonic/values.yaml
