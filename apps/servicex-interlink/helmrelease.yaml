@@ -54,9 +54,9 @@ spec:
                   imagePullPolicy: IfNotPresent
                   command:
                     - sh
-                    - -c
+                    - -ec
                     - |
-                      cp /home/servicex/servicex_app/servicex_app/transformer_manager.py /patch/transformer_manager.py
+                      cp /home/servicex/servicex_app/transformer_manager.py /patch/transformer_manager.py
                       python3 /patch-script/patch-transformer-manager.py
                   volumeMounts:
                     - name: patched-transformer-manager
@@ -68,7 +68,7 @@ spec:
                 path: /spec/template/spec/containers/0/volumeMounts/-
                 value:
                   name: patched-transformer-manager
-                  mountPath: /home/servicex/servicex_app/servicex_app/transformer_manager.py
+                  mountPath: /home/servicex/servicex_app/transformer_manager.py
                   subPath: transformer_manager.py
           - target:
               kind: Deployment
