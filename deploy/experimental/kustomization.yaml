@@ -16,6 +16,8 @@ resources:
   # - ../../apps/servicex/gitrepo.yaml
   - ../../apps/servicex/helmrepo.yaml
   - ../../apps/servicex/secrets-objectStore.yaml
+  - ../../apps/servicex-interlink/helmrelease.yaml
+  - ../../apps/servicex-interlink/values.yaml
 
   - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic/helmrepo.yaml
