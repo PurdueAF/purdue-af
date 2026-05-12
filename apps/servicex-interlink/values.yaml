@@ -98,7 +98,7 @@ transformer:
   #   subdir: /servicex/
   # cachePrefix: "'xcache.cms.rcac.purdue.edu'"
   nodeSelector:
-    kubernetes.io/hostname: interlink-hammer-purdueaf 
+    kubernetes.io/hostname: interlink-hammer-purdueaf
 
   # tolerations:
   #   - key: "hub.jupyter.org/dedicated"
