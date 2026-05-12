@@ -17,7 +17,6 @@ resources:
   - ../../apps/servicex/helmrepo.yaml
   - ../../apps/servicex/secrets-objectStore.yaml
   - ../../apps/servicex-interlink/helmrelease.yaml
-  - ../../apps/servicex-interlink/values.yaml
 
   - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic/helmrepo.yaml
@@ -69,6 +68,10 @@ configMapGenerator:
   - name: servicex-config
     files:
       - values.yaml=../../apps/servicex/values.yaml
+
+  - name: servicex-interlink-config
+    files:
+      - values.yaml=../../apps/servicex-interlink/values.yaml
 
   - name: supersonic-config
     files:
