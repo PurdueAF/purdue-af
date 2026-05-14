@@ -32,46 +32,6 @@ spec:
         patches:
           - target:
               kind: Deployment
-              name: "servicex-interlink-servicex-app"
-            patch: |
-              - op: add
-                path: /spec/template/spec/volumes/-
-                value:
-                  name: patched-transformer-manager
-                  emptyDir: {}
-              - op: add
-                path: /spec/template/spec/volumes/-
-                value:
-                  name: transformer-manager-patch
-                  configMap:
-                    name: servicex-interlink-transformer-manager-patch
-                    defaultMode: 493
-              - op: add
-                path: /spec/template/spec/initContainers/-
-                value:
-                  name: patch-transformer-manager
-                  image: sslhep/servicex_app:v1.8.3
-                  imagePullPolicy: IfNotPresent
-                  command:
-                    - sh
-                    - -ec
-                    - |
-                      cp /home/servicex/servicex_app/transformer_manager.py /patch/transformer_manager.py
-                      python3 /patch-script/patch-transformer-manager.py
-                  volumeMounts:
-                    - name: patched-transformer-manager
-                      mountPath: /patch
-                    - name: transformer-manager-patch
-                      mountPath: /patch-script
-                      readOnly: true
-              - op: add
-                path: /spec/template/spec/containers/0/volumeMounts/-
-                value:
-                  name: patched-transformer-manager
-                  mountPath: /home/servicex/servicex_app/transformer_manager.py
-                  subPath: transformer_manager.py
-          - target:
-              kind: Deployment
               name: "servicex-interlink-did-finder-xrootd"
             patch: |
               - op: add
