@@ -676,7 +676,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "7216 - sum(slurm_info_core_user)",
+          "expr": "5632 - sum(slurm_info_core_user)",
           "interval": "",
           "legendFormat": "{{user}}",
           "range": true,
@@ -743,7 +743,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "16089000 - (sum (slurm_info_ram_user))\n",
+          "expr": "11242000 - (sum (slurm_info_ram_user))\n",
           "interval": "",
           "legendFormat": "{{user}}",
           "range": true,
