@@ -1,0 +1,198 @@
+app:
+  resources:
+    requests:
+      cpu: 2
+      memory: 2Gi
+    limits:
+      cpu: 4
+      memory: 4Gi
+  ingress:
+    enabled: ${enable_ingresses}
+    class: public
+    host: geddes.rcac.purdue.edu
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+noCerts: false
+postgres:
+  enabled: true
+postgresql:
+  image:
+    registry: geddes-registry.rcac.purdue.edu
+    repository: docker-hub-cache/bitnamilegacy/postgresql
+    tag: 14.5.0-debian-11-r35
+  # global:
+  #   postgresql:
+  #     auth:
+  #       database: servicex
+  #       postgresPassword: leftfoot1
+  primary:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    persistence:
+      enabled: false
+      storageClass: ${multinode_storage_class}
+      accessModes: [ReadWriteMany]
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+
+objectStore:
+  enabled: true
+  internal: false
+  publicURL: s3.rcac.purdue.edu:443
+  useTLS: true
+
+codeGen:
+  uproot-raw:
+    enabled: true
+    compressionAlgorithm: ZSTD
+    compressionLevel: 0
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+  rdataframe:
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+  uproot:
+    enabled: false
+  python:
+    enabled: false
+  atlasr21:
+    enabled: false
+  atlasr22:
+    enabled: false
+  atlasr25:
+    enabled: false
+  topcp:
+    enabled: false
+  cmssw-5-3-32:
+    enabled: false
+
+transformer:
+  outputDir: /tmp/servicex
+  cpuRequest: 1
+  memoryRequest: 4Gi
+  cpuLimit: 2
+  memoryLimit: 8Gi
+  # persistence:
+  #   existingClaim: "claim-dkondra"
+  #   subdir: /servicex/
+  # cachePrefix: "'xcache.cms.rcac.purdue.edu'"
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+
+rabbitmq:
+  image:
+    registry: geddes-registry.rcac.purdue.edu
+    repository: docker-hub-cache/bitnamilegacy/rabbitmq
+    tag: 3.11.18-debian-11-r0
+  resources:
+    requests:
+      cpu: 1
+      memory: 1Gi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+minio:
+  persistence:
+    enabled: false
+    storageClass: ${multinode_storage_class}
+    accessModes: [ReadWriteMany]
+    size: 10Gi
+  service:
+    ports:
+      api: 9000
+  ingress:
+    enabled: false
+  apiIngress:
+    enabled: false
+  resources:
+    requests:
+      cpu: 1
+      memory: 1Gi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+
+minioCleanup:
+  enabled: true
+didFinder:
+  rucio:
+    enabled: false
+    rucio_host: http://cms-rucio.cern.ch
+    auth_host: https://cms-rucio-auth.cern.ch
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+  xrootd:
+    enabled: true
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+  CERNOpenData:
+    enabled: false
+gridAccount: dkondrat
+x509Secrets:
+  initImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/alpine:3.6
+  pullPolicy: Always
+  vomsOrg: cms
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+
+scheduledTasks:
+  image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/python
+  tag: "3.10"
+
+secrets: servicex-secrets

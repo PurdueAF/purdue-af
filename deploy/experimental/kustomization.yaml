@@ -17,6 +17,7 @@ resources:
   - ../../apps/servicex/helmrepo.yaml
   - ../../apps/servicex/secrets-objectStore.yaml
   - ../../apps/servicex-interlink/helmrelease.yaml
+  - ../../apps/servicex-eos/helmrelease.yaml
 
   - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic/helmrepo.yaml
@@ -73,9 +74,9 @@ configMapGenerator:
     files:
       - values.yaml=../../apps/servicex-interlink/values.yaml
 
-  - name: servicex-interlink-transformer-manager-patch
+  - name: servicex-eos-config
     files:
-      - patch-transformer-manager.py=../../apps/servicex-interlink/patch-transformer-manager.py
+      - values.yaml=../../apps/servicex-eos/values.yaml
 
   - name: supersonic-config
     files:
