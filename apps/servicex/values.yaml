@@ -126,7 +126,7 @@ rabbitmq:
       effect: "NoSchedule"
 minio:
   persistence:
-    enabled: false
+    enabled: true
     storageClass: ${multinode_storage_class}
     accessModes: [ReadWriteMany]
     size: 2000Gi
