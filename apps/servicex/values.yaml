@@ -129,7 +129,7 @@ minio:
     enabled: false
     storageClass: ${multinode_storage_class}
     accessModes: [ReadWriteMany]
-    size: 10Gi
+    size: 2000Gi
   service:
     ports:
       api: 9000
