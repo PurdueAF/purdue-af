@@ -47,11 +47,11 @@ postgresql:
         value: "cms-af"
         effect: "NoSchedule"
 
-# objectStore:
-#   enabled: true
-#   internal: false
-#   publicURL: s3.rcac.purdue.edu:443
-#   useTLS: true
+objectStore:
+  enabled: true
+  internal: false
+  publicURL: s3.rcac.purdue.edu:443
+  useTLS: true
 
 codeGen:
   uproot-raw:
@@ -125,6 +125,7 @@ rabbitmq:
       value: "cms-af"
       effect: "NoSchedule"
 minio:
+  enabled: false
   persistence:
     enabled: false
     storageClass: ${multinode_storage_class}
@@ -135,11 +136,11 @@ minio:
       api: 9000
   ingress:
     enabled: ${enable_ingresses}
-    hostname: servicex-minio.geddes.rcac.purdue.edu
+    hostname: servicex-s3-minio.geddes.rcac.purdue.edu
     ingressClassName: public
   apiIngress:
     enabled: ${enable_ingresses}
-    hostname: "servicex-minio-api.geddes.rcac.purdue.edu"
+    hostname: "servicex-s3-minio-api.geddes.rcac.purdue.edu"
     ingressClassName: public
   resources:
     requests:
@@ -198,4 +199,4 @@ scheduledTasks:
   image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/python
   tag: "3.10"
 
-# secrets: servicex-secrets
+secrets: servicex-secrets
