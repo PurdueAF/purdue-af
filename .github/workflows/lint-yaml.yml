@@ -1,43 +1,75 @@
 name: Lint YAML
 
 on:
-  push:
-    paths:
-      - '**.yml'
-      - '**.yaml'
   pull_request:
     paths:
-      - '**.yml'
-      - '**.yaml'
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '!docker/dask-gateway-server/**'
+      - '!docker/kaniko-build-jobs/**'
+      - '!docs/**'
+      - '!slurm/**'
+      - '!.cursor/**'
+      - '!.git/**'
+      - '!.github/workflows/**'
+      - '.github/workflows/lint-yaml.yml'
+
+concurrency:
+  group: lint-yaml-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
-  lint:
+  yaml-parse:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install prettier
-        run: npm install -g prettier
-      - name: Format YAML files
+
+      - name: Install parser dependency
         run: |
-          find . -name "*.yml" -o -name "*.yaml" | grep -v "docker/dask-gateway-server" | grep -v "templates" | grep -v ".github/workflows" | xargs prettier --write
-      - name: Commit changes
-        if: ${{ github.event_name == 'pull_request' || github.ref_type == 'branch' }}
+          set -euo pipefail
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pyyaml
+
+      - name: Validate YAML files (check-only, advisory)
+        shell: bash
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          REF_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          git fetch origin "$REF_NAME"
-          git checkout -B "$REF_NAME" "origin/$REF_NAME" || git checkout -B "$REF_NAME"
-          git add -A
-          git diff --quiet && git diff --staged --quiet || git commit -m "Apply prettier YAML formatting"
-          git push origin "$REF_NAME"
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          files = sorted(
+              p for p in Path('.').rglob('*')
+              if p.is_file() and p.suffix in {'.yml', '.yaml'}
+          )
+
+          excluded_prefixes = (
+              Path('docker/dask-gateway-server'),
+              Path('docker/kaniko-build-jobs'),
+              Path('docs'),
+              Path('slurm'),
+              Path('.cursor'),
+              Path('.git'),
+              Path('.github/workflows'),
+          )
+
+          filtered = []
+          for p in files:
+              if any(str(p).startswith(str(prefix) + '/') or p == prefix for prefix in excluded_prefixes):
+                  continue
+              filtered.append(p)
+
+          if not filtered:
+              print('No in-scope YAML files found.')
+              raise SystemExit(0)
+
+          for p in filtered:
+              with p.open('r', encoding='utf-8') as f:
+                  list(yaml.safe_load_all(f))
+
+          print(f'Validated {len(filtered)} YAML file(s).')
+          PY

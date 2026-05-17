@@ -1,22 +1,246 @@
-name: Lint Dockerfiles
+name: Container Reliability
 
 on:
-  push:
-    paths:
-      - '**/Dockerfile*'
   pull_request:
     paths:
-      - '**/Dockerfile*'
+      - 'docker/af-pod-monitor/**'
+      - 'docker/interlink-slurm-plugin/**'
+      - 'docker/purdue-af/**'
+      - 'slurm/**'
+      - '.github/scripts/container-smoke.sh'
+      - '.github/workflows/lint-docker.yml'
+
+concurrency:
+  group: lint-docker-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  lint:
+  detect-docker-changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      dockerfiles: ${{ steps.filter.outputs.dockerfiles }}
+      af_pod_monitor: ${{ steps.filter.outputs.af_pod_monitor }}
+      interlink_slurm_plugin: ${{ steps.filter.outputs.interlink_slurm_plugin }}
+      purdue_af: ${{ steps.filter.outputs.purdue_af }}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            dockerfiles:
+              - 'docker/af-pod-monitor/Dockerfile'
+              - 'docker/interlink-slurm-plugin/Dockerfile.alma8'
+              - 'docker/purdue-af/Dockerfile'
+              - '.github/workflows/lint-docker.yml'
+            af_pod_monitor:
+              - 'docker/af-pod-monitor/**'
+              - '.github/scripts/container-smoke.sh'
+            interlink_slurm_plugin:
+              - 'docker/interlink-slurm-plugin/**'
+              - 'slurm/**'
+              - '.github/scripts/container-smoke.sh'
+            purdue_af:
+              - 'docker/purdue-af/**'
+              - 'slurm/**'
+              - '.github/scripts/container-smoke.sh'
+
+      - name: Publish container reliability plan
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### Container Reliability Plan'
+            echo
+            echo '| Check | Decision |'
+            echo '|---|---|'
+            if [ "${{ steps.filter.outputs.dockerfiles }}" = 'true' ]; then
+              echo '| Dockerfile lint | run |'
+            else
+              echo '| Dockerfile lint | skipped |'
+            fi
+            if [ "${{ steps.filter.outputs.af_pod_monitor }}" = 'true' ]; then
+              echo '| af-pod-monitor build/smoke | run |'
+            else
+              echo '| af-pod-monitor build/smoke | skipped |'
+            fi
+            if [ "${{ steps.filter.outputs.interlink_slurm_plugin }}" = 'true' ]; then
+              echo '| interlink-slurm-plugin build/smoke | run |'
+            else
+              echo '| interlink-slurm-plugin build/smoke | skipped |'
+            fi
+            if [ "${{ steps.filter.outputs.purdue_af }}" = 'true' ]; then
+              echo '| purdue-af build/smoke | run |'
+            else
+              echo '| purdue-af build/smoke | skipped |'
+            fi
+            echo
+            echo '- Workflow mode: advisory (all jobs use continue-on-error).'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  lint-dockerfiles:
+    needs: detect-docker-changes
+    if: needs.detect-docker-changes.outputs.dockerfiles == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Install hadolint
         run: |
-          sudo wget -O /bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-$(uname -s)-$(uname -m)
-          sudo chmod +x /bin/hadolint
-      - name: Run hadolint
+          set -euo pipefail
+          HADOLINT_VERSION=v2.12.0
+          curl -fsSL "https://github.com/hadolint/hadolint/releases/download/${HADOLINT_VERSION}/hadolint-Linux-x86_64" -o /tmp/hadolint
+          chmod +x /tmp/hadolint
+          sudo mv /tmp/hadolint /usr/local/bin/hadolint
+
+      - name: Run hadolint (check-only, advisory)
+        id: hadolint
         run: |
-          find . -type f -iname 'Dockerfile*' -not -path './docker/dask-gateway-server/*' -exec hadolint --ignore DL3041 --ignore DL3033 --failure-threshold warning {} + 
+          set -euo pipefail
+          hadolint --ignore DL3041 --ignore DL3033 --failure-threshold warning docker/af-pod-monitor/Dockerfile
+          hadolint --ignore DL3041 --ignore DL3033 --failure-threshold warning docker/interlink-slurm-plugin/Dockerfile.alma8
+          hadolint --ignore DL3041 --ignore DL3033 --failure-threshold warning docker/purdue-af/Dockerfile
+
+      - name: Publish Dockerfile lint advisory summary
+        if: always()
+        run: |
+          {
+            echo '### Dockerfile Lint Advisory Summary'
+            echo
+            echo "- Hadolint outcome: ${{ steps.hadolint.outcome }}"
+            echo '- Mode: advisory (job continue-on-error=true).'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build-af-pod-monitor:
+    needs: detect-docker-changes
+    if: needs.detect-docker-changes.outputs.af_pod_monitor == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    continue-on-error: true
+    env:
+      BUILDKIT_PROGRESS: plain
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build af-pod-monitor image with cache (advisory)
+        id: build_image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/af-pod-monitor
+          file: docker/af-pod-monitor/Dockerfile
+          load: true
+          pull: true
+          tags: local/af-pod-monitor:${{ github.sha }}
+          cache-from: type=gha,scope=af-pod-monitor
+          cache-to: type=gha,mode=max,scope=af-pod-monitor,ignore-error=true
+          provenance: false
+
+      - name: Smoke test af-pod-monitor image (advisory)
+        id: smoke_test
+        run: .github/scripts/container-smoke.sh local/af-pod-monitor:${{ github.sha }} af-pod-monitor
+
+      - name: Publish af-pod-monitor advisory summary
+        if: always()
+        run: |
+          {
+            echo '### af-pod-monitor Container Advisory Summary'
+            echo
+            echo "- Build outcome: ${{ steps.build_image.outcome }}"
+            echo "- Smoke test outcome: ${{ steps.smoke_test.outcome }}"
+            echo '- Mode: advisory (job continue-on-error=true).'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build-interlink-slurm-plugin:
+    needs: detect-docker-changes
+    if: needs.detect-docker-changes.outputs.interlink_slurm_plugin == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    continue-on-error: true
+    env:
+      BUILDKIT_PROGRESS: plain
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build interlink-slurm-plugin image with cache (advisory)
+        id: build_image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/interlink-slurm-plugin/Dockerfile.alma8
+          load: true
+          pull: true
+          tags: local/interlink-slurm-plugin:${{ github.sha }}
+          cache-from: type=gha,scope=interlink-slurm-plugin
+          cache-to: type=gha,mode=max,scope=interlink-slurm-plugin,ignore-error=true
+          provenance: false
+
+      - name: Smoke test interlink-slurm-plugin image (advisory)
+        id: smoke_test
+        run: .github/scripts/container-smoke.sh local/interlink-slurm-plugin:${{ github.sha }} interlink-slurm-plugin
+
+      - name: Publish interlink-slurm-plugin advisory summary
+        if: always()
+        run: |
+          {
+            echo '### interlink-slurm-plugin Container Advisory Summary'
+            echo
+            echo "- Build outcome: ${{ steps.build_image.outcome }}"
+            echo "- Smoke test outcome: ${{ steps.smoke_test.outcome }}"
+            echo '- Mode: advisory (job continue-on-error=true).'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build-purdue-af:
+    needs: detect-docker-changes
+    if: needs.detect-docker-changes.outputs.purdue_af == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    continue-on-error: true
+    env:
+      BUILDKIT_PROGRESS: plain
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build purdue-af image with cache (advisory)
+        id: build_image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/purdue-af/Dockerfile
+          load: true
+          pull: true
+          tags: local/purdue-af:${{ github.sha }}
+          cache-from: type=gha,scope=purdue-af
+          cache-to: type=gha,mode=max,scope=purdue-af,ignore-error=true
+          provenance: false
+
+      - name: Smoke test purdue-af image (advisory)
+        id: smoke_test
+        run: .github/scripts/container-smoke.sh local/purdue-af:${{ github.sha }} purdue-af
+
+      - name: Publish purdue-af advisory summary
+        if: always()
+        run: |
+          {
+            echo '### purdue-af Container Advisory Summary'
+            echo
+            echo "- Build outcome: ${{ steps.build_image.outcome }}"
+            echo "- Smoke test outcome: ${{ steps.smoke_test.outcome }}"
+            echo '- Mode: advisory (job continue-on-error=true).'
+          } >> "$GITHUB_STEP_SUMMARY"

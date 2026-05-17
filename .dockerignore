@@ -1,0 +1,14 @@
+# Keep root-context Docker builds lean for CI.
+# This file affects builds that use `context: .` in GitHub Actions.
+**
+
+# Keep required sources for maintained root-context Dockerfiles.
+!docker/
+!docker/interlink-slurm-plugin/
+!docker/interlink-slurm-plugin/**
+!docker/purdue-af/
+!docker/purdue-af/**
+!slurm/
+!slurm/slurm-24.05.1-1.el8.x86_64.rpm
+!slurm/slurm-configs/
+!slurm/slurm-configs/**
