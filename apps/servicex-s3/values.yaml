@@ -107,6 +107,8 @@ codeGen:
 transformer:
   sidecarImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_sidecar_transformer
   sidecarTag: "v1.8.3"
+  autoscaler:
+    maxReplicas: 500
   cpuRequest: 0.1
   memoryRequest: 2Gi
   cpuLimit: 0.5
