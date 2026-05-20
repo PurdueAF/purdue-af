@@ -1,4 +1,7 @@
 app:
+  image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_app
+  tag: "v1.8.3"
+  checksImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/ncsa/checks:main
   resources:
     requests:
       cpu: 2
@@ -56,6 +59,10 @@ objectStore:
 codeGen:
   uproot-raw:
     enabled: true
+    image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_code_gen_raw_uproot
+    tag: "v1.8.3"
+    defaultScienceContainerImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_science_image_combined_root
+    defaultScienceContainerTag: 5.7.2-6.38.04
     compressionAlgorithm: ZSTD
     compressionLevel: 0
     nodeSelector:
@@ -66,6 +73,10 @@ codeGen:
         value: "cms-af"
         effect: "NoSchedule"
   rdataframe:
+    image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_code_gen_python
+    tag: "v1.8.3"
+    defaultScienceContainerImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_science_image_combined_root
+    defaultScienceContainerTag: 5.7.2-6.38.04
     nodeSelector:
       cms-af-prod: "true"
     tolerations:
@@ -89,6 +100,8 @@ codeGen:
     enabled: false
 
 transformer:
+  sidecarImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_sidecar_transformer
+  sidecarTag: "v1.8.3"
   outputDir: /tmp/servicex
   cpuRequest: 1
   memoryRequest: 4Gi
@@ -169,6 +182,8 @@ didFinder:
         effect: "NoSchedule"
   xrootd:
     enabled: true
+    image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex-did-finder-xrootd
+    tag: "v1.8.3"
     nodeSelector:
       cms-af-prod: "true"
     tolerations:
@@ -180,6 +195,8 @@ didFinder:
     enabled: false
 gridAccount: dkondrat
 x509Secrets:
+  image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/x509-secrets
+  tag: "v1.8.3"
   initImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/alpine:3.6
   pullPolicy: Always
   vomsOrg: cms
