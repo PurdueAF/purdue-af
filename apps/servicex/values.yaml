@@ -151,7 +151,7 @@ minio:
     accessModes: [ReadWriteMany]
     size: 2000Gi
   volumePermissions:
-    enabled: true
+    enabled: false
   service:
     ports:
       api: 9000
