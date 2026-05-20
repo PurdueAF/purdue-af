@@ -108,6 +108,7 @@ transformer:
   sidecarImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_sidecar_transformer
   sidecarTag: "v1.8.3"
   autoscaler:
+    cpuScaleThreshold: 0.5
     maxReplicas: 500
   cpuRequest: 500m
   memoryRequest: 2Gi
@@ -147,7 +148,7 @@ rabbitmq:
 minio:
   persistence:
     enabled: true
-    storageClass: ${multinode_storage_class}
+    storageClass: ${singlenode_storage_class}
     accessModes: [ReadWriteMany]
     size: 2000Gi
   volumePermissions:
