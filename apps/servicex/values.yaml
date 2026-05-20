@@ -109,9 +109,9 @@ transformer:
   sidecarTag: "v1.8.3"
   autoscaler:
     maxReplicas: 500
-  cpuRequest: 2
+  cpuRequest: 500m
   memoryRequest: 2Gi
-  cpuLimit: 2
+  cpuLimit: 1
   memoryLimit: 4Gi
   # persistence:
   #   existingClaim: "claim-dkondra"
