@@ -149,7 +149,7 @@ minio:
   persistence:
     enabled: true
     storageClass: ${singlenode_storage_class}
-    accessModes: [ReadWriteMany]
+    accessModes: [ReadWriteOnce]
     size: 2000Gi
   volumePermissions:
     enabled: false
