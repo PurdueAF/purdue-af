@@ -165,11 +165,11 @@ minio:
     ingressClassName: public
   resources:
     requests:
-      cpu: 4
+      cpu: 8
       memory: 24Gi
     limits:
-      cpu: 4
-      memory: 24Gi
+      cpu: 32
+      memory: 48Gi
   nodeSelector:
     cms-af-prod: "true"
   tolerations:
