@@ -78,17 +78,7 @@ codeGen:
         value: "cms-af"
         effect: "NoSchedule"
   rdataframe:
-    image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_code_gen_python
-    tag: "v1.8.3"
-    defaultScienceContainerImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_science_image_combined_root
-    defaultScienceContainerTag: 5.7.2-6.38.04
-    nodeSelector:
-      cms-af-prod: "true"
-    tolerations:
-      - key: "hub.jupyter.org/dedicated"
-        operator: "Equal"
-        value: "cms-af"
-        effect: "NoSchedule"
+    enabled: false
   uproot:
     enabled: false
   python:
@@ -210,6 +200,8 @@ didFinder:
         value: "cms-af"
         effect: "NoSchedule"
   CERNOpenData:
+    enabled: false
+  atlasopenmagic:
     enabled: false
 gridAccount: dkondrat
 x509Secrets:
