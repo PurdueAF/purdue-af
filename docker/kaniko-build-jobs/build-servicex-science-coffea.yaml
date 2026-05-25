@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kaniko-build-servicex-science-coffea
+  namespace: cms
+spec:
+  ttlSecondsAfterFinished: 86400
+  backoffLimit: 3
+  completions: 1
+  template:
+    spec:
+      containers:
+        - name: kaniko
+          image: gcr.io/kaniko-project/executor:latest
+          args:
+            - "--context=git://github.com/PurdueAF/purdue-af.git#refs/heads/main"
+            - "--dockerfile=docker/servicex-science-coffea/Dockerfile"
+            - "--destination=geddes-registry.rcac.purdue.edu/cms/servicex-science-combined-root-coffea:5.7.2-6.38.04"
+            - "--cache=true"
+          resources:
+            requests:
+              memory: "8Gi"
+              cpu: "4"
+            limits:
+              memory: "16Gi"
+              cpu: "8"
+          volumeMounts:
+            - name: docker-config
+              mountPath: /kaniko/.docker/
+      restartPolicy: OnFailure
+      volumes:
+        - name: docker-config
+          secret:
+            secretName: docker-config
+      nodeSelector:
+        cms-af-dev: "true"
+      tolerations:
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
