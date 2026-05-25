@@ -4,6 +4,7 @@ app:
   checksImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/ncsa/checks:main
   allowedImagePrefixes:
     - "geddes-registry.rcac.purdue.edu/docker-hub-cache/"
+    - "geddes-registry.rcac.purdue.edu/cms/"
     - "docker.io/sslhep"
     - "sslhep/"
     - "gitlab-registry.cern.ch/"
