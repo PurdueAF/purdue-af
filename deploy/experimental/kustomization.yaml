@@ -13,7 +13,7 @@ resources:
   - ../../apps/monitoring/thanos/data-pvc.yaml
 
   - ../../apps/servicex/helmrelease.yaml
-  # - ../../apps/servicex/gitrepo.yaml
+  - ../../apps/servicex/gitrepo.yaml
   - ../../apps/servicex/helmrepo.yaml
   - ../../apps/servicex/secrets-objectStore.yaml
   - ../../apps/servicex-s3/helmrelease.yaml
