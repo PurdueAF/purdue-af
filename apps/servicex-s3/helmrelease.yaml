@@ -57,3 +57,13 @@ spec:
                 value:
                   name: X509_USER_PROXY
                   value: /etc/grid-security-ro/x509up
+          - target:
+              kind: Deployment
+              name: "servicex-s3-code-gen-python"
+            patch: |
+              - op: replace
+                path: /spec/template/spec/containers/0/env/2/value
+                value: ZLIB
+              - op: replace
+                path: /spec/template/spec/containers/0/env/3/value
+                value: "0"
