@@ -1,0 +1,29 @@
+{
+  "name": "purdue-af-interface-controls",
+  "displayName": "Purdue AF Interface Controls",
+  "description": "Status bar buttons to switch to JupyterLab and open JupyterHub shutdown page.",
+  "version": "0.1.0",
+  "publisher": "purdueaf",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "purdueaf.switchToJupyterLab",
+        "title": "Purdue AF: Switch to JupyterLab"
+      },
+      {
+        "command": "purdueaf.openShutdownPage",
+        "title": "Purdue AF: Shut Down (open JupyterHub home)"
+      }
+    ]
+  }
+}

@@ -168,6 +168,9 @@ COPY --chown=root:root \
     docker/purdue-af/scripts/upload-genaistudio-key \
     docker/purdue-af/scripts/delete-genaistudio-key \
     /usr/local/bin/
+COPY --chown=root:root \
+    docker/purdue-af/code-server/purdue-af-interface-controls \
+    /opt/purdue-af/code-server/
 
 RUN chmod +x /usr/local/bin/pixi && \
     chmod +x /usr/local/bin/* && \

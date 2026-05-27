@@ -21,18 +21,6 @@ singleuser:
         #   exec:
         #     command: ["bash", "-c", "rm -f eos-cern"]
       profile_options:
-        interface:
-          display_name: "Interface"
-          choices:
-            1:
-              display_name: "JupyterLab"
-              default: true
-              kubespawner_override:
-                default_url: "/lab/tree"
-            2:
-              display_name: "VS Code (code-server)"
-              kubespawner_override:
-                default_url: "/vscode/"
         cpu:
           display_name: "CPUs"
           choices:
@@ -200,7 +188,7 @@ singleuser:
       default: false
       description: "Contains the latest features but may be unstable - use at your own risk."
       kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/purdue-af:0.12.3"
+        image: "geddes-registry.rcac.purdue.edu/cms/purdue-af:0.12.4"
         node_selector:
           cms-af-prod: "true"
         cpu_guarantee: 8
@@ -211,6 +199,18 @@ singleuser:
           # nvidia.com/mig-7g.40gb: 1
           nvidia.com/mig-1g.5gb: 1
       profile_options:
+        interface:
+          display_name: "Interface"
+          choices:
+            1:
+              display_name: "JupyterLab"
+              default: true
+              kubespawner_override:
+                default_url: "/lab/tree"
+            2:
+              display_name: "VS Code (code-server)"
+              kubespawner_override:
+                default_url: "/vscode/"
         gpu:
           display_name: "GPUs"
           choices:

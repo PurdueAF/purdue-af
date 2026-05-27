@@ -128,6 +128,16 @@ _cs_install_if_missing ms-python.python
 _cs_install_if_missing ms-toolsai.jupyter
 _cs_install_if_missing continue.continue@1.3.30
 _cs_install_if_missing renan-r-santos.pixi-code
+
+# Install Purdue AF code-server UI controls from bundled extension sources
+PAF_CS_EXT_SRC="/opt/purdue-af/code-server/purdue-af-interface-controls"
+PUBLISHER=$(jq -r '.publisher' "$PAF_CS_EXT_SRC/package.json")
+NAME=$(jq -r '.name' "$PAF_CS_EXT_SRC/package.json")
+VERSION=$(jq -r '.version' "$PAF_CS_EXT_SRC/package.json")
+PAF_CS_EXT_TARGET="${CODE_EXTENSIONSDIR}/${PUBLISHER}.${NAME}-${VERSION}"
+mkdir -p "$PAF_CS_EXT_TARGET"
+cp -a "$PAF_CS_EXT_SRC/." "$PAF_CS_EXT_TARGET/"
+
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
 
 # Continue extension config (from bundled file)
