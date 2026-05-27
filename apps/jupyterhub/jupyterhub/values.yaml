@@ -210,7 +210,7 @@ singleuser:
             2:
               display_name: "VS Code (code-server)"
               kubespawner_override:
-                default_url: "/vscode"
+                default_url: "/vscode/?folder=/home/{username}"
         gpu:
           display_name: "GPUs"
           choices:

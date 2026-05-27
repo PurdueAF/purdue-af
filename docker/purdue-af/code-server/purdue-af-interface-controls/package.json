@@ -11,8 +11,11 @@
     "Other"
   ],
   "main": "./extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
   "activationEvents": [
-    "onStartupFinished"
+    "*"
   ],
   "contributes": {
     "commands": [
