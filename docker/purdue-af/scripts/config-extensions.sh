@@ -140,6 +140,32 @@ if [ -f "$PAF_CS_EXT_SRC/package.json" ]; then
 	PUBLISHER=$(jq -r '.publisher' "$PAF_CS_EXT_SRC/package.json")
 	NAME=$(jq -r '.name' "$PAF_CS_EXT_SRC/package.json")
 	VERSION=$(jq -r '.version' "$PAF_CS_EXT_SRC/package.json")
+	PAF_CS_EXT_ID="${PUBLISHER}.${NAME}"
+	# Clean stale versions/tombstones so code-server doesn't keep this extension marked as removed.
+	rm -rf "${CODE_EXTENSIONSDIR}/${PAF_CS_EXT_ID}-"*
+	CODE_EXT_META_FILE="${CODE_EXTENSIONSDIR}/extensions.json"
+	if [ -f "$CODE_EXT_META_FILE" ]; then
+		python - "$CODE_EXT_META_FILE" "$PAF_CS_EXT_ID" <<'PY'
+import json
+import sys
+
+path, ext_id = sys.argv[1], sys.argv[2].lower()
+try:
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+except Exception:
+    sys.exit(0)
+
+if isinstance(data, list):
+    filtered = [
+        x for x in data
+        if str(((x.get("identifier") or {}).get("id") or "")).lower() != ext_id
+    ]
+    if filtered != data:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(filtered, f)
+PY
+	fi
 	PAF_CS_EXT_TARGET="${CODE_EXTENSIONSDIR}/${PUBLISHER}.${NAME}-${VERSION}"
 	mkdir -p "$PAF_CS_EXT_TARGET"
 	cp -a "$PAF_CS_EXT_SRC/." "$PAF_CS_EXT_TARGET/"
