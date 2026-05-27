@@ -5,6 +5,8 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -331,6 +333,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/c4/36/ce5f75aa7c736a663a901766edc3580098c7ea3959a0e878363a54a3714e/pixi_kernel-0.7.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/16/92/d1e32e3e0d894fe00b15ce28ad4944ab692713f2e7f0a99787405e43533a/protobuf-6.33.6-cp39-abi3-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a1/ad/1500dece815f714c4f98910d5860df77567a25cbfa27ff9f17406ec32edc/purdue_af_shutdown_button-0.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/7e/a5/510c9e6fad0d461c78911290960ab84c67bba0697ebf8880183ce982f4c7/purdue_af_vscode_button-0.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2c/9f/1acba49090bfeb02315771c680b18cd418a45c683edaf2bb4af58328a237/pyroscope_io-1.0.6-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/57/4d/a7545bf6c62b0dbe5795f22ea9e88cc070fdced5c34663ebc5bed2f610c0/returns-0.26.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/d4/59e74daffcb57a07668852eeeb6035af9f32cbfd7a1d2511f17d2fe6a738/smmap-5.0.3-py3-none-any.whl
@@ -345,6 +348,8 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -671,6 +676,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/c4/36/ce5f75aa7c736a663a901766edc3580098c7ea3959a0e878363a54a3714e/pixi_kernel-0.7.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/16/92/d1e32e3e0d894fe00b15ce28ad4944ab692713f2e7f0a99787405e43533a/protobuf-6.33.6-cp39-abi3-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a1/ad/1500dece815f714c4f98910d5860df77567a25cbfa27ff9f17406ec32edc/purdue_af_shutdown_button-0.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/7e/a5/510c9e6fad0d461c78911290960ab84c67bba0697ebf8880183ce982f4c7/purdue_af_vscode_button-0.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2c/9f/1acba49090bfeb02315771c680b18cd418a45c683edaf2bb4af58328a237/pyroscope_io-1.0.6-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/57/4d/a7545bf6c62b0dbe5795f22ea9e88cc070fdced5c34663ebc5bed2f610c0/returns-0.26.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/d4/59e74daffcb57a07668852eeeb6035af9f32cbfd7a1d2511f17d2fe6a738/smmap-5.0.3-py3-none-any.whl
@@ -4121,6 +4127,11 @@ packages:
   name: purdue-af-shutdown-button
   version: 0.1.0
   sha256: b052306dbb6b7232e5b9f7e2d7eb2c154afc47c04fbcb3e5ef1bc752b7a170aa
+  requires_python: '>=3.8'
+- pypi: https://files.pythonhosted.org/packages/7e/a5/510c9e6fad0d461c78911290960ab84c67bba0697ebf8880183ce982f4c7/purdue_af_vscode_button-0.1.0-py3-none-any.whl
+  name: purdue-af-vscode-button
+  version: 0.1.0
+  sha256: 06fa76a9311febf682a3d286fc99de352539568d8dad8c0a97a8adef59164442
   requires_python: '>=3.8'
 - conda: https://conda.anaconda.org/conda-forge/noarch/pure_eval-0.2.3-pyhd8ed1ab_1.conda
   sha256: 71bd24600d14bb171a6321d523486f6a06f855e75e547fa0cb2a0953b02047f0

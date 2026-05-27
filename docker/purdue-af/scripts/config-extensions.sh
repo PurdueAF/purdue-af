@@ -36,6 +36,12 @@ echo $text >$TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings
 echo '{
     "toolbar": [
         {
+            "name": "vscode",
+            "command": "jupyterlab-topbar:switch-to-vscode",
+            "disabled": false,
+            "rank": 10
+        },
+        {
             "name": "spacer",
             "command": "",
             "disabled": false,
