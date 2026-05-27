@@ -58,13 +58,13 @@ echo '{
             "name": "vscode",
             "command": "jupyterlab-topbar:switch-to-vscode",
             "disabled": false,
-            "rank": 150
+            "rank": 160
         },
         {
             "name": "shutdown",
             "command": "jupyterlab-topbar:shutdown",
             "disabled": false,
-            "rank": 160
+            "rank": 170
         }
     ]
 }' >$TOPBAR_CONFIG_PATH/top-bar.jupyterlab-settings

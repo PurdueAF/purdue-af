@@ -39,6 +39,7 @@ uv            = "==0.11.7"
 
 [pypi-dependencies]
 jupyterlab-git            = "==0.52.0"
+jupyter-resource-usage    = "==1.2.1"
 jupyterlab_iframe         = "==0.5.0"
 jupyter-archive           = "==3.4.0"
 jupyterlab_favorites      = "==3.5.0"
