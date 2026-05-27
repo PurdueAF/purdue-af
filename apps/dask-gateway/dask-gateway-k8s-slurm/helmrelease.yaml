@@ -34,8 +34,8 @@ spec:
                 path: /spec/template/spec/volumes/-
                 value:
                   name: munge-key
-                  secret:
-                    secretName: munge-key
+                  persistentVolumeClaim:
+                    claimName: munge-key-hammer
               - op: replace
                 path: /spec/template/spec/containers/0/args
                 value:

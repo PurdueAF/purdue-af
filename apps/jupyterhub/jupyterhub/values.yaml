@@ -329,7 +329,7 @@ singleuser:
           claimName: af-shared-storage
       - name: munge-key
         persistentVolumeClaim:
-          claimName: munge-key
+          claimName: munge-key-hammer
     extraVolumeMounts:
       - name: cvmfs
         mountPath: /cvmfs
