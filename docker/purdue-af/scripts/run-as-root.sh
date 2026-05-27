@@ -8,11 +8,14 @@ PIXI_GLOBAL_PYTHON="${PIXI_GLOBAL}/.pixi/envs/default/bin/python"
 export PIXI_CACHE_DIR="/work/users/${NB_USER}/.pixi-cache/"
 
 # Setup munge authentication
-mkdir -p /etc/munge/
-cp /etc/secrets/munge/munge.key /etc/munge/
-chown munge:munge /etc/munge/munge.key
-chmod 400 /etc/munge/munge.key
-su -l munge -s /usr/sbin/munged
+if [ -f /etc/secrets/munge/munge.key ]; then
+	mkdir -p /etc/munge/
+	install -m 400 -o munge -g munge /etc/secrets/munge/munge.key /etc/munge/munge.key
+	# kubectl cp often leaves the PVC file world-readable; tighten if the mount is writable
+	chmod 400 /etc/secrets/munge/munge.key 2>/dev/null || true
+	chown root:munge /etc/secrets/munge/munge.key 2>/dev/null || true
+	su -l munge -s /usr/sbin/munged
+fi
 
 # Setup user home directory
 # Gated by a versioned sentinel so chown/mkdir only run once per user.
