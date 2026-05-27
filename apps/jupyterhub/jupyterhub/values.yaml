@@ -206,7 +206,7 @@ singleuser:
               display_name: "JupyterLab"
               default: true
               kubespawner_override:
-                default_url: "/lab/tree"
+                default_url: "/lab"
             2:
               display_name: "VS Code (code-server)"
               kubespawner_override:
