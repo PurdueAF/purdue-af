@@ -26,10 +26,20 @@
           "default": "/lab/tree",
           "description": "Path to open when switching to JupyterLab."
         },
-        "purdueaf.shutdownPath": {
+        "purdueaf.shutdownApiPath": {
+          "type": "string",
+          "default": "/api/shutdown",
+          "description": "Jupyter Server shutdown API path."
+        },
+        "purdueaf.hubHomePath": {
           "type": "string",
           "default": "/hub/home",
-          "description": "Path to open when shutting down the server."
+          "description": "JupyterHub home path shown after shutdown."
+        },
+        "purdueaf.servicePrefix": {
+          "type": "string",
+          "default": "",
+          "description": "JupyterHub service prefix, e.g. /user/username/"
         },
         "purdueaf.hubOrigin": {
           "type": "string",
@@ -45,7 +55,7 @@
       },
       {
         "command": "purdueaf.openShutdownPage",
-        "title": "Purdue AF: Shut Down (open JupyterHub home)"
+        "title": "Purdue AF: Shut Down session"
       }
     ]
   }
