@@ -43,12 +43,6 @@ echo '{
             "rank": 50
         },
         {
-            "name": "vscode",
-            "command": "jupyterlab-topbar:switch-to-vscode",
-            "disabled": false,
-            "rank": 100
-        },
-        {
             "name": "text",
             "command": "",
             "disabled": false,
@@ -65,6 +59,12 @@ echo '{
             "command": "",
             "disabled": false,
             "rank": 130
+        },
+        {
+            "name": "vscode",
+            "command": "jupyterlab-topbar:switch-to-vscode",
+            "disabled": false,
+            "rank": 150
         },
         {
             "name": "shutdown",
