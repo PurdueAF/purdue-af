@@ -100,6 +100,10 @@ mkdir -p "$CODE_SERVER_USER_SETTINGS"
 HUB_PREFIX="${JUPYTERHUB_SERVICE_PREFIX:-/user/${NB_USER}/}"
 LAB_PATH="${HUB_PREFIX%/}/lab/tree"
 SHUTDOWN_PATH="/hub/home"
+HUB_ORIGIN=""
+if [[ "${JUPYTERHUB_BASE_URL:-}" == http* ]]; then
+	HUB_ORIGIN="${JUPYTERHUB_BASE_URL%/}"
+fi
 cat >"$CODE_SERVER_USER_SETTINGS/settings.json" <<EOF
 {
   "chat.disableAIFeatures": true,
@@ -112,7 +116,8 @@ cat >"$CODE_SERVER_USER_SETTINGS/settings.json" <<EOF
   },
   "continue.enableNextEdit": false,
   "purdueaf.jupyterLabPath": "${LAB_PATH}",
-  "purdueaf.shutdownPath": "${SHUTDOWN_PATH}"
+  "purdueaf.shutdownPath": "${SHUTDOWN_PATH}",
+  "purdueaf.hubOrigin": "${HUB_ORIGIN}"
 }
 EOF
 

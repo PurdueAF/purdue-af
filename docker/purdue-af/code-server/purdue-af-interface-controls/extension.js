@@ -9,24 +9,61 @@ function normalizeBasePath(path) {
 
 function buildUrls() {
   const config = vscode.workspace.getConfiguration("purdueaf");
+  const hubOrigin = normalizeBasePath(config.get("hubOrigin") || "");
   const hubBase = normalizeBasePath(process.env.JUPYTERHUB_BASE_URL || "/");
   const servicePrefix = process.env.JUPYTERHUB_SERVICE_PREFIX || "";
   const labPath =
     config.get("jupyterLabPath") ||
     `${servicePrefix}lab/tree`.replace(/^\/+/, "/");
-  const shutdownPath =
-    config.get("shutdownPath") || "/hub/home";
-  const labUrl = labPath.startsWith("http")
-    ? labPath
-    : `${hubBase}${labPath.startsWith("/") ? labPath : `/${labPath}`}`;
-  const shutdownUrl = shutdownPath.startsWith("http")
-    ? shutdownPath
-    : `${hubBase}${shutdownPath.startsWith("/") ? shutdownPath : `/${shutdownPath}`}`;
-  return { labUrl, shutdownUrl };
+  const shutdownPath = config.get("shutdownPath") || "/hub/home";
+
+  function toTarget(path) {
+    if (/^https?:\/\//i.test(path)) {
+      return path;
+    }
+    const normalized = path.startsWith("/") ? path : `/${path}`;
+    const origin = hubOrigin || (hubBase.startsWith("http") ? hubBase : "");
+    return origin ? `${origin}${normalized}` : normalized;
+  }
+
+  return {
+    labUrl: toTarget(labPath),
+    shutdownUrl: toTarget(shutdownPath),
+  };
 }
 
-function openExternal(url) {
-  return vscode.env.openExternal(vscode.Uri.parse(url));
+async function navigateTo(target) {
+  // openExternal is unreliable in browser code-server behind JupyterHub proxies.
+  // Redirect via a short-lived webview that runs in the browser context.
+  const panel = vscode.window.createWebviewPanel(
+    "purdueafNavigate",
+    "",
+    { viewColumn: vscode.ViewColumn.Active, preserveFocus: false },
+    { enableScripts: true }
+  );
+
+  panel.webview.html = `<!DOCTYPE html>
+<html>
+  <head><meta charset="UTF-8"></head>
+  <body>
+    <script>
+      (function () {
+        var target = ${JSON.stringify(target)};
+        var url = target;
+        if (!/^https?:\\/\\//i.test(target)) {
+          var topWindow = window.top || window;
+          var origin = topWindow.location.origin;
+          url = origin + (target.startsWith("/") ? target : "/" + target);
+        }
+        (window.top || window).location.href = url;
+      })();
+    </script>
+  </body>
+</html>`;
+
+  setTimeout(() => {
+    panel.dispose();
+  }, 250);
 }
 
 function activate(context) {
@@ -35,14 +72,14 @@ function activate(context) {
   const switchToJupyterLab = vscode.commands.registerCommand(
     "purdueaf.switchToJupyterLab",
     async () => {
-      await openExternal(labUrl);
+      await navigateTo(labUrl);
     }
   );
 
   const openShutdownPage = vscode.commands.registerCommand(
     "purdueaf.openShutdownPage",
     async () => {
-      await openExternal(shutdownUrl);
+      await navigateTo(shutdownUrl);
     }
   );
 

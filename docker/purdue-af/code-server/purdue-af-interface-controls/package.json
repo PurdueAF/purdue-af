@@ -30,6 +30,11 @@
           "type": "string",
           "default": "/hub/home",
           "description": "Path to open when shutting down the server."
+        },
+        "purdueaf.hubOrigin": {
+          "type": "string",
+          "default": "",
+          "description": "Optional absolute Hub origin, e.g. https://cms.geddes.rcac.purdue.edu"
         }
       }
     },
