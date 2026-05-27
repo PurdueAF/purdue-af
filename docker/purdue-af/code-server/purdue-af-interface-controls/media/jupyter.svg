@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="Jupyter">
+  <ellipse cx="12" cy="6.5" rx="9" ry="3.2" fill="currentColor"/>
+  <ellipse cx="12" cy="12" rx="9" ry="3.2" fill="currentColor"/>
+  <ellipse cx="12" cy="17.5" rx="9" ry="3.2" fill="currentColor"/>
+  <circle cx="12" cy="12" r="2.6" fill="currentColor"/>
+</svg>
