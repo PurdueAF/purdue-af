@@ -171,6 +171,11 @@ COPY --chown=root:root \
 COPY --chown=root:root \
     docker/purdue-af/code-server/purdue-af-interface-controls \
     /opt/purdue-af/code-server/purdue-af-interface-controls/
+COPY --chown=root:root docker/purdue-af/code-server/build-vsix.sh /usr/local/bin/build-paf-cs-vsix
+RUN chmod +x /usr/local/bin/build-paf-cs-vsix && \
+    build-paf-cs-vsix \
+        /opt/purdue-af/code-server/purdue-af-interface-controls \
+        /opt/purdue-af/code-server/purdue-af-interface-controls.vsix
 
 RUN chmod +x /usr/local/bin/pixi && \
     chmod +x /usr/local/bin/* && \

@@ -8,10 +8,20 @@ function normalizeBasePath(path) {
 }
 
 function buildUrls() {
+  const config = vscode.workspace.getConfiguration("purdueaf");
   const hubBase = normalizeBasePath(process.env.JUPYTERHUB_BASE_URL || "/");
   const servicePrefix = process.env.JUPYTERHUB_SERVICE_PREFIX || "";
-  const labUrl = `${hubBase}${servicePrefix}lab/tree`;
-  const shutdownUrl = `${hubBase}/hub/home`;
+  const labPath =
+    config.get("jupyterLabPath") ||
+    `${servicePrefix}lab/tree`.replace(/^\/+/, "/");
+  const shutdownPath =
+    config.get("shutdownPath") || "/hub/home";
+  const labUrl = labPath.startsWith("http")
+    ? labPath
+    : `${hubBase}${labPath.startsWith("/") ? labPath : `/${labPath}`}`;
+  const shutdownUrl = shutdownPath.startsWith("http")
+    ? shutdownPath
+    : `${hubBase}${shutdownPath.startsWith("/") ? shutdownPath : `/${shutdownPath}`}`;
   return { labUrl, shutdownUrl };
 }
 

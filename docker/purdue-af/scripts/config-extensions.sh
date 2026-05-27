@@ -97,7 +97,11 @@ mkdir -p "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
 # Disable default GitHub chat in code-server
 CODE_SERVER_USER_SETTINGS="$CODE_USERDATADIR/User"
 mkdir -p "$CODE_SERVER_USER_SETTINGS"
-echo '{
+HUB_PREFIX="${JUPYTERHUB_SERVICE_PREFIX:-/user/${NB_USER}/}"
+LAB_PATH="${HUB_PREFIX%/}/lab/tree"
+SHUTDOWN_PATH="/hub/home"
+cat >"$CODE_SERVER_USER_SETTINGS/settings.json" <<EOF
+{
   "chat.disableAIFeatures": true,
   "chat.commandCenter.enabled": false,
   "window.autoDetectColorScheme": true,
@@ -106,8 +110,11 @@ echo '{
     ".*": true,
     "~*": true
   },
-  "continue.enableNextEdit": false
-}' >"$CODE_SERVER_USER_SETTINGS/settings.json"
+  "continue.enableNextEdit": false,
+  "purdueaf.jupyterLabPath": "${LAB_PATH}",
+  "purdueaf.shutdownPath": "${SHUTDOWN_PATH}"
+}
+EOF
 
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
 
@@ -129,48 +136,67 @@ _cs_install_if_missing ms-toolsai.jupyter
 _cs_install_if_missing continue.continue@1.3.30
 _cs_install_if_missing renan-r-santos.pixi-code
 
-# Install Purdue AF code-server UI controls from bundled extension sources
-PAF_CS_EXT_SRC="/opt/purdue-af/code-server/purdue-af-interface-controls"
-if [ ! -f "$PAF_CS_EXT_SRC/package.json" ] && [ -f "/opt/purdue-af/code-server/package.json" ]; then
-	# Backward compatibility with images built from earlier COPY semantics.
-	PAF_CS_EXT_SRC="/opt/purdue-af/code-server"
-fi
+# Install Purdue AF code-server UI controls via VSIX (proper extensions.json registration)
+PAF_CS_EXT_VSIX="/opt/purdue-af/code-server/purdue-af-interface-controls.vsix"
+PAF_CS_EXT_ID="purdueaf.purdue-af-interface-controls"
 
-if [ -f "$PAF_CS_EXT_SRC/package.json" ]; then
-	PUBLISHER=$(jq -r '.publisher' "$PAF_CS_EXT_SRC/package.json")
-	NAME=$(jq -r '.name' "$PAF_CS_EXT_SRC/package.json")
-	VERSION=$(jq -r '.version' "$PAF_CS_EXT_SRC/package.json")
-	PAF_CS_EXT_ID="${PUBLISHER}.${NAME}"
-	# Clean stale versions/tombstones so code-server doesn't keep this extension marked as removed.
-	rm -rf "${CODE_EXTENSIONSDIR}/${PAF_CS_EXT_ID}-"*
-	CODE_EXT_META_FILE="${CODE_EXTENSIONSDIR}/extensions.json"
-	if [ -f "$CODE_EXT_META_FILE" ]; then
-		python - "$CODE_EXT_META_FILE" "$PAF_CS_EXT_ID" <<'PY'
+_cs_clear_extension_state() {
+	local ext_id="$1"
+	python - "$CODE_EXTENSIONSDIR" "$ext_id" <<'PY'
+import glob
 import json
+import os
 import sys
 
-path, ext_id = sys.argv[1], sys.argv[2].lower()
-try:
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-except Exception:
-    sys.exit(0)
+extensions_dir, ext_id = sys.argv[1], sys.argv[2].lower()
 
-if isinstance(data, list):
-    filtered = [
-        x for x in data
-        if str(((x.get("identifier") or {}).get("id") or "")).lower() != ext_id
-    ]
-    if filtered != data:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(filtered, f)
+for path in glob.glob(os.path.join(extensions_dir, f"{ext_id}-*")):
+    print(f"Removing stale extension directory: {path}")
+    import shutil
+    shutil.rmtree(path, ignore_errors=True)
+
+meta_path = os.path.join(extensions_dir, "extensions.json")
+if os.path.isfile(meta_path):
+    try:
+        with open(meta_path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except Exception:
+        data = None
+    if isinstance(data, list):
+        filtered = [
+            item for item in data
+            if str(((item.get("identifier") or {}).get("id") or "")).lower() != ext_id
+        ]
+        if filtered != data:
+            with open(meta_path, "w", encoding="utf-8") as handle:
+                json.dump(filtered, handle)
+
+obsolete_path = os.path.join(extensions_dir, ".obsolete")
+if os.path.isfile(obsolete_path):
+    try:
+        with open(obsolete_path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except Exception:
+        data = None
+    if isinstance(data, dict):
+        stale = [key for key in data if key.lower().startswith(ext_id)]
+        for key in stale:
+            print(f"Removing stale obsolete entry: {key}")
+            data.pop(key, None)
+        with open(obsolete_path, "w", encoding="utf-8") as handle:
+            json.dump(data, handle)
 PY
-	fi
-	PAF_CS_EXT_TARGET="${CODE_EXTENSIONSDIR}/${PUBLISHER}.${NAME}-${VERSION}"
-	mkdir -p "$PAF_CS_EXT_TARGET"
-	cp -a "$PAF_CS_EXT_SRC/." "$PAF_CS_EXT_TARGET/"
+}
+
+if [ -f "$PAF_CS_EXT_VSIX" ]; then
+	_cs_clear_extension_state "$PAF_CS_EXT_ID"
+	"$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
+		--uninstall-extension "$PAF_CS_EXT_ID" >/dev/null 2>&1 || true
+	"$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
+		--install-extension "$PAF_CS_EXT_VSIX"
+	echo "Installed Purdue AF code-server extension from ${PAF_CS_EXT_VSIX}"
 else
-	echo "WARNING: bundled Purdue AF code-server extension not found at /opt/purdue-af/code-server"
+	echo "WARNING: bundled Purdue AF code-server VSIX not found at ${PAF_CS_EXT_VSIX}" >&2
 fi
 
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"

@@ -18,6 +18,21 @@
     "*"
   ],
   "contributes": {
+    "configuration": {
+      "title": "Purdue AF",
+      "properties": {
+        "purdueaf.jupyterLabPath": {
+          "type": "string",
+          "default": "/lab/tree",
+          "description": "Path to open when switching to JupyterLab."
+        },
+        "purdueaf.shutdownPath": {
+          "type": "string",
+          "default": "/hub/home",
+          "description": "Path to open when shutting down the server."
+        }
+      }
+    },
     "commands": [
       {
         "command": "purdueaf.switchToJupyterLab",
