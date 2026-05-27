@@ -1,0 +1,67 @@
+#!/bin/bash     
+# Writes User GPU allocation data to file for GPU utilization logging for started jobs
+# Jacob Verburgt - verburgt@purdue.edu
+
+node_prefix="${SLURMD_NODENAME:0:1}"
+
+# Check if the node prefix is 'g' or 'h' or i #  " && $node_prefix" != "i"
+if [[ "$node_prefix" != "g" && "$node_prefix" != "h"  && "$node_prefix" != "i" ]]; then
+    exit 0 #GPUs are only on these nodes, so we only log slurm jobs on these nodes.
+fi
+
+
+
+mkdir -p /var/log/gpu_log
+json_file="/var/log/gpu_log/gpu_jobinfo_prolog.json"
+
+#Get UUIDs for users GPUS
+SLURM_JOB_GPU_UUIDS=""
+gpu_indices=$(echo $SLURM_JOB_GPUS | tr ',' ' ')
+for gpu_index in $gpu_indices; do
+    # Use nvidia-smi to get the UUID for each GPU index
+    uuid=$(nvidia-smi --query-gpu=uuid --format=csv,noheader,nounits --id=$gpu_index)
+    # Append the UUID to SLURM_JOB_GPU_UUIDS
+    if [ -z "$SLURM_JOB_GPU_UUIDS" ]; then
+        SLURM_JOB_GPU_UUIDS="$uuid"
+    else
+        SLURM_JOB_GPU_UUIDS="$SLURM_JOB_GPU_UUIDS,$uuid"
+    fi
+done
+
+#Create the json entry for this job
+new_entry=$(jq -n \
+  --argjson start_time "$SLURM_JOB_START_TIME" \
+  --argjson end_time "$SLURM_JOB_END_TIME" \
+  --argjson job_id "$SLURM_JOBID" \
+  --arg gpus "$SLURM_JOB_GPUS" \
+  --arg gpu_uuids "$SLURM_JOB_GPU_UUIDS" \
+  --arg job_user "$SLURM_JOB_USER" \
+  --argjson uid "$SLURM_UID" \
+  --arg partition "$SLURM_JOB_PARTITION" \
+  --arg account "$SLURM_JOB_ACCOUNT" \
+  --arg nodename "$SLURMD_NODENAME" \
+  --arg cluster_name "$SLURM_CLUSTER_NAME" \
+'{
+    "SLURM_JOB_START_TIME": $start_time,
+    "SLURM_JOB_END_TIME": $end_time,
+    "SLURM_JOBID": $job_id,
+    "SLURM_JOB_GPUS": ($gpus | split(",") | map(tonumber)),
+    "SLURM_JOB_GPU_UUIDS": ($gpu_uuids | split(",") | map(.)),
+    "SLURM_JOB_USER": $job_user,
+    "SLURM_UID": $uid,
+    "SLURM_JOB_ACCOUNT": $account,
+    "SLURMD_NODENAME": $nodename,
+    "SLURM_CLUSTER_NAME": $cluster_name
+}')
+
+#Add this entry to the exiting file if it exists. Otherwise, create the existing file
+if [[ -f "$json_file" ]]; then
+  # If already exists - append the new entry
+  jq ". += [$new_entry]" "$json_file" > /tmp/temp.json && mv /tmp/temp.json "$json_file"
+else
+  #Otherwise create the file
+  echo "[$new_entry]" > "$json_file"
+fi
+
+#Always exit 0 so slurm doesn't offline node in case of error
+exit 0

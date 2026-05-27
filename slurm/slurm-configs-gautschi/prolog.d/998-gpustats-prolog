@@ -1,0 +1,22 @@
+#!/bin/bash
+# Writes User GPU allocation data to file for GPU utilization logging for complete jobs
+# Modified from jobstats distribution - https://github.com/PrincetonUniversity/jobstats
+# Jacob Verburgt - verburgt@purdue.edu
+
+node_prefix="${SLURMD_NODENAME:0:1}"
+
+# Check if the node prefix is 'g' or 'h' or 'i' # && "$node_prefix" != "i"
+if [[ "$node_prefix" != "g" && "$node_prefix" != "h" && "$node_prefix" != "i" ]]; then
+    exit 0 #Exit cleanly if on a CPU node (not g/h/i)
+fi
+
+DEST=/run/gpustat
+[ -e $DEST ] || mkdir -m 755 $DEST
+for i in ${GPU_DEVICE_ORDINAL//,/ } ${CUDA_VISIBLE_DEVICES//,/ }; do
+  echo $SLURM_JOB_ID $SLURM_JOB_UID > $DEST/$i
+  if [ "${i:0:3}" != "MIG" ]; then
+    UUID="`/usr/bin/nvidia-smi --query-gpu=uuid --format=noheader,csv -i $i`"
+    echo $SLURM_JOB_ID $SLURM_JOB_UID > "$DEST/$UUID"
+  fi
+done
+exit 0

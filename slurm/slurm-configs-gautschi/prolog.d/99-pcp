@@ -1,0 +1,11 @@
+#!/bin/bash
+
+YEAR=$(date +%Y)
+MONTH=$(date +%m)
+DAY=$(date +%d)
+JOB_DATE_LONG=$(date +%Y%m%d.%H.%M.%S)
+FULLHOST=$(hostname --fqdn)
+LOGDIR="/var/log/pcp/pmlogger/gautschi/$YEAR/$MONTH/$FULLHOST/$YEAR-$MONTH-$DAY"
+PMLOGGER_PROLOG=yes
+pmlogger -U pcp -c /etc/pcp/pmlogger/pmlogger-supremm.config -s 4 -l /tmp/job-$SLURM_JOB_ID-begin-${JOB_DATE_LONG}.log $LOGDIR/job-$SLURM_JOB_ID-begin-$JOB_DATE_LONG &>/dev/null &
+sleep 1

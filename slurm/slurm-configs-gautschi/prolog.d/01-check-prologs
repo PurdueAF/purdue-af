@@ -1,0 +1,32 @@
+#!/bin/bash
+
+#Count prologs and epilogues running.
+
+declare -a eprocs pprocs
+eprocs=($(pgrep -f -u slurm epilog))
+pprocs=($(pgrep -f -u slurm prolog))
+logger -t prolog "$SLURM_JOB_ID $SLURM_JOB_USER ${#eprocs[*]} epilogues, ${#pprocs[*]} prologs running."
+
+#Clear the memory cache.
+if [ ${#eprocs[*]} -lt 1 ] ; then
+	if [ ${#pprocs[*]} -lt 2 ] ; then
+		cache_time=$(date +%s%N)
+		# Particular jobs on i nodes don't seem to like this.
+		#if [[ ! "$(hostname)" =~ i[0-9]{3}\.gautschi\.rcac.purdue\.edu ]]; then
+			## Disabling 4/2/2026 to address concerns about slurm 
+			#echo 3 > /proc/sys/vm/drop_caches
+		#fi
+		N=$(($(date +%s%N) - cache_time))
+		logger -t prolog "$SLURM_JOB_ID $SLURM_JOB_USER Prolog Cache Drop: $(printf '%d.%03d\n' $((N/1000000000)) $(((N/1000000)%1000))) seconds."
+	else
+		logger -t prolog "$SLURM_JOB_ID $SLURM_JOB_USER Prolog Cache Drop deferred - prolog conflict."
+	fi
+else
+	logger -t prolog "$SLURM_JOB_ID $SLURM_JOB_USER Prolog Cache Drop deferred - epilogue conflict."
+fi
+
+#end time for run time
+N=$(($(date +%s%N) - start_time))
+logger -t prolog "$SLURM_JOB_ID $SLURM_JOB_USER Prolog Run Time: $(printf '%d.%03d\n' $((N/1000000000)) $(((N/1000000)%1000))) seconds."
+
+exit 0

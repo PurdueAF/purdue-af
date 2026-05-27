@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# Disable linger if this is the last job running for this user.
+# https://slurm.schedmd.com/pam_slurm_adopt.html#PAM_CONFIG
+O_P=0
+for pid in $(scontrol listpids | awk -v jid=$SLURM_JOB_ID 'NR!=1 { if ($2 != jid && $1 != "-1"){print $1} }'); do
+        ps --noheader -o euser p $pid | grep -q $SLURM_JOB_USER || O_P=1
+done
+if [ $O_P -eq 0 ]; then
+        loginctl disable-linger $SLURM_JOB_USER
+fi
+exit 0

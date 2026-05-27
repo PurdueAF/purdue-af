@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# pam_systemd conflicts with pam_slurm_adopt - bring some pam_systemd features back via prolog
+# https://slurm.schedmd.com/pam_slurm_adopt.html#PAM_CONFIG
+
+loginctl enable-linger $SLURM_JOB_USER
+exit 0
