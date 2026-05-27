@@ -90,7 +90,7 @@ function activate(context) {
     -10000
   );
   labButton.name = "Purdue AF JupyterLab Button";
-  labButton.text = "$(purdueaf-jupyter) JupyterLab";
+  labButton.text = "$(beaker) JupyterLab";
   labButton.tooltip = "Switch to JupyterLab interface";
   labButton.command = "purdueaf.switchToJupyterLab";
   labButton.show();
@@ -100,7 +100,7 @@ function activate(context) {
     -10001
   );
   shutdownButton.name = "Purdue AF Shutdown Button";
-  shutdownButton.text = "$(purdueaf-shutdown) Shut Down";
+  shutdownButton.text = "$(debug-disconnect) Shut Down";
   shutdownButton.tooltip = "Open JupyterHub home to stop this server";
   shutdownButton.command = "purdueaf.openShutdownPage";
   shutdownButton.show();

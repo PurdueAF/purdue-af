@@ -18,22 +18,6 @@
     "*"
   ],
   "contributes": {
-    "icons": {
-      "purdueaf-jupyter": {
-        "description": "Jupyter logo",
-        "default": {
-          "fontPath": "media/purdueaf.woff",
-          "fontCharacter": "\\f102"
-        }
-      },
-      "purdueaf-shutdown": {
-        "description": "Shut down",
-        "default": {
-          "fontPath": "media/purdueaf.woff",
-          "fontCharacter": "\\f101"
-        }
-      }
-    },
     "configuration": {
       "title": "Purdue AF",
       "properties": {
