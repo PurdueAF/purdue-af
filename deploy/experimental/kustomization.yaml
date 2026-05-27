@@ -7,7 +7,6 @@ resources:
   - ../../apps/dask-gateway/helmrepo.yaml
   - ../../apps/dask-gateway/dask-gateway-k8s-slurm-gautschi/helmrelease.yaml
   - ../../apps/dask-gateway/dask-gateway-k8s-slurm-gautschi/ingress.yaml
-  - ../../apps/jupyterhub/jupyterhub/pvc-munge-key-gautschi.yaml
 
   - ../../apps/monitoring/pyroscope/helmrelease.yaml
   - ../../apps/monitoring/loki/helmrelease.yaml
