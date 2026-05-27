@@ -170,7 +170,7 @@ COPY --chown=root:root \
     /usr/local/bin/
 COPY --chown=root:root \
     docker/purdue-af/code-server/purdue-af-interface-controls \
-    /opt/purdue-af/code-server/
+    /opt/purdue-af/code-server/purdue-af-interface-controls/
 
 RUN chmod +x /usr/local/bin/pixi && \
     chmod +x /usr/local/bin/* && \

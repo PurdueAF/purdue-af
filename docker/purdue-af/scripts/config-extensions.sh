@@ -131,12 +131,21 @@ _cs_install_if_missing renan-r-santos.pixi-code
 
 # Install Purdue AF code-server UI controls from bundled extension sources
 PAF_CS_EXT_SRC="/opt/purdue-af/code-server/purdue-af-interface-controls"
-PUBLISHER=$(jq -r '.publisher' "$PAF_CS_EXT_SRC/package.json")
-NAME=$(jq -r '.name' "$PAF_CS_EXT_SRC/package.json")
-VERSION=$(jq -r '.version' "$PAF_CS_EXT_SRC/package.json")
-PAF_CS_EXT_TARGET="${CODE_EXTENSIONSDIR}/${PUBLISHER}.${NAME}-${VERSION}"
-mkdir -p "$PAF_CS_EXT_TARGET"
-cp -a "$PAF_CS_EXT_SRC/." "$PAF_CS_EXT_TARGET/"
+if [ ! -f "$PAF_CS_EXT_SRC/package.json" ] && [ -f "/opt/purdue-af/code-server/package.json" ]; then
+	# Backward compatibility with images built from earlier COPY semantics.
+	PAF_CS_EXT_SRC="/opt/purdue-af/code-server"
+fi
+
+if [ -f "$PAF_CS_EXT_SRC/package.json" ]; then
+	PUBLISHER=$(jq -r '.publisher' "$PAF_CS_EXT_SRC/package.json")
+	NAME=$(jq -r '.name' "$PAF_CS_EXT_SRC/package.json")
+	VERSION=$(jq -r '.version' "$PAF_CS_EXT_SRC/package.json")
+	PAF_CS_EXT_TARGET="${CODE_EXTENSIONSDIR}/${PUBLISHER}.${NAME}-${VERSION}"
+	mkdir -p "$PAF_CS_EXT_TARGET"
+	cp -a "$PAF_CS_EXT_SRC/." "$PAF_CS_EXT_TARGET/"
+else
+	echo "WARNING: bundled Purdue AF code-server extension not found at /opt/purdue-af/code-server"
+fi
 
 chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
 
