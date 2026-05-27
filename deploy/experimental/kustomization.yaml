@@ -4,6 +4,11 @@ resources:
   # - ../../apps/dask-gateway/dask-gateway-k8s-interlink/helmrelease.yaml
   # - ../../apps/dask-gateway/dask-gateway-k8s-interlink/ingress.yaml
 
+  - ../../apps/dask-gateway/helmrepo.yaml
+  - ../../apps/dask-gateway/dask-gateway-k8s-slurm-gautschi/helmrelease.yaml
+  - ../../apps/dask-gateway/dask-gateway-k8s-slurm-gautschi/ingress.yaml
+  - ../../apps/jupyterhub/jupyterhub/pvc-munge-key-gautschi.yaml
+
   - ../../apps/monitoring/pyroscope/helmrelease.yaml
   - ../../apps/monitoring/loki/helmrelease.yaml
   - ../../apps/monitoring/alloy/helmrelease.yaml
@@ -43,6 +48,10 @@ generatorOptions:
   disableNameSuffixHash: true
 
 configMapGenerator:
+  - name: dask-gateway-k8s-slurm-gautschi-config
+    files:
+      - values.yaml=../../apps/dask-gateway/dask-gateway-k8s-slurm-gautschi/values.yaml
+
   - name: dask-gateway-k8s-interlink-config
     files:
       - values.yaml=../../apps/dask-gateway/dask-gateway-k8s-interlink/values.yaml

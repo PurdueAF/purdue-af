@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: traefik-dask-gateway-k8s-slurm-gautschi-ingress
+spec:
+  ingressClassName: public
+  rules:
+    - host: dask-gateway-k8s-slurm-gautschi.geddes.rcac.purdue.edu
+      http:
+        paths:
+          - backend:
+              service:
+                name: traefik-dask-gateway-k8s-slurm-gautschi
+                port:
+                  number: 80
+            path: /
+            pathType: ImplementationSpecific
