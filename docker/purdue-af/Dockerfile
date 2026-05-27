@@ -55,7 +55,7 @@ RUN dnf -y --disablerepo='*' install --nogpgcheck --setopt=install_weak_deps=Fal
 
 # Install Slurm
 COPY slurm/slurm-25.11.4-1.el8.x86_64.rpm /etc/
-COPY slurm/slurm-configs /etc/slurm
+COPY slurm/slurm-configs-hammer /etc/slurm
 RUN set -euo pipefail \
  && dnf localinstall -y /etc/slurm-25.11.4-1.el8.x86_64.rpm \
  && rm -rf /etc/slurm-25.11.4-1.el8.x86_64.rpm \
