@@ -20,7 +20,6 @@ RUN yum update -y && \
     yum upgrade -y && \
     yum install -y \
         https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm \
-        https://repo.opensciencegrid.org/osg/3.6/osg-3.6-el8-release-latest.rpm \
         curl sudo libXft libXpm libXext libSM mesa-libGL glibc-locale-source glibc-langpack-en\
         wget bzip2 &&\
     curl -O https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/t/tini-0.19.0-1.el8.x86_64.rpm && \
