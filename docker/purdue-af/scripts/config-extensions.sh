@@ -98,8 +98,7 @@ mkdir -p "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
 CODE_SERVER_USER_SETTINGS="$CODE_USERDATADIR/User"
 mkdir -p "$CODE_SERVER_USER_SETTINGS"
 HUB_PREFIX="${JUPYTERHUB_SERVICE_PREFIX:-/user/${NB_USER}/}"
-LAB_PATH="${HUB_PREFIX%/}/lab/tree"
-SHUTDOWN_API_PATH="${HUB_PREFIX%/}/api/shutdown"
+LAB_PATH="${HUB_PREFIX%/}/lab"
 HUB_HOME_PATH="/hub/home"
 HUB_ORIGIN=""
 if [[ "${JUPYTERHUB_BASE_URL:-}" == http* ]]; then
@@ -117,7 +116,6 @@ cat >"$CODE_SERVER_USER_SETTINGS/settings.json" <<EOF
   },
   "continue.enableNextEdit": false,
   "purdueaf.jupyterLabPath": "${LAB_PATH}",
-  "purdueaf.shutdownApiPath": "${SHUTDOWN_API_PATH}",
   "purdueaf.hubHomePath": "${HUB_HOME_PATH}",
   "purdueaf.servicePrefix": "${HUB_PREFIX}",
   "purdueaf.hubOrigin": "${HUB_ORIGIN}"

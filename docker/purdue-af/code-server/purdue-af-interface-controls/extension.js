@@ -36,18 +36,11 @@ function buildUrls() {
   const config = vscode.workspace.getConfiguration("purdueaf");
   const origin = getOrigin(config);
   const servicePrefix = getServicePrefix(config);
-  const labPath = config.get("jupyterLabPath") || `${servicePrefix}lab/tree`;
-  const shutdownApiPath =
-    config.get("shutdownApiPath") || `${servicePrefix}api/shutdown`;
+  const labPath = config.get("jupyterLabPath") || `${servicePrefix}lab`;
   const hubHomePath = config.get("hubHomePath") || "/hub/home";
 
   return {
-    origin,
-    servicePrefix,
     labUrl: labPath.startsWith("http") ? labPath : joinUrl(origin, labPath),
-    shutdownApiUrl: shutdownApiPath.startsWith("http")
-      ? shutdownApiPath
-      : joinUrl(origin, shutdownApiPath),
     hubHomeUrl: hubHomePath.startsWith("http")
       ? hubHomePath
       : joinUrl(origin, hubHomePath),
@@ -75,58 +68,20 @@ async function openInBrowser(url, label) {
   }
 }
 
-async function switchToJupyterLab(labUrl) {
-  await openInBrowser(labUrl, "Switch to JupyterLab");
-}
-
-async function shutdownSession(shutdownApiUrl, hubHomeUrl) {
-  const confirmed = await vscode.window.showWarningMessage(
-    "Shut down Analysis Facility session? Unsaved data will be lost.",
-    { modal: true },
-    "Shut Down"
-  );
-  if (confirmed !== "Shut Down") {
-    return;
-  }
-
-  try {
-    const response = await fetch(shutdownApiUrl, {
-      method: "POST",
-      credentials: "include",
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-  } catch (error) {
-    vscode.window.showErrorMessage(
-      `Failed to shut down session: ${error.message || error}`
-    );
-    return;
-  }
-
-  const choice = await vscode.window.showInformationMessage(
-    "Session closed. Open JupyterHub home?",
-    "Open Hub Home"
-  );
-  if (choice === "Open Hub Home") {
-    await openInBrowser(hubHomeUrl, "JupyterHub home");
-  }
-}
-
 function activate(context) {
   const urls = buildUrls();
 
-  const switchToJupyterLabCommand = vscode.commands.registerCommand(
+  const switchToJupyterLab = vscode.commands.registerCommand(
     "purdueaf.switchToJupyterLab",
     async () => {
-      await switchToJupyterLab(urls.labUrl);
+      await openInBrowser(urls.labUrl, "Switch to JupyterLab");
     }
   );
 
-  const openShutdownPage = vscode.commands.registerCommand(
+  const openHubHome = vscode.commands.registerCommand(
     "purdueaf.openShutdownPage",
     async () => {
-      await shutdownSession(urls.shutdownApiUrl, urls.hubHomeUrl);
+      await openInBrowser(urls.hubHomeUrl, "Open JupyterHub home");
     }
   );
 
@@ -146,13 +101,13 @@ function activate(context) {
   );
   shutdownButton.name = "Purdue AF Shutdown Button";
   shutdownButton.text = "$(power) Shut Down";
-  shutdownButton.tooltip = "Shut down this Analysis Facility session";
+  shutdownButton.tooltip = "Open JupyterHub home to stop this server";
   shutdownButton.command = "purdueaf.openShutdownPage";
   shutdownButton.show();
 
   context.subscriptions.push(
-    switchToJupyterLabCommand,
-    openShutdownPage,
+    switchToJupyterLab,
+    openHubHome,
     labButton,
     shutdownButton
   );

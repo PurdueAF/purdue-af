@@ -1,7 +1,7 @@
 {
   "name": "purdue-af-interface-controls",
   "displayName": "Purdue AF Interface Controls",
-  "description": "Status bar buttons to switch to JupyterLab and open JupyterHub shutdown page.",
+  "description": "Status bar buttons to switch to JupyterLab and open JupyterHub home.",
   "version": "0.1.0",
   "publisher": "purdueaf",
   "engines": {
@@ -23,18 +23,13 @@
       "properties": {
         "purdueaf.jupyterLabPath": {
           "type": "string",
-          "default": "/lab/tree",
+          "default": "/lab",
           "description": "Path to open when switching to JupyterLab."
-        },
-        "purdueaf.shutdownApiPath": {
-          "type": "string",
-          "default": "/api/shutdown",
-          "description": "Jupyter Server shutdown API path."
         },
         "purdueaf.hubHomePath": {
           "type": "string",
           "default": "/hub/home",
-          "description": "JupyterHub home path shown after shutdown."
+          "description": "JupyterHub home path with server stop controls."
         },
         "purdueaf.servicePrefix": {
           "type": "string",
@@ -55,7 +50,7 @@
       },
       {
         "command": "purdueaf.openShutdownPage",
-        "title": "Purdue AF: Shut Down session"
+        "title": "Purdue AF: Open JupyterHub home"
       }
     ]
   }
