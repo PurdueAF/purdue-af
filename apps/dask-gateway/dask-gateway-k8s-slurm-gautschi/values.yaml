@@ -148,6 +148,68 @@ gateway:
           return await _orig_slurm_start_cluster(self, user, cluster_options)
 
       SlurmBackend.start_cluster = _slurm_start_cluster_limited
+
+      # Persist sbatch script/cmd for manual debugging (survives staging_dir cleanup).
+      import os
+      import pwd
+      import shlex
+
+      _orig_get_submit_cmd_env_stdin = SlurmBackend.get_submit_cmd_env_stdin
+
+      def _dump_slurm_submit_artifacts(self, cluster, worker, cmd, env, script):
+          kind = f"worker-{worker.name}" if worker else "scheduler"
+          staging_dir = self.get_staging_directory(cluster)
+          base = cluster.config.staging_directory.format(
+              home=pwd.getpwnam(cluster.username).pw_dir,
+              username=cluster.username,
+          )
+          debug_dir = os.path.join(base, "_debug", cluster.name)
+          os.makedirs(debug_dir, mode=0o700, exist_ok=True)
+
+          batch_path = os.path.join(debug_dir, f"{kind}-batch.sh")
+          cmd_path = os.path.join(debug_dir, f"{kind}-sbatch-cmd.txt")
+          submit_path = os.path.join(debug_dir, f"{kind}-submit.sh")
+          readme_path = os.path.join(debug_dir, "README.txt")
+
+          with open(batch_path, "w") as f:
+              f.write(script)
+          os.chmod(batch_path, 0o700)
+
+          with open(cmd_path, "w") as f:
+              f.write(" ".join(shlex.quote(arg) for arg in cmd) + "\n")
+
+          export_keys = sorted(env)
+          with open(submit_path, "w") as f:
+              f.write("#!/bin/sh\n")
+              f.write("set -euo pipefail\n")
+              f.write(f"cd {shlex.quote(staging_dir)}\n")
+              for key in export_keys:
+                  f.write(f"export {key}={shlex.quote(str(env[key]))}\n")
+              f.write(
+                  " ".join(shlex.quote(arg) for arg in cmd)
+                  + " < "
+                  + shlex.quote(batch_path)
+                  + "\n"
+              )
+          os.chmod(submit_path, 0o700)
+
+          with open(readme_path, "w") as f:
+              f.write(
+                  "Dask Gateway SLURM debug artifacts\n"
+                  f"cluster: {cluster.name}\n"
+                  f"user: {cluster.username}\n"
+                  f"staging_dir: {staging_dir}\n\n"
+                  f"Manual submit (as {cluster.username}): {submit_path}\n"
+                  f"Batch script only: {batch_path}\n"
+                  f"sbatch argv: {cmd_path}\n"
+              )
+
+      def _get_submit_cmd_env_stdin_with_debug_dump(self, cluster, worker=None):
+          cmd, env, script = _orig_get_submit_cmd_env_stdin(self, cluster, worker=worker)
+          _dump_slurm_submit_artifacts(self, cluster, worker, cmd, env, script)
+          return cmd, env, script
+
+      SlurmBackend.get_submit_cmd_env_stdin = _get_submit_cmd_env_stdin_with_debug_dump
 traefik:
   replicas: 1
   image:
