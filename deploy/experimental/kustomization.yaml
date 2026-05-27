@@ -5,8 +5,17 @@ resources:
   # - ../../apps/dask-gateway/dask-gateway-k8s-interlink/ingress.yaml
 
   - ../../apps/dask-gateway/helmrepo.yaml
+  - ../../apps/dask-gateway/dask-gateway-k8s/helmrelease.yaml
+  - ../../apps/dask-gateway/dask-gateway-k8s/ingress.yaml
+  - ../../apps/dask-gateway/dask-gateway-k8s-slurm-hammer/helmrelease.yaml
+  - ../../apps/dask-gateway/dask-gateway-k8s-slurm-hammer/ingress.yaml
+  # Legacy Slurm gateway (dask-gateway-k8s-slurm); remove after user migration
+  - ../../apps/dask-gateway/dask-gateway-k8s-slurm/helmrelease.yaml
+  - ../../apps/dask-gateway/dask-gateway-k8s-slurm/ingress.yaml
   - ../../apps/dask-gateway/dask-gateway-k8s-slurm-gautschi/helmrelease.yaml
   - ../../apps/dask-gateway/dask-gateway-k8s-slurm-gautschi/ingress.yaml
+  - ../../apps/jupyterhub/jupyterhub/pvc-munge-key.yaml
+  - ../../apps/jupyterhub/jupyterhub/pvc-munge-key-gautschi.yaml
 
   - ../../apps/monitoring/pyroscope/helmrelease.yaml
   - ../../apps/monitoring/loki/helmrelease.yaml
@@ -47,6 +56,18 @@ generatorOptions:
   disableNameSuffixHash: true
 
 configMapGenerator:
+  - name: dask-gateway-k8s-config
+    files:
+      - values.yaml=../../apps/dask-gateway/dask-gateway-k8s/values.yaml
+
+  - name: dask-gateway-k8s-slurm-hammer-config
+    files:
+      - values.yaml=../../apps/dask-gateway/dask-gateway-k8s-slurm-hammer/values.yaml
+
+  - name: dask-gateway-k8s-slurm-config
+    files:
+      - values.yaml=../../apps/dask-gateway/dask-gateway-k8s-slurm/values.yaml
+
   - name: dask-gateway-k8s-slurm-gautschi-config
     files:
       - values.yaml=../../apps/dask-gateway/dask-gateway-k8s-slurm-gautschi/values.yaml

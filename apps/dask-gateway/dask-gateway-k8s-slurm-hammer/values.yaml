@@ -1,0 +1,183 @@
+gateway:
+  replicas: 1
+  prefix: /
+  loglevel: WARN
+  image:
+    name: geddes-registry.rcac.purdue.edu/cms/dask-gateway-server
+    tag: 2023.9.0-purdue.v4-hammer
+    pullPolicy: IfNotPresent
+  auth:
+    type: simple
+    simple:
+      password: null
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+  resources:
+    limits:
+      cpu: 8
+      memory: 16Gi
+    requests:
+      cpu: 8
+      memory: 16Gi
+  service:
+    annotations:
+      metallb.universe.tf/address-pool: geddes-public-pool
+  env:
+    - name: NAMESPACE
+      value: ${namespace}
+    - name: RELEASE_NAME
+      value: dask-gateway-k8s-slurm-hammer
+  extraConfig:
+    slurmConfig: |
+      import os
+      RELEASE_NAME = os.environ["RELEASE_NAME"]
+      NAMESPACE = os.environ["NAMESPACE"]
+
+      c.DaskGateway.backend_class = "dask_gateway_server.backends.jobqueue.slurm.SlurmBackend"
+      c.DaskGateway.address = ':8786'
+      c.SlurmBackend.api_url = f'http://api-{RELEASE_NAME}.{NAMESPACE}.geddes.rcac.purdue.edu:8000/api'
+      c.SlurmBackend.cluster_start_timeout = 60*10
+      c.SlurmBackend.cluster_heartbeat_period = 60*2
+      c.SlurmBackend.worker_start_timeout = 60*10
+      c.ClusterConfig.idle_timeout = 3600*24
+
+      from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
+      import os.path
+
+      def options_handler(options, user=None):
+          # Determine which conda environment to use
+          conda_env = None
+          
+          # Check if pixi_project is provided (and not empty string)
+          pixi_project = getattr(options, 'pixi_project', None)
+          if pixi_project and pixi_project.strip():
+              # If pixi_project is provided, conda_env should not be explicitly set
+              # Check if user explicitly provided a conda_env
+              user_conda_env = getattr(options, 'conda_env', None)
+              if user_conda_env and user_conda_env.strip():
+                  raise ValueError("pixi-env and conda-env are mutually exclusive. Please specify only one.")
+              
+              # Validate pixi project directory
+              pixi_project_dir = pixi_project.strip()
+              pixi_project_name = getattr(options, 'pixi_env', 'default')
+              
+              # Construct the environment path (always done, even if we can't validate)
+              env_path = os.path.join(pixi_project_dir, '.pixi', 'envs', pixi_project_name)
+              
+              # Validate pixi project if accessible
+              # For SLURM backend, gateway server may not have access to user directories,
+              # but files will be accessible on SLURM nodes where jobs run
+              try:
+                  pixi_toml_path = os.path.join(pixi_project_dir, 'pixi.toml')
+                  if not os.path.exists(pixi_toml_path):
+                      raise ValueError(f"pixi.toml not found in {pixi_project_dir}. Please provide a valid pixi project directory.")
+                  
+                  # Check if environment exists
+                  if not os.path.exists(env_path):
+                      raise ValueError(f"Pixi environment 'default' not found at {env_path}. Please build the environment first by running 'pixi install' in {pixi_project_dir}.")
+              except Exception:
+                  # Gateway server can't access user directories or validation failed, skip validation
+                  # Files will be validated/accessible on SLURM nodes where jobs run
+                  pass
+              
+              conda_env = env_path
+          else:
+              # Use conda_env (must be specified if pixi_project is not provided)
+              user_conda_env = getattr(options, 'conda_env', None)
+              if not user_conda_env or not user_conda_env.strip():
+                  raise ValueError("Either conda_env or pixi_project must be specified")
+              conda_env = user_conda_env.strip()
+
+          setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; export DASK_DISTRIBUTED__WORKER__PROFILE__INTERVAL=1000000000; export DASK_DISTRIBUTED__SCHEDULER__PROFILE__INTERVAL=1000000000; "
+
+          options.env["PATH"]=f"{conda_env}/bin/:"+options.env.pop("PATH")
+          options.env["CPLUS_INCLUDE_PATH"]=f"{conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
+
+          return {
+              "scheduler_cores": 2,
+              "scheduler_memory": 4 * 2 ** 30,
+              "worker_cores": options.worker_cores,
+              "worker_memory": int(options.worker_memory * 2 ** 30),
+              "environment": options.env,
+              "scheduler_cmd": [f"{conda_env}/bin/dask", "scheduler"],
+              "scheduler_partition": "hammer-nodes",
+              # "scheduler_reservation": "CMSLOCAL",
+              "worker_partition": "hammer-nodes",
+              "worker_cmd": [
+                  f"{conda_env}/bin/dask",
+                  "worker",
+                  "--preload",
+                  "/depot/cms/purdue-af/dask_pyroscope_preload_slurm.py",
+              ],
+              "account": "cms",
+              # "time": "1-00:00:00",
+              "time": "0-04:00:00",
+              "scheduler_setup": setup_cmd,
+              "worker_setup": setup_cmd,
+              "staging_directory": "/depot/cms/users/{username}/.dask-gateway/"
+          }
+      c.Backend.cluster_options = Options(
+          String("conda_env", default="", label="Conda environment"),
+          String("pixi_project", default="", label="Pixi project name (mutually exclusive with conda-env)"),
+          String("pixi_env", default="default", label="Pixi environment within project (default: 'default')"),
+          Integer("worker_cores", default=1, min=1, max=16, label="Cores per worker"),
+          Float("worker_memory", default=4, min=1, max=64, label="Memory per worker (GiB)"),
+          Mapping("env", {"X509_USER_PROXY": "", "WORKDIR": ""}, label="Environment variables"),
+          handler=options_handler,
+      )
+
+      # Per-user cap (not in upstream Dask Gateway): at most one active cluster per user.
+      from dask_gateway_server.backends.jobqueue.slurm import SlurmBackend
+      from dask_gateway_server.backends.base import PublicException
+
+      _max_active_clusters_per_user = 1
+      _orig_slurm_start_cluster = SlurmBackend.start_cluster
+
+      async def _slurm_start_cluster_limited(self, user, cluster_options):
+          if _max_active_clusters_per_user:
+              busy = await self.list_clusters(username=user.name)
+              if len(busy) >= _max_active_clusters_per_user:
+                  raise PublicException(
+                      f"You may only have {_max_active_clusters_per_user} active Dask Gateway cluster(s) at a time. "
+                      "Stop your existing cluster or wait for it to finish shutting down before creating another."
+                  )
+          return await _orig_slurm_start_cluster(self, user, cluster_options)
+
+      SlurmBackend.start_cluster = _slurm_start_cluster_limited
+traefik:
+  replicas: 1
+  image:
+    name: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/traefik
+    tag: 2.10.4
+    pullPolicy: IfNotPresent
+  loglevel: WARN
+  dashboard: false
+  service:
+    type: ClusterIP
+    annotations:
+      metallb.universe.tf/address-pool: geddes-private-pool
+    ports:
+      web:
+        port: 80
+      tcp:
+        port: 8786
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+controller:
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
