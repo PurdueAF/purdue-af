@@ -110,8 +110,6 @@ gateway:
               "worker_cmd": [
                   f"{conda_env}/bin/dask",
                   "worker",
-                  "--preload",
-                  "/depot/cms/purdue-af/dask_pyroscope_preload_slurm.py",
               ],
               "account": "cms",
               "qos": "standby",
@@ -148,39 +146,6 @@ gateway:
           return await _orig_slurm_start_cluster(self, user, cluster_options)
 
       SlurmBackend.start_cluster = _slurm_start_cluster_limited
-
-      # Log sbatch script/cmd to gateway pod logs (no depot writes).
-      import shlex
-
-      _orig_get_submit_cmd_env_stdin = SlurmBackend.get_submit_cmd_env_stdin
-
-      def _log_slurm_submit(self, cluster, worker, cmd, env, script):
-          kind = f"worker-{worker.name}" if worker else "scheduler"
-          staging_dir = self.get_staging_directory(cluster)
-          sbatch_cmd = " ".join(shlex.quote(arg) for arg in cmd)
-          env_export = " ".join(
-              f"{key}={shlex.quote(str(env[key]))}" for key in sorted(env)
-          )
-          self.log.warning(
-              "SLURM submit debug cluster=%s user=%s kind=%s staging_dir=%s\n"
-              "sbatch: %s\n"
-              "export: %s\n"
-              "batch script:\n%s",
-              cluster.name,
-              cluster.username,
-              kind,
-              staging_dir,
-              sbatch_cmd,
-              env_export or "(none)",
-              script,
-          )
-
-      def _get_submit_cmd_env_stdin_with_debug_log(self, cluster, worker=None):
-          cmd, env, script = _orig_get_submit_cmd_env_stdin(self, cluster, worker=worker)
-          _log_slurm_submit(self, cluster, worker, cmd, env, script)
-          return cmd, env, script
-
-      SlurmBackend.get_submit_cmd_env_stdin = _get_submit_cmd_env_stdin_with_debug_log
 traefik:
   replicas: 1
   image:
