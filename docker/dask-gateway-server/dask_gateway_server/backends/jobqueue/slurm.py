@@ -104,7 +104,7 @@ class SlurmBackend(JobQueueBackend):
         if cluster.config.account:
             cmd.append("--account=" + cluster.config.account)
         if cluster.config.qos:
-            cmd.extend("--qos=" + cluster.config.qos)
+            cmd.append("--qos=" + cluster.config.qos)
         if cluster.config.reservation:
             cmd.extend(["--reservation=" + cluster.config.reservation])
         if cluster.config.time:
