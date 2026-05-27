@@ -49,12 +49,6 @@ echo '{
             "rank": 110
         },
         {
-            "name": "memory",
-            "command": "",
-            "disabled": false,
-            "rank": 120
-        },
-        {
             "name": "theme-toggler",
             "command": "",
             "disabled": false,
