@@ -21,7 +21,7 @@ singleuser:
         #   exec:
         #     command: ["bash", "-c", "rm -f eos-cern"]
       profile_options:
-        interface:
+        3-interface:
           display_name: "Interface"
           choices:
             1:
@@ -33,7 +33,7 @@ singleuser:
               display_name: "VS Code (code-server)"
               kubespawner_override:
                 default_url: "/vscode/?folder=/home/{username}"
-        cpu:
+        0-cpu:
           display_name: "CPUs"
           choices:
             1:
@@ -61,7 +61,7 @@ singleuser:
               kubespawner_override:
                 cpu_limit: 256
                 cpu_guarantee: 128
-        gpu:
+        1-gpu:
           display_name: "GPUs"
           choices:
             1:
@@ -79,7 +79,7 @@ singleuser:
               kubespawner_override:
                 extra_resource_limits:
                   nvidia.com/mig-7g.40gb: 1
-        memory:
+        2-memory:
           display_name: "Memory"
           choices:
             1:
