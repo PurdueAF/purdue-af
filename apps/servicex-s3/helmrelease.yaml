@@ -10,7 +10,7 @@ spec:
       chart: helm/servicex
       sourceRef:
         kind: GitRepository
-        name: servicex
+        name: servicex-dev
       # chart: servicex
       # version: "1.8.3"
       # sourceRef:
