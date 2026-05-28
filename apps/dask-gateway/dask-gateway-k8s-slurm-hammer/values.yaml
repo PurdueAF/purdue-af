@@ -99,8 +99,8 @@ gateway:
           options.env["CPLUS_INCLUDE_PATH"]=f"{conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
 
           return {
-              "scheduler_cores": 2,
-              "scheduler_memory": 4 * 2 ** 30,
+              "scheduler_cores": 4,
+              "scheduler_memory": 8 * 2 ** 30,
               "worker_cores": options.worker_cores,
               "worker_memory": int(options.worker_memory * 2 ** 30),
               "environment": options.env,
