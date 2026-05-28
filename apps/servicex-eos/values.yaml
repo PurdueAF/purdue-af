@@ -110,7 +110,6 @@ transformer:
   sidecarTag: "v1.8.3"
   autoscaler:
     maxReplicas: 500
-  outputDir: /tmp/servicex
   cpuRequest: 1
   memoryRequest: 4Gi
   cpuLimit: 2
