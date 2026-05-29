@@ -128,6 +128,39 @@ singleuser:
         extra_resource_limits:
           # nvidia.com/mig-7g.40gb: 1
           nvidia.com/mig-1g.5gb: 1
+        extra_containers:
+          - name: af-pod-monitor
+            image: geddes-registry.rcac.purdue.edu/cms/af-pod-monitor:latest
+            volumeMounts:
+              - name: volume-{username}
+                mountPath: /home/{username}
+              - name: work
+                mountPath: /work/
+                mountPropagation: HostToContainer
+          - name: ai-sidecar
+            image: geddes-registry.rcac.purdue.edu/cms/ai-sidecar:latest
+            ports:
+              - containerPort: 9191
+            env:
+              - name: NB_USER
+                valueFrom:
+                  fieldRef:
+                    fieldPath: "metadata.labels['username_unescaped']"
+              - name: JUPYTERHUB_API_URL
+                value: "http://hub:8081/hub/api"
+              - name: LOKI_URL
+                value: "http://loki.cms.svc.cluster.local:3100"
+              - name: NAMESPACE
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.namespace
+            resources:
+              requests:
+                cpu: "100m"
+                memory: "128Mi"
+              limits:
+                cpu: "500m"
+                memory: "256Mi"
       profile_options:
         interface:
           display_name: "Interface"
