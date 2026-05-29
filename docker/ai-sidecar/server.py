@@ -77,16 +77,6 @@ class _AuthMiddleware:
             )
             return
 
-        # Rewrite the Host header to "localhost" before forwarding to the MCP app.
-        # The MCP SDK enforces localhost-only Host validation as a DNS-rebinding
-        # protection, but authentication has already been handled above by the
-        # JupyterHub token check, so this rewrite is safe.
-        new_headers = [
-            (b"host", b"localhost") if k.lower() == b"host" else (k, v)
-            for k, v in scope.get("headers", [])
-        ]
-        scope = {**scope, "headers": new_headers}
-
         await self._app(scope, receive, send)
 
     @staticmethod
@@ -194,7 +184,10 @@ def main() -> None:
     if not NB_USER:
         logger.warning("NB_USER is not set — token ownership check will always fail")
 
-    app = _AuthMiddleware(mcp.streamable_http_app())
+    # Pass host="0.0.0.0" so the SDK does not auto-enable its localhost-only
+    # DNS rebinding protection (which would reject external requests).
+    # Authentication is handled entirely by _AuthMiddleware above.
+    app = _AuthMiddleware(mcp.streamable_http_app(host="0.0.0.0"))
     uvicorn.run(app, host="0.0.0.0", port=9191, log_level="info")
 
 
