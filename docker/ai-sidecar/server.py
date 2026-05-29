@@ -65,7 +65,7 @@ class _AuthMiddleware:
             await self._http_error(send, 401, "Missing Bearer token")
             return
 
-        token = auth[len("Bearer "):]
+        token = auth[len("Bearer ") :]
         username = await _validate_token(token)
 
         if username is None:
@@ -147,7 +147,9 @@ async def handle_call_tool(
     if params.name != "query_loki_logs":
         return types.CallToolResult(
             isError=True,
-            content=[types.TextContent(type="text", text=f"Unknown tool: {params.name}")],
+            content=[
+                types.TextContent(type="text", text=f"Unknown tool: {params.name}")
+            ],
         )
 
     args = params.arguments or {}
@@ -186,7 +188,9 @@ async def handle_call_tool(
         except httpx.RequestError as exc:
             return types.CallToolResult(
                 isError=True,
-                content=[types.TextContent(type="text", text=f"Loki connection error: {exc}")],
+                content=[
+                    types.TextContent(type="text", text=f"Loki connection error: {exc}")
+                ],
             )
 
     if resp.status_code != 200:
@@ -213,14 +217,20 @@ async def handle_call_tool(
 
     if not lines:
         return types.CallToolResult(
-            content=[types.TextContent(type="text", text="No logs found for the specified time range.")]
+            content=[
+                types.TextContent(
+                    type="text", text="No logs found for the specified time range."
+                )
+            ]
         )
 
     header = f"# {len(lines)} log line(s)"
     if len(lines) == limit:
         header += f" (limit={limit} reached — narrow the time range or add a filter)"
     return types.CallToolResult(
-        content=[types.TextContent(type="text", text=header + "\n\n" + "\n".join(lines))]
+        content=[
+            types.TextContent(type="text", text=header + "\n\n" + "\n".join(lines))
+        ]
     )
 
 
