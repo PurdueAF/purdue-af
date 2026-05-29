@@ -77,6 +77,16 @@ class _AuthMiddleware:
             )
             return
 
+        # Rewrite the Host header to "localhost" before forwarding to the MCP app.
+        # The MCP SDK enforces localhost-only Host validation as a DNS-rebinding
+        # protection, but authentication has already been handled above by the
+        # JupyterHub token check, so this rewrite is safe.
+        new_headers = [
+            (b"host", b"localhost") if k.lower() == b"host" else (k, v)
+            for k, v in scope.get("headers", [])
+        ]
+        scope = {**scope, "headers": new_headers}
+
         await self._app(scope, receive, send)
 
     @staticmethod
