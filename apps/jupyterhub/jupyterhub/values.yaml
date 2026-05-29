@@ -146,6 +146,10 @@ singleuser:
                 valueFrom:
                   fieldRef:
                     fieldPath: "metadata.labels['username_unescaped']"
+              - name: POD_NAME
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.name
               - name: JUPYTERHUB_API_URL
                 value: "http://hub:8081/hub/api"
               - name: LOKI_URL
