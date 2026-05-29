@@ -7,8 +7,7 @@ from typing import Optional
 
 import httpx
 import uvicorn
-from mcp import types
-from mcp.server import Server, ServerRequestContext
+from mcp.server.fastmcp import FastMCP
 
 logger = logging.getLogger(__name__)
 
@@ -96,87 +95,53 @@ class _AuthMiddleware:
         await send({"type": "http.response.body", "body": body})
 
 
-async def handle_list_tools(
-    ctx: ServerRequestContext,
-    params: types.PaginatedRequestParams | None,
-) -> types.ListToolsResult:
-    return types.ListToolsResult(
-        tools=[
-            types.Tool(
-                name="query_loki_logs",
-                description=(
-                    "Query Loki for logs from all pods belonging to this Analysis Facility "
-                    "user (notebook pod + Dask workers). Returns timestamped log lines."
-                ),
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "start": {
-                            "type": "string",
-                            "description": (
-                                "How far back to look. Duration ('1h', '30m', '2h') "
-                                "or ISO-8601 timestamp. Default: '1h'."
-                            ),
-                        },
-                        "end": {
-                            "type": "string",
-                            "description": "ISO-8601 end timestamp. Default: now.",
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum log lines to return. Default: 500.",
-                        },
-                        "filter": {
-                            "type": "string",
-                            "description": (
-                                "Optional LogQL pipe expression appended to the selector. "
-                                "Examples: '|= \"ERROR\"' or '|~ \"timeout|refused\"'."
-                            ),
-                        },
-                    },
-                },
-            )
-        ]
-    )
+mcp = FastMCP(
+    "purdue-af-sidecar",
+    stateless_http=True,
+    instructions=(
+        "Tools for querying logs from this Purdue Analysis Facility user pod. "
+        "Use query_loki_logs to retrieve logs from the user's running pods."
+    ),
+)
 
 
-async def handle_call_tool(
-    ctx: ServerRequestContext,
-    params: types.CallToolRequestParams,
-) -> types.CallToolResult:
-    if params.name != "query_loki_logs":
-        return types.CallToolResult(
-            isError=True,
-            content=[
-                types.TextContent(type="text", text=f"Unknown tool: {params.name}")
-            ],
-        )
+@mcp.tool()
+async def query_loki_logs(
+    start: str = "1h",
+    end: Optional[str] = None,
+    limit: int = 500,
+    filter: Optional[str] = None,
+) -> str:
+    """Query Loki for logs from all pods belonging to this Analysis Facility user.
 
-    args = params.arguments or {}
-    start_raw: str = args.get("start", "1h")
-    end_raw: Optional[str] = args.get("end")
-    limit: int = min(int(args.get("limit", 500)), 5000)
-    filter_expr: Optional[str] = args.get("filter")
-
+    Args:
+        start: How far back to look — duration ('1h', '30m', '2h') or ISO-8601
+               timestamp. Default: '1h'.
+        end: ISO-8601 end timestamp. Default: now.
+        limit: Maximum log lines to return. Default: 500.
+        filter: Optional LogQL pipe expression appended to the stream selector,
+                e.g. '|= "ERROR"' or '|~ "timeout|refused"'.
+    """
     selector = f'{{namespace="{NAMESPACE}",username="{NB_USER}"}}'
-    if filter_expr:
-        selector = f"{selector} {filter_expr}"
+    if filter:
+        selector = f"{selector} {filter}"
 
-    m = re.fullmatch(r"(\d+)([hms])", start_raw)
+    m = re.fullmatch(r"(\d+)([hms])", start)
     if m:
         secs = int(m.group(1)) * {"h": 3600, "m": 60, "s": 1}[m.group(2)]
         start_param = str(int((time.time() - secs) * 1e9))
     else:
-        start_param = start_raw
+        start_param = start
 
+    capped_limit = min(limit, 5000)
     loki_params: dict = {
         "query": selector,
         "start": start_param,
-        "limit": limit,
+        "limit": capped_limit,
         "direction": "forward",
     }
-    if end_raw:
-        loki_params["end"] = end_raw
+    if end:
+        loki_params["end"] = end
 
     async with httpx.AsyncClient() as client:
         try:
@@ -186,22 +151,10 @@ async def handle_call_tool(
                 timeout=30.0,
             )
         except httpx.RequestError as exc:
-            return types.CallToolResult(
-                isError=True,
-                content=[
-                    types.TextContent(type="text", text=f"Loki connection error: {exc}")
-                ],
-            )
+            return f"Error: Loki connection failed — {exc}"
 
     if resp.status_code != 200:
-        return types.CallToolResult(
-            isError=True,
-            content=[
-                types.TextContent(
-                    type="text", text=f"Loki HTTP {resp.status_code}: {resp.text[:500]}"
-                )
-            ],
-        )
+        return f"Error: Loki returned HTTP {resp.status_code} — {resp.text[:500]}"
 
     streams = resp.json().get("data", {}).get("result", [])
     lines: list[str] = []
@@ -216,42 +169,23 @@ async def handle_call_tool(
             )
 
     if not lines:
-        return types.CallToolResult(
-            content=[
-                types.TextContent(
-                    type="text", text="No logs found for the specified time range."
-                )
-            ]
-        )
+        return "No logs found for the specified time range."
 
     header = f"# {len(lines)} log line(s)"
-    if len(lines) == limit:
+    if len(lines) == capped_limit:
         header += f" (limit={limit} reached — narrow the time range or add a filter)"
-    return types.CallToolResult(
-        content=[
-            types.TextContent(type="text", text=header + "\n\n" + "\n".join(lines))
-        ]
-    )
+    return header + "\n\n" + "\n".join(lines)
 
 
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
     )
-
     if not NB_USER:
         logger.warning("NB_USER is not set — token ownership check will always fail")
 
-    server = Server(
-        "purdue-af-sidecar",
-        on_list_tools=handle_list_tools,
-        on_call_tool=handle_call_tool,
-    )
-
-    starlette_app = server.streamable_http_app(stateless_http=True, json_response=True)
-    starlette_app = _AuthMiddleware(starlette_app)
-
-    uvicorn.run(starlette_app, host="0.0.0.0", port=9191, log_level="info")
+    app = _AuthMiddleware(mcp.streamable_http_app())
+    uvicorn.run(app, host="0.0.0.0", port=9191, log_level="info")
 
 
 if __name__ == "__main__":
