@@ -141,6 +141,7 @@ mcp = FastMCP(
 
 # ── shared helper ─────────────────────────────────────────────────────────────
 
+
 async def _loki_query(selector: str, start: str, end: Optional[str], limit: int) -> str:
     m = re.fullmatch(r"(\d+)([hms])", start)
     if m:
@@ -180,7 +181,9 @@ async def _loki_query(selector: str, start: str, end: Optional[str], limit: int)
         container = labels.get("container", "unknown")
         for ts_ns, log_line in stream.get("values", []):
             ts = datetime.fromtimestamp(int(ts_ns) / 1e9, tz=timezone.utc)
-            lines.append(f"[{ts.strftime('%Y-%m-%dT%H:%M:%SZ')}] {pod}/{container}: {log_line}")
+            lines.append(
+                f"[{ts.strftime('%Y-%m-%dT%H:%M:%SZ')}] {pod}/{container}: {log_line}"
+            )
 
     if not lines:
         return "No logs found for the specified time range."
@@ -192,6 +195,7 @@ async def _loki_query(selector: str, start: str, end: Optional[str], limit: int)
 
 
 # ── tools ─────────────────────────────────────────────────────────────────────
+
 
 @mcp.tool()
 async def query_notebook_logs(
@@ -242,15 +246,14 @@ async def query_dask_logs(
         filter: Optional LogQL pipe expression, e.g. '|= "ERROR"' or
                 '|~ "timeout|refused"'.
     """
-    selector = (
-        f'{{namespace="{NAMESPACE}",username="{NB_USER}",pod!="{POD_NAME}"}}'
-    )
+    selector = f'{{namespace="{NAMESPACE}",username="{NB_USER}",pod!="{POD_NAME}"}}'
     if filter:
         selector = f"{selector} {filter}"
     return await _loki_query(selector, start, end, limit)
 
 
 # ── entry point ───────────────────────────────────────────────────────────────
+
 
 class _McpAccessFilter(logging.Filter):
     """Suppress uvicorn access-log lines that are not MCP requests.
@@ -273,7 +276,9 @@ def main() -> None:
     if not NB_USER:
         logger.warning("NB_USER is not set — token ownership check will always fail")
     if not POD_NAME:
-        logger.warning("POD_NAME is not set — notebook/dask log separation will not work")
+        logger.warning(
+            "POD_NAME is not set — notebook/dask log separation will not work"
+        )
 
     app = _AuthMiddleware(mcp.streamable_http_app())
     uvicorn.run(app, host="0.0.0.0", port=9191, log_level="info")
