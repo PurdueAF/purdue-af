@@ -77,6 +77,16 @@ class _AuthMiddleware:
             )
             return
 
+        # Rewrite Host to "localhost:9191" so the MCP SDK's built-in DNS-rebinding
+        # protection accepts the request.  The SDK allows "localhost:*" by default;
+        # bare "localhost" (no port) does not match that wildcard pattern.
+        # Our own JupyterHub token check above is the real auth gate here.
+        new_headers = [
+            (b"host", b"localhost:9191") if k.lower() == b"host" else (k, v)
+            for k, v in scope.get("headers", [])
+        ]
+        scope = {**scope, "headers": new_headers}
+
         await self._app(scope, receive, send)
 
     @staticmethod
@@ -184,10 +194,7 @@ def main() -> None:
     if not NB_USER:
         logger.warning("NB_USER is not set — token ownership check will always fail")
 
-    # Pass host="0.0.0.0" so the SDK does not auto-enable its localhost-only
-    # DNS rebinding protection (which would reject external requests).
-    # Authentication is handled entirely by _AuthMiddleware above.
-    app = _AuthMiddleware(mcp.streamable_http_app(host="0.0.0.0"))
+    app = _AuthMiddleware(mcp.streamable_http_app())
     uvicorn.run(app, host="0.0.0.0", port=9191, log_level="info")
 
 
