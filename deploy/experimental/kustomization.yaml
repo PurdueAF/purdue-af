@@ -31,6 +31,7 @@ resources:
   - ../../apps/servicex-s3/helmrelease.yaml
   # - ../../apps/servicex-interlink/helmrelease.yaml
   - ../../apps/servicex-eos/helmrelease.yaml
+  - ../../apps/servicex-test/helmrelease.yaml
 
   - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic/helmrepo.yaml
@@ -110,6 +111,10 @@ configMapGenerator:
   - name: servicex-eos-config
     files:
       - values.yaml=../../apps/servicex-eos/values.yaml
+
+  - name: servicex-test-config
+    files:
+      - values.yaml=../../apps/servicex-test/values.yaml
 
   - name: supersonic-config
     files:
