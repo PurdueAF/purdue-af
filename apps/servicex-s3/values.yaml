@@ -85,7 +85,7 @@ codeGen:
   python:
     enabled: true
     image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_code_gen_python
-    tag: "v1.8.3"
+    tag: python-codegen-compression #"v1.8.3"
     defaultScienceContainerImage: geddes-registry.rcac.purdue.edu/cms/servicex-science-combined-root-coffea
     defaultScienceContainerTag: 5.7.2-6.38.04
     compressionAlgorithm: ZSTD
