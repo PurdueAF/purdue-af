@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentic-interface
+  labels:
+    app: agentic-interface
+spec:
+  selector:
+    app: agentic-interface
+  ports:
+    - port: 8888
+      targetPort: 8888

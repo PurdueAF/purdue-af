@@ -12,7 +12,8 @@ from typing import Optional
 import httpx
 import uvicorn
 from mcp.server.fastmcp import FastMCP
-from tools import logs, storage
+# Tool modules live here; register new sidecar-specific tools as needed.
+# General AF tools (logs, storage) have moved to apps/jupyterhub/agentic-interface.
 
 logger = logging.getLogger(__name__)
 
@@ -128,8 +129,8 @@ mcp = FastMCP(
     ),
 )
 
-logs.register(mcp)
-storage.register(mcp)
+# No tools registered yet — this sidecar is reserved for future
+# pod-local capabilities (filesystem access, process introspection, etc.).
 
 
 # ── entry point ───────────────────────────────────────────────────────────────

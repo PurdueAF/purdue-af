@@ -410,6 +410,10 @@ hub:
     JupyterHub:
       authenticator_class: cilogon
       admin_access: True
+  services:
+    agentic-interface:
+      url: "http://agentic-interface.${namespace}.svc.cluster.local:8888"
+      oauth_no_confirm: true
 scheduling:
   userScheduler:
     enabled: false

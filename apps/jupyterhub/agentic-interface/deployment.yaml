@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentic-interface
+  labels:
+    app: agentic-interface
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agentic-interface
+  template:
+    metadata:
+      labels:
+        app: agentic-interface
+    spec:
+      containers:
+        - name: agentic-interface
+          image: geddes-registry.rcac.purdue.edu/cms/agentic-interface:latest
+          ports:
+            - containerPort: 8888
+          env:
+            - name: JUPYTERHUB_SERVICE_PREFIX
+              value: "/services/agentic-interface"
+            - name: JUPYTERHUB_API_URL
+              value: "http://hub:8081/hub/api"
+            - name: LOKI_URL
+              value: "http://loki.cms.svc.cluster.local:3100"
+            - name: PROMETHEUS_URL
+              value: "http://prometheus-server:9090"
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            tcpSocket:
+              port: 8888
+            initialDelaySeconds: 10
+            periodSeconds: 30
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
