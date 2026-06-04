@@ -12,7 +12,6 @@ from typing import Optional
 import httpx
 import uvicorn
 from mcp.server.fastmcp import FastMCP
-
 from tools import logs, storage
 
 logger = logging.getLogger(__name__)
@@ -73,7 +72,7 @@ class _AuthMiddleware:
             await self._respond(send, 401, "Missing Bearer token")
             return
 
-        token = auth[len("Bearer "):]
+        token = auth[len("Bearer ") :]
         username = await _validate_token(token)
 
         if username is None:
@@ -97,14 +96,16 @@ class _AuthMiddleware:
     @staticmethod
     async def _respond(send, status: int, detail: str) -> None:
         body = f'{{"error":"{detail}"}}'.encode()
-        await send({
-            "type": "http.response.start",
-            "status": status,
-            "headers": [
-                (b"content-type", b"application/json"),
-                (b"content-length", str(len(body)).encode()),
-            ],
-        })
+        await send(
+            {
+                "type": "http.response.start",
+                "status": status,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode()),
+                ],
+            }
+        )
         await send({"type": "http.response.body", "body": body})
 
 
@@ -132,6 +133,7 @@ storage.register(mcp)
 
 
 # ── entry point ───────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     logging.basicConfig(

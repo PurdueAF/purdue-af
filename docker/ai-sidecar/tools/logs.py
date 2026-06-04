@@ -115,9 +115,7 @@ def register(mcp) -> None:
             filter: Optional LogQL pipe expression, e.g. '|= "ERROR"' or
                     '|~ "timeout|refused"'.
         """
-        selector = (
-            f'{{namespace="{NAMESPACE}",username="{NB_USER}",pod!="{POD_NAME}"}}'
-        )
+        selector = f'{{namespace="{NAMESPACE}",username="{NB_USER}",pod!="{POD_NAME}"}}'
         if filter:
             selector = f"{selector} {filter}"
         return await _loki_query(selector, start, end, limit)

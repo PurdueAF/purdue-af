@@ -40,7 +40,9 @@ def register(mcp) -> None:
             try:
                 resp = await client.get(_MONITOR_URL, timeout=5.0)
             except httpx.RequestError as exc:
-                return f"Error: could not reach af-pod-monitor at {_MONITOR_URL} — {exc}"
+                return (
+                    f"Error: could not reach af-pod-monitor at {_MONITOR_URL} — {exc}"
+                )
 
         if resp.status_code != 200:
             return f"Error: af-pod-monitor returned HTTP {resp.status_code}"
