@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
-
 from context import current_user
 
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
@@ -80,12 +79,16 @@ def register(mcp) -> None:
                 any_data = True
                 used_gb = used_kb / 1024 / 1024
                 size_gb = size_kb / 1024 / 1024
-                pct = (util if util is not None else (used_kb / size_kb if size_kb else 0)) * 100
+                pct = (
+                    util if util is not None else (used_kb / size_kb if size_kb else 0)
+                ) * 100
 
                 accessed_str = ""
                 if last_accessed:
                     dt = datetime.fromtimestamp(last_accessed, tz=timezone.utc)
-                    accessed_str = f"  last accessed {dt.strftime('%Y-%m-%d %H:%M UTC')}"
+                    accessed_str = (
+                        f"  last accessed {dt.strftime('%Y-%m-%d %H:%M UTC')}"
+                    )
 
                 rows.append(
                     f"/{prefix}/\n"

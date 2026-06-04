@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
-
 from context import current_user
 
 LOKI_URL = os.environ.get("LOKI_URL", "http://loki.cms.svc.cluster.local:3100")

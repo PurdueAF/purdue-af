@@ -12,6 +12,7 @@ from typing import Optional
 import httpx
 import uvicorn
 from mcp.server.fastmcp import FastMCP
+
 # Tool modules live here; register new sidecar-specific tools as needed.
 # General AF tools (logs, storage) have moved to apps/jupyterhub/agentic-interface.
 
