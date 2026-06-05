@@ -48,14 +48,16 @@ def register(mcp) -> None:
 
         if not servers:
             base = f"https://cms.geddes.rcac.purdue.edu/user/{username}"
-            return "\n".join([
-                f"No active session for user '{username}'.",
-                "Use start_af_session to launch one.",
-                "",
-                "Interface links (will redirect to spawn form until a session is running):",
-                f"  JupyterLab  {base}/lab",
-                f"  VS Code     {base}/vscode/?folder=/home/{username}",
-            ])
+            return "\n".join(
+                [
+                    f"No active session for user '{username}'.",
+                    "Use start_af_session to launch one.",
+                    "",
+                    "Interface links (will redirect to spawn form until a session is running):",
+                    f"  JupyterLab  {base}/lab",
+                    f"  VS Code     {base}/vscode/?folder=/home/{username}",
+                ]
+            )
 
         default = servers.get("", {})
         ready = default.get("ready", False)
@@ -73,11 +75,13 @@ def register(mcp) -> None:
         # Determine the active interface from user_options.
         # Both the stable profile ("3-interface") and pre-release ("interface") use
         # choice "2" for VS Code and "1" (or absent) for JupyterLab.
-        interface_choice = user_options.get("3-interface") or user_options.get("interface", "1")
+        interface_choice = user_options.get("3-interface") or user_options.get(
+            "interface", "1"
+        )
         vscode_active = interface_choice == "2"
 
         base = f"https://cms.geddes.rcac.purdue.edu/user/{username}"
-        lab_url    = f"{base}/lab"
+        lab_url = f"{base}/lab"
         vscode_url = f"{base}/vscode/?folder=/home/{username}"
 
         lines = [
@@ -93,12 +97,10 @@ def register(mcp) -> None:
         # Mark which one was selected at spawn time (or JupyterLab if unspecified).
         lines.append("\nInterface links:")
         lines.append(
-            f"  JupyterLab  {lab_url}"
-            + ("" if vscode_active else "  ← active")
+            f"  JupyterLab  {lab_url}" + ("" if vscode_active else "  ← active")
         )
         lines.append(
-            f"  VS Code     {vscode_url}"
-            + ("  ← active" if vscode_active else "")
+            f"  VS Code     {vscode_url}" + ("  ← active" if vscode_active else "")
         )
 
         if user_options:

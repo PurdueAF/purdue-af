@@ -147,7 +147,9 @@ def register(mcp) -> None:
         result = await _check_and_inject(pod_name, username, public_key)
 
         if result == "EXISTS":
-            key_status = "Key already present in authorized_keys — no changes made to the pod."
+            key_status = (
+                "Key already present in authorized_keys — no changes made to the pod."
+            )
         elif result == "ADDED":
             key_status = "Key added to pod's authorized_keys."
         else:
@@ -155,20 +157,22 @@ def register(mcp) -> None:
 
         config_block = _ssh_config_block(username)
 
-        return "\n".join([
-            key_status,
-            "",
-            "─── SSH config block ───────────────────────────────────────────────────────────────",
-            "Append to ~/.ssh/config ONLY if 'Host PurdueAF' is not already present.",
-            "Check first: grep -c 'Host PurdueAF' ~/.ssh/config 2>/dev/null || echo 0",
-            "",
-            config_block,
-            "────────────────────────────────────────────────────────────────────────────────────",
-            "",
-            "Once the config entry exists:",
-            "  ssh PurdueAF 'hostname'     # quick connection test",
-            "  ssh PurdueAF 'ls ~'         # look around home directory",
-            "",
-            "If SSH fails after a pod restart (stale ControlMaster socket):",
-            "  rm -f ~/.ssh/control-af-* && ssh PurdueAF 'hostname'",
-        ])
+        return "\n".join(
+            [
+                key_status,
+                "",
+                "─── SSH config block ───────────────────────────────────────────────────────────────",
+                "Append to ~/.ssh/config ONLY if 'Host PurdueAF' is not already present.",
+                "Check first: grep -c 'Host PurdueAF' ~/.ssh/config 2>/dev/null || echo 0",
+                "",
+                config_block,
+                "────────────────────────────────────────────────────────────────────────────────────",
+                "",
+                "Once the config entry exists:",
+                "  ssh PurdueAF 'hostname'     # quick connection test",
+                "  ssh PurdueAF 'ls ~'         # look around home directory",
+                "",
+                "If SSH fails after a pod restart (stale ControlMaster socket):",
+                "  rm -f ~/.ssh/control-af-* && ssh PurdueAF 'hostname'",
+            ]
+        )
