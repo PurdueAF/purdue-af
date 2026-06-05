@@ -33,17 +33,41 @@ Follow these sequences exactly.  The tool reference is in the sections below.
 *(Only run this workflow when the user explicitly asks to connect.)*
 
 ```
-1. get_session_status  →  confirm status = "running" before proceeding
+1. get_session_status  →  confirm status = "running"; note the username.
 
-2. connect_to_session:
-     a. Bash: ls ~/.ssh/af_key 2>/dev/null || ssh-keygen -t ed25519 -f ~/.ssh/af_key -N "" -C "purdue-af-agentic"
-     b. Bash: cat ~/.ssh/af_key.pub  → copy output
-     c. call connect_to_session(public_key=<output from b>)
-     d. Bash: grep -c "Host PurdueAF" ~/.ssh/config 2>/dev/null || echo 0
-        → if 0: append the config block returned by connect_to_session to ~/.ssh/config
-        → if >0: leave ~/.ssh/config untouched
+2. Bash (one call — approval 1):
+   Replace USERNAME with the value from step 1, then run the full script.
+   It tries to connect first; only runs setup if that fails.
 
-3. Bash: ssh PurdueAF "hostname"   # verify; should print the pod hostname
+     USERNAME="<username>"
+     if ssh -o BatchMode=yes -o ConnectTimeout=5 PurdueAF "hostname" 2>/dev/null; then
+       echo "ALREADY_CONNECTED"
+     else
+       [ -f ~/.ssh/af_key ] \
+         || ssh-keygen -t ed25519 -f ~/.ssh/af_key -N "" -C "purdue-af-agentic" -q
+       grep -q "Host PurdueAF" ~/.ssh/config 2>/dev/null \
+         || cat >> ~/.ssh/config << EOF
+Host PurdueAF
+    HostName cms.geddes.rcac.purdue.edu
+    Port 22
+    User ${USERNAME}
+    IdentityFile ~/.ssh/af_key
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    ControlMaster auto
+    ControlPath ~/.ssh/control-af-%r@%h:%p
+    ControlPersist 60m
+EOF
+       cat ~/.ssh/af_key.pub
+     fi
+
+   → If output is "ALREADY_CONNECTED": done, skip steps 3 and 4.
+   → Otherwise the output is the public key — continue to step 3.
+
+3. call connect_to_session(public_key=<output from step 2>)
+
+4. Bash (one call — approval 2):
+     ssh PurdueAF "hostname"
 ```
 
 ### Stopping a session
@@ -69,6 +93,20 @@ Follow these sequences exactly.  The tool reference is in the sections below.
 
 4. Report: "Session has restarted. Would you like to reconnect via SSH?"
      → if yes: follow the "Connecting to a running session" workflow above
+```
+
+### Reducing future approval prompts (optional)
+
+To make `ssh PurdueAF` and key-generation commands auto-approved in this project,
+add them to `.claude/settings.local.json`:
+
+```json
+"permissions": {
+  "allow": [
+    "Bash(ssh PurdueAF *)",
+    "Bash(ssh-keygen -t ed25519 -f ~/.ssh/af_key *)"
+  ]
+}
 ```
 
 ### Getting a link to open the session in a browser

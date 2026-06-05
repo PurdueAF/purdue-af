@@ -88,48 +88,44 @@ fi
         return f"Error: could not access your session — ensure it is running and try again. ({exc})"
 
 
-def _ssh_config_block(username: str) -> str:
-    return f"""\
-Host PurdueAF
-    HostName {_SSH_HOST}
-    Port {_SSH_PORT}
-    User {username}
-    IdentityFile ~/.ssh/af_key
-    StrictHostKeyChecking no
-    UserKnownHostsFile /dev/null
-    ControlMaster auto
-    ControlPath ~/.ssh/control-af-%r@%h:%p
-    ControlPersist 60m"""
-
-
 def register(mcp) -> None:
     @mcp.tool()
     async def connect_to_session(public_key: str) -> str:
-        """Set up SSH access to the user's running AF pod.
+        """Inject the agent's SSH public key into the user's running AF pod.
 
-        Checks whether the provided public key is already in the pod's
-        ~/.ssh/authorized_keys and adds it only if not present (idempotent).
-        Does not modify the file if the key already exists.
+        Checks ~/.ssh/authorized_keys on the pod; adds the key only if not
+        already present (idempotent — safe to call multiple times).
 
-        The agent should follow this workflow before calling this tool:
+        Before calling this tool, run the following single Bash call
+        (substitute USERNAME with the value from get_session_status).
+        It tries an existing connection first; only does key/config setup
+        if that fails — so subsequent connects need just one Bash approval.
 
-          1. Check for an existing key:
-               ls ~/.ssh/af_key 2>/dev/null && echo exists || echo missing
-             Generate one only if missing:
-               ssh-keygen -t ed25519 -f ~/.ssh/af_key -N "" -C "purdue-af-agentic"
+            USERNAME="<username>"
+            if ssh -o BatchMode=yes -o ConnectTimeout=5 PurdueAF "hostname" 2>/dev/null; then
+              echo "ALREADY_CONNECTED"
+            else
+              [ -f ~/.ssh/af_key ] \\
+                || ssh-keygen -t ed25519 -f ~/.ssh/af_key -N "" -C "purdue-af-agentic" -q
+              grep -q "Host PurdueAF" ~/.ssh/config 2>/dev/null \\
+                || cat >> ~/.ssh/config << EOF
+            Host PurdueAF
+                HostName cms.geddes.rcac.purdue.edu
+                Port 22
+                User ${USERNAME}
+                IdentityFile ~/.ssh/af_key
+                StrictHostKeyChecking no
+                UserKnownHostsFile /dev/null
+                ControlMaster auto
+                ControlPath ~/.ssh/control-af-%r@%h:%p
+                ControlPersist 60m
+            EOF
+              cat ~/.ssh/af_key.pub
+            fi
 
-          2. Read the public key:
-               cat ~/.ssh/af_key.pub
-
-          3. Call connect_to_session with that content.
-
-          4. Check ~/.ssh/config for an existing 'Host PurdueAF' block:
-               grep -c 'Host PurdueAF' ~/.ssh/config 2>/dev/null || echo 0
-             Only append if not present — do NOT overwrite an existing block.
-
-          5. Use `ssh PurdueAF "command"` for all subsequent pod operations.
-             ControlMaster keeps the connection alive so re-authentication is
-             not needed for every command.
+        If the output is "ALREADY_CONNECTED", skip this tool entirely.
+        Otherwise pass the public key output to this tool, then verify
+        with: ssh PurdueAF "hostname"
 
         Args:
             public_key: Full contents of ~/.ssh/af_key.pub (one line).
@@ -155,24 +151,10 @@ def register(mcp) -> None:
         else:
             return result  # propagate error string
 
-        config_block = _ssh_config_block(username)
-
-        return "\n".join(
-            [
-                key_status,
-                "",
-                "─── SSH config block ───────────────────────────────────────────────────────────────",
-                "Append to ~/.ssh/config ONLY if 'Host PurdueAF' is not already present.",
-                "Check first: grep -c 'Host PurdueAF' ~/.ssh/config 2>/dev/null || echo 0",
-                "",
-                config_block,
-                "────────────────────────────────────────────────────────────────────────────────────",
-                "",
-                "Once the config entry exists:",
-                "  ssh PurdueAF 'hostname'     # quick connection test",
-                "  ssh PurdueAF 'ls ~'         # look around home directory",
-                "",
-                "If SSH fails after a pod restart (stale ControlMaster socket):",
-                "  rm -f ~/.ssh/control-af-* && ssh PurdueAF 'hostname'",
-            ]
-        )
+        return "\n".join([
+            key_status,
+            f"Pod: {pod_name}  User: {username}",
+            "",
+            "Ready. Run: ssh PurdueAF \"hostname\"",
+            "If that fails (stale socket after restart): rm -f ~/.ssh/control-af-*",
+        ])
