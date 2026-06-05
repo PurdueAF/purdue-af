@@ -1,11 +1,19 @@
+---
+name: purdue-af-agentic-interface
+description: Manage a Purdue Analysis Facility session — start/stop/restart the JupyterHub pod, connect via SSH, and inspect Dask clusters, storage, and logs. Use whenever the user mentions Purdue AF, their analysis-facility session, AF Dask clusters, or AF logs/storage.
+---
+
 # Purdue Analysis Facility — Agentic Interface
 
-> **Setup**: set once in your shell profile:
+> **One-time setup**: the MCP server is registered in the project's `.mcp.json`,
+> which reads your JupyterHub API token from `~/.config/purdue-af/token`. Get a
+> token at https://cms.geddes.rcac.purdue.edu/hub/token, then:
 > ```bash
-> export JUPYTERHUB_TOKEN=<your-api-token>
-> # Obtain at: https://cms.geddes.rcac.purdue.edu/hub/token
+> mkdir -p ~/.config/purdue-af && chmod 700 ~/.config/purdue-af
+> printf '%s' '<your-api-token>' > ~/.config/purdue-af/token
+> chmod 600 ~/.config/purdue-af/token
 > ```
-> Your username and active pod are resolved automatically from the token.
+> Username and active pod are resolved automatically from the token.
 
 This MCP server is **self-describing**: every tool result names the next step, so
 the reliable way to drive a workflow is to call a tool and follow its returned

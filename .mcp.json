@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "purdue-af-agentic-interface": {
+      "type": "http",
+      "url": "https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp",
+      "headersHelper": "printf '{\"Authorization\":\"Bearer %s\"}' \"$(tr -d '[:space:]' < \"$HOME/.config/purdue-af/token\")\""
+    }
+  }
+}
