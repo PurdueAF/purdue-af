@@ -151,10 +151,12 @@ def register(mcp) -> None:
         else:
             return result  # propagate error string
 
-        return "\n".join([
-            key_status,
-            f"Pod: {pod_name}  User: {username}",
-            "",
-            "Ready. Run: ssh PurdueAF \"hostname\"",
-            "If that fails (stale socket after restart): rm -f ~/.ssh/control-af-*",
-        ])
+        return "\n".join(
+            [
+                key_status,
+                f"Pod: {pod_name}  User: {username}",
+                "",
+                'Ready. Run: ssh PurdueAF "hostname"',
+                "If that fails (stale socket after restart): rm -f ~/.ssh/control-af-*",
+            ]
+        )
