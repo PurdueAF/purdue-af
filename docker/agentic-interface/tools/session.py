@@ -251,19 +251,19 @@ def register(mcp) -> None:
                         data = resp.json()
                         default = data.get("servers", {}).get("", {})
                         if default.get("ready", False):
-                            pod_name = (
-                                default.get("state", {}).get("pod_name", "")
-                            )
+                            pod_name = default.get("state", {}).get("pod_name", "")
                             started = default.get("started", "")
                             # Invalidate cached user info so subsequent tool
                             # calls pick up the correct pod_name immediately.
                             clear_user_cache(token)
-                            return "\n".join([
-                                "Session is running.",
-                                f"pod: {pod_name}",
-                                f"started: {started}",
-                                f"(became ready after {attempts} poll(s))",
-                            ])
+                            return "\n".join(
+                                [
+                                    "Session is running.",
+                                    f"pod: {pod_name}",
+                                    f"started: {started}",
+                                    f"(became ready after {attempts} poll(s))",
+                                ]
+                            )
                         pending = default.get("pending", "starting")
                         # Not ready yet — fall through to sleep
                 except httpx.RequestError:

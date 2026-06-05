@@ -44,9 +44,7 @@ async def resolve_user(token: str) -> Optional[dict]:
     if not username:
         return None
 
-    pod_name = (
-        data.get("servers", {}).get("", {}).get("state", {}).get("pod_name", "")
-    )
+    pod_name = data.get("servers", {}).get("", {}).get("state", {}).get("pod_name", "")
 
     user_info = {
         "username": username,

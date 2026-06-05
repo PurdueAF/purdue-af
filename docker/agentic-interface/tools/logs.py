@@ -7,13 +7,13 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
-
 from context import current_user
 
 LOKI_URL = os.environ.get("LOKI_URL", "http://loki.cms.svc.cluster.local:3100")
 
 
 # ── time helpers ──────────────────────────────────────────────────────────────
+
 
 def _to_ns(value: str, now_s: float) -> str:
     """Convert a human time spec to a Loki nanosecond Unix timestamp string.
@@ -46,6 +46,7 @@ def _to_ns(value: str, now_s: float) -> str:
 
 # ── deduplication ─────────────────────────────────────────────────────────────
 
+
 def _msg_key(line: str) -> str:
     """Strip the timestamp from a log line for dedup comparison.
 
@@ -53,7 +54,7 @@ def _msg_key(line: str) -> str:
     never collapsed together.
     """
     idx = line.find("] ")
-    return line[idx + 2:] if idx >= 0 else line
+    return line[idx + 2 :] if idx >= 0 else line
 
 
 def _dedup(lines: list[str]) -> list[str]:
@@ -83,6 +84,7 @@ def _dedup(lines: list[str]) -> list[str]:
 
 
 # ── Loki query ────────────────────────────────────────────────────────────────
+
 
 async def _loki_query(
     selector: str,
@@ -144,6 +146,7 @@ async def _loki_query(
 
 
 # ── tools ─────────────────────────────────────────────────────────────────────
+
 
 def register(mcp) -> None:
     @mcp.tool()
