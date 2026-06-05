@@ -1,0 +1,154 @@
+# Zensical configuration for the Purdue Analysis Facility documentation.
+# Docs: https://zensical.org/docs/
+#
+# Build:   cd docs-md && zensical build --clean   (output: docs-md/site/)
+# Preview: cd docs-md && zensical serve
+
+[project]
+
+site_name = "Purdue Analysis Facility"
+site_description = "Documentation for the Purdue Analysis Facility — an interactive environment for fast and scalable CMS physics analyses using dedicated computing resources at Purdue."
+site_author = "Dmitry Kondratyev, Stefan Piperov"
+
+# GitHub Pages project site for the PurdueAF/purdue-af repo.
+# The bare root purdueaf.github.io is reserved for a repo literally named
+# "purdueaf.github.io"; this project repo serves under the /purdue-af/ subpath.
+site_url = "https://purdueaf.github.io/purdue-af/"
+
+copyright = "Copyright &copy; 2023, Purdue University"
+
+# Source repository (adds a link in the header).
+repo_url = "https://github.com/PurdueAF/purdue-af"
+repo_name = "PurdueAF/purdue-af"
+edit_uri = "edit/main/docs-md/docs/"
+
+# Load MathJax so the few LaTeX expressions render.
+extra_javascript = [
+    "javascripts/mathjax.js",
+    "https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js",
+]
+
+# Navigation — mirrors the toctree structure of the original Sphinx docs.
+# Page titles are derived from each page's first heading.
+nav = [
+    { "Home" = "index.md" },
+    { "Documentation" = [
+        "doc-getting-started.md",
+        "doc-interface.md",
+        "doc-login-methods.md",
+        "doc-storage.md",
+        "doc-software.md",
+        "doc-gpus.md",
+        "doc-data-access.md",
+        "doc-hardware.md",
+        "doc-support.md",
+        "doc-contributing.md",
+    ] },
+    { "Monitoring" = [
+        { "Monitoring dashboard" = "https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard" },
+    ] },
+    { "User guides" = [
+        "guide-conda-to-pixi.md",
+        "guide-upload.md",
+        "guide-ssh-access.md",
+        "guide-combine.md",
+        "guide-roofit-cuda.md",
+        "guide-ide-connection.md",
+        "guide-dask.md",
+        "guide-dask-gateway.md",
+        "guide-rucio.md",
+        "guide-cern-eos.md",
+        "guide-binderhub.md",
+        "guide-mc-gen.md",
+        { "Interactive demos (notebooks)" = [
+            "guide-demos.md",
+            "demos/root-cpp.md",
+            "demos/storage-data-access.md",
+            "demos/plotting.md",
+            "demos/gateway-cluster.md",
+        ] },
+        "guide-eos-write.md",
+    ] },
+    { "Useful links" = [
+        { "Purdue Tier-2 website" = "https://www.physics.purdue.edu/Tier2/" },
+        { "CMS Common Analysis Tools documentation" = "https://cms-analysis.docs.cern.ch" },
+        { "Data Aggregation System (DAS)" = "https://cmsweb.cern.ch/das/" },
+    ] },
+]
+
+# ---------------------------------------------------------------------------
+# Theme
+# ---------------------------------------------------------------------------
+[project.theme]
+
+language = "en"
+logo = "images/cms_logo.png"
+
+features = [
+    "announce.dismiss",
+    "content.code.annotate",
+    "content.code.copy",
+    "content.code.select",
+    "content.tabs.link",
+    "content.tooltips",
+    "navigation.footer",
+    "navigation.indexes",
+    "navigation.instant",
+    "navigation.instant.prefetch",
+    "navigation.path",
+    "navigation.sections",
+    "navigation.top",
+    "navigation.tracking",
+    "search.highlight",
+    "toc.follow",
+]
+
+[[project.theme.palette]]
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+# ---------------------------------------------------------------------------
+# Markdown extensions
+# ---------------------------------------------------------------------------
+[project.markdown_extensions.abbr]
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.def_list]
+[project.markdown_extensions.footnotes]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.toc]
+permalink = true
+
+[project.markdown_extensions.pymdownx.arithmatex]
+generic = true
+[project.markdown_extensions.pymdownx.betterem]
+[project.markdown_extensions.pymdownx.caret]
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.emoji]
+emoji_generator = "zensical.extensions.emoji.to_svg"
+emoji_index = "zensical.extensions.emoji.twemoji"
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+[project.markdown_extensions.pymdownx.inlinehilite]
+[project.markdown_extensions.pymdownx.keys]
+[project.markdown_extensions.pymdownx.magiclink]
+[project.markdown_extensions.pymdownx.mark]
+[project.markdown_extensions.pymdownx.smartsymbols]
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+    { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true
+combine_header_slug = true
+[project.markdown_extensions.pymdownx.tasklist]
+custom_checkbox = true
+[project.markdown_extensions.pymdownx.tilde]

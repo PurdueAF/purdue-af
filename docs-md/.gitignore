@@ -1,0 +1,7 @@
+# Zensical build output and cache
+site/
+.cache/
+
+# Local virtual environments
+.venv/
+.venv-*/

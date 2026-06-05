@@ -1,0 +1,51 @@
+# Build the Zensical documentation (docs-md/) and deploy it to GitHub Pages.
+#
+# One-time setup required in the repository settings:
+#   Settings -> Pages -> Build and deployment -> Source: "GitHub Actions"
+#
+# After that, every push to `main` that touches docs-md/ rebuilds and
+# publishes the site automatically. Remove the `paths:` filter below if you
+# want the docs to rebuild on *every* push to main.
+name: Documentation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs-md/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run
+# in-progress and latest queued. Do not cancel in-progress runs.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/configure-pages@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - run: pip install zensical
+      - name: Build site
+        working-directory: docs-md
+        run: zensical build --clean
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs-md/site
+      - uses: actions/deploy-pages@v4
+        id: deployment
