@@ -10,65 +10,18 @@ ContextVar so tool functions can scope their queries per-request.
 
 import logging
 import os
-import time
-from typing import Optional
 
-import httpx
 import uvicorn
+from auth import resolve_user
 from context import current_user
 from mcp.server.fastmcp import FastMCP
 from tools import connect, dask, logs, profiles, session, storage
 
 logger = logging.getLogger(__name__)
 
-HUB_API_URL = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
-NAMESPACE = os.environ.get("NAMESPACE", "cms")
-# JupyterHub sets this for managed services; set it explicitly in the Deployment.
 SERVICE_PREFIX = os.environ.get(
     "JUPYTERHUB_SERVICE_PREFIX", "/services/agentic-interface"
 ).rstrip("/")
-
-# token → (expiry_monotonic, {username, pod_name, namespace})
-_user_cache: dict[str, tuple[float, dict]] = {}
-_CACHE_TTL = 60.0
-
-
-async def _resolve_user(token: str) -> Optional[dict]:
-    """Validate a JupyterHub Bearer token and return the user context dict."""
-    now = time.monotonic()
-    cached = _user_cache.get(token)
-    if cached and now < cached[0]:
-        return cached[1]
-
-    async with httpx.AsyncClient() as client:
-        try:
-            resp = await client.get(
-                f"{HUB_API_URL}/user",
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=10.0,
-            )
-        except httpx.RequestError:
-            return None
-
-    if resp.status_code != 200:
-        return None
-
-    data = resp.json()
-    username = data.get("name")
-    if not username:
-        return None
-
-    # Pod name lives in the default server's spawner state.
-    pod_name = data.get("servers", {}).get("", {}).get("state", {}).get("pod_name", "")
-
-    user_info = {
-        "username": username,
-        "pod_name": pod_name,
-        "namespace": NAMESPACE,
-        "token": token,
-    }
-    _user_cache[token] = (now + _CACHE_TTL, user_info)
-    return user_info
 
 
 class _PathStripper:
@@ -120,7 +73,7 @@ class _AuthMiddleware:
             return
 
         token = auth[len("Bearer ") :]
-        user_info = await _resolve_user(token)
+        user_info = await resolve_user(token)
 
         if user_info is None:
             await self._respond(send, 401, "Invalid JupyterHub token")

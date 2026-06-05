@@ -6,6 +6,7 @@ COPY docker/agentic-interface/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY docker/agentic-interface/context.py .
+COPY docker/agentic-interface/auth.py .
 COPY docker/agentic-interface/server.py .
 COPY docker/agentic-interface/tools/ ./tools/
 

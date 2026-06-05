@@ -21,9 +21,10 @@ Follow these sequences exactly.  The tool reference is in the sections below.
 
 2. start_af_session (with any desired profile/options)
 
-3. Poll until ready:
-     repeat every 15 s: get_session_status
-     stop when status = "running"  (typically 30–60 s)
+3. wait_for_session
+     Polls internally every 10 s (up to 3 min by default).
+     Returns when the pod is ready, or times out with a clear message.
+     Do NOT manually loop get_session_status — use this tool instead.
 
 4. Report: "Session is running at <url>. Would you like to connect to it via SSH?"
      → wait for user's answer before proceeding
@@ -87,9 +88,7 @@ EOF
 
 2. restart_af_session (with any desired profile/options)
 
-3. Poll until ready:
-     repeat every 15 s: get_session_status
-     stop when status = "running"
+3. wait_for_session
 
 4. Report: "Session has restarted. Would you like to reconnect via SSH?"
      → if yes: follow the "Connecting to a running session" workflow above

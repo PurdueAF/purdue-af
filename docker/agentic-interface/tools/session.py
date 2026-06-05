@@ -6,9 +6,11 @@ are automatically scoped to that user's server.
 
 import asyncio
 import os
+import time
 from typing import Optional
 
 import httpx
+from auth import clear_user_cache
 from context import current_user
 
 HUB_API_URL = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
@@ -208,9 +210,73 @@ def register(mcp) -> None:
         if resp.status_code not in (200, 202, 204):
             return f"Error: JupyterHub returned HTTP {resp.status_code} — {resp.text[:300]}"
 
+        clear_user_cache(token)
         return (
             "Session is stopping. Storage is preserved — "
             "use start_af_session to launch a new one."
+        )
+
+    @mcp.tool()
+    async def wait_for_session(timeout_seconds: int = 180) -> str:
+        """Poll until the user's session is fully running or timeout is reached.
+
+        Use this immediately after start_af_session instead of manually calling
+        get_session_status in a loop.  Polls the JupyterHub API every 10 seconds
+        internally and returns as soon as the pod is ready.
+
+        Also clears the internal token cache so the next tool call (e.g.
+        connect_to_session) sees the updated pod name immediately.
+
+        Args:
+            timeout_seconds: Maximum time to wait. Default: 180 s (3 min).
+        """
+        user = current_user.get()
+        token = user["token"]
+        username = user["username"]
+
+        deadline = time.monotonic() + timeout_seconds
+        poll_interval = 10
+        attempts = 0
+
+        async with httpx.AsyncClient() as client:
+            while True:
+                attempts += 1
+                try:
+                    resp = await client.get(
+                        f"{HUB_API_URL}/users/{username}",
+                        headers=_auth(token),
+                        timeout=10.0,
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        default = data.get("servers", {}).get("", {})
+                        if default.get("ready", False):
+                            pod_name = (
+                                default.get("state", {}).get("pod_name", "")
+                            )
+                            started = default.get("started", "")
+                            # Invalidate cached user info so subsequent tool
+                            # calls pick up the correct pod_name immediately.
+                            clear_user_cache(token)
+                            return "\n".join([
+                                "Session is running.",
+                                f"pod: {pod_name}",
+                                f"started: {started}",
+                                f"(became ready after {attempts} poll(s))",
+                            ])
+                        pending = default.get("pending", "starting")
+                        # Not ready yet — fall through to sleep
+                except httpx.RequestError:
+                    pass  # transient network error, keep polling
+
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                await asyncio.sleep(min(poll_interval, remaining))
+
+        return (
+            f"Session did not become ready within {timeout_seconds} s. "
+            "Use get_session_status to check the current state."
         )
 
     @mcp.tool()
