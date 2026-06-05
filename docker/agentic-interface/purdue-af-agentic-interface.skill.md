@@ -7,97 +7,36 @@
 > ```
 > Your username and active pod are resolved automatically from the token.
 
+This MCP server is **self-describing**: every tool result names the next step, so
+the reliable way to drive a workflow is to call a tool and follow its returned
+hints. The server also exposes invocable **prompts** (in Claude Code they appear
+as `/mcp__purdue-af-agentic-interface__<name>`) that spell out the same playbooks:
+
+| Prompt | What it does |
+|---|---|
+| `launch_session`  | start a session and wait until it is ready |
+| `connect_session` | set up SSH and connect to a running session |
+| `restart_session` | restart, preserving (or changing) profile/options |
+| `stop_session`    | stop the session (storage is preserved) |
+| `recover_ssh`     | fix a broken SSH connection after a restart |
+
+**Always ask the user before connecting via SSH.**
+
 ---
 
-## Workflows — read this first
+## Connecting (the one flow worth spelling out)
 
-Follow these sequences exactly.  The tool reference is in the sections below.
+After a session is running:
 
-### Starting a session
+1. `prepare_ssh_connection` — returns one ready-to-run Bash command with your
+   username and host already filled in. Run it locally in a single call.
+2. If it prints `ALREADY_CONNECTED`, you're done. Otherwise it prints an SSH
+   public key — pass that to `connect_to_session(public_key=...)`.
+3. Verify: `ssh PurdueAF "hostname"`.
 
-```
-1. get_session_status
-     → if already "running": report status and URL, then stop — do not re-start
+Thereafter, run pod commands with `ssh PurdueAF "<cmd>"`.
 
-2. start_af_session (with any desired profile/options)
-
-3. wait_for_session
-     Polls internally every 10 s (up to 3 min by default).
-     Returns when the pod is ready, or times out with a clear message.
-     Do NOT manually loop get_session_status — use this tool instead.
-
-4. Report: "Session is running at <url>. Would you like to connect to it via SSH?"
-     → wait for user's answer before proceeding
-```
-
-### Connecting to a running session
-*(Only run this workflow when the user explicitly asks to connect.)*
-
-```
-1. get_session_status  →  confirm status = "running"; note the username.
-
-2. Bash (one call — approval 1):
-   Replace USERNAME with the value from step 1, then run the full script.
-   It tries to connect first; only runs setup if that fails.
-
-     USERNAME="<username>"
-     if ssh -o BatchMode=yes -o ConnectTimeout=5 PurdueAF "hostname" 2>/dev/null; then
-       echo "ALREADY_CONNECTED"
-     else
-       [ -f ~/.ssh/af_key ] \
-         || ssh-keygen -t ed25519 -f ~/.ssh/af_key -N "" -C "purdue-af-agentic" -q
-       grep -q "Host PurdueAF" ~/.ssh/config 2>/dev/null \
-         || cat >> ~/.ssh/config << EOF
-Host PurdueAF
-    HostName cms.geddes.rcac.purdue.edu
-    Port 22
-    User ${USERNAME}
-    IdentityFile ~/.ssh/af_key
-    StrictHostKeyChecking no
-    UserKnownHostsFile /dev/null
-    ControlMaster auto
-    ControlPath ~/.ssh/control-af-%r@%h:%p
-    ControlPersist 60m
-EOF
-       cat ~/.ssh/af_key.pub
-     fi
-
-   → If output is "ALREADY_CONNECTED": done, skip steps 3 and 4.
-   → Otherwise the output is the public key — continue to step 3.
-
-3. call connect_to_session(public_key=<output from step 2>)
-
-4. Bash (one call — approval 2):
-     ssh PurdueAF "hostname"
-```
-
-### Stopping a session
-
-```
-1. Bash: ssh -O exit PurdueAF 2>/dev/null; true
-     (closes the ControlMaster gracefully; the "; true" suppresses errors
-      if no SSH connection is currently open)
-
-2. stop_af_session
-```
-
-### Restarting a session
-
-```
-1. Bash: ssh -O exit PurdueAF 2>/dev/null; true
-
-2. restart_af_session (with any desired profile/options)
-
-3. wait_for_session
-
-4. Report: "Session has restarted. Would you like to reconnect via SSH?"
-     → if yes: follow the "Connecting to a running session" workflow above
-```
-
-### Reducing future approval prompts (optional)
-
-To make `ssh PurdueAF` and key-generation commands auto-approved in this project,
-add them to `.claude/settings.local.json`:
+To auto-approve these in this project, add to `.claude/settings.local.json`:
 
 ```json
 "permissions": {
@@ -108,27 +47,14 @@ add them to `.claude/settings.local.json`:
 }
 ```
 
-### Getting a link to open the session in a browser
+---
 
-```
-call get_session_status
-```
+## Opening the session in a browser
 
-The response always includes both interface links — JupyterLab and VS Code —
-with the one that was active at spawn time marked `← active`.  Present them
-as clickable links for the user to open in their browser.
-
-Works at any time: if no session is running the links are still shown;
-they redirect to the JupyterHub spawn form.
-
-### Recovering a broken SSH connection
-
-```
-Bash: rm -f ~/.ssh/control-af-* && ssh PurdueAF "hostname"
-```
-Use this when SSH commands return a socket error after a pod restart or
-network interruption.  It clears the stale ControlMaster socket and opens
-a fresh connection.
+Call `get_session_status` — the response always includes both interface links
+(JupyterLab and VS Code), with the active one marked `← active`. Present them as
+clickable links. Works even when no session is running (links redirect to the
+spawn form).
 
 ---
 
@@ -140,7 +66,7 @@ a fresh connection.
 **`get_session_status`** — current pod state, profile selected, uptime, URL.
 
 **`list_af_profiles`** — available profiles with exact option keys and choice values.
-Call this before `start_af_session` when non-default options are needed.
+Call before `start_af_session` when non-default options are needed.
 
 **`start_af_session`**
 ```json
@@ -149,61 +75,51 @@ Call this before `start_af_session` when non-default options are needed.
   "user_options": {"<option-key>": "<choice-value>"}
 }}
 ```
-Omit both arguments for defaults (stable profile, JupyterLab, no GPU).
-
-Examples:
+Omit both arguments for defaults (stable profile, JupyterLab, no GPU). Examples:
 ```json
 {"0-cpu": "3", "3-interface": "2"}          // stable: 32 CPUs, VS Code
 {"profile_name": "latest-pre-release-version", "user_options": {"interface": "1"}}
 ```
 
-**`restart_af_session`** — stop + start, preserving options by default.
-Pass `profile_name` / `user_options` to change configuration on restart.
+**`wait_for_session`** — poll until the pod is ready. Use this right after
+`start_af_session` instead of looping `get_session_status`.
+
+**`restart_af_session`** — stop + start, preserving options by default. Pass
+`profile_name` / `user_options` to change configuration on restart.
 
 **`stop_af_session`** — stops the pod. Storage (home, /work) is always preserved.
 
----
+### Connecting
 
-### Connecting to a session
+**`prepare_ssh_connection`** — returns the exact local SSH-setup command
+(username/host baked in). First step of connecting; see above.
 
-**`connect_to_session(public_key)`** — injects the SSH public key into the pod's
-`~/.ssh/authorized_keys`, checking first whether it is already present (idempotent).
-Returns the SSH config block and connection instructions.
-
-The pod's web interface is at `https://cms.geddes.rcac.purdue.edu/user/<username>/`.
-
----
+**`connect_to_session(public_key)`** — injects the public key into the pod's
+`~/.ssh/authorized_keys` (idempotent). The pod's web interface is at
+`https://cms.geddes.rcac.purdue.edu/user/<username>/`.
 
 ### Storage
 
 **`query_storage_usage`** — home and work directory quotas (Prometheus, ≤ 5 min stale).
 Requires a running pod.
 
----
-
 ### Dask clusters
 *(Results always scoped to the calling user.)*
 
-**`list_dask_clusters`** — all clusters across every gateway (k8s, slurm-hammer, slurm-gautschi, slurm).
-
+**`list_dask_clusters`** — all clusters across every gateway.
 **`get_dask_cluster_info(cluster_name, gateway="k8s")`** — per-worker state and options.
-
 **`scale_dask_cluster(cluster_name, n_workers, gateway="k8s")`**
-
 **`stop_dask_cluster(cluster_name, gateway="k8s")`** — irreversible.
 
 `gateway` options: `"k8s"` · `"slurm-hammer"` · `"slurm-gautschi"` · `"slurm"`
 
----
-
 ### Logs
 
 **`query_notebook_logs`** — JupyterLab / VS Code server logs. Requires a running pod.
-
 **`query_dask_logs`** — Dask worker and scheduler logs (notebook pod excluded).
 
-Both accept `start` (duration `"1h"`, `"30m"` or ISO-8601), `limit` (default 500),
-and `filter` (LogQL pipe expression, e.g. `"|= \"ERROR\""`).
+Both accept `start` (`"1h"`, `"30m"`, or ISO-8601), `limit` (default 500), and
+`filter` (LogQL pipe expression, e.g. `"|= \"ERROR\""`).
 
 ---
 

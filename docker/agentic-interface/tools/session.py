@@ -177,7 +177,7 @@ def register(mcp) -> None:
         if resp.status_code == 201:
             return (
                 "Session is starting. This typically takes 30–60 seconds. "
-                "Use get_session_status to check progress."
+                "Call wait_for_session to block until it is ready."
             )
         if resp.status_code == 202:
             return (
@@ -267,6 +267,10 @@ def register(mcp) -> None:
                                     f"pod: {pod_name}",
                                     f"started: {started}",
                                     f"(became ready after {attempts} poll(s))",
+                                    "",
+                                    "Next: get_session_status returns browser links. "
+                                    "If the user wants a shell, ask first, then call "
+                                    "prepare_ssh_connection.",
                                 ]
                             )
                         pending = default.get("pending", "starting")
@@ -396,5 +400,5 @@ def register(mcp) -> None:
         )
         return (
             f"Session restarting with {opts_summary}. "
-            "Use get_session_status to check progress."
+            "Call wait_for_session to block until ready."
         )

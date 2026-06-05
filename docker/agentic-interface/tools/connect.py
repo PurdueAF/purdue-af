@@ -16,6 +16,37 @@ _SSH_HOST = "cms.geddes.rcac.purdue.edu"
 _SSH_PORT = 22
 
 
+def _render_ssh_setup(username: str) -> str:
+    """Build the local SSH bootstrap command, username and host baked in.
+
+    Single source of truth for the client-side setup — the agent runs the
+    returned string verbatim.  Tries an existing connection first and only does
+    key/config setup if that fails.  Uses a quoted heredoc so nothing in the
+    config block is shell-expanded; ssh expands the leading ~ in path options.
+    """
+    return f"""\
+if ssh -o BatchMode=yes -o ConnectTimeout=5 PurdueAF "hostname" 2>/dev/null; then
+  echo "ALREADY_CONNECTED"
+else
+  [ -f ~/.ssh/af_key ] \\
+    || ssh-keygen -t ed25519 -f ~/.ssh/af_key -N "" -C "purdue-af-agentic" -q
+  grep -q "Host PurdueAF" ~/.ssh/config 2>/dev/null \\
+    || cat >> ~/.ssh/config << 'EOF'
+Host PurdueAF
+    HostName {_SSH_HOST}
+    Port {_SSH_PORT}
+    User {username}
+    IdentityFile ~/.ssh/af_key
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    ControlMaster auto
+    ControlPath ~/.ssh/control-af-%r@%h:%p
+    ControlPersist 60m
+EOF
+  cat ~/.ssh/af_key.pub
+fi"""
+
+
 async def _check_and_inject(pod_name: str, username: str, public_key: str) -> str:
     """Check if public_key is in authorized_keys; add it if not.
 
@@ -90,45 +121,54 @@ fi
 
 def register(mcp) -> None:
     @mcp.tool()
+    async def prepare_ssh_connection() -> str:
+        """Generate the local SSH key/config for connecting to the user's AF pod.
+
+        Returns one exact, ready-to-run shell command — your username and the AF
+        host are already filled in from your token, so run it verbatim (a single
+        Bash call).  It tries an existing connection first and only does key/config
+        setup if that fails, so repeat connects need just one approval.
+
+        After running it:
+          - output "ALREADY_CONNECTED" -> already connected; stop here.
+          - otherwise it prints an SSH public key -> pass it to connect_to_session.
+
+        First step of connecting.  Ask the user before connecting via SSH.
+        """
+        user = current_user.get()
+        username = user["username"]
+        pod_name = user["pod_name"]
+
+        setup = _render_ssh_setup(username)
+        lines: list[str] = []
+        if not pod_name:
+            lines += [
+                "Note: no running session detected — start one with "
+                "start_af_session first, or the connection test will fail.",
+                "",
+            ]
+        lines += [
+            "Run this locally (single Bash call):",
+            "",
+            setup,
+            "",
+            'If it prints "ALREADY_CONNECTED": done — verify with ssh PurdueAF "hostname".',
+            "Otherwise pass the printed public key to connect_to_session(public_key=...).",
+        ]
+        return "\n".join(lines)
+
+    @mcp.tool()
     async def connect_to_session(public_key: str) -> str:
-        """Inject the agent's SSH public key into the user's running AF pod.
+        """Inject an SSH public key into the user's running AF pod (idempotent).
 
-        Checks ~/.ssh/authorized_keys on the pod; adds the key only if not
-        already present (idempotent — safe to call multiple times).
-
-        Before calling this tool, run the following single Bash call
-        (substitute USERNAME with the value from get_session_status).
-        It tries an existing connection first; only does key/config setup
-        if that fails — so subsequent connects need just one Bash approval.
-
-            USERNAME="<username>"
-            if ssh -o BatchMode=yes -o ConnectTimeout=5 PurdueAF "hostname" 2>/dev/null; then
-              echo "ALREADY_CONNECTED"
-            else
-              [ -f ~/.ssh/af_key ] \\
-                || ssh-keygen -t ed25519 -f ~/.ssh/af_key -N "" -C "purdue-af-agentic" -q
-              grep -q "Host PurdueAF" ~/.ssh/config 2>/dev/null \\
-                || cat >> ~/.ssh/config << EOF
-            Host PurdueAF
-                HostName cms.geddes.rcac.purdue.edu
-                Port 22
-                User ${USERNAME}
-                IdentityFile ~/.ssh/af_key
-                StrictHostKeyChecking no
-                UserKnownHostsFile /dev/null
-                ControlMaster auto
-                ControlPath ~/.ssh/control-af-%r@%h:%p
-                ControlPersist 60m
-            EOF
-              cat ~/.ssh/af_key.pub
-            fi
-
-        If the output is "ALREADY_CONNECTED", skip this tool entirely.
-        Otherwise pass the public key output to this tool, then verify
-        with: ssh PurdueAF "hostname"
+        Call prepare_ssh_connection first — it generates the local key and prints
+        the public key to pass here.  This tool adds that key to the pod's
+        ~/.ssh/authorized_keys only if not already present, so it is safe to call
+        repeatedly.  After it succeeds, verify with: ssh PurdueAF "hostname".
 
         Args:
-            public_key: Full contents of ~/.ssh/af_key.pub (one line).
+            public_key: The public key printed by prepare_ssh_connection
+                        (contents of ~/.ssh/af_key.pub, one line).
         """
         user = current_user.get()
         pod_name = user["pod_name"]

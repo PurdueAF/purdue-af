@@ -15,7 +15,7 @@ import uvicorn
 from auth import resolve_user
 from context import current_user
 from mcp.server.fastmcp import FastMCP
-from tools import connect, dask, logs, profiles, session, storage
+from tools import connect, dask, logs, profiles, prompts, session, storage
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +149,10 @@ mcp = FastMCP(
         "Use query_notebook_logs / query_dask_logs for log queries; "
         "use query_storage_usage for disk quota information; "
         "use list_dask_clusters / scale_dask_cluster / stop_dask_cluster for Dask; "
-        "use get_session_status / start_af_session / stop_af_session for pod lifecycle."
+        "use get_session_status / start_af_session / stop_af_session for pod lifecycle; "
+        "to connect over SSH, call prepare_ssh_connection then connect_to_session. "
+        "Each tool result names the next step. Invocable workflow prompts "
+        "(launch/connect/restart/stop) are also available."
     ),
 )
 
@@ -159,6 +162,7 @@ dask.register(mcp)
 profiles.register(mcp)
 session.register(mcp)
 connect.register(mcp)
+prompts.register(mcp)
 
 
 # ── entry point ───────────────────────────────────────────────────────────────
