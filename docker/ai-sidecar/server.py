@@ -14,7 +14,7 @@ import uvicorn
 from mcp.server.fastmcp import FastMCP
 
 # Tool modules live here; register new sidecar-specific tools as needed.
-# General AF tools (logs, storage) have moved to apps/jupyterhub/agentic-interface.
+# General AF tools (logs, storage) have moved to docker/agentic-interface.
 
 logger = logging.getLogger(__name__)
 

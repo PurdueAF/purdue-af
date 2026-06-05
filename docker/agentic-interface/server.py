@@ -60,8 +60,17 @@ class _AuthMiddleware:
             await self._app(scope, receive, send)
             return
 
+        path = scope.get("path", "")
+
+        # Unauthenticated liveness/readiness probe. The kubelet hits the pod
+        # directly at /health (no JupyterHub service prefix); accept the
+        # prefixed form too in case it is probed through the proxy.
+        if path in ("/health", f"{SERVICE_PREFIX}/health"):
+            await self._ok(send)
+            return
+
         # Only serve the MCP endpoint; return 404 for anything else.
-        if not scope.get("path", "").startswith(f"{SERVICE_PREFIX}/mcp"):
+        if not path.startswith(f"{SERVICE_PREFIX}/mcp"):
             await self._respond(send, 404, "not found")
             return
 
@@ -93,6 +102,21 @@ class _AuthMiddleware:
             await self._app({**scope, "headers": new_headers}, receive, send)
         finally:
             current_user.reset(ctx_token)
+
+    @staticmethod
+    async def _ok(send) -> None:
+        body = b"ok"
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [
+                    (b"content-type", b"text/plain"),
+                    (b"content-length", str(len(body)).encode()),
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": body})
 
     @staticmethod
     async def _respond(send, status: int, detail: str) -> None:

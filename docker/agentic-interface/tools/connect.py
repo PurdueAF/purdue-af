@@ -30,8 +30,8 @@ async def _check_and_inject(pod_name: str, username: str, public_key: str) -> st
 
     try:
         config.load_incluster_config()
-    except Exception as exc:
-        return f"Error: service is not running in the expected environment — contact AF support"
+    except Exception:
+        return "Error: service is not running in the expected environment — contact AF support"
 
     # Base64-encode the key so special characters can't break the shell script.
     encoded = base64.b64encode(public_key.strip().encode()).decode()
@@ -68,8 +68,8 @@ fi
         pod_user = (pod.metadata.labels or {}).get("username_unescaped", "")
         if pod_user != username:
             return "Error: pod ownership verification failed — access denied"
-    except Exception as exc:
-        return f"Error: could not verify pod ownership — contact AF support"
+    except Exception:
+        return "Error: could not verify pod ownership — contact AF support"
 
     try:
         output = k8s_stream(

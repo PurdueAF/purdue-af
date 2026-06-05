@@ -168,7 +168,12 @@ def register(mcp) -> None:
                 return f"Error: JupyterHub API unreachable — {exc}"
 
         if resp.status_code == 400:
-            return "Session is already running. Use get_session_status to see its URL."
+            # 400 is most commonly "already running", but JupyterHub also uses it
+            # for rejected spawn options — don't mask those behind a success message.
+            body = resp.text.lower()
+            if "already running" in body or "already pending" in body:
+                return "Session is already running. Use get_session_status to see its URL."
+            return f"Error: JupyterHub rejected the spawn request — {resp.text[:300]}"
         if resp.status_code == 201:
             return (
                 "Session is starting. This typically takes 30–60 seconds. "

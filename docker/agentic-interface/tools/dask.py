@@ -80,7 +80,7 @@ async def _fetch_clusters(
         )
     except httpx.RequestError as exc:
         return gateway, f"unreachable ({exc})"
-    if resp.status_code == 401:
+    if resp.status_code in (401, 403):
         return gateway, "not authorised (no access to this backend)"
     if resp.status_code != 200:
         return gateway, f"HTTP {resp.status_code}"
