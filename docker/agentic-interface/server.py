@@ -61,7 +61,12 @@ async def _resolve_user(token: str) -> Optional[dict]:
     # Pod name lives in the default server's spawner state.
     pod_name = data.get("servers", {}).get("", {}).get("state", {}).get("pod_name", "")
 
-    user_info = {"username": username, "pod_name": pod_name, "namespace": NAMESPACE, "token": token}
+    user_info = {
+        "username": username,
+        "pod_name": pod_name,
+        "namespace": NAMESPACE,
+        "token": token,
+    }
     _user_cache[token] = (now + _CACHE_TTL, user_info)
     return user_info
 

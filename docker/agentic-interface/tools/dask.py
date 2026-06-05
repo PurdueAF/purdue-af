@@ -14,7 +14,6 @@ import os
 from typing import Optional
 
 import httpx
-
 from context import current_user
 
 # Gateway name → internal k8s service URL.
@@ -102,7 +101,10 @@ def register(mcp) -> None:
 
         async with httpx.AsyncClient() as client:
             results = await asyncio.gather(
-                *[_fetch_clusters(client, gw, url, token) for gw, url in _GATEWAYS.items()]
+                *[
+                    _fetch_clusters(client, gw, url, token)
+                    for gw, url in _GATEWAYS.items()
+                ]
             )
 
         sections: list[str] = []
@@ -172,7 +174,9 @@ def register(mcp) -> None:
         opts = c.get("options", {})
         sections = [_fmt_cluster(c, gateway)]
         if opts:
-            sections.append("Options:\n" + "\n".join(f"  {k}: {v}" for k, v in opts.items()))
+            sections.append(
+                "Options:\n" + "\n".join(f"  {k}: {v}" for k, v in opts.items())
+            )
         if worker_lines:
             sections.append(f"Workers ({len(workers)}):\n" + "\n".join(worker_lines))
         return "\n\n".join(sections)
@@ -214,7 +218,9 @@ def register(mcp) -> None:
         if resp.status_code not in (200, 204):
             return f"Error: HTTP {resp.status_code} — {resp.text[:300]}"
 
-        return f"Cluster '{cluster_name}' on '{gateway}' scaling to {n_workers} worker(s)."
+        return (
+            f"Cluster '{cluster_name}' on '{gateway}' scaling to {n_workers} worker(s)."
+        )
 
     @mcp.tool()
     async def stop_dask_cluster(cluster_name: str, gateway: str = "k8s") -> str:

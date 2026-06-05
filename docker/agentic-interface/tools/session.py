@@ -9,7 +9,6 @@ import os
 from typing import Optional
 
 import httpx
-
 from context import current_user
 
 HUB_API_URL = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
@@ -59,7 +58,9 @@ def register(mcp) -> None:
         state = default.get("state", {})
         pod_name = state.get("pod_name", "")
 
-        status_str = "running" if ready else f"pending ({pending})" if pending else "not ready"
+        status_str = (
+            "running" if ready else f"pending ({pending})" if pending else "not ready"
+        )
 
         lines = [
             f"# Session status: {status_str}",
@@ -107,7 +108,11 @@ def register(mcp) -> None:
             profiles = await get_profiles()
             profile = find_profile(profiles, profile_name)
             if profile is None:
-                known = ", ".join(f'"{p["slug"]}"' for p in profiles) if profiles else "unavailable"
+                known = (
+                    ", ".join(f'"{p["slug"]}"' for p in profiles)
+                    if profiles
+                    else "unavailable"
+                )
                 return (
                     f"Unknown profile '{profile_name}'. "
                     f"Call list_af_profiles to see available options. "
@@ -225,7 +230,11 @@ def register(mcp) -> None:
                 profiles = await get_profiles()
                 profile = find_profile(profiles, profile_name)
                 if profile is None:
-                    known = ", ".join(f'"{p["slug"]}"' for p in profiles) if profiles else "unavailable"
+                    known = (
+                        ", ".join(f'"{p["slug"]}"' for p in profiles)
+                        if profiles
+                        else "unavailable"
+                    )
                     return (
                         f"Unknown profile '{profile_name}'. "
                         f"Call list_af_profiles to see options. "

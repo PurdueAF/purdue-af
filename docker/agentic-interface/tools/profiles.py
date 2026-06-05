@@ -26,11 +26,13 @@ _CACHE_TTL = 300.0
 
 # ── slug computation (mirrors KubeSpawner internals) ─────────────────────────
 
+
 def _slug(display_name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", display_name.lower()).strip("-")
 
 
 # ── ConfigMap fetch + parse ───────────────────────────────────────────────────
+
 
 async def _read_configmap() -> Optional[str]:
     """Return the values.yaml string from the jupyterhub-config ConfigMap, or None."""
@@ -78,9 +80,7 @@ def _parse_profiles(values_yaml: str) -> list[dict]:
             choices: dict[str, str] = {}
             for ck, cv in (opt_val.get("choices") or {}).items():
                 label = (
-                    cv.get("display_name", str(ck))
-                    if isinstance(cv, dict)
-                    else str(cv)
+                    cv.get("display_name", str(ck)) if isinstance(cv, dict) else str(cv)
                 )
                 if isinstance(cv, dict) and cv.get("default"):
                     label += " (default)"
@@ -105,6 +105,7 @@ def _parse_profiles(values_yaml: str) -> list[dict]:
 
 
 # ── public helpers ────────────────────────────────────────────────────────────
+
 
 async def get_profiles(force: bool = False) -> list[dict]:
     """Return the profile list, with a 5-minute cache."""
@@ -134,6 +135,7 @@ def find_profile(profiles: list[dict], name: str) -> Optional[dict]:
 
 
 # ── tool registration ─────────────────────────────────────────────────────────
+
 
 def register(mcp) -> None:
     @mcp.tool()
@@ -169,7 +171,7 @@ def register(mcp) -> None:
                 for opt_key, opt_info in p["options"].items():
                     block.append(f"  **\"{opt_key}\"** — {opt_info['display_name']}")
                     for ck, label in opt_info["choices"].items():
-                        block.append(f"    `\"{ck}\"` → {label}")
+                        block.append(f'    `"{ck}"` → {label}')
 
             sections.append("\n".join(block))
 
