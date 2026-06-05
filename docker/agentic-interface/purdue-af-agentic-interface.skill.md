@@ -92,6 +92,28 @@ curl -s \
 
 ---
 
+## Tools: Dask cluster management
+
+`list_dask_clusters` — list running clusters (name, status, workers, scheduler address)
+`get_dask_cluster_info(cluster_name)` — full details including per-worker state
+`scale_dask_cluster(cluster_name, n_workers)` — set worker count
+`stop_dask_cluster(cluster_name)` — shut down a cluster and release resources
+
+All Dask tools use `"name": "list_dask_clusters"` etc. with `"arguments": {"cluster_name": "..."}`.
+
+---
+
+## Tools: AF session lifecycle
+
+`get_session_status` — whether the pod is running, which profile, uptime, URL
+`start_af_session(profile?, interface?, gpu?)` — start the pod; options:
+  - `profile`: `"stable"` (default) or `"pre-release"` (includes AI sidecar)
+  - `interface`: `"lab"` (JupyterLab, default) or `"vscode"`
+  - `gpu`: `"0"` (none), `"1_mig"` (5 GB slice), `"1_a100"` (full 40 GB)
+`stop_af_session` — stop the running pod (storage is preserved)
+
+---
+
 ## Authentication errors
 
 | Symptom | Likely cause |

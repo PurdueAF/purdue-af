@@ -17,7 +17,7 @@ import httpx
 import uvicorn
 from context import current_user
 from mcp.server.fastmcp import FastMCP
-from tools import logs, storage
+from tools import dask, logs, session, storage
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ async def _resolve_user(token: str) -> Optional[dict]:
     # Pod name lives in the default server's spawner state.
     pod_name = data.get("servers", {}).get("", {}).get("state", {}).get("pod_name", "")
 
-    user_info = {"username": username, "pod_name": pod_name, "namespace": NAMESPACE}
+    user_info = {"username": username, "pod_name": pod_name, "namespace": NAMESPACE, "token": token}
     _user_cache[token] = (now + _CACHE_TTL, user_info)
     return user_info
 
@@ -165,12 +165,16 @@ mcp = FastMCP(
     instructions=(
         "Tools for the Purdue Analysis Facility. "
         "Use query_notebook_logs / query_dask_logs for log queries; "
-        "use query_storage_usage for disk quota information."
+        "use query_storage_usage for disk quota information; "
+        "use list_dask_clusters / scale_dask_cluster / stop_dask_cluster for Dask; "
+        "use get_session_status / start_af_session / stop_af_session for pod lifecycle."
     ),
 )
 
 logs.register(mcp)
 storage.register(mcp)
+dask.register(mcp)
+session.register(mcp)
 
 
 # ── entry point ───────────────────────────────────────────────────────────────
