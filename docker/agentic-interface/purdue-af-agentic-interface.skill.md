@@ -1,124 +1,197 @@
-# Purdue Analysis Facility — Agentic Interface Skill
+# Purdue Analysis Facility — Agentic Interface
 
-> **Installation**: copy this file into your project as
-> `.claude/skills/purdue-af-agentic-interface.md`, or paste it into `CLAUDE.md`.
->
-> **Required environment variables** (set once in your shell profile):
+> **Setup**: set once in your shell profile:
 > ```bash
-> export JUPYTERHUB_TOKEN=<your-api-token>   # from https://cms.geddes.rcac.purdue.edu/hub/token
+> export JUPYTERHUB_TOKEN=<your-api-token>
+> # Obtain at: https://cms.geddes.rcac.purdue.edu/hub/token
 > ```
-> No `JUPYTERHUB_USER` needed — the service resolves your identity from the token.
+> Your username and active pod are resolved automatically from the token.
 
 ---
 
-## When to use these tools
+## Workflows — read this first
 
-When the user asks about logs, errors, output, or storage usage related to their
-running Purdue AF pod — use the tools below.  The service is always available at
-`https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp` regardless of
-whether the user has an active pod.
+Follow these sequences exactly.  The tool reference is in the sections below.
 
-Base URL for all calls:
+### Starting a session
+
 ```
-https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp
-```
+1. get_session_status
+     → if already "running": report status and URL, then stop — do not re-start
 
----
+2. start_af_session (with any desired profile/options)
 
-## Tool: query_notebook_logs
+3. Poll until ready:
+     repeat every 15 s: get_session_status
+     stop when status = "running"  (typically 30–60 s)
 
-Query logs from the **JupyterLab / VS Code server** container of the user's pod.
-
-**Parameters** (all optional):
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `start` | string | `"1h"` | Duration ago (`"1h"`, `"30m"`) or ISO-8601 timestamp |
-| `end` | string | now | ISO-8601 end timestamp |
-| `limit` | int | 500 | Maximum log lines (cap: 5000) |
-| `filter` | string | — | LogQL pipe expression, e.g. `\|= "ERROR"` |
-
-**How to call it:**
-```bash
-curl -s \
-  -H "Authorization: Bearer ${JUPYTERHUB_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -H "MCP-Protocol-Version: 2025-03-26" \
-  -X POST \
-  "https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp" \
-  -d '{
-    "jsonrpc": "2.0", "id": 1,
-    "method": "tools/call",
-    "params": {
-      "name": "query_notebook_logs",
-      "arguments": { "start": "1h", "limit": 500 }
-    }
-  }' | grep '^data:' | sed 's/^data: //' \
-    | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['content'][0]['text'])"
+4. Report: "Session is running at <url>. Would you like to connect to it via SSH?"
+     → wait for user's answer before proceeding
 ```
 
----
+### Connecting to a running session
+*(Only run this workflow when the user explicitly asks to connect.)*
 
-## Tool: query_dask_logs
+```
+1. get_session_status  →  confirm status = "running" before proceeding
 
-Query logs from the user's **Dask worker and scheduler pods**.  Same parameters
-as `query_notebook_logs`.
+2. connect_to_session:
+     a. Bash: ls ~/.ssh/af_key 2>/dev/null || ssh-keygen -t ed25519 -f ~/.ssh/af_key -N "" -C "purdue-af-agentic"
+     b. Bash: cat ~/.ssh/af_key.pub  → copy output
+     c. call connect_to_session(public_key=<output from b>)
+     d. Bash: grep -c "Host PurdueAF" ~/.ssh/config 2>/dev/null || echo 0
+        → if 0: append the config block returned by connect_to_session to ~/.ssh/config
+        → if >0: leave ~/.ssh/config untouched
 
-Change `"name"` to `"query_dask_logs"` in the curl command above.
-
----
-
-## Tool: query_storage_usage
-
-Report disk quota and usage for the user's **home** and **work** directories.
-Data comes from Prometheus (scraped every 5 min from af-pod-monitor). No parameters.
-
-```bash
-curl -s \
-  -H "Authorization: Bearer ${JUPYTERHUB_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -H "MCP-Protocol-Version: 2025-03-26" \
-  -X POST \
-  "https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp" \
-  -d '{
-    "jsonrpc": "2.0", "id": 1,
-    "method": "tools/call",
-    "params": { "name": "query_storage_usage", "arguments": {} }
-  }' | grep '^data:' | sed 's/^data: //' \
-    | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['content'][0]['text'])"
+3. Bash: ssh PurdueAF "hostname"   # verify; should print the pod hostname
 ```
 
+### Stopping a session
+
+```
+1. Bash: ssh -O exit PurdueAF 2>/dev/null; true
+     (closes the ControlMaster gracefully; the "; true" suppresses errors
+      if no SSH connection is currently open)
+
+2. stop_af_session
+```
+
+### Restarting a session
+
+```
+1. Bash: ssh -O exit PurdueAF 2>/dev/null; true
+
+2. restart_af_session (with any desired profile/options)
+
+3. Poll until ready:
+     repeat every 15 s: get_session_status
+     stop when status = "running"
+
+4. Report: "Session has restarted. Would you like to reconnect via SSH?"
+     → if yes: follow the "Connecting to a running session" workflow above
+```
+
+### Getting a link to open the session in a browser
+
+```
+call get_session_status
+```
+
+The response always includes both interface links — JupyterLab and VS Code —
+with the one that was active at spawn time marked `← active`.  Present them
+as clickable links for the user to open in their browser.
+
+Works at any time: if no session is running the links are still shown;
+they redirect to the JupyterHub spawn form.
+
+### Recovering a broken SSH connection
+
+```
+Bash: rm -f ~/.ssh/control-af-* && ssh PurdueAF "hostname"
+```
+Use this when SSH commands return a socket error after a pod restart or
+network interruption.  It clears the stale ControlMaster socket and opens
+a fresh connection.
+
 ---
 
-## Tools: Dask cluster management
+## Tool reference
 
-`list_dask_clusters` — list running clusters (name, status, workers, scheduler address)
-`get_dask_cluster_info(cluster_name)` — full details including per-worker state
-`scale_dask_cluster(cluster_name, n_workers)` — set worker count
-`stop_dask_cluster(cluster_name)` — shut down a cluster and release resources
+### Session lifecycle
+*(All tools work even when no pod is running.)*
 
-All Dask tools use `"name": "list_dask_clusters"` etc. with `"arguments": {"cluster_name": "..."}`.
+**`get_session_status`** — current pod state, profile selected, uptime, URL.
+
+**`list_af_profiles`** — available profiles with exact option keys and choice values.
+Call this before `start_af_session` when non-default options are needed.
+
+**`start_af_session`**
+```json
+{"name": "start_af_session", "arguments": {
+  "profile_name": "<slug from list_af_profiles>",
+  "user_options": {"<option-key>": "<choice-value>"}
+}}
+```
+Omit both arguments for defaults (stable profile, JupyterLab, no GPU).
+
+Examples:
+```json
+{"0-cpu": "3", "3-interface": "2"}          // stable: 32 CPUs, VS Code
+{"profile_name": "latest-pre-release-version", "user_options": {"interface": "1"}}
+```
+
+**`restart_af_session`** — stop + start, preserving options by default.
+Pass `profile_name` / `user_options` to change configuration on restart.
+
+**`stop_af_session`** — stops the pod. Storage (home, /work) is always preserved.
 
 ---
 
-## Tools: AF session lifecycle
+### Connecting to a session
 
-`get_session_status` — whether the pod is running, which profile, uptime, URL
-`start_af_session(profile?, interface?, gpu?)` — start the pod; options:
-  - `profile`: `"stable"` (default) or `"pre-release"` (includes AI sidecar)
-  - `interface`: `"lab"` (JupyterLab, default) or `"vscode"`
-  - `gpu`: `"0"` (none), `"1_mig"` (5 GB slice), `"1_a100"` (full 40 GB)
-`stop_af_session` — stop the running pod (storage is preserved)
+**`connect_to_session(public_key)`** — injects the SSH public key into the pod's
+`~/.ssh/authorized_keys`, checking first whether it is already present (idempotent).
+Returns the SSH config block and connection instructions.
+
+The pod's web interface is at `https://cms.geddes.rcac.purdue.edu/user/<username>/`.
+
+---
+
+### Storage
+
+**`query_storage_usage`** — home and work directory quotas (Prometheus, ≤ 5 min stale).
+Requires a running pod.
+
+---
+
+### Dask clusters
+*(Results always scoped to the calling user.)*
+
+**`list_dask_clusters`** — all clusters across every gateway (k8s, slurm-hammer, slurm-gautschi, slurm).
+
+**`get_dask_cluster_info(cluster_name, gateway="k8s")`** — per-worker state and options.
+
+**`scale_dask_cluster(cluster_name, n_workers, gateway="k8s")`**
+
+**`stop_dask_cluster(cluster_name, gateway="k8s")`** — irreversible.
+
+`gateway` options: `"k8s"` · `"slurm-hammer"` · `"slurm-gautschi"` · `"slurm"`
+
+---
+
+### Logs
+
+**`query_notebook_logs`** — JupyterLab / VS Code server logs. Requires a running pod.
+
+**`query_dask_logs`** — Dask worker and scheduler logs (notebook pod excluded).
+
+Both accept `start` (duration `"1h"`, `"30m"` or ISO-8601), `limit` (default 500),
+and `filter` (LogQL pipe expression, e.g. `"|= \"ERROR\""`).
 
 ---
 
 ## Authentication errors
 
-| Symptom | Likely cause |
-|---------|-------------|
-| `{"error":"Missing Bearer token"}` | `JUPYTERHUB_TOKEN` is unset |
+| Symptom | Cause |
+|---|---|
+| `{"error":"Missing Bearer token"}` | `JUPYTERHUB_TOKEN` not set |
 | `{"error":"Invalid JupyterHub token"}` | Token expired — refresh at `/hub/token` |
-| `"no running server found"` in result | User has no active pod |
-| HTTP 404 on the URL | Service is not deployed or not yet registered with JupyterHub |
+| `"no running server found"` in result | Pod not running — use `start_af_session` |
+| HTTP 404 on the service URL | Service not deployed or not registered with JupyterHub |
+
+---
+
+## Service endpoint (for manual testing)
+
+```bash
+curl -s \
+  -H "Authorization: Bearer ${JUPYTERHUB_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "MCP-Protocol-Version: 2025-03-26" \
+  -X POST \
+  "https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"TOOL","arguments":ARGS}}' \
+  | grep '^data:' | sed 's/^data: //' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['content'][0]['text'])"
+```

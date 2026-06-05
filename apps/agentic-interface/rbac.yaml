@@ -8,10 +8,24 @@ kind: Role
 metadata:
   name: agentic-interface
 rules:
+  # Read the JupyterHub Helm values to discover current profiles.
+  # Restricted to this one named ConfigMap — no other ConfigMaps are readable.
   - apiGroups: [""]
     resources: ["configmaps"]
     resourceNames: ["jupyterhub-config"]
     verbs: ["get"]
+
+  # Verify pod ownership by label before any exec (defense-in-depth).
+  # "get" only — cannot list, watch, create, update, or delete pods.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get"]
+
+  # Inject SSH public keys into the user's own pod for connect_to_session.
+  # The code verifies pod ownership via the label check above before exec.
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

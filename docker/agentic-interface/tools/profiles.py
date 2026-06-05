@@ -143,14 +143,14 @@ def register(mcp) -> None:
         """List available Analysis Facility session profiles and their configurable options.
 
         Read this before calling start_af_session to know which profile slugs and
-        option key/value pairs are valid.  The data is read live from the cluster
-        configuration so it always reflects the current setup.
+        option key/value pairs are valid.  The data is read live from the current
+        AF configuration so it always reflects the current setup.
         """
         profiles = await get_profiles()
         if not profiles:
             return (
-                "Could not read profile list from the cluster — "
-                "the service may lack ConfigMap read access, or is running outside the cluster."
+                "Could not read profile list — service may be misconfigured. "
+                "Try again shortly or contact AF support."
             )
 
         sections: list[str] = [f"# {len(profiles)} available profile(s)\n"]
