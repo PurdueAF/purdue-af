@@ -172,7 +172,9 @@ def register(mcp) -> None:
             # for rejected spawn options — don't mask those behind a success message.
             body = resp.text.lower()
             if "already running" in body or "already pending" in body:
-                return "Session is already running. Use get_session_status to see its URL."
+                return (
+                    "Session is already running. Use get_session_status to see its URL."
+                )
             return f"Error: JupyterHub rejected the spawn request — {resp.text[:300]}"
         if resp.status_code == 201:
             return (
