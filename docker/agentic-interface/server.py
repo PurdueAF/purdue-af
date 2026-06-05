@@ -17,7 +17,7 @@ import httpx
 import uvicorn
 from context import current_user
 from mcp.server.fastmcp import FastMCP
-from tools import dask, logs, session, storage
+from tools import dask, logs, profiles, session, storage
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +174,7 @@ mcp = FastMCP(
 logs.register(mcp)
 storage.register(mcp)
 dask.register(mcp)
+profiles.register(mcp)
 session.register(mcp)
 
 

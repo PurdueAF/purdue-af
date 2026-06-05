@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agentic-interface
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: agentic-interface
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["jupyterhub-config"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agentic-interface
+subjects:
+  - kind: ServiceAccount
+    name: agentic-interface
+    namespace: cms
+roleRef:
+  kind: Role
+  name: agentic-interface
+  apiGroup: rbac.authorization.k8s.io

@@ -47,6 +47,7 @@ resources:
   - ../../apps/kagent/ingress.yaml
   - ../../apps/kagent/agents/agent-log-analyzer.yaml
 
+  - ../../apps/agentic-interface/rbac.yaml
   - ../../apps/agentic-interface/deployment.yaml
   - ../../apps/agentic-interface/service.yaml
 

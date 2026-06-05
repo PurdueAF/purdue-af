@@ -4,6 +4,7 @@ All calls go through the JupyterHub REST API using the user's own token, so they
 are automatically scoped to that user's server.
 """
 
+import asyncio
 import os
 from typing import Optional
 
@@ -79,49 +80,50 @@ def register(mcp) -> None:
 
     @mcp.tool()
     async def start_af_session(
-        profile: Optional[str] = None,
-        interface: Optional[str] = None,
-        gpu: Optional[str] = None,
+        profile_name: Optional[str] = None,
+        user_options: Optional[dict] = None,
     ) -> str:
         """Start the user's Analysis Facility session (JupyterHub pod).
 
-        If a session is already running, this is a no-op and returns its current URL.
+        Call list_af_profiles first to discover valid profile slugs and option
+        key/value pairs.  If a session is already running this is a no-op.
 
         Args:
-            profile: Profile to launch. Options: 'stable' (default), 'pre-release'.
-                     The pre-release profile includes the AI sidecar.
-            interface: 'lab' for JupyterLab (default) or 'vscode' for VS Code.
-            gpu: GPU allocation — '0' (none, default), '1_mig' (5 GB A100 slice),
-                 '1_a100' (full 40 GB A100, limited availability).
+            profile_name: Profile slug or display name from list_af_profiles.
+                          Omit to use the default profile.
+            user_options: Dict of option_key → choice_value as listed by
+                          list_af_profiles.  Example for the stable profile:
+                          {"3-interface": "2", "0-cpu": "3", "2-memory": "2"}
         """
         user = current_user.get()
         token = user["token"]
         username = user["username"]
 
-        # Map friendly names to JupyterHub profile slugs
-        _profile_map = {
-            "stable": "",                           # default profile
-            "pre-release": "latest-pre-release-version",
-        }
-        _interface_map = {"lab": "1", "vscode": "2"}
-        _gpu_map = {"0": "1", "1_mig": "2", "1_a100": "3"}
+        opts: dict = dict(user_options or {})
 
-        user_options: dict = {}
-        if profile:
-            slug = _profile_map.get(profile.lower(), profile)
-            if slug:
-                user_options["profile"] = slug
-        if interface:
-            user_options["interface"] = _interface_map.get(interface.lower(), interface)
-        if gpu:
-            user_options["gpu"] = _gpu_map.get(gpu.lower(), gpu)
+        if profile_name:
+            from tools.profiles import find_profile, get_profiles
+
+            profiles = await get_profiles()
+            profile = find_profile(profiles, profile_name)
+            if profile is None:
+                known = ", ".join(f'"{p["slug"]}"' for p in profiles) if profiles else "unavailable"
+                return (
+                    f"Unknown profile '{profile_name}'. "
+                    f"Call list_af_profiles to see available options. "
+                    f"Known slugs: {known}"
+                )
+            # Add the profile key so KubeSpawner selects the right profile.
+            # For the default profile the slug is still non-empty (e.g.
+            # "purdue-af-0-12-4-…"), so we always include it when explicitly requested.
+            opts["profile"] = profile["slug"]
 
         async with httpx.AsyncClient() as client:
             try:
                 resp = await client.post(
                     f"{HUB_API_URL}/users/{username}/server",
                     headers=_auth(token),
-                    json=user_options if user_options else {},
+                    json=opts,
                     timeout=15.0,
                 )
             except httpx.RequestError as exc:
@@ -173,4 +175,115 @@ def register(mcp) -> None:
         return (
             "Session is stopping. Storage is preserved — "
             "use start_af_session to launch a new one."
+        )
+
+    @mcp.tool()
+    async def restart_af_session(
+        profile_name: Optional[str] = None,
+        user_options: Optional[dict] = None,
+    ) -> str:
+        """Restart the Analysis Facility session.
+
+        By default restarts with the same profile and resource options that were
+        active before the stop.  Pass profile_name / user_options to switch to
+        different settings on restart.
+
+        Args:
+            profile_name: Profile slug or display name from list_af_profiles.
+                          Omit to keep the current profile.
+            user_options: Option overrides.  Omit to reuse the current options.
+                          See list_af_profiles for valid keys and values.
+        """
+        user = current_user.get()
+        token = user["token"]
+        username = user["username"]
+
+        async with httpx.AsyncClient() as client:
+            # 1. Capture current user_options before stopping.
+            prior_opts: dict = {}
+            try:
+                info = await client.get(
+                    f"{HUB_API_URL}/users/{username}",
+                    headers=_auth(token),
+                    timeout=10.0,
+                )
+                if info.status_code == 200:
+                    prior_opts = (
+                        info.json()
+                        .get("servers", {})
+                        .get("", {})
+                        .get("user_options", {})
+                    )
+            except httpx.RequestError:
+                pass  # non-fatal — we'll restart with whatever options we have
+
+            # 2. Decide on spawn options: caller overrides take precedence over prior state.
+            spawn_opts: dict = dict(user_options or prior_opts)
+            if profile_name:
+                from tools.profiles import find_profile, get_profiles
+
+                profiles = await get_profiles()
+                profile = find_profile(profiles, profile_name)
+                if profile is None:
+                    known = ", ".join(f'"{p["slug"]}"' for p in profiles) if profiles else "unavailable"
+                    return (
+                        f"Unknown profile '{profile_name}'. "
+                        f"Call list_af_profiles to see options. "
+                        f"Known slugs: {known}"
+                    )
+                spawn_opts["profile"] = profile["slug"]
+
+            # 3. Stop.
+            try:
+                stop = await client.delete(
+                    f"{HUB_API_URL}/users/{username}/server",
+                    headers=_auth(token),
+                    timeout=15.0,
+                )
+            except httpx.RequestError as exc:
+                return f"Error: JupyterHub API unreachable — {exc}"
+
+            if stop.status_code not in (200, 202, 204, 400):
+                return f"Error stopping session: HTTP {stop.status_code} — {stop.text[:300]}"
+
+            was_running = stop.status_code != 400  # 400 = no server was running
+
+            # 4. Brief pause to let Kubernetes terminate the pod before re-spawning.
+            if was_running:
+                await asyncio.sleep(3)
+
+            # 5. Start.
+            try:
+                start = await client.post(
+                    f"{HUB_API_URL}/users/{username}/server",
+                    headers=_auth(token),
+                    json=spawn_opts,
+                    timeout=15.0,
+                )
+            except httpx.RequestError as exc:
+                return (
+                    f"Session was stopped but restart failed: JupyterHub API unreachable — {exc}. "
+                    "Use start_af_session to try again."
+                )
+
+        if start.status_code == 400:
+            # Pod still terminating — ask the user to retry
+            return (
+                "Session stopped but the pod is still terminating. "
+                "Wait a few seconds then call start_af_session to complete the restart."
+            )
+        if start.status_code not in (200, 201, 202):
+            return (
+                f"Session stopped but restart returned HTTP {start.status_code}. "
+                "Use start_af_session to try again."
+            )
+
+        opts_summary = (
+            ", ".join(f"{k}={v}" for k, v in spawn_opts.items())
+            if spawn_opts
+            else "default options"
+        )
+        return (
+            f"Session restarting with {opts_summary}. "
+            "Use get_session_status to check progress."
         )

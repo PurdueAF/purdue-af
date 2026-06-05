@@ -52,6 +52,7 @@ spec:
               port: 8888
             initialDelaySeconds: 10
             periodSeconds: 30
+      serviceAccountName: agentic-interface
       nodeSelector:
         cms-af-prod: "true"
       tolerations:
