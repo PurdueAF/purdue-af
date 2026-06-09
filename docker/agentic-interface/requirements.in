@@ -1,0 +1,6 @@
+# Direct dependencies — compile the lock with:
+#   uv pip compile requirements.in -o requirements.txt --python-version 3.11 --generate-hashes
+mcp[cli]>=1.3.0
+httpx>=0.27.0
+pyyaml>=6.0
+kubernetes>=29.0.0
