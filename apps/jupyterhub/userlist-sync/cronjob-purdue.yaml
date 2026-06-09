@@ -40,7 +40,7 @@ spec:
 
                   # Get Purdue users
                   echo "Fetching Purdue users..."
-                  ldapsearch -x host=hammer.rcac.purdue.edu | grep uid: | cut -d " " -f2 > $TMP_FILE
+                  ldapsearch -H ldap://auth.hammer.rcac.purdue.edu -x -b "ou=People,dc=hammer,dc=rcac,dc=purdue,dc=edu" uid | grep uid: | cut -d " " -f2 > $TMP_FILE
                   # echo "Purdue users:"
                   # cat $TMP_FILE
 
