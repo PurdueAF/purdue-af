@@ -2,7 +2,6 @@
 import glob
 import os
 import sqlite3
-from datetime import datetime
 
 import matplotlib.pyplot as plt
 import numpy as np

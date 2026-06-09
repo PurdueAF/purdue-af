@@ -11,7 +11,6 @@ clusters owned by that user.
 
 import asyncio
 import os
-from typing import Optional
 
 import httpx
 from context import current_user

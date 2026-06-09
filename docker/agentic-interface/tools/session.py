@@ -65,7 +65,6 @@ def register(mcp) -> None:
         ready = default.get("ready", False)
         pending = default.get("pending")
         started = default.get("started", "")
-        url = default.get("url", "")
         user_options = default.get("user_options", {})
         state = default.get("state", {})
         pod_name = state.get("pod_name", "")
@@ -275,7 +274,6 @@ def register(mcp) -> None:
                                     "prepare_ssh_connection.",
                                 ]
                             )
-                        pending = default.get("pending", "starting")
                         # Not ready yet — fall through to sleep
                 except httpx.RequestError:
                     pass  # transient network error, keep polling

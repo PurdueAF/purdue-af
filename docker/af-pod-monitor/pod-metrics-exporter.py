@@ -65,7 +65,7 @@ def update_metrics(dir_label):
         stat_info = os.stat(directory)
         last_accessed_time = stat_info.st_atime
         metrics[f"{dl}_dir_last_accessed"].set(last_accessed_time)
-    except:
+    except OSError:
         pass
 
 

@@ -161,7 +161,7 @@ def register(mcp) -> None:
                 header += "  *(default)*"
             block = [
                 header,
-                f"slug: `\"{p['slug']}\"`",
+                f'slug: `"{p["slug"]}"`',
             ]
             if p["description"]:
                 block.append(f"_{p['description']}_")
@@ -169,7 +169,7 @@ def register(mcp) -> None:
             if p["options"]:
                 block.append("\nOption keys and valid values:")
                 for opt_key, opt_info in p["options"].items():
-                    block.append(f"  **\"{opt_key}\"** — {opt_info['display_name']}")
+                    block.append(f'  **"{opt_key}"** — {opt_info["display_name"]}')
                     for ck, label in opt_info["choices"].items():
                         block.append(f'    `"{ck}"` → {label}')
 
