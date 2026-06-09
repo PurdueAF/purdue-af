@@ -1,0 +1,70 @@
+// Renovate configuration — automated dependency update PRs.
+//
+// Activation: install the Mend Renovate GitHub App on this repository
+// (https://github.com/apps/renovate). The app reads this file from main.
+//
+// Covers:
+//   - Flux HelmRelease chart versions (apps/**) via the flux manager
+//   - Dockerfile base images (FROM tags)
+//   - GitHub Actions versions (+ pins them to commit SHAs)
+//   - Python lock (docker/agentic-interface/requirements.{in,txt}) via uv pip compile
+//   - pre-commit hook versions
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    ':dependencyDashboard',
+    // Pin `uses:` action refs to immutable commit SHAs (tag kept as comment).
+    'helpers:pinGitHubActionDigests',
+  ],
+  // Batch update PRs into a weekly window to keep noise down.
+  schedule: ['before 6am on monday'],
+  timezone: 'America/Indiana/Indianapolis',
+  labels: ['dependencies'],
+
+  ignorePaths: [
+    'docker/dask-gateway-server/**', // vendored fork — tracked upstream, do not churn
+    'docs/**', // legacy Sphinx docs, removed after Zensical cutover
+  ],
+
+  // Flux manager is opt-in by path: parse everything Flux reconciles.
+  flux: {
+    managerFilePatterns: ['/(^|/)apps/.*\\.ya?ml$/', '/(^|/)deploy/.*\\.ya?ml$/'],
+  },
+
+  'pre-commit': {
+    enabled: true,
+  },
+
+  // Regenerate the hash-pinned lock from requirements.in (header records the
+  // exact `uv pip compile` command to re-run).
+  'pip-compile': {
+    managerFilePatterns: ['/^docker/agentic-interface/requirements\\.txt$/'],
+  },
+
+  packageRules: [
+    {
+      // Private cluster registry — Renovate has no credentials for it and the
+      // images are built in-repo anyway (kaniko / future CI builds).
+      matchDatasources: ['docker'],
+      matchPackageNames: ['geddes-registry.rcac.purdue.edu/**'],
+      enabled: false,
+    },
+    {
+      // Group all GitHub Actions bumps into one PR.
+      matchManagers: ['github-actions'],
+      groupName: 'github-actions',
+    },
+    {
+      // Helm chart bumps stay individual PRs (each needs real review),
+      // but label them for triage.
+      matchManagers: ['flux'],
+      addLabels: ['helm'],
+    },
+    {
+      // Major chart/image bumps: extra label so they stand out.
+      matchUpdateTypes: ['major'],
+      addLabels: ['major'],
+    },
+  ],
+}
