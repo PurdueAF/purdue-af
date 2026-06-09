@@ -1,0 +1,50 @@
+# Single source of truth for all lint/format checks.
+#
+#   Local:  uvx pre-commit run --all-files     (or: pre-commit install)
+#   CI:     .github/workflows/lint.yml runs the exact same hooks.
+#
+# Hooks that need a runtime not on your machine can be skipped locally,
+# e.g.:  SKIP=hadolint-docker uvx pre-commit run --all-files
+
+exclude: ^docker/dask-gateway-server/ # vendored fork — upstream owns its style
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=2048"]
+        exclude: \.rpm$ # existing slurm/OSG rpms; removal tracked in Phase 0
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.1
+    hooks:
+      - id: ruff-check # lint (+ import sorting), config in ruff.toml
+        args: ["--fix"]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier (JSON/YAML)
+        language: node
+        additional_dependencies: ["prettier@3.8.4"]
+        entry: prettier --write
+        types_or: [json, yaml]
+
+      - id: shfmt
+        name: shfmt
+        language: golang
+        additional_dependencies: ["mvdan.cc/sh/v3/cmd/shfmt@v3.7.0"]
+        entry: shfmt -w
+        types: [shell]
+        # Slurm prolog/epilog scripts (no .sh extension) are deployed verbatim
+        # to clusters — keep them out of formatting (matches the old CI scope).
+        files: \.sh$
+
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.14.0
+    hooks:
+      - id: hadolint-docker
+        args: ["--ignore", "DL3041", "--ignore", "DL3033", "--failure-threshold", "warning"]

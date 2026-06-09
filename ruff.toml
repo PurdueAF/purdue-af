@@ -1,0 +1,14 @@
+# Ruff configuration — single source of truth for Python lint + format
+# (replaces black + isort; run via pre-commit or `uvx ruff check` / `uvx ruff format`).
+target-version = "py311"
+
+# Vendored fork of upstream dask-gateway — never lint.
+extend-exclude = ["docker/dask-gateway-server"]
+
+[lint]
+# Defaults (E4/E7/E9, F) + import sorting (I), matching previous black+isort CI.
+extend-select = ["I"]
+
+[lint.per-file-ignores]
+# JupyterHub config snippets: `c` is the config object injected by the hub at exec time.
+"apps/jupyterhub/jupyterhub/extraFiles/*.py" = ["F821"]

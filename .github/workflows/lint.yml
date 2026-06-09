@@ -1,0 +1,35 @@
+name: Lint
+
+# Single lint entry point: runs every hook defined in .pre-commit-config.yaml
+# (ruff, prettier, shfmt, hadolint, hygiene checks). The config file is the
+# single source of truth — run the same thing locally with:
+#   uvx pre-commit run --all-files
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cache pre-commit environments
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: Install pre-commit
+        run: pip install pre-commit==4.6.0
+      - name: Run pre-commit
+        run: pre-commit run --all-files --show-diff-on-failure --color always
