@@ -47,4 +47,12 @@ repos:
     rev: v2.14.0
     hooks:
       - id: hadolint-docker
-        args: ["--ignore", "DL3041", "--ignore", "DL3033", "--failure-threshold", "warning"]
+        args:
+          [
+            "--ignore",
+            "DL3041",
+            "--ignore",
+            "DL3033",
+            "--failure-threshold",
+            "warning",
+          ]
