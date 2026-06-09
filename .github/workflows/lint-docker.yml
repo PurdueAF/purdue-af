@@ -3,10 +3,20 @@ name: Lint Dockerfiles
 on:
   push:
     paths:
-      - '**/Dockerfile*'
+      - "**/Dockerfile*"
   pull_request:
     paths:
-      - '**/Dockerfile*'
+      - "**/Dockerfile*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HADOLINT_VERSION: v2.14.0
 
 jobs:
   lint:
@@ -15,8 +25,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install hadolint
         run: |
-          sudo wget -O /bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-$(uname -s)-$(uname -m)
+          sudo curl -fsSL "https://github.com/hadolint/hadolint/releases/download/${HADOLINT_VERSION}/hadolint-$(uname -s)-$(uname -m)" -o /bin/hadolint
           sudo chmod +x /bin/hadolint
       - name: Run hadolint
         run: |
-          find . -type f -iname 'Dockerfile*' -not -path './docker/dask-gateway-server/*' -exec hadolint --ignore DL3041 --ignore DL3033 --failure-threshold warning {} + 
+          git ls-files | grep -iE '(^|/)Dockerfile[^/]*$' | grep -v '^docker/dask-gateway-server/' \
+            | xargs hadolint --ignore DL3041 --ignore DL3033 --failure-threshold warning

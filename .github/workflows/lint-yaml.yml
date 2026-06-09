@@ -3,41 +3,29 @@ name: Lint YAML
 on:
   push:
     paths:
-      - '**.yml'
-      - '**.yaml'
+      - "**.yml"
+      - "**.yaml"
   pull_request:
     paths:
-      - '**.yml'
-      - '**.yaml'
+      - "**.yml"
+      - "**.yaml"
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install prettier
-        run: npm install -g prettier
-      - name: Format YAML files
+      - name: Check YAML formatting
         run: |
-          find . -name "*.yml" -o -name "*.yaml" | grep -v "docker/dask-gateway-server" | grep -v "templates" | grep -v ".github/workflows" | xargs prettier --write
-      - name: Commit changes
-        if: ${{ github.event_name == 'pull_request' || github.ref_type == 'branch' }}
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          REF_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          git fetch origin "$REF_NAME"
-          git checkout -B "$REF_NAME" "origin/$REF_NAME" || git checkout -B "$REF_NAME"
-          git add -A
-          git diff --quiet && git diff --staged --quiet || git commit -m "Apply prettier YAML formatting"
-          git push origin "$REF_NAME"
+          git ls-files '*.yml' '*.yaml' \
+            | grep -v '^docker/dask-gateway-server/' \
+            | grep -v 'templates' \
+            | grep -v '^\.github/workflows/' \
+            | xargs npx --yes prettier@3.8.4 --check

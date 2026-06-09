@@ -3,38 +3,30 @@ name: Lint Shell Scripts
 on:
   push:
     paths:
-      - '**.sh'
+      - "**.sh"
   pull_request:
     paths:
-      - '**.sh'
+      - "**.sh"
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SHFMT_VERSION: v3.7.0
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install shfmt
         run: |
-          curl -L https://github.com/mvdan/sh/releases/download/v3.7.0/shfmt_v3.7.0_linux_amd64 -o shfmt
+          curl -fsSL "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64" -o shfmt
           chmod +x shfmt
           sudo mv shfmt /usr/local/bin/
-      - name: Format shell scripts
-        run: |
-          find . -type f -name '*.sh' -not -path './docker/dask-gateway-server/*' -exec shfmt -w {} +
-      - name: Commit changes
-        if: ${{ github.event_name == 'pull_request' || github.ref_type == 'branch' }}
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          REF_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          git fetch origin "$REF_NAME"
-          git checkout -B "$REF_NAME" "origin/$REF_NAME" || git checkout -B "$REF_NAME"
-          git add -A
-          git diff --quiet && git diff --staged --quiet || git commit -m "Apply shfmt shell script formatting"
-          git push origin "$REF_NAME"
+      - name: Check shell script formatting
+        run: git ls-files '*.sh' | grep -v '^docker/dask-gateway-server/' | xargs shfmt -d
