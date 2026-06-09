@@ -16,6 +16,9 @@ ARG NB_GID="100"
 # Fix: https://github.com/koalaman/shellcheck/wiki/SC3014
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+# JupyterHub singleuser image: stays root so the hub/KubeSpawner can set the
+# runtime UID; the spawned container does not run as root.
+# hadolint ignore=DL3002
 USER root
 
 # Install system dependencies
@@ -147,7 +150,7 @@ COPY docker/purdue-af/xml/storage.xml /etc/cvmfs/SITECONF/PhEDEx/
 COPY docker/purdue-af/configs/vomses /etc
 COPY docker/purdue-af/configs/default.local /etc/cvmfs/
 RUN mkdir -p "${HOME}/.globus" "${HOME}/.rnd" && \
-    chown -R ${NB_USER}:${NB_GID} "${HOME}/.globus" "${HOME}/.rnd" && \
+    chown -R "${NB_USER}:${NB_GID}" "${HOME}/.globus" "${HOME}/.rnd" && \
     chmod 700 "${HOME}/.globus"
 
 # Jupyter scripts and configs

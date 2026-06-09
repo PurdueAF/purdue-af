@@ -47,12 +47,18 @@ repos:
     rev: v2.14.0
     hooks:
       - id: hadolint-docker
+        # Pin the image (the upstream hook defaults to :latest).
+        entry: ghcr.io/hadolint/hadolint:v2.14.0 hadolint
+        # DL3041/DL3033/DL3008: unpinned dnf/yum/apt package versions —
+        # distro archives drop old versions, so pinning breaks rebuilds.
         args:
           [
             "--ignore",
             "DL3041",
             "--ignore",
             "DL3033",
+            "--ignore",
+            "DL3008",
             "--failure-threshold",
             "warning",
           ]
