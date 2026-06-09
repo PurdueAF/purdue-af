@@ -1,0 +1,36 @@
+name: Validate Manifests
+
+# Builds every Flux-consumed kustomize root, applies each environment's
+# postBuild substitutions, and validates the rendered manifests with
+# kubeconform. Logic lives in scripts/validate-manifests.sh — run it locally.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUX_VERSION: 2.5.1
+  KUBECONFORM_VERSION: v0.8.0
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest # kustomize + yq preinstalled
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install flux CLI
+        uses: fluxcd/flux2/action@main
+        with:
+          version: ${{ env.FLUX_VERSION }}
+      - name: Install kubeconform
+        run: |
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin kubeconform
+      - name: Validate manifests
+        run: ./scripts/validate-manifests.sh

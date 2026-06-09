@@ -4,8 +4,5 @@ resources:
   - build-af.yaml
   - build-af-node-monitor.yaml
   - build-agentic-interface.yaml
-  - build-purdue-af.yaml
   - build-dask.yaml
   - build-interlink.yaml
-  - build-a2rchi.yaml
-  - secret.yaml
