@@ -1,10 +1,16 @@
-# Build the Zensical documentation (docs-md/) and deploy it to GitHub Pages.
+# Build the Zensical documentation and deploy it to GitHub Pages.
+#
+# Two editions of the docs are built and published together:
+#   - docs-md/      -> https://purdueaf.github.io/purdue-af/        (current docs)
+#   - docs-md-alt/  -> https://purdueaf.github.io/purdue-af/alt/    (alternative docs)
+# GitHub Pages allows only one site per repository, so the alternative edition is
+# served under the /alt/ subpath of the same site for side-by-side comparison.
 #
 # One-time setup required in the repository settings:
 #   Settings -> Pages -> Build and deployment -> Source: "GitHub Actions"
 #
-# After that, every push to `main` that touches docs-md/ rebuilds and
-# publishes the site automatically. Remove the `paths:` filter below if you
+# After that, every push to `main` that touches docs-md/ or docs-md-alt/ rebuilds
+# and publishes the site automatically. Remove the `paths:` filter below if you
 # want the docs to rebuild on *every* push to main.
 name: Documentation
 
@@ -14,6 +20,7 @@ on:
       - main
     paths:
       - "docs-md/**"
+      - "docs-md-alt/**"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -41,11 +48,20 @@ jobs:
         with:
           python-version: 3.x
       - run: pip install zensical
-      - name: Build site
+      - name: Build current docs
         working-directory: docs-md
         run: zensical build --clean
+      - name: Build alternative docs
+        working-directory: docs-md-alt
+        run: zensical build --clean
+      - name: Assemble combined site
+        run: |
+          mkdir -p _site
+          cp -r docs-md/site/. _site/
+          mkdir -p _site/alt
+          cp -r docs-md-alt/site/. _site/alt/
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: docs-md/site
+          path: _site
       - uses: actions/deploy-pages@v4
         id: deployment
