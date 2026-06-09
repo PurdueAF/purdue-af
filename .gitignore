@@ -3,3 +3,5 @@
 **/__pycache__
 monitoring/grafonnet
 .claude/*
+**/.venv/
+**/.pytest_cache/

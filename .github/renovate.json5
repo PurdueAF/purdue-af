@@ -7,7 +7,7 @@
 //   - Flux HelmRelease chart versions (apps/**) via the flux manager
 //   - Dockerfile base images (FROM tags)
 //   - GitHub Actions versions (+ pins them to commit SHAs)
-//   - Python lock (docker/agentic-interface/requirements.{in,txt}) via uv pip compile
+//   - Python deps (docker/agentic-interface/pyproject.toml + uv.lock) via the uv manager
 //   - pre-commit hook versions
 {
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
@@ -36,11 +36,6 @@
     enabled: true,
   },
 
-  // Regenerate the hash-pinned lock from requirements.in (header records the
-  // exact `uv pip compile` command to re-run).
-  'pip-compile': {
-    managerFilePatterns: ['/^docker/agentic-interface/requirements\\.txt$/'],
-  },
 
   packageRules: [
     {
