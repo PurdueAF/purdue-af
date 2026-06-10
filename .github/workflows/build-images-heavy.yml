@@ -37,9 +37,16 @@ jobs:
             dockerfile: docker/purdue-af/Dockerfile
             context: .
             smoke: python3 -c "import jupyterlab; print('ok')"
-          - name: dask-gateway-server
-            dockerfile: docker/dask-gateway-server/Dockerfile
-            context: docker/dask-gateway-server
+          # The base dask-gateway-server/Dockerfile is a stale pre-split
+          # leftover (references a renamed configs dir); only the per-cluster
+          # variants are real build targets (same as the kaniko jobs).
+          - name: dask-gateway-server-hammer
+            dockerfile: docker/dask-gateway-server/Dockerfile.hammer
+            context: .
+            smoke: python3 -c "import dask_gateway_server; print('ok')"
+          - name: dask-gateway-server-gautschi
+            dockerfile: docker/dask-gateway-server/Dockerfile.gautschi
+            context: .
             smoke: python3 -c "import dask_gateway_server; print('ok')"
     name: ${{ matrix.name }}
     steps:
