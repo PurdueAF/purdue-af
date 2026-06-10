@@ -5,3 +5,5 @@ monitoring/grafonnet
 .claude/*
 **/.venv/
 **/.pytest_cache/
+coverage.xml
+.coverage

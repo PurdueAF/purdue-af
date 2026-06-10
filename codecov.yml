@@ -1,0 +1,24 @@
+# Codecov configuration.
+# Statuses start informational: they report coverage without failing PRs.
+# Tighten (informational: false + targets) once the baseline is established.
+
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+# Each CI suite uploads under its own flag; carryforward keeps a component's
+# last-known coverage when a commit doesn't touch it.
+flag_management:
+  default_rules:
+    carryforward: true
+
+ignore:
+  - "tests/**"
+  - "**/tests/**"
+  - "docker/dask-gateway-server/**" # vendored fork
+  - "docs/**"

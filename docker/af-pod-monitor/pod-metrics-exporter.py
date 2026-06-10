@@ -1,3 +1,8 @@
+"""af-pod-monitor: exports storage usage metrics for a user's AF pod.
+
+Sidecar in every user pod; Prometheus scrapes :9090 every 5 minutes.
+"""
+
 import glob
 import os
 import subprocess
@@ -5,75 +10,88 @@ import time
 
 from prometheus_client import Gauge, start_http_server
 
-# Create Prometheus metrics for storage metrics
+WORK_QUOTA_KB = 104857600  # 100 GB
 
-user_dirs = [d for d in os.listdir("/home/")]
-skip = ["jovyan", "slurm"]
-username = [d for d in user_dirs if d not in skip][0]
-
-directories = {"home": glob.glob("/home/*")[0], "work": f"/work/users/{username}/"}
-
+_DIRS = ("home", "work")
 metrics = {}
-for dl in directories.keys():
-    metrics[f"{dl}_dir_used"] = Gauge(
-        f"af_{dl}_dir_used_kb",
-        f"Used storage in {dl} directory mounted to an Analysis Facility pod",
+for _dl in _DIRS:
+    metrics[f"{_dl}_dir_used"] = Gauge(
+        f"af_{_dl}_dir_used_kb",
+        f"Used storage in {_dl} directory mounted to an Analysis Facility pod",
     )
-    metrics[f"{dl}_dir_size"] = Gauge(
-        f"af_{dl}_dir_size_kb",
-        f"Total storage in {dl} directory mounted to an Analysis Facility pod",
+    metrics[f"{_dl}_dir_size"] = Gauge(
+        f"af_{_dl}_dir_size_kb",
+        f"Total storage in {_dl} directory mounted to an Analysis Facility pod",
     )
-    metrics[f"{dl}_dir_util"] = Gauge(
-        f"af_{dl}_dir_util",
-        f"Storage utilization in {dl} directory mounted to an Analysis Facility pod",
+    metrics[f"{_dl}_dir_util"] = Gauge(
+        f"af_{_dl}_dir_util",
+        f"Storage utilization in {_dl} directory mounted to an Analysis Facility pod",
     )
-    metrics[f"{dl}_dir_last_accessed"] = Gauge(
-        f"af_{dl}_dir_last_accessed",
-        f"Last accessed timestamp for {dl} directory in Analysis Facility",
+    metrics[f"{_dl}_dir_last_accessed"] = Gauge(
+        f"af_{_dl}_dir_last_accessed",
+        f"Last accessed timestamp for {_dl} directory in Analysis Facility",
     )
 
 
-def update_metrics(dir_label):
-    directory = directories[dir_label]
+def discover_username(home_entries):
+    """The pod's user is the single /home entry that isn't a system account."""
+    skip = {"jovyan", "slurm"}
+    return next(d for d in home_entries if d not in skip)
 
+
+def discover_directories():
+    username = discover_username(os.listdir("/home/"))
+    return {"home": glob.glob("/home/*")[0], "work": f"/work/users/{username}/"}
+
+
+def parse_df_output(df_output):
+    """Parse `df <dir>` output into (used_kb, size_kb, utilisation)."""
+    lines = df_output.strip().split("\n")
+    header = lines[0].split()
+    data = lines[1].split()
+
+    used = int(data[header.index("Used")])
+    size = 0
+    util = 0
+    for key in ("1K-blocks", "Size"):
+        if key in header:
+            size = int(data[header.index(key)])
+            util = used / size
+    return used, size, util
+
+
+def parse_du_output(du_output, quota_kb=WORK_QUOTA_KB):
+    """Parse `du -s <dir>` output into (used_kb, size_kb, utilisation)."""
+    used = int(du_output.split()[0])
+    return used, quota_kb, used / quota_kb
+
+
+def update_metrics(dir_label, directory):
     if dir_label == "work":
         du_output = subprocess.check_output(["du", "-s", directory]).decode("utf-8")
-        used = int(du_output.split()[0])
-        size = 104857600  # 100 GB
-        util = used / size
+        used, size, util = parse_du_output(du_output)
     else:
-        # Run the "df" command and get the output
         df_output = subprocess.check_output(["df", directory]).decode("utf-8")
-        lines = df_output.strip().split("\n")
-        header = lines[0].split()
-        data = lines[1].split()
+        used, size, util = parse_df_output(df_output)
 
-        # Extract relevant information
-        used = int(data[header.index("Used")])
-        util = 0
-        for key in ["1K-blocks", "Size"]:
-            if key in header:
-                size = int(data[header.index(key)])
-                util = used / size
-
-    # Set the metric values
-    metrics[f"{dl}_dir_used"].set(used)
-    metrics[f"{dl}_dir_size"].set(size)
-    metrics[f"{dl}_dir_util"].set(util)
+    metrics[f"{dir_label}_dir_used"].set(used)
+    metrics[f"{dir_label}_dir_size"].set(size)
+    metrics[f"{dir_label}_dir_util"].set(util)
 
     try:
-        stat_info = os.stat(directory)
-        last_accessed_time = stat_info.st_atime
-        metrics[f"{dl}_dir_last_accessed"].set(last_accessed_time)
+        metrics[f"{dir_label}_dir_last_accessed"].set(os.stat(directory).st_atime)
     except OSError:
         pass
 
 
-if __name__ == "__main__":
-    # Start the Prometheus HTTP server
+def main():
+    directories = discover_directories()
     start_http_server(9090)
-    # Update the metrics
     while True:
-        for dl in directories.keys():
-            update_metrics(dl)
+        for dir_label, directory in directories.items():
+            update_metrics(dir_label, directory)
         time.sleep(300)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,6 +1,11 @@
+import os
 import time
 
 from prometheus_client import Gauge, start_http_server
+
+EVENT_RATE_FILE = os.environ.get(
+    "EVENT_RATE_FILE", "/work/projects/purdue-af/agc/metrics/event_rate.txt"
+)
 
 event_rate_per_worker = Gauge(
     "agc_event_rate_per_worker",
@@ -10,7 +15,7 @@ event_rate_per_worker = Gauge(
 
 def update_metrics():
     try:
-        with open("/work/projects/purdue-af/agc/metrics/event_rate.txt", "r") as f:
+        with open(EVENT_RATE_FILE) as f:
             event_rate = float(f.read().strip())
         event_rate_per_worker.set(event_rate)
     except Exception as e:

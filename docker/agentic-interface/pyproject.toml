@@ -15,6 +15,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.3",
+    "pytest-cov>=6.0",
     "pytest-asyncio>=0.25",
     "respx>=0.22",
 ]

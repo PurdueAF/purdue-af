@@ -19,4 +19,6 @@ Each user is provided with a 25GB home directory at first login. These directori
 [![Documentation Status](https://readthedocs.org/projects/purdue-af/badge/?version=latest)](https://purdue-af.readthedocs.io/en/latest/?badge=latest)
 
 [![Lint](https://github.com/PurdueAF/purdue-af/actions/workflows/lint.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/lint.yml)
+[![Test](https://github.com/PurdueAF/purdue-af/actions/workflows/test.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/PurdueAF/purdue-af/graph/badge.svg)](https://codecov.io/gh/PurdueAF/purdue-af)
 
