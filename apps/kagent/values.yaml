@@ -6,7 +6,7 @@ fullnameOverride: kagent-cms
 
 # Pin runtime image tags to the chart version so the controller and agent Deployments
 # do not oscillate between stale agent images (e.g. 0.7.x) and IMAGE_TAG from the chart.
-tag: "0.8.6"
+tag: "0.9.6"
 
 providers:
   default: openAI
@@ -18,8 +18,13 @@ providers:
     config:
       baseUrl: https://genai.rcac.purdue.edu/api
 
+# clusterScoped was removed upstream; namespaces=[${namespace}] reproduces the
+# previous clusterScoped:false default (Role/RoleBinding scoped to the install
+# namespace only). cms-specific access is granted separately via
+# controller-cms-rbac.yaml.
 rbac:
-  clusterScoped: false
+  namespaces:
+    - ${namespace}
 
 database:
   postgres:
@@ -36,7 +41,7 @@ controller:
     - ${namespace}
     - cms
   agentImage:
-    tag: "0.8.6"
+    tag: "0.9.6"
   agentDeployment:
     serviceAccountName: kagent-agent-readonly
   env:
@@ -48,11 +53,10 @@ kagent-tools:
 kmcp:
   nameOverride: kmcp-cms
 
-tools:
-  grafana-mcp:
-    enabled: true
-  querydoc:
-    enabled: false
+# querydoc/grafana-mcp enable flags moved from tools.<name>.enabled to top-level
+# <name>.enabled upstream; grafana-mcp defaults to enabled so no flag is needed here.
+querydoc:
+  enabled: false
 
 grafana-mcp:
   grafana:
@@ -66,24 +70,25 @@ grafana-mcp:
     tag: latest
     pullPolicy: IfNotPresent
 
-agents:
-  helm-agent:
-    enabled: false
-  istio-agent:
-    enabled: false
-  argo-rollouts-agent:
-    enabled: false
-  kgateway-agent:
-    enabled: false
-  cilium-policy-agent:
-    enabled: false
-  cilium-manager-agent:
-    enabled: false
-  cilium-debug-agent:
-    enabled: false
-  k8s-agent:
-    enabled: false
-  observability-agent:
-    enabled: false
-  promql-agent:
-    enabled: false
+# Per-agent enable flags moved from agents.<name>.enabled to top-level
+# <name>.enabled upstream.
+helm-agent:
+  enabled: false
+istio-agent:
+  enabled: false
+argo-rollouts-agent:
+  enabled: false
+kgateway-agent:
+  enabled: false
+cilium-policy-agent:
+  enabled: false
+cilium-manager-agent:
+  enabled: false
+cilium-debug-agent:
+  enabled: false
+k8s-agent:
+  enabled: false
+observability-agent:
+  enabled: false
+promql-agent:
+  enabled: false
