@@ -147,3 +147,34 @@ def test_cern_extracts_usernames_from_dns(shims):
 def test_requires_source_argument(shims):
     result = run_sync(shims, "")
     assert result.returncode != 0
+
+
+def test_ensure_tools_is_silent_on_stdout(shims):
+    """Regression: ensure_tools runs inside the captured fetch functions, so
+    installer chatter on stdout ends up in the userlist (caused real
+    'invalid data format' failures in production). Whatever it installs,
+    stdout must stay empty."""
+    dnf = shims["bin"] / "dnf"
+    dnf.write_text('#!/bin/bash\necho "Installing: packages, with spaces"\n')
+    dnf.chmod(0o755)
+
+    # Extract the function and call it with a tool that exists nowhere,
+    # forcing the dnf path; capture only stdout.
+    import os
+
+    probe = (
+        f'eval "$(sed -n \'/^ensure_tools()/,/^}}$/p\' "{SCRIPT}")"; '
+        "captured=$(ensure_tools definitely-not-a-real-tool-xyz); "
+        'printf "[%s]" "$captured"'
+    )
+    result = subprocess.run(
+        ["bash", "-c", probe],
+        env={**os.environ, "PATH": f"{shims['bin']}:{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "[]"  # nothing leaked into the captured stream
+    assert "Installing: packages" in result.stderr  # chatter went to stderr

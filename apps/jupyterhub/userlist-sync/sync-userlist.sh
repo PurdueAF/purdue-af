@@ -17,18 +17,22 @@ TMP_FILE=$(mktemp)
 
 ensure_tools() {
 	# Install only what is missing — a no-op in tests and prebaked images.
-	local missing=()
-	for tool in "$@"; do
-		command -v "$tool" >/dev/null || missing+=("$tool")
-	done
-	if [ ${#missing[@]} -gt 0 ]; then
-		dnf install -y "${missing[@]/#ldapsearch/openldap-clients}" --nogpgcheck
-	fi
-	if ! command -v kubectl >/dev/null; then
-		curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-		chmod +x kubectl
-		mv kubectl /usr/local/bin/
-	fi
+	# Runs inside the captured fetch functions, so every line of installer
+	# output MUST go to stderr or it would end up in the userlist.
+	{
+		local missing=()
+		for tool in "$@"; do
+			command -v "$tool" >/dev/null || missing+=("$tool")
+		done
+		if [ ${#missing[@]} -gt 0 ]; then
+			dnf install -y "${missing[@]/#ldapsearch/openldap-clients}" --nogpgcheck
+		fi
+		if ! command -v kubectl >/dev/null; then
+			curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+			chmod +x kubectl
+			mv kubectl /usr/local/bin/
+		fi
+	} 1>&2
 }
 
 fetch_cern() {
