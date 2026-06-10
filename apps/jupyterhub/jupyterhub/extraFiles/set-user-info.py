@@ -45,13 +45,10 @@ def passthrough_auth_state_hook(spawner, auth_state):
         # in prod instance do the user mapping
         af_id = int(spawner.user.id)
         if af_id > 399:
-            # raise Exception(
-            print(
-                f"Error while trying to create an external user with AF ID {af_id}."
+            raise RuntimeError(
+                f"Error while trying to create an external user with AF ID {af_id}. "
                 "We ran out of accounts for external users!"
             )
-            spawner.environment["NB_UID"] = "1000"
-            spawner.environment["NB_GID"] = "1000"
         username = "paf{:04d}".format(af_id)
         uid, gid = ldap_lookup(username)
         spawner.environment["NB_UID"] = str(uid)

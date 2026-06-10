@@ -1,5 +1,6 @@
 """Tests for extraFiles/set-user-info.py — UID/GID mapping at spawn time."""
 
+import pytest
 from conftest import FakeSpawner, load_snippet
 
 
@@ -46,6 +47,21 @@ def test_external_user_mapped_to_paf_account_in_cms(monkeypatch, fake_ldap):
     assert spawner.environment["NB_USER"] == "carol-cern"
     assert fake_ldap["searches"] == ["(uid=paf0007*)"]
     assert spawner.environment["NB_UID"] == "12345"
+
+
+def test_external_user_beyond_account_pool_refuses_spawn(monkeypatch, fake_ldap):
+    ns = load(monkeypatch, fake_ldap, namespace="cms")
+    spawner = FakeSpawner(user_id=400)
+
+    with pytest.raises(RuntimeError, match="ran out of accounts"):
+        ns["passthrough_auth_state_hook"](
+            spawner, {"name": "dave-cern", "domain": "cern.ch"}
+        )
+
+    # no LDAP lookup for a nonexistent paf account, no UID/GID assigned
+    assert fake_ldap["searches"] == []
+    assert "NB_UID" not in spawner.environment
+    assert "NB_GID" not in spawner.environment
 
 
 def test_external_user_in_dev_namespace_gets_default_ids(monkeypatch, fake_ldap):
