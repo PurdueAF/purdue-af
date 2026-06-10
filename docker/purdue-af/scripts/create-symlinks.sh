@@ -1,3 +1,4 @@
+#!/bin/bash
 NEW_HOME=/home/$NB_USER
 if [ ! -L eos-purdue ]; then ln -sf /eos/purdue/ $NEW_HOME/eos-purdue; fi
 if [ -L depot ]; then rm -rf depot; fi

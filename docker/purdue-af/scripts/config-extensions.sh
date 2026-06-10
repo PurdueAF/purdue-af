@@ -1,3 +1,4 @@
+#!/bin/bash
 # earlier: /opt/conda
 base_env_dir=/opt/pixi/.pixi/envs/base-env/
 
@@ -31,7 +32,7 @@ else
 	text='{"text":"Purdue AF v'"$IMAGE_VERSION"'  |  👤 '"$NB_USER"'  |  "}'
 fi
 
-echo $text >$TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings
+echo "$text" >"$TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings"
 
 echo '{
     "toolbar": [

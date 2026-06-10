@@ -43,6 +43,15 @@ repos:
         # to clusters — keep them out of formatting (matches the old CI scope).
         files: \.sh$
 
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        args: ["--severity=warning"]
+        # Slurm prolog/epilog scripts predate this repo's standards and are
+        # deployed verbatim — audit them when they are next touched.
+        exclude: ^slurm/
+
   - repo: https://github.com/hadolint/hadolint
     rev: v2.14.0
     hooks:

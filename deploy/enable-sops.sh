@@ -1,3 +1,4 @@
+#!/bin/bash
 # age-keygen -o ~/.config/sops/age/keys.txt
 # cat ~/.config/sops/age/keys.txt | grep 'public key'
 

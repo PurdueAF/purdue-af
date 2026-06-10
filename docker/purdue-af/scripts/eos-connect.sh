@@ -1,3 +1,4 @@
+#!/bin/bash
 krb_ticket=$(klist 2>/dev/null | grep FILE | cut -d ':' -f3)
 link_exists=$(ls $HOME/eos-cern 2>/dev/null)
 if [ -L $HOME/eos-cern ]; then link_exists="true"; else link_exists="false"; fi

@@ -18,6 +18,7 @@ dev = [
     "pytest-cov>=6.0",
     "pytest-asyncio>=0.25",
     "respx>=0.22",
+    "asgi-lifespan>=2.1",
 ]
 
 [tool.uv]

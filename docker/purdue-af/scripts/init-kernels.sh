@@ -1,3 +1,4 @@
+#!/bin/bash
 export CONDARC=/home/$NB_USER/.condarc
 echo CONDARC=$CONDARC
 
@@ -43,9 +44,7 @@ LCG_STACKS["106b_cuda"]="/cvmfs/sft.cern.ch/lcg/views/LCG_106b_cuda/x86_64-el8-g
 # Loop through each LCG stack and set up kernels
 for lcg_version in "${!LCG_STACKS[@]}"; do
 	# Split the value into path and display name
-	lcg_config=(${LCG_STACKS[$lcg_version]})
-	lcg_path=${lcg_config[0]}
-	lcg_display_name=${lcg_config[1]}
+	read -r lcg_path lcg_display_name <<<"${LCG_STACKS[$lcg_version]}"
 
 	echo "Setting up LCG kernel for version $lcg_version: $lcg_display_name..."
 
@@ -55,6 +54,7 @@ for lcg_version in "${!LCG_STACKS[@]}"; do
 	# Check if the LCG path exists
 	if [ -f "$lcg_path" ]; then
 		# Source LCG setup
+		# shellcheck disable=SC1090  # path comes from the LCG_STACKS table
 		source "$lcg_path"
 
 		# Create kernel name
@@ -75,7 +75,7 @@ for lcg_version in "${!LCG_STACKS[@]}"; do
 		echo "LCG kernel setup complete for $lcg_display_name."
 
 		# Restore environment variables that were modified by LCG
-		while IFS='=' read -r key value; do
+		while IFS='=' read -r key _; do
 			if [ -n "$key" ]; then # Skip empty lines
 				current_value="${!key}"
 				if [[ "$current_value" == *"lcg"* ]]; then                  # If current value contains "lcg"

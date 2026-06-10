@@ -12,11 +12,18 @@
 #      the chart version, HelmRepository URL and valuesFrom-ConfigMap values
 #      resolved from that same stream — this is what catches breaking chart
 #      schema changes when a chart version is bumped (e.g. by Renovate).
+#   5. `promtool check rules` on Prometheus alerting/recording rules embedded
+#      in Helm values — a typo'd PromQL expression otherwise deploys silently
+#      and the alert simply never fires.
 #
 # Bootstrap objects (flux-kustomization.yaml / git-repository.yaml) are
 # validated directly, since they are applied out-of-band.
 #
-# Requirements: kustomize, flux, yq (v4), kubeconform, helm
+# Tripwires: the run fails if suspiciously few HelmReleases/resources were
+# validated — a parsing regression must turn the build red, never silently
+# validate nothing.
+#
+# Requirements: kustomize, flux, yq (v4), kubeconform, helm, promtool
 # Run locally:  ./scripts/validate-manifests.sh
 #
 set -euo pipefail
@@ -25,6 +32,7 @@ cd "$(git rev-parse --show-toplevel)"
 # Rough match for the cluster's Kubernetes version (helm .Capabilities).
 KUBE_VERSION="${KUBE_VERSION:-1.30.0}"
 
+# shellcheck disable=SC2054  # commas below are kubeconform list syntax
 KUBECONFORM=(
 	kubeconform
 	-summary
@@ -37,9 +45,13 @@ KUBECONFORM=(
 workdir=$(mktemp -d)
 trap 'rm -rf "$workdir"' EXIT
 failed=0
+releases_seen=0
 
 # Render one Flux environment exactly like kustomize-controller does:
-# LoadRestrictionsNone + non-strict postBuild substitution.
+# LoadRestrictionsNone + non-strict postBuild substitution, honouring the
+# `kustomize.toolkit.fluxcd.io/substitute: disabled` per-resource annotation
+# (used by ConfigMaps that carry shell scripts).
+SUBST_DISABLED='.metadata.annotations["kustomize.toolkit.fluxcd.io/substitute"] == "disabled"'
 render_env() {
 	local env_dir=$1
 	(
@@ -47,7 +59,10 @@ render_env() {
 			export "${key}=${value}"
 		done < <(yq -r '.spec.postBuild.substitute // {} | to_entries[] | .key + "=" + .value' \
 			"${env_dir}flux-kustomization.yaml")
-		kustomize build --load-restrictor LoadRestrictionsNone "$env_dir" | flux envsubst
+		kustomize build --load-restrictor LoadRestrictionsNone "$env_dir" >"$workdir/raw.yaml"
+		yq "select(${SUBST_DISABLED} | not)" "$workdir/raw.yaml" | flux envsubst
+		echo "---"
+		yq "select(${SUBST_DISABLED})" "$workdir/raw.yaml"
 	)
 }
 
@@ -62,6 +77,7 @@ validate_helmreleases() {
 	local name chart version src_name src_kind repo_line repo_url repo_type
 	local values_files values_args vhash cm key i
 	while IFS= read -r name; do
+		releases_seen=$((releases_seen + 1))
 		chart=$(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec.chart.spec.chart" "$rendered")
 		version=$(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec.chart.spec.version" "$rendered")
 		src_name=$(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec.chart.spec.sourceRef.name" "$rendered")
@@ -177,6 +193,7 @@ for rendered in "$workdir"/rendered-*.yaml; do
 done
 
 # --- Standalone kustomize roots (applied out-of-band) --------------------
+# shellcheck disable=SC2043  # single-element list: more roots may be added
 for root in docker/kaniko-build-jobs; do
 	echo "──── ${root} ────"
 	if ! kustomize build "$root" | "${KUBECONFORM[@]}"; then
@@ -189,6 +206,31 @@ echo "──── flux bootstrap objects ────"
 if ! "${KUBECONFORM[@]}" deploy/*/flux-kustomization.yaml deploy/*/git-repository.yaml; then
 	failed=1
 fi
+
+# --- Prometheus rules ------------------------------------------------------
+echo "──── prometheus rules ────"
+for values_file in $(git grep -lE "alerting_rules|recording_rules" -- 'apps/**/values.yaml'); do
+	for key in alerting_rules.yml recording_rules.yml; do
+		[[ $(yq ".serverFiles | has(\"$key\")" "$values_file") == "true" ]] || continue
+		yq ".serverFiles[\"$key\"]" "$values_file" >"$workdir/rules.yml"
+		echo "  promtool check ${values_file} → ${key}"
+		if ! promtool check rules "$workdir/rules.yml" >/dev/null; then
+			echo "✗ ${values_file}: ${key} failed promtool validation" >&2
+			promtool check rules "$workdir/rules.yml" || true
+			failed=1
+		fi
+	done
+done
+
+# --- Tripwires against silent pass-through --------------------------------
+# Counts well below today's real numbers (~19 releases, ~230 resources) mean
+# the extraction logic broke, not that the platform shrank.
+total_resources=$(yq -N 'select(.kind != null) | .kind' "$workdir/union.yaml" | grep -c .)
+if [[ $releases_seen -lt 10 || $total_resources -lt 100 ]]; then
+	echo "✗ tripwire: only ${releases_seen} HelmReleases / ${total_resources} resources found — validator is broken" >&2
+	failed=1
+fi
+echo "(validated ${releases_seen} HelmRelease references, ${total_resources} resources)"
 
 if [[ $failed -ne 0 ]]; then
 	echo "✗ manifest validation FAILED" >&2

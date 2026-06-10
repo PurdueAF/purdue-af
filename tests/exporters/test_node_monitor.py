@@ -91,3 +91,142 @@ def test_run_subprocess_missing_binary():
     ok, timeout, err = runner._run_subprocess(["definitely-not-a-binary"], timeout_s=5)
     assert ok is False
     assert err
+
+
+# ── check functions (subprocess mocked) ───────────────────────────────────────
+
+
+def stub_run_subprocess(monkeypatch, ok=True, timeout=False, reason=""):
+    calls = []
+
+    def fake(cmd, timeout_s):
+        calls.append(cmd)
+        return ok, timeout, reason
+
+    monkeypatch.setattr(runner, "_run_subprocess", fake)
+    return calls
+
+
+def test_check_ping_without_checksum(monkeypatch):
+    monkeypatch.setattr(runner, "CHECKSUM", "")
+    calls = stub_run_subprocess(monkeypatch)
+
+    ok, timeout, elapsed = runner._check_ping()
+
+    assert (ok, timeout) == (True, False)
+    assert elapsed >= 0
+    assert calls[0][0] == "cat"  # no checksum: plain read
+
+
+def test_check_ping_failure(monkeypatch):
+    monkeypatch.setattr(runner, "CHECKSUM", "")
+    stub_run_subprocess(monkeypatch, ok=False, reason="io error")
+
+    ok, timeout, _ = runner._check_ping()
+    assert (ok, timeout) == (False, False)
+
+
+def test_check_ping_timeout(monkeypatch):
+    monkeypatch.setattr(runner, "CHECKSUM", "")
+    stub_run_subprocess(monkeypatch, ok=False, timeout=True)
+
+    ok, timeout, _ = runner._check_ping()
+    assert (ok, timeout) == (False, True)
+
+
+def test_check_ping_checksum_match(monkeypatch):
+    import types
+
+    monkeypatch.setattr(runner, "CHECKSUM", "abc123")
+    stub_run_subprocess(monkeypatch)
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *a, **kw: types.SimpleNamespace(stdout="abc123  /file\n"),
+    )
+
+    ok, timeout, _ = runner._check_ping()
+    assert (ok, timeout) == (True, False)
+
+
+def test_check_ping_checksum_mismatch_means_corruption(monkeypatch):
+    import types
+
+    monkeypatch.setattr(runner, "CHECKSUM", "abc123")
+    stub_run_subprocess(monkeypatch)
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *a, **kw: types.SimpleNamespace(stdout="DIFFERENT  /file\n"),
+    )
+
+    ok, timeout, _ = runner._check_ping()
+    assert (ok, timeout) == (False, False)
+
+
+def test_check_metadata_skipped_without_dir(monkeypatch):
+    monkeypatch.setattr(runner, "METADATA_DIR", None)
+    assert runner._check_metadata() == (True, False, None)
+
+
+def test_check_metadata_lists_dir(monkeypatch):
+    monkeypatch.setattr(runner, "METADATA_DIR", "/data")
+    calls = stub_run_subprocess(monkeypatch)
+
+    ok, timeout, elapsed = runner._check_metadata()
+
+    assert (ok, timeout) == (True, False)
+    assert calls[0][:2] == ["ls", "-la"]
+
+
+def test_check_throughput_disabled(monkeypatch):
+    monkeypatch.setattr(runner, "ENABLE_FIO", False)
+    assert runner._check_throughput(None) == (True, False, None, None)
+
+
+def test_check_throughput_respects_interval(monkeypatch):
+    import time
+
+    monkeypatch.setattr(runner, "ENABLE_FIO", True)
+    monkeypatch.setattr(runner, "FIO_FILE", "/probe")
+    monkeypatch.setattr(runner, "FIO_INTERVAL_S", 1800.0)
+
+    recent = time.time() - 10
+    ok, timeout, gbps, ts = runner._check_throughput(recent)
+    assert (ok, timeout, gbps, ts) == (True, False, None, recent)  # skipped
+
+
+def test_check_throughput_parses_fio_json(monkeypatch):
+    import json as _json
+    import types
+
+    monkeypatch.setattr(runner, "ENABLE_FIO", True)
+    monkeypatch.setattr(runner, "FIO_FILE", "/probe")
+    fio_out = _json.dumps({"jobs": [{"read": {"bw_bytes": 2_500_000_000}}]})
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *a, **kw: types.SimpleNamespace(returncode=0, stdout=fio_out),
+    )
+
+    ok, timeout, gbps, ts = runner._check_throughput(None)
+
+    assert (ok, timeout) == (True, False)
+    assert gbps == 2.5
+    assert ts is not None
+
+
+def test_check_throughput_fio_failure(monkeypatch):
+    import types
+
+    monkeypatch.setattr(runner, "ENABLE_FIO", True)
+    monkeypatch.setattr(runner, "FIO_FILE", "/probe")
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *a, **kw: types.SimpleNamespace(returncode=1, stdout=""),
+    )
+
+    ok, timeout, gbps, ts = runner._check_throughput(None)
+    assert (ok, gbps) == (False, 0.0)
+    assert ts is None  # timestamp not advanced on failure
