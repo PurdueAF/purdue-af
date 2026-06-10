@@ -17,6 +17,28 @@ flag_management:
   default_rules:
     carryforward: true
 
+# Per-component coverage in the UI and PR comments.
+component_management:
+  individual_components:
+    - component_id: agentic-interface
+      name: Agentic interface (MCP server)
+      paths: ["docker/agentic-interface/**"]
+    - component_id: jupyterhub-config
+      name: JupyterHub config snippets
+      paths: ["apps/jupyterhub/jupyterhub/extraFiles/**"]
+    - component_id: exporters
+      name: Monitoring exporters
+      paths:
+        - "docker/af-pod-monitor/**"
+        - "docker/af-node-monitor/**"
+        - "apps/monitoring/af-monitoring/**"
+
+# One concise PR comment, updated in place.
+comment:
+  layout: "condensed_header, diff, flags, components"
+  behavior: default
+  require_changes: false
+
 ignore:
   - "tests/**"
   - "**/tests/**"
