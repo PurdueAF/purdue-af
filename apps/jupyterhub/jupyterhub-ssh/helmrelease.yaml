@@ -7,7 +7,7 @@ spec:
   chart:
     spec:
       chart: jupyterhub-ssh
-      version: "0.0.1-0.dev.git.142.h402a3d6"
+      version: "0.0.1-n142.h402a3d6"
       sourceRef:
         kind: HelmRepository
         name: jupyterhub-ssh
