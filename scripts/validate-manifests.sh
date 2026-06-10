@@ -140,18 +140,19 @@ for env_dir in deploy/*/; do
 		failed=1
 	fi
 done
+# (named so the rendered-*.yaml glob can never match it: the output redirect
+# creates the file before the glob expands)
 for f in "$workdir"/rendered-*.yaml; do
 	cat "$f"
 	echo "---"
-done >"$workdir/rendered-union.yaml"
+done >"$workdir/union.yaml"
 
 # Pass 2: validate.
 for rendered in "$workdir"/rendered-*.yaml; do
-	[[ "$rendered" == *rendered-union.yaml ]] && continue
 	name=$(basename "$rendered" .yaml)
 	echo "──── ${name#rendered-} ────"
 	"${KUBECONFORM[@]}" <"$rendered" || failed=1
-	validate_helmreleases "$rendered" "$workdir/rendered-union.yaml"
+	validate_helmreleases "$rendered" "$workdir/union.yaml"
 done
 
 # --- Standalone kustomize roots (applied out-of-band) --------------------
