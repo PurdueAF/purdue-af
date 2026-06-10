@@ -1,3 +1,8 @@
+# Lazy annotations: required for the `client = None` fallback below — without
+# this, module-level annotations like `client.CoreV1Api | None` are evaluated
+# at import time and crash when kubernetes is not installed (local runs/tests).
+from __future__ import annotations
+
 import json
 import os
 import time
