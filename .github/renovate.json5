@@ -64,9 +64,11 @@
     {
       // The purdue-af user image is NOT built in CI (cluster-grade kaniko
       // job only — see build-images.yml header). Updates here merge
-      // unverified: label them so they get a manual kaniko build + smoke
-      // test before merge. Revisit with IMPROVEMENT_PLAN item 14.
+      // unverified: hold them in the dashboard's "Pending Approval" section
+      // (no PR until explicitly ticked) and label any created PR for a
+      // manual kaniko build + smoke test. Revisit with IMPROVEMENT_PLAN item 14.
       matchFileNames: ['docker/purdue-af/**'],
+      dependencyDashboardApproval: true,
       addLabels: ['manual-build-required'],
     },
     {
