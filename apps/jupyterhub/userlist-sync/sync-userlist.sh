@@ -53,9 +53,14 @@ fetch_cern() {
 
 fetch_purdue() {
 	ensure_tools ldapsearch
-	ldapsearch -H ldap://auth.hammer.rcac.purdue.edu -x \
-		-b "ou=People,dc=hammer,dc=rcac,dc=purdue,dc=edu" uid |
-		grep uid: | cut -d " " -f2 || true
+	# auth.hammer serves the full roster (incl. x-* service accounts) but is
+	# intermittently empty; the ldap.conf host= filter against centralservices
+	# is stable but returns fewer entries. Merge both and dedupe.
+	{
+		ldapsearch -H ldap://auth.hammer.rcac.purdue.edu -x \
+			-b "ou=People,dc=hammer,dc=rcac,dc=purdue,dc=edu" "(uid=*)" uid 2>/dev/null
+		ldapsearch -x host=hammer.rcac.purdue.edu uid 2>/dev/null
+	} | grep '^uid:' | cut -d ' ' -f2 | sort -u || true
 }
 
 echo "Fetching ${SOURCE} users..."
