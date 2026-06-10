@@ -4,7 +4,7 @@ import json
 
 import auth
 import respx
-from conftest import register_tools
+from agentic_helpers import register_tools
 from tools import profiles, session
 
 USER_URL = f"{session.HUB_API_URL}/users/alice"

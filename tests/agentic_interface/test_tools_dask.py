@@ -4,7 +4,7 @@ import json
 
 import pytest
 import respx
-from conftest import register_tools
+from agentic_helpers import register_tools
 from httpx import ConnectError
 from tools import dask
 

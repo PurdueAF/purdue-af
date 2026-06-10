@@ -3,3 +3,7 @@
 # repo-rooted paths, which Codecov needs to map files to the repository tree.
 [run]
 relative_files = true
+
+[report]
+# Exercised by the container HEALTHCHECK at runtime, not by the test suite.
+omit = docker/purdue-af/jupyter/docker_healthcheck.py

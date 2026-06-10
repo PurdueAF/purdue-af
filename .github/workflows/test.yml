@@ -15,56 +15,34 @@ concurrency:
 jobs:
   pytest:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: agentic-interface
-            project: docker/agentic-interface
-            tests: docker/agentic-interface/tests
-            cov: --cov=docker/agentic-interface
-          - name: jupyterhub-config
-            project: apps/jupyterhub/tests
-            tests: apps/jupyterhub/tests
-            cov: --cov=apps/jupyterhub/jupyterhub/extraFiles
-          - name: exporters
-            project: tests/exporters
-            tests: tests/exporters
-            cov: >-
-              --cov=docker/af-pod-monitor
-              --cov=docker/af-node-monitor
-              --cov=apps/monitoring/af-monitoring
-          - name: scripts
-            project: tests/scripts
-            tests: tests/scripts
-            cov: >-
-              --cov=apps/af-utils/af-users-graph
-              --cov=docker/purdue-af/jupyter
-              --cov-config=tests/scripts/pyproject.toml
-    name: ${{ matrix.name }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          cache-dependency-glob: ${{ matrix.project }}/uv.lock
-      # Run from the repo root (uv --project selects the suite's venv/lock)
-      # so coverage.xml records repo-rooted paths — required for Codecov to
-      # map files to the repository tree.
+          cache-dependency-glob: tests/uv.lock
+      # One project, one lock, every suite — run from the repo root so
+      # coverage records repo-rooted paths (see .coveragerc).
       - name: Run tests with coverage
         run: >-
-          uv run --project ${{ matrix.project }} --frozen --group dev
-          pytest -q -c ${{ matrix.project }}/pyproject.toml
-          ${{ matrix.tests }} ${{ matrix.cov }} --cov-report=xml
+          uv run --project tests --frozen
+          pytest -q -c tests/pyproject.toml tests
+          --cov=docker/agentic-interface
+          --cov=apps/jupyterhub/jupyterhub/extraFiles
+          --cov=docker/af-pod-monitor
+          --cov=docker/af-node-monitor
+          --cov=apps/monitoring/af-monitoring
+          --cov=apps/af-utils/af-users-graph
+          --cov=docker/purdue-af/jupyter
+          --cov-report=xml
       # Codecov reads filename attributes as-is (it ignores <source>), so
-      # rewrite them to repo-rooted paths or files outside the suite dir
-      # never map to the repository tree.
+      # rewrite them to repo-rooted paths.
       - name: Normalise coverage paths
         run: python3 scripts/fix-coverage-paths.py coverage.xml
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           files: coverage.xml
-          flags: ${{ matrix.name }}
           use_oidc: true
           fail_ci_if_error: true

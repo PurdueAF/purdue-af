@@ -14,7 +14,7 @@ import types
 from pathlib import Path
 
 import pytest
-from conftest import load_jupyter_config
+from script_helpers import load_jupyter_config
 
 
 @pytest.fixture(autouse=True)

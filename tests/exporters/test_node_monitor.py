@@ -3,7 +3,7 @@
 import json
 
 import pytest
-from conftest import job_runner
+from exporter_helpers import job_runner
 
 runner = job_runner()
 

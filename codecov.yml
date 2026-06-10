@@ -11,13 +11,8 @@ coverage:
       default:
         informational: true
 
-# Each CI suite uploads under its own flag; carryforward keeps a component's
-# last-known coverage when a commit doesn't touch it.
-flag_management:
-  default_rules:
-    carryforward: true
-
-# Per-component coverage in the UI and PR comments.
+# Per-component coverage in the UI and PR comments (one upload covers all
+# suites; components split it by path — no flags needed).
 component_management:
   individual_components:
     - component_id: agentic-interface
@@ -40,7 +35,7 @@ component_management:
 
 # One concise PR comment, updated in place.
 comment:
-  layout: "condensed_header, diff, flags, components"
+  layout: "condensed_header, diff, components"
   behavior: default
   require_changes: false
 

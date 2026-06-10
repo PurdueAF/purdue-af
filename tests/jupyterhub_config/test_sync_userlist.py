@@ -13,7 +13,13 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).resolve().parent.parent / "userlist-sync" / "sync-userlist.sh"
+SCRIPT = (
+    Path(__file__).resolve().parents[2]
+    / "apps"
+    / "jupyterhub"
+    / "userlist-sync"
+    / "sync-userlist.sh"
+)
 
 CRIC_FIXTURE = json.dumps(
     [

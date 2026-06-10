@@ -3,7 +3,7 @@
 import re
 
 import respx
-from conftest import register_tools
+from agentic_helpers import register_tools
 from httpx import AsyncClient, ConnectError
 from tools import storage
 

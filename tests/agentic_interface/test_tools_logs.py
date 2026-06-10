@@ -4,7 +4,7 @@ import time
 from urllib.parse import parse_qs, urlparse
 
 import respx
-from conftest import register_tools
+from agentic_helpers import register_tools
 from httpx import ConnectError
 from tools import logs
 

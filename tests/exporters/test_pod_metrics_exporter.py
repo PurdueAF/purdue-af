@@ -1,7 +1,7 @@
 """Tests for docker/af-pod-monitor/pod-metrics-exporter.py."""
 
 import pytest
-from conftest import pod_exporter
+from exporter_helpers import pod_exporter
 from prometheus_client import REGISTRY
 
 exporter = pod_exporter()

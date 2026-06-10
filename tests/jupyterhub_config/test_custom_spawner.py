@@ -1,7 +1,7 @@
 """Tests for extraFiles/custom-spawner.py — CILogon auth gating and hooks."""
 
 import pytest
-from conftest import FakeSpawner, load_snippet
+from hub_helpers import FakeSpawner, load_snippet
 from oauthenticator.cilogon import CILogonOAuthenticator
 from tornado import web
 

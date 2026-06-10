@@ -1,7 +1,7 @@
 """Tests for extraFiles/set-user-info.py — UID/GID mapping at spawn time."""
 
 import pytest
-from conftest import FakeSpawner, load_snippet
+from hub_helpers import FakeSpawner, load_snippet
 
 
 def load(monkeypatch, fake_ldap, namespace="cms"):

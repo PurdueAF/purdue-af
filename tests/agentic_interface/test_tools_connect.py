@@ -4,7 +4,7 @@ import sys
 import types
 
 import pytest
-from conftest import register_tools
+from agentic_helpers import register_tools
 from tools import connect
 
 PUBKEY = "ssh-ed25519 AAAATESTKEY purdue-af-agentic"

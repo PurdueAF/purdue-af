@@ -1,7 +1,7 @@
 """Tests for tools/profiles.py — values.yaml parsing, slugs, and caching."""
 
 import pytest
-from conftest import register_tools
+from agentic_helpers import register_tools
 from tools import profiles
 
 VALUES_YAML = """

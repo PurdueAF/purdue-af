@@ -1,6 +1,6 @@
 """Tests for tools/prompts.py — workflow playbooks reference real tools."""
 
-from conftest import register_tools
+from agentic_helpers import register_tools
 from tools import prompts
 
 EXPECTED_PROMPTS = {
