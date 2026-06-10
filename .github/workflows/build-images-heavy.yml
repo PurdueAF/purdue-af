@@ -1,0 +1,64 @@
+name: Build Images (heavy)
+
+# Multi-GB images: built only when their sources change (a Renovate FROM
+# bump counts) plus a weekly run to catch base-image drift. Same
+# build + smoke contract as build-images.yml.
+
+on:
+  push:
+    paths:
+      - "docker/purdue-af/**"
+      - "docker/dask-gateway-server/**"
+      - ".github/workflows/build-images-heavy.yml"
+  pull_request:
+    paths:
+      - "docker/purdue-af/**"
+      - "docker/dask-gateway-server/**"
+      - ".github/workflows/build-images-heavy.yml"
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC, pairs with the Renovate window
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: purdue-af
+            dockerfile: docker/purdue-af/Dockerfile
+            context: .
+            smoke: python3 -c "import jupyterlab; print('ok')"
+          - name: dask-gateway-server
+            dockerfile: docker/dask-gateway-server/Dockerfile
+            context: docker/dask-gateway-server
+            smoke: python3 -c "import dask_gateway_server; print('ok')"
+    name: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free runner disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+          docker-images: false
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          tags: ${{ matrix.name }}:ci
+          push: false
+          load: true
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+      - name: Smoke test
+        run: docker run --rm ${{ matrix.name }}:ci ${{ matrix.smoke }}

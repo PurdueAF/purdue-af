@@ -1,0 +1,68 @@
+name: Build Images
+
+# Build + smoke-test the lightweight first-party images on every push.
+# This is the gate that catches breaking base-image bumps (FROM lines)
+# before they reach the cluster. Heavy images (purdue-af, dask-gateway)
+# are built by build-images-heavy.yml on path changes + weekly.
+#
+# Not built here: docker/servicex-science-coffea (base image lives in the
+# private geddes registry — needs a pull secret; revisit with the image
+# pipeline rework, IMPROVEMENT_PLAN item 14).
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: agentic-interface
+            dockerfile: docker/agentic-interface/Dockerfile
+            context: .
+            smoke: python -c "import server; print('ok:', server.SERVICE_PREFIX)"
+          - name: af-pod-monitor
+            dockerfile: docker/af-pod-monitor/Dockerfile
+            context: docker/af-pod-monitor
+            smoke: >-
+              sh -c "cd /etc && python -c \"import importlib.util as u;
+              s = u.spec_from_file_location('m', 'pod-metrics-exporter.py');
+              m = u.module_from_spec(s); s.loader.exec_module(m);
+              print('ok')\""
+          - name: af-node-monitor
+            dockerfile: docker/af-node-monitor/Dockerfile
+            context: .
+            smoke: >-
+              sh -c "fio --version && cd /opt/af-node-monitor &&
+              AF_NODE_MONITOR_VERBOSE=1 MOUNT_NAME=smoke CHECK_FILE=smoke
+              python -c 'import job_runner, node_healthcheck; print(\"ok\")'"
+          - name: interlink-slurm-plugin
+            dockerfile: docker/interlink-slurm-plugin/Dockerfile.alma8
+            context: .
+            smoke: test -x /sidecar/slurm-sidecar
+    name: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          tags: ${{ matrix.name }}:ci
+          push: false
+          load: true
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+      - name: Smoke test
+        run: docker run --rm ${{ matrix.name }}:ci ${{ matrix.smoke }}

@@ -34,6 +34,13 @@ jobs:
               --cov=docker/af-pod-monitor
               --cov=docker/af-node-monitor
               --cov=apps/monitoring/af-monitoring
+          - name: scripts
+            project: tests/scripts
+            tests: tests/scripts
+            cov: >-
+              --cov=apps/af-utils/af-users-graph
+              --cov=docker/purdue-af/jupyter
+              --cov-config=tests/scripts/pyproject.toml
     name: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@v4

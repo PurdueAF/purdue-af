@@ -1,0 +1,26 @@
+[project]
+name = "purdue-af-script-tests"
+version = "0.0.0"
+description = "Tests for standalone scripts (af-users-graph plot cron, purdue-af image Jupyter config)"
+requires-python = ">=3.11"
+dependencies = [
+    "matplotlib>=3.9",
+    "pandas>=2.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+
+[tool.coverage.run]
+# docker_healthcheck.py shares the image dir but is exercised by the container
+# HEALTHCHECK at runtime, not by this suite.
+omit = ["*/docker_healthcheck.py"]

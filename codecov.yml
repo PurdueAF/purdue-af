@@ -32,6 +32,11 @@ component_management:
         - "docker/af-pod-monitor/**"
         - "docker/af-node-monitor/**"
         - "apps/monitoring/af-monitoring/**"
+    - component_id: scripts
+      name: Standalone scripts
+      paths:
+        - "apps/af-utils/af-users-graph/**"
+        - "docker/purdue-af/jupyter/**"
 
 # One concise PR comment, updated in place.
 comment:
