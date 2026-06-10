@@ -56,6 +56,22 @@ configMapGenerator:
     files:
       - values.yaml=../../apps/jupyterhub/jupyterhub/values.yaml
 
+  - name: af-userlist-sync-scripts
+    options:
+      annotations:
+        # shell scripts use ${...} freely — keep Flux substitution away
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../apps/jupyterhub/userlist-sync/sync-userlist.sh
+
+  - name: database-backup-scripts
+    options:
+      annotations:
+        # shell scripts use ${...} freely — keep Flux substitution away
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../apps/jupyterhub/database-backup/backup-database.sh
+
   - name: jupyterhub-extra-config
     files:
       - 00-custom-spawner.py=../../apps/jupyterhub/jupyterhub/extraFiles/custom-spawner.py
