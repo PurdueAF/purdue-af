@@ -1,13 +1,14 @@
 name: Build Images
 
-# Build + smoke-test the lightweight first-party images on every push.
-# This is the gate that catches breaking base-image bumps (FROM lines)
-# before they reach the cluster. Heavy images (purdue-af, dask-gateway)
-# are built by build-images-heavy.yml on path changes + weekly.
+# Build + smoke-test the lightweight (slim-base, ~1 min) first-party images
+# on every push. This is the gate that catches breaking base-image bumps
+# (FROM lines) before they reach the cluster.
 #
-# Not built here: docker/servicex-science-coffea (base image lives in the
-# private geddes registry — needs a pull secret; revisit with the image
-# pipeline rework, IMPROVEMENT_PLAN item 14).
+# OS-scale images (interlink, dask-gateway variants) are built by
+# build-images-heavy.yml on path changes + weekly. purdue-af is built only
+# by the in-cluster kaniko job (needs cluster-grade CPU/registry locality);
+# servicex-science-coffea needs a private-registry pull secret. Both are
+# IMPROVEMENT_PLAN item 14 territory.
 
 on:
   push:
@@ -46,11 +47,8 @@ jobs:
               sh -c "fio --version && cd /opt/af-node-monitor &&
               AF_NODE_MONITOR_VERBOSE=1 MOUNT_NAME=smoke CHECK_FILE=smoke
               python -c 'import job_runner, node_healthcheck; print(\"ok\")'"
-          - name: interlink-slurm-plugin
-            dockerfile: docker/interlink-slurm-plugin/Dockerfile.alma8
-            context: .
-            smoke: test -x /sidecar/slurm-sidecar
     name: ${{ matrix.name }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3

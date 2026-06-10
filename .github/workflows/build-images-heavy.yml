@@ -1,19 +1,29 @@
 name: Build Images (heavy)
 
-# Multi-GB images: built only when their sources change (a Renovate FROM
-# bump counts) plus a weekly run to catch base-image drift. Same
-# build + smoke contract as build-images.yml.
+# OS-scale images (alma8 + slurm + golang): built when their sources change
+# (a Renovate FROM bump counts) plus a weekly run to catch base-image drift.
+# No GHA layer cache here — exporting multi-GB layers to the capped, throttled
+# cache service costs more time than it saves on weekly builds.
+#
+# NOT built here:
+#   - docker/purdue-af — the multi-GB pixi stack needs cluster-grade CPU and
+#     registry locality; GitHub-hosted runners take hours where the in-cluster
+#     kaniko job (docker/kaniko-build-jobs/build-af.yaml) takes ~20 min.
+#     Stays on kaniko; CI-triggered cluster builds are IMPROVEMENT_PLAN item 14.
+#   - docker/servicex-science-coffea — private geddes-registry base image.
 
 on:
   push:
     paths:
-      - "docker/purdue-af/**"
+      - "docker/interlink-slurm-plugin/**"
       - "docker/dask-gateway-server/**"
+      - "slurm/slurm-configs-*/**"
       - ".github/workflows/build-images-heavy.yml"
   pull_request:
     paths:
-      - "docker/purdue-af/**"
+      - "docker/interlink-slurm-plugin/**"
       - "docker/dask-gateway-server/**"
+      - "slurm/slurm-configs-*/**"
       - ".github/workflows/build-images-heavy.yml"
   schedule:
     - cron: "0 6 * * 1" # Mondays 06:00 UTC, pairs with the Renovate window
@@ -29,14 +39,15 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: purdue-af
-            dockerfile: docker/purdue-af/Dockerfile
+          - name: interlink-slurm-plugin
+            dockerfile: docker/interlink-slurm-plugin/Dockerfile.alma8
             context: .
-            smoke: python3 -c "import jupyterlab; print('ok')"
+            smoke: test -x /sidecar/slurm-sidecar
           # The base dask-gateway-server/Dockerfile is a stale pre-split
           # leftover (references a renamed configs dir); only the per-cluster
           # variants are real build targets (same as the kaniko jobs).
@@ -51,11 +62,6 @@ jobs:
     name: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@v4
-      - name: Free runner disk space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: true
-          docker-images: false
       - uses: docker/setup-buildx-action@v3
       - name: Build image
         uses: docker/build-push-action@v6
@@ -65,7 +71,5 @@ jobs:
           tags: ${{ matrix.name }}:ci
           push: false
           load: true
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,scope=${{ matrix.name }},mode=max
       - name: Smoke test
         run: docker run --rm ${{ matrix.name }}:ci ${{ matrix.smoke }}
