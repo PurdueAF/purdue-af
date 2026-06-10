@@ -24,7 +24,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest # kustomize + yq preinstalled
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - name: Install flux CLI
         uses: fluxcd/flux2/action@main
         with:
