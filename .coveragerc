@@ -1,0 +1,5 @@
+# Shared coverage config for all test suites (each runs from the repo root
+# via `uv run --project <suite>`). relative_files makes coverage record
+# repo-rooted paths, which Codecov needs to map files to the repository tree.
+[run]
+relative_files = true

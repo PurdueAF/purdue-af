@@ -20,34 +20,44 @@ jobs:
       matrix:
         include:
           - name: agentic-interface
-            dir: docker/agentic-interface
-            cov: --cov=.
+            project: docker/agentic-interface
+            tests: docker/agentic-interface/tests
+            cov: --cov=docker/agentic-interface
           - name: jupyterhub-config
-            dir: apps/jupyterhub/tests
-            cov: --cov=../jupyterhub/extraFiles
+            project: apps/jupyterhub/tests
+            tests: apps/jupyterhub/tests
+            cov: --cov=apps/jupyterhub/jupyterhub/extraFiles
           - name: exporters
-            dir: tests/exporters
+            project: tests/exporters
+            tests: tests/exporters
             cov: >-
-              --cov=../../docker/af-pod-monitor
-              --cov=../../docker/af-node-monitor
-              --cov=../../apps/monitoring/af-monitoring
+              --cov=docker/af-pod-monitor
+              --cov=docker/af-node-monitor
+              --cov=apps/monitoring/af-monitoring
     name: ${{ matrix.name }}
-    defaults:
-      run:
-        working-directory: ${{ matrix.dir }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          cache-dependency-glob: ${{ matrix.dir }}/uv.lock
+          cache-dependency-glob: ${{ matrix.project }}/uv.lock
+      # Run from the repo root (uv --project selects the suite's venv/lock)
+      # so coverage.xml records repo-rooted paths — required for Codecov to
+      # map files to the repository tree.
       - name: Run tests with coverage
-        run: uv run --frozen --group dev pytest -q ${{ matrix.cov }} --cov-report=xml
+        run: >-
+          uv run --project ${{ matrix.project }} --frozen --group dev
+          pytest -q -c ${{ matrix.project }}/pyproject.toml
+          ${{ matrix.tests }} ${{ matrix.cov }} --cov-report=xml
+      # Codecov reads filename attributes as-is (it ignores <source>), so
+      # rewrite them to repo-rooted paths or files outside the suite dir
+      # never map to the repository tree.
+      - name: Normalise coverage paths
+        run: python3 scripts/fix-coverage-paths.py coverage.xml
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           files: coverage.xml
           flags: ${{ matrix.name }}
-          working-directory: ${{ matrix.dir }}
           use_oidc: true
-          fail_ci_if_error: false
+          fail_ci_if_error: true
