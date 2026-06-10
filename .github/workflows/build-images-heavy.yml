@@ -1,6 +1,6 @@
 name: Build Images (heavy)
 
-# OS-scale images (alma8 + slurm + golang): built when their sources change
+# OS-scale images (alma8 + slurm): built when their sources change
 # (a Renovate FROM bump counts) plus a weekly run to catch base-image drift.
 # No GHA layer cache here — exporting multi-GB layers to the capped, throttled
 # cache service costs more time than it saves on weekly builds.
@@ -10,18 +10,18 @@ name: Build Images (heavy)
 #     registry locality; GitHub-hosted runners take hours where the in-cluster
 #     kaniko job (docker/kaniko-build-jobs/build-af.yaml) takes ~20 min.
 #     Stays on kaniko; CI-triggered cluster builds are IMPROVEMENT_PLAN item 14.
+#   - docker/interlink-slurm-plugin — too slow on hosted runners and likely
+#     to be retired; build via the kaniko job when needed.
 #   - docker/servicex-science-coffea — private geddes-registry base image.
 
 on:
   push:
     paths:
-      - "docker/interlink-slurm-plugin/**"
       - "docker/dask-gateway-server/**"
       - "slurm/slurm-configs-*/**"
       - ".github/workflows/build-images-heavy.yml"
   pull_request:
     paths:
-      - "docker/interlink-slurm-plugin/**"
       - "docker/dask-gateway-server/**"
       - "slurm/slurm-configs-*/**"
       - ".github/workflows/build-images-heavy.yml"
@@ -44,10 +44,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: interlink-slurm-plugin
-            dockerfile: docker/interlink-slurm-plugin/Dockerfile.alma8
-            context: .
-            smoke: test -x /sidecar/slurm-sidecar
           # The base dask-gateway-server/Dockerfile is a stale pre-split
           # leftover (references a renamed configs dir); only the per-cluster
           # variants are real build targets (same as the kaniko jobs).

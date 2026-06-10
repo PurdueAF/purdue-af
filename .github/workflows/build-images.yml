@@ -4,11 +4,11 @@ name: Build Images
 # on every push. This is the gate that catches breaking base-image bumps
 # (FROM lines) before they reach the cluster.
 #
-# OS-scale images (interlink, dask-gateway variants) are built by
-# build-images-heavy.yml on path changes + weekly. purdue-af is built only
-# by the in-cluster kaniko job (needs cluster-grade CPU/registry locality);
-# servicex-science-coffea needs a private-registry pull secret. Both are
-# IMPROVEMENT_PLAN item 14 territory.
+# OS-scale images (dask-gateway variants) are built by
+# build-images-heavy.yml on path changes + weekly. purdue-af and
+# interlink-slurm-plugin are built only by in-cluster kaniko jobs;
+# servicex-science-coffea needs a private-registry pull secret.
+# All three are IMPROVEMENT_PLAN item 14 territory.
 
 on:
   push:
