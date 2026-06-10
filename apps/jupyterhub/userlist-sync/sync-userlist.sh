@@ -35,6 +35,10 @@ ensure_tools() {
 	} 1>&2
 }
 
+# Fetch pipelines end in `|| true`: under pipefail a tool's exit code would
+# kill the script even when it returned usable data (ldapsearch exits 4 on
+# server-side size limits while still printing entries). Fetch problems are
+# caught by the validation gates below — an empty or short list fails loudly.
 fetch_cern() {
 	ensure_tools curl jq
 	curl -k \
@@ -44,14 +48,14 @@ fetch_cern() {
 		jq -r '.[] | .profiles[] | .dn | select(. != null)' |
 		grep "/OU=Users/" |
 		sed -n 's/.*\/OU=Users\/CN=\([^\/]*\)\/CN=.*/\1/p' |
-		sort -u
+		sort -u || true
 }
 
 fetch_purdue() {
 	ensure_tools ldapsearch
 	ldapsearch -H ldap://auth.hammer.rcac.purdue.edu -x \
 		-b "ou=People,dc=hammer,dc=rcac,dc=purdue,dc=edu" uid |
-		grep uid: | cut -d " " -f2
+		grep uid: | cut -d " " -f2 || true
 }
 
 echo "Fetching ${SOURCE} users..."
