@@ -10,7 +10,7 @@ exclude: ^docker/dask-gateway-server/ # vendored fork — upstream owns its styl
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: check-merge-conflict
       - id: check-added-large-files
