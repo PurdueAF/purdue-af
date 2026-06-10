@@ -36,7 +36,7 @@ repos:
       - id: shfmt
         name: shfmt
         language: golang
-        additional_dependencies: ["mvdan.cc/sh/v3/cmd/shfmt@v3.7.0"]
+        additional_dependencies: ["mvdan.cc/sh/v3/cmd/shfmt@v3.13.1"]
         entry: shfmt -w
         types: [shell]
         # Slurm prolog/epilog scripts (no .sh extension) are deployed verbatim
