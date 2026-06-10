@@ -48,8 +48,9 @@ server:
       - hosts: [prometheus-af.geddes.rcac.purdue.edu]
     ingressClassName: public
 
+  # Recreate avoids two pods sharing prometheus-data-pvc during rollout (TSDB file lock).
   strategy:
-    type: RollingUpdate
+    type: Recreate
 
   tolerations:
     - key: "hub.jupyter.org/dedicated"
