@@ -1,9 +1,0 @@
-nbsphinx
-ipython
-ipywidgets
-docutils<0.22
-sphinx_rtd_theme
-sphinx-copybutton>=0.3.2
-sphinx-togglebutton
-sphinx-tabs
-furo

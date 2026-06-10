@@ -24,7 +24,6 @@
 
   ignorePaths: [
     'docker/dask-gateway-server/**', // vendored fork — tracked upstream, do not churn
-    'docs/**', // legacy Sphinx docs, removed after Zensical cutover
   ],
 
   // Flux manager is opt-in by path: parse everything Flux reconciles.

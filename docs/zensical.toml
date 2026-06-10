@@ -1,8 +1,8 @@
 # Zensical configuration for the Purdue Analysis Facility documentation.
 # Docs: https://zensical.org/docs/
 #
-# Build:   cd docs-md && zensical build --clean   (output: docs-md/site/)
-# Preview: cd docs-md && zensical serve
+# Build:   cd docs && zensical build --clean   (output: docs/site/)
+# Preview: cd docs && zensical serve
 
 [project]
 
@@ -20,7 +20,7 @@ copyright = "Copyright &copy; 2023, Purdue University"
 # Source repository (adds a link in the header).
 repo_url = "https://github.com/PurdueAF/purdue-af"
 repo_name = "PurdueAF/purdue-af"
-edit_uri = "edit/main/docs-md/docs/"
+edit_uri = "edit/main/docs/docs/"
 
 # Load MathJax so the few LaTeX expressions render.
 extra_javascript = [

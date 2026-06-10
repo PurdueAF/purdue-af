@@ -43,4 +43,3 @@ ignore:
   - "tests/**"
   - "**/tests/**"
   - "docker/dask-gateway-server/**" # vendored fork
-  - "docs/**"
