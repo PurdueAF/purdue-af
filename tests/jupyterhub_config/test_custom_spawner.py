@@ -5,6 +5,12 @@ from hub_helpers import FakeSpawner, load_snippet
 from oauthenticator.cilogon import CILogonOAuthenticator
 from tornado import web
 
+# 2026-06-10 hub incident: the spawner rewrite (db11d83c) was reverted along
+# with the chart bump to restore service; these tests pin the reverted
+# behavior. Re-enable when the spawner changes are reintroduced and the
+# breakage is understood.
+pytestmark = pytest.mark.skip(reason="custom-spawner.py reverted to pre-incident state")
+
 PURDUE_LIST = "/etc/secrets/af-auth-purdue/userlist"
 CERN_LIST = "/etc/secrets/af-auth-cern/userlist"
 

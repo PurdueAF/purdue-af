@@ -49,6 +49,9 @@ def test_external_user_mapped_to_paf_account_in_cms(monkeypatch, fake_ldap):
     assert spawner.environment["NB_UID"] == "12345"
 
 
+@pytest.mark.skip(
+    reason="set-user-info.py reverted to pre-incident state (2026-06-10 hub incident)"
+)
 def test_external_user_beyond_account_pool_refuses_spawn(monkeypatch, fake_ldap):
     ns = load(monkeypatch, fake_ldap, namespace="cms")
     spawner = FakeSpawner(user_id=400)
