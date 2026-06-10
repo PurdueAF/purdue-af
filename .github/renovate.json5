@@ -61,5 +61,19 @@
       matchUpdateTypes: ['major'],
       addLabels: ['major'],
     },
+    {
+      // The purdue-af user image is NOT built in CI (cluster-grade kaniko
+      // job only — see build-images.yml header). Updates here merge
+      // unverified: label them so they get a manual kaniko build + smoke
+      // test before merge. Revisit with IMPROVEMENT_PLAN item 14.
+      matchFileNames: ['docker/purdue-af/**'],
+      addLabels: ['manual-build-required'],
+    },
+    {
+      // pixi's pep440 ranges let Renovate propose pre-releases
+      // (jupyterlab 4.6.0rc0, notebook 7.6.0b1) — stable releases only.
+      matchFileNames: ['docker/purdue-af/pixi.toml'],
+      allowedVersions: '!/(a|b|rc)\\d*$/',
+    },
   ],
 }
