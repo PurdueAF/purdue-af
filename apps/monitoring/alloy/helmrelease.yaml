@@ -7,7 +7,7 @@ spec:
   chart:
     spec:
       chart: alloy
-      # Keep version flexible; can be pinned later if desired
+      version: "1.9.0"
       sourceRef:
         kind: HelmRepository
         name: grafana

@@ -72,6 +72,12 @@ validate_helmreleases() {
 			continue
 		fi
 
+		if [[ -z "$version" || "$version" == "null" ]]; then
+			echo "✗ ${name}: chart version is not pinned (omitted version = Flux silently tracks latest)" >&2
+			failed=1
+			continue
+		fi
+
 		repo_line=$(grep -m1 "^${src_name}|" "$repos_file" || true)
 		if [[ -z "$repo_line" ]]; then
 			echo "✗ ${name}: HelmRepository '${src_name}' not found in any rendered environment" >&2
