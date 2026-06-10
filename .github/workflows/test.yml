@@ -40,9 +40,13 @@ jobs:
       # rewrite them to repo-rooted paths.
       - name: Normalise coverage paths
         run: python3 scripts/fix-coverage-paths.py coverage.xml
+      # Coverage reporting is informational: a Codecov outage (CLI download,
+      # GPG keyserver, upload) must not fail the test job. Genuinely silent
+      # processing rejections exit 0 regardless, so fail_ci_if_error would
+      # not catch them anyway — staleness shows up on the badge/dashboard.
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           files: coverage.xml
           use_oidc: true
-          fail_ci_if_error: true
+          fail_ci_if_error: false
