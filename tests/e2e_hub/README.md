@@ -15,6 +15,14 @@ mocked. Never touches the production cluster.
 | OAuth code flow, auth_state, KubeSpawner  | storage/nodeSelectors/registry → nulled    |
 | spawn → JupyterLab HTTP response          | `set-user-info.py` LDAP (phase 2, glauth)  |
 
+## Covered behaviors
+
+Login (allowed / denied / unknown idp / cern suffixing), spawn to a running
+JupyterLab, ownership labels, multi-user isolation, explicit profile
+selection landing in the pod, stop + cleanup, **userlist secret hot-reload**
+(the userlist-sync pipeline's core assumption), admin_users wiring, forged
+OAuth state rejection, logout.
+
 ## Run it
 
 CI: the **Hub E2E** workflow — on changes to `apps/jupyterhub/**` + weekly.

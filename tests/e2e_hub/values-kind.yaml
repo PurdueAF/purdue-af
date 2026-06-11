@@ -70,6 +70,14 @@ singleuser:
       default: true
       kubespawner_override:
         image: "quay.io/jupyterhub/k8s-singleuser-sample:__CHART_VERSION__"
+    # Second profile with an env marker: lets tests assert that explicit
+    # profile selection (user_options {"profile": <slug>}) actually lands
+    # in the pod — the contract the agentic interface's start_af_session uses.
+    - display_name: "E2E alt profile"
+      kubespawner_override:
+        image: "quay.io/jupyterhub/k8s-singleuser-sample:__CHART_VERSION__"
+        environment:
+          E2E_PROFILE_MARKER: "alt"
 
 scheduling:
   userPods:

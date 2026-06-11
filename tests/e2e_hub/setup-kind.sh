@@ -24,13 +24,13 @@ echo "==> pre-load singleuser image (keeps image pull out of the spawn window)"
 docker pull -q "quay.io/jupyterhub/k8s-singleuser-sample:${CHART_VERSION}"
 kind load docker-image --name "$CLUSTER" "quay.io/jupyterhub/k8s-singleuser-sample:${CHART_VERSION}"
 
-echo "==> secrets and config (test users: alice, bob; cern: carol)"
+echo "==> secrets and config (purdue: alice, bob, dkondra; cern: carol)"
 kubectl create secret generic auth-secret \
 	--from-literal=cilogon_client_id=mock-client \
 	--from-literal=cilogon_client_secret=mock-secret \
 	--dry-run=client -o yaml | kubectl apply -f -
 kubectl create secret generic af-auth-purdue \
-	--from-literal=userlist=$'alice\nbob\n' \
+	--from-literal=userlist=$'alice\nbob\ndkondra\n' \
 	--dry-run=client -o yaml | kubectl apply -f -
 kubectl create secret generic af-auth-cern \
 	--from-literal=userlist=$'carol\n' \
