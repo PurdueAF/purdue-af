@@ -51,6 +51,9 @@ proxy:
 
 singleuser:
   uid: null # sample image runs as jovyan
+  # prod's start-singleuser.sh is docker-stacks-specific; the sample image
+  # boots via the singleuser entrypoint directly (verified: crash-loops otherwise)
+  cmd: jupyterhub-singleuser
   image:
     name: quay.io/jupyterhub/k8s-singleuser-sample
     tag: "__CHART_VERSION__" # z2jh tags images with the chart version (setup-kind.sh substitutes)
