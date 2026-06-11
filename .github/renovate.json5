@@ -3,6 +3,9 @@
 // Activation: install the Mend Renovate GitHub App on this repository
 // (https://github.com/apps/renovate). The app reads this file from main.
 //
+// Cluster Kubernetes version: 1.29.x (Geddes). When upgrading the cluster,
+// review Helm chart kubeVersion constraints before relaxing packageRules below.
+//
 // Covers:
 //   - Flux HelmRelease chart versions (apps/**) via the flux manager
 //   - Dockerfile base images (FROM tags)
@@ -61,11 +64,11 @@
       addLabels: ['major'],
     },
     {
-      // dask-gateway >=2026.x requires kubeVersion >=1.30; cluster is on
-      // 1.29. Hold at the 2025.x line until the cluster is upgraded.
+      // dask-gateway >=2025.4.0 requires kubeVersion >=1.30; cluster is on
+      // 1.29. Hold at 2024.1.0 until the cluster is upgraded to 1.30+.
       matchManagers: ['flux'],
       matchPackageNames: ['dask-gateway'],
-      allowedVersions: '<2026.0.0',
+      allowedVersions: '<2025.4.0',
     },
     {
       // jupyterhub chart >4.0.0 breaks our user auth scripts — hold at
