@@ -61,6 +61,13 @@
       addLabels: ['major'],
     },
     {
+      // dask-gateway >=2026.x requires kubeVersion >=1.30; cluster is on
+      // 1.29. Hold at the 2025.x line until the cluster is upgraded.
+      matchManagers: ['flux'],
+      matchPackageNames: ['dask-gateway'],
+      allowedVersions: '<2026.0.0',
+    },
+    {
       // The purdue-af user image is NOT built in CI (cluster-grade kaniko
       // job only — see build-images.yml header). Updates here merge
       // unverified: hold them in the dashboard's "Pending Approval" section
