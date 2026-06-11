@@ -4,6 +4,7 @@ metadata:
   name: alloy
 spec:
   interval: 1m
+  timeout: 20m
   chart:
     spec:
       chart: alloy
@@ -13,11 +14,17 @@ spec:
         name: grafana
       interval: 1m
   install:
+    timeout: 20m
     remediation:
       retries: -1
   upgrade:
+    timeout: 20m
+    cleanupOnFail: true
     remediation:
       retries: -1
+      strategy: rollback
+  rollback:
+    timeout: 15m
   valuesFrom:
     - kind: ConfigMap
       name: alloy-config

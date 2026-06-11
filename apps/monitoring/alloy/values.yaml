@@ -5,6 +5,17 @@ controller:
   replicas: 1
   service:
     enabled: false
+  # Roll up to 3 nodes at a time; default maxUnavailable=1 is too slow for 12 nodes.
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 3
+  volumes:
+    extra:
+      - name: alloy-storage
+        hostPath:
+          path: /var/lib/alloy
+          type: DirectoryOrCreate
   tolerations:
     - key: "hub.jupyter.org/dedicated"
       operator: "Equal"
@@ -20,6 +31,12 @@ rbac:
   create: true
 
 alloy:
+  initialDelaySeconds: 30
+  timeoutSeconds: 5
+  mounts:
+    extra:
+      - name: alloy-storage
+        mountPath: /tmp/alloy
   resources:
     limits:
       cpu: 1000m
