@@ -20,6 +20,10 @@ echo "==> kind cluster '$CLUSTER' (chart version $CHART_VERSION)"
 kind get clusters 2>/dev/null | grep -qx "$CLUSTER" || kind create cluster --name "$CLUSTER" --wait 120s
 kubectl config use-context "kind-$CLUSTER" >/dev/null
 
+echo "==> pre-load singleuser image (keeps image pull out of the spawn window)"
+docker pull -q "quay.io/jupyterhub/k8s-singleuser-sample:${CHART_VERSION}"
+kind load docker-image --name "$CLUSTER" "quay.io/jupyterhub/k8s-singleuser-sample:${CHART_VERSION}"
+
 echo "==> secrets and config (test users: alice, bob; cern: carol)"
 kubectl create secret generic auth-secret \
 	--from-literal=cilogon_client_id=mock-client \

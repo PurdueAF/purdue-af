@@ -14,6 +14,8 @@ hub:
     type: sqlite-memory
     pvc: null
   config:
+    KubeSpawner:
+      http_timeout: 120 # 2-core CI runner: Lab cold-start can exceed the 30s default
     PurdueCILogonOAuthenticator:
       # Browser-side URL (test client reaches the mock via port-forward);
       # server-side URLs use the in-cluster service DNS.
