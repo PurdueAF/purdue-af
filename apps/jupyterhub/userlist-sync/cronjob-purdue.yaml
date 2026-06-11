@@ -33,16 +33,10 @@ spec:
                   memory: "512Mi"
                   cpu: "500m"
               volumeMounts:
-                - name: ldap-conf
-                  mountPath: /etc/openldap/ldap.conf
-                  subPath: ldap.conf
                 - name: scripts
                   mountPath: /scripts
                   readOnly: true
           volumes:
-            - name: ldap-conf
-              configMap:
-                name: ldap-conf
             - name: scripts
               configMap:
                 name: af-userlist-sync-scripts

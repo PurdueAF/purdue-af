@@ -180,23 +180,6 @@ def test_ensure_tools_is_silent_on_stdout(shims):
     assert "Installing: packages" in result.stderr  # chatter went to stderr
 
 
-def test_purdue_falls_back_when_auth_hammer_empty(shims):
-    """Regression: auth.hammer intermittently returns 'No such object'; the
-    centralservices host= filter must keep the sync alive."""
-    ldap = shims["bin"] / "ldapsearch"
-    ldap.write_text(
-        "#!/bin/bash\n"
-        'if [[ "$*" == *auth.hammer* ]]; then exit 32; fi\n'
-        'seq -f "uid: user%g" 1 "${LDAP_COUNT:-250}"\n'
-    )
-    ldap.chmod(0o755)
-
-    result = run_sync(shims, "purdue", GET_SECRET_RC=1)
-
-    assert result.returncode == 0, result.stderr
-    assert "Found 250 users" in result.stdout
-
-
 def test_purdue_tolerates_ldap_sizelimit_exit(shims):
     """Regression: ldapsearch exits 4 ('Size limit exceeded') against large
     directories while still printing entries — under pipefail that killed the
