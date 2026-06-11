@@ -21,4 +21,6 @@ Each user is provided with a 25GB home directory at first login. These directori
 [![Lint](https://github.com/PurdueAF/purdue-af/actions/workflows/lint.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/lint.yml)
 [![Test](https://github.com/PurdueAF/purdue-af/actions/workflows/test.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/PurdueAF/purdue-af/graph/badge.svg)](https://codecov.io/gh/PurdueAF/purdue-af)
+[![Hub E2E](https://github.com/PurdueAF/purdue-af/actions/workflows/e2e-hub.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/e2e-hub.yml)
+[![Pixi Check](https://github.com/PurdueAF/purdue-af/actions/workflows/pixi-check.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/pixi-check.yml)
 

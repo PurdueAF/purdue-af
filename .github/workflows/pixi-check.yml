@@ -6,6 +6,9 @@ name: Pixi Check
 # upstream versions, so running this on unrelated pushes would fail on
 # every upstream release. The image build enforces the lock at build time
 # (`pixi install --locked` in docker/purdue-af/Dockerfile).
+#
+# Failure visibility: the README badge shows the latest run's result, so a
+# failed run stays visibly red until a later run goes green.
 
 on:
   push:
