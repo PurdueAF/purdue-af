@@ -68,6 +68,13 @@
       allowedVersions: '<2026.0.0',
     },
     {
+      // jupyterhub chart >4.0.0 breaks our user auth scripts — hold at
+      // 4.0.0 until they are properly migrated (see commit 8166d311).
+      matchManagers: ['flux'],
+      matchPackageNames: ['jupyterhub'],
+      allowedVersions: '<=4.0.0',
+    },
+    {
       // The purdue-af user image is NOT built in CI (cluster-grade kaniko
       // job only — see build-images.yml header). Updates here merge
       // unverified: hold them in the dashboard's "Pending Approval" section
