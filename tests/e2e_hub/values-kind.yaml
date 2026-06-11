@@ -7,8 +7,8 @@
 hub:
   image:
     name: quay.io/jupyterhub/k8s-hub-slim # upstream twin of the cached prod image
-  nodeSelector: null
-  tolerations: null
+  nodeSelector: null # maps: null deletes
+  tolerations: [] # lists: empty replaces (chart concat()s them — null nil-pointers)
   resources: null
   db:
     type: sqlite-memory
@@ -21,7 +21,8 @@ hub:
       token_url: http://mock-cilogon.default.svc.cluster.local:9090/oauth2/token
       userdata_url: http://mock-cilogon.default.svc.cluster.local:9090/oauth2/userinfo
   services:
-    agentic-interface: null # not deployed in phase 1
+    # (agentic-interface stays as in prod values: an external-service URL the
+    # hub never health-checks — harmless while the service isn't deployed)
     e2e:
       apiToken: e2e-admin-token-not-a-secret
   loadRoles:
@@ -37,9 +38,14 @@ proxy:
     extraPorts: []
   chp:
     nodeSelector: null
-    tolerations: null
+    tolerations: []
     resources: null
-  traefik: null
+  # autohttps is disabled above; null only the placement keys (nulling the
+  # whole traefik map risks nil-pointer errors in chart template helpers)
+  traefik:
+    nodeSelector: null
+    tolerations: []
+    extraPorts: []
 
 singleuser:
   uid: null # sample image runs as jovyan
@@ -61,7 +67,7 @@ singleuser:
 
 scheduling:
   userPods:
-    tolerations: null
+    tolerations: []
 
 ingress:
   enabled: false

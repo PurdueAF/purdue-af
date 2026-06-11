@@ -102,7 +102,9 @@ ENV PIXI_HOME="/opt/pixi" \
     BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env"
 
 WORKDIR "${PIXI_HOME}"
-COPY --chown=root:root docker/purdue-af/pixi.toml "${PIXI_HOME}/"
+# pixi.lock makes the env reproducible: `pixi install --locked` below fails
+# if manifest and lock disagree instead of silently re-solving to latest.
+COPY --chown=root:root docker/purdue-af/pixi.toml docker/purdue-af/pixi.lock "${PIXI_HOME}/"
 COPY --chown=root:root docker/purdue-af/pixi-wrapper /usr/local/bin/pixi
 
 RUN chmod +x /usr/local/bin/pixi && \
@@ -117,7 +119,7 @@ RUN chmod +x /usr/local/bin/pixi && \
     PATH="${PIXI_HOME}/bin:${PATH}" \
     "${PIXI_HOME}/bin/pixi" --version && \
     PATH="${PIXI_HOME}/bin:${PATH}" \
-    pixi install --environment base-env && \
+    pixi install --locked --environment base-env && \
     [ -d "${BASE_ENV_DIR}" ] || (echo "ERROR: BASE_ENV_DIR does not exist after pixi install" && exit 1) && \
     rm -rf "${HOME}/.cache/rattler" || true && \
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ir" || true && \

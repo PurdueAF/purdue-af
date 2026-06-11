@@ -1,0 +1,41 @@
+name: Pixi Check
+
+# Lockfile gate for the purdue-af user image: any change to pixi.toml or
+# pixi.lock must leave them consistent (`pixi lock --check` re-solves and
+# fails on drift). Path-filtered on purpose — a fresh solve chases latest
+# upstream versions, so running this on unrelated pushes would fail on
+# every upstream release. The image build enforces the lock at build time
+# (`pixi install --locked` in docker/purdue-af/Dockerfile).
+
+on:
+  push:
+    paths:
+      - "docker/purdue-af/pixi.toml"
+      - "docker/purdue-af/pixi.lock"
+      - ".github/workflows/pixi-check.yml"
+  pull_request:
+    paths:
+      - "docker/purdue-af/pixi.toml"
+      - "docker/purdue-af/pixi.lock"
+      - ".github/workflows/pixi-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lock-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: prefix-dev/setup-pixi@v0.9.0 # Renovate pins to digest
+        with:
+          run-install: false
+      - name: Check lockfile consistency
+        working-directory: docker/purdue-af
+        run: pixi lock --check
