@@ -1,0 +1,67 @@
+# Test overlay applied ON TOP of the production values.yaml in kind.
+# Nulls out cluster-specific machinery (geddes registry, NFS/CVMFS mounts,
+# RWX storage, node placement, letsencrypt) and points the UNMODIFIED
+# production authenticator at the mock CILogon. `null` deletes the key
+# (helm map-merge semantics); lists replace wholesale.
+
+hub:
+  image:
+    name: quay.io/jupyterhub/k8s-hub-slim # upstream twin of the cached prod image
+  nodeSelector: null
+  tolerations: null
+  resources: null
+  db:
+    type: sqlite-memory
+    pvc: null
+  config:
+    PurdueCILogonOAuthenticator:
+      # Browser-side URL (test client reaches the mock via port-forward);
+      # server-side URLs use the in-cluster service DNS.
+      authorize_url: http://localhost:9090/authorize
+      token_url: http://mock-cilogon.default.svc.cluster.local:9090/oauth2/token
+      userdata_url: http://mock-cilogon.default.svc.cluster.local:9090/oauth2/userinfo
+  services:
+    agentic-interface: null # not deployed in phase 1
+    e2e:
+      apiToken: e2e-admin-token-not-a-secret
+  loadRoles:
+    e2e-admin:
+      services: [e2e]
+      scopes: ["admin:users", "admin:servers", "read:hub"]
+
+proxy:
+  https:
+    enabled: false
+  service:
+    type: ClusterIP
+    extraPorts: []
+  chp:
+    nodeSelector: null
+    tolerations: null
+    resources: null
+  traefik: null
+
+singleuser:
+  uid: null # sample image runs as jovyan
+  image:
+    name: quay.io/jupyterhub/k8s-singleuser-sample
+    tag: "__CHART_VERSION__" # z2jh tags images with the chart version (setup-kind.sh substitutes)
+  startTimeout: 300
+  storage:
+    type: none
+    extraVolumes: []
+    extraVolumeMounts: []
+  # One minimal profile keeps the profileList code path exercised without
+  # geddes images, GPUs, or node selectors.
+  profileList:
+    - display_name: "E2E test profile"
+      default: true
+      kubespawner_override:
+        image: "quay.io/jupyterhub/k8s-singleuser-sample:__CHART_VERSION__"
+
+scheduling:
+  userPods:
+    tolerations: null
+
+ingress:
+  enabled: false

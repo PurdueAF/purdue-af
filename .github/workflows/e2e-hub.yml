@@ -1,0 +1,86 @@
+name: Hub E2E
+
+# Full JupyterHub stack in a throwaway kind cluster: real chart version,
+# real values.yaml, byte-identical auth scripts, mock CILogon. See
+# tests/e2e_hub/README.md. To validate a chart upgrade before unpinning
+# Renovate:  gh workflow run e2e-hub.yml -f chart_version=4.3.5
+
+on:
+  push:
+    paths:
+      - "apps/jupyterhub/jupyterhub/**"
+      - "tests/e2e_hub/**"
+      - ".github/workflows/e2e-hub.yml"
+  pull_request:
+    paths:
+      - "apps/jupyterhub/jupyterhub/**"
+      - "tests/e2e_hub/**"
+      - ".github/workflows/e2e-hub.yml"
+  schedule:
+    - cron: "0 7 * * 1" # Mondays, after the Renovate window
+  workflow_dispatch:
+    inputs:
+      chart_version:
+        description: "z2jh chart version to test (default: version in helmrelease.yaml)"
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: tests/uv.lock
+      - name: Install flux CLI
+        uses: fluxcd/flux2/action@b1b4438ae9ce7ade20a3d6e5aae25cef60be9c94 # main
+        with:
+          version: 2.5.1
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.12.0 # Renovate pins to digest
+        with:
+          cluster_name: af-e2e
+      - name: Deploy hub stack
+        env:
+          CHART_VERSION: ${{ inputs.chart_version }}
+        run: tests/e2e_hub/setup-kind.sh
+      - name: Port-forward hub and mock
+        run: |
+          kubectl port-forward svc/proxy-public 8080:80 &
+          kubectl port-forward svc/mock-cilogon 9090:9090 &
+          sleep 3
+      - name: Run e2e tests
+        env:
+          E2E_HUB: "1"
+        run: uv run --project tests --frozen pytest -q -c tests/pyproject.toml tests/e2e_hub -v
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get pods -A -o wide
+          kubectl logs deployment/hub --tail=200 || true
+          kubectl describe pods -l component=singleuser-server || true
+          kubectl logs deployment/mock-cilogon --tail=50 || true
+
+  # Validates that pixi.toml and pixi.lock in the user image still agree —
+  # the cheap CI-side check for the manual-build-required Renovate queue
+  # (the multi-GB image build itself stays on the in-cluster kaniko job).
+  pixi-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: prefix-dev/setup-pixi@v0.9.0 # Renovate pins to digest
+        with:
+          run-install: false
+      - name: Check lockfile consistency
+        working-directory: docker/purdue-af
+        run: pixi lock --check

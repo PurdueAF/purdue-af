@@ -1,0 +1,38 @@
+# Mock CILogon deployment — the script comes from a ConfigMap created by
+# setup-kind.sh from tests/e2e_hub/mock-cilogon.py.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-cilogon
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: mock-cilogon }
+  template:
+    metadata:
+      labels: { app: mock-cilogon }
+    spec:
+      containers:
+        - name: mock-cilogon
+          image: python:3.12-slim
+          command: [python, /app/mock-cilogon.py]
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: app
+              mountPath: /app
+              readOnly: true
+      volumes:
+        - name: app
+          configMap:
+            name: mock-cilogon
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-cilogon
+spec:
+  selector: { app: mock-cilogon }
+  ports:
+    - port: 9090
+      targetPort: 9090
