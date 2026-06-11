@@ -26,10 +26,10 @@ kubectl create secret generic auth-secret \
 	--from-literal=cilogon_client_secret=mock-secret \
 	--dry-run=client -o yaml | kubectl apply -f -
 kubectl create secret generic af-auth-purdue \
-	--from-literal=userlist=$'alice\nbob' \
+	--from-literal=userlist=$'alice\nbob\n' \
 	--dry-run=client -o yaml | kubectl apply -f -
 kubectl create secret generic af-auth-cern \
-	--from-literal=userlist=$'carol' \
+	--from-literal=userlist=$'carol\n' \
 	--dry-run=client -o yaml | kubectl apply -f -
 # Phase 1 ships only the spawner; set-user-info needs the LDAP mock (phase 2).
 kubectl create configmap jupyterhub-extra-config \

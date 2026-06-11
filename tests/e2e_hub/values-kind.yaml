@@ -53,6 +53,7 @@ singleuser:
     name: quay.io/jupyterhub/k8s-singleuser-sample
     tag: "__CHART_VERSION__" # z2jh tags images with the chart version (setup-kind.sh substitutes)
   startTimeout: 300
+  extraContainers: [] # prod's af-pod-monitor sidecar mounts volumes removed below
   storage:
     type: none
     extraVolumes: []
