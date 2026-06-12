@@ -123,6 +123,47 @@ async def test_cache_expires_after_ttl(monkeypatch):
 
 
 @respx.mock
+async def test_cache_is_bounded(monkeypatch):
+    respx.get(HUB_USER_URL).respond(200, json=hub_user_payload())
+    monkeypatch.setattr(auth, "_CACHE_MAX", 3)
+
+    for i in range(10):
+        await auth.resolve_user(f"tok-{i}")
+
+    assert len(auth._user_cache) <= 3
+
+
+@respx.mock
+async def test_eviction_prefers_expired_entries(monkeypatch):
+    respx.get(HUB_USER_URL).respond(200, json=hub_user_payload())
+    monkeypatch.setattr(auth, "_CACHE_MAX", 2)
+
+    now = 1000.0
+    monkeypatch.setattr(auth.time, "monotonic", lambda: now)
+    await auth.resolve_user("tok-old")
+
+    now += auth._CACHE_TTL + 1  # tok-old is now expired
+    await auth.resolve_user("tok-live")
+    await auth.resolve_user("tok-new")  # at cap — must evict tok-old, not tok-live
+
+    assert "tok-old" not in auth._user_cache
+    assert "tok-live" in auth._user_cache
+    assert "tok-new" in auth._user_cache
+
+
+@respx.mock
+async def test_hub_client_is_reused():
+    respx.get(HUB_USER_URL).respond(200, json=hub_user_payload())
+
+    await auth.resolve_user("tok-1")
+    client = auth._client
+    await auth.resolve_user("tok-2")
+
+    assert client is not None
+    assert auth._client is client
+
+
+@respx.mock
 async def test_refetch_picks_up_new_pod_name():
     """After a session restart the pod name changes; cache clear must surface it."""
     route = respx.get(HUB_USER_URL)

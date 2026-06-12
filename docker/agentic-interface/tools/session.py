@@ -14,6 +14,10 @@ from auth import clear_user_cache
 from context import current_user
 
 HUB_API_URL = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
+# Public base URL of the facility, used to build user-facing interface links.
+PUBLIC_URL = os.environ.get(
+    "AF_PUBLIC_URL", "https://cms.geddes.rcac.purdue.edu"
+).rstrip("/")
 
 
 def _auth(token: str) -> dict:
@@ -49,7 +53,7 @@ def register(mcp) -> None:
         servers = data.get("servers", {})
 
         if not servers:
-            base = f"https://cms.geddes.rcac.purdue.edu/user/{username}"
+            base = f"{PUBLIC_URL}/user/{username}"
             return "\n".join(
                 [
                     f"No active session for user '{username}'.",
@@ -81,7 +85,7 @@ def register(mcp) -> None:
         )
         vscode_active = interface_choice == "2"
 
-        base = f"https://cms.geddes.rcac.purdue.edu/user/{username}"
+        base = f"{PUBLIC_URL}/user/{username}"
         lab_url = f"{base}/lab"
         vscode_url = f"{base}/vscode/?folder=/home/{username}"
 
@@ -175,6 +179,11 @@ def register(mcp) -> None:
                     "Session is already running. Use get_session_status to see its URL."
                 )
             return f"Error: JupyterHub rejected the spawn request — {resp.text[:300]}"
+
+        # Pod identity is about to change — drop cached state so subsequent
+        # tool calls don't see a stale (empty or old) pod_name for up to a TTL.
+        clear_user_cache(token)
+
         if resp.status_code == 201:
             return (
                 "Session is starting. This typically takes 30–60 seconds. "
@@ -362,6 +371,10 @@ def register(mcp) -> None:
                 return f"Error stopping session: HTTP {stop.status_code} — {stop.text[:300]}"
 
             was_running = stop.status_code != 400  # 400 = no server was running
+            if was_running:
+                # The old pod is gone — invalidate cached user info so tools
+                # don't target a terminated pod for up to a cache TTL.
+                clear_user_cache(token)
 
             # 4. Brief pause to let Kubernetes terminate the pod before re-spawning.
             if was_running:

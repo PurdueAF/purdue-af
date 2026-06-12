@@ -156,6 +156,17 @@ async def test_start_rejected_options_not_masked(user_ctx):
     assert "rejected the spawn request" in out
 
 
+@respx.mock
+async def test_start_session_clears_token_cache(user_ctx):
+    respx.post(SERVER_URL).respond(201)
+    auth._user_cache["tok-alice"] = (9e9, {"username": "alice"})
+
+    tools = register_tools(session).tools
+    await tools["start_af_session"]()
+
+    assert "tok-alice" not in auth._user_cache
+
+
 # ── stop_af_session ───────────────────────────────────────────────────────────
 
 
@@ -245,6 +256,24 @@ async def test_restart_overrides_take_precedence(user_ctx, monkeypatch):
     await tools["restart_af_session"](user_options={"0-cpu": "4"})
 
     assert json.loads(start_route.calls.last.request.content) == {"0-cpu": "4"}
+
+
+@respx.mock
+async def test_restart_clears_token_cache_after_stop(user_ctx, monkeypatch):
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(session.asyncio, "sleep", no_sleep)
+
+    respx.get(USER_URL).respond(200, json=server_payload())
+    respx.delete(SERVER_URL).respond(204)
+    respx.post(SERVER_URL).respond(201)
+    auth._user_cache["tok-alice"] = (9e9, {"username": "alice"})
+
+    tools = register_tools(session).tools
+    await tools["restart_af_session"]()
+
+    assert "tok-alice" not in auth._user_cache
 
 
 @respx.mock

@@ -12,8 +12,8 @@ from context import current_user
 
 _NAMESPACE = os.environ.get("NAMESPACE", "cms")
 _CONTAINER = "notebook"
-_SSH_HOST = "cms.geddes.rcac.purdue.edu"
-_SSH_PORT = 22
+_SSH_HOST = os.environ.get("AF_SSH_HOST", "cms.geddes.rcac.purdue.edu")
+_SSH_PORT = int(os.environ.get("AF_SSH_PORT", "22"))
 
 
 def _render_ssh_setup(username: str) -> str:

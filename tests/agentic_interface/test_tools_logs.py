@@ -20,6 +20,7 @@ def test_to_ns_now():
 
 
 def test_to_ns_durations():
+    assert logs._to_ns("2d", NOW) == str(int((NOW - 2 * 86400) * 1e9))
     assert logs._to_ns("1h", NOW) == str(int((NOW - 3600) * 1e9))
     assert logs._to_ns("30m", NOW) == str(int((NOW - 1800) * 1e9))
     assert logs._to_ns("90s", NOW) == str(int((NOW - 90) * 1e9))

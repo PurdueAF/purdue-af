@@ -1,5 +1,6 @@
 """Storage quota tool — queries af-pod-monitor metrics from Prometheus."""
 
+import asyncio
 import os
 from datetime import datetime, timezone
 from typing import Optional
@@ -59,17 +60,13 @@ def register(mcp) -> None:
             any_data = False
 
             for prefix in _DIRS:
-                used_kb = await _prom_scalar(
-                    client, f"af_{prefix}_dir_used_kb{{{pod_selector}}}"
-                )
-                size_kb = await _prom_scalar(
-                    client, f"af_{prefix}_dir_size_kb{{{pod_selector}}}"
-                )
-                util = await _prom_scalar(
-                    client, f"af_{prefix}_dir_util{{{pod_selector}}}"
-                )
-                last_accessed = await _prom_scalar(
-                    client, f"af_{prefix}_dir_last_accessed{{{pod_selector}}}"
+                used_kb, size_kb, util, last_accessed = await asyncio.gather(
+                    *(
+                        _prom_scalar(
+                            client, f"af_{prefix}_dir_{metric}{{{pod_selector}}}"
+                        )
+                        for metric in ("used_kb", "size_kb", "util", "last_accessed")
+                    )
                 )
 
                 if used_kb is None or size_kb is None:

@@ -17,6 +17,28 @@ NAMESPACE = os.environ.get("NAMESPACE", "cms")
 # token → (expiry_monotonic, user_info_dict)
 _user_cache: dict[str, tuple[float, dict]] = {}
 _CACHE_TTL = 60.0
+_CACHE_MAX = 1024
+
+# Shared client: token validation runs on every MCP request, so reuse one
+# connection pool instead of paying a new TCP handshake each time.
+_client: Optional[httpx.AsyncClient] = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None:
+        _client = httpx.AsyncClient(timeout=10.0)
+    return _client
+
+
+def _evict(now: float) -> None:
+    """Keep the cache bounded: drop expired entries, then oldest-expiring."""
+    if len(_user_cache) < _CACHE_MAX:
+        return
+    for tok in [t for t, (expiry, _) in _user_cache.items() if expiry <= now]:
+        del _user_cache[tok]
+    while len(_user_cache) >= _CACHE_MAX:
+        del _user_cache[min(_user_cache, key=lambda t: _user_cache[t][0])]
 
 
 async def resolve_user(token: str) -> Optional[dict]:
@@ -26,15 +48,13 @@ async def resolve_user(token: str) -> Optional[dict]:
     if cached and now < cached[0]:
         return cached[1]
 
-    async with httpx.AsyncClient() as client:
-        try:
-            resp = await client.get(
-                f"{HUB_API_URL}/user",
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=10.0,
-            )
-        except httpx.RequestError:
-            return None
+    try:
+        resp = await _get_client().get(
+            f"{HUB_API_URL}/user",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    except httpx.RequestError:
+        return None
 
     if resp.status_code != 200:
         return None
@@ -52,6 +72,7 @@ async def resolve_user(token: str) -> Optional[dict]:
         "namespace": NAMESPACE,
         "token": token,
     }
+    _evict(now)
     _user_cache[token] = (now + _CACHE_TTL, user_info)
     return user_info
 

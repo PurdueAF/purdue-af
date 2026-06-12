@@ -41,6 +41,46 @@ to it over SSH, and inspect your Dask clusters, storage usage, and logs.
     The token gives full control over your AF session — do not share it or commit
     it to a Git repository.
 
+??? example "Example: connecting Claude Code"
+
+    Store the token in a file (instead of pasting it into a config), then
+    register the server at user scope so it is available in every project:
+
+    ```bash
+    mkdir -p ~/.config/purdue-af && chmod 700 ~/.config/purdue-af
+    printf '%s' '<your-api-token>' > ~/.config/purdue-af/token
+    chmod 600 ~/.config/purdue-af/token
+
+    claude mcp add --scope user --transport http purdue-af-agentic-interface \
+      https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp \
+      --header "Authorization: Bearer $(cat ~/.config/purdue-af/token)"
+    ```
+
+## Installing the skill (recommended)
+
+The MCP server is self-describing, but agents work noticeably better with the
+accompanying **skill** — a Markdown playbook that teaches the agent the AF
+workflows (how to launch and connect to a session, which tools to call in what
+order, how to recover a broken SSH connection). It lives in the Purdue AF
+repository:
+[`docker/agentic-interface/purdue-af-agentic-interface.skill.md`](https://github.com/PurdueAF/purdue-af/blob/main/docker/agentic-interface/purdue-af-agentic-interface.skill.md)
+
+For **Claude Code**, install it with:
+
+```bash
+mkdir -p ~/.claude/skills/purdue-af-agentic-interface
+curl -fsSL -o ~/.claude/skills/purdue-af-agentic-interface/SKILL.md \
+  https://raw.githubusercontent.com/PurdueAF/purdue-af/main/docker/agentic-interface/purdue-af-agentic-interface.skill.md
+```
+
+The skill then activates automatically whenever you mention your Purdue AF
+session, Dask clusters, or AF logs/storage.
+
+For **other agents**, copy the same file's contents into whatever your agent
+uses for persistent instructions (e.g. `AGENTS.md`, Cursor rules, a custom
+system prompt) — it is plain Markdown with no Claude-specific content beyond
+the front-matter header.
+
 ## What you can do
 
 Your username and session are resolved automatically from the token, so you can
@@ -64,6 +104,11 @@ The available tools cover:
   (Kubernetes, Slurm/Hammer, Slurm/Gautschi).
 * **Logs** — query your JupyterLab / VS Code server logs and Dask worker and
   scheduler logs, with time ranges and filters.
+
+The server also exposes invocable **workflow prompts** (`launch_session`,
+`connect_session`, `restart_session`, `stop_session`, `recover_ssh`) that
+walk the agent through each multi-step workflow. In Claude Code they appear
+as `/mcp__purdue-af-agentic-interface__<name>` slash commands.
 
 !!! note
 

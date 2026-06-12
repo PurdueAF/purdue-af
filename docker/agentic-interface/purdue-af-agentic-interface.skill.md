@@ -5,14 +5,25 @@ description: Manage a Purdue Analysis Facility session — start/stop/restart th
 
 # Purdue Analysis Facility — Agentic Interface
 
-> **One-time setup**: the MCP server is registered in the project's `.mcp.json`,
-> which reads your JupyterHub API token from `~/.config/purdue-af/token`. Get a
-> token at https://cms.geddes.rcac.purdue.edu/hub/token, then:
-> ```bash
-> mkdir -p ~/.config/purdue-af && chmod 700 ~/.config/purdue-af
-> printf '%s' '<your-api-token>' > ~/.config/purdue-af/token
-> chmod 600 ~/.config/purdue-af/token
-> ```
+> **One-time setup** — this skill drives the `purdue-af-agentic-interface` MCP
+> server. If its tools are not available, set it up:
+>
+> 1. Get a JupyterHub API token at https://cms.geddes.rcac.purdue.edu/hub/token
+>    and store it locally:
+>    ```bash
+>    mkdir -p ~/.config/purdue-af && chmod 700 ~/.config/purdue-af
+>    printf '%s' '<your-api-token>' > ~/.config/purdue-af/token
+>    chmod 600 ~/.config/purdue-af/token
+>    ```
+> 2. Register the MCP server. Inside the PurdueAF/purdue-af repo the project
+>    `.mcp.json` does this automatically (it reads the token file above). In any
+>    other directory, register it at user scope — in Claude Code:
+>    ```bash
+>    claude mcp add --scope user --transport http purdue-af-agentic-interface \
+>      https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp \
+>      --header "Authorization: Bearer $(cat ~/.config/purdue-af/token)"
+>    ```
+>
 > Username and active pod are resolved automatically from the token.
 
 This MCP server is **self-describing**: every tool result names the next step, so
@@ -126,8 +137,8 @@ Requires a running pod.
 **`query_notebook_logs`** — JupyterLab / VS Code server logs. Requires a running pod.
 **`query_dask_logs`** — Dask worker and scheduler logs (notebook pod excluded).
 
-Both accept `start` (`"1h"`, `"30m"`, or ISO-8601), `limit` (default 500), and
-`filter` (LogQL pipe expression, e.g. `"|= \"ERROR\""`).
+Both accept `start` (`"1h"`, `"30m"`, `"2d"`, or ISO-8601), `limit` (default 500),
+and `filter` (LogQL pipe expression, e.g. `"|= \"ERROR\""`).
 
 ---
 
@@ -135,7 +146,7 @@ Both accept `start` (`"1h"`, `"30m"`, or ISO-8601), `limit` (default 500), and
 
 | Symptom | Cause |
 |---|---|
-| `{"error":"Missing Bearer token"}` | `JUPYTERHUB_TOKEN` not set |
+| `{"error":"Missing Bearer token"}` | No Authorization header reached the server — check the MCP server config and `~/.config/purdue-af/token` |
 | `{"error":"Invalid JupyterHub token"}` | Token expired — refresh at `/hub/token` |
 | `"no running server found"` in result | Pod not running — use `start_af_session` |
 | HTTP 404 on the service URL | Service not deployed or not registered with JupyterHub |

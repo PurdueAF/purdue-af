@@ -5,6 +5,7 @@ data key.  We parse singleuser.profileList from that YAML so the service stays i
 sync with whatever the admin has configured — no hardcoded option keys or slugs.
 """
 
+import os
 import re
 import time
 from typing import Optional
@@ -16,7 +17,7 @@ import yaml
 _K8S_API = "https://kubernetes.default.svc"
 _TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 _CA_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-_NAMESPACE = "cms"
+_NAMESPACE = os.environ.get("NAMESPACE", "cms")
 _CONFIGMAP = "jupyterhub-config"
 
 # (expiry_monotonic, profiles) — refresh every 5 minutes

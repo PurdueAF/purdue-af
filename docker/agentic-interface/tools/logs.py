@@ -20,7 +20,7 @@ def _to_ns(value: str, now_s: float) -> str:
 
     Accepts:
       'now'                    → current time
-      '1h', '30m', '90s'      → that duration ago from now_s
+      '2d', '1h', '30m', '90s' → that duration ago from now_s
       ISO-8601 with timezone   → parsed as-is
       ISO-8601 without timezone → assumed UTC (Loki runs in UTC)
     """
@@ -28,9 +28,9 @@ def _to_ns(value: str, now_s: float) -> str:
     if value.lower() == "now":
         return str(int(now_s * 1e9))
 
-    m = re.fullmatch(r"(\d+)([hms])", value)
+    m = re.fullmatch(r"(\d+)([dhms])", value)
     if m:
-        unit = {"h": 3600, "m": 60, "s": 1}[m.group(2)]
+        unit = {"d": 86400, "h": 3600, "m": 60, "s": 1}[m.group(2)]
         return str(int((now_s - int(m.group(1)) * unit) * 1e9))
 
     try:
@@ -164,9 +164,9 @@ def register(mcp) -> None:
         Use query_dask_logs for distributed computation logs.
 
         Args:
-            start: How far back to look — duration ('1h', '30m') or ISO-8601
-                   timestamp (timezone-aware; bare timestamps assumed UTC).
-                   Default: '1h'.
+            start: How far back to look — duration ('1h', '30m', '2d') or
+                   ISO-8601 timestamp (timezone-aware; bare timestamps assumed
+                   UTC). Default: '1h'.
             end:   End boundary — duration ago ('2h' = 2 hours ago), 'now', or
                    ISO-8601 timestamp. Default: now.
             limit: Maximum log lines to return. Default: 500.
@@ -207,8 +207,8 @@ def register(mcp) -> None:
         interactive server logs.
 
         Args:
-            start: How far back to look — duration ('1h', '30m') or ISO-8601
-                   timestamp. Default: '1h'.
+            start: How far back to look — duration ('1h', '30m', '2d') or
+                   ISO-8601 timestamp. Default: '1h'.
             end:   End boundary — duration ago, 'now', or ISO-8601. Default: now.
             limit: Maximum log lines to return. Default: 500.
             direction: 'forward' (oldest first, default) or 'backward' (newest first).
