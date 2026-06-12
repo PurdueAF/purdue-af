@@ -63,14 +63,14 @@ accompanying **skill** — a Markdown playbook that teaches the agent the AF
 workflows (how to launch and connect to a session, which tools to call in what
 order, how to recover a broken SSH connection). It lives in the Purdue AF
 repository:
-[`docker/agentic-interface/purdue-af-agentic-interface.skill.md`](https://github.com/PurdueAF/purdue-af/blob/main/docker/agentic-interface/purdue-af-agentic-interface.skill.md)
+[`.claude/skills/purdue-af-agentic-interface/SKILL.md`](https://github.com/PurdueAF/purdue-af/blob/main/.claude/skills/purdue-af-agentic-interface/SKILL.md)
 
 For **Claude Code**, install it with:
 
 ```bash
 mkdir -p ~/.claude/skills/purdue-af-agentic-interface
 curl -fsSL -o ~/.claude/skills/purdue-af-agentic-interface/SKILL.md \
-  https://raw.githubusercontent.com/PurdueAF/purdue-af/main/docker/agentic-interface/purdue-af-agentic-interface.skill.md
+  https://raw.githubusercontent.com/PurdueAF/purdue-af/main/.claude/skills/purdue-af-agentic-interface/SKILL.md
 ```
 
 The skill then activates automatically whenever you mention your Purdue AF

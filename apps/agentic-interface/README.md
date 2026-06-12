@@ -34,7 +34,7 @@ your agent expands environment variables in its config, use `Bearer ${JUPYTERHUB
 instead of pasting the token.
 
 For best results also install the companion skill,
-[`docker/agentic-interface/purdue-af-agentic-interface.skill.md`](../../docker/agentic-interface/purdue-af-agentic-interface.skill.md)
+[`.claude/skills/purdue-af-agentic-interface/SKILL.md`](../../.claude/skills/purdue-af-agentic-interface/SKILL.md)
 — a portable Markdown playbook of the AF workflows. In Claude Code, save it as
 `~/.claude/skills/purdue-af-agentic-interface/SKILL.md`; for other agents, paste it into
 your persistent instructions (`AGENTS.md`, rules file, …).
