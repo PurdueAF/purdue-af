@@ -55,7 +55,7 @@ Purdue data access policies:
 | JupyterLab session (CPU / RAM / GPU)        | ✅             | ✅                  |
 | Dask Gateway with Kubernetes backend        | ✅             | ✅                  |
 | Dask Gateway with Slurm backend             | ✅             | ❌                  |
-| Slurm batch submission (`cms` queue)        | ✅             | ❌                  |
+| Slurm batch submission (Hammer cluster)     | ✅             | ❌                  |
 | Write access to Depot (`/depot/cms/`)       | ✅             | ❌ (read-only)      |
 | Write access to `/work/` storage            | ✅             | ✅                  |
 | Grid directory at Purdue EOS (`/store/user/`) | ✅ (on request) | ❌                  |

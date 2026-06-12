@@ -54,8 +54,8 @@ conda activate $conda_envs_path/$conda_env_name
 
     Since Jupyter kernel names are based on the Conda environment names, avoid
     creating multiple Conda environments with the same name. Also, avoid using the
-    names `python3` and `python3-ml`, as these names are reserved for pre-installed
-    kernels.
+    names `python3` and `coffea_latest`, as these names are reserved for
+    pre-installed kernels.
 
 ## Creating custom Conda environments
 

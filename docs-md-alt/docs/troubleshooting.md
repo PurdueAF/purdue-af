@@ -32,6 +32,12 @@ solutions. If your problem is not listed here, please
     * Reading many small files from `/depot/` or `/eos/` can be slow — see
       [Data access](data-access.md) for faster access patterns (XRootD, XCache).
 
+??? failure "My session was shut down on its own"
+
+    Sessions that remain **inactive for 14 days** are automatically shut down to
+    release resources. Your storage volumes are unaffected — simply start a new
+    session.
+
 ??? failure "I deleted/broke my configuration and want a clean start"
 
     Shut down your session (`File → Hub Control Panel → Stop My Server`), then
@@ -115,9 +121,16 @@ solutions. If your problem is not listed here, please
 
 ??? failure "Cluster creation times out"
 
-    Cluster creation fails if the scheduler doesn't start within 2 minutes.
-    This sometimes happens due to resource contention — simply try resubmitting
-    the cluster.
+    Cluster creation fails if the scheduler doesn't start within 3 minutes
+    (Kubernetes backend) or 10 minutes (Slurm backend). This sometimes happens
+    due to resource contention — simply try resubmitting the cluster.
+
+??? failure "I can't create a cluster: \"You may only have 1 active Dask Gateway cluster(s)\""
+
+    Each user can have at most **one active cluster per gateway** at a time.
+    Shut down your existing cluster (see
+    [Shutting down clusters](guide-dask-gateway.md#5-shutting-down-clusters)),
+    or wait for it to finish stopping, then try again.
 
 ??? failure "Workers fail to start or crash immediately"
 
@@ -130,9 +143,10 @@ solutions. If your problem is not listed here, please
 
 ??? failure "My cluster disappeared"
 
-    Dask Gateway clusters persist for at most **1 day**. Additionally, if the
-    notebook from which the cluster was created is terminated, the cluster and all
-    its workers are killed after **1 hour**.
+    Idle clusters (no connected clients — e.g. after the notebook that created the
+    cluster is terminated) are shut down automatically: after **1 hour** on the
+    Kubernetes backend, and after **24 hours** on the Slurm backend. Slurm workers
+    are additionally limited by a **4-hour** Slurm job walltime.
 
 ??? failure "Workers can't read my data via XRootD"
 

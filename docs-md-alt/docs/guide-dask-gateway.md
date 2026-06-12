@@ -5,9 +5,9 @@ multi-tenant environment such as the Purdue Analysis Facility.
 
 There are two types of Dask Gateway clusters that can be created:
 
-* **Dask Gateway cluster with Slurm backend** — workers are submitted to the Purdue
-  Hammer cluster. This is available to **Purdue users only**, due to Purdue data
-  access policies.
+* **Dask Gateway cluster with Slurm backend** — workers are submitted as Slurm jobs
+  to a Purdue community cluster: **Hammer**, or (more recently) **Gautschi**.
+  This is available to **Purdue users only**, due to Purdue data access policies.
 
     With this method, users can create **hundreds of workers**, although requesting
     more than 200–300 workers is usually associated with some wait time due to
@@ -17,8 +17,14 @@ There are two types of Dask Gateway clusters that can be created:
   Purdue Geddes cluster. This is available to **all users**.
 
     With this method, the workers are scheduled almost instantly, but for now we
-    restrict the total per-user resource usage to **400 cores and 800 GB RAM** due
+    restrict each cluster to **200 workers, 200 cores, and 1.2 TB RAM** due
     to limited resources in the Analysis Facility.
+
+!!! important "One cluster at a time"
+
+    Each user can have **at most one active Dask Gateway cluster** per gateway at
+    a time. If cluster creation fails with a message about an existing cluster,
+    shut the old cluster down (or wait for it to finish stopping) first.
 
 The pros and cons of the two backends are summarized in the following table:
 
@@ -48,10 +54,16 @@ from dask_gateway import Gateway
 # To submit workers via Kubernetes (all users):
 gateway = Gateway()
 
-# To submit workers via Slurm (Purdue users only!):
+# To submit workers via Slurm to the Hammer cluster (Purdue users only!):
 # gateway = Gateway(
-#     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
-#     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
+#     "http://dask-gateway-k8s-slurm-hammer.geddes.rcac.purdue.edu/",
+#     proxy_address="api-dask-gateway-k8s-slurm-hammer.cms.geddes.rcac.purdue.edu:8000",
+# )
+
+# To submit workers via Slurm to the Gautschi cluster (Purdue users only!):
+# gateway = Gateway(
+#     "http://dask-gateway-k8s-slurm-gautschi.geddes.rcac.purdue.edu/",
+#     proxy_address="api-dask-gateway-k8s-slurm-gautschi.cms.geddes.rcac.purdue.edu:8000",
 # )
 
 # You may need to update some environment variables before creating a cluster.
@@ -71,6 +83,13 @@ cluster = gateway.new_cluster(
 # which can be used to scale the cluster interactively:
 cluster
 ```
+
+!!! note "Worker size limits"
+
+    A single worker can request at most **64 GB of memory**, and at most
+    **64 cores** (Kubernetes backend) or **16 cores** (Slurm backend).
+    For most analyses, many small workers (1–4 cores each) work better than a
+    few large ones.
 
 ## 2. Shared environments and storage volumes
 
@@ -217,10 +236,10 @@ Below are the different ways to connect a client to a cluster created elsewhere:
     # If submitting workers as Kubernetes pods (all users):
     gateway = Gateway()
 
-    # If submitting workers as Slurm jobs (Purdue users only):
+    # If submitting workers as Slurm jobs to Hammer (Purdue users only):
     # gateway = Gateway(
-    #     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
-    #     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
+    #     "http://dask-gateway-k8s-slurm-hammer.geddes.rcac.purdue.edu/",
+    #     proxy_address="api-dask-gateway-k8s-slurm-hammer.cms.geddes.rcac.purdue.edu:8000",
     # )
 
     clusters = gateway.list_clusters()
@@ -246,10 +265,10 @@ Below are the different ways to connect a client to a cluster created elsewhere:
     # If submitting workers as Kubernetes pods (all users):
     gateway = Gateway()
 
-    # If submitting workers as Slurm jobs (Purdue users only):
+    # If submitting workers as Slurm jobs to Hammer (Purdue users only):
     # gateway = Gateway(
-    #     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
-    #     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
+    #     "http://dask-gateway-k8s-slurm-hammer.geddes.rcac.purdue.edu/",
+    #     proxy_address="api-dask-gateway-k8s-slurm-hammer.cms.geddes.rcac.purdue.edu:8000",
     # )
 
     # To find the cluster name:
@@ -277,11 +296,14 @@ for cluster_info in gateway.list_clusters():
 
 ## 6. Cluster lifetime and timeouts
 
-* Cluster creation will fail if the scheduler doesn't start within **2 minutes**.
-  If this happens, try to resubmit the cluster.
-* Once created, the Dask scheduler and workers will persist for **1 day**.
-* If the notebook from which the Dask Gateway cluster was created is terminated,
-  the cluster and all its workers will be killed after **1 hour**.
+* Cluster creation will fail if the scheduler doesn't start within **3 minutes**
+  (Kubernetes backend) or **10 minutes** (Slurm backend). If this happens, try to
+  resubmit the cluster.
+* An idle cluster (no connected clients — for example, after the notebook that
+  created it is terminated) is automatically shut down after **1 hour** with the
+  Kubernetes backend, or after **24 hours** with the Slurm backend.
+* With the Slurm backend, the underlying Slurm jobs have a walltime limit of
+  **4 hours** — individual workers are terminated when they reach it.
 
 !!! note "See also"
 

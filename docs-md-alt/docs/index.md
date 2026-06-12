@@ -15,17 +15,18 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
 
 ## What you get
 
-* **A personal JupyterLab session** with up to 64 CPU cores, 128 GB RAM, and
+* **A personal JupyterLab session** with up to 128 CPU cores, 128 GB RAM, and
   optional Nvidia A100 GPUs — see [Getting started](getting-started.md).
 * **A modern HEP software stack** managed via [Pixi environments](software.md),
   including `coffea`, `ROOT`, `RDataFrame`, and popular machine learning libraries
   such as `pytorch`, `tensorflow`, and `xgboost`.
-* **Scalable computing** via [Dask Gateway](guide-dask-gateway.md) (up to 400 cores
-  per user) and, for Purdue users, [Slurm batch jobs](scaling-out.md).
+* **Scalable computing** via [Dask Gateway](guide-dask-gateway.md) (up to 200 cores
+  and 1.2 TB RAM per user) and, for Purdue users, [Slurm batch jobs](scaling-out.md).
 * **Multiple data access methods** — [XRootD, XCache, Rucio](data-access.md) —
   and a variety of [private and shared storage volumes](storage.md).
-* **Flexible access options**: web browser, [SSH](guide-ssh-access.md), or
-  [your local VSCode-based IDE](guide-ide-connection.md).
+* **Flexible access options**: web browser (JupyterLab or VS Code),
+  [SSH](guide-ssh-access.md), [your local VSCode-based IDE](guide-ide-connection.md),
+  or [any MCP-capable AI agent](guide-agentic-interface.md).
 
 The software and functionality are regularly updated to provide state-of-the-art
 tools and features for fast, efficient, collaborative HEP research.

@@ -65,6 +65,7 @@ nav = [
             "guide-ssh-access.md",
             "guide-ide-connection.md",
             "guide-vscode.md",
+            "guide-agentic-interface.md",
             "guide-file-transfer.md",
         ] },
         { "Data and storage" = [

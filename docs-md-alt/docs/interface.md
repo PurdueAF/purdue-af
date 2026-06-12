@@ -36,9 +36,13 @@ development:
 
 * **Web-based Visual Studio Code (code-server)** — to open it, click the button with
   the VSCode logo ![](images/vscode-logo.jpeg){ height="20" } in the JupyterLab
-  Launcher.
+  Launcher. You can also make VS Code the default interface of your session by
+  selecting it in the **Interface** option when starting the session.
 * [Connection from local VSCode-based IDEs](guide-ide-connection.md) (VSCode, Cursor, etc.)
 * [SSH connection from a local terminal](guide-ssh-access.md)
+* [Agentic interface (MCP server)](guide-agentic-interface.md) — manage your AF
+  session and Dask clusters from any MCP-capable AI agent (Claude Code, Codex,
+  Cursor, etc.)
 
 ## Python code development
 

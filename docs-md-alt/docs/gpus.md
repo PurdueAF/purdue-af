@@ -25,6 +25,12 @@ a choice of either a 5 GB "slice" of an A100, or a full 40 GB A100.
 | 5 GB "slice" of A100 | 5 GB   | 14                  | Usually immediate |
 | Full A100 GPU        | 40 GB  | 4                   | Subject to availability |
 
+!!! tip
+
+    The resource selection form shows the **current availability** of each GPU
+    configuration next to the corresponding option, so you can see before starting
+    the session whether a full A100 is free.
+
 !!! note
 
     If you selected a GPU, your session will have `CUDA 12.4` and `cudnn 8.9.7.29`

@@ -170,6 +170,10 @@ Conda environments are automatically discovered by Jupyter if they have the
 `ipykernel` package installed — see
 [Creating Conda environments and Jupyter kernels](guide-conda.md).
 
+Two centrally managed Conda environments are pre-installed as kernels:
+**`Python3 kernel (default)`** (from `/depot/cms/kernels/python3`) and
+**`coffea_latest`** (from `/depot/cms/kernels/coffea_latest`).
+
 !!! warning
 
     Automatic environment discovery means that Jupyter periodically scans the
@@ -188,11 +192,13 @@ you to execute ROOT macros and produce plots inside Jupyter notebooks.
 
     [ROOT C++ notebook demo](demos/root-cpp.md)
 
-### LCG_106b_cuda kernel
+### LCG kernels
 
-This kernel is based on the LCG "view" `LCG_106b_cuda` loaded via CVMFS.
-It contains the CUDA-enabled ROOT build and is suitable for
-[running RooFit on GPUs](guide-roofit-cuda.md).
+These kernels are based on LCG "views" loaded via CVMFS:
+
+* **`LCG_106b`** — the standard LCG software stack;
+* **`LCG_106b_cuda`** — contains the CUDA-enabled ROOT build and is suitable for
+  [running RooFit on GPUs](guide-roofit-cuda.md).
 
 ## Combine
 

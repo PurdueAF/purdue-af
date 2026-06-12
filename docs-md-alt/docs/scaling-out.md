@@ -1,6 +1,6 @@
 # Scaling out
 
-A single Purdue AF session is limited to **64 CPU cores and 128 GB RAM**.
+A single Purdue AF session is limited to **128 CPU cores and 128 GB RAM**.
 When your analysis outgrows these resources, several options are available.
 This page gives an overview; detailed instructions are linked from each section.
 
@@ -8,10 +8,10 @@ This page gives an overview; detailed instructions are linked from each section.
 
 | Method | Best for | Available to | Typical scale |
 | --- | --- | --- | --- |
-| [Dask (local cluster)](guide-dask.md) | Parallelizing Python code within a session | All users | up to 64 cores |
-| [Dask Gateway, Kubernetes backend](guide-dask-gateway.md) | Distributed Python / Coffea analyses | All users | up to 400 cores, 800 GB RAM |
-| [Dask Gateway, Slurm backend](guide-dask-gateway.md) | Distributed Python / Coffea analyses | Purdue users | hundreds of workers |
-| Slurm batch jobs | Independent batch workloads, GPU jobs | Purdue users | `cms` queue at Hammer |
+| [Dask (local cluster)](guide-dask.md) | Parallelizing Python code within a session | All users | up to 128 cores |
+| [Dask Gateway, Kubernetes backend](guide-dask-gateway.md) | Distributed Python / Coffea analyses | All users | up to 200 workers (200 cores, 1.2 TB RAM) |
+| [Dask Gateway, Slurm backend](guide-dask-gateway.md) | Distributed Python / Coffea analyses | Purdue users | hundreds of workers (Hammer / Gautschi) |
+| Slurm batch jobs | Independent batch workloads, GPU jobs | Purdue users | Hammer cluster (`cms` account) |
 | CRAB | CMSSW (`cmsRun`) jobs, MC generation, skimming | All CMS users | the entire WLCG |
 
 ## Dask
@@ -25,14 +25,15 @@ frameworks such as Coffea and RDataFrame.
   session — no extra setup required.
 * **[Dask Gateway](guide-dask-gateway.md)** scales beyond the session, submitting
   workers either as Kubernetes pods on the Geddes cluster (all users), or as Slurm
-  jobs on the Hammer cluster (Purdue users only).
+  jobs on the Hammer or Gautschi clusters (Purdue users only). Note that each user
+  can have **at most one active Dask Gateway cluster** per gateway at a time.
 
 ## Slurm (Purdue users only)
 
 [Slurm](https://slurm.schedmd.com/documentation.html) is a job scheduler and
 workload manager that enables batch submission on Purdue computing clusters.
 At Purdue AF, **users with local Purdue accounts** can submit jobs from the AF
-terminal to the `cms` queue on the Hammer cluster.
+terminal to the Hammer cluster, using the `cms` Slurm account.
 
 * [Instructions for submitting Slurm jobs](https://www.rcac.purdue.edu/knowledge/hammer/run)
 * Code and data used by Slurm jobs must be stored on **Depot** (`/depot/cms/`) —

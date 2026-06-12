@@ -10,10 +10,10 @@ from dask_gateway import Gateway
 # To submit workers via Kubernetes (all users):
 gateway = Gateway()
 
-# To submit workers via Slurm (Purdue users only!):
+# To submit workers via Slurm to the Hammer cluster (Purdue users only!):
 # gateway = Gateway(
-#     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
-#     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
+#     "http://dask-gateway-k8s-slurm-hammer.geddes.rcac.purdue.edu/",
+#     proxy_address="api-dask-gateway-k8s-slurm-hammer.cms.geddes.rcac.purdue.edu:8000",
 # )
 ```
 

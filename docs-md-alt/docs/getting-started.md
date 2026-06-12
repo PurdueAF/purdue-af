@@ -24,7 +24,9 @@ See [Login methods and usernames](login-methods.md) for details.
 ## 2. Select resources
 
 After a successful login, you will be redirected to a page where you can select
-the number of CPU cores, the amount of RAM, and (optionally) a GPU for your session.
+the number of CPU cores (up to 128), the amount of RAM (up to 128 GB), and
+(optionally) a GPU for your session. You can also choose which web interface the
+session starts with: **JupyterLab** (default) or **VS Code (code-server)**.
 
 The default values are enough to get started. If you need more resources later,
 shut down the session (`File → Hub Control Panel → Stop My Server`, or the
@@ -38,6 +40,8 @@ shut down the session (`File → Hub Control Panel → Stop My Server`, or the
       for inference and small-scale training;
     * **Full 40 GB instance** of an Nvidia A100 GPU — more powerful, but subject
       to availability.
+
+    The resource selection form shows **live availability** next to each GPU option.
 
     [Learn more about GPU access at Purdue AF](gpus.md)
 
@@ -141,3 +145,4 @@ A VOMS proxy is required to access CMS data via XRootD, submit CRAB jobs, and us
 * Set up a [project-specific Pixi environment](guide-pixi.md)
 * Try the [interactive demos](demos/index.md)
 * When your analysis outgrows a single session, [scale out with Dask Gateway](guide-dask-gateway.md)
+* Connect an AI agent to your session via the [agentic interface](guide-agentic-interface.md)
