@@ -6,7 +6,7 @@ drive it through the actual OAuth code flow and the KubeSpawner spawn path.
 
 import time
 
-from conftest import CERN_IDP, HUB
+from conftest import CERN_IDP, HUB, MOCK, PURDUE_IDP
 
 
 def test_hub_api_is_up(admin):
@@ -230,11 +230,20 @@ def test_tampered_oauth_state_is_rejected(login):
 
 
 def test_logout_clears_session(login):
+    """auto_login means logout is followed by silent re-auth on the next
+    request — so prove the OLD session died by making the re-auth identity
+    a denied user. A surviving cookie would return 200 without consulting
+    the mock; a real logout forces the OAuth round trip into the gate."""
+    import httpx
+
     client, _ = login("alice@purdue.edu")
     assert client.get("/hub/home").status_code == 200
 
-    client.get("/hub/logout")
-    # Without a session, /hub/home bounces through login -> mock -> back;
-    # the point is the old cookie no longer grants direct access.
-    home = client.get("/hub/home", follow_redirects=False)
-    assert home.status_code in (301, 302)
+    client.get("/hub/logout", follow_redirects=False)
+    httpx.post(
+        f"{MOCK}/_identity",
+        json={"eppn": "mallory@purdue.edu", "idp": PURDUE_IDP},
+        timeout=10,
+    )
+    response = client.get("/hub/home")  # follows into OAuth as mallory
+    assert response.status_code in (403, 500)  # denied: old session is gone
