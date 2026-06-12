@@ -15,7 +15,7 @@ app:
       cpu: 4
       memory: 4Gi
   ingress:
-    enabled: ${enable_ingresses}
+    enabled: false
     class: public
     host: geddes.rcac.purdue.edu
   nodeSelector:
