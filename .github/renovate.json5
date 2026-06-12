@@ -78,14 +78,10 @@
       allowedVersions: '<=4.0.0',
     },
     {
-      // The purdue-af user image is NOT built in CI (cluster-grade kaniko
-      // job only — see build-images.yml header). Updates here merge
-      // unverified: hold them in the dashboard's "Pending Approval" section
-      // (no PR until explicitly ticked) and label any created PR for a
-      // manual kaniko build + smoke test. Revisit with IMPROVEMENT_PLAN item 14.
+      // purdue-af updates trigger the full image build + smoke test in CI
+      // (Build Images heavy) — label them so the long build is expected.
       matchFileNames: ['docker/purdue-af/**'],
-      dependencyDashboardApproval: true,
-      addLabels: ['manual-build-required'],
+      addLabels: ['user-image'],
     },
     {
       // pixi's pep440 ranges let Renovate propose pre-releases

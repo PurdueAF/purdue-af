@@ -1,4 +1,4 @@
-FROM geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_science_image_combined_root:5.7.2-6.38.04
+FROM docker.io/sslhep/servicex_science_image_combined_root:5.7.2-6.38.04
 
 USER root
 # Match upstream combined_root: packages live in the pixi env.

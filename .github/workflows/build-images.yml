@@ -1,14 +1,14 @@
 name: Build Images
 
 # Build + smoke-test the lightweight (slim-base, ~1 min) first-party images
-# on every push. This is the gate that catches breaking base-image bumps
-# (FROM lines) before they reach the cluster.
+# on every push; on main, images that PASSED their smoke test are pushed to
+# ghcr.io/purdueaf/<name>:sha-<commit> (see docker/REGISTRY.md for the
+# registry architecture and the geddes pull-through cache).
 #
 # OS-scale images (dask-gateway variants) are built by
-# build-images-heavy.yml on path changes + weekly. purdue-af and
-# interlink-slurm-plugin are built only by in-cluster kaniko jobs;
+# build-images-heavy.yml on path changes + weekly. purdue-af is built only
+# by the in-cluster kaniko job (needs cluster-grade CPU/registry locality);
 # servicex-science-coffea needs a private-registry pull secret.
-# All three are IMPROVEMENT_PLAN item 14 territory.
 
 on:
   push:
@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  packages: write # ghcr push on main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -57,10 +58,24 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          tags: ${{ matrix.name }}:ci
+          tags: ghcr.io/purdueaf/${{ matrix.name }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           push: false
           load: true
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,scope=${{ matrix.name }},mode=max
       - name: Smoke test
-        run: docker run --rm ${{ matrix.name }}:ci ${{ matrix.smoke }}
+        run: docker run --rm ghcr.io/purdueaf/${{ matrix.name }}:sha-${{ github.sha }} ${{ matrix.smoke }}
+      # Only smoke-tested images ever reach the registry.
+      - name: Login to ghcr.io
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3 # Renovate pins to digest
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push to ghcr.io
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: docker push ghcr.io/purdueaf/${{ matrix.name }}:sha-${{ github.sha }}
