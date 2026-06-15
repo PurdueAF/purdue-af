@@ -29,6 +29,7 @@ resources:
   - ../../apps/servicex/helmrepo.yaml
   - ../../apps/servicex/secrets-objectStore.yaml
   - ../../apps/servicex-s3/helmrelease.yaml
+  - ../../apps/servicex-anvil/helmrelease.yaml
   # - ../../apps/servicex-interlink/helmrelease.yaml
   - ../../apps/servicex-eos/helmrelease.yaml
   - ../../apps/servicex-test/helmrelease.yaml
@@ -107,6 +108,10 @@ configMapGenerator:
   - name: servicex-s3-config
     files:
       - values.yaml=../../apps/servicex-s3/values.yaml
+
+  - name: servicex-anvil-config
+    files:
+      - values.yaml=../../apps/servicex-anvil/values.yaml
 
   # - name: servicex-interlink-config
   #   files:
