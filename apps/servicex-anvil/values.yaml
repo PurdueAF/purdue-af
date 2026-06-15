@@ -1,6 +1,6 @@
 app:
   image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_app
-  tag: "v1.8.3"
+  tag: "v1.8.4"
   checksImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/ncsa/checks:main
   allowedImagePrefixes:
     - "geddes-registry.rcac.purdue.edu/docker-hub-cache/"
@@ -66,7 +66,7 @@ codeGen:
   uproot-raw:
     enabled: true
     image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_code_gen_raw_uproot
-    tag: "v1.8.3"
+    tag: "v1.8.4"
     defaultScienceContainerImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_science_image_combined_root
     defaultScienceContainerTag: 5.7.2-6.38.04
     compressionAlgorithm: ZSTD
@@ -85,7 +85,7 @@ codeGen:
   python:
     enabled: true
     image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_code_gen_python
-    tag: python-codegen-compression #"v1.8.3"
+    tag: python-codegen-compression #"v1.8.4"
     defaultScienceContainerImage: geddes-registry.rcac.purdue.edu/cms/servicex-science-combined-root-coffea
     defaultScienceContainerTag: 5.7.2-6.38.04
     compressionAlgorithm: ZSTD
@@ -110,7 +110,7 @@ codeGen:
 
 transformer:
   sidecarImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_sidecar_transformer
-  sidecarTag: "v1.8.3"
+  sidecarTag: "v1.8.4"
   autoscaler:
     maxReplicas: 500
   cpuRequest: 500m
@@ -198,7 +198,7 @@ didFinder:
   xrootd:
     enabled: true
     image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex-did-finder-xrootd
-    tag: "v1.8.3"
+    tag: "v1.8.4"
     nodeSelector:
       cms-af-prod: "true"
     tolerations:
