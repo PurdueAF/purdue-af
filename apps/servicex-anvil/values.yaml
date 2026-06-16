@@ -1,13 +1,13 @@
 app:
-  image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_app
-  tag: "v1.8.4"
-  checksImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/ncsa/checks:main
-  allowedImagePrefixes:
-    - "geddes-registry.rcac.purdue.edu/docker-hub-cache/"
-    - "geddes-registry.rcac.purdue.edu/cms/"
-    - "docker.io/sslhep"
-    - "sslhep/"
-    - "gitlab-registry.cern.ch/"
+  # image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_app
+  # tag: "v1.8.4"
+  # checksImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/ncsa/checks:main
+  # allowedImagePrefixes:
+  #   - "geddes-registry.rcac.purdue.edu/docker-hub-cache/"
+  #   - "geddes-registry.rcac.purdue.edu/cms/"
+  #   - "docker.io/sslhep"
+  #   - "sslhep/"
+  #   - "gitlab-registry.cern.ch/"
   resources:
     requests:
       cpu: 2
@@ -109,8 +109,8 @@ codeGen:
     enabled: false
 
 transformer:
-  sidecarImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_sidecar_transformer
-  sidecarTag: "v1.8.4"
+  # sidecarImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_sidecar_transformer
+  # sidecarTag: "v1.8.4"
   autoscaler:
     maxReplicas: 10
   cpuRequest: 500m
@@ -197,8 +197,8 @@ didFinder:
         effect: "NoSchedule"
   xrootd:
     enabled: true
-    image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex-did-finder-xrootd
-    tag: "v1.8.4"
+    # image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex-did-finder-xrootd
+    # tag: "v1.8.4"
     nodeSelector:
       cms-af-prod: "true"
     tolerations:
