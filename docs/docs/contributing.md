@@ -1,7 +1,7 @@
 # Contributing to documentation
 
 This website is rendered from Markdown documentation in the
-[Purdue AF GitHub repository](https://github.com/PurdueAF/purdue-af/tree/main/docs-md-alt).
+[Purdue AF GitHub repository](https://github.com/PurdueAF/purdue-af/tree/main/docs).
 
 To contribute to the documentation, please **open a pull request** — or simply
 click the "edit" icon at the top of any page to edit it directly on GitHub.
@@ -21,7 +21,7 @@ click the "edit" icon at the top of any page to edit it directly on GitHub.
 ```shell
 pip install zensical
 
-cd docs-md-alt
+cd docs
 zensical serve
 ```
 

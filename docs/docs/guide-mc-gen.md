@@ -1,18 +1,18 @@
 # Private MC generation
 
-This guide describes private MC production.
+This guide describes private MC production at Purdue AF.
 Comprehensive documentation about central MC production in CMS can be found here:
 <https://cms-pdmv.gitbook.io>.
 
-The MC generation pipeline contains multiple steps (see figure below),
-which include simulation of physics processes, interactions of particles with
-detector material, reconstruction and triggering algorithms, etc.
+The MC generation pipeline contains multiple steps (see figure below), which
+include simulation of physics processes, interactions of particles with detector
+material, reconstruction and triggering algorithms, etc.
 
 <figure markdown="span">
   ![](images/mc_gen.png){ width="80%" }
 </figure>
 
-Reference: https://cms-pdmv.gitbook.io/project/monte-carlo-management-mcm-introduction
+Reference: <https://cms-pdmv.gitbook.io/project/monte-carlo-management-mcm-introduction>
 
 In this tutorial, we provide examples for generation of:
 
@@ -22,7 +22,8 @@ In this tutorial, we provide examples for generation of:
 The generator used in these examples is `MadGraph`. A short `MadGraph` tutorial can
 be found [here](https://twiki.cern.ch/twiki/bin/view/CMSPublic/MadgraphTutorial).
 
-Typically, the conditions that should be decided before beginning the production are the following:
+Typically, the conditions that should be decided before beginning the production
+are the following:
 
 * GlobalTag
 * Detector alignment (CMSSW release)
@@ -34,9 +35,9 @@ Typically, the conditions that should be decided before beginning the production
     In this example we are going to produce $DY(pp\rightarrow ll)$
     samples for the Run 2 Ultra Legacy (UL) campaign.
 
-    The first step of production is generation of LHE files (python files with settings)
-    via `Madgraph`. In this example we are going to use the `UL18` Drell-Yan LHE file
-    already produced by the CMS PPD.
+    The first step of production is generation of LHE files (python files with
+    settings) via `MadGraph`. In this example we are going to use the `UL18`
+    Drell-Yan LHE file already produced by the CMS PPD.
 
     Test dataset: `DYJetsToLL_M-50_TuneCP5_13TeV-madgraphMLM-pythia8`
 
@@ -51,13 +52,32 @@ Typically, the conditions that should be decided before beginning the production
 
         Will work only with `slc8` architectures.
 
+!!! note "Running inside containers"
+
+    Purdue AF is based on AlmaLinux8. Run 2 UL production uses CMSSW releases built
+    for `slc7`, so the corresponding steps below are executed inside the
+    `cmssw-el7` Apptainer container (note the `--bind /depot:/depot` argument,
+    which makes Depot storage visible inside the container). Run 3 releases run
+    natively.
+
 ## Step 0: Create your gridpack
 
-## Step 1 : LHE → GEN-SIM
+A *gridpack* is a tarball with a pre-compiled generator setup (e.g. MadGraph
+process directory) from which LHE events are produced. In the examples below, the
+gridpack is referenced by the LHE fragment downloaded from McM, so you do not need
+to produce one yourself.
 
-In this step, we will generate a dataset in `GEN-SIM` format.
-We will start by producing events at the generator level (the four-vectors of particles),
-and simulate the energy footprint left by the particles interacting with detector material.
+If you do need a custom gridpack (e.g. for a new physics process), follow the
+official instructions in the
+[CMS genproductions repository](https://github.com/cms-sw/genproductions) and the
+[MadGraph quick guide](https://twiki.cern.ch/twiki/bin/cmsplugin/view/CMS/QuickGuideMadGraph5aMCatNLO),
+then point the generator fragment to your gridpack location.
+
+## Step 1: LHE → GEN-SIM
+
+In this step, we will generate a dataset in `GEN-SIM` format. We start by producing
+events at the generator level (the four-vectors of particles), and simulate the
+energy footprint left by the particles interacting with detector material.
 
 Some of the important parameters to keep in mind for such campaigns:
 
@@ -66,7 +86,7 @@ Some of the important parameters to keep in mind for such campaigns:
 * Detector geometry
 
 We start with downloading the LHE fragment (process definition, pythia settings,
-path to MadGraph gridpack) from McM (Monte Carlo Production Management):
+path to the MadGraph gridpack) from McM (Monte Carlo Production Management):
 
 === "Run 2 UL"
 
@@ -140,8 +160,9 @@ Then, install the `CMSSW` release:
     cd ../..
     ```
 
-Finally, run the `cmsDriver.py` script and `cmsRun` to generate the events. In this example, we generate only
-10 events locally. For full production, please submit this via CRAB jobs.
+Finally, run the `cmsDriver.py` script and `cmsRun` to generate the events. In this
+example, we generate only 10 events locally. For full production, please submit
+this via [CRAB jobs](scaling-out.md#crab).
 
 === "Run 2 UL"
 
@@ -164,7 +185,7 @@ Finally, run the `cmsDriver.py` script and `cmsRun` to generate the events. In t
     cmsRun TAU-RunIISummer20UL18wmLHEGEN-00001_1_cfg.py
     ```
 
-    Output : `TAU-RunIISummer20UL18wmLHEGEN-00001.root`
+    Output: `TAU-RunIISummer20UL18GS.root`
 
 === "Run 3"
 
@@ -188,17 +209,17 @@ Finally, run the `cmsDriver.py` script and `cmsRun` to generate the events. In t
     cmsRun PPD-Run3Summer22wmLHEGS-00014_1_cfg.py
     ```
 
-    Output : `PPD-Run3Summer22wmLHEGS-00014.root`
+    Output: `PPD-Run3Summer22wmLHEGS-00014.root`
 
-Step 1 will produce a `GEN-SIM` output file.
+Step 1 produces a `GEN-SIM` output file.
 
-## Step 2 DIGI → L1 → DIGI2RAW → HLT
+## Step 2: DIGI → L1 → DIGI2RAW → HLT
 
 === "Run 2 UL"
 
     With pile-up: Neutrino Gun
 
-    Reference : https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get_setup/EGM-RunIISummer20UL18DIGIPremix-00001
+    Reference: <https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get_setup/EGM-RunIISummer20UL18DIGIPremix-00001>
 
     ```shell
     source /cvmfs/cms.cern.ch/cmsset_default.sh
@@ -240,7 +261,7 @@ Step 1 will produce a `GEN-SIM` output file.
     cmsRun TAU-RunIISummer20UL18DIGI-00007_1_cfg.py
     ```
 
-    Without pile-up
+    Without pile-up:
 
     ```shell
     cmsDriver.py \
@@ -262,15 +283,15 @@ Step 1 will produce a `GEN-SIM` output file.
     cmsRun TAU-RunIISummer20UL18DIGI-00007_1_cfg.py
     ```
 
-    Output : `TAU-RunIISummer20UL18DIGI-00007.root`
+    Output: `TAU-RunIISummer20UL18DIGI-00007.root`
 
-    **Adding the HLT objects /information.**
+    **Adding the HLT objects / information.**
 
-    For these samples: `HLTv32` is added, which is present in
-    `CMSSW_10_2_16_UL` release - note that it is different
-    from the originally used CMSSW release!.
+    For these samples, `HLTv32` is added, which is present in the
+    `CMSSW_10_2_16_UL` release — note that it is different from the originally
+    used CMSSW release!
 
-    Create a new directory and set up `CMSSW_10_2_16_UL` release:
+    Create a new directory and set up the `CMSSW_10_2_16_UL` release:
 
     ```shell
     source /cvmfs/cms.cern.ch/cmsset_default.sh
@@ -341,17 +362,15 @@ Step 1 will produce a `GEN-SIM` output file.
     cmsRun PPD-Run3Summer22DRPremix-00019_1_cfg.py
     ```
 
-    Output : `PPD-Run3Summer22DRPremix-00019_0.root`
+    Output: `PPD-Run3Summer22DRPremix-00019_0.root`
 
-## Step3: AOD
+## Step 3: AOD
 
 === "Run 2 UL"
 
-    This step is performed with `CMSSW_10_6_17_patch1`, which we already
-    used in previous steps.
-
-    We will switch to `CMSSW_10_6_17_patch1` and `scram` again to load
-    `CMSSW`-related libraries.
+    This step is performed with `CMSSW_10_6_17_patch1`, which we already used in
+    previous steps. We will switch to `CMSSW_10_6_17_patch1` and `scram` again to
+    load the `CMSSW`-related libraries.
 
     ```shell
     source /cvmfs/cms.cern.ch/cmsset_default.sh
@@ -389,7 +408,7 @@ Step 1 will produce a `GEN-SIM` output file.
     cmsRun TAU-RunIISummer20UL18RECO-00011_1_cfg.py
     ```
 
-    Output : `TAU-RunIISummer20UL18RECO-00011.root`
+    Output: `TAU-RunIISummer20UL18RECO-00011.root`
 
 === "Run 3"
 
@@ -413,7 +432,7 @@ Step 1 will produce a `GEN-SIM` output file.
     cmsRun PPD-Run3Summer22DRPremix-00019_2_cfg.py
     ```
 
-    Output : `PPD-Run3Summer22DRPremix-00019.root`
+    Output: `PPD-Run3Summer22DRPremix-00019.root`
 
 ## Step 4: MiniAOD
 
@@ -464,16 +483,16 @@ Step 1 will produce a `GEN-SIM` output file.
 
     `MiniAODv4`
 
-    For `MiniAODv4` and `NanoAODv12`, we need a different `CMSSW`
-    release to include latest configuration.
-    The centrally approved `CMSSW` release is `CMSSW_13_0_13`.
+    For `MiniAODv4` and `NanoAODv12`, we need a different `CMSSW` release to
+    include the latest configuration. The centrally approved `CMSSW` release is
+    `CMSSW_13_0_13`.
 
-    We will create a new directory for next steps.
+    We will create a new directory for the next steps.
 
     !!! caution
 
-        Please leave already existing `CMSSW` paths to avoid library and
-        settings crash.
+        Please leave already existing `CMSSW` paths to avoid library and settings
+        clashes.
 
     ```shell
     mkdir part2_setup
@@ -504,16 +523,16 @@ Step 1 will produce a `GEN-SIM` output file.
     cmsRun PPD-Run3Summer22MiniAODv4-00002_1_cfg.py
     ```
 
-    Output : `PPD-Run3Summer22MiniAODv4-00002.root`
+    Output: `PPD-Run3Summer22MiniAODv4-00002.root`
 
-## Step 5 : NanoAOD
+## Step 5: NanoAOD
 
 === "Run 2 UL"
 
     `NanoAODv9`
 
     For more details:
-    https://gitlab.cern.ch/cms-nanoAOD/nanoaod-doc/-/wikis/Instructions/Private-production
+    <https://gitlab.cern.ch/cms-nanoAOD/nanoaod-doc/-/wikis/Instructions/Private-production>
 
     ```shell
     source /cvmfs/cms.cern.ch/cmsset_default.sh
@@ -573,6 +592,9 @@ Step 1 will produce a `GEN-SIM` output file.
     cmsRun PPD-Run3Summer22NanoAODv12-00002_1_cfg.py
     ```
 
-    Output :  `PPD-Run3Summer22NanoAODv12-00002.root`
+    Output: `PPD-Run3Summer22NanoAODv12-00002.root`
 
-*This tutorial was prepared by Amandeep Kaur, Dmitry Kondratyev, and Hyeon-Seo Yun @ Purdue University CMS group.*
+---
+
+*This tutorial was prepared by Amandeep Kaur, Dmitry Kondratyev, and Hyeon-Seo Yun
+@ Purdue University CMS group.*

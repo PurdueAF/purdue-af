@@ -1,5 +1,4 @@
-# Zensical configuration for the Purdue Analysis Facility documentation.
-# Docs: https://zensical.org/docs/
+# Zensical configuration for the Purdue Analysis Facility documentation
 #
 # Build:   cd docs && zensical build --clean   (output: docs/site/)
 # Preview: cd docs && zensical serve
@@ -10,9 +9,9 @@ site_name = "Purdue Analysis Facility"
 site_description = "Documentation for the Purdue Analysis Facility — an interactive environment for fast and scalable CMS physics analyses using dedicated computing resources at Purdue."
 site_author = "Dmitry Kondratyev, Stefan Piperov"
 
-# GitHub Pages project site for the PurdueAF/purdue-af repo.
-# The bare root purdueaf.github.io is reserved for a repo literally named
-# "purdueaf.github.io"; this project repo serves under the /purdue-af/ subpath.
+# This edition of the docs is deployed as a sub-site of the main GitHub Pages
+# project site, so that it can be compared against the current documentation
+# at https://purdueaf.github.io/purdue-af/.
 site_url = "https://purdueaf.github.io/purdue-af/"
 
 copyright = "Copyright &copy; 2023, Purdue University"
@@ -28,46 +27,58 @@ extra_javascript = [
     "https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js",
 ]
 
-# Navigation — mirrors the toctree structure of the original Sphinx docs.
+# Navigation.
 # Page titles are derived from each page's first heading.
 nav = [
     { "Home" = "index.md" },
+    { "Getting started" = [
+        "getting-started.md",
+        "login-methods.md",
+        "interface.md",
+    ] },
     { "Documentation" = [
-        "doc-getting-started.md",
-        "doc-interface.md",
-        "doc-login-methods.md",
-        "doc-storage.md",
-        "doc-software.md",
-        "doc-gpus.md",
-        "doc-data-access.md",
-        "doc-hardware.md",
-        "doc-support.md",
-        "doc-contributing.md",
+        "storage.md",
+        "software.md",
+        "data-access.md",
+        "scaling-out.md",
+        "gpus.md",
+        "hardware.md",
     ] },
     { "Monitoring" = [
         { "Monitoring dashboard" = "https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard" },
     ] },
     { "User guides" = [
-        "guide-conda-to-pixi.md",
-        "guide-upload.md",
-        "guide-ssh-access.md",
-        "guide-combine.md",
-        "guide-roofit-cuda.md",
-        "guide-ide-connection.md",
-        "guide-dask.md",
-        "guide-dask-gateway.md",
-        "guide-rucio.md",
-        "guide-cern-eos.md",
-        "guide-binderhub.md",
-        "guide-mc-gen.md",
-        { "Interactive demos (notebooks)" = [
-            "guide-demos.md",
-            "demos/root-cpp.md",
-            "demos/storage-data-access.md",
-            "demos/plotting.md",
-            "demos/gateway-cluster.md",
+        { "Software environments" = [
+            "guide-pixi.md",
+            "guide-conda.md",
+            "guide-combine.md",
         ] },
-        "guide-eos-write.md",
+        { "Scaling out" = [
+            "guide-dask.md",
+            "guide-dask-gateway.md",
+        ] },
+        { "GPUs" = [
+            "guide-roofit-cuda.md",
+        ] },
+        { "Remote access" = [
+            "guide-ssh-access.md",
+            "guide-ide-connection.md",
+            "guide-agentic-interface.md",
+            "guide-file-transfer.md",
+        ] },
+        { "Data and storage" = [
+            "guide-rucio.md",
+            "guide-cern-eos.md",
+            "guide-eos-write.md",
+        ] },
+        { "Special workflows" = [
+            "guide-mc-gen.md",
+        ] },
+    ] },
+    { "Help" = [
+        "troubleshooting.md",
+        "support.md",
+        "contributing.md",
     ] },
     { "Useful links" = [
         { "Purdue Tier-2 website" = "https://www.physics.purdue.edu/Tier2/" },

@@ -2,25 +2,27 @@
 
 Fitting data distributions with analytical models is a common task in CMS analyses.
 Depending on the size of the dataset and the number of free parameters in the model,
-the fitting can take a significant amount of time and become a bottleneck in the analysis.
+the fitting can take a significant amount of time and become a bottleneck in the
+analysis.
 
-The standard tool to perform such fits is RooFit, distributed with the ROOT framework.
-Since ROOT version 6.26, RooFit supports GPU-accelerated fitting using CUDA backend,
-which allows to speed up the fitting process by up to an order of magnitude.
+The standard tool to perform such fits is RooFit, distributed with the ROOT
+framework. Since ROOT version 6.26, RooFit supports GPU-accelerated fitting using
+the CUDA backend, which allows you to speed up the fitting process by up to an order
+of magnitude.
 
-Purdue Analysis Facility now supports this feature, allowing users to
-leverage available GPU resources to speed up their RooFit code. The feature is
-supported in both Jupyter Notebooks and Terminals, and for both C++ ROOT interface and PyROOT.
+The Purdue Analysis Facility supports this feature, allowing users to leverage
+available GPU resources to speed up their RooFit code. The feature is supported in
+both Jupyter Notebooks and Terminals, and for both the C++ ROOT interface and PyROOT.
 
-## Pre-requisites
+## Prerequisites
 
-1. Start your AF session with a GPU.
-2. Load the LCG view with CUDA-enabled ROOT build.
+1. [Start your AF session with a GPU](gpus.md).
+2. Load the LCG view with the CUDA-enabled ROOT build.
    [LCG "releases" and "views"](https://lcgdocs.web.cern.ch/lcgdocs/lcgreleases/introduction/)
    are software stacks distributed by CERN.
 
-    1. If using a Jupyter Notebook: simply select the `LCG_106b_cuda` kernel.
-    2. If using a Terminal, run the following command:
+    * If using a Jupyter Notebook: simply select the `LCG_106b_cuda` kernel.
+    * If using a Terminal, run the following command:
 
         ```shell
         source /cvmfs/sft.cern.ch/lcg/views/LCG_106b_cuda/x86_64-el8-gcc11-opt/setup.sh
@@ -28,17 +30,20 @@ supported in both Jupyter Notebooks and Terminals, and for both C++ ROOT interfa
 
 !!! warning
 
-    The CUDA-enabled ROOT build is currently available only via the LCG software stack.
-    It is not available in other kernels such as the "default" Python3 kernel or `coffea-latest`.
+    The CUDA-enabled ROOT build is currently available only via the LCG software
+    stack. It is not available in other kernels, including the global Pixi
+    environment.
 
     The only supported ROOT version at the moment is `6.32.08`.
 
-## Enabling CUDA backend in RooFit
+## Enabling the CUDA backend in RooFit
 
-To enable CUDA backend in RooFit, the only thing you need to do is to
-pass the `rt.RooFit.EvalBackend.Cuda()` argument to `fitTo()` command in RooFit.
+To enable the CUDA backend in RooFit, the only thing you need to do is pass the
+`rt.RooFit.EvalBackend.Cuda()` argument to the `fitTo()` command
+(in C++: `RooFit::EvalBackend("cuda")`).
 
-Below is an example of the code that uses CUDA backend for fitting a Z-boson mass spectrum.
+Below is an example of code that uses the CUDA backend for fitting a Z-boson mass
+spectrum:
 
 ```python
 import ROOT as rt
@@ -71,8 +76,8 @@ alpha2 = rt.RooRealVar("alpha2" , "alpha2", 2.0, 0.01, 65)
 n2 = rt.RooRealVar("n2" , "n2", 25, 0.01, 385)
 model1_2 = rt.RooCrystalBall("dcb","dcb",mass, mean, sigma, alpha1, n1, alpha2, n2)
 
-mass.setBins(10000,"cache") # cache is repre of the varibale only used in FFT
-mass.setBins(200) # bin to 100 bins otherwise, fitting with FFT conv is gonna take forever
+mass.setBins(10000,"cache") # cache is repre of the variable only used in FFT
+mass.setBins(200) # bin to 200 bins otherwise, fitting with FFT conv is gonna take forever
 mass.setMin("cache",50.5)
 mass.setMax("cache",130.5)
 model1 = rt.RooFFTConvPdf("BWxDCB", "BWxDCB", mass, model1_1, model1_2)
@@ -102,5 +107,5 @@ canvas.Draw()
 ```
 
 To run this code, you can download the input file
-`workspace_ggh_All_Zfit_no_e_cut_UL_calib_cat5.root`
-from [https://cernbox.cern.ch/s/zKjJHZxRbDkADPf](https://cernbox.cern.ch/s/zKjJHZxRbDkADPf).
+`workspace_ggh_All_Zfit_no_e_cut_UL_calib_cat5.root` from
+[https://cernbox.cern.ch/s/zKjJHZxRbDkADPf](https://cernbox.cern.ch/s/zKjJHZxRbDkADPf).

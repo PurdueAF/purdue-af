@@ -1,15 +1,14 @@
 # Creating Conda environments and Jupyter kernels
 
-In the Purdue Analysis Facility, the Python-based Jupyter kernels are created from
-Conda environments. We provide a pre-installed Conda environment
-(`/depot/cms/kernels/python3`), which includes most of the Python packages
-commonly used for HEP analyses. This environment corresponds to the
-`Python3 (default)` Jupyter kernel.
+!!! warning "Conda is being phased out"
 
-!!! tip
+    The recommended way to manage analysis software at Purdue AF is now
+    [Pixi](guide-pixi.md). Conda environments are still fully supported, but
+    automatic Conda kernel discovery will be removed in the future. For new
+    projects, please use Pixi.
 
-    Before creating custom environments, consult with the [Analysis Facility support](doc-support.md).
-    It may be easier to install missing packages into the default environment.
+In the Purdue Analysis Facility, Python-based Jupyter kernels can be created from
+Conda environments.
 
 * List all available Conda environments:
 
@@ -29,10 +28,9 @@ commonly used for HEP analyses. This environment corresponds to the
 
 The basic recipe to create a custom kernel is straightforward:
 
-1. Create a Conda environment in a desired location with a desired name.
-
-    (See different ways to create Conda environments below.)
-2. Istall `ipykernel` package and wait for 1-2 minutes.
+1. Create a Conda environment in a desired location with a desired name
+   (see different ways to create Conda environments below).
+2. Install the `ipykernel` package and wait for 1–2 minutes.
 3. A new kernel with the same name as the Conda environment will appear in Jupyter.
 
 ```shell
@@ -45,34 +43,34 @@ conda_envs_path="/depot/cms/conda_envs/$USER"
 # name of the new environment:
 conda_env_name="my-new-env"
 
-# create a new environment with ipykernel package installed
+# create a new environment with the ipykernel package installed
 conda create -y --prefix $conda_envs_path/$conda_env_name python=3.10 ipykernel
 
-# activate environment
+# activate the environment
 conda activate $conda_envs_path/$conda_env_name
 ```
 
 !!! warning
 
-    Since Jupyter kernel names are based on the Conda environment names,
-    one should avoid creating multiple Conda environments with the same name.
-    Also, one should avoid using names `python3` and `python3-ml` to name
-    Conda environments, as these names are reserved for the pre-installed kernels.
+    Since Jupyter kernel names are based on the Conda environment names, avoid
+    creating multiple Conda environments with the same name. Also, avoid using the
+    names `python3` and `coffea_latest`, as these names are reserved for
+    pre-installed kernels.
 
 ## Creating custom Conda environments
 
-There are multiple ways to create a custom Conda environment,
-the particular choice of a method depends on the use case.
+There are multiple ways to create a custom Conda environment; the particular choice
+of method depends on the use case.
 
 !!! tip
 
-    Use `mamba` instead of `conda` where possible - it will significantly accelerate installation of packages.
+    Use `mamba` instead of `conda` where possible — it significantly accelerates
+    the installation of packages.
 
-### Option 1 (recommended): Create a Conda environment from a YAML file
+### Option 1 (recommended): create a Conda environment from a YAML file
 
-The main benefits of this approach are the reproducibility and portability of
-the resulting environment - it can be easily rebuilt anywhere from the same YAML
-file.
+The main benefits of this approach are the reproducibility and portability of the
+resulting environment — it can be easily rebuilt anywhere from the same YAML file.
 
 1. Here is an example of an `environment.yaml` file:
 
@@ -92,7 +90,7 @@ file.
         - rucio-clients
     ```
 
-2. Additional Conda repositories may be specified under the `channels:` section, e.g:
+2. Additional Conda repositories may be specified under the `channels:` section, e.g.:
 
     ```yaml
     channels:
@@ -100,34 +98,37 @@ file.
       - pyg
     ```
 
-3. Once the list of packages is finalized, create a Conda environment in a desired location
-   (in this example the environment will get created with a name `my-new-env`):
+3. Once the list of packages is finalized, create a Conda environment in a desired
+   location (in this example the environment will be created with the name
+   `my-new-env`):
 
     ```shell
-    mamba env create --file /some-path/environment.yml --prefix /some-path/my-new-env
+    mamba env create --file /some-path/environment.yaml --prefix /some-path/my-new-env
     ```
 
     !!! warning
 
-        Keep in mind that Conda environments can take up a lot of space
-        (up to several dozen GB), so the `/home/<username>/` storage space
-        may be insufficient for storing more than 1-2 custom environments.
+        Keep in mind that Conda environments can take up a lot of space (up to
+        several dozen GB), so the `/home/<username>/` storage space may be
+        insufficient for storing more than 1–2 custom environments.
 
-        A better location to store your environment is either `/work/` or
-        `/depot/` storage (Depot is only writeable by Purdue users).
+        A better location for your environments is either `/work/` or `/depot/`
+        storage (Depot is only writable by Purdue users) —
+        see [Storage volumes](storage.md).
 
-4. To install more packages into the environment or change package versions,
-   the recommended method is to add the package name and/or version into the
-   same YAML file, and then update the environment using the following commands:
+4. To install more packages into the environment or change package versions, the
+   recommended method is to add the package name and/or version into the same YAML
+   file, and then update the environment using the following commands:
 
     ```shell
     conda activate /some-path/my-new-env
     mamba env update --file /path/to/environment.yaml
     ```
 
-### Option 2: Create a Conda environment from scratch
+### Option 2: create a Conda environment from scratch
 
-This option is preferred if you want to start from a clean environment and install all packages manually.
+This option is preferred if you want to start from a clean environment and install
+all packages manually.
 
 ```shell
 conda create --prefix /some-path/my-new-env python=3.10 ipykernel
@@ -136,9 +137,9 @@ conda install numpy pandas # install any packages here
 conda deactivate
 ```
 
-### Option 3: Clone an existing environment into a new environment
+### Option 3: clone an existing environment into a new environment
 
-This is a simple method to duplicate an existing environment.
+This is a simple method to duplicate an existing environment:
 
 ```shell
 conda create --prefix /path/to/cloned_env --clone /path/to/original_env
