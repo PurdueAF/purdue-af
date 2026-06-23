@@ -9,7 +9,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
 
 !!! note "Supported login credentials"
 
-    * Purdue University account (BoilerKey)
+    * Purdue University account
     * CERN account (CMS users only)
     * FNAL account
 

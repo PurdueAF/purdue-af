@@ -12,13 +12,6 @@ take advantage of these features. Please follow the instructions below; you will
 only need to run steps 1–6 once, and afterwards you can connect using step 7 alone,
 as long as you have an AF session running.
 
-!!! note
-
-    This guide describes a full remote connection: the IDE itself runs against the
-    AF filesystem. If you only want to run a **local notebook** against remote AF
-    kernels, see [VSCode integration via the JupyterHub extension](guide-vscode.md)
-    instead.
-
 ## 1. Install the Remote-SSH extension in your IDE
 
 1. In VSCode/Cursor/Antigravity, click on the Extensions icon in the left sidebar.

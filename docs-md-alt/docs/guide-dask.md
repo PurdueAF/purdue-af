@@ -78,5 +78,5 @@ at the Purdue Analysis Facility: [Dask Gateway at Purdue AF](guide-dask-gateway.
 
 !!! note "See also"
 
-    * [Dask Gateway cluster setup (demo notebook)](demos/gateway-cluster.md)
+    * [Dask Gateway cluster setup (demo notebook)](https://github.com/PurdueAF/purdue-af-demos/blob/master/gateway-cluster.ipynb)
     * [Scaling out — overview of all methods](scaling-out.md)

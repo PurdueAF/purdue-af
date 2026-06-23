@@ -5,7 +5,7 @@
 The following table summarizes size, access modes, and accessibility of each storage
 volume (scroll sideways for details).
 
-| Storage volume | Path | Size | Access mode | Mounted in Slurm jobs and Dask/Slurm workers | Mounted in Dask/k8s workers | Writable by users w/o Purdue account |
+| Storage volume | Path | Size per user | Access mode | Mounted in Slurm jobs and Dask/Slurm workers | Mounted in Dask/k8s workers | Writable by users w/o Purdue account |
 | --- | --- | --- | --- | --- | --- | --- |
 | AF home storage | `/home/<username>/` | 25 GB | Read/write | ❌ | ❌ | ✅ |
 | Purdue Depot storage | `/depot/cms/` | up to 1 TB | Read/write for Purdue users, read-only for others | ✅ | ✅ | ❌ |
@@ -37,12 +37,16 @@ Below are common storage use cases with recommendations on which volume to use.
 
 * Keep your code in a **Git repository** (GitHub or GitLab), cloned into one of
   the writable volumes.
-* **Purdue users:** use `/depot/cms/users/<username>/` or a group directory such as
-  `/depot/cms/<group-name>/`. Any code that uses Slurm or Dask Gateway with the
+* **Purdue users:** use either Depot or /work/ storage:
+
+  * private directories: `/depot/cms/users/<username>/` or `/work/users/<username>/`
+  * group directories for shared work: `/depot/cms/<group-name>/` or `/work/projects/<project-name>/`.
+
+  Any code that uses Slurm or Dask Gateway with the
   Slurm backend **must** be stored on Depot, since the other volumes are not
   mounted in Slurm jobs.
-* **CERN / FNAL users:** use `/work/users/<username>/` or a shared project directory
-  `/work/projects/<project-name>/`.
+
+* **CERN / FNAL users:** use private `/work/users/<username>/` directory or a shared project directory `/work/projects/<project-name>/`.
 
 ### Storing custom Pixi or Conda environments
 
@@ -74,8 +78,7 @@ See [Data access](data-access.md) for the full picture.
 * The outputs of CRAB jobs are written to your Grid directory:
   `/eos/purdue/store/user/<cern-username>`.
   *Note: your CERN username is different from your Purdue username!*
-* The Grid directory at Purdue EOS is created only for Purdue-affiliated users.
-  This must be indicated when creating a Purdue Tier-2 account.
+* The Grid directory at Purdue EOS is created by request and only for Purdue-affiliated users. This must be indicated when creating a Purdue Tier-2 account.
 * If you can't see your Grid directory under `/eos/purdue/store/user/`, please
   [contact support](support.md).
 
@@ -88,12 +91,10 @@ The best storage volume depends on the size of the output:
   to EOS using `gfal` or `xrdcp` commands — see [Writing to EOS](guide-eos-write.md).
 * **Small outputs (under 100 GB):**
 
-    * Purdue users should use **Depot** (`/depot/cms/`). If the outputs need to be
-      accessible by other users, use a group directory (e.g. `/depot/cms/top/`).
-    * Non-Purdue users should use **work storage**: `/work/users/<username>/` or
-      `/work/projects/<project-name>/`.
+    * Purdue users should use **work storage** or **Depot**.
+    * Non-Purdue users should use **work storage**.
 
-!!! warning "Don't hammer Depot from many jobs at once"
+!!! warning "Don't stress Depot from many jobs at once"
 
     Avoid writing many files to Depot at the same time, as it may slow Depot down
     for everyone. If your jobs produce large outputs, first save them into
@@ -110,7 +111,7 @@ If you would like a project directory to be created, [contact support](support.m
 ## Other options
 
 * **Git**: users can use GitHub or GitLab to store and share their work. The Git
-  extension located in the left sidebar allows you to work with repositories
+  extensions in JupyterLab and VSCode interfaces allow you to work with repositories
   interactively (commit, push, pull, etc.).
 * **CERNBox**: anyone with a CERN account can mount their CERNBox directory —
   see [CERNBox access](guide-cern-eos.md).

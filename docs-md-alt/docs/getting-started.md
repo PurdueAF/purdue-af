@@ -12,8 +12,8 @@ have a fully functional session with access to CMS data and analysis software.
 
 Three login methods are supported:
 
-* **Purdue University account** (BoilerKey) — recommended if you are a Purdue user,
-  since it unlocks Slurm submission and write access to Depot storage.
+* **Purdue University account** — recommended if you are a Purdue-affiliated user,
+  since it unlocks Slurm submission and write access to Depot storage. External collaborators working with Purdue research groups can also request a guest computing account.
 * **CERN account** (CMS users only)
 * **FNAL account**
 
@@ -64,8 +64,8 @@ After the session has started, take a moment to understand the available storage
       directories under `/work/projects/`.
     * `depot` (mounted at `/depot/cms`) — shared storage, **writable only for Purdue
       users**. Code and environments used by Slurm jobs must live here.
-    * `eos-purdue` (mounted at `/eos/purdue`) — **read-only** view of the Purdue
-      Tier-2 storage, which holds large CMS datasets and users' Grid directories.
+    * Purdue EOS storage (mounted at `/eos/purdue`) — **read-only** view of the   
+      Purdue Tier-2 storage, which holds large CMS datasets and users' Grid directories.
 
 !!! note "See also"
 
@@ -74,12 +74,18 @@ After the session has started, take a moment to understand the available storage
 
 ## 4. Review kernels and software environments
 
-The analysis software at Purdue AF is managed via Pixi and Conda environments,
-Jupyter kernels, as well as LCG stacks and Apptainer images available via CVMFS.
+The analysis software at Purdue AF is managed via Pixi and Conda environments and
+Jupyter kernels.
 
 To get started, you can use the **global Pixi environment**, which contains all
 common HEP analysis packages and ML libraries. It is located at `/work/pixi/global/`
-and available as a Jupyter kernel across the facility.
+and available as the default Jupyter kernel across the facility. To use the environment in Terminal, run the following commands:
+
+```shell
+cd /work/pixi/global/
+pixi shell
+cd /your/working/directory/
+```
 
 For your own analyses, we recommend creating project-specific Pixi environments —
 see the [Pixi guide](guide-pixi.md).
@@ -96,7 +102,7 @@ Follow these instructions:
 * [Adding a new SSH key to your GitHub account](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account){ target="_blank" }
 
 After you have generated an SSH key and added it to your GitHub account, run the
-following command in a Terminal to finish GitHub authentication:
+following command in a Terminal to confirm that GitHub authentication was successful:
 
 ```shell
 ssh -T git@github.com
@@ -143,6 +149,6 @@ A VOMS proxy is required to access CMS data via XRootD, submit CRAB jobs, and us
 
 * Learn the [JupyterLab interface and other ways to work at Purdue AF](interface.md)
 * Set up a [project-specific Pixi environment](guide-pixi.md)
-* Try the [interactive demos](demos/index.md)
+* Try the [interactive demos](https://github.com/PurdueAF/purdue-af-demos)
 * When your analysis outgrows a single session, [scale out with Dask Gateway](guide-dask-gateway.md)
 * Connect an AI agent to your session via the [agentic interface](guide-agentic-interface.md)

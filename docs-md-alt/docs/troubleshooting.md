@@ -8,7 +8,9 @@ solutions. If your problem is not listed here, please
 
 ??? failure "My session fails to start"
 
-    The most common cause is an **overfilled home directory**: the
+    Most commonly this happens due to issues and outages of computing infrastructure - please alert facility admins.
+
+    Another possible cause is an **overfilled home directory**: the
     `/home/<username>/` volume has a strict 25 GB quota, and sessions cannot start
     if you are over it.
 
@@ -24,19 +26,19 @@ solutions. If your problem is not listed here, please
 
 ??? failure "My session is very slow"
 
-    * If you have custom **Conda environments** on a slow filesystem, automatic
-      kernel discovery may be scanning them and slowing down the entire session —
-      see [Software stacks](software.md#conda-kernels).
+    * You might be trying to use custom Pixi or Conda environments on a slow 
+      filesystem. Try moving them to `/work/` storage.
     * Check whether you are running out of RAM: the resources selected at session
       creation are hard limits. Restart the session with more RAM if needed.
     * Reading many small files from `/depot/` or `/eos/` can be slow — see
-      [Data access](data-access.md) for faster access patterns (XRootD, XCache).
+      [Data access](data-access.md) for faster access patterns (XCache).
 
 ??? failure "My session was shut down on its own"
 
     Sessions that remain **inactive for 14 days** are automatically shut down to
     release resources. Your storage volumes are unaffected — simply start a new
-    session.
+    session. Sessions may also occasionally get shut down due to unplanned outages,
+    so save your work regularly and keep important code in sync with a Git repository.
 
 ??? failure "I deleted/broke my configuration and want a clean start"
 
@@ -51,6 +53,8 @@ solutions. If your problem is not listed here, please
     Depot is writable **only for users with Purdue accounts**. CERN and FNAL users
     have read-only access — use `/work/users/<username>/` or a
     `/work/projects/` directory instead. See [Storage volumes](storage.md).
+
+    Purdue users can write to their own private directories, as well as into group dircetories to which they have access. If you don't have access to your group's directory, please contact facility admins.
 
 ??? failure "I can't write to /eos/purdue/"
 
@@ -160,11 +164,6 @@ solutions. If your problem is not listed here, please
 
 ## SSH and IDE connections
 
-??? failure "`scp` to Purdue AF does not work"
-
-    The AF SSH server does not support the SFTP protocol. Use the web interface,
-    or `scp` in the opposite direction — see
-    [Uploading and downloading files](guide-file-transfer.md).
 
 ??? failure "Remote-SSH connection from VSCode/Cursor fails"
 
@@ -172,9 +171,6 @@ solutions. If your problem is not listed here, please
     The usual suspects: home directory permissions (`chmod 755 ~/`), a missing or
     not-on-PATH `websocat` binary, or an expired JupyterHub token.
 
-??? failure "Vim and other terminal programs display garbled lines over SSH"
-
-    Run the `resize` command.
 
 ## Still stuck?
 

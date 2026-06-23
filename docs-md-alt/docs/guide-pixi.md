@@ -1,6 +1,6 @@
 # Managing environments with Pixi
 
-The Purdue Analysis Facility is migrating from Conda/Mamba to **Pixi** for
+The Purdue Analysis Facility has migrated from Conda/Mamba to **Pixi** for
 environment management. Pixi is significantly faster than Conda and addresses
 multiple issues we have experienced with Conda over the years. This guide will help
 you start using Pixi in your projects.

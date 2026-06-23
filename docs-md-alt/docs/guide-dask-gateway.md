@@ -307,6 +307,6 @@ for cluster_info in gateway.list_clusters():
 
 !!! note "See also"
 
-    * [Dask Gateway cluster setup (demo notebook)](demos/gateway-cluster.md)
+    * [Dask Gateway cluster setup (demo notebook)](https://github.com/PurdueAF/purdue-af-demos/blob/master/gateway-cluster.ipynb)
     * [Pixi environments in Dask Gateway](guide-pixi.md#pixi-environments-in-dask-gateway)
     * [Troubleshooting](troubleshooting.md)

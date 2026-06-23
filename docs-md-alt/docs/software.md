@@ -3,8 +3,7 @@
 Analysis software at Purdue AF can come from several sources, listed here from most
 to least recommended:
 
-1. **Pixi environments** — the main way to manage analysis software starting from
-   AF release 0.12.0.
+1. **Pixi environments** — the main way to manage analysis software since 2026.
 2. **Conda environments** — still supported, but being phased out in favor of Pixi.
 3. **LCG stacks** distributed via CVMFS — useful for special cases such as
    CUDA-enabled ROOT.
@@ -14,8 +13,7 @@ to least recommended:
 ## Pixi environments
 
 [Pixi](https://pixi.sh/) is a modern package manager and a successor of Conda/Mamba.
-It is significantly faster than Conda, resolves Conda and PyPI dependencies together,
-and enforces reproducibility via lock files.
+It is significantly faster than Conda, resolves Conda and PyPI dependencies together, and enforces reproducibility via lock files.
 
 Unlike Conda environments, Pixi environments are meant to be **project-specific**:
 the environment definition (`pixi.toml`) and the environment itself live in the
@@ -40,7 +38,7 @@ code that is not part of any Pixi project.
     version = "0.1.0"
 
     [dependencies]
-    awkward = "2.8.10.*"
+    awkward = "*"
     awkward-pandas = "*"
     bokeh = "3.1.0.*"
     # boost = "*"
@@ -49,7 +47,7 @@ code that is not part of any Pixi project.
     certifi = "*"
     click = "*"
     cms-combine = "==10.4.2"
-    coffea = "2025.12.0*"
+    coffea = "2026.4.0*"
     correctionlib="*"
     dask = "*"
     dask-gateway = "*"
@@ -66,7 +64,7 @@ code that is not part of any Pixi project.
     gpustat = "*"
     gsl = "*"
     gxx_linux-64 = "*"
-    h5py = "*"
+    h5py = "<3.15.0"
     hepdata-lib = "*"
     hist = "*"
     ipykernel = "*"
@@ -74,15 +72,18 @@ code that is not part of any Pixi project.
     ipywidgets = "*"
     jupyter = "*"
     jupyter-sshd-proxy = "0.3.0.*"
+    law = "*"
     lhapdf = "*"
     libgcc-devel_linux-64 = "*"
     libgcc-ng = "*"
     libstdcxx-devel_linux-64 = "*"
     libstdcxx-ng = "*"
     lmfit = "*"
+    # madminer = "*"
     mamba = "*"
     matplotlib = "*"
     mimesis = "*"
+    mlflow = "*"
     mplhep = ">=1.1.2"
     numba = "*"
     numpy = "*"
@@ -120,9 +121,11 @@ code that is not part of any Pixi project.
     uproot = "*"
     vdt = "*"
     vector = "*"
+    wrapt = "<2.0.0"
     xgboost = "*"
     xrootd = "*"
     yaml = "*"
+    zuko = "*"
 
     [system-requirements]
     cuda = "12.4"
@@ -133,9 +136,11 @@ code that is not part of any Pixi project.
     phyprakit = "*"
     rabbit-fit = { version = "*", extras = ["plotting"] }
     scalpl = "*"
-    servicex = "==3.3.0"
+    servicex = "==3.3.1"
+    tensor2tensor = "*"
     tensorflow = { version = "==2.20.0", extras = ["and-cuda"] }
     tensorflow-probability = "==0.25"
+    termplotlib = "*"
     tf-keras = "==2.20.1"
     xgbfir = "*"
     roastcoffea = "*"
@@ -162,26 +167,13 @@ Instead, we provide two special Pixi kernels:
 !!! note
 
     In order for a Pixi environment to be discoverable by the "project-aware"
-    kernel, it must have the `ipykernel` package installed.
+    kernel, it must have the `ipykernel` package installed, and be stored in a readable directory.
 
 ### Conda kernels
 
 Conda environments are automatically discovered by Jupyter if they have the
 `ipykernel` package installed — see
 [Creating Conda environments and Jupyter kernels](guide-conda.md).
-
-Two centrally managed Conda environments are pre-installed as kernels:
-**`Python3 kernel (default)`** (from `/depot/cms/kernels/python3`) and
-**`coffea_latest`** (from `/depot/cms/kernels/coffea_latest`).
-
-!!! warning
-
-    Automatic environment discovery means that Jupyter periodically scans the
-    directories where environments are stored. If one of these directories is on a
-    slow filesystem, it may significantly slow down the entire AF session.
-
-    Because of this, automatic Conda environment discovery will be removed in the
-    future, although it will still be possible to add kernels manually.
 
 ### ROOT C++ kernel
 
@@ -190,7 +182,7 @@ you to execute ROOT macros and produce plots inside Jupyter notebooks.
 
 !!! note "See also"
 
-    [ROOT C++ notebook demo](demos/root-cpp.md)
+    [ROOT C++ notebook demo](https://github.com/PurdueAF/purdue-af-demos/blob/master/root-cpp.ipynb)
 
 ### LCG kernels
 

@@ -1,43 +1,14 @@
 # How to use Purdue AF
 
-## Basic interface components
+## User interfaces
 
-JupyterLab provides an interactive interface for general code development.
-The screenshot below shows the main elements of the interface:
+Purdue AF provides several user interfaces for analysis development:
 
-<figure markdown="span">
-  ![](images/interface-new.png){ width="900" }
-</figure>
-
-1. **File browser** — your home directory with symlinks to different storage volumes
-   (Depot, CVMFS, `/work/`, etc. — learn more [here](storage.md)).
-2. **Extensions** — the left sidebar contains useful extensions, such as a Git
-   extension for interactive work with GitHub or GitLab repositories.
-3. **Launcher** — features buttons to create Python and ROOT C++ notebooks with
-   different Pixi or Conda environments, open terminals, create new text files, etc.
-   A new Launcher window can be opened by clicking the `+` button in the file browser
-   or next to any open tab.
-4. **Top bar** — contains the Purdue AF release version, your username, a dark theme
-   switch, and the shutdown button.
-5. **Terminal** — standard Bash terminal, useful for anything that requires a
-   command line interface.
-6. **File editor** — simple IDE with syntax highlighting for most common programming
-   languages.
-
-!!! note
-
-    Windows with terminals, editors, etc. can be rearranged freely. The window layout
-    is preserved when you shut down and restart the AF session.
-
-## Other user interfaces
-
-In addition to JupyterLab, Purdue AF provides other user interfaces for analysis
-development:
-
-* **Web-based Visual Studio Code (code-server)** — to open it, click the button with
-  the VSCode logo ![](images/vscode-logo.jpeg){ height="20" } in the JupyterLab
-  Launcher. You can also make VS Code the default interface of your session by
-  selecting it in the **Interface** option when starting the session.
+* **JupyterLab** — interactive web interface for notebooks, terminals, file
+  browsing, and more. This is the default interface when starting a session.
+* **Web-based Visual Studio Code (code-server)** — to open it, either select the 
+  VSCode interface when creating a session, or click "Open VSCode" button at top
+  right of the JupyterLab interface.
 * [Connection from local VSCode-based IDEs](guide-ide-connection.md) (VSCode, Cursor, etc.)
 * [SSH connection from a local terminal](guide-ssh-access.md)
 * [Agentic interface (MCP server)](guide-agentic-interface.md) — manage your AF
@@ -78,7 +49,7 @@ high energy physics for histogramming, fitting, and statistical analysis.
   execute cells in arbitrary order.
 
     When working from a Jupyter Notebook, you can display ROOT plots using the
-    `TCanvas::Draw` method. [See an example of a ROOT C++ notebook here](demos/root-cpp.md).
+    `TCanvas::Draw` method. [See an example of a ROOT C++ notebook here](https://github.com/PurdueAF/purdue-af-demos/blob/master/root-cpp.ipynb).
 
 * The pre-installed ROOT C++ kernel supports the **CUDA backend** for RooFit. To use
   it, pass the `RooFit::EvalBackend("cuda")` argument to `model.fitTo()` —

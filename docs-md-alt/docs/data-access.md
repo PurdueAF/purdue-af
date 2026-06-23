@@ -4,9 +4,8 @@
 
     * To access remote datasets, use the `XRootD` protocol (requires a
       [VOMS proxy](getting-started.md#6-set-up-a-voms-proxy)).
-    * Repeated reading of the same remote dataset is faster if you use `XCache`:
-      replace the XRootD redirector in the dataset path with
-      `xcache.cms.rcac.purdue.edu`.
+    * Repeated reading of the same remote dataset is faster if you use `XCache` via 
+      the following prefix: `root://xcache.cms.rcac.purdue.edu`.
     * If a dataset is only available on tape, it needs to first be replicated
       (aka copied, "subscribed") to disk.
     * To subscribe a dataset to Purdue, create a `Rucio rule` with a limited lifetime.
@@ -177,4 +176,4 @@ the local **XCache** server.
     * [Rucio tutorial](guide-rucio.md)
     * [Writing to EOS](guide-eos-write.md)
     * [Storage volumes](storage.md)
-    * [Demo notebook: accessing files in different storage locations](demos/storage-data-access.md)
+    * [Demo notebook: accessing files in different storage locations](https://github.com/PurdueAF/purdue-af-demos/blob/master/storage-data-access.ipynb)
