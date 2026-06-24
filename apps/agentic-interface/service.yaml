@@ -4,9 +4,11 @@ metadata:
   name: agentic-interface
   labels:
     app: agentic-interface
+    scrape-metrics: "true"
 spec:
   selector:
     app: agentic-interface
   ports:
-    - port: 8888
+    - name: metrics
+      port: 8888
       targetPort: 8888

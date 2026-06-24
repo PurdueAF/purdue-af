@@ -14,6 +14,7 @@ import os
 import uvicorn
 from auth import resolve_user
 from context import current_user
+from metrics import instrument_mcp, metrics_body, metrics_content_type, record_request
 from mcp.server.fastmcp import FastMCP
 from tools import connect, dask, logs, profiles, prompts, session, storage
 
@@ -61,17 +62,26 @@ class _AuthMiddleware:
             return
 
         path = scope.get("path", "")
+        route = self._route_for(path)
 
         # Unauthenticated liveness/readiness probe. The kubelet hits the pod
         # directly at /health (no JupyterHub service prefix); accept the
         # prefixed form too in case it is probed through the proxy.
-        if path in ("/health", f"{SERVICE_PREFIX}/health"):
+        if route == "health":
             await self._ok(send)
+            record_request(route, 200)
+            return
+
+        # Unauthenticated Prometheus scrape endpoint.
+        if route == "metrics":
+            await self._metrics(send)
+            record_request(route, 200)
             return
 
         # Only serve the MCP endpoint; return 404 for anything else.
-        if not path.startswith(f"{SERVICE_PREFIX}/mcp"):
+        if route != "mcp":
             await self._respond(send, 404, "not found")
+            record_request(route, 404)
             return
 
         headers = {k.lower(): v for k, v in scope.get("headers", [])}
@@ -79,6 +89,7 @@ class _AuthMiddleware:
 
         if not auth.startswith("Bearer "):
             await self._respond(send, 401, "Missing Bearer token")
+            record_request(route, 401)
             return
 
         token = auth[len("Bearer ") :]
@@ -86,6 +97,7 @@ class _AuthMiddleware:
 
         if user_info is None:
             await self._respond(send, 401, "Invalid JupyterHub token")
+            record_request(route, 401)
             return
 
         # Rewrite Host → localhost:8888 to satisfy the MCP SDK's DNS-rebinding
@@ -97,11 +109,32 @@ class _AuthMiddleware:
 
         # Bind user context for the duration of this request so tool functions
         # can call current_user.get() without needing extra arguments.
+        status = 500
+
+        async def counting_send(message):
+            nonlocal status
+            if message["type"] == "http.response.start":
+                status = message["status"]
+            await send(message)
+
         ctx_token = current_user.set(user_info)
         try:
-            await self._app({**scope, "headers": new_headers}, receive, send)
+            await self._app(
+                {**scope, "headers": new_headers}, receive, counting_send
+            )
         finally:
             current_user.reset(ctx_token)
+            record_request(route, status)
+
+    @staticmethod
+    def _route_for(path: str) -> str:
+        if path in ("/health", f"{SERVICE_PREFIX}/health"):
+            return "health"
+        if path in ("/metrics", f"{SERVICE_PREFIX}/metrics"):
+            return "metrics"
+        if path.startswith(f"{SERVICE_PREFIX}/mcp"):
+            return "mcp"
+        return "other"
 
     @staticmethod
     async def _ok(send) -> None:
@@ -112,6 +145,21 @@ class _AuthMiddleware:
                 "status": 200,
                 "headers": [
                     (b"content-type", b"text/plain"),
+                    (b"content-length", str(len(body)).encode()),
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": body})
+
+    @staticmethod
+    async def _metrics(send) -> None:
+        body = metrics_body()
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [
+                    (b"content-type", metrics_content_type().encode()),
                     (b"content-length", str(len(body)).encode()),
                 ],
             }
@@ -155,6 +203,8 @@ mcp = FastMCP(
         "(launch/connect/restart/stop) are also available."
     ),
 )
+
+instrument_mcp(mcp)
 
 logs.register(mcp)
 storage.register(mcp)

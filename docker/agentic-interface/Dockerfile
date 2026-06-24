@@ -11,6 +11,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 COPY docker/agentic-interface/context.py .
 COPY docker/agentic-interface/auth.py .
+COPY docker/agentic-interface/metrics.py .
 COPY docker/agentic-interface/server.py .
 COPY docker/agentic-interface/tools/ ./tools/
 
