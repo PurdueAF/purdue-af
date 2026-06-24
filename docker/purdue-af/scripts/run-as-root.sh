@@ -20,11 +20,11 @@ fi
 # Setup user home directory
 # Gated by a versioned sentinel so chown/mkdir only run once per user.
 # Bump _HOME_SETUP_VER whenever new directories are added here.
-_HOME_SETUP_VER=1
+_HOME_SETUP_VER=2
 _HOME_SETUP_SENTINEL="$NEW_HOME/.jupyter/.af-home-setup-v${_HOME_SETUP_VER}"
 if [ ! -f "$_HOME_SETUP_SENTINEL" ]; then
 	mkdir -p "$NEW_HOME/.jupyter/lab/workspaces"
-	mkdir -p "$NEW_HOME/.local/share"
+	mkdir -p "$NEW_HOME/.local/share/jupyter/runtime"
 	mkdir -p "$NEW_HOME/.config/dask"
 	chown "$NB_USER:users" \
 		"$NEW_HOME/.jupyter" \
@@ -32,9 +32,10 @@ if [ ! -f "$_HOME_SETUP_SENTINEL" ]; then
 		"$NEW_HOME/.jupyter/lab/workspaces" \
 		"$NEW_HOME/.local" \
 		"$NEW_HOME/.local/share" \
+		"$NEW_HOME/.local/share/jupyter" \
+		"$NEW_HOME/.local/share/jupyter/runtime" \
 		"$NEW_HOME/.config" \
-		"$NEW_HOME/.config/dask" \
-		2>/dev/null || true
+		"$NEW_HOME/.config/dask"
 	touch "$_HOME_SETUP_SENTINEL"
 	chown "$NB_USER:users" "$_HOME_SETUP_SENTINEL"
 fi
@@ -111,9 +112,18 @@ if [ -d "${PIXI_GLOBAL}" ] && [ -f "${PIXI_GLOBAL}/pixi.toml" ] && [ -f "${PIXI_
 		mkdir -p "${USER_KERNEL_DIR}"
 		rm -rf "${USER_KERNEL_DIR}/python3"
 		cp -r "${BASE_PY3_KERNEL}" "${USER_KERNEL_DIR}/python3"
-		chown -R "${NB_USER}:users" "${USER_KERNEL_DIR}"
+		chown -R "${NB_USER}:users" "${NEW_HOME}/.local/share/jupyter"
 	fi
 fi
+
+# config-extensions.sh and kernel install run as root and may recreate root-owned
+# parents under ~/.local/share/jupyter; reconcile every start (a few paths only).
+_JUPYTER_USER_DATA="$NEW_HOME/.local/share/jupyter"
+mkdir -p "$_JUPYTER_USER_DATA/runtime"
+for _d in "$NEW_HOME/.local" "$NEW_HOME/.local/share" "$_JUPYTER_USER_DATA" "$_JUPYTER_USER_DATA/runtime"; do
+	chown "$NB_USER:users" "$_d"
+	chmod u+rwx "$_d"
+done
 
 # Setup system files
 mv /etc/slurm/slist /usr/bin
