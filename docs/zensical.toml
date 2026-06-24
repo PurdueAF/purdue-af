@@ -63,7 +63,6 @@ nav = [
         { "Remote access" = [
             "guide-ssh-access.md",
             "guide-ide-connection.md",
-            "guide-agentic-interface.md",
             "guide-file-transfer.md",
         ] },
         { "Data and storage" = [
@@ -74,6 +73,9 @@ nav = [
         { "Special workflows" = [
             "guide-mc-gen.md",
         ] },
+    ] },
+    { "Agentic AI" = [
+        "guide-agentic-interface.md",
     ] },
     { "Help" = [
         "troubleshooting.md",

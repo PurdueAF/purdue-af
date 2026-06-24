@@ -41,6 +41,7 @@ tools and features for fast, efficient, collaborative HEP research.
 | Set up an analysis environment             | [Pixi environments](guide-pixi.md)                      |
 | Read CMS datasets                          | [Data access](data-access.md)                           |
 | Scale your analysis to hundreds of cores   | [Scaling out](scaling-out.md)                           |
+| Manage your session with an AI agent       | [Agentic interface](guide-agentic-interface.md)         |
 | Fix a problem                              | [Troubleshooting](troubleshooting.md)                   |
 | Ask a question                             | [Support](support.md)                                   |
 
