@@ -104,7 +104,7 @@ ENV PIXI_HOME="/opt/pixi" \
 WORKDIR "${PIXI_HOME}"
 # pixi.lock makes the env reproducible: `pixi install --locked` below fails
 # if manifest and lock disagree instead of silently re-solving to latest.
-COPY --chown=root:root docker/purdue-af/pixi.toml docker/purdue-af/pixi.lock "${PIXI_HOME}/"
+COPY --chown=root:root pixi/base/pixi.toml pixi/base/pixi.lock "${PIXI_HOME}/"
 COPY --chown=root:root docker/purdue-af/pixi-wrapper /usr/local/bin/pixi
 
 RUN chmod +x /usr/local/bin/pixi && \

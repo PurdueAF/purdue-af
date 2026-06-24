@@ -8,3 +8,4 @@ monitoring/grafonnet
 **/.pytest_cache/
 coverage.xml
 .coverage
+pixi/*/.pixi/*

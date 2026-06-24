@@ -5,10 +5,10 @@ name: Build Images
 # ghcr.io/purdueaf/<name>:sha-<commit> (see docker/REGISTRY.md for the
 # registry architecture and the geddes pull-through cache).
 #
-# OS-scale images (dask-gateway variants) are built by
-# build-images-heavy.yml on path changes + weekly. purdue-af is built only
-# by the in-cluster kaniko job (needs cluster-grade CPU/registry locality);
-# servicex-science-coffea needs a private-registry pull secret.
+# Large images (purdue-af, dask-gateway variants, interlink, servicex-science)
+# are built only by the in-cluster kaniko jobs (docker/kaniko-build-jobs/) —
+# they exceed GitHub-hosted runner time/disk limits. Pixi environments are
+# validated in pixi-check.yml instead.
 
 on:
   push:

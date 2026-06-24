@@ -1,25 +1,23 @@
 name: Pixi Check
 
-# Lockfile gate for the purdue-af user image: any change to pixi.toml or
-# pixi.lock must leave them consistent (`pixi lock --check` re-solves and
-# fails on drift). Path-filtered on purpose — a fresh solve chases latest
-# upstream versions, so running this on unrelated pushes would fail on
-# every upstream release. The image build enforces the lock at build time
-# (`pixi install --locked` in docker/purdue-af/Dockerfile).
+# Lockfile gate + install for every pixi workspace in the repo. Any change to
+# pixi.toml or pixi.lock must leave them consistent (`pixi lock --check`
+# re-solves and fails on drift), and every declared environment must build
+# (`pixi install --locked --all`). Replaces the former heavy image CI for
+# purdue-af; large Docker images are built only in-cluster (kaniko).
 #
-# Failure visibility: the README badge shows the latest run's result, so a
-# failed run stays visibly red until a later run goes green.
+# Failure visibility: the README badge shows the latest run's result.
 
 on:
   push:
     paths:
-      - "docker/purdue-af/pixi.toml"
-      - "docker/purdue-af/pixi.lock"
+      - "**/pixi.toml"
+      - "**/pixi.lock"
       - ".github/workflows/pixi-check.yml"
   pull_request:
     paths:
-      - "docker/purdue-af/pixi.toml"
-      - "docker/purdue-af/pixi.lock"
+      - "**/pixi.toml"
+      - "**/pixi.lock"
       - ".github/workflows/pixi-check.yml"
   workflow_dispatch:
 
@@ -31,14 +29,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lock-check:
+  discover:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - id: set
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t manifests < <(find . -name 'pixi.toml' -not -path './.git/*' | sort)
+          if [ "${#manifests[@]}" -eq 0 ]; then
+            echo "No pixi.toml files found"
+            exit 1
+          fi
+          dirs=()
+          for manifest in "${manifests[@]}"; do
+            dirs+=("$(dirname "${manifest}")")
+          done
+          json=$(printf '%s\n' "${dirs[@]}" | jq -R -s 'split("\n") | map(select(length > 0)) | {include: map({dir: .})}')
+          echo "matrix=${json}" >> "${GITHUB_OUTPUT}"
+
+  pixi:
+    needs: discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
+    name: ${{ matrix.dir }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: prefix-dev/setup-pixi@v0.9.0 # Renovate pins to digest
         with:
           run-install: false
-      - name: Check lockfile consistency
-        working-directory: docker/purdue-af
-        run: pixi lock --check
+      - name: Validate and build all environments
+        working-directory: ${{ matrix.dir }}
+        run: |
+          set -euo pipefail
+          if [ ! -f pixi.lock ]; then
+            echo "ERROR: pixi.lock is missing — run 'pixi lock' on linux-64 and commit it"
+            exit 1
+          fi
+          pixi workspace environment list
+          pixi lock --check
+          pixi install --locked --all

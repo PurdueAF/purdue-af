@@ -1,7 +1,7 @@
 # Image registry architecture
 
 ```
-CI (Build Images / Build Images heavy)
+CI (Build Images)
   build → smoke test → push (main only)
         └──▶ ghcr.io/purdueaf/<name>:sha-<commit>      ← source of truth
                           │
@@ -16,14 +16,11 @@ cluster pulls ◀── geddes-registry.rcac.purdue.edu/ghcr-cache/purdueaf/<nam
   the `ghcr-cache` proxy project so pulls are LAN-local and survive ghcr
   outages (cache serves last-known images).
 - **Tags are immutable**: `sha-<commit>` only. No `:latest`, no moving tags.
-- **All first-party images are published**: agentic-interface, af-pod-monitor,
-  af-node-monitor (light tier — every push) and purdue-af,
-  interlink-slurm-plugin, servicex-science-coffea,
-  dask-gateway-server-{hammer,gautschi} (heavy tier — path-triggered + weekly).
-- Heavy builds use **registry-backed buildx cache** (`:buildcache` refs on
-  ghcr) — GHA's 10 GB cache cannot hold these layer sets. First builds are
-  slow (purdue-af: potentially hours); later builds rebuild only changed
-  Dockerfile stages. The weekly cron keeps the cache warm.
+- **Lightweight images are published from CI**: agentic-interface, af-pod-monitor,
+  af-node-monitor (every push). Large images (purdue-af, dask-gateway variants,
+  interlink-slurm-plugin, servicex-science-coffea) are built only by the
+  in-cluster kaniko jobs (`docker/kaniko-build-jobs/`) — they exceed GitHub-hosted
+  runner limits. Pixi environments are validated in `pixi-check.yml` instead.
 - Once the cluster pulls purdue-af via ghcr-cache, the in-cluster kaniko
   jobs (docker/kaniko-build-jobs/) become legacy and can be retired.
 

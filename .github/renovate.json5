@@ -78,15 +78,14 @@
       allowedVersions: '<=4.0.0',
     },
     {
-      // purdue-af updates trigger the full image build + smoke test in CI
-      // (Build Images heavy) — label them so the long build is expected.
-      matchFileNames: ['docker/purdue-af/**'],
-      addLabels: ['user-image'],
+      // pixi manifest updates trigger pixi-check (lock + install).
+      matchFileNames: ['pixi/**'],
+      addLabels: ['pixi'],
     },
     {
       // pixi's pep440 ranges let Renovate propose pre-releases
       // (jupyterlab 4.6.0rc0, notebook 7.6.0b1) — stable releases only.
-      matchFileNames: ['docker/purdue-af/pixi.toml'],
+      matchFileNames: ['pixi/base/pixi.toml', 'pixi/global/pixi.toml'],
       allowedVersions: '!/(a|b|rc)\\d*$/',
     },
   ],
