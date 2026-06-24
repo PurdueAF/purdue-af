@@ -127,3 +127,47 @@ async def test_full_stack_handshake_and_auth(monkeypatch):
             )
             assert denied.status_code == 401
             assert json.loads(denied.text)["error"] == "Invalid JupyterHub token"
+
+            # tools/call must increment the tool counter via call_tool instrumentation.
+            from prometheus_client import REGISTRY
+            from tools import profiles
+
+            async def fake_get_profiles(force=False):
+                return [
+                    {
+                        "display_name": "Stable",
+                        "slug": "stable",
+                        "default": True,
+                        "description": "",
+                        "options": {},
+                    }
+                ]
+
+            monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
+
+            before = (
+                REGISTRY.get_sample_value(
+                    "purdue_af_mcp_tool_calls_total",
+                    {"tool": "list_af_profiles", "outcome": "success"},
+                )
+                or 0
+            )
+            tool_resp = await c.post(
+                MCP_URL,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/call",
+                    "params": {"name": "list_af_profiles", "arguments": {}},
+                },
+                headers={**MCP_HEADERS, "Authorization": "Bearer good-token"},
+            )
+            assert tool_resp.status_code == 200
+            after = (
+                REGISTRY.get_sample_value(
+                    "purdue_af_mcp_tool_calls_total",
+                    {"tool": "list_af_profiles", "outcome": "success"},
+                )
+                or 0
+            )
+            assert after == before + 1

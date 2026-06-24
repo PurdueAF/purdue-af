@@ -137,10 +137,9 @@ async def test_instrumented_tool_records_success():
     async def hello() -> str:
         return "hi"
 
-    tool = mcp._tool_manager._tools["hello"]
     before = _tool_counter_value("hello", "success")
 
-    assert await tool.run({}) == "hi"
+    assert await mcp._tool_manager.call_tool("hello", {}) == "hi"
     assert _tool_counter_value("hello", "success") == before + 1
 
 
@@ -154,10 +153,9 @@ async def test_instrumented_tool_records_string_error():
     async def fail_soft() -> str:
         return "Error: something went wrong"
 
-    tool = mcp._tool_manager._tools["fail_soft"]
     before = _tool_counter_value("fail_soft", "error")
 
-    out = await tool.run({})
+    out = await mcp._tool_manager.call_tool("fail_soft", {})
 
     assert out.startswith("Error:")
     assert _tool_counter_value("fail_soft", "error") == before + 1
@@ -174,10 +172,9 @@ async def test_instrumented_tool_records_exception():
     async def fail_hard() -> str:
         raise RuntimeError("boom")
 
-    tool = mcp._tool_manager._tools["fail_hard"]
     before = _tool_counter_value("fail_hard", "error")
 
     with pytest.raises(ToolError):
-        await tool.run({})
+        await mcp._tool_manager.call_tool("fail_hard", {})
 
     assert _tool_counter_value("fail_hard", "error") == before + 1

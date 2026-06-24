@@ -1,8 +1,5 @@
 """Prometheus metrics for the agentic interface HTTP server."""
 
-import functools
-import inspect
-from collections.abc import Callable
 from typing import Any
 
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
@@ -35,43 +32,30 @@ def tool_outcome(result: Any) -> str:
     return "success"
 
 
-def _wrap_tool_fn(fn: Callable[..., Any], tool_name: str) -> Callable[..., Any]:
-    if inspect.iscoroutinefunction(fn):
+def instrument_mcp(mcp) -> None:
+    """Record tool metrics on every MCP tool invocation."""
+    original_call_tool = mcp._tool_manager.call_tool
 
-        @functools.wraps(fn)
-        async def async_wrapper(*args, **kwargs):
-            try:
-                result = await fn(*args, **kwargs)
-            except Exception:
-                record_tool_call(tool_name, "error")
-                raise
-            record_tool_call(tool_name, tool_outcome(result))
-            return result
-
-        return async_wrapper
-
-    @functools.wraps(fn)
-    def sync_wrapper(*args, **kwargs):
+    async def call_tool(
+        name: str,
+        arguments: dict,
+        context=None,
+        convert_result: bool = False,
+    ):
         try:
-            result = fn(*args, **kwargs)
+            result = await original_call_tool(
+                name,
+                arguments,
+                context=context,
+                convert_result=convert_result,
+            )
         except Exception:
-            record_tool_call(tool_name, "error")
+            record_tool_call(name, "error")
             raise
-        record_tool_call(tool_name, tool_outcome(result))
+        record_tool_call(name, tool_outcome(result))
         return result
 
-    return sync_wrapper
-
-
-def instrument_mcp(mcp) -> None:
-    """Wrap mcp.add_tool so every registered tool records call metrics."""
-    original_add_tool = mcp.add_tool
-
-    def add_tool(fn, *args, **kwargs):
-        tool_name = kwargs.get("name") or fn.__name__
-        return original_add_tool(_wrap_tool_fn(fn, tool_name), *args, **kwargs)
-
-    mcp.add_tool = add_tool
+    mcp._tool_manager.call_tool = call_tool
 
 
 def metrics_body() -> bytes:
