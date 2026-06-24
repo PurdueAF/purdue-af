@@ -37,16 +37,16 @@ resources:
   - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic/helmrepo.yaml
 
-  - ../../apps/kagent/helmrepo.yaml
-  - ../../apps/kagent/controller-namespace-cluster-rbac.yaml
-  - ../../apps/kagent/controller-cms-rbac.yaml
-  - ../../apps/kagent/agent-rbac.yaml
-  - ../../apps/kagent/secret-kagent-openai.yaml
-  - ../../apps/kagent/secret-kagent-grafana-mcp-token.yaml
-  - ../../apps/kagent/modelconfigs-extra.yaml
-  - ../../apps/kagent/helmrelease.yaml
-  - ../../apps/kagent/ingress.yaml
-  - ../../apps/kagent/agents/agent-log-analyzer.yaml
+  # - ../../apps/kagent/helmrepo.yaml
+  # - ../../apps/kagent/controller-namespace-cluster-rbac.yaml
+  # - ../../apps/kagent/controller-cms-rbac.yaml
+  # - ../../apps/kagent/agent-rbac.yaml
+  # - ../../apps/kagent/secret-kagent-openai.yaml
+  # - ../../apps/kagent/secret-kagent-grafana-mcp-token.yaml
+  # - ../../apps/kagent/modelconfigs-extra.yaml
+  # - ../../apps/kagent/helmrelease.yaml
+  # - ../../apps/kagent/ingress.yaml
+  # - ../../apps/kagent/agents/agent-log-analyzer.yaml
 
   - ../../apps/agentic-interface/rbac.yaml
   - ../../apps/agentic-interface/deployment.yaml
