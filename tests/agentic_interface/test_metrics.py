@@ -9,7 +9,7 @@ from prometheus_client import REGISTRY
 def _counter_value(route: str, status: str) -> float:
     return (
         REGISTRY.get_sample_value(
-            "agentic_interface_api_calls_total",
+            "purdue_af_mcp_api_calls_total",
             {"route": route, "status": status},
         )
         or 0.0
@@ -53,8 +53,8 @@ async def test_metrics_endpoint_returns_prometheus_format():
     )(http_scope("/metrics"), noop_receive, send)
 
     assert send.status == 200
-    assert b"agentic_interface_api_calls_total" in send.body
-    assert b"agentic_interface_tool_calls_total" in send.body
+    assert b"purdue_af_mcp_api_calls_total" in send.body
+    assert b"purdue_af_mcp_tool_calls_total" in send.body
     assert _counter_value("metrics", "200") == before + 1
 
 
@@ -115,7 +115,7 @@ def test_record_request_increments_counter():
 def _tool_counter_value(tool: str, outcome: str) -> float:
     return (
         REGISTRY.get_sample_value(
-            "agentic_interface_tool_calls_total",
+            "purdue_af_mcp_tool_calls_total",
             {"tool": tool, "outcome": outcome},
         )
         or 0.0

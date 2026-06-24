@@ -8,13 +8,13 @@ from typing import Any
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 
 API_CALLS_TOTAL = Counter(
-    "agentic_interface_api_calls_total",
-    "Total HTTP requests to the agentic interface server",
+    "purdue_af_mcp_api_calls_total",
+    "Total HTTP requests to the Purdue AF MCP server",
     ["route", "status"],
 )
 
 TOOL_CALLS_TOTAL = Counter(
-    "agentic_interface_tool_calls_total",
+    "purdue_af_mcp_tool_calls_total",
     "Total MCP tool invocations",
     ["tool", "outcome"],
 )

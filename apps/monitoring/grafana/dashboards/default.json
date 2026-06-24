@@ -3630,7 +3630,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "prometheus-rancher"
       },
       "description": "Authenticated MCP API requests to /mcp, grouped by HTTP status.",
       "fieldConfig": {
@@ -3707,10 +3707,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "prometheus-rancher"
           },
           "editorMode": "code",
-          "expr": "sum(rate(agentic_interface_api_calls_total{route=\"mcp\"}[5m])) by (status)",
+          "expr": "sum(rate(purdue_af_mcp_api_calls_total{route=\"mcp\"}[5m])) by (status)",
           "interval": "",
           "legendFormat": "{{ status }}",
           "range": true,
@@ -3723,7 +3723,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "prometheus-rancher"
       },
       "description": "All HTTP traffic to the agentic interface, including health and metrics probes.",
       "fieldConfig": {
@@ -3800,10 +3800,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "prometheus-rancher"
           },
           "editorMode": "code",
-          "expr": "sum(rate(agentic_interface_api_calls_total[5m])) by (route)",
+          "expr": "sum(rate(purdue_af_mcp_api_calls_total[5m])) by (route)",
           "interval": "",
           "legendFormat": "{{ route }}",
           "range": true,
@@ -3816,7 +3816,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "prometheus-rancher"
       },
       "description": "MCP tool invocations per second, grouped by tool name.",
       "fieldConfig": {
@@ -3893,10 +3893,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "prometheus-rancher"
           },
           "editorMode": "code",
-          "expr": "sum(rate(agentic_interface_tool_calls_total[5m])) by (tool)",
+          "expr": "sum(rate(purdue_af_mcp_tool_calls_total[5m])) by (tool)",
           "interval": "",
           "legendFormat": "{{ tool }}",
           "range": true,
@@ -3909,7 +3909,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "prometheus-rancher"
       },
       "description": "Failed MCP tool invocations (exceptions or Error: responses), grouped by tool.",
       "fieldConfig": {
@@ -3986,10 +3986,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "prometheus-rancher"
           },
           "editorMode": "code",
-          "expr": "sum(rate(agentic_interface_tool_calls_total{outcome=\"error\"}[5m])) by (tool)",
+          "expr": "sum(rate(purdue_af_mcp_tool_calls_total{outcome=\"error\"}[5m])) by (tool)",
           "interval": "",
           "legendFormat": "{{ tool }}",
           "range": true,
@@ -4015,5 +4015,5 @@
   "timezone": "browser",
   "title": "Purdue Analysis Facility Dashboard",
   "uid": "purdue-af-dashboard",
-  "version": 7
+  "version": 8
 }
