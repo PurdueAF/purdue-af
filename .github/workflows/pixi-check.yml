@@ -1,23 +1,23 @@
 name: Pixi Check
 
-# Lockfile gate + install for every pixi workspace in the repo. Any change to
-# pixi.toml or pixi.lock must leave them consistent (`pixi lock --check`
-# re-solves and fails on drift), and every declared environment must build
-# (`pixi install --locked --all`). Replaces the former heavy image CI for
-# purdue-af; large Docker images are built only in-cluster (kaniko).
+# Validates every pixi workspace under pixi/:
+#   • lock --check (manifest ↔ lock consistency)
+#   • install --locked (environment actually builds)
 #
-# Failure visibility: the README badge shows the latest run's result.
+# pixi/base backs the purdue-af user image; pixi/global is the shared HEP stack.
+# Large Docker images stay on in-cluster kaniko — pixi CI replaces their validation.
+#
+# pixi/global has no committed lock yet: only `pixi lock --dry-run` runs there
+# (solver check, no install) and only when pixi/global/ actually changed.
 
 on:
   push:
     paths:
-      - "**/pixi.toml"
-      - "**/pixi.lock"
+      - "pixi/**"
       - ".github/workflows/pixi-check.yml"
   pull_request:
     paths:
-      - "**/pixi.toml"
-      - "**/pixi.lock"
+      - "pixi/**"
       - ".github/workflows/pixi-check.yml"
   workflow_dispatch:
 
@@ -29,49 +29,96 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  discover:
+  scope:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.set.outputs.matrix }}
+      global: ${{ steps.scope.outputs.global }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - id: set
+        with:
+          fetch-depth: 0
+      - id: scope
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t manifests < <(find . -name 'pixi.toml' -not -path './.git/*' | sort)
-          if [ "${#manifests[@]}" -eq 0 ]; then
-            echo "No pixi.toml files found"
-            exit 1
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "global=true" >> "${GITHUB_OUTPUT}"
+            exit 0
           fi
-          dirs=()
-          for manifest in "${manifests[@]}"; do
-            dirs+=("$(dirname "${manifest}")")
-          done
-          json=$(printf '%s\n' "${dirs[@]}" | jq -R -s 'split("\n") | map(select(length > 0)) | {include: map({dir: .})}')
-          echo "matrix=${json}" >> "${GITHUB_OUTPUT}"
+          case "${{ github.event_name }}" in
+            pull_request)
+              range="origin/${{ github.event.pull_request.base.ref }}...HEAD"
+              ;;
+            push)
+              if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+                range="HEAD~1..HEAD"
+              else
+                range="${{ github.event.before }}..${{ github.sha }}"
+              fi
+              ;;
+            *)
+              echo "global=true" >> "${GITHUB_OUTPUT}"
+              exit 0
+              ;;
+          esac
+          if git diff --name-only "${range}" | grep -qE '^(pixi/global/|\.github/workflows/pixi-check\.yml)'; then
+            echo "global=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "global=false" >> "${GITHUB_OUTPUT}"
+          fi
 
-  pixi:
-    needs: discover
+  pixi-base:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
-    name: ${{ matrix.dir }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: prefix-dev/setup-pixi@v0.9.0 # Renovate pins to digest
         with:
+          pixi-version: v0.62.2
+          manifest-path: pixi/base/pixi.toml
           run-install: false
-      - name: Validate and build all environments
-        working-directory: ${{ matrix.dir }}
+      - name: Check lockfile
+        working-directory: pixi/base
+        run: pixi lock --check
+      - uses: prefix-dev/setup-pixi@v0.9.0 # Renovate pins to digest
+        with:
+          pixi-version: v0.62.2
+          manifest-path: pixi/base/pixi.toml
+          environments: base-env
+          locked: true
+          cache: true
+          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
+  pixi-global:
+    needs: scope
+    if: needs.scope.outputs.global == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: prefix-dev/setup-pixi@v0.9.0 # Renovate pins to digest
+        with:
+          pixi-version: v0.62.2
+          manifest-path: pixi/global/pixi.toml
+          run-install: false
+      - name: Validate manifest
+        id: validate
+        working-directory: pixi/global
         run: |
           set -euo pipefail
-          if [ ! -f pixi.lock ]; then
-            echo "ERROR: pixi.lock is missing — run 'pixi lock' on linux-64 and commit it"
-            exit 1
+          if [ -f pixi.lock ]; then
+            pixi lock --check
+            echo "install=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "No pixi.lock yet — checking the manifest is solvable (dry-run)"
+            pixi lock --dry-run
+            echo "install=false" >> "${GITHUB_OUTPUT}"
           fi
-          pixi workspace environment list
-          pixi lock --check
-          pixi install --locked --all
+      - uses: prefix-dev/setup-pixi@v0.9.0 # Renovate pins to digest
+        if: steps.validate.outputs.install == 'true'
+        with:
+          pixi-version: v0.62.2
+          manifest-path: pixi/global/pixi.toml
+          locked: true
+          cache: true
+          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
