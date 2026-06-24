@@ -4,11 +4,15 @@ name: Pixi Check
 #   • lock --check (manifest ↔ lock consistency)
 #   • install --locked (environment actually builds)
 #
+# Pixi is pinned to v0.62.2 here and in docker/purdue-af/Dockerfile (PIXI_VERSION).
+# Regenerate lock files with that exact version (lock format v6); newer pixi writes
+# v7 locks that 0.62.2 cannot read.
+#
 # pixi/base backs the purdue-af user image; pixi/global is the shared HEP stack.
 # Large Docker images stay on in-cluster kaniko — pixi CI replaces their validation.
 #
-# pixi/global has no committed lock yet: only `pixi lock --dry-run` runs there
-# (solver check, no install) and only when pixi/global/ actually changed.
+# pixi/global is validated only once pixi/global/pixi.lock is committed.
+# Until then the job is skipped (no lock file to check against pixi 0.62.2).
 
 on:
   push:
@@ -91,7 +95,7 @@ jobs:
 
   pixi-global:
     needs: scope
-    if: needs.scope.outputs.global == 'true'
+    if: needs.scope.outputs.global == 'true' && hashFiles('pixi/global/pixi.lock') != ''
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -101,21 +105,10 @@ jobs:
           pixi-version: v0.62.2
           manifest-path: pixi/global/pixi.toml
           run-install: false
-      - name: Validate manifest
-        id: validate
+      - name: Check lockfile and install
         working-directory: pixi/global
-        run: |
-          set -euo pipefail
-          if [ -f pixi.lock ]; then
-            pixi lock --check
-            echo "install=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "No pixi.lock yet — checking the manifest is solvable (dry-run)"
-            pixi lock --dry-run
-            echo "install=false" >> "${GITHUB_OUTPUT}"
-          fi
+        run: pixi lock --check
       - uses: prefix-dev/setup-pixi@v0.9.0 # Renovate pins to digest
-        if: steps.validate.outputs.install == 'true'
         with:
           pixi-version: v0.62.2
           manifest-path: pixi/global/pixi.toml

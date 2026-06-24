@@ -1,3 +1,4 @@
+# Lock file must be generated with pixi 0.62.2 (lock format v6); see docker/purdue-af/Dockerfile.
 [workspace]
 name = "base-env"
 channels = ["conda-forge"]
