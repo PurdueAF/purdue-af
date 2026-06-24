@@ -4,7 +4,7 @@ name: Pixi Check
 # (fails if pixi.toml and pixi.lock are out of sync).
 #
 # Pixi is pinned to v0.62.2 here and in docker/purdue-af/Dockerfile (PIXI_VERSION).
-# Regenerate lock files with that exact version (lock format v6).
+# pixi/global also needs CONDA_OVERRIDE_CUDA on CPU-only CI runners (see job env).
 
 on:
   push:
@@ -42,6 +42,9 @@ jobs:
   pixi-global:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    # pixi/global requires CUDA (system-requirements); mock it on CPU-only runners.
+    env:
+      CONDA_OVERRIDE_CUDA: "12.4"
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - name: Skip without lock file
