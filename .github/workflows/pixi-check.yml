@@ -37,10 +37,19 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       global: ${{ steps.scope.outputs.global }}
+      global_lock: ${{ steps.global_lock.outputs.present }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
+      - id: global_lock
+        shell: bash
+        run: |
+          if [ -f pixi/global/pixi.lock ]; then
+            echo "present=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "present=false" >> "${GITHUB_OUTPUT}"
+          fi
       - id: scope
         shell: bash
         run: |
@@ -95,7 +104,7 @@ jobs:
 
   pixi-global:
     needs: scope
-    if: needs.scope.outputs.global == 'true' && hashFiles('pixi/global/pixi.lock') != ''
+    if: needs.scope.outputs.global == 'true' && needs.scope.outputs.global_lock == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
