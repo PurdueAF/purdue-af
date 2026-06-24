@@ -24,7 +24,7 @@
 # validate nothing.
 #
 # Requirements: kustomize, flux, yq (v4), kubeconform, helm, promtool
-# Run locally:  ./scripts/validate-manifests.sh
+# Run locally:  ./.github/workflows/validate-manifests.sh
 #
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"

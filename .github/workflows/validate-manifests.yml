@@ -2,7 +2,7 @@ name: Validate Manifests
 
 # Builds every Flux-consumed kustomize root, applies each environment's
 # postBuild substitutions, and validates the rendered manifests with
-# kubeconform. Logic lives in scripts/validate-manifests.sh — run it locally.
+# kubeconform. Logic lives in validate-manifests.sh (this directory) — run it locally.
 
 on:
   push:
@@ -38,4 +38,4 @@ jobs:
           curl -fsSL "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz" \
             | sudo tar -xz -C /usr/local/bin --strip-components=1 "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool"
       - name: Validate manifests
-        run: ./scripts/validate-manifests.sh
+        run: ./.github/workflows/validate-manifests.sh

@@ -39,7 +39,7 @@ jobs:
       # Codecov reads filename attributes as-is (it ignores <source>), so
       # rewrite them to repo-rooted paths.
       - name: Normalise coverage paths
-        run: python3 scripts/fix-coverage-paths.py coverage.xml
+        run: python3 .github/workflows/fix-coverage-paths.py coverage.xml
       # Coverage reporting is informational: a Codecov outage (CLI download,
       # GPG keyserver, upload) must not fail the test job. Genuinely silent
       # processing rejections exit 0 regardless, so fail_ci_if_error would

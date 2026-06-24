@@ -47,7 +47,7 @@ kubectl create configmap mock-cilogon \
 kubectl apply -f "$E2E_DIR/mock-cilogon.yaml"
 
 echo "==> render production values the way Flux does"
-# Same mechanism as scripts/validate-manifests.sh, with kind-appropriate vars.
+# Same mechanism as .github/workflows/validate-manifests.sh, with kind-appropriate vars.
 export namespace=default
 export enable_ingresses=false
 export jupyterhub_enable_ingress=false

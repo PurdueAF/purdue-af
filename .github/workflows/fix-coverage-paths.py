@@ -7,7 +7,7 @@ with <source>, so files outside the upload's working directory fail to map
 to the repository tree. This script joins each filename with the <source>
 dir that contains it and resets <sources> to the repo root.
 
-Usage: python scripts/fix-coverage-paths.py [coverage.xml]
+Usage: python .github/workflows/fix-coverage-paths.py [coverage.xml]
 """
 
 import sys
