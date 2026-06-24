@@ -34,7 +34,7 @@ pytest        = "==9.0.3"
 lz4           = "==4.4.5"
 ipywidgets    = "==8.1.8"
 ipympl        = "==0.10.0"
-bokeh         = "==3.9.0"
+bokeh         = "==3.9.1"
 openssh       = "==9.8p1"
 uv            = "==0.11.7"
 
