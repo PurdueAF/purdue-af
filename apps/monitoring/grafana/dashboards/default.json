@@ -3632,7 +3632,7 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "Authenticated MCP API requests to /mcp, grouped by HTTP status.",
+      "description": "Authenticated MCP API requests to /mcp over the last 5 minutes, grouped by HTTP status.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3677,8 +3677,7 @@
           "thresholds": {
             "mode": "absolute",
             "steps": []
-          },
-          "unit": "reqps"
+          }
         },
         "overrides": []
       },
@@ -3710,7 +3709,7 @@
             "uid": "prometheus-rancher"
           },
           "editorMode": "code",
-          "expr": "sum(rate(purdue_af_mcp_api_calls_total{route=\"mcp\"}[5m])) by (status)",
+          "expr": "sum(increase(purdue_af_mcp_api_calls_total{route=\"mcp\"}[5m])) by (status)",
           "interval": "",
           "legendFormat": "{{ status }}",
           "range": true,
@@ -3725,7 +3724,7 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "All HTTP traffic to the agentic interface, including health and metrics probes.",
+      "description": "All HTTP traffic to the agentic interface over the last 5 minutes, including health and metrics probes.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3770,8 +3769,7 @@
           "thresholds": {
             "mode": "absolute",
             "steps": []
-          },
-          "unit": "reqps"
+          }
         },
         "overrides": []
       },
@@ -3803,7 +3801,7 @@
             "uid": "prometheus-rancher"
           },
           "editorMode": "code",
-          "expr": "sum(rate(purdue_af_mcp_api_calls_total[5m])) by (route)",
+          "expr": "sum(increase(purdue_af_mcp_api_calls_total[5m])) by (route)",
           "interval": "",
           "legendFormat": "{{ route }}",
           "range": true,
@@ -3818,7 +3816,7 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "MCP tool invocations per second, grouped by tool name.",
+      "description": "MCP tool invocations over the last 5 minutes, grouped by tool name.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3863,8 +3861,7 @@
           "thresholds": {
             "mode": "absolute",
             "steps": []
-          },
-          "unit": "reqps"
+          }
         },
         "overrides": []
       },
@@ -3896,7 +3893,7 @@
             "uid": "prometheus-rancher"
           },
           "editorMode": "code",
-          "expr": "sum(rate(purdue_af_mcp_tool_calls_total[5m])) by (tool)",
+          "expr": "sum(increase(purdue_af_mcp_tool_calls_total[5m])) by (tool)",
           "interval": "",
           "legendFormat": "{{ tool }}",
           "range": true,
@@ -3911,7 +3908,7 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "Failed MCP tool invocations (exceptions or Error: responses), grouped by tool.",
+      "description": "Failed MCP tool invocations over the last 5 minutes (exceptions or Error: responses), grouped by tool.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3956,8 +3953,7 @@
           "thresholds": {
             "mode": "absolute",
             "steps": []
-          },
-          "unit": "reqps"
+          }
         },
         "overrides": []
       },
@@ -3989,7 +3985,7 @@
             "uid": "prometheus-rancher"
           },
           "editorMode": "code",
-          "expr": "sum(rate(purdue_af_mcp_tool_calls_total{outcome=\"error\"}[5m])) by (tool)",
+          "expr": "sum(increase(purdue_af_mcp_tool_calls_total{outcome=\"error\"}[5m])) by (tool)",
           "interval": "",
           "legendFormat": "{{ tool }}",
           "range": true,
@@ -4015,5 +4011,5 @@
   "timezone": "browser",
   "title": "Purdue Analysis Facility Dashboard",
   "uid": "purdue-af-dashboard",
-  "version": 8
+  "version": 9
 }
