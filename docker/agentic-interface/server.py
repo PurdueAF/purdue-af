@@ -14,8 +14,8 @@ import os
 import uvicorn
 from auth import resolve_user
 from context import current_user
-from metrics import instrument_mcp, metrics_body, metrics_content_type, record_request
 from mcp.server.fastmcp import FastMCP
+from metrics import instrument_mcp, metrics_body, metrics_content_type, record_request
 from tools import connect, dask, logs, profiles, prompts, session, storage
 
 logger = logging.getLogger(__name__)
@@ -119,9 +119,7 @@ class _AuthMiddleware:
 
         ctx_token = current_user.set(user_info)
         try:
-            await self._app(
-                {**scope, "headers": new_headers}, receive, counting_send
-            )
+            await self._app({**scope, "headers": new_headers}, receive, counting_send)
         finally:
             current_user.reset(ctx_token)
             record_request(route, status)

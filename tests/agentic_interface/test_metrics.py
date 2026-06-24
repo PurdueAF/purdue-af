@@ -7,10 +7,13 @@ from prometheus_client import REGISTRY
 
 
 def _counter_value(route: str, status: str) -> float:
-    return REGISTRY.get_sample_value(
-        "agentic_interface_api_calls_total",
-        {"route": route, "status": status},
-    ) or 0.0
+    return (
+        REGISTRY.get_sample_value(
+            "agentic_interface_api_calls_total",
+            {"route": route, "status": status},
+        )
+        or 0.0
+    )
 
 
 async def noop_receive():  # pragma: no cover
@@ -45,9 +48,9 @@ async def test_metrics_endpoint_returns_prometheus_format():
     send = SendCollector()
     before = _counter_value("metrics", "200")
 
-    await server._AuthMiddleware(server._PathStripper(lambda *a: None, server.SERVICE_PREFIX))(
-        http_scope("/metrics"), noop_receive, send
-    )
+    await server._AuthMiddleware(
+        server._PathStripper(lambda *a: None, server.SERVICE_PREFIX)
+    )(http_scope("/metrics"), noop_receive, send)
 
     assert send.status == 200
     assert b"agentic_interface_api_calls_total" in send.body
@@ -57,7 +60,12 @@ async def test_metrics_endpoint_returns_prometheus_format():
 
 async def test_mcp_request_increments_api_call_counter(monkeypatch):
     async def accept(token):
-        return {"username": "alice", "pod_name": "pod-a", "namespace": "cms", "token": "t"}
+        return {
+            "username": "alice",
+            "pod_name": "pod-a",
+            "namespace": "cms",
+            "token": "t",
+        }
 
     monkeypatch.setattr(server, "resolve_user", accept)
 
@@ -90,9 +98,9 @@ async def test_unauthorized_mcp_request_records_401(monkeypatch):
     before = _counter_value("mcp", "401")
     send = SendCollector()
 
-    await server._AuthMiddleware(server._PathStripper(lambda *a: None, server.SERVICE_PREFIX))(
-        http_scope(f"{server.SERVICE_PREFIX}/mcp"), noop_receive, send
-    )
+    await server._AuthMiddleware(
+        server._PathStripper(lambda *a: None, server.SERVICE_PREFIX)
+    )(http_scope(f"{server.SERVICE_PREFIX}/mcp"), noop_receive, send)
 
     assert send.status == 401
     assert _counter_value("mcp", "401") == before + 1
@@ -105,10 +113,13 @@ def test_record_request_increments_counter():
 
 
 def _tool_counter_value(tool: str, outcome: str) -> float:
-    return REGISTRY.get_sample_value(
-        "agentic_interface_tool_calls_total",
-        {"tool": tool, "outcome": outcome},
-    ) or 0.0
+    return (
+        REGISTRY.get_sample_value(
+            "agentic_interface_tool_calls_total",
+            {"tool": tool, "outcome": outcome},
+        )
+        or 0.0
+    )
 
 
 def test_tool_outcome_classifier():
