@@ -42,11 +42,11 @@ jobs:
           enable-cache: true
           cache-dependency-glob: tests/uv.lock
       - name: Install flux CLI
-        uses: fluxcd/flux2/action@b1b4438ae9ce7ade20a3d6e5aae25cef60be9c94 # main
+        uses: fluxcd/flux2/action@cd0ffe01512e8bf809e1ff026fb6b185adc2111a # main
         with:
           version: 2.5.1
       - name: Create kind cluster
-        uses: helm/kind-action@v1.12.0 # Renovate pins to digest
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0 # Renovate pins to digest
         with:
           cluster_name: af-e2e
       - name: Deploy hub stack

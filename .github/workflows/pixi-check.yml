@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-      - uses: prefix-dev/setup-pixi@v0.9.0 # Renovate pins to digest
+      - uses: prefix-dev/setup-pixi@5185adfbffb4bd703da3010310260805d89ebb11 # v0.9.6 # Renovate pins to digest
         with:
           pixi-version: v0.62.2
           manifest-path: pixi/base/pixi.toml
@@ -50,7 +50,7 @@ jobs:
       - name: Skip without lock file
         if: hashFiles('pixi/global/pixi.lock') == ''
         run: echo "pixi/global/pixi.lock not present — skipping"
-      - uses: prefix-dev/setup-pixi@v0.9.0 # Renovate pins to digest
+      - uses: prefix-dev/setup-pixi@5185adfbffb4bd703da3010310260805d89ebb11 # v0.9.6 # Renovate pins to digest
         if: hashFiles('pixi/global/pixi.lock') != ''
         with:
           pixi-version: v0.62.2

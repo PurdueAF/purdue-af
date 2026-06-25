@@ -71,7 +71,7 @@ jobs:
       # Only smoke-tested images ever reach the registry.
       - name: Login to ghcr.io
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3 # Renovate pins to digest
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3 # Renovate pins to digest
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
