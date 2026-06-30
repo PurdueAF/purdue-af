@@ -36,7 +36,7 @@ ipywidgets    = "==8.1.8"
 ipympl        = "==0.10.0"
 bokeh         = "==3.9.0"
 openssh       = "==9.8p1"
-uv            = "==0.11.7"
+uv            = "==0.11.26"
 
 [pypi-dependencies]
 jupyterlab-git            = "==0.52.0"
