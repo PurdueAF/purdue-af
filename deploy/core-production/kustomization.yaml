@@ -77,6 +77,10 @@ configMapGenerator:
       - 01-set-user-info.py=../../apps/jupyterhub/jupyterhub/extraFiles/set-user-info.py
       - 02-gpu-availability.py=../../apps/jupyterhub/jupyterhub/extraFiles/gpu-availability.py
 
+  - name: jupyterhub-gpu-culler
+    files:
+      - cull-gpu-sessions.py=../../apps/jupyterhub/jupyterhub/extraFiles/cull-gpu-sessions.py
+
   - name: jupyterhub-ssh-config
     files:
       - values.yaml=../../apps/jupyterhub/jupyterhub-ssh/values.yaml

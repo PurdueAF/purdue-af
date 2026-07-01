@@ -41,7 +41,9 @@ a choice of either a 5 GB "slice" of an A100, or a full 40 GB A100.
 !!! important
 
     Please terminate your session after using a GPU in order to release it for
-    other users. Full 40 GB A100 instances are in short supply.
+    other users. Full 40 GB A100 instances are in short supply, and sessions
+    holding one are **automatically shut down after 12 hours of inactivity**
+    (regular sessions are only shut down after 14 days).
 
 ### 2. Slurm jobs (Purdue users only)
 

@@ -12,7 +12,7 @@ singleuser:
   profileList:
     - display_name: "Purdue AF 0.12.5 – Pixi-based environment management."
       default: true
-      description: 'Please refer to the Purdue AF documentation for instructions on how to switch from Conda to Pixi: <a href="https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html" target="_blank">https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html</a>.'
+      description: 'Please refer to the Purdue AF documentation for instructions on how to switch from Conda to Pixi: <a href="https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html" target="_blank">https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html</a>. Note: sessions holding a full A100 GPU (40GB) are terminated after 12 hours of inactivity.'
       kubespawner_override:
         image: "geddes-registry.rcac.purdue.edu/cms/purdue-af:0.12.5"
         node_selector: { "cms-af-prod": "true" }
@@ -328,6 +328,9 @@ hub:
     - name: hub-extra-config
       configMap:
         name: jupyterhub-extra-config
+    - name: gpu-culler-script
+      configMap:
+        name: jupyterhub-gpu-culler
     - name: af-auth-purdue
       secret:
         secretName: af-auth-purdue
@@ -340,6 +343,11 @@ hub:
   extraVolumeMounts:
     - name: hub-extra-config
       mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d
+      readOnly: true
+    # deliberately outside jupyterhub_config.d — this is a service script,
+    # not a config snippet to be exec'd at hub startup
+    - name: gpu-culler-script
+      mountPath: /usr/local/etc/jupyterhub-gpu-culler
       readOnly: true
     - mountPath: /etc/secrets/af-auth-purdue/
       name: af-auth-purdue
@@ -386,6 +394,19 @@ hub:
     agentic-interface:
       url: "http://agentic-interface.${namespace}.svc.cluster.local:8888"
       oauth_no_confirm: true
+    # full 40GB GPUs are scarce: cull sessions holding one after 12h of
+    # inactivity (the global `cull` service allows 14 days)
+    gpu-culler:
+      command:
+        - python3
+        - /usr/local/etc/jupyterhub-gpu-culler/cull-gpu-sessions.py
+        - --timeout=43200
+        - --every=600
+  loadRoles:
+    gpu-culler:
+      description: "Stop idle sessions that hold a full GPU"
+      scopes: ["read:users:activity", "read:servers", "delete:servers"]
+      services: ["gpu-culler"]
 scheduling:
   userScheduler:
     enabled: false
