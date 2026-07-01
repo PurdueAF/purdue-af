@@ -1,4 +1,4 @@
-"""Cull sessions that hold a full A100 GPU after 12 hours of inactivity.
+"""Cull sessions that hold a full A100 GPU after 24 hours of inactivity.
 
 Runs as a JupyterHub *managed service* inside the hub pod (see
 hub.services.gpu-culler and hub.loadRoles.gpu-culler in values.yaml), the
@@ -127,7 +127,7 @@ async def main(namespace, timeout, every):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--timeout", type=int, default=43200, help="idle seconds before culling"
+        "--timeout", type=int, default=86400, help="idle seconds before culling"
     )
     parser.add_argument(
         "--every", type=int, default=600, help="seconds between cull passes"

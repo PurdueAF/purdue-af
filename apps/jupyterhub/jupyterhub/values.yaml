@@ -12,7 +12,7 @@ singleuser:
   profileList:
     - display_name: "Purdue AF 0.12.5 – Pixi-based environment management."
       default: true
-      description: 'Please refer to the Purdue AF documentation for instructions on how to switch from Conda to Pixi: <a href="https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html" target="_blank">https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html</a>. Note: sessions holding a full A100 GPU (40GB) are terminated after 12 hours of inactivity.'
+      description: 'Please refer to the Purdue AF documentation for instructions on how to switch from Conda to Pixi: <a href="https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html" target="_blank">https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html</a>. Note: sessions holding a full A100 GPU (40GB) are terminated after 24 hours of inactivity.'
       kubespawner_override:
         image: "geddes-registry.rcac.purdue.edu/cms/purdue-af:0.12.5"
         node_selector: { "cms-af-prod": "true" }
@@ -394,13 +394,13 @@ hub:
     agentic-interface:
       url: "http://agentic-interface.${namespace}.svc.cluster.local:8888"
       oauth_no_confirm: true
-    # full 40GB GPUs are scarce: cull sessions holding one after 12h of
+    # full 40GB GPUs are scarce: cull sessions holding one after 24h of
     # inactivity (the global `cull` service allows 14 days)
     gpu-culler:
       command:
         - python3
         - /usr/local/etc/jupyterhub-gpu-culler/cull-gpu-sessions.py
-        - --timeout=43200
+        - --timeout=86400
         - --every=600
   loadRoles:
     gpu-culler:

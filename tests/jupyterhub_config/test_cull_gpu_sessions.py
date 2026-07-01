@@ -1,4 +1,4 @@
-"""Tests for extraFiles/cull-gpu-sessions.py — the 12h idle cull of full-GPU pods."""
+"""Tests for extraFiles/cull-gpu-sessions.py — the 24h idle cull of full-GPU pods."""
 
 import datetime
 import types
@@ -11,7 +11,7 @@ SCRIPT = (
 FULL = "nvidia.com/mig-7g.40gb"
 
 NOW = datetime.datetime(2026, 7, 1, 12, 0, tzinfo=datetime.timezone.utc)
-TWELVE_HOURS = 43200
+ONE_DAY = 86400
 
 
 def hours_ago(hours):
@@ -103,11 +103,11 @@ async def test_culls_only_servers_idle_past_timeout():
         servers=[("alice", ""), ("bob", "")],
         users={
             "alice": {"servers": {"": {"last_activity": hours_ago(1)}}},
-            "bob": {"servers": {"": {"last_activity": hours_ago(13)}}},
+            "bob": {"servers": {"": {"last_activity": hours_ago(25)}}},
         },
     )
 
-    await mod.cull_once("cms", TWELVE_HOURS)
+    await mod.cull_once("cms", ONE_DAY)
 
     assert ("DELETE", "/users/bob/server") in calls
     assert not any(m == "DELETE" and "alice" in p for m, p in calls)
@@ -126,7 +126,7 @@ async def test_skips_pending_and_vanished_servers():
         },
     )
 
-    await mod.cull_once("cms", TWELVE_HOURS)
+    await mod.cull_once("cms", ONE_DAY)
 
     assert not any(method == "DELETE" for method, _ in calls)
 
@@ -137,10 +137,10 @@ async def test_named_servers_and_special_usernames_are_quoted():
         mod,
         servers=[("eve@cern.ch", "gpu-box")],
         users={
-            "eve%40cern.ch": {"servers": {"gpu-box": {"last_activity": hours_ago(13)}}}
+            "eve%40cern.ch": {"servers": {"gpu-box": {"last_activity": hours_ago(25)}}}
         },
     )
 
-    await mod.cull_once("cms", TWELVE_HOURS)
+    await mod.cull_once("cms", ONE_DAY)
 
     assert ("DELETE", "/users/eve%40cern.ch/servers/gpu-box") in calls

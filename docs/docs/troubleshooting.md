@@ -37,7 +37,7 @@ solutions. If your problem is not listed here, please
 
     Sessions that remain **inactive for 14 days** are automatically shut down to
     release resources. Sessions holding a **full A100 GPU (40GB)** are shut down
-    after only **12 hours** of inactivity, since these GPUs are scarce and shared.
+    after only **24 hours** of inactivity, since these GPUs are scarce and shared.
     Your storage volumes are unaffected — simply start a new
     session. Sessions may also occasionally get shut down due to unplanned outages,
     so save your work regularly and keep important code in sync with a Git repository.
