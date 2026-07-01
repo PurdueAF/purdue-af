@@ -39,6 +39,11 @@ kubectl create secret generic af-auth-cern \
 kubectl create configmap jupyterhub-extra-config \
 	--from-file=00-custom-spawner.py="$HUB_DIR/extraFiles/custom-spawner.py" \
 	--dry-run=client -o yaml | kubectl apply -f -
+# The hub pod mounts this configmap (hub.extraVolumes) and runs the culler as
+# a managed service; in kind it idles — no pod ever holds a full GPU.
+kubectl create configmap jupyterhub-gpu-culler \
+	--from-file=cull-gpu-sessions.py="$HUB_DIR/extraFiles/cull-gpu-sessions.py" \
+	--dry-run=client -o yaml | kubectl apply -f -
 
 echo "==> mock CILogon"
 kubectl create configmap mock-cilogon \
