@@ -68,7 +68,7 @@ codeGen:
     image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_code_gen_raw_uproot
     tag: "v1.8.4"
     defaultScienceContainerImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_science_image_combined_root
-    defaultScienceContainerTag: 5.7.2-6.38.04
+    defaultScienceContainerTag: 5.7.4-6.38.04-coffea
     compressionAlgorithm: ZSTD
     compressionLevel: 0
     nodeSelector:
