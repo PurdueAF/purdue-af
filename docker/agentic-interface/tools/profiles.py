@@ -12,6 +12,7 @@ from typing import Optional
 
 import httpx
 import yaml
+from metrics import instrumented_transport
 
 # Kubernetes in-cluster service and credentials
 _K8S_API = "https://kubernetes.default.svc"
@@ -42,7 +43,11 @@ async def _read_configmap() -> Optional[str]:
     except OSError:
         return None  # not running inside k8s (local dev)
 
-    async with httpx.AsyncClient(verify=_CA_PATH) as client:
+    # verify= goes to the transport: httpx ignores client-level TLS settings
+    # once a custom transport is supplied.
+    async with httpx.AsyncClient(
+        transport=instrumented_transport("kubernetes-api", verify=_CA_PATH)
+    ) as client:
         try:
             resp = await client.get(
                 f"{_K8S_API}/api/v1/namespaces/{_NAMESPACE}/configmaps/{_CONFIGMAP}",

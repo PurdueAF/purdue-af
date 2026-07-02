@@ -96,6 +96,7 @@ configMapGenerator:
   - name: grafana-public-dashboards
     files:
       - ../../apps/monitoring/grafana/dashboards/default.json
+      - ../../apps/monitoring/grafana/dashboards/agentic-interface.json
       - ../../apps/monitoring/grafana/dashboards/single-user.json
       - ../../apps/monitoring/grafana/dashboards/sonic.json
       - ../../apps/monitoring/grafana/dashboards/alerts.json

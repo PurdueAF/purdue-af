@@ -7,8 +7,10 @@ The agent then uses `ssh PurdueAF "cmd"` for all pod operations.
 
 import base64
 import os
+import time
 
 from context import current_user
+from metrics import record_upstream
 
 _NAMESPACE = os.environ.get("NAMESPACE", "cms")
 _CONTAINER = "notebook"
@@ -180,7 +182,13 @@ def register(mcp) -> None:
                 "then retry connect_to_session once get_session_status shows 'running'."
             )
 
+        start = time.monotonic()
         result = await _check_and_inject(pod_name, username, public_key)
+        record_upstream(
+            "kubernetes-exec",
+            "error" if result.startswith("Error") else "success",
+            time.monotonic() - start,
+        )
 
         if result == "EXISTS":
             key_status = (

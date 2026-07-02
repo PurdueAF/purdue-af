@@ -12,6 +12,7 @@ from typing import Optional
 import httpx
 from auth import clear_user_cache
 from context import current_user
+from metrics import instrumented_transport
 
 HUB_API_URL = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
 # Public base URL of the facility, used to build user-facing interface links.
@@ -36,7 +37,7 @@ def register(mcp) -> None:
         token = user["token"]
         username = user["username"]
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(transport=instrumented_transport("hub")) as client:
             try:
                 resp = await client.get(
                     f"{HUB_API_URL}/users/{username}",
@@ -159,7 +160,7 @@ def register(mcp) -> None:
             # "purdue-af-0-12-4-…"), so we always include it when explicitly requested.
             opts["profile"] = profile["slug"]
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(transport=instrumented_transport("hub")) as client:
             try:
                 resp = await client.post(
                     f"{HUB_API_URL}/users/{username}/server",
@@ -210,7 +211,7 @@ def register(mcp) -> None:
         token = user["token"]
         username = user["username"]
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(transport=instrumented_transport("hub")) as client:
             try:
                 resp = await client.delete(
                     f"{HUB_API_URL}/users/{username}/server",
@@ -253,7 +254,7 @@ def register(mcp) -> None:
         poll_interval = 10
         attempts = 0
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(transport=instrumented_transport("hub")) as client:
             while True:
                 attempts += 1
                 try:
@@ -318,7 +319,7 @@ def register(mcp) -> None:
         token = user["token"]
         username = user["username"]
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(transport=instrumented_transport("hub")) as client:
             # 1. Capture current user_options before stopping.
             prior_opts: dict = {}
             try:

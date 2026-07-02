@@ -8,6 +8,7 @@ from typing import Optional
 
 import httpx
 from context import current_user
+from metrics import instrumented_transport
 
 LOKI_URL = os.environ.get("LOKI_URL", "http://loki.cms.svc.cluster.local:3100")
 
@@ -108,7 +109,7 @@ async def _loki_query(
     if end_param:
         params["end"] = end_param
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(transport=instrumented_transport("loki")) as client:
         try:
             resp = await client.get(
                 f"{LOKI_URL}/loki/api/v1/query_range",

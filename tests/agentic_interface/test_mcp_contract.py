@@ -148,7 +148,11 @@ async def test_full_stack_handshake_and_auth(monkeypatch):
             before = (
                 REGISTRY.get_sample_value(
                     "purdue_af_mcp_tool_calls_total",
-                    {"tool": "list_af_profiles", "outcome": "success"},
+                    {
+                        "tool": "list_af_profiles",
+                        "outcome": "success",
+                        "username": "alice",
+                    },
                 )
                 or 0
             )
@@ -166,8 +170,22 @@ async def test_full_stack_handshake_and_auth(monkeypatch):
             after = (
                 REGISTRY.get_sample_value(
                     "purdue_af_mcp_tool_calls_total",
-                    {"tool": "list_af_profiles", "outcome": "success"},
+                    {
+                        "tool": "list_af_profiles",
+                        "outcome": "success",
+                        "username": "alice",
+                    },
                 )
                 or 0
             )
             assert after == before + 1
+
+            # The middleware sniffs the JSON-RPC method from the POST body and
+            # must replay it intact to the MCP app (asserted by the 200 above).
+            assert (
+                REGISTRY.get_sample_value(
+                    "purdue_af_mcp_jsonrpc_requests_total",
+                    {"method": "tools/call", "username": "alice"},
+                )
+                or 0
+            ) >= 1

@@ -10,6 +10,7 @@ import time
 from typing import Optional
 
 import httpx
+from metrics import instrumented_transport, record_auth
 
 HUB_API_URL = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
 NAMESPACE = os.environ.get("NAMESPACE", "cms")
@@ -27,7 +28,9 @@ _client: Optional[httpx.AsyncClient] = None
 def _get_client() -> httpx.AsyncClient:
     global _client
     if _client is None:
-        _client = httpx.AsyncClient(timeout=10.0)
+        _client = httpx.AsyncClient(
+            timeout=10.0, transport=instrumented_transport("hub")
+        )
     return _client
 
 
@@ -46,6 +49,7 @@ async def resolve_user(token: str) -> Optional[dict]:
     now = time.monotonic()
     cached = _user_cache.get(token)
     if cached and now < cached[0]:
+        record_auth("cache_hit")
         return cached[1]
 
     try:
@@ -54,14 +58,17 @@ async def resolve_user(token: str) -> Optional[dict]:
             headers={"Authorization": f"Bearer {token}"},
         )
     except httpx.RequestError:
+        record_auth("hub_unreachable")
         return None
 
     if resp.status_code != 200:
+        record_auth("invalid_token")
         return None
 
     data = resp.json()
     username = data.get("name")
     if not username:
+        record_auth("invalid_token")
         return None
 
     pod_name = data.get("servers", {}).get("", {}).get("state", {}).get("pod_name", "")
@@ -74,6 +81,7 @@ async def resolve_user(token: str) -> Optional[dict]:
     }
     _evict(now)
     _user_cache[token] = (now + _CACHE_TTL, user_info)
+    record_auth("validated")
     return user_info
 
 

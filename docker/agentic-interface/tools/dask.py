@@ -14,6 +14,7 @@ import os
 
 import httpx
 from context import current_user
+from metrics import instrumented_transport
 
 # Gateway name → internal k8s service URL.
 # Override individual entries via env vars if needed.
@@ -37,6 +38,18 @@ _GATEWAYS: dict[str, str] = {
 }
 _GATEWAY_ALIASES = {"hammer": "slurm-hammer", "gautschi": "slurm-gautschi"}
 _GATEWAY_LIST = ", ".join(_GATEWAYS)
+
+# Upstream-metrics target labels, derived per request so one client can talk
+# to several gateway backends and still be broken down by backend.
+_HOST_TO_GATEWAY = {httpx.URL(url).host: gw for gw, url in _GATEWAYS.items()}
+
+
+def _gateway_target(request: httpx.Request) -> str:
+    return f"dask-gateway-{_HOST_TO_GATEWAY.get(request.url.host, 'unknown')}"
+
+
+def _client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(transport=instrumented_transport(_gateway_target))
 
 
 def _resolve_gateway(name: str) -> tuple[str, str]:
@@ -98,7 +111,7 @@ def register(mcp) -> None:
         user = current_user.get()
         token = user["token"]
 
-        async with httpx.AsyncClient() as client:
+        async with _client() as client:
             results = await asyncio.gather(
                 *[
                     _fetch_clusters(client, gw, url, token)
@@ -145,7 +158,7 @@ def register(mcp) -> None:
         except ValueError as e:
             return str(e)
 
-        async with httpx.AsyncClient() as client:
+        async with _client() as client:
             try:
                 resp = await client.get(
                     f"{url}/api/v1/clusters/{cluster_name}",
@@ -201,7 +214,7 @@ def register(mcp) -> None:
         except ValueError as e:
             return str(e)
 
-        async with httpx.AsyncClient() as client:
+        async with _client() as client:
             try:
                 resp = await client.patch(
                     f"{url}/api/v1/clusters/{cluster_name}",
@@ -238,7 +251,7 @@ def register(mcp) -> None:
         except ValueError as e:
             return str(e)
 
-        async with httpx.AsyncClient() as client:
+        async with _client() as client:
             try:
                 resp = await client.delete(
                     f"{url}/api/v1/clusters/{cluster_name}",

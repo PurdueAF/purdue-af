@@ -3,8 +3,15 @@
 import auth
 import httpx
 import respx
+from prometheus_client import REGISTRY
 
 HUB_USER_URL = f"{auth.HUB_API_URL}/user"
+
+
+def _auth_counter_value(result: str) -> float:
+    return (
+        REGISTRY.get_sample_value("purdue_af_mcp_auth_total", {"result": result}) or 0.0
+    )
 
 
 def hub_user_payload(name="alice", pod_name="purdue-af-alice"):
@@ -161,6 +168,31 @@ async def test_hub_client_is_reused():
 
     assert client is not None
     assert auth._client is client
+
+
+@respx.mock
+async def test_auth_metrics_record_each_result():
+    route = respx.get(HUB_USER_URL)
+
+    route.respond(200, json=hub_user_payload())
+    before = {
+        r: _auth_counter_value(r)
+        for r in ("validated", "cache_hit", "invalid_token", "hub_unreachable")
+    }
+
+    await auth.resolve_user("tok-1")  # validated
+    await auth.resolve_user("tok-1")  # cache_hit
+
+    route.respond(403)
+    await auth.resolve_user("tok-bad")  # invalid_token
+
+    route.mock(side_effect=httpx.ConnectError("boom"))
+    await auth.resolve_user("tok-down")  # hub_unreachable
+
+    assert _auth_counter_value("validated") == before["validated"] + 1
+    assert _auth_counter_value("cache_hit") == before["cache_hit"] + 1
+    assert _auth_counter_value("invalid_token") == before["invalid_token"] + 1
+    assert _auth_counter_value("hub_unreachable") == before["hub_unreachable"] + 1
 
 
 @respx.mock

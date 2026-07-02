@@ -8,6 +8,7 @@ The resolved user identity (username + active pod name) is stored in a
 ContextVar so tool functions can scope their queries per-request.
 """
 
+import json
 import logging
 import os
 
@@ -15,7 +16,13 @@ import uvicorn
 from auth import resolve_user
 from context import current_user
 from mcp.server.fastmcp import FastMCP
-from metrics import instrument_mcp, metrics_body, metrics_content_type, record_request
+from metrics import (
+    instrument_mcp,
+    metrics_body,
+    metrics_content_type,
+    record_jsonrpc,
+    record_request,
+)
 from tools import connect, dask, logs, profiles, prompts, session, storage
 
 logger = logging.getLogger(__name__)
@@ -48,6 +55,46 @@ class _PathStripper:
                     "root_path": scope.get("root_path", "") + self._prefix,
                 }
         await self._app(scope, receive, send)
+
+
+async def _buffer_body(receive):
+    """Drain the request body, returning (body, replay_receive).
+
+    The MCP JSON-RPC method lives in the POST body, so the middleware has to
+    read it before the app does; replay_receive hands the buffered messages
+    back to the app in order, then delegates to the original receive.
+    """
+    messages = []
+    while True:
+        message = await receive()
+        messages.append(message)
+        if message["type"] != "http.request" or not message.get("more_body"):
+            break
+    body = b"".join(m.get("body", b"") for m in messages if m["type"] == "http.request")
+
+    async def replay():
+        if messages:
+            return messages.pop(0)
+        return await receive()
+
+    return body, replay
+
+
+def _jsonrpc_methods(body: bytes) -> list[str]:
+    """Extract JSON-RPC method names from an MCP POST body.
+
+    Client-to-server responses carry no method field — label them 'response'.
+    Unparseable bodies are labelled 'invalid'.
+    """
+    try:
+        payload = json.loads(body)
+    except (ValueError, UnicodeDecodeError):
+        return ["invalid"]
+    messages = payload if isinstance(payload, list) else [payload]
+    return [
+        m.get("method", "response") if isinstance(m, dict) else "invalid"
+        for m in messages
+    ]
 
 
 class _AuthMiddleware:
@@ -106,6 +153,14 @@ class _AuthMiddleware:
             (b"host", b"localhost:8888") if k.lower() == b"host" else (k, v)
             for k, v in scope.get("headers", [])
         ]
+
+        # Record the JSON-RPC method so tool traffic is distinguishable from
+        # protocol overhead (initialize, tools/list, notifications/…) in the
+        # request metrics.
+        if scope.get("method") == "POST":
+            body, receive = await _buffer_body(receive)
+            for method in _jsonrpc_methods(body):
+                record_jsonrpc(method, user_info["username"])
 
         # Bind user context for the duration of this request so tool functions
         # can call current_user.get() without needing extra arguments.

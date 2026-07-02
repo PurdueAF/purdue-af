@@ -7,6 +7,7 @@ from typing import Optional
 
 import httpx
 from context import current_user
+from metrics import instrumented_transport
 
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
 _DIRS = ("home", "work")
@@ -55,7 +56,9 @@ def register(mcp) -> None:
 
         pod_selector = f'pod="{pod_name}"'
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(
+            transport=instrumented_transport("prometheus")
+        ) as client:
             rows: list[str] = ["# Storage usage (data age ≤ 5 min)\n"]
             any_data = False
 
