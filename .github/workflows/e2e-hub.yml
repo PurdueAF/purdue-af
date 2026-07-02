@@ -42,7 +42,7 @@ jobs:
           enable-cache: true
           cache-dependency-glob: tests/uv.lock
       - name: Install flux CLI
-        uses: fluxcd/flux2/action@cd0ffe01512e8bf809e1ff026fb6b185adc2111a # main
+        uses: fluxcd/flux2/action@006ecb6b0401525e703585df9e87d6d0d2ed34bd # main
         with:
           version: 2.5.1
       - name: Create kind cluster
