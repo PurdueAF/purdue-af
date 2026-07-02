@@ -96,8 +96,12 @@ async def test_form_shows_live_counts(monkeypatch):
 
     choices = gpu_choices(profiles)
     assert choices["2"]["display_name"] == "1 A100 GPU slice (5GB) — 12 available now"
-    # the static "subject to availability" note is replaced by the live count
-    assert choices["3"]["display_name"] == "1 full A100 GPU (40GB) — 2 available now"
+    # the static "subject to availability" note is replaced by the live count,
+    # and the full-GPU flavor also carries the idle-cull note
+    assert (
+        choices["3"]["display_name"]
+        == "1 full A100 GPU (40GB) — 2 available now, idle session timeout 24h"
+    )
     # zero-GPU choice and non-GPU options stay untouched
     assert choices["1"]["display_name"] == "0"
     assert (
@@ -114,17 +118,23 @@ async def test_form_marks_exhausted_flavor(monkeypatch):
     assert choices["2"]["display_name"] == "1 A100 GPU slice (5GB) — 3 available now"
     assert (
         choices["3"]["display_name"]
-        == "1 full A100 GPU (40GB) — none available right now"
+        == "1 full A100 GPU (40GB) — none available right now, 24h inactivity limit"
     )
 
 
-async def test_form_untouched_when_availability_unknown(monkeypatch):
+async def test_form_keeps_static_labels_when_availability_unknown(monkeypatch):
     ns = load(monkeypatch)
     set_free(ns, None)
 
-    profiles = await ns["profile_list_with_gpu_counts"](None)
+    choices = gpu_choices(await ns["profile_list_with_gpu_counts"](None))
 
-    assert profiles == gpu_profiles()
+    # no live counts: the static "subject to availability" hedge stays,
+    # but the idle-cull note still shows on the full-GPU choice
+    assert choices["2"]["display_name"] == "1 A100 GPU slice (5GB)"
+    assert (
+        choices["3"]["display_name"]
+        == "1 full A100 GPU (40GB) - subject to availability — 24h inactivity limit"
+    )
 
 
 async def test_static_profile_list_is_not_mutated(monkeypatch):
@@ -255,7 +265,7 @@ async def test_admitted_spawn_reserves_the_gpu(monkeypatch):
     choices = gpu_choices(await ns["profile_list_with_gpu_counts"](None))
     assert (
         choices["3"]["display_name"]
-        == "1 full A100 GPU (40GB) — none available right now"
+        == "1 full A100 GPU (40GB) — none available right now, 24h inactivity limit"
     )
 
 

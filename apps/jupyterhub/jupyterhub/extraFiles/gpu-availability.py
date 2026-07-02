@@ -28,15 +28,19 @@ PROMETHEUS_TIMEOUT = 5  # seconds
 CACHE_TTL = 30  # seconds; form renders reuse the last Prometheus answer this long
 GRANT_TTL = 120  # seconds; admitted spawns count as used until Prometheus sees them
 
-# k8s extended resource -> kube-state-metrics resource label + human-readable name
+# k8s extended resource -> kube-state-metrics resource label + human-readable
+# name; an optional "note" is always appended to the choice on the profile form
 GPU_FLAVORS = {
     "nvidia.com/mig-1g.5gb": {
         "metric": "nvidia_com_mig_1g_5gb",
         "label": "A100 GPU slices (5GB)",
+        "note": "idle session timeout 14 days",
     },
     "nvidia.com/mig-7g.40gb": {
         "metric": "nvidia_com_mig_7g_40gb",
         "label": "full A100 GPUs (40GB)",
+        # keep in sync with the gpu-culler --timeout in values.yaml
+        "note": "idle session timeout 24h",
     },
 }
 
@@ -136,23 +140,33 @@ def _gpu_requests_in(kubespawner_override):
 
 
 def _annotate_gpu_choices(profiles, free):
-    """Append live availability to the display name of every GPU choice."""
+    """Append live availability and flavor notes to every GPU choice.
+
+    The flavor note (e.g. the 24h inactivity limit) is appended even when
+    availability is unknown (free is None); the live count replaces the
+    static "subject to availability" hedge only when it is actually known.
+    """
     for profile in profiles:
         for option in (profile.get("profile_options") or {}).values():
             for choice in (option.get("choices") or {}).values():
                 for resource in _gpu_requests_in(choice.get("kubespawner_override")):
-                    count = free.get(resource)
-                    if count is None:
+                    parts = []
+                    count = None if free is None else free.get(resource)
+                    if count is not None:
+                        parts.append(
+                            f"{count} available now"
+                            if count
+                            else "none available right now"
+                        )
+                    note = GPU_FLAVORS[resource].get("note")
+                    if note:
+                        parts.append(note)
+                    if not parts:
                         continue
-                    name = choice["display_name"].removesuffix(
-                        " - subject to availability"
-                    )
-                    note = (
-                        f"{count} available now"
-                        if count
-                        else "none available right now"
-                    )
-                    choice["display_name"] = f"{name} — {note}"
+                    name = choice["display_name"]
+                    if count is not None:
+                        name = name.removesuffix(" - subject to availability")
+                    choice["display_name"] = f"{name} — {', '.join(parts)}"
     return profiles
 
 
@@ -162,9 +176,7 @@ _static_profile_list = c.KubeSpawner.profile_list
 async def profile_list_with_gpu_counts(spawner):
     profiles = copy.deepcopy(_static_profile_list)
     free = await free_gpus()
-    if free is not None:
-        _annotate_gpu_choices(profiles, free)
-    return profiles
+    return _annotate_gpu_choices(profiles, free)
 
 
 class GPUsUnavailableError(Exception):
