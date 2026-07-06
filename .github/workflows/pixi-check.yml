@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - uses: prefix-dev/setup-pixi@5185adfbffb4bd703da3010310260805d89ebb11 # v0.9.6 # Renovate pins to digest
         with:
           pixi-version: v0.62.2
@@ -46,7 +46,7 @@ jobs:
     env:
       CONDA_OVERRIDE_CUDA: "12.4"
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - name: Skip without lock file
         if: hashFiles('pixi/global/pixi.lock') == ''
         run: echo "pixi/global/pixi.lock not present — skipping"
