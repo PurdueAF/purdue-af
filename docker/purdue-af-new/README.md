@@ -39,6 +39,20 @@ kubectl apply -n cms -f docker/kaniko-build-jobs/build-af-new.yaml
 ```
 
 Pushes to `geddes-registry.rcac.purdue.edu/cms/purdue-af:0.13.0-pre1`.
+(First successful build: ~10 min.)
+
+## GitHub Actions viability experiment
+
+`.github/workflows/build-af-new.yml` builds this same Dockerfile on a
+GitHub-hosted runner — separate from the regular CI — to test whether the
+slimmed image now fits GH worker limits (the old alma8+CUDA image did not;
+see the heavy-tier revert in `ed8e24cd`). It remaps the geddes docker-hub-cache
+`FROM` to docker.io via a buildx named context, frees runner disk first,
+smoke-tests (nvcc + jupyterlab import), and on main pushes to
+`ghcr.io/purdueaf/purdue-af-new:sha-<commit>` with a layer-size report in the
+job summary. Runs on `workflow_dispatch` and on pushes touching this
+directory, `pixi/base/`, or the Slurm inputs. If it proves reliable, it
+graduates into `build-images.yml`; the kaniko job stays as fallback.
 
 ## Compare against 0.12.5
 
