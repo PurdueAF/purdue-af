@@ -56,7 +56,10 @@ for cm in jupyterhub-extra-config jupyterhub-gpu-culler; do
 		# generator paths are relative to the kustomization's directory
 		from_file_args+=("--from-file=${key}=$(dirname "$PROD_KUSTOMIZATION")/${path}")
 	done < <(yq ".configMapGenerator[] | select(.name == \"$cm\") | .files[]" "$PROD_KUSTOMIZATION")
-	[ ${#from_file_args[@]} -gt 0 ] || { echo "no generator entry for $cm in $PROD_KUSTOMIZATION"; exit 1; }
+	[ ${#from_file_args[@]} -gt 0 ] || {
+		echo "no generator entry for $cm in $PROD_KUSTOMIZATION"
+		exit 1
+	}
 	kubectl create configmap "$cm" "${from_file_args[@]}" \
 		--dry-run=client -o yaml | kubectl apply -f -
 done
