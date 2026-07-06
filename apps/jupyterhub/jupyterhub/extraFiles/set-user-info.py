@@ -7,13 +7,20 @@ NAMESPACE = os.environ["POD_NAMESPACE"]
 
 
 def ldap_lookup(username):
-    url = "geddes-aux.rcac.purdue.edu"
+    # AF_LDAP_* are only set by the e2e harness (tests/e2e_hub), which points
+    # at a plaintext mock; unset (production) keeps the original geddes-aux
+    # TLS path byte-for-byte.
+    url = os.environ.get("AF_LDAP_HOST", "geddes-aux.rcac.purdue.edu")
+    use_tls = os.environ.get("AF_LDAP_TLS", "true").lower() != "false"
     baseDN = "ou=People,dc=rcac,dc=purdue,dc=edu"
     search_filter = "(uid={0}*)"
     attrs = ["uidNumber", "gidNumber"]
-    s = Server(host=url, use_ssl=True, get_info="ALL")
+    s = Server(host=url, use_ssl=use_tls, get_info="ALL")
     conn = Connection(s, version=3, authentication="ANONYMOUS")
-    conn.start_tls()
+    if use_tls:
+        conn.start_tls()
+    else:
+        conn.bind()
     conn.search(
         search_base=baseDN,
         search_filter=search_filter.format(username),

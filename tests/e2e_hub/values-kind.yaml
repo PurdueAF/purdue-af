@@ -27,6 +27,11 @@ hub:
     # hub never health-checks — harmless while the service isn't deployed)
     e2e:
       apiToken: e2e-admin-token-not-a-secret
+  # maps merge: these ADD to prod's hub.extraEnv (CILOGON_* stay intact).
+  # Point set-user-info.py's ldap_lookup() at the plaintext mock LDAP.
+  extraEnv:
+    AF_LDAP_HOST: mock-ldap.default.svc.cluster.local
+    AF_LDAP_TLS: "false"
   loadRoles:
     e2e-admin:
       services: [e2e]

@@ -122,6 +122,21 @@ def wait_ready(admin, user, timeout=300):
     raise AssertionError(f"{user}'s server never became ready")
 
 
+def test_ldap_uid_gid_land_in_pod(admin):
+    """set-user-info.py auth_state_hook: the LDAP-resolved uid/gid of a
+    Purdue user must reach the pod env (values from mock-ldap-users.ldif).
+    Runs against alice's server spawned above."""
+    pod = next(
+        p
+        for p in singleuser_pods()
+        if p["metadata"]["labels"].get("username_unescaped") == "alice"
+    )
+    env = {e["name"]: e.get("value") for e in pod["spec"]["containers"][0]["env"]}
+    assert env.get("NB_USER") == "alice"
+    assert env.get("NB_UID") == "20001"
+    assert env.get("NB_GID") == "21001"
+
+
 def test_second_user_spawns_concurrently(login, admin):
     """Two users' pods coexist, each carrying its own ownership label."""
     login("carol@cern.ch", idp=CERN_IDP)

@@ -1,0 +1,47 @@
+# Seed entries for the mock LDAP (osixia/openldap) — mirrors the geddes-aux
+# layout that set-user-info.py queries: posixAccounts under ou=People with
+# uidNumber/gidNumber. uid/gid values are deliberately distinct so a swapped
+# assignment fails the e2e assertions.
+dn: ou=People,dc=rcac,dc=purdue,dc=edu
+objectClass: organizationalUnit
+ou: People
+
+dn: uid=alice,ou=People,dc=rcac,dc=purdue,dc=edu
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: alice
+cn: alice
+sn: alice
+uidNumber: 20001
+gidNumber: 21001
+homeDirectory: /home/alice
+
+dn: uid=bob,ou=People,dc=rcac,dc=purdue,dc=edu
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: bob
+cn: bob
+sn: bob
+uidNumber: 20002
+gidNumber: 21002
+homeDirectory: /home/bob
+
+dn: uid=dkondra,ou=People,dc=rcac,dc=purdue,dc=edu
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: dkondra
+cn: dkondra
+sn: dkondra
+uidNumber: 20003
+gidNumber: 21003
+homeDirectory: /home/dkondra
+
+dn: uid=dave,ou=People,dc=rcac,dc=purdue,dc=edu
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: dave
+cn: dave
+sn: dave
+uidNumber: 20004
+gidNumber: 21004
+homeDirectory: /home/dave

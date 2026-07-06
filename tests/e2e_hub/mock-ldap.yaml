@@ -1,0 +1,64 @@
+# Mock LDAP (openldap seeded with posixAccounts) — stands in for geddes-aux
+# so set-user-info.py's ldap_lookup() runs for real at spawn time. The seed
+# LDIF and the anonymous-read ACL come from ConfigMaps created by
+# setup-kind.sh from mock-ldap-users.ldif / mock-ldap-acl.ldif.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-ldap
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: mock-ldap }
+  template:
+    metadata:
+      labels: { app: mock-ldap }
+    spec:
+      containers:
+        - name: mock-ldap
+          image: osixia/openldap:1.5.0
+          args: ["--copy-service"] # required for custom bootstrap ldif mounts
+          env:
+            - name: LDAP_ORGANISATION
+              value: "RCAC Mock"
+            - name: LDAP_DOMAIN
+              value: "rcac.purdue.edu" # -> base dc=rcac,dc=purdue,dc=edu, as in prod
+            - name: LDAP_ADMIN_PASSWORD
+              value: "not-a-secret"
+            - name: LDAP_TLS
+              value: "false" # harness sets AF_LDAP_TLS=false on the hub
+          ports:
+            - containerPort: 389
+          # slapd only listens after the bootstrap LDIFs are applied, so
+          # TCP-ready implies the seed data is queryable.
+          readinessProbe:
+            tcpSocket:
+              port: 389
+            initialDelaySeconds: 5
+            periodSeconds: 3
+          # subPath mounts (not a directory mount): a ConfigMap dir mount
+          # adds the kubelet's ..data symlinks, and osixia's bootstrap then
+          # applies every LDIF twice -> entryAlreadyExists (rc 68) crash.
+          volumeMounts:
+            - name: seed
+              mountPath: /container/service/slapd/assets/config/bootstrap/ldif/custom/10-users.ldif
+              subPath: 10-users.ldif
+              readOnly: true
+            - name: seed
+              mountPath: /container/service/slapd/assets/config/bootstrap/ldif/custom/20-acl.ldif
+              subPath: 20-acl.ldif
+              readOnly: true
+      volumes:
+        - name: seed
+          configMap:
+            name: mock-ldap
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-ldap
+spec:
+  selector: { app: mock-ldap }
+  ports:
+    - port: 389
+      targetPort: 389
