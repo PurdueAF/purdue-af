@@ -38,3 +38,7 @@ spec:
           operator: "Equal"
           value: "cms-af"
           effect: "NoSchedule"
+        - key: gautchi
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
