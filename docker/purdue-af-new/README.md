@@ -19,6 +19,15 @@ stage — matches the original stage for stage, and reuses the files in
 `docker/purdue-af/` (this directory only adds the Dockerfile and the CERN
 configs).
 
+One gotcha, learned from the first pre1 build attempt: the base image's
+`cuda.repo` is NVIDIA's **rolling** rhel8 repo, which also contains CUDA 13.x
+whose `cccl` package _obsoletes_ `cuda-cccl-12-4` — so a plain `dnf upgrade`
+tries to cross-grade CUDA and fails dependency resolution. All dnf commands
+therefore run with `--disablerepo=cuda` except the exact-version cuDNN
+install; CUDA stays at the base image's pins. (Resolution of every dnf
+transaction was dry-run-verified in the amd64 base image before the second
+build attempt.)
+
 Expected: **~5 GB compressed** (from 7.6) and roughly half the build time.
 
 ## Build

@@ -35,15 +35,19 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 USER root
 
 # Install system dependencies.
+# --disablerepo=cuda everywhere except the cuDNN line: the base image's
+# cuda.repo is NVIDIA's ROLLING rhel8 repo (contains CUDA 13.x, whose cccl
+# obsoletes cuda-cccl-12-4), so an unconstrained upgrade would cross-grade
+# CUDA 12.4 → 13 and fail. CUDA must stay exactly at the base image's pins.
 # --exclude=linux-firmware*: kernel firmware is useless in a container and
 # costs >1 GB if an upgrade ever drags it in.
 # cuda-toolkit/nsight are NOT installed here — the base image provides CUDA;
-# only cuDNN is added on top, pinned, from the base's preconfigured cuda repo.
+# only cuDNN is added on top, pinned, from the base's cuda repo.
 RUN set -euo pipefail \
- && dnf -y upgrade --exclude='linux-firmware*' \
- && dnf -y install dnf-plugins-core epel-release \
+ && dnf -y upgrade --disablerepo=cuda --exclude='linux-firmware*' \
+ && dnf -y install --disablerepo=cuda dnf-plugins-core epel-release \
  && dnf config-manager --set-enabled powertools \
- && dnf -y install \
+ && dnf -y install --disablerepo=cuda \
       'dnf-command(config-manager)' \
       sudo wget perl which git bzip2 bzip2-devel zlib-devel \
       openssh-server openssh-clients openssl-devel \
@@ -55,8 +59,9 @@ RUN set -euo pipefail \
       boost-devel diffutils ncurses-compat-libs cmake \
       glibc-static libcurl-devel \
       gfal2-util-scripts python3-gfal2 voms-clients-cpp myproxy patch \
- && dnf -y --enablerepo=epel install tini \
- # cuDNN pin (same version the 0.12.x image shipped)
+ && dnf -y --disablerepo=cuda --enablerepo=epel install tini \
+ # cuDNN pin (same version the 0.12.x image shipped); the only line that
+ # uses the cuda repo — an exact-version install cannot pull obsoletes
  && dnf -y install libcudnn8-8.9.7.29-1+cuda12.2 \
  # cleanup & small quality-of-life
  && dnf clean all \
