@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kaniko-build-af-new
+spec:
+  backoffLimit: 3
+  completions: 1
+  template:
+    spec:
+      containers:
+        - name: kaniko
+          image: gcr.io/kaniko-project/executor:latest
+          args:
+            - "--context=git://github.com/PurdueAF/purdue-af.git#refs/heads/main"
+            - "--dockerfile=docker/purdue-af-new/Dockerfile"
+            - "--destination=geddes-registry.rcac.purdue.edu/cms/purdue-af:0.13.0-pre1"
+            - "--cache=true"
+            # - "--no-push"
+          resources:
+            requests:
+              memory: "128Gi"
+              cpu: "16"
+            limits:
+              memory: "256Gi"
+              cpu: "16"
+          volumeMounts:
+            - name: docker-config
+              mountPath: /kaniko/.docker/
+      restartPolicy: OnFailure
+      volumes:
+        - name: docker-config
+          secret:
+            secretName: docker-config
+      nodeSelector:
+        cms-af-dev: "true"
+      tolerations:
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
