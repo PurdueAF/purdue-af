@@ -83,6 +83,20 @@ singleuser:
         image: "quay.io/jupyterhub/k8s-singleuser-sample:__CHART_VERSION__"
         environment:
           E2E_PROFILE_MARKER: "alt"
+    # Pre-release profile: spawns the REAL AF image (freshly CI-built
+    # sha-<commit> when the commit touched the image inputs, else the
+    # promoted :pre-release). setup-kind.sh substitutes the ref and
+    # pre-pulls it onto the node; the e2e-prerelease job runs the matching
+    # test with E2E_PRERELEASE=1. Boots via the global `cmd:
+    # jupyterhub-singleuser` override above — the docker-stacks boot path
+    # (start-singleuser.sh) is exercised on the real cluster, not in kind.
+    - display_name: "E2E pre-release"
+      slug: pre-release
+      kubespawner_override:
+        image: "__PRERELEASE_IMAGE__"
+        image_pull_policy: IfNotPresent # pre-pulled by setup-kind.sh
+        environment:
+          E2E_PROFILE_MARKER: "pre-release"
 
 scheduling:
   userPods:

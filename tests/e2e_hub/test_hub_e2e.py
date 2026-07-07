@@ -262,3 +262,46 @@ def test_logout_clears_session(login):
     )
     response = client.get("/hub/home")  # follows into OAuth as mallory
     assert response.status_code in (403, 500)  # denied: old session is gone
+
+
+def test_prerelease_profile_spawns_ci_built_image(login, admin):
+    """The CD gate for the AF image: the pre-release JH option must spawn the
+    exact image this pipeline built (sha-<commit> if rebuilt in this commit,
+    else the promoted :pre-release tag) and reach a running JupyterLab.
+    Only meaningful when setup-kind.sh preloaded the image (e2e-prerelease
+    CI job); elsewhere the image isn't on the node, so skip."""
+    import os
+
+    import pytest
+
+    if not os.environ.get("E2E_PRERELEASE"):
+        pytest.skip("pre-release AF image not preloaded (E2E_PRERELEASE unset)")
+    expected_image = os.environ["PRERELEASE_IMAGE"]
+
+    client, _ = login("alice@purdue.edu")
+    admin.delete("/hub/api/users/alice/server")  # tolerate leftovers (404 ok)
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        if not admin.get("/hub/api/users/alice").json().get("servers"):
+            break
+        time.sleep(3)
+
+    spawn = admin.post("/hub/api/users/alice/server", json={"profile": "pre-release"})
+    assert spawn.status_code in (201, 202), spawn.text
+    # generous: the real image's Lab cold-start on a 2-core runner is slow
+    wait_ready(admin, "alice", timeout=600)
+
+    pod = next(
+        p
+        for p in singleuser_pods()
+        if p["metadata"]["labels"].get("username_unescaped") == "alice"
+    )
+    container = pod["spec"]["containers"][0]
+    assert container["image"] == expected_image
+    env = {e["name"]: e.get("value") for e in container["env"]}
+    assert env.get("E2E_PROFILE_MARKER") == "pre-release"
+
+    # The user's own session must reach the running Lab inside the AF image.
+    lab = client.get(f"{HUB}/user/alice/api")
+    assert lab.status_code == 200
+    assert "version" in lab.json()

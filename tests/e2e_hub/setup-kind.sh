@@ -30,6 +30,20 @@ docker pull -q "quay.io/jupyterhub/k8s-singleuser-sample:${CHART_VERSION}"
 kind load docker-image --name "$CLUSTER" "quay.io/jupyterhub/k8s-singleuser-sample:${CHART_VERSION}" ||
 	docker exec "${CLUSTER}-control-plane" crictl pull "quay.io/jupyterhub/k8s-singleuser-sample:${CHART_VERSION}"
 
+# Pre-release AF image (real purdue-af, ~5 GB compressed): pulled straight
+# onto the kind node so the spawn window stays clean. Set by the
+# e2e-prerelease CI job (sha-<commit> if built this commit, else the
+# promoted :pre-release tag); unset for local runs → the pre-release profile
+# exists but its test is skipped (E2E_PRERELEASE unset).
+if [ -n "${PRERELEASE_IMAGE:-}" ]; then
+	echo "==> pre-load pre-release AF image (${PRERELEASE_IMAGE})"
+	creds=()
+	if [ -n "${GHCR_TOKEN:-}" ]; then
+		creds=(--creds "${GHCR_USER:-token}:${GHCR_TOKEN}")
+	fi
+	docker exec "${CLUSTER}-control-plane" crictl pull "${creds[@]}" "$PRERELEASE_IMAGE"
+fi
+
 echo "==> secrets and config (purdue: alice, bob, dkondra; cern: carol)"
 kubectl create secret generic auth-secret \
 	--from-literal=cilogon_client_id=mock-client \
@@ -92,7 +106,9 @@ export singlenode_storage_class=standard
 export af_shared_storage_size=1Gi
 export x509_secret_name=af-x509-proxy
 flux envsubst <"$HUB_DIR/values.yaml" >"$workdir/values.yaml"
-sed "s/__CHART_VERSION__/${CHART_VERSION}/g" "$E2E_DIR/values-kind.yaml" >"$workdir/values-kind.yaml"
+sed -e "s/__CHART_VERSION__/${CHART_VERSION}/g" \
+	-e "s|__PRERELEASE_IMAGE__|${PRERELEASE_IMAGE:-ghcr.io/purdueaf/purdue-af:pre-release}|g" \
+	"$E2E_DIR/values-kind.yaml" >"$workdir/values-kind.yaml"
 
 echo "==> helm install jupyterhub@${CHART_VERSION}"
 helm repo add jupyterhub https://hub.jupyter.org/helm-chart/ >/dev/null 2>&1 || true

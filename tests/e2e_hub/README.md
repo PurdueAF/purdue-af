@@ -7,14 +7,14 @@ mocked. Never touches the production cluster.
 
 ## What is real vs mocked
 
-| Real (identical to production)            | Mocked / replaced                          |
-| ----------------------------------------- | ------------------------------------------ |
+| Real (identical to production)             | Mocked / replaced                             |
+| ------------------------------------------ | --------------------------------------------- |
 | z2jh chart version (from helmrelease.yaml) | CILogon → `mock-cilogon.py` (OAuth code flow) |
-| `values.yaml` (flux-envsubst'd, like Flux) | userlist secrets → test users              |
-| all 3 `jupyterhub_config.d` snippets      | LDAP → openldap seeded like geddes-aux     |
-| OAuth code flow, auth_state, KubeSpawner  | singleuser image → upstream sample (tiny)  |
-| `ldap_lookup()` query/parse path          | storage/nodeSelectors/registry → nulled    |
-| spawn → JupyterLab HTTP response          | Prometheus → absent (gpu script fails open) |
+| `values.yaml` (flux-envsubst'd, like Flux) | userlist secrets → test users                 |
+| all 3 `jupyterhub_config.d` snippets       | LDAP → openldap seeded like geddes-aux        |
+| OAuth code flow, auth_state, KubeSpawner   | singleuser image → upstream sample (tiny)     |
+| `ldap_lookup()` query/parse path           | storage/nodeSelectors/registry → nulled       |
+| spawn → JupyterLab HTTP response           | Prometheus → absent (gpu script fails open)   |
 
 ## Covered behaviors
 
@@ -46,11 +46,28 @@ Locally (needs docker + kind + helm + kubectl + flux):
     E2E_HUB=1 uv run --project tests pytest tests/e2e_hub
     kind delete cluster --name af-e2e
 
+## Pre-release image e2e (the AF image CD gate)
+
+The workflow's `e2e-prerelease` job runs the same stack but spawns the REAL
+purdue-af image through the hub's `pre-release` profile: the freshly built
+`ghcr.io/purdueaf/purdue-af:sha-<commit>` when the commit touched the image
+inputs (job ordering guarantees the build finished first), otherwise the
+currently promoted `:pre-release` tag. `setup-kind.sh` pre-pulls whatever
+`PRERELEASE_IMAGE` names onto the kind node; the test asserting the pod runs
+that image is gated by `E2E_PRERELEASE=1` (skipped in the production job and
+in local runs, where the ~5 GB pull usually isn't worth it). To run it
+locally anyway:
+
+    PRERELEASE_IMAGE=ghcr.io/purdueaf/purdue-af:pre-release tests/e2e_hub/setup-kind.sh
+    E2E_HUB=1 E2E_PRERELEASE=1 PRERELEASE_IMAGE=ghcr.io/purdueaf/purdue-af:pre-release \
+        uv run --project tests pytest tests/e2e_hub -k prerelease
+
 ## Remaining gaps (phase 3)
 
 - agentic-interface deployed as hub service: MCP login → session tools e2e.
-- pixi env *build* validation stays in the separate `pixi-check` job
-  (lock consistency only — the multi-GB image build remains kaniko's job).
+- pixi env _build_ validation stays in the separate `pixi-check` job
+  (lock consistency only — the full image build lives in the `build-image`
+  job of this same workflow).
 - NetworkPolicies are rendered but NOT enforced by kind's default CNI —
   policy regressions (e.g. hub egress to LDAP/CILogon) need the rendered
   manifest diff (see JUPYTERHUB_UPGRADE_PLAN.md phase 2.3) or staging.

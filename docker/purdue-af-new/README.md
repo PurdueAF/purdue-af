@@ -43,24 +43,35 @@ Pushes to `geddes-registry.rcac.purdue.edu/cms/purdue-af:0.13.0-pre2`
 (pre1 built in ~10 min but was missing procps/krb5-workstation — see the
 base-parity row above; bump the tag in the job YAML per iteration).
 
-## GitHub Actions viability experiment
+## CI/CD pipeline (pre-release channel)
 
-`.github/workflows/build-af-new.yml` builds this same Dockerfile on a
-GitHub-hosted runner — separate from the regular CI — to test whether the
-slimmed image now fits GH worker limits (the old alma8+CUDA image did not;
-see the heavy-tier revert in `ed8e24cd`). It remaps the geddes docker-hub-cache
-`FROM` to docker.io via a buildx named context, frees runner disk first,
-smoke-tests (nvcc, ps, klist, xz, jupyterlab import), then installs CVMFS on
-the runner (`cvmfs-contrib/github-action-cvmfs`) and sources
-`/cvmfs/cms.cern.ch/cmsset_default.sh` inside the image — an end-user-level
-test that catches missing base utilities the CMS tooling needs. On main it
-pushes to `ghcr.io/purdueaf/purdue-af-new:sha-<commit>` with a layer-size
-report in the job summary. Runs on `workflow_dispatch` and on pushes touching
-this directory, `pixi/base/`, or the Slurm inputs. If it proves reliable, it
-graduates into `build-images.yml`; the kaniko job stays as fallback.
-(Pod-level CVMFS wiring — the CSI driver, mount propagation into user pods —
-is a separate concern that belongs in the e2e-hub kind cluster, where the
-CSI driver would need to be installed.)
+`.github/workflows/e2e-hub.yml` owns this image end to end:
+
+1. **build-image** (when a commit touches this dir, `pixi/base/`, or the
+   Slurm inputs): buildx build with the geddes `FROM` remapped to docker.io
+   via a named context, smoke test (nvcc, ps, klist, xz, jupyterlab), CVMFS
+   test (host CVMFS mounted in, `cmsset_default.sh` sourced), then push of
+   the immutable `ghcr.io/purdueaf/purdue-af:sha-<commit>`.
+2. **e2e-prerelease**: full hub-in-kind e2e that spawns THIS exact image
+   through the hub's `pre-release` profile and asserts the pod runs it and
+   JupyterLab answers. When the commit didn't rebuild the image, it
+   revalidates the currently promoted `:pre-release` tag instead (also
+   weekly via cron).
+3. **promote** (main only, after e2e passes): moves the
+   `ghcr.io/purdueaf/purdue-af:pre-release` tag to the tested digest.
+
+The hub's "Latest pre-release version" profile
+(`apps/jupyterhub/jupyterhub/values.yaml`) pulls `:pre-release` with
+`image_pull_policy: Always`, so validated builds reach user sessions
+automatically — no manifest edit, no hand-pushed tags. The production
+profile stays pinned; moving it to the same flow is the follow-up step.
+
+⚠ One-time manual step: make the `purdue-af` package public on
+ghcr.io/purdueaf after the first push (cluster nodes pull it
+unauthenticated), or configure an imagePullSecret / the ghcr-cache Harbor
+proxy from docker/REGISTRY.md instead.
+
+The kaniko Job below remains as a cluster-local fallback build path.
 
 ## Compare against 0.12.5
 
