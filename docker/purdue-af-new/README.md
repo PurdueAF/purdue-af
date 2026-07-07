@@ -13,6 +13,7 @@ official CUDA base image instead of CERN alma8-base + a hand-installed
 | 142 MB Java 8 JDK dragged in by `voms-clients` (Java implementation)                                   | `voms-clients-cpp`                                                                                                                                                                               |
 | alma8-base is a 678 MB single layer                                                                    | Rocky OS layer is 69 MB                                                                                                                                                                          |
 | CERN krb5/CA defaults came from alma8-base                                                             | vendored in `configs/` (extracted byte-identical from `alma8-base:20250501-1`): `krb5.conf.d/cern-*` for `kinit <user>@CERN.CH` (eos-connect.sh), `CERN-bundle.pem`                              |
+| alma8-base preinstalled CLI basics the Rocky+CUDA base lacks ("ps: command not found" in pre1)         | `procps-ng psmisc krb5-workstation xz cpio` added (from an `rpm -qa` diff of the two bases; krb5-workstation is the critical one — kinit/klist for EOS)                                          |
 
 Everything else — OSG rpms, Slurm, user setup, the pixi stack, the runtime
 stage — matches the original stage for stage, and reuses the files in
@@ -38,8 +39,9 @@ The Job builds from the `main` branch, so changes must be merged first:
 kubectl apply -n cms -f docker/kaniko-build-jobs/build-af-new.yaml
 ```
 
-Pushes to `geddes-registry.rcac.purdue.edu/cms/purdue-af:0.13.0-pre1`.
-(First successful build: ~10 min.)
+Pushes to `geddes-registry.rcac.purdue.edu/cms/purdue-af:0.13.0-pre2`
+(pre1 built in ~10 min but was missing procps/krb5-workstation — see the
+base-parity row above; bump the tag in the job YAML per iteration).
 
 ## GitHub Actions viability experiment
 
@@ -48,18 +50,24 @@ GitHub-hosted runner — separate from the regular CI — to test whether the
 slimmed image now fits GH worker limits (the old alma8+CUDA image did not;
 see the heavy-tier revert in `ed8e24cd`). It remaps the geddes docker-hub-cache
 `FROM` to docker.io via a buildx named context, frees runner disk first,
-smoke-tests (nvcc + jupyterlab import), and on main pushes to
-`ghcr.io/purdueaf/purdue-af-new:sha-<commit>` with a layer-size report in the
-job summary. Runs on `workflow_dispatch` and on pushes touching this
-directory, `pixi/base/`, or the Slurm inputs. If it proves reliable, it
+smoke-tests (nvcc, ps, klist, xz, jupyterlab import), then installs CVMFS on
+the runner (`cvmfs-contrib/github-action-cvmfs`) and sources
+`/cvmfs/cms.cern.ch/cmsset_default.sh` inside the image — an end-user-level
+test that catches missing base utilities the CMS tooling needs. On main it
+pushes to `ghcr.io/purdueaf/purdue-af-new:sha-<commit>` with a layer-size
+report in the job summary. Runs on `workflow_dispatch` and on pushes touching
+this directory, `pixi/base/`, or the Slurm inputs. If it proves reliable, it
 graduates into `build-images.yml`; the kaniko job stays as fallback.
+(Pod-level CVMFS wiring — the CSI driver, mount propagation into user pods —
+is a separate concern that belongs in the e2e-hub kind cluster, where the
+CSI driver would need to be installed.)
 
 ## Compare against 0.12.5
 
 ```
 kubectl logs -n cms job/kaniko-build-af-new | \
     python3 docker/kaniko-build-jobs/analyze_image_build.py --log - \
-        --image geddes-registry.rcac.purdue.edu/cms/purdue-af:0.13.0-pre1
+        --image geddes-registry.rcac.purdue.edu/cms/purdue-af:0.13.0-pre2
 ```
 
 ## Things to verify on a test session before promoting

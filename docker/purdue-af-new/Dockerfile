@@ -59,6 +59,11 @@ RUN set -euo pipefail \
       boost-devel diffutils ncurses-compat-libs cmake \
       glibc-static libcurl-devel \
       gfal2-util-scripts python3-gfal2 voms-clients-cpp myproxy patch \
+      # base-parity: alma8-base preinstalled these; the Rocky+CUDA base does
+      # not (found by diffing `rpm -qa` of the two bases after "ps: command
+      # not found" in a 0.13.0-pre1 session; krb5-workstation provides the
+      # kinit/klist that eos-connect.sh needs)
+      procps-ng psmisc krb5-workstation xz cpio \
  && dnf -y --disablerepo=cuda --enablerepo=epel install tini \
  # cuDNN pin (same version the 0.12.x image shipped); the only line that
  # uses the cuda repo — an exact-version install cannot pull obsoletes
