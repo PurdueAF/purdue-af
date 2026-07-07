@@ -84,7 +84,22 @@ jobs:
         run: |
           docker run --rm "$IMAGE" sh -c '
             nvcc --version >/dev/null &&
+            ps --version >/dev/null &&
+            klist -V >/dev/null &&
+            xz --version >/dev/null &&
             python3 -c "import jupyterlab; print(\"smoke ok:\", jupyterlab.__version__)"'
+      # Mount the host CVMFS client into the image and source the CMS
+      # environment — catches missing base utilities the CMS tooling needs
+      # (this is an image-level test; pod-level CVMFS CSI wiring is e2e-hub
+      # territory).
+      - name: Install CVMFS on the runner
+        uses: cvmfs-contrib/github-action-cvmfs@10197e000cc0add8e54ac4fb73d3ed44e2de72b4 # v5.5
+      - name: CVMFS smoke test (cmsset_default.sh)
+        run: |
+          docker run --rm -v /cvmfs:/cvmfs:shared "$IMAGE" bash -c '
+            source /cvmfs/cms.cern.ch/cmsset_default.sh &&
+            command -v scramv1 >/dev/null &&
+            echo "cmsset ok: $(command -v scramv1)"'
       # Only smoke-tested images ever reach the registry.
       - name: Push to ghcr.io
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
