@@ -66,10 +66,13 @@ The hub's "Latest pre-release version" profile
 automatically — no manifest edit, no hand-pushed tags. The production
 profile stays pinned; moving it to the same flow is the follow-up step.
 
-⚠ One-time manual step: make the `purdue-af` package public on
-ghcr.io/purdueaf after the first push (cluster nodes pull it
-unauthenticated), or configure an imagePullSecret / the ghcr-cache Harbor
-proxy from docker/REGISTRY.md instead.
+The hub profile pulls through the geddes `ghcr-cache` Harbor proxy
+(`geddes-registry.rcac.purdue.edu/ghcr-cache/purdueaf/purdue-af:pre-release`)
+— LAN-local layers, and Harbor revalidates the moving tag upstream on each
+pull. Setup status: the ghcr `purdue-af` package is public (done
+2026-07-16); ⚠ the `ghcr-cache` Harbor project must ALSO have its access
+level set to Public (see docker/REGISTRY.md one-time setup) — verified
+private/401 as of the same date.
 
 The kaniko Job below remains as a cluster-local fallback build path.
 
@@ -81,20 +84,46 @@ kubectl logs -n cms job/kaniko-build-af-new | \
         --image geddes-registry.rcac.purdue.edu/cms/purdue-af:0.13.0-pre2
 ```
 
+## Old-vs-new comparison (2026-07-16, 0.12.5 vs 0.13.0-pre1 + parity fixes)
+
+Full rpm/command/config diff via throwaway pods on the cluster. Confirmed
+identical: entrypoint/cmd/user, all jupyter scripts+configs, Slurm 25.11.4,
+krb5 config, pixi base env, voms-proxy-\*/gfal-\*/xrdcp/apptainer.
+**Deliberate removals to announce with the release:**
+
+- `nsys`/Nsight Systems, `nvvp` GUIs (the new image instead puts `nvcc`,
+  `ncu`, `nvprof`, `cuda-gdb` on PATH — the old image had none of them
+  reachable); NCCL 2.21.5 is a new addition
+- `java` (openjdk 8, was only there for voms-clients-java; the C++ voms
+  client replaces it — conda `openjdk` via pixi if anyone needs java)
+- GUI leftovers of the nsight stack (mesa-EGL, nss/nspr, xcb/xorg fonts) —
+  basic X11+GLX kept explicitly
+- known quirk inherited from the NVIDIA base: `LIBRARY_PATH` points at CUDA
+  _stub_ libs (intended: lets `nvcc` link without a driver)
+
+**GPU exposure (fixed in-image):** the NVIDIA base bakes
+`NVIDIA_VISIBLE_DEVICES=all` and the cluster runtime honours it — a 0-GPU
+pod on paf-a01 saw both T4s. The Dockerfile now sets it to `void`;
+the device plugin's per-allocation value overrides it for GPU sessions.
+
 ## Things to verify on a test session before promoting
 
 - [ ] GPU session: `nvidia-smi`, `nvcc --version`, torch/TF see the GPU
-      (system cuDNN is 8.9.7, same pin as 0.12.x)
-- [ ] **Non-GPU session does NOT see GPUs** — the NVIDIA base image sets
-      `NVIDIA_VISIBLE_DEVICES=all`; confirm the cluster's container runtime
-      only honours it for pods that request a GPU resource
+      (system cuDNN is 8.9.7, same pin as 0.12.x) — re-check after the
+      `NVIDIA_VISIBLE_DEVICES=void` change (device plugin must still inject
+      the allocated MIG slice)
+- [x] **Non-GPU session does NOT see GPUs** — verified BROKEN on the cluster
+      (0-GPU pod saw all node GPUs) and fixed via
+      `NVIDIA_VISIBLE_DEVICES=void` in the Dockerfile; re-verify on a
+      0-GPU session of the next build
 - [ ] `eos-connect.sh`: `kinit <user>@CERN.CH` resolves the realm and EOS
       mounts (krb5 snippets vendored from alma8-base)
-- [ ] Grid workflows: `voms-proxy-init` (now the C++ client), gfal2, xrootd
-      via CVMFS site config
+- [x] Grid workflows: `voms-proxy-init` works (C++ client); gfal2/xrootd
+      configs byte-identical
 - [ ] Slurm: `sbatch`/`squeue` against hammer
-- [ ] Anything that assumed Alma-specific packaging (should be none —
-      Rocky 8 and Alma 8 are both EL8)
+- [x] Alma-specific packaging: rpm diff shows nothing user-relevant beyond
+      the items listed above (docs updated to say "EL8" instead of
+      "AlmaLinux8")
 
 Promotion path: once validated, this Dockerfile replaces
 `docker/purdue-af/Dockerfile` (keeping that directory's scripts/configs,

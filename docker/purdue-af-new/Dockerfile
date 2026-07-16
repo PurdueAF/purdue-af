@@ -62,8 +62,9 @@ RUN set -euo pipefail \
       # base-parity: alma8-base preinstalled these; the Rocky+CUDA base does
       # not (found by diffing `rpm -qa` of the two bases after "ps: command
       # not found" in a 0.13.0-pre1 session; krb5-workstation provides the
-      # kinit/klist that eos-connect.sh needs)
-      procps-ng psmisc krb5-workstation xz cpio \
+      # kinit/klist that eos-connect.sh needs; libatomic so `gcc -latomic`
+      # works with the system toolchain)
+      procps-ng psmisc krb5-workstation xz cpio libatomic \
  && dnf -y --disablerepo=cuda --enablerepo=epel install tini \
  # cuDNN pin (same version the 0.12.x image shipped); the only line that
  # uses the cuda repo — an exact-version install cannot pull obsoletes
@@ -78,7 +79,7 @@ RUN set -euo pipefail \
 # CERN kerberos + CA defaults (alma8-base shipped these; Rocky does not).
 # eos-connect.sh runs `kinit <user>@CERN.CH` and expects the CERN.CH realm.
 COPY docker/purdue-af-new/configs/krb5.conf.d/ /etc/krb5.conf.d/
-COPY docker/purdue-af-new/configs/certs/CERN-bundle.pem /etc/pki/tls/certs/
+COPY docker/purdue-af-new/configs/certs/ /etc/pki/tls/certs/
 
 # Install OSG certificates and client
 COPY docker/purdue-af/osg/igtf-ca-certs-1.136-1.osg24.el8.noarch.rpm docker/purdue-af/osg/vo-client-138-2.osg24.el8.noarch.rpm /tmp/
@@ -168,7 +169,14 @@ ARG NB_USER="jovyan"
 
 ENV PIXI_HOME="/opt/pixi" \
     BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env" \
-    X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
+    X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates \
+    # The NVIDIA base bakes NVIDIA_VISIBLE_DEVICES=all, and this cluster's
+    # container runtime honors it for unprivileged pods: a 0-GPU session
+    # would see EVERY GPU on its node (verified on paf-a01: both T4s
+    # exposed). "void" = behave like a plain runc container. GPU sessions
+    # are unaffected — the k8s device plugin injects its own value for the
+    # allocated device, which overrides this image default.
+    NVIDIA_VISIBLE_DEVICES=void
 
 # Copy pixi env from stack stage
 COPY --from=stack /opt/pixi /opt/pixi
