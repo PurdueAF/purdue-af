@@ -21,8 +21,9 @@ cluster pulls ◀── geddes-registry.rcac.purdue.edu/ghcr-cache/purdueaf/<nam
   interlink-slurm-plugin, servicex-science-coffea) are built only by the
   in-cluster kaniko jobs (`docker/kaniko-build-jobs/`) — they exceed GitHub-hosted
   runner limits. Pixi environments are validated in `pixi-check.yml` instead.
-- Once the cluster pulls purdue-af via ghcr-cache, the in-cluster kaniko
-  jobs (docker/kaniko-build-jobs/) become legacy and can be retired.
+- The kaniko jobs are therefore the long-term build path for the large images —
+  they are not legacy and cannot be retired unless the heavy builds move to
+  infrastructure with cluster-grade disk/CPU (e.g. a self-hosted runner).
 
 ## One-time setup (cluster admin)
 
@@ -35,6 +36,10 @@ cluster pulls ◀── geddes-registry.rcac.purdue.edu/ghcr-cache/purdueaf/<nam
      "Docker Registry"), URL `https://ghcr.io`, no credentials (public).
    - Projects → New project: name `ghcr-cache`, enable "Proxy Cache",
      select the ghcr endpoint.
+   - **Set the project's Access Level to Public** (Projects → ghcr-cache →
+     Configuration → Public). Harbor projects are private by default, and
+     user pods carry no geddes pull secrets — a private project 401s
+     every spawn.
    - Verify from a cluster node:
      `crictl pull geddes-registry.rcac.purdue.edu/ghcr-cache/purdueaf/agentic-interface:sha-<commit>`
 

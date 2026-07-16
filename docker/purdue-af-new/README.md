@@ -66,13 +66,14 @@ The hub's "Latest pre-release version" profile
 automatically — no manifest edit, no hand-pushed tags. The production
 profile stays pinned; moving it to the same flow is the follow-up step.
 
-The hub profile pulls through the geddes `ghcr-cache` Harbor proxy
-(`geddes-registry.rcac.purdue.edu/ghcr-cache/purdueaf/purdue-af:pre-release`)
-— LAN-local layers, and Harbor revalidates the moving tag upstream on each
-pull. Setup status: the ghcr `purdue-af` package is public (done
-2026-07-16); ⚠ the `ghcr-cache` Harbor project must ALSO have its access
-level set to Public (see docker/REGISTRY.md one-time setup) — verified
-private/401 as of the same date.
+The hub profile currently pulls straight from ghcr.io (the `purdue-af`
+package is public since 2026-07-16; anonymous pull verified, 5.2 GiB
+compressed). The LAN-local `ghcr-cache` Harbor proxy path is prepared as a
+commented-out alternative in values.yaml — switch once the `ghcr-cache`
+Harbor project's access level is set to Public (see docker/REGISTRY.md
+one-time setup; verified private/401 as of 2026-07-16). Harbor revalidates
+moving tags upstream per pull, so the switch won't change promotion
+latency, only pull locality.
 
 The kaniko Job below remains as a cluster-local fallback build path.
 

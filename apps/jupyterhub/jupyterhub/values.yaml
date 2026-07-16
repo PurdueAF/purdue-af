@@ -121,12 +121,15 @@ singleuser:
       kubespawner_override:
         # CI/CD-managed (see .github/workflows/e2e-hub.yml): every change to
         # the image inputs is rebuilt, e2e-tested in kind, and only then
-        # promoted to the ghcr :pre-release tag. Pulled via the geddes
-        # ghcr-cache Harbor proxy (LAN-local layers; Harbor revalidates the
-        # moving tag upstream on every pull, so pull_policy Always still
-        # picks up each promotion instantly). Immutable sha-<commit> twins
-        # live on ghcr for pinning/rollback.
-        image: "geddes-registry.rcac.purdue.edu/ghcr-cache/purdueaf/purdue-af:pre-release"
+        # promoted to the ghcr :pre-release tag. pull_policy Always + the
+        # moving tag means new sessions always start from the latest
+        # validated pre-release; immutable sha-<commit> twins live on ghcr
+        # for pinning/rollback.
+        # Once the geddes ghcr-cache Harbor project is set to Public
+        # (docker/REGISTRY.md one-time setup — currently private/401),
+        # switch to the LAN-local proxy path instead:
+        # image: "geddes-registry.rcac.purdue.edu/ghcr-cache/purdueaf/purdue-af:pre-release"
+        image: "ghcr.io/purdueaf/purdue-af:pre-release"
         image_pull_policy: Always
         node_selector:
           cms-af-prod: "true"
