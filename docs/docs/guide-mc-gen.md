@@ -16,8 +16,8 @@ Reference: <https://cms-pdmv.gitbook.io/project/monte-carlo-management-mcm-intro
 
 In this tutorial, we provide examples for generation of:
 
-* Run 2 Ultra Legacy (UL) datasets
-* Run 3 datasets
+- Run 2 Ultra Legacy (UL) datasets
+- Run 3 datasets
 
 The generator used in these examples is `MadGraph`. A short `MadGraph` tutorial can
 be found [here](https://twiki.cern.ch/twiki/bin/view/CMSPublic/MadgraphTutorial).
@@ -25,10 +25,10 @@ be found [here](https://twiki.cern.ch/twiki/bin/view/CMSPublic/MadgraphTutorial)
 Typically, the conditions that should be decided before beginning the production
 are the following:
 
-* GlobalTag
-* Detector alignment (CMSSW release)
-* HLT menus
-* NanoAOD versions
+- GlobalTag
+- Detector alignment (CMSSW release)
+- HLT menus
+- NanoAOD versions
 
 === "Run 2 UL"
 
@@ -54,7 +54,7 @@ are the following:
 
 !!! note "Running inside containers"
 
-    Purdue AF is based on AlmaLinux8. Run 2 UL production uses CMSSW releases built
+    Purdue AF is based on an EL8 system (RHEL8-compatible). Run 2 UL production uses CMSSW releases built
     for `slc7`, so the corresponding steps below are executed inside the
     `cmssw-el7` Apptainer container (note the `--bind /depot:/depot` argument,
     which makes Depot storage visible inside the container). Run 3 releases run
@@ -62,7 +62,7 @@ are the following:
 
 ## Step 0: Create your gridpack
 
-A *gridpack* is a tarball with a pre-compiled generator setup (e.g. MadGraph
+A _gridpack_ is a tarball with a pre-compiled generator setup (e.g. MadGraph
 process directory) from which LHE events are produced. In the examples below, the
 gridpack is referenced by the LHE fragment downloaded from McM, so you do not need
 to produce one yourself.
@@ -81,9 +81,9 @@ energy footprint left by the particles interacting with detector material.
 
 Some of the important parameters to keep in mind for such campaigns:
 
-* Beamspot
-* Generator fragment (specifies the process which needs to be generated)
-* Detector geometry
+- Beamspot
+- Generator fragment (specifies the process which needs to be generated)
+- Detector geometry
 
 We start with downloading the LHE fragment (process definition, pythia settings,
 path to the MadGraph gridpack) from McM (Monte Carlo Production Management):
@@ -596,5 +596,5 @@ Step 1 produces a `GEN-SIM` output file.
 
 ---
 
-*This tutorial was prepared by Amandeep Kaur, Dmitry Kondratyev, and Hyeon-Seo Yun
-@ Purdue University CMS group.*
+_This tutorial was prepared by Amandeep Kaur, Dmitry Kondratyev, and Hyeon-Seo Yun
+@ Purdue University CMS group._

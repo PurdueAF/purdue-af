@@ -49,8 +49,8 @@ We provide multiple types of Jupyter kernels to execute analysis code in noteboo
 There is no one-to-one mapping between Pixi environments and Jupyter kernels.
 Instead, we provide two special Pixi kernels:
 
-* **"global" kernel** — always uses the global environment at `/work/pixi/global/`.
-* **"project-aware" kernel** — automatically discovers the environment local to the
+- **"global" kernel** — always uses the global environment at `/work/pixi/global/`.
+- **"project-aware" kernel** — automatically discovers the environment local to the
   directory where the notebook is located. If no local environment is found, the
   kernel falls back to the global environment.
 
@@ -78,8 +78,8 @@ you to execute ROOT macros and produce plots inside Jupyter notebooks.
 
 These kernels are based on LCG "views" loaded via CVMFS:
 
-* **`LCG_106b`** — the standard LCG software stack;
-* **`LCG_106b_cuda`** — contains the CUDA-enabled ROOT build and is suitable for
+- **`LCG_106b`** — the standard LCG software stack;
+- **`LCG_106b_cuda`** — contains the CUDA-enabled ROOT build and is suitable for
   [running RooFit on GPUs](guide-roofit-cuda.md).
 
 ## Combine
@@ -106,7 +106,8 @@ cd CMSSW_13_0_13/src
 cmsenv
 ```
 
-Note that Purdue AF is based on AlmaLinux8, so CMSSW releases built for other
+Note that Purdue AF is based on an EL8 system (RHEL8-compatible, `el8`/`slc8`
+architectures), so CMSSW releases built for other
 architectures (e.g. `slc7`) must be run inside an Apptainer container such as
 `cmssw-el7` (see below, and the [MC generation guide](guide-mc-gen.md) for a
 worked example).
