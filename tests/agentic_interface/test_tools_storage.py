@@ -102,6 +102,7 @@ async def test_storage_reports_usage(user_ctx):
     for call in route.calls:
         assert 'username="alice"' in call.request.url.params["query"]
 
+
 @respx.mock
 async def test_storage_no_metrics_message(user_ctx):
     respx.get(PROM_URL).respond(200, json={"data": {"result": []}})

@@ -215,8 +215,7 @@ def register(mcp) -> None:
         namespace = user["namespace"]
         username = user["username"]
         selector = (
-            f'{{namespace="{namespace}",username="{username}",'
-            f'container!="notebook"}}'
+            f'{{namespace="{namespace}",username="{username}",container!="notebook"}}'
         )
         if filter:
             selector = f"{selector} {filter}"
