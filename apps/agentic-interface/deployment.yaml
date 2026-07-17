@@ -28,6 +28,8 @@ spec:
               value: "http://loki.cms.svc.cluster.local:3100"
             - name: PROMETHEUS_URL
               value: "http://prometheus-server:9090"
+            - name: CLUSTER_PROMETHEUS_URL
+              value: "http://rancher-monitoring-prometheus.cattle-monitoring-system.svc.cluster.local:9090"
             - name: NAMESPACE
               valueFrom:
                 fieldRef:

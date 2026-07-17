@@ -236,3 +236,122 @@ async def test_stop_cluster_error_reported(user_ctx):
     tools = register_tools(dask).tools
     out = await tools["stop_dask_cluster"]("c1")
     assert "HTTP 500" in out
+
+
+# ── get_dask_worker_count / get_dask_cluster_usage ─────────────────────────────
+
+
+def test_cluster_id_strips_namespace_prefix():
+    assert dask._cluster_id("cms.ec5c698a448943e9ae11ecfbdad5a6b0") == (
+        "ec5c698a448943e9ae11ecfbdad5a6b0"
+    )
+    assert dask._cluster_id("ec5c698a") == "ec5c698a"
+
+
+def prom_scalar(value):
+    return {"data": {"result": [{"value": [0, str(value)]}]}}
+
+
+def prom_vector(samples):
+    return {
+        "data": {
+            "result": [
+                {"metric": metric, "value": [0, str(value)]}
+                for metric, value in samples
+            ]
+        }
+    }
+
+
+@respx.mock
+async def test_worker_count_reports_total_and_states(user_ctx):
+    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+        200, json={"name": "cms.abc", "status": "RUNNING"}
+    )
+
+    def responder(request):
+        import httpx
+
+        q = request.url.params["query"]
+        if "by (state)" in q:
+            return httpx.Response(
+                200,
+                json=prom_vector([({"state": "idle"}, 2), ({"state": "saturated"}, 1)]),
+            )
+        if "desired_workers" in q:
+            return httpx.Response(200, json=prom_scalar(3))
+        return httpx.Response(200, json=prom_scalar(3))
+
+    respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").mock(side_effect=responder)
+
+    tools = register_tools(dask).tools
+    out = await tools["get_dask_worker_count"]("cms.abc")
+
+    assert "total: 3" in out
+    assert "desired: 3" in out
+    assert "idle=2" in out
+    assert "saturated=1" in out
+
+
+@respx.mock
+async def test_worker_count_requires_ownership(user_ctx):
+    respx.get(f"{K8S}/api/v1/clusters/cms.other").respond(404)
+
+    tools = register_tools(dask).tools
+    out = await tools["get_dask_worker_count"]("cms.other")
+    assert "not found" in out
+
+
+@respx.mock
+async def test_cluster_usage_min_max_avg(user_ctx):
+    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+        200, json={"name": "cms.abc", "status": "RUNNING"}
+    )
+
+    def responder(request):
+        import httpx
+
+        q = request.url.params["query"]
+        if "container_cpu_usage" in q:
+            return httpx.Response(
+                200,
+                json=prom_vector(
+                    [
+                        ({"pod": "dask-worker-abc-1"}, 0.1),
+                        ({"pod": "dask-worker-abc-2"}, 0.3),
+                    ]
+                ),
+            )
+        # memory
+        return httpx.Response(
+            200,
+            json=prom_vector(
+                [
+                    ({"pod": "dask-worker-abc-1"}, 1 * 1024**3),
+                    ({"pod": "dask-worker-abc-2"}, 3 * 1024**3),
+                ]
+            ),
+        )
+
+    respx.get(f"{dask.CLUSTER_PROMETHEUS_URL}/api/v1/query").mock(side_effect=responder)
+
+    tools = register_tools(dask).tools
+    out = await tools["get_dask_cluster_usage"]("cms.abc")
+
+    assert "running workers sampled: 2" in out
+    assert "min=0.100" in out and "max=0.300" in out and "avg=0.200" in out
+    assert "min=1.00" in out and "max=3.00" in out and "avg=2.00" in out
+
+
+@respx.mock
+async def test_cluster_usage_no_workers(user_ctx):
+    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+        200, json={"name": "cms.abc", "status": "RUNNING"}
+    )
+    respx.get(f"{dask.CLUSTER_PROMETHEUS_URL}/api/v1/query").respond(
+        200, json={"data": {"result": []}}
+    )
+
+    tools = register_tools(dask).tools
+    out = await tools["get_dask_cluster_usage"]("cms.abc")
+    assert "No Running worker pods" in out

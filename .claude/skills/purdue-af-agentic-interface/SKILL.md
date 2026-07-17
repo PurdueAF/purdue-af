@@ -88,9 +88,11 @@ Works when a session is (or recently was) running so metrics exist.
 *(Results always scoped to the calling user.)*
 
 **`list_dask_clusters`** — all clusters across every gateway.
-**`get_dask_cluster_info(cluster_name, gateway="k8s")`** — per-worker state and options.
+**`get_dask_cluster_info(cluster_name, gateway="k8s")`** — status, options, dashboard.
+**`get_dask_worker_count(cluster_name, gateway="k8s")`** — live worker count (by state).
+**`get_dask_cluster_usage(cluster_name, gateway="k8s")`** — CPU/memory min/max/avg across Running workers.
 **`scale_dask_cluster(cluster_name, n_workers, gateway="k8s")`**
-**`stop_dask_cluster(cluster_name, gateway="k8s")`** — irreversible.
+**`stop_dask_cluster(cluster_name, gateway="k8s")`** — terminate/delete the cluster (irreversible).
 
 `gateway` options: `"k8s"` · `"slurm-hammer"` · `"slurm-gautschi"` · `"slurm"`
 

@@ -95,7 +95,8 @@ The available tools cover:
 * **Session lifecycle** — check status, list available resource profiles,
   start / stop / restart the session, and wait until it is ready.
 * **Storage** — home and work directory quota usage.
-* **Dask clusters** — list, inspect, scale, and shut down your
+* **Dask clusters** — list, inspect, check worker counts and CPU/memory usage,
+  scale, and shut down your
   [Dask Gateway](guide-dask-gateway.md) clusters on any of the gateways
   (Kubernetes, Slurm/Hammer, Slurm/Gautschi).
 * **Logs** — query your JupyterLab / VS Code server logs and Dask worker and

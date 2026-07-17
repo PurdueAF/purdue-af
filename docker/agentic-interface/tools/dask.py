@@ -6,11 +6,16 @@ so the correct backend is targeted.
 
 Gateways here use SimpleAuthenticator (password ignored). Calls authenticate as
 the Hub username via HTTP Basic so each user only sees their own clusters.
+
+Worker counts come from the AF Prometheus (dask_scheduler_workers). Live CPU /
+memory usage comes from the cluster Prometheus (cadvisor), filtered to Running
+worker pods.
 """
 
 import asyncio
 import base64
 import os
+from typing import Optional
 
 import httpx
 from context import current_user
@@ -39,6 +44,14 @@ _GATEWAYS: dict[str, str] = {
 _GATEWAY_ALIASES = {"hammer": "slurm-hammer", "gautschi": "slurm-gautschi"}
 _GATEWAY_LIST = ", ".join(_GATEWAYS)
 
+PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
+# cadvisor / kubelet metrics (container_*) live on the Rancher Prometheus, not
+# the AF prometheus-server that scrapes dask-gateway-monitor.
+CLUSTER_PROMETHEUS_URL = os.environ.get(
+    "CLUSTER_PROMETHEUS_URL",
+    "http://rancher-monitoring-prometheus.cattle-monitoring-system.svc.cluster.local:9090",
+)
+
 # Upstream-metrics target labels, derived per request so one client can talk
 # to several gateway backends and still be broken down by backend.
 _HOST_TO_GATEWAY = {httpx.URL(url).host: gw for gw, url in _GATEWAYS.items()}
@@ -50,6 +63,10 @@ def _gateway_target(request: httpx.Request) -> str:
 
 def _client() -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=instrumented_transport(_gateway_target))
+
+
+def _prom_client(target: str) -> httpx.AsyncClient:
+    return httpx.AsyncClient(transport=instrumented_transport(target))
 
 
 def _resolve_gateway(name: str) -> tuple[str, str]:
@@ -64,6 +81,14 @@ def _auth(username: str) -> dict:
     """HTTP Basic for SimpleAuthenticator (password field ignored when unset)."""
     cred = base64.b64encode(f"{username}:".encode()).decode()
     return {"Authorization": f"Basic {cred}"}
+
+
+def _cluster_id(cluster_name: str) -> str:
+    """Strip the namespace prefix from a gateway cluster name.
+
+    ``cms.ec5c698a…`` → ``ec5c698a…`` (matches dask-scheduler-/dask-worker- pods).
+    """
+    return cluster_name.rsplit(".", 1)[-1]
 
 
 def _parse_clusters(payload) -> list[dict]:
@@ -111,6 +136,73 @@ async def _fetch_clusters(
     if resp.status_code != 200:
         return gateway, f"HTTP {resp.status_code}"
     return gateway, _parse_clusters(resp.json())
+
+
+async def _require_owned_cluster(
+    client: httpx.AsyncClient, url: str, username: str, cluster_name: str, gateway: str
+) -> Optional[str]:
+    """Return an error string if the user cannot access ``cluster_name``, else None."""
+    try:
+        resp = await client.get(
+            f"{url}/api/v1/clusters/{cluster_name}",
+            headers=_auth(username),
+            timeout=10.0,
+        )
+    except httpx.RequestError as exc:
+        return f"Error: gateway '{gateway}' unreachable — {exc}"
+    if resp.status_code == 404:
+        return f"Cluster '{cluster_name}' not found on gateway '{gateway}'."
+    if resp.status_code in (401, 403):
+        return f"Error: not authorised to access cluster '{cluster_name}'."
+    if resp.status_code != 200:
+        return f"Error: HTTP {resp.status_code} — {resp.text[:300]}"
+    return None
+
+
+async def _prom_scalar(
+    client: httpx.AsyncClient, base_url: str, query: str
+) -> Optional[float]:
+    try:
+        resp = await client.get(
+            f"{base_url}/api/v1/query", params={"query": query}, timeout=8.0
+        )
+    except httpx.RequestError:
+        return None
+    if resp.status_code != 200:
+        return None
+    results = resp.json().get("data", {}).get("result", [])
+    if not results:
+        return None
+    try:
+        return float(results[0]["value"][1])
+    except (KeyError, IndexError, ValueError):
+        return None
+
+
+async def _prom_vector(
+    client: httpx.AsyncClient, base_url: str, query: str
+) -> list[tuple[dict, float]]:
+    try:
+        resp = await client.get(
+            f"{base_url}/api/v1/query", params={"query": query}, timeout=8.0
+        )
+    except httpx.RequestError:
+        return []
+    if resp.status_code != 200:
+        return []
+    out: list[tuple[dict, float]] = []
+    for row in resp.json().get("data", {}).get("result", []):
+        try:
+            out.append((row.get("metric") or {}, float(row["value"][1])))
+        except (KeyError, IndexError, ValueError, TypeError):
+            continue
+    return out
+
+
+def _stats(values: list[float]) -> Optional[tuple[float, float, float]]:
+    if not values:
+        return None
+    return min(values), max(values), sum(values) / len(values)
 
 
 def register(mcp) -> None:
@@ -205,6 +297,159 @@ def register(mcp) -> None:
         if worker_lines:
             sections.append(f"Workers ({len(workers)}):\n" + "\n".join(worker_lines))
         return "\n\n".join(sections)
+
+    @mcp.tool()
+    async def get_dask_worker_count(cluster_name: str, gateway: str = "k8s") -> str:
+        """Return the current number of workers for a Dask cluster (by state).
+
+        Uses the scheduler's Prometheus metrics. Prefer this over guessing from
+        list_dask_clusters when you need an accurate live count.
+
+        Args:
+            cluster_name: Cluster identifier returned by list_dask_clusters.
+            gateway: Gateway backend — 'k8s' (default), 'slurm-hammer',
+                     'slurm-gautschi', or 'slurm'.
+        """
+        user = current_user.get()
+        username = user["username"]
+        try:
+            _, url = _resolve_gateway(gateway)
+        except ValueError as e:
+            return str(e)
+
+        async with _client() as gw_client:
+            err = await _require_owned_cluster(
+                gw_client, url, username, cluster_name, gateway
+            )
+            if err:
+                return err
+
+        cid = _cluster_id(cluster_name)
+        sched_pod = f"dask-scheduler-{cid}"
+        total_q = f'sum(dask_scheduler_workers{{user="{username}",pod="{sched_pod}"}})'
+        by_state_q = (
+            f"sum by (state) ("
+            f'dask_scheduler_workers{{user="{username}",pod="{sched_pod}"}})'
+        )
+        desired_q = f'sum(dask_scheduler_desired_workers{{user="{username}",pod="{sched_pod}"}})'
+
+        async with _prom_client("prometheus") as prom:
+            total, by_state, desired = await asyncio.gather(
+                _prom_scalar(prom, PROMETHEUS_URL, total_q),
+                _prom_vector(prom, PROMETHEUS_URL, by_state_q),
+                _prom_scalar(prom, PROMETHEUS_URL, desired_q),
+            )
+
+        if total is None:
+            return (
+                f"No worker metrics for cluster '{cluster_name}' "
+                "(scheduler may still be starting, or metrics are stale)."
+            )
+
+        lines = [
+            f"# Workers for {cluster_name} (gateway={gateway})",
+            f"total: {int(total)}",
+        ]
+        if desired is not None:
+            lines.append(f"desired: {int(desired)}")
+        state_parts = [
+            f"{(m.get('state') or '?')}={int(v)}"
+            for m, v in sorted(by_state, key=lambda x: x[0].get("state") or "")
+            if v
+        ]
+        if state_parts:
+            lines.append("by state: " + ", ".join(state_parts))
+        return "\n".join(lines)
+
+    @mcp.tool()
+    async def get_dask_cluster_usage(cluster_name: str, gateway: str = "k8s") -> str:
+        """CPU and memory usage across Running workers of a Dask cluster.
+
+        Reports per-worker min / max / average for CPU (cores) and memory (GiB),
+        plus cluster totals. Scoped to the calling user's cluster.
+
+        Args:
+            cluster_name: Cluster identifier returned by list_dask_clusters.
+            gateway: Gateway backend — 'k8s' (default), 'slurm-hammer',
+                     'slurm-gautschi', or 'slurm'.
+        """
+        user = current_user.get()
+        username = user["username"]
+        try:
+            _, url = _resolve_gateway(gateway)
+        except ValueError as e:
+            return str(e)
+
+        async with _client() as gw_client:
+            err = await _require_owned_cluster(
+                gw_client, url, username, cluster_name, gateway
+            )
+            if err:
+                return err
+
+        cid = _cluster_id(cluster_name)
+        worker_re = f"dask-worker-{cid}-.+"
+        # Only Running pods — cadvisor keeps series for terminated workers.
+        running = (
+            f'kube_pod_status_phase{{namespace="cms",phase="Running",'
+            f'pod=~"{worker_re}"}}'
+        )
+        cpu_q = (
+            f"sum by (pod) ("
+            f'rate(container_cpu_usage_seconds_total{{namespace="cms",'
+            f'pod=~"{worker_re}",container="dask-worker"}}[2m])'
+            f" * on(namespace,pod) group_left {running})"
+        )
+        mem_q = (
+            f"sum by (pod) ("
+            f'container_memory_working_set_bytes{{namespace="cms",'
+            f'pod=~"{worker_re}",container="dask-worker"}}'
+            f" * on(namespace,pod) group_left {running})"
+        )
+
+        async with _prom_client("cluster-prometheus") as prom:
+            cpu_rows, mem_rows = await asyncio.gather(
+                _prom_vector(prom, CLUSTER_PROMETHEUS_URL, cpu_q),
+                _prom_vector(prom, CLUSTER_PROMETHEUS_URL, mem_q),
+            )
+
+        cpu_vals = [v for _, v in cpu_rows]
+        mem_vals = [v for _, v in mem_rows]
+        n = max(len(cpu_vals), len(mem_vals))
+        if n == 0:
+            return (
+                f"No Running worker pods with usage metrics for '{cluster_name}'. "
+                "The cluster may have zero workers, or metrics are not scraped yet."
+            )
+
+        lines = [
+            f"# Resource usage for {cluster_name} (gateway={gateway})",
+            f"running workers sampled: {n}",
+        ]
+        cpu_stats = _stats(cpu_vals)
+        if cpu_stats:
+            cmin, cmax, cavg = cpu_stats
+            lines += [
+                "CPU (cores):",
+                f"  min={cmin:.3f}  max={cmax:.3f}  avg={cavg:.3f}  "
+                f"total={sum(cpu_vals):.3f}",
+            ]
+        else:
+            lines.append("CPU (cores): no data")
+
+        mem_stats = _stats(mem_vals)
+        if mem_stats:
+            mmin, mmax, mavg = mem_stats
+            to_gib = 1024**3
+            lines += [
+                "Memory (GiB):",
+                f"  min={mmin / to_gib:.2f}  max={mmax / to_gib:.2f}  "
+                f"avg={mavg / to_gib:.2f}  total={sum(mem_vals) / to_gib:.2f}",
+            ]
+        else:
+            lines.append("Memory (GiB): no data")
+
+        return "\n".join(lines)
 
     @mcp.tool()
     async def scale_dask_cluster(

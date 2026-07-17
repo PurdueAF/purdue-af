@@ -20,6 +20,8 @@ EXPECTED_TOOLS = {
     # dask
     "list_dask_clusters",
     "get_dask_cluster_info",
+    "get_dask_worker_count",
+    "get_dask_cluster_usage",
     "scale_dask_cluster",
     "stop_dask_cluster",
     # profiles + session lifecycle
