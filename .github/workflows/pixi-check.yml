@@ -1,7 +1,12 @@
 name: Pixi Check
 
 # Validates every pixi workspace under pixi/ with `pixi install --locked`
-# (fails if pixi.toml and pixi.lock are out of sync).
+# (fails if pixi.toml and pixi.lock are out of sync), then import-smokes
+# every direct dependency with pixi/check-env.py — each package in a fresh
+# interpreter, INSIDE a rockylinux:8 container. The EL8 container matters:
+# import failures like the pip-tensorflow `GLIBCXX_3.4.29` libstdc++
+# shadowing only reproduce on an EL8 host (Ubuntu runners have a newer
+# system libstdc++ and would silently pass).
 #
 # Pixi is pinned to v0.62.2 here and in docker/purdue-af/Dockerfile (PIXI_VERSION).
 # pixi/global also needs CONDA_OVERRIDE_CUDA on CPU-only CI runners (see job env).
@@ -38,6 +43,11 @@ jobs:
           locked: true
           cache: true
           cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      - name: Import-smoke the base env (EL8 container, like production)
+        run: |
+          docker run --rm -v "$PWD:$PWD" -w "$PWD" rockylinux:8 \
+            pixi/base/.pixi/envs/base-env/bin/python pixi/check-env.py \
+              --manifest pixi/base/pixi.toml --env base-env
 
   pixi-global:
     runs-on: ubuntu-latest
@@ -58,3 +68,9 @@ jobs:
           locked: true
           cache: true
           cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      - name: Import-smoke the global env (EL8 container, like production)
+        if: hashFiles('pixi/global/pixi.lock') != ''
+        run: |
+          docker run --rm -v "$PWD:$PWD" -w "$PWD" rockylinux:8 \
+            pixi/global/.pixi/envs/default/bin/python pixi/check-env.py \
+              --manifest pixi/global/pixi.toml --env default

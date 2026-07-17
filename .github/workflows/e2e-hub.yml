@@ -40,6 +40,7 @@ on:
       # AF image inputs (build-image + e2e-prerelease + promote)
       - "docker/purdue-af-new/**"
       - "pixi/base/**"
+      - "pixi/check-env.py" # COPY'd into the image by the Dockerfile
       - "slurm/slurm-configs-hammer/**"
       - "slurm/*.rpm"
   pull_request:
@@ -50,6 +51,7 @@ on:
       - ".github/workflows/e2e-hub.yml"
       - "docker/purdue-af-new/**"
       - "pixi/base/**"
+      - "pixi/check-env.py" # COPY'd into the image by the Dockerfile
       - "slurm/slurm-configs-hammer/**"
       - "slurm/*.rpm"
   schedule:
@@ -90,6 +92,7 @@ jobs:
             image:
               - "docker/purdue-af-new/**"
               - "pixi/base/**"
+              - "pixi/check-env.py"
               - "slurm/slurm-configs-hammer/**"
               - "slurm/*.rpm"
               - ".github/workflows/e2e-hub.yml"

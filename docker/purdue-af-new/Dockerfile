@@ -159,6 +159,14 @@ RUN chmod +x /usr/local/bin/pixi && \
     cp "${BASE_ENV_DIR}/lib/python3.10/site-packages/jupyter_vscode_proxy/icons/vscode.svg" \
        "${BASE_ENV_DIR}/lib/python3.10/site-packages/jupyter_vscode_proxy/icons/code-server.svg"
 
+# Import-smoke every direct dependency of the base env, each in a fresh
+# interpreter — catches broken installs (e.g. libstdc++ shadowing à la
+# GLIBCXX_3.4.29) at build time instead of in a user session.
+COPY --chown=root:root pixi/check-env.py /tmp/check-env.py
+RUN "${BASE_ENV_DIR}/bin/python" /tmp/check-env.py \
+        --manifest "${PIXI_HOME}/pixi.toml" --env base-env && \
+    rm -f /tmp/check-env.py
+
 # ------------------------------------------------------------
 # Stage: runtime (lightweight; COPY only, no builds or installation routines)
 # ------------------------------------------------------------
