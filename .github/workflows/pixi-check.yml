@@ -68,9 +68,14 @@ jobs:
           locked: true
           cache: true
           cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-      - name: Import-smoke the global env (EL8 container, like production)
+      # Runs inside the REAL pre-release AF image (public on ghcr): same
+      # EL8 userland users get, including CLI tools some packages need at
+      # import time (mlflow → GitPython → the `git` binary, which a bare
+      # rockylinux:8 container lacks — that was a false-positive FAIL).
+      - name: Import-smoke the global env (inside the AF image)
         if: hashFiles('pixi/global/pixi.lock') != ''
         run: |
-          docker run --rm -v "$PWD:$PWD" -w "$PWD" rockylinux:8 \
+          docker run --rm -v "$PWD:$PWD" -w "$PWD" \
+            ghcr.io/purdueaf/purdue-af:pre-release \
             pixi/global/.pixi/envs/default/bin/python pixi/check-env.py \
               --manifest pixi/global/pixi.toml --env default

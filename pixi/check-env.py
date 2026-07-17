@@ -171,8 +171,9 @@ def import_check(python, modules, timeout):
     if proc.returncode == 0:
         return True, elapsed, ""
     lines = (proc.stdout + proc.stderr).strip().splitlines()
-    # crash traces end in useless frame addresses — show a real tail
-    detail = "\n        ".join(lines[-6:]) if lines else f"exit {proc.returncode}"
+    # crash backtraces (e.g. cling's) put the informative frames well above
+    # the end — keep a generous tail so CI logs are actionable
+    detail = "\n        ".join(lines[-30:]) if lines else f"exit {proc.returncode}"
     if "GLIBCXX" in proc.stdout + proc.stderr:
         detail += "  [hint: system libstdc++ shadows the env's — see check-gpu.py]"
     return False, elapsed, detail
