@@ -9,3 +9,4 @@ monitoring/grafonnet
 coverage.xml
 .coverage
 pixi/*/.pixi/*
+*_PLAN.md
