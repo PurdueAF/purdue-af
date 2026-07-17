@@ -38,6 +38,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -79,8 +80,13 @@ def parse_manifest(path):
 
 
 def conda_toplevels(env_dir):
-    """conda-meta/*.json → {package name: sorted importable top-levels}."""
-    result = {}
+    """conda-meta/*.json → {package name: sorted importable top-levels}.
+
+    Metapackages (matplotlib, dask, jupyter, ...) install no files
+    themselves — their code lives in dependencies (matplotlib-base,
+    dask-core, ...). For packages with no own top-levels, follow ONE level
+    of conda `depends` so their imports are still smoke-tested."""
+    records = {}
     for meta in (env_dir / "conda-meta").glob("*.json"):
         try:
             rec = json.loads(meta.read_text())
@@ -93,7 +99,16 @@ def conda_toplevels(env_dir):
                 name = m.group(1)
                 if not name.startswith("_") and name not in _SKIP_TOPLEVEL:
                     tops.add(name)
-        result[rec.get("name", meta.stem)] = sorted(tops)
+        records[rec.get("name", meta.stem)] = (tops, rec.get("depends", []))
+
+    result = {}
+    for name, (tops, depends) in records.items():
+        if not tops:  # metapackage: union the direct deps' own top-levels
+            for dep in depends:
+                dep_name = dep.split()[0]
+                if dep_name in records:
+                    tops |= records[dep_name][0]
+        result[name] = sorted(tops)
     return result
 
 
@@ -127,25 +142,37 @@ def pypi_toplevels(name):
 
 
 def import_check(python, modules, timeout):
-    """Import `modules` in ONE fresh interpreter; → (ok, seconds, detail)."""
+    """Import `modules` in ONE fresh interpreter; → (ok, seconds, detail).
+
+    Each subprocess gets a private HOME and TMPDIR: parallel imports of
+    runtime-compiling packages (ROOT/cling in particular) race on shared
+    cache/temp files and crash spuriously otherwise."""
     code = "; ".join(f"import {m}" for m in modules)
-    env = dict(os.environ, MPLBACKEND="Agg", TF_CPP_MIN_LOG_LEVEL="2")
     start = time.monotonic()
-    try:
-        proc = subprocess.run(
-            [python, "-c", code],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=env,
+    with tempfile.TemporaryDirectory(prefix="check-env-") as scratch:
+        env = dict(
+            os.environ,
+            MPLBACKEND="Agg",
+            TF_CPP_MIN_LOG_LEVEL="2",
+            HOME=scratch,
+            TMPDIR=scratch,
         )
-    except subprocess.TimeoutExpired:
-        return False, timeout, f"import hung for {timeout:.0f}s"
+        try:
+            proc = subprocess.run(
+                [python, "-c", code],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=env,
+            )
+        except subprocess.TimeoutExpired:
+            return False, timeout, f"import hung for {timeout:.0f}s"
     elapsed = time.monotonic() - start
     if proc.returncode == 0:
         return True, elapsed, ""
     lines = (proc.stdout + proc.stderr).strip().splitlines()
-    detail = lines[-1] if lines else f"exit {proc.returncode}"
+    # crash traces end in useless frame addresses — show a real tail
+    detail = "\n        ".join(lines[-6:]) if lines else f"exit {proc.returncode}"
     if "GLIBCXX" in proc.stdout + proc.stderr:
         detail += "  [hint: system libstdc++ shadows the env's — see check-gpu.py]"
     return False, elapsed, detail

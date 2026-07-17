@@ -51,7 +51,10 @@ lmfit = "*"
 mamba = "*"
 matplotlib = "*"
 mimesis = "*"
-mlflow = "*"
+# floor: "*" let the solver satisfy other pins with mlflow 1.2.0 (2019),
+# whose generated protos can't load under protobuf >= 4 (import error
+# caught by check-env.py in CI)
+mlflow = ">=3"
 mplhep = ">=1.1.2"
 numba = "*"
 numpy = "*"
