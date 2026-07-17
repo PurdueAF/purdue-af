@@ -159,7 +159,7 @@ async def test_invalid_token_is_401(monkeypatch):
 
 @pytest.fixture
 def accept_alice(monkeypatch):
-    user = {"username": "alice", "pod_name": "pod-a", "namespace": "cms", "token": "t"}
+    user = {"username": "alice", "namespace": "cms", "token": "t"}
 
     async def accept(token):
         return user

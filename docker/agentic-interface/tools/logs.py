@@ -180,14 +180,9 @@ def register(mcp) -> None:
         user = current_user.get()
         namespace = user["namespace"]
         username = user["username"]
-        pod_name = user["pod_name"]
-
-        if not pod_name:
-            return "Error: no running server found for this user — start a pod first."
-
+        # Scope by username + notebook container — no Hub admin pod_name needed.
         selector = (
-            f'{{namespace="{namespace}",username="{username}",'
-            f'pod="{pod_name}",container="notebook"}}'
+            f'{{namespace="{namespace}",username="{username}",container="notebook"}}'
         )
         if filter:
             selector = f"{selector} {filter}"
@@ -204,7 +199,7 @@ def register(mcp) -> None:
     ) -> str:
         """Query Loki for logs from the authenticated user's Dask worker and scheduler pods.
 
-        Excludes the JupyterHub notebook pod. Use query_notebook_logs for the
+        Excludes the JupyterHub notebook container. Use query_notebook_logs for the
         interactive server logs.
 
         Args:
@@ -219,12 +214,9 @@ def register(mcp) -> None:
         user = current_user.get()
         namespace = user["namespace"]
         username = user["username"]
-        pod_name = user["pod_name"]
-
         selector = (
-            f'{{namespace="{namespace}",username="{username}"'
-            + (f',pod!="{pod_name}"' if pod_name else "")
-            + "}"
+            f'{{namespace="{namespace}",username="{username}",'
+            f'container!="notebook"}}'
         )
         if filter:
             selector = f"{selector} {filter}"

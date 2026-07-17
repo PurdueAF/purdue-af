@@ -4,8 +4,8 @@ Registered with JupyterHub as a service; accessible at
   https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp
 
 Auth: incoming JupyterHub Bearer tokens are validated against the Hub API.
-The resolved user identity (username + active pod name) is stored in a
-ContextVar so tool functions can scope their queries per-request.
+The resolved user identity (username) is stored in a ContextVar so tool
+functions can scope their queries per-request.
 """
 
 import json
@@ -23,7 +23,7 @@ from metrics import (
     record_jsonrpc,
     record_request,
 )
-from tools import connect, dask, logs, profiles, prompts, session, storage
+from tools import dask, logs, profiles, prompts, session, storage
 
 logger = logging.getLogger(__name__)
 
@@ -250,10 +250,9 @@ mcp = FastMCP(
         "Use query_notebook_logs / query_dask_logs for log queries; "
         "use query_storage_usage for disk quota information; "
         "use list_dask_clusters / scale_dask_cluster / stop_dask_cluster for Dask; "
-        "use get_session_status / start_af_session / stop_af_session for pod lifecycle; "
-        "to connect over SSH, call prepare_ssh_connection then connect_to_session. "
+        "use get_session_status / start_af_session / stop_af_session for pod lifecycle. "
         "Each tool result names the next step. Invocable workflow prompts "
-        "(launch/connect/restart/stop) are also available."
+        "(launch/restart/stop) are also available."
     ),
 )
 
@@ -264,7 +263,6 @@ storage.register(mcp)
 dask.register(mcp)
 profiles.register(mcp)
 session.register(mcp)
-connect.register(mcp)
 prompts.register(mcp)
 
 

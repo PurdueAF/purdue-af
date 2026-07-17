@@ -71,8 +71,7 @@ def register(mcp) -> None:
         pending = default.get("pending")
         started = default.get("started", "")
         user_options = default.get("user_options", {})
-        state = default.get("state", {})
-        pod_name = state.get("pod_name", "")
+        # Do not read servers[""].state — that field requires admin:server_state.
 
         status_str = (
             "running" if ready else f"pending ({pending})" if pending else "not ready"
@@ -94,8 +93,6 @@ def register(mcp) -> None:
             f"# Session status: {status_str}",
             f"user: {username}",
         ]
-        if pod_name:
-            lines.append(f"pod: {pod_name}")
         if started:
             lines.append(f"started: {started}")
 
@@ -181,8 +178,6 @@ def register(mcp) -> None:
                 )
             return f"Error: JupyterHub rejected the spawn request — {resp.text[:300]}"
 
-        # Pod identity is about to change — drop cached state so subsequent
-        # tool calls don't see a stale (empty or old) pod_name for up to a TTL.
         clear_user_cache(token)
 
         if resp.status_code == 201:
@@ -240,9 +235,6 @@ def register(mcp) -> None:
         get_session_status in a loop.  Polls the JupyterHub API every 10 seconds
         internally and returns as soon as the pod is ready.
 
-        Also clears the internal token cache so the next tool call (e.g.
-        connect_to_session) sees the updated pod name immediately.
-
         Args:
             timeout_seconds: Maximum time to wait. Default: 180 s (3 min).
         """
@@ -267,23 +259,19 @@ def register(mcp) -> None:
                         data = resp.json()
                         default = data.get("servers", {}).get("", {})
                         if default.get("ready", False):
-                            pod_name = default.get("state", {}).get("pod_name", "")
                             started = default.get("started", "")
-                            # Invalidate cached user info so subsequent tool
-                            # calls pick up the correct pod_name immediately.
                             clear_user_cache(token)
-                            return "\n".join(
-                                [
-                                    "Session is running.",
-                                    f"pod: {pod_name}",
-                                    f"started: {started}",
-                                    f"(became ready after {attempts} poll(s))",
-                                    "",
-                                    "Next: get_session_status returns browser links. "
-                                    "If the user wants a shell, ask first, then call "
-                                    "prepare_ssh_connection.",
-                                ]
-                            )
+                            lines = [
+                                "Session is running.",
+                                f"(became ready after {attempts} poll(s))",
+                            ]
+                            if started:
+                                lines.insert(1, f"started: {started}")
+                            lines += [
+                                "",
+                                "Next: get_session_status returns browser links.",
+                            ]
+                            return "\n".join(lines)
                         # Not ready yet — fall through to sleep
                 except httpx.RequestError:
                     pass  # transient network error, keep polling

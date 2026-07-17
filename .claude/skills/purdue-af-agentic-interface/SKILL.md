@@ -1,6 +1,6 @@
 ---
 name: purdue-af-agentic-interface
-description: Manage a Purdue Analysis Facility session — start/stop/restart the JupyterHub pod, connect via SSH, and inspect Dask clusters, storage, and logs. Use whenever the user mentions Purdue AF, their analysis-facility session, AF Dask clusters, or AF logs/storage.
+description: Manage a Purdue Analysis Facility session — start/stop/restart the JupyterHub pod, and inspect Dask clusters, storage, and logs. Use whenever the user mentions Purdue AF, their analysis-facility session, AF Dask clusters, or AF logs/storage.
 ---
 
 # Purdue Analysis Facility — Agentic Interface
@@ -34,37 +34,8 @@ as `/mcp__purdue-af-agentic-interface__<name>`) that spell out the same playbook
 | Prompt | What it does |
 |---|---|
 | `launch_session`  | start a session and wait until it is ready |
-| `connect_session` | set up SSH and connect to a running session |
 | `restart_session` | restart, preserving (or changing) profile/options |
 | `stop_session`    | stop the session (storage is preserved) |
-| `recover_ssh`     | fix a broken SSH connection after a restart |
-
-**Always ask the user before connecting via SSH.**
-
----
-
-## Connecting (the one flow worth spelling out)
-
-After a session is running:
-
-1. `prepare_ssh_connection` — returns one ready-to-run Bash command with your
-   username and host already filled in. Run it locally in a single call.
-2. If it prints `ALREADY_CONNECTED`, you're done. Otherwise it prints an SSH
-   public key — pass that to `connect_to_session(public_key=...)`.
-3. Verify: `ssh PurdueAF "hostname"`.
-
-Thereafter, run pod commands with `ssh PurdueAF "<cmd>"`.
-
-To auto-approve these in this project, add to `.claude/settings.local.json`:
-
-```json
-"permissions": {
-  "allow": [
-    "Bash(ssh PurdueAF *)",
-    "Bash(ssh-keygen -t ed25519 -f ~/.ssh/af_key *)"
-  ]
-}
-```
 
 ---
 
@@ -108,19 +79,10 @@ Omit both arguments for defaults (stable profile, JupyterLab, no GPU). Examples:
 
 **`stop_af_session`** — stops the pod. Storage (home, /work) is always preserved.
 
-### Connecting
-
-**`prepare_ssh_connection`** — returns the exact local SSH-setup command
-(username/host baked in). First step of connecting; see above.
-
-**`connect_to_session(public_key)`** — injects the public key into the pod's
-`~/.ssh/authorized_keys` (idempotent). The pod's web interface is at
-`https://cms.geddes.rcac.purdue.edu/user/<username>/`.
-
 ### Storage
 
 **`query_storage_usage`** — home and work directory quotas (Prometheus, ≤ 5 min stale).
-Requires a running pod.
+Works when a session is (or recently was) running so metrics exist.
 
 ### Dask clusters
 *(Results always scoped to the calling user.)*
@@ -134,8 +96,8 @@ Requires a running pod.
 
 ### Logs
 
-**`query_notebook_logs`** — JupyterLab / VS Code server logs. Requires a running pod.
-**`query_dask_logs`** — Dask worker and scheduler logs (notebook pod excluded).
+**`query_notebook_logs`** — JupyterLab / VS Code server logs.
+**`query_dask_logs`** — Dask worker and scheduler logs (notebook container excluded).
 
 Both accept `start` (`"1h"`, `"30m"`, `"2d"`, or ISO-8601), `limit` (default 500),
 and `filter` (LogQL pipe expression, e.g. `"|= \"ERROR\""`).
@@ -148,7 +110,7 @@ and `filter` (LogQL pipe expression, e.g. `"|= \"ERROR\""`).
 |---|---|
 | `{"error":"Missing Bearer token"}` | No Authorization header reached the server — check the MCP server config and `~/.config/purdue-af/token` |
 | `{"error":"Invalid JupyterHub token"}` | Token expired — refresh at `/hub/token` |
-| `"no running server found"` in result | Pod not running — use `start_af_session` |
+| `"No active session"` in result | Pod not running — use `start_af_session` |
 | HTTP 404 on the service URL | Service not deployed or not registered with JupyterHub |
 
 ---

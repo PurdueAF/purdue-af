@@ -112,8 +112,8 @@ async def test_notebook_logs_selector_and_output(user_ctx):
     q = query_of(route)["query"][0]
     assert 'namespace="cms"' in q
     assert 'username="alice"' in q
-    assert 'pod="purdue-af-alice"' in q
     assert 'container="notebook"' in q
+    assert "pod=" not in q
     assert "hello world" in out
     assert "# 1 line(s)" in out
 
@@ -128,30 +128,17 @@ async def test_notebook_logs_applies_filter(user_ctx):
     assert query_of(route)["query"][0].endswith('|= "ERROR"')
 
 
-async def test_notebook_logs_requires_pod(podless_user_ctx):
-    tools = register_tools(logs).tools
-    out = await tools["query_notebook_logs"]()
-    assert "no running server" in out
-
-
 @respx.mock
-async def test_dask_logs_excludes_notebook_pod(user_ctx):
+async def test_dask_logs_excludes_notebook_container(user_ctx):
     route = respx.get(LOKI_RANGE_URL).respond(200, json=loki_response([]))
 
     tools = register_tools(logs).tools
     await tools["query_dask_logs"]()
 
-    assert 'pod!="purdue-af-alice"' in query_of(route)["query"][0]
-
-
-@respx.mock
-async def test_dask_logs_without_pod_has_no_pod_matcher(podless_user_ctx):
-    route = respx.get(LOKI_RANGE_URL).respond(200, json=loki_response([]))
-
-    tools = register_tools(logs).tools
-    await tools["query_dask_logs"]()
-
-    assert "pod!" not in query_of(route)["query"][0]
+    q = query_of(route)["query"][0]
+    assert 'username="alice"' in q
+    assert 'container!="notebook"' in q
+    assert "pod!" not in q
 
 
 @respx.mock

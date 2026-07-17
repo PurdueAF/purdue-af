@@ -2,7 +2,6 @@
 
 USER = {
     "username": "alice",
-    "pod_name": "purdue-af-alice",
     "namespace": "cms",
     "token": "tok-alice",
 }

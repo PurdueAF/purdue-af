@@ -14,11 +14,8 @@ def _auth_counter_value(result: str) -> float:
     )
 
 
-def hub_user_payload(name="alice", pod_name="purdue-af-alice"):
-    return {
-        "name": name,
-        "servers": {"": {"state": {"pod_name": pod_name}}},
-    }
+def hub_user_payload(name="alice"):
+    return {"name": name, "servers": {}}
 
 
 @respx.mock
@@ -29,7 +26,6 @@ async def test_valid_token_resolves_user():
 
     assert user == {
         "username": "alice",
-        "pod_name": "purdue-af-alice",
         "namespace": auth.NAMESPACE,
         "token": "tok-1",
     }
@@ -63,15 +59,6 @@ async def test_payload_without_username_returns_none():
     respx.get(HUB_USER_URL).respond(200, json={"servers": {}})
 
     assert await auth.resolve_user("tok-1") is None
-
-
-@respx.mock
-async def test_no_running_server_gives_empty_pod_name():
-    respx.get(HUB_USER_URL).respond(200, json={"name": "alice", "servers": {}})
-
-    user = await auth.resolve_user("tok-1")
-
-    assert user["pod_name"] == ""
 
 
 @respx.mock
@@ -193,19 +180,3 @@ async def test_auth_metrics_record_each_result():
     assert _auth_counter_value("cache_hit") == before["cache_hit"] + 1
     assert _auth_counter_value("invalid_token") == before["invalid_token"] + 1
     assert _auth_counter_value("hub_unreachable") == before["hub_unreachable"] + 1
-
-
-@respx.mock
-async def test_refetch_picks_up_new_pod_name():
-    """After a session restart the pod name changes; cache clear must surface it."""
-    route = respx.get(HUB_USER_URL)
-    route.respond(200, json=hub_user_payload(pod_name="pod-old"))
-
-    user = await auth.resolve_user("tok-1")
-    assert user["pod_name"] == "pod-old"
-
-    route.respond(200, json=hub_user_payload(pod_name="pod-new"))
-    auth.clear_user_cache("tok-1")
-
-    user = await auth.resolve_user("tok-1")
-    assert user["pod_name"] == "pod-new"

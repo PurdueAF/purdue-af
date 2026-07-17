@@ -11,7 +11,7 @@ USER_URL = f"{session.HUB_API_URL}/users/alice"
 SERVER_URL = f"{session.HUB_API_URL}/users/alice/server"
 
 
-def server_payload(ready=True, pod="purdue-af-alice", options=None, pending=None):
+def server_payload(ready=True, options=None, pending=None):
     return {
         "servers": {
             "": {
@@ -19,7 +19,6 @@ def server_payload(ready=True, pod="purdue-af-alice", options=None, pending=None
                 "pending": pending,
                 "started": "2026-01-01T00:00:00Z",
                 "user_options": options or {},
-                "state": {"pod_name": pod},
             }
         }
     }
@@ -67,7 +66,8 @@ async def test_status_running_with_jupyterlab_active(user_ctx):
     out = await tools["get_session_status"]()
 
     assert "# Session status: running" in out
-    assert "pod: purdue-af-alice" in out
+    assert "user: alice" in out
+    assert "pod:" not in out
     assert "JupyterLab" in out and "← active" in out
     assert out.index("← active") < out.index("VS Code")
     assert "0-cpu: 1" in out
@@ -203,7 +203,8 @@ async def test_wait_returns_when_ready(user_ctx):
     out = await tools["wait_for_session"]()
 
     assert "Session is running" in out
-    assert "pod: purdue-af-alice" in out
+    assert "started: 2026-01-01T00:00:00Z" in out
+    assert "pod:" not in out
     assert "tok-alice" not in auth._user_cache  # cache invalidated
 
 

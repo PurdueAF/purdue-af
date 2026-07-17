@@ -49,12 +49,10 @@ def register(mcp) -> None:
         last-accessed time for each directory.
         """
         user = current_user.get()
-        pod_name = user["pod_name"]
-
-        if not pod_name:
-            return "Error: no running server found for this user — start a pod first."
-
-        pod_selector = f'pod="{pod_name}"'
+        username = user["username"]
+        # Metrics are labeled by username via Kubernetes SD (username_unescaped).
+        # No Hub admin state / pod_name required.
+        user_selector = f'username="{username}"'
 
         async with httpx.AsyncClient(
             transport=instrumented_transport("prometheus")
@@ -66,7 +64,7 @@ def register(mcp) -> None:
                 used_kb, size_kb, util, last_accessed = await asyncio.gather(
                     *(
                         _prom_scalar(
-                            client, f"af_{prefix}_dir_{metric}{{{pod_selector}}}"
+                            client, f"af_{prefix}_dir_{metric}{{{user_selector}}}"
                         )
                         for metric in ("used_kb", "size_kb", "util", "last_accessed")
                     )
@@ -99,8 +97,9 @@ def register(mcp) -> None:
 
         if not any_data:
             return (
-                "No storage metrics in Prometheus for this pod — af-pod-monitor may still "
-                "be initialising (first reading takes up to 5 minutes after pod start)."
+                "No storage metrics in Prometheus for this user — the session may "
+                "not be running, or af-pod-monitor may still be initialising "
+                "(first reading takes up to 5 minutes after pod start)."
             )
 
         return "\n".join(rows)

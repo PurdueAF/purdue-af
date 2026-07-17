@@ -2,8 +2,7 @@
 
 A remote [MCP](https://modelcontextprotocol.io) server for the Purdue Analysis Facility.
 Connect any MCP-capable agent (Claude Code, Codex, Cursor, …) and manage your AF session
-in natural language — start/stop it, connect over SSH, and inspect Dask clusters,
-storage, and logs.
+in natural language — start/stop it, and inspect Dask clusters, storage, and logs.
 
 ## Connect
 
@@ -44,16 +43,12 @@ your persistent instructions (`AGENTS.md`, rules file, …).
 Ask in plain language, for example:
 
 - "Start my AF session" (optionally: "…with 32 CPUs and the VS Code interface")
-- "Connect me to my session over SSH"
 - "How much home and work storage am I using?"
 - "List my Dask clusters" / "scale `<name>` to 10 workers"
 - "Show the last 30 minutes of error logs from my notebook"
 
-Connecting over SSH runs a couple of commands on your own machine; your agent will ask
-before running them.
-
 ## Troubleshooting
 
 - **401 / invalid token** — your token expired or is wrong; get a new one at `/hub/token`.
-- **"no running server found"** — start a session first.
+- **"No active session"** — start a session first.
 - Treat the token like a password — don't share or commit it.

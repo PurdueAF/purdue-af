@@ -30,12 +30,3 @@ def user_ctx():
     ctx_token = current_user.set(dict(USER))
     yield dict(USER)
     current_user.reset(ctx_token)
-
-
-@pytest.fixture
-def podless_user_ctx():
-    """A user with no running server (pod_name empty)."""
-    user = {**USER, "pod_name": ""}
-    ctx_token = current_user.set(user)
-    yield user
-    current_user.reset(ctx_token)

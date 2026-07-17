@@ -1,8 +1,8 @@
 """Token validation and user-context resolution.
 
 Extracted into its own module so that tool modules (e.g. session.py) can
-call clear_user_cache() to force a fresh pod_name lookup after the session
-state changes — without creating a circular import with server.py.
+call clear_user_cache() after session state changes — without creating a
+circular import with server.py.
 """
 
 import os
@@ -45,7 +45,12 @@ def _evict(now: float) -> None:
 
 
 async def resolve_user(token: str) -> Optional[dict]:
-    """Validate a JupyterHub Bearer token; return {username, pod_name, namespace, token}."""
+    """Validate a JupyterHub Bearer token; return {username, namespace, token}.
+
+    Does not read Hub server ``state`` (admin-only). Tools that need to know
+    whether a session is running query Hub ``servers[""].ready`` themselves,
+    or filter Loki/Prometheus by ``username``.
+    """
     now = time.monotonic()
     cached = _user_cache.get(token)
     if cached and now < cached[0]:
@@ -71,11 +76,8 @@ async def resolve_user(token: str) -> Optional[dict]:
         record_auth("invalid_token")
         return None
 
-    pod_name = data.get("servers", {}).get("", {}).get("state", {}).get("pod_name", "")
-
     user_info = {
         "username": username,
-        "pod_name": pod_name,
         "namespace": NAMESPACE,
         "token": token,
     }
@@ -86,9 +88,5 @@ async def resolve_user(token: str) -> Optional[dict]:
 
 
 def clear_user_cache(token: str) -> None:
-    """Remove a token's cached entry so the next request gets a fresh pod_name.
-
-    Call this after a session starts or stops so tool functions that rely on
-    current_user['pod_name'] see the updated state immediately.
-    """
+    """Remove a token's cached entry so the next request revalidates."""
     _user_cache.pop(token, None)

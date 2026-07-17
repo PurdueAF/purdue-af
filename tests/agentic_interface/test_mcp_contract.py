@@ -29,17 +29,12 @@ EXPECTED_TOOLS = {
     "stop_af_session",
     "wait_for_session",
     "restart_af_session",
-    # ssh
-    "prepare_ssh_connection",
-    "connect_to_session",
 }
 
 EXPECTED_PROMPTS = {
     "launch_session",
-    "connect_session",
     "restart_session",
     "stop_session",
-    "recover_ssh",
 }
 
 
@@ -99,7 +94,6 @@ async def test_full_stack_handshake_and_auth(monkeypatch):
             return None
         return {
             "username": "alice",
-            "pod_name": "p",
             "namespace": "cms",
             "token": token,
         }

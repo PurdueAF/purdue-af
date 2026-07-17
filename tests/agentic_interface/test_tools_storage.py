@@ -68,12 +68,6 @@ def test_bar_renders_and_clamps():
 # ── query_storage_usage ───────────────────────────────────────────────────────
 
 
-async def test_storage_requires_pod(podless_user_ctx):
-    tools = register_tools(storage).tools
-    out = await tools["query_storage_usage"]()
-    assert "no running server" in out
-
-
 @respx.mock
 async def test_storage_reports_usage(user_ctx):
     gb = 1024 * 1024  # KB per GB
@@ -104,10 +98,9 @@ async def test_storage_reports_usage(user_ctx):
     assert "50.00 GB / 100.00 GB" in out
     assert "50.0%" in out
     assert "last accessed 2023-11-14" in out
-    # every query is scoped to the user's pod
+    # every query is scoped to the authenticated username
     for call in route.calls:
-        assert 'pod="purdue-af-alice"' in call.request.url.params["query"]
-
+        assert 'username="alice"' in call.request.url.params["query"]
 
 @respx.mock
 async def test_storage_no_metrics_message(user_ctx):

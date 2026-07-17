@@ -70,7 +70,6 @@ async def test_mcp_request_increments_api_call_counter(monkeypatch):
     async def accept(token):
         return {
             "username": "alice",
-            "pod_name": "pod-a",
             "namespace": "cms",
             "token": "t",
         }
@@ -164,7 +163,6 @@ async def test_post_mcp_request_records_jsonrpc_method(monkeypatch):
     async def accept(token):
         return {
             "username": "alice",
-            "pod_name": "pod-a",
             "namespace": "cms",
             "token": "t",
         }
