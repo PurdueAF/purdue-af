@@ -75,7 +75,10 @@ jobs:
       - name: Import-smoke the global env (inside the AF image)
         if: hashFiles('pixi/global/pixi.lock') != ''
         run: |
-          docker run --rm -v "$PWD:$PWD" -w "$PWD" \
+          # --user 0: the image defaults to jovyan (uid 1000), but the env
+          # installed on the runner is owned by the runner user (uid 1001)
+          # and some conda-meta files aren't world-readable
+          docker run --rm --user 0:0 -v "$PWD:$PWD" -w "$PWD" \
             ghcr.io/purdueaf/purdue-af:pre-release \
             pixi/global/.pixi/envs/default/bin/python pixi/check-env.py \
               --manifest pixi/global/pixi.toml --env default
