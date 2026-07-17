@@ -4,12 +4,12 @@ Multiple gateway backends are supported (k8s, slurm-hammer, slurm-gautschi, slur
 list_dask_clusters queries all of them; the other tools take a `gateway` argument
 so the correct backend is targeted.
 
-User isolation is enforced by the Dask Gateway itself: every API call uses the
-authenticated user's JupyterHub token, so the gateway only returns/modifies
-clusters owned by that user.
+Gateways here use SimpleAuthenticator (password ignored). Calls authenticate as
+the Hub username via HTTP Basic so each user only sees their own clusters.
 """
 
 import asyncio
+import base64
 import os
 
 import httpx
@@ -60,8 +60,22 @@ def _resolve_gateway(name: str) -> tuple[str, str]:
     return key, _GATEWAYS[key]
 
 
-def _auth(token: str) -> dict:
-    return {"Authorization": f"token {token}"}
+def _auth(username: str) -> dict:
+    """HTTP Basic for SimpleAuthenticator (password field ignored when unset)."""
+    cred = base64.b64encode(f"{username}:".encode()).decode()
+    return {"Authorization": f"Basic {cred}"}
+
+
+def _parse_clusters(payload) -> list[dict]:
+    """Normalise GET /api/v1/clusters/ body to a list of cluster dicts.
+
+    Dask Gateway returns ``{cluster_name: cluster_model, …}``.
+    """
+    if isinstance(payload, dict):
+        return [c for c in payload.values() if isinstance(c, dict)]
+    if isinstance(payload, list):
+        return [c for c in payload if isinstance(c, dict)]
+    return []
 
 
 def _fmt_cluster(c: dict, gateway: str) -> str:
@@ -83,12 +97,12 @@ def _fmt_cluster(c: dict, gateway: str) -> str:
 
 
 async def _fetch_clusters(
-    client: httpx.AsyncClient, gateway: str, url: str, token: str
+    client: httpx.AsyncClient, gateway: str, url: str, username: str
 ) -> tuple[str, list[dict] | str]:
     """Return (gateway_name, clusters_or_error_string)."""
     try:
         resp = await client.get(
-            f"{url}/api/v1/clusters/", headers=_auth(token), timeout=10.0
+            f"{url}/api/v1/clusters/", headers=_auth(username), timeout=10.0
         )
     except httpx.RequestError as exc:
         return gateway, f"unreachable ({exc})"
@@ -96,7 +110,7 @@ async def _fetch_clusters(
         return gateway, "not authorised (no access to this backend)"
     if resp.status_code != 200:
         return gateway, f"HTTP {resp.status_code}"
-    return gateway, resp.json().get("clusters", [])
+    return gateway, _parse_clusters(resp.json())
 
 
 def register(mcp) -> None:
@@ -109,12 +123,12 @@ def register(mcp) -> None:
         calling user only.
         """
         user = current_user.get()
-        token = user["token"]
+        username = user["username"]
 
         async with _client() as client:
             results = await asyncio.gather(
                 *[
-                    _fetch_clusters(client, gw, url, token)
+                    _fetch_clusters(client, gw, url, username)
                     for gw, url in _GATEWAYS.items()
                 ]
             )
@@ -124,7 +138,6 @@ def register(mcp) -> None:
         for gateway, data in results:
             if isinstance(data, str):
                 # error string — only surface if it isn't the "not authorised" case
-                # (non-Purdue users don't have SLURM access; that's expected)
                 if "not authorised" not in data:
                     sections.append(f"[{gateway}] error: {data}")
                 continue
@@ -162,7 +175,7 @@ def register(mcp) -> None:
             try:
                 resp = await client.get(
                     f"{url}/api/v1/clusters/{cluster_name}",
-                    headers=_auth(user["token"]),
+                    headers=_auth(user["username"]),
                     timeout=10.0,
                 )
             except httpx.RequestError as exc:
@@ -216,9 +229,9 @@ def register(mcp) -> None:
 
         async with _client() as client:
             try:
-                resp = await client.patch(
-                    f"{url}/api/v1/clusters/{cluster_name}",
-                    headers=_auth(user["token"]),
+                resp = await client.post(
+                    f"{url}/api/v1/clusters/{cluster_name}/scale",
+                    headers=_auth(user["username"]),
                     json={"count": n_workers},
                     timeout=10.0,
                 )
@@ -255,7 +268,7 @@ def register(mcp) -> None:
             try:
                 resp = await client.delete(
                     f"{url}/api/v1/clusters/{cluster_name}",
-                    headers=_auth(user["token"]),
+                    headers=_auth(user["username"]),
                     timeout=10.0,
                 )
             except httpx.RequestError as exc:

@@ -1,5 +1,6 @@
 """Tests for tools/dask.py — gateway resolution and cluster operations."""
 
+import base64
 import json
 
 import pytest
@@ -16,6 +17,15 @@ SLURM = dask._GATEWAYS["slurm"]
 
 def clusters_url(base):
     return f"{base}/api/v1/clusters/"
+
+
+def clusters_payload(*clusters):
+    """Match Dask Gateway's GET /api/v1/clusters/ shape: {name: model, …}."""
+    return {c["name"]: c for c in clusters}
+
+
+def basic_alice():
+    return "Basic " + base64.b64encode(b"alice:").decode()
 
 
 # ── _resolve_gateway ──────────────────────────────────────────────────────────
@@ -43,7 +53,7 @@ def test_resolve_unknown_raises():
         dask._resolve_gateway("nope")
 
 
-# ── _fmt_cluster ──────────────────────────────────────────────────────────────
+# ── _fmt_cluster / _parse_clusters ────────────────────────────────────────────
 
 
 def test_fmt_cluster_fixed_workers():
@@ -69,6 +79,19 @@ def test_fmt_cluster_scheduler_address():
     assert "scheduler: tls://x:8786" in out
 
 
+def test_parse_clusters_dict_keyed_by_name():
+    payload = clusters_payload(
+        {"name": "a", "status": "RUNNING"},
+        {"name": "b", "status": "RUNNING"},
+    )
+    assert [c["name"] for c in dask._parse_clusters(payload)] == ["a", "b"]
+
+
+def test_parse_clusters_empty():
+    assert dask._parse_clusters({}) == []
+    assert dask._parse_clusters(None) == []
+
+
 # ── list_dask_clusters ────────────────────────────────────────────────────────
 
 
@@ -76,25 +99,25 @@ def test_fmt_cluster_scheduler_address():
 async def test_list_clusters_aggregates_gateways(user_ctx):
     respx.get(clusters_url(K8S)).respond(
         200,
-        json={"clusters": [{"name": "c-k8s", "status": "RUNNING", "workers": {}}]},
+        json=clusters_payload({"name": "c-k8s", "status": "RUNNING", "workers": {}}),
     )
-    respx.get(clusters_url(HAMMER)).respond(403)  # expected: no SLURM access
+    respx.get(clusters_url(HAMMER)).respond(403)  # unexpected auth failure
     respx.get(clusters_url(GAUTSCHI)).mock(side_effect=ConnectError("down"))
-    respx.get(clusters_url(SLURM)).respond(200, json={"clusters": []})
+    respx.get(clusters_url(SLURM)).respond(200, json={})
 
     tools = register_tools(dask).tools
     out = await tools["list_dask_clusters"]()
 
     assert "# 1 Dask cluster(s)" in out
     assert "c-k8s" in out
-    assert "slurm-hammer" not in out  # 403 suppressed by design
+    assert "slurm-hammer" not in out  # 403 suppressed
     assert "[slurm-gautschi] error: unreachable" in out
 
 
 @respx.mock
 async def test_list_clusters_all_empty(user_ctx):
     for base in (K8S, HAMMER, GAUTSCHI, SLURM):
-        respx.get(clusters_url(base)).respond(200, json={"clusters": []})
+        respx.get(clusters_url(base)).respond(200, json={})
 
     tools = register_tools(dask).tools
     assert await tools["list_dask_clusters"]() == (
@@ -103,9 +126,9 @@ async def test_list_clusters_all_empty(user_ctx):
 
 
 @respx.mock
-async def test_list_clusters_sends_user_token(user_ctx):
+async def test_list_clusters_sends_basic_username(user_ctx):
     routes = [
-        respx.get(clusters_url(base)).respond(200, json={"clusters": []})
+        respx.get(clusters_url(base)).respond(200, json={})
         for base in (K8S, HAMMER, GAUTSCHI, SLURM)
     ]
 
@@ -113,7 +136,7 @@ async def test_list_clusters_sends_user_token(user_ctx):
     await tools["list_dask_clusters"]()
 
     for route in routes:
-        assert route.calls.last.request.headers["Authorization"] == "token tok-alice"
+        assert route.calls.last.request.headers["Authorization"] == basic_alice()
 
 
 # ── get_dask_cluster_info ─────────────────────────────────────────────────────
@@ -165,19 +188,20 @@ async def test_scale_rejects_negative(user_ctx):
 
 
 @respx.mock
-async def test_scale_patches_count(user_ctx):
-    route = respx.patch(f"{K8S}/api/v1/clusters/c1").respond(200)
+async def test_scale_posts_count(user_ctx):
+    route = respx.post(f"{K8S}/api/v1/clusters/c1/scale").respond(200)
 
     tools = register_tools(dask).tools
     out = await tools["scale_dask_cluster"]("c1", 8)
 
     assert json.loads(route.calls.last.request.content) == {"count": 8}
+    assert route.calls.last.request.headers["Authorization"] == basic_alice()
     assert "scaling to 8 worker(s)" in out
 
 
 @respx.mock
 async def test_scale_not_found(user_ctx):
-    respx.patch(f"{HAMMER}/api/v1/clusters/ghost").respond(404)
+    respx.post(f"{HAMMER}/api/v1/clusters/ghost/scale").respond(404)
 
     tools = register_tools(dask).tools
     out = await tools["scale_dask_cluster"]("ghost", 2, gateway="hammer")
