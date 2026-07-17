@@ -133,7 +133,7 @@ singleuser:
           nvidia.com/mig-1g.5gb: 1
         extra_containers:
           - name: af-pod-monitor
-            image: geddes-registry.rcac.purdue.edu/cms/af-pod-monitor:latest
+            image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-pod-monitor:latest
             volumeMounts:
               - name: volume-{username}
                 mountPath: /home/{username}
@@ -174,7 +174,7 @@ singleuser:
                   nvidia.com/mig-7g.40gb: 1
   extraContainers:
     - name: af-pod-monitor
-      image: geddes-registry.rcac.purdue.edu/cms/af-pod-monitor:latest
+      image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-pod-monitor:latest
       volumeMounts:
         - name: volume-{username}
           mountPath: /home/{username}

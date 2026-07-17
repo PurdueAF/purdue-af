@@ -66,14 +66,11 @@ The hub's "Latest pre-release version" profile
 automatically — no manifest edit, no hand-pushed tags. The production
 profile stays pinned; moving it to the same flow is the follow-up step.
 
-The hub profile currently pulls straight from ghcr.io (the `purdue-af`
-package is public since 2026-07-16; anonymous pull verified, 5.2 GiB
-compressed). The LAN-local `ghcr-cache` Harbor proxy path is prepared as a
-commented-out alternative in values.yaml — switch once the `ghcr-cache`
-Harbor project's access level is set to Public (see docker/REGISTRY.md
-one-time setup; verified private/401 as of 2026-07-16). Harbor revalidates
-moving tags upstream per pull, so the switch won't change promotion
-latency, only pull locality.
+Pull path: the ghcr `purdue-af` package is public (2026-07-16; anonymous
+pull verified, 5.2 GiB compressed), and manifests pull via the geddes
+`ghcr-proxy-cache` Harbor project — LAN-local layers, with Harbor
+revalidating moving tags (`:pre-release`, `:latest`) upstream on each
+pull, so promotions still land on the next session spawn.
 
 The kaniko Job below remains as a cluster-local fallback build path.
 
@@ -126,7 +123,44 @@ the device plugin's per-allocation value overrides it for GPU sessions.
       the items listed above (docs updated to say "EL8" instead of
       "AlmaLinux8")
 
-Promotion path: once validated, this Dockerfile replaces
+## Promotion to production (Release AF workflow)
+
+Release channels, each with exactly ONE minting trigger (so a wrong-stream
+bump is structurally impossible):
+
+| channel                                                          | scheme                                                         | minted by                                                   |
+| ---------------------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------- |
+| platform                                                         | `YYYY.M.SEQ` CalVer (repo tag + GitHub Release, no file edits) | **Release AF (platform)** dispatch                          |
+| purdue-af image                                                  | its own semver `0.X.Y` (repo tag `v0.X.Y`)                     | **Release AF Image** dispatch, `patch\|minor\|major` choice |
+| versioned aux (af-node-monitor)                                  | semver per image, read from its manifests                      | **Release Aux Image** dispatch                              |
+| continuous aux (agentic-interface, af-pod-monitor) + pre-release | `:latest` / `:pre-release` / `sha-` moving tags                | CI only, never humans                                       |
+
+**Release AF Image** promotes the main image: resolves the digest behind
+ghcr `:pre-release` (by construction the exact bytes that passed build
+smoke + CVMFS + hub-in-kind e2e), verifies its source commit is on main,
+reads the current version from values.yaml, bumps per your choice, adds
+the immutable semver tag to the SAME digest (promote-by-digest — never a
+rebuild), rewrites every version spot in values.yaml
+(`bump-af-version.py`, count-verified, tested), commits, tags
+`v<version>`, and publishes a GitHub Release with digest provenance.
+
+**Release Aux Image** does the same for versioned aux images: retags this
+commit's smoke-tested `sha-` build, rewrites every manifest ref under
+`apps/` (`bump-aux-image.py`, refuses `:latest`-channel images), commits.
+
+**Continuous channel**: `build-images.yml` moves the ghcr `:latest` tag
+after every smoke-tested main build; the agentic-interface and
+af-pod-monitor manifests pull it via the geddes ghcr-proxy-cache
+(kubernetes pulls `:latest` with policy Always by default), so those
+deploy continuously from any build that passes its tests.
+
+Flux rolls the hub config; sessions pull the pinned semver via the geddes
+ghcr-proxy-cache. Rollback = `git revert` the release commit (old tags
+stay on ghcr). ⚠ One-time setup: add a fine-grained PAT with
+`contents: write` as the `AF_RELEASE_TOKEN` secret — pushes made with the
+default GITHUB_TOKEN don't trigger CI on the release commit.
+
+Once the first release lands, this Dockerfile replaces
 `docker/purdue-af/Dockerfile` (keeping that directory's scripts/configs,
-which are referenced unchanged), this directory is deleted, and the regular
-`build-af.yaml` job bumps to 0.13.0.
+which are referenced unchanged), this directory is deleted, and the kaniko
+jobs become emergency fallbacks only.

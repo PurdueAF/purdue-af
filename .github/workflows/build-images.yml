@@ -79,3 +79,14 @@ jobs:
       - name: Push to ghcr.io
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: docker push ghcr.io/purdueaf/${{ matrix.name }}:sha-${{ github.sha }}
+      # Continuous channel: every smoke-tested main build also moves the
+      # ghcr :latest tag. Manifests of continuous-channel images
+      # (agentic-interface, af-pod-monitor) pull it via the geddes
+      # ghcr-proxy-cache; versioned images ignore it (release-aux-image.yml
+      # promotes those explicitly).
+      - name: Move latest tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/purdueaf/${{ matrix.name }}:latest \
+            ghcr.io/purdueaf/${{ matrix.name }}:sha-${{ github.sha }}

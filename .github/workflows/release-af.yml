@@ -1,0 +1,73 @@
+name: Release AF (platform)
+
+# Mints the next whole-platform CalVer tag (YYYY.M.SEQ — the repo's
+# long-standing scheme: 2026.7.7 = 7th release of July 2026) and publishes
+# a GitHub Release with generated notes. Nothing else: no file edits, no
+# image tags — the platform release marks the repo state and is on a
+# SEPARATE cadence from the image releases.
+#
+# Version streams (each minted by exactly one trigger — never cross them):
+#   - platform:        YYYY.M.SEQ  → THIS workflow only
+#   - purdue-af image: semver 0.X.Y (repo tag v0.X.Y) → release-af-image.yml
+#   - versioned aux:   semver per image → release-aux-image.yml
+#   - continuous aux + pre-release: :latest / :pre-release / sha- moving
+#     tags → CI pipelines only, never versioned by humans
+#
+# ⚠ Uses AF_RELEASE_TOKEN (fine-grained PAT, contents:write) if present —
+# tags pushed with the default GITHUB_TOKEN do not trigger CI workflows.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version override (YYYY.M.SEQ) — leave empty to auto-compute"
+        default: ""
+
+permissions:
+  contents: write # git tag + GitHub Release
+
+concurrency:
+  group: release-af-platform
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0 # full tag list + release notes
+          token: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
+      - name: Compute next platform CalVer (YYYY.M.SEQ)
+        id: calver
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            next="${{ inputs.version }}"
+          else
+            year=$(date -u +%Y); month=$(date -u +%-m)
+            last=$(git tag -l "${year}.${month}.*" | sort -t. -k3 -n | tail -1)
+            if [ -z "$last" ]; then
+              next="${year}.${month}.0"
+            else
+              next="${year}.${month}.$(( ${last##*.} + 1 ))"
+            fi
+          fi
+          if git rev-parse -q --verify "refs/tags/$next" >/dev/null; then
+            echo "::error::tag $next already exists"; exit 1
+          fi
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+          echo "next platform version: $next"
+      - name: Tag and publish release
+        env:
+          GH_TOKEN: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
+          VERSION: ${{ steps.calver.outputs.version }}
+        run: |
+          git config user.name "af-release-bot"
+          git config user.email "af-release-bot@users.noreply.github.com"
+          git tag -a "$VERSION" -m "Purdue AF $VERSION"
+          git push origin "$VERSION"
+          gh release create "$VERSION" \
+            --title "Purdue AF $VERSION" \
+            --generate-notes 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"

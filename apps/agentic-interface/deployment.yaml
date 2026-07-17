@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: agentic-interface
-          image: geddes-registry.rcac.purdue.edu/cms/agentic-interface:latest
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-interface:latest
           ports:
             - containerPort: 8888
           env:

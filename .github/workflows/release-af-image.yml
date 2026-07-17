@@ -1,0 +1,137 @@
+name: Release AF Image (purdue-af)
+
+# The manual greenlight for the MAIN AF IMAGE — its own semver (0.X.Y), on
+# a separate cadence from the platform CalVer releases (release-af.yml).
+# Run from the Actions tab, pick a bump (patch/minor/major), and:
+#
+#   1. resolves the digest currently soaking as ghcr :pre-release (which,
+#      by construction, has passed build smoke + CVMFS test + hub-in-kind
+#      e2e — nothing else is ever promoted to that tag);
+#   2. recovers the source commit from the image's OCI revision label and
+#      verifies it is an ancestor of main (no stray builds);
+#   3. reads the current image version from values.yaml (the single source
+#      of truth for "what production runs" — nothing to remember) and
+#      bumps it;
+#   4. adds the immutable semver tag to the SAME digest on ghcr
+#      (promote-by-digest: production runs the exact bytes that were
+#      tested, never a rebuild);
+#   5. rewrites every version spot in values.yaml (count-verified — see
+#      bump-af-version.py), commits, tags v<version> (the v prefix keeps
+#      image tags distinct from bare platform CalVer tags), pushes, and
+#      publishes a GitHub Release with generated notes + provenance.
+#
+# Flux then rolls the hub config; sessions pull the pinned tag via the
+# geddes ghcr-proxy-cache. ROLLBACK: `git revert` the release commit (old
+# tags stay on ghcr forever).
+#
+# ⚠ Uses AF_RELEASE_TOKEN (fine-grained PAT, contents:write on this repo)
+# if present — pushes made with the default GITHUB_TOKEN do NOT trigger
+# other workflows, so validate-manifests/e2e would silently skip the
+# release commit. Falls back to GITHUB_TOKEN with a loud warning.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Semver bump for the new image version"
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      version:
+        description: "Explicit version override (X.Y.Z) — leave empty to bump"
+        default: ""
+      source_tag:
+        description: "ghcr tag to promote (digest is resolved from it)"
+        default: "pre-release"
+
+permissions:
+  contents: write # release commit, git tag, GitHub Release
+  packages: write # semver tag on ghcr
+
+concurrency:
+  group: release-af-image # never run two releases concurrently, never cancel one
+  cancel-in-progress: false
+
+env:
+  IMAGE_REPO: ghcr.io/purdueaf/purdue-af
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.ref == 'refs/heads/main'
+    env:
+      HAVE_RELEASE_PAT: ${{ secrets.AF_RELEASE_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0 # full history: ancestry check + release notes
+          token: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
+      - name: Warn if running with the default token
+        if: env.HAVE_RELEASE_PAT != 'true'
+        run: |
+          echo "::warning::AF_RELEASE_TOKEN secret not set — the release " \
+            "commit will NOT trigger CI workflows (GITHUB_TOKEN limitation)."
+      - name: Login to ghcr.io
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve source digest and provenance
+        id: src
+        run: |
+          ref="$IMAGE_REPO:${{ inputs.source_tag }}"
+          digest=$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' | jq -r .digest)
+          revision=$(docker buildx imagetools inspect "$ref" --format '{{json .Image}}' \
+            | jq -r '.. | objects | .Labels? // empty | ."org.opencontainers.image.revision" // empty' | head -1)
+          [ -n "$digest" ] || { echo "cannot resolve digest of $ref"; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+          echo "promoting $ref @ $digest (built from ${revision:-unknown})"
+          if [ -n "$revision" ]; then
+            git merge-base --is-ancestor "$revision" HEAD || {
+              echo "::error::image was built from $revision, which is NOT on main"; exit 1; }
+          else
+            echo "::warning::image has no revision label — ancestry not verified"
+          fi
+      - name: Bump version in values.yaml
+        id: ver
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            new=$(python3 .github/workflows/bump-af-version.py --set "${{ inputs.version }}" | tail -1)
+          else
+            new=$(python3 .github/workflows/bump-af-version.py --bump "${{ inputs.bump }}" | tail -1)
+          fi
+          echo "version=$new" >> "$GITHUB_OUTPUT"
+          git diff --stat
+      - name: Tag the digest on ghcr (promote-by-digest, no rebuild)
+        run: |
+          docker buildx imagetools create \
+            -t "$IMAGE_REPO:${{ steps.ver.outputs.version }}" \
+            "$IMAGE_REPO@${{ steps.src.outputs.digest }}"
+      - name: Commit, tag, push, publish release
+        env:
+          GH_TOKEN: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          DIGEST: ${{ steps.src.outputs.digest }}
+          REVISION: ${{ steps.src.outputs.revision }}
+        run: |
+          git config user.name "af-release-bot"
+          git config user.email "af-release-bot@users.noreply.github.com"
+          git add apps/jupyterhub/jupyterhub/values.yaml
+          git commit -m "release purdue-af image $VERSION"
+          git tag -a "v$VERSION" -m "purdue-af image $VERSION
+          image: $IMAGE_REPO:$VERSION
+          digest: $DIGEST
+          built from: ${REVISION:-unknown}"
+          git push origin main "v$VERSION"
+          gh release create "v$VERSION" \
+            --title "purdue-af image $VERSION" \
+            --generate-notes \
+            --notes "Image: \`$IMAGE_REPO:$VERSION\`
+          Digest: \`$DIGEST\` (identical bytes to the pre-release that passed e2e)
+          Built from: ${REVISION:-unknown}
+          " \
+            2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "released $VERSION -> $DIGEST" >> "$GITHUB_STEP_SUMMARY"
