@@ -114,6 +114,9 @@ jobs:
         with:
           tool-cache: true
           docker-images: false
+          # apt-based removal is the slowest part (~3 min) and the space
+          # isn't needed: android/dotnet/haskell/tool-cache free enough
+          large-packages: false
       - name: Disk before build
         run: df -h / | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
@@ -176,13 +179,15 @@ jobs:
         run: |
           docker push "$IMAGE_REPO:sha-$GITHUB_SHA"
           echo "pushed=true" >> "$GITHUB_OUTPUT"
-      - name: Size report (layer breakdown)
+      - name: Size report (layer table only — deep dive re-downloads ~5 GB, run locally when needed)
         if: steps.push.outputs.pushed == 'true'
         run: |
           {
             echo ""
             echo '```'
-            python3 docker/kaniko-build-jobs/analyze_image_build.py --image "$IMAGE_REPO:sha-$GITHUB_SHA"
+            python3 docker/kaniko-build-jobs/analyze_image_build.py \
+              --image "$IMAGE_REPO:sha-$GITHUB_SHA" \
+              --deep-dive-min-mb 100000
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -249,6 +254,7 @@ jobs:
         with:
           tool-cache: false
           docker-images: false
+          large-packages: false # slow apt removal; space not needed here
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
