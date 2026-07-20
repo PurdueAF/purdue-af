@@ -55,46 +55,58 @@ proxy:
     extraPorts: []
 
 singleuser:
-  uid: null # sample image runs as jovyan
-  # prod's start-singleuser.sh is docker-stacks-specific; the sample image
-  # boots via the singleuser entrypoint directly (verified: crash-loops otherwise)
+  uid: null # AF image entrypoint drops to jovyan
+  # prod's start-singleuser.sh is docker-stacks-specific and assumes cluster
+  # mounts absent in kind; the real AF image also ships `jupyterhub-singleuser`
+  # on PATH, so boot via it here (the start-singleuser.sh path is exercised on
+  # the real cluster, not in kind).
   cmd: jupyterhub-singleuser
+  # No mock/sample image anywhere: the base image is the REAL production image
+  # pinned in values.yaml, remapped geddes-proxy→ghcr by setup-kind.sh. Every
+  # spawn test runs against a real AF image (production or pre-release).
   image:
-    name: quay.io/jupyterhub/k8s-singleuser-sample
-    tag: "__CHART_VERSION__" # z2jh tags images with the chart version (setup-kind.sh substitutes)
-  startTimeout: 300
+    name: __PRODUCTION_IMAGE_NAME__
+    tag: "__PRODUCTION_IMAGE_TAG__"
+  image_pull_policy: IfNotPresent # pre-pulled onto the node by setup-kind.sh
+  startTimeout: 600 # real AF image cold-start on a 2-core runner is slow
   extraContainers: [] # prod's af-pod-monitor sidecar mounts volumes removed below
   storage:
     type: none
     extraVolumes: []
     extraVolumeMounts: []
-  # One minimal profile keeps the profileList code path exercised without
-  # geddes images, GPUs, or node selectors.
+  # Profiles carry NO resource guarantees or node selectors (kind has neither
+  # the memory nor the labels), so several real-image pods can coexist.
   profileList:
-    - display_name: "E2E test profile"
+    # Default = the image production runs (values.yaml singleuser.image.tag).
+    # The "e2e = production" gate: every commit proves the current hub config
+    # spawns the exact production image. Also the base for the plumbing tests.
+    - display_name: "E2E production"
+      slug: production
       default: true
       kubespawner_override:
-        image: "quay.io/jupyterhub/k8s-singleuser-sample:__CHART_VERSION__"
-    # Second profile with an env marker: lets tests assert that explicit
-    # profile selection (user_options {"profile": <slug>}) actually lands
-    # in the pod — the contract the agentic interface's start_af_session uses.
+        image: "__PRODUCTION_IMAGE__"
+        image_pull_policy: IfNotPresent
+        environment:
+          E2E_PROFILE_MARKER: "production"
+    # Env marker profile: lets tests assert that explicit profile selection
+    # (user_options {"profile": <slug>}) lands in the pod — the contract the
+    # agentic interface's start_af_session uses. Real image, no stand-in.
     - display_name: "E2E alt profile"
+      slug: e2e-alt-profile
       kubespawner_override:
-        image: "quay.io/jupyterhub/k8s-singleuser-sample:__CHART_VERSION__"
+        image: "__PRODUCTION_IMAGE__"
+        image_pull_policy: IfNotPresent
         environment:
           E2E_PROFILE_MARKER: "alt"
-    # Pre-release profile: spawns the REAL AF image (freshly CI-built
-    # sha-<commit> when the commit touched the image inputs, else the
-    # promoted :pre-release). setup-kind.sh substitutes the ref and
-    # pre-pulls it onto the node; the e2e-prerelease job runs the matching
-    # test with E2E_PRERELEASE=1. Boots via the global `cmd:
-    # jupyterhub-singleuser` override above — the docker-stacks boot path
-    # (start-singleuser.sh) is exercised on the real cluster, not in kind.
+    # Pre-release profile: spawns the REAL AF image built by THIS pipeline
+    # (in-<hash> of the current repo state, else the promoted :pre-release).
+    # setup-kind.sh substitutes the ref and pre-pulls it; the e2e-pre-release
+    # job runs the matching test with E2E_PRERELEASE=1.
     - display_name: "E2E pre-release"
       slug: pre-release
       kubespawner_override:
         image: "__PRERELEASE_IMAGE__"
-        image_pull_policy: IfNotPresent # pre-pulled by setup-kind.sh
+        image_pull_policy: IfNotPresent
         environment:
           E2E_PROFILE_MARKER: "pre-release"
 

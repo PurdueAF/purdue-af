@@ -19,35 +19,50 @@ CHART_VERSION=${CHART_VERSION:-$(yq '.spec.chart.spec.version' "$HUB_DIR/helmrel
 workdir=$(mktemp -d)
 trap 'rm -rf "$workdir"' EXIT
 
+# The image production runs, derived from values.yaml (the single source of
+# truth for the production pin) and remapped from the geddes
+# ghcr-proxy-cache path to ghcr.io — GH runners cannot reach geddes, and
+# the proxy mirrors ghcr, so the digest is identical. Override via env for
+# local bisecting. Used by the "production" test profile in values-kind.yaml.
+PROD_NAME=$(yq '.singleuser.image.name' "$HUB_DIR/values.yaml")
+PROD_TAG=$(yq '.singleuser.image.tag' "$HUB_DIR/values.yaml")
+PRODUCTION_IMAGE=${PRODUCTION_IMAGE:-${PROD_NAME/geddes-registry.rcac.purdue.edu\/ghcr-proxy-cache\//ghcr.io/}:${PROD_TAG}}
+# name/tag split for singleuser.image (the chart wants them separate)
+PRODUCTION_IMAGE_NAME=${PRODUCTION_IMAGE%:*}
+PRODUCTION_IMAGE_TAG=${PRODUCTION_IMAGE##*:}
+
+# Pre-pull a real AF image onto the kind node so it is present before the
+# spawn window (crictl pull straight into containerd — faster than docker
+# pull + kind load). Skips if already on the node; passes ghcr creds when
+# provided (private-image / rate-limit safety).
+preload_node() {
+	local image=$1
+	if docker exec "${CLUSTER}-control-plane" crictl inspecti "$image" >/dev/null 2>&1; then
+		echo "==> AF image already on the node ($image)"
+		return
+	fi
+	echo "==> pre-load AF image ($image)"
+	local creds=()
+	if [ -n "${GHCR_TOKEN:-}" ]; then
+		creds=(--creds "${GHCR_USER:-token}:${GHCR_TOKEN}")
+	fi
+	docker exec "${CLUSTER}-control-plane" crictl pull "${creds[@]}" "$image"
+}
+
 echo "==> kind cluster '$CLUSTER' (chart version $CHART_VERSION)"
 kind get clusters 2>/dev/null | grep -qx "$CLUSTER" || kind create cluster --name "$CLUSTER" --wait 120s
 kubectl config use-context "kind-$CLUSTER" >/dev/null
 
-echo "==> pre-load singleuser image (keeps image pull out of the spawn window)"
-docker pull -q "quay.io/jupyterhub/k8s-singleuser-sample:${CHART_VERSION}"
-# Docker Desktop's containerd image store breaks `kind load` on multi-arch
-# images ("content digest not found"); fall back to pulling on the node.
-kind load docker-image --name "$CLUSTER" "quay.io/jupyterhub/k8s-singleuser-sample:${CHART_VERSION}" ||
-	docker exec "${CLUSTER}-control-plane" crictl pull "quay.io/jupyterhub/k8s-singleuser-sample:${CHART_VERSION}"
-
-# Pre-release AF image (real purdue-af, ~5 GB compressed): must be on the
-# kind node before the spawn window. Set by the e2e-pre-release CI job
-# (the in-<hash> build of the current repo state); unset for local runs →
-# the pre-release profile exists but its test is skipped (E2E_PRERELEASE
-# unset). The CI job `kind load`s the image before calling this script
-# (it needs it in the host daemon for the CVMFS check anyway), so pull
-# only when it is not already present on the node.
+# Real AF images (~5 GB compressed each): pre-loaded onto the node only for
+# the job that actually spawns them, so local fast runs (and the other job)
+# never pull 13 GB they will not use. Each job sets the marker for its own
+# image; the e2e-pre-release job also `kind load`s its image beforehand
+# (host daemon needs it for the CVMFS check), so preload_node no-ops there.
 if [ -n "${PRERELEASE_IMAGE:-}" ]; then
-	if docker exec "${CLUSTER}-control-plane" crictl inspecti "$PRERELEASE_IMAGE" >/dev/null 2>&1; then
-		echo "==> pre-release AF image already on the node (${PRERELEASE_IMAGE})"
-	else
-		echo "==> pre-load pre-release AF image (${PRERELEASE_IMAGE})"
-		creds=()
-		if [ -n "${GHCR_TOKEN:-}" ]; then
-			creds=(--creds "${GHCR_USER:-token}:${GHCR_TOKEN}")
-		fi
-		docker exec "${CLUSTER}-control-plane" crictl pull "${creds[@]}" "$PRERELEASE_IMAGE"
-	fi
+	preload_node "$PRERELEASE_IMAGE"
+fi
+if [ -n "${PRELOAD_PRODUCTION:-}" ]; then
+	preload_node "$PRODUCTION_IMAGE"
 fi
 
 echo "==> secrets and config (purdue: alice, bob, dkondra; cern: carol)"
@@ -112,8 +127,10 @@ export singlenode_storage_class=standard
 export af_shared_storage_size=1Gi
 export x509_secret_name=af-x509-proxy
 flux envsubst <"$HUB_DIR/values.yaml" >"$workdir/values.yaml"
-sed -e "s/__CHART_VERSION__/${CHART_VERSION}/g" \
-	-e "s|__PRERELEASE_IMAGE__|${PRERELEASE_IMAGE:-ghcr.io/purdueaf/purdue-af:pre-release}|g" \
+sed -e "s|__PRERELEASE_IMAGE__|${PRERELEASE_IMAGE:-ghcr.io/purdueaf/purdue-af:pre-release}|g" \
+	-e "s|__PRODUCTION_IMAGE__|${PRODUCTION_IMAGE}|g" \
+	-e "s|__PRODUCTION_IMAGE_NAME__|${PRODUCTION_IMAGE_NAME}|g" \
+	-e "s|__PRODUCTION_IMAGE_TAG__|${PRODUCTION_IMAGE_TAG}|g" \
 	"$E2E_DIR/values-kind.yaml" >"$workdir/values-kind.yaml"
 
 echo "==> helm install jupyterhub@${CHART_VERSION}"

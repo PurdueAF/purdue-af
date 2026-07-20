@@ -18,8 +18,7 @@ name: CI pixi
 # skips as verified reuse. Cache eviction only causes a redundant re-run.
 #
 # Pixi is pinned here (pixi-version, both jobs) — keep in sync with
-# PIXI_VERSION in docker/purdue-af/Dockerfile and
-# docker/purdue-af-new/Dockerfile, AND with constraints.pixi in
+# PIXI_VERSION in docker/purdue-af/Dockerfile AND with constraints.pixi in
 # .github/renovate.json5 (so Renovate regenerates pixi.lock with the same
 # pixi — a newer one writes lock-file format v7, unreadable by 0.62.2).
 # pixi/global needs CONDA_OVERRIDE_CUDA on CPU-only CI runners (see job

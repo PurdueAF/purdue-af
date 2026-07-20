@@ -28,12 +28,10 @@ cd "$(git rev-parse --show-toplevel)"
 paths_for() {
 	case "$1" in
 	purdue-af)
-		# Everything COPY'd by docker/purdue-af-new/Dockerfile. NB: the
-		# Dockerfile pulls many files from the legacy docker/purdue-af/
-		# tree (pixi-wrapper, jupyter configs, OSG rpms, scripts) — the
-		# old diff-based filter missed that entire directory.
+		# Everything COPY'd by docker/purdue-af/Dockerfile — the dir is
+		# self-contained (Dockerfile + scripts/jupyter/osg/xml/code-server/
+		# configs/pixi-wrapper), plus the pixi base env and Slurm inputs.
 		cat <<-EOF
-			docker/purdue-af-new
 			docker/purdue-af
 			pixi/base
 			pixi/check-env.py

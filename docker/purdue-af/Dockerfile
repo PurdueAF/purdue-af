@@ -1,11 +1,24 @@
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
 # Multi-stage build: system -> stack -> runtime
+#
+# EXPERIMENTAL slim rebuild of docker/purdue-af (target: purdue-af:0.13.0-preX).
+# Differences vs docker/purdue-af/Dockerfile — see README.md for the numbers:
+#   - base: nvidia/cuda devel on Rocky Linux 8 (EL8, Alma8-compatible) instead
+#     of CERN alma8-base + a hand-installed cuda-toolkit-12-4. CUDA arrives as
+#     immutable NVIDIA-maintained base layers; drops nsight-systems and the
+#     ~1.2 GB of kernel firmware that alma8-base + `dnf upgrade` carried.
+#   - libcudnn8 stays pinned (the base image ships NVIDIA's cuda.repo).
+#   - voms-clients-cpp instead of voms-clients (drops the Java 8 dependency).
+#   - CERN krb5/CA defaults vendored in configs/ (extracted byte-identical
+#     from alma8-base:20250501-1), since the Rocky base has none.
+# Everything else (OSG, Slurm, user setup, pixi stack, runtime) matches the
+# original stage for stage.
 
 # ------------------------------------------------------------
 # Stage: system (dnf, OSG, Slurm, user; no pixi)
 # ------------------------------------------------------------
-FROM gitlab-registry.cern.ch/linuxsupport/alma8-base:20250501-1 AS system
+FROM geddes-registry.rcac.purdue.edu/docker-hub-cache/nvidia/cuda:12.4.1-devel-rockylinux8 AS system
 
 LABEL maintainer="Dmitry Kondratyev <dkondra@purdue.edu>"
 ARG NB_USER="jovyan"
@@ -21,12 +34,20 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # hadolint ignore=DL3002
 USER root
 
-# Install system dependencies
+# Install system dependencies.
+# --disablerepo=cuda everywhere except the cuDNN line: the base image's
+# cuda.repo is NVIDIA's ROLLING rhel8 repo (contains CUDA 13.x, whose cccl
+# obsoletes cuda-cccl-12-4), so an unconstrained upgrade would cross-grade
+# CUDA 12.4 → 13 and fail. CUDA must stay exactly at the base image's pins.
+# --exclude=linux-firmware*: kernel firmware is useless in a container and
+# costs >1 GB if an upgrade ever drags it in.
+# cuda-toolkit/nsight are NOT installed here — the base image provides CUDA;
+# only cuDNN is added on top, pinned, from the base's cuda repo.
 RUN set -euo pipefail \
- && dnf -y upgrade \
- && dnf -y install dnf-plugins-core epel-release \
+ && dnf -y upgrade --disablerepo=cuda --exclude='linux-firmware*' \
+ && dnf -y install --disablerepo=cuda dnf-plugins-core epel-release \
  && dnf config-manager --set-enabled powertools \
- && dnf -y install \
+ && dnf -y install --disablerepo=cuda \
       'dnf-command(config-manager)' \
       sudo wget perl which git bzip2 bzip2-devel zlib-devel \
       openssh-server openssh-clients openssl-devel \
@@ -37,17 +58,28 @@ RUN set -euo pipefail \
       s3cmd htop \
       boost-devel diffutils ncurses-compat-libs cmake \
       glibc-static libcurl-devel \
-      gfal2-util-scripts python3-gfal2 voms-clients myproxy patch \
- && dnf -y --enablerepo=epel install tini \
- # CUDA repo + packages
- && dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo \
- && dnf -y install cuda-toolkit-12-4 libcudnn8-8.9.7.29-1+cuda12.2 \
+      gfal2-util-scripts python3-gfal2 voms-clients-cpp myproxy patch \
+      # base-parity: alma8-base preinstalled these; the Rocky+CUDA base does
+      # not (found by diffing `rpm -qa` of the two bases after "ps: command
+      # not found" in a 0.13.0-pre1 session; krb5-workstation provides the
+      # kinit/klist that eos-connect.sh needs; libatomic so `gcc -latomic`
+      # works with the system toolchain)
+      procps-ng psmisc krb5-workstation xz cpio libatomic \
+ && dnf -y --disablerepo=cuda --enablerepo=epel install tini \
+ # cuDNN pin (same version the 0.12.x image shipped); the only line that
+ # uses the cuda repo — an exact-version install cannot pull obsoletes
+ && dnf -y install libcudnn8-8.9.7.29-1+cuda12.2 \
  # cleanup & small quality-of-life
  && dnf clean all \
  && ln -s /usr/bin/python3 /usr/bin/python \
  && rm -rf /var/cache/dnf \
  && rm -f /usr/bin/vi && ln -s /usr/bin/vim /usr/bin/vi \
  && localedef -c -f UTF-8 -i en_US en_US.UTF-8
+
+# CERN kerberos + CA defaults (alma8-base shipped these; Rocky does not).
+# eos-connect.sh runs `kinit <user>@CERN.CH` and expects the CERN.CH realm.
+COPY docker/purdue-af/configs/krb5.conf.d/ /etc/krb5.conf.d/
+COPY docker/purdue-af/configs/certs/ /etc/pki/tls/certs/
 
 # Install OSG certificates and client
 COPY docker/purdue-af/osg/igtf-ca-certs-1.136-1.osg24.el8.noarch.rpm docker/purdue-af/osg/vo-client-138-2.osg24.el8.noarch.rpm /tmp/
@@ -127,6 +159,14 @@ RUN chmod +x /usr/local/bin/pixi && \
     cp "${BASE_ENV_DIR}/lib/python3.10/site-packages/jupyter_vscode_proxy/icons/vscode.svg" \
        "${BASE_ENV_DIR}/lib/python3.10/site-packages/jupyter_vscode_proxy/icons/code-server.svg"
 
+# Import-smoke every direct dependency of the base env, each in a fresh
+# interpreter — catches broken installs (e.g. libstdc++ shadowing à la
+# GLIBCXX_3.4.29) at build time instead of in a user session.
+COPY --chown=root:root pixi/check-env.py /tmp/check-env.py
+RUN "${BASE_ENV_DIR}/bin/python" /tmp/check-env.py \
+        --manifest "${PIXI_HOME}/pixi.toml" --env base-env && \
+    rm -f /tmp/check-env.py
+
 # ------------------------------------------------------------
 # Stage: runtime (lightweight; COPY only, no builds or installation routines)
 # ------------------------------------------------------------
@@ -135,6 +175,15 @@ FROM system AS runtime
 # Re-declare for COPY path (ARGs not inherited; default matches system stage)
 ARG NB_USER="jovyan"
 
+# NB: the NVIDIA base bakes NVIDIA_VISIBLE_DEVICES=all and this cluster's
+# container runtime honors it for unprivileged pods — a 0-GPU pod running
+# this image raw would see EVERY GPU on its node (verified on paf-a01:
+# both T4s exposed). The image deliberately does NOT override it: baking
+# `void` here could only be undone by device-plugin env injection, and GPU
+# sessions must never depend on that. Instead the hub hides GPUs from
+# 0-GPU sessions at spawn time (gpu-availability.py modify_pod_hook
+# injects NVIDIA_VISIBLE_DEVICES=void into the pod spec); GPU sessions
+# keep the exact same env semantics as the 0.12.x image.
 ENV PIXI_HOME="/opt/pixi" \
     BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env" \
     X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
@@ -198,3 +247,20 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["start-notebook.sh"]
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
     CMD /etc/jupyter/docker_healthcheck.py || exit 1
+
+# --------------------------------------------------------------------------
+# CI smoke stage — ci-images.yml builds `--target smoke` first, so the basic
+# userland checks run DURING the build (no need to load the ~13 GB image
+# into the runner's docker daemon just to `docker run` them). The CVMFS
+# check needs the host's /cvmfs and lives in the e2e-pre-release job.
+FROM runtime AS smoke
+RUN nvcc --version >/dev/null && \
+    ps --version >/dev/null && \
+    klist -V >/dev/null && \
+    xz --version >/dev/null && \
+    python3 -c "import jupyterlab; print('smoke ok:', jupyterlab.__version__)"
+
+# The published image: a bare alias of `runtime` so the smoke stage above
+# stays opt-in — the DEFAULT target (CI push step, kaniko fallback job)
+# resolves here and carries no smoke layers.
+FROM runtime

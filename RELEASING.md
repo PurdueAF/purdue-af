@@ -59,7 +59,7 @@ default production environment. Bump rules:
 Preconditions, enforced by the workflow (bypass only with `force`):
 `ci-ok` green on main HEAD, and the `:pre-release` digest identical to the
 image of the current repo state. Complete the manual checklist in
-[docker/purdue-af-new/README.md](docker/purdue-af-new/README.md) first.
+[docker/purdue-af/README.md](docker/purdue-af/README.md) first.
 
 1. **Actions → Release image → Run workflow** — choose the bump (or an
    explicit `version`). The workflow verifies both gates, adds the semver

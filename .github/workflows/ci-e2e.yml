@@ -6,11 +6,11 @@ name: CI e2e
 # mock LDAP. See tests/e2e_hub/README.md.
 #
 #   e2e-production   certifies the PRODUCTION deployment: the hub stack
-#                    exactly as the repo deploys it to the cms namespace.
-#                    For now it spawns a lightweight mock user image —
-#                    the production AF image is not yet CI-built; once it
-#                    is, this job will spawn the tagged production image
-#                    from values.yaml instead.
+#                    exactly as the repo deploys it to the cms namespace,
+#                    spawning the REAL image pinned in values.yaml
+#                    (singleuser.image.tag) — the "e2e = production" gate.
+#                    Lightweight profiles still cover the fast hub-config
+#                    tests; one profile spawns the pinned production image.
 #   e2e-pre-release  certifies the PRE-RELEASE channel: same stack, but
 #                    spawns the REAL AF image built in stage 1 for the
 #                    CURRENT input state — never a previously promoted
@@ -47,15 +47,33 @@ env:
 
 jobs:
   e2e-production:
-    # mock user image for now — see header; swap to the tagged production
-    # image when production moves into this pipeline
+    # Runs the full hub-config suite AND spawns the REAL image pinned for
+    # production in values.yaml (the "e2e = production" gate). Heavy — it
+    # pulls the ~13 GB AF image into kind — but memoized on the hub-config +
+    # production-pin hash, so it only re-runs when either actually changes
+    # (most commits touch neither and memo-hit).
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read # pull the production AF image into kind
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Resolve the production image
+        id: image
+        run: |
+          name=$(yq '.singleuser.image.name' apps/jupyterhub/jupyterhub/values.yaml)
+          tag=$(yq '.singleuser.image.tag' apps/jupyterhub/jupyterhub/values.yaml)
+          # geddes ghcr-proxy-cache is unreachable from CI; the proxy mirrors
+          # ghcr, so the ghcr ref resolves to the identical digest
+          repo=${name/geddes-registry.rcac.purdue.edu\/ghcr-proxy-cache\//ghcr.io/}
+          {
+            echo "image=${repo}:${tag}"
+            echo "tag=${tag}"
+          } | tee -a "$GITHUB_OUTPUT"
       - name: Compute memo key
         id: key
-        run: echo "key=e2e-production-ok-$(./.github/workflows/image-inputs.sh e2e-hub)" | tee -a "$GITHUB_OUTPUT"
+        run: echo "key=e2e-production-ok-$(./.github/workflows/image-inputs.sh e2e-hub)-${{ steps.image.outputs.tag }}" | tee -a "$GITHUB_OUTPUT"
       - name: Look up recorded green run
         id: memo
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -65,6 +83,17 @@ jobs:
       - name: Verified reuse — identical input state already passed
         if: steps.memo.outputs.cache-hit == 'true'
         run: echo "skipping — ${{ steps.key.outputs.key }} already green" | tee -a "$GITHUB_STEP_SUMMARY"
+      # First step of the real run on purpose: it must never wipe tools other
+      # steps install. tool-cache stays FALSE — helm/kind-action hard-fails
+      # when /opt/hostedtoolcache is deleted; android/dotnet/ghc free enough
+      # for the ~13 GB uncompressed AF image in kind.
+      - name: Free runner disk space
+        if: steps.memo.outputs.cache-hit != 'true'
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1 # Renovate pins to digest
+        with:
+          tool-cache: false
+          docker-images: false
+          large-packages: false # slow apt removal; space not needed here
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         if: steps.memo.outputs.cache-hit != 'true'
         with:
@@ -80,8 +109,20 @@ jobs:
         uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0 # Renovate pins to digest
         with:
           cluster_name: af-e2e
-      - name: Deploy hub stack
+      - name: Login to ghcr.io
+        if: steps.memo.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Deploy hub stack (with the production image preloaded)
         if: steps.memo.outputs.cache-hit != 'true'
+        env:
+          PRELOAD_PRODUCTION: "1"
+          PRODUCTION_IMAGE: ${{ steps.image.outputs.image }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: tests/e2e_hub/setup-kind.sh
       - name: Port-forward hub and mock
         if: steps.memo.outputs.cache-hit != 'true'
@@ -89,10 +130,12 @@ jobs:
           kubectl port-forward svc/proxy-public 8080:80 &
           kubectl port-forward svc/mock-cilogon 9090:9090 &
           sleep 3
-      - name: Run e2e tests
+      - name: Run e2e tests (hub config + production image)
         if: steps.memo.outputs.cache-hit != 'true'
         env:
           E2E_HUB: "1"
+          E2E_PRODUCTION: "1"
+          PRODUCTION_IMAGE: ${{ steps.image.outputs.image }}
         run: uv run --project tests --frozen pytest -q -c tests/pyproject.toml tests/e2e_hub -v
       - name: Diagnostics on failure
         if: failure()

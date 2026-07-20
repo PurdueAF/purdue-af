@@ -1,9 +1,12 @@
-# purdue-af-new — experimental slim rebuild (0.13.0-preX)
+# purdue-af — the Analysis Facility singleuser image
 
-Rebuild of [`docker/purdue-af`](../purdue-af/Dockerfile) on top of NVIDIA's
-official CUDA base image instead of CERN alma8-base + a hand-installed
-`cuda-toolkit-12-4`. Motivated by a layer-by-layer analysis of the
-0.12.5 build (30m30s, 7.6 GB compressed) with
+The canonical AF image (0.13.0+), built and published by CI (see the
+pipeline below). Rebuilt on top of NVIDIA's official CUDA base image
+instead of CERN alma8-base + a hand-installed `cuda-toolkit-12-4` — the
+prior 0.12.x image lives, retired, in
+[`docker/purdue-af-old`](../purdue-af-old/Dockerfile). Motivated by a
+layer-by-layer analysis of the 0.12.5 build (30m30s, 7.6 GB compressed)
+with
 [`analyze_image_build.py`](../kaniko-build-jobs/analyze_image_build.py):
 
 | finding in 0.12.5                                                                                      | fix here                                                                                                                                                                                         |
@@ -16,9 +19,10 @@ official CUDA base image instead of CERN alma8-base + a hand-installed
 | alma8-base preinstalled CLI basics the Rocky+CUDA base lacks ("ps: command not found" in pre1)         | `procps-ng psmisc krb5-workstation xz cpio` added (from an `rpm -qa` diff of the two bases; krb5-workstation is the critical one — kinit/klist for EOS)                                          |
 
 Everything else — OSG rpms, Slurm, user setup, the pixi stack, the runtime
-stage — matches the original stage for stage, and reuses the files in
-`docker/purdue-af/` (this directory only adds the Dockerfile and the CERN
-configs).
+stage — matches the original stage for stage. This directory is
+self-contained: the shared scripts, jupyter configs, OSG rpms, xml,
+code-server assets, and pixi-wrapper were consolidated here from the
+legacy image (the CERN krb5/CA configs are under `configs/`).
 
 One gotcha, learned from the first pre1 build attempt: the base image's
 `cuda.repo` is NVIDIA's **rolling** rhel8 repo, which also contains CUDA 13.x
@@ -33,22 +37,23 @@ Expected: **~5 GB compressed** (from 7.6) and roughly half the build time.
 
 ## Build
 
-The Job builds from the `main` branch, so changes must be merged first:
+CI builds and publishes this image — see the pipeline below. The in-cluster
+kaniko Job (`docker/kaniko-build-jobs/build-af-new.yaml`) is an EMERGENCY
+FALLBACK only (e.g. GitHub Actions unavailable); it builds from `main` and
+pushes to the geddes-native `cms/purdue-af` path, which production no longer
+pulls, so its destination tag must be reconciled with the ghcr flow by hand
+before anything would consume it:
 
 ```
 kubectl apply -n cms -f docker/kaniko-build-jobs/build-af-new.yaml
 ```
-
-Pushes to `geddes-registry.rcac.purdue.edu/cms/purdue-af:0.13.0-pre2`
-(pre1 built in ~10 min but was missing procps/krb5-workstation — see the
-base-parity row above; bump the tag in the job YAML per iteration).
 
 ## CI/CD pipeline (pre-release channel)
 
 The staged `ci.yml` pipeline owns this image end to end:
 
 1. **build-af-image** (`ci-images.yml`): the image is CONTENT-ADDRESSED —
-   tagged `in-<hash>` of its input tree (this dir, `docker/purdue-af/`,
+   tagged `in-<hash>` of its input tree (this self-contained dir,
    `pixi/base/`, the Slurm inputs; see
    `.github/workflows/image-inputs.sh`). If the tag already exists on ghcr
    the build is verified reuse; otherwise: buildx build with the geddes
@@ -169,7 +174,10 @@ stay on ghcr). ⚠ One-time setup: add a fine-grained PAT with
 `contents: write` as the `AF_RELEASE_TOKEN` secret — pushes made with the
 default GITHUB_TOKEN don't trigger CI on the release commit.
 
-Once the first release lands, this Dockerfile replaces
-`docker/purdue-af/Dockerfile` (keeping that directory's scripts/configs,
-which are referenced unchanged), this directory is deleted, and the kaniko
-jobs become emergency fallbacks only.
+**Cutover status:** complete. The first release (0.13.0, 2026-07) landed,
+production runs this CI-built image via the geddes ghcr-proxy-cache, and
+`e2e-production` spawns the pinned tag every run. This directory is now the
+canonical `docker/purdue-af/` and is self-contained (the shared
+scripts/configs were consolidated in from the legacy image). The retired
+0.12.x image is `docker/purdue-af-old/Dockerfile` (kaniko `build-af.yaml`);
+it is kept for reference only and is no longer a live build path.

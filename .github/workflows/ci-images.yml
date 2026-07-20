@@ -40,7 +40,7 @@ permissions:
 
 env:
   AF_REPO: ghcr.io/purdueaf/purdue-af
-  # keep in sync with the FROM line in docker/purdue-af-new/Dockerfile
+  # keep in sync with the FROM line in docker/purdue-af/Dockerfile
   GEDDES_BASE: geddes-registry.rcac.purdue.edu/docker-hub-cache/nvidia/cuda:12.4.1-devel-rockylinux8
   PUBLIC_BASE: docker.io/nvidia/cuda:12.4.1-devel-rockylinux8
 
@@ -142,7 +142,7 @@ jobs:
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
-          file: docker/purdue-af-new/Dockerfile
+          file: docker/purdue-af/Dockerfile
           target: smoke
           # The Dockerfile's FROM points at the geddes docker-hub-cache proxy
           # (unreachable from GH runners); remap that exact ref to docker.io
@@ -168,7 +168,7 @@ jobs:
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
-          file: docker/purdue-af-new/Dockerfile
+          file: docker/purdue-af/Dockerfile
           tags: ${{ env.AF_IMAGE }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}

@@ -47,51 +47,28 @@ def test_unknown_domain_is_rejected(login):
     assert response.status_code in (403, 500)
 
 
-def test_spawn_reaches_running_jupyterlab(login, admin):
-    client, _ = login("alice@purdue.edu")
+def test_production_spawn_carries_ownership_label(login, admin):
+    """Base of the plumbing chain: spawn alice on the DEFAULT profile (the
+    production image, no mock stand-in) and assert the username_unescaped
+    label — the agentic-interface ownership gate. Real image, so gated on
+    E2E_PRODUCTION (preloaded in the e2e-production job; skipped elsewhere).
+    That a real AF session reaches a running Lab is asserted by
+    test_production_profile_spawns_pinned_image below."""
+    require_production()
+    login("alice@purdue.edu")
+    admin.delete("/hub/api/users/alice/server")  # tolerate leftovers (404 ok)
+    wait_cleared(admin, "alice")
 
     spawn = admin.post("/hub/api/users/alice/server", json={})
     assert spawn.status_code in (201, 202), spawn.text
+    wait_ready(admin, "alice", timeout=600)
 
-    deadline = time.monotonic() + 300
-    while time.monotonic() < deadline:
-        servers = admin.get("/hub/api/users/alice").json().get("servers", {})
-        if servers.get("", {}).get("ready"):
-            break
-        time.sleep(5)
-    else:
-        raise AssertionError(f"server never became ready: {servers}")
-
-    # The user's own session must reach the running Lab server.
-    lab = client.get(f"{HUB}/user/alice/api")
-    assert lab.status_code == 200
-    assert "version" in lab.json()
-
-
-def test_spawned_pod_carries_ownership_label(admin):
-    """The username_unescaped label is the agentic-interface ownership gate."""
-    import json
-    import subprocess
-
-    pods = json.loads(
-        subprocess.run(
-            [
-                "kubectl",
-                "get",
-                "pods",
-                "-l",
-                "component=singleuser-server",
-                "-o",
-                "json",
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
+    pod = next(
+        p
+        for p in singleuser_pods()
+        if p["metadata"]["labels"].get("username_unescaped") == "alice"
     )
-    assert pods["items"], "no singleuser pod found"
-    labels = pods["items"][0]["metadata"]["labels"]
-    assert labels.get("username_unescaped") == "alice"
+    assert pod["metadata"]["labels"].get("username_unescaped") == "alice"
 
 
 # ── session lifecycle & isolation (tests below build on alice's running server) ──
@@ -122,10 +99,33 @@ def wait_ready(admin, user, timeout=300):
     raise AssertionError(f"{user}'s server never became ready")
 
 
+def wait_cleared(admin, user, timeout=120):
+    """Wait until `user` has no server (after a delete, before a respawn)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not admin.get(f"/hub/api/users/{user}").json().get("servers"):
+            return
+        time.sleep(3)
+
+
+def require_production():
+    """Skip unless the real production AF image is preloaded on the node
+    (E2E_PRODUCTION, set by the e2e-production CI job). The spawn-based
+    plumbing tests run the REAL image — there is no mock stand-in — so they
+    only run where it is available."""
+    import os
+
+    import pytest
+
+    if not os.environ.get("E2E_PRODUCTION"):
+        pytest.skip("production AF image not preloaded (E2E_PRODUCTION unset)")
+
+
 def test_ldap_uid_gid_land_in_pod(admin):
     """set-user-info.py auth_state_hook: the LDAP-resolved uid/gid of a
     Purdue user must reach the pod env (values from mock-ldap-users.ldif).
     Runs against alice's server spawned above."""
+    require_production()
     pod = next(
         p
         for p in singleuser_pods()
@@ -139,10 +139,11 @@ def test_ldap_uid_gid_land_in_pod(admin):
 
 def test_second_user_spawns_concurrently(login, admin):
     """Two users' pods coexist, each carrying its own ownership label."""
+    require_production()
     login("carol@cern.ch", idp=CERN_IDP)
     spawn = admin.post("/hub/api/users/carol-cern/server", json={})
     assert spawn.status_code in (201, 202), spawn.text
-    wait_ready(admin, "carol-cern")
+    wait_ready(admin, "carol-cern", timeout=600)
 
     labels = {
         p["metadata"]["labels"].get("username_unescaped") for p in singleuser_pods()
@@ -152,18 +153,15 @@ def test_second_user_spawns_concurrently(login, admin):
 
 def test_profile_selection_lands_in_pod(admin):
     """Explicit profile choice (the start_af_session contract) must reach the pod."""
+    require_production()
     admin.delete("/hub/api/users/alice/server")
-    deadline = time.monotonic() + 120
-    while time.monotonic() < deadline:
-        if not admin.get("/hub/api/users/alice").json().get("servers"):
-            break
-        time.sleep(3)
+    wait_cleared(admin, "alice")
 
     spawn = admin.post(
         "/hub/api/users/alice/server", json={"profile": "e2e-alt-profile"}
     )
     assert spawn.status_code in (201, 202), spawn.text
-    wait_ready(admin, "alice")
+    wait_ready(admin, "alice", timeout=600)
 
     pod = next(
         p
@@ -176,6 +174,7 @@ def test_profile_selection_lands_in_pod(admin):
 
 def test_stop_server_cleans_up(admin):
     """Stopping must remove the pod and clear hub state (carol's untouched)."""
+    require_production()
     stop = admin.delete("/hub/api/users/alice/server")
     assert stop.status_code in (202, 204), stop.text
 
@@ -303,5 +302,49 @@ def test_prerelease_profile_spawns_ci_built_image(login, admin):
 
     # The user's own session must reach the running Lab inside the AF image.
     lab = client.get(f"{HUB}/user/alice/api")
+    assert lab.status_code == 200
+    assert "version" in lab.json()
+
+
+def test_production_profile_spawns_pinned_image(login, admin):
+    """The "e2e = production" gate: the production JH option must spawn the
+    exact image pinned in values.yaml (singleuser.image.tag) and reach a
+    running JupyterLab. Proves the current hub config works with the image
+    production actually runs — independent of what :pre-release moved to.
+    Only meaningful when setup-kind.sh preloaded the image (e2e-production
+    CI job); elsewhere the image isn't on the node, so skip."""
+    import os
+
+    import pytest
+
+    if not os.environ.get("E2E_PRODUCTION"):
+        pytest.skip("production AF image not preloaded (E2E_PRODUCTION unset)")
+    expected_image = os.environ["PRODUCTION_IMAGE"]
+
+    client, _ = login("bob@purdue.edu")
+    admin.delete("/hub/api/users/bob/server")  # tolerate leftovers (404 ok)
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        if not admin.get("/hub/api/users/bob").json().get("servers"):
+            break
+        time.sleep(3)
+
+    spawn = admin.post("/hub/api/users/bob/server", json={"profile": "production"})
+    assert spawn.status_code in (201, 202), spawn.text
+    # generous: the real image's Lab cold-start on a 2-core runner is slow
+    wait_ready(admin, "bob", timeout=600)
+
+    pod = next(
+        p
+        for p in singleuser_pods()
+        if p["metadata"]["labels"].get("username_unescaped") == "bob"
+    )
+    container = pod["spec"]["containers"][0]
+    assert container["image"] == expected_image
+    env = {e["name"]: e.get("value") for e in container["env"]}
+    assert env.get("E2E_PROFILE_MARKER") == "production"
+
+    # The user's own session must reach the running Lab inside the AF image.
+    lab = client.get(f"{HUB}/user/bob/api")
     assert lab.status_code == 200
     assert "version" in lab.json()
