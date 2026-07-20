@@ -4,8 +4,6 @@ resources:
   - ../../apps/af-utils/af-users-graph/pvc.yaml
   - ../../apps/af-utils/af-users-graph/deployment.yaml
   - ../../apps/af-utils/af-users-graph/service.yaml
-  - ../../apps/af-utils/flux-github-alert/github-provider.yaml
-  - ../../apps/af-utils/flux-github-alert/github-alert.yaml
 
   - ../../apps/infrastructure/af-shared-storage.yaml
   - ../../apps/infrastructure/cvmfs-pvc.yaml

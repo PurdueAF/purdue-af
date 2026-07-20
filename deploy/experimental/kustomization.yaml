@@ -1,10 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  # Reconcile events for THIS Kustomization → GitHub commit status (the
-  # provider itself is deployed by core-production into the same namespace)
-  - ../../apps/af-utils/flux-github-alert/github-alert-experimental.yaml
-
   # - ../../apps/dask-gateway/dask-gateway-k8s-interlink/helmrelease.yaml
   # - ../../apps/dask-gateway/dask-gateway-k8s-interlink/ingress.yaml
 
