@@ -52,12 +52,17 @@ The staged `ci.yml` pipeline owns this image end to end:
    `pixi/base/`, the Slurm inputs; see
    `.github/workflows/image-inputs.sh`). If the tag already exists on ghcr
    the build is verified reuse; otherwise: buildx build with the geddes
-   `FROM` remapped to docker.io via a named context, smoke test (nvcc, ps,
-   klist, xz, jupyterlab), CVMFS test (host CVMFS mounted in,
-   `cmsset_default.sh` sourced), then push of the immutable `in-` tag.
-2. **e2e-pre-release** (`ci-e2e.yml`): full hub-in-kind e2e that spawns the
-   `in-` image of the CURRENT repo state through the hub's `pre-release`
-   profile and asserts the pod runs it and JupyterLab answers.
+   `FROM` remapped to docker.io via a named context, the basic smoke test
+   (nvcc, ps, klist, xz, jupyterlab) running DURING the build as the
+   Dockerfile's `smoke` stage, then a single zstd upload from buildx —
+   image and `mode=max` buildcache share blobs, so the registry
+   deduplicates them, and the image is never loaded into the runner's
+   docker daemon.
+2. **e2e-pre-release** (`ci-e2e.yml`): pulls the `in-` image ONCE on the
+   runner, runs the CVMFS check there (host CVMFS mounted in,
+   `cmsset_default.sh` sourced), `kind load`s the same copy, then the full
+   hub-in-kind e2e spawns it through the hub's `pre-release` profile and
+   asserts the pod runs it and JupyterLab answers.
 3. **publish** (`ci.yml`, main only, behind the ci-ok gate — every stage
    of the same commit green): adds `:sha-<commit>` and moves
    `ghcr.io/purdueaf/purdue-af:pre-release` to the tested digest.

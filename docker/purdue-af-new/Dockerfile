@@ -245,3 +245,20 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["start-notebook.sh"]
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
     CMD /etc/jupyter/docker_healthcheck.py || exit 1
+
+# --------------------------------------------------------------------------
+# CI smoke stage — ci-images.yml builds `--target smoke` first, so the basic
+# userland checks run DURING the build (no need to load the ~13 GB image
+# into the runner's docker daemon just to `docker run` them). The CVMFS
+# check needs the host's /cvmfs and lives in the e2e-pre-release job.
+FROM runtime AS smoke
+RUN nvcc --version >/dev/null && \
+    ps --version >/dev/null && \
+    klist -V >/dev/null && \
+    xz --version >/dev/null && \
+    python3 -c "import jupyterlab; print('smoke ok:', jupyterlab.__version__)"
+
+# The published image: a bare alias of `runtime` so the smoke stage above
+# stays opt-in — the DEFAULT target (CI push step, kaniko fallback job)
+# resolves here and carries no smoke layers.
+FROM runtime

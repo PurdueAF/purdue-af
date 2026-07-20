@@ -163,11 +163,45 @@ jobs:
         uses: fluxcd/flux2/action@1ed703a34462da3527564befc791436d1711aca7 # main
         with:
           version: ${{ env.FLUX_VERSION }}
+      - name: Login to ghcr.io
+        if: steps.memo.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # ONE registry pull serves both the CVMFS check (host docker) and the
+      # kind node (kind load below) — setup-kind.sh sees the image already
+      # on the node and skips its crictl pull.
+      - name: Pull the AF image
+        if: steps.memo.outputs.cache-hit != 'true'
+        run: docker pull "${{ steps.image.outputs.image }}"
+      # Mount the host CVMFS client into the image and source the CMS
+      # environment — catches missing base utilities the CMS tooling needs
+      # (image-level test; pod-level CVMFS CSI wiring is a cluster concern).
+      # Lives here rather than in the build job so the build never has to
+      # load the image into its docker daemon.
+      - name: Install CVMFS on the runner
+        if: steps.memo.outputs.cache-hit != 'true'
+        uses: cvmfs-contrib/github-action-cvmfs@10197e000cc0add8e54ac4fb73d3ed44e2de72b4 # v5.5
+      - name: CVMFS smoke test (cmsset_default.sh)
+        if: steps.memo.outputs.cache-hit != 'true'
+        run: |
+          docker run --rm -v /cvmfs:/cvmfs:shared "${{ steps.image.outputs.image }}" bash -c '
+            source /cvmfs/cms.cern.ch/cmsset_default.sh &&
+            command -v scramv1 >/dev/null &&
+            echo "cmsset ok: $(command -v scramv1)"'
       - name: Create kind cluster
         if: steps.memo.outputs.cache-hit != 'true'
         uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0 # Renovate pins to digest
         with:
           cluster_name: af-e2e
+      - name: Load the AF image into kind
+        if: steps.memo.outputs.cache-hit != 'true'
+        run: |
+          kind load docker-image --name af-e2e "${{ steps.image.outputs.image }}"
+          # free the daemon copy — the node now has its own (~13 GB each)
+          docker rmi "${{ steps.image.outputs.image }}"
       - name: Deploy hub stack (with the AF image preloaded)
         if: steps.memo.outputs.cache-hit != 'true'
         env:

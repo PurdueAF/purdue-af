@@ -121,8 +121,38 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build image
+      # The image is never loaded into the docker daemon: the basic smoke
+      # test is the Dockerfile's `smoke` stage (runs DURING this build),
+      # and the CVMFS check lives in e2e-pre-release, which pulls the image
+      # anyway. This kills the ~13 GB `load:` copy and the second upload.
+      - name: Build + in-build smoke test
         if: env.AF_EXISTS != 'true'
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: docker/purdue-af-new/Dockerfile
+          target: smoke
+          # The Dockerfile's FROM points at the geddes docker-hub-cache proxy
+          # (unreachable from GH runners); remap that exact ref to docker.io
+          # without modifying the Dockerfile.
+          build-contexts: |
+            ${{ env.GEDDES_BASE }}=docker-image://${{ env.PUBLIC_BASE }}
+          push: false
+          # Registry-backed cache — the 10 GB GHA cache cannot hold this
+          # layer set. cache-to happens once, in the push step below.
+          cache-from: type=registry,ref=ghcr.io/purdueaf/purdue-af:buildcache
+      - name: Disk after build
+        if: env.AF_EXISTS != 'true'
+        run: df -h / | tee -a "$GITHUB_STEP_SUMMARY"
+      # Everything is cached from the step above, so this only EXPORTS:
+      # image and buildcache are pushed by buildx with identical zstd blobs,
+      # which the registry deduplicates — one ~upload instead of two, and
+      # zstd cuts every later pull (pixi-global, e2e, cluster sessions of
+      # :pre-release). The default target is the bare `runtime` alias, so
+      # no smoke layers ship.
+      - name: Push in- tag + build cache (single zstd upload)
+        id: push
+        if: env.AF_EXISTS != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
@@ -131,54 +161,15 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-          # The Dockerfile's FROM points at the geddes docker-hub-cache proxy
-          # (unreachable from GH runners); remap that exact ref to docker.io
-          # without modifying the Dockerfile.
           build-contexts: |
             ${{ env.GEDDES_BASE }}=docker-image://${{ env.PUBLIC_BASE }}
-          push: false
-          load: true
-          # Registry-backed cache — the 10 GB GHA cache cannot hold this
-          # layer set. ignore-error keeps fork PRs (read-only token) building.
+          outputs: type=image,push=true,compression=zstd,compression-level=3,force-compression=true,oci-mediatypes=true
           cache-from: type=registry,ref=ghcr.io/purdueaf/purdue-af:buildcache
-          cache-to: type=registry,ref=ghcr.io/purdueaf/purdue-af:buildcache,mode=max,ignore-error=true
-      - name: Disk after build
-        if: env.AF_EXISTS != 'true'
-        run: |
-          df -h / | tee -a "$GITHUB_STEP_SUMMARY"
-          docker image ls "${AF_IMAGE%:*}" | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: Smoke test
-        if: env.AF_EXISTS != 'true'
-        run: |
-          docker run --rm "$AF_IMAGE" sh -c '
-            nvcc --version >/dev/null &&
-            ps --version >/dev/null &&
-            klist -V >/dev/null &&
-            xz --version >/dev/null &&
-            python3 -c "import jupyterlab; print(\"smoke ok:\", jupyterlab.__version__)"'
-      # Mount the host CVMFS client into the image and source the CMS
-      # environment — catches missing base utilities the CMS tooling needs
-      # (image-level test; pod-level CVMFS CSI wiring is a cluster concern).
-      - name: Install CVMFS on the runner
-        if: env.AF_EXISTS != 'true'
-        uses: cvmfs-contrib/github-action-cvmfs@10197e000cc0add8e54ac4fb73d3ed44e2de72b4 # v5.5
-      - name: CVMFS smoke test (cmsset_default.sh)
-        if: env.AF_EXISTS != 'true'
-        run: |
-          docker run --rm -v /cvmfs:/cvmfs:shared "$AF_IMAGE" bash -c '
-            source /cvmfs/cms.cern.ch/cmsset_default.sh &&
-            command -v scramv1 >/dev/null &&
-            echo "cmsset ok: $(command -v scramv1)"'
-      # Only smoke-tested images ever reach the registry; the in- tag is
-      # what pixi-global and e2e consume before any promotion.
-      - name: Push in- tag to ghcr.io
-        id: push
-        if: env.AF_EXISTS != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        run: |
-          docker push "$AF_IMAGE"
-          echo "pushed=true" >> "$GITHUB_OUTPUT"
+          # force-compression on BOTH exports: identical zstd blobs → the
+          # registry dedups image push against cache push
+          cache-to: type=registry,ref=ghcr.io/purdueaf/purdue-af:buildcache,mode=max,compression=zstd,compression-level=3,force-compression=true,ignore-error=true
       - name: Size report (layer table only — deep dive re-downloads ~5 GB, run locally when needed)
-        if: steps.push.outputs.pushed == 'true'
+        if: steps.push.conclusion == 'success' && env.AF_EXISTS != 'true'
         run: |
           {
             echo ""
@@ -190,8 +181,10 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Record availability
         id: avail
+        env:
+          PUSH_RAN: ${{ env.AF_EXISTS != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         run: |
-          if [ "$AF_EXISTS" = "true" ] || [ "${{ steps.push.outputs.pushed }}" = "true" ]; then
+          if [ "$AF_EXISTS" = "true" ] || [ "$PUSH_RAN" = "true" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             # fork PR: image was built and smoke-tested but cannot be
