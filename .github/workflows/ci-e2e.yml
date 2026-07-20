@@ -5,14 +5,17 @@ name: CI e2e
 # hub configmaps derived from the production kustomization, mock CILogon +
 # mock LDAP. See tests/e2e_hub/README.md.
 #
-#   e2e-hub-config  spawns the lightweight sample image — validates the hub
-#                   configuration exactly as the repo deploys it (stand-in
-#                   for the production image until prod moves to this
-#                   pipeline).
-#   e2e-af-image    same stack, but spawns the REAL AF image built in stage
-#                   1 for the CURRENT input state — never a previously
-#                   promoted tag, so the run always represents what this
-#                   commit would ship.
+#   e2e-production   certifies the PRODUCTION deployment: the hub stack
+#                    exactly as the repo deploys it to the cms namespace.
+#                    For now it spawns a lightweight mock user image —
+#                    the production AF image is not yet CI-built; once it
+#                    is, this job will spawn the tagged production image
+#                    from values.yaml instead.
+#   e2e-pre-release  certifies the PRE-RELEASE channel: same stack, but
+#                    spawns the REAL AF image built in stage 1 for the
+#                    CURRENT input state — never a previously promoted
+#                    tag — through the hub's pre-release profile. The
+#                    :pre-release promotion in ci.yml rides on this job.
 #
 # Both jobs are memoized on the hash of their full input state
 # (image-inputs.sh e2e-hub, plus the AF image tag for the real-image job):
@@ -39,14 +42,16 @@ env:
   FLUX_VERSION: 2.5.1
 
 jobs:
-  e2e-hub-config:
+  e2e-production:
+    # mock user image for now — see header; swap to the tagged production
+    # image when production moves into this pipeline
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - name: Compute memo key
         id: key
-        run: echo "key=e2e-config-ok-$(./.github/workflows/image-inputs.sh e2e-hub)" | tee -a "$GITHUB_OUTPUT"
+        run: echo "key=e2e-production-ok-$(./.github/workflows/image-inputs.sh e2e-hub)" | tee -a "$GITHUB_OUTPUT"
       - name: Look up recorded green run
         id: memo
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -103,7 +108,7 @@ jobs:
           path: .ci-memo
           key: ${{ steps.key.outputs.key }}
 
-  e2e-af-image:
+  e2e-pre-release:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -127,7 +132,7 @@ jobs:
         id: key
         run: |
           img="${{ steps.image.outputs.image }}"
-          echo "key=e2e-af-ok-$(./.github/workflows/image-inputs.sh e2e-hub)-${img##*:}" | tee -a "$GITHUB_OUTPUT"
+          echo "key=e2e-pre-release-ok-$(./.github/workflows/image-inputs.sh e2e-hub)-${img##*:}" | tee -a "$GITHUB_OUTPUT"
       - name: Look up recorded green run
         id: memo
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -176,7 +181,7 @@ jobs:
           kubectl port-forward svc/proxy-public 8080:80 &
           kubectl port-forward svc/mock-cilogon 9090:9090 &
           sleep 3
-      - name: Run AF-image e2e test
+      - name: Run pre-release e2e test
         if: steps.memo.outputs.cache-hit != 'true'
         env:
           E2E_HUB: "1"

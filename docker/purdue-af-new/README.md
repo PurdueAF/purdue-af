@@ -55,7 +55,7 @@ The staged `ci.yml` pipeline owns this image end to end:
    `FROM` remapped to docker.io via a named context, smoke test (nvcc, ps,
    klist, xz, jupyterlab), CVMFS test (host CVMFS mounted in,
    `cmsset_default.sh` sourced), then push of the immutable `in-` tag.
-2. **e2e-af-image** (`ci-e2e.yml`): full hub-in-kind e2e that spawns the
+2. **e2e-pre-release** (`ci-e2e.yml`): full hub-in-kind e2e that spawns the
    `in-` image of the CURRENT repo state through the hub's `pre-release`
    profile and asserts the pod runs it and JupyterLab answers.
 3. **publish** (`ci.yml`, main only, behind the ci-ok gate — every stage

@@ -11,9 +11,12 @@ name: CI
 #                                     current state was already built + smoked)
 #   stage 1b pixi     ci-pixi.yml     env checks; pixi-global runs INSIDE the
 #                                     stage-1 AF image (the current state)
-#   stage 2  e2e      ci-e2e.yml      hub stack in kind; spawns the stage-1 AF
-#                                     image — e2e always tests the current repo
-#                                     state, never "whatever :pre-release is"
+#   stage 2  e2e      ci-e2e.yml      hub stack in kind, one job per channel:
+#                                     e2e-production (prod config, mock user
+#                                     image until prod is CI-built) and
+#                                     e2e-pre-release (spawns the stage-1 AF
+#                                     image — always the current repo state,
+#                                     never "whatever :pre-release is")
 #   stage 3  publish  (below)        main only, strictly behind the ci-ok gate:
 #                                     :sha- provenance tags for every image,
 #                                     aux continuous channel moves :latest,
