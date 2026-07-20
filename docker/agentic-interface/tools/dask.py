@@ -334,9 +334,7 @@ def register(mcp) -> None:
             return f"Error: HTTP {resp.status_code} — {resp.text[:300]}"
 
         fields = resp.json().get("cluster_options") or []
-        backend = (
-            "Kubernetes (Geddes)" if gateway == "k8s" else "Slurm (Hammer)"
-        )
+        backend = "Kubernetes (Geddes)" if gateway == "k8s" else "Slurm (Hammer)"
         lines = [
             f"# Cluster options for gateway={gateway} — {backend}",
             "Pass these as arguments to create_dask_cluster.",
