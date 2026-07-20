@@ -13,8 +13,12 @@ The components of the Analysis Facility are divided into **core** and **experime
 
 ### Update process
 
-- To update a core component, push directly to the `main` branch and verify everything looks good in the
-  staging namespace. Then tag the successful commit using the `YYYY.MM.v` versioning scheme, which triggers
-  deployment into the production namespace.
-- To apply a hot fix, branch from the tagged commit, apply the fix, and tag it with a newer version. The fix should be merged back into `main` later.
-- To update an experimental component, push to the `main` branch.
+- To update a core component, push to `main` and verify it in the staging
+  namespace (`cms-dev`, which tracks `main` head). It reaches production
+  when the next platform CalVer tag is minted — see
+  [RELEASING.md](../RELEASING.md) for when and how versions are
+  incremented (platform tags and image versions are minted by the release
+  workflows, never by hand).
+- To update an experimental component, push to `main` — it deploys to the
+  production namespace directly (experimental components are purposely
+  brittle for faster prototyping).
