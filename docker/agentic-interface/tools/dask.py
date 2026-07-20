@@ -1,8 +1,8 @@
-"""Dask cluster tools — list, inspect, scale, stop via Dask Gateway REST API.
+"""Dask cluster tools — create, list, inspect, scale, stop via Gateway API.
 
-Multiple gateway backends are supported (k8s, slurm-hammer, slurm-gautschi, slurm).
-list_dask_clusters queries all of them; the other tools take a `gateway` argument
-so the correct backend is targeted.
+Two gateway backends are supported: ``k8s`` (Geddes Kubernetes) and ``slurm``
+(Hammer Slurm). list_dask_clusters queries both; other tools take a `gateway`
+argument so the correct backend is targeted.
 
 Gateways here use SimpleAuthenticator (password ignored). Calls authenticate as
 the Hub username via HTTP Basic so each user only sees their own clusters.
@@ -28,20 +28,11 @@ _GATEWAYS: dict[str, str] = {
         "DASK_GATEWAY_K8S_URL",
         "http://api-dask-gateway-k8s.cms.svc.cluster.local:8000",
     ),
-    "slurm-hammer": os.environ.get(
-        "DASK_GATEWAY_SLURM_HAMMER_URL",
-        "http://api-dask-gateway-k8s-slurm-hammer.cms.svc.cluster.local:8000",
-    ),
-    "slurm-gautschi": os.environ.get(
-        "DASK_GATEWAY_SLURM_GAUTSCHI_URL",
-        "http://api-dask-gateway-k8s-slurm-gautschi.cms.svc.cluster.local:8000",
-    ),
     "slurm": os.environ.get(
         "DASK_GATEWAY_SLURM_URL",
         "http://api-dask-gateway-k8s-slurm.cms.svc.cluster.local:8000",
     ),
 }
-_GATEWAY_ALIASES = {"hammer": "slurm-hammer", "gautschi": "slurm-gautschi"}
 _GATEWAY_LIST = ", ".join(_GATEWAYS)
 
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
@@ -71,7 +62,7 @@ def _prom_client(target: str) -> httpx.AsyncClient:
 
 def _resolve_gateway(name: str) -> tuple[str, str]:
     """Return (canonical_name, url) or raise ValueError."""
-    key = _GATEWAY_ALIASES.get(name.lower(), name.lower())
+    key = name.lower()
     if key not in _GATEWAYS:
         raise ValueError(f"Unknown gateway '{name}'. Valid options: {_GATEWAY_LIST}")
     return key, _GATEWAYS[key]
@@ -205,12 +196,76 @@ def _stats(values: list[float]) -> Optional[tuple[float, float, float]]:
     return min(values), max(values), sum(values) / len(values)
 
 
+def _base_worker_env(username: str, extra: Optional[dict] = None) -> dict:
+    """Build the env mapping required by gateway options handlers.
+
+    Handlers always ``pop("PATH")`` and prepend the conda/pixi bin dir, so PATH
+    must be present. Callers can override/extend via ``extra``.
+    """
+    env = {
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "HOME": f"/home/{username}",
+        "USER": username,
+        "LOGNAME": username,
+    }
+    if extra:
+        for key, value in extra.items():
+            if value is None:
+                continue
+            env[str(key)] = str(value)
+    return env
+
+
+def _build_cluster_options(
+    *,
+    username: str,
+    pixi_project: Optional[str],
+    pixi_env: str,
+    conda_env: Optional[str],
+    worker_cores: float,
+    worker_memory: float,
+    env: Optional[dict],
+) -> dict | str:
+    """Validate create args and return the Gateway ``cluster_options`` body."""
+    pixi = (pixi_project or "").strip()
+    conda = (conda_env or "").strip()
+    if pixi and conda:
+        return (
+            "Error: pixi_project and conda_env are mutually exclusive — "
+            "specify only one."
+        )
+    if not pixi and not conda:
+        return (
+            "Error: provide either pixi_project (directory with pixi.toml) "
+            "or conda_env (path to a conda/pixi env prefix)."
+        )
+    if worker_cores <= 0:
+        return "Error: worker_cores must be > 0."
+    if worker_memory <= 0:
+        return "Error: worker_memory must be > 0 (GiB)."
+
+    options: dict = {
+        "worker_cores": worker_cores,
+        "worker_memory": worker_memory,
+        "env": _base_worker_env(username, env),
+    }
+    if pixi:
+        options["pixi_project"] = pixi
+        options["pixi_env"] = (pixi_env or "default").strip() or "default"
+        options["conda_env"] = ""
+    else:
+        options["conda_env"] = conda
+        options["pixi_project"] = ""
+        options["pixi_env"] = "default"
+    return options
+
+
 def register(mcp) -> None:
     @mcp.tool()
     async def list_dask_clusters() -> str:
         """List all running Dask clusters across every gateway backend.
 
-        Queries the Kubernetes gateway and all SLURM gateways concurrently and
+        Queries the Kubernetes (k8s) and Slurm (Hammer) gateways concurrently and
         labels each cluster with its source backend. Results are scoped to the
         calling user only.
         """
@@ -248,14 +303,199 @@ def register(mcp) -> None:
         return header + "\n\n".join(sections)
 
     @mcp.tool()
+    async def list_dask_cluster_options(gateway: str = "k8s") -> str:
+        """List the create-time options accepted by a Dask Gateway backend.
+
+        Call this before create_dask_cluster to see field names, defaults, and
+        limits for the chosen gateway (Kubernetes vs Slurm differ slightly).
+
+        Args:
+            gateway: 'k8s' (Geddes Kubernetes) or 'slurm' (Hammer Slurm).
+        """
+        user = current_user.get()
+        try:
+            gateway, url = _resolve_gateway(gateway)
+        except ValueError as e:
+            return str(e)
+
+        async with _client() as client:
+            try:
+                resp = await client.get(
+                    f"{url}/api/v1/options",
+                    headers=_auth(user["username"]),
+                    timeout=10.0,
+                )
+            except httpx.RequestError as exc:
+                return f"Error: gateway '{gateway}' unreachable — {exc}"
+
+        if resp.status_code in (401, 403):
+            return f"Error: not authorised for gateway '{gateway}'."
+        if resp.status_code != 200:
+            return f"Error: HTTP {resp.status_code} — {resp.text[:300]}"
+
+        fields = resp.json().get("cluster_options") or []
+        backend = (
+            "Kubernetes (Geddes)" if gateway == "k8s" else "Slurm (Hammer)"
+        )
+        lines = [
+            f"# Cluster options for gateway={gateway} — {backend}",
+            "Pass these as arguments to create_dask_cluster.",
+            "",
+        ]
+        for field in fields:
+            name = field.get("field", "?")
+            label = field.get("label", name)
+            default = field.get("default")
+            spec = field.get("spec") or {}
+            lines.append(f"- {name}: {label}")
+            lines.append(f"    default={default!r}  type={spec}")
+        lines += [
+            "",
+            "Notes:",
+            "  • Provide exactly one of pixi_project or conda_env.",
+            "  • worker_memory is in GiB.",
+            "  • k8s workers see /work; Slurm (Hammer) workers do not — "
+            "put pixi/conda envs on /depot for Slurm.",
+            "  • Only one active cluster per user is allowed.",
+        ]
+        return "\n".join(lines)
+
+    @mcp.tool()
+    async def create_dask_cluster(
+        gateway: str = "k8s",
+        pixi_project: Optional[str] = None,
+        pixi_env: str = "default",
+        conda_env: Optional[str] = None,
+        worker_cores: float = 1,
+        worker_memory: float = 4,
+        n_workers: Optional[int] = None,
+        env: Optional[dict] = None,
+    ) -> str:
+        """Create a new Dask Gateway cluster on Kubernetes or Slurm.
+
+        Choose the backend with ``gateway``:
+          • 'k8s' — Geddes Kubernetes workers (can use /work and /depot)
+          • 'slurm' — Hammer Slurm workers (use /depot for envs; no /work)
+
+        Provide exactly one of ``pixi_project`` (dir containing pixi.toml) or
+        ``conda_env`` (absolute path to an env prefix). Optionally pass
+        ``n_workers`` to scale immediately after create (clusters start at 0).
+
+        Args:
+            gateway: 'k8s' (default) or 'slurm'.
+            pixi_project: Path to a pixi project directory.
+            pixi_env: Pixi environment name within the project (default 'default').
+            conda_env: Path to a conda/mamba env prefix (mutually exclusive with
+                       pixi_project).
+            worker_cores: Cores per worker (k8s ≤ 64, Slurm ≤ 16).
+            worker_memory: Memory per worker in GiB (≤ 64).
+            n_workers: If set (≥ 0), scale to this many workers after create.
+            env: Extra environment variables for workers (e.g. X509_USER_PROXY,
+                 PYTHONPATH, NB_UID/NB_GID for CERN/FNAL users).
+        """
+        user = current_user.get()
+        username = user["username"]
+        try:
+            gateway, url = _resolve_gateway(gateway)
+        except ValueError as e:
+            return str(e)
+
+        options = _build_cluster_options(
+            username=username,
+            pixi_project=pixi_project,
+            pixi_env=pixi_env,
+            conda_env=conda_env,
+            worker_cores=worker_cores,
+            worker_memory=worker_memory,
+            env=env,
+        )
+        if isinstance(options, str):
+            return options
+
+        if n_workers is not None and n_workers < 0:
+            return "Error: n_workers must be ≥ 0."
+
+        async with _client() as client:
+            try:
+                resp = await client.post(
+                    f"{url}/api/v1/clusters/",
+                    headers=_auth(username),
+                    json={"cluster_options": options},
+                    timeout=60.0,
+                )
+            except httpx.RequestError as exc:
+                return f"Error: gateway '{gateway}' unreachable — {exc}"
+
+            if resp.status_code == 422:
+                reason = resp.reason_phrase or ""
+                try:
+                    reason = resp.json().get("message") or resp.text[:400]
+                except Exception:
+                    reason = resp.text[:400] or reason
+                return f"Error: gateway rejected create — {reason}"
+            if resp.status_code not in (200, 201):
+                return f"Error: HTTP {resp.status_code} — {resp.text[:400]}"
+
+            cluster_name = resp.json().get("name", "")
+            if not cluster_name:
+                return f"Error: create succeeded but no cluster name in response — {resp.text[:300]}"
+
+            lines = [
+                f"Cluster '{cluster_name}' created on gateway '{gateway}'.",
+                f"workers: cores={worker_cores} memory={worker_memory} GiB each",
+            ]
+            if options.get("pixi_project"):
+                lines.append(
+                    f"env: pixi_project={options['pixi_project']} "
+                    f"pixi_env={options['pixi_env']}"
+                )
+            else:
+                lines.append(f"env: conda_env={options['conda_env']}")
+
+            if n_workers is None:
+                lines += [
+                    "",
+                    "Cluster starts with 0 workers. Next: scale_dask_cluster(...).",
+                ]
+                return "\n".join(lines)
+
+            try:
+                scale = await client.post(
+                    f"{url}/api/v1/clusters/{cluster_name}/scale",
+                    headers=_auth(username),
+                    json={"count": n_workers},
+                    timeout=30.0,
+                )
+            except httpx.RequestError as exc:
+                lines += [
+                    "",
+                    f"Created, but scale failed (gateway unreachable): {exc}",
+                    "Retry with scale_dask_cluster.",
+                ]
+                return "\n".join(lines)
+
+            if scale.status_code not in (200, 204):
+                lines += [
+                    "",
+                    f"Created, but scale returned HTTP {scale.status_code}: "
+                    f"{scale.text[:300]}",
+                    "Retry with scale_dask_cluster.",
+                ]
+                return "\n".join(lines)
+
+            lines.append(f"Scaling to {n_workers} worker(s).")
+            lines.append(
+                "Next: get_dask_worker_count / get_dask_cluster_info to confirm ready."
+            )
+            return "\n".join(lines)
+
+    @mcp.tool()
     async def get_dask_cluster_info(cluster_name: str, gateway: str = "k8s") -> str:
         """Get detailed information about a specific Dask cluster.
 
         Args:
             cluster_name: Cluster identifier returned by list_dask_clusters.
-            gateway: Gateway backend — 'k8s' (default), 'slurm-hammer',
-                     'slurm-gautschi', or 'slurm'. Use the value shown in
-                     list_dask_clusters.
+            gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
         user = current_user.get()
         try:
@@ -307,8 +547,7 @@ def register(mcp) -> None:
 
         Args:
             cluster_name: Cluster identifier returned by list_dask_clusters.
-            gateway: Gateway backend — 'k8s' (default), 'slurm-hammer',
-                     'slurm-gautschi', or 'slurm'.
+            gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
         user = current_user.get()
         username = user["username"]
@@ -370,8 +609,7 @@ def register(mcp) -> None:
 
         Args:
             cluster_name: Cluster identifier returned by list_dask_clusters.
-            gateway: Gateway backend — 'k8s' (default), 'slurm-hammer',
-                     'slurm-gautschi', or 'slurm'.
+            gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
         user = current_user.get()
         username = user["username"]
@@ -460,8 +698,7 @@ def register(mcp) -> None:
         Args:
             cluster_name: Cluster identifier returned by list_dask_clusters.
             n_workers: Target worker count (≥ 0).
-            gateway: Gateway backend — 'k8s' (default), 'slurm-hammer',
-                     'slurm-gautschi', or 'slurm'.
+            gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
         if n_workers < 0:
             return "Error: n_workers must be ≥ 0."
@@ -500,8 +737,7 @@ def register(mcp) -> None:
 
         Args:
             cluster_name: Cluster identifier returned by list_dask_clusters.
-            gateway: Gateway backend — 'k8s' (default), 'slurm-hammer',
-                     'slurm-gautschi', or 'slurm'.
+            gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
         user = current_user.get()
         try:

@@ -88,13 +88,17 @@ Works when a session is (or recently was) running so metrics exist.
 *(Results always scoped to the calling user.)*
 
 **`list_dask_clusters`** — all clusters across every gateway.
+**`list_dask_cluster_options(gateway="k8s")`** — create-time fields/defaults/limits for a backend.
+**`create_dask_cluster(gateway="k8s", …)`** — create a cluster (pixi XOR conda; cores/memory; optional `n_workers` / `env`).
 **`get_dask_cluster_info(cluster_name, gateway="k8s")`** — status, options, dashboard.
 **`get_dask_worker_count(cluster_name, gateway="k8s")`** — live worker count (by state).
 **`get_dask_cluster_usage(cluster_name, gateway="k8s")`** — CPU/memory min/max/avg across Running workers.
 **`scale_dask_cluster(cluster_name, n_workers, gateway="k8s")`**
 **`stop_dask_cluster(cluster_name, gateway="k8s")`** — terminate/delete the cluster (irreversible).
 
-`gateway` options: `"k8s"` · `"slurm-hammer"` · `"slurm-gautschi"` · `"slurm"`
+`gateway` options: `"k8s"` (Geddes Kubernetes) · `"slurm"` (Hammer Slurm)
+
+Create notes: one active cluster per user; Slurm workers cannot see `/work` (put envs on `/depot`); clusters start at 0 workers unless `n_workers` is set.
 
 ### Logs
 

@@ -19,6 +19,8 @@ EXPECTED_TOOLS = {
     "query_storage_usage",
     # dask
     "list_dask_clusters",
+    "list_dask_cluster_options",
+    "create_dask_cluster",
     "get_dask_cluster_info",
     "get_dask_worker_count",
     "get_dask_cluster_usage",

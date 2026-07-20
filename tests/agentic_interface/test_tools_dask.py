@@ -10,8 +10,6 @@ from httpx import ConnectError
 from tools import dask
 
 K8S = dask._GATEWAYS["k8s"]
-HAMMER = dask._GATEWAYS["slurm-hammer"]
-GAUTSCHI = dask._GATEWAYS["slurm-gautschi"]
 SLURM = dask._GATEWAYS["slurm"]
 
 
@@ -32,25 +30,22 @@ def basic_alice():
 
 
 def test_resolve_canonical_names():
-    for name in ("k8s", "slurm-hammer", "slurm-gautschi", "slurm"):
+    for name in ("k8s", "slurm"):
         canonical, url = dask._resolve_gateway(name)
         assert canonical == name
         assert url == dask._GATEWAYS[name]
 
 
-def test_resolve_aliases():
-    assert dask._resolve_gateway("hammer")[0] == "slurm-hammer"
-    assert dask._resolve_gateway("gautschi")[0] == "slurm-gautschi"
-
-
 def test_resolve_is_case_insensitive():
     assert dask._resolve_gateway("K8S")[0] == "k8s"
-    assert dask._resolve_gateway("Hammer")[0] == "slurm-hammer"
+    assert dask._resolve_gateway("Slurm")[0] == "slurm"
 
 
 def test_resolve_unknown_raises():
     with pytest.raises(ValueError, match="Unknown gateway"):
         dask._resolve_gateway("nope")
+    with pytest.raises(ValueError, match="Unknown gateway"):
+        dask._resolve_gateway("slurm-hammer")
 
 
 # ── _fmt_cluster / _parse_clusters ────────────────────────────────────────────
@@ -101,22 +96,19 @@ async def test_list_clusters_aggregates_gateways(user_ctx):
         200,
         json=clusters_payload({"name": "c-k8s", "status": "RUNNING", "workers": {}}),
     )
-    respx.get(clusters_url(HAMMER)).respond(403)  # unexpected auth failure
-    respx.get(clusters_url(GAUTSCHI)).mock(side_effect=ConnectError("down"))
-    respx.get(clusters_url(SLURM)).respond(200, json={})
+    respx.get(clusters_url(SLURM)).mock(side_effect=ConnectError("down"))
 
     tools = register_tools(dask).tools
     out = await tools["list_dask_clusters"]()
 
     assert "# 1 Dask cluster(s)" in out
     assert "c-k8s" in out
-    assert "slurm-hammer" not in out  # 403 suppressed
-    assert "[slurm-gautschi] error: unreachable" in out
+    assert "[slurm] error: unreachable" in out
 
 
 @respx.mock
 async def test_list_clusters_all_empty(user_ctx):
-    for base in (K8S, HAMMER, GAUTSCHI, SLURM):
+    for base in (K8S, SLURM):
         respx.get(clusters_url(base)).respond(200, json={})
 
     tools = register_tools(dask).tools
@@ -128,8 +120,7 @@ async def test_list_clusters_all_empty(user_ctx):
 @respx.mock
 async def test_list_clusters_sends_basic_username(user_ctx):
     routes = [
-        respx.get(clusters_url(base)).respond(200, json={})
-        for base in (K8S, HAMMER, GAUTSCHI, SLURM)
+        respx.get(clusters_url(base)).respond(200, json={}) for base in (K8S, SLURM)
     ]
 
     tools = register_tools(dask).tools
@@ -201,11 +192,163 @@ async def test_scale_posts_count(user_ctx):
 
 @respx.mock
 async def test_scale_not_found(user_ctx):
-    respx.post(f"{HAMMER}/api/v1/clusters/ghost/scale").respond(404)
+    respx.post(f"{SLURM}/api/v1/clusters/ghost/scale").respond(404)
 
     tools = register_tools(dask).tools
-    out = await tools["scale_dask_cluster"]("ghost", 2, gateway="hammer")
-    assert "not found on gateway 'hammer'" in out
+    out = await tools["scale_dask_cluster"]("ghost", 2, gateway="slurm")
+    assert "not found on gateway 'slurm'" in out
+
+
+# ── _build_cluster_options / create / options ─────────────────────────────────
+
+
+def test_build_options_pixi():
+    opts = dask._build_cluster_options(
+        username="alice",
+        pixi_project="/depot/cms/alice/proj",
+        pixi_env="analysis",
+        conda_env=None,
+        worker_cores=2,
+        worker_memory=8,
+        env={"X509_USER_PROXY": "/tmp/x509"},
+    )
+    assert opts["pixi_project"] == "/depot/cms/alice/proj"
+    assert opts["pixi_env"] == "analysis"
+    assert opts["conda_env"] == ""
+    assert opts["worker_cores"] == 2
+    assert opts["worker_memory"] == 8
+    assert opts["env"]["PATH"]
+    assert opts["env"]["HOME"] == "/home/alice"
+    assert opts["env"]["X509_USER_PROXY"] == "/tmp/x509"
+
+
+def test_build_options_conda():
+    opts = dask._build_cluster_options(
+        username="alice",
+        pixi_project=None,
+        pixi_env="default",
+        conda_env="/depot/cms/alice/miniconda3/envs/ana",
+        worker_cores=1,
+        worker_memory=4,
+        env=None,
+    )
+    assert opts["conda_env"] == "/depot/cms/alice/miniconda3/envs/ana"
+    assert opts["pixi_project"] == ""
+
+
+def test_build_options_rejects_both_or_neither():
+    both = dask._build_cluster_options(
+        username="alice",
+        pixi_project="/p",
+        pixi_env="default",
+        conda_env="/c",
+        worker_cores=1,
+        worker_memory=1,
+        env=None,
+    )
+    assert "mutually exclusive" in both
+
+    neither = dask._build_cluster_options(
+        username="alice",
+        pixi_project=None,
+        pixi_env="default",
+        conda_env=None,
+        worker_cores=1,
+        worker_memory=1,
+        env=None,
+    )
+    assert "provide either" in neither
+
+
+@respx.mock
+async def test_list_cluster_options(user_ctx):
+    respx.get(f"{K8S}/api/v1/options").respond(
+        200,
+        json={
+            "cluster_options": [
+                {
+                    "field": "worker_cores",
+                    "label": "Cores per worker",
+                    "default": 1,
+                    "spec": {"type": "int", "min": 1, "max": 64},
+                },
+                {
+                    "field": "pixi_project",
+                    "label": "Pixi project",
+                    "default": "",
+                    "spec": {"type": "string"},
+                },
+            ]
+        },
+    )
+
+    tools = register_tools(dask).tools
+    out = await tools["list_dask_cluster_options"]()
+    assert "gateway=k8s" in out
+    assert "Kubernetes (Geddes)" in out
+    assert "worker_cores" in out
+    assert "pixi_project" in out
+
+
+@respx.mock
+async def test_create_cluster_pixi_then_scale(user_ctx):
+    create = respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.abc"})
+    scale = respx.post(f"{K8S}/api/v1/clusters/cms.abc/scale").respond(204)
+
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"](
+        pixi_project="/work/alice/proj",
+        worker_cores=2,
+        worker_memory=8,
+        n_workers=3,
+    )
+    assert "cms.abc" in out
+    assert "Scaling to 3" in out
+    assert create.called
+    body = json.loads(create.calls[0].request.content)
+    opts = body["cluster_options"]
+    assert opts["pixi_project"] == "/work/alice/proj"
+    assert opts["conda_env"] == ""
+    assert opts["worker_cores"] == 2
+    assert opts["env"]["USER"] == "alice"
+    assert scale.called
+    assert json.loads(scale.calls[0].request.content) == {"count": 3}
+
+
+@respx.mock
+async def test_create_cluster_slurm_conda_no_scale(user_ctx):
+    create = respx.post(clusters_url(SLURM)).respond(201, json={"name": "cms.slurm1"})
+
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"](
+        gateway="slurm",
+        conda_env="/depot/cms/alice/envs/ana",
+    )
+    assert "slurm" in out
+    assert "0 workers" in out
+    assert create.called
+    opts = json.loads(create.calls[0].request.content)["cluster_options"]
+    assert opts["conda_env"] == "/depot/cms/alice/envs/ana"
+    assert opts["pixi_project"] == ""
+
+
+@respx.mock
+async def test_create_cluster_validation_error_local(user_ctx):
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"]()
+    assert "provide either" in out
+
+
+@respx.mock
+async def test_create_cluster_gateway_rejects(user_ctx):
+    respx.post(clusters_url(K8S)).respond(
+        422, json={"message": "User already has 1 active clusters"}
+    )
+
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"](pixi_project="/work/alice/p")
+    assert "rejected" in out
+    assert "active clusters" in out
 
 
 # ── stop_dask_cluster ─────────────────────────────────────────────────────────

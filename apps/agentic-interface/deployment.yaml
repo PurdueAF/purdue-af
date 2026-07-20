@@ -36,10 +36,6 @@ spec:
                   fieldPath: metadata.namespace
             - name: DASK_GATEWAY_K8S_URL
               value: "http://api-dask-gateway-k8s.cms.svc.cluster.local:8000"
-            - name: DASK_GATEWAY_SLURM_HAMMER_URL
-              value: "http://api-dask-gateway-k8s-slurm-hammer.cms.svc.cluster.local:8000"
-            - name: DASK_GATEWAY_SLURM_GAUTSCHI_URL
-              value: "http://api-dask-gateway-k8s-slurm-gautschi.cms.svc.cluster.local:8000"
             - name: DASK_GATEWAY_SLURM_URL
               value: "http://api-dask-gateway-k8s-slurm.cms.svc.cluster.local:8000"
           resources:
