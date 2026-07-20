@@ -67,7 +67,7 @@ singleuser:
   image:
     name: __PRODUCTION_IMAGE_NAME__
     tag: "__PRODUCTION_IMAGE_TAG__"
-  image_pull_policy: IfNotPresent # pre-pulled onto the node by setup-kind.sh
+    pullPolicy: IfNotPresent # pre-pulled onto the node by setup-kind.sh
   startTimeout: 600 # real AF image cold-start on a 2-core runner is slow
   extraContainers: [] # prod's af-pod-monitor sidecar mounts volumes removed below
   storage:
