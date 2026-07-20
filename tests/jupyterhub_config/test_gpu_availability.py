@@ -243,6 +243,47 @@ async def test_non_gpu_spawn_skips_availability_check(monkeypatch):
     assert await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner(), pod) is pod
 
 
+async def test_non_gpu_spawn_hides_node_gpus(monkeypatch):
+    # the NVIDIA-based 0.13.x image inherits NVIDIA_VISIBLE_DEVICES=all; the
+    # hook must neutralize it for 0-GPU pods — in EVERY container (sidecars
+    # must not see GPUs either)
+    ns = load(monkeypatch)
+    pod = fake_pod({"cpu": "256", "memory": "256G"})
+
+    assert await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner(), pod) is pod
+
+    for container in pod.spec.containers:
+        env = {e.name: e.value for e in container.env}
+        assert env == {"NVIDIA_VISIBLE_DEVICES": "void"}
+
+
+async def test_gpu_spawn_env_left_untouched(monkeypatch):
+    # GPU sessions must keep exactly the device-plugin-injected environment:
+    # the hook may not add or change NVIDIA_VISIBLE_DEVICES for them
+    ns = load(monkeypatch)
+    set_free(ns, {SLICE: 5, FULL: 1})
+    pod = fake_pod({FULL: "1"})
+
+    assert await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner(), pod) is pod
+
+    for container in pod.spec.containers:
+        assert not getattr(container, "env", None)
+
+
+async def test_hide_gpus_respects_existing_env(monkeypatch):
+    # an explicitly configured NVIDIA_VISIBLE_DEVICES is never overridden
+    ns = load(monkeypatch)
+    pod = fake_pod({"cpu": "1"})
+    preset = types.SimpleNamespace(name="NVIDIA_VISIBLE_DEVICES", value="all")
+    pod.spec.containers[0].env = [preset]
+
+    assert await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner(), pod) is pod
+
+    assert pod.spec.containers[0].env == [preset]
+    env = {e.name: e.value for e in pod.spec.containers[1].env}
+    assert env == {"NVIDIA_VISIBLE_DEVICES": "void"}
+
+
 async def test_spawn_allowed_when_availability_unknown(monkeypatch):
     ns = load(monkeypatch)
     set_free(ns, None)

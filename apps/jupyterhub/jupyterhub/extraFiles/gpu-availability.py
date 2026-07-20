@@ -183,19 +183,50 @@ class GPUsUnavailableError(Exception):
     """Aborts a spawn that requests an exhausted GPU flavor."""
 
 
+def hide_gpus_from_pod(pod):
+    """Inject NVIDIA_VISIBLE_DEVICES=void into every container of a 0-GPU pod.
+
+    The 0.13.x AF image is built on the NVIDIA CUDA base, which bakes
+    NVIDIA_VISIBLE_DEVICES=all — and the cluster runtime honors it, so a
+    0-GPU session would see every GPU on its node. The guard lives HERE, in
+    the pod spec, rather than as an image ENV override: pod-spec env always
+    beats image env, GPU sessions are never touched (the device plugin's
+    injection for the allocated device works exactly as it does for the
+    0.12.x image), and the fix applies to any image the hub spawns.
+    """
+    try:
+        from kubernetes_asyncio.client.models import V1EnvVar
+    except ImportError:  # unit tests exercise plain namespaces
+        from types import SimpleNamespace as V1EnvVar
+    for container in pod.spec.containers:
+        env = getattr(container, "env", None) or []
+        if any(getattr(e, "name", None) == "NVIDIA_VISIBLE_DEVICES" for e in env):
+            continue  # explicitly configured elsewhere — leave it alone
+        env.append(V1EnvVar(name="NVIDIA_VISIBLE_DEVICES", value="void"))
+        container.env = env
+
+
 async def refuse_gpu_spawn_if_unavailable(spawner, pod):
     """modify_pod_hook: re-check availability at spawn time and refuse if 0.
 
     The form annotation above is only cosmetic (and may be stale by the time
     the user clicks Start); this is the actual gate, and it also covers spawns
-    that bypass the form (e.g. the REST API / agentic interface).
+    that bypass the form (e.g. the REST API / agentic interface). It also
+    hides node GPUs from sessions that did not request any (see
+    hide_gpus_from_pod).
     """
     requested = {}
+    any_gpu = False
     for container in pod.spec.containers:
         limits = getattr(container.resources, "limits", None) or {}
         for resource, amount in limits.items():
+            if resource.startswith("nvidia.com/") and int(amount) > 0:
+                any_gpu = True
             if resource in GPU_FLAVORS and int(amount) > 0:
                 requested[resource] = requested.get(resource, 0) + int(amount)
+    if not any_gpu:
+        hide_gpus_from_pod(pod)
+        return pod
     if not requested:
         return pod
 

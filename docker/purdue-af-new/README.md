@@ -106,26 +106,31 @@ krb5 config, pixi base env, voms-proxy-\*/gfal-\*/xrdcp/apptainer.
 - known quirk inherited from the NVIDIA base: `LIBRARY_PATH` points at CUDA
   _stub_ libs (intended: lets `nvcc` link without a driver)
 
-**GPU exposure (fixed in-image):** the NVIDIA base bakes
-`NVIDIA_VISIBLE_DEVICES=all` and the cluster runtime honours it — a 0-GPU
-pod on paf-a01 saw both T4s. The Dockerfile now sets it to `void`;
-the device plugin's per-allocation value overrides it for GPU sessions.
+**GPU exposure (fixed at spawn time, not in-image):** the NVIDIA base
+bakes `NVIDIA_VISIBLE_DEVICES=all` and the cluster runtime honours it — a
+0-GPU pod on paf-a01 saw both T4s. The fix lives in the hub, not the
+image: `gpu-availability.py`'s `modify_pod_hook` injects
+`NVIDIA_VISIBLE_DEVICES=void` into the pod spec of sessions that request
+no GPU (unit-tested). The image deliberately does NOT override the env:
+GPU sessions keep exactly the 0.12.x semantics — visibility comes from
+the device plugin's per-allocation injection, with nothing new for it to
+fight — so a GPU-session regression from this change is structurally
+impossible. (An earlier iteration baked `void` into the image; reverted
+in favor of the spawn-time guard.)
 
 ## Things to verify on a test session before promoting
 
 - [ ] GPU session: `nvidia-smi`, `nvcc --version`, torch/TF see the GPU
-      (system cuDNN is 8.9.7, same pin as 0.12.x) — re-check after the
-      `NVIDIA_VISIBLE_DEVICES=void` change (device plugin must still inject
-      the allocated MIG slice)
-- [x] **Non-GPU session does NOT see GPUs** — verified BROKEN on the cluster
-      (0-GPU pod saw all node GPUs) and fixed via
-      `NVIDIA_VISIBLE_DEVICES=void` in the Dockerfile; re-verify on a
-      0-GPU session of the next build
-- [ ] `eos-connect.sh`: `kinit <user>@CERN.CH` resolves the realm and EOS
-      mounts (krb5 snippets vendored from alma8-base)
+      (system cuDNN is 8.9.7, same pin as 0.12.x)
+- [ ] **Non-GPU session does NOT see GPUs** — verified BROKEN with the raw
+      image on the cluster (0-GPU pod saw all node GPUs); now guarded by
+      the spawn-time `void` injection — verify on a 0-GPU session after
+      the hub config rolls
+- [x] `eos-connect.sh`: `kinit <user>@CERN.CH` resolves the realm and EOS
+      mounts (krb5 snippets vendored from alma8-base) — verified 2026-07-20
 - [x] Grid workflows: `voms-proxy-init` works (C++ client); gfal2/xrootd
       configs byte-identical
-- [ ] Slurm: `sbatch`/`squeue` against hammer
+- [x] Slurm: `sbatch`/`squeue` against hammer — verified 2026-07-20
 - [x] Alma-specific packaging: rpm diff shows nothing user-relevant beyond
       the items listed above (docs updated to say "EL8" instead of
       "AlmaLinux8")

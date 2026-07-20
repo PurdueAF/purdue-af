@@ -175,16 +175,18 @@ FROM system AS runtime
 # Re-declare for COPY path (ARGs not inherited; default matches system stage)
 ARG NB_USER="jovyan"
 
+# NB: the NVIDIA base bakes NVIDIA_VISIBLE_DEVICES=all and this cluster's
+# container runtime honors it for unprivileged pods — a 0-GPU pod running
+# this image raw would see EVERY GPU on its node (verified on paf-a01:
+# both T4s exposed). The image deliberately does NOT override it: baking
+# `void` here could only be undone by device-plugin env injection, and GPU
+# sessions must never depend on that. Instead the hub hides GPUs from
+# 0-GPU sessions at spawn time (gpu-availability.py modify_pod_hook
+# injects NVIDIA_VISIBLE_DEVICES=void into the pod spec); GPU sessions
+# keep the exact same env semantics as the 0.12.x image.
 ENV PIXI_HOME="/opt/pixi" \
     BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env" \
-    X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates \
-    # The NVIDIA base bakes NVIDIA_VISIBLE_DEVICES=all, and this cluster's
-    # container runtime honors it for unprivileged pods: a 0-GPU session
-    # would see EVERY GPU on its node (verified on paf-a01: both T4s
-    # exposed). "void" = behave like a plain runc container. GPU sessions
-    # are unaffected — the k8s device plugin injects its own value for the
-    # allocated device, which overrides this image default.
-    NVIDIA_VISIBLE_DEVICES=void
+    X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
 
 # Copy pixi env from stack stage
 COPY --from=stack /opt/pixi /opt/pixi
