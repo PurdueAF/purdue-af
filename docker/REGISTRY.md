@@ -50,19 +50,15 @@ cluster pulls ◀── geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purduea
    - Verify from a cluster node:
      `crictl pull geddes-registry.rcac.purdue.edu/ghcr-cache/purdueaf/agentic-interface:sha-<commit>`
 
-## Switching a deployment (checklist, per image)
+## Deployment references (current state)
 
-Only after the proxy cache works:
+All aux images (agentic-interface, af-pod-monitor, af-node-monitor) pull
+`:latest` through the `ghcr-proxy-cache` project — the continuous
+channel, moved only by the ci.yml publish stage after a fully green
+pipeline. The purdue-af image is pinned by semver in
+`apps/jupyterhub/jupyterhub/values.yaml` and promoted via
+release-image.yml (see RELEASING.md at the repo root).
 
-1. Pick the `sha-<commit>` tag of a main build whose CI was fully green.
-2. Update the manifest to
-   `geddes-registry.rcac.purdue.edu/ghcr-cache/purdueaf/<name>:sha-<commit>`.
-   First targets (also closes IMPROVEMENT_PLAN item 3's `:latest`s):
-   - `apps/agentic-interface/deployment.yaml` (`cms/agentic-interface:latest`)
-   - `apps/jupyterhub/jupyterhub/values.yaml` (`cms/af-pod-monitor:latest` ×2)
-   - af-node-monitor refs (`JOB_IMAGE` default + deployment)
-3. Flux reconciles; verify the pod runs, then delete the old geddes-native
-   image copy at leisure.
-
-Follow-up (IMPROVEMENT_PLAN item 13): Flux ImagePolicy on the `sha-` tag
-pattern + ImageUpdateAutomation turns step 1–2 into reviewed PRs.
+Follow-up (IMPROVEMENT_PLAN item 13): Flux ImagePolicy +
+ImageUpdateAutomation can replace the `:latest` channel with reviewed
+pin-bump commits once desired.

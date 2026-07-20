@@ -16,7 +16,9 @@ spec:
       enableServiceLinks: false
       containers:
         - name: af-node-monitor
-          image: geddes-registry.rcac.purdue.edu/cms/af-node-monitor:0.1.1
+          # continuous channel: ci.yml moves :latest after every fully green
+          # main pipeline; k8s pulls :latest with policy Always by default
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
           command: ["python", "/scripts/node_healthcheck.py"]
           env:
             - name: RESULTS_DIR

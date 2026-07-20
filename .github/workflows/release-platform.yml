@@ -13,9 +13,8 @@ name: Release platform
 # Version streams (each minted by exactly one trigger — never cross them):
 #   - platform:        YYYY.M.SEQ  → THIS workflow only
 #   - purdue-af image: semver 0.X.Y (repo tag v0.X.Y) → release-image.yml
-#   - versioned aux:   semver per image → release-image.yml
-#   - continuous aux + pre-release: :latest / :pre-release / :sha- / :in-
-#     moving tags → ci.yml only, never versioned by humans
+#   - everything else (aux images + pre-release): :latest / :pre-release /
+#     :sha- / :in- moving tags → ci.yml only, never versioned by humans
 #
 # ⚠ Uses AF_RELEASE_TOKEN (fine-grained PAT, contents:write) if present —
 # tags pushed with the default GITHUB_TOKEN do not trigger CI workflows.

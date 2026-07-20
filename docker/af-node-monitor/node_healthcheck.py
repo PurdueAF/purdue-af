@@ -167,7 +167,8 @@ RESULT_STALE_WINDOW_S = float(
 )
 
 JOB_IMAGE = os.getenv(
-    "JOB_IMAGE", "geddes-registry.rcac.purdue.edu/cms/af-node-monitor:0.1.1"
+    "JOB_IMAGE",
+    "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest",
 )
 
 NODE_CACHE_TTL_S = float(os.getenv("NODE_CACHE_TTL_S", "300"))

@@ -140,31 +140,28 @@ in favor of the spawn-time guard.)
 Release channels, each with exactly ONE minting trigger (so a wrong-stream
 bump is structurally impossible):
 
-| channel                                                          | scheme                                                         | minted by                                                             |
-| ---------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------- |
-| platform                                                         | `YYYY.M.SEQ` CalVer (repo tag + GitHub Release, no file edits) | **Release platform** (release-platform.yml) dispatch                  |
-| purdue-af image                                                  | its own semver `0.X.Y` (repo tag `v0.X.Y`)                     | **Release image** (release-image.yml) dispatch, `patch\|minor\|major` |
-| versioned aux (af-node-monitor)                                  | semver per image, read from its manifests                      | **Release image** (release-image.yml) dispatch                        |
-| continuous aux (agentic-interface, af-pod-monitor) + pre-release | `:latest` / `:pre-release` / `:sha-` / `:in-` moving tags      | ci.yml only, never humans                                             |
+| channel                                                             | scheme                                                         | minted by                                                             |
+| ------------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------- |
+| platform                                                             | `YYYY.M.SEQ` CalVer (repo tag + GitHub Release, no file edits) | **Release platform** (release-platform.yml) dispatch                  |
+| purdue-af image                                                      | its own semver `0.X.Y` (repo tag `v0.X.Y`)                     | **Release image** (release-image.yml) dispatch, `patch\|minor\|major` |
+| all aux images (agentic-interface, af-pod-monitor, af-node-monitor) + pre-release | `:latest` / `:pre-release` / `:sha-` / `:in-` moving tags | ci.yml only, never humans                                             |
 
-**Release image** promotes a versioned image behind two gates: the
+**Release image** promotes the purdue-af image behind two gates: the
 release commit's `ci-ok` check must be green (the checks API is queried —
 commits whose CI never ran fail loudly), and the digest being promoted
-must be the `in-<hash>` image of the CURRENT repo state (for purdue-af it
-must also equal the soaking `:pre-release` digest — the exact bytes users
-tested). It then adds the immutable semver tag to the SAME digest
-(promote-by-digest — never a rebuild), rewrites every version spot
-(`bump-af-version.py` for purdue-af, count-verified; `bump-aux-image.py`
-for aux images, refuses `:latest`-channel images), commits, and for
-purdue-af tags `v<version>` and publishes a GitHub Release with digest
-provenance.
+must be the `in-<hash>` image of the CURRENT repo state AND equal the
+soaking `:pre-release` digest — the exact bytes users tested. It then
+adds the immutable semver tag to the SAME digest (promote-by-digest —
+never a rebuild), rewrites every version spot in values.yaml
+(`bump-af-version.py`, count-verified), commits, tags `v<version>`, and
+publishes a GitHub Release with digest provenance.
 
 **Continuous channel**: the ci.yml publish stage moves the ghcr `:latest`
 tag after every fully green main pipeline (lint + unit + manifests +
-builds + pixi + e2e); the agentic-interface and af-pod-monitor manifests
-pull it via the geddes ghcr-proxy-cache (kubernetes pulls `:latest` with
-policy Always by default), so those deploy continuously from any state
-that passed everything.
+builds + pixi + e2e); the agentic-interface, af-pod-monitor and
+af-node-monitor manifests pull it via the geddes ghcr-proxy-cache
+(kubernetes pulls `:latest` with policy Always by default), so those
+deploy continuously from any state that passed everything.
 
 Flux rolls the hub config; sessions pull the pinned semver via the geddes
 ghcr-proxy-cache. Rollback = `git revert` the release commit (old tags
