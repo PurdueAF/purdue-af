@@ -1,0 +1,134 @@
+name: CI
+
+# THE pipeline — the whole automatic CI/CD strategy as one dependency graph.
+# Stages live in reusable workflows (ci-*.yml, this directory); publication
+# is impossible without every stage of the SAME commit succeeding.
+#
+#   stage 0  checks   ci-checks.yml   lint · unit tests · manifest validation
+#   stage 1  images   ci-images.yml   content-addressed builds: every image is
+#                                     tagged in-<hash of its input tree>; an
+#                                     existing tag is VERIFIED reuse (the exact
+#                                     current state was already built + smoked)
+#   stage 1b pixi     ci-pixi.yml     env checks; pixi-global runs INSIDE the
+#                                     stage-1 AF image (the current state)
+#   stage 2  e2e      ci-e2e.yml      hub stack in kind; spawns the stage-1 AF
+#                                     image — e2e always tests the current repo
+#                                     state, never "whatever :pre-release is"
+#   stage 3  publish  (below)        main only, strictly behind the ci-ok gate:
+#                                     :sha- provenance tags for every image,
+#                                     aux continuous channel moves :latest,
+#                                     AF image moves :pre-release
+#
+# ci-ok is the single branch-protection check: it fails if ANY stage did not
+# succeed — a skipped-but-required job can never masquerade as a pass.
+# Renovate PRs trigger this pipeline like any other PR (no weekly cron).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # never cancel a main run mid-publish; PR runs are superseded freely
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci-checks.yml
+    permissions:
+      contents: read
+      id-token: write # Codecov OIDC upload
+
+  images:
+    needs: checks
+    uses: ./.github/workflows/ci-images.yml
+    permissions:
+      contents: read
+      packages: write # in- tag push + registry build cache
+
+  pixi:
+    needs: images
+    uses: ./.github/workflows/ci-pixi.yml
+    with:
+      af-image: ${{ needs.images.outputs.af-image }}
+      af-image-available: ${{ needs.images.outputs.af-image-available }}
+    permissions:
+      contents: read
+      packages: read
+
+  e2e:
+    needs: images
+    uses: ./.github/workflows/ci-e2e.yml
+    with:
+      af-image: ${{ needs.images.outputs.af-image }}
+      af-image-available: ${{ needs.images.outputs.af-image-available }}
+    permissions:
+      contents: read
+      packages: read
+
+  ci-ok:
+    # The one required status check. `if: always()` + explicit result
+    # inspection: a failed OR skipped stage fails the gate — success is
+    # never assumed for work that did not run.
+    needs: [checks, images, pixi, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail unless every stage succeeded
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'to_entries | all(.value.result == "success")' >/dev/null || {
+            echo "::error::a required stage failed or was skipped — publication blocked"
+            exit 1
+          }
+
+  publish:
+    # Stage 3 — main only. Pure retags of digests that just passed the full
+    # pipeline (promote-by-digest, no rebuild):
+    #   every image        → :sha-<commit>   (immutable provenance)
+    #   aux images         → :latest         (continuous channel; manifests
+    #                                          pull it via the geddes
+    #                                          ghcr-proxy-cache on restart)
+    #   purdue-af          → :pre-release    (the hub's pre-release profile,
+    #                                          image_pull_policy Always)
+    # Versioned promotion to production stays human: release-image.yml.
+    needs: [ci-ok, images]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      packages: write
+    steps:
+      - name: Login to ghcr.io
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish aux images (:sha- + :latest)
+        env:
+          AUX_TAGS: ${{ needs.images.outputs.aux-tags }}
+        run: |
+          for pair in $AUX_TAGS; do
+            name="${pair%%=*}"; tag="${pair#*=}"
+            repo="ghcr.io/purdueaf/${name}"
+            docker buildx imagetools create -t "$repo:sha-$GITHUB_SHA" "$repo:$tag"
+            docker buildx imagetools create -t "$repo:latest" "$repo:$tag"
+            echo "published $repo:$tag -> :sha-${GITHUB_SHA::12} + :latest" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Publish AF image (:sha- + :pre-release)
+        env:
+          AF_IMAGE: ${{ needs.images.outputs.af-image }}
+        run: |
+          repo="${AF_IMAGE%:*}"
+          docker buildx imagetools create -t "$repo:sha-$GITHUB_SHA" "$AF_IMAGE"
+          docker buildx imagetools create -t "$repo:pre-release" "$AF_IMAGE"
+          echo "published $AF_IMAGE -> :sha-${GITHUB_SHA::12} + :pre-release" | tee -a "$GITHUB_STEP_SUMMARY"

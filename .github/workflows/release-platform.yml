@@ -1,4 +1,4 @@
-name: Release AF (platform)
+name: Release platform
 
 # Mints the next whole-platform CalVer tag (YYYY.M.SEQ — the repo's
 # long-standing scheme: 2026.7.7 = 7th release of July 2026) and publishes
@@ -6,12 +6,16 @@ name: Release AF (platform)
 # image tags — the platform release marks the repo state and is on a
 # SEPARATE cadence from the image releases.
 #
+# This is the production gate: the core-production Flux GitRepository
+# tracks `semver: 2026.x`, so minting a tag is what rolls the cms
+# namespace forward to the tagged commit.
+#
 # Version streams (each minted by exactly one trigger — never cross them):
 #   - platform:        YYYY.M.SEQ  → THIS workflow only
-#   - purdue-af image: semver 0.X.Y (repo tag v0.X.Y) → release-af-image.yml
-#   - versioned aux:   semver per image → release-aux-image.yml
-#   - continuous aux + pre-release: :latest / :pre-release / sha- moving
-#     tags → CI pipelines only, never versioned by humans
+#   - purdue-af image: semver 0.X.Y (repo tag v0.X.Y) → release-image.yml
+#   - versioned aux:   semver per image → release-image.yml
+#   - continuous aux + pre-release: :latest / :pre-release / :sha- / :in-
+#     moving tags → ci.yml only, never versioned by humans
 #
 # ⚠ Uses AF_RELEASE_TOKEN (fine-grained PAT, contents:write) if present —
 # tags pushed with the default GITHUB_TOKEN do not trigger CI workflows.
@@ -27,7 +31,7 @@ permissions:
   contents: write # git tag + GitHub Release
 
 concurrency:
-  group: release-af-platform
+  group: release-platform
   cancel-in-progress: false
 
 jobs:

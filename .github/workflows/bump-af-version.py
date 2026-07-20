@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Rewrite the production AF version across values.yaml — the file-editing
-half of the Release AF workflow (.github/workflows/release-af.yml).
+half of the image release workflow (.github/workflows/release-image.yml).
 
 values.yaml is the single source of truth for "what production runs": the
 current version is READ from it (--print-current), and a release rewrites
@@ -17,7 +17,7 @@ Spots rewritten (each must match exactly once):
 
 The purdue-af IMAGE is versioned with its own semver (0.12.x), on a
 separate cadence from the platform's CalVer tags (2026.M.SEQ) — see
-release-af-image.yml vs release-af.yml.
+release-image.yml vs release-platform.yml.
 
 Usage:
   bump-af-version.py --print-current

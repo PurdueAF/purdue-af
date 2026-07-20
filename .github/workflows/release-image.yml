@@ -1,0 +1,183 @@
+name: Release image
+
+# The manual greenlight for VERSIONED images — one workflow for both:
+#
+#   purdue-af       semver 0.X.Y, repo tag v0.X.Y, GitHub Release; rewrites
+#                   values.yaml (bump-af-version.py, count-verified)
+#   af-node-monitor semver per image; rewrites every manifest reference
+#                   under apps/ (bump-aux-image.py, which also normalizes
+#                   the pull path to the geddes ghcr-proxy-cache and
+#                   refuses to touch continuous-channel images)
+#
+# Two gates make "assumed success" impossible:
+#
+#   1. CI-green gate — the ci-ok check of the release commit (HEAD of
+#      main) must have succeeded; commits whose CI never ran (e.g. pushed
+#      with the default GITHUB_TOKEN) fail loudly instead of releasing
+#      untested state.
+#   2. Exact-state gate — the digest being promoted must be the digest of
+#      ghcr :in-<hash(HEAD)> (image-inputs.sh, same definition CI builds
+#      from): the release ships the image of THIS repo state, not an older
+#      soak. For purdue-af the :pre-release digest must match it too —
+#      i.e. the exact bytes users have been soaking.
+#
+# Promotion is by digest: the semver tag is added to the SAME digest that
+# passed the pipeline, never a rebuild. ROLLBACK: `git revert` the release
+# commit (old tags stay on ghcr forever).
+#
+# Version streams (each minted by exactly one trigger — never cross them):
+#   - platform:        YYYY.M.SEQ  → release-platform.yml
+#   - purdue-af image: semver 0.X.Y (repo tag v0.X.Y) → THIS workflow
+#   - versioned aux:   semver per image → THIS workflow
+#   - continuous aux + pre-release: :latest / :pre-release / :sha- / :in-
+#     moving tags → ci.yml only, never versioned by humans
+#
+# ⚠ Uses AF_RELEASE_TOKEN (fine-grained PAT, contents:write on this repo)
+# if present — pushes made with the default GITHUB_TOKEN do NOT trigger
+# other workflows, so CI would silently skip the release commit. Falls
+# back to GITHUB_TOKEN with a loud warning.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Which versioned image to release"
+        type: choice
+        options: [purdue-af, af-node-monitor]
+      bump:
+        description: "Semver bump for the new version"
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      version:
+        description: "Explicit version override (X.Y.Z) — leave empty to bump"
+        default: ""
+      force:
+        description: "Bypass the CI-green and exact-state gates (emergencies only)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # release commit, git tag, GitHub Release
+  packages: write # semver tag on ghcr
+
+concurrency:
+  group: release-image # never run two releases concurrently, never cancel one
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.ref == 'refs/heads/main'
+    env:
+      IMAGE_NAME: ${{ inputs.image }}
+      IMAGE_REPO: ghcr.io/purdueaf/${{ inputs.image }}
+      GH_TOKEN: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
+      HAVE_RELEASE_PAT: ${{ secrets.AF_RELEASE_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0 # full history for release notes
+          token: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
+      - name: Warn if running with the default token
+        if: env.HAVE_RELEASE_PAT != 'true'
+        run: |
+          echo "::warning::AF_RELEASE_TOKEN secret not set — the release " \
+            "commit will NOT trigger CI workflows (GITHUB_TOKEN limitation)."
+      - name: Login to ghcr.io
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: "Gate 1: ci-ok succeeded for this commit"
+        run: |
+          sha=$(git rev-parse HEAD)
+          conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?check_name=ci-ok" \
+            -q '.check_runs[0].conclusion // "missing"')
+          echo "ci-ok on ${sha}: ${conclusion}"
+          if [ "$conclusion" != "success" ]; then
+            if [ "${{ inputs.force }}" = "true" ]; then
+              echo "::warning::ci-ok is '${conclusion}' — proceeding because force=true"
+            else
+              echo "::error::ci-ok is '${conclusion}' for ${sha} — this repo state has not passed CI"
+              exit 1
+            fi
+          fi
+      - name: "Gate 2: resolve the exact-state digest"
+        id: src
+        run: |
+          tag=$(./.github/workflows/image-inputs.sh "$IMAGE_NAME")
+          ref="$IMAGE_REPO:$tag"
+          digest=$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' | jq -r .digest) || true
+          if [ -z "$digest" ] || [ "$digest" = "null" ]; then
+            echo "::error::$ref not found — CI has not published the image of this repo state"
+            exit 1
+          fi
+          echo "exact-state image: $ref @ $digest"
+          if [ "$IMAGE_NAME" = "purdue-af" ]; then
+            soak=$(docker buildx imagetools inspect "$IMAGE_REPO:pre-release" --format '{{json .Manifest}}' | jq -r .digest) || true
+            echo ":pre-release digest: ${soak:-none}"
+            if [ "$soak" != "$digest" ]; then
+              if [ "${{ inputs.force }}" = "true" ]; then
+                echo "::warning::releasing $digest which is NOT the soaking :pre-release ($soak) — force=true"
+              else
+                echo "::error::the :pre-release users are soaking ($soak) is not the image of this" \
+                  "repo state ($digest) — wait for CI on main to promote, or use force"
+                exit 1
+              fi
+            fi
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Bump version in manifests
+        id: ver
+        run: |
+          if [ "$IMAGE_NAME" = "purdue-af" ]; then
+            if [ -n "${{ inputs.version }}" ]; then
+              new=$(python3 .github/workflows/bump-af-version.py --set "${{ inputs.version }}" | tail -1)
+            else
+              new=$(python3 .github/workflows/bump-af-version.py --bump "${{ inputs.bump }}" | tail -1)
+            fi
+          else
+            if [ -n "${{ inputs.version }}" ]; then
+              new=$(python3 .github/workflows/bump-aux-image.py --name "$IMAGE_NAME" --set "${{ inputs.version }}" | tail -1)
+            else
+              new=$(python3 .github/workflows/bump-aux-image.py --name "$IMAGE_NAME" --bump "${{ inputs.bump }}" | tail -1)
+            fi
+          fi
+          echo "version=$new" >> "$GITHUB_OUTPUT"
+          git diff --stat
+      - name: Tag the digest on ghcr (promote-by-digest, no rebuild)
+        run: |
+          docker buildx imagetools create \
+            -t "$IMAGE_REPO:${{ steps.ver.outputs.version }}" \
+            "$IMAGE_REPO@${{ steps.src.outputs.digest }}"
+          echo "promoted $IMAGE_REPO@${{ steps.src.outputs.digest }} -> :${{ steps.ver.outputs.version }}" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Commit, push (and for purdue-af tag + publish release)
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          DIGEST: ${{ steps.src.outputs.digest }}
+        run: |
+          git config user.name "af-release-bot"
+          git config user.email "af-release-bot@users.noreply.github.com"
+          git add apps/
+          git commit -m "release $IMAGE_NAME image $VERSION"
+          if [ "$IMAGE_NAME" = "purdue-af" ]; then
+            # the v prefix keeps image tags distinct from bare platform CalVer tags
+            git tag -a "v$VERSION" -m "purdue-af image $VERSION
+          image: $IMAGE_REPO:$VERSION
+          digest: $DIGEST"
+            git push origin main "v$VERSION"
+            gh release create "v$VERSION" \
+              --title "purdue-af image $VERSION" \
+              --generate-notes \
+              --notes "Image: \`$IMAGE_REPO:$VERSION\`
+          Digest: \`$DIGEST\` (identical bytes to the pre-release that passed CI + e2e)
+          " \
+              2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            git push origin main
+          fi
+          echo "released $IMAGE_NAME $VERSION -> $DIGEST" >> "$GITHUB_STEP_SUMMARY"

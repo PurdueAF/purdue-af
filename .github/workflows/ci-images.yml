@@ -1,0 +1,281 @@
+name: CI images
+
+# Stage 1 of ci.yml — content-addressed image builds.
+#
+# Every first-party image is tagged `in-<hash>` where the hash names the
+# exact git state of its declared input paths (.github/workflows/
+# image-inputs.sh — the single source of truth, shared with
+# release-image.yml). If the tag already exists on ghcr, the build is
+# skipped as VERIFIED reuse: the identical input state was already built
+# and smoke-tested. There is no diff-based path filtering anywhere — a
+# skip can never mean "we assumed this was fine".
+#
+# in- tags are pushed from same-repo PRs too (that is what makes reuse
+# work across a merge); the consumable channels (:latest, :pre-release,
+# :sha-) move only in the publish stage of ci.yml, on main, behind the
+# ci-ok gate.
+#
+# Large images other than purdue-af (dask-gateway variants, interlink,
+# servicex-science) still exceed GitHub-hosted runner limits and are built
+# only by the in-cluster kaniko jobs (docker/kaniko-build-jobs/).
+
+on:
+  workflow_call:
+    outputs:
+      af-image:
+        description: "Full ref of the AF image for the current input state"
+        value: ${{ jobs.resolve.outputs.af-image }}
+      af-image-available:
+        description: "'true' when the af-image ref is pullable from ghcr"
+        value: ${{ jobs.build-af-image.outputs.available }}
+      aux-tags:
+        description: "Space-separated <name>=<in-tag> pairs for the aux images"
+        value: ${{ jobs.resolve.outputs.aux-tags }}
+
+permissions:
+  contents: read
+
+env:
+  AF_REPO: ghcr.io/purdueaf/purdue-af
+  # keep in sync with the FROM line in docker/purdue-af-new/Dockerfile
+  GEDDES_BASE: geddes-registry.rcac.purdue.edu/docker-hub-cache/nvidia/cuda:12.4.1-devel-rockylinux8
+  PUBLIC_BASE: docker.io/nvidia/cuda:12.4.1-devel-rockylinux8
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      af-image: ${{ steps.hashes.outputs.af-image }}
+      af-exists: ${{ steps.hashes.outputs.af-exists }}
+      aux-tags: ${{ steps.hashes.outputs.aux-tags }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Login to ghcr.io
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve input hashes
+        id: hashes
+        run: |
+          af_tag=$(./.github/workflows/image-inputs.sh purdue-af)
+          if docker buildx imagetools inspect "$AF_REPO:$af_tag" >/dev/null 2>&1; then
+            af_exists=true
+          else
+            af_exists=false
+          fi
+          aux_tags=""
+          for name in agentic-interface af-pod-monitor af-node-monitor; do
+            tag=$(./.github/workflows/image-inputs.sh "$name")
+            aux_tags="${aux_tags:+$aux_tags }${name}=${tag}"
+          done
+          {
+            echo "af-image=$AF_REPO:$af_tag"
+            echo "af-exists=$af_exists"
+            echo "aux-tags=$aux_tags"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  build-af-image:
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write # in- tag push + registry build cache
+    outputs:
+      available: ${{ steps.avail.outputs.available }}
+    env:
+      AF_IMAGE: ${{ needs.resolve.outputs.af-image }}
+      AF_EXISTS: ${{ needs.resolve.outputs.af-exists }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Verified reuse — this exact input state is already on ghcr
+        if: env.AF_EXISTS == 'true'
+        run: echo "reusing $AF_IMAGE (already built + smoke-tested for this input state)" | tee -a "$GITHUB_STEP_SUMMARY"
+      # First build step on purpose: it must never wipe tools other steps
+      # install. apt-based removal is the slowest part (~3 min) and the
+      # space isn't needed: android/dotnet/haskell/tool-cache free enough.
+      - name: Free runner disk space
+        if: env.AF_EXISTS != 'true'
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1 # Renovate pins to digest
+        with:
+          tool-cache: true
+          docker-images: false
+          large-packages: false
+      - name: Disk before build
+        if: env.AF_EXISTS != 'true'
+        run: df -h / | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+        if: env.AF_EXISTS != 'true'
+      # Login first: cache-from needs read; cache-to/push need write.
+      - name: Login to ghcr.io
+        if: env.AF_EXISTS != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build image
+        if: env.AF_EXISTS != 'true'
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: docker/purdue-af-new/Dockerfile
+          tags: ${{ env.AF_IMAGE }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          # The Dockerfile's FROM points at the geddes docker-hub-cache proxy
+          # (unreachable from GH runners); remap that exact ref to docker.io
+          # without modifying the Dockerfile.
+          build-contexts: |
+            ${{ env.GEDDES_BASE }}=docker-image://${{ env.PUBLIC_BASE }}
+          push: false
+          load: true
+          # Registry-backed cache — the 10 GB GHA cache cannot hold this
+          # layer set. ignore-error keeps fork PRs (read-only token) building.
+          cache-from: type=registry,ref=ghcr.io/purdueaf/purdue-af:buildcache
+          cache-to: type=registry,ref=ghcr.io/purdueaf/purdue-af:buildcache,mode=max,ignore-error=true
+      - name: Disk after build
+        if: env.AF_EXISTS != 'true'
+        run: |
+          df -h / | tee -a "$GITHUB_STEP_SUMMARY"
+          docker image ls "${AF_IMAGE%:*}" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Smoke test
+        if: env.AF_EXISTS != 'true'
+        run: |
+          docker run --rm "$AF_IMAGE" sh -c '
+            nvcc --version >/dev/null &&
+            ps --version >/dev/null &&
+            klist -V >/dev/null &&
+            xz --version >/dev/null &&
+            python3 -c "import jupyterlab; print(\"smoke ok:\", jupyterlab.__version__)"'
+      # Mount the host CVMFS client into the image and source the CMS
+      # environment — catches missing base utilities the CMS tooling needs
+      # (image-level test; pod-level CVMFS CSI wiring is a cluster concern).
+      - name: Install CVMFS on the runner
+        if: env.AF_EXISTS != 'true'
+        uses: cvmfs-contrib/github-action-cvmfs@10197e000cc0add8e54ac4fb73d3ed44e2de72b4 # v5.5
+      - name: CVMFS smoke test (cmsset_default.sh)
+        if: env.AF_EXISTS != 'true'
+        run: |
+          docker run --rm -v /cvmfs:/cvmfs:shared "$AF_IMAGE" bash -c '
+            source /cvmfs/cms.cern.ch/cmsset_default.sh &&
+            command -v scramv1 >/dev/null &&
+            echo "cmsset ok: $(command -v scramv1)"'
+      # Only smoke-tested images ever reach the registry; the in- tag is
+      # what pixi-global and e2e consume before any promotion.
+      - name: Push in- tag to ghcr.io
+        id: push
+        if: env.AF_EXISTS != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        run: |
+          docker push "$AF_IMAGE"
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+      - name: Size report (layer table only — deep dive re-downloads ~5 GB, run locally when needed)
+        if: steps.push.outputs.pushed == 'true'
+        run: |
+          {
+            echo ""
+            echo '```'
+            python3 docker/kaniko-build-jobs/analyze_image_build.py \
+              --image "$AF_IMAGE" \
+              --deep-dive-min-mb 100000
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Record availability
+        id: avail
+        run: |
+          if [ "$AF_EXISTS" = "true" ] || [ "${{ steps.push.outputs.pushed }}" = "true" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            # fork PR: image was built and smoke-tested but cannot be
+            # pushed — downstream jobs fall back to :pre-release
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-aux-images:
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write # in- tag push
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: agentic-interface
+            dockerfile: docker/agentic-interface/Dockerfile
+            context: .
+            smoke: python -c "import server; print('ok:', server.SERVICE_PREFIX)"
+          - name: af-pod-monitor
+            dockerfile: docker/af-pod-monitor/Dockerfile
+            context: docker/af-pod-monitor
+            smoke: >-
+              sh -c "cd /etc && python -c \"import importlib.util as u;
+              s = u.spec_from_file_location('m', 'pod-metrics-exporter.py');
+              m = u.module_from_spec(s); s.loader.exec_module(m);
+              print('ok')\""
+          - name: af-node-monitor
+            dockerfile: docker/af-node-monitor/Dockerfile
+            context: .
+            smoke: >-
+              sh -c "fio --version && cd /opt/af-node-monitor &&
+              AF_NODE_MONITOR_VERBOSE=1 MOUNT_NAME=smoke CHECK_FILE=smoke
+              python -c 'import job_runner, node_healthcheck; print(\"ok\")'"
+    name: aux ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Login to ghcr.io
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve input state
+        id: meta
+        run: |
+          tag=$(./.github/workflows/image-inputs.sh "${{ matrix.name }}")
+          image="ghcr.io/purdueaf/${{ matrix.name }}:$tag"
+          if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
+            exists=true
+          else
+            exists=false
+          fi
+          {
+            echo "image=$image"
+            echo "exists=$exists"
+          } | tee -a "$GITHUB_OUTPUT"
+      - name: Verified reuse — this exact input state is already on ghcr
+        if: steps.meta.outputs.exists == 'true'
+        run: echo "reusing ${{ steps.meta.outputs.image }}" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+        if: steps.meta.outputs.exists != 'true'
+      - name: Build image
+        if: steps.meta.outputs.exists != 'true'
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          tags: ${{ steps.meta.outputs.image }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          push: false
+          load: true
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+      - name: Smoke test
+        if: steps.meta.outputs.exists != 'true'
+        run: docker run --rm ${{ steps.meta.outputs.image }} ${{ matrix.smoke }}
+      # Only smoke-tested images ever reach the registry.
+      - name: Push in- tag to ghcr.io
+        if: steps.meta.outputs.exists != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        run: docker push ${{ steps.meta.outputs.image }}

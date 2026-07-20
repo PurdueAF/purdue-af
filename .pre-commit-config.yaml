@@ -1,7 +1,8 @@
 # Single source of truth for all lint/format checks.
 #
 #   Local:  uvx pre-commit run --all-files     (or: pre-commit install)
-#   CI:     .github/workflows/lint.yml runs the exact same hooks.
+#   CI:     the check-lint job (.github/workflows/ci-checks.yml) runs the
+#           exact same hooks.
 #
 # Hooks that need a runtime not on your machine can be skipped locally,
 # e.g.:  SKIP=hadolint-docker uvx pre-commit run --all-files

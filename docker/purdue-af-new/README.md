@@ -45,20 +45,22 @@ base-parity row above; bump the tag in the job YAML per iteration).
 
 ## CI/CD pipeline (pre-release channel)
 
-`.github/workflows/e2e-hub.yml` owns this image end to end:
+The staged `ci.yml` pipeline owns this image end to end:
 
-1. **build-image** (when a commit touches this dir, `pixi/base/`, or the
-   Slurm inputs): buildx build with the geddes `FROM` remapped to docker.io
-   via a named context, smoke test (nvcc, ps, klist, xz, jupyterlab), CVMFS
-   test (host CVMFS mounted in, `cmsset_default.sh` sourced), then push of
-   the immutable `ghcr.io/purdueaf/purdue-af:sha-<commit>`.
-2. **e2e-prerelease**: full hub-in-kind e2e that spawns THIS exact image
-   through the hub's `pre-release` profile and asserts the pod runs it and
-   JupyterLab answers. When the commit didn't rebuild the image, it
-   revalidates the currently promoted `:pre-release` tag instead (also
-   weekly via cron).
-3. **promote** (main only, after e2e passes): moves the
-   `ghcr.io/purdueaf/purdue-af:pre-release` tag to the tested digest.
+1. **build-af-image** (`ci-images.yml`): the image is CONTENT-ADDRESSED —
+   tagged `in-<hash>` of its input tree (this dir, `docker/purdue-af/`,
+   `pixi/base/`, the Slurm inputs; see
+   `.github/workflows/image-inputs.sh`). If the tag already exists on ghcr
+   the build is verified reuse; otherwise: buildx build with the geddes
+   `FROM` remapped to docker.io via a named context, smoke test (nvcc, ps,
+   klist, xz, jupyterlab), CVMFS test (host CVMFS mounted in,
+   `cmsset_default.sh` sourced), then push of the immutable `in-` tag.
+2. **e2e-af-image** (`ci-e2e.yml`): full hub-in-kind e2e that spawns the
+   `in-` image of the CURRENT repo state through the hub's `pre-release`
+   profile and asserts the pod runs it and JupyterLab answers.
+3. **publish** (`ci.yml`, main only, behind the ci-ok gate — every stage
+   of the same commit green): adds `:sha-<commit>` and moves
+   `ghcr.io/purdueaf/purdue-af:pre-release` to the tested digest.
 
 The hub's "Latest pre-release version" profile
 (`apps/jupyterhub/jupyterhub/values.yaml`) pulls `:pre-release` with
@@ -123,36 +125,36 @@ the device plugin's per-allocation value overrides it for GPU sessions.
       the items listed above (docs updated to say "EL8" instead of
       "AlmaLinux8")
 
-## Promotion to production (Release AF workflow)
+## Promotion to production (release workflows)
 
 Release channels, each with exactly ONE minting trigger (so a wrong-stream
 bump is structurally impossible):
 
-| channel                                                          | scheme                                                         | minted by                                                   |
-| ---------------------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------- |
-| platform                                                         | `YYYY.M.SEQ` CalVer (repo tag + GitHub Release, no file edits) | **Release AF (platform)** dispatch                          |
-| purdue-af image                                                  | its own semver `0.X.Y` (repo tag `v0.X.Y`)                     | **Release AF Image** dispatch, `patch\|minor\|major` choice |
-| versioned aux (af-node-monitor)                                  | semver per image, read from its manifests                      | **Release Aux Image** dispatch                              |
-| continuous aux (agentic-interface, af-pod-monitor) + pre-release | `:latest` / `:pre-release` / `sha-` moving tags                | CI only, never humans                                       |
+| channel                                                          | scheme                                                         | minted by                                                             |
+| ---------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------- |
+| platform                                                         | `YYYY.M.SEQ` CalVer (repo tag + GitHub Release, no file edits) | **Release platform** (release-platform.yml) dispatch                  |
+| purdue-af image                                                  | its own semver `0.X.Y` (repo tag `v0.X.Y`)                     | **Release image** (release-image.yml) dispatch, `patch\|minor\|major` |
+| versioned aux (af-node-monitor)                                  | semver per image, read from its manifests                      | **Release image** (release-image.yml) dispatch                        |
+| continuous aux (agentic-interface, af-pod-monitor) + pre-release | `:latest` / `:pre-release` / `:sha-` / `:in-` moving tags      | ci.yml only, never humans                                             |
 
-**Release AF Image** promotes the main image: resolves the digest behind
-ghcr `:pre-release` (by construction the exact bytes that passed build
-smoke + CVMFS + hub-in-kind e2e), verifies its source commit is on main,
-reads the current version from values.yaml, bumps per your choice, adds
-the immutable semver tag to the SAME digest (promote-by-digest — never a
-rebuild), rewrites every version spot in values.yaml
-(`bump-af-version.py`, count-verified, tested), commits, tags
-`v<version>`, and publishes a GitHub Release with digest provenance.
+**Release image** promotes a versioned image behind two gates: the
+release commit's `ci-ok` check must be green (the checks API is queried —
+commits whose CI never ran fail loudly), and the digest being promoted
+must be the `in-<hash>` image of the CURRENT repo state (for purdue-af it
+must also equal the soaking `:pre-release` digest — the exact bytes users
+tested). It then adds the immutable semver tag to the SAME digest
+(promote-by-digest — never a rebuild), rewrites every version spot
+(`bump-af-version.py` for purdue-af, count-verified; `bump-aux-image.py`
+for aux images, refuses `:latest`-channel images), commits, and for
+purdue-af tags `v<version>` and publishes a GitHub Release with digest
+provenance.
 
-**Release Aux Image** does the same for versioned aux images: retags this
-commit's smoke-tested `sha-` build, rewrites every manifest ref under
-`apps/` (`bump-aux-image.py`, refuses `:latest`-channel images), commits.
-
-**Continuous channel**: `build-images.yml` moves the ghcr `:latest` tag
-after every smoke-tested main build; the agentic-interface and
-af-pod-monitor manifests pull it via the geddes ghcr-proxy-cache
-(kubernetes pulls `:latest` with policy Always by default), so those
-deploy continuously from any build that passes its tests.
+**Continuous channel**: the ci.yml publish stage moves the ghcr `:latest`
+tag after every fully green main pipeline (lint + unit + manifests +
+builds + pixi + e2e); the agentic-interface and af-pod-monitor manifests
+pull it via the geddes ghcr-proxy-cache (kubernetes pulls `:latest` with
+policy Always by default), so those deploy continuously from any state
+that passed everything.
 
 Flux rolls the hub config; sessions pull the pinned semver via the geddes
 ghcr-proxy-cache. Rollback = `git revert` the release commit (old tags

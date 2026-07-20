@@ -16,11 +16,8 @@ Each user is provided with a 25GB home directory at first login. These directori
 
 ---
 
-[![Documentation](https://github.com/PurdueAF/purdue-af/actions/workflows/docs.yml/badge.svg)](https://purdueaf.github.io/purdue-af/)
+[![Docs deploy](https://github.com/PurdueAF/purdue-af/actions/workflows/docs-deploy.yml/badge.svg)](https://purdueaf.github.io/purdue-af/)
 
-[![Lint](https://github.com/PurdueAF/purdue-af/actions/workflows/lint.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/lint.yml)
-[![Test](https://github.com/PurdueAF/purdue-af/actions/workflows/test.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/test.yml)
+[![CI](https://github.com/PurdueAF/purdue-af/actions/workflows/ci.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/PurdueAF/purdue-af/graph/badge.svg)](https://codecov.io/gh/PurdueAF/purdue-af)
-[![Hub E2E](https://github.com/PurdueAF/purdue-af/actions/workflows/e2e-hub.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/e2e-hub.yml)
-[![Pixi Check](https://github.com/PurdueAF/purdue-af/actions/workflows/pixi-check.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/pixi-check.yml)
 

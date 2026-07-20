@@ -1,6 +1,6 @@
-"""Tests for .github/workflows/bump-aux-image.py (release-aux-image.yml's
-manifest rewriter), run against the REAL manifests under apps/ so layout
-drift fails here before it fails a release."""
+"""Tests for .github/workflows/bump-aux-image.py (release-image.yml's
+manifest rewriter for aux images), run against the REAL manifests under
+apps/ so layout drift fails here before it fails a release."""
 
 import re
 import shutil

@@ -1,4 +1,4 @@
-"""Tests for .github/workflows/bump-af-version.py (the Release AF workflow's
+"""Tests for .github/workflows/bump-af-version.py (release-image.yml's
 values.yaml rewriter). Runs against the REAL values.yaml text, so if the
 file's layout drifts away from what the release automation expects, this
 suite fails before a release does."""

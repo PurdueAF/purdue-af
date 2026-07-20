@@ -6,7 +6,7 @@
 # After that, every push to `main` that touches docs/ rebuilds
 # and publishes the site automatically. Remove the `paths:` filter below if you
 # want the docs to rebuild on *every* push to main.
-name: Documentation
+name: Docs deploy
 
 on:
   push:
@@ -15,7 +15,7 @@ on:
     paths:
       - "docs/**"
       - "pixi/**"
-      - ".github/workflows/docs.yml"
+      - ".github/workflows/docs-deploy.yml"
   workflow_dispatch:
 
 permissions:

@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Bump a VERSIONED auxiliary image (e.g. af-node-monitor) across all
-manifests under apps/ — the file-editing half of release-aux-image.yml.
+manifests under apps/ — the file-editing half of release-image.yml.
 
 Aux images come in two channels:
   - continuous (`:latest` refs, e.g. agentic-interface, af-pod-monitor):
-    CI moves the ghcr `latest` tag after every smoke-tested main build;
-    manifests never change and this script REFUSES to touch them;
+    the ci.yml publish stage moves the ghcr `latest` tag after every fully
+    green main pipeline; manifests never change and this script REFUSES to
+    touch them;
   - versioned (semver refs, e.g. af-node-monitor): promoted manually via
-    release-aux-image.yml, which retags a tested sha- digest and calls
-    this script to rewrite every manifest reference.
+    release-image.yml, which retags the tested exact-state digest and
+    calls this script to rewrite every manifest reference.
 
 The manifests are the single source of truth for the current version;
 rewrites also normalize the registry to the geddes ghcr-proxy-cache path.

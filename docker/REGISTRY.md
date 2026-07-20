@@ -1,11 +1,13 @@
 # Image registry architecture
 
 ```
-CI (Build Images)
-  build → smoke test → push (main only)
-        └──▶ ghcr.io/purdueaf/<name>:sha-<commit>      ← source of truth
+ci.yml (stage 1: content-addressed builds)
+  build → smoke test → push :in-<input-hash>           ← source of truth
+ci.yml (stage 3 publish: main only, behind the ci-ok gate)
+  retag → ghcr.io/purdueaf/<name>:sha-<commit> (provenance)
+        → :latest (aux continuous channel) / :pre-release (purdue-af)
                           │
-cluster pulls ◀── geddes-registry.rcac.purdue.edu/ghcr-cache/purdueaf/<name>
+cluster pulls ◀── geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/<name>
                   (Harbor proxy-cache, same mechanism as docker-hub-cache)
 ```
 
@@ -13,14 +15,19 @@ cluster pulls ◀── geddes-registry.rcac.purdue.edu/ghcr-cache/purdueaf/<nam
   built-in `GITHUB_TOKEN` (no separate account or secret), only smoke-tested
   images are pushed, every image carries `org.opencontainers.image.revision`.
 - **geddes-registry** stays the cluster-facing registry: manifests reference
-  the `ghcr-cache` proxy project so pulls are LAN-local and survive ghcr
+  the `ghcr-proxy-cache` project so pulls are LAN-local and survive ghcr
   outages (cache serves last-known images).
-- **Tags are immutable**: `sha-<commit>` only. No `:latest`, no moving tags.
-- **Lightweight images are published from CI**: agentic-interface, af-pod-monitor,
-  af-node-monitor (every push). Large images (purdue-af, dask-gateway variants,
+- **Tag taxonomy**: `in-<hash>` (immutable, names the exact input-tree state;
+  what CI builds and tests), `sha-<commit>` (immutable provenance, added at
+  publish), `:latest` / `:pre-release` (moving channel tags, moved ONLY by the
+  ci.yml publish stage after the full pipeline is green), semver (immutable,
+  added only by release-image.yml, promote-by-digest).
+- **CI-built images**: purdue-af, agentic-interface, af-pod-monitor,
+  af-node-monitor. Other large images (dask-gateway variants,
   interlink-slurm-plugin, servicex-science-coffea) are built only by the
-  in-cluster kaniko jobs (`docker/kaniko-build-jobs/`) — they exceed GitHub-hosted
-  runner limits. Pixi environments are validated in `pixi-check.yml` instead.
+  in-cluster kaniko jobs (`docker/kaniko-build-jobs/`) — they exceed
+  GitHub-hosted runner limits. Pixi environments are validated by the
+  ci-pixi.yml stage instead.
 - The kaniko jobs are therefore the long-term build path for the large images —
   they are not legacy and cannot be retired unless the heavy builds move to
   infrastructure with cluster-grade disk/CPU (e.g. a self-hosted runner).
