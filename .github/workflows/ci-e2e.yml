@@ -181,6 +181,8 @@ jobs:
         env:
           E2E_HUB: "1"
           E2E_PRERELEASE: "1"
+          # the test asserts the spawned pod runs exactly this image
+          PRERELEASE_IMAGE: ${{ steps.image.outputs.image }}
         run: >-
           uv run --project tests --frozen pytest -q -c tests/pyproject.toml
           tests/e2e_hub -v -k "prerelease or hub_api_is_up"

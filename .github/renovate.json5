@@ -25,6 +25,16 @@
   timezone: 'America/Indiana/Indianapolis',
   labels: ['dependencies'],
 
+  // Tool versions Renovate uses when regenerating lock files.
+  constraints: {
+    // MUST match the repo's pixi pin (PIXI_VERSION in
+    // docker/purdue-af{,-new}/Dockerfile and pixi-version in
+    // .github/workflows/ci-pixi.yml): newer pixi rewrites pixi.lock in
+    // lock-file format v7, which pixi 0.62.2 cannot read — every
+    // pixi-touching PR would fail `pixi install --locked` in CI.
+    pixi: '0.62.2',
+  },
+
   ignorePaths: [
     'docker/dask-gateway-server/**', // vendored fork — tracked upstream, do not churn
   ],
