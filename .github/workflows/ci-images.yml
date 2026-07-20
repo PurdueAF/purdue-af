@@ -23,11 +23,14 @@ on:
   workflow_call:
     outputs:
       af-image:
-        description: "Full ref of the AF image for the current input state"
-        value: ${{ jobs.resolve.outputs.af-image }}
+        description: "Digest-pinned ref (repo:in-tag@sha256:...) of the AF image for the current input state; empty when unavailable"
+        value: ${{ jobs.build-af-image.outputs.image }}
       af-image-available:
         description: "'true' when the af-image ref is pullable from ghcr"
         value: ${{ jobs.build-af-image.outputs.available }}
+      af-digest:
+        description: "Manifest digest of the AF image (what e2e tested — publish retags THIS, not the tag)"
+        value: ${{ jobs.build-af-image.outputs.digest }}
       aux-tags:
         description: "Space-separated <name>=<in-tag> pairs for the aux images"
         value: ${{ jobs.resolve.outputs.aux-tags }}
@@ -51,6 +54,7 @@ jobs:
     outputs:
       af-image: ${{ steps.hashes.outputs.af-image }}
       af-exists: ${{ steps.hashes.outputs.af-exists }}
+      af-digest: ${{ steps.hashes.outputs.af-digest }}
       aux-tags: ${{ steps.hashes.outputs.aux-tags }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -65,10 +69,14 @@ jobs:
         id: hashes
         run: |
           af_tag=$(./.github/workflows/image-inputs.sh purdue-af)
-          if docker buildx imagetools inspect "$AF_REPO:$af_tag" >/dev/null 2>&1; then
+          af_exists=false
+          af_digest=""
+          if af_digest=$(docker buildx imagetools inspect "$AF_REPO:$af_tag" \
+              --format '{{json .Manifest}}' 2>/dev/null | jq -r .digest) &&
+            [ -n "$af_digest" ] && [ "$af_digest" != "null" ]; then
             af_exists=true
           else
-            af_exists=false
+            af_digest=""
           fi
           aux_tags=""
           for name in agentic-interface af-pod-monitor af-node-monitor; do
@@ -78,6 +86,7 @@ jobs:
           {
             echo "af-image=$AF_REPO:$af_tag"
             echo "af-exists=$af_exists"
+            echo "af-digest=$af_digest"
             echo "aux-tags=$aux_tags"
           } | tee -a "$GITHUB_OUTPUT"
 
@@ -90,9 +99,12 @@ jobs:
       packages: write # in- tag push + registry build cache
     outputs:
       available: ${{ steps.avail.outputs.available }}
+      image: ${{ steps.avail.outputs.image }}
+      digest: ${{ steps.avail.outputs.digest }}
     env:
       AF_IMAGE: ${{ needs.resolve.outputs.af-image }}
       AF_EXISTS: ${{ needs.resolve.outputs.af-exists }}
+      AF_DIGEST_RESOLVED: ${{ needs.resolve.outputs.af-digest }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - name: Verified reuse — this exact input state is already on ghcr
@@ -179,17 +191,34 @@ jobs:
               --deep-dive-min-mb 100000
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      # Everything downstream consumes the image by DIGEST-PINNED ref
+      # (repo:in-tag@sha256:...) — what pixi/e2e test is byte-identical to
+      # what publish later retags, even if the in- tag were moved.
       - name: Record availability
         id: avail
         env:
-          PUSH_RAN: ${{ env.AF_EXISTS != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+          PUSH_DIGEST: ${{ steps.push.outputs.digest }}
         run: |
-          if [ "$AF_EXISTS" = "true" ] || [ "$PUSH_RAN" = "true" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
+          digest=""
+          if [ "$AF_EXISTS" = "true" ]; then
+            digest="$AF_DIGEST_RESOLVED"
+          elif [ -n "$PUSH_DIGEST" ]; then
+            digest="$PUSH_DIGEST"
+          fi
+          if [ -n "$digest" ]; then
+            {
+              echo "available=true"
+              echo "image=$AF_IMAGE@$digest"
+              echo "digest=$digest"
+            } | tee -a "$GITHUB_OUTPUT"
           else
             # fork PR: image was built and smoke-tested but cannot be
             # pushed — downstream jobs fall back to :pre-release
-            echo "available=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "available=false"
+              echo "image="
+              echo "digest="
+            } | tee -a "$GITHUB_OUTPUT"
           fi
 
   build-aux-images:

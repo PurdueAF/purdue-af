@@ -16,10 +16,14 @@ name: CI e2e
 #                    CURRENT input state — never a previously promoted
 #                    tag — through the hub's pre-release profile. The
 #                    :pre-release promotion in ci.yml rides on this job.
+#   cvmfs-smoke      image-level CVMFS check of the same AF image, in a
+#                    parallel job so it stays off the critical path (it
+#                    needs the host's /cvmfs, which the kind stack lacks).
 #
-# Both jobs are memoized on the hash of their full input state
-# (image-inputs.sh e2e-hub, plus the AF image tag for the real-image job):
-# identical state with a recorded green run skips as verified reuse.
+# All jobs are memoized on the hash of their full input state
+# (image-inputs.sh e2e-hub plus the AF image ref where it applies; the
+# cvmfs-smoke key is the image ref alone): identical state with a
+# recorded green run skips as verified reuse.
 # Renovate chart bumps change helmrelease.yaml → the hash changes → e2e
 # runs on the Renovate PR itself (this replaced the old weekly cron).
 
@@ -163,45 +167,15 @@ jobs:
         uses: fluxcd/flux2/action@1ed703a34462da3527564befc791436d1711aca7 # main
         with:
           version: ${{ env.FLUX_VERSION }}
-      - name: Login to ghcr.io
-        if: steps.memo.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      # ONE registry pull serves both the CVMFS check (host docker) and the
-      # kind node (kind load below) — setup-kind.sh sees the image already
-      # on the node and skips its crictl pull.
-      - name: Pull the AF image
-        if: steps.memo.outputs.cache-hit != 'true'
-        run: docker pull "${{ steps.image.outputs.image }}"
-      # Mount the host CVMFS client into the image and source the CMS
-      # environment — catches missing base utilities the CMS tooling needs
-      # (image-level test; pod-level CVMFS CSI wiring is a cluster concern).
-      # Lives here rather than in the build job so the build never has to
-      # load the image into its docker daemon.
-      - name: Install CVMFS on the runner
-        if: steps.memo.outputs.cache-hit != 'true'
-        uses: cvmfs-contrib/github-action-cvmfs@10197e000cc0add8e54ac4fb73d3ed44e2de72b4 # v5.5
-      - name: CVMFS smoke test (cmsset_default.sh)
-        if: steps.memo.outputs.cache-hit != 'true'
-        run: |
-          docker run --rm -v /cvmfs:/cvmfs:shared "${{ steps.image.outputs.image }}" bash -c '
-            source /cvmfs/cms.cern.ch/cmsset_default.sh &&
-            command -v scramv1 >/dev/null &&
-            echo "cmsset ok: $(command -v scramv1)"'
       - name: Create kind cluster
         if: steps.memo.outputs.cache-hit != 'true'
         uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0 # Renovate pins to digest
         with:
           cluster_name: af-e2e
-      - name: Load the AF image into kind
-        if: steps.memo.outputs.cache-hit != 'true'
-        run: |
-          kind load docker-image --name af-e2e "${{ steps.image.outputs.image }}"
-          # free the daemon copy — the node now has its own (~13 GB each)
-          docker rmi "${{ steps.image.outputs.image }}"
+      # setup-kind.sh crictl-pulls the image straight into the kind node —
+      # measured ~3x faster than docker pull + kind load (which streams the
+      # ~13 GB image uncompressed through a docker-save pipe). The CVMFS
+      # check runs in the parallel cvmfs-smoke job below.
       - name: Deploy hub stack (with the AF image preloaded)
         if: steps.memo.outputs.cache-hit != 'true'
         env:
@@ -234,6 +208,72 @@ jobs:
           kubectl logs -l component=singleuser-server --tail=100 --prefix || true
           kubectl describe pods -l component=singleuser-server || true
           kubectl logs deployment/mock-cilogon --tail=50 || true
+      - name: Record green run
+        if: success() && steps.memo.outputs.cache-hit != 'true'
+        run: mkdir -p .ci-memo && echo ok > .ci-memo/marker
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        if: success() && steps.memo.outputs.cache-hit != 'true'
+        with:
+          path: .ci-memo
+          key: ${{ steps.key.outputs.key }}
+
+  cvmfs-smoke:
+    # Mount the host CVMFS client into the AF image and source the CMS
+    # environment — catches missing base utilities the CMS tooling needs
+    # (image-level test; pod-level CVMFS CSI wiring is a cluster concern).
+    # A separate parallel job: the check pulls its own copy of the image,
+    # which is cheaper than putting the pull + check on the e2e critical
+    # path, and feeds ci-ok like every other job here.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read # pull the (possibly private) AF image
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Pick the AF image to test
+        id: image
+        run: |
+          if [ "${{ inputs.af-image-available }}" = "true" ]; then
+            image="${{ inputs.af-image }}"
+          else
+            # fork PR: the exact-state image could not be pushed — fall
+            # back to the promoted channel so the check still runs
+            echo "::warning::exact-state AF image unavailable — falling back to :pre-release"
+            image="ghcr.io/purdueaf/purdue-af:pre-release"
+          fi
+          echo "image=$image" | tee -a "$GITHUB_OUTPUT"
+      - name: Compute memo key
+        id: key
+        run: |
+          img="${{ steps.image.outputs.image }}"
+          echo "key=cvmfs-smoke-ok-${img##*:}" | tee -a "$GITHUB_OUTPUT"
+      - name: Look up recorded green run
+        id: memo
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: .ci-memo
+          key: ${{ steps.key.outputs.key }}
+      - name: Verified reuse — identical input state already passed
+        if: steps.memo.outputs.cache-hit == 'true'
+        run: echo "skipping — ${{ steps.key.outputs.key }} already green" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Login to ghcr.io
+        if: steps.memo.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install CVMFS on the runner
+        if: steps.memo.outputs.cache-hit != 'true'
+        uses: cvmfs-contrib/github-action-cvmfs@10197e000cc0add8e54ac4fb73d3ed44e2de72b4 # v5.5
+      - name: CVMFS smoke test (cmsset_default.sh)
+        if: steps.memo.outputs.cache-hit != 'true'
+        run: |
+          docker run --rm -v /cvmfs:/cvmfs:shared "${{ steps.image.outputs.image }}" bash -c '
+            source /cvmfs/cms.cern.ch/cmsset_default.sh &&
+            command -v scramv1 >/dev/null &&
+            echo "cmsset ok: $(command -v scramv1)"'
       - name: Record green run
         if: success() && steps.memo.outputs.cache-hit != 'true'
         run: mkdir -p .ci-memo && echo ok > .ci-memo/marker

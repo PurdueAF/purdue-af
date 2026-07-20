@@ -1,0 +1,80 @@
+name: Registry GC
+
+# Weekly ghcr hygiene: deletes package versions older than 14 days whose
+# tags are ALL moving build tags (in-<hash> / sha-<commit>). Every rebuild
+# pushes a few GB of new blobs under those tags; without cleanup they
+# accumulate forever.
+#
+# NEVER deleted:
+#   - any version carrying a non-build tag (semver releases, :latest,
+#     :pre-release, :buildcache) — "tagged images" in the release sense;
+#   - the in- tags of the CURRENT repo state (deleting them would force a
+#     full rebuild on the next CI run — computed via image-inputs.sh);
+#   - untagged versions: buildx pushes provenance/attestation manifests as
+#     untagged children of tagged indexes, and old cache manifests linger
+#     untagged — deleting blindly can break tagged images, and public-repo
+#     storage is free, so they are left alone.
+#
+# Deleting a version whose digest is ALSO reachable via a kept tag cannot
+# happen: ghcr versions are digests, so a digest carrying both `in-x` and
+# `pre-release` is one version — protected by the non-build tag.
+#
+# Uses GITHUB_TOKEN (packages: write; the packages are linked to this repo
+# with admin). If deletion ever 403s, grant the repo admin on the package
+# (package settings → Manage Actions access) or switch to a PAT with
+# delete:packages.
+
+on:
+  schedule:
+    - cron: "0 8 * * 1" # Mondays 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write # version deletion
+
+concurrency:
+  group: registry-gc
+  cancel-in-progress: false
+
+env:
+  MAX_AGE_DAYS: 14
+
+jobs:
+  gc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Delete stale build-tag versions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cutoff=$(date -u -d "${MAX_AGE_DAYS} days ago" +%s)
+          for name in purdue-af agentic-interface af-pod-monitor af-node-monitor; do
+            keep_tag=$(./.github/workflows/image-inputs.sh "$name")
+            echo "== ${name} (protecting current ${keep_tag})"
+            gh api --paginate "orgs/PurdueAF/packages/container/${name}/versions?per_page=100" \
+              | jq -c '.[]' | while read -r v; do
+              id=$(jq -r '.id' <<<"$v")
+              created=$(jq -r '.created_at' <<<"$v")
+              tags=$(jq -r '.metadata.container.tags[]?' <<<"$v")
+              # keep young versions
+              [ "$(date -u -d "$created" +%s)" -lt "$cutoff" ] || continue
+              # keep untagged versions (attestation children, old cache)
+              [ -n "$tags" ] || continue
+              # keep any version with a non-build tag or the current in- tag
+              deletable=true
+              for t in $tags; do
+                case "$t" in
+                "$keep_tag") deletable=false ;;
+                in-* | sha-*) : ;;
+                *) deletable=false ;;
+                esac
+              done
+              [ "$deletable" = "true" ] || continue
+              echo "deleting ${name} version ${id} (created ${created}; tags: $(echo "$tags" | tr '\n' ' '))" \
+                | tee -a "$GITHUB_STEP_SUMMARY"
+              gh api -X DELETE "orgs/PurdueAF/packages/container/${name}/versions/${id}"
+            done
+          done

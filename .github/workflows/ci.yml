@@ -116,6 +116,9 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Retags are BY DIGEST: what the pipeline tested is what ships, even
+      # if a moving tag were overwritten between test and publish; and both
+      # channel tags of an image always land on the same digest.
       - name: Publish aux images (:sha- + :latest)
         env:
           AUX_TAGS: ${{ needs.images.outputs.aux-tags }}
@@ -123,15 +126,22 @@ jobs:
           for pair in $AUX_TAGS; do
             name="${pair%%=*}"; tag="${pair#*=}"
             repo="ghcr.io/purdueaf/${name}"
-            docker buildx imagetools create -t "$repo:sha-$GITHUB_SHA" "$repo:$tag"
-            docker buildx imagetools create -t "$repo:latest" "$repo:$tag"
-            echo "published $repo:$tag -> :sha-${GITHUB_SHA::12} + :latest" | tee -a "$GITHUB_STEP_SUMMARY"
+            digest=$(docker buildx imagetools inspect "$repo:$tag" --format '{{json .Manifest}}' | jq -r .digest)
+            [ -n "$digest" ] && [ "$digest" != "null" ] || { echo "::error::cannot resolve $repo:$tag"; exit 1; }
+            docker buildx imagetools create \
+              -t "$repo:sha-$GITHUB_SHA" \
+              -t "$repo:latest" \
+              "$repo@$digest"
+            echo "published $repo@$digest ($tag) -> :sha-${GITHUB_SHA::12} + :latest" | tee -a "$GITHUB_STEP_SUMMARY"
           done
       - name: Publish AF image (:sha- + :pre-release)
         env:
-          AF_IMAGE: ${{ needs.images.outputs.af-image }}
+          AF_IMAGE: ${{ needs.images.outputs.af-image }} # digest-pinned ref
+          AF_DIGEST: ${{ needs.images.outputs.af-digest }}
         run: |
-          repo="${AF_IMAGE%:*}"
-          docker buildx imagetools create -t "$repo:sha-$GITHUB_SHA" "$AF_IMAGE"
-          docker buildx imagetools create -t "$repo:pre-release" "$AF_IMAGE"
-          echo "published $AF_IMAGE -> :sha-${GITHUB_SHA::12} + :pre-release" | tee -a "$GITHUB_STEP_SUMMARY"
+          repo="${AF_IMAGE%%:*}"
+          docker buildx imagetools create \
+            -t "$repo:sha-$GITHUB_SHA" \
+            -t "$repo:pre-release" \
+            "$repo@$AF_DIGEST"
+          echo "published $repo@$AF_DIGEST -> :sha-${GITHUB_SHA::12} + :pre-release" | tee -a "$GITHUB_STEP_SUMMARY"

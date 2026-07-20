@@ -29,8 +29,10 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-# Rough match for the cluster's Kubernetes version (helm .Capabilities).
-KUBE_VERSION="${KUBE_VERSION:-1.30.0}"
+# The cluster's Kubernetes version (helm .Capabilities / kubeVersion
+# constraints validate against this) — Geddes runs 1.29.x; keep in sync
+# with the cluster note in .github/renovate.json5 when it is upgraded.
+KUBE_VERSION="${KUBE_VERSION:-1.29.0}"
 
 # shellcheck disable=SC2054  # commas below are kubeconform list syntax
 KUBECONFORM=(
