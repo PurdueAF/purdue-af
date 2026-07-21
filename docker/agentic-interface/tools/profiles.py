@@ -14,6 +14,8 @@ import httpx
 import yaml
 from metrics import instrumented_transport
 
+from tools.gpu import free_gpus
+
 # Kubernetes in-cluster service and credentials
 _K8S_API = "https://kubernetes.default.svc"
 _TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
@@ -31,6 +33,17 @@ _CACHE_TTL = 300.0
 
 def _slug(display_name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", display_name.lower()).strip("-")
+
+
+def _gpu_label(label: str, resource: Optional[str], free: Optional[dict]) -> str:
+    """Append live availability to a GPU choice label (marks exhausted flavors)."""
+    if not resource or free is None:
+        return label
+    base = label.removesuffix(" - subject to availability")
+    count = free.get(resource, 0)
+    if count <= 0:
+        return f"{base} — none available right now (do not select)"
+    return f"{base} — {count} available now"
 
 
 def _gpu_resource(kubespawner_override: Optional[dict]) -> Optional[str]:
@@ -180,6 +193,10 @@ def register(mcp) -> None:
                 "Try again shortly or contact AF support."
             )
 
+        # Live GPU availability (only queried if some profile exposes a GPU option).
+        has_gpu = any("gpu" in opt for p in profiles for opt in p["options"].values())
+        free = await free_gpus() if has_gpu else None
+
         sections: list[str] = [f"# {len(profiles)} available profile(s)\n"]
 
         for p in profiles:
@@ -197,8 +214,11 @@ def register(mcp) -> None:
                 block.append("\nOption keys and valid values:")
                 for opt_key, opt_info in p["options"].items():
                     block.append(f'  **"{opt_key}"** — {opt_info["display_name"]}')
+                    gpu_map = opt_info.get("gpu") or {}
                     for ck, label in opt_info["choices"].items():
-                        block.append(f'    `"{ck}"` → {label}')
+                        block.append(
+                            f'    `"{ck}"` → {_gpu_label(label, gpu_map.get(ck), free)}'
+                        )
 
             sections.append("\n".join(block))
 

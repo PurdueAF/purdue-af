@@ -55,15 +55,19 @@ spawn form).
 
 **`get_session_status`** — current pod state, profile selected, uptime, URL.
 
-**`list_af_profiles`** — available profiles with exact option keys and choice values.
-Call before `start_af_session` when non-default options are needed.
+**`list_af_profiles`** — available profiles with exact option keys and choice values,
+including live GPU availability per flavor (exhausted flavors are flagged "do not
+select"). Call before `start_af_session` when non-default options are needed.
 
 **`start_af_session`** — asks the user (via the client's multiple-choice UI /
 MCP elicitation) for the profile, then one question per option (interface, CPU,
 memory, …), unless supplied. Pass `use_defaults=true` to skip all questions and
-launch the default profile. Clients without elicitation get a short instruction.
-The GPU question shows how many of each flavor are free right now (live from the
-same Prometheus source the Hub form uses) and hides any flavor with none left.
+launch the default profile. The GPU question shows how many of each flavor are
+free right now (live from the same Prometheus source the Hub form uses) and hides
+any flavor with none left. If the choices can't be collected interactively —
+the client can't elicit, or the prompt was dismissed/cancelled — the tool does
+NOT dead-end: it returns an instruction to ask the user (via `list_af_profiles`)
+and re-call with `profile_name`/`user_options`, or `use_defaults=true`.
 ```json
 {"name": "start_af_session", "arguments": {
   "profile_name": "<slug from list_af_profiles>",

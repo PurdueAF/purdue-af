@@ -198,6 +198,43 @@ async def test_list_profiles_tool_renders(monkeypatch):
     assert '`"2"` → VS Code' in out
 
 
+async def test_list_profiles_tool_shows_gpu_availability(monkeypatch):
+    async def fake_read():
+        return GPU_VALUES_YAML
+
+    async def fake_free():
+        return {"nvidia.com/mig-1g.5gb": 4, "nvidia.com/mig-7g.40gb": 0}
+
+    monkeypatch.setattr(profiles, "_read_configmap", fake_read)
+    monkeypatch.setattr(profiles, "free_gpus", fake_free)
+
+    tools = register_tools(profiles).tools
+    out = await tools["list_af_profiles"]()
+
+    assert "1 A100 GPU slice (5GB) — 4 available now" in out
+    # Exhausted flavor is shown but flagged, and the static hedge is dropped.
+    assert "1 full A100 GPU (40GB) — none available right now (do not select)" in out
+    assert "subject to availability" not in out
+
+
+async def test_list_profiles_tool_gpu_availability_unknown(monkeypatch):
+    async def fake_read():
+        return GPU_VALUES_YAML
+
+    async def fake_free():
+        return None  # Prometheus unreachable
+
+    monkeypatch.setattr(profiles, "_read_configmap", fake_read)
+    monkeypatch.setattr(profiles, "free_gpus", fake_free)
+
+    tools = register_tools(profiles).tools
+    out = await tools["list_af_profiles"]()
+
+    # Falls back to the static labels unchanged.
+    assert "available now" not in out
+    assert "1 A100 GPU slice (5GB)" in out
+
+
 async def test_list_profiles_tool_unavailable(monkeypatch):
     async def broken_read():
         return None

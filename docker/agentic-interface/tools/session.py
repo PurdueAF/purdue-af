@@ -31,13 +31,17 @@ def _auth(token: str) -> dict:
 
 # ── profile / option selection helpers ────────────────────────────────────────
 
-_START_CHOICES_HELP = (
-    "This client can't show interactive choices. To start a session:\n"
-    "  • call start_af_session(use_defaults=True) to launch the default "
-    "profile immediately, or\n"
-    "  • call list_af_profiles to see profiles and their options, then call "
-    "start_af_session(profile_name=..., user_options={...}) with the user's "
-    "picks."
+# Returned whenever an interactive choice couldn't be collected — either the
+# client can't render elicitation, or the prompt was dismissed/cancelled (which
+# also happens when the server→client stream is flaky). Rather than dead-ending,
+# hand the agent everything it needs to ask the user in chat and retry, so the
+# session can always be started.
+_ELICIT_FALLBACK = (
+    "Couldn't collect the choices interactively. Ask the user which profile and "
+    "options they want — call list_af_profiles for the exact slugs, option keys, "
+    "and live GPU availability — then call start_af_session again with "
+    "profile_name and user_options. To skip the questions entirely, call "
+    "start_af_session(use_defaults=True) to launch the default profile."
 )
 
 
@@ -216,10 +220,8 @@ def register(mcp) -> None:
                     field="profile",
                 )
                 status, data = await elicit(ctx, "Choose a session profile.", model)
-                if status == "unsupported":
-                    return _START_CHOICES_HELP
                 if status != "accept":
-                    return "Session start cancelled."
+                    return _ELICIT_FALLBACK
                 selected = find_profile(profiles, data.profile)
         # profiles empty (e.g. local/dev) → selected stays None → Hub default.
 
@@ -255,10 +257,8 @@ def register(mcp) -> None:
                     status, data = await elicit(
                         ctx, f"{opt_info.get('display_name', opt_key)}:", model
                     )
-                    if status == "unsupported":
-                        return _START_CHOICES_HELP
                     if status != "accept":
-                        return "Session start cancelled."
+                        return _ELICIT_FALLBACK
                     opts[opt_key] = data.value
 
         async with httpx.AsyncClient(transport=instrumented_transport("hub")) as client:

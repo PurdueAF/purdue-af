@@ -30,7 +30,7 @@ def test_dask_elicit_models_pass_sdk_validator(model):
     _validate_elicitation_schema(model)  # raises TypeError if not primitive-only
 
 
-def test_single_choice_model_passes_sdk_validator_and_has_enum():
+def test_single_choice_model_passes_sdk_validator_and_uses_titled_oneof():
     model = single_choice_model(
         "Choice",
         ["1", "2", "3"],
@@ -40,11 +40,28 @@ def test_single_choice_model_passes_sdk_validator_and_has_enum():
     )
     _validate_elicitation_schema(model)
 
-    prop = model.model_json_schema()["properties"]["value"]
+    schema = model.model_json_schema()
+    prop = schema["properties"]["value"]
     assert prop["type"] == "string"
-    assert prop["enum"] == ["1", "2", "3"]
-    assert prop["enumNames"] == ["a", "b", "c"]
+    # Standards-compliant titled single-select — inline, no deprecated enumNames.
+    assert prop["oneOf"] == [
+        {"const": "1", "title": "a"},
+        {"const": "2", "title": "b"},
+        {"const": "3", "title": "c"},
+    ]
+    assert "enumNames" not in prop
     assert prop["default"] == "2"
+    # No $ref/$defs anywhere (breaks dropdown rendering in some clients).
+    assert "$defs" not in schema
+    assert "$ref" not in str(schema)
+
+
+def test_single_choice_model_without_labels_uses_plain_enum():
+    model = single_choice_model("Choice", ["k8s", "slurm"])
+    _validate_elicitation_schema(model)
+    prop = model.model_json_schema()["properties"]["value"]
+    assert prop["enum"] == ["k8s", "slurm"]
+    assert "oneOf" not in prop
 
 
 def test_single_choice_model_default_falls_back_when_missing():

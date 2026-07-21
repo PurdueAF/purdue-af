@@ -334,21 +334,35 @@ async def test_start_use_defaults_skips_elicitation(user_ctx, monkeypatch):
     assert body == {"profile": "stable"}
 
 
-async def test_start_unsupported_client_returns_help(user_ctx, monkeypatch):
+async def test_start_unsupported_client_returns_fallback(user_ctx, monkeypatch):
     fake_profiles_with_options(monkeypatch, multi=True)
 
     tools = register_tools(session).tools
     out = await tools["start_af_session"](None)
     assert "use_defaults=True" in out
+    assert "list_af_profiles" in out
 
 
-async def test_start_cancelled(user_ctx, monkeypatch):
+@respx.mock
+async def test_start_cancel_falls_back_not_dead_end(user_ctx, monkeypatch):
+    # A dismissed/cancelled prompt (also happens on a flaky server→client stream)
+    # must NOT dead-end — it returns the actionable fallback so the agent recovers.
     fake_profiles_with_options(monkeypatch, multi=True)
 
     ctx = FakeCtx(("cancel", None))
     tools = register_tools(session).tools
     out = await tools["start_af_session"](ctx)
-    assert "cancelled" in out.lower()
+    assert "list_af_profiles" in out
+    assert "use_defaults=True" in out
+
+
+async def test_start_decline_falls_back(user_ctx, monkeypatch):
+    fake_profiles_with_options(monkeypatch, multi=True)
+
+    ctx = FakeCtx(("decline", None))
+    tools = register_tools(session).tools
+    out = await tools["start_af_session"](ctx)
+    assert "list_af_profiles" in out
 
 
 @respx.mock
@@ -368,8 +382,11 @@ async def test_start_gpu_question_shows_counts_and_hides_exhausted(
     await tools["start_af_session"](ctx)
 
     prop = ctx.calls[0][1].model_json_schema()["properties"]["value"]
-    assert prop["enum"] == ["1", "2"]  # exhausted 40GB flavor hidden
-    assert prop["enumNames"] == ["0", "1 A100 GPU slice (5GB) — 3 available now"]
+    # exhausted 40GB flavor hidden; titled oneOf carries the live-count labels
+    assert prop["oneOf"] == [
+        {"const": "1", "title": "0"},
+        {"const": "2", "title": "1 A100 GPU slice (5GB) — 3 available now"},
+    ]
 
     body = json.loads(route.calls.last.request.content)
     assert body == {"profile": "stable", "1-gpu": "2"}
@@ -390,8 +407,8 @@ async def test_start_gpu_question_unknown_keeps_all(user_ctx, monkeypatch):
     await tools["start_af_session"](ctx)
 
     prop = ctx.calls[0][1].model_json_schema()["properties"]["value"]
-    assert prop["enum"] == ["1", "2", "3"]
-    assert "subject to availability" in prop["enumNames"][2]
+    assert [c["const"] for c in prop["oneOf"]] == ["1", "2", "3"]
+    assert "subject to availability" in prop["oneOf"][2]["title"]
 
 
 # ── stop_af_session ───────────────────────────────────────────────────────────
