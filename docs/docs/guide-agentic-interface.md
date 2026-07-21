@@ -88,9 +88,9 @@ simply ask in plain language, for example:
 * "Start my AF session" (optionally: "…with 32 CPUs and the VS Code interface")
 * "How much home and work storage am I using?"
 * "List my Dask clusters" / "scale `<name>` to 10 workers"
-* "Create a Dask cluster" — the agent asks which backend (Kubernetes or Slurm)
-  and which worker environment (the shared global pixi env, or your own pixi /
-  conda env) as multiple-choice questions before creating it
+* "Create a Dask cluster" — the agent walks you through multiple-choice
+  questions (backend, worker environment, worker size, and worker count) before
+  creating it
 * "Show the last 30 minutes of error logs from my notebook"
 
 The available tools cover:

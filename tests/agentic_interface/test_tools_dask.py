@@ -351,6 +351,9 @@ async def test_create_cluster_explicit_slurm_conda_no_scale(user_ctx):
         FakeCtx(),
         gateway="slurm",
         conda_env="/depot/cms/alice/envs/ana",
+        worker_cores=1,
+        worker_memory=4,
+        n_workers=0,
     )
     assert "slurm" in out
     assert "0 workers" in out
@@ -368,13 +371,26 @@ async def test_create_cluster_gateway_rejects(user_ctx):
 
     tools = register_tools(dask).tools
     out = await tools["create_dask_cluster"](
-        FakeCtx(), gateway="k8s", pixi_project="/work/alice/p"
+        FakeCtx(),
+        gateway="k8s",
+        pixi_project="/work/alice/p",
+        worker_cores=1,
+        worker_memory=4,
+        n_workers=0,
     )
     assert "rejected" in out
     assert "active clusters" in out
 
 
 # ── create_dask_cluster: elicitation flows ────────────────────────────────────
+
+
+def default_size():
+    return accept(dask._SizeChoice(size="default"))
+
+
+def count(value):
+    return accept(dask._CountChoice(count=value))
 
 
 @respx.mock
@@ -384,15 +400,20 @@ async def test_create_elicits_backend_and_global_env(user_ctx):
     ctx = FakeCtx(
         accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="global")),
+        default_size(),
+        count("0"),
     )
     tools = register_tools(dask).tools
     out = await tools["create_dask_cluster"](ctx)
 
     assert "cms.g" in out
+    assert "0 workers" in out
     assert create.called
     opts = json.loads(create.calls[0].request.content)["cluster_options"]
     assert opts["pixi_project"] == dask.GLOBAL_PIXI_PROJECT
-    assert len(ctx.calls) == 2
+    assert opts["worker_cores"] == dask.DEFAULT_WORKER_CORES
+    assert opts["worker_memory"] == dask.DEFAULT_WORKER_MEMORY
+    assert len(ctx.calls) == 4
 
 
 @respx.mock
@@ -416,6 +437,8 @@ async def test_create_elicits_pixi_path(user_ctx):
         accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="pixi")),
         accept(dask._PixiChoice(pixi_project="/depot/cms/alice/proj", pixi_env="ml")),
+        default_size(),
+        count("0"),
     )
     tools = register_tools(dask).tools
     out = await tools["create_dask_cluster"](ctx)
@@ -424,7 +447,7 @@ async def test_create_elicits_pixi_path(user_ctx):
     opts = json.loads(create.calls[0].request.content)["cluster_options"]
     assert opts["pixi_project"] == "/depot/cms/alice/proj"
     assert opts["pixi_env"] == "ml"
-    assert len(ctx.calls) == 3
+    assert len(ctx.calls) == 5
 
 
 @respx.mock
@@ -435,6 +458,8 @@ async def test_create_elicits_conda_path_on_slurm(user_ctx):
         accept(dask._BackendChoice(gateway="slurm")),
         accept(dask._EnvChoice(env_source="conda")),
         accept(dask._CondaChoice(conda_env="/depot/cms/alice/envs/ana")),
+        default_size(),
+        count("0"),
     )
     tools = register_tools(dask).tools
     out = await tools["create_dask_cluster"](ctx)
@@ -442,6 +467,50 @@ async def test_create_elicits_conda_path_on_slurm(user_ctx):
     assert "cms.c" in out
     opts = json.loads(create.calls[0].request.content)["cluster_options"]
     assert opts["conda_env"] == "/depot/cms/alice/envs/ana"
+
+
+@respx.mock
+async def test_create_elicits_preset_count_scales(user_ctx):
+    respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.n"})
+    scale = respx.post(f"{K8S}/api/v1/clusters/cms.n/scale").respond(204)
+
+    ctx = FakeCtx(
+        accept(dask._BackendChoice(gateway="k8s")),
+        accept(dask._EnvChoice(env_source="global")),
+        default_size(),
+        count("50"),
+    )
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"](ctx)
+
+    assert "Scaling to 50" in out
+    assert scale.called
+    assert json.loads(scale.calls[0].request.content) == {"count": 50}
+
+
+@respx.mock
+async def test_create_elicits_custom_size_and_count(user_ctx):
+    create = respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.x"})
+    scale = respx.post(f"{K8S}/api/v1/clusters/cms.x/scale").respond(204)
+
+    ctx = FakeCtx(
+        accept(dask._BackendChoice(gateway="k8s")),
+        accept(dask._EnvChoice(env_source="global")),
+        accept(dask._SizeChoice(size="custom")),
+        accept(dask._CustomSize(worker_cores=8, worker_memory=16)),
+        count("custom"),
+        accept(dask._CustomCount(n_workers=25)),
+    )
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"](ctx)
+
+    assert "cms.x" in out
+    opts = json.loads(create.calls[0].request.content)["cluster_options"]
+    assert opts["worker_cores"] == 8
+    assert opts["worker_memory"] == 16
+    assert scale.called
+    assert json.loads(scale.calls[0].request.content) == {"count": 25}
+    assert len(ctx.calls) == 6
 
 
 async def test_create_unsupported_client_returns_help(user_ctx):
@@ -452,6 +521,17 @@ async def test_create_unsupported_client_returns_help(user_ctx):
 
 async def test_create_declined_cancels(user_ctx):
     ctx = FakeCtx(("decline", None))
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"](ctx)
+    assert "cancelled" in out.lower()
+
+
+async def test_create_declined_size_cancels(user_ctx):
+    ctx = FakeCtx(
+        accept(dask._BackendChoice(gateway="k8s")),
+        accept(dask._EnvChoice(env_source="global")),
+        ("cancel", None),
+    )
     tools = register_tools(dask).tools
     out = await tools["create_dask_cluster"](ctx)
     assert "cancelled" in out.lower()

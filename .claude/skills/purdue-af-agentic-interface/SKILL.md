@@ -98,20 +98,24 @@ Works when a session is (or recently was) running so metrics exist.
 
 `gateway` options: `"k8s"` (Geddes Kubernetes) · `"slurm"` (Hammer Slurm)
 
-**Creating a cluster** — `create_dask_cluster` needs two choices. If you omit them
-it asks the user via the client's multiple-choice UI (MCP elicitation); clients
+**Creating a cluster** — `create_dask_cluster` asks any omitted choice via the
+client's multiple-choice UI (MCP elicitation), one question at a time. Clients
 without elicitation get a text prompt listing the choices, or you can use the
-`create_cluster` prompt to gather them in chat.
+`create_cluster` prompt to gather them in chat. The questions, in order:
 
-- `gateway`: `"k8s"` or `"slurm"`.
-- `env_source`: `"global"` (shared pixi env at `/work/pixi/global`, **k8s only**) ·
-  `"pixi"` (your `pixi_project` [+ `pixi_env`]) · `"conda"` (your `conda_env`).
-  Passing `pixi_project`/`conda_env` implies the matching source.
-- Optional: `worker_cores` (k8s ≤ 64, Slurm ≤ 16), `worker_memory` (GiB, ≤ 64),
-  `n_workers` (scale after create; else starts at 0), `env` (extra worker env vars).
+1. `gateway`: `"k8s"` or `"slurm"`.
+2. `env_source`: `"global"` (shared pixi env at `/work/pixi/global`, **k8s only**) ·
+   `"pixi"` (your `pixi_project` [+ `pixi_env`]) · `"conda"` (your `conda_env`).
+   Passing `pixi_project`/`conda_env` implies the matching source.
+3. worker size: `default` (1 core / 4 GiB) or `custom` → then `worker_cores`
+   (k8s ≤ 64, Slurm ≤ 16) and `worker_memory` (GiB, ≤ 64).
+4. worker count to start with: `0`, `10`, `50`, or custom → `n_workers`.
+
+Also optional: `env` (extra worker env vars). Passing `worker_cores`/`worker_memory`
+skips question 3; passing `n_workers` skips question 4.
 
 Create notes: one active cluster per user; Slurm workers cannot see `/work` (put
-envs on `/depot`, and `"global"` is unavailable there).
+envs on `/depot`, and `"global"` is unavailable there); count 0 starts empty.
 
 ### Prompts (invocable playbooks)
 

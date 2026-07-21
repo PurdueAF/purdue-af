@@ -312,6 +312,51 @@ class _CondaChoice(BaseModel):
     )
 
 
+# Default worker size when the user picks "default".
+DEFAULT_WORKER_CORES = 1.0
+DEFAULT_WORKER_MEMORY = 4.0
+
+
+class _SizeChoice(BaseModel):
+    """How big each worker should be."""
+
+    size: Literal["default", "custom"] = Field(
+        default="default",
+        description=(
+            f"default = {DEFAULT_WORKER_CORES:g} core / "
+            f"{DEFAULT_WORKER_MEMORY:g} GiB per worker; "
+            "custom = specify your own cores and memory."
+        ),
+    )
+
+
+class _CustomSize(BaseModel):
+    """Custom per-worker resources."""
+
+    worker_cores: float = Field(
+        gt=0, description="Cores per worker (k8s ≤ 64, Slurm ≤ 16)."
+    )
+    worker_memory: float = Field(gt=0, description="Memory per worker in GiB (≤ 64).")
+
+
+class _CountChoice(BaseModel):
+    """How many workers to start the cluster with."""
+
+    count: Literal["0", "10", "50", "custom"] = Field(
+        default="0",
+        description=(
+            "Number of workers to start with: 0 (scale later), 10, 50, or "
+            "custom to enter your own number."
+        ),
+    )
+
+
+class _CustomCount(BaseModel):
+    """Custom starting worker count."""
+
+    n_workers: int = Field(ge=0, description="Number of workers to start with.")
+
+
 # Fallback shown when the client cannot render elicitation forms. Doubles as
 # guidance for the create_cluster prompt so the agent asks in plain chat.
 _CREATE_CHOICES_HELP = (
@@ -324,7 +369,10 @@ _CREATE_CHOICES_HELP = (
     "env_source='global' (k8s only; Slurm cannot see /work).\n"
     "   • your pixi project: pass pixi_project='/path' (+ optional pixi_env).\n"
     "   • your conda env: pass conda_env='/path' (use /depot for Slurm).\n"
-    "Optionally: worker_cores, worker_memory (GiB), n_workers."
+    "3) worker size: default (1 core / 4 GiB) or custom (pass worker_cores + "
+    "worker_memory in GiB).\n"
+    "4) worker count to start with: 0, 10, 50, or a custom number (pass "
+    "n_workers)."
 )
 
 
@@ -454,17 +502,18 @@ def register(mcp) -> None:
         pixi_project: Optional[str] = None,
         pixi_env: str = "default",
         conda_env: Optional[str] = None,
-        worker_cores: float = 1,
-        worker_memory: float = 4,
+        worker_cores: Optional[float] = None,
+        worker_memory: Optional[float] = None,
         n_workers: Optional[int] = None,
         env: Optional[dict] = None,
     ) -> str:
         """Create a new Dask Gateway cluster on Kubernetes or Slurm.
 
-        If ``gateway`` or the worker environment are not supplied, the tool asks
-        the user via the client's multiple-choice UI (MCP elicitation). Clients
-        that don't support elicitation get a short instruction listing the
-        choices — collect them from the user and call again with explicit args.
+        Any choice not supplied is asked interactively via the client's
+        multiple-choice UI (MCP elicitation), one question at a time: backend →
+        environment → worker size → worker count. Clients that don't support
+        elicitation get a short instruction listing the choices — collect them
+        from the user and call again with explicit args.
 
         Backend (``gateway``):
           • 'k8s' — Geddes Kubernetes workers (can use /work and /depot)
@@ -476,8 +525,8 @@ def register(mcp) -> None:
           • 'conda' — your own conda env (set ``conda_env``)
 
         Passing ``pixi_project`` or ``conda_env`` directly implies the matching
-        ``env_source``. Optionally pass ``n_workers`` to scale immediately after
-        create (clusters otherwise start at 0 workers).
+        ``env_source``. Passing ``worker_cores``/``worker_memory`` skips the size
+        question; passing ``n_workers`` skips the count question.
 
         Args:
             gateway: 'k8s' or 'slurm'. Elicited from the user if omitted.
@@ -487,14 +536,21 @@ def register(mcp) -> None:
             pixi_env: Pixi environment name within the project (default 'default').
             conda_env: Path to a conda/mamba env prefix (mutually exclusive with
                        pixi_project).
-            worker_cores: Cores per worker (k8s ≤ 64, Slurm ≤ 16).
-            worker_memory: Memory per worker in GiB (≤ 64).
-            n_workers: If set (≥ 0), scale to this many workers after create.
+            worker_cores: Cores per worker (k8s ≤ 64, Slurm ≤ 16). Defaults to
+                          1 if the user picks the default size.
+            worker_memory: Memory per worker in GiB (≤ 64). Defaults to 4 if the
+                           user picks the default size.
+            n_workers: Workers to start with (≥ 0). 0 (or omitted with a
+                       non-eliciting client) starts the cluster empty.
             env: Extra environment variables for workers (e.g. X509_USER_PROXY,
                  PYTHONPATH, NB_UID/NB_GID for CERN/FNAL users).
         """
         if n_workers is not None and n_workers < 0:
             return "Error: n_workers must be ≥ 0."
+        if worker_cores is not None and worker_cores <= 0:
+            return "Error: worker_cores must be > 0."
+        if worker_memory is not None and worker_memory <= 0:
+            return "Error: worker_memory must be > 0 (GiB)."
 
         # ── Backend: ask the user if not supplied ──
         if gateway is None:
@@ -566,6 +622,49 @@ def register(mcp) -> None:
                 "Use 'global', 'pixi', or 'conda'."
             )
 
+        # ── Worker size: ask only if neither cores nor memory was supplied ──
+        if worker_cores is None and worker_memory is None:
+            status, data = await _elicit(ctx, "Choose the worker size.", _SizeChoice)
+            if status == "unsupported":
+                return _CREATE_CHOICES_HELP
+            if status != "accept":
+                return "Cluster creation cancelled."
+            if data.size == "custom":
+                status, size = await _elicit(
+                    ctx, "Specify the resources per worker.", _CustomSize
+                )
+                if status == "unsupported":
+                    return _CREATE_CHOICES_HELP
+                if status != "accept":
+                    return "Cluster creation cancelled."
+                worker_cores = size.worker_cores
+                worker_memory = size.worker_memory
+        if worker_cores is None:
+            worker_cores = DEFAULT_WORKER_CORES
+        if worker_memory is None:
+            worker_memory = DEFAULT_WORKER_MEMORY
+
+        # ── Worker count: ask only if n_workers was not supplied ──
+        if n_workers is None:
+            status, data = await _elicit(
+                ctx, "How many workers should the cluster start with?", _CountChoice
+            )
+            if status == "unsupported":
+                return _CREATE_CHOICES_HELP
+            if status != "accept":
+                return "Cluster creation cancelled."
+            if data.count == "custom":
+                status, count = await _elicit(
+                    ctx, "Specify the number of workers to start with.", _CustomCount
+                )
+                if status == "unsupported":
+                    return _CREATE_CHOICES_HELP
+                if status != "accept":
+                    return "Cluster creation cancelled."
+                n_workers = count.n_workers
+            else:
+                n_workers = int(data.count)
+
         options = _build_cluster_options(
             username=username,
             pixi_project=pixi_project,
@@ -615,7 +714,7 @@ def register(mcp) -> None:
             else:
                 lines.append(f"env: conda_env={options['conda_env']}")
 
-            if n_workers is None:
+            if not n_workers:
                 lines += [
                     "",
                     "Cluster starts with 0 workers. Next: scale_dask_cluster(...).",
