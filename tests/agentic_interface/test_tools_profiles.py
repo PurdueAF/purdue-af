@@ -62,6 +62,45 @@ def test_parse_profiles_full():
     assert parsed[1]["options"] == {}
 
 
+GPU_VALUES_YAML = """
+singleuser:
+  profileList:
+    - display_name: "Stable"
+      default: true
+      profile_options:
+        1-gpu:
+          display_name: GPUs
+          choices:
+            "1":
+              display_name: "0"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-1g.5gb: 0
+            "2":
+              display_name: "1 A100 GPU slice (5GB)"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-1g.5gb: 1
+            "3":
+              display_name: "1 full A100 GPU (40GB) - subject to availability"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/mig-7g.40gb: 1
+"""
+
+
+def test_parse_profiles_gpu_map():
+    parsed = profiles._parse_profiles(GPU_VALUES_YAML)
+    gpu_opt = parsed[0]["options"]["1-gpu"]
+    # Only choices requesting > 0 GPUs are mapped; the "0" choice is omitted.
+    assert gpu_opt["gpu"] == {
+        "2": "nvidia.com/mig-1g.5gb",
+        "3": "nvidia.com/mig-7g.40gb",
+    }
+    # Non-GPU options carry no "gpu" key.
+    assert "gpu" not in profiles._parse_profiles(VALUES_YAML)[0]["options"]["0-cpu"]
+
+
 def test_parse_profiles_invalid_yaml():
     assert profiles._parse_profiles("][ not yaml") == []
 

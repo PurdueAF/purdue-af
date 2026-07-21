@@ -62,6 +62,8 @@ Call before `start_af_session` when non-default options are needed.
 MCP elicitation) for the profile, then one question per option (interface, CPU,
 memory, …), unless supplied. Pass `use_defaults=true` to skip all questions and
 launch the default profile. Clients without elicitation get a short instruction.
+The GPU question shows how many of each flavor are free right now (live from the
+same Prometheus source the Hub form uses) and hides any flavor with none left.
 ```json
 {"name": "start_af_session", "arguments": {
   "profile_name": "<slug from list_af_profiles>",

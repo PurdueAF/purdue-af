@@ -108,6 +108,37 @@ def fake_profiles_with_options(monkeypatch, *, multi=False):
     return parsed
 
 
+def fake_profiles_gpu(monkeypatch):
+    parsed = [
+        {
+            "display_name": "Stable",
+            "slug": "stable",
+            "default": True,
+            "description": "",
+            "options": {
+                "1-gpu": {
+                    "display_name": "GPUs",
+                    "choices": {
+                        "1": "0",
+                        "2": "1 A100 GPU slice (5GB)",
+                        "3": "1 full A100 GPU (40GB) - subject to availability",
+                    },
+                    "gpu": {
+                        "2": "nvidia.com/mig-1g.5gb",
+                        "3": "nvidia.com/mig-7g.40gb",
+                    },
+                }
+            },
+        }
+    ]
+
+    async def fake_get_profiles(force=False):
+        return parsed
+
+    monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
+    return parsed
+
+
 # ── get_session_status ────────────────────────────────────────────────────────
 
 
@@ -318,6 +349,49 @@ async def test_start_cancelled(user_ctx, monkeypatch):
     tools = register_tools(session).tools
     out = await tools["start_af_session"](ctx)
     assert "cancelled" in out.lower()
+
+
+@respx.mock
+async def test_start_gpu_question_shows_counts_and_hides_exhausted(
+    user_ctx, monkeypatch
+):
+    fake_profiles_gpu(monkeypatch)
+
+    async def fake_free():
+        return {"nvidia.com/mig-1g.5gb": 3, "nvidia.com/mig-7g.40gb": 0}
+
+    monkeypatch.setattr(session, "free_gpus", fake_free)
+    route = respx.post(SERVER_URL).respond(201)
+
+    ctx = FakeCtx(accept(value="2"))
+    tools = register_tools(session).tools
+    await tools["start_af_session"](ctx)
+
+    prop = ctx.calls[0][1].model_json_schema()["properties"]["value"]
+    assert prop["enum"] == ["1", "2"]  # exhausted 40GB flavor hidden
+    assert prop["enumNames"] == ["0", "1 A100 GPU slice (5GB) — 3 available now"]
+
+    body = json.loads(route.calls.last.request.content)
+    assert body == {"profile": "stable", "1-gpu": "2"}
+
+
+@respx.mock
+async def test_start_gpu_question_unknown_keeps_all(user_ctx, monkeypatch):
+    fake_profiles_gpu(monkeypatch)
+
+    async def fake_free():
+        return None  # Prometheus unreachable → fail open
+
+    monkeypatch.setattr(session, "free_gpus", fake_free)
+    respx.post(SERVER_URL).respond(201)
+
+    ctx = FakeCtx(accept(value="3"))
+    tools = register_tools(session).tools
+    await tools["start_af_session"](ctx)
+
+    prop = ctx.calls[0][1].model_json_schema()["properties"]["value"]
+    assert prop["enum"] == ["1", "2", "3"]
+    assert "subject to availability" in prop["enumNames"][2]
 
 
 # ── stop_af_session ───────────────────────────────────────────────────────────

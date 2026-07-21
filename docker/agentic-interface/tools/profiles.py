@@ -33,6 +33,19 @@ def _slug(display_name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", display_name.lower()).strip("-")
 
 
+def _gpu_resource(kubespawner_override: Optional[dict]) -> Optional[str]:
+    """Return the k8s GPU resource a choice requests (amount > 0), else None."""
+    limits = (kubespawner_override or {}).get("extra_resource_limits") or {}
+    for resource, amount in limits.items():
+        if str(resource).startswith("nvidia.com/"):
+            try:
+                if int(amount) > 0:
+                    return resource
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
 # ── ConfigMap fetch + parse ───────────────────────────────────────────────────
 
 
@@ -84,6 +97,7 @@ def _parse_profiles(values_yaml: str) -> list[dict]:
         options: dict[str, dict] = {}
         for opt_key, opt_val in (p.get("profile_options") or {}).items():
             choices: dict[str, str] = {}
+            gpu: dict[str, str] = {}  # choice key -> k8s GPU resource (amount > 0)
             for ck, cv in (opt_val.get("choices") or {}).items():
                 label = (
                     cv.get("display_name", str(ck)) if isinstance(cv, dict) else str(cv)
@@ -91,11 +105,18 @@ def _parse_profiles(values_yaml: str) -> list[dict]:
                 if isinstance(cv, dict) and cv.get("default"):
                     label += " (default)"
                 choices[str(ck)] = label
+                if isinstance(cv, dict):
+                    resource = _gpu_resource(cv.get("kubespawner_override"))
+                    if resource:
+                        gpu[str(ck)] = resource
 
-            options[str(opt_key)] = {
+            option = {
                 "display_name": opt_val.get("display_name", str(opt_key)),
                 "choices": choices,
             }
+            if gpu:
+                option["gpu"] = gpu
+            options[str(opt_key)] = option
 
         profiles.append(
             {

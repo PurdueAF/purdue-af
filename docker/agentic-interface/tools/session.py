@@ -16,6 +16,7 @@ from mcp.server.fastmcp import Context
 from metrics import instrumented_transport
 
 from tools.elicitation import elicit, single_choice_model
+from tools.gpu import apply_availability, free_gpus
 
 HUB_API_URL = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
 # Public base URL of the facility, used to build user-facing interface links.
@@ -234,11 +235,20 @@ def register(mcp) -> None:
                     choices = opt_info.get("choices") or {}
                     if not choices:
                         continue
-                    keys = list(choices)
+                    # GPU options: annotate with live availability and hide any
+                    # flavor that has none free right now (same data the Hub form
+                    # uses). Non-GPU options are unchanged.
+                    gpu_map = opt_info.get("gpu")
+                    if gpu_map:
+                        labels_map, keys = apply_availability(
+                            choices, gpu_map, await free_gpus()
+                        )
+                    else:
+                        labels_map, keys = choices, list(choices)
                     model = single_choice_model(
                         f"Option_{len(opts)}",
                         keys,
-                        labels=[choices[k] for k in keys],
+                        labels=[labels_map[k] for k in keys],
                         default=_default_choice_key(choices),
                         description=opt_info.get("display_name", opt_key),
                     )
