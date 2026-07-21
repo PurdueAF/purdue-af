@@ -96,7 +96,9 @@ simply ask in plain language, for example:
 The available tools cover:
 
 * **Session lifecycle** — check status, list available resource profiles,
-  start / stop / restart the session, and wait until it is ready.
+  start / stop / restart the session, and wait until it is ready. When starting,
+  the agent asks you (as multiple-choice questions) which profile and resource
+  options — interface, CPU, memory — to use, unless you ask for the defaults.
 * **Storage** — home and work directory quota usage.
 * **Dask clusters** — list, create (Kubernetes or Slurm/Hammer), inspect, check worker
   counts and CPU/memory usage, scale, and shut down your

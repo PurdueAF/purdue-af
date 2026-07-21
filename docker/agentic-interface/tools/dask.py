@@ -23,6 +23,8 @@ from mcp.server.fastmcp import Context
 from metrics import instrumented_transport
 from pydantic import BaseModel, Field
 
+from tools.elicitation import elicit as _elicit
+
 # Gateway name → internal k8s service URL.
 # Override individual entries via env vars if needed.
 _GATEWAYS: dict[str, str] = {
@@ -374,26 +376,6 @@ _CREATE_CHOICES_HELP = (
     "4) worker count to start with: 0, 10, 50, or a custom number (pass "
     "n_workers)."
 )
-
-
-async def _elicit(ctx, message: str, schema):
-    """Ask the client for structured input.
-
-    Returns ``(status, data)`` where status is one of:
-      • 'accept'      — user submitted the form; data is a ``schema`` instance
-      • 'decline' / 'cancel' — user rejected the prompt; data is None
-      • 'unsupported' — no context, or the client cannot elicit; data is None
-    """
-    if ctx is None:
-        return "unsupported", None
-    try:
-        result = await ctx.elicit(message=message, schema=schema)
-    except Exception:
-        return "unsupported", None
-    action = getattr(result, "action", "unsupported")
-    if action == "accept":
-        return "accept", getattr(result, "data", None)
-    return action, None
 
 
 def register(mcp) -> None:

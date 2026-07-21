@@ -58,16 +58,21 @@ spawn form).
 **`list_af_profiles`** — available profiles with exact option keys and choice values.
 Call before `start_af_session` when non-default options are needed.
 
-**`start_af_session`**
+**`start_af_session`** — asks the user (via the client's multiple-choice UI /
+MCP elicitation) for the profile, then one question per option (interface, CPU,
+memory, …), unless supplied. Pass `use_defaults=true` to skip all questions and
+launch the default profile. Clients without elicitation get a short instruction.
 ```json
 {"name": "start_af_session", "arguments": {
   "profile_name": "<slug from list_af_profiles>",
   "user_options": {"<option-key>": "<choice-value>"}
 }}
 ```
-Omit both arguments for defaults (stable profile, JupyterLab, no GPU). Examples:
+Supplying `profile_name`/`user_options` skips the matching questions;
+`use_defaults` skips them all. Examples:
 ```json
-{"0-cpu": "3", "3-interface": "2"}          // stable: 32 CPUs, VS Code
+{"use_defaults": true}                       // default profile, no questions
+{"user_options": {"0-cpu": "3", "3-interface": "2"}}   // stable: 32 CPUs, VS Code
 {"profile_name": "latest-pre-release-version", "user_options": {"interface": "1"}}
 ```
 

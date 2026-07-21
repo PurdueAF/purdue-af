@@ -12,7 +12,10 @@ from typing import Optional
 import httpx
 from auth import clear_user_cache
 from context import current_user
+from mcp.server.fastmcp import Context
 from metrics import instrumented_transport
+
+from tools.elicitation import elicit, single_choice_model
 
 HUB_API_URL = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
 # Public base URL of the facility, used to build user-facing interface links.
@@ -23,6 +26,34 @@ PUBLIC_URL = os.environ.get(
 
 def _auth(token: str) -> dict:
     return {"Authorization": f"token {token}"}
+
+
+# ── profile / option selection helpers ────────────────────────────────────────
+
+_START_CHOICES_HELP = (
+    "This client can't show interactive choices. To start a session:\n"
+    "  • call start_af_session(use_defaults=True) to launch the default "
+    "profile immediately, or\n"
+    "  • call list_af_profiles to see profiles and their options, then call "
+    "start_af_session(profile_name=..., user_options={...}) with the user's "
+    "picks."
+)
+
+
+def _default_profile(profiles: list[dict]) -> Optional[dict]:
+    """Return the profile marked default, else the first, else None."""
+    for p in profiles:
+        if p.get("default"):
+            return p
+    return profiles[0] if profiles else None
+
+
+def _default_choice_key(choices: dict[str, str]) -> Optional[str]:
+    """Pick the choice key whose label is marked '(default)', else the first."""
+    for key, label in choices.items():
+        if str(label).rstrip().endswith("(default)"):
+            return key
+    return next(iter(choices), None)
 
 
 def register(mcp) -> None:
@@ -115,20 +146,30 @@ def register(mcp) -> None:
 
     @mcp.tool()
     async def start_af_session(
+        ctx: Context,
         profile_name: Optional[str] = None,
         user_options: Optional[dict] = None,
+        use_defaults: bool = False,
     ) -> str:
         """Start the user's Analysis Facility session (JupyterHub pod).
 
-        Call list_af_profiles first to discover valid profile slugs and option
-        key/value pairs.  If a session is already running this is a no-op.
+        When ``profile_name`` / ``user_options`` are omitted (and use_defaults is
+        False), the tool asks the user via the client's multiple-choice UI (MCP
+        elicitation): first the profile, then one question per configurable
+        option (interface, CPU, memory, …), each defaulting to the profile's
+        default. Clients that can't elicit get a short instruction instead.
+
+        Pass ``use_defaults=True`` to skip all questions and launch the default
+        profile immediately. If a session is already running this is a no-op.
 
         Args:
             profile_name: Profile slug or display name from list_af_profiles.
-                          Omit to use the default profile.
+                          Elicited from the user if omitted.
             user_options: Dict of option_key → choice_value as listed by
                           list_af_profiles.  Example for the stable profile:
-                          {"3-interface": "2", "0-cpu": "3", "2-memory": "2"}
+                          {"3-interface": "2", "0-cpu": "3", "2-memory": "2"}.
+                          Any option not supplied is elicited.
+            use_defaults: Skip elicitation and start the default profile/options.
         """
         user = current_user.get()
         token = user["token"]
@@ -136,12 +177,15 @@ def register(mcp) -> None:
 
         opts: dict = dict(user_options or {})
 
-        if profile_name:
-            from tools.profiles import find_profile, get_profiles
+        from tools.profiles import find_profile, get_profiles
 
-            profiles = await get_profiles()
-            profile = find_profile(profiles, profile_name)
-            if profile is None:
+        profiles = await get_profiles()
+
+        # ── Resolve which profile to launch ──
+        selected: Optional[dict] = None
+        if profile_name:
+            selected = find_profile(profiles, profile_name)
+            if selected is None:
                 known = (
                     ", ".join(f'"{p["slug"]}"' for p in profiles)
                     if profiles
@@ -152,10 +196,60 @@ def register(mcp) -> None:
                     f"Call list_af_profiles to see available options. "
                     f"Known slugs: {known}"
                 )
-            # Add the profile key so KubeSpawner selects the right profile.
-            # For the default profile the slug is still non-empty (e.g.
-            # "purdue-af-0-12-4-…"), so we always include it when explicitly requested.
-            opts["profile"] = profile["slug"]
+        elif use_defaults:
+            selected = _default_profile(profiles)
+        elif profiles:
+            # Only ask when there is a genuine choice to make.
+            if len(profiles) == 1:
+                selected = profiles[0]
+            else:
+                model = single_choice_model(
+                    "ProfileChoice",
+                    [p["slug"] for p in profiles],
+                    labels=[
+                        p["display_name"] + (" (default)" if p.get("default") else "")
+                        for p in profiles
+                    ],
+                    default=(_default_profile(profiles) or {}).get("slug"),
+                    description="Analysis Facility session profile.",
+                    field="profile",
+                )
+                status, data = await elicit(ctx, "Choose a session profile.", model)
+                if status == "unsupported":
+                    return _START_CHOICES_HELP
+                if status != "accept":
+                    return "Session start cancelled."
+                selected = find_profile(profiles, data.profile)
+        # profiles empty (e.g. local/dev) → selected stays None → Hub default.
+
+        if selected is not None:
+            # KubeSpawner selects the profile by slug; always include it.
+            opts["profile"] = selected["slug"]
+
+            # ── Ask for each option the caller didn't already specify ──
+            if not use_defaults:
+                for opt_key, opt_info in selected.get("options", {}).items():
+                    if opt_key in opts:
+                        continue
+                    choices = opt_info.get("choices") or {}
+                    if not choices:
+                        continue
+                    keys = list(choices)
+                    model = single_choice_model(
+                        f"Option_{len(opts)}",
+                        keys,
+                        labels=[choices[k] for k in keys],
+                        default=_default_choice_key(choices),
+                        description=opt_info.get("display_name", opt_key),
+                    )
+                    status, data = await elicit(
+                        ctx, f"{opt_info.get('display_name', opt_key)}:", model
+                    )
+                    if status == "unsupported":
+                        return _START_CHOICES_HELP
+                    if status != "accept":
+                        return "Session start cancelled."
+                    opts[opt_key] = data.value
 
         async with httpx.AsyncClient(transport=instrumented_transport("hub")) as client:
             try:

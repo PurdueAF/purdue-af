@@ -1,6 +1,7 @@
 """Tests for tools/session.py — JupyterHub session lifecycle."""
 
 import json
+import types
 
 import auth
 import respx
@@ -9,6 +10,31 @@ from tools import profiles, session
 
 USER_URL = f"{session.HUB_API_URL}/users/alice"
 SERVER_URL = f"{session.HUB_API_URL}/users/alice/server"
+
+
+class _Result:
+    def __init__(self, action, data=None):
+        self.action = action
+        self.data = data
+
+
+class FakeCtx:
+    """Stand-in for FastMCP Context; scripts elicit() responses in order."""
+
+    def __init__(self, *responses):
+        self._responses = list(responses)
+        self.calls = []
+
+    async def elicit(self, message, schema):
+        self.calls.append((message, schema))
+        if not self._responses:
+            raise AssertionError(f"unexpected elicit call: {message!r}")
+        action, data = self._responses.pop(0)
+        return _Result(action, data)
+
+
+def accept(**kwargs):
+    return ("accept", types.SimpleNamespace(**kwargs))
 
 
 def server_payload(ready=True, options=None, pending=None):
@@ -34,6 +60,46 @@ def fake_profiles(monkeypatch):
             "options": {},
         }
     ]
+
+    async def fake_get_profiles(force=False):
+        return parsed
+
+    monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
+    return parsed
+
+
+_STABLE_OPTIONS = {
+    "3-interface": {
+        "display_name": "Interface",
+        "choices": {"1": "JupyterLab (default)", "2": "VS Code"},
+    },
+    "0-cpu": {
+        "display_name": "CPU cores",
+        "choices": {"1": "1 (default)", "2": "4", "3": "8"},
+    },
+}
+
+
+def fake_profiles_with_options(monkeypatch, *, multi=False):
+    parsed = [
+        {
+            "display_name": "Stable",
+            "slug": "stable",
+            "default": True,
+            "description": "",
+            "options": _STABLE_OPTIONS,
+        }
+    ]
+    if multi:
+        parsed.append(
+            {
+                "display_name": "Pre-release",
+                "slug": "pre-release",
+                "default": False,
+                "description": "",
+                "options": {},
+            }
+        )
 
     async def fake_get_profiles(force=False):
         return parsed
@@ -110,7 +176,8 @@ async def test_start_session(user_ctx):
     route = respx.post(SERVER_URL).respond(201)
 
     tools = register_tools(session).tools
-    out = await tools["start_af_session"]()
+    # No profiles available (local/dev) → no elicitation, Hub default.
+    out = await tools["start_af_session"](FakeCtx())
 
     assert "Session is starting" in out
     assert json.loads(route.calls.last.request.content) == {}
@@ -122,7 +189,9 @@ async def test_start_with_profile_and_options(user_ctx, monkeypatch):
     route = respx.post(SERVER_URL).respond(201)
 
     tools = register_tools(session).tools
-    await tools["start_af_session"](profile_name="Stable", user_options={"0-cpu": "2"})
+    await tools["start_af_session"](
+        FakeCtx(), profile_name="Stable", user_options={"0-cpu": "2"}
+    )
 
     body = json.loads(route.calls.last.request.content)
     assert body == {"0-cpu": "2", "profile": "stable"}
@@ -132,7 +201,7 @@ async def test_start_unknown_profile(user_ctx, monkeypatch):
     fake_profiles(monkeypatch)
 
     tools = register_tools(session).tools
-    out = await tools["start_af_session"](profile_name="ghost")
+    out = await tools["start_af_session"](FakeCtx(), profile_name="ghost")
 
     assert "Unknown profile 'ghost'" in out
     assert '"stable"' in out  # known slugs listed
@@ -143,7 +212,7 @@ async def test_start_already_running(user_ctx):
     respx.post(SERVER_URL).respond(400, text="alice's server is already running")
 
     tools = register_tools(session).tools
-    out = await tools["start_af_session"]()
+    out = await tools["start_af_session"](FakeCtx())
     assert "already running" in out
 
 
@@ -152,7 +221,7 @@ async def test_start_rejected_options_not_masked(user_ctx):
     respx.post(SERVER_URL).respond(400, text="Invalid profile option 'x'")
 
     tools = register_tools(session).tools
-    out = await tools["start_af_session"]()
+    out = await tools["start_af_session"](FakeCtx())
     assert "rejected the spawn request" in out
 
 
@@ -162,9 +231,93 @@ async def test_start_session_clears_token_cache(user_ctx):
     auth._user_cache["tok-alice"] = (9e9, {"username": "alice"})
 
     tools = register_tools(session).tools
-    await tools["start_af_session"]()
+    await tools["start_af_session"](FakeCtx())
 
     assert "tok-alice" not in auth._user_cache
+
+
+# ── start_af_session: elicitation flows ───────────────────────────────────────
+
+
+@respx.mock
+async def test_start_elicits_profile_and_options(user_ctx, monkeypatch):
+    fake_profiles_with_options(monkeypatch, multi=True)
+    route = respx.post(SERVER_URL).respond(201)
+
+    ctx = FakeCtx(
+        accept(profile="stable"),
+        accept(value="2"),  # interface → VS Code
+        accept(value="3"),  # cpu → 8
+    )
+    tools = register_tools(session).tools
+    out = await tools["start_af_session"](ctx)
+
+    assert "Session is starting" in out
+    body = json.loads(route.calls.last.request.content)
+    assert body == {"profile": "stable", "3-interface": "2", "0-cpu": "3"}
+    assert len(ctx.calls) == 3
+
+
+@respx.mock
+async def test_start_single_profile_skips_profile_question(user_ctx, monkeypatch):
+    fake_profiles_with_options(monkeypatch, multi=False)
+    route = respx.post(SERVER_URL).respond(201)
+
+    ctx = FakeCtx(
+        accept(value="1"),  # interface (profile auto-selected, no profile question)
+        accept(value="2"),  # cpu
+    )
+    tools = register_tools(session).tools
+    await tools["start_af_session"](ctx)
+
+    body = json.loads(route.calls.last.request.content)
+    assert body == {"profile": "stable", "3-interface": "1", "0-cpu": "2"}
+    assert len(ctx.calls) == 2
+
+
+@respx.mock
+async def test_start_only_elicits_missing_options(user_ctx, monkeypatch):
+    fake_profiles_with_options(monkeypatch, multi=False)
+    route = respx.post(SERVER_URL).respond(201)
+
+    ctx = FakeCtx(accept(value="3"))  # only cpu asked; interface pre-supplied
+    tools = register_tools(session).tools
+    await tools["start_af_session"](
+        ctx, profile_name="Stable", user_options={"3-interface": "2"}
+    )
+
+    body = json.loads(route.calls.last.request.content)
+    assert body == {"3-interface": "2", "profile": "stable", "0-cpu": "3"}
+    assert len(ctx.calls) == 1
+
+
+@respx.mock
+async def test_start_use_defaults_skips_elicitation(user_ctx, monkeypatch):
+    fake_profiles_with_options(monkeypatch, multi=True)
+    route = respx.post(SERVER_URL).respond(201)
+
+    tools = register_tools(session).tools
+    await tools["start_af_session"](FakeCtx(), use_defaults=True)
+
+    body = json.loads(route.calls.last.request.content)
+    assert body == {"profile": "stable"}
+
+
+async def test_start_unsupported_client_returns_help(user_ctx, monkeypatch):
+    fake_profiles_with_options(monkeypatch, multi=True)
+
+    tools = register_tools(session).tools
+    out = await tools["start_af_session"](None)
+    assert "use_defaults=True" in out
+
+
+async def test_start_cancelled(user_ctx, monkeypatch):
+    fake_profiles_with_options(monkeypatch, multi=True)
+
+    ctx = FakeCtx(("cancel", None))
+    tools = register_tools(session).tools
+    out = await tools["start_af_session"](ctx)
+    assert "cancelled" in out.lower()
 
 
 # ── stop_af_session ───────────────────────────────────────────────────────────

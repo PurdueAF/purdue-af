@@ -15,11 +15,13 @@ def register(mcp) -> None:
         return (
             "Start the user's Purdue Analysis Facility session:\n"
             "1. get_session_status — if already running, report the URL and stop.\n"
-            "2. (optional) list_af_profiles if the user wants a non-default "
-            "profile or resources.\n"
-            "3. start_af_session with any chosen profile/options.\n"
-            "4. wait_for_session — blocks until the pod is ready.\n"
-            "5. Report the URL from get_session_status."
+            "2. start_af_session — it asks the user (via the client's "
+            "multiple-choice UI) for the profile and resource options unless "
+            "they are supplied; it reads the choices from list_af_profiles. Pass "
+            "use_defaults=True to skip the questions and launch the default "
+            "profile.\n"
+            "3. wait_for_session — blocks until the pod is ready.\n"
+            "4. Report the URL from get_session_status."
         )
 
     @mcp.prompt()
