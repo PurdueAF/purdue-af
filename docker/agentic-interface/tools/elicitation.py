@@ -6,8 +6,6 @@ radio buttons). These helpers keep the request/fallback handling and dynamic
 schema construction in one place so individual tools stay small.
 """
 
-from typing import Literal
-
 from pydantic import BaseModel, Field, create_model
 
 
@@ -42,20 +40,25 @@ def single_choice_model(
 ) -> type[BaseModel]:
     """Build a one-field elicitation model whose value is one of ``keys``.
 
-    ``labels`` (same length/order as ``keys``) are attached as JSON-schema
-    ``enumNames`` so clients can show human-readable choices while the submitted
-    value stays the machine key. The chosen value is read from ``<instance>.value``
-    (or the name given by ``field``).
+    The field is a plain ``str`` carrying ``enum`` (the machine keys) and, when
+    ``labels`` is given, ``enumNames`` (human-readable, same order) in its JSON
+    schema — the shape MCP elicitation clients render as a dropdown/radio.
+
+    A ``str`` annotation (rather than ``Literal``) is required: the MCP SDK's
+    elicitation schema validator only accepts raw primitive annotations and
+    rejects ``Literal``. The chosen value is read from ``<instance>.value`` (or
+    the name given by ``field``).
     """
     if not keys:
         raise ValueError("single_choice_model requires at least one key")
 
-    choice_type = Literal[tuple(keys)]  # type: ignore[valid-type]
-    extra = {"enumNames": list(labels)} if labels else None
     default_val = default if default in keys else keys[0]
+    extra: dict = {"enum": list(keys)}
+    if labels:
+        extra["enumNames"] = list(labels)
     field_info = Field(
         default=default_val,
         description=description,
         json_schema_extra=extra,
     )
-    return create_model(model_name, **{field: (choice_type, field_info)})
+    return create_model(model_name, **{field: (str, field_info)})

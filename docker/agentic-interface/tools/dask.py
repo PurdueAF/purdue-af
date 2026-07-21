@@ -15,7 +15,7 @@ worker pods.
 import asyncio
 import base64
 import os
-from typing import Literal, Optional
+from typing import Optional
 
 import httpx
 from context import current_user
@@ -274,8 +274,9 @@ def _build_cluster_options(
 class _BackendChoice(BaseModel):
     """Which compute backend to run the Dask workers on."""
 
-    gateway: Literal["k8s", "slurm"] = Field(
+    gateway: str = Field(
         default="k8s",
+        json_schema_extra={"enum": ["k8s", "slurm"]},
         description=(
             "k8s = Geddes Kubernetes (workers see /work and /depot); "
             "slurm = Hammer Slurm (workers see /depot only)."
@@ -286,8 +287,9 @@ class _BackendChoice(BaseModel):
 class _EnvChoice(BaseModel):
     """Which worker environment to use."""
 
-    env_source: Literal["global", "pixi", "conda"] = Field(
+    env_source: str = Field(
         default="global",
+        json_schema_extra={"enum": ["global", "pixi", "conda"]},
         description=(
             "global = shared pixi env at /work/pixi/global (k8s only); "
             "pixi = your own pixi project; conda = your own conda env."
@@ -322,8 +324,9 @@ DEFAULT_WORKER_MEMORY = 4.0
 class _SizeChoice(BaseModel):
     """How big each worker should be."""
 
-    size: Literal["default", "custom"] = Field(
+    size: str = Field(
         default="default",
+        json_schema_extra={"enum": ["default", "custom"]},
         description=(
             f"default = {DEFAULT_WORKER_CORES:g} core / "
             f"{DEFAULT_WORKER_MEMORY:g} GiB per worker; "
@@ -344,8 +347,9 @@ class _CustomSize(BaseModel):
 class _CountChoice(BaseModel):
     """How many workers to start the cluster with."""
 
-    count: Literal["0", "10", "50", "custom"] = Field(
+    count: str = Field(
         default="0",
+        json_schema_extra={"enum": ["0", "10", "50", "custom"]},
         description=(
             "Number of workers to start with: 0 (scale later), 10, 50, or "
             "custom to enter your own number."
