@@ -89,7 +89,7 @@ Works when a session is (or recently was) running so metrics exist.
 
 **`list_dask_clusters`** — all clusters across every gateway.
 **`list_dask_cluster_options(gateway="k8s")`** — create-time fields/defaults/limits for a backend.
-**`create_dask_cluster(gateway="k8s", …)`** — create a cluster (pixi XOR conda; cores/memory; optional `n_workers` / `env`).
+**`create_dask_cluster(gateway=None, env_source=None, …)`** — create a cluster.
 **`get_dask_cluster_info(cluster_name, gateway="k8s")`** — status, options, dashboard.
 **`get_dask_worker_count(cluster_name, gateway="k8s")`** — live worker count (by state).
 **`get_dask_cluster_usage(cluster_name, gateway="k8s")`** — CPU/memory min/max/avg across Running workers.
@@ -98,7 +98,24 @@ Works when a session is (or recently was) running so metrics exist.
 
 `gateway` options: `"k8s"` (Geddes Kubernetes) · `"slurm"` (Hammer Slurm)
 
-Create notes: one active cluster per user; Slurm workers cannot see `/work` (put envs on `/depot`); clusters start at 0 workers unless `n_workers` is set.
+**Creating a cluster** — `create_dask_cluster` needs two choices. If you omit them
+it asks the user via the client's multiple-choice UI (MCP elicitation); clients
+without elicitation get a text prompt listing the choices, or you can use the
+`create_cluster` prompt to gather them in chat.
+
+- `gateway`: `"k8s"` or `"slurm"`.
+- `env_source`: `"global"` (shared pixi env at `/work/pixi/global`, **k8s only**) ·
+  `"pixi"` (your `pixi_project` [+ `pixi_env`]) · `"conda"` (your `conda_env`).
+  Passing `pixi_project`/`conda_env` implies the matching source.
+- Optional: `worker_cores` (k8s ≤ 64, Slurm ≤ 16), `worker_memory` (GiB, ≤ 64),
+  `n_workers` (scale after create; else starts at 0), `env` (extra worker env vars).
+
+Create notes: one active cluster per user; Slurm workers cannot see `/work` (put
+envs on `/depot`, and `"global"` is unavailable there).
+
+### Prompts (invocable playbooks)
+
+`launch_session` · `restart_session` · `stop_session` · `create_cluster`
 
 ### Logs
 
@@ -122,6 +139,12 @@ and `filter` (LogQL pipe expression, e.g. `"|= \"ERROR\""`).
 ---
 
 ## Service endpoint (for manual testing)
+
+The deployed service runs with **stateful** streamable-HTTP sessions
+(`MCP_STATELESS_HTTP=false`) so tools can use elicitation. That means a
+one-shot `tools/call` curl (below) needs a prior `initialize` + `Mcp-Session-Id`
+handshake — use a real MCP client for interactive testing, or set
+`MCP_STATELESS_HTTP=true` on the deployment for stateless one-shot calls.
 
 ```bash
 curl -s \

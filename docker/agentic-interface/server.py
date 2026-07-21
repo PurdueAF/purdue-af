@@ -242,9 +242,19 @@ class _McpAccessFilter(logging.Filter):
 
 # ── MCP server ────────────────────────────────────────────────────────────────
 
+# Stateful streamable-HTTP sessions are required for server→client requests such
+# as elicitation (create_dask_cluster's multiple-choice prompts). Stateless mode
+# keeps one-shot POSTs working (handy for curl) but disables elicitation. The
+# deployment (single replica) sets MCP_STATELESS_HTTP=false to enable it.
+STATELESS_HTTP = os.environ.get("MCP_STATELESS_HTTP", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
 mcp = FastMCP(
     "purdue-af-agentic-interface",
-    stateless_http=True,
+    stateless_http=STATELESS_HTTP,
     instructions=(
         "Tools for the Purdue Analysis Facility. "
         "Use query_notebook_logs / query_dask_logs for log queries; "
@@ -254,7 +264,7 @@ mcp = FastMCP(
         "stop_dask_cluster for Dask; "
         "use get_session_status / start_af_session / stop_af_session for pod lifecycle. "
         "Each tool result names the next step. Invocable workflow prompts "
-        "(launch/restart/stop) are also available."
+        "(launch/restart/stop/create_cluster) are also available."
     ),
 )
 

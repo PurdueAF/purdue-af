@@ -34,6 +34,27 @@ def register(mcp) -> None:
         )
 
     @mcp.prompt()
+    def create_cluster() -> str:
+        """Create a Dask Gateway cluster, asking the user for backend + env."""
+        return (
+            "Create a Dask Gateway cluster for the user. Ask these as "
+            "multiple-choice questions (use the client's choice UI if available) "
+            "before calling create_dask_cluster:\n"
+            "1. Backend — 'k8s' (Geddes Kubernetes) or 'slurm' (Hammer)?\n"
+            "2. Worker environment —\n"
+            "   • 'global': shared pixi env at /work/pixi/global (k8s only), or\n"
+            "   • 'pixi': the user's own pixi project (ask for pixi_project path "
+            "and optional pixi_env), or\n"
+            "   • 'conda': the user's own conda env (ask for conda_env path).\n"
+            "3. (optional) worker_cores, worker_memory (GiB), and n_workers.\n"
+            "Then call create_dask_cluster with the chosen arguments. "
+            "create_dask_cluster will also elicit these directly if you call it "
+            "without them. Notes: Slurm workers cannot see /work, so 'global' is "
+            "k8s-only and Slurm envs must live on /depot. Call "
+            "list_dask_cluster_options first if you want exact limits/defaults."
+        )
+
+    @mcp.prompt()
     def stop_session() -> str:
         """Stop the AF session (storage is preserved)."""
         return (

@@ -26,6 +26,32 @@ def basic_alice():
     return "Basic " + base64.b64encode(b"alice:").decode()
 
 
+class _FakeResult:
+    def __init__(self, action, data=None):
+        self.action = action
+        self.data = data
+
+
+class FakeCtx:
+    """Stand-in for FastMCP Context; scripts elicit() responses in order."""
+
+    def __init__(self, *responses):
+        # each response: (action, data) where data is a schema instance
+        self._responses = list(responses)
+        self.calls = []
+
+    async def elicit(self, message, schema):
+        self.calls.append((message, schema))
+        if not self._responses:
+            raise AssertionError(f"unexpected elicit call: {message!r}")
+        action, data = self._responses.pop(0)
+        return _FakeResult(action, data)
+
+
+def accept(data):
+    return ("accept", data)
+
+
 # ── _resolve_gateway ──────────────────────────────────────────────────────────
 
 
@@ -291,12 +317,14 @@ async def test_list_cluster_options(user_ctx):
 
 
 @respx.mock
-async def test_create_cluster_pixi_then_scale(user_ctx):
+async def test_create_cluster_explicit_args_pixi_then_scale(user_ctx):
     create = respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.abc"})
     scale = respx.post(f"{K8S}/api/v1/clusters/cms.abc/scale").respond(204)
 
     tools = register_tools(dask).tools
     out = await tools["create_dask_cluster"](
+        FakeCtx(),  # explicit args → no elicitation
+        gateway="k8s",
         pixi_project="/work/alice/proj",
         worker_cores=2,
         worker_memory=8,
@@ -305,8 +333,7 @@ async def test_create_cluster_pixi_then_scale(user_ctx):
     assert "cms.abc" in out
     assert "Scaling to 3" in out
     assert create.called
-    body = json.loads(create.calls[0].request.content)
-    opts = body["cluster_options"]
+    opts = json.loads(create.calls[0].request.content)["cluster_options"]
     assert opts["pixi_project"] == "/work/alice/proj"
     assert opts["conda_env"] == ""
     assert opts["worker_cores"] == 2
@@ -316,11 +343,12 @@ async def test_create_cluster_pixi_then_scale(user_ctx):
 
 
 @respx.mock
-async def test_create_cluster_slurm_conda_no_scale(user_ctx):
+async def test_create_cluster_explicit_slurm_conda_no_scale(user_ctx):
     create = respx.post(clusters_url(SLURM)).respond(201, json={"name": "cms.slurm1"})
 
     tools = register_tools(dask).tools
     out = await tools["create_dask_cluster"](
+        FakeCtx(),
         gateway="slurm",
         conda_env="/depot/cms/alice/envs/ana",
     )
@@ -333,22 +361,100 @@ async def test_create_cluster_slurm_conda_no_scale(user_ctx):
 
 
 @respx.mock
-async def test_create_cluster_validation_error_local(user_ctx):
-    tools = register_tools(dask).tools
-    out = await tools["create_dask_cluster"]()
-    assert "provide either" in out
-
-
-@respx.mock
 async def test_create_cluster_gateway_rejects(user_ctx):
     respx.post(clusters_url(K8S)).respond(
         422, json={"message": "User already has 1 active clusters"}
     )
 
     tools = register_tools(dask).tools
-    out = await tools["create_dask_cluster"](pixi_project="/work/alice/p")
+    out = await tools["create_dask_cluster"](
+        FakeCtx(), gateway="k8s", pixi_project="/work/alice/p"
+    )
     assert "rejected" in out
     assert "active clusters" in out
+
+
+# ── create_dask_cluster: elicitation flows ────────────────────────────────────
+
+
+@respx.mock
+async def test_create_elicits_backend_and_global_env(user_ctx):
+    create = respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.g"})
+
+    ctx = FakeCtx(
+        accept(dask._BackendChoice(gateway="k8s")),
+        accept(dask._EnvChoice(env_source="global")),
+    )
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"](ctx)
+
+    assert "cms.g" in out
+    assert create.called
+    opts = json.loads(create.calls[0].request.content)["cluster_options"]
+    assert opts["pixi_project"] == dask.GLOBAL_PIXI_PROJECT
+    assert len(ctx.calls) == 2
+
+
+@respx.mock
+async def test_create_global_on_slurm_rejected(user_ctx):
+    ctx = FakeCtx(
+        accept(dask._BackendChoice(gateway="slurm")),
+        accept(dask._EnvChoice(env_source="global")),
+    )
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"](ctx)
+
+    assert "/work" in out
+    assert "Slurm" in out
+
+
+@respx.mock
+async def test_create_elicits_pixi_path(user_ctx):
+    create = respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.p"})
+
+    ctx = FakeCtx(
+        accept(dask._BackendChoice(gateway="k8s")),
+        accept(dask._EnvChoice(env_source="pixi")),
+        accept(dask._PixiChoice(pixi_project="/depot/cms/alice/proj", pixi_env="ml")),
+    )
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"](ctx)
+
+    assert "cms.p" in out
+    opts = json.loads(create.calls[0].request.content)["cluster_options"]
+    assert opts["pixi_project"] == "/depot/cms/alice/proj"
+    assert opts["pixi_env"] == "ml"
+    assert len(ctx.calls) == 3
+
+
+@respx.mock
+async def test_create_elicits_conda_path_on_slurm(user_ctx):
+    create = respx.post(clusters_url(SLURM)).respond(201, json={"name": "cms.c"})
+
+    ctx = FakeCtx(
+        accept(dask._BackendChoice(gateway="slurm")),
+        accept(dask._EnvChoice(env_source="conda")),
+        accept(dask._CondaChoice(conda_env="/depot/cms/alice/envs/ana")),
+    )
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"](ctx)
+
+    assert "cms.c" in out
+    opts = json.loads(create.calls[0].request.content)["cluster_options"]
+    assert opts["conda_env"] == "/depot/cms/alice/envs/ana"
+
+
+async def test_create_unsupported_client_returns_help(user_ctx):
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"](None)
+    assert "needs two choices" in out
+
+
+async def test_create_declined_cancels(user_ctx):
+    ctx = FakeCtx(("decline", None))
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"](ctx)
+    assert "cancelled" in out.lower()
 
 
 # ── stop_dask_cluster ─────────────────────────────────────────────────────────

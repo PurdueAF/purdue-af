@@ -15,11 +15,13 @@ worker pods.
 import asyncio
 import base64
 import os
-from typing import Optional
+from typing import Literal, Optional
 
 import httpx
 from context import current_user
+from mcp.server.fastmcp import Context
 from metrics import instrumented_transport
+from pydantic import BaseModel, Field
 
 # Gateway name → internal k8s service URL.
 # Override individual entries via env vars if needed.
@@ -34,6 +36,10 @@ _GATEWAYS: dict[str, str] = {
     ),
 }
 _GATEWAY_LIST = ", ".join(_GATEWAYS)
+
+# Shared pixi env pre-built for everyone. Lives on /work, so it is only usable
+# by Kubernetes workers — Slurm (Hammer) workers can see /depot but not /work.
+GLOBAL_PIXI_PROJECT = os.environ.get("DASK_GLOBAL_PIXI_PROJECT", "/work/pixi/global")
 
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
 # cadvisor / kubelet metrics (container_*) live on the Rancher Prometheus, not
@@ -260,6 +266,88 @@ def _build_cluster_options(
     return options
 
 
+# ── Elicitation schemas (rendered as multiple-choice forms by capable clients) ─
+
+
+class _BackendChoice(BaseModel):
+    """Which compute backend to run the Dask workers on."""
+
+    gateway: Literal["k8s", "slurm"] = Field(
+        default="k8s",
+        description=(
+            "k8s = Geddes Kubernetes (workers see /work and /depot); "
+            "slurm = Hammer Slurm (workers see /depot only)."
+        ),
+    )
+
+
+class _EnvChoice(BaseModel):
+    """Which worker environment to use."""
+
+    env_source: Literal["global", "pixi", "conda"] = Field(
+        default="global",
+        description=(
+            "global = shared pixi env at /work/pixi/global (k8s only); "
+            "pixi = your own pixi project; conda = your own conda env."
+        ),
+    )
+
+
+class _PixiChoice(BaseModel):
+    """Location of a user-provided pixi project."""
+
+    pixi_project: str = Field(
+        description="Path to a pixi project directory (the folder with pixi.toml)."
+    )
+    pixi_env: str = Field(
+        default="default", description="Pixi environment name within the project."
+    )
+
+
+class _CondaChoice(BaseModel):
+    """Location of a user-provided conda environment."""
+
+    conda_env: str = Field(
+        description="Absolute path to a conda/mamba environment prefix."
+    )
+
+
+# Fallback shown when the client cannot render elicitation forms. Doubles as
+# guidance for the create_cluster prompt so the agent asks in plain chat.
+_CREATE_CHOICES_HELP = (
+    "create_dask_cluster needs two choices from the user. Ask them (use the "
+    "client's multiple-choice UI if available), then call create_dask_cluster "
+    "again with explicit arguments:\n"
+    "1) gateway: 'k8s' (Geddes Kubernetes) or 'slurm' (Hammer).\n"
+    "2) worker environment — one of:\n"
+    "   • global (default): shared pixi env at /work/pixi/global — pass "
+    "env_source='global' (k8s only; Slurm cannot see /work).\n"
+    "   • your pixi project: pass pixi_project='/path' (+ optional pixi_env).\n"
+    "   • your conda env: pass conda_env='/path' (use /depot for Slurm).\n"
+    "Optionally: worker_cores, worker_memory (GiB), n_workers."
+)
+
+
+async def _elicit(ctx, message: str, schema):
+    """Ask the client for structured input.
+
+    Returns ``(status, data)`` where status is one of:
+      • 'accept'      — user submitted the form; data is a ``schema`` instance
+      • 'decline' / 'cancel' — user rejected the prompt; data is None
+      • 'unsupported' — no context, or the client cannot elicit; data is None
+    """
+    if ctx is None:
+        return "unsupported", None
+    try:
+        result = await ctx.elicit(message=message, schema=schema)
+    except Exception:
+        return "unsupported", None
+    action = getattr(result, "action", "unsupported")
+    if action == "accept":
+        return "accept", getattr(result, "data", None)
+    return action, None
+
+
 def register(mcp) -> None:
     @mcp.tool()
     async def list_dask_clusters() -> str:
@@ -360,7 +448,9 @@ def register(mcp) -> None:
 
     @mcp.tool()
     async def create_dask_cluster(
-        gateway: str = "k8s",
+        ctx: Context,
+        gateway: Optional[str] = None,
+        env_source: Optional[str] = None,
         pixi_project: Optional[str] = None,
         pixi_env: str = "default",
         conda_env: Optional[str] = None,
@@ -371,16 +461,28 @@ def register(mcp) -> None:
     ) -> str:
         """Create a new Dask Gateway cluster on Kubernetes or Slurm.
 
-        Choose the backend with ``gateway``:
+        If ``gateway`` or the worker environment are not supplied, the tool asks
+        the user via the client's multiple-choice UI (MCP elicitation). Clients
+        that don't support elicitation get a short instruction listing the
+        choices — collect them from the user and call again with explicit args.
+
+        Backend (``gateway``):
           • 'k8s' — Geddes Kubernetes workers (can use /work and /depot)
           • 'slurm' — Hammer Slurm workers (use /depot for envs; no /work)
 
-        Provide exactly one of ``pixi_project`` (dir containing pixi.toml) or
-        ``conda_env`` (absolute path to an env prefix). Optionally pass
-        ``n_workers`` to scale immediately after create (clusters start at 0).
+        Worker environment (``env_source``):
+          • 'global' — shared pixi env at /work/pixi/global (k8s only)
+          • 'pixi' — your own pixi project (set ``pixi_project`` + ``pixi_env``)
+          • 'conda' — your own conda env (set ``conda_env``)
+
+        Passing ``pixi_project`` or ``conda_env`` directly implies the matching
+        ``env_source``. Optionally pass ``n_workers`` to scale immediately after
+        create (clusters otherwise start at 0 workers).
 
         Args:
-            gateway: 'k8s' (default) or 'slurm'.
+            gateway: 'k8s' or 'slurm'. Elicited from the user if omitted.
+            env_source: 'global', 'pixi', or 'conda'. Elicited if omitted and no
+                        pixi_project/conda_env is given.
             pixi_project: Path to a pixi project directory.
             pixi_env: Pixi environment name within the project (default 'default').
             conda_env: Path to a conda/mamba env prefix (mutually exclusive with
@@ -391,12 +493,78 @@ def register(mcp) -> None:
             env: Extra environment variables for workers (e.g. X509_USER_PROXY,
                  PYTHONPATH, NB_UID/NB_GID for CERN/FNAL users).
         """
-        user = current_user.get()
-        username = user["username"]
+        if n_workers is not None and n_workers < 0:
+            return "Error: n_workers must be ≥ 0."
+
+        # ── Backend: ask the user if not supplied ──
+        if gateway is None:
+            status, data = await _elicit(
+                ctx, "Choose the compute backend for your Dask cluster.", _BackendChoice
+            )
+            if status == "unsupported":
+                return _CREATE_CHOICES_HELP
+            if status != "accept":
+                return "Cluster creation cancelled."
+            gateway = data.gateway
+
         try:
             gateway, url = _resolve_gateway(gateway)
         except ValueError as e:
             return str(e)
+
+        user = current_user.get()
+        username = user["username"]
+
+        # ── Worker environment: infer from explicit paths, else ask the user ──
+        if pixi_project:
+            env_source = "pixi"
+        elif conda_env:
+            env_source = "conda"
+        elif env_source is None:
+            status, data = await _elicit(
+                ctx, "Choose the worker environment.", _EnvChoice
+            )
+            if status == "unsupported":
+                return _CREATE_CHOICES_HELP
+            if status != "accept":
+                return "Cluster creation cancelled."
+            env_source = data.env_source
+
+        if env_source == "global":
+            if gateway == "slurm":
+                return (
+                    "Error: the global pixi env lives on /work, which Slurm "
+                    "(Hammer) workers cannot access. Choose a pixi project or "
+                    "conda env on /depot instead."
+                )
+            pixi_project = GLOBAL_PIXI_PROJECT
+            pixi_env = "default"
+        elif env_source == "pixi":
+            if not pixi_project:
+                status, data = await _elicit(
+                    ctx, "Provide the path to your pixi project.", _PixiChoice
+                )
+                if status == "unsupported":
+                    return _CREATE_CHOICES_HELP
+                if status != "accept":
+                    return "Cluster creation cancelled."
+                pixi_project = data.pixi_project
+                pixi_env = data.pixi_env
+        elif env_source == "conda":
+            if not conda_env:
+                status, data = await _elicit(
+                    ctx, "Provide the path to your conda environment.", _CondaChoice
+                )
+                if status == "unsupported":
+                    return _CREATE_CHOICES_HELP
+                if status != "accept":
+                    return "Cluster creation cancelled."
+                conda_env = data.conda_env
+        else:
+            return (
+                f"Error: unknown env_source '{env_source}'. "
+                "Use 'global', 'pixi', or 'conda'."
+            )
 
         options = _build_cluster_options(
             username=username,
@@ -409,9 +577,6 @@ def register(mcp) -> None:
         )
         if isinstance(options, str):
             return options
-
-        if n_workers is not None and n_workers < 0:
-            return "Error: n_workers must be ≥ 0."
 
         async with _client() as client:
             try:

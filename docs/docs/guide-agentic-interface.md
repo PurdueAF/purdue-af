@@ -88,6 +88,9 @@ simply ask in plain language, for example:
 * "Start my AF session" (optionally: "…with 32 CPUs and the VS Code interface")
 * "How much home and work storage am I using?"
 * "List my Dask clusters" / "scale `<name>` to 10 workers"
+* "Create a Dask cluster" — the agent asks which backend (Kubernetes or Slurm)
+  and which worker environment (the shared global pixi env, or your own pixi /
+  conda env) as multiple-choice questions before creating it
 * "Show the last 30 minutes of error logs from my notebook"
 
 The available tools cover:
@@ -103,8 +106,8 @@ The available tools cover:
   scheduler logs, with time ranges and filters.
 
 The server also exposes invocable **workflow prompts** (`launch_session`,
-`restart_session`, `stop_session`) that walk the agent through each multi-step
-workflow. In Claude Code they appear as
+`restart_session`, `stop_session`, `create_cluster`) that walk the agent through
+each multi-step workflow. In Claude Code they appear as
 `/mcp__purdue-af-agentic-interface__<name>` slash commands.
 
 ## Troubleshooting

@@ -22,6 +22,10 @@ spec:
           env:
             - name: JUPYTERHUB_SERVICE_PREFIX
               value: "/services/agentic-interface"
+            # Stateful streamable-HTTP sessions (single replica) so tools can use
+            # MCP elicitation for interactive prompts (e.g. create_dask_cluster).
+            - name: MCP_STATELESS_HTTP
+              value: "false"
             - name: JUPYTERHUB_API_URL
               value: "http://hub:8081/hub/api"
             - name: LOKI_URL

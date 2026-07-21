@@ -7,6 +7,7 @@ EXPECTED_PROMPTS = {
     "launch_session",
     "restart_session",
     "stop_session",
+    "create_cluster",
 }
 
 
