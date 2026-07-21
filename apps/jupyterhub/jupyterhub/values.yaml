@@ -262,10 +262,6 @@ singleuser:
         nfs:
           server: datadepot.rcac.purdue.edu
           path: /depot/cms
-      - name: depot-interlink
-        nfs:
-          server: datadepot.rcac.purdue.edu
-          path: /depot/itap/interlink
       - name: work
         persistentVolumeClaim:
           claimName: af-shared-storage
@@ -281,9 +277,6 @@ singleuser:
         mountPropagation: HostToContainer
       - name: depot
         mountPath: /depot/cms
-        mountPropagation: HostToContainer
-      - name: depot-interlink
-        mountPath: /depot/itap/interlink
         mountPropagation: HostToContainer
       - name: work
         mountPath: /work/
