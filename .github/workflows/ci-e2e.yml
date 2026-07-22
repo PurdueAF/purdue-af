@@ -58,7 +58,7 @@ jobs:
       contents: read
       packages: read # pull the production AF image into kind
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Resolve the production image
         id: image
         run: |
@@ -101,7 +101,7 @@ jobs:
           cache-dependency-glob: tests/uv.lock
       - name: Install flux CLI
         if: steps.memo.outputs.cache-hit != 'true'
-        uses: fluxcd/flux2/action@1ed703a34462da3527564befc791436d1711aca7 # main
+        uses: fluxcd/flux2/action@b5a3752471b02a43a27bef81de415553fb32dcc9 # main
         with:
           version: ${{ env.FLUX_VERSION }}
       - name: Create kind cluster
@@ -162,7 +162,7 @@ jobs:
       contents: read
       packages: read # pull the (possibly private) image into kind
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Pick the AF image to spawn
         id: image
         run: |
@@ -207,7 +207,7 @@ jobs:
           cache-dependency-glob: tests/uv.lock
       - name: Install flux CLI
         if: steps.memo.outputs.cache-hit != 'true'
-        uses: fluxcd/flux2/action@1ed703a34462da3527564befc791436d1711aca7 # main
+        uses: fluxcd/flux2/action@b5a3752471b02a43a27bef81de415553fb32dcc9 # main
         with:
           version: ${{ env.FLUX_VERSION }}
       - name: Create kind cluster
@@ -273,7 +273,7 @@ jobs:
       contents: read
       packages: read # pull the (possibly private) AF image
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Pick the AF image to test
         id: image
         run: |
