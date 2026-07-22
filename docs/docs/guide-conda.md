@@ -44,7 +44,7 @@ conda_envs_path="/depot/cms/conda_envs/$USER"
 conda_env_name="my-new-env"
 
 # create a new environment with the ipykernel package installed
-conda create -y --prefix $conda_envs_path/$conda_env_name python=3.10 ipykernel
+conda create -y --prefix $conda_envs_path/$conda_env_name python=3.12 ipykernel
 
 # activate the environment
 conda activate $conda_envs_path/$conda_env_name
@@ -80,7 +80,7 @@ resulting environment — it can be easily rebuilt anywhere from the same YAML f
       - defaults
       - conda-forge
     dependencies:
-      - python=3.9
+      - python=3.12
       - numpy
       - pandas
       - matplotlib
@@ -131,7 +131,7 @@ This option is preferred if you want to start from a clean environment and insta
 all packages manually.
 
 ```shell
-conda create --prefix /some-path/my-new-env python=3.10 ipykernel
+conda create --prefix /some-path/my-new-env python=3.12 ipykernel
 conda activate /some-path/my-new-env
 conda install numpy pandas # install any packages here
 conda deactivate

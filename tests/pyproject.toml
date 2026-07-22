@@ -2,7 +2,7 @@
 name = "purdue-af-tests"
 version = "0.0.0"
 description = "Single test project for all Purdue AF suites (tests/<suite>/)"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     # test tooling
     "pytest>=8.3",

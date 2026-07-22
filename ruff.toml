@@ -1,6 +1,6 @@
 # Ruff configuration — single source of truth for Python lint + format
 # (replaces black + isort; run via pre-commit or `uvx ruff check` / `uvx ruff format`).
-target-version = "py311"
+target-version = "py312"
 
 # Vendored fork of upstream dask-gateway — never lint.
 extend-exclude = ["docker/dask-gateway-server"]

@@ -38,7 +38,7 @@ Purdue AF instance and make it executable via BinderHub.
     - defaults
     - conda-forge
     dependencies:
-    - python=3.8
+    - python=3.12
     - numpy
     - matplotlib
     - pandas

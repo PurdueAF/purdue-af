@@ -156,8 +156,8 @@ RUN chmod +x /usr/local/bin/pixi && \
     rm -rf "${HOME}/.cache/rattler" || true && \
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ir" || true && \
     rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ark" || true && \
-    cp "${BASE_ENV_DIR}/lib/python3.10/site-packages/jupyter_vscode_proxy/icons/vscode.svg" \
-       "${BASE_ENV_DIR}/lib/python3.10/site-packages/jupyter_vscode_proxy/icons/code-server.svg"
+    cp "${BASE_ENV_DIR}/lib/python3.12/site-packages/jupyter_vscode_proxy/icons/vscode.svg" \
+       "${BASE_ENV_DIR}/lib/python3.12/site-packages/jupyter_vscode_proxy/icons/code-server.svg"
 
 # Import-smoke every direct dependency of the base env, each in a fresh
 # interpreter — catches broken installs (e.g. libstdc++ shadowing à la

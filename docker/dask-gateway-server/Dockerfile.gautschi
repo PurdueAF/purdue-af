@@ -74,7 +74,7 @@ RUN curl -sL -o /tmp/micromamba.tar.bz2 "https://micromamba.snakepit.net/api/mic
         --root-prefix="${CONDA_DIR}" \
         --prefix="${CONDA_DIR}" \
         --yes \
-        "python=3.10" \
+        "python=3.12" \
         'mamba' &&\
     rm micromamba &&\
     # # Pin major.minor version of python

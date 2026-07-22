@@ -184,7 +184,12 @@ singleuser:
   defaultUrl: "/lab"
   extraFiles:
     monitoring-setup:
-      mountPath: /opt/pixi/.pixi/envs/default/lib/python3.10/site-packages/sitecustomize.py
+      # Must match the image's env name AND python minor version — the old
+      # path (envs/default/lib/python3.10) matched neither in the current
+      # image, so this sitecustomize (pyroscope + otel for jupyter-server)
+      # was silently inactive. base-env python is pinned 3.12 in
+      # pixi/base/pixi.toml; bump this path together with it.
+      mountPath: /opt/pixi/.pixi/envs/base-env/lib/python3.12/site-packages/sitecustomize.py
       stringData: |
         import os
 

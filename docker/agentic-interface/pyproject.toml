@@ -2,7 +2,7 @@
 name = "purdue-af-agentic-interface"
 version = "0.1.0"
 description = "Purdue AF Agentic Interface — JupyterHub Service MCP server"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 # Runtime dependencies; uv.lock pins the full tree for the Docker image.
 # (Tests live in tests/ with their own project.)
 dependencies = [

@@ -91,5 +91,17 @@
       matchFileNames: ['pixi/base/pixi.toml', 'pixi/global/pixi.toml'],
       allowedVersions: '!/(a|b|rc)\\d*$/',
     },
+    {
+      // Python is deliberately frozen at 3.12 platform-wide (2026-07): the
+      // science stack is capped by conda-forge tensorflow (no 3.13/3.14
+      // builds exist), and the infra images/tests follow so there is ONE
+      // python everywhere. Covers the docker manager (FROM python:3.12-slim)
+      // and the pixi manager (python = "3.12.*" in pixi/{base,global}).
+      // 3.12.x patch releases stay allowed. Relax when conda-forge ships
+      // tensorflow for newer python (check: pixi/check-env.py will gate it).
+      matchPackageNames: ['python'],
+      matchDatasources: ['docker', 'conda'],
+      allowedVersions: '<3.13',
+    },
   ],
 }

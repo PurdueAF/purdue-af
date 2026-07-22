@@ -14,6 +14,11 @@ $env_default_dir/python3/bin/python -m ipykernel install \
 
 kernel_path="$base_env_dir/share/jupyter/kernels/python3/"
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/depot/cms/purdue-af/lhapdf/lib:/depot/cms/purdue-af/combine/HiggsAnalysis/CombinedLimit/build/lib
+# TODO(py3.12): the depot lhapdf install below was built against python 3.10
+# (compiled bindings — version-tagged .so files). The kernel/global-env python
+# is 3.12 now, so these bindings will not import until lhapdf (and the Combine
+# build, if its compiled parts matter) are rebuilt on depot for 3.12. This is
+# an EXTERNAL filesystem dependency — it cannot be fixed from this repo.
 PYTHONPATH=$PYTHONPATH:/depot/cms/purdue-af/lhapdf/lib/python3.10/site-packages:/depot/cms/purdue-af/combine/HiggsAnalysis/CombinedLimit/build/lib/python
 PATH=$env_default_dir/python3/bin/:/depot/cms/purdue-af/combine/HiggsAnalysis/CombinedLimit/build/bin:$PATH:/depot/cms/purdue-af/lhapdf/bin
 CPLUS_INCLUDE_PATH=$env_default_dir/python3/x86_64-conda-linux-gnu/sysroot/usr/include
