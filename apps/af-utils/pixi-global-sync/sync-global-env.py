@@ -447,11 +447,44 @@ def pixi_install(env_dir):
     raise RuntimeError("pixi install failed after retries")
 
 
+def purge_incomplete_dist_infos(env_dir):
+    """Remove hollow *.dist-info dirs left by interrupted PyPI installs.
+
+    importlib.metadata discovers them by directory name and can return
+    Version=None when METADATA is missing — that breaks packages like
+    `vector` which parse `awkward`'s version at import time. Pixi install
+    may add the new complete dist-info without removing the hollow one.
+    """
+    env_dir = Path(env_dir)
+    site_root = env_dir / ".pixi" / "envs" / ENV_NAME / "lib"
+    removed = 0
+    for site in site_root.glob("python*/site-packages"):
+        for dist in site.glob("*.dist-info"):
+            if not (dist / "METADATA").is_file():
+                shutil.rmtree(dist, ignore_errors=True)
+                removed += 1
+    if removed:
+        log.warning("purged %d incomplete *.dist-info dirs under %s", removed, env_dir)
+    return removed
+
+
+def wipe_env_prefix(env_dir):
+    """Delete the installed env prefix so the next pixi install is clean.
+    Package cache on the share keeps this from being a full cold download."""
+    prefix = Path(env_dir) / ".pixi" / "envs" / ENV_NAME
+    if prefix.exists():
+        log.warning("wiping env prefix for clean reinstall: %s", prefix)
+        shutil.rmtree(prefix)
+
+
 def validate_env(env_dir):
     """Import-smoke every declared dependency (check-env.py) with the
     env's own interpreter."""
     env_dir = Path(env_dir)
     python = env_dir / ".pixi" / "envs" / ENV_NAME / "bin" / "python"
+    if not python.is_file():
+        log.error("check-env FAILED: env python missing at %s", python)
+        return False
     proc = run_with_heartbeat(
         [
             python,
@@ -529,13 +562,26 @@ def reconcile(force=False):
     started = time.time()
     try:
         stage_manifests(LIVE_DIR, desired)
+        # Healing a previously-broken live env: incremental install can leave
+        # hollow dist-info / half-linked trees. Wipe once so cache hardlinks
+        # rebuild a coherent prefix.
+        if METRICS["env_healthy"] < 0.5:
+            wipe_env_prefix(LIVE_DIR)
         pixi_install(LIVE_DIR)
+        purge_incomplete_dist_infos(LIVE_DIR)
         if not validate_env(LIVE_DIR):
-            metric_set("env_healthy", 0.0)
-            raise RuntimeError(
-                "env failed post-install validation (CI validated this lock, "
-                "so this is likely infra: disk/NFS/network). Will retry."
+            log.warning(
+                "post-install validation failed — wiping prefix and retrying once"
             )
+            wipe_env_prefix(LIVE_DIR)
+            pixi_install(LIVE_DIR)
+            purge_incomplete_dist_infos(LIVE_DIR)
+            if not validate_env(LIVE_DIR):
+                metric_set("env_healthy", 0.0)
+                raise RuntimeError(
+                    "env failed post-install validation (CI validated this lock, "
+                    "so this is likely infra: disk/NFS/network). Will retry."
+                )
     except Exception:
         metric_inc("sync_failures_total")
         _last_failure["ts"] = time.time()

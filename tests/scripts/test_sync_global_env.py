@@ -227,6 +227,32 @@ class TestCiGate:
         assert not allowed and "fail-closed" in reason
 
 
+class TestPurgeIncompleteDistInfos:
+    def test_removes_hollow_dist_info_keeps_complete(self, sync):
+        site = (
+            sync.LIVE_DIR
+            / ".pixi"
+            / "envs"
+            / sync.ENV_NAME
+            / "lib"
+            / "python3.12"
+            / "site-packages"
+        )
+        hollow = site / "awkward-2.9.0.dist-info"
+        complete = site / "awkward-2.9.1.dist-info"
+        hollow.mkdir(parents=True)
+        (hollow / "licenses").mkdir()
+        complete.mkdir(parents=True)
+        (complete / "METADATA").write_text("Name: awkward\nVersion: 2.9.1\n")
+
+        assert sync.purge_incomplete_dist_infos(sync.LIVE_DIR) == 1
+        assert not hollow.exists()
+        assert complete.exists()
+
+    def test_noop_when_env_missing(self, sync):
+        assert sync.purge_incomplete_dist_infos(sync.LIVE_DIR) == 0
+
+
 class TestUnhealthyRetry:
     def test_in_sync_but_unhealthy_does_not_early_return(self, sync, monkeypatch):
         """After a failed install, manifests already match desired — we must
