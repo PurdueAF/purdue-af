@@ -19,7 +19,7 @@ repos:
         exclude: \.rpm$ # existing slurm/OSG rpms; removal tracked in Phase 0
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.20
+    rev: v0.15.22
     hooks:
       - id: ruff-check # lint (+ import sorting), config in ruff.toml
         args: ["--fix"]
@@ -30,7 +30,7 @@ repos:
       - id: prettier
         name: prettier (JSON/YAML)
         language: node
-        additional_dependencies: ["prettier@3.9.4"]
+        additional_dependencies: ["prettier@3.9.6"]
         entry: prettier --write
         types_or: [json, yaml]
 
