@@ -9,9 +9,10 @@ The components of the Analysis Facility are divided into **core** and **experime
 
 - Core components are deployed into the production namespace `cms` from
   the newest platform CalVer tag (`YYYY.M.SEQ`).
-- Experimental components are deployed from the moving git tag
-  `main-ci-passed` (near tip of `main`, only advanced after the full
-  pipeline is green) into the production namespace.
+- Experimental components are deployed from the CI-owned git ref
+  `refs/ci/main-passed` (near tip of `main`, only advanced after the full
+  pipeline is green) into the production namespace. This is a custom ref,
+  not a tag — it is never included in `git push --tags` / `--all`.
 
 ### Update process
 
@@ -21,6 +22,17 @@ The components of the Analysis Facility are divided into **core** and **experime
   and how versions are incremented (platform tags and image versions are
   minted by the release workflows, never by hand).
 - To update an experimental component, push to `main` — after `ci-ok`
-  succeeds, the publish stage moves `main-ci-passed` to that commit and
-  Flux deploys it (experimental components are purposely brittle for
-  faster prototyping, but still behind the same CI gate as image channels).
+  succeeds, the publish stage force-pushes `refs/ci/main-passed` to that
+  commit and Flux deploys it (experimental components are purposely
+  brittle for faster prototyping, but still behind the same CI gate as
+  image channels).
+
+### Retired: `main-ci-passed` tag
+
+An earlier draft used a moving git tag named `main-ci-passed`. That tag
+is retired (blocked from recreation on GitHub). If you still have a local
+copy, drop it once:
+
+```
+git tag -d main-ci-passed
+```
