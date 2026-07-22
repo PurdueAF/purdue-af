@@ -227,6 +227,36 @@ class TestCiGate:
         assert not allowed and "fail-closed" in reason
 
 
+class TestUnhealthyRetry:
+    def test_in_sync_but_unhealthy_does_not_early_return(self, sync, monkeypatch):
+        """After a failed install, manifests already match desired — we must
+        keep trying to heal, not treat byte-equality as done."""
+        sync.stage_manifests(sync.LIVE_DIR, DESIRED)
+        sync.metric_set("env_healthy", 0.0)
+        sync.REQUIRE_CI_CHECKS = False
+        called = {"install": 0}
+
+        def fake_install(_):
+            called["install"] += 1
+
+        monkeypatch.setattr(sync, "read_desired", lambda: DESIRED)
+        monkeypatch.setattr(sync, "pixi_install", fake_install)
+        monkeypatch.setattr(sync, "validate_env", lambda _: True)
+        assert sync.reconcile() is True
+        assert called["install"] == 1
+
+    def test_healthy_in_sync_skips_install(self, sync, monkeypatch):
+        sync.stage_manifests(sync.LIVE_DIR, DESIRED)
+        sync.metric_set("env_healthy", 1.0)
+        called = {"install": 0}
+        monkeypatch.setattr(sync, "read_desired", lambda: DESIRED)
+        monkeypatch.setattr(
+            sync, "pixi_install", lambda _: called.__setitem__("install", 1)
+        )
+        assert sync.reconcile() is True
+        assert called["install"] == 0
+
+
 class TestMetrics:
     def test_exposition_renders_all_series(self, sync):
         text = sync.render_metrics()

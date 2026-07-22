@@ -49,6 +49,8 @@ spec:
             # restarts. Node-local emptyDir is only scratch space.
             - name: PIXI_CACHE_DIR
               value: /work/pixi/.cache/pixi
+            # emptyDir /cache starts empty; sync-global-env.py mkdir's this
+            # at startup (pixi needs it for PyPI tempfile locks).
             - name: TMPDIR
               value: /cache/tmp
           ports:

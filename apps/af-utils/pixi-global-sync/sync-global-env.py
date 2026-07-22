@@ -502,7 +502,11 @@ def reconcile(force=False):
 
     in_sync = is_in_sync(LIVE_DIR, desired)
     metric_set("in_sync", 1.0 if in_sync else 0.0)
-    if in_sync and not force:
+    # Manifests are staged BEFORE pixi install, so a failed install leaves
+    # in_sync=1 with a broken env. Keep forcing until env_healthy recovers
+    # (bounded by FAIL_COOLDOWN below) — otherwise we'd sit unhealthy until
+    # the next 6 h deep_verify.
+    if in_sync and not force and METRICS["env_healthy"] >= 0.5:
         return True
     if not force and time.time() - _last_failure["ts"] < FAIL_COOLDOWN:
         return False
@@ -573,6 +577,10 @@ def main():
         PIXI_BIN,
     )
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    # /cache is an emptyDir that starts empty; pixi's PyPI phase creates
+    # tempfile locks under TMPDIR and fails hard if the parent is missing.
+    if tmp := os.environ.get("TMPDIR"):
+        Path(tmp).mkdir(parents=True, exist_ok=True)
     acquire_lock()
     stop = threading.Event()
 
