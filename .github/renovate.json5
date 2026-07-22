@@ -134,6 +134,24 @@
       allowedVersions: '!/(a|b|rc)\\d*$/',
     },
     {
+      // code-server has never supported nodejs >=23 (every conda-forge build
+      // pins nodejs >=22,<23) — a nodejs major bump can never solve together
+      // with code-server. Blocks the doomed proposal (seen in PR #90).
+      // Relax if code-server upstream ever moves off the 22.x pin.
+      matchPackageNames: ['nodejs'],
+      matchFileNames: ['pixi/base/pixi.toml'],
+      allowedVersions: '<23',
+    },
+    {
+      // opentelemetry-api ==1.41.1 (pixi/base pypi deps) requires
+      // importlib-metadata <8.8 — Renovate widening the conda range past it
+      // makes the env unsolvable (seen in PR #90). Bump together with the
+      // opentelemetry pins, then relax.
+      matchPackageNames: ['importlib-metadata'],
+      matchFileNames: ['pixi/base/pixi.toml'],
+      allowedVersions: '<8.8',
+    },
+    {
       // Python is deliberately frozen at 3.12 platform-wide (2026-07): the
       // science stack is capped by conda-forge tensorflow (no 3.13/3.14
       // builds exist), and the infra images/tests follow so there is ONE
