@@ -111,8 +111,14 @@ jobs:
           }
 
   publish:
-    # Stage 3 — main only. Pure retags of digests that just passed the full
-    # pipeline (promote-by-digest, no rebuild):
+    # Stage 3 — promote consumable channel tags. ONLY on push to main.
+    # Never on pull_request, never on workflow_dispatch (including the
+    # post-lock-commit dispatches on Renovate branches — those may build
+    # and push content-addressed in-<hash> tags, but must not move
+    # :latest / :pre-release / :sha-).
+    #
+    # Pure retags of digests that just passed the full pipeline
+    # (promote-by-digest, no rebuild):
     #   every image        → :sha-<commit>   (immutable provenance)
     #   aux images         → :latest         (continuous channel; manifests
     #                                          pull it via the geddes
@@ -121,12 +127,23 @@ jobs:
     #                                          image_pull_policy Always)
     # Versioned promotion to production stays human: release-image.yml.
     needs: [ci-ok, images]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+      && needs.ci-ok.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       packages: write
     steps:
+      - name: Refuse to promote off main
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" != "push" ] || [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::refusing image promote: only push to main may move" \
+              " :latest / :pre-release / :sha- (got event=${GITHUB_EVENT_NAME} ref=${GITHUB_REF})"
+            exit 1
+          fi
       - name: Login to ghcr.io
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
         with:

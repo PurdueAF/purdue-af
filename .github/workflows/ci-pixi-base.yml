@@ -12,8 +12,8 @@ name: CI pixi-base
 #
 # Memoized when the lock was already in sync (image-inputs.sh key). Lock
 # commits prefer AF_RELEASE_TOKEN (PAT push re-triggers PR/push CI); without
-# it we push with GITHUB_TOKEN and workflow_dispatch CI on the new tip
-# (workflow_dispatch is allowed to re-trigger with GITHUB_TOKEN).
+# it we push with GITHUB_TOKEN and auto-approve the resulting action_required
+# pull_request run (see retrigger-after-lock-push.sh) so no human click.
 # Pixi pin: keep in sync with PIXI_VERSION in docker/purdue-af/Dockerfile
 # and constraints.pixi in renovate.json5.
 
@@ -88,6 +88,7 @@ jobs:
           HAVE_PAT: ${{ secrets.AF_RELEASE_TOKEN != '' }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
           GH_TOKEN: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ] && \
@@ -106,17 +107,15 @@ jobs:
           git commit -m "chore(pixi): regenerate base lockfile"
           git pull --rebase origin "$BRANCH"
           git push origin "HEAD:$BRANCH"
-          if [ "$HAVE_PAT" = "true" ]; then
-            echo "Committed pixi/base/pixi.lock — PAT push re-triggers CI." \
-              | tee -a "$GITHUB_STEP_SUMMARY"
-          else
-            # GITHUB_TOKEN pushes do not fire pull_request/push workflows;
-            # workflow_dispatch is an explicit exception and attaches checks
-            # to the new tip (what branch protection looks at on the PR).
-            gh workflow run ci.yml --ref "$BRANCH"
-            echo "Committed pixi/base/pixi.lock — dispatched CI on $BRANCH." \
-              | tee -a "$GITHUB_STEP_SUMMARY"
+          # Helper may be absent on Renovate branches — load from default branch.
+          script=.github/workflows/retrigger-after-lock-push.sh
+          if [ ! -f "$script" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/contents/.github/workflows/retrigger-after-lock-push.sh?ref=${GITHUB_DEFAULT_BRANCH}" \
+              --jq .content | base64 -d > /tmp/retrigger-after-lock-push.sh
+            script=/tmp/retrigger-after-lock-push.sh
+            chmod +x "$script"
           fi
+          "$script" "$HAVE_PAT" "$BRANCH" | tee -a "$GITHUB_STEP_SUMMARY"
           # Fail this SHA so images does not build against a pre-lock tree.
           # The follow-up run (concurrency) cancels this one.
           exit 1

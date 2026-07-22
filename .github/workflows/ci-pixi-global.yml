@@ -11,8 +11,9 @@ name: CI pixi-global
 #
 # Memoized when the lock was already in sync (image-inputs.sh key + image
 # ref). Lock commits prefer AF_RELEASE_TOKEN; without it we push with
-# GITHUB_TOKEN and workflow_dispatch CI. Pixi pin: keep in sync with
-# PIXI_VERSION in docker/purdue-af/Dockerfile and constraints.pixi.
+# GITHUB_TOKEN and auto-approve the action_required follow-up run (see
+# retrigger-after-lock-push.sh). Pixi pin: keep in sync with PIXI_VERSION
+# in docker/purdue-af/Dockerfile and constraints.pixi.
 # CONDA_OVERRIDE_CUDA mocks CUDA on CPU-only runners.
 
 on:
@@ -132,6 +133,7 @@ jobs:
           HAVE_PAT: ${{ secrets.AF_RELEASE_TOKEN != '' }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
           GH_TOKEN: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ] && \
@@ -150,14 +152,15 @@ jobs:
           git commit -m "chore(pixi): regenerate global lockfile"
           git pull --rebase origin "$BRANCH"
           git push origin "HEAD:$BRANCH"
-          if [ "$HAVE_PAT" = "true" ]; then
-            echo "Committed pixi/global/pixi.lock — PAT push re-triggers CI." \
-              | tee -a "$GITHUB_STEP_SUMMARY"
-          else
-            gh workflow run ci.yml --ref "$BRANCH"
-            echo "Committed pixi/global/pixi.lock — dispatched CI on $BRANCH." \
-              | tee -a "$GITHUB_STEP_SUMMARY"
+          # Helper may be absent on Renovate branches — load from default branch.
+          script=.github/workflows/retrigger-after-lock-push.sh
+          if [ ! -f "$script" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/contents/.github/workflows/retrigger-after-lock-push.sh?ref=${GITHUB_DEFAULT_BRANCH}" \
+              --jq .content | base64 -d > /tmp/retrigger-after-lock-push.sh
+            script=/tmp/retrigger-after-lock-push.sh
+            chmod +x "$script"
           fi
+          "$script" "$HAVE_PAT" "$BRANCH" | tee -a "$GITHUB_STEP_SUMMARY"
           # Fail this SHA; follow-up CI runs on the lock commit.
           exit 1
       - name: Record green run
