@@ -34,10 +34,12 @@
   prConcurrentLimit: 2,
   branchConcurrentLimit: 2,
 
-  // Which pixi CI/Docker use when they regenerate locks (not used by Renovate
-  // itself — skipArtifactsUpdate below). Keep in sync with PIXI_VERSION in
-  // docker/purdue-af/Dockerfile and pixi-version in ci-pixi.yml: newer pixi
-  // writes lock-file format v7, which 0.62.2 cannot read.
+  // Pixi CLI is frozen at 0.62.2 (lock format v6). Newer pixi writes v7,
+  // which 0.62.2 cannot read — keep in sync across:
+  //   - constraints.pixi (here)
+  //   - pixi-version in .github/workflows/ci-pixi.yml
+  //   - ARG PIXI_VERSION in docker/purdue-af{,-old}/Dockerfile
+  // packageRules below disable bumps; customManagers track the Docker ARG.
   constraints: {
     pixi: '0.62.2',
   },
@@ -56,12 +58,31 @@
     enabled: true,
   },
 
+  // Track Dockerfile PIXI_VERSION pins (github-actions already sees
+  // pixi-version: in ci-pixi.yml; constraints.pixi is a tool-constraint).
+  customManagers: [
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)Dockerfile$/'],
+      matchStrings: ['ARG PIXI_VERSION="(?<currentValue>[^"]+)"'],
+      datasourceTemplate: 'github-releases',
+      depNameTemplate: 'prefix-dev/pixi',
+      extractVersionTemplate: '^v(?<version>.*)$',
+    },
+  ],
+
   packageRules: [
     {
       // Private cluster registry — Renovate has no credentials for it and the
       // images are built in-repo anyway (kaniko / future CI builds).
       matchDatasources: ['docker'],
       matchPackageNames: ['geddes-registry.rcac.purdue.edu/**'],
+      enabled: false,
+    },
+    {
+      // Freeze pixi CLI at 0.62.2: constraints.pixi, setup-pixi pixi-version,
+      // and Dockerfile ARG PIXI_VERSION. Lock format v6 only.
+      matchPackageNames: ['pixi', 'prefix-dev/pixi'],
       enabled: false,
     },
     {
