@@ -25,11 +25,11 @@ nodejs        = "22.*"
 
 # Kernel discovery / misc
 nb_conda_kernels      = "==2.5.1"
-metakernel            = "==0.32.0"
+metakernel            = "==1.0.0"
 importlib-metadata    = "<8.8"   # opentelemetry-api requires <8.8.0
 
 # Other tools
-rucio-clients = "==39.3.1"
+rucio-clients = "==40.4.1"
 pytest        = "==9.1.1"
 lz4           = "==4.4.5"
 ipywidgets    = "==8.1.8"
