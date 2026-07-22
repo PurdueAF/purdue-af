@@ -21,6 +21,6 @@ The components of the Analysis Facility are divided into **core** and **experime
   and how versions are incremented (platform tags and image versions are
   minted by the release workflows, never by hand).
 - To update an experimental component, push to `main` — after `ci-ok`
-  succeeds, CI moves `main-ci-passed` to that commit and Flux deploys it
-  (experimental components are purposely brittle for faster prototyping,
-  but still behind the same CI gate as image channels).
+  succeeds, the publish stage moves `main-ci-passed` to that commit and
+  Flux deploys it (experimental components are purposely brittle for
+  faster prototyping, but still behind the same CI gate as image channels).

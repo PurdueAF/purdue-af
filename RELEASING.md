@@ -10,7 +10,7 @@ by hand.
 | **Platform** (everything Flux deploys)                | CalVer `YYYY.M.SEQ`               | `2026.7.8` | **Release platform** workflow                      | immediately — production Flux tracks the newest `2026.x` tag |
 | **purdue-af image**                                   | semver `0.X.Y`, repo tag `v0.X.Y` | `v0.13.0`  | **Release image** workflow                         | at the **next platform release**                             |
 | Continuous (`:latest`, `:pre-release`, `in-`, `sha-`) | moving tags                       | —          | `ci.yml` publish stage only, behind the ci-ok gate | on pod restart / session spawn                               |
-| Experimental Flux source (`main-ci-passed`)           | moving git tag                    | —          | `ci.yml` after ci-ok on `main` only                | experimental Flux reconcile (~1 min)                         |
+| Experimental Flux source (`main-ci-passed`)           | moving git tag                    | —          | `ci.yml` publish stage only, behind the ci-ok gate | experimental Flux reconcile (~1 min)                         |
 
 All auxiliary images (agentic-interface, af-pod-monitor, af-node-monitor)
 are on the continuous `:latest` channel — unversioned, no release step:
@@ -81,8 +81,8 @@ deletes release tags.
 
 - Channel tags (`:latest`, `:pre-release`), build tags (`in-`, `sha-`),
   and the experimental Flux tag (`main-ci-passed`) are CI-owned: they
-  move only in `ci.yml` after every stage of the same commit is green.
-  Hand-moving them defeats the gates.
+  move only in the `ci.yml` publish stage, after every stage of the same
+  commit is green. Hand-moving them defeats the gates.
 - The `AF_RELEASE_TOKEN` secret (fine-grained PAT, `contents: write`)
   must exist — release commits/tags pushed with the default
   `GITHUB_TOKEN` do not trigger CI, so the release commit would go
