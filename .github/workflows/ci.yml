@@ -59,6 +59,7 @@ jobs:
       AF_RELEASE_TOKEN: ${{ secrets.AF_RELEASE_TOKEN }}
     permissions:
       contents: write # lockfile commits
+      actions: write # workflow_dispatch when no PAT
 
   images:
     needs: pixi-base
@@ -77,6 +78,7 @@ jobs:
       AF_RELEASE_TOKEN: ${{ secrets.AF_RELEASE_TOKEN }}
     permissions:
       contents: write # lockfile commits
+      actions: write # workflow_dispatch when no PAT
       packages: read
 
   e2e:

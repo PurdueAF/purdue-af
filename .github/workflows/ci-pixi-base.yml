@@ -11,7 +11,9 @@ name: CI pixi-base
 #      userland (rockylinux:8) — catches libstdc++ issues Ubuntu would miss.
 #
 # Memoized when the lock was already in sync (image-inputs.sh key). Lock
-# commits use AF_RELEASE_TOKEN so the push re-triggers workflows.
+# commits prefer AF_RELEASE_TOKEN (PAT push re-triggers PR/push CI); without
+# it we push with GITHUB_TOKEN and workflow_dispatch CI on the new tip
+# (workflow_dispatch is allowed to re-trigger with GITHUB_TOKEN).
 # Pixi pin: keep in sync with PIXI_VERSION in docker/purdue-af/Dockerfile
 # and constraints.pixi in renovate.json5.
 
@@ -19,7 +21,7 @@ on:
   workflow_call:
     secrets:
       AF_RELEASE_TOKEN:
-        description: "PAT with contents:write — required to commit regenerated lockfiles"
+        description: "Optional PAT with contents:write — auto-retriggers CI on lock push"
         required: false
 
 permissions:
@@ -31,6 +33,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: write # commit regenerated pixi/base/pixi.lock
+      actions: write # workflow_dispatch when no PAT
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -84,17 +87,13 @@ jobs:
         env:
           HAVE_PAT: ${{ secrets.AF_RELEASE_TOKEN != '' }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
+          GH_TOKEN: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ] && \
              [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
             echo "::error::pixi/base/pixi.lock is out of sync with pixi.toml. " \
               "Fork PRs cannot receive lock commits — run \`pixi lock --manifest-path pixi/base/pixi.toml\` and push."
-            exit 1
-          fi
-          if [ "$HAVE_PAT" != "true" ]; then
-            echo "::error::AF_RELEASE_TOKEN secret is required to commit regenerated " \
-              "pixi.lock (GITHUB_TOKEN pushes do not re-trigger CI)."
             exit 1
           fi
           git config user.name "github-actions[bot]"
@@ -107,10 +106,19 @@ jobs:
           git commit -m "chore(pixi): regenerate base lockfile"
           git pull --rebase origin "$BRANCH"
           git push origin "HEAD:$BRANCH"
-          echo "Committed regenerated pixi/base/pixi.lock — follow-up CI will build the AF image." \
-            | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$HAVE_PAT" = "true" ]; then
+            echo "Committed pixi/base/pixi.lock — PAT push re-triggers CI." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            # GITHUB_TOKEN pushes do not fire pull_request/push workflows;
+            # workflow_dispatch is an explicit exception and attaches checks
+            # to the new tip (what branch protection looks at on the PR).
+            gh workflow run ci.yml --ref "$BRANCH"
+            echo "Committed pixi/base/pixi.lock — dispatched CI on $BRANCH." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
           # Fail this SHA so images does not build against a pre-lock tree.
-          # The push starts a new pipeline (concurrency cancels this run).
+          # The follow-up run (concurrency) cancels this one.
           exit 1
       - name: Record green run
         # Only memoize in-sync trees; a lock push triggers a new commit/CI.

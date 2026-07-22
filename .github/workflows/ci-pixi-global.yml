@@ -10,7 +10,8 @@ name: CI pixi-global
 #   3. import-smoke via pixi/check-env.py inside the AF image
 #
 # Memoized when the lock was already in sync (image-inputs.sh key + image
-# ref). Lock commits use AF_RELEASE_TOKEN. Pixi pin: keep in sync with
+# ref). Lock commits prefer AF_RELEASE_TOKEN; without it we push with
+# GITHUB_TOKEN and workflow_dispatch CI. Pixi pin: keep in sync with
 # PIXI_VERSION in docker/purdue-af/Dockerfile and constraints.pixi.
 # CONDA_OVERRIDE_CUDA mocks CUDA on CPU-only runners.
 
@@ -27,7 +28,7 @@ on:
         type: string
     secrets:
       AF_RELEASE_TOKEN:
-        description: "PAT with contents:write — required to commit regenerated lockfiles"
+        description: "Optional PAT with contents:write — auto-retriggers CI on lock push"
         required: false
 
 permissions:
@@ -39,6 +40,7 @@ jobs:
     timeout-minutes: 180
     permissions:
       contents: write # commit regenerated pixi/global/pixi.lock
+      actions: write # workflow_dispatch when no PAT
       packages: read # pull the (possibly private) AF image
     env:
       CONDA_OVERRIDE_CUDA: "12.4"
@@ -129,17 +131,13 @@ jobs:
         env:
           HAVE_PAT: ${{ secrets.AF_RELEASE_TOKEN != '' }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
+          GH_TOKEN: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ] && \
              [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
             echo "::error::pixi/global/pixi.lock is out of sync with pixi.toml. " \
               "Fork PRs cannot receive lock commits — run \`pixi lock --manifest-path pixi/global/pixi.toml\` and push."
-            exit 1
-          fi
-          if [ "$HAVE_PAT" != "true" ]; then
-            echo "::error::AF_RELEASE_TOKEN secret is required to commit regenerated " \
-              "pixi.lock (GITHUB_TOKEN pushes do not re-trigger CI)."
             exit 1
           fi
           git config user.name "github-actions[bot]"
@@ -152,8 +150,16 @@ jobs:
           git commit -m "chore(pixi): regenerate global lockfile"
           git pull --rebase origin "$BRANCH"
           git push origin "HEAD:$BRANCH"
-          echo "Committed regenerated pixi/global/pixi.lock — follow-up CI will verify." \
-            | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$HAVE_PAT" = "true" ]; then
+            echo "Committed pixi/global/pixi.lock — PAT push re-triggers CI." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            gh workflow run ci.yml --ref "$BRANCH"
+            echo "Committed pixi/global/pixi.lock — dispatched CI on $BRANCH." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          # Fail this SHA; follow-up CI runs on the lock commit.
+          exit 1
       - name: Record green run
         if: success() && steps.present.outputs.have_lock == 'true' && steps.memo.outputs.cache-hit != 'true' && steps.lock.outputs.updated != 'true'
         run: mkdir -p .ci-memo && echo ok > .ci-memo/marker
