@@ -13,6 +13,6 @@ spec:
     # CI-owned moving branch: advanced in the ci.yml publish stage behind
     # ci-ok. Near tip of main; visible in the GitHub Branches UI. Not
     # included in `git push --tags`.
-    branch: ci/main-passed
+    branch: main-validated
   secretRef:
     name: flux-github-token
