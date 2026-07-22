@@ -326,7 +326,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/73/67/deca91f5987ffdfce3898aa3a9fe4d72d3dd8650052d25a3de86a7c19d50/jupyter_archive-3.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/28/74/3975cf07c16cfafd618dce7a26a82db3b9716d8ef1eecb16e6ec3b9a6665/jupyter_resource_usage-1.2.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/94/c4/148eec071c341ba935a05f9bd61ddd08a7de8e9219f745b4dfd9868f1fef/jupyter_sshd_proxy-0.3.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/d9/b2/85b3135eb9dc5b6e914d503e05dabe4b4a54066692dd9a26931dc5e48f5f/jupyterlab_favorites-3.5.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/01/17/1e2b9a7f0fff21a0eb0333c11389ea88fe7e5419a25e8c2e6cc8ba9d55a0/jupyterlab_favorites-3.5.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fe/1f/d9928d5137e5ef6b099592b402457fbb77f4e17721465d6258fdb8b06ec3/jupyterlab_git-0.52.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/91/f3/fc82c9f22c851e68f17d26a8f3dd603f0bdfdc2005ab7e65961f9c870d2b/jupyterlab_iframe-0.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0d/4b/40119ec9f3e5a4a9351d49a5de829b3c61d4f588f78df167a0e5a9d326b8/jupyterlab_theme_toggler-1.1.0-py3-none-any.whl
@@ -684,7 +684,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/73/67/deca91f5987ffdfce3898aa3a9fe4d72d3dd8650052d25a3de86a7c19d50/jupyter_archive-3.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/28/74/3975cf07c16cfafd618dce7a26a82db3b9716d8ef1eecb16e6ec3b9a6665/jupyter_resource_usage-1.2.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/94/c4/148eec071c341ba935a05f9bd61ddd08a7de8e9219f745b4dfd9868f1fef/jupyter_sshd_proxy-0.3.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/d9/b2/85b3135eb9dc5b6e914d503e05dabe4b4a54066692dd9a26931dc5e48f5f/jupyterlab_favorites-3.5.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/01/17/1e2b9a7f0fff21a0eb0333c11389ea88fe7e5419a25e8c2e6cc8ba9d55a0/jupyterlab_favorites-3.5.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fe/1f/d9928d5137e5ef6b099592b402457fbb77f4e17721465d6258fdb8b06ec3/jupyterlab_git-0.52.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/91/f3/fc82c9f22c851e68f17d26a8f3dd603f0bdfdc2005ab7e65961f9c870d2b/jupyterlab_iframe-0.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0d/4b/40119ec9f3e5a4a9351d49a5de829b3c61d4f588f78df167a0e5a9d326b8/jupyterlab_theme_toggler-1.1.0-py3-none-any.whl
@@ -2546,10 +2546,10 @@ packages:
   - pkg:pypi/jupyterlab?source=hash-mapping
   size: 8861204
   timestamp: 1777483115382
-- pypi: https://files.pythonhosted.org/packages/d9/b2/85b3135eb9dc5b6e914d503e05dabe4b4a54066692dd9a26931dc5e48f5f/jupyterlab_favorites-3.5.0-py3-none-any.whl
+- pypi: https://files.pythonhosted.org/packages/01/17/1e2b9a7f0fff21a0eb0333c11389ea88fe7e5419a25e8c2e6cc8ba9d55a0/jupyterlab_favorites-3.5.2-py3-none-any.whl
   name: jupyterlab-favorites
-  version: 3.5.0
-  sha256: bbd52c74983250962a951971bfcabc434f810ada648b569f68b331deae070cbf
+  version: 3.5.2
+  sha256: c7df8412095f0db532aea8e1b827f3516e0c428a12085ec7338a8005422952bf
   requires_python: '>=3.8'
 - pypi: https://files.pythonhosted.org/packages/fe/1f/d9928d5137e5ef6b099592b402457fbb77f4e17721465d6258fdb8b06ec3/jupyterlab_git-0.52.0-py3-none-any.whl
   name: jupyterlab-git
