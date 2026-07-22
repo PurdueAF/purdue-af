@@ -30,7 +30,7 @@ repos:
       - id: prettier
         name: prettier (JSON/YAML)
         language: node
-        additional_dependencies: ["prettier@3.9.4"]
+        additional_dependencies: ["prettier@3.9.6"]
         entry: prettier --write
         types_or: [json, yaml]
 
