@@ -9,8 +9,10 @@ name: CI
 #                                     tagged in-<hash of its input tree>; an
 #                                     existing tag is VERIFIED reuse (the exact
 #                                     current state was already built + smoked)
-#   stage 1b pixi     ci-pixi.yml     env checks; pixi-global runs INSIDE the
-#                                     stage-1 AF image (the current state)
+#   stage 1b pixi     ci-pixi.yml     env checks; regenerates + commits
+#                                     pixi.lock when manifests drift (Renovate
+#                                     is manifest-only); pixi-global runs
+#                                     INSIDE the stage-1 AF image
 #   stage 2  e2e      ci-e2e.yml      hub stack in kind, one job per channel:
 #                                     e2e-production (spawns the image pinned
 #                                     in values.yaml — the "e2e = production"
@@ -61,8 +63,11 @@ jobs:
     with:
       af-image: ${{ needs.images.outputs.af-image }}
       af-image-available: ${{ needs.images.outputs.af-image-available }}
+    secrets:
+      # PAT so regenerated pixi.lock commits re-trigger CI (GITHUB_TOKEN cannot).
+      AF_RELEASE_TOKEN: ${{ secrets.AF_RELEASE_TOKEN }}
     permissions:
-      contents: read
+      contents: write # lockfile commits from ci-pixi.yml
       packages: read
 
   e2e:

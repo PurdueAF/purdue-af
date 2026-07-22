@@ -1,28 +1,33 @@
 name: CI pixi
 
-# Stage 1b of ci.yml — validates every pixi workspace under pixi/ with
-# `pixi install --locked` (fails if pixi.toml and pixi.lock are out of
-# sync), then import-smokes every direct dependency with pixi/check-env.py
-# — each package in a fresh interpreter, inside an EL8 userland. The EL8
-# container matters: import failures like the pip-tensorflow
-# `GLIBCXX_3.4.29` libstdc++ shadowing only reproduce on an EL8 host
-# (Ubuntu runners have a newer system libstdc++ and would silently pass).
+# Stage 1b of ci.yml — for every pixi workspace under pixi/:
+#   1. `pixi install --locked` when toml/lock agree
+#   2. otherwise `pixi lock` + install, then on green check-env commit the
+#      regenerated lock back to the branch (Renovate only bumps manifests;
+#      see skipArtifactsUpdate in renovate.json5)
+#   3. import-smoke every direct dependency with pixi/check-env.py — each
+#      package in a fresh interpreter, inside an EL8 userland. The EL8
+#      container matters: import failures like the pip-tensorflow
+#      `GLIBCXX_3.4.29` libstdc++ shadowing only reproduce on an EL8 host
+#      (Ubuntu runners have a newer system libstdc++ and would silently pass).
 #
 # pixi-global runs INSIDE the stage-1 AF image (the image for the CURRENT
 # repo state, not the promoted :pre-release) — same EL8 userland users
 # get, including CLI tools some packages need at import time (mlflow →
 # GitPython → the `git` binary, which a bare rockylinux:8 lacks).
 #
-# Both jobs are memoized: a green run is recorded under a cache key that
-# hashes the job's full input state (image-inputs.sh); an identical state
-# skips as verified reuse. Cache eviction only causes a redundant re-run.
+# Both jobs are memoized when the lock was already in sync: a green run is
+# recorded under a cache key that hashes the job's full input state
+# (image-inputs.sh). Regenerated-lock runs skip the memo write (the push
+# triggers a follow-up CI on the new commit).
+#
+# Lock commits use AF_RELEASE_TOKEN so the push re-triggers workflows
+# (GITHUB_TOKEN pushes do not). Fork PRs must regenerate locks locally.
 #
 # Pixi is pinned here (pixi-version, both jobs) — keep in sync with
-# PIXI_VERSION in docker/purdue-af/Dockerfile AND with constraints.pixi in
-# .github/renovate.json5 (so Renovate regenerates pixi.lock with the same
-# pixi — a newer one writes lock-file format v7, unreadable by 0.62.2).
-# pixi/global needs CONDA_OVERRIDE_CUDA on CPU-only CI runners (see job
-# env).
+# PIXI_VERSION in docker/purdue-af/Dockerfile and constraints.pixi in
+# .github/renovate.json5. pixi/global needs CONDA_OVERRIDE_CUDA on
+# CPU-only CI runners (see job env).
 
 on:
   workflow_call:
@@ -35,6 +40,10 @@ on:
         description: "'true' when af-image is pullable from ghcr"
         required: true
         type: string
+    secrets:
+      AF_RELEASE_TOKEN:
+        description: "PAT with contents:write — required to commit regenerated lockfiles"
+        required: false
 
 permissions:
   contents: read
@@ -43,8 +52,14 @@ jobs:
   check-pixi-base:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: write # commit regenerated pixi/base/pixi.lock
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # PR head branch so a lock commit can be pushed back; main on push.
+          ref: ${{ github.head_ref || github.ref_name }}
+          token: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
       - name: Compute memo key
         id: key
         run: echo "key=pixi-base-ok-$(./.github/workflows/image-inputs.sh pixi-base)" | tee -a "$GITHUB_OUTPUT"
@@ -63,20 +78,65 @@ jobs:
           pixi-version: v0.62.2
           manifest-path: pixi/base/pixi.toml
           environments: base-env
-          locked: true
-          cache: true
-          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          run-install: false
+          cache: false
+      - name: Install base env (regenerate lock if out of sync)
+        id: lock
+        if: steps.memo.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          MANIFEST=pixi/base/pixi.toml
+          if pixi install --manifest-path "$MANIFEST" --environment base-env --locked; then
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::pixi/base lock out of sync — regenerating with pixi lock"
+            pixi lock --manifest-path "$MANIFEST"
+            pixi install --manifest-path "$MANIFEST" --environment base-env --locked
+            echo "updated=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Import-smoke the base env (EL8 container, like production)
         if: steps.memo.outputs.cache-hit != 'true'
         run: |
           docker run --rm -v "$PWD:$PWD" -w "$PWD" rockylinux:8 \
             pixi/base/.pixi/envs/base-env/bin/python pixi/check-env.py \
               --manifest pixi/base/pixi.toml --env base-env
+      - name: Commit regenerated lockfile
+        if: success() && steps.memo.outputs.cache-hit != 'true' && steps.lock.outputs.updated == 'true'
+        env:
+          HAVE_PAT: ${{ secrets.AF_RELEASE_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ] && \
+             [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "::error::pixi/base/pixi.lock is out of sync with pixi.toml. " \
+              "Fork PRs cannot receive lock commits — run \`pixi lock --manifest-path pixi/base/pixi.toml\` and push."
+            exit 1
+          fi
+          if [ "$HAVE_PAT" != "true" ]; then
+            echo "::error::AF_RELEASE_TOKEN secret is required to commit regenerated " \
+              "pixi.lock (GITHUB_TOKEN pushes do not re-trigger CI)."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pixi/base/pixi.lock
+          if git diff --staged --quiet; then
+            echo "Lock regenerate produced no file change — nothing to commit"
+            exit 0
+          fi
+          git commit -m "chore(pixi): regenerate base lockfile"
+          # Rebase in case the sibling global job pushed first.
+          branch="${{ github.head_ref || github.ref_name }}"
+          git pull --rebase origin "$branch"
+          git push origin "HEAD:$branch"
+          echo "Committed regenerated pixi/base/pixi.lock — follow-up CI will verify." \
+            | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Record green run
-        if: success() && steps.memo.outputs.cache-hit != 'true'
+        # Only memoize in-sync trees; a lock push triggers a new commit/CI.
+        if: success() && steps.memo.outputs.cache-hit != 'true' && steps.lock.outputs.updated != 'true'
         run: mkdir -p .ci-memo && echo ok > .ci-memo/marker
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        if: success() && steps.memo.outputs.cache-hit != 'true'
+        if: success() && steps.memo.outputs.cache-hit != 'true' && steps.lock.outputs.updated != 'true'
         with:
           path: .ci-memo
           key: ${{ steps.key.outputs.key }}
@@ -85,19 +145,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
-      contents: read
+      contents: write # commit regenerated pixi/global/pixi.lock
       packages: read # pull the (possibly private) AF image
     # pixi/global requires CUDA (system-requirements); mock it on CPU-only runners.
     env:
       CONDA_OVERRIDE_CUDA: "12.4"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          token: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
       - name: Skip without lock file
-        if: hashFiles('pixi/global/pixi.lock') == ''
-        run: echo "pixi/global/pixi.lock not present — skipping"
+        id: present
+        run: |
+          if [ -f pixi/global/pixi.lock ]; then
+            echo "have_lock=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have_lock=false" >> "$GITHUB_OUTPUT"
+            echo "pixi/global/pixi.lock not present — will generate on first install"
+          fi
       - name: Pick the AF image to test inside
         id: image
-        if: hashFiles('pixi/global/pixi.lock') != ''
         run: |
           if [ "${{ inputs.af-image-available }}" = "true" ]; then
             image="${{ inputs.af-image }}"
@@ -110,37 +178,51 @@ jobs:
           echo "image=$image" | tee -a "$GITHUB_OUTPUT"
       - name: Compute memo key
         id: key
-        if: hashFiles('pixi/global/pixi.lock') != ''
+        if: steps.present.outputs.have_lock == 'true'
         run: |
           img="${{ steps.image.outputs.image }}"
           echo "key=pixi-global-ok-$(./.github/workflows/image-inputs.sh pixi-global)-${img##*:}" | tee -a "$GITHUB_OUTPUT"
       - name: Look up recorded green run
         id: memo
-        if: hashFiles('pixi/global/pixi.lock') != ''
+        if: steps.present.outputs.have_lock == 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: .ci-memo
           key: ${{ steps.key.outputs.key }}
       - name: Verified reuse — identical input state already passed
-        if: hashFiles('pixi/global/pixi.lock') != '' && steps.memo.outputs.cache-hit == 'true'
+        if: steps.present.outputs.have_lock == 'true' && steps.memo.outputs.cache-hit == 'true'
         run: echo "skipping — ${{ steps.key.outputs.key }} already green" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f # v0.10.0 # Renovate pins to digest
-        if: hashFiles('pixi/global/pixi.lock') != '' && steps.memo.outputs.cache-hit != 'true'
+        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.cache-hit != 'true'
         with:
           pixi-version: v0.62.2
           manifest-path: pixi/global/pixi.toml
-          locked: true
-          cache: true
-          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          run-install: false
+          cache: false
+      - name: Install global env (regenerate lock if out of sync)
+        id: lock
+        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          MANIFEST=pixi/global/pixi.toml
+          if [ -f pixi/global/pixi.lock ] && \
+             pixi install --manifest-path "$MANIFEST" --locked; then
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::pixi/global lock missing or out of sync — regenerating with pixi lock"
+            pixi lock --manifest-path "$MANIFEST"
+            pixi install --manifest-path "$MANIFEST" --locked
+            echo "updated=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Login to ghcr.io
-        if: hashFiles('pixi/global/pixi.lock') != '' && steps.memo.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: (steps.present.outputs.have_lock != 'true' || steps.memo.outputs.cache-hit != 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
       - name: Import-smoke the global env (inside the AF image)
-        if: hashFiles('pixi/global/pixi.lock') != '' && steps.memo.outputs.cache-hit != 'true'
+        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.cache-hit != 'true'
         run: |
           # --user 0: the image defaults to jovyan (uid 1000), but the env
           # installed on the runner is owned by the runner user (uid 1001)
@@ -149,11 +231,42 @@ jobs:
             "${{ steps.image.outputs.image }}" \
             pixi/global/.pixi/envs/default/bin/python pixi/check-env.py \
               --manifest pixi/global/pixi.toml --env default
+      - name: Commit regenerated lockfile
+        if: success() && (steps.present.outputs.have_lock != 'true' || steps.memo.outputs.cache-hit != 'true') && steps.lock.outputs.updated == 'true'
+        env:
+          HAVE_PAT: ${{ secrets.AF_RELEASE_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ] && \
+             [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "::error::pixi/global/pixi.lock is out of sync with pixi.toml. " \
+              "Fork PRs cannot receive lock commits — run \`pixi lock --manifest-path pixi/global/pixi.toml\` and push."
+            exit 1
+          fi
+          if [ "$HAVE_PAT" != "true" ]; then
+            echo "::error::AF_RELEASE_TOKEN secret is required to commit regenerated " \
+              "pixi.lock (GITHUB_TOKEN pushes do not re-trigger CI)."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pixi/global/pixi.lock
+          if git diff --staged --quiet; then
+            echo "Lock regenerate produced no file change — nothing to commit"
+            exit 0
+          fi
+          git commit -m "chore(pixi): regenerate global lockfile"
+          # Rebase in case the sibling base job pushed first.
+          branch="${{ github.head_ref || github.ref_name }}"
+          git pull --rebase origin "$branch"
+          git push origin "HEAD:$branch"
+          echo "Committed regenerated pixi/global/pixi.lock — follow-up CI will verify." \
+            | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Record green run
-        if: success() && hashFiles('pixi/global/pixi.lock') != '' && steps.memo.outputs.cache-hit != 'true'
+        if: success() && steps.present.outputs.have_lock == 'true' && steps.memo.outputs.cache-hit != 'true' && steps.lock.outputs.updated != 'true'
         run: mkdir -p .ci-memo && echo ok > .ci-memo/marker
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        if: success() && hashFiles('pixi/global/pixi.lock') != '' && steps.memo.outputs.cache-hit != 'true'
+        if: success() && steps.present.outputs.have_lock == 'true' && steps.memo.outputs.cache-hit != 'true' && steps.lock.outputs.updated != 'true'
         with:
           path: .ci-memo
           key: ${{ steps.key.outputs.key }}

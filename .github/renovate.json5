@@ -11,7 +11,13 @@
 //   - Dockerfile base images (FROM tags)
 //   - GitHub Actions versions (+ pins them to commit SHAs)
 //   - Python deps (docker/agentic-interface/pyproject.toml + uv.lock) via the uv manager
+//   - pixi manifests (pixi/{base,global}/pixi.toml) — NOT lockfiles
 //   - pre-commit hook versions
+//
+// Pixi lockfiles: Renovate only bumps pixi.toml. CI (ci-pixi.yml) regenerates
+// pixi.lock when out of sync, runs check-env, and on success commits the lock
+// back to the PR branch. That keeps Mend runners free of `pixi lock` (which
+// OOMs / fills disk on the science stack) while still landing green PRs.
 {
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   extends: [
@@ -25,18 +31,20 @@
   timezone: 'America/Indiana/Indianapolis',
   labels: ['dependencies'],
 
-  // Tool versions Renovate uses when regenerating lock files.
+  prConcurrentLimit: 2,
+  branchConcurrentLimit: 2,
+
+  // Which pixi CI/Docker use when they regenerate locks (not used by Renovate
+  // itself — skipArtifactsUpdate below). Keep in sync with PIXI_VERSION in
+  // docker/purdue-af/Dockerfile and pixi-version in ci-pixi.yml: newer pixi
+  // writes lock-file format v7, which 0.62.2 cannot read.
   constraints: {
-    // MUST match the repo's pixi pin (PIXI_VERSION in
-    // docker/purdue-af{,-new}/Dockerfile and pixi-version in
-    // .github/workflows/ci-pixi.yml): newer pixi rewrites pixi.lock in
-    // lock-file format v7, which pixi 0.62.2 cannot read — every
-    // pixi-touching PR would fail `pixi install --locked` in CI.
     pixi: '0.62.2',
   },
 
   ignorePaths: [
     'docker/dask-gateway-server/**', // vendored fork — tracked upstream, do not churn
+    'docker/purdue-af-old/**', // legacy image tree
   ],
 
   // Flux manager is opt-in by path: parse everything Flux reconciles.
@@ -47,7 +55,6 @@
   'pre-commit': {
     enabled: true,
   },
-
 
   packageRules: [
     {
@@ -81,9 +88,23 @@
       allowedVersions: '<2025.4.0',
     },
     {
-      // pixi manifest updates trigger pixi-check (lock + install).
-      matchFileNames: ['pixi/**'],
+      // Manifest-only: CI regenerates pixi.lock (see ci-pixi.yml). Skipping
+      // artifacts here is what keeps Mend runners from running `pixi lock`.
+      matchManagers: ['pixi'],
+      skipArtifactsUpdate: true,
       addLabels: ['pixi'],
+    },
+    {
+      // One PR for the AF base env so co-dependent pins bump together
+      // (e.g. jupyterlab needing a matching jupyter_server).
+      matchManagers: ['pixi'],
+      matchFileNames: ['pixi/base/**'],
+      groupName: 'pixi-base',
+    },
+    {
+      matchManagers: ['pixi'],
+      matchFileNames: ['pixi/global/**'],
+      groupName: 'pixi-global',
     },
     {
       // pixi's pep440 ranges let Renovate propose pre-releases
