@@ -61,6 +61,12 @@ LOCK_STALE_SECONDS = int(os.environ.get("LOCK_STALE_SECONDS", "600"))
 # every 30 s) — take over after this many seconds of a frozen heartbeat
 LOCK_FROZEN_SECONDS = int(os.environ.get("LOCK_FROZEN_SECONDS", "90"))
 METRICS_PORT = int(os.environ.get("METRICS_PORT", "9099"))
+# CI gate: only sync a lock whose introducing commit has ALL GitHub checks
+# green. Fail-closed (API errors block syncing, never break the live env).
+REQUIRE_CI_CHECKS = os.environ.get("REQUIRE_CI_CHECKS", "1") == "1"
+GITHUB_REPO = os.environ.get("GITHUB_REPO", "PurdueAF/purdue-af")
+GITHUB_LOCK_PATH = os.environ.get("GITHUB_LOCK_PATH", "pixi/global/pixi.lock")
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
 LIVE_DIR = WORK_ROOT / "global"  # plain pixi project dir, as it always was
 CACHE_DIR = WORK_ROOT / ".cache"
@@ -72,6 +78,7 @@ METRICS = {
     "in_sync": 0.0,  # 1 = live pixi.lock matches the repo's
     "paused": 0.0,  # 1 = .sync-pause present, daemon hands-off
     "env_healthy": 1.0,  # 0 after a failed verify, until healed
+    "ci_gate_ok": 1.0,  # 0 = desired lock blocked (checks pending/failed)
     "last_success_timestamp_seconds": 0.0,
     "last_attempt_timestamp_seconds": 0.0,
     "syncs_total": 0.0,
@@ -170,6 +177,120 @@ def stage_manifests(target_dir, files):
         tmp = target_dir / f".{name}.tmp"
         tmp.write_bytes(data)
         tmp.replace(target_dir / name)
+
+
+# ── CI gate ──────────────────────────────────────────────────────────────
+OK_CONCLUSIONS = {"success", "neutral", "skipped"}
+BAD_CONCLUSIONS = {"failure", "timed_out", "cancelled", "action_required", "stale"}
+
+
+def aggregate_check_runs(runs):
+    """GitHub check-runs → ('success'|'pending'|'failure', detail)."""
+    if not runs:
+        return "pending", "no check runs reported yet"
+    bad = [r["name"] for r in runs if r.get("conclusion") in BAD_CONCLUSIONS]
+    if bad:
+        return "failure", "failed checks: " + ", ".join(sorted(bad))
+    unfinished = [
+        r["name"]
+        for r in runs
+        if r.get("status") != "completed" or r.get("conclusion") not in OK_CONCLUSIONS
+    ]
+    if unfinished:
+        return "pending", "awaiting: " + ", ".join(sorted(unfinished)[:5])
+    return "success", f"{len(runs)} checks green"
+
+
+class CiGate:
+    """Answers: is the desired lock content blessed by CI on main?
+
+    Uses conditional requests (ETag) so the steady state costs zero API
+    rate limit; blessed shas are cached forever. `fetch` is injectable
+    for tests: fetch(url) -> (status, body_bytes)."""
+
+    def __init__(self, fetch=None):
+        self.fetch = fetch or self._fetch_urllib
+        self._etags = {}  # url -> (etag, cached_body)
+        self._blessed = set()  # shas fully verified green
+        self._content_ok = {}  # sha -> bool (blob matches desired)
+        self._last_logged = None
+
+    def _fetch_urllib(self, url):
+        import urllib.error
+        import urllib.request
+
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "pixi-global-sync",
+        }
+        if GITHUB_TOKEN:
+            headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
+        etag, cached = self._etags.get(url, (None, None))
+        if etag:
+            headers["If-None-Match"] = etag
+        request = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(request, timeout=20) as resp:
+                body = resp.read()
+                if resp.headers.get("ETag"):
+                    self._etags[url] = (resp.headers["ETag"], body)
+                return resp.status, body
+        except urllib.error.HTTPError as err:
+            if err.code == 304 and cached is not None:
+                return 200, cached
+            return err.code, err.read() if err.fp else b""
+
+    def _json(self, url):
+        status, body = self.fetch(url)
+        if status != 200:
+            raise RuntimeError(f"GitHub API {status} for {url}")
+        return json.loads(body)
+
+    def evaluate(self, desired_lock_bytes):
+        """→ (allowed: bool, reason: str). Never raises."""
+        try:
+            commits = self._json(
+                f"https://api.github.com/repos/{GITHUB_REPO}/commits"
+                f"?path={GITHUB_LOCK_PATH}&sha=main&per_page=1"
+            )
+            if not commits:
+                return False, "no commit found for the lock path"
+            sha = commits[0]["sha"]
+
+            if sha not in self._content_ok:
+                status, blob = self.fetch(
+                    f"https://raw.githubusercontent.com/{GITHUB_REPO}/{sha}/{GITHUB_LOCK_PATH}"
+                )
+                if status != 200:
+                    return False, f"cannot fetch lock blob at {sha[:8]} ({status})"
+                self._content_ok[sha] = blob == desired_lock_bytes
+            if not self._content_ok[sha]:
+                return False, (
+                    f"desired manifests do not match lock commit {sha[:8]} "
+                    "(Flux catching up?)"
+                )
+            if sha in self._blessed:
+                return True, f"commit {sha[:8]} already verified"
+
+            runs = self._json(
+                f"https://api.github.com/repos/{GITHUB_REPO}/commits/{sha}"
+                "/check-runs?per_page=100"
+            ).get("check_runs", [])
+            verdict, detail = aggregate_check_runs(runs)
+            if verdict == "success":
+                self._blessed.add(sha)
+                return True, f"commit {sha[:8]}: {detail}"
+            return False, f"commit {sha[:8]}: {detail}"
+        except Exception as err:  # fail-closed, but never crash the loop
+            return False, f"CI gate error (fail-closed): {err}"
+
+    def log_once(self, allowed, reason):
+        key = (allowed, reason.split(" (")[0])
+        if key != self._last_logged:
+            (log.info if allowed else log.warning)(
+                "CI gate: %s — %s", "PASS" if allowed else "BLOCKED", reason
+            )
+            self._last_logged = key
 
 
 # ── singleton lock (NFS-safe: mkdir is atomic; heartbeat allows takeover) ─
@@ -347,6 +468,7 @@ def validate_env(env_dir):
 # ── reconcile ────────────────────────────────────────────────────────────
 _last_failure = {"ts": 0.0}
 _was_paused = {"value": False}
+_ci_gate = CiGate()
 
 
 def short_hash(data):
@@ -378,6 +500,13 @@ def reconcile(force=False):
         return True
     if not force and time.time() - _last_failure["ts"] < FAIL_COOLDOWN:
         return False
+
+    if REQUIRE_CI_CHECKS:
+        allowed, reason = _ci_gate.evaluate(desired["pixi.lock"])
+        _ci_gate.log_once(allowed, reason)
+        metric_set("ci_gate_ok", 1.0 if allowed else 0.0)
+        if not allowed:
+            return False  # re-evaluated next cycle (ETag-cached, cheap)
 
     log.info(
         "%s: live lock %s -> desired %s; syncing",

@@ -140,6 +140,79 @@ class TestFrozenHeartbeat:
         assert observer.frozen(130.0, 171)
 
 
+class TestCiGate:
+    @staticmethod
+    def run(name, status="completed", conclusion="success"):
+        return {"name": name, "status": status, "conclusion": conclusion}
+
+    def test_aggregate_all_green(self, sync):
+        runs = [
+            self.run("checks"),
+            self.run("e2e"),
+            self.run("lint", conclusion="skipped"),
+        ]
+        assert sync.aggregate_check_runs(runs)[0] == "success"
+
+    def test_aggregate_failure_names_the_check(self, sync):
+        runs = [self.run("checks"), self.run("pixi-global", conclusion="failure")]
+        verdict, detail = sync.aggregate_check_runs(runs)
+        assert verdict == "failure" and "pixi-global" in detail
+
+    def test_aggregate_pending(self, sync):
+        runs = [
+            self.run("checks"),
+            self.run("e2e", status="in_progress", conclusion=None),
+        ]
+        assert sync.aggregate_check_runs(runs)[0] == "pending"
+
+    def test_aggregate_no_runs_is_pending(self, sync):
+        assert sync.aggregate_check_runs([])[0] == "pending"
+
+    def _fake_fetch(self, sync, lock=b"LOCK", conclusion="success"):
+        def fetch(url):
+            if "/commits?" in url:
+                return 200, json.dumps([{"sha": "a" * 40}]).encode()
+            if "raw.githubusercontent" in url:
+                return 200, lock
+            if "/check-runs" in url:
+                return 200, json.dumps(
+                    {"check_runs": [self.run("ci-ok", conclusion=conclusion)]}
+                ).encode()
+            raise AssertionError(url)
+
+        return fetch
+
+    def test_gate_passes_and_caches_blessed_sha(self, sync):
+        gate = sync.CiGate(fetch=self._fake_fetch(sync))
+        assert gate.evaluate(b"LOCK")[0] is True
+
+        # second call may re-ask WHICH commit is latest (ETag-cached in
+        # production) but must not re-fetch the blob or the check-runs
+        def commits_only(url):
+            if "/commits?" in url:
+                return 200, json.dumps([{"sha": "a" * 40}]).encode()
+            raise AssertionError(f"unexpected re-fetch: {url}")
+
+        gate.fetch = commits_only
+        allowed, reason = gate.evaluate(b"LOCK")
+        assert allowed and "already verified" in reason
+
+    def test_gate_blocks_on_failed_checks(self, sync):
+        gate = sync.CiGate(fetch=self._fake_fetch(sync, conclusion="failure"))
+        allowed, reason = gate.evaluate(b"LOCK")
+        assert not allowed and "ci-ok" in reason
+
+    def test_gate_blocks_on_content_mismatch(self, sync):
+        gate = sync.CiGate(fetch=self._fake_fetch(sync, lock=b"OTHER"))
+        allowed, reason = gate.evaluate(b"LOCK")
+        assert not allowed and "do not match" in reason
+
+    def test_gate_fails_closed_on_api_error(self, sync):
+        gate = sync.CiGate(fetch=lambda url: (500, b""))
+        allowed, reason = gate.evaluate(b"LOCK")
+        assert not allowed and "fail-closed" in reason
+
+
 class TestMetrics:
     def test_exposition_renders_all_series(self, sync):
         text = sync.render_metrics()
