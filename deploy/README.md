@@ -25,9 +25,9 @@ The components of the Analysis Facility are divided into **core** and **experime
   succeeds, the publish stage force-pushes `ci/main-passed` to that
   commit and Flux deploys it (experimental components are purposely
   brittle for faster prototyping, but still behind the same CI gate as
-  image channels). Do not push to `ci/main-passed` by hand — the
-  `protect-ci-main-passed` ruleset restricts updates to org/repo admins
-  (CI uses `AF_RELEASE_TOKEN`).
+  image channels). Do not push to `ci/main-passed` by hand — only the
+  publish job should move it (`protect-ci-main-passed` blocks deleting
+  the branch; updates are left open so `GITHUB_TOKEN` can force-push).
 
 ### Retired pointers
 

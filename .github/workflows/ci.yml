@@ -129,10 +129,10 @@ jobs:
     #   git                → ci/main-passed  (Flux experimental source;
     #                                          moving branch — visible in the
     #                                          GH UI, not pushed by --tags;
-    #                                          AF_RELEASE_TOKEN so the push
-    #                                          bypasses protect-ci-main-passed;
-    #                                          safe: no workflow listens to
-    #                                          pushes on this branch)
+    #                                          GITHUB_TOKEN on purpose: no
+    #                                          workflow listens to this branch,
+    #                                          and AF_RELEASE_TOKEN is optional
+    #                                          in this repo)
     # Versioned promotion to production stays human: release-image.yml.
     needs: [ci-ok, images]
     if: >-
@@ -142,7 +142,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write # ci/main-passed branch (fallback if no PAT)
+      contents: write # ci/main-passed branch
       packages: write
     steps:
       - name: Refuse to promote off main
@@ -190,10 +190,6 @@ jobs:
             "$repo@$AF_DIGEST"
           echo "published $repo@$AF_DIGEST -> :sha-${GITHUB_SHA::12} + :pre-release" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          # Admin-capable PAT: protect-ci-main-passed blocks github-actions[bot].
-          # Pushing ci/main-passed does not retrigger CI (workflows filter to main).
-          token: ${{ secrets.AF_RELEASE_TOKEN }}
       - name: Advance ci/main-passed to this commit
         run: |
           set -euo pipefail
