@@ -1,8 +1,10 @@
 """Tests for extraFiles/cull-gpu-sessions.py — the 24h idle cull of full-GPU pods."""
 
+import asyncio
 import datetime
 import types
 
+import pytest
 from common import REPO, load_script
 
 SCRIPT = (
@@ -144,3 +146,124 @@ async def test_named_servers_and_special_usernames_are_quoted():
     await mod.cull_once("cms", ONE_DAY)
 
     assert ("DELETE", "/users/eve%40cern.ch/servers/gpu-box") in calls
+
+
+# ── full_gpu_servers (k8s edge) ───────────────────────────────────────────────
+
+
+async def test_full_gpu_servers_filters_pods(monkeypatch):
+    mod = culler()
+    pods = [
+        fake_pod(
+            limits={FULL: "1"},
+            annotations={"hub.jupyter.org/username": "alice"},
+            phase="Running",
+        ),
+        fake_pod(
+            limits={FULL: "1"},
+            annotations={"hub.jupyter.org/username": "stopped"},
+            phase="Succeeded",
+        ),
+        fake_pod(
+            limits={"nvidia.com/mig-1g.5gb": "1"},
+            annotations={"hub.jupyter.org/username": "partial"},
+            phase="Running",
+        ),
+        fake_pod(limits={FULL: "1"}, annotations=None, phase="Running"),
+        fake_pod(
+            limits={FULL: "1"},
+            annotations={
+                "hub.jupyter.org/username": "bob",
+                "hub.jupyter.org/servername": "gpu",
+            },
+            phase="Running",
+        ),
+    ]
+
+    class FakeCore:
+        def __init__(self, _api):
+            pass
+
+        async def list_namespaced_pod(self, namespace, label_selector):
+            assert namespace == "cms"
+            assert label_selector == mod.POD_SELECTOR
+            return types.SimpleNamespace(items=pods)
+
+    class FakeClient:
+        CoreV1Api = FakeCore
+
+        class ApiClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+    fake_k8s = types.SimpleNamespace(
+        client=FakeClient,
+        config=types.SimpleNamespace(load_incluster_config=lambda: None),
+    )
+    monkeypatch.setitem(__import__("sys").modules, "kubernetes_asyncio", fake_k8s)
+    monkeypatch.setitem(
+        __import__("sys").modules, "kubernetes_asyncio.client", fake_k8s.client
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules, "kubernetes_asyncio.config", fake_k8s.config
+    )
+
+    assert await mod.full_gpu_servers("cms") == [("alice", ""), ("bob", "gpu")]
+
+
+# ── hub_api + main loop ───────────────────────────────────────────────────────
+
+
+async def test_hub_api_get_and_empty_body(monkeypatch):
+    mod = culler()
+    monkeypatch.setenv("JUPYTERHUB_API_URL", "http://hub/api/")
+    monkeypatch.setenv("JUPYTERHUB_API_TOKEN", "secret")
+
+    class FakeResponse:
+        def __init__(self, body):
+            self.body = body
+
+    calls = []
+
+    class FakeClient:
+        async def fetch(self, request):
+            calls.append((request.method, request.url, request.headers))
+            if request.method == "DELETE":
+                return FakeResponse(b"")
+            return FakeResponse(b'{"servers":{}}')
+
+    monkeypatch.setattr(mod, "AsyncHTTPClient", lambda: FakeClient())
+
+    assert await mod.hub_api("GET", "/users/alice") == {"servers": {}}
+    assert await mod.hub_api("DELETE", "/users/alice/server") is None
+    assert calls[0][0] == "GET"
+    assert calls[0][1] == "http://hub/api/users/alice"
+    assert calls[0][2]["Authorization"] == "token secret"
+
+
+async def test_main_continues_after_cull_failure(monkeypatch):
+    mod = culler()
+    passes = {"n": 0}
+
+    async def boom(namespace, timeout):
+        passes["n"] += 1
+        if passes["n"] == 1:
+            raise RuntimeError("transient")
+        raise asyncio.CancelledError()
+
+    sleeps = []
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(mod, "cull_once", boom)
+    monkeypatch.setattr(mod.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        await mod.main("cms", ONE_DAY, every=7)
+
+    assert passes["n"] == 2
+    assert sleeps == [7]

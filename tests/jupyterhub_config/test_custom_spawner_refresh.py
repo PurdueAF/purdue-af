@@ -6,10 +6,6 @@ the name/domain keys that authenticate()/post_auth_hook inject at login;
 set-user-info.py's auth_state_hook then KeyErrors and every spawn 500s.
 This broke the 2025-09 (4.2.0) and 2026-06 (4.3.5) chart upgrades.
 custom-spawner.py pins refresh_user to "no change" — this test pins the pin.
-
-(Kept separate from test_custom_spawner.py, which is skip-marked wholesale:
-it asserts the reverted-and-pending rewrite's behavior, not the deployed
-snippet's.)
 """
 
 import asyncio

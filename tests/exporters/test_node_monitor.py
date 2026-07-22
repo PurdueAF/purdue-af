@@ -230,3 +230,145 @@ def test_check_throughput_fio_failure(monkeypatch):
     ok, timeout, gbps, ts = runner._check_throughput(None)
     assert (ok, gbps) == (False, 0.0)
     assert ts is None  # timestamp not advanced on failure
+
+
+def test_check_throughput_fio_timeout(monkeypatch):
+    import subprocess as sp
+
+    monkeypatch.setattr(runner, "ENABLE_FIO", True)
+    monkeypatch.setattr(runner, "FIO_FILE", "/probe")
+
+    def boom(*a, **kw):
+        raise sp.TimeoutExpired(cmd="fio", timeout=1)
+
+    monkeypatch.setattr(runner.subprocess, "run", boom)
+    ok, timeout, gbps, ts = runner._check_throughput(None)
+    assert (ok, timeout, gbps) == (False, True, 0.0)
+    assert ts is None
+
+
+def test_check_throughput_fio_bad_json(monkeypatch):
+    import types
+
+    monkeypatch.setattr(runner, "ENABLE_FIO", True)
+    monkeypatch.setattr(runner, "FIO_FILE", "/probe")
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *a, **kw: types.SimpleNamespace(returncode=0, stdout="not-json"),
+    )
+    ok, timeout, gbps, ts = runner._check_throughput(None)
+    assert (ok, timeout, gbps) == (False, False, 0.0)
+    assert ts is None
+
+
+def test_check_ping_failure_without_reason(monkeypatch):
+    monkeypatch.setattr(runner, "CHECKSUM", "")
+    stub_run_subprocess(monkeypatch, ok=False, reason="")
+    ok, timeout, _ = runner._check_ping()
+    assert (ok, timeout) == (False, False)
+
+
+def test_check_metadata_failure_paths(monkeypatch):
+    monkeypatch.setattr(runner, "METADATA_DIR", "/data")
+    stub_run_subprocess(monkeypatch, ok=False, timeout=True)
+    ok, timeout, _ = runner._check_metadata()
+    assert (ok, timeout) == (False, True)
+
+    stub_run_subprocess(monkeypatch, ok=False, reason="")
+    ok, timeout, _ = runner._check_metadata()
+    assert (ok, timeout) == (False, False)
+
+
+# ── main orchestration ────────────────────────────────────────────────────────
+
+
+def test_main_writes_timeout_when_ping_fails(monkeypatch, tmp_path):
+    monkeypatch.setattr(runner, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(runner, "MOUNT_NAME", "/depot/")
+    monkeypatch.setattr(runner, "NODE_NAME", "node-a")
+    monkeypatch.setattr(runner, "ENABLE_FIO", False)
+    monkeypatch.setattr(runner, "FIO_FILE", None)
+    monkeypatch.setattr(
+        runner, "_check_ping", lambda: (False, False, 12.0)
+    )
+    monkeypatch.setattr(
+        runner, "_check_metadata", lambda: (True, False, 1.0)
+    )
+
+    runner.main()
+
+    result = json.loads((tmp_path / "depot__node-a.json").read_text())
+    assert result["ok"] is False
+    assert result["timeout"] is True
+    assert result["throughput_gbps"] == 0.0
+    assert result["node"] == "node-a"
+
+
+def test_main_success_without_node_name(monkeypatch, tmp_path):
+    monkeypatch.setattr(runner, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(runner, "MOUNT_NAME", "/work/")
+    monkeypatch.setattr(runner, "NODE_NAME", "")
+    monkeypatch.setattr(runner, "ENABLE_FIO", False)
+    monkeypatch.setattr(runner, "FIO_FILE", None)
+    monkeypatch.setattr(runner, "_check_ping", lambda: (True, False, 5.0))
+    monkeypatch.setattr(
+        runner, "_check_metadata", lambda: (True, False, 2.0)
+    )
+    monkeypatch.setattr(
+        runner, "_check_throughput", lambda last: (True, False, None, last)
+    )
+
+    runner.main()
+
+    result = json.loads((tmp_path / "work.json").read_text())
+    assert result["ok"] is True
+    assert result["timeout"] is False
+    assert result["ping_ms"] == 5.0
+    assert result["node"] == ""
+
+
+def test_main_runs_fio_and_records_throughput(monkeypatch, tmp_path):
+    monkeypatch.setattr(runner, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(runner, "MOUNT_NAME", "/depot/")
+    monkeypatch.setattr(runner, "NODE_NAME", "n1")
+    monkeypatch.setattr(runner, "ENABLE_FIO", True)
+    monkeypatch.setattr(runner, "FIO_FILE", "/probe")
+    monkeypatch.setattr(runner, "FIO_INTERVAL_S", 1.0)
+    monkeypatch.setattr(runner, "_check_ping", lambda: (True, False, 1.0))
+    monkeypatch.setattr(
+        runner, "_check_metadata", lambda: (True, False, 1.0)
+    )
+    monkeypatch.setattr(
+        runner, "_check_throughput", lambda last: (True, False, 3.5, 12345.0)
+    )
+
+    runner.main()
+
+    result = json.loads((tmp_path / "depot__n1.json").read_text())
+    assert result["ok"] is True
+    assert result["throughput_gbps"] == 3.5
+    assert result["last_fio_ts"] == 12345.0
+
+
+def test_main_tolerates_corrupt_previous_last_fio_ts(monkeypatch, tmp_path):
+    monkeypatch.setattr(runner, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(runner, "MOUNT_NAME", "/depot/")
+    monkeypatch.setattr(runner, "NODE_NAME", "n1")
+    path = tmp_path / "depot__n1.json"
+    path.write_text('{"last_fio_ts": "not-a-float", "throughput_gbps": 1.0}')
+    monkeypatch.setattr(runner, "ENABLE_FIO", False)
+    monkeypatch.setattr(runner, "FIO_FILE", None)
+    monkeypatch.setattr(runner, "_check_ping", lambda: (True, False, 1.0))
+    monkeypatch.setattr(
+        runner, "_check_metadata", lambda: (True, False, None)
+    )
+    monkeypatch.setattr(
+        runner, "_check_throughput", lambda last: (True, False, None, last)
+    )
+
+    runner.main()
+
+    result = json.loads(path.read_text())
+    assert result["ok"] is True
+    assert result["last_fio_ts"] is None

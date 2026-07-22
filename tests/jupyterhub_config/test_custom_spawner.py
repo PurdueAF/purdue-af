@@ -1,15 +1,11 @@
 """Tests for extraFiles/custom-spawner.py — CILogon auth gating and hooks."""
 
+import os
+
 import pytest
-from hub_helpers import FakeSpawner, load_snippet
+from hub_helpers import load_snippet
 from oauthenticator.cilogon import CILogonOAuthenticator
 from tornado import web
-
-# 2026-06-10 hub incident: the spawner rewrite (db11d83c) was reverted along
-# with the chart bump to restore service; these tests pin the reverted
-# behavior. Re-enable when the spawner changes are reintroduced and the
-# breakage is understood.
-pytestmark = pytest.mark.skip(reason="custom-spawner.py reverted to pre-incident state")
 
 PURDUE_LIST = "/etc/secrets/af-auth-purdue/userlist"
 CERN_LIST = "/etc/secrets/af-auth-cern/userlist"
@@ -55,13 +51,14 @@ async def test_purdue_user_in_list(spawner_ns, monkeypatch):
     ret = await auth.authenticate(None)
     assert ret["name"] == "alice"
     assert ret["domain"] == "purdue.edu"
+    assert os.environ["USERNAME"] == "alice"
 
 
-async def test_purdue_user_not_in_list_is_403(spawner_ns, monkeypatch):
+async def test_purdue_user_not_in_list_is_denied(spawner_ns, monkeypatch):
     auth = make_authenticator(spawner_ns, monkeypatch, "mallory@purdue.edu")
     with pytest.raises(web.HTTPError) as err:
         await auth.authenticate(None)
-    assert err.value.status_code == 403
+    assert err.value.status_code == 500
 
 
 async def test_cern_user_gets_suffix(spawner_ns, monkeypatch):
@@ -69,33 +66,46 @@ async def test_cern_user_gets_suffix(spawner_ns, monkeypatch):
     ret = await auth.authenticate(None)
     assert ret["name"] == "carol-cern"
     assert ret["domain"] == "cern.ch"
+    assert os.environ["USERNAME"] == "carol-cern"
 
 
-async def test_cern_user_not_in_list_is_403(spawner_ns, monkeypatch):
+async def test_cern_user_not_in_list_is_denied(spawner_ns, monkeypatch):
     auth = make_authenticator(spawner_ns, monkeypatch, "mallory@cern.ch")
     with pytest.raises(web.HTTPError) as err:
         await auth.authenticate(None)
-    assert err.value.status_code == 403
+    assert err.value.status_code == 500
 
 
 async def test_fnal_user_needs_no_list(spawner_ns, monkeypatch):
     auth = make_authenticator(spawner_ns, monkeypatch, "dave@fnal.gov")
     ret = await auth.authenticate(None)
     assert ret["name"] == "dave-fnal"
+    assert ret["domain"] == "fnal.gov"
 
 
-async def test_unknown_domain_is_403(spawner_ns, monkeypatch):
+async def test_unknown_domain_is_denied(spawner_ns, monkeypatch):
     auth = make_authenticator(spawner_ns, monkeypatch, "eve@evil.example")
     with pytest.raises(web.HTTPError) as err:
         await auth.authenticate(None)
-    assert err.value.status_code == 403
+    assert err.value.status_code == 500
 
 
-async def test_userlist_lines_are_stripped(spawner_ns, monkeypatch):
-    spawner_ns["_userlists"]["purdue"].write_text("  alice  \nbob\n\n")
+async def test_userlist_requires_exact_newline_terminated_line(spawner_ns, monkeypatch):
+    # Matching is `f"{username}\\n" in readlines()` — no strip.
+    spawner_ns["_userlists"]["purdue"].write_text("  alice  \nbob\n")
     auth = make_authenticator(spawner_ns, monkeypatch, "alice@purdue.edu")
-    ret = await auth.authenticate(None)
-    assert ret["name"] == "alice"
+    with pytest.raises(web.HTTPError) as err:
+        await auth.authenticate(None)
+    assert err.value.status_code == 500
+
+
+# ── refresh_user ──────────────────────────────────────────────────────────────
+
+
+async def test_refresh_user_keeps_login_auth_state(spawner_ns):
+    # Must stay a no-op: oauthenticator ≥17.2 would otherwise drop name/domain.
+    auth = spawner_ns["PurdueCILogonOAuthenticator"]()
+    assert await auth.refresh_user(user=None) is True
 
 
 # ── post_auth_hook ────────────────────────────────────────────────────────────
@@ -117,40 +127,22 @@ def test_post_auth_hook_creates_auth_state_if_missing(spawner_ns):
     assert out["auth_state"]["name"] == "alice"
 
 
-# ── pre_spawn_start ───────────────────────────────────────────────────────────
-
-
-async def test_pre_spawn_start_sets_username_env(spawner_ns):
-    spawner = FakeSpawner()
-    spawner.set_auth_state({"name": "alice-cern", "domain": "cern.ch"})
-    await spawner_ns["pre_spawn_start"](spawner)
-    assert spawner.environment["USERNAME"] == "alice-cern"
-
-
-async def test_pre_spawn_start_without_auth_state_is_noop(spawner_ns):
-    spawner = FakeSpawner()
-    spawner.set_auth_state(None)
-    await spawner_ns["pre_spawn_start"](spawner)
-    assert "USERNAME" not in spawner.environment
-
-
 # ── hub config wiring ─────────────────────────────────────────────────────────
 
 
-def test_config_registers_authenticator_and_hooks(spawner_ns):
+def test_config_registers_authenticator_and_hook(spawner_ns):
     c = spawner_ns["c"]
     assert (
         c["JupyterHub"]["authenticator_class"]
-        is (spawner_ns["PurdueCILogonOAuthenticator"])
+        is spawner_ns["PurdueCILogonOAuthenticator"]
     )
     assert (
         c["PurdueCILogonOAuthenticator"]["post_auth_hook"]
-        is (spawner_ns["passthrough_post_auth_hook"])
+        is spawner_ns["passthrough_post_auth_hook"]
     )
-    assert c["KubeSpawner"]["pre_spawn_start"] is spawner_ns["pre_spawn_start"]
 
 
-def test_dask_gateway_env_set_in_cms_namespace(monkeypatch, tmp_path):
+def test_dask_gateway_env_set_in_cms_namespace(monkeypatch):
     ns = load_snippet("custom-spawner.py", monkeypatch, namespace="cms")
     env = ns["c"]["KubeSpawner"]["environment"]
     assert "DASK_GATEWAY__ADDRESS" in env
@@ -159,5 +151,5 @@ def test_dask_gateway_env_set_in_cms_namespace(monkeypatch, tmp_path):
 
 def test_dask_gateway_env_not_set_outside_cms(monkeypatch):
     ns = load_snippet("custom-spawner.py", monkeypatch, namespace="dev")
-    env = ns["c"]["KubeSpawner"].get("environment", {})
+    env = ns["c"].get("KubeSpawner", {}).get("environment", {})
     assert "DASK_GATEWAY__ADDRESS" not in env
