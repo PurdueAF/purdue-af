@@ -4,26 +4,26 @@ name: CI
 # Stages live in reusable workflows (ci-*.yml, this directory); publication
 # is impossible without every stage of the SAME commit succeeding.
 #
-#   stage 0  checks   ci-checks.yml   lint · unit tests · manifest validation
-#   stage 1  images   ci-images.yml   content-addressed builds: every image is
-#                                     tagged in-<hash of its input tree>; an
-#                                     existing tag is VERIFIED reuse (the exact
-#                                     current state was already built + smoked)
-#   stage 1b pixi     ci-pixi.yml     env checks; regenerates + commits
-#                                     pixi.lock when manifests drift (Renovate
-#                                     is manifest-only); pixi-global runs
-#                                     INSIDE the stage-1 AF image
-#   stage 2  e2e      ci-e2e.yml      hub stack in kind, one job per channel:
-#                                     e2e-production (spawns the image pinned
-#                                     in values.yaml — the "e2e = production"
-#                                     gate) and e2e-pre-release (spawns the
-#                                     stage-1 AF image — always the current
-#                                     repo state, never "whatever :pre-release
-#                                     is")
-#   stage 3  publish  (below)        main only, strictly behind the ci-ok gate:
-#                                     :sha- provenance tags for every image,
-#                                     aux continuous channel moves :latest,
-#                                     AF image moves :pre-release
+#   stage 0   checks      ci-checks.yml   lint · unit tests · manifest validation
+#   stage 1a  pixi-base   ci-pixi.yml     sync/commit pixi/base lock + import-smoke
+#                                         (before AF image build — Dockerfile uses
+#                                         `pixi install --locked`)
+#   stage 1b  images      ci-images.yml   content-addressed builds: every image is
+#                                         tagged in-<hash of its input tree>; an
+#                                         existing tag is VERIFIED reuse
+#   stage 1c  pixi-global ci-pixi.yml     sync/commit pixi/global lock + import-smoke
+#                                         INSIDE the stage-1 AF image
+#   stage 2   e2e         ci-e2e.yml      hub stack in kind, one job per channel:
+#                                         e2e-production (spawns the image pinned
+#                                         in values.yaml — the "e2e = production"
+#                                         gate) and e2e-pre-release (spawns the
+#                                         stage-1 AF image — always the current
+#                                         repo state, never "whatever :pre-release
+#                                         is")
+#   stage 3   publish     (below)         main only, strictly behind the ci-ok gate:
+#                                         :sha- provenance tags for every image,
+#                                         aux continuous channel moves :latest,
+#                                         AF image moves :pre-release
 #
 # ci-ok is the single branch-protection check: it fails if ANY stage did not
 # succeed — a skipped-but-required job can never masquerade as a pass.
@@ -50,24 +50,36 @@ jobs:
       contents: read
       id-token: write # Codecov OIDC upload
 
-  images:
+  # Lock sync + smoke for pixi/base BEFORE the AF image build so
+  # `pixi install --locked` in the Dockerfile sees a matching lock.
+  pixi-base:
     needs: checks
+    uses: ./.github/workflows/ci-pixi.yml
+    with:
+      suite: base
+    secrets:
+      AF_RELEASE_TOKEN: ${{ secrets.AF_RELEASE_TOKEN }}
+    permissions:
+      contents: write # lockfile commits
+
+  images:
+    needs: pixi-base
     uses: ./.github/workflows/ci-images.yml
     permissions:
       contents: read
       packages: write # in- tag push + registry build cache
 
-  pixi:
+  pixi-global:
     needs: images
     uses: ./.github/workflows/ci-pixi.yml
     with:
+      suite: global
       af-image: ${{ needs.images.outputs.af-image }}
       af-image-available: ${{ needs.images.outputs.af-image-available }}
     secrets:
-      # PAT so regenerated pixi.lock commits re-trigger CI (GITHUB_TOKEN cannot).
       AF_RELEASE_TOKEN: ${{ secrets.AF_RELEASE_TOKEN }}
     permissions:
-      contents: write # lockfile commits from ci-pixi.yml
+      contents: write # lockfile commits
       packages: read
 
   e2e:
@@ -84,7 +96,7 @@ jobs:
     # The one required status check. `if: always()` + explicit result
     # inspection: a failed OR skipped stage fails the gate — success is
     # never assumed for work that did not run.
-    needs: [checks, images, pixi, e2e]
+    needs: [checks, pixi-base, images, pixi-global, e2e]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

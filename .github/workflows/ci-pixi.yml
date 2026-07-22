@@ -1,6 +1,11 @@
 name: CI pixi
 
-# Stage 1b of ci.yml — for every pixi workspace under pixi/:
+# Called twice from ci.yml:
+#   suite=base   — after checks, BEFORE the AF image build (so Dockerfile
+#                  `pixi install --locked` sees a matching pixi/base lock)
+#   suite=global — after images (import-smoke runs inside the AF image)
+#
+# For each suite:
 #   1. `pixi install --locked` when toml/lock agree
 #   2. otherwise `pixi lock` + install, then on green check-env commit the
 #      regenerated lock back to the branch (Renovate only bumps manifests;
@@ -16,7 +21,7 @@ name: CI pixi
 # get, including CLI tools some packages need at import time (mlflow →
 # GitPython → the `git` binary, which a bare rockylinux:8 lacks).
 #
-# Both jobs are memoized when the lock was already in sync: a green run is
+# Jobs are memoized when the lock was already in sync: a green run is
 # recorded under a cache key that hashes the job's full input state
 # (image-inputs.sh). Regenerated-lock runs skip the memo write (the push
 # triggers a follow-up CI on the new commit).
@@ -24,22 +29,27 @@ name: CI pixi
 # Lock commits use AF_RELEASE_TOKEN so the push re-triggers workflows
 # (GITHUB_TOKEN pushes do not). Fork PRs must regenerate locks locally.
 #
-# Pixi is pinned here (pixi-version, both jobs) — keep in sync with
-# PIXI_VERSION in docker/purdue-af/Dockerfile and constraints.pixi in
-# .github/renovate.json5. pixi/global needs CONDA_OVERRIDE_CUDA on
-# CPU-only CI runners (see job env).
+# Pixi is pinned here (pixi-version) — keep in sync with PIXI_VERSION in
+# docker/purdue-af/Dockerfile and constraints.pixi in renovate.json5.
+# pixi/global needs CONDA_OVERRIDE_CUDA on CPU-only CI runners (see job env).
 
 on:
   workflow_call:
     inputs:
-      af-image:
-        description: "Full ref of the AF image for the current input state"
+      suite:
+        description: "'base' or 'global' — which pixi workspace to check"
         required: true
         type: string
+      af-image:
+        description: "Full ref of the AF image (required for suite=global)"
+        required: false
+        type: string
+        default: ""
       af-image-available:
         description: "'true' when af-image is pullable from ghcr"
-        required: true
+        required: false
         type: string
+        default: "false"
     secrets:
       AF_RELEASE_TOKEN:
         description: "PAT with contents:write — required to commit regenerated lockfiles"
@@ -50,6 +60,7 @@ permissions:
 
 jobs:
   check-pixi-base:
+    if: inputs.suite == 'base'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -127,12 +138,14 @@ jobs:
             exit 0
           fi
           git commit -m "chore(pixi): regenerate base lockfile"
-          # Rebase in case the sibling global job pushed first.
           branch="${{ github.head_ref || github.ref_name }}"
           git pull --rebase origin "$branch"
           git push origin "HEAD:$branch"
-          echo "Committed regenerated pixi/base/pixi.lock — follow-up CI will verify." \
+          echo "Committed regenerated pixi/base/pixi.lock — follow-up CI will build the AF image." \
             | tee -a "$GITHUB_STEP_SUMMARY"
+          # Fail this SHA so images does not build against a pre-lock tree.
+          # The push starts a new pipeline (concurrency cancels this run).
+          exit 1
       - name: Record green run
         # Only memoize in-sync trees; a lock push triggers a new commit/CI.
         if: success() && steps.memo.outputs.cache-hit != 'true' && steps.lock.outputs.updated != 'true'
@@ -144,6 +157,7 @@ jobs:
           key: ${{ steps.key.outputs.key }}
 
   check-pixi-global:
+    if: inputs.suite == 'global'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -259,7 +273,6 @@ jobs:
             exit 0
           fi
           git commit -m "chore(pixi): regenerate global lockfile"
-          # Rebase in case the sibling base job pushed first.
           branch="${{ github.head_ref || github.ref_name }}"
           git pull --rebase origin "$branch"
           git push origin "HEAD:$branch"
