@@ -31,6 +31,13 @@ spec:
           image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af:0.13.0
           command: ["python3", "/config/sync-global-env.py"]
           env:
+            # pixi/global declares [system-requirements] cuda; this pod has
+            # no GPU/driver injected (none requested + NVIDIA_VISIBLE_DEVICES
+            # =void), so mock the __cuda virtual package exactly like
+            # ci-pixi.yml does on CPU-only runners. Keep in sync with the
+            # cuda version in pixi/global/pixi.toml.
+            - name: CONDA_OVERRIDE_CUDA
+              value: "12.4"
             # cache lives on the SAME filesystem as the env: installs become
             # mostly hardlink swaps (short update window) and survive pod
             # restarts. Node-local emptyDir is only scratch space.
