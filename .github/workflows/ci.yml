@@ -60,7 +60,11 @@ jobs:
     secrets:
       AF_RELEASE_TOKEN: ${{ secrets.AF_RELEASE_TOKEN }}
     permissions:
+      # Must cover EVERY job in ci-pixi.yml (GitHub checks the union before
+      # evaluating `if: suite == ...` — omitting packages:read caused
+      # startup_failure even though only check-pixi-base runs).
       contents: write # lockfile commits
+      packages: read
 
   images:
     needs: pixi-base
