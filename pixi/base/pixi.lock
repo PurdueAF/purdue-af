@@ -346,7 +346,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/28/74/3975cf07c16cfafd618dce7a26a82db3b9716d8ef1eecb16e6ec3b9a6665/jupyter_resource_usage-1.2.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/94/c4/148eec071c341ba935a05f9bd61ddd08a7de8e9219f745b4dfd9868f1fef/jupyter_sshd_proxy-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/01/17/1e2b9a7f0fff21a0eb0333c11389ea88fe7e5419a25e8c2e6cc8ba9d55a0/jupyterlab_favorites-3.5.2-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/fe/1f/d9928d5137e5ef6b099592b402457fbb77f4e17721465d6258fdb8b06ec3/jupyterlab_git-0.52.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/f6/81/58a8bc9528bc3355b5e2e630fb7e238cad65e2e2391eac8c308d9a9e8679/jupyterlab_git-0.54.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/3f/fd/70246be863a774d48146877541055ddd495cfadfa0bad76b0c8b33f3dcbf/jupyterlab_git_core-0.54.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/91/f3/fc82c9f22c851e68f17d26a8f3dd603f0bdfdc2005ab7e65961f9c870d2b/jupyterlab_iframe-0.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0d/4b/40119ec9f3e5a4a9351d49a5de829b3c61d4f588f78df167a0e5a9d326b8/jupyterlab_theme_toggler-1.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f0/24/6996d2ca1c4d5172cedb755fcae63a387a81d561bc05d5b2c7d3a2f3275f/jupyterlab_topbar_text-1.1.0-py3-none-any.whl
@@ -723,7 +724,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/28/74/3975cf07c16cfafd618dce7a26a82db3b9716d8ef1eecb16e6ec3b9a6665/jupyter_resource_usage-1.2.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/94/c4/148eec071c341ba935a05f9bd61ddd08a7de8e9219f745b4dfd9868f1fef/jupyter_sshd_proxy-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/01/17/1e2b9a7f0fff21a0eb0333c11389ea88fe7e5419a25e8c2e6cc8ba9d55a0/jupyterlab_favorites-3.5.2-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/fe/1f/d9928d5137e5ef6b099592b402457fbb77f4e17721465d6258fdb8b06ec3/jupyterlab_git-0.52.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/f6/81/58a8bc9528bc3355b5e2e630fb7e238cad65e2e2391eac8c308d9a9e8679/jupyterlab_git-0.54.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/3f/fd/70246be863a774d48146877541055ddd495cfadfa0bad76b0c8b33f3dcbf/jupyterlab_git_core-0.54.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/91/f3/fc82c9f22c851e68f17d26a8f3dd603f0bdfdc2005ab7e65961f9c870d2b/jupyterlab_iframe-0.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0d/4b/40119ec9f3e5a4a9351d49a5de829b3c61d4f588f78df167a0e5a9d326b8/jupyterlab_theme_toggler-1.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f0/24/6996d2ca1c4d5172cedb755fcae63a387a81d561bc05d5b2c7d3a2f3275f/jupyterlab_topbar_text-1.1.0-py3-none-any.whl
@@ -2693,16 +2695,13 @@ packages:
   version: 3.5.2
   sha256: c7df8412095f0db532aea8e1b827f3516e0c428a12085ec7338a8005422952bf
   requires_python: '>=3.8'
-- pypi: https://files.pythonhosted.org/packages/fe/1f/d9928d5137e5ef6b099592b402457fbb77f4e17721465d6258fdb8b06ec3/jupyterlab_git-0.52.0-py3-none-any.whl
+- pypi: https://files.pythonhosted.org/packages/f6/81/58a8bc9528bc3355b5e2e630fb7e238cad65e2e2391eac8c308d9a9e8679/jupyterlab_git-0.54.0-py3-none-any.whl
   name: jupyterlab-git
-  version: 0.52.0
-  sha256: bb3f516b1ebce2fd0726f93c52567e2d8d462e49263c59009f1b7bb41232a9a1
+  version: 0.54.0
+  sha256: b33f96aef13d814a6c023d74d843f0d7d2e9d1fd8a283bc91f69921a68936d7d
   requires_dist:
   - jupyter-server>=2.0.1,<3
-  - nbdime~=4.0.1
-  - nbformat
-  - packaging
-  - pexpect
+  - jupyterlab-git-core[nbdime]>=0.52.0
   - traitlets~=5.0
   - black ; extra == 'dev'
   - jupyterlab~=4.0 ; extra == 'dev'
@@ -2714,7 +2713,23 @@ packages:
   - pytest-cov ; extra == 'test'
   - pytest-jupyter[server]>=0.6.0 ; extra == 'test'
   - jupyter-archive ; extra == 'ui-tests'
-  requires_python: '>=3.8'
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/3f/fd/70246be863a774d48146877541055ddd495cfadfa0bad76b0c8b33f3dcbf/jupyterlab_git_core-0.54.0-py3-none-any.whl
+  name: jupyterlab-git-core
+  version: 0.54.0
+  sha256: a163c7b3748292a7e83f514ae9cd838aa4c538ceb6224530626b56771a55053e
+  requires_dist:
+  - anyio
+  - nbformat
+  - packaging
+  - pexpect
+  - traitlets~=5.0
+  - nbdime~=4.0.1 ; extra == 'nbdime'
+  - coverage ; extra == 'test'
+  - pytest ; extra == 'test'
+  - pytest-asyncio ; extra == 'test'
+  - pytest-cov ; extra == 'test'
+  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/91/f3/fc82c9f22c851e68f17d26a8f3dd603f0bdfdc2005ab7e65961f9c870d2b/jupyterlab_iframe-0.5.0-py3-none-any.whl
   name: jupyterlab-iframe
   version: 0.5.0
