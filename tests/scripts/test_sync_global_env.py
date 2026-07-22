@@ -168,12 +168,17 @@ class TestCiGate:
     def test_aggregate_no_runs_is_pending(self, sync):
         assert sync.aggregate_check_runs([])[0] == "pending"
 
-    def _fake_fetch(self, sync, lock=b"LOCK", conclusion="success"):
+    DESIRED = {"pixi.toml": b"TOML", "pixi.lock": b"LOCK"}
+
+    def _fake_fetch(self, sync, blobs=None, conclusion="success"):
+        blobs = blobs if blobs is not None else dict(self.DESIRED)
+
         def fetch(url):
             if "/commits?" in url:
+                assert "path=pixi/global&" in url  # gate on the DIR, not one file
                 return 200, json.dumps([{"sha": "a" * 40}]).encode()
             if "raw.githubusercontent" in url:
-                return 200, lock
+                return 200, blobs[url.rsplit("/", 1)[-1]]
             if "/check-runs" in url:
                 return 200, json.dumps(
                     {"check_runs": [self.run("ci-ok", conclusion=conclusion)]}
@@ -184,7 +189,7 @@ class TestCiGate:
 
     def test_gate_passes_and_caches_blessed_sha(self, sync):
         gate = sync.CiGate(fetch=self._fake_fetch(sync))
-        assert gate.evaluate(b"LOCK")[0] is True
+        assert gate.evaluate(self.DESIRED)[0] is True
 
         # second call may re-ask WHICH commit is latest (ETag-cached in
         # production) but must not re-fetch the blob or the check-runs
@@ -194,22 +199,31 @@ class TestCiGate:
             raise AssertionError(f"unexpected re-fetch: {url}")
 
         gate.fetch = commits_only
-        allowed, reason = gate.evaluate(b"LOCK")
+        allowed, reason = gate.evaluate(self.DESIRED)
         assert allowed and "already verified" in reason
 
     def test_gate_blocks_on_failed_checks(self, sync):
         gate = sync.CiGate(fetch=self._fake_fetch(sync, conclusion="failure"))
-        allowed, reason = gate.evaluate(b"LOCK")
+        allowed, reason = gate.evaluate(self.DESIRED)
         assert not allowed and "ci-ok" in reason
 
-    def test_gate_blocks_on_content_mismatch(self, sync):
-        gate = sync.CiGate(fetch=self._fake_fetch(sync, lock=b"OTHER"))
-        allowed, reason = gate.evaluate(b"LOCK")
+    def test_gate_blocks_on_lock_mismatch(self, sync):
+        blobs = dict(self.DESIRED, **{"pixi.lock": b"OTHER"})
+        gate = sync.CiGate(fetch=self._fake_fetch(sync, blobs=blobs))
+        allowed, reason = gate.evaluate(self.DESIRED)
+        assert not allowed and "do not match" in reason
+
+    def test_gate_blocks_on_toml_only_mismatch(self, sync):
+        """A toml edit without a lock regen must be gated on ITS commit —
+        the desired toml differing from the blessed commit's blob blocks."""
+        blobs = dict(self.DESIRED, **{"pixi.toml": b"EDITED-WITHOUT-LOCK"})
+        gate = sync.CiGate(fetch=self._fake_fetch(sync, blobs=blobs))
+        allowed, reason = gate.evaluate(self.DESIRED)
         assert not allowed and "do not match" in reason
 
     def test_gate_fails_closed_on_api_error(self, sync):
         gate = sync.CiGate(fetch=lambda url: (500, b""))
-        allowed, reason = gate.evaluate(b"LOCK")
+        allowed, reason = gate.evaluate(self.DESIRED)
         assert not allowed and "fail-closed" in reason
 
 

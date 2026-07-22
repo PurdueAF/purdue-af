@@ -65,7 +65,8 @@ METRICS_PORT = int(os.environ.get("METRICS_PORT", "9099"))
 # green. Fail-closed (API errors block syncing, never break the live env).
 REQUIRE_CI_CHECKS = os.environ.get("REQUIRE_CI_CHECKS", "1") == "1"
 GITHUB_REPO = os.environ.get("GITHUB_REPO", "PurdueAF/purdue-af")
-GITHUB_LOCK_PATH = os.environ.get("GITHUB_LOCK_PATH", "pixi/global/pixi.lock")
+# gate on the whole env dir: toml-only commits must be blessed too
+GITHUB_GATE_PATH = os.environ.get("GITHUB_GATE_PATH", "pixi/global")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
 LIVE_DIR = WORK_ROOT / "global"  # plain pixi project dir, as it always was
@@ -246,27 +247,32 @@ class CiGate:
             raise RuntimeError(f"GitHub API {status} for {url}")
         return json.loads(body)
 
-    def evaluate(self, desired_lock_bytes):
-        """→ (allowed: bool, reason: str). Never raises."""
+    def evaluate(self, desired_files):
+        """desired_files = {"pixi.toml": bytes, "pixi.lock": bytes}
+        → (allowed: bool, reason: str). Never raises."""
         try:
             commits = self._json(
                 f"https://api.github.com/repos/{GITHUB_REPO}/commits"
-                f"?path={GITHUB_LOCK_PATH}&sha=main&per_page=1"
+                f"?path={GITHUB_GATE_PATH}&sha=main&per_page=1"
             )
             if not commits:
-                return False, "no commit found for the lock path"
+                return False, "no commit found for the env path"
             sha = commits[0]["sha"]
 
             if sha not in self._content_ok:
-                status, blob = self.fetch(
-                    f"https://raw.githubusercontent.com/{GITHUB_REPO}/{sha}/{GITHUB_LOCK_PATH}"
-                )
-                if status != 200:
-                    return False, f"cannot fetch lock blob at {sha[:8]} ({status})"
-                self._content_ok[sha] = blob == desired_lock_bytes
+                match = True
+                for name, desired_bytes in desired_files.items():
+                    status, blob = self.fetch(
+                        f"https://raw.githubusercontent.com/{GITHUB_REPO}/{sha}"
+                        f"/{GITHUB_GATE_PATH}/{name}"
+                    )
+                    if status != 200:
+                        return False, f"cannot fetch {name} at {sha[:8]} ({status})"
+                    match = match and blob == desired_bytes
+                self._content_ok[sha] = match
             if not self._content_ok[sha]:
                 return False, (
-                    f"desired manifests do not match lock commit {sha[:8]} "
+                    f"desired manifests do not match env commit {sha[:8]} "
                     "(Flux catching up?)"
                 )
             if sha in self._blessed:
@@ -502,7 +508,7 @@ def reconcile(force=False):
         return False
 
     if REQUIRE_CI_CHECKS:
-        allowed, reason = _ci_gate.evaluate(desired["pixi.lock"])
+        allowed, reason = _ci_gate.evaluate(desired)
         _ci_gate.log_once(allowed, reason)
         metric_set("ci_gate_ok", 1.0 if allowed else 0.0)
         if not allowed:
