@@ -1,0 +1,102 @@
+# Reconciler for the shared global pixi env on /work (af-shared-storage).
+# Design + runbook: README.md in this directory.
+#
+# Desired state (pixi.toml/pixi.lock/check-env.py/sync script) arrives via
+# the pixi-global-sync ConfigMap generated in deploy/*/kustomization.yaml;
+# kubelet refreshes the mount in place, so the daemon picks up changes
+# WITHOUT a pod restart (name-suffix hashing is disabled repo-wide).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pixi-global-sync
+  labels:
+    app: pixi-global-sync
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # never two builders against the same NFS dir
+  selector:
+    matchLabels:
+      app: pixi-global-sync
+  template:
+    metadata:
+      labels:
+        app: pixi-global-sync
+    spec:
+      # Builds must run in the exact userland user sessions get (same EL8,
+      # same pinned pixi that understands the lock format). Bump this tag
+      # together with AF image releases.
+      containers:
+        - name: sync
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af:0.13.0
+          command: ["python3", "/config/sync-global-env.py"]
+          env:
+            # cache lives on the SAME filesystem as the env: installs become
+            # mostly hardlink swaps (short update window) and survive pod
+            # restarts. Node-local emptyDir is only scratch space.
+            - name: PIXI_CACHE_DIR
+              value: /work/pixi/.cache/pixi
+            - name: TMPDIR
+              value: /cache/tmp
+          ports:
+            - name: metrics
+              containerPort: 9099
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            # generous: /healthz only fails after the loop has been silent
+            # >5 poll intervals (builds keep the heartbeat fresh)
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: "2"
+              memory: 8Gi
+            limits:
+              cpu: "8"
+              memory: 24Gi
+          securityContext:
+            # must be able to write /work/pixi — the share does not squash
+            # root for cluster clients (user-pod startup already chowns as
+            # root). If that ever changes, switch to the owning uid.
+            runAsUser: 0
+          volumeMounts:
+            - name: work
+              mountPath: /work
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: cache
+              mountPath: /cache
+      volumes:
+        - name: work
+          persistentVolumeClaim:
+            claimName: af-shared-storage
+        - name: config
+          configMap:
+            name: pixi-global-sync
+        - name: cache
+          emptyDir:
+            sizeLimit: 10Gi # tmp scratch only (pixi cache is on /work)
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
+---
+# Scraped via the existing `scrape-metrics: "true"` ServiceMonitor.
+apiVersion: v1
+kind: Service
+metadata:
+  name: pixi-global-sync
+  labels:
+    scrape-metrics: "true"
+spec:
+  selector:
+    app: pixi-global-sync
+  ports:
+    - name: metrics
+      port: 9099
+      targetPort: metrics

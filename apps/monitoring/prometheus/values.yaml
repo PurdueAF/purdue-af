@@ -102,6 +102,13 @@ serverFiles:
           max_samples_per_send: 10000
           max_shards: 10
     scrape_configs:
+      # The scrape-metrics ServiceMonitor label feeds RANCHER's Prometheus,
+      # not this server — scrape the sync Service directly so the
+      # AFGlobalEnv* alerts below can actually evaluate here.
+      - job_name: "pixi-global-sync"
+        static_configs:
+          - targets:
+              - "pixi-global-sync:9099"
       - job_name: "jupyterhub"
         metrics_path: "/hub/metrics"
         static_configs:
@@ -358,6 +365,45 @@ serverFiles:
                 By now they might not be able to use AF at all.
                 The immediate solution is to increase quota for this user (PVC size) by 1 GB,
                 and then ask them to clean up files immediately.
+          - alert: AFGlobalEnvOutOfSync
+            # build ~20-40 min + retry cooldowns; 3h of drift means builds
+            # keep failing (see pixi-global-sync pod logs / check-env output)
+            expr: pixi_global_sync_in_sync == 0
+            for: 3h
+            labels:
+              severity: warning
+            annotations:
+              summary: Global pixi env is not in sync with the repository
+              description: |
+                /work/pixi/global has not matched pixi/global/pixi.lock on main
+                for 3 hours. Builds or validation are failing — users still have
+                the previous (working) env, but it is going stale.
+                Check: kubectl logs deploy/pixi-global-sync
+          - alert: AFGlobalEnvUnhealthy
+            expr: pixi_global_sync_env_healthy == 0
+            for: 30m
+            labels:
+              severity: critical
+            annotations:
+              summary: Live global pixi env failed import verification
+              description: |
+                The deep verify of /work/pixi/global found packages that no
+                longer import, and the self-heal rebuild has not recovered it.
+                User sessions relying on the global env are likely broken.
+                Check: kubectl logs deploy/pixi-global-sync
+          - alert: AFGlobalEnvSyncDown
+            # also fires if scraping of the sync service is broken — silence
+            # is never mistaken for health
+            expr: absent(pixi_global_sync_in_sync)
+            for: 1h
+            labels:
+              severity: warning
+            annotations:
+              summary: pixi-global-sync metrics are absent
+              description: |
+                No pixi_global_sync_* metrics for 1h — the reconciler pod is
+                down or its Service/scrape wiring is broken. The global env is
+                not being kept in sync while this persists.
 alertmanager:
   enabled: true
   config:

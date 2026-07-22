@@ -48,6 +48,8 @@ resources:
   # - ../../apps/kagent/ingress.yaml
   # - ../../apps/kagent/agents/agent-log-analyzer.yaml
 
+  - ../../apps/af-utils/pixi-global-sync/deployment.yaml
+
   - ../../apps/agentic-interface/rbac.yaml
   - ../../apps/agentic-interface/deployment.yaml
   - ../../apps/agentic-interface/service.yaml
@@ -61,6 +63,17 @@ generatorOptions:
   disableNameSuffixHash: true
 
 configMapGenerator:
+  - name: pixi-global-sync
+    options:
+      annotations:
+        # python/yaml use ${...}-like strings — keep Flux substitution away
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../apps/af-utils/pixi-global-sync/sync-global-env.py
+      - ../../pixi/check-env.py
+      - ../../pixi/global/pixi.toml
+      - ../../pixi/global/pixi.lock
+
   - name: dask-gateway-k8s-config
     files:
       - values.yaml=../../apps/dask-gateway/dask-gateway-k8s/values.yaml
