@@ -39,7 +39,7 @@
   // docker/purdue-af/Dockerfile and pixi-version in ci-pixi.yml: newer pixi
   // writes lock-file format v7, which 0.62.2 cannot read.
   constraints: {
-    pixi: '0.62.2',
+    pixi: '==0.73.0',
   },
 
   ignorePaths: [
