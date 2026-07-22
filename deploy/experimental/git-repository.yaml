@@ -10,6 +10,8 @@ spec:
   timeout: 1m
   url: https://github.com/PurdueAF/purdue-af.git
   ref:
-    branch: main
+    # CI-owned moving tag: advanced to HEAD of main only after ci-ok
+    # (see .github/workflows/ci.yml). Not the tip of main itself.
+    tag: main-ci-passed
   secretRef:
     name: flux-github-token

@@ -20,10 +20,13 @@ name: CI
 #                                         stage-1 AF image — always the current
 #                                         repo state, never "whatever :pre-release
 #                                         is")
-#   stage 3   publish     (below)         main only, strictly behind the ci-ok gate:
+#   stage 3a  publish           (below)   main only, strictly behind the ci-ok gate:
 #                                         :sha- provenance tags for every image,
 #                                         aux continuous channel moves :latest,
 #                                         AF image moves :pre-release
+#   stage 3b  main-ci-passed    (below)   main only, behind ci-ok: force-move the
+#                                         git tag Flux experimental tracks (near
+#                                         tip of main, only green commits)
 #
 # ci-ok is the single branch-protection check: it fails if ANY stage did not
 # succeed — a skipped-but-required job can never masquerade as a pass.
@@ -179,3 +182,36 @@ jobs:
             -t "$repo:pre-release" \
             "$repo@$AF_DIGEST"
           echo "published $repo@$AF_DIGEST -> :sha-${GITHUB_SHA::12} + :pre-release" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  main-ci-passed:
+    # Stage 3b — advance the Flux experimental source tag. ONLY on push
+    # to main, behind ci-ok. Independent of image publish so a registry
+    # hiccup cannot stall manifest deploys that already passed CI.
+    #
+    # GITHUB_TOKEN is intentional: AF_RELEASE_TOKEN would retrigger CI on
+    # the tag push; moving this tag must not start another pipeline.
+    needs: [ci-ok]
+    if: >-
+      github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+      && needs.ci-ok.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Refuse to promote off main
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" != "push" ] || [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::refusing main-ci-passed move: only push to main may move" \
+              " the tag (got event=${GITHUB_EVENT_NAME} ref=${GITHUB_REF})"
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Move main-ci-passed to this commit
+        run: |
+          set -euo pipefail
+          git tag -f main-ci-passed "$GITHUB_SHA"
+          git push origin "refs/tags/main-ci-passed" --force
+          echo "main-ci-passed -> ${GITHUB_SHA}" | tee -a "$GITHUB_STEP_SUMMARY"

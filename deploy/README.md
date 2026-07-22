@@ -9,8 +9,9 @@ The components of the Analysis Facility are divided into **core** and **experime
 
 - Core components are deployed into the production namespace `cms` from
   the newest platform CalVer tag (`YYYY.M.SEQ`).
-- Experimental components are deployed from the head of the `main` branch
-  into the production namespace.
+- Experimental components are deployed from the moving git tag
+  `main-ci-passed` (near tip of `main`, only advanced after the full
+  pipeline is green) into the production namespace.
 
 ### Update process
 
@@ -19,6 +20,7 @@ The components of the Analysis Facility are divided into **core** and **experime
   platform tag is minted — see [RELEASING.md](../RELEASING.md) for when
   and how versions are incremented (platform tags and image versions are
   minted by the release workflows, never by hand).
-- To update an experimental component, push to `main` — it deploys to the
-  production namespace directly (experimental components are purposely
-  brittle for faster prototyping).
+- To update an experimental component, push to `main` — after `ci-ok`
+  succeeds, CI moves `main-ci-passed` to that commit and Flux deploys it
+  (experimental components are purposely brittle for faster prototyping,
+  but still behind the same CI gate as image channels).
