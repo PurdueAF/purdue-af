@@ -129,8 +129,7 @@
       groupName: 'pixi-global',
     },
     {
-      // pixi's pep440 ranges let Renovate propose pre-releases
-      // (jupyterlab 4.6.0rc0, notebook 7.6.0b1) — stable releases only.
+      // Stable releases only — no a/b/rc.
       matchFileNames: ['pixi/base/pixi.toml', 'pixi/global/pixi.toml'],
       allowedVersions: '!/(a|b|rc)\\d*$/',
     },
