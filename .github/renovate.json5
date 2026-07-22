@@ -134,6 +134,16 @@
       allowedVersions: '!/(a|b|rc)\\d*$/',
     },
     {
+      // openssh uses upstream's "portable" versioning (9.8p1, 10.4p1 — all
+      // STABLE releases; pN is the portable-line number, not a pre-release).
+      // That's not valid pep440, so without this rule the pixi manager can't
+      // parse it and silently never proposes openssh updates. Map the scheme
+      // so openssh is Renovate-managed like everything else.
+      matchPackageNames: ['openssh'],
+      matchDatasources: ['conda'],
+      versioning: 'regex:^(?<major>\\d+)\\.(?<minor>\\d+)p(?<patch>\\d+)$',
+    },
+    {
       // code-server has never supported nodejs >=23 (every conda-forge build
       // pins nodejs >=22,<23) — a nodejs major bump can never solve together
       // with code-server. Blocks the doomed proposal (seen in PR #90).

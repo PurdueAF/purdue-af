@@ -35,7 +35,10 @@ lz4           = "==4.4.5"
 ipywidgets    = "==8.1.8"
 ipympl        = "==0.10.0"
 bokeh         = "==3.9.0"
-openssh       = "==9.8p1"
+# p-suffix = upstream "portable" releases (stable, not pre-release); Renovate
+# parses them via the regex-versioning rule in renovate.json5.
+# >=10.2p1 required alongside mamba >=2.8 (both sides must agree on krb5 1.22).
+openssh       = "==10.4p1"
 uv            = "==0.11.31"
 
 [pypi-dependencies]
