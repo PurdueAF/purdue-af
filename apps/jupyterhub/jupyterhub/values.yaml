@@ -2,6 +2,10 @@ singleuser:
   podNameTemplate: "purdue-af-{userid}"
   uid: 0
   cmd: "start-singleuser.sh"
+  # Also scopes the continuous-image-puller DaemonSet (z2jh copies this
+  # nodeSelector onto prePuller pods). Without it the puller runs on every
+  # node, including non-AF workers.
+  nodeSelector: { "cms-af-prod": "true" }
   image:
     name: "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af"
     tag: "0.13.0"
@@ -294,6 +298,7 @@ prePuller:
   hook:
     enabled: false
   continuous:
+    # Schedules via singleuser.nodeSelector (cms-af-prod) + scheduling.userPods.tolerations.
     enabled: true
   pullProfileListImages: false
 hub:
