@@ -8,7 +8,7 @@ platforms = ["linux-64"]
 # Core runtime
 python        = "3.12.*"
 conda         = "==26.5.3"
-mamba         = "==2.5.0"
+mamba         = "==2.8.1"
 jupyter_core  = "==5.9.1"
 jupyter       = "==1.1.1"
 code-server   = "==4.115.0"
