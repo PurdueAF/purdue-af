@@ -57,7 +57,7 @@ jobs:
       af-digest: ${{ steps.hashes.outputs.af-digest }}
       aux-tags: ${{ steps.hashes.outputs.aux-tags }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Login to ghcr.io
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
@@ -106,7 +106,7 @@ jobs:
       AF_EXISTS: ${{ needs.resolve.outputs.af-exists }}
       AF_DIGEST_RESOLVED: ${{ needs.resolve.outputs.af-digest }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Verified reuse — this exact input state is already on ghcr
         if: env.AF_EXISTS == 'true'
         run: echo "reusing $AF_IMAGE (already built + smoke-tested for this input state)" | tee -a "$GITHUB_STEP_SUMMARY"
@@ -253,7 +253,7 @@ jobs:
               python -c 'import job_runner, node_healthcheck; print(\"ok\")'"
     name: aux ${{ matrix.name }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Login to ghcr.io
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
