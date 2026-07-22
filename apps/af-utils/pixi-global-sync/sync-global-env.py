@@ -57,6 +57,9 @@ BUILD_TIMEOUT = int(os.environ.get("BUILD_TIMEOUT", "5400"))  # 90 min
 VALIDATE_TIMEOUT = int(os.environ.get("VALIDATE_TIMEOUT", "1800"))
 FAIL_COOLDOWN = int(os.environ.get("FAIL_COOLDOWN", "1800"))
 LOCK_STALE_SECONDS = int(os.environ.get("LOCK_STALE_SECONDS", "600"))
+# a holder whose heartbeat value stops CHANGING is dead (live ones refresh
+# every 30 s) — take over after this many seconds of a frozen heartbeat
+LOCK_FROZEN_SECONDS = int(os.environ.get("LOCK_FROZEN_SECONDS", "90"))
 METRICS_PORT = int(os.environ.get("METRICS_PORT", "9099"))
 
 LIVE_DIR = WORK_ROOT / "global"  # plain pixi project dir, as it always was
@@ -191,7 +194,25 @@ def should_take_over(heartbeat, now, stale_seconds=None):
         return True
 
 
+class FrozenHeartbeatObserver:
+    """A LIVE lock holder rewrites its heartbeat every 30 s, so the ts field
+    keeps changing. If we observe the SAME ts for longer than `threshold`,
+    the holder is dead (e.g. SIGKILLed mid-install before it could release)
+    — safe to take over long before the absolute-age staleness kicks in."""
+
+    def __init__(self, threshold):
+        self.threshold = threshold
+        self._seen = None  # (heartbeat_ts, first_observed_monotonic)
+
+    def frozen(self, heartbeat_ts, now_monotonic):
+        if self._seen is None or self._seen[0] != heartbeat_ts:
+            self._seen = (heartbeat_ts, now_monotonic)
+            return False
+        return (now_monotonic - self._seen[1]) > self.threshold
+
+
 def acquire_lock():
+    observer = FrozenHeartbeatObserver(LOCK_FROZEN_SECONDS)
     while True:
         try:
             LOCK_DIR.mkdir(parents=True)
@@ -203,11 +224,31 @@ def acquire_lock():
                 heartbeat = json.loads(heartbeat_path().read_text())
             except (OSError, ValueError):
                 heartbeat = None
-            if should_take_over(heartbeat, time.time()):
+            now = time.time()
+            if should_take_over(heartbeat, now):
                 log.warning("taking over stale lock (heartbeat=%s)", heartbeat)
                 write_heartbeat()
                 return
-            log.info("another instance holds the lock; retrying in 30 s")
+            if observer.frozen(heartbeat.get("ts"), time.monotonic()):
+                log.warning(
+                    "lock holder %s (pid %s) is dead — heartbeat frozen for "
+                    ">%ss; taking over",
+                    heartbeat.get("holder"),
+                    heartbeat.get("pid"),
+                    LOCK_FROZEN_SECONDS,
+                )
+                write_heartbeat()
+                return
+            age = now - float(heartbeat.get("ts", now))
+            log.info(
+                "lock held by %s (pid %s), heartbeat %.0fs old — waiting "
+                "(takeover on frozen>%ss or age>%ss)",
+                heartbeat.get("holder"),
+                heartbeat.get("pid"),
+                age,
+                LOCK_FROZEN_SECONDS,
+                LOCK_STALE_SECONDS,
+            )
             time.sleep(30)
 
 
@@ -216,9 +257,14 @@ def release_lock():
 
 
 # ── the actual work: what an admin would type, automated ─────────────────
+_current_child = {"proc": None}  # terminated by the SIGTERM handler
+
+
 def run_with_heartbeat(cmd, timeout, **kwargs):
     """Run a long subprocess while keeping liveness + lock heartbeats
-    fresh (pixi install can take tens of minutes)."""
+    fresh (pixi install can take tens of minutes). The child is registered
+    so the SIGTERM handler can kill it — otherwise the daemon would block
+    past the pod grace period, get SIGKILLed, and leave the lock behind."""
     log.info("run: %s", " ".join(map(str, cmd)))
     stop = threading.Event()
 
@@ -232,18 +278,25 @@ def run_with_heartbeat(cmd, timeout, **kwargs):
 
     beater = threading.Thread(target=_beat, daemon=True)
     beater.start()
+    proc = subprocess.Popen(
+        list(map(str, cmd)),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        **kwargs,
+    )
+    _current_child["proc"] = proc
     try:
-        return subprocess.run(
-            list(map(str, cmd)),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            timeout=timeout,
-            **kwargs,
-        )
+        stdout, _ = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        stdout, _ = proc.communicate()
+        raise
     finally:
+        _current_child["proc"] = None
         stop.set()
         beater.join(timeout=5)
+    return subprocess.CompletedProcess(cmd, proc.returncode, stdout=stdout)
 
 
 def pixi_install(env_dir):
@@ -389,8 +442,11 @@ def main():
     stop = threading.Event()
 
     def _terminate(signum, frame):
-        log.info("signal %s — releasing lock and exiting", signum)
+        log.info("signal %s — stopping (killing any in-flight install)", signum)
         stop.set()
+        child = _current_child["proc"]
+        if child is not None:
+            child.terminate()
 
     signal.signal(signal.SIGTERM, _terminate)
     signal.signal(signal.SIGINT, _terminate)

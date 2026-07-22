@@ -119,6 +119,27 @@ class TestLockTakeover:
         assert not sync.should_take_over(heartbeat, time.time())
 
 
+class TestFrozenHeartbeat:
+    def test_changing_heartbeat_never_frozen(self, sync):
+        observer = sync.FrozenHeartbeatObserver(threshold=90)
+        assert not observer.frozen(100.0, 0)
+        assert not observer.frozen(130.0, 200)  # ts changed -> holder alive
+        assert not observer.frozen(160.0, 400)
+
+    def test_frozen_heartbeat_detected_after_threshold(self, sync):
+        observer = sync.FrozenHeartbeatObserver(threshold=90)
+        assert not observer.frozen(100.0, 0)  # first observation
+        assert not observer.frozen(100.0, 60)  # frozen, under threshold
+        assert observer.frozen(100.0, 91)  # dead holder
+
+    def test_change_resets_the_clock(self, sync):
+        observer = sync.FrozenHeartbeatObserver(threshold=90)
+        assert not observer.frozen(100.0, 0)
+        assert not observer.frozen(130.0, 80)  # changed: clock restarts
+        assert not observer.frozen(130.0, 160)  # only 80s frozen
+        assert observer.frozen(130.0, 171)
+
+
 class TestMetrics:
     def test_exposition_renders_all_series(self, sync):
         text = sync.render_metrics()
