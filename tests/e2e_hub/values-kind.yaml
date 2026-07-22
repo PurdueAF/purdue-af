@@ -56,6 +56,9 @@ proxy:
 
 singleuser:
   uid: null # AF image entrypoint drops to jovyan
+  # Prod pins cms-af-prod for user pods + continuous image-puller; kind has
+  # neither that label nor the dedicated taint — clear so pods can schedule.
+  nodeSelector: null
   # prod's start-singleuser.sh is docker-stacks-specific and assumes cluster
   # mounts absent in kind; the real AF image also ships `jupyterhub-singleuser`
   # on PATH, so boot via it here (the start-singleuser.sh path is exercised on
