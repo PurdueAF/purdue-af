@@ -289,12 +289,8 @@ def test_main_writes_timeout_when_ping_fails(monkeypatch, tmp_path):
     monkeypatch.setattr(runner, "NODE_NAME", "node-a")
     monkeypatch.setattr(runner, "ENABLE_FIO", False)
     monkeypatch.setattr(runner, "FIO_FILE", None)
-    monkeypatch.setattr(
-        runner, "_check_ping", lambda: (False, False, 12.0)
-    )
-    monkeypatch.setattr(
-        runner, "_check_metadata", lambda: (True, False, 1.0)
-    )
+    monkeypatch.setattr(runner, "_check_ping", lambda: (False, False, 12.0))
+    monkeypatch.setattr(runner, "_check_metadata", lambda: (True, False, 1.0))
 
     runner.main()
 
@@ -312,9 +308,7 @@ def test_main_success_without_node_name(monkeypatch, tmp_path):
     monkeypatch.setattr(runner, "ENABLE_FIO", False)
     monkeypatch.setattr(runner, "FIO_FILE", None)
     monkeypatch.setattr(runner, "_check_ping", lambda: (True, False, 5.0))
-    monkeypatch.setattr(
-        runner, "_check_metadata", lambda: (True, False, 2.0)
-    )
+    monkeypatch.setattr(runner, "_check_metadata", lambda: (True, False, 2.0))
     monkeypatch.setattr(
         runner, "_check_throughput", lambda last: (True, False, None, last)
     )
@@ -336,9 +330,7 @@ def test_main_runs_fio_and_records_throughput(monkeypatch, tmp_path):
     monkeypatch.setattr(runner, "FIO_FILE", "/probe")
     monkeypatch.setattr(runner, "FIO_INTERVAL_S", 1.0)
     monkeypatch.setattr(runner, "_check_ping", lambda: (True, False, 1.0))
-    monkeypatch.setattr(
-        runner, "_check_metadata", lambda: (True, False, 1.0)
-    )
+    monkeypatch.setattr(runner, "_check_metadata", lambda: (True, False, 1.0))
     monkeypatch.setattr(
         runner, "_check_throughput", lambda last: (True, False, 3.5, 12345.0)
     )
@@ -360,9 +352,7 @@ def test_main_tolerates_corrupt_previous_last_fio_ts(monkeypatch, tmp_path):
     monkeypatch.setattr(runner, "ENABLE_FIO", False)
     monkeypatch.setattr(runner, "FIO_FILE", None)
     monkeypatch.setattr(runner, "_check_ping", lambda: (True, False, 1.0))
-    monkeypatch.setattr(
-        runner, "_check_metadata", lambda: (True, False, None)
-    )
+    monkeypatch.setattr(runner, "_check_metadata", lambda: (True, False, None))
     monkeypatch.setattr(
         runner, "_check_throughput", lambda last: (True, False, None, last)
     )
