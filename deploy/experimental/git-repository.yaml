@@ -10,9 +10,9 @@ spec:
   timeout: 1m
   url: https://github.com/PurdueAF/purdue-af.git
   ref:
-    # CI-owned custom ref (not a tag): advanced in the ci.yml publish
-    # stage behind ci-ok. Near tip of main; not fetched by default
-    # `git fetch` / `git push --tags`, so it cannot collide with local tags.
-    name: refs/ci/main-passed
+    # CI-owned moving branch: advanced in the ci.yml publish stage behind
+    # ci-ok. Near tip of main; visible in the GitHub Branches UI. Not
+    # included in `git push --tags`.
+    branch: ci/main-passed
   secretRef:
     name: flux-github-token

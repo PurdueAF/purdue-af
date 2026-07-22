@@ -9,10 +9,10 @@ The components of the Analysis Facility are divided into **core** and **experime
 
 - Core components are deployed into the production namespace `cms` from
   the newest platform CalVer tag (`YYYY.M.SEQ`).
-- Experimental components are deployed from the CI-owned git ref
-  `refs/ci/main-passed` (near tip of `main`, only advanced after the full
-  pipeline is green) into the production namespace. This is a custom ref,
-  not a tag — it is never included in `git push --tags` / `--all`.
+- Experimental components are deployed from the CI-owned branch
+  `ci/main-passed` (near tip of `main`, only advanced after the full
+  pipeline is green) into the production namespace. Inspect the tip in
+  the GitHub UI: https://github.com/PurdueAF/purdue-af/tree/ci/main-passed
 
 ### Update process
 
@@ -22,16 +22,17 @@ The components of the Analysis Facility are divided into **core** and **experime
   and how versions are incremented (platform tags and image versions are
   minted by the release workflows, never by hand).
 - To update an experimental component, push to `main` — after `ci-ok`
-  succeeds, the publish stage force-pushes `refs/ci/main-passed` to that
+  succeeds, the publish stage force-pushes `ci/main-passed` to that
   commit and Flux deploys it (experimental components are purposely
   brittle for faster prototyping, but still behind the same CI gate as
-  image channels).
+  image channels). Do not push to `ci/main-passed` by hand — a branch
+  ruleset restricts updates to GitHub Actions.
 
-### Retired: `main-ci-passed` tag
+### Retired pointers
 
-An earlier draft used a moving git tag named `main-ci-passed`. That tag
-is retired (blocked from recreation on GitHub). If you still have a local
-copy, drop it once:
+Earlier drafts used a moving tag `main-ci-passed` and a custom ref
+`refs/ci/main-passed`. Both are retired. If you still have a local tag
+copy:
 
 ```
 git tag -d main-ci-passed

@@ -24,7 +24,7 @@ name: CI
 #                                         :sha- provenance tags for every image,
 #                                         aux continuous channel moves :latest,
 #                                         AF image moves :pre-release,
-#                                         refs/ci/main-passed (Flux experimental)
+#                                         ci/main-passed (Flux experimental)
 #
 # ci-ok is the single branch-protection check: it fails if ANY stage did not
 # succeed — a skipped-but-required job can never masquerade as a pass.
@@ -116,7 +116,7 @@ jobs:
     # Never on pull_request, never on workflow_dispatch (including the
     # post-lock-commit dispatches on Renovate branches — those may build
     # and push content-addressed in-<hash> tags, but must not move
-    # :latest / :pre-release / :sha- / refs/ci/main-passed).
+    # :latest / :pre-release / :sha- / ci/main-passed).
     #
     # Pure retags of digests that just passed the full pipeline
     # (promote-by-digest, no rebuild):
@@ -126,9 +126,9 @@ jobs:
     #                                          ghcr-proxy-cache on restart)
     #   purdue-af          → :pre-release    (the hub's pre-release profile,
     #                                          image_pull_policy Always)
-    #   git                → refs/ci/main-passed  (Flux experimental source;
-    #                                          custom ref, not a tag — avoids
-    #                                          git push --tags collisions;
+    #   git                → ci/main-passed  (Flux experimental source;
+    #                                          moving branch — visible in the
+    #                                          GH UI, not pushed by --tags;
     #                                          GITHUB_TOKEN on purpose so the
     #                                          push does not retrigger CI)
     # Versioned promotion to production stays human: release-image.yml.
@@ -140,7 +140,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write # refs/ci/main-passed
+      contents: write # ci/main-passed branch
       packages: write
     steps:
       - name: Refuse to promote off main
@@ -148,7 +148,7 @@ jobs:
           set -euo pipefail
           if [ "${GITHUB_EVENT_NAME}" != "push" ] || [ "${GITHUB_REF}" != "refs/heads/main" ]; then
             echo "::error::refusing promote: only push to main may move" \
-              " :latest / :pre-release / :sha- / refs/ci/main-passed" \
+              " :latest / :pre-release / :sha- / ci/main-passed" \
               " (got event=${GITHUB_EVENT_NAME} ref=${GITHUB_REF})"
             exit 1
           fi
@@ -188,8 +188,8 @@ jobs:
             "$repo@$AF_DIGEST"
           echo "published $repo@$AF_DIGEST -> :sha-${GITHUB_SHA::12} + :pre-release" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Advance refs/ci/main-passed to this commit
+      - name: Advance ci/main-passed to this commit
         run: |
           set -euo pipefail
-          git push --force origin "${GITHUB_SHA}:refs/ci/main-passed"
-          echo "refs/ci/main-passed -> ${GITHUB_SHA}" | tee -a "$GITHUB_STEP_SUMMARY"
+          git push --force origin "${GITHUB_SHA}:refs/heads/ci/main-passed"
+          echo "ci/main-passed -> ${GITHUB_SHA}" | tee -a "$GITHUB_STEP_SUMMARY"
