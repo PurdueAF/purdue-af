@@ -293,7 +293,8 @@ prePuller:
   hook:
     enabled: false
   continuous:
-    enabled: false
+    enabled: true
+  pullProfileListImages: false
 hub:
   image:
     # Pull-through cache of docker.io/jupyterhub/k8s-hub-slim. Tag is
