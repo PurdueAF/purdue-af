@@ -27,7 +27,7 @@ cluster pulls ◀── geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purduea
   interlink-slurm-plugin, servicex-science-coffea) are built only by the
   in-cluster kaniko jobs (`docker/kaniko-build-jobs/`) — they exceed
   GitHub-hosted runner limits. Pixi environments are validated by the
-  ci-pixi.yml stage instead.
+  ci-pixi-global.yml stage instead.
 - The kaniko jobs are therefore the long-term build path for the large images —
   they are not legacy and cannot be retired unless the heavy builds move to
   infrastructure with cluster-grade disk/CPU (e.g. a self-hosted runner).

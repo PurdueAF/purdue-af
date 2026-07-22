@@ -66,17 +66,17 @@ paths_for() {
 		cat <<-EOF
 			pixi/base
 			pixi/check-env.py
-			.github/workflows/ci-pixi.yml
+			.github/workflows/ci-pixi-base.yml
 			.github/workflows/image-inputs.sh
 		EOF
 		;;
 	pixi-global)
 		# The AF image the check runs inside is appended to the memo key
-		# by ci-pixi.yml (it is not a git path).
+		# by ci-pixi-global.yml (it is not a git path).
 		cat <<-EOF
 			pixi/global
 			pixi/check-env.py
-			.github/workflows/ci-pixi.yml
+			.github/workflows/ci-pixi-global.yml
 			.github/workflows/image-inputs.sh
 		EOF
 		;;

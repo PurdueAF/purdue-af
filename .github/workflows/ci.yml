@@ -5,14 +5,14 @@ name: CI
 # is impossible without every stage of the SAME commit succeeding.
 #
 #   stage 0   checks      ci-checks.yml   lint · unit tests · manifest validation
-#   stage 1a  pixi-base   ci-pixi.yml     sync/commit pixi/base lock + import-smoke
-#                                         (before AF image build — Dockerfile uses
-#                                         `pixi install --locked`)
-#   stage 1b  images      ci-images.yml   content-addressed builds: every image is
-#                                         tagged in-<hash of its input tree>; an
-#                                         existing tag is VERIFIED reuse
-#   stage 1c  pixi-global ci-pixi.yml     sync/commit pixi/global lock + import-smoke
-#                                         INSIDE the stage-1 AF image
+#   stage 1a  pixi-base   ci-pixi-base.yml    sync/commit pixi/base lock +
+#                                             import-smoke (before AF image —
+#                                             Dockerfile uses `pixi install --locked`)
+#   stage 1b  images      ci-images.yml       content-addressed builds: every image
+#                                             is tagged in-<hash of its input tree>;
+#                                             an existing tag is VERIFIED reuse
+#   stage 1c  pixi-global ci-pixi-global.yml  sync/commit pixi/global lock +
+#                                             import-smoke INSIDE the stage-1 AF image
 #   stage 2   e2e         ci-e2e.yml      hub stack in kind, one job per channel:
 #                                         e2e-production (spawns the image pinned
 #                                         in values.yaml — the "e2e = production"
@@ -54,17 +54,11 @@ jobs:
   # `pixi install --locked` in the Dockerfile sees a matching lock.
   pixi-base:
     needs: checks
-    uses: ./.github/workflows/ci-pixi.yml
-    with:
-      suite: base
+    uses: ./.github/workflows/ci-pixi-base.yml
     secrets:
       AF_RELEASE_TOKEN: ${{ secrets.AF_RELEASE_TOKEN }}
     permissions:
-      # Must cover EVERY job in ci-pixi.yml (GitHub checks the union before
-      # evaluating `if: suite == ...` — omitting packages:read caused
-      # startup_failure even though only check-pixi-base runs).
       contents: write # lockfile commits
-      packages: read
 
   images:
     needs: pixi-base
@@ -75,9 +69,8 @@ jobs:
 
   pixi-global:
     needs: images
-    uses: ./.github/workflows/ci-pixi.yml
+    uses: ./.github/workflows/ci-pixi-global.yml
     with:
-      suite: global
       af-image: ${{ needs.images.outputs.af-image }}
       af-image-available: ${{ needs.images.outputs.af-image-available }}
     secrets:
