@@ -48,7 +48,10 @@ server:
       - hosts: [prometheus-af.geddes.rcac.purdue.edu]
     ingressClassName: public
 
-  # Recreate avoids two pods sharing prometheus-data-pvc during rollout (TSDB file lock).
+  # Keep Recreate: Prometheus TSDB cannot be opened by two processes (file lock /
+  # corruption risk) even though the PVC is RWX. RollingUpdate would briefly run
+  # two pods on the same data. True zero-downtime needs HA Prometheus or
+  # remote-write-only + Thanos receive.
   strategy:
     type: Recreate
 

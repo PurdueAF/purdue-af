@@ -145,9 +145,12 @@ resources:
     cpu: 4000m
     memory: 8Gi
 
-# Ensure rollout does not run two pods concurrently to avoid PVC multi-attach
+# RWX PVC allows surge; spawn new pod before terminating old for zero downtime.
 deploymentStrategy:
-  type: Recreate
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
 
 # Grafana configuration
 grafana.ini:
