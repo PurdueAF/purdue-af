@@ -17,7 +17,7 @@ name: CI images
 #
 # Large images other than purdue-af (dask-gateway variants, interlink,
 # servicex-science) still exceed GitHub-hosted runner limits and are built
-# only by the in-cluster kaniko jobs (docker/kaniko-build-jobs/).
+# out-of-band by the cluster admin.
 
 on:
   workflow_call:
@@ -186,7 +186,7 @@ jobs:
           {
             echo ""
             echo '```'
-            python3 docker/kaniko-build-jobs/analyze_image_build.py \
+            python3 docker/analyze_image_build.py \
               --image "$AF_IMAGE" \
               --deep-dive-min-mb 100000
             echo '```'

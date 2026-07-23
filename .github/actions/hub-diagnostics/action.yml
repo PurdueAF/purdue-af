@@ -1,0 +1,13 @@
+name: hub diagnostics
+description: Dump kind-cluster state after an e2e failure.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        kubectl get pods -A -o wide
+        kubectl get events --sort-by=.lastTimestamp | tail -40
+        kubectl logs deployment/hub --tail=200 || true
+        kubectl logs -l component=singleuser-server --tail=100 --prefix || true
+        kubectl describe pods -l component=singleuser-server || true
+        kubectl logs deployment/mock-cilogon --tail=50 || true

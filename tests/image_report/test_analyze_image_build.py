@@ -1,6 +1,6 @@
-"""Tests for docker/kaniko-build-jobs/analyze_image_build.py.
+"""Tests for docker/analyze_image_build.py.
 
-The script runs after every purdue-af kaniko build; these tests pin down
+The analyzer reports build time/size breakdowns for images; these tests pin down
 the log-parsing, manifest-joining, and tar-streaming logic against
 synthetic inputs so a kaniko/logrus/registry format change is caught in CI
 rather than as a silently empty report.

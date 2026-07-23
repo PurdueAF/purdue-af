@@ -3657,16 +3657,6 @@
           "interval": "",
           "legendFormat": "paused",
           "refId": "C"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "pixi_global_sync_ci_gate_ok",
-          "interval": "",
-          "legendFormat": "ci gate",
-          "refId": "D"
         }
       ],
       "options": {
@@ -3735,34 +3725,6 @@
                       "1": {
                         "text": "PAUSED",
                         "color": "orange",
-                        "index": 1
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "ci gate"
-            },
-            "properties": [
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "0": {
-                        "text": "BLOCKED",
-                        "color": "red",
-                        "index": 0
-                      },
-                      "1": {
-                        "text": "OK",
-                        "color": "green",
                         "index": 1
                       }
                     }

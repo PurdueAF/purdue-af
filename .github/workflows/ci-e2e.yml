@@ -23,7 +23,9 @@ name: CI e2e
 # All jobs are memoized on the hash of their full input state
 # (image-inputs.sh e2e-hub plus the AF image ref where it applies; the
 # cvmfs-smoke key is the image ref alone): identical state with a
-# recorded green run skips as verified reuse.
+# recorded green run skips as verified reuse. The shared machinery
+# (memo restore/save, image fallback, kind stack, diagnostics) lives in
+# .github/actions/ composites — one definition, three consumers.
 # Renovate chart bumps change helmrelease.yaml → the hash changes → e2e
 # runs on the Renovate PR itself (this replaced the old weekly cron).
 
@@ -41,9 +43,6 @@ on:
 
 permissions:
   contents: read
-
-env:
-  FLUX_VERSION: 2.5.1
 
 jobs:
   e2e-production:
@@ -76,60 +75,20 @@ jobs:
         run: echo "key=e2e-production-ok-$(./.github/workflows/image-inputs.sh e2e-hub)-${{ steps.image.outputs.tag }}" | tee -a "$GITHUB_OUTPUT"
       - name: Look up recorded green run
         id: memo
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        uses: ./.github/actions/e2e-memo-restore
         with:
-          path: .ci-memo
           key: ${{ steps.key.outputs.key }}
-      - name: Verified reuse — identical input state already passed
-        if: steps.memo.outputs.cache-hit == 'true'
-        run: echo "skipping — ${{ steps.key.outputs.key }} already green" | tee -a "$GITHUB_STEP_SUMMARY"
-      # First step of the real run on purpose: it must never wipe tools other
-      # steps install. tool-cache stays FALSE — helm/kind-action hard-fails
-      # when /opt/hostedtoolcache is deleted; android/dotnet/ghc free enough
-      # for the ~13 GB uncompressed AF image in kind.
-      - name: Free runner disk space
+      - name: Bring up the hub stack (production image preloaded)
         if: steps.memo.outputs.cache-hit != 'true'
-        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1 # Renovate pins to digest
-        with:
-          tool-cache: false
-          docker-images: false
-          large-packages: false # slow apt removal; space not needed here
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        if: steps.memo.outputs.cache-hit != 'true'
-        with:
-          enable-cache: true
-          cache-dependency-glob: tests/uv.lock
-      - name: Install flux CLI
-        if: steps.memo.outputs.cache-hit != 'true'
-        uses: fluxcd/flux2/action@b5a3752471b02a43a27bef81de415553fb32dcc9 # main
-        with:
-          version: ${{ env.FLUX_VERSION }}
-      - name: Create kind cluster
-        if: steps.memo.outputs.cache-hit != 'true'
-        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0 # Renovate pins to digest
-        with:
-          cluster_name: af-e2e
-      - name: Login to ghcr.io
-        if: steps.memo.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Deploy hub stack (with the production image preloaded)
-        if: steps.memo.outputs.cache-hit != 'true'
+        uses: ./.github/actions/kind-hub-stack
         env:
           PRELOAD_PRODUCTION: "1"
           PRODUCTION_IMAGE: ${{ steps.image.outputs.image }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: tests/e2e_hub/setup-kind.sh
-      - name: Port-forward hub and mock
-        if: steps.memo.outputs.cache-hit != 'true'
-        run: |
-          kubectl port-forward svc/proxy-public 8080:80 &
-          kubectl port-forward svc/mock-cilogon 9090:9090 &
-          sleep 3
+        with:
+          ghcr-login: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+          ghcr-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run e2e tests (hub config + production image)
         if: steps.memo.outputs.cache-hit != 'true'
         env:
@@ -139,20 +98,11 @@ jobs:
         run: uv run --project tests --frozen pytest -q -c tests/pyproject.toml tests/e2e_hub -v
       - name: Diagnostics on failure
         if: failure()
-        run: |
-          kubectl get pods -A -o wide
-          kubectl get events --sort-by=.lastTimestamp | tail -40
-          kubectl logs deployment/hub --tail=200 || true
-          kubectl logs -l component=singleuser-server --tail=100 --prefix || true
-          kubectl describe pods -l component=singleuser-server || true
-          kubectl logs deployment/mock-cilogon --tail=50 || true
+        uses: ./.github/actions/hub-diagnostics
       - name: Record green run
         if: success() && steps.memo.outputs.cache-hit != 'true'
-        run: mkdir -p .ci-memo && echo ok > .ci-memo/marker
-      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        if: success() && steps.memo.outputs.cache-hit != 'true'
+        uses: ./.github/actions/e2e-memo-save
         with:
-          path: .ci-memo
           key: ${{ steps.key.outputs.key }}
 
   e2e-pre-release:
@@ -165,16 +115,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Pick the AF image to spawn
         id: image
-        run: |
-          if [ "${{ inputs.af-image-available }}" = "true" ]; then
-            image="${{ inputs.af-image }}"
-          else
-            # fork PR: the exact-state image could not be pushed — fall
-            # back to the promoted channel so the stack test still runs
-            echo "::warning::exact-state AF image unavailable — falling back to :pre-release"
-            image="ghcr.io/purdueaf/purdue-af:pre-release"
-          fi
-          echo "image=$image" | tee -a "$GITHUB_OUTPUT"
+        uses: ./.github/actions/pick-af-image
+        with:
+          af-image: ${{ inputs.af-image }}
+          af-image-available: ${{ inputs.af-image-available }}
       - name: Compute memo key
         id: key
         run: |
@@ -182,56 +126,20 @@ jobs:
           echo "key=e2e-pre-release-ok-$(./.github/workflows/image-inputs.sh e2e-hub)-${img##*:}" | tee -a "$GITHUB_OUTPUT"
       - name: Look up recorded green run
         id: memo
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        uses: ./.github/actions/e2e-memo-restore
         with:
-          path: .ci-memo
           key: ${{ steps.key.outputs.key }}
-      - name: Verified reuse — identical input state already passed
-        if: steps.memo.outputs.cache-hit == 'true'
-        run: echo "skipping — ${{ steps.key.outputs.key }} already green" | tee -a "$GITHUB_STEP_SUMMARY"
-      # First step of the real run on purpose: it must never wipe tools
-      # other steps install. tool-cache stays FALSE — helm/kind-action
-      # hard-fails when /opt/hostedtoolcache is deleted; android/dotnet/ghc
-      # free enough for the ~13 GB uncompressed AF image in kind.
-      - name: Free runner disk space
-        if: steps.memo.outputs.cache-hit != 'true'
-        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1 # Renovate pins to digest
-        with:
-          tool-cache: false
-          docker-images: false
-          large-packages: false # slow apt removal; space not needed here
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        if: steps.memo.outputs.cache-hit != 'true'
-        with:
-          enable-cache: true
-          cache-dependency-glob: tests/uv.lock
-      - name: Install flux CLI
-        if: steps.memo.outputs.cache-hit != 'true'
-        uses: fluxcd/flux2/action@b5a3752471b02a43a27bef81de415553fb32dcc9 # main
-        with:
-          version: ${{ env.FLUX_VERSION }}
-      - name: Create kind cluster
-        if: steps.memo.outputs.cache-hit != 'true'
-        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0 # Renovate pins to digest
-        with:
-          cluster_name: af-e2e
       # setup-kind.sh crictl-pulls the image straight into the kind node —
       # measured ~3x faster than docker pull + kind load (which streams the
       # ~13 GB image uncompressed through a docker-save pipe). The CVMFS
       # check runs in the parallel cvmfs-smoke job below.
-      - name: Deploy hub stack (with the AF image preloaded)
+      - name: Bring up the hub stack (AF image preloaded)
         if: steps.memo.outputs.cache-hit != 'true'
+        uses: ./.github/actions/kind-hub-stack
         env:
           PRERELEASE_IMAGE: ${{ steps.image.outputs.image }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: tests/e2e_hub/setup-kind.sh
-      - name: Port-forward hub and mock
-        if: steps.memo.outputs.cache-hit != 'true'
-        run: |
-          kubectl port-forward svc/proxy-public 8080:80 &
-          kubectl port-forward svc/mock-cilogon 9090:9090 &
-          sleep 3
       - name: Run pre-release e2e test
         if: steps.memo.outputs.cache-hit != 'true'
         env:
@@ -244,20 +152,11 @@ jobs:
           tests/e2e_hub -v -k "prerelease or hub_api_is_up"
       - name: Diagnostics on failure
         if: failure()
-        run: |
-          kubectl get pods -A -o wide
-          kubectl get events --sort-by=.lastTimestamp | tail -40
-          kubectl logs deployment/hub --tail=200 || true
-          kubectl logs -l component=singleuser-server --tail=100 --prefix || true
-          kubectl describe pods -l component=singleuser-server || true
-          kubectl logs deployment/mock-cilogon --tail=50 || true
+        uses: ./.github/actions/hub-diagnostics
       - name: Record green run
         if: success() && steps.memo.outputs.cache-hit != 'true'
-        run: mkdir -p .ci-memo && echo ok > .ci-memo/marker
-      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        if: success() && steps.memo.outputs.cache-hit != 'true'
+        uses: ./.github/actions/e2e-memo-save
         with:
-          path: .ci-memo
           key: ${{ steps.key.outputs.key }}
 
   cvmfs-smoke:
@@ -276,16 +175,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Pick the AF image to test
         id: image
-        run: |
-          if [ "${{ inputs.af-image-available }}" = "true" ]; then
-            image="${{ inputs.af-image }}"
-          else
-            # fork PR: the exact-state image could not be pushed — fall
-            # back to the promoted channel so the check still runs
-            echo "::warning::exact-state AF image unavailable — falling back to :pre-release"
-            image="ghcr.io/purdueaf/purdue-af:pre-release"
-          fi
-          echo "image=$image" | tee -a "$GITHUB_OUTPUT"
+        uses: ./.github/actions/pick-af-image
+        with:
+          af-image: ${{ inputs.af-image }}
+          af-image-available: ${{ inputs.af-image-available }}
       - name: Compute memo key
         id: key
         run: |
@@ -293,13 +186,9 @@ jobs:
           echo "key=cvmfs-smoke-ok-${img##*:}" | tee -a "$GITHUB_OUTPUT"
       - name: Look up recorded green run
         id: memo
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        uses: ./.github/actions/e2e-memo-restore
         with:
-          path: .ci-memo
           key: ${{ steps.key.outputs.key }}
-      - name: Verified reuse — identical input state already passed
-        if: steps.memo.outputs.cache-hit == 'true'
-        run: echo "skipping — ${{ steps.key.outputs.key }} already green" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Login to ghcr.io
         if: steps.memo.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
@@ -319,9 +208,6 @@ jobs:
             echo "cmsset ok: $(command -v scramv1)"'
       - name: Record green run
         if: success() && steps.memo.outputs.cache-hit != 'true'
-        run: mkdir -p .ci-memo && echo ok > .ci-memo/marker
-      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        if: success() && steps.memo.outputs.cache-hit != 'true'
+        uses: ./.github/actions/e2e-memo-save
         with:
-          path: .ci-memo
           key: ${{ steps.key.outputs.key }}

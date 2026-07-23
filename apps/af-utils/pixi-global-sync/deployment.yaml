@@ -34,16 +34,10 @@ spec:
             # pixi/global declares [system-requirements] cuda; this pod has
             # no GPU/driver injected (none requested + NVIDIA_VISIBLE_DEVICES
             # =void), so mock the __cuda virtual package exactly like
-            # ci-pixi.yml does on CPU-only runners. Keep in sync with the
+            # ci-pixi-global.yml does on CPU-only runners. Keep in sync with the
             # cuda version in pixi/global/pixi.toml.
             - name: CONDA_OVERRIDE_CUDA
               value: "12.4"
-            # Only sync locks whose commit has ALL GitHub checks green
-            # (fail-closed; set "0" for emergency bypass). Public repo —
-            # unauthenticated + ETag-cached; add a GITHUB_TOKEN env from a
-            # secret if rate limits are ever hit.
-            - name: REQUIRE_CI_CHECKS
-              value: "1"
             # cache lives on the SAME filesystem as the env: installs become
             # mostly hardlink swaps (short update window) and survive pod
             # restarts. Node-local emptyDir is only scratch space.

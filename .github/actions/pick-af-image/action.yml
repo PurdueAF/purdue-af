@@ -1,0 +1,29 @@
+name: pick AF image
+description: >-
+  The stage-1 AF image for the current input state, or — on fork PRs, where
+  the exact-state image could not be pushed — the promoted :pre-release
+  fallback so the check still runs.
+inputs:
+  af-image:
+    description: Full ref of the AF image for the current input state
+    required: true
+  af-image-available:
+    description: "'true' when af-image is pullable from ghcr"
+    required: true
+outputs:
+  image:
+    description: Image ref to use
+    value: ${{ steps.pick.outputs.image }}
+runs:
+  using: composite
+  steps:
+    - id: pick
+      shell: bash
+      run: |
+        if [ "${{ inputs.af-image-available }}" = "true" ]; then
+          image="${{ inputs.af-image }}"
+        else
+          echo "::warning::exact-state AF image unavailable — falling back to :pre-release"
+          image="ghcr.io/purdueaf/purdue-af:pre-release"
+        fi
+        echo "image=$image" | tee -a "$GITHUB_OUTPUT"

@@ -75,7 +75,7 @@
   packageRules: [
     {
       // Private cluster registry — Renovate has no credentials for it and the
-      // images are built in-repo anyway (kaniko / future CI builds).
+      // images are built in-repo anyway (CI builds).
       matchDatasources: ['docker'],
       matchPackageNames: ['geddes-registry.rcac.purdue.edu/**'],
       enabled: false,

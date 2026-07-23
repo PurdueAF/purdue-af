@@ -261,6 +261,6 @@ RUN nvcc --version >/dev/null && \
     python3 -c "import jupyterlab; print('smoke ok:', jupyterlab.__version__)"
 
 # The published image: a bare alias of `runtime` so the smoke stage above
-# stays opt-in — the DEFAULT target (CI push step, kaniko fallback job)
+# stays opt-in — the DEFAULT target (CI push step)
 # resolves here and carries no smoke layers.
 FROM runtime

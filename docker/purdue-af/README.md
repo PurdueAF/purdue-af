@@ -7,7 +7,7 @@ prior 0.12.x image lives, retired, in
 [`docker/purdue-af-old`](../purdue-af-old/Dockerfile). Motivated by a
 layer-by-layer analysis of the 0.12.5 build (30m30s, 7.6 GB compressed)
 with
-[`analyze_image_build.py`](../kaniko-build-jobs/analyze_image_build.py):
+[`analyze_image_build.py`](../analyze_image_build.py):
 
 | finding in 0.12.5                                                                                      | fix here                                                                                                                                                                                         |
 | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -37,16 +37,8 @@ Expected: **~5 GB compressed** (from 7.6) and roughly half the build time.
 
 ## Build
 
-CI builds and publishes this image — see the pipeline below. The in-cluster
-kaniko Job (`docker/kaniko-build-jobs/build-af-new.yaml`) is an EMERGENCY
-FALLBACK only (e.g. GitHub Actions unavailable); it builds from `main` and
-pushes to the geddes-native `cms/purdue-af` path, which production no longer
-pulls, so its destination tag must be reconciled with the ghcr flow by hand
-before anything would consume it:
-
-```
-kubectl apply -n cms -f docker/kaniko-build-jobs/build-af-new.yaml
-```
+CI builds and publishes this image — see the pipeline below. There is no
+other live build path.
 
 ## CI/CD pipeline (pre-release channel)
 
@@ -84,14 +76,11 @@ pull verified, 5.2 GiB compressed), and manifests pull via the geddes
 revalidating moving tags (`:pre-release`, `:latest`) upstream on each
 pull, so promotions still land on the next session spawn.
 
-The kaniko Job below remains as a cluster-local fallback build path.
-
 ## Compare against 0.12.5
 
 ```
-kubectl logs -n cms job/kaniko-build-af-new | \
-    python3 docker/kaniko-build-jobs/analyze_image_build.py --log - \
-        --image geddes-registry.rcac.purdue.edu/cms/purdue-af:0.13.0-pre2
+python3 docker/analyze_image_build.py \
+    --image ghcr.io/purdueaf/purdue-af:pre-release
 ```
 
 ## Old-vs-new comparison (2026-07-16, 0.12.5 vs 0.13.0-pre1 + parity fixes)
@@ -179,5 +168,5 @@ production runs this CI-built image via the geddes ghcr-proxy-cache, and
 `e2e-production` spawns the pinned tag every run. This directory is now the
 canonical `docker/purdue-af/` and is self-contained (the shared
 scripts/configs were consolidated in from the legacy image). The retired
-0.12.x image is `docker/purdue-af-old/Dockerfile` (kaniko `build-af.yaml`);
+0.12.x image is `docker/purdue-af-old/Dockerfile`;
 it is kept for reference only and is no longer a live build path.

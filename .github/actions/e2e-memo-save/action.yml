@@ -1,0 +1,17 @@
+name: e2e memo save
+description: >-
+  Record a green run for a memo key. Callers guard with
+  `if: success() && <restore>.outputs.cache-hit != 'true'`.
+inputs:
+  key:
+    description: Memo key that just passed
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: mkdir -p .ci-memo && echo ok > .ci-memo/marker
+    - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: .ci-memo
+        key: ${{ inputs.key }}

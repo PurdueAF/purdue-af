@@ -1,0 +1,24 @@
+name: e2e memo restore
+description: >-
+  Look up a recorded green run for a memo key. Jobs guard their real work
+  with `if: steps.<id>.outputs.cache-hit != 'true'` — identical input state
+  with a recorded green run skips as verified reuse.
+inputs:
+  key:
+    description: Memo key (includes the full input-state hash)
+    required: true
+outputs:
+  cache-hit:
+    description: "'true' when this key already has a recorded green run"
+    value: ${{ steps.restore.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: .ci-memo
+        key: ${{ inputs.key }}
+    - if: steps.restore.outputs.cache-hit == 'true'
+      shell: bash
+      run: echo "skipping — ${{ inputs.key }} already green" | tee -a "$GITHUB_STEP_SUMMARY"

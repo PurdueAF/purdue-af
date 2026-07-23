@@ -1,0 +1,61 @@
+name: kind hub stack
+description: >-
+  Bring up the full JupyterHub e2e stack in kind: free disk, uv, flux CLI,
+  kind cluster, optional ghcr login, deploy via tests/e2e_hub/setup-kind.sh
+  (which reads its image-preload config from the CALLER STEP's env vars —
+  set PRELOAD_PRODUCTION/PRODUCTION_IMAGE/PRERELEASE_IMAGE/GHCR_* on the
+  step that uses this action), then port-forward hub + mock.
+inputs:
+  ghcr-login:
+    description: "'true' to docker-login to ghcr before deploying"
+    required: false
+    default: "false"
+  ghcr-token:
+    description: Token for the ghcr login (pass secrets.GITHUB_TOKEN)
+    required: false
+    default: ""
+  flux-version:
+    description: flux CLI version
+    required: false
+    default: "2.5.1"
+runs:
+  using: composite
+  steps:
+    # First on purpose: must never wipe tools other steps install.
+    # tool-cache stays FALSE — helm/kind-action hard-fails when
+    # /opt/hostedtoolcache is deleted; android/dotnet/ghc free enough for
+    # the ~13 GB uncompressed AF image in kind.
+    - name: Free runner disk space
+      uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1 # Renovate pins to digest
+      with:
+        tool-cache: false
+        docker-images: false
+        large-packages: false # slow apt removal; space not needed here
+    - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: tests/uv.lock
+    - name: Install flux CLI
+      uses: fluxcd/flux2/action@b5a3752471b02a43a27bef81de415553fb32dcc9 # main
+      with:
+        version: ${{ inputs.flux-version }}
+    - name: Create kind cluster
+      uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0 # Renovate pins to digest
+      with:
+        cluster_name: af-e2e
+    - name: Login to ghcr.io
+      if: inputs.ghcr-login == 'true'
+      uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ inputs.ghcr-token }}
+    - name: Deploy hub stack
+      shell: bash
+      run: tests/e2e_hub/setup-kind.sh
+    - name: Port-forward hub and mock
+      shell: bash
+      run: |
+        kubectl port-forward svc/proxy-public 8080:80 &
+        kubectl port-forward svc/mock-cilogon 9090:9090 &
+        sleep 3

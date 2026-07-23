@@ -194,15 +194,6 @@ for rendered in "$workdir"/rendered-*.yaml; do
 	validate_helmreleases "$rendered" "$workdir/helm-repos.txt"
 done
 
-# --- Standalone kustomize roots (applied out-of-band) --------------------
-# shellcheck disable=SC2043  # single-element list: more roots may be added
-for root in docker/kaniko-build-jobs; do
-	echo "──── ${root} ────"
-	if ! kustomize build "$root" | "${KUBECONFORM[@]}"; then
-		failed=1
-	fi
-done
-
 # --- Flux bootstrap objects ----------------------------------------------
 echo "──── flux bootstrap objects ────"
 if ! "${KUBECONFORM[@]}" deploy/*/flux-kustomization.yaml deploy/*/git-repository.yaml; then

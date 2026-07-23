@@ -11,9 +11,12 @@ the share is the persistent package cache at `/work/pixi/.cache`.
 
 ## Why this shape
 
-- **Validation happens upstream, once.** `ci-pixi` solves and
-  import-smokes every lock change inside the AF image _before merge_ —
-  nothing unvalidated ever reaches the cluster. The daemon re-verifies
+- **Validation happens upstream, once — and the delivery channel is the
+  gate.** `ci-pixi-global.yml` solves and import-smokes every lock change
+  inside the AF image, and the manifests reach the daemon via the Flux
+  `experimental` channel, which tracks the `main-validated` branch —
+  advanced only by the ci.yml publish stage behind `ci-ok`. Content that
+  did not pass the full pipeline structurally cannot arrive here. The daemon re-verifies
   after each install (and every 6 h), so a broken-on-disk env alerts and
   self-heals, but it doesn't duplicate CI's staging pipeline on `/work`.
 - **In-place updates are short and boring.** With the cache on the same
