@@ -3633,7 +3633,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "pixi_global_sync_in_sync",
+          "expr": "max(pixi_global_sync_in_sync{job=\"pixi-global-sync\"})",
           "interval": "",
           "legendFormat": "in sync",
           "refId": "A"
@@ -3643,7 +3643,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "pixi_global_sync_env_healthy",
+          "expr": "max(pixi_global_sync_env_healthy{job=\"pixi-global-sync\"})",
           "interval": "",
           "legendFormat": "env healthy",
           "refId": "B"
@@ -3653,7 +3653,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "pixi_global_sync_paused",
+          "expr": "max(pixi_global_sync_paused{job=\"pixi-global-sync\"})",
           "interval": "",
           "legendFormat": "paused",
           "refId": "C"
@@ -3738,9 +3738,9 @@
     },
     {
       "id": 53,
-      "type": "timeseries",
+      "type": "state-timeline",
       "title": "Global pixi env \u2014 sync/health history",
-      "description": "Binary state over time: drops of 'in sync' show update windows or failing syncs; drops of 'env healthy' mean the live env failed import verification.",
+      "description": "One row per signal. Colored spans show state over time: red spans on 'in sync' are update windows or failing syncs; red on 'env healthy' means the live env failed import verification; orange on 'paused' is manual work (.sync-pause present).",
       "datasource": {
         "type": "datasource",
         "uid": "-- Mixed --"
@@ -3757,7 +3757,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "pixi_global_sync_in_sync",
+          "expr": "max(pixi_global_sync_in_sync{job=\"pixi-global-sync\"})",
           "interval": "",
           "legendFormat": "in sync",
           "refId": "A"
@@ -3767,7 +3767,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "pixi_global_sync_env_healthy",
+          "expr": "max(pixi_global_sync_env_healthy{job=\"pixi-global-sync\"})",
           "interval": "",
           "legendFormat": "env healthy",
           "refId": "B"
@@ -3777,9 +3777,204 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "pixi_global_sync_paused",
+          "expr": "max(pixi_global_sync_paused{job=\"pixi-global-sync\"})",
           "interval": "",
           "legendFormat": "paused",
+          "refId": "C"
+        }
+      ],
+      "options": {
+        "mergeValues": true,
+        "showValue": "auto",
+        "alignValue": "center",
+        "rowHeight": 0.85,
+        "perPage": 20,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 0,
+            "fillOpacity": 72,
+            "spanNulls": false,
+            "insertNulls": false,
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            }
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "PROBLEM",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "OK",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "-"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "in sync"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "out of sync",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "in sync",
+                        "color": "green",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "env healthy"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "UNHEALTHY",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "healthy",
+                        "color": "green",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "paused"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "auto",
+                        "color": "text",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "PAUSED",
+                        "color": "orange",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 54,
+      "type": "timeseries",
+      "title": "Global pixi env \u2014 sync activity",
+      "description": "How often the env is being rebuilt and how long the last rebuild took. Left axis: syncs and failures per hour. Right axis: duration of the last sync (staging + install + verification).",
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "gridPos": {
+        "x": 15,
+        "y": 118,
+        "w": 9,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max(increase(pixi_global_sync_syncs_total{job=\"pixi-global-sync\"}[1h]))",
+          "interval": "",
+          "legendFormat": "syncs / h",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max(increase(pixi_global_sync_sync_failures_total{job=\"pixi-global-sync\"}[1h]))",
+          "interval": "",
+          "legendFormat": "failures / h",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max(pixi_global_sync_last_sync_duration_seconds{job=\"pixi-global-sync\"})",
+          "interval": "",
+          "legendFormat": "last sync duration (right axis)",
           "refId": "C"
         }
       ],
@@ -3803,7 +3998,7 @@
             "drawStyle": "line",
             "lineInterpolation": "stepAfter",
             "lineWidth": 2,
-            "fillOpacity": 12,
+            "fillOpacity": 8,
             "spanNulls": false,
             "showPoints": "never",
             "axisPlacement": "auto",
@@ -3815,100 +4010,8 @@
             }
           },
           "min": 0,
-          "max": 1.2,
           "decimals": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      }
-    },
-    {
-      "id": 54,
-      "type": "timeseries",
-      "title": "Global pixi env \u2014 sync activity",
-      "description": "Sync attempts and failures per hour, and how long the last sync took (stage + install + verify).",
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
-      },
-      "gridPos": {
-        "x": 15,
-        "y": 118,
-        "w": 9,
-        "h": 8
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "increase(pixi_global_sync_syncs_total[1h])",
-          "interval": "",
-          "legendFormat": "syncs / h",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "increase(pixi_global_sync_sync_failures_total[1h])",
-          "interval": "",
-          "legendFormat": "failures / h",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "pixi_global_sync_last_sync_duration_seconds",
-          "interval": "",
-          "legendFormat": "last sync duration",
-          "refId": "C"
-        }
-      ],
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "fillOpacity": 10,
-            "spanNulls": false,
-            "showPoints": "never",
-            "axisPlacement": "auto",
-            "stacking": {
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "min": 0,
+          "unit": "short",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -3920,6 +4023,21 @@
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "syncs / h"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -3938,7 +4056,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "last sync duration"
+              "options": "last sync duration (right axis)"
             },
             "properties": [
               {
@@ -3946,8 +4064,34 @@
                 "value": "s"
               },
               {
+                "id": "decimals",
+                "value": 1
+              },
+              {
                 "id": "custom.axisPlacement",
                 "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "duration"
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [4, 4],
+                  "fill": "dash"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
               }
             ]
           }
