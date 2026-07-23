@@ -92,7 +92,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install flux CLI
-        uses: fluxcd/flux2/action@b5a3752471b02a43a27bef81de415553fb32dcc9 # main
+        uses: fluxcd/flux2/action@c5902410cf258f55a66235fb4689e375ff3f8f59 # main
         with:
           version: ${{ env.FLUX_VERSION }}
       - name: Install kubeconform

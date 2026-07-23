@@ -36,7 +36,7 @@ runs:
         enable-cache: true
         cache-dependency-glob: tests/uv.lock
     - name: Install flux CLI
-      uses: fluxcd/flux2/action@b5a3752471b02a43a27bef81de415553fb32dcc9 # main
+      uses: fluxcd/flux2/action@c5902410cf258f55a66235fb4689e375ff3f8f59 # main
       with:
         version: ${{ inputs.flux-version }}
     - name: Create kind cluster
@@ -45,7 +45,7 @@ runs:
         cluster_name: af-e2e
     - name: Login to ghcr.io
       if: inputs.ghcr-login == 'true'
-      uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4 # Renovate pins to digest
+      uses: docker/login-action@06fb636fac595d6fb4b28a5dfcb21a6f5091859c # v4 # Renovate pins to digest
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
