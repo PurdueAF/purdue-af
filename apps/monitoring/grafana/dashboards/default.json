@@ -3655,7 +3655,7 @@
           },
           "expr": "max(pixi_global_sync_paused{job=\"pixi-global-sync\"})",
           "interval": "",
-          "legendFormat": "paused",
+          "legendFormat": "sync mode",
           "refId": "C"
         }
       ],
@@ -3708,7 +3708,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "paused"
+              "options": "sync mode"
             },
             "properties": [
               {
@@ -3718,12 +3718,12 @@
                     "type": "value",
                     "options": {
                       "0": {
-                        "text": "auto",
+                        "text": "automatic",
                         "color": "green",
                         "index": 0
                       },
                       "1": {
-                        "text": "PAUSED",
+                        "text": "PAUSED \u2014 manual work",
                         "color": "orange",
                         "index": 1
                       }
@@ -3779,7 +3779,7 @@
           },
           "expr": "max(pixi_global_sync_paused{job=\"pixi-global-sync\"})",
           "interval": "",
-          "legendFormat": "paused",
+          "legendFormat": "sync mode",
           "refId": "C"
         }
       ],
@@ -3903,7 +3903,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "paused"
+              "options": "sync mode"
             },
             "properties": [
               {
@@ -3913,12 +3913,12 @@
                     "type": "value",
                     "options": {
                       "0": {
-                        "text": "auto",
-                        "color": "text",
+                        "text": "automatic",
+                        "color": "green",
                         "index": 0
                       },
                       "1": {
-                        "text": "PAUSED",
+                        "text": "PAUSED \u2014 manual work",
                         "color": "orange",
                         "index": 1
                       }
