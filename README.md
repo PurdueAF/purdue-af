@@ -25,4 +25,3 @@ Each user is provided with a 25GB home directory at first login. These directori
 [![AF image](https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2FPurdueAF%2Fpurdue-af%2Fmain%2Fapps%2Fjupyterhub%2Fjupyterhub%2Fvalues.yaml&query=%24.singleuser.image.tag&label=AF%20image&color=B1810B)](RELEASING.md)
 
 When and how versions are incremented: see [RELEASING.md](RELEASING.md).
-
