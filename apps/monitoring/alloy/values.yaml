@@ -22,7 +22,7 @@ controller:
       value: "cms-af"
       effect: "NoSchedule"
   nodeSelector:
-    cms-af-prod: "true"
+    cms-af-dev: "true"
 
 serviceAccount:
   create: true
