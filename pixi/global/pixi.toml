@@ -16,7 +16,7 @@ certifi = "*"
 click = "*"
 # 10.4.2 builds pin root_base to exactly 6.36.04, whose conda-forge build
 # segfaults on `import ROOT` on EL8; 10.6.0 builds allow root 6.36.10 (ok)
-cms-combine = "==10.6.0"
+cms-combine = "==10.6.1"
 coffea = "2026.7.0.*"
 correctionlib="*"
 dask = "*"
