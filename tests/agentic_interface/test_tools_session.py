@@ -548,3 +548,199 @@ async def test_restart_pod_still_terminating(user_ctx, monkeypatch):
     out = await tools["restart_af_session"]()
     assert "still terminating" in out
     assert "start_af_session" in out  # recovery hint
+
+
+# ── remaining error / edge paths ──────────────────────────────────────────────
+
+
+def test_default_profile_helpers():
+    assert session._default_profile([]) is None
+    assert (
+        session._default_profile([{"slug": "a"}, {"slug": "b", "default": True}])[
+            "slug"
+        ]
+        == "b"
+    )
+    assert session._default_profile([{"slug": "only"}])["slug"] == "only"
+    assert session._default_choice_key({"1": "A", "2": "B (default)"}) == "2"
+    assert session._default_choice_key({"1": "A", "2": "B"}) == "1"
+    assert session._default_choice_key({}) is None
+
+
+@respx.mock
+async def test_status_hub_unreachable(user_ctx):
+    from httpx import ConnectError
+
+    respx.get(USER_URL).mock(side_effect=ConnectError("down"))
+    tools = register_tools(session).tools
+    assert "unreachable" in await tools["get_session_status"]()
+
+
+@respx.mock
+async def test_start_skips_empty_choices_and_option_cancel(user_ctx, monkeypatch):
+    parsed = [
+        {
+            "display_name": "Stable",
+            "slug": "stable",
+            "default": True,
+            "description": "",
+            "options": {
+                "empty": {"display_name": "Empty", "choices": {}},
+                "0-cpu": {
+                    "display_name": "CPU cores",
+                    "choices": {"1": "1 (default)", "2": "4"},
+                },
+            },
+        }
+    ]
+
+    async def fake_get_profiles(force=False):
+        return parsed
+
+    monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
+
+    tools = register_tools(session).tools
+    ctx = FakeCtx(("cancel", None))
+    out = await tools["start_af_session"](ctx)
+    assert "list_af_profiles" in out  # option cancel → fallback
+    assert len(ctx.calls) == 1  # empty choices skipped; only cpu asked
+
+
+@respx.mock
+async def test_start_hub_unreachable_and_status_codes(user_ctx):
+    from httpx import ConnectError
+
+    tools = register_tools(session).tools
+    respx.post(SERVER_URL).mock(side_effect=ConnectError("down"))
+    assert "unreachable" in await tools["start_af_session"](FakeCtx())
+
+    respx.post(SERVER_URL).respond(202)
+    assert "already pending" in await tools["start_af_session"](FakeCtx())
+
+    respx.post(SERVER_URL).respond(200)
+    assert "Session starting" in await tools["start_af_session"](FakeCtx())
+
+    respx.post(SERVER_URL).respond(500, text="boom")
+    assert "HTTP 500" in await tools["start_af_session"](FakeCtx())
+
+
+@respx.mock
+async def test_stop_unreachable_and_http_error(user_ctx):
+    from httpx import ConnectError
+
+    tools = register_tools(session).tools
+    respx.delete(SERVER_URL).mock(side_effect=ConnectError("down"))
+    assert "unreachable" in await tools["stop_af_session"]()
+
+    respx.delete(SERVER_URL).respond(500, text="boom")
+    assert "HTTP 500" in await tools["stop_af_session"]()
+
+
+@respx.mock
+async def test_wait_retries_through_transient_errors(user_ctx, monkeypatch):
+    from httpx import ConnectError
+
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(session.asyncio, "sleep", no_sleep)
+
+    calls = {"n": 0}
+
+    def responder(_request):
+        import httpx
+
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ConnectError("blip")
+        return httpx.Response(200, json=server_payload(ready=True))
+
+    respx.get(USER_URL).mock(side_effect=responder)
+    tools = register_tools(session).tools
+    out = await tools["wait_for_session"](timeout_seconds=30)
+    assert "Session is running" in out
+    assert calls["n"] == 2
+
+
+@respx.mock
+async def test_restart_error_paths(user_ctx, monkeypatch):
+    from httpx import ConnectError
+
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(session.asyncio, "sleep", no_sleep)
+    tools = register_tools(session).tools
+
+    # prior-options fetch fails → still restarts with empty opts
+    respx.get(USER_URL).mock(side_effect=ConnectError("down"))
+    respx.delete(SERVER_URL).respond(204)
+    respx.post(SERVER_URL).respond(201)
+    out = await tools["restart_af_session"]()
+    assert "default options" in out
+
+    # unknown profile
+    async def fake_get_profiles(force=False):
+        return [{"slug": "stable", "display_name": "Stable", "default": True}]
+
+    monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
+    respx.get(USER_URL).respond(200, json=server_payload())
+    out = await tools["restart_af_session"](profile_name="ghost")
+    assert "Unknown profile" in out
+
+    # stop unreachable
+    respx.get(USER_URL).respond(200, json=server_payload())
+    respx.delete(SERVER_URL).mock(side_effect=ConnectError("down"))
+    assert "unreachable" in await tools["restart_af_session"]()
+
+    # stop unexpected status
+    respx.get(USER_URL).respond(200, json=server_payload())
+    respx.delete(SERVER_URL).respond(500, text="no")
+    assert "Error stopping session" in await tools["restart_af_session"]()
+
+    # start unreachable after stop
+    respx.get(USER_URL).respond(200, json=server_payload())
+    respx.delete(SERVER_URL).respond(204)
+    respx.post(SERVER_URL).mock(side_effect=ConnectError("down"))
+    out = await tools["restart_af_session"]()
+    assert "stopped but restart failed" in out
+
+    # start unexpected status
+    respx.get(USER_URL).respond(200, json=server_payload())
+    respx.delete(SERVER_URL).respond(204)
+    respx.post(SERVER_URL).respond(500, text="no")
+    out = await tools["restart_af_session"]()
+    assert "restart returned HTTP 500" in out
+
+
+@respx.mock
+async def test_restart_unknown_profile_when_list_empty(user_ctx, monkeypatch):
+    async def empty_profiles(force=False):
+        return []
+
+    monkeypatch.setattr(profiles, "get_profiles", empty_profiles)
+    respx.get(USER_URL).respond(200, json=server_payload())
+    tools = register_tools(session).tools
+    out = await tools["restart_af_session"](profile_name="ghost")
+    assert "Unknown profile" in out
+    assert "unavailable" in out
+
+
+@respx.mock
+async def test_restart_with_named_profile(user_ctx, monkeypatch):
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(session.asyncio, "sleep", no_sleep)
+    fake_profiles(monkeypatch)
+
+    respx.get(USER_URL).respond(200, json=server_payload(options={"0-cpu": "1"}))
+    respx.delete(SERVER_URL).respond(204)
+    start = respx.post(SERVER_URL).respond(201)
+
+    tools = register_tools(session).tools
+    out = await tools["restart_af_session"](profile_name="Stable")
+
+    body = json.loads(start.calls.last.request.content)
+    assert body["profile"] == "stable"
+    assert "Session restarting" in out

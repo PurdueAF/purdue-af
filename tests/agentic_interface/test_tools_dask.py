@@ -684,3 +684,473 @@ async def test_cluster_usage_no_workers(user_ctx):
     tools = register_tools(dask).tools
     out = await tools["get_dask_cluster_usage"]("cms.abc")
     assert "No Running worker pods" in out
+
+
+# ── helper edge cases + remaining error paths ─────────────────────────────────
+
+
+def test_parse_clusters_list_and_garbage():
+    assert [c["name"] for c in dask._parse_clusters([{"name": "x"}, "skip"])] == ["x"]
+    assert dask._parse_clusters("nope") == []
+
+
+def test_stats_empty_and_base_env_skips_none():
+    assert dask._stats([]) is None
+    env = dask._base_worker_env("alice", {"KEEP": "1", "DROP": None})
+    assert env["KEEP"] == "1"
+    assert "DROP" not in env
+
+
+def test_build_options_rejects_nonpositive_resources():
+    assert "worker_cores" in dask._build_cluster_options(
+        username="alice",
+        pixi_project="/p",
+        pixi_env="default",
+        conda_env=None,
+        worker_cores=0,
+        worker_memory=1,
+        env=None,
+    )
+    assert "worker_memory" in dask._build_cluster_options(
+        username="alice",
+        pixi_project="/p",
+        pixi_env="default",
+        conda_env=None,
+        worker_cores=1,
+        worker_memory=0,
+        env=None,
+    )
+
+
+@respx.mock
+async def test_list_clusters_auth_and_http_errors(user_ctx):
+    """401/403 are fetched but intentionally omitted from the list output;
+    other HTTP errors are surfaced. Cover both via _fetch_clusters + list."""
+    import httpx
+
+    async with httpx.AsyncClient() as client:
+        respx.get(clusters_url(K8S)).respond(403)
+        gw, data = await dask._fetch_clusters(client, "k8s", K8S, "alice")
+        assert data == "not authorised (no access to this backend)"
+
+        respx.get(clusters_url(K8S)).respond(401)
+        _, data = await dask._fetch_clusters(client, "k8s", K8S, "alice")
+        assert "not authorised" in data
+
+        respx.get(clusters_url(K8S)).respond(503)
+        _, data = await dask._fetch_clusters(client, "k8s", K8S, "alice")
+        assert data == "HTTP 503"
+
+    def responder(request):
+        if "k8s-slurm" in str(request.url):
+            return httpx.Response(503)
+        return httpx.Response(403)
+
+    respx.get(url__regex=r".*/api/v1/clusters/").mock(side_effect=responder)
+    tools = register_tools(dask).tools
+    out = await tools["list_dask_clusters"]()
+    # auth errors suppressed; HTTP 503 from slurm is shown
+    assert "not authorised" not in out
+    assert "HTTP 503" in out
+
+
+@respx.mock
+async def test_require_owned_cluster_error_shapes(user_ctx):
+    import httpx
+
+    async with httpx.AsyncClient() as client:
+        respx.get(f"{K8S}/api/v1/clusters/c1").mock(side_effect=ConnectError("down"))
+        err = await dask._require_owned_cluster(client, K8S, "alice", "c1", "k8s")
+        assert "unreachable" in err
+
+        respx.get(f"{K8S}/api/v1/clusters/c1").respond(403)
+        err = await dask._require_owned_cluster(client, K8S, "alice", "c1", "k8s")
+        assert "not authorised" in err
+
+        respx.get(f"{K8S}/api/v1/clusters/c1").respond(500, text="boom")
+        err = await dask._require_owned_cluster(client, K8S, "alice", "c1", "k8s")
+        assert "HTTP 500" in err
+
+
+@respx.mock
+async def test_prom_helpers_tolerate_failures():
+    import httpx
+
+    async with httpx.AsyncClient() as client:
+        respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").mock(
+            side_effect=ConnectError("down")
+        )
+        assert await dask._prom_scalar(client, dask.PROMETHEUS_URL, "up") is None
+        assert await dask._prom_vector(client, dask.PROMETHEUS_URL, "up") == []
+
+        respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").respond(500)
+        assert await dask._prom_scalar(client, dask.PROMETHEUS_URL, "up") is None
+        assert await dask._prom_vector(client, dask.PROMETHEUS_URL, "up") == []
+
+        respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").respond(
+            200, json={"data": {"result": []}}
+        )
+        assert await dask._prom_scalar(client, dask.PROMETHEUS_URL, "up") is None
+
+        respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").respond(
+            200, json={"data": {"result": [{"value": [0, "bad"]}]}}
+        )
+        assert await dask._prom_scalar(client, dask.PROMETHEUS_URL, "up") is None
+
+        respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").respond(
+            200,
+            json={
+                "data": {
+                    "result": [
+                        {"metric": {"a": "1"}, "value": [0, "1.5"]},
+                        {"metric": {}, "value": [0, "x"]},
+                    ]
+                }
+            },
+        )
+        rows = await dask._prom_vector(client, dask.PROMETHEUS_URL, "up")
+        assert rows == [({"a": "1"}, 1.5)]
+
+
+async def test_list_options_unknown_gateway(user_ctx):
+    tools = register_tools(dask).tools
+    out = await tools["list_dask_cluster_options"](gateway="bogus")
+    assert "Unknown gateway" in out
+
+
+@respx.mock
+async def test_list_options_unreachable_and_auth(user_ctx):
+    tools = register_tools(dask).tools
+    respx.get(f"{K8S}/api/v1/options").mock(side_effect=ConnectError("down"))
+    assert "unreachable" in await tools["list_dask_cluster_options"]()
+
+    respx.get(f"{K8S}/api/v1/options").respond(401)
+    assert "not authorised" in await tools["list_dask_cluster_options"]()
+
+    respx.get(f"{K8S}/api/v1/options").respond(500, text="nope")
+    assert "HTTP 500" in await tools["list_dask_cluster_options"]()
+
+
+async def test_create_rejects_bad_numeric_args(user_ctx):
+    tools = register_tools(dask).tools
+    assert "n_workers" in await tools["create_dask_cluster"](FakeCtx(), n_workers=-1)
+    assert "worker_cores" in await tools["create_dask_cluster"](
+        FakeCtx(), worker_cores=0, pixi_project="/p", gateway="k8s"
+    )
+    assert "worker_memory" in await tools["create_dask_cluster"](
+        FakeCtx(), worker_memory=-1, pixi_project="/p", gateway="k8s"
+    )
+
+
+async def test_create_unknown_gateway_and_env_source(user_ctx):
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"](
+        FakeCtx(), gateway="bogus", pixi_project="/p", worker_cores=1, worker_memory=1
+    )
+    assert "Unknown gateway" in out
+
+    out = await tools["create_dask_cluster"](
+        FakeCtx(),
+        gateway="k8s",
+        env_source="weird",
+        worker_cores=1,
+        worker_memory=1,
+        n_workers=0,
+    )
+    assert "unknown env_source" in out
+
+
+async def test_create_cancel_and_unsupported_mid_flow(user_ctx):
+    tools = register_tools(dask).tools
+
+    ctx = FakeCtx(
+        accept(dask._BackendChoice(gateway="k8s")),
+        ("cancel", None),
+    )
+    assert "cancelled" in (await tools["create_dask_cluster"](ctx)).lower()
+
+    class BoomCtx(FakeCtx):
+        async def elicit(self, message, schema):
+            if not self._responses:
+                raise RuntimeError("elicit broken")
+            return await super().elicit(message, schema)
+
+    # backend accepted, then env elicit fails → help text
+    ctx = BoomCtx(accept(dask._BackendChoice(gateway="k8s")))
+    out = await tools["create_dask_cluster"](ctx)
+    assert "needs two choices" in out
+
+
+@respx.mock
+async def test_create_gateway_errors_and_scale_failures(user_ctx):
+    tools = register_tools(dask).tools
+    kwargs = dict(
+        gateway="k8s",
+        pixi_project="/work/alice/p",
+        worker_cores=1,
+        worker_memory=4,
+        n_workers=2,
+    )
+
+    respx.post(clusters_url(K8S)).mock(side_effect=ConnectError("down"))
+    assert "unreachable" in await tools["create_dask_cluster"](FakeCtx(), **kwargs)
+
+    respx.post(clusters_url(K8S)).respond(500, text="boom")
+    assert "HTTP 500" in await tools["create_dask_cluster"](FakeCtx(), **kwargs)
+
+    respx.post(clusters_url(K8S)).respond(201, json={})
+    assert "no cluster name" in await tools["create_dask_cluster"](
+        FakeCtx(), **{**kwargs, "n_workers": 0}
+    )
+
+    respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.s"})
+    respx.post(f"{K8S}/api/v1/clusters/cms.s/scale").mock(
+        side_effect=ConnectError("down")
+    )
+    out = await tools["create_dask_cluster"](FakeCtx(), **kwargs)
+    assert "Created, but scale failed" in out
+
+    respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.s2"})
+    respx.post(f"{K8S}/api/v1/clusters/cms.s2/scale").respond(500, text="no")
+    out = await tools["create_dask_cluster"](FakeCtx(), **kwargs)
+    assert "scale returned HTTP 500" in out
+
+
+@respx.mock
+async def test_create_422_without_json_body(user_ctx):
+    respx.post(clusters_url(K8S)).respond(422, text="plain reject")
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"](
+        FakeCtx(),
+        gateway="k8s",
+        pixi_project="/p",
+        worker_cores=1,
+        worker_memory=1,
+        n_workers=0,
+    )
+    assert "rejected" in out
+    assert "plain reject" in out
+
+
+@respx.mock
+async def test_cluster_info_unreachable_and_http_error(user_ctx):
+    tools = register_tools(dask).tools
+    respx.get(f"{K8S}/api/v1/clusters/c1").mock(side_effect=ConnectError("down"))
+    assert "unreachable" in await tools["get_dask_cluster_info"]("c1")
+
+    respx.get(f"{K8S}/api/v1/clusters/c1").respond(500, text="err")
+    assert "HTTP 500" in await tools["get_dask_cluster_info"]("c1")
+
+
+@respx.mock
+async def test_worker_count_no_metrics_and_bad_gateway(user_ctx):
+    tools = register_tools(dask).tools
+    assert "Unknown gateway" in await tools["get_dask_worker_count"]("c1", gateway="x")
+
+    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+        200, json={"name": "cms.abc", "status": "RUNNING"}
+    )
+    respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").respond(
+        200, json={"data": {"result": []}}
+    )
+    out = await tools["get_dask_worker_count"]("cms.abc")
+    assert "No worker metrics" in out
+
+
+@respx.mock
+async def test_usage_partial_metrics_and_errors(user_ctx):
+    tools = register_tools(dask).tools
+    assert "Unknown gateway" in await tools["get_dask_cluster_usage"]("c1", gateway="x")
+
+    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(403)
+    assert "not authorised" in await tools["get_dask_cluster_usage"]("cms.abc")
+
+    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+        200, json={"name": "cms.abc", "status": "RUNNING"}
+    )
+
+    def responder(request):
+        import httpx
+
+        q = request.url.params["query"]
+        if "container_cpu_usage" in q:
+            return httpx.Response(200, json=prom_vector([({"pod": "w1"}, 0.5)]))
+        return httpx.Response(200, json={"data": {"result": []}})
+
+    respx.get(f"{dask.CLUSTER_PROMETHEUS_URL}/api/v1/query").mock(side_effect=responder)
+    out = await tools["get_dask_cluster_usage"]("cms.abc")
+    assert "CPU (cores):" in out
+    assert "Memory (GiB): no data" in out
+
+
+@respx.mock
+async def test_scale_and_stop_error_paths(user_ctx):
+    tools = register_tools(dask).tools
+    assert "Unknown gateway" in await tools["scale_dask_cluster"]("c1", 1, gateway="x")
+    assert "Unknown gateway" in await tools["stop_dask_cluster"]("c1", gateway="x")
+
+    respx.post(f"{K8S}/api/v1/clusters/c1/scale").mock(side_effect=ConnectError("down"))
+    assert "unreachable" in await tools["scale_dask_cluster"]("c1", 1)
+
+    respx.post(f"{K8S}/api/v1/clusters/c1/scale").respond(500, text="no")
+    assert "HTTP 500" in await tools["scale_dask_cluster"]("c1", 1)
+
+    respx.delete(f"{K8S}/api/v1/clusters/c1").mock(side_effect=ConnectError("down"))
+    assert "unreachable" in await tools["stop_dask_cluster"]("c1")
+
+
+@respx.mock
+async def test_create_elicits_unsupported_on_size_and_count(user_ctx):
+    """Mid-flow elicit failures after env is chosen return the help text."""
+    tools = register_tools(dask).tools
+
+    class BoomAfter(FakeCtx):
+        async def elicit(self, message, schema):
+            if "worker size" in message or "How many workers" in message:
+                raise RuntimeError("boom")
+            return await super().elicit(message, schema)
+
+    ctx = BoomAfter(
+        accept(dask._BackendChoice(gateway="k8s")),
+        accept(dask._EnvChoice(env_source="global")),
+    )
+    assert "needs two choices" in await tools["create_dask_cluster"](ctx)
+
+    class BoomCustom(FakeCtx):
+        async def elicit(self, message, schema):
+            if "resources per worker" in message or "number of workers" in message:
+                raise RuntimeError("boom")
+            return await super().elicit(message, schema)
+
+    ctx = BoomCustom(
+        accept(dask._BackendChoice(gateway="k8s")),
+        accept(dask._EnvChoice(env_source="global")),
+        accept(dask._SizeChoice(size="custom")),
+    )
+    assert "needs two choices" in await tools["create_dask_cluster"](ctx)
+
+    ctx = BoomCustom(
+        accept(dask._BackendChoice(gateway="k8s")),
+        accept(dask._EnvChoice(env_source="global")),
+        accept(dask._SizeChoice(size="default")),
+        count("custom"),
+    )
+    assert "needs two choices" in await tools["create_dask_cluster"](ctx)
+
+
+async def test_create_cancel_on_pixi_conda_custom(user_ctx):
+    tools = register_tools(dask).tools
+
+    ctx = FakeCtx(
+        accept(dask._BackendChoice(gateway="k8s")),
+        accept(dask._EnvChoice(env_source="pixi")),
+        ("cancel", None),
+    )
+    assert "cancelled" in (await tools["create_dask_cluster"](ctx)).lower()
+
+    ctx = FakeCtx(
+        accept(dask._BackendChoice(gateway="k8s")),
+        accept(dask._EnvChoice(env_source="conda")),
+        ("cancel", None),
+    )
+    assert "cancelled" in (await tools["create_dask_cluster"](ctx)).lower()
+
+    ctx = FakeCtx(
+        accept(dask._BackendChoice(gateway="k8s")),
+        accept(dask._EnvChoice(env_source="global")),
+        accept(dask._SizeChoice(size="custom")),
+        ("cancel", None),
+    )
+    assert "cancelled" in (await tools["create_dask_cluster"](ctx)).lower()
+
+    ctx = FakeCtx(
+        accept(dask._BackendChoice(gateway="k8s")),
+        accept(dask._EnvChoice(env_source="global")),
+        accept(dask._SizeChoice(size="default")),
+        count("custom"),
+        ("cancel", None),
+    )
+    assert "cancelled" in (await tools["create_dask_cluster"](ctx)).lower()
+
+
+async def test_create_unsupported_on_pixi_conda_and_count(user_ctx):
+    tools = register_tools(dask).tools
+
+    class BoomPath(FakeCtx):
+        async def elicit(self, message, schema):
+            if "pixi project" in message or "conda environment" in message:
+                raise RuntimeError("boom")
+            if "How many workers" in message:
+                raise RuntimeError("boom")
+            return await super().elicit(message, schema)
+
+    assert "needs two choices" in await tools["create_dask_cluster"](
+        BoomPath(
+            accept(dask._BackendChoice(gateway="k8s")),
+            accept(dask._EnvChoice(env_source="pixi")),
+        )
+    )
+    assert "needs two choices" in await tools["create_dask_cluster"](
+        BoomPath(
+            accept(dask._BackendChoice(gateway="k8s")),
+            accept(dask._EnvChoice(env_source="conda")),
+        )
+    )
+    assert "needs two choices" in await tools["create_dask_cluster"](
+        BoomPath(
+            accept(dask._BackendChoice(gateway="k8s")),
+            accept(dask._EnvChoice(env_source="global")),
+            accept(dask._SizeChoice(size="default")),
+        )
+    )
+
+
+async def test_create_cancel_on_worker_count_prompt(user_ctx):
+    tools = register_tools(dask).tools
+    ctx = FakeCtx(
+        accept(dask._BackendChoice(gateway="k8s")),
+        accept(dask._EnvChoice(env_source="global")),
+        accept(dask._SizeChoice(size="default")),
+        ("cancel", None),
+    )
+    assert "cancelled" in (await tools["create_dask_cluster"](ctx)).lower()
+
+
+@respx.mock
+async def test_create_returns_build_options_error(user_ctx, monkeypatch):
+    """If _build_cluster_options rejects after elicitation, surface that string."""
+    tools = register_tools(dask).tools
+    monkeypatch.setattr(
+        dask,
+        "_build_cluster_options",
+        lambda **kw: "Error: synthetic options failure",
+    )
+    ctx = FakeCtx(
+        accept(dask._BackendChoice(gateway="k8s")),
+        accept(dask._EnvChoice(env_source="global")),
+        accept(dask._SizeChoice(size="default")),
+        count("0"),
+    )
+    out = await tools["create_dask_cluster"](ctx)
+    assert "synthetic options failure" in out
+
+
+@respx.mock
+async def test_usage_cpu_missing_memory_present(user_ctx):
+    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+        200, json={"name": "cms.abc", "status": "RUNNING"}
+    )
+
+    def responder(request):
+        import httpx
+
+        q = request.url.params["query"]
+        if "container_cpu_usage" in q:
+            return httpx.Response(200, json={"data": {"result": []}})
+        return httpx.Response(200, json=prom_vector([({"pod": "w1"}, 2 * 1024**3)]))
+
+    respx.get(f"{dask.CLUSTER_PROMETHEUS_URL}/api/v1/query").mock(side_effect=responder)
+    tools = register_tools(dask).tools
+    out = await tools["get_dask_cluster_usage"]("cms.abc")
+    assert "CPU (cores): no data" in out
+    assert "Memory (GiB):" in out

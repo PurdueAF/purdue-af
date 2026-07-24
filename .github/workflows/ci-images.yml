@@ -180,17 +180,6 @@ jobs:
           # force-compression on BOTH exports: identical zstd blobs → the
           # registry dedups image push against cache push
           cache-to: type=registry,ref=ghcr.io/purdueaf/purdue-af:buildcache,mode=max,compression=zstd,compression-level=3,force-compression=true,ignore-error=true
-      - name: Size report (layer table only — deep dive re-downloads ~5 GB, run locally when needed)
-        if: steps.push.conclusion == 'success' && env.AF_EXISTS != 'true'
-        run: |
-          {
-            echo ""
-            echo '```'
-            python3 docker/analyze_image_build.py \
-              --image "$AF_IMAGE" \
-              --deep-dive-min-mb 100000
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
       # Everything downstream consumes the image by DIGEST-PINNED ref
       # (repo:in-tag@sha256:...) — what pixi/e2e test is byte-identical to
       # what publish later retags, even if the in- tag were moved.

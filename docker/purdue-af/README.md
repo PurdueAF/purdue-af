@@ -5,9 +5,7 @@ pipeline below). Rebuilt on top of NVIDIA's official CUDA base image
 instead of CERN alma8-base + a hand-installed `cuda-toolkit-12-4` — the
 prior 0.12.x image lives, retired, in
 [`docker/purdue-af-old`](../purdue-af-old/Dockerfile). Motivated by a
-layer-by-layer analysis of the 0.12.5 build (30m30s, 7.6 GB compressed)
-with
-[`analyze_image_build.py`](../analyze_image_build.py):
+layer-by-layer analysis of the 0.12.5 build (30m30s, 7.6 GB compressed):
 
 | finding in 0.12.5                                                                                      | fix here                                                                                                                                                                                         |
 | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -75,13 +73,6 @@ pull verified, 5.2 GiB compressed), and manifests pull via the geddes
 `ghcr-proxy-cache` Harbor project — LAN-local layers, with Harbor
 revalidating moving tags (`:pre-release`, `:latest`) upstream on each
 pull, so promotions still land on the next session spawn.
-
-## Compare against 0.12.5
-
-```
-python3 docker/analyze_image_build.py \
-    --image ghcr.io/purdueaf/purdue-af:pre-release
-```
 
 ## Old-vs-new comparison (2026-07-16, 0.12.5 vs 0.13.0-pre1 + parity fixes)
 

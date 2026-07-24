@@ -32,7 +32,6 @@ component_management:
       paths:
         - "apps/af-utils/af-users-graph/**"
         - "docker/purdue-af/jupyter/**"
-        - "docker/analyze_image_build.py"
         - ".github/workflows/bump-af-version.py"
 
 # One concise PR comment, updated in place.

@@ -374,3 +374,204 @@ def test_node_label_prefers_result_json(metrics_env):
 
     assert sample("af_node_mount_valid", node="node-actual") == 1
     assert sample("af_node_mount_valid", node="node-a") is None
+
+
+# ── remaining branches ────────────────────────────────────────────────────────
+
+
+def test_vlog_and_elog(monkeypatch, capsys):
+    monkeypatch.delenv("AF_NODE_MONITOR_VERBOSE", raising=False)
+    nh._vlog("quiet")
+    assert capsys.readouterr().out == ""
+
+    monkeypatch.setenv("AF_NODE_MONITOR_VERBOSE", "true")
+    nh._vlog("loud")
+    assert "loud" in capsys.readouterr().out
+
+    nh._elog("always")
+    assert "always" in capsys.readouterr().out
+
+
+def test_init_k8s_loads_config(monkeypatch):
+    monkeypatch.setattr(nh, "_k8s_ready", False)
+    monkeypatch.setattr(nh, "_core_v1", None, raising=False)
+    monkeypatch.setattr(nh, "_batch_v1", None, raising=False)
+
+    class FakeConfig:
+        @staticmethod
+        def load_incluster_config():
+            raise Exception("not in cluster")
+
+        @staticmethod
+        def load_kube_config():
+            return None
+
+    class FakeCore:
+        pass
+
+    class FakeBatch:
+        pass
+
+    class FakeClient:
+        CoreV1Api = FakeCore
+        BatchV1Api = FakeBatch
+
+    monkeypatch.setattr(nh, "config", FakeConfig)
+    monkeypatch.setattr(nh, "client", FakeClient)
+    monkeypatch.setenv("AF_NODE_MONITOR_VERBOSE", "1")
+
+    nh._init_k8s()
+    assert nh._k8s_ready is True
+    assert isinstance(nh._core_v1, FakeCore)
+    assert isinstance(nh._batch_v1, FakeBatch)
+
+    # second call is a no-op once ready
+    nh._init_k8s()
+
+
+def test_list_target_nodes_skips_incomplete_and_api_errors(k8s, monkeypatch):
+    nameless = types.SimpleNamespace(
+        metadata=types.SimpleNamespace(name=None),
+        status=types.SimpleNamespace(conditions=[]),
+    )
+    no_conds = types.SimpleNamespace(
+        metadata=types.SimpleNamespace(name="bare"),
+        status=types.SimpleNamespace(conditions=None),
+    )
+    k8s.core.nodes = [nameless, no_conds, fake_node("ok")]
+    assert nh._list_target_nodes() == ["ok"]
+
+    monkeypatch.setattr(nh, "_node_cache", [])
+    monkeypatch.setattr(nh, "_last_node_refresh", 0.0)
+
+    def boom(label_selector):
+        raise nh.ApiException("denied")
+
+    k8s.core.list_node = boom
+    assert nh._list_target_nodes() == []
+
+
+def test_has_active_job_and_keys_without_k8s_or_on_error(monkeypatch, k8s):
+    monkeypatch.setattr(nh, "_k8s_ready", False)
+    assert nh._has_active_job("/depot/", "node-a") is False
+    assert nh._list_active_job_keys() == set()
+
+    monkeypatch.setattr(nh, "_k8s_ready", True)
+    monkeypatch.setattr(nh, "_batch_v1", k8s.batch, raising=False)
+
+    def boom(**kwargs):
+        raise nh.ApiException("no")
+
+    k8s.batch.list_namespaced_job = boom
+    assert nh._has_active_job("/depot/", "node-a") is False
+    assert nh._list_active_job_keys() == set()
+
+
+def test_ensure_jobs_guards_and_create_failure(monkeypatch, k8s):
+    monkeypatch.setattr(nh, "_k8s_ready", False)
+    nh._ensure_jobs(NOW)
+    assert k8s.batch.created == []
+
+    monkeypatch.setattr(nh, "_k8s_ready", True)
+    monkeypatch.setattr(nh, "_batch_v1", k8s.batch, raising=False)
+    monkeypatch.setattr(nh, "_list_target_nodes", lambda: [])
+    nh._ensure_jobs(NOW)
+    assert k8s.batch.created == []
+
+    monkeypatch.setattr(nh, "_list_target_nodes", lambda: ["node-a"])
+    monkeypatch.setattr(nh, "_has_active_job", lambda *a: False)
+    nh._last_job_start_ts.clear()
+
+    def boom(**kwargs):
+        raise nh.ApiException("create failed")
+
+    k8s.batch.create_namespaced_job = boom
+    nh._ensure_jobs(NOW)  # does not raise
+    assert k8s.batch.created == []
+
+
+def test_cleanup_guards_conditions_and_errors(monkeypatch, k8s):
+    monkeypatch.setattr(nh, "_k8s_ready", False)
+    nh._cleanup_finished_jobs(NOW)
+
+    monkeypatch.setattr(nh, "_k8s_ready", True)
+    monkeypatch.setattr(nh, "_batch_v1", k8s.batch, raising=False)
+
+    def boom(**kwargs):
+        raise nh.ApiException("list failed")
+
+    k8s.batch.list_namespaced_job = boom
+    nh._cleanup_finished_jobs(NOW)
+
+    # restore list, exercise incomplete jobs + condition-based success/fail
+    k8s.batch = FakeBatchV1()
+    monkeypatch.setattr(nh, "_batch_v1", k8s.batch, raising=False)
+
+    incomplete = fake_job(name="incomplete", finished_ago=None, started_ago=None)
+    incomplete.status.completion_time = None
+    incomplete.status.start_time = None
+    incomplete.status.active = 0
+
+    no_meta = types.SimpleNamespace(
+        metadata=None,
+        status=types.SimpleNamespace(active=0, succeeded=1, failed=0, conditions=[]),
+    )
+
+    via_cond = fake_job(name="via-cond", finished_ago=1)
+    via_cond.status.succeeded = 0
+    via_cond.status.failed = 0
+    via_cond.status.conditions = [types.SimpleNamespace(type="Complete", status="True")]
+
+    failed_cond = fake_job(name="fail-cond", finished_ago=120)
+    failed_cond.status.succeeded = 0
+    failed_cond.status.failed = 0
+    failed_cond.status.conditions = [
+        types.SimpleNamespace(type="Failed", status="True")
+    ]
+
+    k8s.batch.jobs = [incomplete, no_meta, via_cond, failed_cond]
+    nh._cleanup_finished_jobs(NOW)
+    assert "via-cond" in k8s.batch.deleted
+    assert "fail-cond" in k8s.batch.deleted
+
+
+def test_cleanup_force_delete_and_delete_api_errors(monkeypatch, k8s):
+    monkeypatch.setattr(nh, "JOB_MAX_RUNTIME_S", 300.0)
+    k8s.batch.jobs = [fake_job(name="stuck", active=1, started_ago=400)]
+
+    def boom_delete(**kwargs):
+        raise nh.ApiException("cannot delete")
+
+    k8s.batch.delete_namespaced_job = boom_delete
+    nh._cleanup_finished_jobs(NOW)  # swallows ApiException
+
+    k8s.batch = FakeBatchV1(jobs=[fake_job(name="done", succeeded=1, finished_ago=1)])
+    monkeypatch.setattr(nh, "_batch_v1", k8s.batch, raising=False)
+    k8s.batch.delete_namespaced_job = boom_delete
+    nh._cleanup_finished_jobs(NOW)
+
+
+def test_cleanup_respects_success_retention(monkeypatch, k8s):
+    monkeypatch.setattr(nh, "JOB_SUCCESS_RETENTION_S", 60.0)
+    k8s.batch.jobs = [fake_job(name="fresh", succeeded=1, finished_ago=5)]
+    nh._cleanup_finished_jobs(NOW)
+    assert k8s.batch.deleted == []
+
+
+def test_update_metrics_fallback_empty_nodes(metrics_env, monkeypatch):
+    monkeypatch.setattr(nh, "_list_target_nodes", lambda: [])
+    metrics_env(
+        "/depot/",
+        "",
+        ok=True,
+        timestamp=time.time(),
+        ping_ms=1.0,
+    )
+    nh.update_metrics()
+    assert sample("af_node_mount_valid", node="unknown") == 1
+
+
+def test_timeout_result_without_partial_ping(metrics_env):
+    metrics_env("/depot/", "node-a", ok=True, timeout=True, timestamp=time.time())
+    nh.update_metrics()
+    assert sample("af_node_mount_ping_ms") == nh._timeout_ping_ms()

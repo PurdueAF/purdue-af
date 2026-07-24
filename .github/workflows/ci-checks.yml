@@ -51,8 +51,8 @@ jobs:
           cache-dependency-glob: tests/uv.lock
       # One project, one lock, every suite — run from the repo root so
       # coverage records repo-rooted paths (see .coveragerc).
-      # analyze_image_build / bump_af_version are load_script module names
-      # (file paths don't work with --cov for non-package scripts).
+      # bump_af_version is a load_script module name (file paths don't
+      # work with --cov for non-package scripts).
       - name: Run tests with coverage
         run: >-
           uv run --project tests --frozen
@@ -64,7 +64,6 @@ jobs:
           --cov=apps/monitoring/af-monitoring
           --cov=apps/af-utils/af-users-graph
           --cov=docker/purdue-af/jupyter
-          --cov=analyze_image_build
           --cov=bump_af_version
           --cov-report=xml
       # Codecov reads filename attributes as-is (it ignores <source>), so

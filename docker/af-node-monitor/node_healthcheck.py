@@ -758,7 +758,7 @@ def update_metrics() -> None:
                 mount_last_success_ts.labels(**labels).set(timestamp)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - process entrypoint
     start_http_server(8000)
     while True:
         try:
