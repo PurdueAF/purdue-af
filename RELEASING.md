@@ -1,21 +1,17 @@
 # Releasing
 
-The Purdue AF has **two human-minted version streams** and a set of
-CI-owned continuous channels. Each stream is minted by exactly one
-workflow — never create version tags by hand, and never move channel tags
-by hand.
+Two version streams are minted by hand; everything else is CI-owned. Never
+create a version tag or move a channel tag by hand.
 
-| Stream                                                | Scheme                            | Example    | Minted by                                          | Reaches the cluster                                    |
-| ----------------------------------------------------- | --------------------------------- | ---------- | -------------------------------------------------- | ------------------------------------------------------ |
-| **Platform** (everything Flux deploys)                | CalVer `YYYY.M.SEQ`               | `2026.7.8` | **Release platform** workflow                      | immediately — core Flux tracks the newest `2026.x` tag |
-| **purdue-af image**                                   | semver `0.X.Y`, repo tag `v0.X.Y` | `v0.13.0`  | **Release image** workflow                         | at the **next platform release**                       |
-| Continuous (`:latest`, `:pre-release`, `in-`, `sha-`) | moving tags                       | —          | `ci.yml` publish stage only, behind the ci-ok gate | on pod restart / session spawn                         |
-| Experimental Flux source (`main-validated`)           | CI-owned moving branch            | —          | `ci.yml` publish stage only, behind the ci-ok gate | experimental Flux reconcile (~1 min)                   |
+| Stream                                                | Scheme                           | Minted by                              | Reaches the cluster                                    |
+| ----------------------------------------------------- | -------------------------------- | -------------------------------------- | ------------------------------------------------------ |
+| **Platform** (everything Flux deploys)                | CalVer `YYYY.M.SEQ` (`2026.7.8`) | **Release platform** workflow          | immediately — core Flux tracks the newest `2026.x` tag |
+| **purdue-af image**                                   | semver `v0.X.Y` (`v0.13.0`)      | **Release image** workflow             | at the next platform release                           |
+| Continuous (`:latest`, `:pre-release`, `in-`, `sha-`) | moving tags                      | `ci.yml` publish stage, behind `ci-ok` | on pod restart / session spawn                         |
+| Experimental Flux source (`main-validated`)           | moving branch                    | `ci.yml` publish stage, behind `ci-ok` | experimental Flux reconcile (~1 min)                   |
 
-All auxiliary images (agentic-interface, af-pod-monitor, af-node-monitor)
-are on the continuous `:latest` channel — unversioned, no release step:
-every fully green pipeline on `main` moves `:latest`, and the cluster
-picks it up on the next pod restart.
+The aux images (agentic-interface, af-pod-monitor, af-node-monitor) have no
+release step at all: every green pipeline on `main` moves `:latest`.
 
 ## How changes reach the cluster
 
@@ -27,109 +23,83 @@ picks it up on the next pod restart.
 | Global env (`pixi/global`)                        | push to `main` → CI validates the lock → `pixi-global-sync` applies it to `/work/pixi/global`                               |
 | Aux images (agentic-interface, monitors)          | push to `main` → CI green → `:latest` moves → pod restart picks it up                                                       |
 
-Manual steps are `workflow_dispatch` runs from the Actions tab (`Release
-platform`, `Release image`); everything else happens on its own once CI is
-green. When to mint each, and how to roll back, is below.
-
-## The pipeline at a glance
-
-Every commit runs one pipeline ([ci.yml](.github/workflows/ci.yml));
-nothing is published unless every step passed for that exact commit.
-Automation stops at the pre-release channel — releasing is always one of
-the manual steps described below.
+Every commit runs one pipeline ([ci.yml](.github/workflows/ci.yml)) and
+nothing is published unless every stage passed for that exact commit. The
+publish stage runs on `main` only; the two releases are `workflow_dispatch`
+runs from the Actions tab.
 
 ```mermaid
-%%{init: {"flowchart": {"wrappingWidth": 380}}}%%
 flowchart TD
-    PR([commit pushed / PR opened]) --> CHK
-    CHK["<b>checks</b><br/>formatting · unit tests · config validation"] --> PB
-    PB["<b>pixi-base</b> — the Jupyter environment<br/>rebuild lockfile · check all imports"] --> IMG
-    IMG["<b>container images</b> — incl. the Purdue AF image<br/>rebuilt only when their files change;<br/>otherwise reuse the already-tested build"] --> PG
-    IMG --> E2E
-    PG["<b>pixi-global</b> — shared analysis environment<br/>rebuild lockfile · import check in the AF image"] --> OK
-    E2E["<b>e2e</b> — JupyterHub in a throwaway cluster<br/>log in · spawn the real AF image · CVMFS"] --> OK
-    OK{{"<b>ci-ok</b> — did every step above pass?"}}
-    OK -->|yes, and this is main| PUB
-    PUB["<b>publish</b><br/>images get :latest / :pre-release tags;<br/>the main-validated branch advances"]
-    PUB --> EXP["<b>Flux: experimental</b><br/>auto-deploys from main-validated<br/>(incl. pixi-global-sync → /work)"]
-    REL["<b>release-image / release-platform</b><br/>a person decides when + which version"] --> PROD
-    PROD["<b>Flux: core</b><br/>runs released versions only"]
-    OK -.->|only fully-tested commits<br/>can be released| REL
+  push(["push/PR into main branch"]) --> checks["CI: syntax, pixi, images, e2e"]
+  checks --> ok{{"ci-ok?"}}
+  ok -->|no| stop(["nothing published"])
+  ok -->|yes| passed["ci passed"]
+  passed --> pub["publish"]
+  pub --> tags["pre-release / latest docker tags"]
+  pub --> mv["advance main-validated branch"]
+  mv --> exp["Flux: reconcile experimental components"]
+  passed -.->|manual run by admin| img["Release AF image"]
+  passed -.->|manual run by admin| plat["Release platform"]
+  img -.-> plat
+  plat -.-> core["Flux: reconcile core components"]
 ```
 
-## Platform releases (the frequent one)
+## Platform release
 
-Mint a platform tag **whenever core components need to reach the
-production namespace**: hub configuration, monitoring, cronjobs, manifest
-changes — anything under the core Flux environment. (Experimental
-components track the CI-owned `main-validated` branch and never need a
-platform release.)
+Mint one whenever core components need to reach the cluster: hub
+configuration, monitoring, cronjobs, manifest changes. (Experimental
+components track `main-validated` and never need one.)
 
-1. **Actions → Release platform → Run workflow** — computes the next
-   `YYYY.M.SEQ`, tags, and publishes a GitHub Release with generated
-   notes. No file edits, no image tags.
-2. Core Flux advances to the tagged commit within ~1 minute.
+**Actions → Release platform → Run workflow** computes the next
+`YYYY.M.SEQ`, tags it, and publishes a GitHub Release with generated notes —
+no file edits, no image tags. Core Flux advances within ~1 minute.
 
-**Rollback**: deleting the most recent platform Release _together with
-its tag_ rolls the core components back — Flux tracks the newest `2026.x` **git
-tag**, so once the tag is gone it re-resolves to the previous one and
-re-applies that commit's manifests on the next reconcile (~1 min). The
-previous GitHub Release automatically becomes "latest" again.
+**Rollback**: delete the newest Release _together with its tag_. Flux tracks
+the newest `2026.x` **git tag**, so it re-resolves to the previous one and
+re-applies that commit on the next reconcile.
 
 ```
 gh release delete 2026.7.9 --cleanup-tag   # --cleanup-tag is what matters
 ```
 
-Deleting only the Release object (without the tag) rolls back **nothing**.
-And this is a rollback of what is deployed, not of history: `main` still
-contains the offending commits — fix or revert them before minting the
-next tag, or the next release re-ships them. Never use tag deletion for
-`v*` image releases: the image pin lives in a values.yaml commit, so
-deleting a `v` tag rolls back nothing (revert the release commit instead).
+Deleting the Release object alone rolls back **nothing**. And this rolls back
+what is deployed, not history: `main` still contains the offending commits —
+fix or revert them, or the next tag re-ships them.
 
-## purdue-af image releases
+## purdue-af image release
 
-Release when the content soaking as `:pre-release` should become the
-default session environment. Bump rules:
+Release when the content soaking as `:pre-release` should become the default
+session environment. **major** — never, until the AF moves from R&D to
+Operations; **minor** — breaking changes for users, or a major change to the
+codebase; **patch** — anything else.
 
-- **major** — never, until the AF moves from R&D to Operations mode;
-- **minor** — breaking changes for users, or a major change to the AF
-  codebase;
-- **patch** — any other release of new content to users (no breaking
-  changes).
-
-Preconditions, enforced by the workflow (bypass only with `force`):
-`ci-ok` green on main HEAD, and the `:pre-release` digest identical to the
-image of the current repo state. Complete the manual checklist in
+Preconditions, enforced by the workflow (bypass only with `force`): `ci-ok`
+green on main HEAD, and the `:pre-release` digest identical to the image of
+the current repo state. Complete the manual checklist in
 [docker/purdue-af/README.md](docker/purdue-af/README.md) first.
 
 1. **Actions → Release image → Run workflow** — choose the bump (or an
-   explicit `version`). The workflow verifies both gates, adds the semver
-   tag to the **same digest** that passed CI (never a rebuild), rewrites
-   every version spot in values.yaml (`bump-af-version.py`,
-   count-verified), commits to `main`, tags `v<version>`, and publishes a
-   GitHub Release.
-2. **Actions → Release platform → Run workflow** — the bump commit
-   reaches the cluster only when a platform tag covers it; this is always
-   the second step of an image release.
+   explicit `version`). It adds the semver tag to the **same digest** that
+   passed CI (never a rebuild), rewrites every version spot in values.yaml
+   (`bump-af-version.py`, count-verified), commits to `main`, tags
+   `v<version>`, and publishes a Release.
+2. **Actions → Release platform → Run workflow** — always the second step:
+   the bump commit reaches the cluster only once a platform tag covers it.
 
 **Rollback**: `git revert` the release commit on `main`, then mint a new
-platform tag. Old semver tags stay on ghcr forever; the registry GC never
-deletes release tags.
+platform tag. Never delete a `v*` tag — the pin lives in a values.yaml
+commit, so deleting the tag rolls back nothing. Old semver tags stay on ghcr
+forever; the registry GC never deletes release tags.
 
 ## Rules of the road
 
-- Channel tags (`:latest`, `:pre-release`), build tags (`in-`, `sha-`),
-  and the experimental Flux branch (`main-validated`) are CI-owned: they
-  move only in the `ci.yml` publish stage, after every stage of the same
-  commit is green. Hand-moving them defeats the gates.
-- The `AF_RELEASE_TOKEN` secret (fine-grained PAT, `contents: write`)
-  must exist — release commits/tags pushed with the default
-  `GITHUB_TOKEN` do not trigger CI, so the release commit would go
-  unvalidated.
-- Version badges in the README read the platform tag list and
-  `apps/jupyterhub/jupyterhub/values.yaml` — they update on their own;
-  nothing to edit. The per-component status badges update on their own too
-  (`component-status.yml`), but their README list is static: adding or
-  removing a component means editing that list, and the unit tests fail
-  until you do.
+- Channel tags (`:latest`, `:pre-release`), build tags (`in-`, `sha-`) and
+  `main-validated` move only in the `ci.yml` publish stage, after every stage
+  of the same commit is green. Hand-moving them defeats the gates.
+- The `AF_RELEASE_TOKEN` secret (fine-grained PAT, `contents: write`) must
+  exist: commits and tags pushed with the default `GITHUB_TOKEN` do not
+  trigger CI, so a release commit would go unvalidated.
+- README version badges update themselves. The per-component status badges do
+  too (`component-status.yml`), but their README list is static — adding or
+  removing a component means editing that list, and the unit tests fail until
+  you do.

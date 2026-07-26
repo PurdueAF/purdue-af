@@ -47,6 +47,10 @@ CHANNELS = {
     "experimental": Path("deploy/experimental/kustomization.yaml"),
 }
 IMAGE_INPUTS = Path(".github/workflows/image-inputs.sh")
+# Images ci-images.yml builds. purdue-af ships on a semver stream of its own;
+# the aux images ride :latest, which the publish stage moves at the same
+# moment it advances main-validated — so main-validated is their deployed ref.
+CI_IMAGES = ["purdue-af", "agentic-interface", "af-pod-monitor", "af-node-monitor"]
 VALUES_YAML = Path("apps/jupyterhub/jupyterhub/values.yaml")
 
 COLORS = {
@@ -211,12 +215,12 @@ def badge(label: str, status: str, ahead: int) -> dict[str, Any]:
     }
 
 
-def af_image_paths() -> list[str]:
-    """The purdue-af image's input paths, from the build's own definition —
-    the same list that content-addresses the image, so drift here means CI
-    would build a different image than the one core is pinned to."""
+def image_paths(name: str) -> list[str]:
+    """An image's input paths, from the build's own definition — the same list
+    that content-addresses it, so drift here means CI would build a different
+    image than the one deployed."""
     out = subprocess.run(
-        [str(REPO / IMAGE_INPUTS), "--paths", "purdue-af"],
+        [str(REPO / IMAGE_INPUTS), "--paths", name],
         capture_output=True,
         text=True,
         check=True,
@@ -265,15 +269,21 @@ def main() -> int:
             status, ahead = classify(drift, unvalidated, args.ci_state)
             rows.append((channel, component, status, ahead))
 
-    # the AF image ships on its own semver stream
+    # images are their own stream, not part of either Flux channel
     version = af_image_version()
-    image_tag = f"v{version}" if version else None
-    if image_tag and ref_exists(image_tag):
-        paths = af_image_paths()
-        drift = commits_touching(image_tag, head, paths)
+    af_tag = f"v{version}" if version else None
+    for name in CI_IMAGES:
+        if name == "purdue-af":
+            if not (af_tag and ref_exists(af_tag)):
+                continue
+            deployed_ref = af_tag
+        else:
+            deployed_ref = validated
+        paths = image_paths(name)
+        drift = commits_touching(deployed_ref, head, paths)
         unvalidated = commits_touching(validated, head, paths)
         status, ahead = classify(drift, unvalidated, args.ci_state)
-        rows.append(("core", "docker/purdue-af", status, ahead))
+        rows.append(("image", name, status, ahead))
 
     if args.out:
         args.out.mkdir(parents=True, exist_ok=True)

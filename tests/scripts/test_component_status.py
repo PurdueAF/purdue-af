@@ -7,6 +7,7 @@ component that no longer exists — fails here instead of quietly rendering
 import json
 
 import pytest
+import yaml
 from common import REPO, load_script
 
 SCRIPT_PATH = REPO / ".github" / "workflows" / "component-status.py"
@@ -164,7 +165,7 @@ def test_readme_references_every_component_badge(cs, components):
         for channel, mapping in components.items()
         for component in mapping
     }
-    expected.add("core-docker-purdue-af")  # the image's own stream
+    expected |= {f"image-{name}" for name in cs.CI_IMAGES}
 
     missing = sorted(s for s in expected if f"[{s}]:" not in readme)
     assert not missing, f"add these badges to README.md: {missing}"
@@ -179,7 +180,7 @@ def test_readme_has_no_badges_for_dead_components(cs, components):
         for channel, mapping in components.items()
         for component in mapping
     }
-    live |= {"core-docker-purdue-af", "status-pending"}
+    live |= {f"image-{name}" for name in cs.CI_IMAGES} | {"status-pending"}
 
     referenced = {
         line.split("]:")[0].lstrip("[")
@@ -187,6 +188,27 @@ def test_readme_has_no_badges_for_dead_components(cs, components):
         if line.startswith("[") and "/status/badges/" in line
     }
     assert referenced - live == set()
+
+
+# --- images ---------------------------------------------------------------
+
+
+def test_ci_images_match_the_build_workflow(cs):
+    """The image list is hand-written; if ci-images.yml gains or drops an
+    image, the dashboard would silently stop covering it."""
+    workflow = yaml.safe_load((REPO / ".github/workflows/ci-images.yml").read_text())
+    jobs = workflow["jobs"]
+    aux = {m["name"] for m in jobs["build-aux-images"]["strategy"]["matrix"]["include"]}
+    assert "build-af-image" in jobs  # purdue-af gets a job of its own
+    assert set(cs.CI_IMAGES) == aux | {"purdue-af"}
+
+
+@pytest.mark.parametrize("name", ["purdue-af", "agentic-interface"])
+def test_image_paths_come_from_the_build_definition(cs, name):
+    paths = cs.image_paths(name)
+    assert paths, name
+    # image-inputs.sh always folds in the build logic itself
+    assert ".github/workflows/image-inputs.sh" in paths
 
 
 # --- version streams ------------------------------------------------------

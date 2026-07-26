@@ -30,17 +30,10 @@ Admin documentation: [https://purdue-cms-tier2.gitlab.io/documentation](https://
 
 ## Component status
 
-The badges reflect the status of each component with respect to `main` branch.
+Whether each component on the cluster is running what is on `main`
+([![awaiting deployment][status-pending]](https://github.com/PurdueAF/purdue-af/releases)).
 
-Current status: [![awaiting deployment][status-pending]](https://github.com/PurdueAF/purdue-af/releases)
-
-
-Legend: `deployed` means no drift; `awaiting release` is validated and only needs a
-release to ship; `validating` is still in CI; `failed CI` is broken. The
-number is how many commits the component has moved since it was deployed.
-
-**Core** — deployed from the newest platform tag, currently ![platform][platform-version],
-which pins the session image at ![AF image][af-image-version]
+**Core** — the newest platform tag, currently ![platform][platform-version]
 
 ![af-users-graph][core-af-utils-af-users-graph]
 ![infrastructure][core-infrastructure]
@@ -52,9 +45,8 @@ which pins the session image at ![AF image][af-image-version]
 ![af-monitoring][core-monitoring-af-monitoring]
 ![grafana][core-monitoring-grafana]
 ![prometheus][core-monitoring-prometheus]
-![purdue-af][core-docker-purdue-af]
 
-**Experimental** — deployed from `main-validated` branch
+**Experimental** — `main-validated`
 
 ![pixi-global-sync][experimental-af-utils-pixi-global-sync]
 ![agentic-interface][experimental-agentic-interface]
@@ -77,6 +69,23 @@ which pins the session image at ![AF image][af-image-version]
 ![servicex-test][experimental-servicex-test]
 ![supersonic][experimental-sonic-supersonic]
 
+**Images** — `purdue-af` is released on its own semver stream and pinned at
+![AF image][af-image-version]; the rest ride `:latest`
+
+![purdue-af][image-purdue-af]
+![agentic-interface][image-agentic-interface]
+![af-pod-monitor][image-af-pod-monitor]
+![af-node-monitor][image-af-node-monitor]
+
+Reading the badges:
+
+- `deployed` — no drift, the cluster has it
+- `awaiting release` — validated, and only a release stands between it and
+  the cluster
+- `validating` — CI has not finished on those commits yet
+- `failed CI` — do not release; the drift is broken
+- the trailing number is how many commits it has moved since it was deployed
+
 Recomputed hourly and after every CI run by
 [`component-status.yml`](.github/workflows/component-status.yml); the badge
 data lives on the [`status`](https://github.com/PurdueAF/purdue-af/tree/status)
@@ -95,7 +104,6 @@ How a change reaches the cluster, version rules and rollback:
 [core-monitoring-af-monitoring]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-monitoring-af-monitoring.json
 [core-monitoring-grafana]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-monitoring-grafana.json
 [core-monitoring-prometheus]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-monitoring-prometheus.json
-[core-docker-purdue-af]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-docker-purdue-af.json
 [experimental-af-utils-pixi-global-sync]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-af-utils-pixi-global-sync.json
 [experimental-agentic-interface]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-agentic-interface.json
 [experimental-dask-gateway-dask-gateway-k8s]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-dask-gateway-dask-gateway-k8s.json
@@ -116,6 +124,10 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-servicex-s3]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex-s3.json
 [experimental-servicex-test]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex-test.json
 [experimental-sonic-supersonic]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic.json
+[image-purdue-af]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-purdue-af.json
+[image-agentic-interface]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-agentic-interface.json
+[image-af-pod-monitor]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-af-pod-monitor.json
+[image-af-node-monitor]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-af-node-monitor.json
 [status-pending]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/_pending.json
 [platform-version]: https://img.shields.io/github/v/tag/PurdueAF/purdue-af?filter=2*&sort=semver&label=platform&color=B1810B
 [af-image-version]: https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2FPurdueAF%2Fpurdue-af%2Fmain%2Fapps%2Fjupyterhub%2Fjupyterhub%2Fvalues.yaml&query=%24.singleuser.image.tag&label=AF%20image&color=B1810B
