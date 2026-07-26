@@ -8,10 +8,12 @@
 [![AF image](https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2FPurdueAF%2Fpurdue-af%2Fmain%2Fapps%2Fjupyterhub%2Fjupyterhub%2Fvalues.yaml&query=%24.singleuser.image.tag&label=AF%20image&color=B1810B)](RELEASING.md)
 
 GitOps source of truth for the **Purdue Analysis Facility** — a Kubernetes-based interactive analysis platform for high energy physics research at CMS experiment.
-Functionality includes JupyterHub sessions on demand, Dask clusters that burst onto Kubernetes or Slurm, data delivery via ServiceX, GPU inference-as-a-service, agentic AI interface, and the monitoring around it.
 
-Everything the cluster runs is declared here and reconciled by Flux; images and manifests are published only after the full CI/CD pipeline passes on the same commit. End-user documentation lives at
-[analysis-facility.physics.purdue.edu](https://analysis-facility.physics.purdue.edu).
+Everything the cluster runs is declared here and reconciled by Flux; images and manifests are published only after the full CI/CD pipeline passes on the same commit.
+
+User documentation:
+[analysis-facility.physics.purdue.edu](https://analysis-facility.physics.purdue.edu)
+Admin documentation: [https://purdue-cms-tier2.gitlab.io/documentation](https://purdue-cms-tier2.gitlab.io/documentation)
 
 ## Platform at a glance
 
