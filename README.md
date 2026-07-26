@@ -30,13 +30,16 @@ Admin documentation: [https://purdue-cms-tier2.gitlab.io/documentation](https://
 
 ## Component status
 
-Whether each component on the cluster is running what is on `main`
-([![awaiting deployment][status-pending]](https://github.com/PurdueAF/purdue-af/releases)).
-`deployed` means no drift; `awaiting release` is validated and only needs a
+The badges reflect the status of each component with respect to `main` branch.
+
+Current status: [![awaiting deployment][status-pending]](https://github.com/PurdueAF/purdue-af/releases)
+
+
+Legend: `deployed` means no drift; `awaiting release` is validated and only needs a
 release to ship; `validating` is still in CI; `failed CI` is broken. The
 number is how many commits the component has moved since it was deployed.
 
-**Core** — the newest platform tag, currently ![platform][platform-version],
+**Core** — deployed from the newest platform tag, currently ![platform][platform-version],
 which pins the session image at ![AF image][af-image-version]
 
 ![af-users-graph][core-af-utils-af-users-graph]
@@ -51,7 +54,7 @@ which pins the session image at ![AF image][af-image-version]
 ![prometheus][core-monitoring-prometheus]
 ![purdue-af][core-docker-purdue-af]
 
-**Experimental** — `main-validated`
+**Experimental** — deployed from `main-validated` branch
 
 ![pixi-global-sync][experimental-af-utils-pixi-global-sync]
 ![agentic-interface][experimental-agentic-interface]
