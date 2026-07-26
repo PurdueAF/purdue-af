@@ -48,8 +48,8 @@ load`s the same copy, then the hub-in-kind e2e spawns it through the hub's
    and moves `:pre-release` to the tested digest.
 
 The hub's pre-release profile pulls `:pre-release` with `image_pull_policy:
-Always`, so validated builds reach sessions on the next spawn. Production
-stays pinned to a semver tag.
+Always`, so validated builds reach sessions on the next spawn. The default
+profile stays pinned to a semver tag.
 
 Images are public on ghcr; manifests pull them through the geddes
 `ghcr-proxy-cache` Harbor project, which revalidates moving tags upstream on
@@ -65,7 +65,7 @@ then adds the semver tag to that same digest (never a rebuild), rewrites
 every version spot in `values.yaml` (`bump-af-version.py`, count-verified),
 commits, tags `v<version>`, and publishes a GitHub Release.
 
-The bump commit reaches production with the next platform tag. Bump rules and
+The bump commit reaches the cluster with the next platform tag. Bump rules and
 rollback: [RELEASING.md](../../RELEASING.md).
 
 Before releasing, verify on a test session: GPU visibility (`nvidia-smi`,

@@ -193,14 +193,18 @@ def write_badge(out: Path, slug: str, payload: dict[str, Any]) -> None:
     (out / f"{slug}.json").write_text(json.dumps(payload, ensure_ascii=False))
 
 
-def badge(channel: str, status: str, ahead: int) -> dict[str, Any]:
-    """One badge per component per channel. The label names the CHANNEL, not
-    the component — the README table already has a component column, and a
-    component deployed in both channels then reads as two labelled badges."""
+def label_for(component: str) -> str:
+    """Badge label: the last path segment is what anyone calls the app."""
+    return Path(component).name
+
+
+def badge(label: str, status: str, ahead: int) -> dict[str, Any]:
+    """One badge per component per channel — self-describing, since the README
+    lists them as a bare wall with no surrounding text."""
     message = status if not ahead else f"{status} · {ahead}"
     return {
         "schemaVersion": 1,
-        "label": channel,
+        "label": label,
         "message": message,
         "color": COLORS.get(status, "lightgrey"),
         "cacheSeconds": 300,
@@ -275,7 +279,9 @@ def main() -> int:
         args.out.mkdir(parents=True, exist_ok=True)
         for channel, component, status, ahead in rows:
             write_badge(
-                args.out, slugify(channel, component), badge(channel, status, ahead)
+                args.out,
+                slugify(channel, component),
+                badge(label_for(component), status, ahead),
             )
         pending = sum(1 for row in rows if row[2] != "deployed")
         write_badge(

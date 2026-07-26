@@ -5,12 +5,12 @@ CI-owned continuous channels. Each stream is minted by exactly one
 workflow — never create version tags by hand, and never move channel tags
 by hand.
 
-| Stream                                                | Scheme                            | Example    | Minted by                                          | Reaches production                                           |
-| ----------------------------------------------------- | --------------------------------- | ---------- | -------------------------------------------------- | ------------------------------------------------------------ |
-| **Platform** (everything Flux deploys)                | CalVer `YYYY.M.SEQ`               | `2026.7.8` | **Release platform** workflow                      | immediately — production Flux tracks the newest `2026.x` tag |
-| **purdue-af image**                                   | semver `0.X.Y`, repo tag `v0.X.Y` | `v0.13.0`  | **Release image** workflow                         | at the **next platform release**                             |
-| Continuous (`:latest`, `:pre-release`, `in-`, `sha-`) | moving tags                       | —          | `ci.yml` publish stage only, behind the ci-ok gate | on pod restart / session spawn                               |
-| Experimental Flux source (`main-validated`)           | CI-owned moving branch            | —          | `ci.yml` publish stage only, behind the ci-ok gate | experimental Flux reconcile (~1 min)                         |
+| Stream                                                | Scheme                            | Example    | Minted by                                          | Reaches the cluster                                    |
+| ----------------------------------------------------- | --------------------------------- | ---------- | -------------------------------------------------- | ------------------------------------------------------ |
+| **Platform** (everything Flux deploys)                | CalVer `YYYY.M.SEQ`               | `2026.7.8` | **Release platform** workflow                      | immediately — core Flux tracks the newest `2026.x` tag |
+| **purdue-af image**                                   | semver `0.X.Y`, repo tag `v0.X.Y` | `v0.13.0`  | **Release image** workflow                         | at the **next platform release**                       |
+| Continuous (`:latest`, `:pre-release`, `in-`, `sha-`) | moving tags                       | —          | `ci.yml` publish stage only, behind the ci-ok gate | on pod restart / session spawn                         |
+| Experimental Flux source (`main-validated`)           | CI-owned moving branch            | —          | `ci.yml` publish stage only, behind the ci-ok gate | experimental Flux reconcile (~1 min)                   |
 
 All auxiliary images (agentic-interface, af-pod-monitor, af-node-monitor)
 are on the continuous `:latest` channel — unversioned, no release step:
@@ -21,8 +21,8 @@ picks it up on the next pod restart.
 
 Every commit runs one pipeline ([ci.yml](.github/workflows/ci.yml));
 nothing is published unless every step passed for that exact commit.
-Automation stops at the pre-release channel — production is always one
-of the manual releases described below.
+Automation stops at the pre-release channel — releasing is always one of
+the manual steps described below.
 
 ```mermaid
 %%{init: {"flowchart": {"wrappingWidth": 380}}}%%
@@ -39,7 +39,7 @@ flowchart TD
     PUB["<b>publish</b><br/>images get :latest / :pre-release tags;<br/>the main-validated branch advances"]
     PUB --> EXP["<b>Flux: experimental</b><br/>auto-deploys from main-validated<br/>(incl. pixi-global-sync → /work)"]
     REL["<b>release-image / release-platform</b><br/>a person decides when + which version"] --> PROD
-    PROD["<b>Flux: production</b><br/>runs released versions only"]
+    PROD["<b>Flux: core</b><br/>runs released versions only"]
     OK -.->|only fully-tested commits<br/>can be released| REL
 ```
 
@@ -54,10 +54,10 @@ platform release.)
 1. **Actions → Release platform → Run workflow** — computes the next
    `YYYY.M.SEQ`, tags, and publishes a GitHub Release with generated
    notes. No file edits, no image tags.
-2. Production Flux advances to the tagged commit within ~1 minute.
+2. Core Flux advances to the tagged commit within ~1 minute.
 
 **Rollback**: deleting the most recent platform Release _together with
-its tag_ rolls production back — Flux tracks the newest `2026.x` **git
+its tag_ rolls the core components back — Flux tracks the newest `2026.x` **git
 tag**, so once the tag is gone it re-resolves to the previous one and
 re-applies that commit's manifests on the next reconcile (~1 min). The
 previous GitHub Release automatically becomes "latest" again.
@@ -67,7 +67,7 @@ gh release delete 2026.7.9 --cleanup-tag   # --cleanup-tag is what matters
 ```
 
 Deleting only the Release object (without the tag) rolls back **nothing**.
-And this is a rollback of production, not of history: `main` still
+And this is a rollback of what is deployed, not of history: `main` still
 contains the offending commits — fix or revert them before minting the
 next tag, or the next release re-ships them. Never use tag deletion for
 `v*` image releases: the image pin lives in a values.yaml commit, so
@@ -76,7 +76,7 @@ deleting a `v` tag rolls back nothing (revert the release commit instead).
 ## purdue-af image releases
 
 Release when the content soaking as `:pre-release` should become the
-default production environment. Bump rules:
+default session environment. Bump rules:
 
 - **major** — never, until the AF moves from R&D to Operations mode;
 - **minor** — breaking changes for users, or a major change to the AF
@@ -96,7 +96,7 @@ image of the current repo state. Complete the manual checklist in
    count-verified), commits to `main`, tags `v<version>`, and publishes a
    GitHub Release.
 2. **Actions → Release platform → Run workflow** — the bump commit
-   reaches production only when a platform tag covers it; this is always
+   reaches the cluster only when a platform tag covers it; this is always
    the second step of an image release.
 
 **Rollback**: `git revert` the release commit on `main`, then mint a new

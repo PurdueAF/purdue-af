@@ -6,7 +6,7 @@ name: Release platform
 # image tags — the platform release marks the repo state and is on a
 # SEPARATE cadence from the image releases.
 #
-# This is the production gate: the core-production Flux GitRepository
+# This is the gate for core components: the core-production Flux GitRepository
 # tracks `semver: 2026.x`, so minting a tag is what rolls the cms
 # namespace forward to the tagged commit.
 #

@@ -17,7 +17,7 @@ The components of the Analysis Facility are divided into **core** and **experime
 ### Update process
 
 - To update a core component, push to `main` — the CI pipeline validates
-  the full state (the `ci-ok` gate). It reaches production when the next
+  the full state (the `ci-ok` gate). It reaches the cluster when the next
   platform tag is minted — see [RELEASING.md](../RELEASING.md) for when
   and how versions are incremented (platform tags and image versions are
   minted by the release workflows, never by hand).
