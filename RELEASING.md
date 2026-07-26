@@ -108,10 +108,7 @@ deletes release tags.
 - Channel tags (`:latest`, `:pre-release`), build tags (`in-`, `sha-`),
   and the experimental Flux branch (`main-validated`) are CI-owned: they
   move only in the `ci.yml` publish stage, after every stage of the same
-  commit is green. Hand-moving them defeats the gates. Retired pointers:
-  tag `main-ci-passed` (blocked from recreation), custom ref
-  `refs/ci/main-passed`, and branch `ci/main-passed`. If you have a local
-  tag copy, `git tag -d main-ci-passed`.
+  commit is green. Hand-moving them defeats the gates.
 - The `AF_RELEASE_TOKEN` secret (fine-grained PAT, `contents: write`)
   must exist — release commits/tags pushed with the default
   `GITHUB_TOKEN` do not trigger CI, so the release commit would go

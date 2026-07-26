@@ -28,13 +28,3 @@ The components of the Analysis Facility are divided into **core** and **experime
   image channels). Do not push to `main-validated` by hand — only the
   publish job should move it (`protect-main-validated` blocks deleting
   the branch; updates are left open so `GITHUB_TOKEN` can force-push).
-
-### Retired pointers
-
-Earlier drafts used a moving tag `main-ci-passed`, a custom ref
-`refs/ci/main-passed`, and branch `ci/main-passed`. All are retired. If
-you still have a local tag copy:
-
-```
-git tag -d main-ci-passed
-```

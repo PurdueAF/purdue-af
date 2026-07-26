@@ -28,29 +28,23 @@ cluster pulls ◀── geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purduea
   cluster admin out-of-band — they exceed
   GitHub-hosted runner limits. Pixi environments are validated by the
   ci-pixi-global.yml stage instead.
-- Those out-of-band builds remain the long-term path for the large images
-  unless the heavy builds move to infrastructure with cluster-grade disk/CPU
-  (e.g. a self-hosted runner).
 
-## One-time setup (cluster admin)
+## Registry configuration
 
-1. **Make the ghcr packages public** (after the first main push creates them):
-   GitHub → PurdueAF org → Packages → each `<name>` → Package settings →
-   Change visibility → Public. (First push creates them private by default;
-   public packages need no pull credentials anywhere.)
-2. **Create the Harbor proxy-cache project** on geddes-registry:
-   - Registries → New endpoint: provider "GitHub GHCR" (or generic
-     "Docker Registry"), URL `https://ghcr.io`, no credentials (public).
-   - Projects → New project: name `ghcr-cache`, enable "Proxy Cache",
-     select the ghcr endpoint.
-   - **Set the project's Access Level to Public** (Projects → ghcr-cache →
-     Configuration → Public). Harbor projects are private by default, and
-     user pods carry no geddes pull secrets — a private project 401s
-     every spawn.
-   - Verify from a cluster node:
-     `crictl pull geddes-registry.rcac.purdue.edu/ghcr-cache/purdueaf/agentic-interface:sha-<commit>`
+- The ghcr packages are **public**, so nothing in the cluster needs pull
+  credentials for them.
+- `ghcr-proxy-cache` is a Harbor **proxy-cache** project on geddes-registry
+  pointing at `https://ghcr.io` (no credentials), with its access level set
+  to **Public** — user pods carry no geddes pull secrets, so a private
+  project would 401 on every spawn.
 
-## Deployment references (current state)
+Verify from a cluster node:
+
+```
+crictl pull geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-interface:latest
+```
+
+## What pulls what
 
 All aux images (agentic-interface, af-pod-monitor, af-node-monitor) pull
 `:latest` through the `ghcr-proxy-cache` project — the continuous
@@ -58,7 +52,3 @@ channel, moved only by the ci.yml publish stage after a fully green
 pipeline. The purdue-af image is pinned by semver in
 `apps/jupyterhub/jupyterhub/values.yaml` and promoted via
 release-image.yml (see RELEASING.md at the repo root).
-
-Follow-up (IMPROVEMENT_PLAN item 13): Flux ImagePolicy +
-ImageUpdateAutomation can replace the `:latest` channel with reviewed
-pin-bump commits once desired.

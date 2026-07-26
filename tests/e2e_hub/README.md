@@ -12,9 +12,10 @@ mocked. Never touches the production cluster.
 | z2jh chart version (from helmrelease.yaml) | CILogon → `mock-cilogon.py` (OAuth code flow) |
 | `values.yaml` (flux-envsubst'd, like Flux) | userlist secrets → test users                 |
 | all 3 `jupyterhub_config.d` snippets       | LDAP → openldap seeded like geddes-aux        |
-| OAuth code flow, auth_state, KubeSpawner   | singleuser image → upstream sample (tiny)     |
-| `ldap_lookup()` query/parse path           | storage/nodeSelectors/registry → nulled       |
-| spawn → JupyterLab HTTP response           | Prometheus → absent (gpu script fails open)   |
+| OAuth code flow, auth_state, KubeSpawner   | storage/nodeSelectors/registry → nulled       |
+| `ldap_lookup()` query/parse path           | Prometheus → absent (gpu script fails open)   |
+| singleuser image (the real AF image)       |                                               |
+| spawn → JupyterLab HTTP response           |                                               |
 
 ## Covered behaviors
 
@@ -26,14 +27,14 @@ core assumption), admin_users wiring, forged OAuth state rejection, logout.
 
 ## Run it
 
-CI: the **Hub E2E** workflow — on changes to `apps/jupyterhub/jupyterhub/**`,
-the production kustomization, or the harness itself, plus weekly. It always
-tests **what the repo deploys**: the chart version comes from
-`helmrelease.yaml` and the hub configmaps are derived from
-`deploy/core-production/kustomization.yaml` — there is no version knob. To
-validate a chart upgrade, bump `helmrelease.yaml` in a PR; the workflow
-exercises that exact version and fails the PR if values or scripts break
-the deployment.
+CI: the `e2e` stage of `ci.yml` (`ci-e2e.yml`), memoized on the hash of its
+input state — it re-runs whenever the hub config, the harness, or the image
+under test changes. It always tests **what the repo deploys**: the chart
+version comes from `helmrelease.yaml` and the hub configmaps are derived
+from `deploy/core-production/kustomization.yaml` — there is no version knob.
+To validate a chart upgrade, bump `helmrelease.yaml` in a PR; the pipeline
+exercises that exact version and fails the PR if values or scripts break the
+deployment.
 
 Locally (needs docker + kind + helm + kubectl + flux):
 
@@ -49,10 +50,10 @@ Locally (needs docker + kind + helm + kubectl + flux):
 ## Pre-release image e2e (the AF image CD gate)
 
 The workflow's `e2e-prerelease` job runs the same stack but spawns the REAL
-purdue-af image through the hub's `pre-release` profile: the freshly built
-`ghcr.io/purdueaf/purdue-af:sha-<commit>` when the commit touched the image
-inputs (job ordering guarantees the build finished first), otherwise the
-currently promoted `:pre-release` tag. `setup-kind.sh` pre-pulls whatever
+purdue-af image through the hub's `pre-release` profile: the `in-<hash>`
+image built for the current input state (job ordering guarantees the build
+finished first), or the promoted `:pre-release` tag when that image is
+unavailable (fork PRs). `setup-kind.sh` pre-pulls whatever
 `PRERELEASE_IMAGE` names onto the kind node; the test asserting the pod runs
 that image is gated by `E2E_PRERELEASE=1` (skipped in the production job and
 in local runs, where the ~5 GB pull usually isn't worth it). To run it
@@ -62,15 +63,11 @@ locally anyway:
     E2E_HUB=1 E2E_PRERELEASE=1 PRERELEASE_IMAGE=ghcr.io/purdueaf/purdue-af:pre-release \
         uv run --project tests pytest tests/e2e_hub -k prerelease
 
-## Remaining gaps (phase 3)
+## Not covered by this harness
 
-- agentic-interface deployed as hub service: MCP login → session tools e2e.
-- pixi env _build_ validation stays in the separate `pixi-check` job
-  (lock consistency only — the full image build lives in the `build-image`
-  job of this same workflow).
-- NetworkPolicies are rendered but NOT enforced by kind's default CNI —
-  policy regressions (e.g. hub egress to LDAP/CILogon) need the rendered
-  manifest diff (see JUPYTERHUB_UPGRADE_PLAN.md phase 2.3) or staging.
-- the geddes-registry pull-through cache is not exercised (upstream quay
-  images are used); check mirror tags with `docker manifest inspect` before
-  a version bump.
+- The agentic-interface is not deployed as a hub service here, so the MCP
+  login → session-tool path is untested end to end.
+- NetworkPolicies are rendered but not enforced by kind's default CNI, so
+  policy regressions (e.g. hub egress to LDAP/CILogon) do not show up.
+- The geddes pull-through cache is not exercised: images come from ghcr and
+  upstream quay directly.

@@ -23,9 +23,7 @@ the share is the persistent package cache at `/work/pixi/.cache`.
   filesystem, `pixi install --locked` is mostly hardlink swaps. Running
   kernels keep already-imported modules; as with any env update (manual
   ones included), lazily-imported packages can mix until the kernel
-  restarts. A symlink/blue-green scheme was considered and rejected:
-  CPython doesn't realpath `sys.path`, so flips silently mix envs inside
-  running kernels anyway — all cost, no benefit (verified empirically).
+  restarts.
 - **No state files.** Drift = byte-difference between the mounted desired
   manifests (ConfigMap, kubelet-refreshed ~1 min after Flux applies) and
   the live ones. Change latency merge→live ≈ Flux interval + 1 min +
@@ -59,6 +57,4 @@ eventually surfaces as AFGlobalEnvOutOfSync.
 - **Force a re-sync now:** `rm /work/pixi/global/pixi.lock` (instant
   drift) or wait ≤60 s after Flux applies a change.
 
-Deployed via `deploy/experimental/` for the trial period; promote by
-moving the resource + configMapGenerator entries to
-`deploy/core-production/`.
+Deployed from `deploy/experimental/`.
