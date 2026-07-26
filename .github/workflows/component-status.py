@@ -7,7 +7,7 @@ cluster the same as what's on `main`, and if not, why not?**
 Everything is derived from git refs alone — no cluster access — because the
 two Flux channels track refs in this repo:
 
-    production    newest platform tag `YYYY.M.SEQ`  (deploy/core-production)
+    core    newest platform tag `YYYY.M.SEQ`  (deploy/core-production)
     experimental  branch `main-validated`           (deploy/experimental)
 
 `main-validated` doubles as the validation boundary: the ci.yml publish
@@ -43,7 +43,7 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[2]
 CHANNELS = {
-    "production": Path("deploy/core-production/kustomization.yaml"),
+    "core": Path("deploy/core-production/kustomization.yaml"),
     "experimental": Path("deploy/experimental/kustomization.yaml"),
 }
 IMAGE_INPUTS = Path(".github/workflows/image-inputs.sh")
@@ -76,7 +76,7 @@ def ref_exists(ref: str) -> bool:
 
 
 def latest_platform_tag() -> str | None:
-    """Newest CalVer tag — what production Flux tracks."""
+    """Newest CalVer tag — what core Flux tracks."""
     tags = [
         t
         for t in git("tag", "-l", "2*").splitlines()
@@ -210,7 +210,7 @@ def badge(channel: str, status: str, ahead: int) -> dict[str, Any]:
 def af_image_paths() -> list[str]:
     """The purdue-af image's input paths, from the build's own definition —
     the same list that content-addresses the image, so drift here means CI
-    would build a different image than the one production is pinned to."""
+    would build a different image than the one core is pinned to."""
     out = subprocess.run(
         [str(REPO / IMAGE_INPUTS), "--paths", "purdue-af"],
         capture_output=True,
@@ -250,7 +250,7 @@ def main() -> int:
     rows: list[tuple[str, str, str, int]] = []
 
     for channel, deployed in (
-        ("production", platform_tag),
+        ("core", platform_tag),
         ("experimental", validated),
     ):
         if deployed is None:
@@ -269,7 +269,7 @@ def main() -> int:
         drift = commits_touching(image_tag, head, paths)
         unvalidated = commits_touching(validated, head, paths)
         status, ahead = classify(drift, unvalidated, args.ci_state)
-        rows.append(("production", "docker/purdue-af", status, ahead))
+        rows.append(("core", "docker/purdue-af", status, ahead))
 
     if args.out:
         args.out.mkdir(parents=True, exist_ok=True)

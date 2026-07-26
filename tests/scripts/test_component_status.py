@@ -138,10 +138,10 @@ def test_slugs_are_unique_across_channels(cs, components):
 
 @pytest.mark.parametrize("ahead", [0, 1, 42])
 def test_badge_matches_the_shields_endpoint_schema(cs, ahead):
-    payload = cs.badge("production", "awaiting release", ahead)
+    payload = cs.badge("core", "awaiting release", ahead)
     assert json.loads(json.dumps(payload)) == payload
     assert payload["schemaVersion"] == 1
-    assert payload["label"] == "production"  # the table names the component
+    assert payload["label"] == "core"  # the table names the component
     assert payload["color"] == cs.COLORS["awaiting release"]
     assert payload["message"] == (
         "awaiting release" if not ahead else f"awaiting release · {ahead}"
@@ -164,7 +164,7 @@ def test_readme_references_every_component_badge(cs, components):
         for channel, mapping in components.items()
         for component in mapping
     }
-    expected.add("production-docker-purdue-af")  # the image's own stream
+    expected.add("core-docker-purdue-af")  # the image's own stream
 
     missing = sorted(s for s in expected if f"[{s}]:" not in readme)
     assert not missing, f"add these badges to README.md: {missing}"
@@ -179,7 +179,7 @@ def test_readme_has_no_badges_for_dead_components(cs, components):
         for channel, mapping in components.items()
         for component in mapping
     }
-    live |= {"production-docker-purdue-af", "status-pending"}
+    live |= {"core-docker-purdue-af", "status-pending"}
 
     referenced = {
         line.split("]:")[0].lstrip("[")
