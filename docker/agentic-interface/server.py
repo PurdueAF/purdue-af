@@ -23,6 +23,7 @@ from metrics import (
     record_jsonrpc,
     record_request,
 )
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from tools import dask, logs, profiles, prompts, session, storage
 
 logger = logging.getLogger(__name__)
@@ -40,11 +41,11 @@ class _PathStripper:
     receives /mcp as expected.
     """
 
-    def __init__(self, app, prefix: str) -> None:
+    def __init__(self, app: ASGIApp, prefix: str) -> None:
         self._app = app
         self._prefix = prefix.rstrip("/")
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "http":
             path = scope.get("path", "")
             if path.startswith(self._prefix):
@@ -57,7 +58,7 @@ class _PathStripper:
         await self._app(scope, receive, send)
 
 
-async def _buffer_body(receive):
+async def _buffer_body(receive: Receive) -> tuple[bytes, Receive]:
     """Drain the request body, returning (body, replay_receive).
 
     The MCP JSON-RPC method lives in the POST body, so the middleware has to
@@ -72,7 +73,7 @@ async def _buffer_body(receive):
             break
     body = b"".join(m.get("body", b"") for m in messages if m["type"] == "http.request")
 
-    async def replay():
+    async def replay() -> Message:
         if messages:
             return messages.pop(0)
         return await receive()
@@ -100,10 +101,10 @@ def _jsonrpc_methods(body: bytes) -> list[str]:
 class _AuthMiddleware:
     """Validate JupyterHub Bearer tokens and populate the current_user ContextVar."""
 
-    def __init__(self, app) -> None:
+    def __init__(self, app: ASGIApp) -> None:
         self._app = app
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] not in ("http", "websocket"):
             await self._app(scope, receive, send)
             return
@@ -166,7 +167,7 @@ class _AuthMiddleware:
         # can call current_user.get() without needing extra arguments.
         status = 500
 
-        async def counting_send(message):
+        async def counting_send(message: Message) -> None:
             nonlocal status
             if message["type"] == "http.response.start":
                 status = message["status"]
@@ -190,7 +191,7 @@ class _AuthMiddleware:
         return "other"
 
     @staticmethod
-    async def _ok(send) -> None:
+    async def _ok(send: Send) -> None:
         body = b"ok"
         await send(
             {
@@ -205,7 +206,7 @@ class _AuthMiddleware:
         await send({"type": "http.response.body", "body": body})
 
     @staticmethod
-    async def _metrics(send) -> None:
+    async def _metrics(send: Send) -> None:
         body = metrics_body()
         await send(
             {
@@ -220,7 +221,7 @@ class _AuthMiddleware:
         await send({"type": "http.response.body", "body": body})
 
     @staticmethod
-    async def _respond(send, status: int, detail: str) -> None:
+    async def _respond(send: Send, status: int, detail: str) -> None:
         body = f'{{"error":"{detail}"}}'.encode()
         await send(
             {

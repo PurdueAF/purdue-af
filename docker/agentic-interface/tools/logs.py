@@ -4,10 +4,10 @@ import os
 import re
 import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
-from context import current_user
+from context import require_user
 from metrics import instrumented_transport
 
 LOKI_URL = os.environ.get("LOKI_URL", "http://loki.cms.svc.cluster.local:3100")
@@ -149,7 +149,7 @@ async def _loki_query(
 # ── tools ─────────────────────────────────────────────────────────────────────
 
 
-def register(mcp) -> None:
+def register(mcp: Any) -> None:
     @mcp.tool()
     async def query_notebook_logs(
         start: str = "1h",
@@ -177,7 +177,7 @@ def register(mcp) -> None:
             dedup: Collapse consecutive identical messages (default True).
                    Useful when errors are flooding the log.
         """
-        user = current_user.get()
+        user = require_user()
         namespace = user["namespace"]
         username = user["username"]
         # Scope by username + notebook container — no Hub admin pod_name needed.
@@ -211,7 +211,7 @@ def register(mcp) -> None:
             filter: Optional LogQL pipe expression.
             dedup: Collapse consecutive identical messages (default True).
         """
-        user = current_user.get()
+        user = require_user()
         namespace = user["namespace"]
         username = user["username"]
         selector = (

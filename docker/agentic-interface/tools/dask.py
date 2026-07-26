@@ -15,10 +15,10 @@ worker pods.
 import asyncio
 import base64
 import os
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
-from context import current_user
+from context import require_user
 from mcp.server.fastmcp import Context
 from metrics import instrumented_transport
 from pydantic import BaseModel, Field
@@ -90,7 +90,7 @@ def _cluster_id(cluster_name: str) -> str:
     return cluster_name.rsplit(".", 1)[-1]
 
 
-def _parse_clusters(payload) -> list[dict]:
+def _parse_clusters(payload: Any) -> list[dict[str, Any]]:
     """Normalise GET /api/v1/clusters/ body to a list of cluster dicts.
 
     Dask Gateway returns ``{cluster_name: cluster_model, …}``.
@@ -382,7 +382,7 @@ _CREATE_CHOICES_HELP = (
 )
 
 
-def register(mcp) -> None:
+def register(mcp: Any) -> None:
     @mcp.tool()
     async def list_dask_clusters() -> str:
         """List all running Dask clusters across every gateway backend.
@@ -391,7 +391,7 @@ def register(mcp) -> None:
         labels each cluster with its source backend. Results are scoped to the
         calling user only.
         """
-        user = current_user.get()
+        user = require_user()
         username = user["username"]
 
         async with _client() as client:
@@ -434,7 +434,7 @@ def register(mcp) -> None:
         Args:
             gateway: 'k8s' (Geddes Kubernetes) or 'slurm' (Hammer Slurm).
         """
-        user = current_user.get()
+        user = require_user()
         try:
             gateway, url = _resolve_gateway(gateway)
         except ValueError as e:
@@ -554,7 +554,7 @@ def register(mcp) -> None:
         except ValueError as e:
             return str(e)
 
-        user = current_user.get()
+        user = require_user()
         username = user["username"]
 
         # ── Worker environment: infer from explicit paths, else ask the user ──
@@ -745,7 +745,7 @@ def register(mcp) -> None:
             cluster_name: Cluster identifier returned by list_dask_clusters.
             gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
-        user = current_user.get()
+        user = require_user()
         try:
             _, url = _resolve_gateway(gateway)
         except ValueError as e:
@@ -797,7 +797,7 @@ def register(mcp) -> None:
             cluster_name: Cluster identifier returned by list_dask_clusters.
             gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
-        user = current_user.get()
+        user = require_user()
         username = user["username"]
         try:
             _, url = _resolve_gateway(gateway)
@@ -859,7 +859,7 @@ def register(mcp) -> None:
             cluster_name: Cluster identifier returned by list_dask_clusters.
             gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
-        user = current_user.get()
+        user = require_user()
         username = user["username"]
         try:
             _, url = _resolve_gateway(gateway)
@@ -951,7 +951,7 @@ def register(mcp) -> None:
         if n_workers < 0:
             return "Error: n_workers must be ≥ 0."
 
-        user = current_user.get()
+        user = require_user()
         try:
             _, url = _resolve_gateway(gateway)
         except ValueError as e:
@@ -987,7 +987,7 @@ def register(mcp) -> None:
             cluster_name: Cluster identifier returned by list_dask_clusters.
             gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
-        user = current_user.get()
+        user = require_user()
         try:
             _, url = _resolve_gateway(gateway)
         except ValueError as e:

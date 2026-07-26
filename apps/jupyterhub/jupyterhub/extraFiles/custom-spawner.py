@@ -1,11 +1,17 @@
 import os
+from typing import Any
 
 from oauthenticator.cilogon import CILogonOAuthenticator
 from tornado import web
 
+# `c` is the traitlets config object JupyterHub injects into this file's
+# globals at exec time. A bare annotation declares its type for static
+# checkers without creating (or shadowing) the runtime binding.
+c: Any
+
 
 class PurdueCILogonOAuthenticator(CILogonOAuthenticator):
-    async def authenticate(self, handler, data=None):
+    async def authenticate(self, handler: Any, data: Any = None) -> Any:
         import pprint
 
         ret = await super().authenticate(handler, data)
@@ -42,7 +48,7 @@ class PurdueCILogonOAuthenticator(CILogonOAuthenticator):
         os.environ["USERNAME"] = fixedUsername
         return ret
 
-    async def refresh_user(self, user, handler=None, **kwargs):
+    async def refresh_user(self, user: Any, handler: Any = None, **kwargs: Any) -> Any:
         # oauthenticator >= 17.2 implements refresh_user: it rebuilds
         # auth_state from the raw CILogon token/userinfo data, silently
         # dropping the name/domain keys that authenticate() and the
@@ -56,7 +62,9 @@ class PurdueCILogonOAuthenticator(CILogonOAuthenticator):
         return True
 
 
-def passthrough_post_auth_hook(authenticator, handler, authentication):
+def passthrough_post_auth_hook(
+    authenticator: Any, handler: Any, authentication: Any
+) -> Any:
     import pprint
 
     print("in post auth:")

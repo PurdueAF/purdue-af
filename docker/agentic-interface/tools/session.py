@@ -7,11 +7,11 @@ are automatically scoped to that user's server.
 import asyncio
 import os
 import time
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 from auth import clear_user_cache
-from context import current_user
+from context import require_user
 from mcp.server.fastmcp import Context
 from metrics import instrumented_transport
 
@@ -61,7 +61,7 @@ def _default_choice_key(choices: dict[str, str]) -> Optional[str]:
     return next(iter(choices), None)
 
 
-def register(mcp) -> None:
+def register(mcp: Any) -> None:
     @mcp.tool()
     async def get_session_status() -> str:
         """Return the current status of the user's Analysis Facility session (pod).
@@ -69,7 +69,7 @@ def register(mcp) -> None:
         Includes: whether it is running, which profile and resources were selected,
         how long it has been active, and the URL to access it.
         """
-        user = current_user.get()
+        user = require_user()
         token = user["token"]
         username = user["username"]
 
@@ -176,7 +176,7 @@ def register(mcp) -> None:
                           Any option not supplied is elicited.
             use_defaults: Skip elicitation and start the default profile/options.
         """
-        user = current_user.get()
+        user = require_user()
         token = user["token"]
         username = user["username"]
 
@@ -306,7 +306,7 @@ def register(mcp) -> None:
         Any unsaved notebook state and running kernels will be lost.
         Storage (home directory, /work) is preserved.
         """
-        user = current_user.get()
+        user = require_user()
         token = user["token"]
         username = user["username"]
 
@@ -342,7 +342,7 @@ def register(mcp) -> None:
         Args:
             timeout_seconds: Maximum time to wait. Default: 180 s (3 min).
         """
-        user = current_user.get()
+        user = require_user()
         token = user["token"]
         username = user["username"]
 
@@ -407,7 +407,7 @@ def register(mcp) -> None:
             user_options: Option overrides.  Omit to reuse the current options.
                           See list_af_profiles for valid keys and values.
         """
-        user = current_user.get()
+        user = require_user()
         token = user["token"]
         username = user["username"]
 

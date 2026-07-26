@@ -13,7 +13,7 @@ event_rate_per_worker = Gauge(
 )
 
 
-def update_metrics():
+def update_metrics() -> None:
     try:
         with open(EVENT_RATE_FILE) as f:
             event_rate = float(f.read().strip())

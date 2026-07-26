@@ -8,13 +8,14 @@ schema construction in one place so individual tools stay small.
 
 import logging
 import time
+from typing import Any, cast
 
 from pydantic import BaseModel, Field, create_model
 
 logger = logging.getLogger(__name__)
 
 
-def _client_diag(ctx) -> tuple[str | None, str | None, bool | None]:
+def _client_diag(ctx: Any) -> tuple[str | None, str | None, bool | None]:
     """(client_name, client_version, declared_elicitation_capability) or Nones."""
     try:
         params = ctx.session.client_params
@@ -31,7 +32,7 @@ def _client_diag(ctx) -> tuple[str | None, str | None, bool | None]:
         return None, None, None
 
 
-async def elicit(ctx, message: str, schema: type[BaseModel]):
+async def elicit(ctx: Any, message: str, schema: type[BaseModel]) -> tuple[str, Any]:
     """Ask the client for structured input.
 
     Returns ``(status, data)`` where status is one of:
@@ -113,4 +114,5 @@ def single_choice_model(
         description=description,
         json_schema_extra=extra,
     )
-    return create_model(model_name, **{field: (str, field_info)})
+    fields: dict[str, Any] = {field: (str, field_info)}
+    return cast(type[BaseModel], create_model(model_name, **fields))

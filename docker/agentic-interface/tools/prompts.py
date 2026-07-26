@@ -7,8 +7,10 @@ Any MCP client can surface these; in Claude Code they appear as
 ``/mcp__purdue-af-agentic-interface__<name>``.
 """
 
+from typing import Any
 
-def register(mcp) -> None:
+
+def register(mcp: Any) -> None:
     @mcp.prompt()
     def launch_session() -> str:
         """Start the user's Purdue Analysis Facility session and wait until ready."""

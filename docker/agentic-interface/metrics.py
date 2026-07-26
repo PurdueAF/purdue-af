@@ -131,7 +131,7 @@ def _username() -> str:
     return (user or {}).get("username") or "unknown"
 
 
-def instrument_mcp(mcp) -> None:
+def instrument_mcp(mcp: Any) -> None:
     """Record metrics and a structured log line on every MCP tool invocation."""
     original_call_tool = mcp._tool_manager.call_tool
 
@@ -149,10 +149,10 @@ def instrument_mcp(mcp) -> None:
 
     async def call_tool(
         name: str,
-        arguments: dict,
-        context=None,
+        arguments: dict[str, Any],
+        context: Any = None,
         convert_result: bool = False,
-    ):
+    ) -> Any:
         username = _username()
         start = time.monotonic()
         try:
@@ -175,7 +175,7 @@ class _InstrumentedTransport(httpx.AsyncBaseTransport):
     """httpx transport wrapper that times outbound requests per backend target."""
 
     def __init__(
-        self, target: Union[str, Callable[[httpx.Request], str]], **kwargs
+        self, target: Union[str, Callable[[httpx.Request], str]], **kwargs: Any
     ) -> None:
         self._target = target if callable(target) else (lambda request: target)
         self._inner = httpx.AsyncHTTPTransport(**kwargs)
@@ -197,7 +197,7 @@ class _InstrumentedTransport(httpx.AsyncBaseTransport):
 
 
 def instrumented_transport(
-    target: Union[str, Callable[[httpx.Request], str]], **kwargs
+    target: Union[str, Callable[[httpx.Request], str]], **kwargs: Any
 ) -> httpx.AsyncBaseTransport:
     """Build an httpx transport that records upstream metrics for `target`.
 

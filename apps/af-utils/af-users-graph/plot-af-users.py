@@ -5,6 +5,7 @@ import glob
 import os
 import sqlite3
 import sys
+from typing import Any
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -39,7 +40,7 @@ ORDER BY reg_date;
 """
 
 
-def find_latest_backup(backup_dir):
+def find_latest_backup(backup_dir: str) -> str | None:
     """Return the most recent jupyterhub-*.sqlite backup, or None if there are none."""
     backup_files = glob.glob(f"{backup_dir}/jupyterhub-*.sqlite")
     if not backup_files:
@@ -47,7 +48,7 @@ def find_latest_backup(backup_dir):
     return max(backup_files, key=os.path.getctime)
 
 
-def load_registration_stats(db_path):
+def load_registration_stats(db_path: str) -> Any:
     """Daily and cumulative registered-user counts from a JupyterHub database."""
     conn = sqlite3.connect(db_path)
     try:
@@ -61,7 +62,7 @@ def load_registration_stats(db_path):
     return df
 
 
-def plot_registered_users(df, output_path):
+def plot_registered_users(df: Any, output_path: str) -> None:
     """Render the cumulative-users plot and save it to output_path."""
     plt.style.use("default")
     plt.rcParams.update(PLOT_STYLE)
@@ -153,7 +154,7 @@ def plot_registered_users(df, output_path):
     plt.close(fig)
 
 
-def main(backup_dir=BACKUP_DIR, output_path=OUTPUT_PATH):
+def main(backup_dir: str = BACKUP_DIR, output_path: str = OUTPUT_PATH) -> None:
     latest_backup = find_latest_backup(backup_dir)
     if latest_backup is None:
         print("No backup files found!")

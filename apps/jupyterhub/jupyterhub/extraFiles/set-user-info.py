@@ -1,12 +1,18 @@
 import json
 import os
+from typing import Any
 
 from ldap3 import SUBTREE, Connection, Server
+
+# `c` is the traitlets config object JupyterHub injects into this file's
+# globals at exec time. A bare annotation declares its type for static
+# checkers without creating (or shadowing) the runtime binding.
+c: Any
 
 NAMESPACE = os.environ["POD_NAMESPACE"]
 
 
-def ldap_lookup(username):
+def ldap_lookup(username: str) -> tuple[Any, Any]:
     # AF_LDAP_* are only set by the e2e harness (tests/e2e_hub), which points
     # at a plaintext mock; unset (production) keeps the original geddes-aux
     # TLS path byte-for-byte.
@@ -37,7 +43,7 @@ def ldap_lookup(username):
     return uid_number, gid_number
 
 
-def passthrough_auth_state_hook(spawner, auth_state):
+def passthrough_auth_state_hook(spawner: Any, auth_state: Any) -> None:
     print("auth_state", auth_state)
     spawner.userdata = {"name": auth_state["name"], "domain": auth_state["domain"]}
     domain = spawner.userdata["domain"]

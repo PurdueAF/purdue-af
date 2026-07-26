@@ -44,6 +44,27 @@ repos:
         # to clusters — keep them out of formatting (matches the old CI scope).
         files: \.sh$
 
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v2.3.0
+    hooks:
+      - id: mypy
+        name: mypy (first-party python)
+        # Config (scope, strictness, per-module exceptions) lives in
+        # mypy.ini — the single source of truth, same as ruff.toml.
+        # pass_filenames off: types cross files, so the whole configured
+        # scope is checked on every run rather than just what changed.
+        pass_filenames: false
+        args: ["--config-file", "mypy.ini"]
+        # Typed third-party packages mypy needs to see to check OUR calls
+        # against them. Untyped SDKs (kubernetes, mcp, jupyterhub) resolve
+        # to Any via ignore_missing_imports and need nothing here.
+        additional_dependencies:
+          - httpx>=0.27
+          - starlette>=0.40
+          - pydantic>=2.9
+          - prometheus_client>=0.22
+          - types-PyYAML
+
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.11.0.1
     hooks:

@@ -271,7 +271,8 @@ def _load_result(mount_name: str, node_name: str) -> Dict[str, Any] | None:
     path = _result_path(mount_name, node_name)
     try:
         with path.open("r", encoding="utf-8") as f:
-            return json.load(f)
+            loaded: Dict[str, Any] = json.load(f)
+            return loaded
     except FileNotFoundError:
         # Per-node result file not present yet.
         return None

@@ -49,7 +49,7 @@ _SP_RE = re.compile(
 )
 
 
-def parse_manifest(path):
+def parse_manifest(path: Path) -> tuple[list[str], list[str]]:
     """pixi.toml → (conda_deps, pypi_deps). Uses tomllib when available,
     else a line parser good enough for flat dependency tables."""
     text = path.read_text()
@@ -79,7 +79,7 @@ def parse_manifest(path):
         return conda, pypi
 
 
-def conda_toplevels(env_dir):
+def conda_toplevels(env_dir: Path) -> dict[str, list[str]]:
     """conda-meta/*.json → {package name: sorted importable top-levels}.
 
     Metapackages (matplotlib, dask, jupyter, ...) install no files
@@ -112,7 +112,7 @@ def conda_toplevels(env_dir):
     return result
 
 
-def pypi_toplevels(name):
+def pypi_toplevels(name: str) -> list[str] | None:
     """Installed-dist metadata → importable top-levels (run with env python)."""
     import importlib.metadata as md
 
@@ -123,7 +123,7 @@ def pypi_toplevels(name):
             continue
         tl = dist.read_text("top_level.txt")
         if tl:
-            tops = [t.strip() for t in tl.splitlines() if t.strip()]
+            tops = {t.strip() for t in tl.splitlines() if t.strip()}
         else:
             tops = {
                 str(f).split("/", 1)[0].removesuffix(".py")
@@ -141,7 +141,9 @@ def pypi_toplevels(name):
     return None  # not installed at all
 
 
-def import_check(python, modules, timeout):
+def import_check(
+    python: str, modules: list[str], timeout: float
+) -> tuple[bool, float, str]:
     """Import `modules` in ONE fresh interpreter; → (ok, seconds, detail).
 
     Each subprocess gets a private HOME and TMPDIR: parallel imports of
@@ -179,7 +181,7 @@ def import_check(python, modules, timeout):
     return False, elapsed, detail
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--manifest",

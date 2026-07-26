@@ -19,9 +19,15 @@ import copy
 import json
 import os
 import time
+from typing import Any
 from urllib.parse import urlencode
 
 from tornado.httpclient import AsyncHTTPClient
+
+# `c` is the traitlets config object JupyterHub injects into this file's
+# globals at exec time. A bare annotation declares its type for static
+# checkers without creating (or shadowing) the runtime binding.
+c: Any
 
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
 PROMETHEUS_TIMEOUT = 5  # seconds
@@ -68,7 +74,7 @@ _USED_QUERY = (
 )
 
 
-async def _prom_query(query):
+async def _prom_query(query: str) -> dict[str, float]:
     """Instant PromQL query -> {resource label: value}. Raises on failure."""
     url = f"{PROMETHEUS_URL}/api/v1/query?" + urlencode({"query": query})
     response = await AsyncHTTPClient().fetch(
@@ -81,7 +87,7 @@ async def _prom_query(query):
     }
 
 
-async def get_free_gpus():
+async def get_free_gpus() -> dict[str, int] | None:
     """{k8s resource: free count} on schedulable AF nodes; None when unknown."""
     try:
         allocatable, used = await asyncio.gather(
@@ -105,31 +111,34 @@ async def get_free_gpus():
 
 # kube-state-metrics only sees a newly admitted pod after the next scrape, so
 # remember our own recent admissions and subtract them from the availability.
-_recent_grants = []  # [(monotonic timestamp, k8s resource name)]
-_cache = {"expires": 0.0, "free": None}
+# [(monotonic timestamp, k8s resource name)]
+_recent_grants: list[tuple[float, str]] = []
+_cache_expires: float = 0.0
+_cache_free: dict[str, int] | None = None
 
 
-def _grants_in_flight(resource):
+def _grants_in_flight(resource: str) -> int:
     now = time.monotonic()
     _recent_grants[:] = [(t, r) for (t, r) in _recent_grants if now - t < GRANT_TTL]
     return sum(1 for (_, r) in _recent_grants if r == resource)
 
 
-async def free_gpus(use_cache=True):
+async def free_gpus(use_cache: bool = True) -> dict[str, int] | None:
     """Cached availability minus spawns admitted in the last GRANT_TTL seconds."""
+    global _cache_expires, _cache_free
     now = time.monotonic()
-    if not use_cache or _cache["free"] is None or now >= _cache["expires"]:
-        _cache["free"] = await get_free_gpus()
-        _cache["expires"] = now + CACHE_TTL
-    if _cache["free"] is None:
+    if not use_cache or _cache_free is None or now >= _cache_expires:
+        _cache_free = await get_free_gpus()
+        _cache_expires = now + CACHE_TTL
+    if _cache_free is None:
         return None
     return {
         resource: max(count - _grants_in_flight(resource), 0)
-        for resource, count in _cache["free"].items()
+        for resource, count in _cache_free.items()
     }
 
 
-def _gpu_requests_in(kubespawner_override):
+def _gpu_requests_in(kubespawner_override: dict[str, Any] | None) -> dict[str, int]:
     """GPU resources (with amount > 0) requested by a kubespawner override."""
     limits = (kubespawner_override or {}).get("extra_resource_limits") or {}
     return {
@@ -139,7 +148,9 @@ def _gpu_requests_in(kubespawner_override):
     }
 
 
-def _annotate_gpu_choices(profiles, free):
+def _annotate_gpu_choices(
+    profiles: list[dict[str, Any]], free: dict[str, int] | None
+) -> list[dict[str, Any]]:
     """Append live availability and flavor notes to every GPU choice.
 
     The flavor note (e.g. the 24h inactivity limit) is appended even when
@@ -173,7 +184,7 @@ def _annotate_gpu_choices(profiles, free):
 _static_profile_list = c.KubeSpawner.profile_list
 
 
-async def profile_list_with_gpu_counts(spawner):
+async def profile_list_with_gpu_counts(spawner: Any) -> list[dict[str, Any]]:
     profiles = copy.deepcopy(_static_profile_list)
     free = await free_gpus()
     return _annotate_gpu_choices(profiles, free)
@@ -183,7 +194,7 @@ class GPUsUnavailableError(Exception):
     """Aborts a spawn that requests an exhausted GPU flavor."""
 
 
-def hide_gpus_from_pod(pod):
+def hide_gpus_from_pod(pod: Any) -> Any:
     """Inject NVIDIA_VISIBLE_DEVICES=void into every container of a 0-GPU pod.
 
     The 0.13.x AF image is built on the NVIDIA CUDA base, which bakes
@@ -206,7 +217,7 @@ def hide_gpus_from_pod(pod):
         container.env = env
 
 
-async def refuse_gpu_spawn_if_unavailable(spawner, pod):
+async def refuse_gpu_spawn_if_unavailable(spawner: Any, pod: Any) -> Any:
     """modify_pod_hook: re-check availability at spawn time and refuse if 0.
 
     The form annotation above is only cosmetic (and may be stale by the time
@@ -215,7 +226,7 @@ async def refuse_gpu_spawn_if_unavailable(spawner, pod):
     hides node GPUs from sessions that did not request any (see
     hide_gpus_from_pod).
     """
-    requested = {}
+    requested: dict[str, int] = {}
     any_gpu = False
     for container in pod.spec.containers:
         limits = getattr(container.resources, "limits", None) or {}

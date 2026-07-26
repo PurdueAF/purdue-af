@@ -44,7 +44,9 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 log = logging.getLogger("pixi-global-sync")
 
@@ -70,7 +72,7 @@ LOCK_DIR = CACHE_DIR / ".sync-lock"
 PAUSE_FILE_NAME = ".sync-pause"
 
 # ── metrics (hand-rolled exposition; stdlib only) ────────────────────────
-METRICS = {
+METRICS: dict[str, float] = {
     "in_sync": 0.0,  # 1 = live pixi.lock matches the repo's
     "paused": 0.0,  # 1 = .sync-pause present, daemon hands-off
     "env_healthy": 1.0,  # 0 after a failed verify, until healed
@@ -84,17 +86,17 @@ METRICS = {
 _metrics_lock = threading.Lock()
 
 
-def metric_set(name, value):
+def metric_set(name: str, value: float) -> None:
     with _metrics_lock:
         METRICS[name] = float(value)
 
 
-def metric_inc(name, delta=1.0):
+def metric_inc(name: str, delta: float = 1.0) -> None:
     with _metrics_lock:
         METRICS[name] += delta
 
 
-def render_metrics():
+def render_metrics() -> str:
     with _metrics_lock:
         lines = [
             f"pixi_global_sync_{name} {value}"
@@ -104,7 +106,7 @@ def render_metrics():
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):  # noqa: N802 (stdlib API)
+    def do_GET(self) -> None:  # noqa: N802 (stdlib API)
         if self.path == "/metrics":
             body = render_metrics().encode()
             self.send_response(200)
@@ -125,18 +127,18 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def log_message(self, *args):  # quiet access log
+    def log_message(self, *args: Any) -> None:  # quiet access log
         pass
 
 
-def start_metrics_server():
+def start_metrics_server() -> http.server.ThreadingHTTPServer:
     server = http.server.ThreadingHTTPServer(("", METRICS_PORT), _Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
 
 
 # ── desired state & drift ────────────────────────────────────────────────
-def read_desired(config_dir=None):
+def read_desired(config_dir: str | Path | None = None) -> dict[str, bytes]:
     """→ {filename: bytes}. Reads through the kubelet ..data indirection so
     toml+lock always come from the SAME atomic ConfigMap revision."""
     config_dir = Path(config_dir) if config_dir else CONFIG_DIR
@@ -146,7 +148,7 @@ def read_desired(config_dir=None):
     }
 
 
-def is_in_sync(live_dir, desired_files):
+def is_in_sync(live_dir: str | Path, desired_files: dict[str, bytes]) -> bool:
     """Drift check = byte equality of the two manifests. No state files."""
     live_dir = Path(live_dir)
     try:
@@ -158,12 +160,12 @@ def is_in_sync(live_dir, desired_files):
         return False
 
 
-def is_paused(live_dir=None):
+def is_paused(live_dir: str | Path | None = None) -> bool:
     live_dir = Path(live_dir) if live_dir else LIVE_DIR
     return (live_dir / PAUSE_FILE_NAME).exists()
 
 
-def stage_manifests(target_dir, files):
+def stage_manifests(target_dir: str | Path, files: dict[str, bytes]) -> None:
     """Write pixi.toml/pixi.lock into target_dir, each atomically
     (tmp + rename) so a concurrent reader never sees a torn file."""
     target_dir = Path(target_dir)
@@ -175,18 +177,20 @@ def stage_manifests(target_dir, files):
 
 
 # ── singleton lock (NFS-safe: mkdir is atomic; heartbeat allows takeover) ─
-def heartbeat_path():
+def heartbeat_path() -> Path:
     return LOCK_DIR / "heartbeat.json"
 
 
-def write_heartbeat():
+def write_heartbeat() -> None:
     payload = {"holder": socket.gethostname(), "pid": os.getpid(), "ts": time.time()}
     tmp = LOCK_DIR / f".hb-{os.getpid()}.tmp"
     tmp.write_text(json.dumps(payload))
     tmp.replace(heartbeat_path())
 
 
-def should_take_over(heartbeat, now, stale_seconds=None):
+def should_take_over(
+    heartbeat: dict[str, Any] | None, now: float, stale_seconds: float | None = None
+) -> bool:
     stale_seconds = LOCK_STALE_SECONDS if stale_seconds is None else stale_seconds
     if heartbeat is None:
         return True
@@ -202,18 +206,19 @@ class FrozenHeartbeatObserver:
     the holder is dead (e.g. SIGKILLed mid-install before it could release)
     — safe to take over long before the absolute-age staleness kicks in."""
 
-    def __init__(self, threshold):
+    def __init__(self, threshold: float) -> None:
         self.threshold = threshold
-        self._seen = None  # (heartbeat_ts, first_observed_monotonic)
+        # (heartbeat_ts, first_observed_monotonic)
+        self._seen: tuple[float | None, float] | None = None
 
-    def frozen(self, heartbeat_ts, now_monotonic):
+    def frozen(self, heartbeat_ts: float | None, now_monotonic: float) -> bool:
         if self._seen is None or self._seen[0] != heartbeat_ts:
             self._seen = (heartbeat_ts, now_monotonic)
             return False
         return (now_monotonic - self._seen[1]) > self.threshold
 
 
-def acquire_lock():
+def acquire_lock() -> None:
     observer = FrozenHeartbeatObserver(LOCK_FROZEN_SECONDS)
     while True:
         try:
@@ -254,15 +259,19 @@ def acquire_lock():
             time.sleep(30)
 
 
-def release_lock():
+def release_lock() -> None:
     shutil.rmtree(LOCK_DIR, ignore_errors=True)
 
 
 # ── the actual work: what an admin would type, automated ─────────────────
-_current_child = {"proc": None}  # terminated by the SIGTERM handler
+_current_child: dict[str, subprocess.Popen[str] | None] = {
+    "proc": None
+}  # terminated by the SIGTERM handler
 
 
-def run_with_heartbeat(cmd, timeout, **kwargs):
+def run_with_heartbeat(
+    cmd: Sequence[Any], timeout: float, **kwargs: Any
+) -> subprocess.CompletedProcess[str]:
     """Run a long subprocess while keeping liveness + lock heartbeats
     fresh (pixi install can take tens of minutes). The child is registered
     so the SIGTERM handler can kill it — otherwise the daemon would block
@@ -270,7 +279,7 @@ def run_with_heartbeat(cmd, timeout, **kwargs):
     log.info("run: %s", " ".join(map(str, cmd)))
     stop = threading.Event()
 
-    def _beat():
+    def _beat() -> None:
         while not stop.wait(30):
             metric_set("loop_heartbeat_timestamp_seconds", time.time())
             try:
@@ -301,7 +310,7 @@ def run_with_heartbeat(cmd, timeout, **kwargs):
     return subprocess.CompletedProcess(cmd, proc.returncode, stdout=stdout)
 
 
-def pixi_install(env_dir):
+def pixi_install(env_dir: str | Path) -> None:
     attempts = 3
     for attempt in range(1, attempts + 1):
         proc = run_with_heartbeat(
@@ -322,7 +331,7 @@ def pixi_install(env_dir):
     raise RuntimeError("pixi install failed after retries")
 
 
-def purge_incomplete_dist_infos(env_dir):
+def purge_incomplete_dist_infos(env_dir: str | Path) -> int:
     """Remove hollow *.dist-info dirs left by interrupted PyPI installs.
 
     importlib.metadata discovers them by directory name and can return
@@ -343,7 +352,7 @@ def purge_incomplete_dist_infos(env_dir):
     return removed
 
 
-def wipe_env_prefix(env_dir):
+def wipe_env_prefix(env_dir: str | Path) -> None:
     """Delete the installed env prefix so the next pixi install is clean.
     Package cache on the share keeps this from being a full cold download."""
     prefix = Path(env_dir) / ".pixi" / "envs" / ENV_NAME
@@ -352,7 +361,7 @@ def wipe_env_prefix(env_dir):
         shutil.rmtree(prefix)
 
 
-def validate_env(env_dir):
+def validate_env(env_dir: str | Path) -> bool:
     """Import-smoke every declared dependency (check-env.py) with the
     env's own interpreter."""
     env_dir = Path(env_dir)
@@ -380,22 +389,22 @@ def validate_env(env_dir):
 
 
 # ── reconcile ────────────────────────────────────────────────────────────
-_last_failure = {"ts": 0.0}
-_was_paused = {"value": False}
+_last_failure: dict[str, float] = {"ts": 0.0}
+_was_paused: dict[str, bool] = {"value": False}
 
 
-def short_hash(data):
+def short_hash(data: bytes | None) -> str:
     return hashlib.sha256(data).hexdigest()[:8] if data is not None else "absent"
 
 
-def _live_lock_bytes():
+def _live_lock_bytes() -> bytes | None:
     try:
         return (LIVE_DIR / "pixi.lock").read_bytes()
     except OSError:
         return None
 
 
-def reconcile(force=False):
+def reconcile(force: bool = False) -> bool:
     desired = read_desired()
     paused = is_paused()
     if paused != _was_paused["value"]:  # log transitions only, not every cycle
@@ -464,7 +473,7 @@ def reconcile(force=False):
     return True
 
 
-def deep_verify():
+def deep_verify() -> None:
     """Periodic import-smoke of the live env; failure alerts and forces a
     re-sync (self-heal). Skipped while paused."""
     if is_paused() or not (LIVE_DIR / "pixi.toml").exists():
@@ -477,7 +486,7 @@ def deep_verify():
 
 
 # ── main ─────────────────────────────────────────────────────────────────
-def main():
+def main() -> int:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
@@ -497,7 +506,7 @@ def main():
     acquire_lock()
     stop = threading.Event()
 
-    def _terminate(signum, frame):
+    def _terminate(signum: int, frame: Any) -> None:
         log.info("signal %s — stopping (killing any in-flight install)", signum)
         stop.set()
         child = _current_child["proc"]

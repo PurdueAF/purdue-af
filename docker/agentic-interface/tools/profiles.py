@@ -8,7 +8,7 @@ sync with whatever the admin has configured — no hardcoded option keys or slug
 import os
 import re
 import time
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 import yaml
@@ -53,7 +53,7 @@ def _gpu_resource(kubespawner_override: Optional[dict]) -> Optional[str]:
         if str(resource).startswith("nvidia.com/"):
             try:
                 if int(amount) > 0:
-                    return resource
+                    return str(resource)
             except (TypeError, ValueError):
                 continue
     return None
@@ -86,7 +86,8 @@ async def _read_configmap() -> Optional[str]:
     if resp.status_code != 200:
         return None
 
-    return resp.json().get("data", {}).get("values.yaml")
+    values: Any = resp.json().get("data", {}).get("values.yaml")
+    return values if values is None else str(values)
 
 
 def _parse_profiles(values_yaml: str) -> list[dict]:
@@ -177,7 +178,7 @@ def find_profile(profiles: list[dict], name: str) -> Optional[dict]:
 # ── tool registration ─────────────────────────────────────────────────────────
 
 
-def register(mcp) -> None:
+def register(mcp: Any) -> None:
     @mcp.tool()
     async def list_af_profiles() -> str:
         """List available Analysis Facility session profiles and their configurable options.

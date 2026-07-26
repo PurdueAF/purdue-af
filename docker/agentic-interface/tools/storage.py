@@ -3,10 +3,10 @@
 import asyncio
 import os
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
-from context import current_user
+from context import require_user
 from metrics import instrumented_transport
 
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
@@ -39,7 +39,7 @@ def _bar(fraction: float, width: int = 20) -> str:
     return "█" * filled + "░" * (width - filled)
 
 
-def register(mcp) -> None:
+def register(mcp: Any) -> None:
     @mcp.tool()
     async def query_storage_usage() -> str:
         """Report storage quota and usage for the authenticated user's home and work directories.
@@ -48,7 +48,7 @@ def register(mcp) -> None:
         5 minutes). Returns used / total space, utilisation percentage, and
         last-accessed time for each directory.
         """
-        user = current_user.get()
+        user = require_user()
         username = user["username"]
         # Metrics are labeled by username via Kubernetes SD (username_unescaped).
         # No Hub admin state / pod_name required.

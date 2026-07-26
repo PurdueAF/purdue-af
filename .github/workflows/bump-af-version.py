@@ -37,7 +37,7 @@ DEFAULT_REGISTRY = "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/pu
 VERSION_RE = r"\d+\.\d+\.\d+"
 
 
-def bump_version(cur, kind):
+def bump_version(cur: str, kind: str) -> str:
     major, minor, patch = map(int, cur.split("."))
     return {
         "major": f"{major + 1}.0.0",
@@ -46,14 +46,14 @@ def bump_version(cur, kind):
     }[kind]
 
 
-def current_version(text):
+def current_version(text: str) -> str:
     m = re.search(rf'docker_image_tag: "({VERSION_RE})"', text)
     if not m:
         sys.exit("cannot find docker_image_tag in values.yaml — layout changed?")
     return m.group(1)
 
 
-def apply(text, new_version, registry):
+def apply(text: str, new_version: str, registry: str) -> str:
     """→ new text; every substitution must match exactly once."""
     subs = [
         # (what, pattern, replacement)
@@ -93,7 +93,7 @@ def apply(text, new_version, registry):
     return text
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--print-current", action="store_true")

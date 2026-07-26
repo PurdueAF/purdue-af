@@ -19,6 +19,7 @@ import asyncio
 import datetime
 import json
 import os
+from typing import Any
 from urllib.parse import quote
 
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
@@ -28,7 +29,7 @@ GPU_RESOURCE = "nvidia.com/mig-7g.40gb"
 POD_SELECTOR = "username_unescaped"
 
 
-def pod_holds_full_gpu(pod):
+def pod_holds_full_gpu(pod: Any) -> bool:
     """True if any container in the pod requests at least one full GPU."""
     return any(
         int(
@@ -41,7 +42,7 @@ def pod_holds_full_gpu(pod):
     )
 
 
-def pod_server(pod):
+def pod_server(pod: Any) -> tuple[str | None, str]:
     """(username, server name) a singleuser pod belongs to, from kubespawner
     annotations; username is None for pods that are not hub-spawned."""
     annotations = pod.metadata.annotations or {}
@@ -50,7 +51,7 @@ def pod_server(pod):
     return username, servername
 
 
-async def full_gpu_servers(namespace):
+async def full_gpu_servers(namespace: str) -> list[tuple[str, str]]:
     """[(username, server name)] of running pods that hold a full GPU."""
     # Imported lazily so the unit tests don't need the kubernetes client.
     from kubernetes_asyncio import client, config
@@ -70,7 +71,7 @@ async def full_gpu_servers(namespace):
     return servers
 
 
-async def hub_api(method, path):
+async def hub_api(method: str, path: str) -> Any:
     """JupyterHub REST call using the managed-service credentials."""
     url = os.environ["JUPYTERHUB_API_URL"].rstrip("/") + path
     response = await AsyncHTTPClient().fetch(
@@ -83,16 +84,16 @@ async def hub_api(method, path):
     return json.loads(response.body) if response.body else None
 
 
-def idle_seconds(server, now):
+def idle_seconds(server: dict[str, Any], now: datetime.datetime) -> float:
     """Seconds since the server's last activity (spawn time if none yet)."""
     timestamp = server.get("last_activity") or server.get("started")
     if not timestamp:
-        return 0
+        return 0.0
     last = datetime.datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-    return (now - last).total_seconds()
+    return float((now - last).total_seconds())
 
 
-async def cull_once(namespace, timeout):
+async def cull_once(namespace: str, timeout: float) -> None:
     now = datetime.datetime.now(datetime.timezone.utc)
     for username, servername in await full_gpu_servers(namespace):
         user = await hub_api("GET", f"/users/{quote(username, safe='')}")
@@ -111,7 +112,7 @@ async def cull_once(namespace, timeout):
         await hub_api("DELETE", path)
 
 
-async def main(namespace, timeout, every):
+async def main(namespace: str, timeout: float, every: float) -> None:
     print(
         f"[gpu-culler] culling {GPU_RESOURCE} sessions idle > {timeout}s "
         f"in namespace {namespace}, checking every {every}s"

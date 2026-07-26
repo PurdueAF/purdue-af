@@ -27,3 +27,8 @@ package = false
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["."]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.3.0",
+]

@@ -65,7 +65,8 @@ def _load_previous_result(path: Path) -> Dict[str, Any]:
         return {}
     try:
         with path.open("r", encoding="utf-8") as f:
-            return json.load(f)
+            loaded: Dict[str, Any] = json.load(f)
+            return loaded
     except Exception:
         return {}
 
