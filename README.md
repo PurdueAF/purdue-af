@@ -15,42 +15,30 @@ Everything the cluster runs is declared here and reconciled by Flux; images and 
 
 ## Platform at a glance
 
-|                  |                                                                                              |
-| ---------------- | -------------------------------------------------------------------------------------------- |
-| Orchestration    | Kubernetes (Geddes cluster), namespace `cms`; [Flux](https://fluxcd.io) CD from two channels |
-| Sessions         | JupyterHub (z2jh chart), CILogon auth — Purdue / CERN / FNAL identities                      |
-| Scale-out        | Dask Gateway — Kubernetes + Slurm backends                                                   |
-| User environment | Rocky8+CUDA image, [pixi](https://pixi.sh) environments                                      |
-| Data             | CVMFS, XRootD, EOS, `/depot` NFS; ServiceX for columnar delivery                             |
-| Inference        | SuperSONIC — shared Triton servers, scaled per workload                                      |
-| Observability    | Prometheus, Grafana, Loki, Tempo, Pyroscope, Alloy + two purpose-built exporters             |
-| Agents           | MCP server exposing AF-specific tools to any MCP client                                      |
-
-## Repository map
-
-```
-apps/          what runs in the cluster — Helm releases + manifests, one dir per component
-  jupyterhub/    hub values, auth gate, spawner hooks, GPU admission, userlist sync
-  dask-gateway/  k8s + Slurm gateway releases (per-cluster values)
-  monitoring/    prometheus · grafana · loki · tempo · pyroscope · alloy · exporters
-  agentic-interface/  MCP server deployment
-  af-utils/      shared-storage tooling, incl. the global pixi env reconciler
-deploy/        Flux entry points; one kustomization per environment
-docker/        first-party image sources (purdue-af, agentic-interface, monitors, …)
-pixi/          environment definitions: base/ (baked into the image), global/ (shared environment on /work)
-tests/         411 tests — unit, ASGI, hub-config, exporters, and hub-in-kind e2e
-docs/          user documentation (Zensical → GitHub Pages)
-```
+|                  |                                                                                                                                                                                                                                                                                                                       |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Orchestration    | [Kubernetes](https://github.com/kubernetes/kubernetes) (Geddes cluster), namespace `cms`; [Flux](https://github.com/fluxcd/flux2) CD from two channels                                                                                                                                                                |
+| Sessions         | [JupyterHub](https://github.com/jupyterhub/zero-to-jupyterhub-k8s) (z2jh chart), [CILogon](https://cilogon.org) auth — Purdue / CERN / FNAL identities                                                                                                                                                                |
+| Scale-out        | [Dask Gateway](https://github.com/dask/dask-gateway) — Kubernetes + [Slurm](https://github.com/SchedMD/slurm) backends                                                                                                                                                                                                |
+| User environment | [Rocky Linux 8](https://rockylinux.org) + CUDA image, [pixi](https://github.com/prefix-dev/pixi) environments                                                                                                                                                                                                         |
+| Data             | [CVMFS](https://github.com/cvmfs/cvmfs), [XRootD](https://github.com/xrootd/xrootd), [EOS](https://github.com/cern-eos/eos), `/depot` NFS; [ServiceX](https://github.com/ssl-hep/ServiceX) for columnar delivery                                                                                                      |
+| Inference        | [SuperSONIC](https://github.com/fastmachinelearning/SuperSONIC) — shared [Triton](https://github.com/triton-inference-server/server) servers, scaled per workload                                                                                                                                                     |
+| Observability    | [Prometheus](https://github.com/prometheus/prometheus), [Grafana](https://github.com/grafana/grafana), [Loki](https://github.com/grafana/loki), [Tempo](https://github.com/grafana/tempo), [Pyroscope](https://github.com/grafana/pyroscope), [Alloy](https://github.com/grafana/alloy) + two purpose-built exporters |
+| Agents           | [MCP](https://github.com/modelcontextprotocol/modelcontextprotocol) server exposing AF-specific tools to any MCP client                                                                                                                                                                                               |
 
 ## How changes reach the cluster
 
-| Change                                            | Path to production                                                                               |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Core component (hub config, monitoring, cronjobs) | push to `main` → CI green → mint a platform tag → production Flux reconciles (~1 min)            |
-| Experimental component                            | push to `main` → CI green → publish advances `main-validated` → Flux reconciles (~1 min)         |
-| AF image content (Dockerfile, `pixi/base`)        | push to `main` → CI builds + e2e → `:pre-release` moves → release the image, then a platform tag |
-| Global env (`pixi/global`)                        | push to `main` → CI validates the lock → `pixi-global-sync` applies it to `/work/pixi/global`    |
-| Aux images (agentic-interface, monitors)          | push to `main` → CI green → `:latest` moves → pod restart picks it up                            |
+| Change                                            | Path to production                                                                                             |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Core component (hub config, monitoring, cronjobs) | push to `main` → CI green → **run `Release platform`** → production Flux reconciles (~1 min)                   |
+| AF image content (Dockerfile, `pixi/base`)        | push to `main` → CI builds + e2e → `:pre-release` moves → **run `Release image`**, then **`Release platform`** |
+| Experimental component                            | push to `main` → CI green → publish advances `main-validated` → Flux reconciles (~1 min)                       |
+| Global env (`pixi/global`)                        | push to `main` → CI validates the lock → `pixi-global-sync` applies it to `/work/pixi/global`                  |
+| Aux images (agentic-interface, monitors)          | push to `main` → CI green → `:latest` moves → pod restart picks it up                                          |
+
+**Bold** steps are the only manual ones: a `workflow_dispatch` run from the
+Actions tab. Everything else happens on its own once CI is green — nothing
+reaches production on a schedule or a timer.
 
 ## Pointers
 
