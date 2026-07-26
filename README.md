@@ -7,28 +7,24 @@
 [![Platform](https://img.shields.io/github/v/tag/PurdueAF/purdue-af?filter=2*&sort=semver&label=platform&color=B1810B)](https://github.com/PurdueAF/purdue-af/releases)
 [![AF image](https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2FPurdueAF%2Fpurdue-af%2Fmain%2Fapps%2Fjupyterhub%2Fjupyterhub%2Fvalues.yaml&query=%24.singleuser.image.tag&label=AF%20image&color=B1810B)](RELEASING.md)
 
-GitOps source of truth for the **Purdue Analysis Facility** — an interactive
-CMS analysis platform on the Purdue Tier-2 (Geddes) Kubernetes cluster:
-JupyterHub sessions on demand, Dask clusters that burst onto Kubernetes or
-Slurm, ServiceX delivery, GPU inference, and the monitoring around it.
+GitOps source of truth for the **Purdue Analysis Facility** — a Kubernetes-based interactive analysis platform for high energy physics research at CMS experiment.
+Functionality includes JupyterHub sessions on demand, Dask clusters that burst onto Kubernetes or Slurm, data delivery via ServiceX, GPU inference-as-a-service, agentic AI interface, and the monitoring around it.
 
-Everything the cluster runs is declared here and reconciled by Flux; images
-and manifests are published only after the full pipeline passes on the same
-commit. End-user documentation lives at
+Everything the cluster runs is declared here and reconciled by Flux; images and manifests are published only after the full CI/CD pipeline passes on the same commit. End-user documentation lives at
 [analysis-facility.physics.purdue.edu](https://analysis-facility.physics.purdue.edu).
 
 ## Platform at a glance
 
 |                  |                                                                                            |
 | ---------------- | ------------------------------------------------------------------------------------------ |
-| Orchestration    | Kubernetes (Geddes, RCAC), namespace `cms`; [Flux](https://fluxcd.io) CD from two channels |
-| Sessions         | JupyterHub (z2jh chart 4.4.0), CILogon auth — Purdue / CERN / FNAL identities              |
-| Scale-out        | Dask Gateway 2024.1.0 — Kubernetes backend + Slurm backends (Hammer, Gautschi)             |
-| User environment | One ~5 GB CUDA image + [pixi](https://pixi.sh) environments, Python 3.12 throughout        |
+| Orchestration    | Kubernetes (Geddes cluster), namespace `cms`; [Flux](https://fluxcd.io) CD from two channels |
+| Sessions         | JupyterHub (z2jh chart), CILogon auth — Purdue / CERN / FNAL identities              |
+| Scale-out        | Dask Gateway — Kubernetes + Slurm backends             |
+| User environment | Rocky8+CUDA image, [pixi](https://pixi.sh) environments     |
 | Data             | CVMFS, XRootD, EOS, `/depot` NFS; ServiceX for columnar delivery                           |
-| Inference        | SuperSONIC (Triton-backed GPU inference for CMS workflows)                                 |
+| Inference        | SuperSONIC (GPU inference-as-a-service)                                 |
 | Observability    | Prometheus, Grafana, Loki, Tempo, Pyroscope, Alloy + two purpose-built exporters           |
-| Agents           | MCP server exposing session/Dask/storage/log tools to any MCP client                       |
+| Agents           | MCP server exposing AF-specific tools to any MCP client                       |
 
 ## Repository map
 
@@ -41,7 +37,7 @@ apps/          what runs in the cluster — Helm releases + manifests, one dir p
   af-utils/      shared-storage tooling, incl. the global pixi env reconciler
 deploy/        Flux entry points; one kustomization per environment (see deploy/README.md)
 docker/        first-party image sources (purdue-af, agentic-interface, monitors, …)
-pixi/          environment definitions: base/ (baked into the image), global/ (on /work)
+pixi/          environment definitions: base/ (baked into the image), global/ (shared environment on /work)
 tests/         411 tests — unit, ASGI, hub-config, exporters, and hub-in-kind e2e
 docs/          user documentation (Zensical → GitHub Pages)
 ```
@@ -58,36 +54,6 @@ docs/          user documentation (Zensical → GitHub Pages)
 
 Bump rules, rollback and the pipeline diagram: [RELEASING.md](RELEASING.md).
 
-## Operations
-
-```bash
-# what production runs right now
-yq '.singleuser.image.tag' apps/jupyterhub/jupyterhub/values.yaml
-git tag -l '2*' | sort -V | tail -1
-
-# cluster state (namespace cms)
-kubectl -n cms get pods -l component=singleuser-server        # user sessions
-kubectl -n cms get cronjobs                                   # userlist sync, x509, backups
-flux -n cms get kustomizations                                # purdue-af-flux: applied revision
-kubectl -n cms logs deploy/pixi-global-sync -f                # global env sync
-
-# releases (Actions tab, or:)
-gh workflow run release-image.yml -f bump=patch
-gh workflow run release-platform.yml
-```
-
-## Working on it
-
-```bash
-uvx pre-commit run --all-files          # ruff · prettier · shfmt · shellcheck · hadolint · mypy
-uv run --project tests pytest tests     # everything except the kind e2e
-tests/e2e_hub/setup-kind.sh             # real hub in kind (~3 min), then:
-E2E_HUB=1 uv run --project tests pytest tests/e2e_hub
-.github/workflows/validate-manifests.sh # kustomize build + kubeconform + helm template + promtool
-```
-
-CI runs these same commands, driven by the same configs
-(`.pre-commit-config.yaml`, `ruff.toml`, `mypy.ini`).
 
 ## Pointers
 
