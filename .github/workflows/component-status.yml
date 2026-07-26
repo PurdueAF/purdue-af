@@ -1,0 +1,82 @@
+name: Component status
+
+# Recomputes the README deployment dashboard: for every component, is the
+# cluster running what is on `main`, and if not, why not? Derived from git
+# refs alone (see component-status.py) — no cluster access.
+#
+# Output is shields.io endpoint JSON on the orphan `status` branch, which is
+# force-pushed as a single commit every run, so keeping the dashboard current
+# adds nothing to `main` and no history anywhere.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  schedule:
+    - cron: "17 * * * *" # picks up platform tags; those pushes cannot trigger workflows
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: component-status
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # PR runs cannot change any deployed ref — only main pushes and tags can
+    if: >-
+      github.event_name != 'workflow_run'
+      || github.event.workflow_run.head_branch == 'main'
+    permissions:
+      contents: write # force-push the status branch
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0 # every tag and branch: the refs ARE the input
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml==6.0.3
+
+      # a silent fallback here would misreport unvalidated drift as ready to
+      # release, so require the ref instead
+      - name: Verify the validation ref is present
+        run: git rev-parse --verify origin/main-validated
+
+      - name: Resolve CI state on main
+        id: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          conclusion=$(gh run list --workflow ci.yml --branch main \
+            --limit 1 --json conclusion --jq '.[0].conclusion // ""')
+          case "$conclusion" in
+            success | failure) state=$conclusion ;;
+            *) state=pending ;;
+          esac
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+
+      - name: Compute status
+        run: |
+          python .github/workflows/component-status.py \
+            --out badges --ci-state '${{ steps.ci.outputs.state }}' \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish to the status branch
+        run: |
+          work=$(mktemp -d)
+          cp -r badges "$work/badges"
+          cd "$work"
+          git init -q -b status
+          git add -A
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -q -m "component status for ${GITHUB_SHA:0:8}"
+          git push -q --force \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}" \
+            status
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
