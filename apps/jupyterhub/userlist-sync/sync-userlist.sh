@@ -13,6 +13,12 @@ set -euo pipefail
 SOURCE=${1:?usage: sync-userlist.sh cern|purdue}
 SECRET_NAME="af-auth-${SOURCE}"
 MIN_USERS=${MIN_USERS:-200}
+# Upstream registries are flaky — Hammer LDAP in particular answers only
+# intermittently. Retry INSIDE the pod with spaced attempts rather than
+# letting the job fail and be recreated: one pod per run instead of a pile
+# of Error pods, and the gaps are long enough to outlive a brief outage.
+FETCH_ATTEMPTS=${FETCH_ATTEMPTS:-5}
+FETCH_RETRY_DELAY=${FETCH_RETRY_DELAY:-60}
 TMP_FILE=$(mktemp)
 
 ensure_tools() {
@@ -58,8 +64,27 @@ fetch_purdue() {
 		grep '^uid:' | cut -d ' ' -f2 | sort -u || true
 }
 
+# A retry is worth it only while the result is unusable; the definitive
+# verdict (and the operator-facing error message) stays with the validation
+# gates below, so this loop never decides to fail on its own.
+fetch_with_retry() {
+	local attempt count
+	for attempt in $(seq 1 "$FETCH_ATTEMPTS"); do
+		"fetch_${SOURCE}" >"$TMP_FILE"
+		count=$(grep -c . "$TMP_FILE" || true)
+		if [ "$count" -ge "$MIN_USERS" ]; then
+			return 0
+		fi
+		if [ "$attempt" -lt "$FETCH_ATTEMPTS" ]; then
+			echo "attempt ${attempt}/${FETCH_ATTEMPTS}: got ${count} users" \
+				"(< ${MIN_USERS}) — retrying in ${FETCH_RETRY_DELAY}s"
+			sleep "$FETCH_RETRY_DELAY"
+		fi
+	done
+}
+
 echo "Fetching ${SOURCE} users..."
-"fetch_${SOURCE}" >"$TMP_FILE"
+fetch_with_retry
 
 # --- Validate before touching the Secret -----------------------------------
 if [ ! -s "$TMP_FILE" ]; then

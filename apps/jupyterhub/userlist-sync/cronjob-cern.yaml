@@ -10,6 +10,20 @@ spec:
   failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
+      # The script already retries the flaky upstream fetch in-pod, so a
+      # pod-level retry storm adds nothing but Error pods (the default
+      # backoffLimit of 6 left 7 per failed run). One retry still covers
+      # genuine pod-level mishaps (eviction, image pull).
+      backoffLimit: 1
+      # concurrencyPolicy is Forbid: without a deadline, ONE wedged pod
+      # blocks every later run indefinitely (a missing-secret pod stuck in
+      # ContainerCreating once stalled the cern sync for 23 h). Comfortably
+      # above the in-pod retry budget (5 x 60 s + fetch time).
+      activeDeadlineSeconds: 900
+      # Finished Jobs (and their pods) delete themselves — the namespace
+      # stays clean without hand-pruning. Logs live in Loki; an hour is
+      # plenty to inspect a failure in-cluster before it is swept.
+      ttlSecondsAfterFinished: 3600
       template:
         spec:
           enableServiceLinks: false

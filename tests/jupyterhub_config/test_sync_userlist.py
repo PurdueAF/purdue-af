@@ -75,6 +75,11 @@ def run_sync(shims, source, **env):
         "PATH": f"{shims['bin']}:{os.environ['PATH']}",
         "SHIM_LOG": str(shims["log"]),
         "CRIC_JSON": CRIC_FIXTURE,
+        # one immediate attempt by default: the failure-path tests would
+        # otherwise sit through the production retry budget. Retry
+        # behaviour itself is covered explicitly below.
+        "FETCH_ATTEMPTS": "1",
+        "FETCH_RETRY_DELAY": "0",
         **{k: str(v) for k, v in env.items()},
     }
     return subprocess.run(
@@ -125,6 +130,45 @@ def test_refuses_empty_list(shims):
     result = run_sync(shims, "purdue", LDAP_COUNT=0)
 
     assert result.returncode == 1
+    assert "patch" not in calls(shims) and "create" not in calls(shims)
+
+
+def test_retries_flaky_fetch_until_it_answers(shims):
+    """Hammer LDAP answers intermittently: a run must survive early empty
+    replies instead of failing the pod (which is what littered the
+    namespace with Error pods)."""
+    counter = shims["bin"].parent / "attempts"
+    (shims["bin"] / "ldapsearch").write_text(
+        f"""#!/bin/bash
+echo "ldapsearch $*" >>"$SHIM_LOG"
+n=$(( $(cat {counter} 2>/dev/null || echo 0) + 1 ))
+echo "$n" >{counter}
+# first two attempts return nothing, as the real server does when flaky
+[ "$n" -lt 3 ] && exit 0
+seq -f "uid: user%g" 1 250
+"""
+    )
+    (shims["bin"] / "ldapsearch").chmod(0o755)
+
+    result = run_sync(
+        shims, "purdue", GET_SECRET_RC=1, FETCH_ATTEMPTS=5, FETCH_RETRY_DELAY=0
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert counter.read_text().strip() == "3"  # succeeded on the third try
+    assert "created-with:" in calls(shims)
+
+
+def test_gives_up_after_the_attempt_budget(shims):
+    """A persistently dead upstream still fails loudly — and leaves the
+    existing Secret untouched."""
+    result = run_sync(
+        shims, "purdue", LDAP_COUNT=0, FETCH_ATTEMPTS=3, FETCH_RETRY_DELAY=0
+    )
+
+    assert result.returncode == 1
+    assert "refusing to update" in result.stdout
+    assert calls(shims).count("ldapsearch") == 3
     assert "patch" not in calls(shims) and "create" not in calls(shims)
 
 
