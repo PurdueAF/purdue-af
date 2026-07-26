@@ -17,6 +17,20 @@ are on the continuous `:latest` channel — unversioned, no release step:
 every fully green pipeline on `main` moves `:latest`, and the cluster
 picks it up on the next pod restart.
 
+## How changes reach the cluster
+
+| Change                                            | Path to the cluster                                                                                                         |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Core component (hub config, monitoring, cronjobs) | push to `main` → CI green → mint new platform tag (manual) → core Flux reconciles (~1 min)                                  |
+| AF image content (Dockerfile, `pixi/base`)        | push to `main` → CI builds + e2e → `:pre-release` moves → mint new image version (manual), then a new platform tag (manual) |
+| Experimental component                            | push to `main` → CI green → publish advances `main-validated` → experimental Flux reconciles (~1 min)                       |
+| Global env (`pixi/global`)                        | push to `main` → CI validates the lock → `pixi-global-sync` applies it to `/work/pixi/global`                               |
+| Aux images (agentic-interface, monitors)          | push to `main` → CI green → `:latest` moves → pod restart picks it up                                                       |
+
+Manual steps are `workflow_dispatch` runs from the Actions tab (`Release
+platform`, `Release image`); everything else happens on its own once CI is
+green. When to mint each, and how to roll back, is below.
+
 ## The pipeline at a glance
 
 Every commit runs one pipeline ([ci.yml](.github/workflows/ci.yml));
@@ -115,4 +129,7 @@ deletes release tags.
   unvalidated.
 - Version badges in the README read the platform tag list and
   `apps/jupyterhub/jupyterhub/values.yaml` — they update on their own;
-  nothing to edit.
+  nothing to edit. The per-component status badges update on their own too
+  (`component-status.yml`), but their README list is static: adding or
+  removing a component means editing that list, and the unit tests fail
+  until you do.

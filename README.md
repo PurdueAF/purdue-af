@@ -4,8 +4,8 @@
 [![codecov](https://codecov.io/gh/PurdueAF/purdue-af/graph/badge.svg)](https://codecov.io/gh/PurdueAF/purdue-af)
 [![Docs deploy](https://github.com/PurdueAF/purdue-af/actions/workflows/docs-deploy.yml/badge.svg)](https://purdueaf.github.io/purdue-af/)
 [![Registry GC](https://github.com/PurdueAF/purdue-af/actions/workflows/registry-gc.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/registry-gc.yml)
-[![Platform](https://img.shields.io/github/v/tag/PurdueAF/purdue-af?filter=2*&sort=semver&label=platform&color=B1810B)](https://github.com/PurdueAF/purdue-af/releases)
-[![AF image](https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2FPurdueAF%2Fpurdue-af%2Fmain%2Fapps%2Fjupyterhub%2Fjupyterhub%2Fvalues.yaml&query=%24.singleuser.image.tag&label=AF%20image&color=B1810B)](RELEASING.md)
+[![platform][platform-version]](https://github.com/PurdueAF/purdue-af/releases)
+[![AF image][af-image-version]](RELEASING.md)
 
 GitOps source of truth for the **Purdue Analysis Facility** — a Kubernetes-based interactive analysis platform for high energy physics research at CMS experiment.
 
@@ -28,20 +28,6 @@ Admin documentation: [https://purdue-cms-tier2.gitlab.io/documentation](https://
 | Observability    | [Prometheus](https://github.com/prometheus/prometheus), [Grafana](https://github.com/grafana/grafana), [Loki](https://github.com/grafana/loki), [Tempo](https://github.com/grafana/tempo), [Pyroscope](https://github.com/grafana/pyroscope), [Alloy](https://github.com/grafana/alloy) + two purpose-built exporters |
 | Agents           | MCP server exposing AF-specific tools to any MCP client                                                                                                                                                                                                                                                               |
 
-## How changes reach the cluster
-
-| Change                                            | Path to the cluster                                                                                                         |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Core component (hub config, monitoring, cronjobs) | push to `main` → CI green → mint new platform tag (manual) → core Flux reconciles (~1 min)                                  |
-| AF image content (Dockerfile, `pixi/base`)        | push to `main` → CI builds + e2e → `:pre-release` moves → mint new image version (manual), then a new platform tag (manual) |
-| Experimental component                            | push to `main` → CI green → publish advances `main-validated` → experimental Flux reconciles (~1 min)                       |
-| Global env (`pixi/global`)                        | push to `main` → CI validates the lock → `pixi-global-sync` applies it to `/work/pixi/global`                               |
-| Aux images (agentic-interface, monitors)          | push to `main` → CI green → `:latest` moves → pod restart picks it up                                                       |
-
-Manual steps are `workflow_dispatch` runs from the Actions tab (`Release
-platform`, `Release image`); everything else happens on its own once CI is
-green. Version rules and rollback: [RELEASING.md](RELEASING.md).
-
 ## Component status
 
 Whether each component on the cluster is running what is on `main`
@@ -50,7 +36,8 @@ Whether each component on the cluster is running what is on `main`
 release to ship; `validating` is still in CI; `failed CI` is broken. The
 number is how many commits the component has moved since it was deployed.
 
-**Core** — newest platform tag
+**Core** — the newest platform tag, currently ![platform][platform-version],
+which pins the session image at ![AF image][af-image-version]
 
 ![af-users-graph][core-af-utils-af-users-graph]
 ![infrastructure][core-infrastructure]
@@ -92,6 +79,9 @@ Recomputed hourly and after every CI run by
 data lives on the [`status`](https://github.com/PurdueAF/purdue-af/tree/status)
 branch, so keeping it current never touches `main`.
 
+How a change reaches the cluster, version rules and rollback:
+[RELEASING.md](RELEASING.md).
+
 [core-af-utils-af-users-graph]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-af-utils-af-users-graph.json
 [core-infrastructure]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-infrastructure.json
 [core-jupyterhub-af-x509-secrets]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-jupyterhub-af-x509-secrets.json
@@ -124,3 +114,5 @@ branch, so keeping it current never touches `main`.
 [experimental-servicex-test]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex-test.json
 [experimental-sonic-supersonic]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic.json
 [status-pending]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/_pending.json
+[platform-version]: https://img.shields.io/github/v/tag/PurdueAF/purdue-af?filter=2*&sort=semver&label=platform&color=B1810B
+[af-image-version]: https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2FPurdueAF%2Fpurdue-af%2Fmain%2Fapps%2Fjupyterhub%2Fjupyterhub%2Fvalues.yaml&query=%24.singleuser.image.tag&label=AF%20image&color=B1810B
