@@ -82,6 +82,27 @@
       depNameTemplate: 'prefix-dev/pixi',
       extractVersionTemplate: '^v(?<version>.*)$',
     },
+    {
+      // Coding-agent CLIs baked into the AF image. Pinned as Dockerfile ARGs
+      // (npm install -g <pkg>@<version>), so only a regex manager sees them.
+      // The matching code-server extensions are pinned in
+      // docker/purdue-af/scripts/config-extensions.sh and come from Open VSX,
+      // which Renovate cannot query — bump those by hand alongside these.
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)Dockerfile$/'],
+      matchStrings: [
+        'ARG CLAUDE_CODE_VERSION="(?<currentValue>[^"]+)"',
+      ],
+      datasourceTemplate: 'npm',
+      depNameTemplate: '@anthropic-ai/claude-code',
+    },
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)Dockerfile$/'],
+      matchStrings: ['ARG CODEX_VERSION="(?<currentValue>[^"]+)"'],
+      datasourceTemplate: 'npm',
+      depNameTemplate: '@openai/codex',
+    },
   ],
 
   packageRules: [

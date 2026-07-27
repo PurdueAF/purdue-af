@@ -33,6 +33,7 @@ paths_for() {
 		# configs/pixi-wrapper), plus the pixi base env and Slurm inputs.
 		cat <<-EOF
 			docker/purdue-af
+			.claude/skills/purdue-af-agentic-interface
 			pixi/base
 			pixi/check-env.py
 			slurm/slurm-configs-hammer

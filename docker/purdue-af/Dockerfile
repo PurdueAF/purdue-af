@@ -159,6 +159,23 @@ RUN chmod +x /usr/local/bin/pixi && \
     cp "${BASE_ENV_DIR}/lib/python3.12/site-packages/jupyter_vscode_proxy/icons/vscode.svg" \
        "${BASE_ENV_DIR}/lib/python3.12/site-packages/jupyter_vscode_proxy/icons/code-server.svg"
 
+# Coding-agent CLIs. Installed with the base env's node (nodejs 22 from
+# pixi/base) into their own prefix so a pixi rebuild cannot clobber them, and
+# so the runtime stage can COPY them as one directory. Both ship the same
+# config files their code-server extensions read, so registering the AF MCP
+# server once (config-agents.sh) covers terminal and editor alike.
+ARG CLAUDE_CODE_VERSION="2.1.220"
+ARG CODEX_VERSION="0.145.0"
+ENV NPM_GLOBAL="/opt/npm-global"
+# hadolint ignore=DL3016  # versions ARE pinned, via the ARGs above
+RUN PATH="${BASE_ENV_DIR}/bin:${PATH}" \
+    npm install -g --prefix "${NPM_GLOBAL}" --no-fund --no-audit \
+        "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+        "@openai/codex@${CODEX_VERSION}" && \
+    PATH="${NPM_GLOBAL}/bin:${BASE_ENV_DIR}/bin:${PATH}" claude --version && \
+    PATH="${NPM_GLOBAL}/bin:${BASE_ENV_DIR}/bin:${PATH}" codex --version && \
+    rm -rf "${HOME}/.npm" || true
+
 # Import-smoke every direct dependency of the base env, each in a fresh
 # interpreter — catches broken installs (e.g. libstdc++ shadowing à la
 # GLIBCXX_3.4.29) at build time instead of in a user session.
@@ -191,6 +208,10 @@ ENV PIXI_HOME="/opt/pixi" \
 # Copy pixi env from stack stage
 COPY --from=stack /opt/pixi /opt/pixi
 
+# Coding-agent CLIs (claude, codex) — their shebangs resolve `node` from PATH,
+# which the ENV below puts in the base env.
+COPY --from=stack /opt/npm-global /opt/npm-global
+
 # Pixi wrapper in final image (same path as before)
 COPY --chown=root:root docker/purdue-af/pixi-wrapper /usr/local/bin/pixi
 
@@ -213,6 +234,7 @@ COPY docker/purdue-af/jupyter/jupyter_server_config.py \
     /etc/jupyter/
 COPY --chown=root:root docker/purdue-af/scripts/run-as-root.sh \
     docker/purdue-af/scripts/config-extensions.sh \
+    docker/purdue-af/scripts/config-agents.sh \
     docker/purdue-af/scripts/create-symlinks.sh \
     /usr/local/bin/before-notebook.d/
 COPY --chown=root:root \
@@ -225,6 +247,19 @@ COPY --chown=root:root \
 COPY --chown=root:root \
     docker/purdue-af/code-server/purdue-af-interface-controls \
     /opt/purdue-af/code-server/purdue-af-interface-controls/
+# Agentic-interface skill: one source of truth in .claude/skills, adapted for
+# in-session use at build time (the laptop setup preamble does not apply here).
+COPY --chown=root:root .claude/skills/purdue-af-agentic-interface/SKILL.md \
+    /tmp/skill/SKILL.md
+COPY --chown=root:root docker/purdue-af/agents/purdue-af-section.md \
+    /opt/purdue-af/agents/purdue-af-section.md
+COPY --chown=root:root docker/purdue-af/scripts/managed-block.py \
+    /usr/local/bin/managed-block.py
+COPY --chown=root:root docker/purdue-af/scripts/prepare-skill.py /tmp/prepare-skill.py
+RUN python3 /tmp/prepare-skill.py /tmp/skill/SKILL.md \
+        /opt/purdue-af/skills/purdue-af-agentic-interface/SKILL.md && \
+    rm -rf /tmp/skill /tmp/prepare-skill.py
+
 COPY --chown=root:root docker/purdue-af/code-server/build-vsix.sh /usr/local/bin/build-paf-cs-vsix
 RUN chmod +x /usr/local/bin/build-paf-cs-vsix && \
     build-paf-cs-vsix \
@@ -238,7 +273,7 @@ RUN chmod +x /usr/local/bin/pixi && \
     fix-permissions "${HOME}"
 
 # Set PATH before switching user so it's available to all users
-ENV PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}"
+ENV PATH="/usr/local/bin:/opt/npm-global/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}"
 
 USER ${NB_USER}
 WORKDIR "${HOME}"
@@ -258,6 +293,8 @@ RUN nvcc --version >/dev/null && \
     ps --version >/dev/null && \
     klist -V >/dev/null && \
     xz --version >/dev/null && \
+    claude --version >/dev/null && \
+    codex --version >/dev/null && \
     python3 -c "import jupyterlab; print('smoke ok:', jupyterlab.__version__)"
 
 # The published image: a bare alias of `runtime` so the smoke stage above

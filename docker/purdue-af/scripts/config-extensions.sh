@@ -142,6 +142,12 @@ _cs_install_if_missing ms-python.python
 _cs_install_if_missing ms-toolsai.jupyter
 _cs_install_if_missing continue.continue@1.3.30
 _cs_install_if_missing renan-r-santos.pixi-code
+# Coding agents. Both extensions drive the CLIs installed in the image and
+# read the same config files, so config-agents.sh registers the AF MCP server
+# for the editor and the terminal in one go. Open VSX is code-server's
+# marketplace — these IDs are the Open VSX ones, not the MS Marketplace ones.
+_cs_install_if_missing anthropic.claude-code
+_cs_install_if_missing openai.chatgpt
 
 # Install Purdue AF code-server UI controls via VSIX (proper extensions.json registration)
 PAF_CS_EXT_VSIX="/opt/purdue-af/code-server/purdue-af-interface-controls.vsix"

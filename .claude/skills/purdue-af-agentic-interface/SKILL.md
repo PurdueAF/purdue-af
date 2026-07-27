@@ -26,150 +26,57 @@ description: Manage a Purdue Analysis Facility session — start/stop/restart th
 >
 > Username and active pod are resolved automatically from the token.
 
-This MCP server is **self-describing**: every tool result names the next step, so
-the reliable way to drive a workflow is to call a tool and follow its returned
-hints. The server also exposes invocable **prompts** (in Claude Code they appear
-as `/mcp__purdue-af-agentic-interface__<name>`) that spell out the same playbooks:
+The server is **self-describing**: every tool carries its own arguments and
+limits, and every result names the next step. Call a tool and follow what it
+returns rather than planning the whole sequence up front. Everything below is
+what the tool descriptions cannot tell you.
 
-| Prompt | What it does |
-|---|---|
-| `launch_session`  | start a session and wait until it is ready |
-| `restart_session` | restart, preserving (or changing) profile/options |
-| `stop_session`    | stop the session (storage is preserved) |
+## Prefer these tools over the shell
 
----
+Inside an AF session a terminal is right there, and it will give you the wrong
+answer for anything the platform tracks centrally:
 
-## Opening the session in a browser
+- **Storage and quotas** — `query_storage_usage`, never `du`/`df`. Quotas are
+  per-user and enforced outside the filesystem; `du` reports neither.
+- **Logs** — `query_notebook_logs` / `query_dask_logs`, never tailing files.
+  Logs come from Loki and outlive the pod that produced them.
+- **Session and cluster state** — the tools, never `kubectl` or `ps`. A session
+  has no permission to see its own pod object.
 
-Call `get_session_status` — the response always includes both interface links
-(JupyterLab and VS Code), with the active one marked `← active`. Present them as
-clickable links. Works even when no session is running (links redirect to the
-spawn form).
+## Before you call
 
----
+- `list_af_profiles` before `start_af_session` when the user wants anything
+  other than defaults — it carries the exact option keys, valid values, and
+  live GPU availability.
+- `list_dask_cluster_options` before `create_dask_cluster` — limits differ per
+  gateway.
+- `wait_for_session` after starting a session, rather than polling
+  `get_session_status` in a loop.
 
-## Tool reference
+## Actions that cost the user something
 
-### Session lifecycle
-*(All tools work even when no pod is running.)*
+- **`restart_af_session` / `stop_af_session` kill the process you are running
+  in** when you are inside the AF session itself. Say so and get agreement
+  first; you will lose the conversation. Storage (home, `/work`) is preserved.
+- **`stop_dask_cluster` is irreversible** — running work is lost.
+- Only **one active Dask cluster per user** is allowed, so creating one may
+  require stopping another.
 
-**`get_session_status`** — current pod state, profile selected, uptime, URL.
+## Presenting a session
 
-**`list_af_profiles`** — available profiles with exact option keys and choice values,
-including live GPU availability per flavor (exhausted flavors are flagged "do not
-select"). Call before `start_af_session` when non-default options are needed.
-
-**`start_af_session`** — asks the user (via the client's multiple-choice UI /
-MCP elicitation) for the profile, then one question per option (interface, CPU,
-memory, …), unless supplied. Pass `use_defaults=true` to skip all questions and
-launch the default profile. The GPU question shows how many of each flavor are
-free right now (live from the same Prometheus source the Hub form uses) and hides
-any flavor with none left. If the choices can't be collected interactively —
-the client can't elicit, or the prompt was dismissed/cancelled — the tool does
-NOT dead-end: it returns an instruction to ask the user (via `list_af_profiles`)
-and re-call with `profile_name`/`user_options`, or `use_defaults=true`.
-```json
-{"name": "start_af_session", "arguments": {
-  "profile_name": "<slug from list_af_profiles>",
-  "user_options": {"<option-key>": "<choice-value>"}
-}}
-```
-Supplying `profile_name`/`user_options` skips the matching questions;
-`use_defaults` skips them all. Examples:
-```json
-{"use_defaults": true}                       // default profile, no questions
-{"user_options": {"0-cpu": "3", "3-interface": "2"}}   // stable: 32 CPUs, VS Code
-{"profile_name": "latest-pre-release-version", "user_options": {"interface": "1"}}
-```
-
-**`wait_for_session`** — poll until the pod is ready. Use this right after
-`start_af_session` instead of looping `get_session_status`.
-
-**`restart_af_session`** — stop + start, preserving options by default. Pass
-`profile_name` / `user_options` to change configuration on restart.
-
-**`stop_af_session`** — stops the pod. Storage (home, /work) is always preserved.
-
-### Storage
-
-**`query_storage_usage`** — home and work directory quotas (Prometheus, ≤ 5 min stale).
-Works when a session is (or recently was) running so metrics exist.
-
-### Dask clusters
-*(Results always scoped to the calling user.)*
-
-**`list_dask_clusters`** — all clusters across every gateway.
-**`list_dask_cluster_options(gateway="k8s")`** — create-time fields/defaults/limits for a backend.
-**`create_dask_cluster(gateway=None, env_source=None, …)`** — create a cluster.
-**`get_dask_cluster_info(cluster_name, gateway="k8s")`** — status, options, dashboard.
-**`get_dask_worker_count(cluster_name, gateway="k8s")`** — live worker count (by state).
-**`get_dask_cluster_usage(cluster_name, gateway="k8s")`** — CPU/memory min/max/avg across Running workers.
-**`scale_dask_cluster(cluster_name, n_workers, gateway="k8s")`**
-**`stop_dask_cluster(cluster_name, gateway="k8s")`** — terminate/delete the cluster (irreversible).
-
-`gateway` options: `"k8s"` (Geddes Kubernetes) · `"slurm"` (Hammer Slurm)
-
-**Creating a cluster** — `create_dask_cluster` asks any omitted choice via the
-client's multiple-choice UI (MCP elicitation), one question at a time. Clients
-without elicitation get a text prompt listing the choices, or you can use the
-`create_cluster` prompt to gather them in chat. The questions, in order:
-
-1. `gateway`: `"k8s"` or `"slurm"`.
-2. `env_source`: `"global"` (shared pixi env at `/work/pixi/global`, **k8s only**) ·
-   `"pixi"` (your `pixi_project` [+ `pixi_env`]) · `"conda"` (your `conda_env`).
-   Passing `pixi_project`/`conda_env` implies the matching source.
-3. worker size: `default` (1 core / 4 GiB) or `custom` → then `worker_cores`
-   (k8s ≤ 64, Slurm ≤ 16) and `worker_memory` (GiB, ≤ 64).
-4. worker count to start with: `0`, `10`, `50`, or custom → `n_workers`.
-
-Also optional: `env` (extra worker env vars). Passing `worker_cores`/`worker_memory`
-skips question 3; passing `n_workers` skips question 4.
-
-Create notes: one active cluster per user; Slurm workers cannot see `/work` (put
-envs on `/depot`, and `"global"` is unavailable there); count 0 starts empty.
-
-### Prompts (invocable playbooks)
-
-`launch_session` · `restart_session` · `stop_session` · `create_cluster`
-
-### Logs
-
-**`query_notebook_logs`** — JupyterLab / VS Code server logs.
-**`query_dask_logs`** — Dask worker and scheduler logs (notebook container excluded).
-
-Both accept `start` (`"1h"`, `"30m"`, `"2d"`, or ISO-8601), `limit` (default 500),
-and `filter` (LogQL pipe expression, e.g. `"|= \"ERROR\""`).
-
----
+`get_session_status` returns both interface links (JupyterLab and VS Code) with
+the active one marked. Present them as clickable links — that is what the user
+actually wants when they ask about their session. It works with no session
+running too; the links land on the spawn form.
 
 ## Authentication errors
 
 | Symptom | Cause |
 |---|---|
-| `{"error":"Missing Bearer token"}` | No Authorization header reached the server — check the MCP server config and `~/.config/purdue-af/token` |
-| `{"error":"Invalid JupyterHub token"}` | Token expired — refresh at `/hub/token` |
+| `{"error":"Missing Bearer token"}` | No Authorization header reached the server — check the MCP server config (outside an AF session, the token file it reads) |
+| `{"error":"Invalid JupyterHub token"}` | Token expired. Inside an AF session, restart the session; outside one, mint a new token at `/hub/token` |
 | `"No active session"` in result | Pod not running — use `start_af_session` |
 | HTTP 404 on the service URL | Service not deployed or not registered with JupyterHub |
 
----
-
-## Service endpoint (for manual testing)
-
-The deployed service runs with **stateful** streamable-HTTP sessions
-(`MCP_STATELESS_HTTP=false`) so tools can use elicitation. That means a
-one-shot `tools/call` curl (below) needs a prior `initialize` + `Mcp-Session-Id`
-handshake — use a real MCP client for interactive testing, or set
-`MCP_STATELESS_HTTP=true` on the deployment for stateless one-shot calls.
-
-```bash
-curl -s \
-  -H "Authorization: Bearer ${JUPYTERHUB_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -H "MCP-Protocol-Version: 2025-03-26" \
-  -X POST \
-  "https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"TOOL","arguments":ARGS}}' \
-  | grep '^data:' | sed 's/^data: //' \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['content'][0]['text'])"
-```
+Deployment details, and how to call the endpoint by hand, are in
+[apps/agentic-interface/README.md](../../../apps/agentic-interface/README.md).
