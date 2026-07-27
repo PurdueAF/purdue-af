@@ -251,8 +251,8 @@ COPY --chown=root:root \
 # in-session use at build time (the laptop setup preamble does not apply here).
 COPY --chown=root:root .claude/skills/purdue-af-agentic-interface/SKILL.md \
     /tmp/skill/SKILL.md
-COPY --chown=root:root docker/purdue-af/agents/purdue-af-section.md \
-    /opt/purdue-af/agents/purdue-af-section.md
+COPY --chown=root:root docker/purdue-af/agents/platform-context.md \
+    /opt/purdue-af/agents/platform-context.md
 COPY --chown=root:root docker/purdue-af/scripts/managed-block.py \
     /usr/local/bin/managed-block.py
 COPY --chown=root:root docker/purdue-af/scripts/prepare-skill.py /tmp/prepare-skill.py
@@ -310,6 +310,7 @@ RUN nvcc --version >/dev/null && \
     ps --version >/dev/null && \
     klist -V >/dev/null && \
     xz --version >/dev/null && \
+    xrdcp --version >/dev/null 2>&1 && \
     claude --version >/dev/null && \
     codex --version >/dev/null && \
     python3 -c "import jupyterlab; print('smoke ok:', jupyterlab.__version__)"

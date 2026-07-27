@@ -29,6 +29,10 @@ metakernel            = "==1.0.0"
 importlib-metadata    = "<8.8"   # opentelemetry-api requires <8.8.0
 
 # Other tools
+# xrootd puts xrdcp/xrdfs on the session PATH: the grid clients in /usr/bin
+# (gfal, voms-proxy-init) are useless for XRootD reads without it, and users
+# should not need the global pixi env just to copy a file.
+xrootd        = "==5.9.2"  # matches the global env
 rucio-clients = "==40.4.1"
 pytest        = "==9.1.1"
 lz4           = "==4.4.5"

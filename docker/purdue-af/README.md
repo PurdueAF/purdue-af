@@ -49,7 +49,7 @@ instruction file instead. `managed-block.py` maintains a delimited section in
 `~/.codex/AGENTS.md` and `~/.claude/CLAUDE.md`:
 
     <!-- BEGIN PURDUE AF — managed, edits inside are overwritten -->
-    ...content from docker/purdue-af/agents/purdue-af-section.md...
+    ...content from docker/purdue-af/agents/platform-context.md...
     <!-- END PURDUE AF -->
 
 Everything inside the markers is replaced on every session start, so the AF
@@ -57,10 +57,18 @@ content tracks the image; everything outside is never touched, so users keep
 their own instructions. The block is appended if the markers are absent, and
 re-running is a no-op.
 
-The section is deliberately a few lines — it costs context on every agent turn,
-and the MCP server already describes its own tools. Facility context (storage
-volumes, environments, scale-out) belongs in the guardrails file that will sit
-alongside it, not here.
+The section is the platform context every agent in a session sees: session
+limits, storage volumes and their visibility from Slurm and Dask workers, path
+aliases, data access, software environments, scale-out limits, and GPUs. It
+separates **Rules** (enforced by the platform, fail if broken) from **Guidance**
+(preferences an agent may deviate from), so advice is never mistaken for a wall.
+
+Every number in it is re-derived from its source by
+`tests/manifests/test_platform_context.py`: spawn-form choices and the home
+quota from the hub values, worker caps and Slurm partitions from the
+dask-gateway values, session and worker ceilings from the user docs, and the
+storage inventory from `docs/docs/storage.md`. A stale guardrail is worse than
+none, because an agent acts on it.
 
 Notable constraints baked into the Dockerfile:
 

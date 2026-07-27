@@ -29,7 +29,7 @@ _config_agents() {
 	# agent expands it per run, which is the whole point.
 	AUTH_HEADER='Authorization: Bearer ${JUPYTERHUB_API_TOKEN}'
 	SKILL_SRC="/opt/purdue-af/skills"
-	AGENT_SECTION="/opt/purdue-af/agents/purdue-af-section.md"
+	AGENT_SECTION="/opt/purdue-af/agents/platform-context.md"
 	# Absolute path on purpose: `su` resets PATH, and the system python3 on
 	# Rocky 8 is 3.6 — too old for the platform's scripts.
 	PYTHON="/opt/pixi/.pixi/envs/base-env/bin/python3"

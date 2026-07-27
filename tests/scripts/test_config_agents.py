@@ -215,6 +215,8 @@ def test_dockerfile_installs_and_runs_the_hook():
     assert "/opt/npm-global/bin" in text
     # and proven to run in the final image, not just installed
     assert "claude --version" in text and "codex --version" in text
+    # xrdcp is promised on PATH by the platform context; prove it in the image
+    assert "xrdcp --version" in text
 
 
 def test_code_server_installs_both_agent_extensions():
@@ -313,9 +315,9 @@ def test_startup_hook_targets_both_agent_files():
 
 def test_section_source_is_shipped_and_is_an_image_input():
     text = DOCKERFILE.read_text()
-    assert "agents/purdue-af-section.md" in text
+    assert "agents/platform-context.md" in text
     assert "managed-block.py" in text
-    assert (REPO / "docker/purdue-af/agents/purdue-af-section.md").is_file()
+    assert (REPO / "docker/purdue-af/agents/platform-context.md").is_file()
 
 
 # --- the skill must not drift from the server -----------------------------
