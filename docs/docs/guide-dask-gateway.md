@@ -6,7 +6,7 @@ multi-tenant environment such as the Purdue Analysis Facility.
 There are two types of Dask Gateway clusters that can be created:
 
 * **Dask Gateway cluster with Slurm backend** — workers are submitted as Slurm jobs
-  to a Purdue community cluster: **Hammer**, or (more recently) **Gautschi**.
+  to the Purdue **Hammer** community cluster.
   This is available to **Purdue users only**, due to Purdue data access policies.
 
     With this method, users can create **hundreds of workers**, although requesting
@@ -56,14 +56,8 @@ gateway = Gateway()
 
 # To submit workers via Slurm to the Hammer cluster (Purdue users only!):
 # gateway = Gateway(
-#     "http://dask-gateway-k8s-slurm-hammer.geddes.rcac.purdue.edu/",
-#     proxy_address="api-dask-gateway-k8s-slurm-hammer.cms.geddes.rcac.purdue.edu:8000",
-# )
-
-# To submit workers via Slurm to the Gautschi cluster (Purdue users only!):
-# gateway = Gateway(
-#     "http://dask-gateway-k8s-slurm-gautschi.geddes.rcac.purdue.edu/",
-#     proxy_address="api-dask-gateway-k8s-slurm-gautschi.cms.geddes.rcac.purdue.edu:8000",
+#     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
+#     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
 # )
 
 # You may need to update some environment variables before creating a cluster.
@@ -238,8 +232,8 @@ Below are the different ways to connect a client to a cluster created elsewhere:
 
     # If submitting workers as Slurm jobs to Hammer (Purdue users only):
     # gateway = Gateway(
-    #     "http://dask-gateway-k8s-slurm-hammer.geddes.rcac.purdue.edu/",
-    #     proxy_address="api-dask-gateway-k8s-slurm-hammer.cms.geddes.rcac.purdue.edu:8000",
+    #     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
+    #     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
     # )
 
     clusters = gateway.list_clusters()
@@ -267,8 +261,8 @@ Below are the different ways to connect a client to a cluster created elsewhere:
 
     # If submitting workers as Slurm jobs to Hammer (Purdue users only):
     # gateway = Gateway(
-    #     "http://dask-gateway-k8s-slurm-hammer.geddes.rcac.purdue.edu/",
-    #     proxy_address="api-dask-gateway-k8s-slurm-hammer.cms.geddes.rcac.purdue.edu:8000",
+    #     "http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
+    #     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
     # )
 
     # To find the cluster name:

@@ -108,7 +108,6 @@ holds the file. A dataset does not need to be at Purdue to be read.
 | Local Dask cluster | all users | the session's own cores (≤ 128) |
 | Dask Gateway, Kubernetes | all users | ≤ 200 workers; ≤ 64 cores and ≤ 64 GiB per worker |
 | Dask Gateway, Slurm (Hammer) | Purdue accounts | partition `hammer-nodes`, account `cms`, 4 h walltime; ≤ 16 cores, ≤ 64 GiB per worker |
-| Dask Gateway, Slurm (Gautschi) | Purdue accounts | partition `cpu`, account `cms`, QoS `standby`, 4 h walltime; ≤ 16 cores, ≤ 64 GiB per worker |
 | Slurm batch (`sbatch`) | Purdue accounts | Hammer, account `cms`; `/depot` only |
 | CRAB | all CMS users | WLCG |
 
@@ -117,10 +116,10 @@ another requires stopping the existing one. `Gateway()` with no arguments
 connects to the **Kubernetes** backend (`DASK_GATEWAY__ADDRESS` is preset). A
 Slurm backend requires the address explicitly:
 
-    Gateway("http://dask-gateway-k8s-slurm-hammer.geddes.rcac.purdue.edu/",
-            proxy_address="api-dask-gateway-k8s-slurm-hammer.cms.geddes.rcac.purdue.edu:8000")
+    Gateway("http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
+            proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000")
 
-with `hammer` replaced by `gautschi` for that cluster.
+Hammer is the only Slurm backend; there is no Gautschi Dask gateway.
 
 ### GPUs
 

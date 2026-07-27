@@ -71,7 +71,7 @@ def test_resolve_unknown_raises():
     with pytest.raises(ValueError, match="Unknown gateway"):
         dask._resolve_gateway("nope")
     with pytest.raises(ValueError, match="Unknown gateway"):
-        dask._resolve_gateway("slurm-hammer")
+        dask._resolve_gateway("slurm-nonexistent")
 
 
 # ── _fmt_cluster / _parse_clusters ────────────────────────────────────────────

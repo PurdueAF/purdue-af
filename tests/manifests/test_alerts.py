@@ -1,0 +1,119 @@
+"""Tests for the Prometheus alert rules and the health dashboard they feed.
+
+Alerts are the platform's definition of "unhealthy" — the Grafana health table
+and (next) the MCP health tool both read `ALERTS`, so a rule that loses its
+`component` label silently drops out of both. These tests hold that contract.
+Expression correctness is checked by promtool in validate-manifests.sh; what
+cannot be checked there is whether the labels line up with the consumers."""
+
+import json
+import re
+
+import yaml
+from common import REPO
+
+VALUES = REPO / "apps/monitoring/prometheus/values.yaml"
+DASHBOARD = REPO / "apps/monitoring/grafana/dashboards/alerts.json"
+SEVERITIES = {"warning", "error", "critical"}
+
+
+def rules():
+    doc = yaml.safe_load(VALUES.read_text())
+    groups = doc["serverFiles"]["alerting_rules.yml"]["groups"]
+    return [r for g in groups for r in g["rules"]]
+
+
+def test_every_alert_has_a_component_and_severity():
+    """The health table groups by component and splits by severity; an alert
+    missing either is invisible in the only view that summarises health."""
+    for rule in rules():
+        labels = rule.get("labels", {})
+        assert labels.get("component"), f"{rule['alert']} has no component label"
+        assert labels.get("severity") in SEVERITIES, (
+            f"{rule['alert']}: severity {labels.get('severity')!r} not in {SEVERITIES}"
+        )
+
+
+def test_every_alert_explains_what_to_do():
+    """A firing alert an operator cannot act on is noise in the health signal."""
+    for rule in rules():
+        annotations = rule.get("annotations", {})
+        assert annotations.get("summary"), f"{rule['alert']} has no summary"
+        assert len(annotations.get("description", "")) > 40, (
+            f"{rule['alert']} has no usable description"
+        )
+
+
+def test_every_alert_waits_before_firing():
+    """Without `for:`, a single bad scrape flips the facility to unhealthy."""
+    for rule in rules():
+        assert rule.get("for"), f"{rule['alert']} fires instantly"
+
+
+def test_alert_names_are_prefixed():
+    for rule in rules():
+        assert rule["alert"].startswith("AF"), rule["alert"]
+
+
+def test_hub_alert_is_scoped_to_this_environment():
+    """The jupyterhub job also scrapes the parked cmsdev hub, which is
+    permanently down — an unscoped `up == 0` fires forever."""
+    hub = next(r for r in rules() if r["alert"] == "AFHubDown")
+    assert "${jupyterhub_host}" in hub["expr"], (
+        "AFHubDown must be scoped to the environment's own hub"
+    )
+
+
+def test_mount_slow_excludes_the_probe_timeout_sentinel():
+    """af-node-monitor reports its timeout value (10000 ms) as the latency when
+    a check gives up; AFMountInvalid covers that case. Without the upper bound
+    both alerts fire for one fault."""
+    slow = next(r for r in rules() if r["alert"] == "AFMountSlow")
+    assert "< 10000" in slow["expr"], slow["expr"]
+
+
+# --- the dashboard that turns alerts into a health answer -----------------
+
+
+def dashboard():
+    return json.loads(DASHBOARD.read_text())
+
+
+def panels_by_title():
+    return {p["title"]: p for p in dashboard()["panels"]}
+
+
+def test_health_panels_exist():
+    titles = panels_by_title()
+    assert "Facility health" in titles
+    assert "Firing alerts by component" in titles
+
+
+def test_health_stat_counts_only_actionable_severities():
+    """Warnings are routine; a headline that goes red on every warning stops
+    being read."""
+    expr = panels_by_title()["Facility health"]["targets"][0]["expr"]
+    assert 'alertstate="firing"' in expr
+    assert "error|critical" in expr
+    # `or vector(0)` keeps the panel green instead of "No data" when nothing
+    # is firing — the common and most important case
+    assert "or vector(0)" in expr
+
+
+def test_component_table_groups_by_the_alert_labels():
+    panel = panels_by_title()["Firing alerts by component"]
+    expr = panel["targets"][0]["expr"]
+    assert re.search(r"count by \(component, severity\)", expr), expr
+    matrix = next(t for t in panel["transformations"] if t["id"] == "groupingToMatrix")
+    assert matrix["options"]["rowField"] == "component"
+    assert matrix["options"]["columnField"] == "severity"
+
+
+def test_dashboard_covers_every_component_that_has_alerts():
+    """Nothing to configure per component — but if the table ever moves to a
+    hardcoded list, this catches the omission."""
+    components = {r["labels"]["component"] for r in rules()}
+    assert len(components) >= 3, components
+    panel = json.dumps(panels_by_title()["Firing alerts by component"])
+    hardcoded = [c for c in components if f'"{c}"' in panel]
+    assert not hardcoded, f"table hardcodes components: {hardcoded}"

@@ -357,6 +357,7 @@ serverFiles:
             for: 1m
             labels:
               severity: warning
+              component: storage
             annotations:
               summary: High /home/ utilization for {{ $labels.username }}
               description: |
@@ -368,6 +369,7 @@ serverFiles:
             for: 1m
             labels:
               severity: error
+              component: storage
             annotations:
               summary: Very high /home/ utilization for {{ $labels.username }}
               description: |
@@ -379,6 +381,7 @@ serverFiles:
             for: 1m
             labels:
               severity: critical
+              component: storage
             annotations:
               summary: Critical /home/ utilization for {{ $labels.username }}
               description: |
@@ -393,6 +396,7 @@ serverFiles:
             for: 3h
             labels:
               severity: warning
+              component: environment
             annotations:
               summary: Global pixi env is not in sync with the repository
               description: |
@@ -405,6 +409,7 @@ serverFiles:
             for: 30m
             labels:
               severity: critical
+              component: environment
             annotations:
               summary: Live global pixi env failed import verification
               description: |
@@ -419,12 +424,122 @@ serverFiles:
             for: 1h
             labels:
               severity: warning
+              component: environment
             annotations:
               summary: pixi-global-sync metrics are absent
               description: |
                 No pixi_global_sync_* metrics for 1h — the reconciler pod is
                 down or its Service/scrape wiring is broken. The global env is
                 not being kept in sync while this persists.
+
+      # Can users get in? ---------------------------------------------------
+      - name: af-access
+        rules:
+          # Scoped to the production hub on purpose: the same job also scrapes
+          # cmsdev.geddes.rcac.purdue.edu, which is parked and permanently
+          # down — an unscoped `up == 0` would fire forever and drown the
+          # health signal in a known non-problem.
+          - alert: AFHubDown
+            expr: up{job="jupyterhub", instance="${jupyterhub_host}"} == 0
+            for: 5m
+            labels:
+              severity: critical
+              component: access
+            annotations:
+              summary: JupyterHub is not responding to scrapes
+              description: >
+                The hub has been unreachable for 5 minutes. Nobody can start,
+                stop or reach a session while this is true.
+                Check: kubectl -n cms get pods -l component=hub
+          # Observed spawn statuses: success, failure, already-pending,
+          # throttled, too-many-users. Only `failure` is a real fault — the
+          # others are the hub deliberately refusing, and alerting on them
+          # would fire every time the facility is simply busy.
+          - alert: AFSpawnFailures
+            expr: sum(increase(jupyterhub_server_spawn_duration_seconds_count{status="failure"}[30m])) > 3
+            for: 5m
+            labels:
+              severity: error
+              component: access
+            annotations:
+              summary: Multiple session spawns failed in the last 30 minutes
+              description: >
+                {{ printf "%.0f" $value }} spawn failures in 30 minutes — users are
+                being turned away at login. Check the hub logs, and whether the
+                singleuser image still pulls.
+          - alert: AFSessionStuckPending
+            expr: kube_pod_status_phase{namespace="cms",pod=~"purdue-af-.*",phase="Pending"} == 1
+            for: 15m
+            labels:
+              severity: warning
+              component: access
+            annotations:
+              summary: Session pod {{ $labels.pod }} has been Pending for 15m
+              description: >
+                A session pod cannot be scheduled — usually no node with the
+                requested CPU/RAM/GPU, or a volume that will not bind.
+                Check: kubectl -n cms describe pod {{ $labels.pod }}
+
+      # Can users read data? ------------------------------------------------
+      - name: af-data
+        rules:
+          - alert: AFMountInvalid
+            expr: af_node_mount_valid == 0
+            for: 10m
+            labels:
+              severity: error
+              component: data
+            annotations:
+              summary: "{{ $labels.mount_name }} is unusable on node {{ $labels.exported_node }}"
+              description: >
+                The mount failed its check — unreachable, or the probe timed out —
+                for 10 minutes. Sessions and Dask workers landing on this node
+                cannot read that storage.
+                Check: kubectl -n cms logs -l app=af-node-monitor
+          # Healthy metadata latency across all 17 nodes sits at p50 ~60 ms,
+          # p90 ~350 ms, worst ~906 ms. The probe reports its timeout value
+          # (10000 ms) when it gives up, and AFMountInvalid already covers that,
+          # so the upper bound keeps this alert to real degradation.
+          - alert: AFMountSlow
+            expr: af_node_mount_metadata_latency_ms > 2000 < 10000
+            for: 15m
+            labels:
+              severity: warning
+              component: data
+            annotations:
+              summary: "{{ $labels.mount_name }} is slow on node {{ $labels.exported_node }}"
+              description: >
+                Metadata latency is {{ printf "%.0f" $value }} ms against a healthy
+                ceiling near 900 ms. Reads still work, but analyses on this node
+                will crawl.
+          - alert: AFNodeMonitorStale
+            expr: time() - af_node_monitor_last_iteration_timestamp_seconds > 900
+            for: 5m
+            labels:
+              severity: warning
+              component: data
+            annotations:
+              summary: af-node-monitor has not completed a pass in 15 minutes
+              description: >
+                Mount health is unknown, which is not the same as good: every
+                af_node_mount_* series is stale, so AFMountInvalid cannot fire.
+                Check: kubectl -n cms logs -l app=af-node-monitor
+
+      # Can users scale out? ------------------------------------------------
+      - name: af-scale-out
+        rules:
+          - alert: AFDaskGatewayDown
+            expr: kube_deployment_status_replicas_available{namespace="cms",deployment=~"api-dask-gateway.*"} == 0
+            for: 10m
+            labels:
+              severity: error
+              component: scale-out
+            annotations:
+              summary: Dask Gateway {{ $labels.deployment }} has no available replicas
+              description: >
+                Users cannot create or reach clusters on this gateway; already
+                running clusters may survive.
+                Check: kubectl -n cms get deploy {{ $labels.deployment }}
 alertmanager:
   enabled: true
   config:
