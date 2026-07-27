@@ -85,7 +85,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/charset-normalizer-3.4.7-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/click-8.4.1-pyhc90fa1f_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cloudpickle-3.1.2-pyhcf101f3_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/cms-combine-10.6.1-py312h0af4ba1_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/cms-combine-11.0.0-py312h0af4ba1_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/coffea-2026.7.0-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/colorlog-6.10.1-pyh707e725_0.conda
@@ -759,7 +759,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/9d/84/4e9a53a062d4073c74897a6bd20fff74d55307341b3e85c081002462b3ef/proto_plus-1.28.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b9/f2/d31e6ad42d657af07be2ffd779190353f759a07b51232b9e1d724f2cda46/pygame-2.6.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/3e/b9/3766cc361d93edb2ce81e2e1f87dd98f314d7d513877a342d31b30741680/pypng-0.20220715.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/a3/08/98a230bd975d1058ba00736f8347510b53972474db6a2701e759010fa0c6/pyroscope_io-1.2.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/de/1c/a7dac80341fe67ae775a33f9d0da2c04445479be3ce8a96e4b62df210c6e/pyroscope_io-1.2.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/86/c1/0ee413ddd639aebf22c85d6db39f136ccc10e6a4b4dd275a92b5c839de8d/python_snappy-0.7.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b7/24/3d2466f1602a7c56980341ad9c428f74d62cc16883f62a9b4e9602930584/qastle-0.19.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7c/0e/3f64dc7983b2dad63c164a8d4fc0a5ada98ec662194b93cc502321b6d8ff/rabbit_fit-0.2.5-py3-none-any.whl
@@ -1949,9 +1949,9 @@ packages:
   - pkg:pypi/cloudpickle?source=hash-mapping
   size: 27353
   timestamp: 1765303462831
-- conda: https://conda.anaconda.org/conda-forge/linux-64/cms-combine-10.6.1-py312h0af4ba1_0.conda
-  sha256: 6f01ef2575080231d2d905ee4b9547bf9f654456fff9152cb646ef160bd5f419
-  md5: e530cf72eb122df668bb51af3c1418b4
+- conda: https://conda.anaconda.org/conda-forge/linux-64/cms-combine-11.0.0-py312h0af4ba1_0.conda
+  sha256: 88de0203ff1e5d7b3c3b8aa9f46dac6e6800f3a23f733dc2a01d4eed92fdddaf
+  md5: 031b64efc10698e364b0417555bd70ed
   depends:
   - python
   - pandas
@@ -1962,12 +1962,12 @@ packages:
   - libgcc >=14
   - root_base >=6.40.2,<6.40.3.0a0
   - libboost >=1.90.0,<1.91.0a0
-  - python_abi 3.12.* *_cp312
   - vdt >=0.4.4,<0.4.5.0a0
+  - python_abi 3.12.* *_cp312
   license: Apache-2.0
   purls: []
-  size: 2712992
-  timestamp: 1784903394172
+  size: 2712963
+  timestamp: 1785142273644
 - pypi: https://files.pythonhosted.org/packages/f9/12/31f15a639fbc2cf89c001caa03014f667618317dc7fd03f8afef56b3ab84/cmsstyle-0.5.0-py3-none-any.whl
   name: cmsstyle
   version: 0.5.0
@@ -4025,26 +4025,26 @@ packages:
   - lz4>=3.1.0 ; extra == 'other'
   - opencv-python>=3.0 ; extra == 'other'
   - matplotlib>=3.0 ; extra == 'other'
-  - swig==4.* ; extra == 'testing'
+  - mujoco-py>=2.1,<2.2 ; extra == 'testing'
   - imageio>=2.14.1 ; extra == 'testing'
-  - mujoco==2.2.0 ; extra == 'testing'
   - matplotlib>=3.0 ; extra == 'testing'
-  - pygame==2.1.0 ; extra == 'testing'
   - lz4>=3.1.0 ; extra == 'testing'
   - box2d-py==2.3.5 ; extra == 'testing'
-  - mujoco-py>=2.1,<2.2 ; extra == 'testing'
+  - mujoco==2.2.0 ; extra == 'testing'
+  - pygame==2.1.0 ; extra == 'testing'
+  - swig==4.* ; extra == 'testing'
   - opencv-python>=3.0 ; extra == 'testing'
   - pytest==7.0.1 ; extra == 'testing'
-  - swig==4.* ; extra == 'all'
+  - mujoco-py>=2.1,<2.2 ; extra == 'all'
+  - ale-py~=0.7.5 ; extra == 'all'
   - imageio>=2.14.1 ; extra == 'all'
-  - mujoco==2.2.0 ; extra == 'all'
   - matplotlib>=3.0 ; extra == 'all'
   - pytest==7.0.1 ; extra == 'all'
-  - pygame==2.1.0 ; extra == 'all'
   - lz4>=3.1.0 ; extra == 'all'
   - box2d-py==2.3.5 ; extra == 'all'
-  - ale-py~=0.7.5 ; extra == 'all'
-  - mujoco-py>=2.1,<2.2 ; extra == 'all'
+  - mujoco==2.2.0 ; extra == 'all'
+  - pygame==2.1.0 ; extra == 'all'
+  - swig==4.* ; extra == 'all'
   - opencv-python>=3.0 ; extra == 'all'
   requires_python: '>=3.6'
 - pypi: https://files.pythonhosted.org/packages/41/55/55d157aa8693090954fc9639bf27218240517c3bc7afa6e97412da6ebfd9/gym_notices-0.1.0-py3-none-any.whl
@@ -9261,10 +9261,10 @@ packages:
   name: pypng
   version: 0.20220715.0
   sha256: 4a43e969b8f5aaafb2a415536c1a8ec7e341cd6a3f957fd5b5f32a4cfeed902c
-- pypi: https://files.pythonhosted.org/packages/a3/08/98a230bd975d1058ba00736f8347510b53972474db6a2701e759010fa0c6/pyroscope_io-1.2.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+- pypi: https://files.pythonhosted.org/packages/de/1c/a7dac80341fe67ae775a33f9d0da2c04445479be3ce8a96e4b62df210c6e/pyroscope_io-1.2.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
   name: pyroscope-io
-  version: 1.2.0
-  sha256: 0049dc9a335f697965838c4af65ae1dc647c2056a965594d6100d5b22c8fe318
+  version: 1.2.1
+  sha256: 16a39b80e5032fe978eaac6abf907e7b79128357adc0f0d8e7921e68bd57c4ea
   requires_python: '>=3.10'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/pyside6-6.11.1-py312h50ac2ff_1.conda
   sha256: 6f9e4fd9f6aa1d82a524384399c956c0c79c6c5df5ae42e241eb59f42c11ffbf
