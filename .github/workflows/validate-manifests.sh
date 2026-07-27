@@ -68,6 +68,37 @@ render_env() {
 	)
 }
 
+# `helm template` pulls the chart over the network on every call, so a reset
+# connection to the chart host fails the whole run for reasons that have
+# nothing to do with the manifests (seen: grafana.github.io and GitHub release
+# assets both dropping connections mid-run). Retry a few times before
+# believing it; a genuinely broken chart or values file fails all attempts.
+HELM_ATTEMPTS="${HELM_ATTEMPTS:-3}"
+HELM_RETRY_DELAY="${HELM_RETRY_DELAY:-5}"
+helm_template_retry() {
+	local name=$1 version=$2 args_ref=$3
+	shift 3
+	local -a src=("$@")
+	local -n vals="$args_ref"
+	local attempt=1 out
+	while :; do
+		if out=$(helm template "$name" "${src[@]}" \
+			--version "$version" \
+			--kube-version "$KUBE_VERSION" \
+			--namespace cms \
+			${vals[@]+"${vals[@]}"} 2>&1); then
+			return 0
+		fi
+		if ((attempt >= HELM_ATTEMPTS)); then
+			printf '%s\n' "$out" >&2
+			return 1
+		fi
+		echo "  ${name}: helm template attempt ${attempt} failed, retrying in ${HELM_RETRY_DELAY}s" >&2
+		attempt=$((attempt + 1))
+		sleep "$HELM_RETRY_DELAY"
+	done
+}
+
 # helm-template every HelmRelease in a rendered stream. Identical
 # (repo, chart, version, values) combinations are rendered only once.
 # (newline-joined list, not an assoc array: macOS ships bash 3.2)
@@ -151,11 +182,7 @@ validate_helmreleases() {
 		else
 			helm_src=("$chart" --repo "$repo_url")
 		fi
-		if ! helm template "$name" "${helm_src[@]}" \
-			--version "$version" \
-			--kube-version "$KUBE_VERSION" \
-			--namespace cms \
-			${values_args[@]+"${values_args[@]}"} >/dev/null; then
+		if ! helm_template_retry "$name" "$version" values_args "${helm_src[@]}"; then
 			echo "✗ ${name}: helm template failed" >&2
 			failed=1
 		fi
