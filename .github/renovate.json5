@@ -19,6 +19,18 @@
 // and on success commits the lock back to the PR branch. That keeps Mend
 // runners free of `pixi lock` (which OOMs / fills disk on the science stack)
 // while still landing green PRs.
+//
+// ── tensorflow is the anchor of pixi/global ──────────────────────────────
+// conda-forge tensorflow is the slowest-moving package in the science stack,
+// and several pins below exist ONLY to keep it solvable. Today (2026-07) it
+// is pinned to ==2.19.1 (cuda*) in pixi/global/pixi.toml and it dictates:
+//   - python  <3.13  — no conda-forge tensorflow builds for 3.13/3.14 exist
+//   - pytorch <2.13  — libtorch 2.13 wants libprotobuf 7; tensorflow 2.19.1
+//                      is built against libprotobuf 6 (see rule below)
+// IF TENSORFLOW IS EVER DROPPED FROM pixi/global (or upgraded past 2.19.x),
+// revisit EVERY pin in packageRules before assuming it is still needed —
+// most of them are downstream of tensorflow, not independently motivated.
+// Lift them one at a time and let pixi/check-env.py in CI gate the result.
 {
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   extends: [
@@ -160,6 +172,22 @@
       matchPackageNames: ['importlib-metadata'],
       matchFileNames: ['pixi/base/pixi.toml'],
       allowedVersions: '<8.8',
+    },
+    {
+      // pytorch 2.13 -> libtorch 2.13 requires libprotobuf >=7.35.1, which
+      // nothing else in pixi/global can accept (seen in PR #96):
+      //   - tensorflow 2.19.1 is built against libprotobuf ==6.31.1 on every
+      //     linux-64 build except _205/_255, and 2.19.1 is the newest version
+      //     conda-forge has — no protobuf-7 tensorflow exists at any version.
+      //   - mlflow >=3 caps protobuf <7 on every conda-forge build up to
+      //     3.14.0. (Stale: upstream mlflow-skinny allows protobuf <8 since
+      //     >=3.11.1; the bound is hardcoded in the feedstock's meta.yaml.)
+      // Relax when conda-forge ships a tensorflow built against libprotobuf 7
+      // AND the mlflow feedstock syncs its bound to upstream's <8. See the
+      // tensorflow-anchor note at the top of this file.
+      matchPackageNames: ['pytorch'],
+      matchFileNames: ['pixi/global/pixi.toml'],
+      allowedVersions: '<2.13',
     },
     {
       // Python is deliberately frozen at 3.12 platform-wide (2026-07): the
