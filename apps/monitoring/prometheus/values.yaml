@@ -93,14 +93,35 @@ server:
   retention: 30d
   retentionSize: 30GB
 
+# The chart's scrapeConfigs is a MAP, so it merges with (rather than being
+# replaced by) the scrape_configs list below. Its k8s defaults need cluster-scoped
+# node/pod/service/endpointslice list+watch, but prometheus-sa only has a
+# namespaced Role — they discover nothing and spam RBAC errors. Keep only the
+# self-scrape.
+scrapeConfigs:
+  kubernetes-api-servers:
+    enabled: false
+  kubernetes-nodes:
+    enabled: false
+  kubernetes-nodes-cadvisor:
+    enabled: false
+  kubernetes-pods:
+    enabled: false
+  kubernetes-pods-slow:
+    enabled: false
+  kubernetes-service-endpoints:
+    enabled: false
+  kubernetes-service-endpoints-slow:
+    enabled: false
+  kubernetes-services:
+    enabled: false
+  prometheus-pushgateway:
+    enabled: false
+
 serverFiles:
   prometheus.yml:
-    remote_write:
-      - url: "http://thanos-receive-router.cms.svc.cluster.local:19291/api/v1/receive"
-        remote_timeout: 60s
-        queue_config:
-          max_samples_per_send: 10000
-          max_shards: 10
+    # No remote_write: thanos-receive-router was never deployed, and writing to a
+    # nonexistent endpoint pins the queue at capacity retrying forever.
     scrape_configs:
       # The scrape-metrics ServiceMonitor label feeds RANCHER's Prometheus,
       # not this server — scrape the sync Service directly so the
