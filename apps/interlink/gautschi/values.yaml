@@ -55,7 +55,7 @@ plugin:
     BashPath: /bin/bash
 
 virtualNode:
-  image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:0.6.2-pre1
+  image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:0.7.0-pre1
   resources:
     CPUs: 1000
     memGiB: 4000
