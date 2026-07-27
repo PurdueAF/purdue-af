@@ -1,0 +1,55 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: interlink-hammer
+spec:
+  interval: 1m
+  chart:
+    spec:
+      chart: interlink
+      version: "0.6.1"
+      sourceRef:
+        kind: HelmRepository
+        name: interlink
+      interval: 1m
+  install:
+    remediation:
+      retries: -1
+  upgrade:
+    remediation:
+      retries: -1
+  valuesFrom:
+    - kind: ConfigMap
+      name: interlink-hammer-config
+      valuesKey: values.yaml
+  # The chart has no hook for the munge key or for sizing the node container,
+  # so both are patched in. munge-key-hammer is the same PVC the AF sessions
+  # and the dask-gateway Slurm gateways mount — created out of band, never in
+  # git. The target name follows nodeName: every chart resource is
+  # <nodeName>-*, so renaming the node renames this target too.
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: "interlink-hammer-node"
+            patch: |
+              - op: add
+                path: /spec/template/spec/volumes/-
+                value:
+                  name: munge-key
+                  persistentVolumeClaim:
+                    claimName: munge-key-hammer
+              - op: add
+                path: /spec/template/spec/containers/0/volumeMounts/-
+                value:
+                  name: munge-key
+                  mountPath: /etc/secrets/munge
+                  readOnly: true
+              - op: add
+                path: /spec/template/spec/containers/0/resources
+                value:
+                  limits:
+                    memory: 16Gi
+                  requests:
+                    memory: 16Gi

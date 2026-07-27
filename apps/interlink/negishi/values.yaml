@@ -1,0 +1,194 @@
+# interLink virtual node offloading AF pods to Slurm on Negishi.
+# Every chart resource is named after nodeName, including the Deployment the
+# HelmRelease postRenderer patches (<nodeName>-node).
+nodeName: interlink-negishi
+
+interlink:
+  image: ghcr.io/interlink-hq/interlink/interlink:0.6.2-pre1
+  enabled: true
+  socket: unix:///var/run/interlink.sock
+  address: http://0.0.0.0
+  port: 3000
+  logging:
+    verboseLogging: false
+    errorsOnlyLogging: true
+
+plugin:
+  enabled: true
+  image: "geddes-registry.rcac.purdue.edu/interlink/sidecar:0.6.0-patch1.1"
+  address: "http://0.0.0.0"
+  port: 4000
+  privileged: false
+  extraVolumeMounts:
+    - name: plugin-data
+      mountPath: /depot/itap/interlink/
+  envs:
+    - name: SLURMCONFIGPATH
+      value: "/etc/interlink/plugin.yaml"
+    - name: SHARED_FS
+      value: "true"
+    - name: HOME
+      value: "/depot/itap/interlink/cache"
+  config: |
+    ImagePrefix: "docker://"
+    SidecarPort: 4000
+    VerboseLogging: false
+    ErrorsOnlyLogging: true
+    EnableProbes: true
+    DataRootFolder: "/depot/itap/interlink/negishi/"
+    ExportPodData: true
+    SbatchPath: "/usr/bin/sbatch"
+    ScancelPath: "/usr/bin/scancel"
+    SqueuePath: "/usr/bin/squeue"
+    CommandPrefix: ""
+    ContainerRuntime: "singularity"
+    SingularityPrefix: ""
+    SingularityDefaultOptions:
+      - "--nv"
+      - "--no-eval"
+    Namespace: "${namespace}"
+    Tsocks: false
+    TsocksPath: "$WORK/tsocks-1.8beta5+ds1/libtsocks.so"
+    TsocksLoginNode: "login01"
+    BashPath: /bin/bash
+
+virtualNode:
+  image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:0.6.1-pre4
+  resources:
+    CPUs: 1000
+    memGiB: 4000
+    pods: 300
+
+  disableCSR: true
+
+  network:
+    # creates the wstunnel template ConfigMap
+    enableTunnel: true
+    tunnelImage: "ghcr.io/erebe/wstunnel:v10.4.4"
+    # each pod gets its own tunnel at "<podname>.<wildcardDNS>"
+    wildcardDNS: "geddes.rcac.purdue.edu"
+    wstunnelTemplatePath: "/etc/templates/wstunnel.yaml"
+    # Unlike Hammer, Negishi overrides the built-in template: this one adds an
+    # ingress rule per exposed port, so services like Jupyter running inside an
+    # offloaded pod are reachable by hostname.
+    customTemplate: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: {{.Name}}
+        namespace: {{.Namespace}}
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app.kubernetes.io/component: {{.Name}}
+        template:
+          metadata:
+            labels:
+              app.kubernetes.io/component: {{.Name}}
+          spec:
+            containers:
+            - args:
+              - ./wstunnel server --log-lvl DEBUG --dns-resolver-prefer-ipv4 --restrict-http-upgrade-path-prefix {{.RandomPassword}}  ws://0.0.0.0:28080
+              command:
+              - bash
+              - -c
+              image: ghcr.io/erebe/wstunnel:latest
+              imagePullPolicy: IfNotPresent
+              name: wstunnel
+              ports:
+              - containerPort: 28080
+                name: webhook
+                protocol: TCP
+              - containerPort: 51820
+                name: vpn
+                protocol: UDP
+              {{- range .ExposedPorts}}
+              - containerPort: {{.Port}}
+                name: {{.Name}}
+                protocol: {{.Protocol}}
+              {{- end}}
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 90Mi
+            nodeSelector:
+              kubernetes.io/os: linux
+      ---
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: {{.Name}}
+        namespace: {{.Namespace}}
+      spec:
+        type: ClusterIP
+        selector:
+          app.kubernetes.io/component: {{.Name}}
+        ports:
+          - port: 28080
+            targetPort: 28080
+            name: ws
+          {{- range .ExposedPorts}}
+          - port: {{.Port}}
+            targetPort: {{.Port}}
+            name: {{.Name}}
+            {{- if .Protocol}}
+            protocol: {{.Protocol}}
+            {{- end}}
+          {{- end}}
+      ---
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: {{.Name}}
+        namespace: {{.Namespace}}
+        annotations:
+          nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+          nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+          nginx.org/websocket-services: {{.Name}}
+          kubernetes.io/ingress.class: "nginx"
+      spec:
+        rules:
+        - host: {{.Name}}-{{.Namespace}}.{{.WildcardDNS}}
+          http:
+            paths:
+            - path: /
+              pathType: Prefix
+              backend:
+                service:
+                  name: {{.Name}}
+                  port:
+                    number: 28080
+        {{- range .ExposedPorts}}
+        - host: {{$.Name}}.{{$.WildcardDNS}}
+          http:
+            paths:
+            - path: /
+              pathType: Prefix
+              backend:
+                service:
+                  name: {{$.Name}}
+                  port:
+                    number: {{.Port}}
+        {{- end}}
+    # $DOWNLOAD_DIR survives Flux postBuild substitution: only the braced
+    # form is substituted, bare $VAR is passed through untouched
+    wstunnelCommand: |
+      export DOWNLOAD_DIR="/depot/itap/interlink/negishi" && \
+      curl -L https://github.com/erebe/wstunnel/releases/download/v10.4.4/wstunnel_10.4.4_linux_amd64.tar.gz -o "$DOWNLOAD_DIR/wstunnel.tar.gz" && \
+      tar -xzvf "$DOWNLOAD_DIR/wstunnel.tar.gz" -C "$DOWNLOAD_DIR" && \
+      chmod +x "$DOWNLOAD_DIR/wstunnel" && \
+      "$DOWNLOAD_DIR/wstunnel" client --http-upgrade-path-prefix %s %s ws://%s:80 > "$DOWNLOAD_DIR/wstunnel_client_$$.log" 2>&1 &
+
+extraVolumes:
+  - name: plugin-data
+    nfs:
+      server: datadepot.rcac.purdue.edu
+      path: /depot/itap/interlink
+
+podScheduling:
+  nodeSelector:
+    kubernetes.io/hostname: geddes-b000
+
+serviceAccount:
+  create: true

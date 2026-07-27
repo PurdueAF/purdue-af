@@ -1,0 +1,8 @@
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: interlink
+spec:
+  interval: 1h
+  type: oci
+  url: oci://ghcr.io/interlink-hq/interlink-helm-chart

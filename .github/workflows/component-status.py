@@ -197,9 +197,18 @@ def write_badge(out: Path, slug: str, payload: dict[str, Any]) -> None:
     (out / f"{slug}.json").write_text(json.dumps(payload, ensure_ascii=False))
 
 
+# Components whose directory name alone does not name the thing: the
+# interLink apps are one per cluster, so the node they register — not the
+# cluster — is what a reader is looking for.
+LABEL_OVERRIDES = {
+    "apps/interlink/gautschi": "interlink-gautschi",
+    "apps/interlink/hammer": "interlink-hammer",
+}
+
+
 def label_for(component: str) -> str:
     """Badge label: the last path segment is what anyone calls the app."""
-    return Path(component).name
+    return LABEL_OVERRIDES.get(component, Path(component).name)
 
 
 def badge(label: str, status: str, ahead: int) -> dict[str, Any]:

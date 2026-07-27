@@ -56,6 +56,8 @@ Whether each component on the cluster is running what is on `main`
 ![dask-gateway-k8s-slurm-gautschi][experimental-dask-gateway-dask-gateway-k8s-slurm-gautschi]
 ![dask-gateway-k8s-slurm-hammer][experimental-dask-gateway-dask-gateway-k8s-slurm-hammer]
 ![infrastructure][experimental-infrastructure]
+![interlink-gautschi][experimental-interlink-gautschi]
+![interlink-hammer][experimental-interlink-hammer]
 ![kagent][experimental-kagent]
 ![af-monitoring][experimental-monitoring-af-monitoring]
 ![alloy][experimental-monitoring-alloy]
@@ -112,6 +114,8 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-dask-gateway-dask-gateway-k8s-slurm-gautschi]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-dask-gateway-dask-gateway-k8s-slurm-gautschi.json
 [experimental-dask-gateway-dask-gateway-k8s-slurm-hammer]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-dask-gateway-dask-gateway-k8s-slurm-hammer.json
 [experimental-infrastructure]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-infrastructure.json
+[experimental-interlink-gautschi]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-gautschi.json
+[experimental-interlink-hammer]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-hammer.json
 [experimental-kagent]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-kagent.json
 [experimental-monitoring-af-monitoring]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-af-monitoring.json
 [experimental-monitoring-alloy]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-alloy.json

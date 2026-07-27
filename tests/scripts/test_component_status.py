@@ -190,6 +190,12 @@ def test_readme_has_no_badges_for_dead_components(cs, components):
     assert referenced - live == set()
 
 
+def test_label_overrides_point_at_real_components(cs, components):
+    """A renamed or removed component must not leave a dangling override."""
+    live = {c for mapping in components.values() for c in mapping}
+    assert set(cs.LABEL_OVERRIDES) <= live
+
+
 # --- images ---------------------------------------------------------------
 
 

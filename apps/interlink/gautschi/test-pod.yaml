@@ -1,0 +1,54 @@
+# Not deployed by Flux — apply by hand to prove the virtual node accepts a
+# pod and the Slurm plugin submits it:
+#   kubectl apply -n cms -f apps/interlink/hammer/test-pod.yaml
+#   kubectl logs -n cms test-interlink-gautschi
+#   kubectl delete -n cms -f apps/interlink/hammer/test-pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-interlink-gautschi
+  annotations:
+    slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs"
+    slurm-job.vk.io/flags: "--uid=616617 -A cms -p cpu"
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: interlink-gautschi
+  tolerations:
+    - key: virtual-node.interlink/no-schedule
+      operator: Exists
+  volumes:
+    - name: slurm-data
+      nfs:
+        server: datadepot.rcac.purdue.edu
+        path: /depot/cms/purdue-af/interlink
+  containers:
+    - name: test
+      image: busybox:1.35
+      command: ["sh", "-c"]
+      args:
+        - |
+          echo 'Hello from virtual node interlink-gautschi!'
+          sleep 300
+      volumeMounts:
+        - name: slurm-data
+          mountPath: /depot/cms/purdue-af/interlink/
+      resources:
+        requests:
+          memory: "100M"
+          cpu: "250m"
+        limits:
+          memory: "200M"
+          cpu: "1"
+      readinessProbe:
+        exec:
+          command: ["sh", "-c", "true"]
+        initialDelaySeconds: 10
+        periodSeconds: 10
+        failureThreshold: 30
+      startupProbe:
+        exec:
+          command: ["sh", "-c", "true"]
+        initialDelaySeconds: 10
+        periodSeconds: 10
+        failureThreshold: 30
+  restartPolicy: Never
