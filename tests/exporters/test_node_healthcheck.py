@@ -115,11 +115,12 @@ def clear_metrics():
     yield
 
 
-def sample(name, mount="/depot/", node="node-a", **extra):
+def sample(name, mount="/depot/", node="node-a", node_pool="prod", **extra):
     labels = {
         "mount_name": mount,
         "mount_path": nh.MOUNTS[mount]["mount_path"],
         "node": node,
+        "node_pool": node_pool,
         **extra,
     }
     return REGISTRY.get_sample_value(name, labels)

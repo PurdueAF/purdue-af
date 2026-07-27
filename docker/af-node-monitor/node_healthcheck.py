@@ -178,33 +178,40 @@ try:
     mount_valid = Gauge(
         "af_node_mount_valid",
         "Storage mount health",
-        ["mount_name", "mount_path", "node"],
+        ["mount_name", "mount_path", "node", "node_pool"],
     )
     mount_ping_ms = Gauge(
         "af_node_mount_ping_ms",
         "Storage mount ping time in milliseconds",
-        ["mount_name", "mount_path", "node"],
+        ["mount_name", "mount_path", "node", "node_pool"],
     )
     mount_data_rate_gbps = Gauge(
         "af_node_mount_data_rate_gbps",
         "Storage mount sequential read throughput in Gbps",
-        ["mount_name", "mount_path", "node"],
+        ["mount_name", "mount_path", "node", "node_pool"],
     )
     mount_metadata_latency_ms = Gauge(
         "af_node_mount_metadata_latency_ms",
         "Storage mount metadata latency in milliseconds (ls)",
-        ["mount_name", "mount_path", "node"],
+        ["mount_name", "mount_path", "node", "node_pool"],
+    )
+
+    mount_result_fresh = Gauge(
+        "af_node_mount_result_fresh",
+        "1 when af_node_mount_valid reflects a recent completed check, 0 when no "
+        "usable result exists (so `valid` is unknown rather than bad)",
+        ["mount_name", "mount_path", "node", "node_pool"],
     )
 
     mount_timeout_total = Counter(
         "af_node_mount_timeout_total",
         "Total number of timeouts contacting mount workers or running checks",
-        ["mount_name", "mount_path", "node", "check_type"],
+        ["mount_name", "mount_path", "node", "node_pool", "check_type"],
     )
     mount_last_success_ts = Gauge(
         "af_node_mount_last_success_timestamp_seconds",
         "Unix timestamp of last successful metrics update for mount",
-        ["mount_name", "mount_path", "node"],
+        ["mount_name", "mount_path", "node", "node_pool"],
     )
     monitor_last_iteration_ts = Gauge(
         "af_node_monitor_last_iteration_timestamp_seconds",
@@ -288,6 +295,10 @@ def _load_result(mount_name: str, node_name: str) -> Dict[str, Any] | None:
         return None
 
 
+# node name -> "prod" | "dev", filled by _list_target_nodes()
+_node_pools: Dict[str, str] = {}
+
+
 def _list_target_nodes() -> List[str]:
     """Return a cached list of Ready AF node names based on labels."""
     _init_k8s()
@@ -300,12 +311,15 @@ def _list_target_nodes() -> List[str]:
         return _node_cache
 
     names: set[str] = set()
+    # Both pools are monitored. The pool is recorded per node so that alerts
+    # and user-facing tools can tell them apart: a dev node failing is an
+    # operator's problem, not a facility outage.
     label_sets = [
-        "cms-af-prod=true",
-        "cms-af-dev=true",
+        ("cms-af-prod=true", "prod"),
+        ("cms-af-dev=true", "dev"),
     ]
     try:
-        for selector in label_sets:
+        for selector, pool in label_sets:
             resp = _core_v1.list_node(label_selector=selector)
             for node in resp.items:
                 if not node.metadata or not node.metadata.name:
@@ -323,6 +337,8 @@ def _list_target_nodes() -> List[str]:
                         break
                 if ready:
                     names.add(node.metadata.name)
+                    # first match wins: a node labelled both is production
+                    _node_pools.setdefault(node.metadata.name, pool)
     except ApiException as e:  # type: ignore[misc]
         print(f"[node_healthcheck] Error listing nodes: {e}")
     except Exception as e:  # pragma: no cover - defensive
@@ -691,6 +707,7 @@ def update_metrics() -> None:
                 "mount_name": m_name,
                 "mount_path": mount_path,
                 "node": node_for_label,
+                "node_pool": _node_pools.get(node_for_label, "prod"),
             }
 
             if data and data.get("_storage_error"):
@@ -704,6 +721,7 @@ def update_metrics() -> None:
                 mount_ping_ms.labels(**labels).set(_timeout_ping_ms())
                 mount_metadata_latency_ms.labels(**labels).set(_timeout_metadata_ms())
                 mount_data_rate_gbps.labels(**labels).set(0.0)
+                mount_result_fresh.labels(**labels).set(0)
 
                 check_type = "no_recent_result"
                 mount_key = _sanitized_mount_name(m_name)
@@ -722,6 +740,7 @@ def update_metrics() -> None:
                 mount_ping_ms.labels(**labels).set(_timeout_ping_ms())
                 mount_metadata_latency_ms.labels(**labels).set(_timeout_metadata_ms())
                 mount_data_rate_gbps.labels(**labels).set(0.0)
+                mount_result_fresh.labels(**labels).set(0)
                 mount_timeout_total.labels(check_type="stale_result", **labels).inc()
                 continue
 
@@ -733,6 +752,7 @@ def update_metrics() -> None:
             gbps = data.get("throughput_gbps")
 
             mount_valid.labels(**labels).set(1 if ok else 0)
+            mount_result_fresh.labels(**labels).set(1)
 
             if timeout:
                 # On timeout, expose worst-case latency semantics for both ping and metadata,

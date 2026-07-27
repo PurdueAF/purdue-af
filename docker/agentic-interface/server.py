@@ -24,7 +24,7 @@ from metrics import (
     record_request,
 )
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
-from tools import dask, logs, profiles, prompts, session, storage
+from tools import dask, health, logs, profiles, prompts, session, storage
 
 logger = logging.getLogger(__name__)
 
@@ -260,6 +260,7 @@ mcp = FastMCP(
         "Tools for the Purdue Analysis Facility. "
         "Use query_notebook_logs / query_dask_logs for log queries; "
         "use query_storage_usage for disk quota information; "
+        'use get_facility_health for "is the AF healthy / is something broken"; '
         "use list_dask_clusters / list_dask_cluster_options / create_dask_cluster / "
         "get_dask_worker_count / get_dask_cluster_usage / scale_dask_cluster / "
         "stop_dask_cluster for Dask; "
@@ -273,6 +274,7 @@ instrument_mcp(mcp)
 
 logs.register(mcp)
 storage.register(mcp)
+health.register(mcp)
 dask.register(mcp)
 profiles.register(mcp)
 session.register(mcp)

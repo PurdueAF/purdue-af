@@ -481,19 +481,36 @@ serverFiles:
       # Can users read data? ------------------------------------------------
       - name: af-data
         rules:
+          # `valid == 0` alone is ambiguous: it also means the check never ran.
+          # af_node_mount_result_fresh separates the two so a scheduling gap in
+          # the monitor is never reported as a storage outage.
           - alert: AFMountInvalid
-            expr: af_node_mount_valid == 0
+            expr: af_node_mount_valid{node_pool="prod"} == 0 and af_node_mount_result_fresh{node_pool="prod"} == 1
             for: 10m
             labels:
               severity: error
               component: data
             annotations:
-              summary: "{{ $labels.mount_name }} is unusable on node {{ $labels.exported_node }}"
+              summary: "{{ $labels.mount_name }} is failing on node {{ $labels.exported_node }}"
               description: >
-                The mount failed its check — unreachable, or the probe timed out —
-                for 10 minutes. Sessions and Dask workers landing on this node
-                cannot read that storage.
+                The mount check completed and failed for 10 minutes. Sessions and
+                Dask workers on this node may be unable to read that storage. If
+                this spans most nodes, treat it as a storage-system or network
+                problem rather than a node problem.
                 Check: kubectl -n cms logs -l app=af-node-monitor
+          - alert: AFMountHealthUnknown
+            expr: af_node_mount_result_fresh{node_pool="prod"} == 0
+            for: 30m
+            labels:
+              severity: warning
+              component: data
+            annotations:
+              summary: "Storage health unknown for {{ $labels.mount_name }} on node {{ $labels.exported_node }}"
+              description: >
+                No usable check result for 30 minutes, usually because the check
+                could not be scheduled on that node. This says nothing about the
+                storage itself — it means we cannot tell.
+                Check: kubectl -n cms get jobs -l app=af-node-monitor
           # Healthy metadata latency across all 17 nodes sits at p50 ~60 ms,
           # p90 ~350 ms, worst ~906 ms. The probe reports its timeout value
           # (10000 ms) when it gives up, and AFMountInvalid already covers that,
@@ -522,6 +539,21 @@ serverFiles:
                 Mount health is unknown, which is not the same as good: every
                 af_node_mount_* series is stale, so AFMountInvalid cannot fire.
                 Check: kubectl -n cms logs -l app=af-node-monitor
+
+          # Dev nodes are monitored too, but they are not part of the facility
+          # users see — a warning keeps them off the facility health verdict
+          # while still showing up for operators.
+          - alert: AFMountInvalidDev
+            expr: af_node_mount_valid{node_pool="dev"} == 0 and af_node_mount_result_fresh{node_pool="dev"} == 1
+            for: 30m
+            labels:
+              severity: warning
+              component: dev
+            annotations:
+              summary: "{{ $labels.mount_name }} is failing on dev node {{ $labels.exported_node }}"
+              description: >
+                A mount check completed and failed on a cms-af-dev node. No user
+                sessions run there, so this does not affect the facility.
 
       # Can users scale out? ------------------------------------------------
       - name: af-scale-out

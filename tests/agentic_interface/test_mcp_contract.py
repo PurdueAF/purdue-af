@@ -12,6 +12,8 @@ import server
 from asgi_lifespan import LifespanManager
 
 EXPECTED_TOOLS = {
+    # health
+    "get_facility_health",
     # logs
     "query_notebook_logs",
     "query_dask_logs",
