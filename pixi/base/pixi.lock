@@ -367,7 +367,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/e4/be/5b3cfe508bfab6761414ff944e3366eb13be4fd71efcd69450f89ba39f43/protobuf-7.35.1-cp310-abi3-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a1/ad/1500dece815f714c4f98910d5860df77567a25cbfa27ff9f17406ec32edc/purdue_af_shutdown_button-0.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0e/18/dbd0de664ac7ddf40574cc266fdc12f613b956892f09a9eb73b6f45b700d/purdue_af_vscode_button-0.1.2-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/a3/08/98a230bd975d1058ba00736f8347510b53972474db6a2701e759010fa0c6/pyroscope_io-1.2.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/de/1c/a7dac80341fe67ae775a33f9d0da2c04445479be3ce8a96e4b62df210c6e/pyroscope_io-1.2.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/47/15/7da7c0efa3ecfb2b69ef2283e17b93330109d618afe5c788b9bc81807da4/returns-0.28.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/d4/59e74daffcb57a07668852eeeb6035af9f32cbfd7a1d2511f17d2fe6a738/smmap-5.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/32/46/9cb0e58b2deb7f82b84065f37f3bffeb12413f947f9388e4cac22c4621ce/sortedcontainers-2.4.0-py2.py3-none-any.whl
@@ -742,7 +742,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/e4/be/5b3cfe508bfab6761414ff944e3366eb13be4fd71efcd69450f89ba39f43/protobuf-7.35.1-cp310-abi3-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a1/ad/1500dece815f714c4f98910d5860df77567a25cbfa27ff9f17406ec32edc/purdue_af_shutdown_button-0.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0e/18/dbd0de664ac7ddf40574cc266fdc12f613b956892f09a9eb73b6f45b700d/purdue_af_vscode_button-0.1.2-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/a3/08/98a230bd975d1058ba00736f8347510b53972474db6a2701e759010fa0c6/pyroscope_io-1.2.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/de/1c/a7dac80341fe67ae775a33f9d0da2c04445479be3ce8a96e4b62df210c6e/pyroscope_io-1.2.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/47/15/7da7c0efa3ecfb2b69ef2283e17b93330109d618afe5c788b9bc81807da4/returns-0.28.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/d4/59e74daffcb57a07668852eeeb6035af9f32cbfd7a1d2511f17d2fe6a738/smmap-5.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/32/46/9cb0e58b2deb7f82b84065f37f3bffeb12413f947f9388e4cac22c4621ce/sortedcontainers-2.4.0-py2.py3-none-any.whl
@@ -4668,10 +4668,10 @@ packages:
   - pkg:pypi/pyproject-hooks?source=hash-mapping
   size: 15528
   timestamp: 1733710122949
-- pypi: https://files.pythonhosted.org/packages/a3/08/98a230bd975d1058ba00736f8347510b53972474db6a2701e759010fa0c6/pyroscope_io-1.2.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+- pypi: https://files.pythonhosted.org/packages/de/1c/a7dac80341fe67ae775a33f9d0da2c04445479be3ce8a96e4b62df210c6e/pyroscope_io-1.2.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
   name: pyroscope-io
-  version: 1.2.0
-  sha256: 0049dc9a335f697965838c4af65ae1dc647c2056a965594d6100d5b22c8fe318
+  version: 1.2.1
+  sha256: 16a39b80e5032fe978eaac6abf907e7b79128357adc0f0d8e7921e68bd57c4ea
   requires_python: '>=3.10'
 - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyha55dd90_7.conda
   sha256: ba3b032fa52709ce0d9fd388f63d330a026754587a2f461117cac9ab73d8d0d8
