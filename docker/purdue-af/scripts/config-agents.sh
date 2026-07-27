@@ -24,6 +24,10 @@ MCP_URL="http://agentic-interface.${NAMESPACE:-cms}.svc.cluster.local:8888/servi
 AUTH_HEADER='Authorization: Bearer ${JUPYTERHUB_API_TOKEN}'
 SKILL_SRC="/opt/purdue-af/skills"
 AGENT_SECTION="/opt/purdue-af/agents/purdue-af-section.md"
+# Absolute path on purpose: `su` resets PATH, and the system python3 on
+# Rocky 8 is 3.6 — too old for the platform's scripts.
+PYTHON="/opt/pixi/.pixi/envs/base-env/bin/python3"
+[[ -x "${PYTHON}" ]] || PYTHON="python3"
 
 if [[ -z "${NB_USER:-}" ]]; then
 	echo "config-agents: NB_USER unset, skipping" >&2
@@ -89,7 +93,7 @@ fi
 # the skill.
 if [[ -f "${AGENT_SECTION}" ]]; then
 	for target in "${NEW_HOME}/.codex/AGENTS.md" "${NEW_HOME}/.claude/CLAUDE.md"; do
-		if _as_user "python3 /usr/local/bin/managed-block.py '${AGENT_SECTION}' '${target}'"; then
+		if _as_user "'${PYTHON}' /usr/local/bin/managed-block.py '${AGENT_SECTION}' '${target}'"; then
 			:
 		else
 			echo "config-agents: WARNING could not update ${target}" >&2

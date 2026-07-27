@@ -377,3 +377,28 @@ def test_skill_keeps_what_descriptions_cannot_carry():
     assert "never `du`" in skill  # routing against the shell
     assert "kill the process you are running" in skill  # destructive warning
     assert "Authentication errors" in skill  # failure-mode mapping
+
+
+def test_bundled_python_scripts_do_not_use_the_system_interpreter():
+    """Rocky 8 ships python3.6 at /usr/bin/python3, which cannot parse these
+    scripts (`from __future__ import annotations` is a SyntaxError there). The
+    image build runs before ENV PATH prefers the pixi env, and `su` resets PATH
+    at session start — so both call sites must name the interpreter."""
+    dockerfile = DOCKERFILE.read_text()
+    build_step = next(
+        ln for ln in dockerfile.splitlines() if "prepare-skill.py /tmp/skill" in ln
+    )
+    assert "BASE_ENV_DIR" in build_step, build_step
+
+    hook = (REPO / "docker/purdue-af/scripts/config-agents.sh").read_text()
+    call = next(ln for ln in hook.splitlines() if "managed-block.py" in ln)
+    assert "${PYTHON}" in call, call
+    assert "/opt/pixi/.pixi/envs/base-env/bin/python3" in hook
+
+
+def test_bundled_python_scripts_target_the_platform_python():
+    """They use 3.7+ syntax deliberately; this pins the reason down in one
+    place so nobody 'fixes' the build by downgrading the scripts."""
+    for name in ("prepare-skill.py", "managed-block.py"):
+        text = (REPO / "docker/purdue-af/scripts" / name).read_text()
+        assert "from __future__ import annotations" in text, name

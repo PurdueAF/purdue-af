@@ -256,7 +256,9 @@ COPY --chown=root:root docker/purdue-af/agents/purdue-af-section.md \
 COPY --chown=root:root docker/purdue-af/scripts/managed-block.py \
     /usr/local/bin/managed-block.py
 COPY --chown=root:root docker/purdue-af/scripts/prepare-skill.py /tmp/prepare-skill.py
-RUN python3 /tmp/prepare-skill.py /tmp/skill/SKILL.md \
+# The pixi python, not the system one: this stage runs before ENV PATH below,
+# and Rocky 8's /usr/bin/python3 is 3.6 — too old for these scripts.
+RUN "${BASE_ENV_DIR}/bin/python3" /tmp/prepare-skill.py /tmp/skill/SKILL.md \
         /opt/purdue-af/skills/purdue-af-agentic-interface/SKILL.md && \
     rm -rf /tmp/skill /tmp/prepare-skill.py
 
