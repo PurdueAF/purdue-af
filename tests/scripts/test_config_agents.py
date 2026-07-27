@@ -402,3 +402,114 @@ def test_bundled_python_scripts_target_the_platform_python():
     for name in ("prepare-skill.py", "managed-block.py"):
         text = (REPO / "docker/purdue-af/scripts" / name).read_text()
         assert "from __future__ import annotations" in text, name
+
+
+# --- sourcing safety: start.sh runs these hooks with `source` ---------------
+
+
+HOOK_DIR = REPO / "docker" / "purdue-af" / "scripts"
+# the hooks Dockerfile installs into /usr/local/bin/before-notebook.d
+STARTUP_HOOKS = ["config-agents.sh", "config-extensions.sh", "create-symlinks.sh"]
+
+
+def test_start_sh_sources_hooks_rather_than_executing_them():
+    """Pins the assumption the next two tests rest on. If upstream ever
+    switches run-hooks to execute instead of source, these guards can relax."""
+    start = (REPO / "docker/purdue-af/jupyter/start.sh").read_text()
+    assert 'source "${f}"' in start
+
+
+def test_sourcing_the_hook_returns_control_to_the_caller(tmp_path):
+    """THE regression: a top-level `exit` in a sourced hook kills start.sh, so
+    the container dies before JupyterLab launches — and every later hook is
+    skipped. Reproduces run-hooks: source, then prove we are still alive."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    for tool in ("claude", "codex"):
+        stub = bindir / tool
+        stub.write_text("#!/bin/bash\nexit 0\n")
+        stub.chmod(0o755)
+
+    caller = tmp_path / "caller.sh"
+    caller.write_text(f'source "{HOOK_DIR / "config-agents.sh"}"\necho STILL_ALIVE\n')
+    result = subprocess.run(
+        ["bash", str(caller)],
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": f"{bindir}:/usr/bin:/bin",
+            "HOME": str(tmp_path),
+            "NB_USER": "jovyan",
+        },
+    )
+    assert "STILL_ALIVE" in result.stdout, (
+        "sourcing the hook terminated the calling shell — start.sh would exit "
+        f"and the container would never start.\nstdout: {result.stdout}"
+    )
+    assert result.returncode == 0
+
+
+def test_sourced_hooks_do_not_leak_shell_options(tmp_path):
+    """`set -e`/`set -u` at the top level of a sourced hook applies to the rest
+    of start.sh, turning any later unset variable into a container failure."""
+    caller = tmp_path / "caller.sh"
+    caller.write_text(
+        f'source "{HOOK_DIR / "config-agents.sh"}"\n'
+        'case "$-" in *e*) echo LEAKED_E ;; esac\n'
+        'case "$-" in *u*) echo LEAKED_U ;; esac\n'
+        "echo DONE\n"
+    )
+    result = subprocess.run(
+        ["bash", str(caller)],
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "NB_USER": ""},
+    )
+    assert "DONE" in result.stdout
+    assert "LEAKED_E" not in result.stdout
+    assert "LEAKED_U" not in result.stdout
+
+
+def _top_level_exits(text):
+    """Lines calling `exit` outside any function definition.
+
+    Indentation is no guide — an `exit` nested in an `if` is still top level,
+    and that is exactly the form that killed a session start once already.
+    Tracks function bodies by the `name() {` ... `}` pairs shfmt guarantees.
+    """
+    import re
+
+    offenders, depth = [], 0
+    for i, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*\(\)\s*\{", stripped):
+            depth += 1
+            continue
+        if depth and stripped == "}":
+            depth -= 1
+            continue
+        if depth or stripped.startswith("#"):
+            continue
+        if re.match(r"^exit\b", stripped):
+            offenders.append(f"{i}: {stripped}")
+    return offenders
+
+
+@pytest.mark.parametrize("hook", STARTUP_HOOKS)
+def test_hooks_have_no_top_level_exit(hook):
+    """Static counterpart to the sourcing test, applied to every startup hook.
+    `exit` anywhere outside a function ends start.sh and the container with it —
+    including on error paths, where it turns a recoverable problem into a
+    session that never starts."""
+    path = HOOK_DIR / hook
+    if not path.is_file():
+        pytest.skip(f"{hook} not present")
+    offenders = _top_level_exits(path.read_text())
+    assert not offenders, f"{hook} exits the sourcing shell at {offenders}"
+
+
+def test_the_exit_detector_actually_detects():
+    """A scanner that silently matches nothing would make the guard useless."""
+    assert _top_level_exits("echo hi\nexit 0\n")
+    assert _top_level_exits("if [ -z x ]; then\n\texit 1\nfi\n")  # indented
+    assert not _top_level_exits("f() {\n\texit 0\n}\nf\n")  # inside a function

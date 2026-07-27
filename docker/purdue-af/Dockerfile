@@ -291,6 +291,21 @@ HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
 # into the runner's docker daemon just to `docker run` them). The CVMFS
 # check needs the host's /cvmfs and lives in the e2e-pre-release job.
 FROM runtime AS smoke
+# start.sh SOURCES before-notebook.d/*.sh, so a top-level `exit` in any hook
+# terminates the container before JupyterLab launches — a failure that only
+# shows up at spawn time. Source the agent hook the same way start.sh does and
+# prove the shell survives it. (config-extensions.sh is left out on purpose: it
+# reaches the network to install code-server extensions.)
+RUN NB_USER=jovyan NAMESPACE=cms bash -c \
+        'source /usr/local/bin/before-notebook.d/config-agents.sh; echo HOOKS_SURVIVED' \
+        >/tmp/hooks.log 2>&1; \
+    cat /tmp/hooks.log; \
+    grep -q HOOKS_SURVIVED /tmp/hooks.log || { \
+        echo "FATAL: sourcing config-agents.sh exited the shell — start.sh would die" >&2; \
+        exit 1; \
+    }; \
+    rm -f /tmp/hooks.log
+
 RUN nvcc --version >/dev/null && \
     ps --version >/dev/null && \
     klist -V >/dev/null && \
