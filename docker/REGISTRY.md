@@ -23,11 +23,11 @@ cluster pulls ◀── geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purduea
   ci.yml publish stage after the full pipeline is green), semver (immutable,
   added only by release-image.yml, promote-by-digest).
 - **CI-built images**: purdue-af, agentic-interface, af-pod-monitor,
-  af-node-monitor. Other large images (dask-gateway variants,
-  interlink-slurm-plugin, servicex-science-coffea) are built only by the
-  cluster admin out-of-band — they exceed
-  GitHub-hosted runner limits. Pixi environments are validated by the
-  ci-pixi-global.yml stage instead.
+  af-node-monitor. Three larger images (dask-gateway-server,
+  interlink-slurm-plugin, servicex-science-coffea) exceed GitHub-hosted runner
+  limits and are built in-cluster with kaniko instead — see
+  [kaniko-build-jobs/README.md](kaniko-build-jobs/README.md). Pixi environments
+  are validated by the ci-pixi-global.yml stage instead.
 
 ## Registry configuration
 

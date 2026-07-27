@@ -59,7 +59,6 @@
 
   ignorePaths: [
     'docker/dask-gateway-server/**', // vendored fork — tracked upstream, do not churn
-    'docker/purdue-af-old/**', // legacy image tree
   ],
 
   // Flux manager is opt-in by path: parse everything Flux reconciles.
