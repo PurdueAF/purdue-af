@@ -26,11 +26,7 @@ rm -rf $NEW_HOME/.jupyter/lab/user-settings/jupyterlab-topbar-extension/
 
 IMAGE_VERSION=${JUPYTER_IMAGE#*:}
 
-if [ $NAMESPACE == "cms-dev" ]; then
-	text='{"text":"🚧 dev 🚧  |  Purdue AF v'"$IMAGE_VERSION"'  |  👤 '"$NB_USER"'  |  "}'
-else
-	text='{"text":"Purdue AF v'"$IMAGE_VERSION"'  |  👤 '"$NB_USER"'  |  "}'
-fi
+text='{"text":"Purdue AF v'"$IMAGE_VERSION"'  |  👤 '"$NB_USER"'  |  "}'
 
 echo "$text" >"$TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings"
 

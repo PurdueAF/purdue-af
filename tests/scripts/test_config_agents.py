@@ -96,10 +96,10 @@ def _adds(calls):
 
 
 def test_url_follows_the_namespace(run_script):
-    _, calls = run_script(NAMESPACE="cms-dev")
+    _, calls = run_script(NAMESPACE="cms-other")
     adds = _adds(calls)
     assert len(adds) == 2
-    assert all("agentic-interface.cms-dev.svc.cluster.local:8888" in c for c in adds)
+    assert all("agentic-interface.cms-other.svc.cluster.local:8888" in c for c in adds)
 
 
 def test_url_defaults_to_the_production_namespace(run_script):

@@ -135,7 +135,6 @@ serverFiles:
         static_configs:
           - targets:
               - "cms.geddes.rcac.purdue.edu"
-              - "cmsdev.geddes.rcac.purdue.edu"
       - job_name: "kube-state-metrics"
         honor_timestamps: false
         static_configs:
@@ -435,10 +434,9 @@ serverFiles:
       # Can users get in? ---------------------------------------------------
       - name: af-access
         rules:
-          # Scoped to the production hub on purpose: the same job also scrapes
-          # cmsdev.geddes.rcac.purdue.edu, which is parked and permanently
-          # down — an unscoped `up == 0` would fire forever and drown the
-          # health signal in a known non-problem.
+          # Scoped to this environment's own hub on purpose. The jupyterhub
+          # job is a static target list, so an unscoped `up == 0` would fire
+          # for any other hub added to it and drown the health signal.
           - alert: AFHubDown
             expr: up{job="jupyterhub", instance="${jupyterhub_host}"} == 0
             for: 5m

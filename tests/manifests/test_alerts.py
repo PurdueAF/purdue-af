@@ -56,8 +56,8 @@ def test_alert_names_are_prefixed():
 
 
 def test_hub_alert_is_scoped_to_this_environment():
-    """The jupyterhub job also scrapes the parked cmsdev hub, which is
-    permanently down — an unscoped `up == 0` fires forever."""
+    """The jupyterhub job is a static target list; an unscoped `up == 0`
+    would fire for any other hub added to it."""
     hub = next(r for r in rules() if r["alert"] == "AFHubDown")
     assert "${jupyterhub_host}" in hub["expr"], (
         "AFHubDown must be scoped to the environment's own hub"
