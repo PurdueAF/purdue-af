@@ -211,6 +211,24 @@
       allowedVersions: '<2.13',
     },
     {
+      // xrootd is capped below 6.x in BOTH pixi manifests (2026-07). The 6.0
+      // packaging split moved the Python bindings out of the `xrootd` package
+      // into `python-xrootd`: conda-forge ships no py312 build of `xrootd` 6.x
+      // at all, so an automated bump would silently drop the `XRootD` module
+      // that rucio-clients and fsspec-xrootd import, while xrdcp kept working.
+      // 6.0 also breaks callers: glob/iglob default to raise_error=true,
+      // `xrdcp --allow-http` is gone, the Davix XrdClHttp plugin is removed,
+      // and XrdEc is deprecated.
+      // 5.9.x is NOT stale — it is maintained in parallel with 6.x (5.9.6 and
+      // 6.1.0 shipped the same day), so patch bumps stay allowed.
+      // To lift: move pixi/base AND pixi/global together, add `python-xrootd`
+      // explicitly, and confirm `import XRootD` plus fsspec-xrootd still work
+      // (pixi/check-env.py gates the import).
+      matchPackageNames: ['xrootd', 'python-xrootd', 'libxrootd'],
+      matchDatasources: ['conda'],
+      allowedVersions: '<6',
+    },
+    {
       // Python is deliberately frozen at 3.12 platform-wide (2026-07): the
       // science stack is capped by conda-forge tensorflow (no 3.13/3.14
       // builds exist), and the infra images/tests follow so there is ONE

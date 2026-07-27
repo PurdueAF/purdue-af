@@ -206,3 +206,27 @@ def test_root_is_not_promised_from_the_bare_session():
 def test_context_stays_within_a_sane_context_budget():
     """It is injected into every agent turn; unbounded growth is a real cost."""
     assert len(context().splitlines()) < 140
+
+
+# --- dependency pins the platform context depends on ----------------------
+
+
+def test_xrootd_is_capped_below_the_binding_split():
+    """conda-forge ships no py312 build of `xrootd` 6.x — the Python bindings
+    moved to `python-xrootd`. An unguarded Renovate bump would keep xrdcp
+    working while silently removing `import XRootD`, so the cap must survive
+    as long as the manifests pin a 5.x version."""
+    renovate = (REPO / ".github/renovate.json5").read_text()
+    manifests = [
+        (REPO / "pixi/base/pixi.toml").read_text(),
+        (REPO / "pixi/global/pixi.toml").read_text(),
+    ]
+    pinned_5x = any(re.search(r'^xrootd\s*=\s*"==5\.', m, re.M) for m in manifests)
+    if not pinned_5x:
+        return  # migrated to 6.x deliberately; the cap should have been lifted
+    block = renovate[renovate.index("matchPackageNames: ['xrootd'") - 900 :]
+    assert "allowedVersions: '<6'" in block
+    for name in ("xrootd", "python-xrootd", "libxrootd"):
+        assert f"'{name}'" in block, f"{name} not covered by the cap"
+    # the reason has to travel with the pin, or it gets lifted blindly
+    assert "python-xrootd" in block and "py312" in block
