@@ -6,8 +6,16 @@ target-version = "py312"
 extend-exclude = ["docker/dask-gateway-server"]
 
 [lint]
-# Defaults (E4/E7/E9, F) + import sorting (I), matching previous black+isort CI.
-extend-select = ["I"]
+# E4/E7/E9 + F (ruff's pre-0.16 defaults) + import sorting (I), matching the
+# previous black+isort CI.
+#
+# Spelled as an explicit `select`, NOT `extend-select`: ruff 0.16.0 grew its
+# default rule set from 59 rules to 413, so `extend-select = ["I"]` silently
+# turned on ~350 new rules and broke the lint job (PR #105 — 146 findings
+# across BLE001/PLW1510/RUF059/EXE001/S102/... none of which this repo has
+# ever opted into). Keeping the list explicit makes the ruff version bump a
+# no-op and any future ruleset change a deliberate edit here.
+select = ["E4", "E7", "E9", "F", "I"]
 
 [lint.per-file-ignores]
 # JupyterHub config snippets: `c` is the config object injected by the hub at exec time.
