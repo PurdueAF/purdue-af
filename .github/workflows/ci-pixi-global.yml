@@ -96,6 +96,28 @@ jobs:
       - name: Verified reuse — identical input state already passed
         if: steps.present.outputs.have_lock == 'true' && steps.memo.outputs.cache-hit == 'true'
         run: echo "skipping — ${{ steps.key.outputs.key }} already green" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Login to ghcr.io
+        if: (steps.present.outputs.have_lock != 'true' || steps.memo.outputs.cache-hit != 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4 # Renovate pins to digest
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      # The ~13 GB pull and the global-env install need each other's results
+      # only at `docker run` time, so they overlap: the pull runs detached
+      # while pixi installs, and by the smoke-test step the image is local.
+      - name: Start the AF image pull (detached)
+        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.cache-hit != 'true'
+        env:
+          AF_IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          set -euo pipefail
+          rm -f /tmp/af-pull.done /tmp/af-pull.failed
+          nohup bash -c '
+            if docker pull -q "$AF_IMAGE"; then touch /tmp/af-pull.done
+            else touch /tmp/af-pull.failed; fi
+          ' >/tmp/af-pull.log 2>&1 &
+          echo "pulling $AF_IMAGE in the background"
       - uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f # v0.10.0 # Renovate pins to digest
         if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.cache-hit != 'true'
         with:
@@ -119,13 +141,16 @@ jobs:
             pixi install --manifest-path "$MANIFEST" --locked
             echo "updated=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: Login to ghcr.io
-        if: (steps.present.outputs.have_lock != 'true' || steps.memo.outputs.cache-hit != 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4 # Renovate pins to digest
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
+      # Fails loudly on a bad pull instead of letting `docker run` retry it
+      # serially, which would silently give back the overlap.
+      - name: Wait for the AF image
+        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          while [ ! -f /tmp/af-pull.done ] && [ ! -f /tmp/af-pull.failed ]; do sleep 5; done
+          if [ -f /tmp/af-pull.failed ]; then
+            echo "::error::AF image pull failed"; cat /tmp/af-pull.log; exit 1
+          fi
       - name: Import-smoke the global env (inside the AF image)
         if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.cache-hit != 'true'
         run: |
