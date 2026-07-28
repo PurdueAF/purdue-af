@@ -12,6 +12,8 @@ dependencies = [
     "asgi-lifespan>=2.1",
     # runtime deps of the sources under test
     "mcp[cli]>=1.3.0", # agentic-interface
+    "fastapi>=0.115", # supersonic-model-manager
+    "python-multipart>=0.0.20", # supersonic-model-manager uploads
     "httpx>=0.27.0",
     "pyyaml>=6.0",
     "oauthenticator>=17.0", # jupyterhub extraFiles

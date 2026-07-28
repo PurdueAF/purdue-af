@@ -1,0 +1,9 @@
+apiVersion: v2
+name: supersonic-model-manager
+description: Web dashboard for managing the Triton model repository of a SuperSONIC deployment.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://fastmachinelearning.org/SuperSONIC/
+annotations:
+  artifacthub.io/category: ai-machine-learning

@@ -1,0 +1,137 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "modelManager.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "modelManager.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas | default 1 }}
+  strategy:
+    # The PVC may be ReadWriteOnce; never run two writers at once.
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "modelManager.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "modelManager.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/auth: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "modelManager.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: model-manager
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: INSTANCE_NAME
+              value: {{ .Values.supersonicRelease | default (include "modelManager.name" .) | quote }}
+            - name: SUPERSONIC_RELEASE
+              value: {{ .Values.supersonicRelease | quote }}
+            - name: INFERENCE_ENDPOINT
+              value: {{ .Values.inferenceEndpoint | quote }}
+            - name: MODEL_REPOSITORY_PATH
+              value: {{ .Values.modelRepository.mountPath | quote }}
+            - name: PVC_NAME
+              value: {{ .Values.modelRepository.claimName | quote }}
+            - name: READ_ONLY
+              value: {{ .Values.modelRepository.readOnly | quote }}
+            - name: MAX_UPLOAD_BYTES
+              value: {{ .Values.modelRepository.maxUploadBytes | quote }}
+            - name: REFRESH_SECONDS
+              value: {{ .Values.refreshSeconds | quote }}
+            - name: TRITON_DISCOVERY
+              value: {{ .Values.triton.discovery | quote }}
+            - name: TRITON_NAMESPACE
+              value: {{ .Values.triton.namespace | default .Release.Namespace | quote }}
+            - name: TRITON_LABEL_SELECTOR
+              value: {{ include "modelManager.tritonSelector" . | quote }}
+            - name: TRITON_HTTP_PORT
+              value: {{ .Values.triton.httpPort | quote }}
+            - name: TRITON_ENDPOINTS
+              value: {{ join "," .Values.triton.endpoints | quote }}
+            - name: TRITON_TIMEOUT_S
+              value: {{ .Values.triton.timeoutSeconds | quote }}
+            - name: PROMETHEUS_URL
+              value: {{ .Values.prometheus.url | quote }}
+            - name: PROMETHEUS_SELECTOR
+              value: {{ include "modelManager.prometheusSelector" . | quote }}
+            - name: PROMETHEUS_WINDOW
+              value: {{ .Values.prometheus.window | quote }}
+            - name: PROMETHEUS_TIMEOUT_S
+              value: {{ .Values.prometheus.timeoutSeconds | quote }}
+            - name: AUTH_ENABLED
+              value: {{ .Values.auth.enabled | quote }}
+            {{- if .Values.auth.enabled }}
+            - name: AUTH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "modelManager.authSecretName" . }}
+                  key: username
+            - name: AUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "modelManager.authSecretName" . }}
+                  key: password
+            {{- end }}
+          volumeMounts:
+            - name: model-repository
+              mountPath: {{ .Values.modelRepository.mountPath }}
+              {{- if .Values.modelRepository.subPath }}
+              subPath: {{ .Values.modelRepository.subPath }}
+              {{- end }}
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: model-repository
+          persistentVolumeClaim:
+            claimName: {{ .Values.modelRepository.claimName }}
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

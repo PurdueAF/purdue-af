@@ -1,0 +1,1581 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="system">
+<head>
+  <meta charset="UTF-8" />
+  <title>SuperSONIC Model Manager</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <link rel="icon" type="image/svg+xml" href="/static/img/supersonic-mark.svg" />
+  <script>
+    (function () {
+      try {
+        var v = localStorage.getItem("model-manager-theme");
+        document.documentElement.dataset.theme =
+          v === "light" || v === "dark" || v === "system" ? v : "system";
+      } catch (e) {
+        document.documentElement.dataset.theme = "system";
+      }
+    })();
+  </script>
+  <style>
+    :root {
+      --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+      --radius-lg: 14px;
+      --radius: 10px;
+      --radius-sm: 6px;
+      --radius-pill: 999px;
+
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+
+      --text-2xs: 0.625rem;
+      --text-xs: 0.6875rem;
+      --text-sm: 0.8125rem;
+      --text-base: 0.875rem;
+      --text-ui: 0.9375rem;
+      --text-lg: 1.125rem;
+      --text-xl: 1.5rem;
+
+      --letter-overline: 0.07em;
+      --dur: 160ms;
+    }
+
+    html[data-theme="light"] {
+      --bg: #f4f5f7;
+      --surface: #ffffff;
+      --surface-sunken: #fafafb;
+      --surface-hover: #f6f7f9;
+      --border: #e3e5ea;
+      --border-strong: #cfd3da;
+      --text: #12141a;
+      --text-muted: #6b7280;
+      --text-faint: #9aa1ac;
+      --accent: #2f6df6;
+      --accent-soft: rgba(47, 109, 246, 0.1);
+      --ok: #12a37a;
+      --ok-soft: rgba(18, 163, 122, 0.12);
+      --warn: #d18700;
+      --warn-soft: rgba(209, 135, 0, 0.13);
+      --danger: #dc4b4b;
+      --danger-soft: rgba(220, 75, 75, 0.12);
+      --track: #e6e8ec;
+      --shadow: 0 1px 2px rgba(16, 20, 30, 0.05), 0 4px 16px rgba(16, 20, 30, 0.05);
+      --shadow-pop: 0 8px 32px rgba(16, 20, 30, 0.14);
+    }
+
+    html[data-theme="dark"] {
+      --bg: #0e1014;
+      --surface: #171a20;
+      --surface-sunken: #13161b;
+      --surface-hover: #1d212a;
+      --border: #272c36;
+      --border-strong: #363c48;
+      --text: #e8eaef;
+      --text-muted: #9aa2b1;
+      --text-faint: #6b7382;
+      --accent: #5b8dff;
+      --accent-soft: rgba(91, 141, 255, 0.14);
+      --ok: #3ecfa0;
+      --ok-soft: rgba(62, 207, 160, 0.14);
+      --warn: #eab456;
+      --warn-soft: rgba(234, 180, 86, 0.14);
+      --danger: #f08585;
+      --danger-soft: rgba(240, 133, 133, 0.14);
+      --track: #262b34;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
+      --shadow-pop: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      html[data-theme="system"] {
+        --bg: #0e1014;
+        --surface: #171a20;
+        --surface-sunken: #13161b;
+        --surface-hover: #1d212a;
+        --border: #272c36;
+        --border-strong: #363c48;
+        --text: #e8eaef;
+        --text-muted: #9aa2b1;
+        --text-faint: #6b7382;
+        --accent: #5b8dff;
+        --accent-soft: rgba(91, 141, 255, 0.14);
+        --ok: #3ecfa0;
+        --ok-soft: rgba(62, 207, 160, 0.14);
+        --warn: #eab456;
+        --warn-soft: rgba(234, 180, 86, 0.14);
+        --danger: #f08585;
+        --danger-soft: rgba(240, 133, 133, 0.14);
+        --track: #262b34;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
+        --shadow-pop: 0 8px 32px rgba(0, 0, 0, 0.5);
+      }
+    }
+
+    @media (prefers-color-scheme: light) {
+      html[data-theme="system"] {
+        --bg: #f4f5f7;
+        --surface: #ffffff;
+        --surface-sunken: #fafafb;
+        --surface-hover: #f6f7f9;
+        --border: #e3e5ea;
+        --border-strong: #cfd3da;
+        --text: #12141a;
+        --text-muted: #6b7280;
+        --text-faint: #9aa1ac;
+        --accent: #2f6df6;
+        --accent-soft: rgba(47, 109, 246, 0.1);
+        --ok: #12a37a;
+        --ok-soft: rgba(18, 163, 122, 0.12);
+        --warn: #d18700;
+        --warn-soft: rgba(209, 135, 0, 0.13);
+        --danger: #dc4b4b;
+        --danger-soft: rgba(220, 75, 75, 0.12);
+        --track: #e6e8ec;
+        --shadow: 0 1px 2px rgba(16, 20, 30, 0.05), 0 4px 16px rgba(16, 20, 30, 0.05);
+        --shadow-pop: 0 8px 32px rgba(16, 20, 30, 0.14);
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .shell {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: var(--space-6) var(--space-5) var(--space-8);
+    }
+
+    /* ---------- header ---------- */
+
+    header.top {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      margin-bottom: var(--space-5);
+      flex-wrap: wrap;
+    }
+
+    .brand { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+
+    /* Official SuperSONIC mark: the repository ships a dark and a light
+       variant, so swap them with the theme rather than recolouring. */
+    .brand-mark { width: 43px; height: 43px; flex: none; display: block; }
+    .brand-mark img { width: 100%; height: 100%; display: block; }
+    .brand-mark .on-dark { display: none; }
+
+    html[data-theme="dark"] .brand-mark .on-light { display: none; }
+    html[data-theme="dark"] .brand-mark .on-dark { display: block; }
+
+    @media (prefers-color-scheme: dark) {
+      html[data-theme="system"] .brand-mark .on-light { display: none; }
+      html[data-theme="system"] .brand-mark .on-dark { display: block; }
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: var(--text-lg);
+      font-weight: 650;
+      letter-spacing: -0.015em;
+      white-space: nowrap;
+    }
+
+    .brand .sub {
+      margin: 0;
+      font-size: var(--text-xs);
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .spacer { flex: 1 1 auto; }
+
+    .head-actions { display: flex; align-items: center; gap: var(--space-2); }
+
+    /* ---------- primitives ---------- */
+
+    .btn {
+      appearance: none;
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+      font-size: var(--text-sm);
+      padding: 7px 13px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      transition: background var(--dur), border-color var(--dur), opacity var(--dur);
+      white-space: nowrap;
+    }
+    .btn:hover:not(:disabled) { background: var(--surface-hover); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn.primary {
+      background: var(--accent); border-color: var(--accent); color: #fff;
+    }
+    .btn.primary:hover:not(:disabled) { filter: brightness(1.07); background: var(--accent); }
+    .btn.ghost { border-color: transparent; background: transparent; color: var(--text-muted); }
+    .btn.ghost:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
+    .btn.danger { color: var(--danger); border-color: var(--border); }
+    .btn.danger:hover:not(:disabled) { background: var(--danger-soft); border-color: var(--danger); }
+    .btn.icon { padding: 7px 9px; }
+
+    /* Theme toggle shows the mode it will switch *to*, so one click always
+       produces a visible change. Both icons occupy the same cell to avoid
+       any width shift when swapping. */
+    .theme-toggle { position: relative; }
+    .theme-toggle svg { transition: opacity 140ms ease, transform 220ms ease; }
+    .theme-toggle .icon-moon { position: absolute; top: 50%; left: 50%; margin: -7.5px 0 0 -7.5px; }
+    .theme-toggle .icon-sun { opacity: 0; transform: rotate(-45deg); }
+    .theme-toggle .icon-moon { opacity: 1; transform: none; }
+    .theme-toggle[data-target="light"] .icon-sun { opacity: 1; transform: none; }
+    .theme-toggle[data-target="light"] .icon-moon { opacity: 0; transform: rotate(45deg); }
+
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 9px;
+      border-radius: var(--radius-pill);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-size: var(--text-xs);
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); flex: none; }
+    .chip.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, var(--border)); background: var(--ok-soft); }
+    .chip.ok .dot { background: var(--ok); }
+    .chip.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, var(--border)); background: var(--warn-soft); }
+    .chip.warn .dot { background: var(--warn); }
+    .chip.bad { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); background: var(--danger-soft); }
+    .chip.bad .dot { background: var(--danger); }
+
+    /* Inference endpoint: the address clients actually send requests to. */
+    .chip.endpoint {
+      font: inherit;
+      font-size: var(--text-xs);
+      cursor: pointer;
+      gap: var(--space-2);
+      padding: 3px 9px;
+      max-width: 56ch;
+      transition: border-color var(--dur), background var(--dur), color var(--dur);
+    }
+    .chip.endpoint:hover { border-color: var(--accent); color: var(--accent); }
+    .chip.endpoint .k {
+      text-transform: uppercase;
+      letter-spacing: var(--letter-overline);
+      font-size: var(--text-2xs);
+      color: var(--text-faint);
+    }
+    .chip.endpoint .v { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chip.endpoint:hover .v { color: var(--accent); }
+    .chip.endpoint svg { flex: none; opacity: 0.55; }
+    .chip.endpoint.copied { border-color: var(--ok); color: var(--ok); background: var(--ok-soft); }
+    .chip.endpoint.copied .v { color: var(--ok); font-weight: 600; }
+    /* While confirming, the chip reads just "copied!" */
+    .chip.endpoint.copied .k, .chip.endpoint.copied svg { display: none; }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: var(--radius-sm);
+      font-size: var(--text-2xs);
+      font-weight: 600;
+      letter-spacing: var(--letter-overline);
+      text-transform: uppercase;
+      border: 1px solid transparent;
+    }
+    .tag.pvc { color: var(--accent); background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 25%, transparent); }
+    .tag.external { color: var(--text-muted); background: var(--surface-sunken); border-color: var(--border); }
+    .tag.both { color: var(--ok); background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 25%, transparent); }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+    }
+
+    .card-head {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: var(--space-4) var(--space-5);
+      border-bottom: 1px solid var(--border);
+    }
+    .card-head h2 {
+      margin: 0;
+      font-size: var(--text-xs);
+      font-weight: 650;
+      letter-spacing: var(--letter-overline);
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+    /* ---------- top row ---------- */
+
+    .top-grid {
+      display: grid;
+      grid-template-columns: minmax(260px, 340px) minmax(240px, 1fr) minmax(280px, 1fr);
+      gap: var(--space-4);
+      margin-bottom: var(--space-4);
+      align-items: stretch;
+    }
+
+    @media (max-width: 1080px) {
+      .top-grid { grid-template-columns: 1fr 1fr; }
+      .top-grid > .upload-card { grid-column: 1 / -1; }
+    }
+    @media (max-width: 720px) {
+      .top-grid { grid-template-columns: 1fr; }
+      .shell { padding: var(--space-4) var(--space-3) var(--space-6); }
+    }
+
+    /* storage */
+
+    .storage-body {
+      display: flex; align-items: center; gap: var(--space-5);
+      padding: var(--space-5);
+    }
+
+    .gauge { position: relative; width: 116px; height: 116px; flex: none; }
+    .gauge svg { transform: rotate(-90deg); display: block; }
+    .gauge .track-ring { stroke: var(--track); }
+    .gauge .value-ring {
+      stroke: var(--accent);
+      stroke-linecap: round;
+      transition: stroke-dashoffset 600ms cubic-bezier(0.2, 0.7, 0.3, 1), stroke var(--dur);
+    }
+    .gauge.warn .value-ring { stroke: var(--warn); }
+    .gauge.bad .value-ring { stroke: var(--danger); }
+    .gauge-label {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 1px;
+    }
+    .gauge-pct { font-size: var(--text-xl); font-weight: 640; letter-spacing: -0.03em; }
+    .gauge-cap { font-size: var(--text-2xs); color: var(--text-faint); text-transform: uppercase; letter-spacing: var(--letter-overline); }
+
+    .storage-facts { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+    .fact .k {
+      font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--letter-overline);
+      color: var(--text-faint);
+    }
+    .fact .v { font-size: var(--text-ui); font-weight: 560; }
+    .fact .v small { font-weight: 400; color: var(--text-muted); font-size: var(--text-sm); }
+
+    /* servers */
+
+    .server-list { padding: var(--space-3) var(--space-3); display: flex; flex-direction: column; gap: 2px; max-height: 208px; overflow-y: auto; }
+    .server-row {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: 7px var(--space-3);
+      border-radius: var(--radius-sm);
+      font-size: var(--text-sm);
+    }
+    .server-row:hover { background: var(--surface-hover); }
+    .server-row .name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--text-xs); }
+    .server-row .count { color: var(--text-muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--text-faint); }
+    .status-dot.live { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+    .status-dot.down { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+
+    /* upload */
+
+    .dropzone {
+      margin: var(--space-4);
+      border: 1.5px dashed var(--border-strong);
+      border-radius: var(--radius);
+      padding: var(--space-5) var(--space-4);
+      text-align: center;
+      transition: border-color var(--dur), background var(--dur);
+      cursor: pointer;
+    }
+    .dropzone:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .dropzone.drag { border-color: var(--accent); background: var(--accent-soft); }
+    .dropzone .title { font-size: var(--text-sm); font-weight: 560; }
+    .dropzone .hint { font-size: var(--text-xs); color: var(--text-muted); margin-top: 3px; }
+    .dropzone .links { margin-top: var(--space-3); display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; }
+
+    .upload-progress {
+      margin: 0 var(--space-4) var(--space-4);
+      display: none;
+    }
+    .upload-progress.active { display: block; }
+    .bar {
+      height: 6px; border-radius: var(--radius-pill); background: var(--track); overflow: hidden;
+    }
+    .bar > i {
+      display: block; height: 100%; width: 0%;
+      background: var(--accent); border-radius: inherit;
+      transition: width 200ms linear;
+    }
+    .upload-progress .meta {
+      display: flex; justify-content: space-between;
+      font-size: var(--text-xs); color: var(--text-muted); margin-top: 6px;
+    }
+
+    /* ---------- table ---------- */
+
+    .table-head {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    .search {
+      position: relative; display: flex; align-items: center;
+    }
+    .search input {
+      appearance: none;
+      font: inherit; font-size: var(--text-sm);
+      padding: 6px 10px 6px 30px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface-sunken);
+      color: var(--text);
+      width: 220px;
+      transition: border-color var(--dur), background var(--dur);
+    }
+    .search input:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+    .search svg { position: absolute; left: 9px; color: var(--text-faint); pointer-events: none; }
+
+    table { width: 100%; border-collapse: collapse; }
+
+    thead th {
+      text-align: left;
+      font-size: var(--text-2xs);
+      font-weight: 620;
+      letter-spacing: var(--letter-overline);
+      text-transform: uppercase;
+      color: var(--text-faint);
+      padding: var(--space-3) var(--space-3);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      background: var(--surface);
+      position: sticky; top: 0; z-index: 1;
+    }
+    thead th.sortable { cursor: pointer; user-select: none; }
+    thead th.sortable:hover { color: var(--text-muted); }
+    thead th .arrow { opacity: 0; margin-left: 3px; }
+    thead th.sorted .arrow { opacity: 1; }
+    th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    tbody td {
+      padding: var(--space-3);
+      border-bottom: 1px solid var(--border);
+      font-size: var(--text-sm);
+      vertical-align: middle;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr.model-row:hover { background: var(--surface-hover); }
+    tbody tr.pending { opacity: 0.55; }
+
+    .model-name {
+      display: flex; align-items: center; gap: var(--space-2);
+      min-width: 0;
+    }
+    .model-name .n { font-weight: 560; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .model-name .caret {
+      border: none; background: none; color: var(--text-faint); cursor: pointer;
+      padding: 2px; display: grid; place-items: center; border-radius: 4px;
+      transition: transform var(--dur), color var(--dur);
+      flex: none;
+    }
+    .model-name .caret:hover { color: var(--text); }
+    .model-name .caret.open { transform: rotate(90deg); }
+    .model-sub { font-size: var(--text-2xs); color: var(--text-faint); font-family: var(--font-mono); }
+
+    td.metric { color: var(--text); }
+    td.metric .unit { color: var(--text-faint); font-size: var(--text-xs); margin-left: 2px; }
+    td.metric.empty { color: var(--text-faint); }
+
+    .loaded-cell { display: flex; align-items: center; gap: var(--space-2); justify-content: flex-end; }
+    .mini-bar { width: 34px; height: 5px; border-radius: var(--radius-pill); background: var(--track); overflow: hidden; flex: none; }
+    .mini-bar > i { display: block; height: 100%; background: var(--ok); }
+
+    /* iOS switch */
+
+    /* The checkbox is styled directly, so it stays a real, focusable control
+       exposed to assistive tech rather than an invisible input behind a span. */
+    .switch { display: inline-flex; align-items: center; }
+    .switch input {
+      appearance: none;
+      -webkit-appearance: none;
+      position: relative;
+      margin: 0;
+      width: 42px; height: 25px;
+      border-radius: var(--radius-pill);
+      background: var(--track);
+      border: none;
+      cursor: pointer;
+      flex: none;
+      transition: background var(--dur) ease;
+    }
+    .switch input::after {
+      content: "";
+      position: absolute;
+      top: 2px; left: 2px;
+      width: 21px; height: 21px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+      transition: transform 220ms cubic-bezier(0.3, 1.4, 0.5, 1);
+    }
+    .switch input:checked { background: var(--ok); }
+    .switch input:checked::after { transform: translateX(17px); }
+    .switch input:indeterminate { background: var(--warn); }
+    .switch input:indeterminate::after { transform: translateX(8.5px); }
+    .switch input:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+    .switch input:disabled { opacity: 0.4; cursor: not-allowed; }
+    .switch.busy input { opacity: 0.5; pointer-events: none; }
+
+    /* detail row */
+
+    tr.detail-row > td { padding: 0; background: var(--surface-sunken); border-bottom: 1px solid var(--border); }
+    .detail {
+      padding: var(--space-4) var(--space-5) var(--space-4) 44px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: var(--space-4);
+    }
+    .detail h4 {
+      margin: 0 0 var(--space-2);
+      font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--letter-overline);
+      color: var(--text-faint); font-weight: 620;
+    }
+    .kv { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--text-xs); padding: 3px 0; }
+    .kv .k { color: var(--text-muted); }
+    .kv .v { font-family: var(--font-mono); }
+    .state-pill {
+      font-size: var(--text-2xs); font-weight: 600; padding: 1px 6px; border-radius: var(--radius-sm);
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .state-pill.ready { color: var(--ok); background: var(--ok-soft); }
+    .state-pill.unavailable { color: var(--text-muted); background: var(--track); }
+    .state-pill.loading { color: var(--warn); background: var(--warn-soft); }
+
+    .empty-state {
+      padding: var(--space-8) var(--space-5);
+      text-align: center; color: var(--text-muted); font-size: var(--text-sm);
+    }
+
+    /* ---------- toasts & modal ---------- */
+
+    .toasts {
+      position: fixed; right: var(--space-5); bottom: var(--space-5);
+      display: flex; flex-direction: column; gap: var(--space-2);
+      z-index: 50; max-width: min(420px, calc(100vw - 40px));
+    }
+    .toast {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-pop);
+      padding: var(--space-3) var(--space-4);
+      font-size: var(--text-sm);
+      animation: rise 200ms ease;
+    }
+    .toast.ok { border-left-color: var(--ok); }
+    .toast.warn { border-left-color: var(--warn); }
+    .toast.err { border-left-color: var(--danger); }
+    .toast .t { font-weight: 580; }
+    .toast .d { color: var(--text-muted); font-size: var(--text-xs); margin-top: 2px; word-break: break-word; }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    dialog.modal {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow-pop);
+      padding: 0;
+      width: min(440px, calc(100vw - 32px));
+    }
+    dialog.modal::backdrop { background: rgba(8, 10, 14, 0.45); backdrop-filter: blur(2px); }
+    .modal-body { padding: var(--space-5); }
+    .modal-body h3 { margin: 0 0 var(--space-2); font-size: var(--text-ui); font-weight: 620; }
+    .modal-body p { margin: 0 0 var(--space-4); color: var(--text-muted); font-size: var(--text-sm); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+    .field { margin-bottom: var(--space-3); }
+    .field label { display: block; font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 4px; }
+    .field input[type="text"] {
+      width: 100%; font: inherit; font-size: var(--text-sm);
+      padding: 7px 10px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: var(--surface-sunken); color: var(--text);
+    }
+    .field input[type="text"]:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+    .check { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--text-muted); }
+
+    .file-summary {
+      background: var(--surface-sunken); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: var(--space-3);
+      font-size: var(--text-xs); font-family: var(--font-mono);
+      margin-bottom: var(--space-3);
+      max-height: 120px; overflow-y: auto;
+    }
+
+    .banner {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius);
+      background: var(--warn-soft);
+      border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+      color: var(--text);
+      font-size: var(--text-sm);
+      margin-bottom: var(--space-4);
+    }
+    .banner.hidden { display: none; }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="top">
+      <div class="brand">
+        <div class="brand-mark">
+          <img class="on-light" src="/static/img/supersonic-mark.svg" alt="SuperSONIC" />
+          <img class="on-dark" src="/static/img/supersonic-mark-light.svg" alt="" aria-hidden="true" />
+        </div>
+        <div>
+          <h1>SuperSONIC Model Manager</h1>
+          <p class="sub" id="brand-sub">&nbsp;</p>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <div class="head-actions">
+        <button class="chip endpoint" id="chip-endpoint" hidden>
+          <span class="k">inference</span>
+          <span class="v mono" id="endpoint-value"></span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="12" height="12" rx="2"></rect>
+            <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path>
+          </svg>
+        </button>
+        <span class="chip" id="chip-servers"><span class="dot"></span><span>–</span></span>
+        <span class="chip" id="chip-updated">–</span>
+        <button class="btn ghost icon theme-toggle" id="btn-theme">
+          <svg class="icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+          </svg>
+          <svg class="icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
+          </svg>
+        </button>
+        <button class="btn ghost icon" id="btn-refresh" title="Refresh now" aria-label="Refresh now">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M21 12a9 9 0 1 1-2.6-6.4"></path><path d="M21 4v5h-5"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="banner hidden" id="banner"></div>
+
+    <div class="top-grid">
+      <!-- Storage -->
+      <section class="card">
+        <div class="card-head"><h2>Model repository</h2></div>
+        <div class="storage-body">
+          <div class="gauge" id="gauge">
+            <svg width="116" height="116" viewBox="0 0 116 116">
+              <circle class="track-ring" cx="58" cy="58" r="49" fill="none" stroke-width="10"></circle>
+              <circle class="value-ring" id="gauge-ring" cx="58" cy="58" r="49" fill="none" stroke-width="10"
+                      stroke-dasharray="307.9" stroke-dashoffset="307.9"></circle>
+            </svg>
+            <div class="gauge-label">
+              <span class="gauge-pct" id="gauge-pct">–</span>
+              <span class="gauge-cap">used</span>
+            </div>
+          </div>
+          <div class="storage-facts">
+            <div class="fact">
+              <div class="k">Used / total</div>
+              <div class="v mono" id="fact-usage">–</div>
+            </div>
+            <div class="fact">
+              <div class="k">Free</div>
+              <div class="v mono" id="fact-free">–</div>
+            </div>
+            <div class="fact">
+              <div class="k">Models on PVC</div>
+              <div class="v mono" id="fact-count">–</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Servers -->
+      <section class="card">
+        <div class="card-head">
+          <h2>Triton servers</h2>
+          <div class="spacer"></div>
+          <span class="chip" id="chip-discovery">–</span>
+        </div>
+        <div class="server-list" id="server-list"></div>
+      </section>
+
+      <!-- Upload -->
+      <section class="card upload-card">
+        <div class="card-head"><h2>Upload model</h2></div>
+        <div class="dropzone" id="dropzone">
+          <div class="title">Drop a model here</div>
+          <div class="hint">A <span class="mono">.zip</span>/<span class="mono">.tar.gz</span> archive, or a model directory</div>
+          <div class="links">
+            <button class="btn" id="btn-pick-archive">Choose archive</button>
+            <button class="btn" id="btn-pick-dir">Choose folder</button>
+          </div>
+        </div>
+        <div class="upload-progress" id="upload-progress">
+          <div class="bar"><i id="upload-bar"></i></div>
+          <div class="meta"><span id="upload-name">–</span><span id="upload-pct">0%</span></div>
+        </div>
+        <input type="file" id="input-archive" class="sr-only" accept=".zip,.tar,.gz,.tgz,.bz2,.xz" />
+        <input type="file" id="input-dir" class="sr-only" webkitdirectory directory multiple />
+      </section>
+    </div>
+
+    <!-- Models -->
+    <section class="card">
+      <div class="table-head">
+        <h2 style="margin:0;font-size:var(--text-xs);font-weight:650;letter-spacing:var(--letter-overline);text-transform:uppercase;color:var(--text-muted)">Models</h2>
+        <span class="chip" id="chip-models">–</span>
+        <div class="spacer"></div>
+        <div class="search">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path>
+          </svg>
+          <input type="search" id="search" placeholder="Filter models" autocomplete="off" />
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table id="models-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="name" style="min-width:220px">Model <span class="arrow">▾</span></th>
+              <th>Where</th>
+              <th class="num sortable" data-sort="size">Size <span class="arrow">▾</span></th>
+              <th class="num sortable" data-sort="loaded">Loaded <span class="arrow">▾</span></th>
+              <th class="num sortable" data-sort="throughput">Throughput <span class="arrow">▾</span></th>
+              <th class="num sortable" data-sort="queue">Queue <span class="arrow">▾</span></th>
+              <th class="num sortable" data-sort="compute">Compute <span class="arrow">▾</span></th>
+              <th style="width:60px;text-align:center">Serve</th>
+              <th style="width:44px"></th>
+            </tr>
+          </thead>
+          <tbody id="models-body"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="models-empty" style="display:none">No models found.</div>
+    </section>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+
+  <dialog class="modal" id="upload-modal">
+    <form method="dialog" class="modal-body" id="upload-form">
+      <h3>Upload model</h3>
+      <p id="upload-desc">Confirm the model name before uploading.</p>
+      <div class="file-summary" id="upload-files"></div>
+      <div class="field">
+        <label for="upload-model-name">Model name</label>
+        <input type="text" id="upload-model-name" autocomplete="off" spellcheck="false" />
+      </div>
+      <div class="field check">
+        <input type="checkbox" id="upload-overwrite" />
+        <label for="upload-overwrite" style="margin:0">Replace an existing model with this name</label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" value="cancel" type="submit">Cancel</button>
+        <button class="btn primary" value="upload" type="submit" id="upload-confirm">Upload</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="confirm-modal">
+    <form method="dialog" class="modal-body">
+      <h3 id="confirm-title">Are you sure?</h3>
+      <p id="confirm-text"></p>
+      <div class="modal-actions">
+        <button class="btn" value="cancel" type="submit">Cancel</button>
+        <button class="btn danger" value="ok" type="submit" id="confirm-ok">Delete</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    "use strict";
+
+    const state = {
+      data: null,
+      sort: { key: "name", dir: 1 },
+      filter: "",
+      expanded: new Set(),
+      pending: new Set(),
+      timer: null,
+      inFlight: false,
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    /* ---------------- formatting ---------------- */
+
+    function fmtBytes(bytes) {
+      if (bytes === null || bytes === undefined) return "–";
+      if (bytes === 0) return "0 B";
+      const units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
+      const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+      const value = bytes / Math.pow(1024, i);
+      const digits = value >= 100 || i === 0 ? 0 : value >= 10 ? 1 : 2;
+      return `${value.toFixed(digits)} ${units[i]}`;
+    }
+
+    function fmtNumber(value, digits) {
+      if (value === null || value === undefined || !isFinite(value)) return null;
+      return value.toLocaleString(undefined, {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+      });
+    }
+
+    function fmtRate(value) {
+      if (value === null || value === undefined || !isFinite(value)) return null;
+      if (value === 0) return "0";
+      if (value >= 100) return fmtNumber(value, 0);
+      if (value >= 1) return fmtNumber(value, 1);
+      return fmtNumber(value, 2);
+    }
+
+    function fmtMillis(microseconds) {
+      if (microseconds === null || microseconds === undefined || !isFinite(microseconds)) return null;
+      const ms = microseconds / 1000;
+      if (ms >= 100) return fmtNumber(ms, 0);
+      if (ms >= 1) return fmtNumber(ms, 1);
+      return fmtNumber(ms, 2);
+    }
+
+    function fmtAgo(epochSeconds) {
+      if (!epochSeconds) return "–";
+      const seconds = Math.max(0, Date.now() / 1000 - epochSeconds);
+      if (seconds < 60) return `${Math.round(seconds)}s ago`;
+      if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
+      if (seconds < 86400) return `${Math.round(seconds / 3600)}h ago`;
+      return `${Math.round(seconds / 86400)}d ago`;
+    }
+
+    function escapeHtml(text) {
+      return String(text).replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+      );
+    }
+
+    /* ---------------- toasts ---------------- */
+
+    function toast(title, detail, kind) {
+      const el = document.createElement("div");
+      el.className = `toast ${kind || ""}`;
+      el.innerHTML =
+        `<div class="t">${escapeHtml(title)}</div>` +
+        (detail ? `<div class="d">${escapeHtml(detail)}</div>` : "");
+      $("toasts").appendChild(el);
+      setTimeout(() => {
+        el.style.transition = "opacity 240ms, transform 240ms";
+        el.style.opacity = "0";
+        el.style.transform = "translateY(6px)";
+        setTimeout(() => el.remove(), 260);
+      }, kind === "err" ? 14000 : kind === "warn" ? 9000 : 4500);
+    }
+
+    /* ---------------- data ---------------- */
+
+    async function api(path, options) {
+      const response = await fetch(path, options);
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch (e) {
+        /* non-JSON error body */
+      }
+      if (!response.ok) {
+        const message =
+          (payload && (payload.detail || payload.error)) || `HTTP ${response.status}`;
+        throw new Error(message);
+      }
+      return payload;
+    }
+
+    async function refresh() {
+      if (state.inFlight) return;
+      state.inFlight = true;
+      try {
+        state.data = await api("/api/state");
+        render();
+      } catch (error) {
+        showBanner(`Could not reach the backend: ${error.message}`);
+      } finally {
+        state.inFlight = false;
+      }
+    }
+
+    function scheduleRefresh() {
+      clearInterval(state.timer);
+      const seconds = (state.data && state.data.refreshSeconds) || 15;
+      state.timer = setInterval(refresh, seconds * 1000);
+    }
+
+    function showBanner(message) {
+      const banner = $("banner");
+      if (!message) {
+        banner.classList.add("hidden");
+        return;
+      }
+      banner.classList.remove("hidden");
+      banner.textContent = message;
+    }
+
+    /* ---------------- render ---------------- */
+
+    function render() {
+      const data = state.data;
+      if (!data) return;
+
+      $("brand-sub").textContent = `${data.instance} · ${data.namespace} namespace`;
+      renderEndpoint(data.inference || {});
+
+      const live = data.servers.filter((s) => s.live).length;
+      const chipServers = $("chip-servers");
+      chipServers.className = `chip ${live === 0 ? "bad" : live < data.servers.length ? "warn" : "ok"}`;
+      chipServers.innerHTML = `<span class="dot"></span><span>${live}/${data.servers.length} servers</span>`;
+      $("chip-updated").textContent = fmtAgo(data.updatedAt);
+      $("chip-discovery").textContent = data.kubernetes.discovery;
+
+      renderStorage(data);
+      renderServers(data);
+      renderModels(data);
+
+      const problems = [];
+      if (data.readOnly) problems.push("Read-only mode: uploads and model control are disabled.");
+      if (!data.storage.writable) problems.push(`Repository ${data.storage.path} is not writable.`);
+      if (data.prometheus.configured && data.prometheus.error) {
+        problems.push(`Prometheus: ${data.prometheus.error}`);
+      }
+      if (!data.prometheus.configured) problems.push("Prometheus is not configured — metrics are unavailable.");
+      if (data.servers.length === 0) problems.push("No Triton servers discovered.");
+      showBanner(problems.join("  •  "));
+    }
+
+    const ENDPOINT_SOURCES = {
+      ingress: "Envoy ingress — the address external clients use",
+      service: "Envoy service (in-cluster only — no ingress is configured)",
+      configured: "Configured explicitly in the chart values",
+    };
+
+    let currentEndpoint = "";
+
+    function renderEndpoint(inference) {
+      const chip = $("chip-endpoint");
+      if (!inference.endpoint) {
+        chip.hidden = true;
+        return;
+      }
+      chip.hidden = false;
+      currentEndpoint = inference.endpoint;
+      chip.title = `${ENDPOINT_SOURCES[inference.source] || "Inference endpoint"}\nClick to copy`;
+      // Leave the "copied!" confirmation alone if a refresh lands during it.
+      if (!chip.classList.contains("copied")) {
+        $("endpoint-value").textContent = inference.endpoint;
+      }
+    }
+
+    /** Clipboard API needs a secure context; fall back for plain-http access. */
+    async function copyText(text) {
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+      } catch (e) {
+        /* fall through to the legacy path */
+      }
+      try {
+        const area = document.createElement("textarea");
+        area.value = text;
+        area.setAttribute("readonly", "");
+        area.style.cssText = "position:fixed;top:-1000px;opacity:0";
+        document.body.appendChild(area);
+        area.select();
+        const ok = document.execCommand("copy");
+        area.remove();
+        return ok;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    $("chip-endpoint").addEventListener("click", async () => {
+      if (!currentEndpoint) return;
+      const chip = $("chip-endpoint");
+      if (!(await copyText(currentEndpoint))) {
+        toast("Could not copy", currentEndpoint, "err");
+        return;
+      }
+      chip.classList.add("copied");
+      $("endpoint-value").textContent = "copied!";
+      setTimeout(() => {
+        chip.classList.remove("copied");
+        $("endpoint-value").textContent = currentEndpoint;
+      }, 1300);
+    });
+
+    function renderStorage(data) {
+      const { usedBytes, totalBytes, freeBytes, modelsBytes } = data.storage;
+      const ratio = totalBytes > 0 ? Math.min(usedBytes / totalBytes, 1) : 0;
+      const circumference = 2 * Math.PI * 49;
+
+      const gauge = $("gauge");
+      gauge.className = `gauge ${ratio >= 0.9 ? "bad" : ratio >= 0.75 ? "warn" : ""}`;
+      $("gauge-ring").style.strokeDashoffset = String(circumference * (1 - ratio));
+      $("gauge-pct").textContent = totalBytes > 0 ? `${(ratio * 100).toFixed(ratio >= 0.1 ? 0 : 1)}%` : "–";
+
+      $("fact-usage").innerHTML =
+        `${fmtBytes(usedBytes)} <small>/ ${totalBytes ? fmtBytes(totalBytes) : "unknown"}</small>`;
+      $("fact-free").textContent = freeBytes != null ? fmtBytes(freeBytes) : "–";
+
+      // On a claim shared with other workloads, the models are only a slice of
+      // what is used, so show their own footprint next to the count.
+      const onPvc = data.models.filter((m) => m.source !== "external").length;
+      $("fact-count").innerHTML =
+        modelsBytes != null
+          ? `${onPvc} <small>· ${fmtBytes(modelsBytes)}</small>`
+          : String(onPvc);
+    }
+
+    function renderServers(data) {
+      const list = $("server-list");
+      if (!data.servers.length) {
+        list.innerHTML = `<div class="empty-state" style="padding:var(--space-5)">No Triton servers discovered.</div>`;
+        return;
+      }
+      list.innerHTML = data.servers
+        .map((server) => {
+          const ready = server.models.filter((m) => String(m.state).toUpperCase() === "READY").length;
+          const dot = server.live ? "live" : "down";
+          const detail = server.live
+            ? `${ready}/${server.models.length} loaded`
+            : (server.error || "unreachable").slice(0, 40);
+          return `
+            <div class="server-row" title="${escapeHtml(server.address)}${
+              server.error ? " — " + escapeHtml(server.error) : ""
+            }">
+              <span class="status-dot ${dot}"></span>
+              <span class="name">${escapeHtml(server.name)}</span>
+              <span class="count">${escapeHtml(detail)}</span>
+            </div>`;
+        })
+        .join("");
+    }
+
+    function sortValue(model, key) {
+      switch (key) {
+        case "size": return model.sizeBytes ?? -1;
+        case "loaded": return model.loadedCount;
+        case "throughput": return model.metrics.throughput ?? -1;
+        case "queue": return model.metrics.queueLatencyUs ?? -1;
+        case "compute": return model.metrics.computeLatencyUs ?? -1;
+        default: return model.name.toLowerCase();
+      }
+    }
+
+    function visibleModels(data) {
+      const needle = state.filter.trim().toLowerCase();
+      const rows = data.models.filter((m) => !needle || m.name.toLowerCase().includes(needle));
+      const { key, dir } = state.sort;
+      rows.sort((a, b) => {
+        const av = sortValue(a, key);
+        const bv = sortValue(b, key);
+        if (av < bv) return -dir;
+        if (av > bv) return dir;
+        return a.name.localeCompare(b.name);
+      });
+      return rows;
+    }
+
+    function metricCell(text, unit) {
+      if (text === null) return `<td class="num metric empty">–</td>`;
+      return `<td class="num metric">${text}<span class="unit">${unit}</span></td>`;
+    }
+
+    function renderModels(data) {
+      const body = $("models-body");
+      const rows = visibleModels(data);
+      const serverCount = data.servers.length;
+
+      $("chip-models").textContent = `${data.models.length} total`;
+      $("models-empty").style.display = rows.length ? "none" : "block";
+
+      document.querySelectorAll("thead th.sortable").forEach((th) => {
+        const active = th.dataset.sort === state.sort.key;
+        th.classList.toggle("sorted", active);
+        const arrow = th.querySelector(".arrow");
+        if (arrow) arrow.textContent = state.sort.dir === 1 ? "▴" : "▾";
+      });
+
+      body.innerHTML = rows
+        .map((model) => {
+          const pending = state.pending.has(model.name);
+          const expanded = state.expanded.has(model.name);
+          const allLoaded = serverCount > 0 && model.loadedCount === serverCount;
+          const someLoaded = model.loadedCount > 0 && !allLoaded;
+          const controlBlocked = data.readOnly || serverCount === 0;
+          const loadedRatio = serverCount ? (model.loadedCount / serverCount) * 100 : 0;
+
+          const sub = [];
+          if (model.versions && model.versions.length) sub.push(`v${model.versions.join(", v")}`);
+          if (model.platform) sub.push(model.platform);
+
+          const detail = expanded ? detailRow(model, data) : "";
+
+          return `
+          <tr class="model-row ${pending ? "pending" : ""}" data-model="${escapeHtml(model.name)}">
+            <td>
+              <div class="model-name">
+                <button class="caret ${expanded ? "open" : ""}" data-action="expand" aria-label="Details">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+                </button>
+                <div style="min-width:0">
+                  <div class="n">${escapeHtml(model.name)}</div>
+                  ${sub.length ? `<div class="model-sub">${escapeHtml(sub.join(" · "))}</div>` : ""}
+                </div>
+              </div>
+            </td>
+            <td><span class="tag ${model.source}">${
+              model.source === "pvc" ? "PVC" : model.source === "both" ? "PVC + server" : "server only"
+            }</span></td>
+            <td class="num mono">${model.sizeBytes != null ? fmtBytes(model.sizeBytes) : "–"}</td>
+            <td class="num">
+              <div class="loaded-cell">
+                <span class="mono">${model.loadedCount}/${serverCount}</span>
+                <span class="mini-bar"><i style="width:${loadedRatio}%"></i></span>
+              </div>
+            </td>
+            ${metricCell(fmtRate(model.metrics.throughput), " inf/s")}
+            ${metricCell(fmtMillis(model.metrics.queueLatencyUs), " ms")}
+            ${metricCell(fmtMillis(model.metrics.computeLatencyUs), " ms")}
+            <td style="text-align:center">
+              <label class="switch ${pending ? "busy" : ""}" title="${
+                controlBlocked ? "Model control unavailable" : allLoaded ? "Unload from all servers" : "Load on all servers"
+              }">
+                <input type="checkbox" data-action="toggle" ${allLoaded ? "checked" : ""}
+                  ${controlBlocked || pending ? "disabled" : ""}
+                  aria-label="Serve ${escapeHtml(model.name)} on all Triton servers" />
+              </label>
+            </td>
+            <td style="text-align:right">
+              ${
+                model.source === "external" || data.readOnly
+                  ? ""
+                  : `<button class="btn ghost icon" data-action="delete" title="Delete from PVC" aria-label="Delete from PVC">
+                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                         <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2"/>
+                       </svg>
+                     </button>`
+              }
+            </td>
+          </tr>${detail}`;
+        })
+        .join("");
+
+      // Partial load state cannot be expressed in HTML, so set it after paint.
+      rows.forEach((model) => {
+        if (model.loadedCount > 0 && model.loadedCount < serverCount) {
+          const input = body.querySelector(
+            `tr[data-model="${CSS.escape(model.name)}"] input[data-action="toggle"]`
+          );
+          if (input) input.indeterminate = true;
+        }
+      });
+    }
+
+    function detailRow(model, data) {
+      const states = Object.entries(model.serverStates);
+      const perServer = states.length
+        ? states
+            .map(([server, info]) => {
+              const stateName = String(info.state || "").toUpperCase();
+              const cls =
+                stateName === "READY" ? "ready" : stateName.includes("LOAD") ? "loading" : "unavailable";
+              return `<div class="kv">
+                        <span class="k">${escapeHtml(server)}</span>
+                        <span class="v"><span class="state-pill ${cls}">${escapeHtml(info.state || "?")}</span></span>
+                      </div>`;
+            })
+            .join("")
+        : `<div class="kv"><span class="k">Not present on any server</span></div>`;
+
+      const m = model.metrics || {};
+      const metricRows = [
+        ["Inferences (total)", m.inferenceCount != null ? fmtNumber(m.inferenceCount, 0) : "–"],
+        ["Failures (total)", m.failureCount != null ? fmtNumber(m.failureCount, 0) : "–"],
+        ["Requests per execution", m.batchRatio != null ? fmtNumber(m.batchRatio, 2) : "–"],
+        ["Throughput", fmtRate(m.throughput) ? `${fmtRate(m.throughput)} inf/s` : "–"],
+        ["Queue latency", fmtMillis(m.queueLatencyUs) ? `${fmtMillis(m.queueLatencyUs)} ms` : "–"],
+        ["Compute latency", fmtMillis(m.computeLatencyUs) ? `${fmtMillis(m.computeLatencyUs)} ms` : "–"],
+      ]
+        .map(([k, v]) => `<div class="kv"><span class="k">${k}</span><span class="v">${escapeHtml(v)}</span></div>`)
+        .join("");
+
+      const repoRows = [
+        ["Versions", model.versions && model.versions.length ? model.versions.join(", ") : "–"],
+        ["Files", model.fileCount != null ? String(model.fileCount) : "–"],
+        ["Size", model.sizeBytes != null ? fmtBytes(model.sizeBytes) : "–"],
+        ["config.pbtxt", model.hasConfig == null ? "–" : model.hasConfig ? "present" : "missing"],
+        ["Modified", model.modified ? fmtAgo(model.modified) : "–"],
+      ]
+        .map(([k, v]) => `<div class="kv"><span class="k">${k}</span><span class="v">${escapeHtml(v)}</span></div>`)
+        .join("");
+
+      return `
+        <tr class="detail-row">
+          <td colspan="9">
+            <div class="detail">
+              <div>
+                <h4>Per-server state</h4>
+                ${perServer}
+              </div>
+              <div>
+                <h4>On the PVC</h4>
+                ${model.source === "external" ? `<div class="kv"><span class="k">Loaded from another repository</span></div>` : repoRows}
+              </div>
+              <div>
+                <h4>Metrics${data.prometheus.window ? ` (${escapeHtml(data.prometheus.window)} window)` : ""}</h4>
+                ${metricRows}
+              </div>
+            </div>
+          </td>
+        </tr>`;
+    }
+
+    /* ---------------- actions ---------------- */
+
+    async function toggleModel(name, load) {
+      state.pending.add(name);
+      render();
+      try {
+        const result = await api(`/api/models/${encodeURIComponent(name)}/${load ? "load" : "unload"}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        toast(`${load ? "Loaded" : "Unloaded"} ${name}`, `${result.results.length} server(s)`, "ok");
+      } catch (error) {
+        toast(`Could not ${load ? "load" : "unload"} ${name}`, error.message, "err");
+      } finally {
+        state.pending.delete(name);
+        await refresh();
+      }
+    }
+
+    function confirmDialog(title, text, okLabel) {
+      return new Promise((resolve) => {
+        const dialog = $("confirm-modal");
+        $("confirm-title").textContent = title;
+        $("confirm-text").textContent = text;
+        $("confirm-ok").textContent = okLabel || "Delete";
+        dialog.onclose = () => resolve(dialog.returnValue === "ok");
+        dialog.showModal();
+      });
+    }
+
+    async function deleteModel(name) {
+      const ok = await confirmDialog(
+        `Delete ${name}?`,
+        "This permanently removes the model directory from the PVC. Servers that already loaded it keep serving until unloaded.",
+        "Delete"
+      );
+      if (!ok) return;
+      try {
+        await api(`/api/models/${encodeURIComponent(name)}`, { method: "DELETE" });
+        toast(`Deleted ${name}`, "Removed from the model repository", "ok");
+      } catch (error) {
+        toast(`Could not delete ${name}`, error.message, "err");
+      }
+      await refresh();
+    }
+
+    /* ---------------- upload ---------------- */
+
+    const ARCHIVE_RE = /\.(zip|tar|tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz)$/i;
+    let pendingUpload = null;
+
+    function guessName(files) {
+      if (files.length === 1 && ARCHIVE_RE.test(files[0].name)) {
+        return files[0].name.replace(ARCHIVE_RE, "");
+      }
+      const relative = files[0].webkitRelativePath || files[0].name;
+      const parts = relative.split("/").filter(Boolean);
+      return parts.length > 1 ? parts[0] : "";
+    }
+
+    function openUploadDialog(files) {
+      if (!files.length) return;
+      if (state.data && state.data.readOnly) {
+        toast("Read-only mode", "This instance cannot accept uploads.", "err");
+        return;
+      }
+      const total = files.reduce((sum, f) => sum + f.size, 0);
+      const limit = (state.data && state.data.maxUploadBytes) || Infinity;
+      if (total > limit) {
+        toast("Upload too large", `${fmtBytes(total)} exceeds the ${fmtBytes(limit)} limit.`, "err");
+        return;
+      }
+
+      pendingUpload = files;
+      $("upload-desc").textContent =
+        files.length === 1 && ARCHIVE_RE.test(files[0].name)
+          ? "The archive should contain the model directory (config.pbtxt and version folders)."
+          : `${files.length} files · ${fmtBytes(total)}`;
+      $("upload-files").textContent = files
+        .slice(0, 40)
+        .map((f) => `${f.webkitRelativePath || f.name}  (${fmtBytes(f.size)})`)
+        .join("\n") + (files.length > 40 ? `\n… ${files.length - 40} more` : "");
+      $("upload-model-name").value = guessName(files);
+      $("upload-overwrite").checked = false;
+      $("upload-modal").showModal();
+    }
+
+    function startUpload(files, name, overwrite) {
+      const form = new FormData();
+      files.forEach((file) => form.append("files", file));
+      form.append("name", name);
+      form.append("overwrite", overwrite ? "true" : "false");
+      form.append(
+        "paths",
+        JSON.stringify(files.map((f) => f.webkitRelativePath || f.name))
+      );
+
+      const progress = $("upload-progress");
+      progress.classList.add("active");
+      $("upload-name").textContent = name || files[0].name;
+      $("upload-bar").style.width = "0%";
+      $("upload-pct").textContent = "0%";
+
+      const request = new XMLHttpRequest();
+      request.open("POST", "/api/upload");
+      request.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        const percent = (event.loaded / event.total) * 100;
+        $("upload-bar").style.width = `${percent}%`;
+        $("upload-pct").textContent = `${percent.toFixed(0)}%`;
+      };
+      request.onload = () => {
+        progress.classList.remove("active");
+        let payload = null;
+        try { payload = JSON.parse(request.responseText); } catch (e) { /* ignore */ }
+        if (request.status >= 200 && request.status < 300) {
+          const info = payload && payload.uploaded;
+          const validation = (info && info.validation) || {};
+          const detail = info ? `${fmtBytes(info.sizeBytes)} · ${info.fileCount} files` : "";
+          toast(`Uploaded ${info ? info.name : name}`, detail, "ok");
+          (validation.warnings || []).forEach((w) => toast("Check this model", w, "warn"));
+        } else if (payload && payload.validation) {
+          // Rejected by the Triton layout check: list every problem found.
+          const errors = payload.validation.errors || [];
+          toast(
+            `${name} is not a valid Triton model`,
+            errors.join("  •  ") || payload.detail,
+            "err"
+          );
+        } else {
+          const message = (payload && (payload.detail || payload.error)) || `HTTP ${request.status}`;
+          toast("Upload failed", message, "err");
+        }
+        refresh();
+      };
+      request.onerror = () => {
+        progress.classList.remove("active");
+        toast("Upload failed", "Network error", "err");
+      };
+      request.send(form);
+    }
+
+    /* ---------------- wiring ---------------- */
+
+    const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+    /** What the page is actually showing right now, resolving "system". */
+    function resolvedTheme() {
+      const stored = document.documentElement.dataset.theme || "system";
+      if (stored === "light" || stored === "dark") return stored;
+      return darkQuery.matches ? "dark" : "light";
+    }
+
+    function syncThemeButton() {
+      const target = resolvedTheme() === "dark" ? "light" : "dark";
+      const button = $("btn-theme");
+      button.dataset.target = target;
+      button.title = `Switch to ${target} mode`;
+      button.setAttribute("aria-label", `Switch to ${target} mode`);
+    }
+
+    function setTheme(theme) {
+      document.documentElement.dataset.theme = theme;
+      try { localStorage.setItem("model-manager-theme", theme); } catch (e) { /* ignore */ }
+      syncThemeButton();
+    }
+
+    // Always flip away from what is on screen, so a single click is a single
+    // visible change even when the page started out following the OS.
+    $("btn-theme").addEventListener("click", () => {
+      setTheme(resolvedTheme() === "dark" ? "light" : "dark");
+    });
+
+    // While still following the OS, track it.
+    darkQuery.addEventListener("change", syncThemeButton);
+    syncThemeButton();
+
+    $("btn-refresh").addEventListener("click", refresh);
+
+    $("search").addEventListener("input", (event) => {
+      state.filter = event.target.value;
+      if (state.data) renderModels(state.data);
+    });
+
+    document.querySelectorAll("thead th.sortable").forEach((th) => {
+      th.addEventListener("click", () => {
+        const key = th.dataset.sort;
+        if (state.sort.key === key) {
+          state.sort.dir *= -1;
+        } else {
+          state.sort.key = key;
+          state.sort.dir = key === "name" ? 1 : -1;
+        }
+        if (state.data) renderModels(state.data);
+      });
+    });
+
+    $("models-body").addEventListener("click", (event) => {
+      const row = event.target.closest("tr[data-model]");
+      if (!row) return;
+      const name = row.dataset.model;
+      const trigger = event.target.closest("[data-action]");
+      if (!trigger) return;
+
+      if (trigger.dataset.action === "expand") {
+        if (state.expanded.has(name)) state.expanded.delete(name);
+        else state.expanded.add(name);
+        renderModels(state.data);
+      } else if (trigger.dataset.action === "delete") {
+        deleteModel(name);
+      }
+    });
+
+    $("models-body").addEventListener("change", (event) => {
+      const input = event.target.closest('input[data-action="toggle"]');
+      if (!input) return;
+      const row = input.closest("tr[data-model]");
+      toggleModel(row.dataset.model, input.checked);
+    });
+
+    // Upload inputs
+    $("btn-pick-archive").addEventListener("click", (e) => { e.stopPropagation(); $("input-archive").click(); });
+    $("btn-pick-dir").addEventListener("click", (e) => { e.stopPropagation(); $("input-dir").click(); });
+    $("dropzone").addEventListener("click", () => $("input-archive").click());
+    $("input-archive").addEventListener("change", (event) => {
+      openUploadDialog(Array.from(event.target.files));
+      event.target.value = "";
+    });
+    $("input-dir").addEventListener("change", (event) => {
+      openUploadDialog(Array.from(event.target.files));
+      event.target.value = "";
+    });
+
+    const dropzone = $("dropzone");
+    ["dragenter", "dragover"].forEach((type) =>
+      dropzone.addEventListener(type, (event) => {
+        event.preventDefault();
+        dropzone.classList.add("drag");
+      })
+    );
+    ["dragleave", "drop"].forEach((type) =>
+      dropzone.addEventListener(type, (event) => {
+        event.preventDefault();
+        dropzone.classList.remove("drag");
+      })
+    );
+    dropzone.addEventListener("drop", async (event) => {
+      const items = Array.from(event.dataTransfer.items || []);
+      const entries = items
+        .map((item) => (item.webkitGetAsEntry ? item.webkitGetAsEntry() : null))
+        .filter(Boolean);
+      if (entries.length && entries.some((entry) => entry.isDirectory)) {
+        const files = [];
+        for (const entry of entries) await walkEntry(entry, "", files);
+        openUploadDialog(files);
+      } else {
+        openUploadDialog(Array.from(event.dataTransfer.files || []));
+      }
+    });
+
+    /** Recursively collect files from a dropped directory, tagging relative paths. */
+    async function walkEntry(entry, prefix, out) {
+      if (entry.isFile) {
+        const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+        Object.defineProperty(file, "webkitRelativePath", {
+          value: prefix ? `${prefix}/${entry.name}` : entry.name,
+          configurable: true,
+        });
+        out.push(file);
+        return;
+      }
+      const reader = entry.createReader();
+      const children = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+      for (const child of children) {
+        await walkEntry(child, prefix ? `${prefix}/${entry.name}` : entry.name, out);
+      }
+    }
+
+    $("upload-form").addEventListener("submit", (event) => {
+      const action = event.submitter && event.submitter.value;
+      if (action !== "upload" || !pendingUpload) {
+        pendingUpload = null;
+        return;
+      }
+      const name = $("upload-model-name").value.trim();
+      if (!name) {
+        event.preventDefault();
+        toast("Model name required", "Give the model a name before uploading.", "err");
+        return;
+      }
+      startUpload(pendingUpload, name, $("upload-overwrite").checked);
+      pendingUpload = null;
+    });
+
+    refresh().then(scheduleRefresh);
+    setInterval(() => {
+      if (state.data) $("chip-updated").textContent = fmtAgo(state.data.updatedAt);
+    }, 1000);
+  </script>
+</body>
+</html>

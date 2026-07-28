@@ -79,7 +79,7 @@ jobs:
             af_digest=""
           fi
           aux_tags=""
-          for name in agentic-interface af-pod-monitor af-node-monitor; do
+          for name in agentic-interface af-pod-monitor af-node-monitor supersonic-model-manager; do
             tag=$(./.github/workflows/image-inputs.sh "$name")
             aux_tags="${aux_tags:+$aux_tags }${name}=${tag}"
           done
@@ -240,6 +240,19 @@ jobs:
               sh -c "fio --version && cd /opt/af-node-monitor &&
               AF_NODE_MONITOR_VERBOSE=1 MOUNT_NAME=smoke CHECK_FILE=smoke
               python -c 'import job_runner, node_healthcheck; print(\"ok\")'"
+          # Imports the app, asserts the dashboard and its logo assets ship in
+          # the image, and that the ASGI routes are wired.
+          - name: supersonic-model-manager
+            dockerfile: docker/supersonic-model-manager/Dockerfile
+            context: .
+            smoke: >-
+              python -c "from pathlib import Path;
+              from model_manager.main import app, STATIC_DIR;
+              routes = {getattr(r, 'path', None) for r in app.routes};
+              assert {'/', '/healthz', '/api/state'} <= routes, routes;
+              assert (STATIC_DIR / 'index.html').is_file();
+              assert (STATIC_DIR / 'img' / 'supersonic-mark.svg').is_file();
+              print('ok:', len(routes), 'routes')"
     name: aux ${{ matrix.name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

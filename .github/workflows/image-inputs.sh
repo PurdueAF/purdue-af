@@ -14,7 +14,7 @@
 #   image-inputs.sh --paths <name>  → prints the input path list (one per line)
 #
 # Names: purdue-af, agentic-interface, af-pod-monitor, af-node-monitor,
-#        pixi-base, pixi-global, e2e-hub
+#        supersonic-model-manager, pixi-base, pixi-global, e2e-hub
 #
 # The hash covers file content, names and modes of every TRACKED file under
 # the listed pathspecs (git ls-files -s), so it is independent of commit
@@ -52,6 +52,13 @@ paths_for() {
 	af-pod-monitor)
 		cat <<-EOF
 			docker/af-pod-monitor
+			.github/workflows/ci-images.yml
+			.github/workflows/image-inputs.sh
+		EOF
+		;;
+	supersonic-model-manager)
+		cat <<-EOF
+			docker/supersonic-model-manager
 			.github/workflows/ci-images.yml
 			.github/workflows/image-inputs.sh
 		EOF

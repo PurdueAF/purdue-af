@@ -1,0 +1,83 @@
+# Values for the `supersonic` SuperSONIC release (apps/sonic/supersonic),
+# which runs in the cms namespace on Geddes.
+#
+#   helm install model-manager ./chart -n cms -f values-supersonic.yaml \
+#     --set auth.password='...'
+#
+# Checked against the live release (July 2026):
+#   - Triton pods carry app.kubernetes.io/instance=supersonic in namespace cms
+#   - the model repository is /work/triton_models on the af-shared-storage claim
+#   - metrics are scraped by rancher-monitoring, which labels the series
+#     job="supersonic-triton" and does NOT set a `release` label
+#   - "public" is the ingress class used by supersonic's other ingresses
+#
+# NOTE: the release's Triton is currently started without
+# --model-control-mode=explicit, so the load/unload switches will be refused
+# until that flag is added in apps/sonic/supersonic/values.yaml.
+
+supersonicRelease: supersonic
+
+image:
+  # Aux images are published by ci.yml as :latest (and :sha-<commit>); semver
+  # tags only come from release-image.yml, so :latest is the channel to track.
+  repository: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/supersonic-model-manager
+  tag: "latest"
+
+modelRepository:
+  # Reuse the existing shared claim rather than creating a new PVC.
+  claimName: af-shared-storage
+  create: false
+  # The repository is a subdirectory of that claim; the app sees it at mountPath.
+  subPath: triton_models
+  mountPath: /models
+
+triton:
+  discovery: kubernetes
+  # Derived from supersonicRelease as:
+  #   app.kubernetes.io/component=triton,app.kubernetes.io/instance=supersonic
+  labelSelector: ""
+  httpPort: 8000
+
+prometheus:
+  url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
+  # Must be set explicitly: this Prometheus scrapes via ServiceMonitor and does
+  # not add the `release` label the chart would otherwise derive.
+  selector: 'job="supersonic-triton"'
+  window: 5m
+
+auth:
+  enabled: true
+  # No password in git: the Secret is created out of band with
+  #   kubectl -n cms create secret generic supersonic-model-manager-auth \
+  #     --from-literal=username=admin --from-literal=password='...'
+  # The HelmRelease stays in a retrying state until it exists.
+  existingSecret: supersonic-model-manager-auth
+
+ingress:
+  enabled: true
+  hostName: supersonic-models.geddes.rcac.purdue.edu
+  ingressClassName: public
+  tls: true
+
+# /work/triton_models is world-writable, so no recursive fsGroup walk is needed
+# over a 40 TiB shared claim.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  fsGroup: null
+
+nodeSelector: { "cms-af-prod": "true" }
+
+tolerations:
+  - key: hub.jupyter.org/dedicated
+    operator: Equal
+    value: cms-af
+    effect: NoSchedule
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 1
+    memory: 1Gi

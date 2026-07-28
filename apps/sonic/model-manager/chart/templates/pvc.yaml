@@ -1,0 +1,25 @@
+{{- include "modelManager.validate" . -}}
+{{- if .Values.modelRepository.create }}
+{{- $existing := (lookup "v1" "PersistentVolumeClaim" .Release.Namespace .Values.modelRepository.claimName) }}
+{{- if not $existing }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.modelRepository.claimName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "modelManager.labels" . | nindent 4 }}
+  annotations:
+    # Keep the models when this chart is uninstalled.
+    "helm.sh/resource-policy": keep
+spec:
+  accessModes:
+    {{- toYaml .Values.modelRepository.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.modelRepository.size }}
+  {{- if .Values.modelRepository.storageClassName }}
+  storageClassName: {{ .Values.modelRepository.storageClassName }}
+  {{- end }}
+{{- end }}
+{{- end }}

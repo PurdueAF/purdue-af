@@ -1,0 +1,89 @@
+{{- if .Values.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "modelManager.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "modelManager.labels" . | nindent 4 }}
+  {{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+
+{{- if .Values.rbac.create }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "modelManager.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "modelManager.labels" . | nindent 4 }}
+rules:
+  # Discover Triton pods and read their IPs
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  # Read the model repository PVC to report its true capacity, and the Envoy
+  # Service to show the in-cluster inference endpoint
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims", "services"]
+    verbs: ["get", "list"]
+  # Read the Envoy ingress to show the external inference endpoint
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "modelManager.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "modelManager.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "modelManager.name" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "modelManager.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+
+{{- if and .Values.triton.namespace (ne .Values.triton.namespace .Release.Namespace) .Values.rbac.create }}
+---
+# Triton runs in another namespace, so pod discovery needs a Role there too.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "modelManager.name" . }}-triton
+  namespace: {{ .Values.triton.namespace }}
+  labels:
+    {{- include "modelManager.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services"]
+    verbs: ["get", "list"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "modelManager.name" . }}-triton
+  namespace: {{ .Values.triton.namespace }}
+  labels:
+    {{- include "modelManager.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "modelManager.name" . }}-triton
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "modelManager.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

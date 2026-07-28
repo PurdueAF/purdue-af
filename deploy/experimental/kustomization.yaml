@@ -33,6 +33,9 @@ resources:
 
   - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic/helmrepo.yaml
+  # Model repository dashboard for the supersonic release above. Needs the
+  # supersonic-model-manager-auth Secret to exist in the namespace.
+  - ../../apps/sonic/model-manager/helmrelease.yaml
 
   # - ../../apps/kagent/helmrepo.yaml
   # - ../../apps/kagent/controller-namespace-cluster-rbac.yaml
@@ -137,6 +140,10 @@ configMapGenerator:
   - name: supersonic-config
     files:
       - values.yaml=../../apps/sonic/supersonic/values.yaml
+
+  - name: supersonic-model-manager-config
+    files:
+      - values.yaml=../../apps/sonic/model-manager/values-supersonic.yaml
 
   - name: kagent-config
     files:

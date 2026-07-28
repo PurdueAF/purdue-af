@@ -1,0 +1,44 @@
+SuperSONIC Model Manager is installed.
+
+  Release:     {{ include "modelManager.name" . }}
+  Namespace:   {{ .Release.Namespace }}
+  Repository:  PVC {{ .Values.modelRepository.claimName }} ({{ .Values.modelRepository.size }}) at {{ .Values.modelRepository.mountPath }}
+
+Dashboard:
+{{- if .Values.ingress.enabled }}
+  http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.hostName }}
+{{- else }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "modelManager.name" . }} 8080:{{ .Values.service.port }}
+  then open http://localhost:8080
+{{- end }}
+
+{{- if .Values.auth.enabled }}
+
+Sign in with HTTP Basic auth:
+  username: {{ if .Values.auth.existingSecret }}(key "username" of secret {{ .Values.auth.existingSecret }}){{ else }}{{ .Values.auth.username }}{{ end }}
+  password: kubectl -n {{ .Release.Namespace }} get secret {{ include "modelManager.authSecretName" . }} -o jsonpath='{.data.password}' | base64 -d
+{{- end }}
+
+Triton discovery: {{ .Values.triton.discovery }} ({{ include "modelManager.tritonSelector" . }})
+{{- if not .Values.prometheus.url }}
+
+NOTE: prometheus.url is empty, so per-model metrics will be blank.
+      Point it at the Prometheus that scrapes your Triton servers.
+{{- end }}
+
+To let Triton serve models from this PVC, mount the same claim in your
+SuperSONIC release and enable explicit model control:
+
+  triton:
+    modelRepository:
+      enabled: true
+      storageType: pvc
+      mountPath: /models
+      pvc:
+        claimName: {{ .Values.modelRepository.claimName }}
+    args:
+      - |
+        /opt/tritonserver/bin/tritonserver \
+        --model-repository=/models \
+        --model-control-mode=explicit \
+        --load-model=*
