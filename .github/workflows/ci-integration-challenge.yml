@@ -1,0 +1,164 @@
+name: Integration challenge
+
+# The IRIS-HEP CMS integration challenge over CMS OpenData, run against the
+# AF image + the `pixi/global` environment users actually get. See
+# tests/integration_challenge/README.md.
+#
+# Stands alone: this workflow owns its own triggers and result, so an
+# exploratory analysis check stays independent of the ci.yml pipeline.
+#
+# Manual + weekly is a cost decision. Installing pixi/global is the expensive
+# step (it carries pytorch, tensorflow, ROOT and cms-combine), the env is tens
+# of GB — far past what actions/cache or an artifact can carry between
+# workflows — so the way to pay for it once is to run at times when
+# ci-pixi-global.yml is not.
+#
+# To run dispatch-only, comment out the `schedule:` block.
+
+on:
+  workflow_dispatch:
+    inputs:
+      af-image:
+        description: "AF image ref to test (default: the image for the current input state)"
+        required: false
+        type: string
+      processes:
+        description: "Space-separated physics processes"
+        required: false
+        default: "signal"
+        type: string
+      max-files:
+        description: "Files per dataset key"
+        required: false
+        default: "1"
+        type: string
+      ref:
+        description: "Integration-challenge ref (branch, tag or SHA)"
+        required: false
+        default: "main"
+        type: string
+  schedule:
+    - cron: "23 5 * * 1" # Mondays 05:23 UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-challenge-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AF_REPO: ghcr.io/purdueaf/purdue-af
+  UPSTREAM_REPO: https://github.com/iris-hep/integration-challenge
+
+jobs:
+  challenge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: read # pull the AF image
+    env:
+      # pixi/global declares [system-requirements] cuda; runners have no GPU.
+      # Keep in sync with ci-pixi-global.yml and pixi/global/pixi.toml.
+      CONDA_OVERRIDE_CUDA: "12.4"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Login to ghcr.io
+        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4 # Renovate pins to digest
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Same content-addressed resolution ci-images.yml does, so a dispatch
+      # from a branch tests that branch's image when it exists.
+      - name: Resolve the AF image
+        id: image
+        run: |
+          set -euo pipefail
+          image="${{ inputs.af-image }}"
+          if [ -z "$image" ]; then
+            tag=$(./.github/workflows/image-inputs.sh purdue-af)
+            if docker buildx imagetools inspect "$AF_REPO:$tag" >/dev/null 2>&1; then
+              image="$AF_REPO:$tag"
+            else
+              echo "::notice::no image for the current input state — using :pre-release"
+              image="$AF_REPO:pre-release"
+            fi
+          fi
+          echo "image=$image" | tee -a "$GITHUB_OUTPUT"
+
+      # Tracks the branch head, so every run tests whatever upstream has
+      # published right now. The resolved SHA is recorded below because it is
+      # the only way to tell two runs apart after the fact: a red run here can
+      # mean our environment drifted OR that upstream changed today, and the
+      # SHA is the first thing to check when telling those apart.
+      - name: Check out the integration challenge
+        id: challenge
+        env:
+          UPSTREAM_REF: ${{ inputs.ref || 'main' }}
+        run: |
+          set -euo pipefail
+          git init -q challenge
+          git -C challenge remote add origin "$UPSTREAM_REPO"
+          git -C challenge fetch -q --depth 1 origin "$UPSTREAM_REF"
+          git -C challenge checkout -q FETCH_HEAD
+          sha=$(git -C challenge rev-parse HEAD)
+          echo "sha=$sha" | tee -a "$GITHUB_OUTPUT"
+          echo "challenge at $UPSTREAM_REF ($sha)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f # v0.10.0 # Renovate pins to digest
+        with:
+          # Frozen at 0.62.2 (lock format v6) — do not bump; see renovate.json5.
+          pixi-version: v0.62.2
+          manifest-path: pixi/global/pixi.toml
+          run-install: false
+          cache: false
+
+      # --locked pins this to the exact environment the AF ships. Lock drift
+      # belongs to ci-pixi-global.yml, which reports it; re-solving here would
+      # quietly test something else.
+      - name: Install the global env
+        run: pixi install --manifest-path pixi/global/pixi.toml --locked
+
+      - name: Pull the AF image
+        run: docker pull -q "${{ steps.image.outputs.image }}"
+
+      # Runs the driver with the global env's interpreter INSIDE the AF image
+      # — the same combination a user gets from the `Python (pixi global)`
+      # kernel. --user 0:0 for the same reason as ci-pixi-global.yml: the env
+      # is owned by the runner user, the image defaults to jovyan.
+      - name: Run the integration challenge
+        env:
+          AF_IMAGE: ${{ steps.image.outputs.image }}
+          # via env, never interpolated into the script: dispatch inputs are
+          # attacker-controlled text as far as the shell is concerned
+          PROCESSES: ${{ inputs.processes || 'signal' }}
+          MAX_FILES: ${{ inputs.max-files || '1' }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2086 # PROCESSES is a deliberate word list
+          docker run --rm --user 0:0 -v "$PWD:$PWD" -w "$PWD" \
+            "$AF_IMAGE" \
+            pixi/global/.pixi/envs/default/bin/python \
+            tests/integration_challenge/run_challenge.py \
+            --challenge-root challenge/cms \
+            --processes $PROCESSES \
+            --max-files "$MAX_FILES" \
+            2>&1 | tee challenge.log
+
+      - name: Summarize
+        if: always()
+        run: |
+          {
+            echo "### Integration challenge"
+            echo
+            echo "image: \`${{ steps.image.outputs.image }}\`"
+            echo "upstream: \`${{ inputs.ref || 'main' }}\` @ \`${{ steps.challenge.outputs.sha }}\`"
+            echo
+            echo '```'
+            tail -n 30 challenge.log 2>/dev/null || echo "(no output captured)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
