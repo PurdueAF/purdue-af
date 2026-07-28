@@ -9,7 +9,9 @@ triton:
   args:
     - |
       /opt/tritonserver/bin/tritonserver \
-      --model-repository=/work/triton_models/ \
+      --model-repository=/models \
+      --model-control-mode=explicit \
+      --load-model=* \
       --allow-gpu-metrics=true \
       --log-verbose=0 \
       --disable-auto-complete-config \
@@ -35,12 +37,15 @@ triton:
       scrape_metrics: "true"
     annotations:
       metallb.universe.tf/address-pool: geddes-private-pool
+  # Dedicated model repository claim, created and written by the model manager
+  # (apps/sonic/model-manager). Models previously served from
+  # /work/triton_models on af-shared-storage need copying across.
   modelRepository:
     enabled: true
     storageType: pvc
     pvc:
-      claimName: af-shared-storage
-    mountPath: /work/
+      claimName: supersonic-model-repository
+    mountPath: /models
   readinessProbe:
     successThreshold: 3
   #   reset: true

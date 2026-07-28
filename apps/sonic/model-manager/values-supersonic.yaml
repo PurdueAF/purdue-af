@@ -6,14 +6,12 @@
 #
 # Checked against the live release (July 2026):
 #   - Triton pods carry app.kubernetes.io/instance=supersonic in namespace cms
-#   - the model repository is /work/triton_models on the af-shared-storage claim
 #   - metrics are scraped by rancher-monitoring, which labels the series
 #     job="supersonic-triton" and does NOT set a `release` label
-#   - "public" is the ingress class used by supersonic's other ingresses
 #
-# NOTE: the release's Triton is currently started without
-# --model-control-mode=explicit, so the load/unload switches will be refused
-# until that flag is added in apps/sonic/supersonic/values.yaml.
+# The release mounts the same claim at /models and runs with
+# --model-control-mode=explicit (apps/sonic/supersonic/values.yaml), so
+# uploads here are servable and the load/unload switches work.
 
 supersonicRelease: supersonic
 
@@ -24,11 +22,14 @@ image:
   tag: "latest"
 
 modelRepository:
-  # Reuse the existing shared claim rather than creating a new PVC.
-  claimName: af-shared-storage
-  create: false
-  # The repository is a subdirectory of that claim; the app sees it at mountPath.
-  subPath: triton_models
+  # Dedicated claim, created here and mounted read-only by the Triton pods.
+  # RWX because the manager writes while Triton reads, from different pods.
+  claimName: supersonic-model-repository
+  create: true
+  size: 1Gi
+  accessModes:
+    - ReadWriteMany
+  storageClassName: geddes-standard-multinode
   mountPath: /models
 
 triton:
@@ -53,18 +54,10 @@ auth:
   # The HelmRelease stays in a retrying state until it exists.
   existingSecret: supersonic-model-manager-auth
 
+# Not exposed publicly. Reach the dashboard with:
+#   kubectl -n cms port-forward svc/supersonic-model-manager 8080:80
 ingress:
-  enabled: true
-  hostName: supersonic-models.geddes.rcac.purdue.edu
-  ingressClassName: public
-  tls: true
-
-# /work/triton_models is world-writable, so no recursive fsGroup walk is needed
-# over a 40 TiB shared claim.
-podSecurityContext:
-  runAsNonRoot: true
-  runAsUser: 10001
-  fsGroup: null
+  enabled: false
 
 nodeSelector: { "cms-af-prod": "true" }
 

@@ -17,7 +17,7 @@ can be loaded and unloaded, but not deleted.
 ## Requirements
 
 - Triton started with `--model-control-mode=explicit`, or it refuses runtime load/unload (the
-  dashboard surfaces the refusal). **The `supersonic` release does not currently set this.**
+  dashboard surfaces the refusal).
 - The same claim mounted into the Triton pods as a model repository, otherwise Triton cannot see
   uploads. `ReadWriteMany` is required when both mount it.
 - A Prometheus scraping Triton — only for the metric columns.
@@ -33,6 +33,12 @@ kubectl -n cms create secret generic supersonic-model-manager-auth \
   --from-literal=username=admin --from-literal=password='CHOOSE-A-PASSWORD'
 ```
 
+There is no ingress — reach the dashboard with:
+
+```bash
+kubectl -n cms port-forward svc/supersonic-model-manager 8080:80
+```
+
 Standalone install:
 
 ```bash
@@ -44,7 +50,8 @@ helm install model-manager ./chart -n cms -f values-supersonic.yaml --set auth.p
 matcher (`release="<release>"`). The latter must be overridden when a ServiceMonitor-based
 Prometheus scrapes Triton without adding a `release` label — as in `values-supersonic.yaml`.
 
-To let Triton serve what you upload, point it at the same claim:
+To let Triton serve what you upload, point it at the same claim — this is how
+[`apps/sonic/supersonic/values.yaml`](../supersonic/values.yaml) is wired:
 
 ```yaml
 triton:
@@ -74,9 +81,9 @@ Every chart value maps to an environment variable, so the image also runs standa
 | `inferenceEndpoint` | `INFERENCE_ENDPOINT` | *(empty — discovered from the Envoy ingress/service)* |
 | `refreshSeconds` | `REFRESH_SECONDS` | `15` |
 
-`subPath` mounts a subdirectory of the claim as the repository root — how the `supersonic` release
-is wired, with models in `triton_models/` on the shared `af-shared-storage` claim. The gauge then
-shows how full the *claim* is, with the models' own footprint next to the model count.
+`subPath` mounts a subdirectory of the claim as the repository root, for when models live inside a
+larger shared claim. The gauge always shows how full the *claim* is, with the models' own
+footprint next to the model count.
 
 The PVC carries `helm.sh/resource-policy: keep` and is created only if absent, so uninstalling
 never deletes models.
