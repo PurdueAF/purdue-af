@@ -54,10 +54,11 @@ auth:
   # The HelmRelease stays in a retrying state until it exists.
   existingSecret: supersonic-model-manager-auth
 
-# Not exposed publicly. Reach the dashboard with:
-#   kubectl -n cms port-forward svc/supersonic-model-manager 8080:80
 ingress:
-  enabled: false
+  enabled: true
+  hostName: supersonic-models.geddes.rcac.purdue.edu
+  ingressClassName: public
+  tls: true
 
 nodeSelector: { "cms-af-prod": "true" }
 

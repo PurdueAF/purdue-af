@@ -61,8 +61,10 @@ envoy:
   loadBalancerPolicy: "ROUND_ROBIN"
   service:
     type: LoadBalancer
+  # Not exposed publicly; clients reach Envoy through the LoadBalancer service
+  # on the private pool, or in-cluster at supersonic.cms.svc.cluster.local:8001.
   ingress:
-    enabled: true
+    enabled: false
     hostName: supersonic.geddes.rcac.purdue.edu
     ingressClassName: public
   rate_limiter:
