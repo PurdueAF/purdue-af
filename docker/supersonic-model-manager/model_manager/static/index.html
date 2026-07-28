@@ -204,7 +204,8 @@
       font-family: var(--font-mono);
     }
 
-    /* Inference / Grafana sit under the release line; plain text, not chips. */
+    /* Inference / Grafana sit under the release line; plain text, not chips.
+       Each row ends with an explicit action hint (copy / open). */
     .brand-links {
       display: flex;
       flex-direction: column;
@@ -225,7 +226,7 @@
       cursor: pointer;
       text-decoration: none;
       display: inline-flex;
-      align-items: baseline;
+      align-items: center;
       gap: 6px;
       max-width: min(72ch, 100%);
       text-align: left;
@@ -243,10 +244,33 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      text-decoration: underline;
+      text-decoration-color: color-mix(in srgb, var(--text-faint) 55%, transparent);
+      text-underline-offset: 2px;
     }
-    .brand-link:hover .v { color: var(--accent); }
-    .brand-link.copied .v { color: var(--ok); font-weight: 600; }
-    .brand-link.copied .k { display: none; }
+    .brand-link:hover .v {
+      color: var(--accent);
+      text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    }
+    .brand-link .action {
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: var(--text-2xs);
+      letter-spacing: var(--letter-overline);
+      text-transform: uppercase;
+      color: var(--text-faint);
+    }
+    .brand-link .action svg { opacity: 0.75; }
+    .brand-link:hover .action { color: var(--accent); }
+    .brand-link.copied .v {
+      color: var(--ok);
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .brand-link.copied .k,
+    .brand-link.copied .action { display: none; }
 
     .spacer { flex: 1 1 auto; }
 
@@ -688,13 +712,28 @@
           <h1>SuperSONIC Model Manager</h1>
           <p class="sub" id="brand-sub">&nbsp;</p>
           <div class="brand-links" id="brand-links" hidden>
-            <button class="brand-link" id="link-endpoint" type="button" hidden>
+            <button class="brand-link" id="link-endpoint" type="button" hidden aria-label="Copy inference endpoint">
               <span class="k">inference</span>
               <span class="v" id="endpoint-value"></span>
+              <span class="action">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                copy
+              </span>
             </button>
-            <a class="brand-link" id="link-grafana" hidden target="_blank" rel="noopener noreferrer">
+            <a class="brand-link" id="link-grafana" hidden target="_blank" rel="noopener noreferrer" aria-label="Open Grafana dashboard in a new tab">
               <span class="k">grafana</span>
               <span class="v" id="grafana-value"></span>
+              <span class="action">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+                open
+              </span>
             </a>
           </div>
         </div>
@@ -1035,7 +1074,7 @@
       } else {
         link.hidden = false;
         currentEndpoint = inference.endpoint;
-        link.title = `${ENDPOINT_SOURCES[inference.source] || "Inference endpoint"}\nClick to copy`;
+        link.title = `${ENDPOINT_SOURCES[inference.source] || "Inference endpoint"} — click to copy`;
         // Leave the "copied!" confirmation alone if a refresh lands during it.
         if (!link.classList.contains("copied")) {
           $("endpoint-value").textContent = inference.endpoint;
@@ -1052,7 +1091,7 @@
       } else {
         link.hidden = false;
         link.href = grafana.url;
-        link.title = `${GRAFANA_SOURCES[grafana.source] || "Grafana dashboard"}\nOpen in a new tab`;
+        link.title = `${GRAFANA_SOURCES[grafana.source] || "Grafana dashboard"} — opens in a new tab`;
         $("grafana-value").textContent = grafana.url.replace(/^https?:\/\//, "");
       }
       syncBrandLinks();
