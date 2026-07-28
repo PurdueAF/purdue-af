@@ -230,6 +230,47 @@ def test_falls_back_to_the_envoy_service_when_no_ingress(in_cluster):
 
 
 @respx.mock
+def test_ignores_non_grpc_ingresses_and_uses_the_envoy_service(in_cluster):
+    # Current Geddes layout: only Grafana is Ingress-exposed; Envoy is a Service.
+    respx.get(f"{API}/apis/networking.k8s.io/v1/namespaces/cms/ingresses").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "items": [
+                    ingress(
+                        "supersonic-grafana",
+                        "supersonic-grafana.geddes.rcac.purdue.edu",
+                    )
+                ]
+            },
+        )
+    )
+    respx.get(f"{API}/api/v1/namespaces/cms/services").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "items": [
+                    {
+                        "metadata": {"name": "supersonic"},
+                        "spec": {
+                            "ports": [
+                                {"name": "grpc", "port": 8001},
+                                {"name": "admin", "port": 9901},
+                            ]
+                        },
+                    }
+                ]
+            },
+        )
+    )
+
+    assert kube.find_inference_endpoint() == {
+        "endpoint": "supersonic.cms.svc.cluster.local:8001",
+        "source": "service",
+    }
+
+
+@respx.mock
 def test_no_endpoint_when_nothing_is_found(in_cluster):
     respx.get(f"{API}/apis/networking.k8s.io/v1/namespaces/cms/ingresses").mock(
         return_value=httpx.Response(200, json={"items": []})

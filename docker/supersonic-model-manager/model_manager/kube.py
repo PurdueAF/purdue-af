@@ -145,11 +145,17 @@ def find_inference_endpoint() -> dict:
     namespace = settings.triton_namespace
     selector = f"app.kubernetes.io/instance={release}"
 
+    # SuperSONIC names the Envoy gRPC Ingress "{release}-ingress-grpc".
+    # Other release ingresses (Grafana, metrics collector, …) share the
+    # instance label and must be ignored.
     ingresses = _get(
         f"/apis/networking.k8s.io/v1/namespaces/{namespace}/ingresses",
         params={"labelSelector": selector},
     )
-    for item in _prefer_grpc((ingresses or {}).get("items", [])):
+    for item in (ingresses or {}).get("items", []):
+        name = (item.get("metadata") or {}).get("name", "")
+        if "ingress-grpc" not in name:
+            continue
         spec = item.get("spec") or {}
         rules = spec.get("rules") or []
         host = rules[0].get("host") if rules else None
@@ -176,14 +182,6 @@ def find_inference_endpoint() -> dict:
             }
 
     return {"endpoint": "", "source": None}
-
-
-def _prefer_grpc(items: list) -> list:
-    """Put the gRPC ingress first — a release may also expose Grafana etc."""
-    return sorted(
-        items,
-        key=lambda i: "grpc" not in (i.get("metadata") or {}).get("name", ""),
-    )
 
 
 def list_triton_pods() -> list:
