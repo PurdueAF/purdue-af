@@ -61,6 +61,21 @@ def _default_choice_key(choices: dict[str, str]) -> Optional[str]:
     return next(iter(choices), None)
 
 
+def _servers(data: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """Return the user's servers, or None when the token may not see them.
+
+    The Hub omits `servers` entirely from a user model when the token lacks
+    `read:servers` — it does NOT return an empty dict. Singleuser server tokens
+    (what an agent running inside a session carries) are exactly that case, so
+    treating a missing key as "no session" tells a user their running session
+    does not exist. Absent means unknown; only an empty dict means none.
+    """
+    servers = data.get("servers")
+    if servers is None:
+        return None
+    return servers if isinstance(servers, dict) else {}
+
+
 def register(mcp: Any) -> None:
     @mcp.tool()
     async def get_session_status() -> str:
@@ -87,7 +102,15 @@ def register(mcp: Any) -> None:
             return f"Error: JupyterHub API returned HTTP {resp.status_code}"
 
         data = resp.json()
-        servers = data.get("servers", {})
+        servers = _servers(data)
+
+        if servers is None:
+            return (
+                f"Cannot read session state for '{username}': this token is not "
+                "permitted to list servers, so I cannot tell whether a session "
+                "is running. This is a permissions gap, not a stopped session — "
+                "check the JupyterHub interface directly."
+            )
 
         if not servers:
             base = f"{PUBLIC_URL}/user/{username}"
@@ -361,7 +384,7 @@ def register(mcp: Any) -> None:
                     )
                     if resp.status_code == 200:
                         data = resp.json()
-                        default = data.get("servers", {}).get("", {})
+                        default = (_servers(data) or {}).get("", {})
                         if default.get("ready", False):
                             started = default.get("started", "")
                             clear_user_cache(token)
@@ -422,8 +445,7 @@ def register(mcp: Any) -> None:
                 )
                 if info.status_code == 200:
                     prior_opts = (
-                        info.json()
-                        .get("servers", {})
+                        (_servers(info.json()) or {})
                         .get("", {})
                         .get("user_options", {})
                     )

@@ -407,6 +407,17 @@ hub:
         - --timeout=86400
         - --every=600
   loadRoles:
+    # Singleuser server tokens ship with `users:activity!user` and
+    # `access:servers!server` only, so `GET /users/<name>` comes back WITHOUT a
+    # `servers` key — an agent running inside a session could not see the very
+    # session it runs in. `read:servers!user` scopes that to the token's own
+    # user; it grants no visibility of anyone else.
+    server:
+      description: "Singleuser server token: report activity, read own session"
+      scopes:
+        - "users:activity!user"
+        - "access:servers!server"
+        - "read:servers!user"
     gpu-culler:
       description: "Stop idle sessions that hold a full GPU"
       scopes: ["read:users:activity", "read:servers", "delete:servers"]

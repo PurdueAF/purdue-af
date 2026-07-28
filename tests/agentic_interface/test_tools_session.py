@@ -4,6 +4,7 @@ import json
 import types
 
 import auth
+import pytest
 import respx
 from agentic_helpers import register_tools
 from tools import profiles, session
@@ -744,3 +745,45 @@ async def test_restart_with_named_profile(user_ctx, monkeypatch):
     body = json.loads(start.calls.last.request.content)
     assert body["profile"] == "stable"
     assert "Session restarting" in out
+
+
+# ── servers-key visibility ────────────────────────────────────────────────────
+
+
+def test_missing_servers_key_is_unknown_not_absent():
+    """The Hub omits `servers` when the token lacks read:servers. Reading that
+    as "no session" told users inside a running session that it did not exist."""
+    assert session._servers({"name": "alice"}) is None
+    assert session._servers({"name": "alice", "servers": {}}) == {}
+    assert session._servers({"servers": {"": {"ready": True}}}) == {"": {"ready": True}}
+
+
+@pytest.mark.asyncio
+async def test_status_never_claims_no_session_when_it_cannot_see(user_ctx):
+    """The exact regression: an agent inside a running session carries a
+    singleuser server token, whose user model has no `servers` key. Saying
+    "no active session" there contradicts the session the agent runs in."""
+    from httpx import Response
+
+    tools = register_tools(session)
+    with respx.mock:
+        respx.get(USER_URL).mock(
+            return_value=Response(200, json={"name": "alice", "kind": "user"})
+        )
+        out = await tools.tools["get_session_status"]()
+    assert "No active session" not in out
+    assert "cannot tell" in out.lower() or "cannot read" in out.lower()
+
+
+@pytest.mark.asyncio
+async def test_status_still_reports_a_genuinely_stopped_session(user_ctx):
+    """The permission fix must not hide a real "you have no session"."""
+    from httpx import Response
+
+    tools = register_tools(session)
+    with respx.mock:
+        respx.get(USER_URL).mock(
+            return_value=Response(200, json={"name": "alice", "servers": {}})
+        )
+        out = await tools.tools["get_session_status"]()
+    assert "No active session" in out
