@@ -1,0 +1,11 @@
+# The IRIS-HEP integration challenge revision the analysis smoke test runs
+# against, pinned to a commit so upstream movement arrives as a Renovate PR
+# that runs the full CI chain. A breaking upstream change then reddens that
+# PR while main stays green — see tests/integration_challenge/README.md.
+#
+# Renovate tracks this via customManagers → git-refs in .github/renovate.json5.
+# The file is also a memo input (image-inputs.sh pixi-global), so bumping it
+# forces the stage-1c job to actually re-run rather than reuse a green marker.
+
+repo=https://github.com/iris-hep/integration-challenge
+ref=cc7b7e52513f5690380d00f3e915671c3826d923

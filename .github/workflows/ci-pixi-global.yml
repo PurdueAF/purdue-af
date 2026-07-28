@@ -8,6 +8,15 @@ name: CI pixi-global
 #   2. otherwise `pixi lock` + install, then on green check-env commit the
 #      regenerated lock (Renovate only bumps manifests; see renovate.json5)
 #   3. import-smoke via pixi/check-env.py inside the AF image
+#   4. the IRIS-HEP integration challenge over CMS OpenData, same env, same
+#      image — imports prove the env resolves, this proves it does physics
+#
+# Step 4 lives here rather than in ci-e2e.yml because this is the one job that
+# already holds both halves of what it needs: the global env installed on the
+# runner and the AF image in the host docker daemon. The e2e jobs load the
+# image into a kind node instead and carry no global env, so hosting it there
+# would mean installing the env a second time (tens of GB, uncacheable
+# between workflows).
 #
 # Memoized when the lock was already in sync (image-inputs.sh key + image
 # ref). Lock commits prefer AF_RELEASE_TOKEN; without it we push with
@@ -127,6 +136,34 @@ jobs:
             "${{ steps.image.outputs.image }}" \
             pixi/global/.pixi/envs/default/bin/python pixi/check-env.py \
               --manifest pixi/global/pixi.toml --env default
+      # Pinned by tests/integration_challenge/upstream.pin, so upstream
+      # movement reaches CI as a Renovate PR rather than as a surprise on an
+      # unrelated one. The pin is part of this job's memo key.
+      - name: Check out the integration challenge
+        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          pin=tests/integration_challenge/upstream.pin
+          repo=$(grep -E '^repo=' "$pin" | cut -d= -f2-)
+          ref=$(grep -E '^ref=' "$pin" | cut -d= -f2-)
+          git init -q challenge
+          git -C challenge remote add origin "$repo"
+          git -C challenge fetch -q --depth 1 origin "$ref"
+          git -C challenge checkout -q FETCH_HEAD
+          echo "integration challenge at $ref" | tee -a "$GITHUB_STEP_SUMMARY"
+      # Runs the global env's own interpreter inside the AF image — the same
+      # combination a user gets from the `Python (pixi global)` kernel. Reads
+      # a CMS OpenData file straight from eospublic (no grid cert needed).
+      - name: Run the integration challenge
+        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          docker run --rm --user 0:0 -v "$PWD:$PWD" -w "$PWD" \
+            "${{ steps.image.outputs.image }}" \
+            pixi/global/.pixi/envs/default/bin/python \
+            tests/integration_challenge/run_challenge.py \
+            --challenge-root challenge/cms
+
       - name: Commit regenerated lockfile
         if: success() && (steps.present.outputs.have_lock != 'true' || steps.memo.outputs.cache-hit != 'true') && steps.lock.outputs.updated == 'true'
         env:

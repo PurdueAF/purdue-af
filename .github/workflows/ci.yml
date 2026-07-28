@@ -13,6 +13,10 @@ name: CI
 #                                             an existing tag is VERIFIED reuse
 #   stage 1c  pixi-global ci-pixi-global.yml  sync/commit pixi/global lock +
 #                                             import-smoke INSIDE the stage-1 AF image
+#                                             + the IRIS-HEP integration challenge
+#                                             over CMS OpenData in that same env
+#                                             (the env is already installed and the
+#                                             image already pulled here)
 #   stage 2   e2e         ci-e2e.yml      hub stack in kind, one job per channel:
 #                                         e2e-production (spawns the image pinned
 #                                         in values.yaml — the "e2e = production"

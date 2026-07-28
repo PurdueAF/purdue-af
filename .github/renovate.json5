@@ -102,6 +102,18 @@
       datasourceTemplate: 'npm',
       depNameTemplate: '@openai/codex',
     },
+    {
+      // The IRIS-HEP integration challenge revision the stage-1c analysis
+      // smoke test runs against. Pinned to a commit so upstream movement
+      // arrives as a PR that runs the full chain: a breaking upstream change
+      // reddens that PR instead of an unrelated one.
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)upstream\\.pin$/'],
+      matchStrings: ['ref=(?<currentDigest>[0-9a-f]{40})'],
+      currentValueTemplate: 'main',
+      datasourceTemplate: 'git-refs',
+      depNameTemplate: 'https://github.com/iris-hep/integration-challenge',
+    },
   ],
 
   packageRules: [
