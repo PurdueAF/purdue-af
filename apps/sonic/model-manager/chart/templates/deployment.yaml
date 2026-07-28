@@ -77,6 +77,8 @@ spec:
               value: {{ .Values.supersonicRelease | quote }}
             - name: INFERENCE_ENDPOINT
               value: {{ .Values.inferenceEndpoint | quote }}
+            - name: GRAFANA_URL
+              value: {{ .Values.grafanaUrl | quote }}
             - name: MODEL_REPOSITORY_PATH
               value: {{ .Values.modelRepository.mountPath | quote }}
             - name: PVC_NAME

@@ -204,6 +204,11 @@
 
     .spacer { flex: 1 1 auto; }
 
+    /* URL pills sit with the brand (left); status/actions stay on the right. */
+    .head-links {
+      display: flex; align-items: center; gap: var(--space-2);
+      flex-wrap: wrap; min-width: 0;
+    }
     .head-actions { display: flex; align-items: center; gap: var(--space-2); }
 
     /* ---------- primitives ---------- */
@@ -265,7 +270,7 @@
     .chip.bad { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); background: var(--danger-soft); }
     .chip.bad .dot { background: var(--danger); }
 
-    /* Inference endpoint: the address clients actually send requests to. */
+    /* Copyable / linkable endpoint pills (inference address, Grafana URL). */
     .chip.endpoint {
       font: inherit;
       font-size: var(--text-xs);
@@ -273,6 +278,7 @@
       gap: var(--space-2);
       padding: 3px 9px;
       max-width: 56ch;
+      text-decoration: none;
       transition: border-color var(--dur), background var(--dur), color var(--dur);
     }
     .chip.endpoint:hover { border-color: var(--accent); color: var(--accent); }
@@ -663,9 +669,8 @@
           <p class="sub" id="brand-sub">&nbsp;</p>
         </div>
       </div>
-      <div class="spacer"></div>
-      <div class="head-actions">
-        <button class="chip endpoint" id="chip-endpoint" hidden>
+      <div class="head-links">
+        <button class="chip endpoint" id="chip-endpoint" type="button" hidden>
           <span class="k">inference</span>
           <span class="v mono" id="endpoint-value"></span>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -673,6 +678,18 @@
             <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path>
           </svg>
         </button>
+        <a class="chip endpoint" id="chip-grafana" hidden target="_blank" rel="noopener noreferrer">
+          <span class="k">grafana</span>
+          <span class="v mono" id="grafana-value"></span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <line x1="10" y1="14" x2="21" y2="3"></line>
+          </svg>
+        </a>
+      </div>
+      <div class="spacer"></div>
+      <div class="head-actions">
         <span class="chip" id="chip-servers"><span class="dot"></span><span>–</span></span>
         <span class="chip" id="chip-updated">–</span>
         <button class="btn ghost icon theme-toggle" id="btn-theme">
@@ -963,6 +980,7 @@
 
       $("brand-sub").textContent = `${data.instance} · ${data.namespace} namespace`;
       renderEndpoint(data.inference || {});
+      renderGrafana(data.grafana || {});
 
       const live = data.servers.filter((s) => s.live).length;
       const chipServers = $("chip-servers");
@@ -992,6 +1010,11 @@
       configured: "Configured explicitly in the chart values",
     };
 
+    const GRAFANA_SOURCES = {
+      ingress: "Grafana ingress for this SuperSONIC release",
+      configured: "Configured explicitly in the chart values",
+    };
+
     let currentEndpoint = "";
 
     function renderEndpoint(inference) {
@@ -1007,6 +1030,19 @@
       if (!chip.classList.contains("copied")) {
         $("endpoint-value").textContent = inference.endpoint;
       }
+    }
+
+    function renderGrafana(grafana) {
+      const chip = $("chip-grafana");
+      if (!grafana.url) {
+        chip.hidden = true;
+        chip.removeAttribute("href");
+        return;
+      }
+      chip.hidden = false;
+      chip.href = grafana.url;
+      chip.title = `${GRAFANA_SOURCES[grafana.source] || "Grafana dashboard"}\nOpen in a new tab`;
+      $("grafana-value").textContent = grafana.url.replace(/^https?:\/\//, "");
     }
 
     /** Clipboard API needs a secure context; fall back for plain-http access. */

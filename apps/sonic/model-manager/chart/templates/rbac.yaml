@@ -31,7 +31,7 @@ rules:
   - apiGroups: [""]
     resources: ["persistentvolumeclaims", "services"]
     verbs: ["get", "list"]
-  # Read the Envoy ingress to show the external inference endpoint
+  # Read the Envoy / Grafana ingresses to show their public URLs
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses"]
     verbs: ["get", "list"]

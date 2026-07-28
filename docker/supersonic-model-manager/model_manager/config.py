@@ -95,11 +95,12 @@ class Settings:
         )
     )
 
-    # -- Inference endpoint shown on the dashboard ------------------------
-    # Name of the SuperSONIC release, used to find its Envoy ingress/service.
+    # -- Inference / Grafana URLs shown on the dashboard ------------------
+    # Name of the SuperSONIC release, used to find its Envoy/Grafana ingresses.
     supersonic_release: str = field(default_factory=lambda: _str("SUPERSONIC_RELEASE"))
-    # Explicit override; skips discovery entirely.
+    # Explicit overrides; skip discovery entirely when set.
     inference_endpoint: str = field(default_factory=lambda: _str("INFERENCE_ENDPOINT"))
+    grafana_url: str = field(default_factory=lambda: _str("GRAFANA_URL"))
 
     # -- Misc -------------------------------------------------------------
     instance_name: str = field(

@@ -184,6 +184,37 @@ def find_inference_endpoint() -> dict:
     return {"endpoint": "", "source": None}
 
 
+def find_grafana_url() -> dict:
+    """Public URL of the SuperSONIC Grafana dashboard, if one is Ingress-exposed."""
+    if settings.grafana_url:
+        return {"url": settings.grafana_url, "source": "configured"}
+
+    release = settings.supersonic_release
+    if not release:
+        return {"url": "", "source": None}
+
+    namespace = settings.triton_namespace
+    ingresses = _get(
+        f"/apis/networking.k8s.io/v1/namespaces/{namespace}/ingresses",
+        params={"labelSelector": f"app.kubernetes.io/instance={release}"},
+    )
+    for item in (ingresses or {}).get("items", []):
+        meta = item.get("metadata") or {}
+        name = meta.get("name", "")
+        labels = meta.get("labels") or {}
+        if "grafana" not in name and labels.get("app.kubernetes.io/name") != "grafana":
+            continue
+        spec = item.get("spec") or {}
+        rules = spec.get("rules") or []
+        host = rules[0].get("host") if rules else None
+        if not host:
+            continue
+        scheme = "https" if spec.get("tls") else "http"
+        return {"url": f"{scheme}://{host}", "source": "ingress"}
+
+    return {"url": "", "source": None}
+
+
 def list_triton_pods() -> list:
     """Triton pods as ``[{"name", "ip", "node", "phase", "ready"}]``."""
     payload = _get(

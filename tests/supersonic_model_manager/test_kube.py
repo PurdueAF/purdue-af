@@ -23,6 +23,7 @@ def in_cluster(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "pvc_name", "af-shared-storage")
     monkeypatch.setattr(settings, "supersonic_release", "supersonic")
     monkeypatch.setattr(settings, "inference_endpoint", "")
+    monkeypatch.setattr(settings, "grafana_url", "")
     monkeypatch.setattr(settings, "triton_label_selector", "app=triton")
 
 
@@ -286,3 +287,68 @@ def test_no_endpoint_without_a_release_name(in_cluster, monkeypatch):
     monkeypatch.setattr(settings, "supersonic_release", "")
 
     assert kube.find_inference_endpoint()["endpoint"] == ""
+
+
+# --------------------------------------------------------------------------
+# Grafana URL
+# --------------------------------------------------------------------------
+
+
+def test_explicit_grafana_url_skips_discovery(in_cluster, monkeypatch):
+    monkeypatch.setattr(settings, "grafana_url", "https://grafana.example.org")
+
+    assert kube.find_grafana_url() == {
+        "url": "https://grafana.example.org",
+        "source": "configured",
+    }
+
+
+@respx.mock
+def test_finds_the_grafana_ingress(in_cluster):
+    respx.get(f"{API}/apis/networking.k8s.io/v1/namespaces/cms/ingresses").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "items": [
+                    ingress(
+                        "supersonic-ingress-grpc",
+                        "supersonic.geddes.rcac.purdue.edu",
+                    ),
+                    {
+                        **ingress(
+                            "supersonic-grafana",
+                            "supersonic-grafana.geddes.rcac.purdue.edu",
+                        ),
+                        "metadata": {
+                            "name": "supersonic-grafana",
+                            "labels": {"app.kubernetes.io/name": "grafana"},
+                        },
+                    },
+                ]
+            },
+        )
+    )
+
+    assert kube.find_grafana_url() == {
+        "url": "https://supersonic-grafana.geddes.rcac.purdue.edu",
+        "source": "ingress",
+    }
+
+
+@respx.mock
+def test_no_grafana_url_without_a_grafana_ingress(in_cluster):
+    respx.get(f"{API}/apis/networking.k8s.io/v1/namespaces/cms/ingresses").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "items": [
+                    ingress(
+                        "supersonic-ingress-grpc",
+                        "supersonic.geddes.rcac.purdue.edu",
+                    )
+                ]
+            },
+        )
+    )
+
+    assert kube.find_grafana_url() == {"url": "", "source": None}

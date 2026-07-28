@@ -78,12 +78,20 @@ async def index() -> FileResponse:
 
 @app.get("/api/state")
 async def state() -> dict:
-    pvc_capacity, models_on_pvc, triton_state, prom, inference = await asyncio.gather(
+    (
+        pvc_capacity,
+        models_on_pvc,
+        triton_state,
+        prom,
+        inference,
+        grafana,
+    ) = await asyncio.gather(
         asyncio.to_thread(kube.pvc_capacity_bytes),
         asyncio.to_thread(repository.scan_models),
         triton.collect_state(),
         metrics.collect_metrics(),
         asyncio.to_thread(kube.find_inference_endpoint),
+        asyncio.to_thread(kube.find_grafana_url),
     )
     storage = await asyncio.to_thread(repository.storage_usage, pvc_capacity)
 
@@ -143,6 +151,7 @@ async def state() -> dict:
         "storage": storage,
         "pvcName": settings.pvc_name,
         "inference": inference,
+        "grafana": grafana,
         "servers": servers,
         "serverNames": server_names,
         "liveServerCount": len(live_servers),

@@ -117,6 +117,10 @@ rbac:
 # Service's in-cluster address.
 inferenceEndpoint: ""
 
+# -- Grafana dashboard URL shown next to the inference endpoint. Leave empty
+# to discover it from the release's Grafana Ingress.
+grafanaUrl: ""
+
 # -- Dashboard auto-refresh interval, seconds
 refreshSeconds: 15
 
