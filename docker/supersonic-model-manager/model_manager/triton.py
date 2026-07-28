@@ -10,8 +10,8 @@ import logging
 
 import httpx
 
-from .config import settings
 from . import kube
+from .config import settings
 
 log = logging.getLogger(__name__)
 
@@ -31,10 +31,20 @@ def discover_servers() -> list:
     if settings.triton_discovery == "static":
         servers = []
         for endpoint in settings.triton_endpoints:
-            address = endpoint if ":" in endpoint else f"{endpoint}:{settings.triton_http_port}"
+            address = (
+                endpoint
+                if ":" in endpoint
+                else f"{endpoint}:{settings.triton_http_port}"
+            )
             servers.append(
-                {"name": address, "address": address, "url": f"http://{address}", "node": None,
-                 "ready": None, "phase": None}
+                {
+                    "name": address,
+                    "address": address,
+                    "url": f"http://{address}",
+                    "node": None,
+                    "ready": None,
+                    "phase": None,
+                }
             )
         return servers
 
@@ -114,7 +124,9 @@ async def collect_state() -> dict:
     return {"servers": results, "models": models}
 
 
-async def _control_one(client: httpx.AsyncClient, server: dict, model: str, action: str) -> dict:
+async def _control_one(
+    client: httpx.AsyncClient, server: dict, model: str, action: str
+) -> dict:
     url = f"{server['url']}/v2/repository/models/{model}/{action}"
     try:
         response = await client.post(url, json={})
@@ -129,7 +141,11 @@ async def _control_one(client: httpx.AsyncClient, server: dict, model: str, acti
                     "so models cannot be loaded or unloaded at runtime.",
                     "controlDisabled": True,
                 }
-            return {"server": server["name"], "ok": False, "error": f"HTTP {response.status_code}: {message}"}
+            return {
+                "server": server["name"],
+                "ok": False,
+                "error": f"HTTP {response.status_code}: {message}",
+            }
         _control_capability[server["address"]] = True
         return {"server": server["name"], "ok": True, "error": None}
     except Exception as exc:
@@ -146,8 +162,13 @@ async def control_model(model: str, action: str, server_names=None) -> dict:
         wanted = set(server_names)
         servers = [s for s in servers if s["name"] in wanted or s["address"] in wanted]
     if not servers:
-        return {"action": action, "model": model, "results": [], "ok": False,
-                "error": "No Triton servers found."}
+        return {
+            "action": action,
+            "model": model,
+            "results": [],
+            "ok": False,
+            "error": "No Triton servers found.",
+        }
 
     # Unloading uses a longer budget: Triton drains in-flight requests first.
     timeout = settings.triton_timeout_s * (6 if action == "unload" else 3)

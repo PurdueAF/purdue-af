@@ -1,7 +1,5 @@
 """Triton model repository layout rules applied to uploads."""
 
-import pytest
-
 from model_manager.validation import parse_config, validate_model_dir
 
 
@@ -38,7 +36,9 @@ def test_accepts_multiple_versions_sorted_numerically(staged, make_model):
 
 def test_accepts_savedmodel_directory(staged):
     model = staged / "tf_model"
-    write(model / "config.pbtxt", 'name: "tf_model"\nplatform: "tensorflow_savedmodel"\n')
+    write(
+        model / "config.pbtxt", 'name: "tf_model"\nplatform: "tensorflow_savedmodel"\n'
+    )
     write(model / "1" / "model.savedmodel" / "saved_model.pb", "x")
 
     result = validate_model_dir(model, "tf_model")
@@ -130,7 +130,9 @@ def test_rejects_version_zero(staged, make_model):
 def test_rejects_config_name_mismatch(staged):
     """Triton refuses to load a model whose config name is not its directory."""
     model = staged / "installed_as"
-    write(model / "config.pbtxt", 'name: "something_else"\nplatform: "onnxruntime_onnx"\n')
+    write(
+        model / "config.pbtxt", 'name: "something_else"\nplatform: "onnxruntime_onnx"\n'
+    )
     write(model / "1" / "model.onnx", "x")
 
     result = validate_model_dir(model, "installed_as")
@@ -152,7 +154,9 @@ def test_rejects_wrong_artifact_name_for_platform(staged):
 
 def test_rejects_savedmodel_as_file(staged):
     model = staged / "tf_flat"
-    write(model / "config.pbtxt", 'name: "tf_flat"\nplatform: "tensorflow_savedmodel"\n')
+    write(
+        model / "config.pbtxt", 'name: "tf_flat"\nplatform: "tensorflow_savedmodel"\n'
+    )
     write(model / "1" / "model.savedmodel", "not a directory")
 
     result = validate_model_dir(model, "tf_flat")

@@ -50,7 +50,13 @@ IMAGE_INPUTS = Path(".github/workflows/image-inputs.sh")
 # Images ci-images.yml builds. purdue-af ships on a semver stream of its own;
 # the aux images ride :latest, which the publish stage moves at the same
 # moment it advances main-validated — so main-validated is their deployed ref.
-CI_IMAGES = ["purdue-af", "agentic-interface", "af-pod-monitor", "af-node-monitor"]
+CI_IMAGES = [
+    "purdue-af",
+    "agentic-interface",
+    "af-pod-monitor",
+    "af-node-monitor",
+    "supersonic-model-manager",
+]
 VALUES_YAML = Path("apps/jupyterhub/jupyterhub/values.yaml")
 
 COLORS = {

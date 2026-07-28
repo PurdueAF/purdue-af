@@ -3,7 +3,6 @@
 import httpx
 import pytest
 import respx
-
 from model_manager import metrics
 from model_manager.config import settings
 
@@ -107,9 +106,10 @@ async def test_series_without_a_model_label_are_ignored():
             200,
             json={
                 "status": "success",
-                "data": {"resultType": "vector", "result": [
-                    {"metric": {"job": "triton"}, "value": [0, "1"]}
-                ]},
+                "data": {
+                    "resultType": "vector",
+                    "result": [{"metric": {"job": "triton"}, "value": [0, "1"]}],
+                },
             },
         )
     )

@@ -3,7 +3,6 @@
 import httpx
 import pytest
 import respx
-
 from model_manager import kube
 from model_manager.config import settings
 
@@ -54,7 +53,9 @@ def test_api_unavailable_outside_a_cluster(monkeypatch):
 
 @respx.mock
 def test_pvc_capacity_prefers_bound_status(in_cluster):
-    respx.get(f"{API}/api/v1/namespaces/cms/persistentvolumeclaims/af-shared-storage").mock(
+    respx.get(
+        f"{API}/api/v1/namespaces/cms/persistentvolumeclaims/af-shared-storage"
+    ).mock(
         return_value=httpx.Response(
             200,
             json={
@@ -69,9 +70,15 @@ def test_pvc_capacity_prefers_bound_status(in_cluster):
 
 @respx.mock
 def test_pvc_capacity_falls_back_to_the_request(in_cluster):
-    respx.get(f"{API}/api/v1/namespaces/cms/persistentvolumeclaims/af-shared-storage").mock(
+    respx.get(
+        f"{API}/api/v1/namespaces/cms/persistentvolumeclaims/af-shared-storage"
+    ).mock(
         return_value=httpx.Response(
-            200, json={"status": {}, "spec": {"resources": {"requests": {"storage": "50Gi"}}}}
+            200,
+            json={
+                "status": {},
+                "spec": {"resources": {"requests": {"storage": "50Gi"}}},
+            },
         )
     )
 
@@ -80,9 +87,9 @@ def test_pvc_capacity_falls_back_to_the_request(in_cluster):
 
 @respx.mock
 def test_api_errors_are_swallowed(in_cluster):
-    respx.get(f"{API}/api/v1/namespaces/cms/persistentvolumeclaims/af-shared-storage").mock(
-        return_value=httpx.Response(403, text="forbidden")
-    )
+    respx.get(
+        f"{API}/api/v1/namespaces/cms/persistentvolumeclaims/af-shared-storage"
+    ).mock(return_value=httpx.Response(403, text="forbidden"))
 
     assert kube.pvc_capacity_bytes() == 0
 
@@ -158,8 +165,13 @@ def test_prefers_the_grpc_ingress_over_other_release_ingresses(in_cluster):
             200,
             json={
                 "items": [
-                    ingress("supersonic-grafana", "supersonic-grafana.geddes.rcac.purdue.edu"),
-                    ingress("supersonic-ingress-grpc", "supersonic.geddes.rcac.purdue.edu"),
+                    ingress(
+                        "supersonic-grafana",
+                        "supersonic-grafana.geddes.rcac.purdue.edu",
+                    ),
+                    ingress(
+                        "supersonic-ingress-grpc", "supersonic.geddes.rcac.purdue.edu"
+                    ),
                 ]
             },
         )
@@ -177,7 +189,10 @@ def test_prefers_the_grpc_ingress_over_other_release_ingresses(in_cluster):
 def test_ingress_without_tls_uses_port_80(in_cluster):
     respx.get(f"{API}/apis/networking.k8s.io/v1/namespaces/cms/ingresses").mock(
         return_value=httpx.Response(
-            200, json={"items": [ingress("supersonic-ingress-grpc", "sonic.local", tls=False)]}
+            200,
+            json={
+                "items": [ingress("supersonic-ingress-grpc", "sonic.local", tls=False)]
+            },
         )
     )
 

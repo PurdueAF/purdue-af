@@ -68,6 +68,7 @@ Whether each component on the cluster is running what is on `main`
 ![servicex-s3][experimental-servicex-s3]
 ![servicex-test][experimental-servicex-test]
 ![supersonic][experimental-sonic-supersonic]
+![model-manager][experimental-sonic-model-manager]
 
 **Images** — `purdue-af` is released on its own semver stream and pinned at
 ![AF image][af-image-version]; the rest ride `:latest`
@@ -76,6 +77,7 @@ Whether each component on the cluster is running what is on `main`
 ![agentic-interface][image-agentic-interface]
 ![af-pod-monitor][image-af-pod-monitor]
 ![af-node-monitor][image-af-node-monitor]
+![supersonic-model-manager][image-supersonic-model-manager]
 
 Reading the badges:
 
@@ -123,11 +125,13 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-servicex-eos]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex-eos.json
 [experimental-servicex-s3]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex-s3.json
 [experimental-servicex-test]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex-test.json
+[experimental-sonic-model-manager]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-model-manager.json
 [experimental-sonic-supersonic]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic.json
 [image-purdue-af]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-purdue-af.json
 [image-agentic-interface]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-agentic-interface.json
 [image-af-pod-monitor]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-af-pod-monitor.json
 [image-af-node-monitor]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-af-node-monitor.json
+[image-supersonic-model-manager]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-supersonic-model-manager.json
 [status-pending]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/_pending.json
 [platform-version]: https://img.shields.io/github/v/tag/PurdueAF/purdue-af?filter=2*&sort=semver&label=platform&color=B1810B
 [af-image-version]: https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2FPurdueAF%2Fpurdue-af%2Fmain%2Fapps%2Fjupyterhub%2Fjupyterhub%2Fvalues.yaml&query=%24.singleuser.image.tag&label=AF%20image&color=B1810B

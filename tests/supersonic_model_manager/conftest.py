@@ -30,8 +30,15 @@ def repo(tmp_path, monkeypatch):
 def make_model(repo):
     """Create a well-formed Triton model directory inside the repository."""
 
-    def _make(name, platform="onnxruntime_onnx", versions=("1",), artifact="model.onnx",
-              size=32, config=True, parent=None):
+    def _make(
+        name,
+        platform="onnxruntime_onnx",
+        versions=("1",),
+        artifact="model.onnx",
+        size=32,
+        config=True,
+        parent=None,
+    ):
         base = (parent or repo) / name
         base.mkdir(parents=True, exist_ok=True)
         if config:

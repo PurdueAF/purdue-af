@@ -29,6 +29,7 @@ log = logging.getLogger("model_manager")
 
 STATIC_DIR = Path(__file__).parent / "static"
 
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     root = repository.repo_root()
@@ -55,7 +56,9 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 def _require_writable() -> None:
     if settings.read_only:
-        raise HTTPException(status_code=403, detail="This instance is running in read-only mode.")
+        raise HTTPException(
+            status_code=403, detail="This instance is running in read-only mode."
+        )
 
 
 # --------------------------------------------------------------------------
@@ -94,7 +97,8 @@ async def state() -> dict:
         pvc_entry = by_name.get(name)
         server_states = triton_state["models"].get(name, {})
         loaded = [
-            server for server, info in server_states.items()
+            server
+            for server, info in server_states.items()
             if str(info.get("state", "")).upper() == "READY"
         ]
         if pvc_entry and server_states:
@@ -110,8 +114,14 @@ async def state() -> dict:
                 "source": source,
                 "sizeBytes": pvc_entry["sizeBytes"] if pvc_entry else None,
                 "fileCount": pvc_entry["fileCount"] if pvc_entry else None,
-                "versions": pvc_entry["versions"] if pvc_entry else sorted(
-                    {info.get("version", "") for info in server_states.values() if info.get("version")}
+                "versions": pvc_entry["versions"]
+                if pvc_entry
+                else sorted(
+                    {
+                        info.get("version", "")
+                        for info in server_states.values()
+                        if info.get("version")
+                    }
                 ),
                 "platform": pvc_entry["platform"] if pvc_entry else "",
                 "modified": pvc_entry["modified"] if pvc_entry else None,
@@ -143,7 +153,10 @@ async def state() -> dict:
             "window": prom.get("window"),
             "error": prom.get("error"),
         },
-        "kubernetes": {"available": kube.api_available(), "discovery": settings.triton_discovery},
+        "kubernetes": {
+            "available": kube.api_available(),
+            "discovery": settings.triton_discovery,
+        },
         "updatedAt": time.time(),
     }
 
@@ -201,7 +214,7 @@ async def _spool_to_disk(upload: UploadFile, destination: Path, limit: int) -> i
             if written > limit:
                 raise repository.RepositoryError(
                     "Upload exceeds the configured size limit "
-                    f"({limit / (1024 ** 3):.1f} GiB)."
+                    f"({limit / (1024**3):.1f} GiB)."
                 )
             out.write(chunk)
     return written
@@ -223,7 +236,9 @@ async def upload(
     try:
         staging_root.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Model repository is not writable: {exc}")
+        raise HTTPException(
+            status_code=500, detail=f"Model repository is not writable: {exc}"
+        )
 
     # A single archive is the common case; a set of files with relative paths
     # comes from the browser's directory picker.
@@ -232,7 +247,10 @@ async def upload(
     try:
         if single_archive:
             upload_file = files[0]
-            tmp = staging_root / f"incoming-{uuid.uuid4().hex}-{Path(upload_file.filename).name}"
+            tmp = (
+                staging_root
+                / f"incoming-{uuid.uuid4().hex}-{Path(upload_file.filename).name}"
+            )
             try:
                 await _spool_to_disk(upload_file, tmp, settings.max_upload_bytes)
                 result = await asyncio.to_thread(
@@ -252,7 +270,9 @@ async def upload(
                 except json.JSONDecodeError:
                     raise repository.RepositoryError("Malformed 'paths' field.")
             if len(relative_paths) not in (0, len(files)):
-                raise repository.RepositoryError("'paths' does not match the uploaded files.")
+                raise repository.RepositoryError(
+                    "'paths' does not match the uploaded files."
+                )
 
             effective_name = name.strip()
             if not effective_name and relative_paths:
@@ -267,14 +287,21 @@ async def upload(
             try:
                 for index, upload_file in enumerate(files):
                     relative = (
-                        str(relative_paths[index]) if relative_paths
+                        str(relative_paths[index])
+                        if relative_paths
                         else (upload_file.filename or f"file-{index}")
                     )
                     # Drop the leading model directory: it becomes the model name.
-                    parts = [p for p in relative.replace("\\", "/").split("/") if p not in ("", ".")]
+                    parts = [
+                        p
+                        for p in relative.replace("\\", "/").split("/")
+                        if p not in ("", ".")
+                    ]
                     if len(parts) > 1 and parts[0] == effective_name:
                         parts = parts[1:]
-                    await asyncio.to_thread(upload_dir.add_file, "/".join(parts), upload_file.file)
+                    await asyncio.to_thread(
+                        upload_dir.add_file, "/".join(parts), upload_file.file
+                    )
                 result = await asyncio.to_thread(upload_dir.finish)
             except Exception:
                 upload_dir.cleanup()

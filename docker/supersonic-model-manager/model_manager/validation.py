@@ -38,7 +38,7 @@ BACKEND_ARTIFACTS = {
     "python": ("model.py", "file"),
     "dali": ("model.dali", "file"),
     "tensorflow": None,  # savedmodel or graphdef
-    "fil": None,         # xgboost.json, checkpoint.tl, ...
+    "fil": None,  # xgboost.json, checkpoint.tl, ...
     "vllm": None,
 }
 
@@ -101,7 +101,7 @@ def parse_config(config_file: Path) -> dict:
         return {"_error": str(exc)}
 
     def scalar(field_name: str, quoted: bool = True):
-        pattern = rf'"([^"]*)"' if quoted else r"([0-9]+)"
+        pattern = r'"([^"]*)"' if quoted else r"([0-9]+)"
         # An unindented match is top-level; fall back to the first match anywhere.
         top = re.search(rf"^{field_name}\s*:\s*{pattern}", text, re.MULTILINE)
         if top:
@@ -190,7 +190,9 @@ def validate_model_dir(model_dir: Path, model_name: str) -> ValidationResult:
 
     if not version_dirs:
         # The most common mistake: model files dropped straight into the model dir.
-        stray = [e.name for e in entries if e.is_file() and e.name in ARTIFACT_PLATFORMS]
+        stray = [
+            e.name for e in entries if e.is_file() and e.name in ARTIFACT_PLATFORMS
+        ]
         if stray:
             result.errors.append(
                 f"Model file '{stray[0]}' is directly inside the model directory. "
@@ -215,7 +217,9 @@ def validate_model_dir(model_dir: Path, model_name: str) -> ValidationResult:
     if not platform and not backend and not default_filename:
         platform = _infer_platform(version_dirs[0])
 
-    expected_name, expected_kind = _expected_artifact(platform, backend, default_filename)
+    expected_name, expected_kind = _expected_artifact(
+        platform, backend, default_filename
+    )
     result.platform = platform or backend or ""
 
     for version_dir in version_dirs:

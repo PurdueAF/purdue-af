@@ -9,7 +9,7 @@ supersonicRelease: ""
 
 image:
   repository: ghcr.io/fastmachinelearning/supersonic-model-manager
-  tag: ""            # defaults to .Chart.AppVersion
+  tag: "" # defaults to .Chart.AppVersion
   pullPolicy: IfNotPresent
 
 replicas: 1

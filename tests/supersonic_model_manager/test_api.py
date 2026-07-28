@@ -6,7 +6,6 @@ import zipfile
 
 import httpx
 import pytest
-
 from model_manager import kube, metrics, triton
 from model_manager.config import settings
 from model_manager.main import app
@@ -35,7 +34,9 @@ def client(repo, monkeypatch):
 def model_zip(name="mymodel", version_dir=True):
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as zf:
-        zf.writestr(f"{name}/config.pbtxt", f'name: "{name}"\nplatform: "onnxruntime_onnx"\n')
+        zf.writestr(
+            f"{name}/config.pbtxt", f'name: "{name}"\nplatform: "onnxruntime_onnx"\n'
+        )
         zf.writestr(f"{name}/{'1/' if version_dir else ''}model.onnx", "weights")
     return buffer.getvalue()
 
@@ -135,7 +136,9 @@ async def test_state_marks_models_only_present_on_servers(client, monkeypatch):
     async def with_server():
         return {
             "servers": [{"name": "t-0", "live": True, "models": [], "error": None}],
-            "models": {"from_cvmfs": {"t-0": {"state": "READY", "version": "1", "reason": ""}}},
+            "models": {
+                "from_cvmfs": {"t-0": {"state": "READY", "version": "1", "reason": ""}}
+            },
         }
 
     monkeypatch.setattr(triton, "collect_state", with_server)
@@ -149,13 +152,17 @@ async def test_state_marks_models_only_present_on_servers(client, monkeypatch):
     assert model["loadedCount"] == 1
 
 
-async def test_state_marks_models_present_in_both_places(client, make_model, monkeypatch):
+async def test_state_marks_models_present_in_both_places(
+    client, make_model, monkeypatch
+):
     make_model("deepmet")
 
     async def with_server():
         return {
             "servers": [{"name": "t-0", "live": True, "models": [], "error": None}],
-            "models": {"deepmet": {"t-0": {"state": "READY", "version": "1", "reason": ""}}},
+            "models": {
+                "deepmet": {"t-0": {"state": "READY", "version": "1", "reason": ""}}
+            },
         }
 
     monkeypatch.setattr(triton, "collect_state", with_server)
@@ -187,7 +194,9 @@ async def test_upload_of_invalid_model_returns_structured_errors(client, repo):
     async with client as c:
         response = await c.post(
             "/api/upload",
-            files={"files": ("bad.zip", model_zip(version_dir=False), "application/zip")},
+            files={
+                "files": ("bad.zip", model_zip(version_dir=False), "application/zip")
+            },
             data={"name": "mymodel", "overwrite": "false"},
         )
 

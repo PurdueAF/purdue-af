@@ -3,7 +3,6 @@
 import httpx
 import pytest
 import respx
-
 from model_manager import triton
 from model_manager.config import settings
 
@@ -40,10 +39,14 @@ def test_discovers_static_endpoints_and_defaults_the_port(monkeypatch):
 @respx.mock
 async def test_collect_state_merges_models_across_servers():
     respx.post(f"http://{SERVERS[0]}/v2/repository/index").mock(
-        return_value=httpx.Response(200, json=index_payload(("a", "READY"), ("b", "READY")))
+        return_value=httpx.Response(
+            200, json=index_payload(("a", "READY"), ("b", "READY"))
+        )
     )
     respx.post(f"http://{SERVERS[1]}/v2/repository/index").mock(
-        return_value=httpx.Response(200, json=index_payload(("a", "READY"), ("b", "UNAVAILABLE")))
+        return_value=httpx.Response(
+            200, json=index_payload(("a", "READY"), ("b", "UNAVAILABLE"))
+        )
     )
 
     state = await triton.collect_state()

@@ -22,7 +22,16 @@ from .validation import validate_model_dir
 
 STAGING_DIRNAME = ".uploads"
 MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,255}$")
-ARCHIVE_SUFFIXES = (".zip", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz")
+ARCHIVE_SUFFIXES = (
+    ".zip",
+    ".tar",
+    ".tar.gz",
+    ".tgz",
+    ".tar.bz2",
+    ".tbz2",
+    ".tar.xz",
+    ".txz",
+)
 
 
 class RepositoryError(Exception):
@@ -71,7 +80,9 @@ def model_path(name: str) -> Path:
     root = repo_root().resolve()
     path = (root / name).resolve()
     if path.parent != root:
-        raise RepositoryError(f"Refusing to access {name!r} outside the repository root.")
+        raise RepositoryError(
+            f"Refusing to access {name!r} outside the repository root."
+        )
     return path
 
 
@@ -81,7 +92,9 @@ def _dir_stats(path: Path) -> tuple:
     count = 0
     newest = 0.0
     for dirpath, dirnames, filenames in os.walk(path, followlinks=False):
-        dirnames[:] = [d for d in dirnames if not os.path.islink(os.path.join(dirpath, d))]
+        dirnames[:] = [
+            d for d in dirnames if not os.path.islink(os.path.join(dirpath, d))
+        ]
         for filename in filenames:
             fpath = os.path.join(dirpath, filename)
             try:
@@ -120,7 +133,11 @@ def scan_models() -> list:
         size, count, newest = _dir_stats(child)
         config_file = child / "config.pbtxt"
         versions = sorted(
-            (sub.name for sub in child.iterdir() if sub.is_dir() and sub.name.isdigit()),
+            (
+                sub.name
+                for sub in child.iterdir()
+                if sub.is_dir() and sub.name.isdigit()
+            ),
             key=int,
         )
         entries.append(
@@ -201,7 +218,9 @@ def storage_usage(pvc_capacity_bytes=None) -> dict:
 
 
 def _staging_dir() -> Path:
-    staging = repo_root() / STAGING_DIRNAME / f"stage-{int(time.time() * 1000)}-{os.getpid()}"
+    staging = (
+        repo_root() / STAGING_DIRNAME / f"stage-{int(time.time() * 1000)}-{os.getpid()}"
+    )
     staging.mkdir(parents=True, exist_ok=False)
     return staging
 
@@ -244,7 +263,9 @@ def _extract_zip(archive: Path, dest: Path, budget: int) -> None:
                 continue
             remaining -= info.file_size
             if remaining < 0:
-                raise RepositoryError("Archive expands beyond the configured upload size limit.")
+                raise RepositoryError(
+                    "Archive expands beyond the configured upload size limit."
+                )
             target.parent.mkdir(parents=True, exist_ok=True)
             with zf.open(info) as src, open(target, "wb") as out:
                 shutil.copyfileobj(src, out, 1024 * 1024)
@@ -257,9 +278,13 @@ def _extract_tar(archive: Path, dest: Path, budget: int) -> None:
             if member.name.startswith("PaxHeader") or "/PaxHeader" in member.name:
                 continue
             if member.issym() or member.islnk():
-                raise RepositoryError(f"Archive contains a link ({member.name!r}); refusing.")
+                raise RepositoryError(
+                    f"Archive contains a link ({member.name!r}); refusing."
+                )
             if not (member.isfile() or member.isdir()):
-                raise RepositoryError(f"Unsupported archive entry type: {member.name!r}")
+                raise RepositoryError(
+                    f"Unsupported archive entry type: {member.name!r}"
+                )
             rel = _safe_relpath(member.name)
             if _is_junk(rel):
                 continue
@@ -269,7 +294,9 @@ def _extract_tar(archive: Path, dest: Path, budget: int) -> None:
                 continue
             remaining -= member.size
             if remaining < 0:
-                raise RepositoryError("Archive expands beyond the configured upload size limit.")
+                raise RepositoryError(
+                    "Archive expands beyond the configured upload size limit."
+                )
             target.parent.mkdir(parents=True, exist_ok=True)
             src = tf.extractfile(member)
             if src is None:
@@ -348,7 +375,9 @@ def _install(source: Path, name: str, overwrite: bool) -> dict:
     return {"name": name, "sizeBytes": size, "fileCount": count}
 
 
-def install_archive(archive_path: Path, original_filename: str, name: str, overwrite: bool) -> dict:
+def install_archive(
+    archive_path: Path, original_filename: str, name: str, overwrite: bool
+) -> dict:
     """Unpack an uploaded archive into the repository as model ``name``."""
     staging = _staging_dir()
     try:
@@ -361,8 +390,10 @@ def install_archive(archive_path: Path, original_filename: str, name: str, overw
 
         model_root = _resolve_model_root(extract_to)
         if not name:
-            name = model_root.name if model_root is not extract_to else _strip_archive_suffix(
-                original_filename
+            name = (
+                model_root.name
+                if model_root is not extract_to
+                else _strip_archive_suffix(original_filename)
             )
         name = _validate_name(name)
 

@@ -10,7 +10,9 @@ from .config import settings
 
 PUBLIC_PATHS = ("/healthz", "/readyz")
 
-_UNAUTHORIZED_HEADERS = {"WWW-Authenticate": 'Basic realm="SuperSONIC Model Manager", charset="UTF-8"'}
+_UNAUTHORIZED_HEADERS = {
+    "WWW-Authenticate": 'Basic realm="SuperSONIC Model Manager", charset="UTF-8"'
+}
 
 
 def _check(header: str) -> bool:
@@ -43,7 +45,9 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
 
         if not _check(request.headers.get("authorization", "")):
             return JSONResponse(
-                {"error": "Unauthorized"}, status_code=401, headers=_UNAUTHORIZED_HEADERS
+                {"error": "Unauthorized"},
+                status_code=401,
+                headers=_UNAUTHORIZED_HEADERS,
             )
 
         return await call_next(request)

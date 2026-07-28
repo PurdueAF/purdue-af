@@ -7,7 +7,6 @@ import zipfile
 from pathlib import Path
 
 import pytest
-
 from model_manager import repository
 from model_manager.config import settings
 
@@ -215,7 +214,9 @@ def test_unwraps_archive_with_a_single_wrapping_directory(repo, tmp_path):
     }
     archive = build_zip(tmp_path / "wrapped.zip", entries)
 
-    result = repository.install_archive(archive, "wrapped.zip", "mymodel", overwrite=False)
+    result = repository.install_archive(
+        archive, "wrapped.zip", "mymodel", overwrite=False
+    )
 
     assert (repo / "mymodel" / "1" / "model.onnx").is_file()
     assert result["name"] == "mymodel"
@@ -226,7 +227,9 @@ def test_unwraps_archive_with_a_single_wrapping_directory(repo, tmp_path):
 # --------------------------------------------------------------------------
 
 
-def test_refuses_to_replace_existing_model_without_overwrite(repo, tmp_path, make_model):
+def test_refuses_to_replace_existing_model_without_overwrite(
+    repo, tmp_path, make_model
+):
     make_model("mymodel")
     archive = build_zip(tmp_path / "m.zip", MODEL_FILES)
 
@@ -266,7 +269,9 @@ def test_delete_missing_model_raises(repo):
 
 def test_directory_upload_drops_junk_and_installs(repo):
     upload = repository.DirectoryUpload("dirmodel", overwrite=False)
-    upload.add_file("config.pbtxt", io.BytesIO(b'name: "dirmodel"\nplatform: "onnxruntime_onnx"\n'))
+    upload.add_file(
+        "config.pbtxt", io.BytesIO(b'name: "dirmodel"\nplatform: "onnxruntime_onnx"\n')
+    )
     upload.add_file("1/model.onnx", io.BytesIO(b"x"))
     upload.add_file(".DS_Store", io.BytesIO(b"junk"))
 

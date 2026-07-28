@@ -33,6 +33,10 @@ repos:
         additional_dependencies: ["prettier@3.9.6"]
         entry: prettier --write
         types_or: [json, yaml]
+        # Helm templates are Go templates, not YAML — prettier cannot parse
+        # `{{- include ... | nindent 4 }}` and fails on the whole file.
+        # Chart values.yaml (real YAML) is still formatted.
+        exclude: ^apps/.*/chart/templates/
 
       - id: shfmt
         name: shfmt
