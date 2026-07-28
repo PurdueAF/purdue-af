@@ -12,8 +12,9 @@ Purdue AF provides several user interfaces for analysis development:
 * [Connection from local VSCode-based IDEs](guide-ide-connection.md) (VSCode, Cursor, etc.)
 * [SSH connection from a local terminal](guide-ssh-access.md)
 * [Agentic interface (MCP server)](guide-agentic-interface.md) — manage your AF
-  session and Dask clusters from any MCP-capable AI agent (Claude Code, Codex,
-  Cursor, etc.)
+  session and Dask clusters from any MCP-capable AI agent. Claude Code and Codex
+  come pre-installed and pre-connected in the session (terminal and VS Code
+  extensions); agents on your own machine (Cursor, etc.) connect with a token.
 
 ## Python code development
 

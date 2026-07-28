@@ -2,11 +2,26 @@
 
 Purdue AF provides a remote [MCP](https://modelcontextprotocol.io) (Model Context
 Protocol) server that lets you manage your Analysis Facility session from **any
-MCP-capable AI agent** — Claude Code, Codex, Cursor, and others. Once connected,
-you can control the AF in natural language: start and stop your session, and
-inspect your Dask clusters, storage usage, and logs.
+MCP-capable AI agent** — Claude Code, Codex, Cursor, and others. You can control
+the AF in natural language: start and stop your session, check whether the
+facility is healthy, and inspect your Dask clusters, storage usage, and logs.
 
-## Connecting your agent
+Agents inside an AF session are ready to use; agents on your own machine need a
+token and a one-time setup.
+
+## Inside an AF session
+
+Nothing to set up. `claude` and `codex` are on `PATH` in any terminal, their
+extensions are installed in the VS Code interface, and both are already
+connected to the MCP server as you — no token, re-registered on every session
+start. The AF skill and a short platform context (storage volumes, scale-out
+limits, GPU options) are installed too.
+
+Run `claude` or `codex` and ask for what you want. You still sign in to the
+agent with your own Anthropic or OpenAI account; the AF ships no model
+credentials.
+
+## Connecting from your own machine
 
 |               |                                                                    |
 | ------------- | ------------------------------------------------------------------ |
@@ -58,6 +73,11 @@ inspect your Dask clusters, storage usage, and logs.
 
 ## Installing the skill (recommended)
 
+!!! note
+
+    Not needed inside an AF session — the skill is already installed there.
+    This is for agents running on your own machine.
+
 The MCP server is self-describing, but agents work noticeably better with the
 accompanying **skill** — a Markdown playbook that teaches the agent the AF
 workflows (how to launch a session, which tools to call in what order). It lives
@@ -82,8 +102,8 @@ the front-matter header.
 
 ## What you can do
 
-Your username and session are resolved automatically from the token, so you can
-simply ask in plain language, for example:
+Your username and session are resolved automatically, so you can simply ask in
+plain language, for example:
 
 * "Start my AF session" (optionally: "…with 32 CPUs and the VS Code interface")
 * "How much home and work storage am I using?"
@@ -92,9 +112,13 @@ simply ask in plain language, for example:
   questions (backend, worker environment, worker size, and worker count) before
   creating it
 * "Show the last 30 minutes of error logs from my notebook"
+* "Is the AF healthy?" — what is affecting the facility, if anything, and for
+  how long
 
 The available tools cover:
 
+* **Facility health** — a summary of anything currently affecting the facility:
+  access, storage, scale-out, and the software environment.
 * **Session lifecycle** — check status, list available resource profiles,
   start / stop / restart the session, and wait until it is ready. When starting,
   the agent asks you (as multiple-choice questions) which profile and resource
@@ -118,6 +142,8 @@ each multi-step workflow. In Claude Code they appear as
 | --- | --- |
 | `401` / "Invalid JupyterHub token" | The token expired or is wrong — get a new one at [/hub/token](https://cms.geddes.rcac.purdue.edu/hub/token). |
 | "No active session" | No session is running — ask the agent to start one first. |
+| "Cannot read session state" | The agent's token is not allowed to list your sessions. Inside an AF session this means the image predates the fix — restart the session; from your own machine, mint a fresh token at [/hub/token](https://cms.geddes.rcac.purdue.edu/hub/token). |
+| Agent reports a facility problem | Check the [monitoring dashboard](https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-alerts) and [contact support](support.md) if it persists. |
 | HTTP 404 on the service URL | Check the URL — it must end with `/services/agentic-interface/mcp`. |
 
 !!! note "See also"
