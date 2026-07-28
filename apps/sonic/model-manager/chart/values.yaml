@@ -42,6 +42,12 @@ modelRepository:
   # the models live inside a larger shared claim (e.g. "triton_models" on
   # af-shared-storage); the app still sees the repository root at mountPath.
   subPath: ""
+  # -- Chown the mounted repository to the app's uid in an init container.
+  # Needed because CSI drivers that declare fsGroupPolicy=ReadWriteOnceWithFSType
+  # (CephFS among them) ignore podSecurityContext.fsGroup on ReadWriteMany
+  # volumes, so the mount arrives owned by root:root 0755 and the unprivileged
+  # app cannot write to it. Set false if the volume is already writable.
+  fixOwnership: true
   # -- Refuse all writes (uploads, deletes, load/unload) when true
   readOnly: false
   # -- Largest single upload accepted, in bytes (default 8 GiB)

@@ -29,6 +29,33 @@ spec:
       serviceAccountName: {{ include "modelManager.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- $uid := .Values.podSecurityContext.runAsUser | default 10001 }}
+      {{- if and .Values.modelRepository.fixOwnership (not .Values.modelRepository.readOnly) }}
+      initContainers:
+        # fsGroup is ignored by CSI drivers with fsGroupPolicy other than File
+        # (CephFS uses ReadWriteOnceWithFSType), so a ReadWriteMany volume is
+        # mounted root-owned and the app cannot write. Take ownership once.
+        - name: fix-ownership
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["chown", "-R", "{{ $uid }}:{{ $uid }}", "{{ .Values.modelRepository.mountPath }}"]
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN", "FOWNER"]
+          volumeMounts:
+            - name: model-repository
+              mountPath: {{ .Values.modelRepository.mountPath }}
+              {{- if .Values.modelRepository.subPath }}
+              subPath: {{ .Values.modelRepository.subPath }}
+              {{- end }}
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+      {{- end }}
       containers:
         - name: model-manager
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"

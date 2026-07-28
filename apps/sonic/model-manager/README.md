@@ -88,6 +88,11 @@ footprint next to the model count.
 The PVC carries `helm.sh/resource-policy: keep` and is created only if absent, so uninstalling
 never deletes models.
 
+CephFS (and any CSI driver whose `fsGroupPolicy` is not `File`) ignores `podSecurityContext.fsGroup`
+on ReadWriteMany volumes, so the claim mounts as `root:root 0755` and the unprivileged app cannot
+write. `modelRepository.fixOwnership` (default true) runs a one-shot init container that chowns the
+mount to the app's uid. Set it false when the volume is already writable.
+
 ## Uploads
 
 Accepts a `.zip`/`.tar.*` archive or a directory (picker or drag-and-drop), landing as
