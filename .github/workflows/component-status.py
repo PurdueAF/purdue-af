@@ -63,8 +63,8 @@ VALUES_YAML = Path("apps/jupyterhub/jupyterhub/values.yaml")
 
 COLORS = {
     "deployed": "brightgreen",
-    "awaiting release": "blue",
-    "validating": "yellow",
+    "awaiting release": "yellow",
+    "validating": "blue",
     "failed CI": "red",
     "unknown": "lightgrey",
 }
