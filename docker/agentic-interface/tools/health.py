@@ -4,13 +4,16 @@ Thresholds live in apps/monitoring/prometheus/values.yaml, not here: this tool
 reports what is firing, so adding an alert rule improves it automatically and
 there is only ever one definition of "unhealthy".
 
-Two rules shape the output:
+Three rules shape the output:
 
-* Only ``error``/``critical`` alerts make the facility degraded. Warnings are
-  routine and a verdict that flips on every one of them stops being read.
+* Only ``error``/``critical`` alerts make the facility **Degraded**. Warnings
+  that still affect users (slow storage, monitor gaps) yield **Impaired** —
+  between healthy and broken — so the headline stays honest without crying wolf.
 * A signal that could not be collected is ``unknown``, never ``ok`` — the
   storage checks in particular go blank when they cannot be scheduled, which
   says nothing about the storage itself.
+* Every firing alert a user may see is listed under its component; "Normal"
+  only covers components with nothing firing at all.
 
 Output is for the calling user: their own quota is reported, no other user's.
 """
@@ -41,6 +44,9 @@ BLOCKING = ("error", "critical")
 # Those alerts exist for operators; a user asking "is the AF healthy" should
 # never see them, and they must not affect the verdict.
 HIDDEN_COMPONENTS = {"dev"}
+# Per-user quota warnings are already reported as a percent figure below; they
+# must not flip the facility headline to Impaired.
+SKIP_IMPAIR_PREFIXES = ("AFHomeDir",)
 
 
 def _et(ts: float) -> str:
@@ -80,16 +86,28 @@ def _describe(alertname: str, series: list[dict[str, Any]]) -> str:
     count = len(series)
     mounts = sorted({s["metric"].get("mount_name", "") for s in series} - {""})
     nodes = sorted({s["metric"].get("exported_node", "") for s in series} - {""})
+    where = f"{len(nodes)} node{'s' if len(nodes) != 1 else ''}"
+    widespread = len(nodes) > 2
+    scope_system = (
+        "across most of the facility — likely a storage-system or network "
+        "issue rather than one machine"
+        if widespread
+        else "on a single machine"
+    )
+    mount_list = ", ".join(mounts) or "storage"
 
     if alertname == "AFMountInvalid":
-        where = f"{len(nodes)} node{'s' if len(nodes) != 1 else ''}"
-        scope = (
-            "across most of the facility — likely a storage-system or network "
-            "issue rather than one machine"
-            if len(nodes) > 2
+        return f"{mount_list} failing on {where}, {scope_system}"
+    if alertname == "AFMountSlow":
+        detail = (
+            "across most of the facility"
+            if widespread
             else "on a single machine"
         )
-        return f"{', '.join(mounts) or 'storage'} failing on {where}, {scope}"
+        return (
+            f"{mount_list} is slow on {where}, {detail} — "
+            "reads still work, but analyses on affected nodes will crawl"
+        )
     if alertname == "AFMountHealthUnknown":
         return (
             f"storage checks have not reported on {len(nodes)} node"
@@ -106,6 +124,11 @@ def _describe(alertname: str, series: list[dict[str, Any]]) -> str:
         return "a Dask gateway is unavailable; new clusters may not start"
     if alertname.startswith("AFGlobalEnv"):
         return "the shared pixi environment is not in sync with the AF repository"
+    if alertname == "AFNodeMonitorStale":
+        return (
+            "storage health checks have not completed recently — "
+            "mount state may be stale"
+        )
     return alertname
 
 
@@ -186,17 +209,28 @@ def register(mcp: Any) -> None:
 
         blocking = [n for n, sev in severities.items() if sev in BLOCKING]
         unknown = "AFMountHealthUnknown" in severities
+        # Warnings users feel (slow mounts, stale checks) — not quiet quota
+        # notices, and not the unknown case which already has its own verdict.
+        impaired = [
+            n
+            for n, sev in severities.items()
+            if sev not in BLOCKING
+            and n != "AFMountHealthUnknown"
+            and not n.startswith(SKIP_IMPAIR_PREFIXES)
+        ]
 
         if blocking:
             verdict = "**Degraded**"
         elif unknown:
             verdict = "**Partly unknown**"
+        elif impaired:
+            verdict = "**Impaired**"
         else:
             verdict = "**Healthy**"
 
         lines = [f"{verdict} — Purdue Analysis Facility\n"]
 
-        if not blocking and not unknown:
+        if not blocking and not unknown and not impaired:
             lines.append("Nothing is failing across the facility.")
 
         for component, alerts in sorted(by_component.items()):

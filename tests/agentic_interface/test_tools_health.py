@@ -1,8 +1,9 @@
 """Tests for tools/health.py — the "is the AF healthy" answer.
 
 The tool reads whatever Prometheus is firing, so these stub Prometheus and
-assert on the resulting prose. Three properties matter more than wording:
-a warning must not make the facility look broken, an unknown must not look
+assert on the resulting prose. Properties that matter more than wording:
+a warning must not make the facility look **Degraded**, storage slowness
+must show as **Impaired** with a per-component line, an unknown must not look
 healthy, and no other user's alert may ever appear."""
 
 import time
@@ -67,8 +68,8 @@ async def test_healthy_when_nothing_is_firing(user_ctx):
 
 @pytest.mark.asyncio
 async def test_warning_alone_does_not_degrade_the_facility(user_ctx):
-    """A routine warning must not turn the headline red, or it stops meaning
-    anything."""
+    """A warning must not turn the headline to Degraded, or it stops meaning
+    anything — but it also must not claim Healthy when storage is slow."""
     out = await run(firing=[series("AFMountHealthUnknown", "warning", "data")])
     assert "**Degraded**" not in out
 
@@ -78,6 +79,46 @@ async def test_unknown_storage_is_not_reported_as_healthy(user_ctx):
     out = await run(firing=[series("AFMountHealthUnknown", "warning", "data")])
     assert "**Partly unknown**" in out
     assert "not the same as broken" in out
+
+
+@pytest.mark.asyncio
+async def test_mount_slow_is_impaired_not_healthy(user_ctx):
+    """Elevated metadata latency is felt by users; reporting Healthy with a
+    buried warning is how the MCP used to miss EOS slowdowns."""
+    many = [
+        series(
+            "AFMountSlow", "warning", "data", mount_name="eos", exported_node=f"n{i}"
+        )
+        for i in range(14)
+    ]
+    out = await run(firing=many)
+    assert "**Impaired**" in out
+    assert "**Healthy**" not in out
+    assert "**Degraded**" not in out
+    assert "Nothing is failing" not in out
+    assert "**Storage**" in out
+    assert "eos is slow" in out
+    assert "14 nodes" in out
+    assert "will crawl" in out
+
+
+@pytest.mark.asyncio
+async def test_own_quota_warning_does_not_impair_the_facility(user_ctx):
+    """Home quota is already reported as a percent; it must not flip the
+    facility headline."""
+    out = await run(
+        firing=[
+            series(
+                "AFHomeDirUtilHigh",
+                "warning",
+                "storage",
+                username="alice",
+            )
+        ],
+        home_util=0.93,
+    )
+    assert "**Healthy**" in out
+    assert "**Impaired**" not in out
 
 
 @pytest.mark.asyncio

@@ -515,18 +515,23 @@ serverFiles:
           # p90 ~350 ms, worst ~906 ms. The probe reports its timeout value
           # (10000 ms) when it gives up, and AFMountInvalid already covers that,
           # so the upper bound keeps this alert to real degradation.
+          #
+          # Checks only refresh every ~10 minutes (JOB_INTERVAL_S), and
+          # individual samples often dip below 2s even while the mount is
+          # chronically slow — so an instant `> 2000` with `for:` never holds.
+          # avg_over_time across ~2 check cycles detects sustained elevation.
           - alert: AFMountSlow
-            expr: af_node_mount_metadata_latency_ms > 2000 < 10000
-            for: 15m
+            expr: avg_over_time(af_node_mount_metadata_latency_ms{node_pool="prod"}[20m]) > 2000 and avg_over_time(af_node_mount_metadata_latency_ms{node_pool="prod"}[20m]) < 10000
+            for: 5m
             labels:
               severity: warning
               component: data
             annotations:
               summary: "{{ $labels.mount_name }} is slow on node {{ $labels.exported_node }}"
               description: >
-                Metadata latency is {{ printf "%.0f" $value }} ms against a healthy
-                ceiling near 900 ms. Reads still work, but analyses on this node
-                will crawl.
+                20-minute average metadata latency is {{ printf "%.0f" $value }} ms
+                against a healthy ceiling near 900 ms. Reads still work, but
+                analyses on this node will crawl.
           - alert: AFNodeMonitorStale
             expr: time() - af_node_monitor_last_iteration_timestamp_seconds > 900
             for: 5m

@@ -72,6 +72,16 @@ def test_mount_slow_excludes_the_probe_timeout_sentinel():
     assert "< 10000" in slow["expr"], slow["expr"]
 
 
+def test_mount_slow_uses_a_rolling_average_on_prod():
+    """Mount checks refresh only every ~10 minutes and individual samples often
+    dip below the threshold while EOS is still chronically slow. Instant
+    comparisons with `for:` never hold; avg_over_time does. Prod-only so a
+    sick cms-af-dev node cannot affect the user-facing signal."""
+    slow = next(r for r in rules() if r["alert"] == "AFMountSlow")
+    assert "avg_over_time" in slow["expr"], slow["expr"]
+    assert 'node_pool="prod"' in slow["expr"], slow["expr"]
+
+
 # --- the dashboard that turns alerts into a health answer -----------------
 
 
