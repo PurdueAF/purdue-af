@@ -74,13 +74,20 @@ def test_production_spawn_carries_ownership_label(login, admin):
 # ── session lifecycle & isolation (tests below build on alice's running server) ──
 
 
+# Kind hub stack lives in the production namespace (`cms`); kubectl must too.
+E2E_NAMESPACE = "cms"
+
+
 def kubectl_json(*args):
     import json
     import subprocess
 
     return json.loads(
         subprocess.run(
-            ["kubectl", *args, "-o", "json"], capture_output=True, text=True, check=True
+            ["kubectl", "-n", E2E_NAMESPACE, *args, "-o", "json"],
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout
     )
 
@@ -206,6 +213,8 @@ def test_userlist_update_allows_new_user_without_restart(login):
     subprocess.run(
         [
             "kubectl",
+            "-n",
+            E2E_NAMESPACE,
             "patch",
             "secret",
             "af-auth-purdue",
