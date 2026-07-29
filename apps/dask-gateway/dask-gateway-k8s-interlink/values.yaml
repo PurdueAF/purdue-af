@@ -159,13 +159,15 @@ gateway:
               "sbatch_flags": "--account=cms --partition=cpu --qos=standby",
           },
       }
-      # ExportPodData already materializes the dask-credentials Secret under
-      # ${workingPath}/secrets/dask-credentials/ on the shared NFS. Bind that
+      # ExportPodData materializes the dask-credentials Secret under
+      # $workingPath/secrets/dask-credentials/ on the shared NFS. Bind that
       # directory onto /etc/dask-credentials so the controller's hardcoded TLS
-      # paths work inside Singularity (${workingPath} is exported by the Slurm
-      # job script before singularity runs).
+      # paths work inside Singularity. Use bare $workingPath (not ${...}):
+      # Flux postBuild substitutes braced ${var} and would empty an unknown
+      # ${workingPath} → mount source "/secrets/..." (see interlink wstunnel
+      # pattern in apps/interlink/*/values.yaml).
       INTERLINK_SINGULARITY_MOUNTS = (
-          "--bind ${workingPath}/secrets/dask-credentials:/etc/dask-credentials"
+          "--bind $workingPath/secrets/dask-credentials:/etc/dask-credentials"
       )
       AF_NODE_SELECTOR = {"cms-af-prod": "true"}
       AF_TOLERATIONS = [
