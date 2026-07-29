@@ -162,10 +162,11 @@ gateway:
       # ExportPodData materializes the dask-credentials Secret under
       # $workingPath/secrets/dask-credentials/ on the shared NFS. Bind that
       # directory onto /etc/dask-credentials so the controller's hardcoded TLS
-      # paths work inside Singularity. Use bare $workingPath (not ${...}):
-      # Flux postBuild substitutes braced ${var} and would empty an unknown
-      # ${workingPath} → mount source "/secrets/..." (see interlink wstunnel
-      # pattern in apps/interlink/*/values.yaml).
+      # paths work inside Singularity. Use bare $workingPath (Flux postBuild
+      # empties braced vars it does not know, which would drop the prefix;
+      # same pattern as interlink wstunnel $DOWNLOAD_DIR).
+      # Do not write dollar-brace placeholders in this comment — envsubst
+      # treats invalid names as a hard parse error.
       INTERLINK_SINGULARITY_MOUNTS = (
           "--bind $workingPath/secrets/dask-credentials:/etc/dask-credentials"
       )
