@@ -424,8 +424,10 @@ gateway:
               )
               annotations = {
                   "slurm-job.vk.io/singularity-options": "--unsquash --bind /cvmfs",
+                  # Walltime matches dask-gateway-k8s-slurm (Hammer): 4 hours.
                   "slurm-job.vk.io/flags": (
-                      f"--uid={uid} -A {meta['account']} -p {meta['partition']}"
+                      f"--uid={uid} -A {meta['account']} -p {meta['partition']} "
+                      f"-t 0-04:00:00"
                   ),
               }
           else:
