@@ -15,7 +15,9 @@ interlink:
 
 plugin:
   enabled: true
-  image: "geddes-registry.rcac.purdue.edu/cms/interlink-slurm-plugin:0.6.2-pre3"
+  # One multi-cluster image from ghcr. Tag == upstream plugin checkout
+  # (docker/interlink-slurm-plugin/PLUGIN_REF); SLURM_CLUSTER selects configs.
+  image: "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:0.6.2-pre3"
   address: "http://0.0.0.0"
   port: 4000
   privileged: false
@@ -25,6 +27,8 @@ plugin:
     - name: cvmfs
       mountPath: /cvmfs
   envs:
+    - name: SLURM_CLUSTER
+      value: "hammer"
     - name: SLURMCONFIGPATH
       value: "/etc/interlink/plugin.yaml"
     - name: SHARED_FS

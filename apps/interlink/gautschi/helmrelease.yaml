@@ -24,9 +24,10 @@ spec:
       valuesKey: values.yaml
   # The chart has no hook for the munge key or for sizing the node container,
   # so both are patched in. munge-key-gautschi is the same PVC the Gautschi
-  # dask-gateway mounts — created out of band, never in git. The target name
-  # follows nodeName: every chart resource is <nodeName>-*, so renaming the
-  # node renames this target too.
+  # dask-gateway mounts — created out of band, never in git. Cluster Slurm
+  # client configs come from the shared plugin image via SLURM_CLUSTER=gautschi
+  # (slurm/slurm-configs-gautschi/). The target name follows nodeName: every
+  # chart resource is <nodeName>-*, so renaming the node renames this target too.
   postRenderers:
     - kustomize:
         patches:

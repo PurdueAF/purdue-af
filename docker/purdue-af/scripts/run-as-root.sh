@@ -126,7 +126,10 @@ for _d in "$NEW_HOME/.local" "$NEW_HOME/.local/share" "$_JUPYTER_USER_DATA" "$_J
 done
 
 # Setup system files
-mv /etc/slurm/slist /usr/bin
+if [ -f /etc/slurm/slist ]; then
+	mv /etc/slurm/slist /usr/bin/slist
+	chmod 755 /usr/bin/slist
+fi
 cp /cvmfs/cms.cern.ch/SITECONF/T2_US_Purdue/storage.json /etc/cvmfs/ || true
 
 # Create bashrc_af file

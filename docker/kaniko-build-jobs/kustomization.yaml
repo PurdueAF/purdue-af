@@ -3,5 +3,4 @@ kind: Kustomization
 # Applied by hand, never by Flux — see README.md.
 resources:
   - build-dask.yaml
-  - build-interlink.yaml
   - build-servicex-science-coffea.yaml

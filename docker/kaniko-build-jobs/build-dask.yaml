@@ -13,7 +13,7 @@ spec:
           args:
             - "--context=git://github.com/PurdueAF/purdue-af.git"
             - "--dockerfile=docker/dask-gateway-server/Dockerfile.hammer"
-            - "--destination=geddes-registry.rcac.purdue.edu/cms/dask-gateway-server:2023.9.0-purdue.v4-hammer"
+            - "--destination=geddes-registry.rcac.purdue.edu/cms/dask-gateway-server:2023.9.0-purdue.v5-hammer"
             - "--cache=true"
             # - "--no-push"
           resources:

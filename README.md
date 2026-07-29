@@ -70,14 +70,16 @@ Whether each component on the cluster is running what is on `main`
 ![supersonic][experimental-sonic-supersonic]
 ![model-manager][experimental-sonic-model-manager]
 
-**Images** — `purdue-af` is released on its own semver stream and pinned at
-![AF image][af-image-version]; the rest ride `:latest`
+# Images — `purdue-af` is released on its own semver stream and pinned at
+![AF image][af-image-version]; most aux images ride `:latest`.
+`interlink-slurm-plugin` is pinned to its upstream plugin ref (`PLUGIN_REF`).
 
 ![purdue-af][image-purdue-af]
 ![agentic-interface][image-agentic-interface]
 ![af-pod-monitor][image-af-pod-monitor]
 ![af-node-monitor][image-af-node-monitor]
 ![supersonic-model-manager][image-supersonic-model-manager]
+![interlink-slurm-plugin][image-interlink-slurm-plugin]
 
 Reading the badges:
 
@@ -132,6 +134,7 @@ How a change reaches the cluster, version rules and rollback:
 [image-af-pod-monitor]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-af-pod-monitor.json
 [image-af-node-monitor]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-af-node-monitor.json
 [image-supersonic-model-manager]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-supersonic-model-manager.json
+[image-interlink-slurm-plugin]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-interlink-slurm-plugin.json
 [status-pending]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/_pending.json
 [platform-version]: https://img.shields.io/github/v/tag/PurdueAF/purdue-af?filter=2*&sort=semver&label=platform&color=B1810B
 [af-image-version]: https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2FPurdueAF%2Fpurdue-af%2Fmain%2Fapps%2Fjupyterhub%2Fjupyterhub%2Fvalues.yaml&query=%24.singleuser.image.tag&label=AF%20image&color=B1810B

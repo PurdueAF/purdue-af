@@ -114,6 +114,71 @@ def test_munge_key_comes_from_a_per_cluster_pvc(interlink_clusters):
         assert claim == f"munge-key-{cluster}", f"{cluster}: mounts {claim}"
 
 
+def test_slurm_cluster_env_matches_directory(interlink_clusters):
+    """The sidecar installs /etc/slurm from /opt/purdue-af/slurm-configs/$SLURM_CLUSTER.
+    A typo here points the node at the wrong RCAC controller (or refuses to start)."""
+    for cluster, app in interlink_clusters.items():
+        if cluster == "negishi":
+            # Negishi still uses a different sidecar image without SLURM_CLUSTER.
+            continue
+        envs = {e["name"]: e["value"] for e in app["values"]["plugin"]["envs"]}
+        assert "SLURM_CLUSTER" in envs, f"{cluster}: SLURM_CLUSTER missing"
+        assert envs["SLURM_CLUSTER"] == cluster, f"{cluster}: {envs['SLURM_CLUSTER']}"
+
+
+def test_active_clusters_share_one_plugin_image(active_clusters):
+    """Cluster identity is SLURM_CLUSTER + munge PVC, not the image tag.
+    Divergent tags mean hammer/gautschi drift on sidecar version."""
+    images = {app["values"]["plugin"]["image"] for app in active_clusters.values()}
+    assert len(images) == 1, f"active clusters pin different plugin images: {images}"
+    image = next(iter(images))
+    assert "ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:" in image, image
+
+
+def test_plugin_image_tag_matches_plugin_ref(active_clusters):
+    """Tag == PLUGIN_REF == upstream interlink-slurm-plugin checkout. Not :latest."""
+    plugin_ref = (REPO / "docker/interlink-slurm-plugin/PLUGIN_REF").read_text().strip()
+    assert plugin_ref, "PLUGIN_REF is empty"
+    for cluster, app in active_clusters.items():
+        image = app["values"]["plugin"]["image"]
+        assert image.endswith(f":{plugin_ref}"), f"{cluster}: {image} != :{plugin_ref}"
+        assert not image.endswith(":latest"), cluster
+
+
+def test_dockerfile_plugin_ref_arg_matches_plugin_ref_file():
+    """Dockerfile ARG default must not drift from PLUGIN_REF."""
+    plugin_ref = (REPO / "docker/interlink-slurm-plugin/PLUGIN_REF").read_text().strip()
+    dockerfile = (REPO / "docker/interlink-slurm-plugin/Dockerfile").read_text()
+    assert f"ARG SLURM_PLUGIN_REF={plugin_ref}" in dockerfile, plugin_ref
+
+
+def test_plugin_image_is_not_the_old_kaniko_registry(active_clusters):
+    """Kaniko pushed to geddes cms/; CI publishes to ghcr and the cluster
+    pulls through ghcr-proxy-cache — the cms/ path must not come back."""
+    for cluster, app in active_clusters.items():
+        image = app["values"]["plugin"]["image"]
+        assert "/cms/interlink-slurm-plugin:" not in image, cluster
+
+
+def test_slurm_cluster_has_client_configs(interlink_clusters):
+    """Baked configs live at slurm/slurm-configs-<cluster>/. Without slurm.conf
+    the container exits unless /etc/secrets/slurm-configs is mounted as override."""
+    slurm_root = REPO / "slurm"
+    for cluster, app in interlink_clusters.items():
+        if cluster == "negishi":
+            # Negishi still uses a different sidecar image without SLURM_CLUSTER.
+            continue
+        envs = {e["name"]: e["value"] for e in app["values"]["plugin"]["envs"]}
+        if "SLURM_CLUSTER" not in envs:
+            continue
+        conf = slurm_root / f"slurm-configs-{cluster}" / "slurm.conf"
+        assert conf.is_file(), f"{cluster}: missing {conf}"
+        text = conf.read_text()
+        assert f"ClusterName={cluster}" in text, f"{cluster}: ClusterName mismatch in {conf}"
+        assert "AuthType=auth/munge" in text, f"{cluster}: expected auth/munge"
+        assert "SlurmctldHost=" in text, f"{cluster}: missing SlurmctldHost"
+
+
 def test_munge_key_pvcs_are_not_declared_in_git(interlink_clusters, experimental):
     """Creating one from git would collide with the existing bound PVCs, whose
     specs are immutable."""

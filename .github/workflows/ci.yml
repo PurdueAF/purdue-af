@@ -125,8 +125,9 @@ jobs:
     # Pure retags of digests that just passed the full pipeline
     # (promote-by-digest, no rebuild):
     #   every image        → :sha-<commit>   (immutable provenance)
-    #   aux images         → :latest         (continuous channel; manifests
-    #                                          pull it via the geddes
+    #   aux images         → channel tag      (:latest for most;
+    #                                          $PLUGIN_REF for interlink-slurm-plugin;
+    #                                          manifests pull via geddes
     #                                          ghcr-proxy-cache on restart)
     #   purdue-af          → :pre-release    (the hub's pre-release profile,
     #                                          image_pull_policy Always)
@@ -167,20 +168,23 @@ jobs:
       # Retags are BY DIGEST: what the pipeline tested is what ships, even
       # if a moving tag were overwritten between test and publish; and both
       # channel tags of an image always land on the same digest.
-      - name: Publish aux images (:sha- + :latest)
+      - name: Publish aux images (:sha- + channel tag)
         env:
           AUX_TAGS: ${{ needs.images.outputs.aux-tags }}
         run: |
           for pair in $AUX_TAGS; do
-            name="${pair%%=*}"; tag="${pair#*=}"
+            # name=in-<hash>=<channel>  (channel is :latest for most aux images,
+            # PLUGIN_REF for interlink-slurm-plugin)
+            name="${pair%%=*}"; rest="${pair#*=}"
+            tag="${rest%%=*}"; channel="${rest#*=}"
             repo="ghcr.io/purdueaf/${name}"
             digest=$(docker buildx imagetools inspect "$repo:$tag" --format '{{json .Manifest}}' | jq -r .digest)
             [ -n "$digest" ] && [ "$digest" != "null" ] || { echo "::error::cannot resolve $repo:$tag"; exit 1; }
             docker buildx imagetools create \
               -t "$repo:sha-$GITHUB_SHA" \
-              -t "$repo:latest" \
+              -t "$repo:$channel" \
               "$repo@$digest"
-            echo "published $repo@$digest ($tag) -> :sha-${GITHUB_SHA::12} + :latest" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "published $repo@$digest ($tag) -> :sha-${GITHUB_SHA::12} + :$channel" | tee -a "$GITHUB_STEP_SUMMARY"
           done
       - name: Publish AF image (:sha- + :pre-release)
         env:

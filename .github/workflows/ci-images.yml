@@ -15,9 +15,8 @@ name: CI images
 # :sha-) move only in the publish stage of ci.yml, on main, behind the
 # ci-ok gate.
 #
-# Large images other than purdue-af (dask-gateway variants, interlink,
-# servicex-science) still exceed GitHub-hosted runner limits and are built
-# out-of-band by the cluster admin.
+# Remaining out-of-band (kaniko) images: dask-gateway variants and
+# servicex-science — still too large / awkward for GitHub-hosted runners.
 
 on:
   workflow_call:
@@ -32,7 +31,7 @@ on:
         description: "Manifest digest of the AF image (what e2e tested — publish retags THIS, not the tag)"
         value: ${{ jobs.build-af-image.outputs.digest }}
       aux-tags:
-        description: "Space-separated <name>=<in-tag> pairs for the aux images"
+        description: "Space-separated <name>=<in-tag>=<channel-tag> pairs for the aux images"
         value: ${{ jobs.resolve.outputs.aux-tags }}
 
 permissions:
@@ -79,9 +78,16 @@ jobs:
             af_digest=""
           fi
           aux_tags=""
-          for name in agentic-interface af-pod-monitor af-node-monitor supersonic-model-manager; do
+          for name in agentic-interface af-pod-monitor af-node-monitor supersonic-model-manager interlink-slurm-plugin; do
             tag=$(./.github/workflows/image-inputs.sh "$name")
-            aux_tags="${aux_tags:+$aux_tags }${name}=${tag}"
+            # Most aux images ride :latest. interlink-slurm-plugin is pinned to
+            # the upstream plugin checkout (PLUGIN_REF) so values and the
+            # published tag stay aligned with SLURM_PLUGIN_REF.
+            channel=latest
+            if [ "$name" = interlink-slurm-plugin ]; then
+              channel=$(tr -d '[:space:]' < docker/interlink-slurm-plugin/PLUGIN_REF)
+            fi
+            aux_tags="${aux_tags:+$aux_tags }${name}=${tag}=${channel}"
           done
           {
             echo "af-image=$AF_REPO:$af_tag"
@@ -213,7 +219,7 @@ jobs:
   build-aux-images:
     needs: resolve
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write # in- tag push
@@ -253,6 +259,21 @@ jobs:
               assert (STATIC_DIR / 'index.html').is_file();
               assert (STATIC_DIR / 'img' / 'supersonic-mark.svg').is_file();
               print('ok:', len(routes), 'routes')"
+          # Thin Slurm client for every RCAC cluster; SLURM_CLUSTER selects
+          # the baked config tree at runtime. Smoke does not start munged
+          # (needs the site key PVC) — just asserts the multi-cluster layout.
+          - name: interlink-slurm-plugin
+            dockerfile: docker/interlink-slurm-plugin/Dockerfile
+            context: .
+            free_disk: true
+            smoke_entrypoint: /bin/sh
+            smoke: >-
+              -c "set -e;
+              test -x /sidecar/slurm-sidecar;
+              test -x /etc/startup.sh;
+              test -f /opt/purdue-af/slurm-configs/hammer/slurm.conf;
+              ls /opt/purdue-af/slurm-configs;
+              echo ok"
     name: aux ${{ matrix.name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -273,13 +294,29 @@ jobs:
           else
             exists=false
           fi
+          build_args=""
+          build_contexts=""
+          if [ "${{ matrix.name }}" = interlink-slurm-plugin ]; then
+            plugin_ref=$(tr -d '[:space:]' < docker/interlink-slurm-plugin/PLUGIN_REF)
+            build_args="SLURM_PLUGIN_REF=${plugin_ref}"
+            build_contexts="${GEDDES_BASE}=docker-image://${PUBLIC_BASE}"
+          fi
           {
             echo "image=$image"
             echo "exists=$exists"
+            echo "build_args=$build_args"
+            echo "build_contexts=$build_contexts"
           } | tee -a "$GITHUB_OUTPUT"
       - name: Verified reuse — this exact input state is already on ghcr
         if: steps.meta.outputs.exists == 'true'
         run: echo "reusing ${{ steps.meta.outputs.image }}" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Free runner disk space
+        if: steps.meta.outputs.exists != 'true' && matrix.free_disk
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1 # Renovate pins to digest
+        with:
+          tool-cache: true
+          docker-images: false
+          large-packages: false
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
         if: steps.meta.outputs.exists != 'true'
       - name: Build image
@@ -292,13 +329,23 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+          build-args: ${{ steps.meta.outputs.build_args }}
+          build-contexts: ${{ steps.meta.outputs.build_contexts }}
           push: false
           load: true
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,scope=${{ matrix.name }},mode=max
       - name: Smoke test
         if: steps.meta.outputs.exists != 'true'
-        run: docker run --rm ${{ steps.meta.outputs.image }} ${{ matrix.smoke }}
+        env:
+          SMOKE_ENTRYPOINT: ${{ matrix.smoke_entrypoint }}
+        run: |
+          if [ -n "$SMOKE_ENTRYPOINT" ]; then
+            docker run --rm --entrypoint "$SMOKE_ENTRYPOINT" \
+              ${{ steps.meta.outputs.image }} ${{ matrix.smoke }}
+          else
+            docker run --rm ${{ steps.meta.outputs.image }} ${{ matrix.smoke }}
+          fi
       # Only smoke-tested images ever reach the registry.
       - name: Push in- tag to ghcr.io
         if: steps.meta.outputs.exists != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)

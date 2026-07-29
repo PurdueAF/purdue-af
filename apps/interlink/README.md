@@ -5,16 +5,22 @@ virtual node in the `cms` namespace. A pod scheduled onto such a node is
 translated into a Slurm job on the named cluster and run under Singularity;
 to Kubernetes it still looks like an ordinary pod.
 
-| Node                 | Cluster  | Slurm partition | Depot path                                | Munge key PVC        | Deployed |
-| -------------------- | -------- | --------------- | ----------------------------------------- | -------------------- | -------- |
-| `interlink-hammer`   | Hammer   | `hammer-nodes`  | `/depot/cms/purdue-af/interlink`          | `munge-key-hammer`   | yes      |
-| `interlink-gautschi` | Gautschi | `cpu`           | `/depot/cms/purdue-af/interlink/gautschi` | `munge-key-gautschi` | yes      |
-| `interlink-negishi`  | Negishi  | —               | `/depot/itap/interlink/negishi`           | `munge-key-negishi`  | no       |
+| Node                 | Cluster  | Slurm partition | Depot path                                | Munge key PVC        | `SLURM_CLUSTER` | Deployed |
+| -------------------- | -------- | --------------- | ----------------------------------------- | -------------------- | --------------- | -------- |
+| `interlink-hammer`   | Hammer   | `hammer-nodes`  | `/depot/cms/purdue-af/interlink`          | `munge-key-hammer`   | `hammer`        | yes      |
+| `interlink-gautschi` | Gautschi | `cpu`           | `/depot/cms/purdue-af/interlink/gautschi` | `munge-key-gautschi` | `gautschi`      | yes      |
+| `interlink-negishi`  | Negishi  | —               | `/depot/itap/interlink/negishi`           | `munge-key-negishi`  | —               | no       |
+
+Hammer and Gautschi share one plugin image tagged with the upstream plugin
+ref (`PLUGIN_REF`, e.g. `…/interlink-slurm-plugin:0.6.2-pre3`). Cluster
+identity comes from `SLURM_CLUSTER` plus the per-cluster munge PVC — never
+from a floating `:latest`. CI builds on ghcr; see
+[`docker/interlink-slurm-plugin/README.md`](../../docker/interlink-slurm-plugin/README.md)
+and [`slurm/README.md`](../../slurm/README.md).
 
 A node is deployed only once its munge key PVC exists; the others stay
 commented out in `deploy/experimental/kustomization.yaml`, since without the
 key the node pod never gets past Pending.
-
 Each node is three containers in one Deployment (`<nodeName>-node`): the
 interLink API, the Slurm sidecar plugin that shells out to `sbatch`, and the
 virtual kubelet that registers the Node object. Chart resources are all named

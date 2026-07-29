@@ -40,10 +40,10 @@ RUN curl -LO https://golang.org/dl/go1.19.2.linux-amd64.tar.gz
 RUN tar -C /usr/local -xzf go1.19.2.linux-amd64.tar.gz
 # USER dask:dask
 
-COPY slurm/slurm-24.05.1-1.el8.x86_64.rpm /etc/
-COPY slurm/slurm-configs /etc/slurm
-RUN dnf localinstall -y /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
-    rm -rf /etc/slurm-24.05.1-1.el8.x86_64.rpm && \
+COPY slurm/slurm-25.11.4-1.el8.x86_64.rpm /etc/
+COPY slurm/slurm-configs-hammer /etc/slurm
+RUN dnf localinstall -y /etc/slurm-25.11.4-1.el8.x86_64.rpm && \
+    rm -rf /etc/slurm-25.11.4-1.el8.x86_64.rpm && \
     groupadd -g 1033 slurm && \
     adduser -u 2000 -g 1033 slurm && \
     chown -R slurm:slurm /etc/slurm/ && \

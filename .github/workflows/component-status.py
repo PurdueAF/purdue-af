@@ -48,14 +48,16 @@ CHANNELS = {
 }
 IMAGE_INPUTS = Path(".github/workflows/image-inputs.sh")
 # Images ci-images.yml builds. purdue-af ships on a semver stream of its own;
-# the aux images ride :latest, which the publish stage moves at the same
-# moment it advances main-validated — so main-validated is their deployed ref.
+# most aux images ride :latest (publish moves it with main-validated).
+# interlink-slurm-plugin is pinned to PLUGIN_REF but still rebuilt whenever
+# its input tree changes, so main-validated remains a useful deployed ref.
 CI_IMAGES = [
     "purdue-af",
     "agentic-interface",
     "af-pod-monitor",
     "af-node-monitor",
     "supersonic-model-manager",
+    "interlink-slurm-plugin",
 ]
 VALUES_YAML = Path("apps/jupyterhub/jupyterhub/values.yaml")
 
