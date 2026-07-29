@@ -12,7 +12,64 @@ spec:
         kind: HelmRepository
         name: dask
       interval: 1m
+  install:
+    remediation:
+      retries: -1
+  upgrade:
+    remediation:
+      retries: -1
   valuesFrom:
     - kind: ConfigMap
       name: dask-gateway-k8s-interlink-config
       valuesKey: values.yaml
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: "api-.*"
+            patch: |
+              - op: add
+                path: /spec/template/spec/volumes/-
+                value:
+                  name: depot
+                  nfs:
+                    server: datadepot.rcac.purdue.edu
+                    path: /depot/cms
+              - op: add
+                path: /spec/template/spec/volumes/-
+                value:
+                  name: work
+                  persistentVolumeClaim:
+                    claimName: af-shared-storage
+              - op: add
+                path: /spec/template/spec/volumes/-
+                value:
+                  name: cvmfs
+                  persistentVolumeClaim:
+                    claimName: cvmfs
+              - op: add
+                path: /spec/template/spec/containers/0/volumeMounts/-
+                value:
+                  name: depot
+                  mountPath: /depot/cms
+                  mountPropagation: HostToContainer
+              - op: add
+                path: /spec/template/spec/containers/0/volumeMounts/-
+                value:
+                  name: work
+                  mountPath: /work/
+                  mountPropagation: HostToContainer
+              - op: add
+                path: /spec/template/spec/containers/0/volumeMounts/-
+                value:
+                  name: cvmfs
+                  mountPath: /cvmfs
+                  mountPropagation: HostToContainer
+          - target:
+              kind: Service
+              name: "api-.*"
+            patch: |
+              - op: add
+                path: /spec/type
+                value: LoadBalancer

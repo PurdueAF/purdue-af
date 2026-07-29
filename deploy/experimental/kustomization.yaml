@@ -1,14 +1,12 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  # - ../../apps/dask-gateway/dask-gateway-k8s-interlink/helmrelease.yaml
-  # - ../../apps/dask-gateway/dask-gateway-k8s-interlink/ingress.yaml
+  - ../../apps/dask-gateway/dask-gateway-k8s-interlink/helmrelease.yaml
+  - ../../apps/dask-gateway/dask-gateway-k8s-interlink/ingress.yaml
 
   - ../../apps/dask-gateway/helmrepo.yaml
   - ../../apps/dask-gateway/dask-gateway-k8s/helmrelease.yaml
   - ../../apps/dask-gateway/dask-gateway-k8s/ingress.yaml
-  # The only Slurm gateway (Hammer). Marked legacy pending user migration;
-  # the -hammer and -gautschi instances were removed 2026-07.
   - ../../apps/dask-gateway/dask-gateway-k8s-slurm/helmrelease.yaml
   - ../../apps/dask-gateway/dask-gateway-k8s-slurm/ingress.yaml
 

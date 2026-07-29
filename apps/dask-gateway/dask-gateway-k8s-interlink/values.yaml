@@ -1,3 +1,7 @@
+# Dask Gateway (KubeBackend) with a `cluster` option:
+#   - geddes (default): scheduler + workers on AF nodes (same as dask-gateway-k8s)
+#   - hammer / gautschi: scheduler + workers on the interLink virtual node
+#     (Slurm via VK). Purdue LDAP UID only; conda/pixi under /depot or /cvmfs.
 gateway:
   replicas: 1
   prefix: /
@@ -40,13 +44,15 @@ gateway:
     imagePullSecrets: []
     namespace: ${namespace}
     environment: {}
+    # Defaults = geddes. options_handler overrides nodeSelector / volumes /
+    # annotations when cluster is hammer or gautschi.
     scheduler:
       cores:
-        request: 2
-        limit: 4
+        request: 4
+        limit: 8
       memory:
-        request: 4G
-        limit: 8G
+        request: 16G
+        limit: 32G
       extraPodConfig:
         nodeSelector:
           cms-af-prod: "true"
@@ -63,12 +69,13 @@ gateway:
           - name: work
             persistentVolumeClaim:
               claimName: af-shared-storage
+          - name: cvmfs
+            persistentVolumeClaim:
+              claimName: cvmfs
       extraContainerConfig:
         env:
           - name: DASK_LOGGING__DISTRIBUTED
             value: warning
-          - name: PYTHONWARNINGS
-            value: "ignore::FutureWarning:coffea"
         volumeMounts:
           - name: depot
             mountPath: /depot/cms
@@ -76,14 +83,18 @@ gateway:
           - name: work
             mountPath: /work/
             mountPropagation: HostToContainer
+          - name: cvmfs
+            mountPath: /cvmfs
+            mountPropagation: HostToContainer
     worker:
       extraPodConfig:
-        # schedulerName: yunikorn
         nodeSelector:
-          kubernetes.io/hostname: interlink-hammer
+          cms-af-prod: "true"
         tolerations:
-          - key: virtual-node.interlink/no-schedule
-            operator: Exists
+          - key: "hub.jupyter.org/dedicated"
+            operator: "Equal"
+            value: "cms-af"
+            effect: "NoSchedule"
         volumes:
           - name: cvmfs
             persistentVolumeClaim:
@@ -104,6 +115,12 @@ gateway:
             value: warning
           - name: PYTHONWARNINGS
             value: "ignore::FutureWarning:coffea"
+          - name: DASK_DISTRIBUTED__WORKER__PRELOAD
+            value: '["/work/projects/purdue-af/dask_pyroscope_preload.py"]'
+          - name: DASK_DISTRIBUTED__WORKER__PRELOAD_ARGV
+            value: "[[]]"
+          - name: DASK_DISTRIBUTED__WORKER__PROFILE__INTERVAL
+            value: "1000000000"
         volumeMounts:
           - name: cvmfs
             mountPath: /cvmfs
@@ -122,13 +139,134 @@ gateway:
       c.DaskGateway.address = ':8000'
       c.KubeBackend.api_url = 'http://dask-gateway-k8s-interlink.geddes.rcac.purdue.edu:80/api'
 
-      c.ClusterConfig.cluster_max_cores = 401
-      c.ClusterConfig.cluster_max_memory = '404 G'
-      c.ClusterConfig.cluster_max_workers = 400
-      c.ClusterConfig.idle_timeout = 3600
-      c.SlurmBackend.cluster_start_timeout = 60*5
-      c.SlurmBackend.cluster_heartbeat_period = 60
-      c.SlurmBackend.worker_start_timeout = 60*5
+      c.ClusterConfig.cluster_max_cores = 201
+      c.ClusterConfig.cluster_max_memory = '1200 G'
+      c.ClusterConfig.cluster_max_workers = 200
+      c.ClusterConfig.adaptive_period = 15
+      # Longer than dask-gateway-k8s: interLink → Slurm queue wait.
+      c.ClusterConfig.idle_timeout = 86400
+      c.Backend.cluster_start_timeout = 900
+      c.Backend.worker_start_timeout = 900
+      c.Backend.worker_start_failure_limit = 8
+
+      INTERLINK_CLUSTERS = {
+          "hammer": {
+              "node": "interlink-hammer",
+              "partition": "hammer-nodes",
+              "account": "cms",
+          },
+          "gautschi": {
+              "node": "interlink-gautschi",
+              "partition": "cpu",
+              "account": "cms",
+          },
+      }
+      AF_NODE_SELECTOR = {"cms-af-prod": "true"}
+      AF_TOLERATIONS = [
+          {
+              "key": "hub.jupyter.org/dedicated",
+              "operator": "Equal",
+              "value": "cms-af",
+              "effect": "NoSchedule",
+          },
+      ]
+      INTERLINK_TOLERATIONS = [
+          {
+              "key": "virtual-node.interlink/no-schedule",
+              "operator": "Exists",
+          },
+      ]
+      # Virtual nodes: only depot NFS is reliable; cvmfs via singularity --bind.
+      INTERLINK_VOLUMES = [
+          {
+              "name": "depot",
+              "nfs": {
+                  "server": "datadepot.rcac.purdue.edu",
+                  "path": "/depot/cms",
+              },
+          },
+      ]
+      INTERLINK_VOLUME_MOUNTS = [
+          {
+              "name": "depot",
+              "mountPath": "/depot/cms",
+              "mountPropagation": "HostToContainer",
+          },
+      ]
+      GEDDES_SCHEDULER_MOUNTS = [
+          {
+              "name": "depot",
+              "mountPath": "/depot/cms",
+              "mountPropagation": "HostToContainer",
+          },
+          {
+              "name": "work",
+              "mountPath": "/work/",
+              "mountPropagation": "HostToContainer",
+          },
+          {
+              "name": "cvmfs",
+              "mountPath": "/cvmfs",
+              "mountPropagation": "HostToContainer",
+          },
+      ]
+      GEDDES_WORKER_MOUNTS = [
+          {
+              "name": "cvmfs",
+              "mountPath": "/cvmfs",
+              "mountPropagation": "HostToContainer",
+          },
+          {
+              "name": "eos",
+              "mountPath": "/eos",
+              "mountPropagation": "HostToContainer",
+          },
+          {
+              "name": "depot",
+              "mountPath": "/depot/cms",
+              "mountPropagation": "HostToContainer",
+          },
+          {
+              "name": "work",
+              "mountPath": "/work/",
+              "mountPropagation": "HostToContainer",
+          },
+      ]
+      GEDDES_SCHEDULER_VOLUMES = [
+          {
+              "name": "depot",
+              "nfs": {
+                  "server": "datadepot.rcac.purdue.edu",
+                  "path": "/depot/cms",
+              },
+          },
+          {
+              "name": "work",
+              "persistentVolumeClaim": {"claimName": "af-shared-storage"},
+          },
+          {
+              "name": "cvmfs",
+              "persistentVolumeClaim": {"claimName": "cvmfs"},
+          },
+      ]
+      GEDDES_WORKER_VOLUMES = [
+          {
+              "name": "cvmfs",
+              "persistentVolumeClaim": {"claimName": "cvmfs"},
+          },
+          {"name": "eos", "hostPath": {"path": "/eos"}},
+          {
+              "name": "depot",
+              "nfs": {
+                  "server": "datadepot.rcac.purdue.edu",
+                  "path": "/depot/cms",
+              },
+          },
+          {
+              "name": "work",
+              "persistentVolumeClaim": {"claimName": "af-shared-storage"},
+          },
+      ]
 
       def ldap_lookup(username):
           import subprocess
@@ -158,71 +296,239 @@ gateway:
           result = ldap_result_id[u'entries'][0][u'attributes']
           uid_number = result[u'uidNumber']
           gid_number = result [u'gidNumber']
-          return uid_number, gid_number            
+          return uid_number, gid_number
 
 
-      from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
+      def _require_depot_or_cvmfs(path, what):
+          allowed = ("/depot/", "/cvmfs/")
+          if not path.startswith(allowed):
+              raise ValueError(
+                  f"{what} for interLink (hammer/gautschi) must live under "
+                  f"/depot/ or /cvmfs/ (got {path!r}). /work and /home are "
+                  "not visible on Slurm nodes."
+              )
+
+
+      from dask_gateway_server.options import Options, Float, Mapping, String, Select
+      import os.path
 
       def options_handler(options, user):
-          if user.name=="jovyan":
-            uid, gid = 1000, 1000
+          cluster = (getattr(options, "cluster", None) or "geddes").strip().lower()
+          if cluster not in ("geddes",) + tuple(INTERLINK_CLUSTERS):
+              raise ValueError(
+                  f"Unknown cluster {cluster!r}. Choose geddes, hammer, or gautschi."
+              )
+          use_interlink = cluster in INTERLINK_CLUSTERS
+
+          if use_interlink:
+              if user.name == "jovyan" or ("-cern" in user.name) or ("-fnal" in user.name):
+                  raise ValueError(
+                      "interLink clusters (hammer/gautschi) are available to "
+                      "Purdue accounts only. Use cluster='geddes' or the "
+                      "default Kubernetes Dask Gateway."
+                  )
+              try:
+                  uid, gid = ldap_lookup(user.name)
+              except Exception as exc:
+                  raise ValueError(
+                      f"Could not resolve Purdue LDAP UID for {user.name!r}: {exc}"
+                  ) from exc
+          elif user.name == "jovyan":
+              uid, gid = 1000, 1000
           elif ("-cern" in user.name) or ("-fnal" in user.name):
               if not options.env:
-                raise ValueError("'env' must be specified in new_cluster(), for example env=dict(os.environ)")
-              if ("NB_UID" not in options.env) or ("NB_GID" not in options.env):
                   raise ValueError(
-                      "NB_UID and NB_GID variables must exist in 'env'"
+                      "'env' must be specified in new_cluster(), for example env=dict(os.environ)"
                   )
+              if ("NB_UID" not in options.env) or ("NB_GID" not in options.env):
+                  raise ValueError("NB_UID and NB_GID variables must exist in 'env'")
               uid, gid = int(options.env["NB_UID"]), int(options.env["NB_GID"])
           else:
-              uid,gid = ldap_lookup(user.name)
+              uid, gid = ldap_lookup(user.name)
 
-          # Remove NVIDIA_VISIBLE_DEVICES from the environment
           if "NVIDIA_VISIBLE_DEVICES" in options.env:
               del options.env["NVIDIA_VISIBLE_DEVICES"]
-          
-          options.env["PATH"]=f"{options.conda_env}/bin/:"+options.env.pop("PATH")
-          options.env["CPLUS_INCLUDE_PATH"]=f"{options.conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
 
-          extra_pod_config = {"securityContext": {"runAsUser": uid, "runAsGroup": gid,}}
-          extra_pod_annotations = {
-            "slurm-job.vk.io/singularity-options": "--unsquash --bind /cvmfs",
-            "slurm-job.vk.io/flags": f"--uid={uid} -A cms -p hammer-nodes"
+          conda_env = None
+          pixi_project = getattr(options, "pixi_project", None)
+          if pixi_project and pixi_project.strip():
+              user_conda_env = getattr(options, "conda_env", None)
+              if user_conda_env and user_conda_env.strip():
+                  raise ValueError(
+                      "pixi-env and conda-env are mutually exclusive. Please specify only one."
+                  )
+              pixi_project_dir = pixi_project.strip()
+              if use_interlink:
+                  _require_depot_or_cvmfs(pixi_project_dir, "pixi_project")
+              pixi_project_name = getattr(options, "pixi_env", "default")
+              pixi_toml_path = os.path.join(pixi_project_dir, "pixi.toml")
+              if not os.path.exists(pixi_toml_path):
+                  raise ValueError(
+                      f"pixi.toml not found in {pixi_project_dir}. "
+                      "Please provide a valid pixi project directory."
+                  )
+              env_path = os.path.join(
+                  pixi_project_dir, ".pixi", "envs", pixi_project_name
+              )
+              if not os.path.exists(env_path):
+                  raise ValueError(
+                      f"Pixi environment '{pixi_project_name}' not found at {env_path}. "
+                      f"Please build it first with 'pixi install' in {pixi_project_dir}."
+                  )
+              bin_python = os.path.join(env_path, "bin", "python")
+              bin_python3 = os.path.join(env_path, "bin", "python3")
+              if not (os.path.exists(bin_python) or os.path.exists(bin_python3)):
+                  raise ValueError(
+                      f"Environment at {env_path} does not appear to be a valid conda environment."
+                  )
+              conda_env = env_path
+          else:
+              user_conda_env = getattr(options, "conda_env", None)
+              if not user_conda_env or not user_conda_env.strip():
+                  raise ValueError("Either conda_env or pixi_project must be specified")
+              conda_env = user_conda_env.strip()
+              if use_interlink:
+                  _require_depot_or_cvmfs(conda_env, "conda_env")
+
+          options.env["PATH"] = f"{conda_env}/bin/:" + options.env.pop("PATH", "")
+          options.env["CPLUS_INCLUDE_PATH"] = (
+              f"{conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
+          )
+          options.env["XRD_REQUESTTIMEOUT"] = "300"
+          options.env["XRD_CPCHUNKSIZE"] = "1048576"
+          options.env["XRD_CONNECTIONWINDOW"] = "300"
+          options.env["XRD_CONNECTIONRETRY"] = "5"
+          options.env["XRD_STREAMTIMEOUT"] = "300"
+          options.env["DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT"] = (
+              "300s" if use_interlink else "60s"
+          )
+
+          death_timeout = "900" if use_interlink else "180"
+          worker_cmd = [
+              f"{conda_env}/bin/dask",
+              "worker",
+              "--death-timeout",
+              death_timeout,
+          ]
+          scheduler_cmd = [f"{conda_env}/bin/dask", "scheduler"]
+
+          security = {"securityContext": {"runAsUser": uid, "runAsGroup": gid}}
+          if use_interlink:
+              meta = INTERLINK_CLUSTERS[cluster]
+              node_sel = {"kubernetes.io/hostname": meta["node"]}
+              tolerations = INTERLINK_TOLERATIONS
+              volumes = INTERLINK_VOLUMES
+              # /work preload is invisible on Slurm; prefer depot copy if present.
+              options.env["DASK_DISTRIBUTED__WORKER__PRELOAD"] = (
+                  '["/depot/cms/purdue-af/dask_pyroscope_preload_slurm.py"]'
+              )
+              annotations = {
+                  "slurm-job.vk.io/singularity-options": "--unsquash --bind /cvmfs",
+                  "slurm-job.vk.io/flags": (
+                      f"--uid={uid} -A {meta['account']} -p {meta['partition']}"
+                  ),
+              }
+          else:
+              node_sel = AF_NODE_SELECTOR
+              tolerations = AF_TOLERATIONS
+              volumes = None
+              annotations = {}
+
+          # Replace sticky keys each request (shared c.KubeClusterConfig).
+          for target in (
+              c.KubeClusterConfig.scheduler_extra_pod_config,
+              c.KubeClusterConfig.worker_extra_pod_config,
+          ):
+              target.update(security)
+              target["nodeSelector"] = dict(node_sel)
+              target["tolerations"] = list(tolerations)
+
+          if use_interlink:
+              c.KubeClusterConfig.scheduler_extra_pod_config["volumes"] = list(volumes)
+              c.KubeClusterConfig.worker_extra_pod_config["volumes"] = list(volumes)
+              c.KubeClusterConfig.scheduler_extra_container_config["volumeMounts"] = list(
+                  INTERLINK_VOLUME_MOUNTS
+              )
+              c.KubeClusterConfig.worker_extra_container_config["volumeMounts"] = list(
+                  INTERLINK_VOLUME_MOUNTS
+              )
+          else:
+              c.KubeClusterConfig.scheduler_extra_pod_config["volumes"] = list(
+                  GEDDES_SCHEDULER_VOLUMES
+              )
+              c.KubeClusterConfig.worker_extra_pod_config["volumes"] = list(
+                  GEDDES_WORKER_VOLUMES
+              )
+              c.KubeClusterConfig.scheduler_extra_container_config["volumeMounts"] = list(
+                  GEDDES_SCHEDULER_MOUNTS
+              )
+              c.KubeClusterConfig.worker_extra_container_config["volumeMounts"] = list(
+                  GEDDES_WORKER_MOUNTS
+              )
+
+          c.KubeClusterConfig.scheduler_extra_pod_annotations.clear()
+          c.KubeClusterConfig.worker_extra_pod_annotations.clear()
+          c.KubeClusterConfig.scheduler_extra_pod_annotations.update(annotations)
+          c.KubeClusterConfig.worker_extra_pod_annotations.update(annotations)
+
+          c.KubeClusterConfig.scheduler_extra_pod_labels = {
+              "user": user.name,
+              "cluster": cluster,
           }
-          c.KubeClusterConfig.scheduler_extra_pod_config.update(extra_pod_config)
-          c.KubeClusterConfig.worker_extra_pod_config.update(extra_pod_config)
-          c.KubeClusterConfig.worker_extra_pod_annotations.update(extra_pod_annotations)
-          c.KubeClusterConfig.scheduler_extra_pod_annotations.update(extra_pod_annotations)
-          c.KubeClusterConfig.scheduler_extra_pod_labels = {"user": user.name}
           c.KubeClusterConfig.worker_extra_pod_labels = {
-            "user": user.name,
-            #"queue": "root.community.cms"
+              "user": user.name,
+              "cluster": cluster,
           }
 
-          setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; export DASK_DISTRIBUTED__WORKER__PROFILE__INTERVAL=1000000000; export DASK_DISTRIBUTED__SCHEDULER__PROFILE__INTERVAL=1000000000; "
+          setup_cmd = (
+              "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; "
+              "export DASK_DISTRIBUTED__WORKER__PROFILE__INTERVAL=1000000000; "
+              "export DASK_DISTRIBUTED__SCHEDULER__PROFILE__INTERVAL=1000000000; "
+          )
           desired_cores = options.worker_cores
           desired_memory = int(options.worker_memory * 2 ** 30)
           return {
-              "worker_cores": 1,
+              "worker_cores": desired_cores,
               "worker_cores_limit": desired_cores,
-              "worker_memory": int(desired_memory * 0.75),
+              "worker_memory": desired_memory,
               "worker_memory_limit": desired_memory,
               "environment": options.env,
-              "scheduler_cmd": [f"{options.conda_env}/bin/dask", "scheduler"],
-              "worker_cmd": [f"{options.conda_env}/bin/dask", "worker"],
-              "time": "1-00:00:00",
+              "scheduler_cmd": scheduler_cmd,
+              "worker_cmd": worker_cmd,
               "scheduler_setup": setup_cmd,
               "worker_setup": setup_cmd,
           }
+
       c.Backend.cluster_options = Options(
-          String("conda_env", default="/depot/cms/kernels/python3", label="Conda environment"),
+          Select(
+              "cluster",
+              ["geddes", "hammer", "gautschi"],
+              default="geddes",
+              label="Target cluster (geddes=AF k8s; hammer/gautschi=interLink/Slurm)",
+          ),
+          String("conda_env", default="", label="Conda environment"),
+          String(
+              "pixi_project",
+              default="",
+              label="Pixi project path (mutually exclusive with conda-env)",
+          ),
+          String(
+              "pixi_env",
+              default="default",
+              label="Pixi environment within project (default: 'default')",
+          ),
           Float("worker_cores", default=1, min=0.1, max=64, label="Cores per worker"),
-          Float("worker_memory", default=4, min=0.1, max=64, label="Memory per worker (GiB)"),
+          Float(
+              "worker_memory",
+              default=4,
+              min=0.1,
+              max=64,
+              label="Memory per worker (GiB)",
+          ),
           Mapping("env", {}, label="Environment variables"),
           handler=options_handler,
       )
 
-      # Per-user cap (not in upstream Dask Gateway): at most one cluster while pending, running, or stopping.
       from dask_gateway_server.backends.kubernetes import KubeBackend
       from dask_gateway_server.backends.base import PublicException
       from dask_gateway_server import models
@@ -249,7 +555,7 @@ gateway:
 
       KubeBackend.start_cluster = _kube_start_cluster_limited
 traefik:
-  replicas: 1
+  replicas: 2
   image:
     name: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/traefik
     tag: 2.10.4
