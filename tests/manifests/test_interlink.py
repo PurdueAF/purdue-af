@@ -174,7 +174,9 @@ def test_slurm_cluster_has_client_configs(interlink_clusters):
         conf = slurm_root / f"slurm-configs-{cluster}" / "slurm.conf"
         assert conf.is_file(), f"{cluster}: missing {conf}"
         text = conf.read_text()
-        assert f"ClusterName={cluster}" in text, f"{cluster}: ClusterName mismatch in {conf}"
+        assert f"ClusterName={cluster}" in text, (
+            f"{cluster}: ClusterName mismatch in {conf}"
+        )
         assert "AuthType=auth/munge" in text, f"{cluster}: expected auth/munge"
         assert "SlurmctldHost=" in text, f"{cluster}: missing SlurmctldHost"
 

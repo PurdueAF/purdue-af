@@ -64,7 +64,7 @@ RUN set -euo pipefail \
  && rm -rf /etc/slurm/* /tmp/slurm-build \
  && chown -R slurm:slurm /var/log/slurm \
  && dnf clean all && rm -rf /var/cache/dnf \
- && ls -1 /opt/purdue-af/slurm-configs | grep -q . \
+ && test -n "$(find /opt/purdue-af/slurm-configs -mindepth 1 -maxdepth 1 -type d -print -quit)" \
  || { echo "no slurm/slurm-configs-* trees found in build context" >&2; exit 1; }
 
 COPY docker/interlink-slurm-plugin/startup.sh /etc/startup.sh
