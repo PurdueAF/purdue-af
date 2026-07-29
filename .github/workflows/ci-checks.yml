@@ -61,7 +61,6 @@ jobs:
           --cov=apps/jupyterhub/jupyterhub/extraFiles
           --cov=docker/af-pod-monitor
           --cov=docker/af-node-monitor
-          --cov=apps/monitoring/af-monitoring
           --cov=apps/af-utils/af-users-graph
           --cov=docker/purdue-af/jupyter
           --cov=bump_af_version

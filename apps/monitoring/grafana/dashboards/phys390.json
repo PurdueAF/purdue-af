@@ -148,7 +148,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(count by (namespace)(kube_pod_info{pod=~\"purdue-af-.*\", namespace=~\"cms(-dev)?\"}))",
+          "expr": "sum(count by (namespace)(kube_pod_info{pod=~\"purdue-af-.*\", namespace=~\"cms\"}))",
           "interval": "",
           "legendFormat": "Current AF Users",
           "range": true,

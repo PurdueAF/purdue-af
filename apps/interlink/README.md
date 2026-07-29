@@ -39,8 +39,7 @@ tolerations:
 ```
 
 Slurm submission options come from pod annotations
-(`slurm-job.vk.io/flags`, `slurm-job.vk.io/singularity-options`); see
-`<cluster>/test-pod.yaml` for a working example.
+(`slurm-job.vk.io/flags`, `slurm-job.vk.io/singularity-options`).
 
 ## What is not in git
 
@@ -58,10 +57,9 @@ uncomment Negishi in the kustomization.
 
 ```bash
 kubectl get node interlink-hammer
-kubectl apply -n cms -f apps/interlink/hammer/test-pod.yaml
-kubectl logs -n cms test-interlink-hammer
 ```
 
-The pod should reach `Running` and print its hello line; `squeue` on the
-cluster shows the matching job. Delete it afterwards — it is not managed by
-Flux.
+Schedule a short-lived pod with the nodeSelector/tolerations above and the
+Slurm annotations your partition expects. The pod should reach `Running`;
+`squeue` on the cluster shows the matching job. Delete it afterwards — it is
+not managed by Flux.

@@ -56,6 +56,6 @@ runs:
     - name: Port-forward hub and mock
       shell: bash
       run: |
-        kubectl port-forward svc/proxy-public 8080:80 &
-        kubectl port-forward svc/mock-cilogon 9090:9090 &
+        kubectl -n cms port-forward svc/proxy-public 8080:80 &
+        kubectl -n cms port-forward svc/mock-cilogon 9090:9090 &
         sleep 3

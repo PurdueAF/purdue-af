@@ -13,6 +13,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 CLUSTER=af-e2e
+NS=cms
 HUB_DIR=apps/jupyterhub/jupyterhub
 E2E_DIR=tests/e2e_hub
 CHART_VERSION=${CHART_VERSION:-$(yq '.spec.chart.spec.version' "$HUB_DIR/helmrelease.yaml")}
@@ -52,6 +53,7 @@ preload_node() {
 echo "==> kind cluster '$CLUSTER' (chart version $CHART_VERSION)"
 kind get clusters 2>/dev/null | grep -qx "$CLUSTER" || kind create cluster --name "$CLUSTER" --wait 120s
 kubectl config use-context "kind-$CLUSTER" >/dev/null
+kubectl get namespace "$NS" >/dev/null 2>&1 || kubectl create namespace "$NS"
 
 # Real AF images (~5 GB compressed each): pre-loaded onto the node only for
 # the job that actually spawns them, so local fast runs (and the other job)
@@ -66,14 +68,14 @@ if [ -n "${PRELOAD_PRODUCTION:-}" ]; then
 fi
 
 echo "==> secrets and config (purdue: alice, bob, dkondra; cern: carol)"
-kubectl create secret generic auth-secret \
+kubectl -n "$NS" create secret generic auth-secret \
 	--from-literal=cilogon_client_id=mock-client \
 	--from-literal=cilogon_client_secret=mock-secret \
 	--dry-run=client -o yaml | kubectl apply -f -
-kubectl create secret generic af-auth-purdue \
+kubectl -n "$NS" create secret generic af-auth-purdue \
 	--from-literal=userlist=$'alice\nbob\ndkondra\n' \
 	--dry-run=client -o yaml | kubectl apply -f -
-kubectl create secret generic af-auth-cern \
+kubectl -n "$NS" create secret generic af-auth-cern \
 	--from-literal=userlist=$'carol\n' \
 	--dry-run=client -o yaml | kubectl apply -f -
 # Hub-mounted configmaps, derived from the production configMapGenerator so
@@ -95,26 +97,27 @@ for cm in jupyterhub-extra-config jupyterhub-gpu-culler; do
 		echo "no generator entry for $cm in $PROD_KUSTOMIZATION"
 		exit 1
 	}
-	kubectl create configmap "$cm" "${from_file_args[@]}" \
+	kubectl -n "$NS" create configmap "$cm" "${from_file_args[@]}" \
 		--dry-run=client -o yaml | kubectl apply -f -
 done
 
 echo "==> mock CILogon"
-kubectl create configmap mock-cilogon \
+kubectl -n "$NS" create configmap mock-cilogon \
 	--from-file=mock-cilogon.py="$E2E_DIR/mock-cilogon.py" \
 	--dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -f "$E2E_DIR/mock-cilogon.yaml"
+kubectl -n "$NS" apply -f "$E2E_DIR/mock-cilogon.yaml"
 
 echo "==> mock LDAP (geddes-aux stand-in for set-user-info.py)"
-kubectl create configmap mock-ldap \
+kubectl -n "$NS" create configmap mock-ldap \
 	--from-file=10-users.ldif="$E2E_DIR/mock-ldap-users.ldif" \
 	--from-file=20-acl.ldif="$E2E_DIR/mock-ldap-acl.ldif" \
 	--dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -f "$E2E_DIR/mock-ldap.yaml"
+kubectl -n "$NS" apply -f "$E2E_DIR/mock-ldap.yaml"
 
 echo "==> render production values the way Flux does"
 # Same mechanism as .github/workflows/validate-manifests.sh, with kind-appropriate vars.
-export namespace=default
+# Use the production namespace so set-user-info / custom-spawner hit the same paths as cms.
+export namespace=cms
 export enable_ingresses=false
 export jupyterhub_enable_ingress=false
 export jupyterhub_host=localhost
@@ -137,15 +140,16 @@ echo "==> helm install jupyterhub@${CHART_VERSION}"
 helm repo add jupyterhub https://hub.jupyter.org/helm-chart/ >/dev/null 2>&1 || true
 helm repo update jupyterhub >/dev/null
 helm upgrade --install jupyterhub jupyterhub/jupyterhub \
+	--namespace "$NS" \
 	--version "$CHART_VERSION" \
 	-f "$workdir/values.yaml" \
 	-f "$workdir/values-kind.yaml" \
 	--timeout 10m --wait
 
-kubectl rollout status deployment/hub --timeout=300s
-kubectl rollout status deployment/mock-cilogon --timeout=120s
-kubectl rollout status deployment/mock-ldap --timeout=120s
+kubectl -n "$NS" rollout status deployment/hub --timeout=300s
+kubectl -n "$NS" rollout status deployment/mock-cilogon --timeout=120s
+kubectl -n "$NS" rollout status deployment/mock-ldap --timeout=120s
 echo "==> ready. Port-forward and run the tests:"
-echo "    kubectl port-forward svc/proxy-public 8080:80 &"
-echo "    kubectl port-forward svc/mock-cilogon 9090:9090 &"
+echo "    kubectl -n $NS port-forward svc/proxy-public 8080:80 &"
+echo "    kubectl -n $NS port-forward svc/mock-cilogon 9090:9090 &"
 echo "    E2E_HUB=1 uv run --project tests pytest tests/e2e_hub -v"

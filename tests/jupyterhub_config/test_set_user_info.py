@@ -35,8 +35,8 @@ def test_purdue_user_resolved_via_ldap(monkeypatch, fake_ldap):
     assert fake_ldap["searches"] == ["(uid=alice*)"]
 
 
-def test_external_user_mapped_to_paf_account_in_cms(monkeypatch, fake_ldap):
-    ns = load(monkeypatch, fake_ldap, namespace="cms")
+def test_external_user_mapped_to_paf_account(monkeypatch, fake_ldap):
+    ns = load(monkeypatch, fake_ldap)
     spawner = FakeSpawner(user_id=7)
 
     ns["passthrough_auth_state_hook"](
@@ -49,11 +49,8 @@ def test_external_user_mapped_to_paf_account_in_cms(monkeypatch, fake_ldap):
     assert spawner.environment["NB_UID"] == "12345"
 
 
-@pytest.mark.skip(
-    reason="set-user-info.py reverted to pre-incident state (2026-06-10 hub incident)"
-)
 def test_external_user_beyond_account_pool_refuses_spawn(monkeypatch, fake_ldap):
-    ns = load(monkeypatch, fake_ldap, namespace="cms")
+    ns = load(monkeypatch, fake_ldap)
     spawner = FakeSpawner(user_id=400)
 
     with pytest.raises(RuntimeError, match="ran out of accounts"):
@@ -65,19 +62,6 @@ def test_external_user_beyond_account_pool_refuses_spawn(monkeypatch, fake_ldap)
     assert fake_ldap["searches"] == []
     assert "NB_UID" not in spawner.environment
     assert "NB_GID" not in spawner.environment
-
-
-def test_external_user_in_dev_namespace_gets_default_ids(monkeypatch, fake_ldap):
-    ns = load(monkeypatch, fake_ldap, namespace="dev")
-    spawner = FakeSpawner(user_id=7)
-
-    ns["passthrough_auth_state_hook"](
-        spawner, {"name": "carol-cern", "domain": "cern.ch"}
-    )
-
-    assert spawner.environment["NB_UID"] == "1000"
-    assert spawner.environment["NB_GID"] == "1000"
-    assert fake_ldap["searches"] == []  # no LDAP in dev
 
 
 def test_pixi_home_points_to_work_storage(monkeypatch, fake_ldap):

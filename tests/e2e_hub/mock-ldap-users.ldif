@@ -45,3 +45,106 @@ sn: dave
 uidNumber: 20004
 gidNumber: 21004
 homeDirectory: /home/dave
+
+# Pooled paf#### accounts for external (non-purdue.edu) hub users —
+# set-user-info.py maps hub user id N → uid=paf00NN. Seed enough for
+# the handful of identities the e2e suite creates.
+dn: uid=paf0001,ou=People,dc=rcac,dc=purdue,dc=edu
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: paf0001
+cn: paf0001
+sn: paf0001
+uidNumber: 30001
+gidNumber: 31001
+homeDirectory: /home/paf0001
+
+dn: uid=paf0002,ou=People,dc=rcac,dc=purdue,dc=edu
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: paf0002
+cn: paf0002
+sn: paf0002
+uidNumber: 30002
+gidNumber: 31002
+homeDirectory: /home/paf0002
+
+dn: uid=paf0003,ou=People,dc=rcac,dc=purdue,dc=edu
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: paf0003
+cn: paf0003
+sn: paf0003
+uidNumber: 30003
+gidNumber: 31003
+homeDirectory: /home/paf0003
+
+dn: uid=paf0004,ou=People,dc=rcac,dc=purdue,dc=edu
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: paf0004
+cn: paf0004
+sn: paf0004
+uidNumber: 30004
+gidNumber: 31004
+homeDirectory: /home/paf0004
+
+dn: uid=paf0005,ou=People,dc=rcac,dc=purdue,dc=edu
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: paf0005
+cn: paf0005
+sn: paf0005
+uidNumber: 30005
+gidNumber: 31005
+homeDirectory: /home/paf0005
+
+dn: uid=paf0006,ou=People,dc=rcac,dc=purdue,dc=edu
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: paf0006
+cn: paf0006
+sn: paf0006
+uidNumber: 30006
+gidNumber: 31006
+homeDirectory: /home/paf0006
+
+dn: uid=paf0007,ou=People,dc=rcac,dc=purdue,dc=edu
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: paf0007
+cn: paf0007
+sn: paf0007
+uidNumber: 30007
+gidNumber: 31007
+homeDirectory: /home/paf0007
+
+dn: uid=paf0008,ou=People,dc=rcac,dc=purdue,dc=edu
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: paf0008
+cn: paf0008
+sn: paf0008
+uidNumber: 30008
+gidNumber: 31008
+homeDirectory: /home/paf0008
+
+dn: uid=paf0009,ou=People,dc=rcac,dc=purdue,dc=edu
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: paf0009
+cn: paf0009
+sn: paf0009
+uidNumber: 30009
+gidNumber: 31009
+homeDirectory: /home/paf0009
+
+dn: uid=paf0010,ou=People,dc=rcac,dc=purdue,dc=edu
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: paf0010
+cn: paf0010
+sn: paf0010
+uidNumber: 30010
+gidNumber: 31010
+homeDirectory: /home/paf0010

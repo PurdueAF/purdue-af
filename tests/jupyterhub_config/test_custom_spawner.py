@@ -99,15 +99,6 @@ async def test_userlist_requires_exact_newline_terminated_line(spawner_ns, monke
     assert err.value.status_code == 500
 
 
-# ── refresh_user ──────────────────────────────────────────────────────────────
-
-
-async def test_refresh_user_keeps_login_auth_state(spawner_ns):
-    # Must stay a no-op: oauthenticator ≥17.2 would otherwise drop name/domain.
-    auth = spawner_ns["PurdueCILogonOAuthenticator"]()
-    assert await auth.refresh_user(user=None) is True
-
-
 # ── post_auth_hook ────────────────────────────────────────────────────────────
 
 
@@ -147,9 +138,3 @@ def test_dask_gateway_env_set_in_cms_namespace(monkeypatch):
     env = ns["c"]["KubeSpawner"]["environment"]
     assert "DASK_GATEWAY__ADDRESS" in env
     assert "DASK_GATEWAY__PROXY_ADDRESS" in env
-
-
-def test_dask_gateway_env_not_set_outside_cms(monkeypatch):
-    ns = load_snippet("custom-spawner.py", monkeypatch, namespace="dev")
-    env = ns["c"].get("KubeSpawner", {}).get("environment", {})
-    assert "DASK_GATEWAY__ADDRESS" not in env

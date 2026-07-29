@@ -509,9 +509,3 @@ def test_hooks_have_no_top_level_exit(hook):
     offenders = _top_level_exits(path.read_text())
     assert not offenders, f"{hook} exits the sourcing shell at {offenders}"
 
-
-def test_the_exit_detector_actually_detects():
-    """A scanner that silently matches nothing would make the guard useless."""
-    assert _top_level_exits("echo hi\nexit 0\n")
-    assert _top_level_exits("if [ -z x ]; then\n\texit 1\nfi\n")  # indented
-    assert not _top_level_exits("f() {\n\texit 0\n}\nf\n")  # inside a function

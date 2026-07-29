@@ -35,17 +35,6 @@ resources:
   # supersonic-model-manager-auth Secret to exist in the namespace.
   - ../../apps/sonic/model-manager/helmrelease.yaml
 
-  # - ../../apps/kagent/helmrepo.yaml
-  # - ../../apps/kagent/controller-namespace-cluster-rbac.yaml
-  # - ../../apps/kagent/controller-cms-rbac.yaml
-  # - ../../apps/kagent/agent-rbac.yaml
-  # - ../../apps/kagent/secret-kagent-openai.yaml
-  # - ../../apps/kagent/secret-kagent-grafana-mcp-token.yaml
-  # - ../../apps/kagent/modelconfigs-extra.yaml
-  # - ../../apps/kagent/helmrelease.yaml
-  # - ../../apps/kagent/ingress.yaml
-  # - ../../apps/kagent/agents/agent-log-analyzer.yaml
-
   - ../../apps/interlink/helmrepo.yaml
   - ../../apps/interlink/hammer/helmrelease.yaml
   - ../../apps/interlink/gautschi/helmrelease.yaml
@@ -142,10 +131,6 @@ configMapGenerator:
   - name: supersonic-model-manager-config
     files:
       - values.yaml=../../apps/sonic/model-manager/values-supersonic.yaml
-
-  - name: kagent-config
-    files:
-      - values.yaml=../../apps/kagent/values.yaml
 
   - name: interlink-hammer-config
     files:

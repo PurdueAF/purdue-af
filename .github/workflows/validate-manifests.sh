@@ -40,8 +40,6 @@ KUBECONFORM=(
 	-summary
 	-schema-location default
 	-schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
-	# kagent CRDs have no published JSON schema (not in CRDs-catalog).
-	-skip Agent,ModelConfig
 )
 
 workdir=$(mktemp -d)

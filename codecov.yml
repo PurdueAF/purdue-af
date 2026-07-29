@@ -26,7 +26,6 @@ component_management:
       paths:
         - "docker/af-pod-monitor/**"
         - "docker/af-node-monitor/**"
-        - "apps/monitoring/af-monitoring/**"
     - component_id: scripts
       name: Standalone scripts
       paths:

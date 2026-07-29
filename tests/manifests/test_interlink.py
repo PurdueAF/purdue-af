@@ -114,13 +114,14 @@ def test_munge_key_comes_from_a_per_cluster_pvc(interlink_clusters):
         assert claim == f"munge-key-{cluster}", f"{cluster}: mounts {claim}"
 
 
-def test_slurm_cluster_env_matches_directory(interlink_clusters):
+def test_slurm_cluster_env_matches_directory(active_clusters):
     """The sidecar installs /etc/slurm from /opt/purdue-af/slurm-configs/$SLURM_CLUSTER.
-    A typo here points the node at the wrong RCAC controller (or refuses to start)."""
-    for cluster, app in interlink_clusters.items():
-        if cluster == "negishi":
-            # Negishi still uses a different sidecar image without SLURM_CLUSTER.
-            continue
+    A typo here points the node at the wrong RCAC controller (or refuses to start).
+
+    Negishi stays commented out in experimental until its munge PVC exists; its
+    values still use the old sidecar shape and are not part of this contract.
+    """
+    for cluster, app in active_clusters.items():
         envs = {e["name"]: e["value"] for e in app["values"]["plugin"]["envs"]}
         assert "SLURM_CLUSTER" in envs, f"{cluster}: SLURM_CLUSTER missing"
         assert envs["SLURM_CLUSTER"] == cluster, f"{cluster}: {envs['SLURM_CLUSTER']}"
@@ -160,14 +161,15 @@ def test_plugin_image_is_not_the_old_kaniko_registry(active_clusters):
         assert "/cms/interlink-slurm-plugin:" not in image, cluster
 
 
-def test_slurm_cluster_has_client_configs(interlink_clusters):
+def test_slurm_cluster_has_client_configs(active_clusters):
     """Baked configs live at slurm/slurm-configs-<cluster>/. Without slurm.conf
-    the container exits unless /etc/secrets/slurm-configs is mounted as override."""
+    the container exits unless /etc/secrets/slurm-configs is mounted as override.
+
+    Negishi is parked (commented) in experimental; see
+    test_slurm_cluster_env_matches_directory.
+    """
     slurm_root = REPO / "slurm"
-    for cluster, app in interlink_clusters.items():
-        if cluster == "negishi":
-            # Negishi still uses a different sidecar image without SLURM_CLUSTER.
-            continue
+    for cluster, app in active_clusters.items():
         envs = {e["name"]: e["value"] for e in app["values"]["plugin"]["envs"]}
         if "SLURM_CLUSTER" not in envs:
             continue

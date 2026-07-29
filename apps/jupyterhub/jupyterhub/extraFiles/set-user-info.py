@@ -9,8 +9,6 @@ from ldap3 import SUBTREE, Connection, Server
 # checkers without creating (or shadowing) the runtime binding.
 c: Any
 
-NAMESPACE = os.environ["POD_NAMESPACE"]
-
 
 def ldap_lookup(username: str) -> tuple[Any, Any]:
     # AF_LDAP_* are only set by the e2e harness (tests/e2e_hub), which points
@@ -54,25 +52,20 @@ def passthrough_auth_state_hook(spawner: Any, auth_state: Any) -> None:
         uid, gid = ldap_lookup(username)
         spawner.environment["NB_UID"] = str(uid)
         spawner.environment["NB_GID"] = str(gid)
-    elif NAMESPACE == "cms":
-        # in prod instance do the user mapping
+    else:
+        # External users map onto a pooled paf#### account via hub user id.
+        # paf0000–paf0399 are provisioned in LDAP; beyond that there is no
+        # account to map onto — refuse the spawn rather than falling back to
+        # a shared UID or looking up a nonexistent paf04xx entry.
         af_id = int(spawner.user.id)
         if af_id > 399:
-            # raise Exception(
-            print(
-                f"Error while trying to create an external user with AF ID {af_id}."
-                "We ran out of accounts for external users!"
+            raise RuntimeError(
+                f"ran out of accounts for external users (AF ID {af_id})"
             )
-            spawner.environment["NB_UID"] = "1000"
-            spawner.environment["NB_GID"] = "1000"
         username = "paf{:04d}".format(af_id)
         uid, gid = ldap_lookup(username)
         spawner.environment["NB_UID"] = str(uid)
         spawner.environment["NB_GID"] = str(gid)
-    else:
-        # in dev instance skip user mapping
-        spawner.environment["NB_UID"] = "1000"
-        spawner.environment["NB_GID"] = "1000"
 
     # Pixi CLI and pixi-kernel run `pixi info`, which may create $PIXI_HOME/envs and
     # other layout. Keep /opt/pixi read-only; store per-user Pixi state on /work.

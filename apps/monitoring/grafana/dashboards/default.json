@@ -123,7 +123,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(count by (namespace)(kube_pod_info{pod=~\"purdue-af-.*\", namespace=~\"cms(-dev)?\"}))",
+          "expr": "sum(count by (namespace)(kube_pod_info{pod=~\"purdue-af-.*\", namespace=~\"cms\"}))",
           "interval": "",
           "legendFormat": "Current AF Users",
           "range": true,
@@ -276,7 +276,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (node)(kube_pod_info{namespace=~\"cms(-dev)?\", node!=\"\", pod=~\"purdue-af-.*\"})",
+          "expr": "count by (node)(kube_pod_info{namespace=~\"cms\", node!=\"\", pod=~\"purdue-af-.*\"})",
           "interval": "",
           "legendFormat": "{{ node }}",
           "refId": "A"
@@ -357,7 +357,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (node) (\n  kube_pod_container_resource_requests{\n    namespace=~\"cms(-dev)?\",\n    resource=\"cpu\"\n  }\n  * on(node) group_left()\n  kube_node_spec_taint{value=\"cms-af\"}\n)\n/\nsum by (node) (\n  kube_node_status_capacity{resource=\"cpu\"}\n  * on(node) group_left()\n  kube_node_spec_taint{value=\"cms-af\"}\n)",
+          "expr": "sum by (node) (\n  kube_pod_container_resource_requests{\n    namespace=~\"cms\",\n    resource=\"cpu\"\n  }\n  * on(node) group_left()\n  kube_node_spec_taint{value=\"cms-af\"}\n)\n/\nsum by (node) (\n  kube_node_status_capacity{resource=\"cpu\"}\n  * on(node) group_left()\n  kube_node_spec_taint{value=\"cms-af\"}\n)",
           "instant": true,
           "interval": "",
           "legendFormat": "{{ node }}",
@@ -618,7 +618,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (node) (\n  kube_pod_container_resource_requests{\n    namespace=~\"cms(-dev)?\",\n    resource=\"memory\"\n  }\n  * on(node) group_left()\n  kube_node_spec_taint{value=\"cms-af\"}\n)\n/\nsum by (node) (\n  kube_node_status_capacity{resource=\"memory\"}\n  * on(node) group_left()\n  kube_node_spec_taint{value=\"cms-af\"}\n)",
+          "expr": "sum by (node) (\n  kube_pod_container_resource_requests{\n    namespace=~\"cms\",\n    resource=\"memory\"\n  }\n  * on(node) group_left()\n  kube_node_spec_taint{value=\"cms-af\"}\n)\n/\nsum by (node) (\n  kube_node_status_capacity{resource=\"memory\"}\n  * on(node) group_left()\n  kube_node_spec_taint{value=\"cms-af\"}\n)",
           "instant": true,
           "interval": "",
           "legendFormat": "{{ node }}",
