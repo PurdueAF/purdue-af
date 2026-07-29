@@ -99,11 +99,7 @@ def _describe(alertname: str, series: list[dict[str, Any]]) -> str:
     if alertname == "AFMountInvalid":
         return f"{mount_list} failing on {where}, {scope_system}"
     if alertname == "AFMountSlow":
-        detail = (
-            "across most of the facility"
-            if widespread
-            else "on a single machine"
-        )
+        detail = "across most of the facility" if widespread else "on a single machine"
         return (
             f"{mount_list} is slow on {where}, {detail} — "
             "reads still work, but analyses on affected nodes will crawl"
