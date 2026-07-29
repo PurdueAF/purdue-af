@@ -159,6 +159,14 @@ gateway:
               "sbatch_flags": "--account=cms --partition=cpu --qos=standby",
           },
       }
+      # ExportPodData already materializes the dask-credentials Secret under
+      # ${workingPath}/secrets/dask-credentials/ on the shared NFS. Bind that
+      # directory onto /etc/dask-credentials so the controller's hardcoded TLS
+      # paths work inside Singularity (${workingPath} is exported by the Slurm
+      # job script before singularity runs).
+      INTERLINK_SINGULARITY_MOUNTS = (
+          "--bind ${workingPath}/secrets/dask-credentials:/etc/dask-credentials"
+      )
       AF_NODE_SELECTOR = {"cms-af-prod": "true"}
       AF_TOLERATIONS = [
           {
@@ -436,6 +444,7 @@ gateway:
                   '["/depot/cms/purdue-af/dask_pyroscope_preload_slurm.py"]'
               )
               annotations = {
+                  "slurm-job.vk.io/singularity-mounts": INTERLINK_SINGULARITY_MOUNTS,
                   "slurm-job.vk.io/singularity-options": "--unsquash --bind /cvmfs",
                   # Walltime matches dask-gateway-k8s-slurm (Hammer): 4 hours.
                   "slurm-job.vk.io/flags": (
