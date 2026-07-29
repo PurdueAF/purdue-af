@@ -466,10 +466,9 @@ gateway:
                   GEDDES_WORKER_MOUNTS
               )
 
-          c.KubeClusterConfig.scheduler_extra_pod_annotations.clear()
-          c.KubeClusterConfig.worker_extra_pod_annotations.clear()
-          c.KubeClusterConfig.scheduler_extra_pod_annotations.update(annotations)
-          c.KubeClusterConfig.worker_extra_pod_annotations.update(annotations)
+          # Assign (don't .clear()) — traitlets Dict may be a LazyConfigValue.
+          c.KubeClusterConfig.scheduler_extra_pod_annotations = dict(annotations)
+          c.KubeClusterConfig.worker_extra_pod_annotations = dict(annotations)
 
           c.KubeClusterConfig.scheduler_extra_pod_labels = {
               "user": user.name,
