@@ -508,4 +508,3 @@ def test_hooks_have_no_top_level_exit(hook):
         pytest.skip(f"{hook} not present")
     offenders = _top_level_exits(path.read_text())
     assert not offenders, f"{hook} exits the sourcing shell at {offenders}"
-
