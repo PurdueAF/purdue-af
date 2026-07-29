@@ -7,7 +7,7 @@ see [../REGISTRY.md](../REGISTRY.md).
 
 | Job | Image | Consumed by |
 | --- | --- | --- |
-| `build-dask.yaml` | `dask-gateway-server:2023.9.0-purdue.v5-hammer` | `apps/dask-gateway/dask-gateway-k8s-slurm` |
+| `build-dask.yaml` | `dask-gateway-server:2023.9.0-purdue.v4-hammer` | `apps/dask-gateway/dask-gateway-k8s-slurm` |
 | `build-servicex-science-coffea.yaml` | `servicex-science-combined-root-coffea:5.7.2-6.38.04` | `apps/servicex`, `-anvil`, `-test` |
 
 These are **not** reconciled by Flux. Run one by hand, watch it, then delete it:
