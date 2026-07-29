@@ -48,11 +48,11 @@ gateway:
     # annotations when cluster is hammer or gautschi.
     scheduler:
       cores:
-        request: 4
-        limit: 8
+        request: 2
+        limit: 2
       memory:
-        request: 16G
-        limit: 32G
+        request: 4G
+        limit: 4G
       extraPodConfig:
         nodeSelector:
           cms-af-prod: "true"
