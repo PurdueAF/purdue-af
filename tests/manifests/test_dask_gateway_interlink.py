@@ -67,9 +67,9 @@ def test_ingress_host():
     )
 
 
-def test_partitions_match_interlink_test_pods():
+def test_interlink_sbatch_targets():
     text = _values_text()
-    assert '"partition": "hammer-nodes"' in text
-    assert '"partition": "cpu"' in text
+    assert "--partition=hammer-nodes" in text
+    assert "--partition=cpu --qos=standby" in text
     assert "interlink-hammer" in text
     assert "interlink-gautschi" in text

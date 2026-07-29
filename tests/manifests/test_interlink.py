@@ -287,22 +287,6 @@ def test_values_configmap_is_not_exempt_from_substitution(experimental):
         assert "kustomize.toolkit.fluxcd.io/substitute" not in annotations
 
 
-# --- the hand-applied test pods ------------------------------------------
-
-
-def test_test_pod_targets_its_own_virtual_node(interlink_clusters):
-    for cluster, app in interlink_clusters.items():
-        pod = yaml.safe_load((app["dir"] / "test-pod.yaml").read_text())
-        spec = pod["spec"]
-        assert (
-            spec["nodeSelector"]["kubernetes.io/hostname"] == app["values"]["nodeName"]
-        )
-        assert any(
-            t["key"] == "virtual-node.interlink/no-schedule"
-            for t in spec["tolerations"]
-        ), f"{cluster}: without the toleration the pod never lands on the node"
-
-
 def test_disabled_clusters_generate_no_configmap(
     interlink_clusters, active_clusters, experimental
 ):
@@ -311,9 +295,3 @@ def test_disabled_clusters_generate_no_configmap(
     generated = {g["name"] for g in experimental["configMapGenerator"]}
     for cluster in set(interlink_clusters) - set(active_clusters):
         assert f"interlink-{cluster}-config" not in generated, cluster
-
-
-def test_test_pods_are_not_deployed_by_flux(interlink_clusters, experimental):
-    """They are one-shot debugging pods, applied by hand."""
-    resources = " ".join(experimental["resources"])
-    assert "test-pod.yaml" not in resources

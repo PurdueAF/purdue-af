@@ -152,13 +152,11 @@ gateway:
       INTERLINK_CLUSTERS = {
           "hammer": {
               "node": "interlink-hammer",
-              "partition": "hammer-nodes",
-              "account": "cms",
+              "sbatch_flags": "--account=cms --partition=hammer-nodes",
           },
           "gautschi": {
               "node": "interlink-gautschi",
-              "partition": "cpu",
-              "account": "cms",
+              "sbatch_flags": "--account=cms --partition=cpu --qos=standby",
           },
       }
       AF_NODE_SELECTOR = {"cms-af-prod": "true"}
@@ -426,8 +424,7 @@ gateway:
                   "slurm-job.vk.io/singularity-options": "--unsquash --bind /cvmfs",
                   # Walltime matches dask-gateway-k8s-slurm (Hammer): 4 hours.
                   "slurm-job.vk.io/flags": (
-                      f"--uid={uid} -A {meta['account']} -p {meta['partition']} "
-                      f"-t 0-04:00:00"
+                      f"--uid={uid} {meta['sbatch_flags']} -t 0-04:00:00"
                   ),
               }
           else:

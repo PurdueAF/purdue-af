@@ -9,7 +9,7 @@ metadata:
   name: test-interlink-gautschi
   annotations:
     slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs"
-    slurm-job.vk.io/flags: "--uid=616617 -A cms -p cpu"
+    slurm-job.vk.io/flags: "--uid=616617 --account=cms --partition=cpu --qos=standby"
 spec:
   nodeSelector:
     kubernetes.io/hostname: interlink-gautschi
