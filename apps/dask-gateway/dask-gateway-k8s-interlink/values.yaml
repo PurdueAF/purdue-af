@@ -191,6 +191,21 @@ gateway:
               "mountPropagation": "HostToContainer",
           },
       ]
+      # Default Dask Gateway readiness is HTTP :8788/api/health with
+      # failureThreshold=3 (~15s) — too aggressive for Singularity+Slurm start.
+      # Startup probe blocks readiness until health passes; then keep a relaxed
+      # readiness for ongoing checks.
+      INTERLINK_SCHEDULER_STARTUP_PROBE = {
+          "httpGet": {"port": 8788, "path": "/api/health"},
+          "initialDelaySeconds": 60,
+          "periodSeconds": 10,
+          "failureThreshold": 90,
+      }
+      INTERLINK_SCHEDULER_READINESS_PROBE = {
+          "httpGet": {"port": 8788, "path": "/api/health"},
+          "periodSeconds": 10,
+          "failureThreshold": 30,
+      }
       GEDDES_SCHEDULER_MOUNTS = [
           {
               "name": "depot",
@@ -445,12 +460,14 @@ gateway:
           if use_interlink:
               c.KubeClusterConfig.scheduler_extra_pod_config["volumes"] = list(volumes)
               c.KubeClusterConfig.worker_extra_pod_config["volumes"] = list(volumes)
-              c.KubeClusterConfig.scheduler_extra_container_config["volumeMounts"] = list(
-                  INTERLINK_VOLUME_MOUNTS
-              )
-              c.KubeClusterConfig.worker_extra_container_config["volumeMounts"] = list(
-                  INTERLINK_VOLUME_MOUNTS
-              )
+              sched_cc = dict(c.KubeClusterConfig.scheduler_extra_container_config)
+              worker_cc = dict(c.KubeClusterConfig.worker_extra_container_config)
+              sched_cc["volumeMounts"] = list(INTERLINK_VOLUME_MOUNTS)
+              worker_cc["volumeMounts"] = list(INTERLINK_VOLUME_MOUNTS)
+              sched_cc["startupProbe"] = dict(INTERLINK_SCHEDULER_STARTUP_PROBE)
+              sched_cc["readinessProbe"] = dict(INTERLINK_SCHEDULER_READINESS_PROBE)
+              c.KubeClusterConfig.scheduler_extra_container_config = sched_cc
+              c.KubeClusterConfig.worker_extra_container_config = worker_cc
           else:
               c.KubeClusterConfig.scheduler_extra_pod_config["volumes"] = list(
                   GEDDES_SCHEDULER_VOLUMES
@@ -458,12 +475,14 @@ gateway:
               c.KubeClusterConfig.worker_extra_pod_config["volumes"] = list(
                   GEDDES_WORKER_VOLUMES
               )
-              c.KubeClusterConfig.scheduler_extra_container_config["volumeMounts"] = list(
-                  GEDDES_SCHEDULER_MOUNTS
-              )
-              c.KubeClusterConfig.worker_extra_container_config["volumeMounts"] = list(
-                  GEDDES_WORKER_MOUNTS
-              )
+              sched_cc = dict(c.KubeClusterConfig.scheduler_extra_container_config)
+              worker_cc = dict(c.KubeClusterConfig.worker_extra_container_config)
+              sched_cc["volumeMounts"] = list(GEDDES_SCHEDULER_MOUNTS)
+              worker_cc["volumeMounts"] = list(GEDDES_WORKER_MOUNTS)
+              sched_cc.pop("startupProbe", None)
+              sched_cc.pop("readinessProbe", None)
+              c.KubeClusterConfig.scheduler_extra_container_config = sched_cc
+              c.KubeClusterConfig.worker_extra_container_config = worker_cc
 
           # Assign (don't .clear()) — traitlets Dict may be a LazyConfigValue.
           c.KubeClusterConfig.scheduler_extra_pod_annotations = dict(annotations)
