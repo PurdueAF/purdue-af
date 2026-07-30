@@ -815,13 +815,18 @@ def update_metrics() -> None:
                 continue
 
             timestamp = float(data.get("timestamp", 0))
-            # Consider stale if older than configured stale window
-            if now - timestamp > RESULT_STALE_WINDOW_S:
+            timeout = bool(data.get("timeout", False))
+            ok = bool(data.get("ok", False)) and not timeout
+            stale = now - timestamp > RESULT_STALE_WINDOW_S
+
+            if stale and ok:
+                # Last success is too old — unknown, not green.
                 _publish_unusable(labels, "stale_result")
                 continue
 
-            timeout = bool(data.get("timeout", False))
-            ok = bool(data.get("ok", False)) and not timeout
+            # Fresh result, or a stale *failure*/timeout: keep publishing as a
+            # completed check (fresh=1). Stale EOS timeouts must stay red
+            # (AFMountInvalid), not flip to unknown and disappear from MCP.
 
             ping_ms = data.get("ping_ms")
             meta_ms = data.get("metadata_ms")
@@ -852,7 +857,18 @@ def update_metrics() -> None:
                 if gbps is not None:
                     mount_data_rate_gbps.labels(**labels).set(float(gbps))
 
-                mount_last_success_ts.labels(**labels).set(timestamp)
+                if ok:
+                    mount_last_success_ts.labels(**labels).set(timestamp)
+                else:
+                    mount_data_rate_gbps.labels(**labels).set(
+                        float(gbps) if gbps is not None else 0.0
+                    )
+                    if ping_ms is None:
+                        mount_ping_ms.labels(**labels).set(_timeout_ping_ms())
+                    if meta_ms is None:
+                        mount_metadata_latency_ms.labels(**labels).set(
+                            _timeout_metadata_ms()
+                        )
 
 
 if __name__ == "__main__":  # pragma: no cover - process entrypoint

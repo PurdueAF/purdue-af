@@ -478,6 +478,30 @@ serverFiles:
                 requested CPU/RAM/GPU, or a volume that will not bind.
                 Check: kubectl -n cms describe pod {{ $labels.pod }}
 
+      # Do users have worker capacity? -------------------------------------
+      - name: af-compute
+        rules:
+          # AF session/Dask nodes carry hub.jupyter.org/dedicated=cms-af.
+          # Mount metrics are deliberately null on NotReady nodes, so without
+          # this alert a power loss / drain looks like "storage is fine".
+          - alert: AFProdNodesNotReady
+            expr: >
+              (kube_node_status_condition{condition="Ready", status="true"} == 0)
+              * on(node) group_left()
+              kube_node_spec_taint{key="hub.jupyter.org/dedicated", value="cms-af"}
+            for: 10m
+            labels:
+              severity: error
+              component: compute
+            annotations:
+              summary: "AF worker node {{ $labels.node }} is NotReady"
+              description: >
+                Node {{ $labels.node }} has been NotReady for 10 minutes.
+                Sessions and Dask workers cannot land there. If many nodes fire
+                together, treat it as a site / power / network outage rather
+                than a single machine fault.
+                Check: kubectl get node {{ $labels.node }}
+
       # Can users read data? ------------------------------------------------
       - name: af-data
         rules:
@@ -486,8 +510,9 @@ serverFiles:
           # the monitor is never reported as a storage outage.
           #
           # NotReady / drained nodes publish no mount gauges at all (null) —
-          # they must not appear here. Red is only a completed failing check
-          # on a Ready node (valid=0, fresh=1).
+          # they must not appear here (see AFProdNodesNotReady). Red is a
+          # completed failing check on a Ready node (valid=0, fresh=1),
+          # including timeouts and last-known failures that have gone stale.
           - alert: AFMountInvalid
             expr: af_node_mount_valid{node_pool="prod"} == 0 and af_node_mount_result_fresh{node_pool="prod"} == 1
             for: 10m
@@ -497,24 +522,24 @@ serverFiles:
             annotations:
               summary: "{{ $labels.mount_name }} is failing on node {{ $labels.exported_node }}"
               description: >
-                The mount check completed and failed for 10 minutes. Sessions and
-                Dask workers on this node may be unable to read that storage. If
-                this spans most nodes, treat it as a storage-system or network
+                Data access check for {{ $labels.mount_name }} completed and
+                failed for 10 minutes (includes timeouts). Sessions and Dask
+                workers on this node may be unable to use that path. If this
+                spans most Ready nodes, treat it as a storage-system or network
                 problem rather than a node problem.
                 Check: kubectl -n cms logs -l app=af-node-monitor
           - alert: AFMountHealthUnknown
             expr: af_node_mount_result_fresh{node_pool="prod"} == 0
-            for: 30m
+            for: 10m
             labels:
               severity: warning
               component: data
             annotations:
-              summary: "Storage health unknown for {{ $labels.mount_name }} on node {{ $labels.exported_node }}"
+              summary: "Data access unknown for {{ $labels.mount_name }} on node {{ $labels.exported_node }}"
               description: >
-                The node is Ready but no usable check result for 30 minutes
-                (stale result or Job never finished). Offline / NotReady nodes
-                publish no mount series at all — they will not appear here.
-                This says nothing about the storage itself.
+                The node is Ready but no usable check result for 10 minutes
+                (never reported, or last success went stale). Offline /
+                NotReady nodes publish no series — they will not appear here.
                 Check: kubectl -n cms get jobs -l app=af-node-monitor
           # Healthy metadata latency across all 17 nodes sits at p50 ~60 ms,
           # p90 ~350 ms, worst ~906 ms. The probe reports its timeout value

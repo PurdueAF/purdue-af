@@ -10,8 +10,8 @@ Three rules shape the output:
   that still affect users (slow storage, monitor gaps) yield **Impaired** —
   between healthy and broken — so the headline stays honest without crying wolf.
 * A signal that could not be collected is ``unknown``, never ``ok`` — the
-  storage checks in particular go blank when they cannot be scheduled, which
-  says nothing about the storage itself.
+  data-access checks in particular go blank when they cannot be scheduled,
+  which says nothing about the storage itself.
 * Every firing alert a user may see is listed under its component; "Normal"
   only covers components with nothing firing at all.
 
@@ -34,7 +34,8 @@ EASTERN = ZoneInfo("America/New_York")
 # up, under its raw component name, so a new alert is never silently dropped.
 COMPONENT_TITLES = {
     "access": "Facility access",
-    "data": "Storage",
+    "compute": "Compute capacity",
+    "data": "Data access",
     "scale-out": "Scale-out",
     "environment": "Software environment",
     "storage": "User storage",
@@ -81,11 +82,22 @@ async def _scalar(client: httpx.AsyncClient, expr: str) -> Optional[float]:
         return None
 
 
+def _node_names(series: list[dict[str, Any]]) -> list[str]:
+    """Mount alerts use exported_node; kube-state uses node."""
+    return sorted(
+        {
+            s["metric"].get("exported_node") or s["metric"].get("node", "")
+            for s in series
+        }
+        - {""}
+    )
+
+
 def _describe(alertname: str, series: list[dict[str, Any]]) -> str:
     """One line per alert, in facility terms rather than metric terms."""
     count = len(series)
     mounts = sorted({s["metric"].get("mount_name", "") for s in series} - {""})
-    nodes = sorted({s["metric"].get("exported_node", "") for s in series} - {""})
+    nodes = _node_names(series)
     where = f"{len(nodes)} node{'s' if len(nodes) != 1 else ''}"
     widespread = len(nodes) > 2
     scope_system = (
@@ -94,7 +106,7 @@ def _describe(alertname: str, series: list[dict[str, Any]]) -> str:
         if widespread
         else "on a single machine"
     )
-    mount_list = ", ".join(mounts) or "storage"
+    mount_list = ", ".join(mounts) or "a data path"
 
     if alertname == "AFMountInvalid":
         return f"{mount_list} failing on {where}, {scope_system}"
@@ -106,9 +118,17 @@ def _describe(alertname: str, series: list[dict[str, Any]]) -> str:
         )
     if alertname == "AFMountHealthUnknown":
         return (
-            f"storage checks have not reported on {len(nodes)} Ready node"
+            f"data-access checks have not reported on {len(nodes)} Ready node"
             f"{'s' if len(nodes) != 1 else ''} — state is unknown there "
-            "(not the same as a failed mount check, and offline nodes are omitted)"
+            "(not the same as a failed check, and offline nodes are omitted)"
+        )
+    if alertname == "AFProdNodesNotReady":
+        listed = ", ".join(nodes[:8])
+        more = f" (+{len(nodes) - 8} more)" if len(nodes) > 8 else ""
+        return (
+            f"{len(nodes)} worker node{'s' if len(nodes) != 1 else ''} NotReady"
+            f"{f' ({listed}{more})' if listed else ''} — "
+            "sessions and Dask workers cannot run on them"
         )
     if alertname == "AFHubDown":
         return "the hub is not responding; sessions cannot be started or reached"
@@ -122,7 +142,7 @@ def _describe(alertname: str, series: list[dict[str, Any]]) -> str:
         return "the shared pixi environment is not in sync with the AF repository"
     if alertname == "AFNodeMonitorStale":
         return (
-            "storage health checks have not completed recently — "
+            "data-access health checks have not completed recently — "
             "mount state may be stale"
         )
     return alertname
@@ -134,8 +154,9 @@ def register(mcp: Any) -> None:
         """Report whether the Purdue Analysis Facility is healthy right now.
 
         Summarises the alerts Prometheus is evaluating across facility access,
-        storage, scale-out and the software environment, plus the calling
-        user's own storage quota, plus what has fired in the last 6 hours.
+        compute capacity, data access, scale-out and the software environment,
+        plus the calling user's own storage quota, plus what has fired in the
+        last 6 hours.
 
         Use this for "is the AF healthy / is something broken / why is my
         session slow" questions before investigating anything specific.

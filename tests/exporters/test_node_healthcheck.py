@@ -346,7 +346,8 @@ def test_missing_result_with_active_job_is_never_started(metrics_env, monkeypatc
     assert sample("af_node_mount_timeout_total", check_type="job_never_started") == 1
 
 
-def test_stale_result(metrics_env, monkeypatch):
+def test_stale_success_is_unknown(metrics_env, monkeypatch):
+    """An old green result must not stay green — flip to unknown (fresh=0)."""
     monkeypatch.setattr(nh, "RESULT_STALE_WINDOW_S", 100.0)
     metrics_env("/depot/", "node-a", ok=True, timestamp=time.time() - 1000)
 
@@ -355,6 +356,26 @@ def test_stale_result(metrics_env, monkeypatch):
     assert sample("af_node_mount_valid") == 0
     assert sample("af_node_mount_result_fresh") == 0
     assert sample("af_node_mount_timeout_total", check_type="stale_result") == 1
+
+
+def test_stale_failure_stays_red(metrics_env, monkeypatch):
+    """EOS (and similar) timeouts that stop refreshing must keep fresh=1 so
+    AFMountInvalid keeps firing — not silently become unknown."""
+    monkeypatch.setattr(nh, "RESULT_STALE_WINDOW_S", 100.0)
+    metrics_env(
+        "/depot/",
+        "node-a",
+        ok=False,
+        timeout=True,
+        timestamp=time.time() - 1000,
+        ping_ms=10000.0,
+    )
+
+    nh.update_metrics()
+
+    assert sample("af_node_mount_valid") == 0
+    assert sample("af_node_mount_result_fresh") == 1
+    assert sample("af_node_mount_timeout_total", check_type="job_result") == 1
 
 
 def test_not_ready_node_clears_gauges_to_null(metrics_env, monkeypatch):

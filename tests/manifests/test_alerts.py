@@ -73,6 +73,21 @@ def test_mount_invalid_requires_fresh_completed_check():
     assert "== 1" in invalid["expr"]
 
 
+def test_prod_nodes_not_ready_uses_cms_af_taint():
+    """NotReady AF capacity must page operators; mount gauges are null there."""
+    rule = next(r for r in rules() if r["alert"] == "AFProdNodesNotReady")
+    assert 'value="cms-af"' in rule["expr"], rule["expr"]
+    assert "kube_node_status_condition" in rule["expr"]
+    assert rule["labels"]["component"] == "compute"
+    assert rule["labels"]["severity"] == "error"
+
+
+def test_mount_health_unknown_waits_ten_minutes():
+    """Unknown used to wait 30m while EOS timeouts sat pending; keep it short."""
+    unknown = next(r for r in rules() if r["alert"] == "AFMountHealthUnknown")
+    assert unknown["for"] == "10m"
+
+
 def test_mount_slow_excludes_the_probe_timeout_sentinel():
     """af-node-monitor reports its timeout value (10000 ms) as the latency when
     a check gives up; AFMountInvalid covers that case. Without the upper bound

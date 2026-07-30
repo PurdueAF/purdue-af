@@ -97,7 +97,7 @@ async def test_mount_slow_is_impaired_not_healthy(user_ctx):
     assert "**Healthy**" not in out
     assert "**Degraded**" not in out
     assert "Nothing is failing" not in out
-    assert "**Storage**" in out
+    assert "**Data access**" in out
     assert "eos is slow" in out
     assert "14 nodes" in out
     assert "will crawl" in out
@@ -128,6 +128,22 @@ async def test_error_degrades_the_facility(user_ctx):
         firing=[series("AFMountInvalid", "error", "data", mount_name="eos")]
     )
     assert "**Degraded**" in out
+
+
+@pytest.mark.asyncio
+async def test_not_ready_workers_degrade_compute_capacity(user_ctx):
+    """Offline AF nodes must show under compute — not look like healthy storage."""
+    many = [
+        series("AFProdNodesNotReady", "error", "compute", node=f"paf-{i}")
+        for i in range(9)
+    ]
+    out = await run(firing=many)
+    assert "**Degraded**" in out
+    assert "**Compute capacity**" in out
+    assert "9 worker nodes NotReady" in out
+    assert "sessions and Dask workers cannot run" in out
+    assert "facility access, data access" in out.lower()
+    assert "compute capacity" not in out.lower().split("normal:")[-1]
 
 
 @pytest.mark.asyncio
