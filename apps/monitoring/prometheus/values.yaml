@@ -507,10 +507,10 @@ serverFiles:
             annotations:
               summary: "Storage health unknown for {{ $labels.mount_name }} on node {{ $labels.exported_node }}"
               description: >
-                No usable check result for 30 minutes, usually because the check
-                could not be scheduled on that node. This says nothing about the
-                storage itself — it means we cannot tell.
-                Check: kubectl -n cms get jobs -l app=af-node-monitor
+                No usable check result for 30 minutes. Usually the check could
+                not be scheduled (node NotReady / drained / power loss) or the
+                result went stale — this says nothing about the storage itself.
+                Check: kubectl -n cms get nodes; kubectl -n cms get jobs -l app=af-node-monitor
           # Healthy metadata latency across all 17 nodes sits at p50 ~60 ms,
           # p90 ~350 ms, worst ~906 ms. The probe reports its timeout value
           # (10000 ms) when it gives up, and AFMountInvalid already covers that,

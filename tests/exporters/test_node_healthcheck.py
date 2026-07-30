@@ -82,6 +82,21 @@ class FakeBatchV1:
         self.deleted.append(name)
 
 
+@pytest.fixture(autouse=True)
+def clear_metrics():
+    for metric in (
+        nh.mount_valid,
+        nh.mount_ping_ms,
+        nh.mount_data_rate_gbps,
+        nh.mount_metadata_latency_ms,
+        nh.mount_result_fresh,
+        nh.mount_timeout_total,
+        nh.mount_last_success_ts,
+    ):
+        metric.clear()
+    yield
+
+
 @pytest.fixture
 def k8s(monkeypatch):
     """Wire fake k8s clients into the module and reset its mutable state."""
@@ -96,23 +111,11 @@ def k8s(monkeypatch):
         nh, "client", types.SimpleNamespace(V1DeleteOptions=lambda **kw: kw)
     )
     monkeypatch.setattr(nh, "_node_cache", [])
+    monkeypatch.setattr(nh, "_af_nodes_cache", [])
     monkeypatch.setattr(nh, "_last_node_refresh", 0.0)
     nh._last_job_start_ts.clear()
+    nh._node_pools.clear()
     return types.SimpleNamespace(core=core, batch=batch)
-
-
-@pytest.fixture(autouse=True)
-def clear_metrics():
-    for metric in (
-        nh.mount_valid,
-        nh.mount_ping_ms,
-        nh.mount_data_rate_gbps,
-        nh.mount_metadata_latency_ms,
-        nh.mount_timeout_total,
-        nh.mount_last_success_ts,
-    ):
-        metric.clear()
-    yield
 
 
 def sample(name, mount="/depot/", node="node-a", node_pool="prod", **extra):
@@ -201,6 +204,16 @@ def test_list_target_nodes_filters_not_ready(k8s):
     assert nh._list_target_nodes() == ["ready-1"]
 
 
+def test_list_af_nodes_includes_not_ready(k8s):
+    """Jobs skip NotReady nodes, but metrics must still see them — otherwise
+    last-known-good gauges freeze green while checks cannot run."""
+    k8s.core.nodes = [fake_node("ready-1"), fake_node("broken", ready=False)]
+    assert nh._list_af_nodes() == [
+        ("broken", "prod", False),
+        ("ready-1", "prod", True),
+    ]
+
+
 def test_list_target_nodes_is_cached(k8s):
     nh._list_target_nodes()
     first_calls = k8s.core.calls
@@ -212,6 +225,7 @@ def test_list_target_nodes_without_k8s(monkeypatch):
     monkeypatch.setattr(nh, "_k8s_ready", False)
     monkeypatch.setattr(nh, "_init_k8s", lambda: None)
     assert nh._list_target_nodes() == []
+    assert nh._list_af_nodes() == []
 
 
 # ── job orchestration ─────────────────────────────────────────────────────────
@@ -284,8 +298,9 @@ def metrics_env(monkeypatch, tmp_path):
     monkeypatch.setattr(nh, "RESULTS_DIR", tmp_path)
     monkeypatch.setattr(nh, "_ensure_jobs", lambda now: None)
     monkeypatch.setattr(nh, "_cleanup_finished_jobs", lambda now: None)
-    monkeypatch.setattr(nh, "_list_target_nodes", lambda: ["node-a"])
+    monkeypatch.setattr(nh, "_list_af_nodes", lambda: [("node-a", "prod", True)])
     monkeypatch.setattr(nh, "_list_active_job_keys", lambda: set())
+    nh._node_pools["node-a"] = "prod"
 
     def write(_mount, _node, **data):
         nh._result_path(_mount, _node).write_text(json.dumps(data))
@@ -307,6 +322,7 @@ def test_fresh_ok_result(metrics_env):
     nh.update_metrics()
 
     assert sample("af_node_mount_valid") == 1
+    assert sample("af_node_mount_result_fresh") == 1
     assert sample("af_node_mount_ping_ms") == 1.5
     assert sample("af_node_mount_metadata_latency_ms") == 20.0
     assert sample("af_node_mount_data_rate_gbps") == 8.2
@@ -317,6 +333,7 @@ def test_missing_result_reports_timeout_semantics(metrics_env):
     nh.update_metrics()
 
     assert sample("af_node_mount_valid") == 0
+    assert sample("af_node_mount_result_fresh") == 0
     assert sample("af_node_mount_ping_ms") == nh._timeout_ping_ms()
     assert sample("af_node_mount_timeout_total", check_type="no_recent_result") == 1
 
@@ -336,7 +353,33 @@ def test_stale_result(metrics_env, monkeypatch):
     nh.update_metrics()
 
     assert sample("af_node_mount_valid") == 0
+    assert sample("af_node_mount_result_fresh") == 0
     assert sample("af_node_mount_timeout_total", check_type="stale_result") == 1
+
+
+def test_not_ready_node_does_not_keep_last_good_green(metrics_env, monkeypatch):
+    """Power outage / NotReady: Jobs cannot start, so a recent-looking result
+    file must not keep af_node_mount_valid=1. Mark unknown (fresh=0) instead —
+    AFMountHealthUnknown, not AFMountInvalid."""
+    metrics_env(
+        "/depot/",
+        "node-a",
+        ok=True,
+        timestamp=time.time(),
+        ping_ms=1.0,
+        metadata_ms=10.0,
+        throughput_gbps=5.0,
+    )
+    monkeypatch.setattr(nh, "_list_af_nodes", lambda: [("node-a", "prod", False)])
+
+    nh.update_metrics()
+
+    assert sample("af_node_mount_valid") == 0
+    assert sample("af_node_mount_result_fresh") == 0
+    assert sample("af_node_mount_timeout_total", check_type="node_not_ready") == 1
+    # Jobs are only created for Ready nodes — update_metrics must not invent
+    # a "confirmed bad mount" signal that would fire AFMountInvalid.
+    assert sample("af_node_mount_result_fresh") == 0
 
 
 def test_timeout_result_uses_worst_case_latencies(metrics_env):
@@ -560,7 +603,7 @@ def test_cleanup_respects_success_retention(monkeypatch, k8s):
 
 
 def test_update_metrics_fallback_empty_nodes(metrics_env, monkeypatch):
-    monkeypatch.setattr(nh, "_list_target_nodes", lambda: [])
+    monkeypatch.setattr(nh, "_list_af_nodes", lambda: [])
     metrics_env(
         "/depot/",
         "",

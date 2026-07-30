@@ -241,7 +241,11 @@ _core_v1: client.CoreV1Api | None  # type: ignore[type-arg]
 _batch_v1: client.BatchV1Api | None  # type: ignore[type-arg]
 _k8s_ready: bool = False
 
+# Ready nodes only — Jobs are pinned to these.
 _node_cache: List[str] = []
+# All AF-labelled nodes as (name, pool, ready). Metrics must cover NotReady
+# nodes too: otherwise last-known-good gauges freeze green while jobs cannot run.
+_af_nodes_cache: List[tuple[str, str, bool]] = []
 _last_node_refresh: float = 0.0
 
 _last_job_start_ts: dict[str, dict[str, float]] = defaultdict(dict)
@@ -295,22 +299,32 @@ def _load_result(mount_name: str, node_name: str) -> Dict[str, Any] | None:
         return None
 
 
-# node name -> "prod" | "dev", filled by _list_target_nodes()
+# node name -> "prod" | "dev", filled by _refresh_node_caches()
 _node_pools: Dict[str, str] = {}
 
 
-def _list_target_nodes() -> List[str]:
-    """Return a cached list of Ready AF node names based on labels."""
+def _node_is_ready(node: Any) -> bool:
+    conditions = getattr(getattr(node, "status", None), "conditions", None) or []
+    for cond in conditions:
+        if (
+            getattr(cond, "type", "") == "Ready"
+            and getattr(cond, "status", "") == "True"
+        ):
+            return True
+    return False
+
+
+def _refresh_node_caches() -> None:
+    """Refresh Ready-only and all-AF-node caches from the API."""
     _init_k8s()
     if not _k8s_ready or _core_v1 is None:
-        return []
+        return
 
-    global _node_cache, _last_node_refresh
+    global _node_cache, _af_nodes_cache, _last_node_refresh
     now = time.time()
-    if _node_cache and (now - _last_node_refresh) < NODE_CACHE_TTL_S:
-        return _node_cache
+    if _af_nodes_cache and (now - _last_node_refresh) < NODE_CACHE_TTL_S:
+        return
 
-    names: set[str] = set()
     # Both pools are monitored. The pool is recorded per node so that alerts
     # and user-facing tools can tell them apart: a dev node failing is an
     # operator's problem, not a facility outage.
@@ -318,35 +332,62 @@ def _list_target_nodes() -> List[str]:
         ("cms-af-prod=true", "prod"),
         ("cms-af-dev=true", "dev"),
     ]
+    by_name: dict[str, tuple[str, bool]] = {}
     try:
         for selector, pool in label_sets:
             resp = _core_v1.list_node(label_selector=selector)
             for node in resp.items:
                 if not node.metadata or not node.metadata.name:
                     continue
-                conditions = getattr(node.status, "conditions", None)
-                if not conditions:
-                    continue
-                ready = False
-                for cond in conditions:
-                    if (
-                        getattr(cond, "type", "") == "Ready"
-                        and getattr(cond, "status", "") == "True"
-                    ):
-                        ready = True
-                        break
-                if ready:
-                    names.add(node.metadata.name)
-                    # first match wins: a node labelled both is production
-                    _node_pools.setdefault(node.metadata.name, pool)
+                name = node.metadata.name
+                ready = _node_is_ready(node)
+                # first match wins: a node labelled both is production
+                if name not in by_name:
+                    by_name[name] = (pool, ready)
+                    _node_pools[name] = pool
     except ApiException as e:  # type: ignore[misc]
         print(f"[node_healthcheck] Error listing nodes: {e}")
+        return
     except Exception as e:  # pragma: no cover - defensive
         print(f"[node_healthcheck] Unexpected error listing nodes: {e}")
+        return
 
-    _node_cache = sorted(names)
+    _af_nodes_cache = sorted(
+        ((name, pool, ready) for name, (pool, ready) in by_name.items()),
+        key=lambda row: row[0],
+    )
+    _node_cache = [name for name, _pool, ready in _af_nodes_cache if ready]
     _last_node_refresh = now
+
+
+def _list_target_nodes() -> List[str]:
+    """Return Ready AF node names — Jobs are only scheduled on these."""
+    _refresh_node_caches()
+    if not _k8s_ready or _core_v1 is None:
+        return []
     return _node_cache
+
+
+def _list_af_nodes() -> List[tuple[str, str, bool]]:
+    """Return all AF-labelled nodes as (name, pool, ready).
+
+    Metrics are published for NotReady nodes too so last-known-good results
+    cannot freeze as green while checks cannot run.
+    """
+    _refresh_node_caches()
+    if not _k8s_ready or _core_v1 is None:
+        return []
+    return _af_nodes_cache
+
+
+def _publish_unusable(labels: dict[str, str], check_type: str) -> None:
+    """Mark a mount check as not usable — unknown, not a confirmed failure."""
+    mount_valid.labels(**labels).set(0)
+    mount_ping_ms.labels(**labels).set(_timeout_ping_ms())
+    mount_metadata_latency_ms.labels(**labels).set(_timeout_metadata_ms())
+    mount_data_rate_gbps.labels(**labels).set(0.0)
+    mount_result_fresh.labels(**labels).set(0)
+    mount_timeout_total.labels(check_type=check_type, **labels).inc()
 
 
 def _has_active_job(mount_name: str, node_name: str) -> bool:
@@ -687,15 +728,30 @@ def update_metrics() -> None:
     # Explicitly clean up finished Jobs after a short retention.
     _cleanup_finished_jobs(now)
 
-    nodes = _list_target_nodes()
-    if not nodes:
+    af_nodes = _list_af_nodes()
+    if not af_nodes:
         # Fallback: still try to read legacy per-mount results.
-        nodes = [""]
+        af_nodes = [("", "prod", True)]
     active_job_keys = _list_active_job_keys()
 
     for m_name, cfg in MOUNTS.items():
         mount_path = cfg["mount_path"]
-        for node_name in nodes:
+        for node_name, pool, ready in af_nodes:
+            labels = {
+                "mount_name": m_name,
+                "mount_path": mount_path,
+                "node": node_name or "unknown",
+                "node_pool": pool,
+            }
+
+            # NotReady nodes cannot schedule Jobs. Without this branch the last
+            # successful gauge values freeze green indefinitely — the failure
+            # mode during a power outage / node drain.
+            if node_name and not ready:
+                labels["node"] = node_name
+                _publish_unusable(labels, "node_not_ready")
+                continue
+
             data = _load_result(m_name, node_name)
             # Use node from result JSON (job pod's node); fallback to discovery
             # so the metric always reflects the node that produced the data.
@@ -707,7 +763,7 @@ def update_metrics() -> None:
                 "mount_name": m_name,
                 "mount_path": mount_path,
                 "node": node_for_label,
-                "node_pool": _node_pools.get(node_for_label, "prod"),
+                "node_pool": _node_pools.get(node_for_label, pool),
             }
 
             if data and data.get("_storage_error"):
@@ -717,12 +773,6 @@ def update_metrics() -> None:
             if not data:
                 # No result yet: expose timeout semantics for latency/throughput gauges
                 # so alerts/dashboards see an explicit failure signal.
-                mount_valid.labels(**labels).set(0)
-                mount_ping_ms.labels(**labels).set(_timeout_ping_ms())
-                mount_metadata_latency_ms.labels(**labels).set(_timeout_metadata_ms())
-                mount_data_rate_gbps.labels(**labels).set(0.0)
-                mount_result_fresh.labels(**labels).set(0)
-
                 check_type = "no_recent_result"
                 mount_key = _sanitized_mount_name(m_name)
                 node_key = _sanitized_node_name(node_name)
@@ -730,18 +780,13 @@ def update_metrics() -> None:
                     # Distinguish the case where a Job exists but has not produced output
                     # yet (for example stuck Pending/ContainerCreating).
                     check_type = "job_never_started"
-                mount_timeout_total.labels(check_type=check_type, **labels).inc()
+                _publish_unusable(labels, check_type)
                 continue
 
             timestamp = float(data.get("timestamp", 0))
             # Consider stale if older than configured stale window
             if now - timestamp > RESULT_STALE_WINDOW_S:
-                mount_valid.labels(**labels).set(0)
-                mount_ping_ms.labels(**labels).set(_timeout_ping_ms())
-                mount_metadata_latency_ms.labels(**labels).set(_timeout_metadata_ms())
-                mount_data_rate_gbps.labels(**labels).set(0.0)
-                mount_result_fresh.labels(**labels).set(0)
-                mount_timeout_total.labels(check_type="stale_result", **labels).inc()
+                _publish_unusable(labels, "stale_result")
                 continue
 
             timeout = bool(data.get("timeout", False))
