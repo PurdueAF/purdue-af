@@ -357,10 +357,10 @@ def test_stale_result(metrics_env, monkeypatch):
     assert sample("af_node_mount_timeout_total", check_type="stale_result") == 1
 
 
-def test_not_ready_node_does_not_keep_last_good_green(metrics_env, monkeypatch):
-    """Power outage / NotReady: Jobs cannot start, so a recent-looking result
-    file must not keep af_node_mount_valid=1. Mark unknown (fresh=0) instead —
-    AFMountHealthUnknown, not AFMountInvalid."""
+def test_not_ready_node_clears_gauges_to_null(metrics_env, monkeypatch):
+    """Power outage / NotReady: Jobs cannot start. Drop gauges so Prometheus
+    scrapes null — not last-known-good green, and not a false red that would
+    fire AFMountInvalid (that requires fresh=1 after a completed check)."""
     metrics_env(
         "/depot/",
         "node-a",
@@ -370,16 +370,37 @@ def test_not_ready_node_does_not_keep_last_good_green(metrics_env, monkeypatch):
         metadata_ms=10.0,
         throughput_gbps=5.0,
     )
-    monkeypatch.setattr(nh, "_list_af_nodes", lambda: [("node-a", "prod", False)])
+    # First publish the green result while Ready…
+    nh.update_metrics()
+    assert sample("af_node_mount_valid") == 1
+    assert sample("af_node_mount_result_fresh") == 1
 
+    # …then the node goes NotReady: series must disappear.
+    monkeypatch.setattr(nh, "_list_af_nodes", lambda: [("node-a", "prod", False)])
     nh.update_metrics()
 
+    assert sample("af_node_mount_valid") is None
+    assert sample("af_node_mount_result_fresh") is None
+    assert sample("af_node_mount_metadata_latency_ms") is None
+    assert sample("af_node_mount_ping_ms") is None
+    assert sample("af_node_mount_data_rate_gbps") is None
+    assert sample("af_node_mount_last_success_timestamp_seconds") is None
+
+
+def test_completed_failure_on_ready_node_is_fresh_invalid(metrics_env):
+    """A finished check that failed is red: valid=0 with fresh=1 — the only
+    combination AFMountInvalid matches."""
+    metrics_env(
+        "/depot/",
+        "node-a",
+        ok=False,
+        timestamp=time.time(),
+        ping_ms=5.0,
+        metadata_ms=12.0,
+    )
+    nh.update_metrics()
     assert sample("af_node_mount_valid") == 0
-    assert sample("af_node_mount_result_fresh") == 0
-    assert sample("af_node_mount_timeout_total", check_type="node_not_ready") == 1
-    # Jobs are only created for Ready nodes — update_metrics must not invent
-    # a "confirmed bad mount" signal that would fire AFMountInvalid.
-    assert sample("af_node_mount_result_fresh") == 0
+    assert sample("af_node_mount_result_fresh") == 1
 
 
 def test_timeout_result_uses_worst_case_latencies(metrics_env):
@@ -390,18 +411,31 @@ def test_timeout_result_uses_worst_case_latencies(metrics_env):
     nh.update_metrics()
 
     assert sample("af_node_mount_valid") == 0  # timeout invalidates ok
+    assert sample("af_node_mount_result_fresh") == 1  # completed check → red, not null
     assert sample("af_node_mount_ping_ms") == 2.0  # partial measurement kept
     assert sample("af_node_mount_metadata_latency_ms") == nh._timeout_metadata_ms()
     assert sample("af_node_mount_data_rate_gbps") == 0.0
     assert sample("af_node_mount_timeout_total", check_type="job_result") == 1
 
 
-def test_storage_error_skips_metrics_entirely(metrics_env, tmp_path):
-    nh._result_path("/depot/", "node-a").mkdir()  # triggers _storage_error
+def test_storage_error_clears_gauges_to_null(metrics_env):
+    # Seed a green series, then a storage error must wipe it (not leave green).
+    metrics_env(
+        "/depot/",
+        "node-a",
+        ok=True,
+        timestamp=time.time(),
+        ping_ms=1.0,
+    )
+    nh.update_metrics()
+    assert sample("af_node_mount_valid") == 1
 
+    nh._result_path("/depot/", "node-a").unlink()
+    nh._result_path("/depot/", "node-a").mkdir()  # triggers _storage_error
     nh.update_metrics()
 
-    assert sample("af_node_mount_valid") is None  # nothing reported
+    assert sample("af_node_mount_valid") is None
+    assert sample("af_node_mount_result_fresh") is None
 
 
 def test_node_label_prefers_result_json(metrics_env):

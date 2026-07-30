@@ -198,8 +198,9 @@ try:
 
     mount_result_fresh = Gauge(
         "af_node_mount_result_fresh",
-        "1 when af_node_mount_valid reflects a recent completed check, 0 when no "
-        "usable result exists (so `valid` is unknown rather than bad)",
+        "1 when af_node_mount_valid reflects a recent completed check on a Ready "
+        "node, 0 when the node is Ready but no usable result exists (unknown). "
+        "Series are absent (null) for NotReady nodes",
         ["mount_name", "mount_path", "node", "node_pool"],
     )
 
@@ -371,8 +372,8 @@ def _list_target_nodes() -> List[str]:
 def _list_af_nodes() -> List[tuple[str, str, bool]]:
     """Return all AF-labelled nodes as (name, pool, ready).
 
-    Metrics are published for NotReady nodes too so last-known-good results
-    cannot freeze as green while checks cannot run.
+    NotReady nodes are included so their last-known-good gauges can be cleared
+    (null in Prometheus) rather than freezing green while Jobs cannot run.
     """
     _refresh_node_caches()
     if not _k8s_ready or _core_v1 is None:
@@ -380,8 +381,37 @@ def _list_af_nodes() -> List[tuple[str, str, bool]]:
     return _af_nodes_cache
 
 
+def _clear_mount_gauges(labels: dict[str, str]) -> None:
+    """Drop status gauges for a mount/node so scrapes show null, not stale values.
+
+    Counters are left alone — they are cumulative and do not drive green/red.
+    """
+    labelvalues = (
+        labels["mount_name"],
+        labels["mount_path"],
+        labels["node"],
+        labels["node_pool"],
+    )
+    for gauge in (
+        mount_valid,
+        mount_ping_ms,
+        mount_data_rate_gbps,
+        mount_metadata_latency_ms,
+        mount_result_fresh,
+        mount_last_success_ts,
+    ):
+        try:
+            gauge.remove(*labelvalues)
+        except KeyError:
+            pass
+
+
 def _publish_unusable(labels: dict[str, str], check_type: str) -> None:
-    """Mark a mount check as not usable — unknown, not a confirmed failure."""
+    """Ready node, but no usable check — unknown (fresh=0), not a confirmed failure.
+
+    Confirmed failures set valid=0 with fresh=1 after a completed check. That is
+    what turns dashboards/alerts red; this path must not.
+    """
     mount_valid.labels(**labels).set(0)
     mount_ping_ms.labels(**labels).set(_timeout_ping_ms())
     mount_metadata_latency_ms.labels(**labels).set(_timeout_metadata_ms())
@@ -744,12 +774,12 @@ def update_metrics() -> None:
                 "node_pool": pool,
             }
 
-            # NotReady nodes cannot schedule Jobs. Without this branch the last
-            # successful gauge values freeze green indefinitely — the failure
-            # mode during a power outage / node drain.
+            # NotReady: Jobs cannot run. Clear gauges so Prometheus/Grafana see
+            # null (gap), not last-known-good green and not a false red. Red is
+            # reserved for a completed failing check on a Ready node (fresh=1).
             if node_name and not ready:
                 labels["node"] = node_name
-                _publish_unusable(labels, "node_not_ready")
+                _clear_mount_gauges(labels)
                 continue
 
             data = _load_result(m_name, node_name)
@@ -767,7 +797,8 @@ def update_metrics() -> None:
             }
 
             if data and data.get("_storage_error"):
-                # Results PVC is unavailable; skip metrics entirely so they appear empty.
+                # Results PVC is unavailable; drop series so they appear empty.
+                _clear_mount_gauges(labels)
                 continue
 
             if not data:

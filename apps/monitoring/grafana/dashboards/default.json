@@ -1060,7 +1060,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (exported_node) (af_node_mount_metadata_latency_ms{mount_name=\"/depot/\"})",
+          "expr": "sum by (exported_node) (af_node_mount_metadata_latency_ms{mount_name=\"/depot/\"} and on(exported_node, mount_name) (af_node_mount_result_fresh{mount_name=\"/depot/\"} == 1))",
           "interval": "5m",
           "legendFormat": "{{ exported_node }}",
           "range": true,
@@ -1145,7 +1145,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (exported_node) (af_node_mount_metadata_latency_ms{mount_name=\"/work/\"})",
+          "expr": "sum by (exported_node) (af_node_mount_metadata_latency_ms{mount_name=\"/work/\"} and on(exported_node, mount_name) (af_node_mount_result_fresh{mount_name=\"/work/\"} == 1))",
           "interval": "5m",
           "legendFormat": "{{ exported_node }}",
           "range": true,
@@ -1230,7 +1230,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (exported_node) (af_node_mount_metadata_latency_ms{mount_name=\"eos\"})",
+          "expr": "sum by (exported_node) (af_node_mount_metadata_latency_ms{mount_name=\"eos\"} and on(exported_node, mount_name) (af_node_mount_result_fresh{mount_name=\"eos\"} == 1))",
           "interval": "5m",
           "legendFormat": "{{ exported_node }}",
           "range": true,
@@ -1315,7 +1315,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (exported_node) (af_node_mount_metadata_latency_ms{mount_name=\"cvmfs\"})",
+          "expr": "sum by (exported_node) (af_node_mount_metadata_latency_ms{mount_name=\"cvmfs\"} and on(exported_node, mount_name) (af_node_mount_result_fresh{mount_name=\"cvmfs\"} == 1))",
           "interval": "5m",
           "legendFormat": "{{ exported_node }}",
           "range": true,

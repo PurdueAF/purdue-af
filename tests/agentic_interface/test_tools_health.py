@@ -78,7 +78,8 @@ async def test_warning_alone_does_not_degrade_the_facility(user_ctx):
 async def test_unknown_storage_is_not_reported_as_healthy(user_ctx):
     out = await run(firing=[series("AFMountHealthUnknown", "warning", "data")])
     assert "**Partly unknown**" in out
-    assert "not the same as broken" in out
+    assert "unknown" in out
+    assert "offline nodes are omitted" in out
 
 
 @pytest.mark.asyncio

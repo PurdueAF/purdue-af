@@ -484,6 +484,10 @@ serverFiles:
           # `valid == 0` alone is ambiguous: it also means the check never ran.
           # af_node_mount_result_fresh separates the two so a scheduling gap in
           # the monitor is never reported as a storage outage.
+          #
+          # NotReady / drained nodes publish no mount gauges at all (null) —
+          # they must not appear here. Red is only a completed failing check
+          # on a Ready node (valid=0, fresh=1).
           - alert: AFMountInvalid
             expr: af_node_mount_valid{node_pool="prod"} == 0 and af_node_mount_result_fresh{node_pool="prod"} == 1
             for: 10m
@@ -507,10 +511,11 @@ serverFiles:
             annotations:
               summary: "Storage health unknown for {{ $labels.mount_name }} on node {{ $labels.exported_node }}"
               description: >
-                No usable check result for 30 minutes. Usually the check could
-                not be scheduled (node NotReady / drained / power loss) or the
-                result went stale — this says nothing about the storage itself.
-                Check: kubectl -n cms get nodes; kubectl -n cms get jobs -l app=af-node-monitor
+                The node is Ready but no usable check result for 30 minutes
+                (stale result or Job never finished). Offline / NotReady nodes
+                publish no mount series at all — they will not appear here.
+                This says nothing about the storage itself.
+                Check: kubectl -n cms get jobs -l app=af-node-monitor
           # Healthy metadata latency across all 17 nodes sits at p50 ~60 ms,
           # p90 ~350 ms, worst ~906 ms. The probe reports its timeout value
           # (10000 ms) when it gives up, and AFMountInvalid already covers that,

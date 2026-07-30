@@ -64,6 +64,15 @@ def test_hub_alert_is_scoped_to_this_environment():
     )
 
 
+def test_mount_invalid_requires_fresh_completed_check():
+    """Red (AFMountInvalid) is only a finished failing check — never a missing
+    series from a NotReady node (those publish null and do not match)."""
+    invalid = next(r for r in rules() if r["alert"] == "AFMountInvalid")
+    assert "af_node_mount_valid" in invalid["expr"]
+    assert "af_node_mount_result_fresh" in invalid["expr"]
+    assert "== 1" in invalid["expr"]
+
+
 def test_mount_slow_excludes_the_probe_timeout_sentinel():
     """af-node-monitor reports its timeout value (10000 ms) as the latency when
     a check gives up; AFMountInvalid covers that case. Without the upper bound

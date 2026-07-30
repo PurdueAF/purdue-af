@@ -106,9 +106,9 @@ def _describe(alertname: str, series: list[dict[str, Any]]) -> str:
         )
     if alertname == "AFMountHealthUnknown":
         return (
-            f"storage checks have not reported on {len(nodes)} node"
-            f"{'s' if len(nodes) != 1 else ''} — their state is unknown, which is "
-            "not the same as broken"
+            f"storage checks have not reported on {len(nodes)} Ready node"
+            f"{'s' if len(nodes) != 1 else ''} — state is unknown there "
+            "(not the same as a failed mount check, and offline nodes are omitted)"
         )
     if alertname == "AFHubDown":
         return "the hub is not responding; sessions cannot be started or reached"
