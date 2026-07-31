@@ -87,9 +87,7 @@ async def test_mount_slow_is_impaired_not_healthy(user_ctx):
     """Elevated metadata latency is felt by users; reporting Healthy with a
     buried warning is how the MCP used to miss EOS slowdowns."""
     many = [
-        series(
-            "AFMountSlow", "warning", "data", mount_name="eos", node=f"n{i}"
-        )
+        series("AFMountSlow", "warning", "data", mount_name="eos", node=f"n{i}")
         for i in range(14)
     ]
     out = await run(firing=many)
@@ -150,18 +148,14 @@ async def test_not_ready_workers_degrade_compute_capacity(user_ctx):
 async def test_widespread_failure_reads_as_a_system_problem(user_ctx):
     """Storage rarely breaks on one machine; the wording has to distinguish."""
     many = [
-        series(
-            "AFMountInvalid", "error", "data", mount_name="eos", node=f"n{i}"
-        )
+        series("AFMountInvalid", "error", "data", mount_name="eos", node=f"n{i}")
         for i in range(14)
     ]
     out = await run(firing=many)
     assert "14 nodes" in out
     assert "storage-system or network" in out
 
-    one = [
-        series("AFMountInvalid", "error", "data", mount_name="eos", node="n1")
-    ]
+    one = [series("AFMountInvalid", "error", "data", mount_name="eos", node="n1")]
     out = await run(firing=one)
     assert "single machine" in out
 
@@ -235,9 +229,7 @@ async def test_dev_hardware_is_invisible_to_users(user_ctx):
     out = await run(
         firing=[
             series("AFMountInvalidDev", "warning", "dev", node="a337"),
-            series(
-                "AFMountInvalid", "error", "data", node_pool="dev", node="a337"
-            ),
+            series("AFMountInvalid", "error", "data", node_pool="dev", node="a337"),
         ]
     )
     assert "**Healthy**" in out

@@ -96,7 +96,6 @@ def _node_names(series: list[dict[str, Any]]) -> list[str]:
     return sorted(names - {""})
 
 
-
 def _describe(alertname: str, series: list[dict[str, Any]]) -> str:
     """One line per alert, in facility terms rather than metric terms."""
     count = len(series)
