@@ -64,6 +64,14 @@ def test_hub_alert_is_scoped_to_this_environment():
     )
 
 
+def test_mount_invalid_is_a_warning_not_an_error():
+    """Transient storage failures must not flip Facility health / MCP Degraded."""
+    invalid = next(r for r in rules() if r["alert"] == "AFMountInvalid")
+    assert invalid["labels"]["severity"] == "warning"
+    slow = next(r for r in rules() if r["alert"] == "AFMountSlow")
+    assert slow["labels"]["severity"] == "warning"
+
+
 def test_mount_invalid_requires_fresh_completed_check():
     """Red (AFMountInvalid) is only a finished failing check — never a missing
     series from a NotReady node (those publish null and do not match)."""

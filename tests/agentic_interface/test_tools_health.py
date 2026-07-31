@@ -3,8 +3,9 @@
 The tool reads whatever Prometheus is firing, so these stub Prometheus and
 assert on the resulting prose. Properties that matter more than wording:
 a warning must not make the facility look **Degraded**, storage slowness
-must show as **Impaired** with a per-component line, an unknown must not look
-healthy, and no other user's alert may ever appear."""
+must show as **Impaired** with a per-component line, mount failures are
+warnings (Impaired) not errors, an unknown must not look healthy, and no
+other user's alert may ever appear."""
 
 import time
 
@@ -122,10 +123,20 @@ async def test_own_quota_warning_does_not_impair_the_facility(user_ctx):
 
 @pytest.mark.asyncio
 async def test_error_degrades_the_facility(user_ctx):
-    out = await run(
-        firing=[series("AFMountInvalid", "error", "data", mount_name="eos")]
-    )
+    out = await run(firing=[series("AFHubDown", "critical", "access")])
     assert "**Degraded**" in out
+
+
+@pytest.mark.asyncio
+async def test_mount_invalid_is_impaired_not_degraded(user_ctx):
+    """Mount failures are often transient EOS/NFS blips — warn, don't page
+    the facility as Degraded."""
+    out = await run(
+        firing=[series("AFMountInvalid", "warning", "data", mount_name="eos")]
+    )
+    assert "**Impaired**" in out
+    assert "**Degraded**" not in out
+    assert "**Data access**" in out
 
 
 @pytest.mark.asyncio
@@ -148,14 +159,16 @@ async def test_not_ready_workers_degrade_compute_capacity(user_ctx):
 async def test_widespread_failure_reads_as_a_system_problem(user_ctx):
     """Storage rarely breaks on one machine; the wording has to distinguish."""
     many = [
-        series("AFMountInvalid", "error", "data", mount_name="eos", node=f"n{i}")
+        series("AFMountInvalid", "warning", "data", mount_name="eos", node=f"n{i}")
         for i in range(14)
     ]
     out = await run(firing=many)
     assert "14 nodes" in out
     assert "storage-system or network" in out
+    assert "**Impaired**" in out
+    assert "**Degraded**" not in out
 
-    one = [series("AFMountInvalid", "error", "data", mount_name="eos", node="n1")]
+    one = [series("AFMountInvalid", "warning", "data", mount_name="eos", node="n1")]
     out = await run(firing=one)
     assert "single machine" in out
 
@@ -190,7 +203,7 @@ async def test_times_are_eastern_and_labelled(user_ctx):
         {"metric": {"alertname": "AFMountInvalid"}, "value": [NOW, str(NOW - 7200)]}
     ]
     out = await run(
-        firing=[series("AFMountInvalid", "error", "data", mount_name="eos")],
+        firing=[series("AFMountInvalid", "warning", "data", mount_name="eos")],
         since=since,
     )
     assert " ET, " in out
@@ -216,7 +229,7 @@ async def test_monitoring_outage_is_not_a_health_claim(user_ctx):
 async def test_output_avoids_internal_mechanics(user_ctx):
     """Users get facility facts, not the monitoring implementation."""
     out = await run(
-        firing=[series("AFMountInvalid", "error", "data", mount_name="eos")]
+        firing=[series("AFMountInvalid", "warning", "data", mount_name="eos")]
     )
     for jargon in ("probe", "Prometheus", "af_node_mount", "kubectl", "Job"):
         assert jargon not in out
@@ -229,7 +242,7 @@ async def test_dev_hardware_is_invisible_to_users(user_ctx):
     out = await run(
         firing=[
             series("AFMountInvalidDev", "warning", "dev", node="a337"),
-            series("AFMountInvalid", "error", "data", node_pool="dev", node="a337"),
+            series("AFMountInvalid", "warning", "data", node_pool="dev", node="a337"),
         ]
     )
     assert "**Healthy**" in out

@@ -515,23 +515,24 @@ serverFiles:
           # the monitor is never reported as a storage outage.
           #
           # NotReady / drained nodes publish no mount gauges at all (null) —
-          # they must not appear here (see AFProdNodesNotReady). Red is a
-          # completed failing check on a Ready node (valid=0, fresh=1),
-          # including timeouts and last-known failures that have gone stale.
+          # they must not appear here (see AFProdNodesNotReady). A completed
+          # failing check on a Ready node (valid=0, fresh=1) is a warning —
+          # EOS/NFS/CVMFS blips are common and must not flip facility health
+          # to Degraded the way hub-down or NotReady workers do.
           - alert: AFMountInvalid
             expr: af_node_mount_valid{node_pool="prod"} == 0 and af_node_mount_result_fresh{node_pool="prod"} == 1
             for: 10m
             labels:
-              severity: error
+              severity: warning
               component: data
             annotations:
               summary: "{{ $labels.mount_name }} is failing on node {{ $labels.node }}"
               description: >
                 Data access check for {{ $labels.mount_name }} completed and
                 failed for 10 minutes (includes timeouts). Sessions and Dask
-                workers on this node may be unable to use that path. If this
-                spans most Ready nodes, treat it as a storage-system or network
-                problem rather than a node problem.
+                workers on this node may be unable to use that path. Storage
+                outages are often transient; treat a widespread firing as a
+                storage-system or network problem rather than a node problem.
                 Check: kubectl -n cms logs -l app=af-node-monitor
           - alert: AFMountHealthUnknown
             expr: af_node_mount_result_fresh{node_pool="prod"} == 0

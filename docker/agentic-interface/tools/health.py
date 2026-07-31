@@ -7,8 +7,9 @@ there is only ever one definition of "unhealthy".
 Three rules shape the output:
 
 * Only ``error``/``critical`` alerts make the facility **Degraded**. Warnings
-  that still affect users (slow storage, monitor gaps) yield **Impaired** —
-  between healthy and broken — so the headline stays honest without crying wolf.
+  that still affect users (failed or slow data access, monitor gaps) yield
+  **Impaired** — between healthy and broken — so the headline stays honest
+  without crying wolf over transient storage blips.
 * A signal that could not be collected is ``unknown``, never ``ok`` — the
   data-access checks in particular go blank when they cannot be scheduled,
   which says nothing about the storage itself.
