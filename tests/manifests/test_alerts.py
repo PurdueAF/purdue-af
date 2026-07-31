@@ -108,9 +108,7 @@ def test_af_pod_monitor_does_not_double_scrape_pixi_sync():
         if r.get("action") == "drop"
         and r.get("source_labels") == ["__meta_kubernetes_service_name"]
     ]
-    assert any(
-        "pixi-global-sync" in str(r.get("regex", "")) for r in drops
-    ), drops
+    assert any("pixi-global-sync" in str(r.get("regex", "")) for r in drops), drops
     assert any(j["job_name"] == "pixi-global-sync" for j in jobs)
 
 
@@ -128,9 +126,9 @@ def test_af_node_monitor_has_dedicated_scrape_without_pod_host():
         if r.get("action") == "drop"
         and r.get("source_labels") == ["__meta_kubernetes_service_name"]
     ]
-    assert any(
-        "af-node-monitor-service" in str(r.get("regex", "")) for r in drops
-    ), drops
+    assert any("af-node-monitor-service" in str(r.get("regex", "")) for r in drops), (
+        drops
+    )
 
 
 def test_pixi_daemon_stale_alert_uses_heartbeat():
