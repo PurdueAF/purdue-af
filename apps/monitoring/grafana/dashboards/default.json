@@ -3635,10 +3635,10 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
-      "description": "pixi-global-sync daemon keeping /work/pixi/global in sync with pixi/global on main. PAUSED = .sync-pause file present (manual work in progress).",
+      "description": "Live state of the pixi-global-sync daemon. 'in sync' / 'env healthy' are current truth, not proof of recent rebuilds (an unchanged lock stays in sync for days). 'daemon' is heartbeat freshness \u2014 red means the loop is stalled. 'last rebuild' is time since the last successful install (long ages are normal when the lock is unchanged). PAUSED = .sync-pause present.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3646,6 +3646,7 @@
           },
           "mappings": [
             {
+              "type": "value",
               "options": {
                 "0": {
                   "color": "red",
@@ -3657,8 +3658,7 @@
                   "index": 1,
                   "text": "OK"
                 }
-              },
-              "type": "value"
+              }
             }
           ],
           "noValue": "NO DATA",
@@ -3667,7 +3667,11 @@
             "steps": [
               {
                 "color": "red",
-                "value": 0
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
               }
             ]
           }
@@ -3683,6 +3687,7 @@
                 "id": "mappings",
                 "value": [
                   {
+                    "type": "value",
                     "options": {
                       "0": {
                         "color": "green",
@@ -3692,12 +3697,81 @@
                       "1": {
                         "color": "orange",
                         "index": 1,
-                        "text": "PAUSED — manual work"
+                        "text": "PAUSED \u2014 manual work"
                       }
-                    },
-                    "type": "value"
+                    }
                   }
                 ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "daemon"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "color": "red",
+                        "index": 0,
+                        "text": "STALLED"
+                      },
+                      "1": {
+                        "color": "green",
+                        "index": 1,
+                        "text": "alive"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "last rebuild"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "mappings",
+                "value": []
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "blue",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 604800
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
               }
             ]
           }
@@ -3705,7 +3779,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 6,
+        "w": 8,
         "x": 0,
         "y": 119
       },
@@ -3732,82 +3806,105 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max(pixi_global_sync_in_sync{job=\"pixi-global-sync\"})",
-          "interval": "",
+          "expr": "clamp_max(max(pixi_global_sync_in_sync{job=\"pixi-global-sync\"}), 1)",
           "legendFormat": "in sync",
-          "refId": "A"
+          "refId": "A",
+          "instant": true
         },
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max(pixi_global_sync_env_healthy{job=\"pixi-global-sync\"})",
-          "interval": "",
+          "expr": "clamp_max(max(pixi_global_sync_env_healthy{job=\"pixi-global-sync\"}), 1)",
           "legendFormat": "env healthy",
-          "refId": "B"
+          "refId": "B",
+          "instant": true
         },
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max(pixi_global_sync_paused{job=\"pixi-global-sync\"})",
-          "interval": "",
+          "expr": "clamp_max(max(pixi_global_sync_paused{job=\"pixi-global-sync\"}), 1)",
           "legendFormat": "sync mode",
-          "refId": "C"
+          "refId": "C",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "(time() - max(pixi_global_sync_loop_heartbeat_timestamp_seconds{job=\"pixi-global-sync\"})) < bool 300",
+          "legendFormat": "daemon",
+          "refId": "D",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "time() - max(pixi_global_sync_last_success_timestamp_seconds{job=\"pixi-global-sync\"})",
+          "legendFormat": "last rebuild",
+          "refId": "E",
+          "instant": true
         }
       ],
-      "title": "Global pixi env — sync status",
+      "title": "Global pixi env \u2014 sync status",
       "type": "stat"
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
-      "description": "One row per signal. Colored spans show state over time: red spans on 'in sync' are update windows or failing syncs; red on 'env healthy' means the live env failed import verification; orange on 'paused' is manual work (.sync-pause present).",
+      "description": "One row per signal over the selected range. Red on 'in sync' = drift / rebuild window; red on 'env healthy' = import verify failed; orange on 'sync mode' = .sync-pause; red on 'daemon' = heartbeat stalled. Gaps mean the metric was not scraped (pod/scrape down).",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
           "custom": {
-            "axisPlacement": "auto",
-            "fillOpacity": 72,
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
+            "fillOpacity": 80,
             "lineWidth": 0,
-            "spanNulls": false
+            "spanNulls": false,
+            "insertNulls": false
           },
           "mappings": [
             {
+              "type": "range",
               "options": {
-                "0": {
+                "from": null,
+                "to": 0.5,
+                "result": {
+                  "text": "PROBLEM",
                   "color": "red",
-                  "index": 0,
-                  "text": "PROBLEM"
-                },
-                "1": {
-                  "color": "green",
-                  "index": 1,
-                  "text": "OK"
+                  "index": 0
                 }
-              },
-              "type": "value"
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 0.5,
+                "to": null,
+                "result": {
+                  "text": "OK",
+                  "color": "green",
+                  "index": 1
+                }
+              }
             }
           ],
-          "noValue": "-",
+          "noValue": "no data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "transparent",
-                "value": 0
+                "value": null
               }
             ]
           }
@@ -3823,19 +3920,28 @@
                 "id": "mappings",
                 "value": [
                   {
+                    "type": "range",
                     "options": {
-                      "0": {
+                      "from": null,
+                      "to": 0.5,
+                      "result": {
+                        "text": "out of sync",
                         "color": "red",
-                        "index": 0,
-                        "text": "out of sync"
-                      },
-                      "1": {
-                        "color": "green",
-                        "index": 1,
-                        "text": "in sync"
+                        "index": 0
                       }
-                    },
-                    "type": "value"
+                    }
+                  },
+                  {
+                    "type": "range",
+                    "options": {
+                      "from": 0.5,
+                      "to": null,
+                      "result": {
+                        "text": "in sync",
+                        "color": "green",
+                        "index": 1
+                      }
+                    }
                   }
                 ]
               }
@@ -3851,19 +3957,28 @@
                 "id": "mappings",
                 "value": [
                   {
+                    "type": "range",
                     "options": {
-                      "0": {
+                      "from": null,
+                      "to": 0.5,
+                      "result": {
+                        "text": "UNHEALTHY",
                         "color": "red",
-                        "index": 0,
-                        "text": "UNHEALTHY"
-                      },
-                      "1": {
-                        "color": "green",
-                        "index": 1,
-                        "text": "healthy"
+                        "index": 0
                       }
-                    },
-                    "type": "value"
+                    }
+                  },
+                  {
+                    "type": "range",
+                    "options": {
+                      "from": 0.5,
+                      "to": null,
+                      "result": {
+                        "text": "healthy",
+                        "color": "green",
+                        "index": 1
+                      }
+                    }
                   }
                 ]
               }
@@ -3879,19 +3994,65 @@
                 "id": "mappings",
                 "value": [
                   {
+                    "type": "range",
                     "options": {
-                      "0": {
+                      "from": null,
+                      "to": 0.5,
+                      "result": {
+                        "text": "automatic",
                         "color": "green",
-                        "index": 0,
-                        "text": "automatic"
-                      },
-                      "1": {
-                        "color": "orange",
-                        "index": 1,
-                        "text": "PAUSED — manual work"
+                        "index": 0
                       }
-                    },
-                    "type": "value"
+                    }
+                  },
+                  {
+                    "type": "range",
+                    "options": {
+                      "from": 0.5,
+                      "to": null,
+                      "result": {
+                        "text": "PAUSED",
+                        "color": "orange",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "daemon"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "range",
+                    "options": {
+                      "from": null,
+                      "to": 0.5,
+                      "result": {
+                        "text": "STALLED",
+                        "color": "red",
+                        "index": 0
+                      }
+                    }
+                  },
+                  {
+                    "type": "range",
+                    "options": {
+                      "from": 0.5,
+                      "to": null,
+                      "result": {
+                        "text": "alive",
+                        "color": "green",
+                        "index": 1
+                      }
+                    }
                   }
                 ]
               }
@@ -3901,8 +4062,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 9,
-        "x": 6,
+        "w": 8,
+        "x": 8,
         "y": 119
       },
       "id": 53,
@@ -3914,11 +4075,9 @@
           "showLegend": false
         },
         "mergeValues": true,
-        "perPage": 20,
         "rowHeight": 0.85,
-        "showValue": "auto",
+        "showValue": "never",
         "tooltip": {
-          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
@@ -3930,8 +4089,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max(pixi_global_sync_in_sync{job=\"pixi-global-sync\"})",
-          "interval": "",
+          "expr": "(max(pixi_global_sync_in_sync{job=\"pixi-global-sync\"}) == bool 1)",
           "legendFormat": "in sync",
           "refId": "A"
         },
@@ -3940,8 +4098,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max(pixi_global_sync_env_healthy{job=\"pixi-global-sync\"})",
-          "interval": "",
+          "expr": "(max(pixi_global_sync_env_healthy{job=\"pixi-global-sync\"}) == bool 1)",
           "legendFormat": "env healthy",
           "refId": "B"
         },
@@ -3950,21 +4107,29 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max(pixi_global_sync_paused{job=\"pixi-global-sync\"})",
-          "interval": "",
+          "expr": "(max(pixi_global_sync_paused{job=\"pixi-global-sync\"}) == bool 1)",
           "legendFormat": "sync mode",
           "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((time() - max(pixi_global_sync_loop_heartbeat_timestamp_seconds{job=\"pixi-global-sync\"})) < bool 300)",
+          "legendFormat": "daemon",
+          "refId": "D"
         }
       ],
-      "title": "Global pixi env — sync/health history",
+      "title": "Global pixi env \u2014 sync/health history",
       "type": "state-timeline"
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
-      "description": "How often the env is being rebuilt and how long the last rebuild took. Left axis: syncs and failures per hour. Right axis: duration of the last sync (staging + install + verification).",
+      "description": "Rebuild activity. Blue/red bars are completed syncs and failures per hour (idle stretches with zero bars are normal when the lock is unchanged). Yellow markers are the duration of a sync that finished in that hour \u2014 not a continuous line (the underlying gauge is sticky last-value).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3978,8 +4143,8 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 8,
+            "drawStyle": "bars",
+            "fillOpacity": 60,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -3988,13 +4153,12 @@
             },
             "insertNulls": false,
             "lineInterpolation": "stepAfter",
-            "lineWidth": 2,
-            "pointSize": 5,
+            "lineWidth": 1,
+            "pointSize": 7,
             "scaleDistribution": {
               "type": "linear"
             },
             "showPoints": "never",
-            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -4012,7 +4176,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": 0
+                "value": null
               }
             ]
           },
@@ -4031,6 +4195,10 @@
                   "fixedColor": "blue",
                   "mode": "fixed"
                 }
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "bars"
               }
             ]
           },
@@ -4046,13 +4214,21 @@
                   "fixedColor": "red",
                   "mode": "fixed"
                 }
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "bars"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 40
               }
             ]
           },
           {
             "matcher": {
               "id": "byName",
-              "options": "last sync duration (right axis)"
+              "options": "sync duration"
             },
             "properties": [
               {
@@ -4072,11 +4248,16 @@
                 "value": "duration"
               },
               {
-                "id": "custom.lineStyle",
-                "value": {
-                  "dash": [4, 4],
-                  "fill": "dash"
-                }
+                "id": "custom.drawStyle",
+                "value": "points"
+              },
+              {
+                "id": "custom.showPoints",
+                "value": "always"
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 0
               },
               {
                 "id": "custom.fillOpacity",
@@ -4095,8 +4276,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 9,
-        "x": 15,
+        "w": 8,
+        "x": 16,
         "y": 119
       },
       "id": 54,
@@ -4108,7 +4289,6 @@
           "showLegend": true
         },
         "tooltip": {
-          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
@@ -4121,7 +4301,6 @@
             "uid": "prometheus"
           },
           "expr": "max(increase(pixi_global_sync_syncs_total{job=\"pixi-global-sync\"}[1h]))",
-          "interval": "",
           "legendFormat": "syncs / h",
           "refId": "A"
         },
@@ -4131,7 +4310,6 @@
             "uid": "prometheus"
           },
           "expr": "max(increase(pixi_global_sync_sync_failures_total{job=\"pixi-global-sync\"}[1h]))",
-          "interval": "",
           "legendFormat": "failures / h",
           "refId": "B"
         },
@@ -4140,13 +4318,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max(pixi_global_sync_last_sync_duration_seconds{job=\"pixi-global-sync\"})",
-          "interval": "",
-          "legendFormat": "last sync duration (right axis)",
+          "expr": "max(pixi_global_sync_last_sync_duration_seconds{job=\"pixi-global-sync\"}) and on() (max(increase(pixi_global_sync_syncs_total{job=\"pixi-global-sync\"}[1h])) > 0)",
+          "legendFormat": "sync duration",
           "refId": "C"
         }
       ],
-      "title": "Global pixi env — sync activity",
+      "title": "Global pixi env \u2014 sync activity",
       "type": "timeseries"
     }
   ],
@@ -4165,5 +4342,5 @@
   "timezone": "browser",
   "title": "Purdue Analysis Facility Dashboard",
   "uid": "purdue-af-dashboard",
-  "version": 13
+  "version": 14
 }

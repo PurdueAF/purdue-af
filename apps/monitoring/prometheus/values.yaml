@@ -210,6 +210,12 @@ serverFiles:
           - source_labels: [__meta_kubernetes_service_label_scrape_metrics]
             action: keep
             regex: "true"
+          # pixi-global-sync is scraped by the dedicated static job below —
+          # dropping it here avoids duplicate series (and the af-pod-monitor
+          # pod_node label) for the same metrics.
+          - source_labels: [__meta_kubernetes_service_name]
+            regex: "pixi-global-sync"
+            action: drop
           - source_labels: [__meta_kubernetes_pod_container_name]
             regex: "^chp$"
             action: drop
@@ -435,6 +441,21 @@ serverFiles:
                 No pixi_global_sync_* metrics for 1h — the reconciler pod is
                 down or its Service/scrape wiring is broken. The global env is
                 not being kept in sync while this persists.
+          - alert: AFGlobalEnvDaemonStale
+            # Metrics can still scrape while the loop is wedged; heartbeat age
+            # catches that case (absent metrics are AFGlobalEnvSyncDown).
+            expr: time() - pixi_global_sync_loop_heartbeat_timestamp_seconds > 900
+            for: 10m
+            labels:
+              severity: warning
+              component: environment
+            annotations:
+              summary: pixi-global-sync heartbeat is stale
+              description: |
+                The reconciler loop has not refreshed its heartbeat for 15+
+                minutes. Builds may be hung or the process wedged — the global
+                env is not being reconciled.
+                Check: kubectl logs deploy/pixi-global-sync
 
       # Can users get in? ---------------------------------------------------
       - name: af-access

@@ -95,7 +95,10 @@ spec:
           value: "cms-af"
           effect: "NoSchedule"
 ---
-# Scraped via the existing `scrape-metrics: "true"` ServiceMonitor.
+# Scraped by AF Prometheus via the dedicated `pixi-global-sync` static job
+# (apps/monitoring/prometheus/values.yaml). scrape-metrics keeps Rancher
+# Prometheus in the loop too; AF's af-pod-monitor job drops this Service so
+# metrics are not duplicated there.
 apiVersion: v1
 kind: Service
 metadata:

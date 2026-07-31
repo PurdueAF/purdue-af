@@ -142,6 +142,13 @@ def _describe(alertname: str, series: list[dict[str, Any]]) -> str:
         return f"{count} session{'s' if count != 1 else ''} stuck waiting to start"
     if alertname == "AFDaskGatewayDown":
         return "a Dask gateway is unavailable; new clusters may not start"
+    if alertname == "AFGlobalEnvDaemonStale":
+        return (
+            "the global pixi sync loop looks wedged — heartbeat is stale, "
+            "rebuilds may be hung"
+        )
+    if alertname == "AFGlobalEnvSyncDown":
+        return "global pixi sync metrics are missing; the reconciler may be down"
     if alertname.startswith("AFGlobalEnv"):
         return "the shared pixi environment is not in sync with the AF repository"
     if alertname == "AFNodeMonitorStale":

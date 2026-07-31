@@ -96,6 +96,29 @@ def test_mount_health_unknown_waits_ten_minutes():
     assert unknown["for"] == "10m"
 
 
+def test_af_pod_monitor_does_not_double_scrape_pixi_sync():
+    """pixi-global-sync has its own static scrape; kubernetes SD must not
+    duplicate those series under job=af-pod-monitor."""
+    doc = yaml.safe_load(VALUES.read_text())
+    jobs = doc["serverFiles"]["prometheus.yml"]["scrape_configs"]
+    af = next(j for j in jobs if j["job_name"] == "af-pod-monitor")
+    drops = [
+        r
+        for r in af["relabel_configs"]
+        if r.get("action") == "drop"
+        and r.get("source_labels") == ["__meta_kubernetes_service_name"]
+    ]
+    assert any(r.get("regex") == "pixi-global-sync" for r in drops), drops
+    assert any(j["job_name"] == "pixi-global-sync" for j in jobs)
+
+
+def test_pixi_daemon_stale_alert_uses_heartbeat():
+    rule = next(r for r in rules() if r["alert"] == "AFGlobalEnvDaemonStale")
+    assert "loop_heartbeat_timestamp_seconds" in rule["expr"]
+    assert rule["labels"]["severity"] == "warning"
+    assert rule["labels"]["component"] == "environment"
+
+
 def test_af_pod_monitor_scrape_does_not_steal_node_label():
     """af-node-monitor exports node=<AF worker>. Scraping the monitor pod's
     kubernetes node name into the same label renames the worker to exported_node
