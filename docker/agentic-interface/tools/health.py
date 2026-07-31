@@ -83,14 +83,18 @@ async def _scalar(client: httpx.AsyncClient, expr: str) -> Optional[float]:
 
 
 def _node_names(series: list[dict[str, Any]]) -> list[str]:
-    """Mount alerts use exported_node; kube-state uses node."""
-    return sorted(
-        {
-            s["metric"].get("exported_node") or s["metric"].get("node", "")
-            for s in series
-        }
-        - {""}
-    )
+    """Worker node under test.
+
+    Prefer ``exported_node`` when present: older scrapes collided the monitor
+    pod host onto ``node`` and renamed the AF worker to ``exported_node``.
+    New scrapes keep the exporter label as ``node`` only.
+    """
+    names: set[str] = set()
+    for s in series:
+        m = s["metric"]
+        names.add(m.get("exported_node") or m.get("node") or "")
+    return sorted(names - {""})
+
 
 
 def _describe(alertname: str, series: list[dict[str, Any]]) -> str:

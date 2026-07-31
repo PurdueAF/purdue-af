@@ -191,8 +191,13 @@ serverFiles:
           - source_labels: [__meta_kubernetes_namespace]
             target_label: "namespace"
             replacement: "$1"
+          # Must not be "node": af-node-monitor already exports a `node` label
+          # for the AF worker under test. Using "node" here collides and
+          # Prometheus renames the real worker to exported_node while the
+          # scrape host (where the monitor pod sits) becomes node — which is
+          # how non-AF hosts like geddes-b001 show up on mount alerts.
           - source_labels: [__meta_kubernetes_pod_node_name]
-            target_label: "node"
+            target_label: "pod_node"
           - source_labels:
               [__meta_kubernetes_service_label_app_kubernetes_io_name]
             target_label: "app"
@@ -520,7 +525,7 @@ serverFiles:
               severity: error
               component: data
             annotations:
-              summary: "{{ $labels.mount_name }} is failing on node {{ $labels.exported_node }}"
+              summary: "{{ $labels.mount_name }} is failing on node {{ $labels.node }}"
               description: >
                 Data access check for {{ $labels.mount_name }} completed and
                 failed for 10 minutes (includes timeouts). Sessions and Dask
@@ -535,7 +540,7 @@ serverFiles:
               severity: warning
               component: data
             annotations:
-              summary: "Data access unknown for {{ $labels.mount_name }} on node {{ $labels.exported_node }}"
+              summary: "Data access unknown for {{ $labels.mount_name }} on node {{ $labels.node }}"
               description: >
                 The node is Ready but no usable check result for 10 minutes
                 (never reported, or last success went stale). Offline /
@@ -557,7 +562,7 @@ serverFiles:
               severity: warning
               component: data
             annotations:
-              summary: "{{ $labels.mount_name }} is slow on node {{ $labels.exported_node }}"
+              summary: "{{ $labels.mount_name }} is slow on node {{ $labels.node }}"
               description: >
                 20-minute average metadata latency is {{ printf "%.0f" $value }} ms
                 against a healthy ceiling near 900 ms. Reads still work, but
@@ -585,7 +590,7 @@ serverFiles:
               severity: warning
               component: dev
             annotations:
-              summary: "{{ $labels.mount_name }} is failing on dev node {{ $labels.exported_node }}"
+              summary: "{{ $labels.mount_name }} is failing on dev node {{ $labels.node }}"
               description: >
                 A mount check completed and failed on a cms-af-dev node. No user
                 sessions run there, so this does not affect the facility.

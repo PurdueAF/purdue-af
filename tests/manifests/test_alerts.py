@@ -88,6 +88,37 @@ def test_mount_health_unknown_waits_ten_minutes():
     assert unknown["for"] == "10m"
 
 
+def test_af_pod_monitor_scrape_does_not_steal_node_label():
+    """af-node-monitor exports node=<AF worker>. Scraping the monitor pod's
+    kubernetes node name into the same label renames the worker to exported_node
+    and makes non-AF hosts (e.g. where the Deployment sits) look monitored."""
+    doc = yaml.safe_load(VALUES.read_text())
+    jobs = doc["serverFiles"]["prometheus.yml"]["scrape_configs"]
+    af = next(j for j in jobs if j["job_name"] == "af-pod-monitor")
+    node_targets = [
+        r
+        for r in af["relabel_configs"]
+        if r.get("source_labels") == ["__meta_kubernetes_pod_node_name"]
+    ]
+    assert node_targets, "expected a pod-node relabel"
+    assert all(r.get("target_label") != "node" for r in node_targets), node_targets
+    assert any(r.get("target_label") == "pod_node" for r in node_targets)
+
+
+def test_mount_alerts_name_the_worker_node_label():
+    """Summaries must use the exporter's node label, not a scrape-host alias."""
+    for name in (
+        "AFMountInvalid",
+        "AFMountSlow",
+        "AFMountHealthUnknown",
+        "AFMountInvalidDev",
+    ):
+        rule = next(r for r in rules() if r["alert"] == name)
+        summary = rule["annotations"]["summary"]
+        assert "$labels.node" in summary, summary
+        assert "exported_node" not in summary
+
+
 def test_mount_slow_excludes_the_probe_timeout_sentinel():
     """af-node-monitor reports its timeout value (10000 ms) as the latency when
     a check gives up; AFMountInvalid covers that case. Without the upper bound
