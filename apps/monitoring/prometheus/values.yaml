@@ -171,6 +171,14 @@ serverFiles:
               - "vm-hammer-f003.rcac.purdue.edu:9796"
               - "vm-hammer-f004.rcac.purdue.edu:9796"
               - "vm-hammer-f005.rcac.purdue.edu:9796"
+      # Mount metrics export node=<AF worker>. Scraping them through
+      # af-pod-monitor also attaches pod_node=<Deployment host> (e.g.
+      # geddes-b001), which is not cms-af-prod/dev and confuses every panel.
+      # Scrape the Service directly, like pixi-global-sync.
+      - job_name: "af-node-monitor"
+        static_configs:
+          - targets:
+              - "af-node-monitor-service:8000"
       - job_name: "af-pod-monitor"
         kubernetes_sd_configs:
           - role: endpoints
@@ -191,11 +199,8 @@ serverFiles:
           - source_labels: [__meta_kubernetes_namespace]
             target_label: "namespace"
             replacement: "$1"
-          # Must not be "node": af-node-monitor already exports a `node` label
-          # for the AF worker under test. Using "node" here collides and
-          # Prometheus renames the real worker to exported_node while the
-          # scrape host (where the monitor pod sits) becomes node — which is
-          # how non-AF hosts like geddes-b001 show up on mount alerts.
+          # Session / aux pod host. Must not be "node" — that label is reserved
+          # for af-node-monitor's AF-worker label (see dedicated job above).
           - source_labels: [__meta_kubernetes_pod_node_name]
             target_label: "pod_node"
           - source_labels:
@@ -210,11 +215,9 @@ serverFiles:
           - source_labels: [__meta_kubernetes_service_label_scrape_metrics]
             action: keep
             regex: "true"
-          # pixi-global-sync is scraped by the dedicated static job below —
-          # dropping it here avoids duplicate series (and the af-pod-monitor
-          # pod_node label) for the same metrics.
+          # Dedicated static jobs own these Services (see above / pixi job).
           - source_labels: [__meta_kubernetes_service_name]
-            regex: "pixi-global-sync"
+            regex: "pixi-global-sync|af-node-monitor-service"
             action: drop
           - source_labels: [__meta_kubernetes_pod_container_name]
             regex: "^chp$"

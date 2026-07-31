@@ -108,8 +108,29 @@ def test_af_pod_monitor_does_not_double_scrape_pixi_sync():
         if r.get("action") == "drop"
         and r.get("source_labels") == ["__meta_kubernetes_service_name"]
     ]
-    assert any(r.get("regex") == "pixi-global-sync" for r in drops), drops
+    assert any(
+        "pixi-global-sync" in str(r.get("regex", "")) for r in drops
+    ), drops
     assert any(j["job_name"] == "pixi-global-sync" for j in jobs)
+
+
+def test_af_node_monitor_has_dedicated_scrape_without_pod_host():
+    """Mount metrics must not carry the Deployment host (geddes-b001 etc.)."""
+    doc = yaml.safe_load(VALUES.read_text())
+    jobs = doc["serverFiles"]["prometheus.yml"]["scrape_configs"]
+    node_mon = next(j for j in jobs if j["job_name"] == "af-node-monitor")
+    targets = node_mon["static_configs"][0]["targets"]
+    assert "af-node-monitor-service:8000" in targets
+    af = next(j for j in jobs if j["job_name"] == "af-pod-monitor")
+    drops = [
+        r
+        for r in af["relabel_configs"]
+        if r.get("action") == "drop"
+        and r.get("source_labels") == ["__meta_kubernetes_service_name"]
+    ]
+    assert any(
+        "af-node-monitor-service" in str(r.get("regex", "")) for r in drops
+    ), drops
 
 
 def test_pixi_daemon_stale_alert_uses_heartbeat():
