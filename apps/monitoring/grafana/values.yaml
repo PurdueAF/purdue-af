@@ -1,14 +1,16 @@
 # Grafana Helm Chart Values
 # https://github.com/grafana/helm-charts/tree/main/charts/grafana
 
-# Persistence configuration
+# Persistence: RWO block storage for SQLite. CephFS/RWX cannot reliably
+# provide the file locks SQLite needs and caused recurring CrashLoopBackOff
+# (database is locked / hung /api/health probes).
 persistence:
   enabled: true
   type: pvc
   size: 20Gi
-  storageClassName: ${multinode_storage_class}
+  storageClassName: ${singlenode_storage_class}
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
 
 # Ingress configuration
 ingress:
@@ -36,14 +38,13 @@ securityContext:
   fsGroup: 472
   fsGroupChangePolicy: OnRootMismatch
 
-# Disable init chown on NFS/root-squash volumes; rely on fsGroup instead
+# Disable init chown; rely on fsGroup on RBD
 initChownData:
   enabled: false
 
-# Mount writable tmp dirs for paths that fail on root-squash NFS
+# Temp dirs stay on emptyDir. Plugins live on the RWO PVC so they are not
+# reinstalled (and rewritten into SQLite) on every restart.
 extraVolumes:
-  - name: grafana-plugins-tmp
-    emptyDir: {}
   - name: grafana-png-tmp
     emptyDir: {}
   - name: grafana-pdf-tmp
@@ -60,8 +61,6 @@ extraVolumes:
           path: default.conf
 
 extraVolumeMounts:
-  - name: grafana-plugins-tmp
-    mountPath: /var/lib/grafana/plugins
   - name: grafana-png-tmp
     mountPath: /var/lib/grafana/png
   - name: grafana-pdf-tmp
@@ -145,18 +144,18 @@ resources:
     cpu: 4000m
     memory: 8Gi
 
-# RWX PVC allows surge; spawn new pod before terminating old for zero downtime.
+# RWO + SQLite: never run two pods against the same DB.
 deploymentStrategy:
-  type: RollingUpdate
-  rollingUpdate:
-    maxSurge: 1
-    maxUnavailable: 0
+  type: Recreate
 
 # Grafana configuration
 grafana.ini:
   server:
     root_url: https://cms.geddes.rcac.purdue.edu/grafana/
     serve_from_sub_path: true
+  database:
+    wal: true
+    query_retries: 10
   dashboards:
     default_home_dashboard_path: /var/lib/grafana/dashboards/public/default.json
   auth.anonymous:
