@@ -79,7 +79,7 @@ repos:
         exclude: ^slurm/
 
   - repo: https://github.com/hadolint/hadolint
-    rev: v2.14.0
+    rev: v2.15.1
     hooks:
       - id: hadolint-docker
         # Pin the image (the upstream hook defaults to :latest).
