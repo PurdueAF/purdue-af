@@ -38,18 +38,18 @@ pytest        = "==9.1.1"
 lz4           = "==4.4.5"
 ipywidgets    = "==8.1.8"
 ipympl        = "==0.10.0"
-bokeh         = "==3.9.1"
+bokeh         = "==3.9.2"
 # p-suffix = upstream "portable" releases (stable, not pre-release); Renovate
 # parses them via the regex-versioning rule in renovate.json5.
 # >=10.2p1 required alongside mamba >=2.8 (both sides must agree on krb5 1.22).
 openssh       = "==10.4p1"
-uv            = "==0.11.32"
+uv            = "==0.12.1"
 
 [pypi-dependencies]
-jupyterlab-git            = "==0.54.0"
+jupyterlab-git            = "==0.54.1"
 jupyter-resource-usage    = "==1.2.1"
 jupyterlab_iframe         = "==0.5.0"
-jupyter-archive           = "==3.4.0"
+jupyter-archive           = "==3.5.1"
 jupyterlab_favorites      = "==3.5.2"
 purdue-af-shutdown-button = "==0.1.0"
 purdue-af-vscode-button   = "==0.1.2"
