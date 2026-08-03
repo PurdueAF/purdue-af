@@ -33,7 +33,7 @@ importlib-metadata    = "<8.8"   # opentelemetry-api requires <8.8.0
 # (gfal, voms-proxy-init) are useless for XRootD reads without it, and users
 # should not need the global pixi env just to copy a file.
 xrootd        = "==5.9.2"  # matches the global env
-rucio-clients = "==40.4.1"
+rucio-clients = "==41.1.1"
 pytest        = "==9.1.1"
 lz4           = "==4.4.5"
 ipywidgets    = "==8.1.8"
