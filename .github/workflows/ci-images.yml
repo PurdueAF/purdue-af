@@ -59,7 +59,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Login to ghcr.io
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4 # Renovate pins to digest
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4 # Renovate pins to digest
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -134,7 +134,7 @@ jobs:
       # Login first: cache-from needs read; cache-to/push need write.
       - name: Login to ghcr.io
         if: env.AF_EXISTS != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4 # Renovate pins to digest
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4 # Renovate pins to digest
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -279,7 +279,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Login to ghcr.io
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4 # Renovate pins to digest
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4 # Renovate pins to digest
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
