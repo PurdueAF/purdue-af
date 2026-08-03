@@ -66,7 +66,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/bleach-with-css-6.4.0-hac0b51c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/blessed-1.33.0-pyha191276_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/blinker-1.9.0-pyhff2d567_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/bokeh-3.9.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/boost-histogram-1.7.2-py312h0a2e395_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/brotli-1.2.0-hed03a55_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/brotli-bin-1.2.0-hb03c661_1.conda
@@ -768,7 +768,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/48/f0/ae7ca09223a81a1d890b2557186ea015f6e0502e9b8cb8e1813f1d8cfa4e/s3transfer-0.14.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7d/9a/c0f48ff733cd14e1a742409d829e308900059723fb1f00dc98f0f4012ed2/scalpl-0.4.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0b/8e/1e91b00b4babe11244500d50b2911518eb8ad6d3c80ddb08d4db3404e3ed/servicex-3.3.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/70/46/eab9fe2a4a2f6665a7c79b2007121a00ba95502fef50c1537d8147b4f91c/simple_parsing-0.1.8-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/dc/de/95277ceb670f0076d0d9ee06ade551d236e4989e2853e15a369bd7c67e5f/simple_parsing-0.1.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/b6/156a8de1e1b47694f0e7de6675866936608d45dc68388fd017d36f8693be/simplejson-4.1.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/64/75/e8fab6e46fcfaf278998b9d0a182361eaa1a9b5a9a7ecb58a0796d9e5229/tensor2tensor-1.14.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ac/83/5d448ba7cf144e9c9648455bb5188aba0361f23cba95934a761c96934f36/tensorflow_datasets-4.9.10-py3-none-any.whl
@@ -1651,9 +1651,9 @@ packages:
   - pkg:pypi/blinker?source=hash-mapping
   size: 13934
   timestamp: 1731096548765
-- conda: https://conda.anaconda.org/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
-  sha256: b3d3b93a17fa678e81cd5ff5309fe64c7feb65c71cb134f14e4fe2113dc0c8d5
-  md5: 123fcfe0df4b6fc21804538e59cdaafe
+- conda: https://conda.anaconda.org/conda-forge/noarch/bokeh-3.9.2-pyhd8ed1ab_0.conda
+  sha256: 577c2614f3a59512697c1ffe2021c5194818b55f734006fcdeb6c6921b514c44
+  md5: b2781afb860ae9ed84cb92bdebbc83ea
   depends:
   - contourpy >=1.2
   - jinja2 >=2.9
@@ -1671,8 +1671,8 @@ packages:
   license_family: BSD
   purls:
   - pkg:pypi/bokeh?source=compressed-mapping
-  size: 4526315
-  timestamp: 1781002115296
+  size: 4292921
+  timestamp: 1785249803504
 - conda: https://conda.anaconda.org/conda-forge/linux-64/boost-histogram-1.7.2-py312h0a2e395_0.conda
   sha256: 9060bbb5ceb53bf85e31955ee0c8d7a543cfd6dc1197a2958482674a0993ee81
   md5: 15a8168bc964cfcae3902df61a9744dd
@@ -4025,27 +4025,27 @@ packages:
   - lz4>=3.1.0 ; extra == 'other'
   - opencv-python>=3.0 ; extra == 'other'
   - matplotlib>=3.0 ; extra == 'other'
-  - mujoco-py>=2.1,<2.2 ; extra == 'testing'
-  - imageio>=2.14.1 ; extra == 'testing'
-  - matplotlib>=3.0 ; extra == 'testing'
-  - lz4>=3.1.0 ; extra == 'testing'
-  - box2d-py==2.3.5 ; extra == 'testing'
-  - mujoco==2.2.0 ; extra == 'testing'
-  - pygame==2.1.0 ; extra == 'testing'
   - swig==4.* ; extra == 'testing'
+  - lz4>=3.1.0 ; extra == 'testing'
+  - matplotlib>=3.0 ; extra == 'testing'
+  - mujoco==2.2.0 ; extra == 'testing'
+  - imageio>=2.14.1 ; extra == 'testing'
+  - mujoco-py>=2.1,<2.2 ; extra == 'testing'
+  - pygame==2.1.0 ; extra == 'testing'
   - opencv-python>=3.0 ; extra == 'testing'
+  - box2d-py==2.3.5 ; extra == 'testing'
   - pytest==7.0.1 ; extra == 'testing'
-  - mujoco-py>=2.1,<2.2 ; extra == 'all'
   - ale-py~=0.7.5 ; extra == 'all'
-  - imageio>=2.14.1 ; extra == 'all'
-  - matplotlib>=3.0 ; extra == 'all'
-  - pytest==7.0.1 ; extra == 'all'
-  - lz4>=3.1.0 ; extra == 'all'
-  - box2d-py==2.3.5 ; extra == 'all'
-  - mujoco==2.2.0 ; extra == 'all'
-  - pygame==2.1.0 ; extra == 'all'
   - swig==4.* ; extra == 'all'
+  - lz4>=3.1.0 ; extra == 'all'
+  - matplotlib>=3.0 ; extra == 'all'
+  - mujoco==2.2.0 ; extra == 'all'
+  - imageio>=2.14.1 ; extra == 'all'
+  - mujoco-py>=2.1,<2.2 ; extra == 'all'
+  - pygame==2.1.0 ; extra == 'all'
   - opencv-python>=3.0 ; extra == 'all'
+  - pytest==7.0.1 ; extra == 'all'
+  - box2d-py==2.3.5 ; extra == 'all'
   requires_python: '>=3.6'
 - pypi: https://files.pythonhosted.org/packages/41/55/55d157aa8693090954fc9639bf27218240517c3bc7afa6e97412da6ebfd9/gym_notices-0.1.0-py3-none-any.whl
   name: gym-notices
@@ -10429,10 +10429,10 @@ packages:
   - pkg:pypi/simpervisor?source=hash-mapping
   size: 13639
   timestamp: 1734339920707
-- pypi: https://files.pythonhosted.org/packages/70/46/eab9fe2a4a2f6665a7c79b2007121a00ba95502fef50c1537d8147b4f91c/simple_parsing-0.1.8-py3-none-any.whl
+- pypi: https://files.pythonhosted.org/packages/dc/de/95277ceb670f0076d0d9ee06ade551d236e4989e2853e15a369bd7c67e5f/simple_parsing-0.1.9-py3-none-any.whl
   name: simple-parsing
-  version: 0.1.8
-  sha256: 4d1ef136a28674b3ebb9760cacda4d6f01de32de0b280a869df977d182f12947
+  version: 0.1.9
+  sha256: 398c6b2c3d6ee3b865a6b8d7413999ee7b373de3c5a047f0b12b03b705d52e16
   requires_dist:
   - docstring-parser~=0.15
   - typing-extensions>=4.5.0
