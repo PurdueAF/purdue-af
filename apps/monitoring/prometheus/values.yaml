@@ -56,10 +56,14 @@ server:
     - query.timeout=2m
     - query.max-concurrency=20
     - storage.tsdb.wal-compression
+  # Non-recursive only: chmod -R on CephFS TSDB walks every chunk/WAL inode
+  # and routinely hangs the pod in Init for 10–30+ minutes on restart.
+  # Data is already world-writable from prior runs; dir mode is enough for
+  # nobody (65534) to create new files.
   extraInitContainers:
     - name: prometheus-data-permission-fix
       image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.36
-      command: ["/bin/chmod", "-R", "777", "/prometheus"]
+      command: ["/bin/sh", "-c", "chmod 777 /prometheus"]
       securityContext:
         runAsUser: 0
         runAsNonRoot: false
