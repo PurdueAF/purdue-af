@@ -39,6 +39,11 @@ triton:
   labelSelector: ""
   httpPort: 8000
 
+# Envoy's LoadBalancer address, which is what clients actually dial. Set
+# explicitly because discovery would otherwise report the in-cluster Service
+# name — the gRPC Ingress is disabled for this release.
+inferenceEndpoint: supersonic.cms.geddes.rcac.purdue.edu:8001
+
 prometheus:
   url: http://prometheus-server:9090
   # Default selector release="supersonic" (from supersonicRelease) matches the
