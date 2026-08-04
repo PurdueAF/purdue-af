@@ -132,12 +132,15 @@ def test_prometheus_server_tolerates_ceph_stalls():
     doc = yaml.safe_load(VALUES.read_text())
     server = doc["server"]
     assert server["startupProbe"]["enabled"] is True
-    assert server["startupProbe"]["failureThreshold"] * server["startupProbe"][
-        "periodSeconds"
-    ] >= 300
-    assert server["livenessProbeFailureThreshold"] * server[
-        "livenessProbePeriodSeconds"
-    ] >= 120
+    assert (
+        server["startupProbe"]["failureThreshold"]
+        * server["startupProbe"]["periodSeconds"]
+        >= 300
+    )
+    assert (
+        server["livenessProbeFailureThreshold"] * server["livenessProbePeriodSeconds"]
+        >= 120
+    )
     assert "query.timeout=2m" in server["extraFlags"]
     assert server["global"]["scrape_timeout"] < server["global"]["scrape_interval"]
 
