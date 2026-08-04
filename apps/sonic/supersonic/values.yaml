@@ -112,7 +112,7 @@ grafana:
           type: prometheus
           access: proxy
           isDefault: true
-          url: http://rancher-monitoring-prometheus.cattle-monitoring-system
+          url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
           jsonData:
             timeInterval: "5s"
             tlsSkipVerify: true
