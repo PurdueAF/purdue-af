@@ -38,8 +38,8 @@ spec:
                 path: /spec/triggers/0/metadata/timeout
                 value: "60000"
           # SuperSONIC chart validation forbids :9090 on the Grafana datasource
-          # URL when using prometheus.external, but the Service only listens on
-          # 9090. Rewrite the provisioned ConfigMap after render.
+          # URL when using prometheus.external, but prometheus-server only
+          # listens on 9090. Rewrite the provisioned ConfigMap after render.
           - target:
               kind: ConfigMap
               name: "supersonic-grafana"
@@ -57,4 +57,4 @@ spec:
                     name: prometheus
                     uid: prometheus
                     type: prometheus
-                    url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
+                    url: http://prometheus-server:9090

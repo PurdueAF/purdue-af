@@ -4,10 +4,10 @@
 #   helm install model-manager ./chart -n cms -f values-supersonic.yaml \
 #     --set auth.password='...'
 #
-# Checked against the live release (July 2026):
+# Checked against the live release:
 #   - Triton pods carry app.kubernetes.io/instance=supersonic in namespace cms
-#   - metrics are scraped by rancher-monitoring, which labels the series
-#     job="supersonic-triton" and does NOT set a `release` label
+#   - metrics are scraped by cms prometheus-server (af-pod-monitor job), which
+#     sets app/release labels from the Service's app.kubernetes.io/* labels
 #
 # The release mounts the same claim at /models and runs with
 # --model-control-mode=explicit (apps/sonic/supersonic/values.yaml), so
@@ -33,17 +33,16 @@ modelRepository:
   mountPath: /models
 
 triton:
-  discovery: kubernetes
+  discovery: labels
   # Derived from supersonicRelease as:
   #   app.kubernetes.io/component=triton,app.kubernetes.io/instance=supersonic
   labelSelector: ""
   httpPort: 8000
 
 prometheus:
-  url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
-  # Must be set explicitly: this Prometheus scrapes via ServiceMonitor and does
-  # not add the `release` label the chart would otherwise derive.
-  selector: 'job="supersonic-triton"'
+  url: http://prometheus-server:9090
+  # Default selector release="supersonic" (from supersonicRelease) matches the
+  # labels af-pod-monitor attaches on cms prometheus-server.
   window: 5m
 
 auth:

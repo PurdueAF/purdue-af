@@ -95,9 +95,12 @@ ingress:
   enabled: false
 
 prometheus:
+  # Use the AF Prometheus already running in cms (HelmRelease `prometheus`).
+  # It scrapes Triton via af-pod-monitor and attaches app/release labels the
+  # SuperSONIC dashboard expects — rancher-monitoring does not.
   external:
     enabled: true
-    url: rancher-monitoring-prometheus.cattle-monitoring-system
+    url: prometheus-server
     port: 9090
     scheme: http
 
@@ -116,9 +119,8 @@ grafana:
           isDefault: true
           # Chart validation requires scheme://host with no port (must match
           # prometheus.external.scheme + .url). Port 9090 is injected by the
-          # HelmRelease postRenderer in helmrelease.yaml — without it Grafana
-          # dials :80 and times out against rancher-monitoring-prometheus.
-          url: http://rancher-monitoring-prometheus.cattle-monitoring-system
+          # HelmRelease postRenderer in helmrelease.yaml.
+          url: http://prometheus-server
           jsonData:
             timeInterval: "5s"
             tlsSkipVerify: true
