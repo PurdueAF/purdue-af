@@ -109,6 +109,8 @@ grafana:
     datasources.yaml:
       datasources:
         - name: prometheus
+          # Must match the chart dashboard's hardcoded datasource uid.
+          uid: prometheus
           type: prometheus
           access: proxy
           isDefault: true

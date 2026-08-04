@@ -55,5 +55,6 @@ spec:
                       timeInterval: 5s
                       tlsSkipVerify: true
                     name: prometheus
+                    uid: prometheus
                     type: prometheus
                     url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
