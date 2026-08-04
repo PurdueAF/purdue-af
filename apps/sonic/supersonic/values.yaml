@@ -20,12 +20,12 @@ triton:
   resources:
     limits:
       nvidia.com/mig-1g.5gb: 1
-      cpu: 2
-      memory: 8G
+      cpu: 16
+      memory: 16G
     requests:
       nvidia.com/mig-1g.5gb: 1
-      cpu: 2
-      memory: 8G
+      cpu: 16
+      memory: 16G
   nodeSelector: { "cms-af-prod": "true" }
   tolerations:
     - key: hub.jupyter.org/dedicated
