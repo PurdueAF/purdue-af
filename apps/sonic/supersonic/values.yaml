@@ -112,7 +112,11 @@ grafana:
           type: prometheus
           access: proxy
           isDefault: true
-          url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
+          # Chart validation requires scheme://host with no port (must match
+          # prometheus.external.scheme + .url). Port 9090 is injected by the
+          # HelmRelease postRenderer in helmrelease.yaml — without it Grafana
+          # dials :80 and times out against rancher-monitoring-prometheus.
+          url: http://rancher-monitoring-prometheus.cattle-monitoring-system
           jsonData:
             timeInterval: "5s"
             tlsSkipVerify: true
