@@ -19,11 +19,11 @@ triton:
 
   resources:
     limits:
-      nvidia.com/mig-1g.5gb: 1
+      nvidia.com/gpu: 1
       cpu: 16
       memory: 16G
     requests:
-      nvidia.com/mig-1g.5gb: 1
+      nvidia.com/gpu: 1
       cpu: 16
       memory: 16G
   nodeSelector: { "cms-af-prod": "true" }
