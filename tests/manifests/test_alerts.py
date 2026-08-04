@@ -112,6 +112,36 @@ def test_af_pod_monitor_does_not_double_scrape_pixi_sync():
     assert any(j["job_name"] == "pixi-global-sync" for j in jobs)
 
 
+def test_kube_state_metrics_scrape_keeps_only_cms_and_cluster_scoped():
+    """Cluster-wide KSM (~244k series) is what balloons TSDB on this PVC and
+    stretches Ceph compaction long enough for liveness to SIGKILL the pod."""
+    doc = yaml.safe_load(VALUES.read_text())
+    jobs = doc["serverFiles"]["prometheus.yml"]["scrape_configs"]
+    ksm = next(j for j in jobs if j["job_name"] == "kube-state-metrics")
+    keeps = [
+        r
+        for r in ksm.get("metric_relabel_configs", [])
+        if r.get("action") == "keep" and r.get("source_labels") == ["namespace"]
+    ]
+    assert keeps, "expected a namespace keep rule on kube-state-metrics"
+    assert keeps[0].get("regex") == "(|cms)"
+
+
+def test_prometheus_server_tolerates_ceph_stalls():
+    """Default chart probes kill this server on Ceph RWX WAL/compaction stalls."""
+    doc = yaml.safe_load(VALUES.read_text())
+    server = doc["server"]
+    assert server["startupProbe"]["enabled"] is True
+    assert server["startupProbe"]["failureThreshold"] * server["startupProbe"][
+        "periodSeconds"
+    ] >= 300
+    assert server["livenessProbeFailureThreshold"] * server[
+        "livenessProbePeriodSeconds"
+    ] >= 120
+    assert "query.timeout=2m" in server["extraFlags"]
+    assert server["global"]["scrape_timeout"] < server["global"]["scrape_interval"]
+
+
 def test_af_node_monitor_has_dedicated_scrape_without_pod_host():
     """Mount metrics must not carry the Deployment host (geddes-b001 etc.)."""
     doc = yaml.safe_load(VALUES.read_text())

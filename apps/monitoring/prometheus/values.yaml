@@ -25,11 +25,37 @@ server:
   storagePath: /prometheus
 
   global:
-    scrape_interval: 15s
-    evaluation_interval: 15s
-    scrape_timeout: 15s
+    # scrape_timeout must be < scrape_interval or scrapes pile up and starve
+    # the HTTP server (health probes) on Ceph-backed TSDB stalls.
+    scrape_interval: 30s
+    evaluation_interval: 30s
+    scrape_timeout: 10s
 
-  extraFlags: [web.enable-remote-write-receiver]
+  # WAL on Ceph RWX routinely takes minutes to replay; without a startupProbe
+  # the default liveness window (~75s) kills the container mid-replay. At
+  # runtime the same Ceph latency freezes /-/healthy long enough for the
+  # default probe to SIGKILL (exit 137, reason=Error — not OOMKilled). Soften
+  # probes and cap query runtime so a stuck Grafana query cannot pin the
+  # process until the kubelet shoots it.
+  startupProbe:
+    enabled: true
+    periodSeconds: 10
+    failureThreshold: 60 # 10 min for Ceph WAL / mmap replay
+    timeoutSeconds: 10
+  livenessProbeInitialDelay: 60
+  livenessProbePeriodSeconds: 30
+  livenessProbeTimeout: 30
+  livenessProbeFailureThreshold: 6 # ~3 min unresponsive before kill
+  readinessProbeInitialDelay: 30
+  readinessProbePeriodSeconds: 10
+  readinessProbeTimeout: 10
+  readinessProbeFailureThreshold: 6
+
+  extraFlags:
+    - web.enable-remote-write-receiver
+    - query.timeout=2m
+    - query.max-concurrency=20
+    - storage.tsdb.wal-compression
   extraInitContainers:
     - name: prometheus-data-permission-fix
       image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.36
@@ -140,6 +166,15 @@ serverFiles:
         static_configs:
           - targets:
               - "rancher-monitoring-kube-state-metrics.cattle-monitoring-system.svc.cluster.local:8080"
+        # Rancher's KSM is cluster-scoped (~244k of ~314k head series here).
+        # AF alerts/dashboards only need cms namespaced series plus
+        # cluster-scoped ones with no namespace label (nodes, PVs, …). Dropping
+        # rook-ceph/kube-system/… cuts TSDB size and Ceph compaction I/O that
+        # has been freezing this server long enough to fail liveness probes.
+        metric_relabel_configs:
+          - source_labels: [namespace]
+            regex: "(|cms)"
+            action: keep
       - job_name: "slurm-metrics"
         static_configs:
           - targets:
