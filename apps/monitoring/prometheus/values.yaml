@@ -27,8 +27,8 @@ server:
   global:
     # scrape_timeout must be < scrape_interval or scrapes pile up and starve
     # the HTTP server (health probes) on Ceph-backed TSDB stalls.
-    scrape_interval: 30s
-    evaluation_interval: 30s
+    scrape_interval: 15s
+    evaluation_interval: 15s
     scrape_timeout: 10s
 
   # WAL on Ceph RWX routinely takes minutes to replay; without a startupProbe
