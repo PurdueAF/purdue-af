@@ -152,3 +152,22 @@ async def test_control_without_servers_reports_cleanly(monkeypatch):
 async def test_rejects_unknown_action():
     with pytest.raises(ValueError):
         await triton.control_model("m", "delete")
+
+
+@respx.mock
+async def test_index_hides_the_upload_staging_directory():
+    """Triton lists every subdirectory of the repository as a model."""
+    payload = index_payload(
+        ("particlenet", "READY"),
+        (".uploads", "UNAVAILABLE"),
+        (".hidden", "UNAVAILABLE"),
+    )
+    for server in SERVERS:
+        respx.post(f"http://{server}/v2/repository/index").mock(
+            return_value=httpx.Response(200, json=payload)
+        )
+
+    state = await triton.collect_state()
+
+    assert set(state["models"]) == {"particlenet"}
+    assert [m["name"] for m in state["servers"][0]["models"]] == ["particlenet"]

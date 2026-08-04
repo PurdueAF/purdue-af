@@ -50,6 +50,10 @@ modelRepository:
   fixOwnership: true
   # -- Refuse all writes (uploads, deletes, load/unload) when true
   readOnly: false
+  # -- Load a model on every Triton server as soon as it is uploaded. A failed
+  # load (no room on the servers, a server down) is reported but never fails
+  # the upload — the model stays on the PVC and can be served later.
+  autoLoadOnUpload: true
   # -- Largest single upload accepted, in bytes (default 8 GiB)
   maxUploadBytes: 8589934592
 

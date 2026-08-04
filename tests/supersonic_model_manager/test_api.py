@@ -246,3 +246,117 @@ async def test_model_control_rejected_in_read_only_mode(client, monkeypatch):
         response = await c.post("/api/models/m/load", json={})
 
     assert response.status_code == 403
+
+
+# --------------------------------------------------------------------------
+# Auto-serve on upload
+# --------------------------------------------------------------------------
+
+
+def load_result(ok, results, error=None):
+    return {
+        "action": "load",
+        "model": "mymodel",
+        "results": results,
+        "ok": ok,
+        "error": error,
+    }
+
+
+async def test_upload_serves_the_model_automatically(client, repo, monkeypatch):
+    calls = []
+
+    async def fake_control(name, action, servers=None):
+        calls.append((name, action))
+        return load_result(True, [{"server": "t-0", "ok": True, "error": None}])
+
+    monkeypatch.setattr(settings, "auto_load_on_upload", True)
+    monkeypatch.setattr(triton, "control_model", fake_control)
+
+    async with client as c:
+        response = await c.post(
+            "/api/upload",
+            files={"files": ("m.zip", model_zip(), "application/zip")},
+            data={"name": "mymodel"},
+        )
+
+    assert response.status_code == 200
+    assert calls == [("mymodel", "load")]
+    auto = response.json()["autoLoad"]
+    assert auto["ok"] is True
+    assert auto["loadedOn"] == ["t-0"]
+
+
+async def test_upload_survives_a_server_with_no_room(client, repo, monkeypatch):
+    """A model that cannot be loaded still lands on the PVC."""
+
+    async def fake_control(name, action, servers=None):
+        return load_result(
+            False,
+            [
+                {"server": "t-0", "ok": True, "error": None},
+                {
+                    "server": "t-1",
+                    "ok": False,
+                    "error": "failed to load: CUDA out of memory",
+                },
+            ],
+            error="failed to load: CUDA out of memory",
+        )
+
+    monkeypatch.setattr(settings, "auto_load_on_upload", True)
+    monkeypatch.setattr(triton, "control_model", fake_control)
+
+    async with client as c:
+        response = await c.post(
+            "/api/upload",
+            files={"files": ("m.zip", model_zip(), "application/zip")},
+            data={"name": "mymodel"},
+        )
+
+    assert response.status_code == 200, "a failed load must not fail the upload"
+    assert (repo / "mymodel" / "1" / "model.onnx").is_file()
+    auto = response.json()["autoLoad"]
+    assert auto["ok"] is False
+    assert auto["loadedOn"] == ["t-0"]
+    assert "out of memory" in auto["failedOn"][0]["error"]
+
+
+async def test_auto_load_can_be_disabled(client, repo, monkeypatch):
+    calls = []
+
+    async def fake_control(name, action, servers=None):
+        calls.append(name)
+        return load_result(True, [])
+
+    monkeypatch.setattr(settings, "auto_load_on_upload", False)
+    monkeypatch.setattr(triton, "control_model", fake_control)
+
+    async with client as c:
+        response = await c.post(
+            "/api/upload",
+            files={"files": ("m.zip", model_zip(), "application/zip")},
+            data={"name": "mymodel"},
+        )
+
+    assert response.status_code == 200
+    assert calls == []
+    assert response.json()["autoLoad"] is None
+
+
+async def test_staging_directory_is_not_listed_as_a_model(client, repo, monkeypatch):
+    """Triton indexes every subdirectory, including our upload staging area."""
+
+    async def with_staging():
+        return {
+            "servers": [{"name": "t-0", "live": True, "models": [], "error": None}],
+            "models": {},
+        }
+
+    monkeypatch.setattr(triton, "collect_state", with_staging)
+    (repo / ".uploads").mkdir()
+
+    async with client as c:
+        payload = (await c.get("/api/state")).json()
+
+    assert [m["name"] for m in payload["models"]] == []

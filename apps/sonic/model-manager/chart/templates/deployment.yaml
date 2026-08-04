@@ -85,6 +85,8 @@ spec:
               value: {{ .Values.modelRepository.claimName | quote }}
             - name: READ_ONLY
               value: {{ .Values.modelRepository.readOnly | quote }}
+            - name: AUTO_LOAD_ON_UPLOAD
+              value: {{ .Values.modelRepository.autoLoadOnUpload | quote }}
             - name: MAX_UPLOAD_BYTES
               value: {{ .Values.modelRepository.maxUploadBytes | quote }}
             - name: REFRESH_SECONDS

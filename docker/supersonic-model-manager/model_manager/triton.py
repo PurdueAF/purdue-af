@@ -10,7 +10,7 @@ import logging
 
 import httpx
 
-from . import kube
+from . import kube, repository
 from .config import settings
 
 log = logging.getLogger(__name__)
@@ -87,7 +87,8 @@ async def _repository_index(client: httpx.AsyncClient, server: dict) -> dict:
                 "reason": item.get("reason", ""),
             }
             for item in payload
-            if item.get("name")
+            # Triton lists every subdirectory, including our staging area.
+            if not repository.is_internal_name(item.get("name", ""))
         ]
     except Exception as exc:
         out["error"] = _short_error(exc)

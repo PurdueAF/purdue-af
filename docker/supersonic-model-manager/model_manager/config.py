@@ -46,6 +46,10 @@ class Settings:
         default_factory=lambda: _int("MAX_UPLOAD_BYTES", 8 * 1024 * 1024 * 1024, 1024)
     )
     read_only: bool = field(default_factory=lambda: _bool("READ_ONLY", False))
+    # Load a model on every Triton server as soon as it is uploaded.
+    auto_load_on_upload: bool = field(
+        default_factory=lambda: _bool("AUTO_LOAD_ON_UPLOAD", True)
+    )
 
     # -- Triton discovery -------------------------------------------------
     # "kubernetes" lists Triton pods by label; "static" uses TRITON_ENDPOINTS.

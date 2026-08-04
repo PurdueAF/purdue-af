@@ -117,6 +117,16 @@ def _read_platform(config_file: Path) -> str:
     return match.group(1) if match else ""
 
 
+def is_internal_name(name: str) -> bool:
+    """Bookkeeping directories that are not models.
+
+    Triton indexes every subdirectory of the repository, so it reports the
+    upload staging area as a model in a permanently unavailable state. Both
+    sides of the dashboard filter on this.
+    """
+    return not name or name.startswith(".") or name == STAGING_DIRNAME
+
+
 def scan_models() -> list:
     """List every model directory currently on the PVC."""
     root = repo_root()
@@ -127,7 +137,7 @@ def scan_models() -> list:
     for child in sorted(root.iterdir(), key=lambda p: p.name.lower()):
         if not child.is_dir() or child.is_symlink():
             continue
-        if child.name.startswith(".") or child.name == STAGING_DIRNAME:
+        if is_internal_name(child.name):
             continue
 
         size, count, newest = _dir_stats(child)

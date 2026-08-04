@@ -1492,6 +1492,22 @@
           const detail = info ? `${fmtBytes(info.sizeBytes)} · ${info.fileCount} files` : "";
           toast(`Uploaded ${info ? info.name : name}`, detail, "ok");
           (validation.warnings || []).forEach((w) => toast("Check this model", w, "warn"));
+
+          // Uploads are served automatically; say so, and say when it did not work.
+          const auto = payload && payload.autoLoad;
+          if (auto && auto.attempted) {
+            const modelName = info ? info.name : name;
+            if (auto.ok) {
+              toast(`Serving ${modelName}`, `Loaded on ${auto.loadedOn.length} server(s)`, "ok");
+            } else {
+              const reason = (auto.failedOn[0] && auto.failedOn[0].error) || auto.error || "";
+              toast(
+                `${modelName} was uploaded but is not being served`,
+                `${reason}  •  Use the Serve switch to retry.`,
+                "warn"
+              );
+            }
+          }
         } else if (payload && payload.validation) {
           // Rejected by the Triton layout check: list every problem found.
           const errors = payload.validation.errors || [];

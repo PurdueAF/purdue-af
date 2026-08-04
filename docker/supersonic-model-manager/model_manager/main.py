@@ -333,4 +333,25 @@ async def upload(
         raise HTTPException(status_code=500, detail=f"Upload failed: {exc}")
 
     log.info("Installed model %s (%s bytes)", result["name"], result["sizeBytes"])
-    return {"uploaded": result}
+
+    # Serve it straight away. A failure here (no room on the servers, no
+    # explicit model control, a server down) leaves the model on the PVC and
+    # is reported alongside the upload rather than failing it.
+    auto_load = None
+    if settings.auto_load_on_upload:
+        loaded = await triton.control_model(result["name"], "load")
+        auto_load = {
+            "attempted": True,
+            "ok": loaded["ok"],
+            "loadedOn": [r["server"] for r in loaded["results"] if r["ok"]],
+            "failedOn": [
+                {"server": r["server"], "error": r["error"]}
+                for r in loaded["results"]
+                if not r["ok"]
+            ],
+            "error": loaded["error"],
+        }
+        if not loaded["ok"]:
+            log.warning("Auto-load of %s failed: %s", result["name"], loaded["error"])
+
+    return {"uploaded": result, "autoLoad": auto_load}
