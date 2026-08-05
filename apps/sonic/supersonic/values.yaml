@@ -68,8 +68,10 @@ envoy:
     hostName: supersonic.geddes.rcac.purdue.edu
     ingressClassName: public
   rate_limiter:
+    # Rejects RepositoryIndex (and thus new client sessions) when
+    # serverLoadMetric exceeds serverLoadThreshold, via Lua → Prometheus.
     prometheus_based:
-      enabled: false
+      enabled: true
     listener_level:
       enabled: false
   dynamic_routing:
