@@ -173,22 +173,27 @@ jobs:
           AUX_TAGS: ${{ needs.images.outputs.aux-tags }}
         run: |
           set -euo pipefail
-          # GHCR applies secondary rate limits to rapid back-to-back retags
-          # across packages; a short gap plus retries keeps publish from
-          # failing an otherwise-green main run (see run 31008040707).
-          retag() {
+          # Every GHCR call here can fail transiently: secondary rate limits on
+          # rapid back-to-back retags (run 31008040707) and DNS/network blips
+          # pulling blobs (run 31053841647). Both are retryable, so wrap the
+          # digest lookup as well as the retag — an unguarded `inspect` under
+          # `set -e` kills the step before any retry can happen.
+          # Progress goes to stderr: stdout is captured for the digest.
+          ghcr_retry() {
+            local what="$1"; shift
             local attempt=1 max=5 delay=15
-            until docker buildx imagetools create "$@"; do
+            until "$@"; do
               if [ "$attempt" -ge "$max" ]; then
-                echo "::error::imagetools create failed after ${max} attempts: $*"
+                echo "::error::${what} failed after ${max} attempts" >&2
                 return 1
               fi
-              echo "::warning::imagetools create failed (attempt ${attempt}/${max}); retrying in ${delay}s"
+              echo "::warning::${what} failed (attempt ${attempt}/${max}); retrying in ${delay}s" >&2
               sleep "$delay"
               attempt=$((attempt + 1))
               delay=$((delay * 2))
             done
           }
+          retag() { ghcr_retry "imagetools create" docker buildx imagetools create "$@"; }
           first=1
           for pair in $AUX_TAGS; do
             # name=in-<hash>=<channel>  (channel is :latest for most aux images,
@@ -197,7 +202,8 @@ jobs:
             name="${pair%%=*}"; rest="${pair#*=}"
             tag="${rest%%=*}"; channel="${rest#*=}"
             repo="ghcr.io/purdueaf/${name}"
-            digest=$(docker buildx imagetools inspect "$repo:$tag" --format '{{json .Manifest}}' | jq -r .digest)
+            digest=$(ghcr_retry "imagetools inspect $repo:$tag" \
+              docker buildx imagetools inspect "$repo:$tag" --format '{{json .Manifest}}' | jq -r .digest)
             [ -n "$digest" ] && [ "$digest" != "null" ] || { echo "::error::cannot resolve $repo:$tag"; exit 1; }
             retag \
               -t "$repo:sha-$GITHUB_SHA" \
