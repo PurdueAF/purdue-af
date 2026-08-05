@@ -172,15 +172,34 @@ jobs:
         env:
           AUX_TAGS: ${{ needs.images.outputs.aux-tags }}
         run: |
+          set -euo pipefail
+          # GHCR applies secondary rate limits to rapid back-to-back retags
+          # across packages; a short gap plus retries keeps publish from
+          # failing an otherwise-green main run (see run 31008040707).
+          retag() {
+            local attempt=1 max=5 delay=15
+            until docker buildx imagetools create "$@"; do
+              if [ "$attempt" -ge "$max" ]; then
+                echo "::error::imagetools create failed after ${max} attempts: $*"
+                return 1
+              fi
+              echo "::warning::imagetools create failed (attempt ${attempt}/${max}); retrying in ${delay}s"
+              sleep "$delay"
+              attempt=$((attempt + 1))
+              delay=$((delay * 2))
+            done
+          }
+          first=1
           for pair in $AUX_TAGS; do
             # name=in-<hash>=<channel>  (channel is :latest for most aux images,
             # PLUGIN_REF for interlink-slurm-plugin)
+            if [ "$first" -eq 0 ]; then sleep 5; else first=0; fi
             name="${pair%%=*}"; rest="${pair#*=}"
             tag="${rest%%=*}"; channel="${rest#*=}"
             repo="ghcr.io/purdueaf/${name}"
             digest=$(docker buildx imagetools inspect "$repo:$tag" --format '{{json .Manifest}}' | jq -r .digest)
             [ -n "$digest" ] && [ "$digest" != "null" ] || { echo "::error::cannot resolve $repo:$tag"; exit 1; }
-            docker buildx imagetools create \
+            retag \
               -t "$repo:sha-$GITHUB_SHA" \
               -t "$repo:$channel" \
               "$repo@$digest"
@@ -191,8 +210,22 @@ jobs:
           AF_IMAGE: ${{ needs.images.outputs.af-image }} # digest-pinned ref
           AF_DIGEST: ${{ needs.images.outputs.af-digest }}
         run: |
+          set -euo pipefail
+          retag() {
+            local attempt=1 max=5 delay=15
+            until docker buildx imagetools create "$@"; do
+              if [ "$attempt" -ge "$max" ]; then
+                echo "::error::imagetools create failed after ${max} attempts: $*"
+                return 1
+              fi
+              echo "::warning::imagetools create failed (attempt ${attempt}/${max}); retrying in ${delay}s"
+              sleep "$delay"
+              attempt=$((attempt + 1))
+              delay=$((delay * 2))
+            done
+          }
           repo="${AF_IMAGE%%:*}"
-          docker buildx imagetools create \
+          retag \
             -t "$repo:sha-$GITHUB_SHA" \
             -t "$repo:pre-release" \
             "$repo@$AF_DIGEST"
