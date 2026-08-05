@@ -57,4 +57,4 @@ spec:
                     name: prometheus
                     uid: prometheus
                     type: prometheus
-                    url: http://prometheus-server:9090
+                    url: http://prometheus-server.cms.svc.cluster.local:9090

@@ -45,7 +45,7 @@ triton:
 inferenceEndpoint: supersonic.cms.geddes.rcac.purdue.edu:8001
 
 prometheus:
-  url: http://prometheus-server:9090
+  url: http://prometheus-server.cms.svc.cluster.local:9090
   # Default selector release="supersonic" (from supersonicRelease) matches the
   # labels af-pod-monitor attaches on cms prometheus-server.
   window: 5m

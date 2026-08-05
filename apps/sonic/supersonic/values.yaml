@@ -98,9 +98,11 @@ prometheus:
   # Use the AF Prometheus already running in cms (HelmRelease `prometheus`).
   # It scrapes Triton via af-pod-monitor and attaches app/release labels the
   # SuperSONIC dashboard expects — rancher-monitoring does not.
+  # FQDN required: KEDA operator runs in the keda namespace and cannot
+  # resolve the short name prometheus-server.
   external:
     enabled: true
-    url: prometheus-server
+    url: prometheus-server.cms.svc.cluster.local
     port: 9090
     scheme: http
 
@@ -120,7 +122,7 @@ grafana:
           # Chart validation requires scheme://host with no port (must match
           # prometheus.external.scheme + .url). Port 9090 is injected by the
           # HelmRelease postRenderer in helmrelease.yaml.
-          url: http://prometheus-server
+          url: http://prometheus-server.cms.svc.cluster.local
           jsonData:
             timeInterval: "5s"
             tlsSkipVerify: true
