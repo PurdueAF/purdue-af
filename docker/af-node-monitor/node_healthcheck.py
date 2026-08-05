@@ -345,13 +345,26 @@ def _refresh_node_caches() -> None:
                 # first match wins: a node labelled both is production
                 if name not in by_name:
                     by_name[name] = (pool, ready)
-                    _node_pools[name] = pool
     except ApiException as e:  # type: ignore[misc]
         print(f"[node_healthcheck] Error listing nodes: {e}")
         return
     except Exception as e:  # pragma: no cover - defensive
         print(f"[node_healthcheck] Unexpected error listing nodes: {e}")
         return
+
+    # Drop gauges for the inactive pool (and for nodes that left the AF set).
+    # A leftover node_pool series with the 10s timeout sentinel is what made
+    # paf-b00 look red on heatmaps while its live checks were fine.
+    other_pool = {"prod": "dev", "dev": "prod"}
+    prev_pools = dict(_node_pools)
+    for name, (pool, _ready) in by_name.items():
+        _clear_node_pool_gauges(name, other_pool[pool])
+    for name, old_pool in prev_pools.items():
+        if name not in by_name:
+            _clear_node_pool_gauges(name, old_pool)
+
+    _node_pools.clear()
+    _node_pools.update({name: pool for name, (pool, _ready) in by_name.items()})
 
     _af_nodes_cache = sorted(
         ((name, pool, ready) for name, (pool, ready) in by_name.items()),
@@ -404,6 +417,25 @@ def _clear_mount_gauges(labels: dict[str, str]) -> None:
             gauge.remove(*labelvalues)
         except KeyError:
             pass
+
+
+def _clear_node_pool_gauges(node_name: str, pool: str) -> None:
+    """Drop all mount status gauges for a node under one node_pool label.
+
+    prometheus_client keeps every label set forever until remove(). When a
+    node flips between cms-af-dev and cms-af-prod (or leaves the AF set), the
+    inactive pool's series must be dropped — otherwise scrapes keep exporting
+    a frozen timeout sentinel that Grafana heatmaps can sum into a false red.
+    """
+    for m_name, cfg in MOUNTS.items():
+        _clear_mount_gauges(
+            {
+                "mount_name": m_name,
+                "mount_path": cfg["mount_path"],
+                "node": node_name,
+                "node_pool": pool,
+            }
+        )
 
 
 def _publish_unusable(labels: dict[str, str], check_type: str) -> None:

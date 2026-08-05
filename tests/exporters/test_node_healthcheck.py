@@ -228,6 +228,74 @@ def test_list_target_nodes_without_k8s(monkeypatch):
     assert nh._list_af_nodes() == []
 
 
+def _seed_pool_gauges(node: str, pool: str, *, latency: float = 10000.0) -> None:
+    """Create the full set of status gauges for every mount under one pool."""
+    for m_name, cfg in nh.MOUNTS.items():
+        labels = {
+            "mount_name": m_name,
+            "mount_path": cfg["mount_path"],
+            "node": node,
+            "node_pool": pool,
+        }
+        nh.mount_valid.labels(**labels).set(0)
+        nh.mount_ping_ms.labels(**labels).set(nh._timeout_ping_ms())
+        nh.mount_metadata_latency_ms.labels(**labels).set(latency)
+        nh.mount_data_rate_gbps.labels(**labels).set(0.0)
+        nh.mount_result_fresh.labels(**labels).set(0)
+
+
+def test_refresh_clears_inactive_pool_gauges(k8s):
+    """Ghost node_pool series (e.g. frozen 10s timeout under prod while the
+    node is only labelled cms-af-dev) must be removed on refresh — otherwise
+    heatmap queries that join without node_pool sum them into a false red."""
+    _seed_pool_gauges("node-a", "dev", latency=10000.0)
+    _seed_pool_gauges("node-a", "prod", latency=10000.0)
+    assert sample("af_node_mount_metadata_latency_ms", node_pool="dev") == 10000.0
+    assert sample("af_node_mount_metadata_latency_ms", node_pool="prod") == 10000.0
+
+    # FakeCoreV1 returns the node for both selectors → first match = prod.
+    nh._last_node_refresh = 0.0
+    nh._af_nodes_cache = []
+    nh._refresh_node_caches()
+
+    assert nh._node_pools["node-a"] == "prod"
+    # Inactive pool wiped; active pool left alone (update_metrics republishes).
+    assert sample("af_node_mount_metadata_latency_ms", node_pool="dev") is None
+    assert sample("af_node_mount_valid", node_pool="dev") is None
+    assert sample("af_node_mount_result_fresh", node_pool="dev") is None
+    assert sample("af_node_mount_metadata_latency_ms", node_pool="prod") == 10000.0
+
+
+def test_refresh_clears_gauges_for_departed_nodes(k8s):
+    _seed_pool_gauges("node-gone", "dev", latency=10000.0)
+    nh._node_pools["node-gone"] = "dev"
+    k8s.core.nodes = [fake_node("node-a")]
+    nh._last_node_refresh = 0.0
+    nh._af_nodes_cache = []
+    nh._refresh_node_caches()
+
+    assert "node-gone" not in nh._node_pools
+    assert (
+        sample("af_node_mount_metadata_latency_ms", node="node-gone", node_pool="dev")
+        is None
+    )
+
+
+def test_pool_flip_dev_to_prod_drops_dev_series(k8s):
+    """After cms-af-prod is added, the previous dev series must disappear."""
+    _seed_pool_gauges("node-a", "dev", latency=42.0)
+    nh._node_pools["node-a"] = "dev"
+    # Healthy live value under the old pool.
+    assert sample("af_node_mount_metadata_latency_ms", node_pool="dev") == 42.0
+
+    nh._last_node_refresh = 0.0
+    nh._af_nodes_cache = []
+    nh._refresh_node_caches()
+
+    assert nh._node_pools["node-a"] == "prod"
+    assert sample("af_node_mount_metadata_latency_ms", node_pool="dev") is None
+
+
 # ── job orchestration ─────────────────────────────────────────────────────────
 
 
