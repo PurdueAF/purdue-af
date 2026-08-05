@@ -211,6 +211,7 @@ def write_badge(out: Path, slug: str, payload: dict[str, Any]) -> None:
 LABEL_OVERRIDES = {
     "apps/interlink/gautschi": "interlink-gautschi",
     "apps/interlink/hammer": "interlink-hammer",
+    "apps/interlink/negishi": "interlink-negishi",
 }
 
 

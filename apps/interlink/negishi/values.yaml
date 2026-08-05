@@ -15,14 +15,20 @@ interlink:
 
 plugin:
   enabled: true
-  image: "geddes-registry.rcac.purdue.edu/interlink/sidecar:0.6.0-patch1.1"
+  # One multi-cluster image from ghcr. Tag == upstream plugin checkout
+  # (docker/interlink-slurm-plugin/PLUGIN_REF); SLURM_CLUSTER selects configs.
+  image: "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:0.6.2-pre3"
   address: "http://0.0.0.0"
   port: 4000
   privileged: false
   extraVolumeMounts:
     - name: plugin-data
       mountPath: /depot/itap/interlink/
+    - name: cvmfs
+      mountPath: /cvmfs
   envs:
+    - name: SLURM_CLUSTER
+      value: "negishi"
     - name: SLURMCONFIGPATH
       value: "/etc/interlink/plugin.yaml"
     - name: SHARED_FS
@@ -185,10 +191,18 @@ extraVolumes:
     nfs:
       server: datadepot.rcac.purdue.edu
       path: /depot/itap/interlink
+  - name: cvmfs
+    persistentVolumeClaim:
+      claimName: cvmfs
 
 podScheduling:
   nodeSelector:
-    kubernetes.io/hostname: geddes-b000
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
 
 serviceAccount:
   create: true

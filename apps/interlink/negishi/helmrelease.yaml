@@ -22,10 +22,11 @@ spec:
     - kind: ConfigMap
       name: interlink-negishi-config
       valuesKey: values.yaml
-  # The chart has no hook for the munge key, and the Negishi sidecar writes to
-  # /etc/kubernetes and /etc/docker on a read-only image layer. munge-key-negishi
-  # is created and populated out of band, like every other munge PVC — never in
-  # git. The target name follows nodeName: every chart resource is <nodeName>-*.
+  # The chart has no hook for the munge key or for sizing the node container,
+  # so both are patched in. munge-key-negishi is created out of band, never in
+  # git. Cluster Slurm client configs come from the shared plugin image via
+  # SLURM_CLUSTER=negishi (slurm/slurm-configs-negishi/). The target name
+  # follows nodeName: every chart resource is <nodeName>-*.
   postRenderers:
     - kustomize:
         patches:
@@ -46,22 +47,9 @@ spec:
                   mountPath: /etc/secrets/munge
                   readOnly: true
               - op: add
-                path: /spec/template/spec/volumes/-
+                path: /spec/template/spec/containers/0/resources
                 value:
-                  name: kube-config-dir
-                  emptyDir: {}
-              - op: add
-                path: /spec/template/spec/containers/0/volumeMounts/-
-                value:
-                  name: kube-config-dir
-                  mountPath: /etc/kubernetes
-              - op: add
-                path: /spec/template/spec/volumes/-
-                value:
-                  name: docker-config-dir
-                  emptyDir: {}
-              - op: add
-                path: /spec/template/spec/containers/0/volumeMounts/-
-                value:
-                  name: docker-config-dir
-                  mountPath: /etc/docker
+                  limits:
+                    memory: 16Gi
+                  requests:
+                    memory: 16Gi

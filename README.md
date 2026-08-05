@@ -56,6 +56,7 @@ Whether each component on the cluster is running what is on `main`
 ![infrastructure][experimental-infrastructure]
 ![interlink-gautschi][experimental-interlink-gautschi]
 ![interlink-hammer][experimental-interlink-hammer]
+![interlink-negishi][experimental-interlink-negishi]
 ![af-monitoring][experimental-monitoring-af-monitoring]
 ![alloy][experimental-monitoring-alloy]
 ![loki][experimental-monitoring-loki]
@@ -115,6 +116,7 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-infrastructure]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-infrastructure.json
 [experimental-interlink-gautschi]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-gautschi.json
 [experimental-interlink-hammer]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-hammer.json
+[experimental-interlink-negishi]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-negishi.json
 [experimental-monitoring-af-monitoring]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-af-monitoring.json
 [experimental-monitoring-alloy]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-alloy.json
 [experimental-monitoring-loki]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-loki.json
