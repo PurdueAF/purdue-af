@@ -45,7 +45,7 @@ gateway:
     namespace: ${namespace}
     environment: {}
     # Defaults = geddes. options_handler overrides nodeSelector / volumes /
-    # annotations when cluster is hammer or gautschi.
+    # annotations when cluster is one of the interLink clusters.
     scheduler:
       cores:
         request: 2
@@ -157,6 +157,13 @@ gateway:
           "gautschi": {
               "node": "interlink-gautschi",
               "sbatch_flags": "--account=cms --partition=cpu --qos=standby",
+          },
+          # Negishi has a CMS-owned partition (AllowAccounts=cms), so jobs land
+          # on dedicated nodes rather than borrowing idle capacity. It sets
+          # DenyQOS=standby, so no --qos here.
+          "negishi": {
+              "node": "interlink-negishi",
+              "sbatch_flags": "--account=cms --partition=cms",
           },
       }
       # ExportPodData materializes the dask-credentials Secret under
@@ -327,9 +334,9 @@ gateway:
           allowed = ("/depot/", "/cvmfs/")
           if not path.startswith(allowed):
               raise ValueError(
-                  f"{what} for interLink (hammer/gautschi) must live under "
-                  f"/depot/ or /cvmfs/ (got {path!r}). /work and /home are "
-                  "not visible on Slurm nodes."
+                  f"{what} for interLink (" + "/".join(INTERLINK_CLUSTERS) + ") "
+                  f"must live under /depot/ or /cvmfs/ (got {path!r}). /work and "
+                  "/home are not visible on Slurm nodes."
               )
 
 
@@ -338,18 +345,19 @@ gateway:
 
       def options_handler(options, user):
           cluster = (getattr(options, "cluster", None) or "geddes").strip().lower()
-          if cluster not in ("geddes",) + tuple(INTERLINK_CLUSTERS):
+          allowed = ("geddes",) + tuple(INTERLINK_CLUSTERS)
+          if cluster not in allowed:
               raise ValueError(
-                  f"Unknown cluster {cluster!r}. Choose geddes, hammer, or gautschi."
+                  f"Unknown cluster {cluster!r}. Choose one of: {', '.join(allowed)}."
               )
           use_interlink = cluster in INTERLINK_CLUSTERS
 
           if use_interlink:
               if user.name == "jovyan" or ("-cern" in user.name) or ("-fnal" in user.name):
                   raise ValueError(
-                      "interLink clusters (hammer/gautschi) are available to "
-                      "Purdue accounts only. Use cluster='geddes' or the "
-                      "default Kubernetes Dask Gateway."
+                      "interLink clusters (" + "/".join(INTERLINK_CLUSTERS) + ") "
+                      "are available to Purdue accounts only. Use "
+                      "cluster='geddes' or the default Kubernetes Dask Gateway."
                   )
               try:
                   uid, gid = ldap_lookup(user.name)
@@ -531,9 +539,13 @@ gateway:
       c.Backend.cluster_options = Options(
           Select(
               "cluster",
-              ["geddes", "hammer", "gautschi"],
+              ["geddes"] + list(INTERLINK_CLUSTERS),
               default="geddes",
-              label="Target cluster (geddes=AF k8s; hammer/gautschi=interLink/Slurm)",
+              label=(
+                  "Target cluster (geddes=AF k8s; "
+                  + "/".join(INTERLINK_CLUSTERS)
+                  + "=interLink/Slurm)"
+              ),
           ),
           String("conda_env", default="", label="Conda environment"),
           String(

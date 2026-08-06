@@ -67,9 +67,53 @@ def test_ingress_host():
     )
 
 
+def _extra_config() -> str:
+    """The gateway's extraConfig, dedented — it is Python, not YAML."""
+    doc = yaml.safe_load(_values_text())
+    return doc["gateway"]["extraConfig"]["config"]
+
+
+def _interlink_clusters():
+    """Evaluate the gateway's own INTERLINK_CLUSTERS table, so the test reads
+    what the gateway will actually run rather than a copy of it."""
+    src = _extra_config()
+    start = src.index("INTERLINK_CLUSTERS = {")
+    ns: dict = {}
+    exec(src[start : src.index("\n}", start) + 2], ns)
+    return ns["INTERLINK_CLUSTERS"]
+
+
 def test_interlink_sbatch_targets():
-    text = _values_text()
-    assert "--partition=hammer-nodes" in text
-    assert "--partition=cpu --qos=standby" in text
-    assert "interlink-hammer" in text
-    assert "interlink-gautschi" in text
+    clusters = _interlink_clusters()
+    assert set(clusters) == {"hammer", "gautschi", "negishi"}
+    assert (
+        clusters["hammer"]["sbatch_flags"] == "--account=cms --partition=hammer-nodes"
+    )
+    assert (
+        clusters["gautschi"]["sbatch_flags"]
+        == "--account=cms --partition=cpu --qos=standby"
+    )
+    # Negishi owns a cms partition that denies the standby QoS
+    assert clusters["negishi"]["sbatch_flags"] == "--account=cms --partition=cms"
+
+
+def test_every_interlink_cluster_has_a_deployed_node():
+    """A cluster offered here with no interLink node would accept the option and
+    then leave every worker Pending."""
+    nodes = {c["node"] for c in _interlink_clusters().values()}
+    deployed = (REPO / "deploy/experimental/kustomization.yaml").read_text()
+    for node in nodes:
+        cluster = node.removeprefix("interlink-")
+        assert f"apps/interlink/{cluster}/helmrelease.yaml" in deployed, node
+        assert f"# - ../../apps/interlink/{cluster}/" not in deployed, (
+            f"{node} is offered but its node is commented out"
+        )
+
+
+def test_cluster_choices_are_derived_not_hardcoded():
+    """The Select list, the label and both error messages must come from
+    INTERLINK_CLUSTERS, or adding a cluster leaves them silently stale."""
+    text = _extra_config()
+    assert '["geddes"] + list(INTERLINK_CLUSTERS)' in text
+    for stale in ("hammer, or gautschi", "(hammer/gautschi)", "hammer or gautschi"):
+        assert stale not in text, f"hardcoded cluster list: {stale!r}"
