@@ -1980,7 +1980,7 @@
       },
       "gridPos": {
         "h": 10,
-        "w": 8,
+        "w": 6,
         "x": 0,
         "y": 45
       },
@@ -2082,8 +2082,8 @@
       },
       "gridPos": {
         "h": 10,
-        "w": 8,
-        "x": 8,
+        "w": 6,
+        "x": 6,
         "y": 45
       },
       "id": 28,
@@ -2185,8 +2185,8 @@
       },
       "gridPos": {
         "h": 10,
-        "w": 8,
-        "x": 16,
+        "w": 6,
+        "x": 12,
         "y": 45
       },
       "id": 46,
@@ -2217,6 +2217,112 @@
         }
       ],
       "title": "Slurm jobs (Hammer) - Memory allocation",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "How long a job submitted now would wait before starting, per cluster, under that cluster's configured account/partition/QoS selector. Comes from `sbatch --test-only`, so nothing is actually queued. A cluster whose probe stops reporting drops out of the graph rather than reading zero.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 14400
+              },
+              {
+                "color": "dark-red",
+                "value": 86400
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 6,
+        "x": 18,
+        "y": 45
+      },
+      "id": 55,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "af_slurm_backlog_seconds",
+          "interval": "",
+          "legendFormat": "{{cluster}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Slurm backlog - predicted wait before a job starts",
       "type": "timeseries"
     },
     {

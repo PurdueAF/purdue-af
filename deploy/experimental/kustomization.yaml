@@ -42,6 +42,9 @@ resources:
 
   - ../../apps/af-utils/pixi-global-sync/deployment.yaml
 
+  - ../../apps/af-utils/slurm-probes/deployment.yaml
+  - ../../apps/af-utils/slurm-probes/service.yaml
+
   - ../../apps/agentic-interface/rbac.yaml
   - ../../apps/agentic-interface/deployment.yaml
   - ../../apps/agentic-interface/service.yaml
@@ -129,6 +132,15 @@ configMapGenerator:
   - name: supersonic-model-manager-config
     files:
       - values.yaml=../../apps/sonic/model-manager/values-supersonic.yaml
+
+  - name: slurm-probes
+    options:
+      annotations:
+        # shell + python with their own ${...}; keep Flux substitution away
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../apps/af-utils/slurm-probes/probe.sh
+      - ../../apps/af-utils/slurm-probes/serve.py
 
   - name: interlink-hammer-config
     files:

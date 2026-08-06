@@ -152,6 +152,10 @@ serverFiles:
       # The scrape-metrics ServiceMonitor label feeds RANCHER's Prometheus,
       # not this server — scrape the sync Service directly so the
       # AFGlobalEnv* alerts below can actually evaluate here.
+      - job_name: "slurm-probes"
+        static_configs:
+          - targets:
+              - "slurm-probes:9100"
       - job_name: "pixi-global-sync"
         static_configs:
           - targets:

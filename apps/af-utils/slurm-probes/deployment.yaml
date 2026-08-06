@@ -1,0 +1,135 @@
+# Predicted Slurm wait time per interLink cluster.
+#
+# Answers "would a job start now, or sit in the queue for days?" before anyone
+# submits one — see README.md. One probe container per cluster (each needs its
+# own munge key and Slurm config), all writing textfiles that a single sidecar
+# serves on :9100.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slurm-probes
+  labels:
+    app: slurm-probes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slurm-probes
+  template:
+    metadata:
+      labels:
+        app: slurm-probes
+    spec:
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+        - key: "hub.jupyter.org/dedicated"
+          operator: "Equal"
+          value: "cms-af"
+          effect: "NoSchedule"
+      containers:
+        - name: probe-hammer
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:0.6.2-pre3
+          # startup.sh installs this cluster's Slurm client config and starts
+          # munged; the entrypoint normally chains the sidecar after it.
+          command:
+            ["/bin/sh", "-c", "/etc/startup.sh && exec bash /config/probe.sh"]
+          env:
+            - name: SLURM_CLUSTER
+              value: "hammer"
+            - name: PROBE_SBATCH_FLAGS
+              value: "--account=cms --partition=hammer-nodes"
+            - name: PROBE_UID
+              value: "616617"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: metrics
+              mountPath: /var/lib/slurm-probes
+            - name: munge-hammer
+              mountPath: /etc/secrets/munge
+              readOnly: true
+          resources:
+            requests: { cpu: 10m, memory: 64Mi }
+            limits: { memory: 256Mi }
+        - name: probe-gautschi
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:0.6.2-pre3
+          # startup.sh installs this cluster's Slurm client config and starts
+          # munged; the entrypoint normally chains the sidecar after it.
+          command:
+            ["/bin/sh", "-c", "/etc/startup.sh && exec bash /config/probe.sh"]
+          env:
+            - name: SLURM_CLUSTER
+              value: "gautschi"
+            - name: PROBE_SBATCH_FLAGS
+              value: "--account=cms --partition=cpu --qos=standby"
+            - name: PROBE_UID
+              value: "616617"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: metrics
+              mountPath: /var/lib/slurm-probes
+            - name: munge-gautschi
+              mountPath: /etc/secrets/munge
+              readOnly: true
+          resources:
+            requests: { cpu: 10m, memory: 64Mi }
+            limits: { memory: 256Mi }
+        - name: probe-negishi
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:0.6.2-pre3
+          # startup.sh installs this cluster's Slurm client config and starts
+          # munged; the entrypoint normally chains the sidecar after it.
+          command:
+            ["/bin/sh", "-c", "/etc/startup.sh && exec bash /config/probe.sh"]
+          env:
+            - name: SLURM_CLUSTER
+              value: "negishi"
+            - name: PROBE_SBATCH_FLAGS
+              value: "--account=cms --partition=cms"
+            - name: PROBE_UID
+              value: "616617"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: metrics
+              mountPath: /var/lib/slurm-probes
+            - name: munge-negishi
+              mountPath: /etc/secrets/munge
+              readOnly: true
+          resources:
+            requests: { cpu: 10m, memory: 64Mi }
+            limits: { memory: 256Mi }
+        - name: exporter
+          image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/python:3.12-slim
+          command: ["python3", "/config/serve.py"]
+          ports:
+            - name: metrics
+              containerPort: 9100
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: metrics
+              mountPath: /var/lib/slurm-probes
+              readOnly: true
+          readinessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            initialDelaySeconds: 5
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }
+      volumes:
+        - name: config
+          configMap:
+            name: slurm-probes
+        - name: metrics
+          emptyDir: {}
+        - name: munge-hammer
+          persistentVolumeClaim:
+            claimName: munge-key-hammer
+        - name: munge-gautschi
+          persistentVolumeClaim:
+            claimName: munge-key-gautschi
+        - name: munge-negishi
+          persistentVolumeClaim:
+            claimName: munge-key-negishi
