@@ -5,8 +5,12 @@ metadata:
   labels:
     app: prometheus
 spec:
-  storageClassName: ${multinode_storage_class}
-  accessModes: [ReadWriteMany]
+  # RWO block (RBD), not CephFS/RWX. Prometheus is single-replica (Recreate)
+  # so it never needed RWX; CephFS stalls during WAL/compaction freeze the
+  # process (HTTP probes time out for hours at ~0 CPU) the same way SQLite
+  # on CephFS took down Grafana. Mirror alertmanager/grafana singlenode PVC.
+  storageClassName: ${singlenode_storage_class}
+  accessModes: [ReadWriteOnce]
   resources:
     requests:
       storage: 40Gi

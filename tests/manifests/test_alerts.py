@@ -128,7 +128,7 @@ def test_kube_state_metrics_scrape_keeps_only_cms_and_cluster_scoped():
 
 
 def test_prometheus_server_tolerates_ceph_stalls():
-    """Default chart probes kill this server on Ceph RWX WAL/compaction stalls."""
+    """Default chart probes kill this server on WAL/compaction stalls."""
     doc = yaml.safe_load(VALUES.read_text())
     server = doc["server"]
     assert server["startupProbe"]["enabled"] is True
@@ -143,6 +143,16 @@ def test_prometheus_server_tolerates_ceph_stalls():
     )
     assert "query.timeout=2m" in server["extraFlags"]
     assert server["global"]["scrape_timeout"] < server["global"]["scrape_interval"]
+
+
+def test_prometheus_tsdb_uses_rwo_block_storage():
+    """CephFS/RWX freezes this server during WAL/compaction (probes time out
+    for hours at ~0 CPU). Same fix as Grafana/alertmanager: RBD RWO."""
+    pvc = yaml.safe_load((REPO / "apps/monitoring/prometheus/pvc.yaml").read_text())
+    assert pvc["spec"]["storageClassName"] == "${singlenode_storage_class}"
+    assert pvc["spec"]["accessModes"] == ["ReadWriteOnce"]
+    doc = yaml.safe_load(VALUES.read_text())
+    assert doc["server"]["persistentVolume"]["existingClaim"] == "prometheus-data-pvc"
 
 
 def test_af_node_monitor_has_dedicated_scrape_without_pod_host():
