@@ -1,0 +1,9 @@
+# Per-cluster Slurm *client* RPM version. The controller protocol must match —
+# a 25.11 client talking to a 24.11 controller fails with
+# "Protocol authentication error" even with a valid munge key.
+#
+# RPMs live beside this file as slurm-<version>-1.el8.x86_64.rpm.
+# Format: <cluster> <version>
+hammer   25.11.4
+gautschi 25.11.4
+negishi  24.11.5

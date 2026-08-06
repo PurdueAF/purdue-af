@@ -3,7 +3,7 @@
 Site image for the [interlink-slurm-plugin](https://github.com/interlink-hq/interlink-slurm-plugin)
 sidecar. Upstream’s published image is a self-contained demo Slurm cluster;
 this one is a **thin client** against RCAC Slurm on the same NVIDIA
-Rocky Linux 8 CUDA base as the AF session image, plus the site Slurm RPM.
+Rocky Linux 8 CUDA base as the AF session image, plus the site Slurm RPM(s).
 
 ## Versioning
 
@@ -21,12 +21,20 @@ tests fail if values / Dockerfile drift.
 
 One image tag is shared by every `apps/interlink/<cluster>/` Deployment:
 
-1. Build copies every `slurm/slurm-configs-<cluster>/` tree into
+1. Build extracts every `slurm/slurm-*-1.el8.x86_64.rpm` into
+   `/opt/purdue-af/slurm-clients/<version>/` and copies every
+   `slurm/slurm-configs-<cluster>/` tree into
    `/opt/purdue-af/slurm-configs/<cluster>/`.
-2. At start, `startup.sh` installs the tree named by `$SLURM_CLUSTER` into
-   `/etc/slurm`, loads `munge-key-<cluster>`, and starts `munged`.
+2. At start, `startup.sh` installs the config tree named by `$SLURM_CLUSTER`,
+   activates the client version from `slurm/client-versions` onto
+   `/opt/purdue-af/slurm-active/bin` (first on `PATH`), loads
+   `munge-key-<cluster>`, and starts `munged`.
 3. Optional override: mount a full client tree at `/etc/secrets/slurm-configs`
    (takes precedence) for a cluster whose configs are not in git yet.
+
+Clusters may need different client RPMs — Negishi is on 24.11 while
+Hammer/Gautschi are on 25.11. A single system-wide `dnf install` cannot cover
+both; the versioned prefixes above are why one image still works.
 
 ## Build & publish
 

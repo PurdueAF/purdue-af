@@ -10,7 +10,8 @@ Per-cluster Slurm *client* trees consumed by:
 
 ```
 slurm/
-  slurm-<version>-1.el8.x86_64.rpm   # shared client RPM (25.11.4 for AF, interlink, dask)
+  client-versions                    # cluster -> client RPM version map
+  slurm-<version>-1.el8.x86_64.rpm   # one RPM per distinct controller version
   slurm-configs-<cluster>/
     slurm.conf                       # required
     cgroup.conf                      # optional
@@ -18,8 +19,20 @@ slurm/
     slist                            # optional; Hammer RCAC helper shipped into PATH
 ```
 
+Current map (see `client-versions`):
+
+| Cluster  | Client RPM |
+| -------- | ---------- |
+| hammer   | 25.11.4    |
+| gautschi | 25.11.4    |
+| negishi  | 24.11.5    |
+
 `<cluster>` must match `apps/interlink/<cluster>/`, `munge-key-<cluster>`, and
 `SLURM_CLUSTER=<cluster>`.
+
+A mismatched client/controller version fails with `Protocol authentication
+error` even when the munge key is correct — that is why Negishi cannot share
+Hammer's 25.11 RPM.
 
 ## What belongs here
 
@@ -38,6 +51,8 @@ backup `*.old` / `*.new` copies, etc.
 ## Adding a cluster
 
 1. Drop the client files above into `slurm/slurm-configs-<name>/`.
-2. Create and populate `munge-key-<name>` in `cms` (out of band, never in git).
-3. Wire `apps/interlink/<name>/` with `SLURM_CLUSTER` + munge PVC postRenderer.
-4. Merge to `main` — CI rebuilds `interlink-slurm-plugin` and retags `$PLUGIN_REF`.
+2. Add `<name> <version>` to `client-versions`. If that version is new, add
+   `slurm-<version>-1.el8.x86_64.rpm` (from the cluster's login node).
+3. Create and populate `munge-key-<name>` in `cms` (out of band, never in git).
+4. Wire `apps/interlink/<name>/` with `SLURM_CLUSTER` + munge PVC postRenderer.
+5. Merge to `main` — CI rebuilds `interlink-slurm-plugin` and retags `$PLUGIN_REF`.

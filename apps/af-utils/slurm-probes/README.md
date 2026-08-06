@@ -50,5 +50,6 @@ kubectl -n cms logs deploy/slurm-probes -c probe-<cluster>
 ```
 
 `Protocol authentication error` with the controller port reachable and local
-`munged` healthy means the munge key no longer authenticates against that
-cluster.
+`munged` healthy is either a bad munge key **or** a Slurm client/controller
+version mismatch (Negishi is 24.11; Hammer/Gautschi are 25.11 — see
+`slurm/client-versions`).

@@ -272,6 +272,10 @@ jobs:
               test -x /sidecar/slurm-sidecar;
               test -x /etc/startup.sh;
               test -f /opt/purdue-af/slurm-configs/hammer/slurm.conf;
+              test -f /opt/purdue-af/slurm-configs/negishi/slurm.conf;
+              test -f /opt/purdue-af/slurm-clients/client-versions;
+              test -x /opt/purdue-af/slurm-clients/25.11.4/usr/bin/sbatch;
+              test -x /opt/purdue-af/slurm-clients/24.11.5/usr/bin/sbatch;
               ls /opt/purdue-af/slurm-configs;
               echo ok"
     name: aux ${{ matrix.name }}

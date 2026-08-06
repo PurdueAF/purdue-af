@@ -183,6 +183,48 @@ def test_slurm_cluster_has_client_configs(active_clusters):
         assert "SlurmctldHost=" in text, f"{cluster}: missing SlurmctldHost"
 
 
+def _client_versions():
+    """Parse slurm/client-versions -> {cluster: version}."""
+    path = REPO / "slurm" / "client-versions"
+    mapping = {}
+    for line in path.read_text().splitlines():
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        cluster, version, *rest = line.split()
+        assert not rest, f"extra fields in client-versions: {line!r}"
+        mapping[cluster] = version
+    return mapping
+
+
+def test_every_interlink_cluster_has_a_slurm_client_version(interlink_clusters):
+    """startup.sh refuses to start without a version; a new cluster directory
+    must not be forgotten in client-versions."""
+    versions = _client_versions()
+    for cluster in interlink_clusters:
+        assert cluster in versions, f"{cluster}: missing from slurm/client-versions"
+
+
+def test_slurm_client_rpms_exist_for_mapped_versions(interlink_clusters):
+    """The Dockerfile extracts slurm/slurm-<ver>-1.el8.x86_64.rpm per version.
+    A map entry without the RPM fails the image build — catch it in unit tests."""
+    versions = _client_versions()
+    for cluster in interlink_clusters:
+        ver = versions[cluster]
+        rpm = REPO / "slurm" / f"slurm-{ver}-1.el8.x86_64.rpm"
+        assert rpm.is_file(), f"{cluster}: missing {rpm.name} for version {ver}"
+
+
+def test_negishi_uses_a_different_slurm_client_than_hammer():
+    """Regression: Negishi's controller is still on 24.11; Hammer/Gautschi are
+    on 25.11. Sharing Hammer's RPM yields Protocol authentication error."""
+    versions = _client_versions()
+    assert versions["negishi"] != versions["hammer"]
+    assert versions["negishi"].startswith("24.")
+    assert versions["hammer"].startswith("25.")
+    assert versions["gautschi"] == versions["hammer"]
+
+
 def test_munge_key_pvcs_are_not_declared_in_git(interlink_clusters, experimental):
     """Creating one from git would collide with the existing bound PVCs, whose
     specs are immutable."""

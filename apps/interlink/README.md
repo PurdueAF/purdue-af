@@ -14,7 +14,9 @@ to Kubernetes it still looks like an ordinary pod.
 All three nodes share one plugin image tagged with the upstream plugin
 ref (`PLUGIN_REF`, e.g. `…/interlink-slurm-plugin:0.6.2-pre3`). Cluster
 identity comes from `SLURM_CLUSTER` plus the per-cluster munge PVC — never
-from a floating `:latest`. CI builds on ghcr; see
+from a floating `:latest`. Client binaries are selected at start from
+`slurm/client-versions` (Negishi is still on Slurm 24.11; Hammer and
+Gautschi are on 25.11). CI builds on ghcr; see
 [`docker/interlink-slurm-plugin/README.md`](../../docker/interlink-slurm-plugin/README.md)
 and [`slurm/README.md`](../../slurm/README.md).
 
