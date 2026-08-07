@@ -15,8 +15,9 @@
 # the relocated binaries still carry RPATH=/usr/lib64/slurm and resolve
 # PluginDir to the same compiled-in path, so no system RPM is installed here
 # and that link is what makes sbatch runnable at all. Each extracted client is
-# smoke-tested below (`sbatch --version`) so a relocation that breaks it fails
-# the build instead of a running pod.
+# smoke-tested below (`sbatch --version` against a throwaway SLURM_CONF, since
+# sbatch otherwise hunts for a controller via DNS SRV and dies) so a relocation
+# that breaks it fails the build instead of a running pod.
 #
 # Version tag == upstream plugin checkout == PLUGIN_REF (single source of
 # truth). CI publishes ghcr.io/purdueaf/interlink-slurm-plugin:$PLUGIN_REF;
@@ -76,6 +77,7 @@ RUN set -euo pipefail \
              /opt/purdue-af/slurm-active/bin \
              /var/log/slurm \
  && shopt -s nullglob \
+ && printf 'ClusterName=smoke\nSlurmctldHost=localhost\n' > /tmp/smoke.conf \
  && rpms=(/tmp/slurm-build/slurm-*-1.el8.x86_64.rpm) \
  && (( ${#rpms[@]} > 0 )) || { echo "no slurm/slurm-*-1.el8.x86_64.rpm in build context" >&2; exit 1; } \
  && for rpm in "${rpms[@]}"; do \
@@ -87,7 +89,8 @@ RUN set -euo pipefail \
       test -x "${dest}/usr/bin/sbatch" \
         || { echo "extracted ${rpm} but ${dest}/usr/bin/sbatch missing" >&2; exit 1; }; \
       ln -sfn "${dest}/usr/lib64/slurm" /usr/lib64/slurm; \
-      LD_LIBRARY_PATH="${dest}/usr/lib64" "${dest}/usr/bin/sbatch" --version >/dev/null \
+      SLURM_CONF=/tmp/smoke.conf LD_LIBRARY_PATH="${dest}/usr/lib64" \
+        "${dest}/usr/bin/sbatch" --version >/dev/null \
         || { echo "extracted ${rpm} but sbatch will not run — relocation broke RPATH/PluginDir" >&2; exit 1; }; \
       rm -f /usr/lib64/slurm; \
       echo "extracted Slurm client ${ver}"; \
@@ -104,7 +107,7 @@ RUN set -euo pipefail \
       name="${d##*/slurm-configs-}"; \
       cp -a "$d" "/opt/purdue-af/slurm-configs/${name}"; \
     done \
- && rm -rf /etc/slurm/* /tmp/slurm-build \
+ && rm -rf /etc/slurm/* /tmp/slurm-build /tmp/smoke.conf \
  && chown -R slurm:slurm /var/log/slurm \
  && dnf remove -y cpio rpm rpm-libs rpm-build-libs python3-rpm || true \
  && dnf clean all && rm -rf /var/cache/dnf \
