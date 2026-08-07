@@ -40,17 +40,51 @@ def _env(container):
     return {e["name"]: e["value"] for e in container.get("env", [])}
 
 
-def test_one_probe_per_interlink_cluster():
-    probes = {n for n in containers() if n.startswith("probe-")}
-    assert probes == {f"probe-{c}" for c in gateway_clusters()}
+def probes():
+    """{container name: env}. A cluster may be probed under several selectors —
+    standby against the default QoS, say — so this is not keyed by cluster."""
+    return {n: _env(c) for n, c in containers().items() if n.startswith("probe-")}
 
 
-def test_probe_flags_match_what_the_gateway_submits():
-    """If these drift, the reported wait is for a job nobody runs."""
+def _series(flags):
+    """The key probe.sh derives its output filename from."""
+    part = re.search(r"--partition=(\S+)", flags)
+    qos = re.search(r"--qos=(\S+)", flags)
+    return (part.group(1) if part else "") + "|" + (qos.group(1) if qos else "")
+
+
+def test_every_interlink_cluster_is_probed():
+    probed = {e["SLURM_CLUSTER"] for e in probes().values()}
+    assert probed == set(gateway_clusters())
+
+
+def test_every_cluster_is_probed_with_exactly_the_gateway_selector():
+    """Extra selectors are welcome — comparing standby against the default QoS
+    is the point of having more than one. But if *none* of a cluster's probes
+    matches what the gateway submits, the panel stops describing the wait users
+    actually get."""
     for cluster, meta in gateway_clusters().items():
-        env = _env(containers()[f"probe-{cluster}"])
-        assert env["PROBE_SBATCH_FLAGS"] == meta["sbatch_flags"], cluster
-        assert env["SLURM_CLUSTER"] == cluster
+        matching = [
+            n
+            for n, e in probes().items()
+            if e["SLURM_CLUSTER"] == cluster
+            and e["PROBE_SBATCH_FLAGS"] == meta["sbatch_flags"]
+        ]
+        assert len(matching) == 1, f"{cluster}: {matching}"
+
+
+def test_probe_output_files_cannot_collide():
+    """Two probes on one cluster write two textfiles; if the derived names
+    collided one would silently overwrite the other and a series would vanish
+    with no error anywhere."""
+    keys = [
+        (e["SLURM_CLUSTER"], _series(e["PROBE_SBATCH_FLAGS"]))
+        for e in probes().values()
+    ]
+    assert len(set(keys)) == len(keys), keys
+    probe = (APP / "probe.sh").read_text()
+    assert 'SERIES="${CLUSTER}${PARTITION:+-${PARTITION}}${QOS:+-${QOS}}"' in probe
+    assert 'OUT="${OUT_DIR}/${SERIES}.prom"' in probe
 
 
 def test_selector_labels_are_parsed_from_the_flags():
@@ -67,8 +101,8 @@ def test_selector_labels_are_parsed_from_the_flags():
 
 
 def test_probe_submits_as_the_configured_uid():
-    for cluster in gateway_clusters():
-        assert _env(containers()[f"probe-{cluster}"])["PROBE_UID"] == "616617"
+    for name, env in probes().items():
+        assert env["PROBE_UID"] == "616617", name
 
 
 def test_exports_exactly_one_metric():
@@ -92,10 +126,12 @@ def test_a_failed_probe_emits_no_series():
 
 def test_each_probe_mounts_its_own_munge_key():
     """Sharing a key across clusters authenticates against none of them."""
-    for cluster in gateway_clusters():
-        container = containers()[f"probe-{cluster}"]
+    for name, container in containers().items():
+        if not name.startswith("probe-"):
+            continue
+        cluster = _env(container)["SLURM_CLUSTER"]
         claims = {m["name"] for m in container["volumeMounts"]}
-        assert f"munge-{cluster}" in claims, cluster
+        assert f"munge-{cluster}" in claims, name
     volumes = {
         v["name"]: v.get("persistentVolumeClaim", {}).get("claimName")
         for v in deployment()["spec"]["template"]["spec"]["volumes"]
@@ -105,9 +141,9 @@ def test_each_probe_mounts_its_own_munge_key():
 
 
 def test_probe_runs_startup_so_it_has_slurm_config_and_munged():
-    for cluster in gateway_clusters():
-        cmd = " ".join(containers()[f"probe-{cluster}"]["command"])
-        assert "/etc/startup.sh" in cmd, cluster
+    for name in probes():
+        cmd = " ".join(containers()[name]["command"])
+        assert "/etc/startup.sh" in cmd, name
 
 
 def test_probe_submits_as_a_user_not_root():

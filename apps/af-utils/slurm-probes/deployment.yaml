@@ -28,7 +28,7 @@ spec:
           value: "cms-af"
           effect: "NoSchedule"
       containers:
-        - name: probe-hammer
+        - name: probe-hammer-default
           image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:0.6.2-pre3
           # startup.sh installs this cluster's Slurm client config and starts
           # munged; the entrypoint normally chains the sidecar after it.
@@ -52,7 +52,7 @@ spec:
           resources:
             requests: { cpu: 10m, memory: 64Mi }
             limits: { memory: 256Mi }
-        - name: probe-gautschi
+        - name: probe-gautschi-standby
           image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:0.6.2-pre3
           # startup.sh installs this cluster's Slurm client config and starts
           # munged; the entrypoint normally chains the sidecar after it.
@@ -76,7 +76,31 @@ spec:
           resources:
             requests: { cpu: 10m, memory: 64Mi }
             limits: { memory: 256Mi }
-        - name: probe-negishi
+        - name: probe-gautschi-default
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:0.6.2-pre3
+          # startup.sh installs this cluster's Slurm client config and starts
+          # munged; the entrypoint normally chains the sidecar after it.
+          command:
+            ["/bin/sh", "-c", "/etc/startup.sh && exec bash /config/probe.sh"]
+          env:
+            - name: SLURM_CLUSTER
+              value: "gautschi"
+            - name: PROBE_SBATCH_FLAGS
+              value: "--account=cms --partition=cpu"
+            - name: PROBE_UID
+              value: "616617"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: metrics
+              mountPath: /var/lib/slurm-probes
+            - name: munge-gautschi
+              mountPath: /etc/secrets/munge
+              readOnly: true
+          resources:
+            requests: { cpu: 10m, memory: 64Mi }
+            limits: { memory: 256Mi }
+        - name: probe-negishi-standby
           image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:0.6.2-pre3
           # startup.sh installs this cluster's Slurm client config and starts
           # munged; the entrypoint normally chains the sidecar after it.
@@ -87,6 +111,30 @@ spec:
               value: "negishi"
             - name: PROBE_SBATCH_FLAGS
               value: "--account=cms-a --partition=cpu --qos=standby"
+            - name: PROBE_UID
+              value: "616617"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: metrics
+              mountPath: /var/lib/slurm-probes
+            - name: munge-negishi
+              mountPath: /etc/secrets/munge
+              readOnly: true
+          resources:
+            requests: { cpu: 10m, memory: 64Mi }
+            limits: { memory: 256Mi }
+        - name: probe-negishi-default
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:0.6.2-pre3
+          # startup.sh installs this cluster's Slurm client config and starts
+          # munged; the entrypoint normally chains the sidecar after it.
+          command:
+            ["/bin/sh", "-c", "/etc/startup.sh && exec bash /config/probe.sh"]
+          env:
+            - name: SLURM_CLUSTER
+              value: "negishi"
+            - name: PROBE_SBATCH_FLAGS
+              value: "--account=cms-a --partition=cpu"
             - name: PROBE_UID
               value: "616617"
           volumeMounts:

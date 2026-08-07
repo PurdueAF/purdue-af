@@ -2,7 +2,13 @@
 
 Probes that submit nothing but ask each interLink cluster's Slurm controller a
 question. Today there is one: how long a job would wait before starting, per
-cluster and per account/partition/QoS selector.
+account/partition/QoS selector.
+
+A cluster can carry more than one probe. Gautschi and Negishi are each measured
+both under the standby QoS the Dask gateway submits with and under their default
+QoS, because that single flag is worth days — the two series side by side are
+what shows it. Each probe writes its own textfile, keyed by the selector rather
+than the cluster.
 
 ```
 af_slurm_backlog_seconds{cluster="gautschi",account="cms",partition="cpu",qos="standby",flags="--account=cms --partition=cpu --qos=standby"} 291360
@@ -48,7 +54,7 @@ worthless.
 ## When a cluster reports nothing
 
 ```bash
-kubectl -n cms logs deploy/slurm-probes -c probe-<cluster>
+kubectl -n cms logs deploy/slurm-probes -c probe-<cluster>-<standby|default>
 ```
 
 `Protocol authentication error` with the controller port reachable and local

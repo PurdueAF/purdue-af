@@ -31,7 +31,11 @@ PROBE_UID="${PROBE_UID:-616617}"
 INTERVAL="${PROBE_INTERVAL_S:-300}"
 TIMEOUT="${PROBE_TIMEOUT_S:-30}"
 OUT_DIR="${PROBE_OUT_DIR:-/var/lib/slurm-probes}"
-OUT="${OUT_DIR}/${CLUSTER}.prom"
+# Keyed by selector, not by cluster: a cluster is probed under more than one
+# QoS at a time (standby yields to owners and waits far longer than the default
+# QoS on the same partition), and those probes must not overwrite each other.
+SERIES="${CLUSTER}${PARTITION:+-${PARTITION}}${QOS:+-${QOS}}"
+OUT="${OUT_DIR}/${SERIES}.prom"
 LABELS="cluster=\"${CLUSTER}\",account=\"${ACCOUNT}\",partition=\"${PARTITION}\",qos=\"${QOS}\",flags=\"${FLAGS}\""
 
 probe_once() {
@@ -48,7 +52,7 @@ probe_once() {
 	if [ "$rc" -ne 0 ] || [ -z "$stamp" ]; then
 		# No series at all: an unknown wait is not a short one, and a stale
 		# file ages out of the sidecar on its own.
-		echo "probe(${CLUSTER}): rc=${rc} ${out}" >&2
+		echo "probe(${SERIES}): rc=${rc} ${out}" >&2
 		return
 	fi
 
@@ -63,7 +67,7 @@ probe_once() {
 		af_slurm_backlog_seconds{${LABELS}} ${backlog}
 	EOF
 	mv -f "$tmp" "$OUT"
-	echo "probe(${CLUSTER}): starts in ${backlog}s"
+	echo "probe(${SERIES}): starts in ${backlog}s"
 }
 
 mkdir -p "$OUT_DIR"
