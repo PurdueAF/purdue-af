@@ -154,6 +154,28 @@
       allowedVersions: '<2025.4.0',
     },
     {
+      // Hold Triton at 26.04 for Geddes GPU nodes on NVIDIA driver R580.
+      // 26.06+ is CUDA 13.3.x, whose paired Linux driver is >=610.43.02
+      // (CUDA Toolkit release notes Table 3). 26.07 was merged (#118) then
+      // rolled back (af19f790). CUDA 13.x MVC lists >=580 as the floor, but
+      // 26.07 failed in practice on R580 — pin the image here. The host
+      // NVIDIA driver is not a Renovate-tracked dep in this repo.
+      matchDatasources: ['docker'],
+      matchPackageNames: ['nvcr.io/nvidia/tritonserver'],
+      allowedVersions: '<26.05',
+    },
+    {
+      // interlink-slurm-plugin base must stay on Rocky 8: site clients are
+      // slurm-*-1.el8.x86_64.rpm, the Dockerfile installs EPEL 8, and RCAC
+      // Slurm itself runs on EL8. A jump to Rocky 10 (Renovate dashboard)
+      // would break the dnf/EPEL layer and mismatch the relocated clients.
+      // Relax only when RCAC ships EL9/EL10 Slurm RPMs and the sidecar is
+      // retargeted (Dockerfile + epel + rpm glob together).
+      matchDatasources: ['docker'],
+      matchPackageNames: ['docker.io/rockylinux/rockylinux', 'rockylinux/rockylinux'],
+      allowedVersions: '<9',
+    },
+    {
       // Manifest-only: CI regenerates pixi.lock (see ci-pixi-*.yml). Skipping
       // artifacts here is what keeps Mend runners from running `pixi lock`.
       matchManagers: ['pixi'],
