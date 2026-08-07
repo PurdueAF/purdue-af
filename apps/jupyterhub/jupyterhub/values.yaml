@@ -8,17 +8,17 @@ singleuser:
   nodeSelector: { "cms-af-prod": "true" }
   image:
     name: "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af"
-    tag: "0.13.1"
+    tag: "0.13.2"
   extraLabels:
     username_unescaped: "{username}"
-    docker_image_tag: "0.13.1"
+    docker_image_tag: "0.13.2"
   startTimeout: 3600
   profileList:
-    - display_name: "Purdue AF 0.13.1 – Pixi-based environment management."
+    - display_name: "Purdue AF 0.13.2 – Pixi-based environment management."
       default: true
       description: 'Please refer to the Purdue AF documentation for instructions on how to switch from Conda to Pixi: <a href="https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html" target="_blank">https://analysis-facility.physics.purdue.edu/en/latest/guide-conda-to-pixi.html</a>.'
       kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af:0.13.1"
+        image: "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af:0.13.2"
         node_selector: { "cms-af-prod": "true" }
         # lifecycle_hooks:
         # preStop:
