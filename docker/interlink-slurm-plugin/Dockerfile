@@ -73,7 +73,7 @@ RUN set -euo pipefail \
       [ -n "${ver}" ] || { echo "cannot parse version from ${rpm}" >&2; exit 1; }; \
       dest="/opt/purdue-af/slurm-clients/${ver}"; \
       mkdir -p "${dest}"; \
-      (cd "${dest}" && rpm2cpio "${rpm}" | cpio -idm --quiet); \
+      rpm2cpio "${rpm}" | cpio -idm --quiet --directory="${dest}"; \
       test -x "${dest}/usr/bin/sbatch" \
         || { echo "extracted ${rpm} but ${dest}/usr/bin/sbatch missing" >&2; exit 1; }; \
       echo "extracted Slurm client ${ver}"; \
