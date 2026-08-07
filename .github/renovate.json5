@@ -271,9 +271,11 @@
       // and the pixi manager (python = "3.12.*" in pixi/{base,global}).
       // 3.12.x patch releases stay allowed. Relax when conda-forge ships
       // tensorflow for newer python (check: pixi/check-env.py will gate it).
+      // Regex (not '<3.13'): docker versioning has no range support, and this
+      // rule also matches the docker datasource (FROM python:3.12-slim).
       matchPackageNames: ['python'],
       matchDatasources: ['docker', 'conda'],
-      allowedVersions: '<3.13',
+      allowedVersions: '/^3\\.12([.-]|$)/',
     },
   ],
 }
