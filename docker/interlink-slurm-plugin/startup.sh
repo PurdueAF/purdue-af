@@ -81,6 +81,21 @@ if [ -d "${client_root}/usr/lib64" ]; then
 	echo "${client_root}/usr/lib64" | ${sudo_cmd} tee /etc/ld.so.conf.d/00-slurm-client.conf >/dev/null
 	${sudo_cmd} ldconfig
 fi
+# The client RPMs are relocated under ${clients_root} so two versions can
+# coexist, but their binaries still carry the absolute paths the RPM was built
+# with: sbatch has RPATH=/usr/lib64/slurm, and Slurm resolves PluginDir to that
+# same compiled-in path (our slurm.conf leaves PluginDir commented out). Neither
+# follows ld.so.conf or LD_LIBRARY_PATH — without this link sbatch dies with
+# "libslurmfull.so: cannot open shared object file", and merely putting the dir
+# on LD_LIBRARY_PATH just moves the failure to "Bad value for PluginDir".
+# This is the lib64 half of the slurm-active/bin symlink farm above.
+sys_plugin_dir="/usr/lib64/slurm"
+if [ -e "${sys_plugin_dir}" ] && [ ! -L "${sys_plugin_dir}" ]; then
+	echo "${sys_plugin_dir} is a real directory (system Slurm RPM?) — refusing to" >&2
+	echo "activate ${client_ver} over it; the versions would silently mix." >&2
+	exit 1
+fi
+${sudo_cmd} ln -sfn "${client_root}/usr/lib64/slurm" "${sys_plugin_dir}"
 
 ${sudo_cmd} mkdir -p /etc/slurm
 ${sudo_cmd} rm -rf /etc/slurm/*

@@ -11,6 +11,12 @@
 # /opt/purdue-af/slurm-clients/<version>/; startup.sh activates the version
 # named in slurm/client-versions into /opt/purdue-af/slurm-active/ (first on
 # PATH) so the sidecar and probes pick it up without sourcing env files.
+# Activation also links that version's usr/lib64/slurm onto /usr/lib64/slurm:
+# the relocated binaries still carry RPATH=/usr/lib64/slurm and resolve
+# PluginDir to the same compiled-in path, so no system RPM is installed here
+# and that link is what makes sbatch runnable at all. Each extracted client is
+# smoke-tested below (`sbatch --version`) so a relocation that breaks it fails
+# the build instead of a running pod.
 #
 # Version tag == upstream plugin checkout == PLUGIN_REF (single source of
 # truth). CI publishes ghcr.io/purdueaf/interlink-slurm-plugin:$PLUGIN_REF;
@@ -80,6 +86,10 @@ RUN set -euo pipefail \
       rpm2cpio "${rpm}" | cpio -idm --quiet --directory="${dest}"; \
       test -x "${dest}/usr/bin/sbatch" \
         || { echo "extracted ${rpm} but ${dest}/usr/bin/sbatch missing" >&2; exit 1; }; \
+      ln -sfn "${dest}/usr/lib64/slurm" /usr/lib64/slurm; \
+      LD_LIBRARY_PATH="${dest}/usr/lib64" "${dest}/usr/bin/sbatch" --version >/dev/null \
+        || { echo "extracted ${rpm} but sbatch will not run — relocation broke RPATH/PluginDir" >&2; exit 1; }; \
+      rm -f /usr/lib64/slurm; \
       echo "extracted Slurm client ${ver}"; \
     done \
  && test -f /tmp/slurm-build/client-versions \

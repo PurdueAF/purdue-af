@@ -339,3 +339,46 @@ def test_disabled_clusters_generate_no_configmap(
     generated = {g["name"] for g in experimental["configMapGenerator"]}
     for cluster in set(interlink_clusters) - set(active_clusters):
         assert f"interlink-{cluster}-config" not in generated, cluster
+
+
+# --- Slurm client activation -----------------------------------------------
+#
+# Relocating the client RPMs under /opt/purdue-af/slurm-clients/<ver>/ so two
+# versions can coexist broke every one of them: the binaries keep the absolute
+# paths they were compiled with. sbatch has RPATH=/usr/lib64/slurm and Slurm
+# reads PluginDir from that same compiled-in path, so with the directory gone
+# sbatch exits 127 on libslurmfull.so and no job is ever submitted. Nothing in
+# the manifests can see this — it takes actually running the image.
+
+STARTUP = REPO / "docker" / "interlink-slurm-plugin" / "startup.sh"
+DOCKERFILE = REPO / "docker" / "interlink-slurm-plugin" / "Dockerfile"
+
+
+def test_activation_points_the_compiled_in_plugin_dir_at_the_chosen_version():
+    """ld.so.conf covers libslurm.so, but reaches neither the RPATH nor the
+    PluginDir lookup; only /usr/lib64/slurm itself satisfies those."""
+    startup = STARTUP.read_text()
+    link = 'ln -sfn "${client_root}/usr/lib64/slurm" "${sys_plugin_dir}"'
+    assert link in startup, "startup.sh must link the versioned plugin dir"
+    assert 'sys_plugin_dir="/usr/lib64/slurm"' in startup
+
+
+def test_activation_refuses_to_shadow_a_real_system_plugin_dir():
+    """`ln -sfn` onto an existing directory silently creates the link *inside*
+    it, which would leave a 24.11 client loading 25.11 plugins."""
+    startup = STARTUP.read_text()
+    assert '[ -e "${sys_plugin_dir}" ] && [ ! -L "${sys_plugin_dir}" ]' in startup
+
+
+def test_image_build_proves_each_extracted_client_can_run():
+    """`sbatch --version` needs no slurm.conf and no controller, yet exercises
+    both the dynamic linker and the PluginDir check — the two things
+    relocation breaks. Without it, breakage only shows up in a running pod."""
+    dockerfile = DOCKERFILE.read_text()
+    assert '"${dest}/usr/bin/sbatch" --version' in dockerfile, (
+        "no build-time smoke test that the extracted client actually runs"
+    )
+    assert 'ln -sfn "${dest}/usr/lib64/slurm" /usr/lib64/slurm' in dockerfile
+    assert "rm -f /usr/lib64/slurm" in dockerfile, (
+        "build-time link must be removed, or startup.sh refuses to activate"
+    )
