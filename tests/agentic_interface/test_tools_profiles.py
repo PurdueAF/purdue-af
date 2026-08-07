@@ -86,6 +86,11 @@ singleuser:
               kubespawner_override:
                 extra_resource_limits:
                   nvidia.com/mig-7g.40gb: 1
+            "4":
+              display_name: "1 NVIDIA T4 GPU (16GB)"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/gpu: 1
 """
 
 
@@ -96,6 +101,7 @@ def test_parse_profiles_gpu_map():
     assert gpu_opt["gpu"] == {
         "2": "nvidia.com/mig-1g.5gb",
         "3": "nvidia.com/mig-7g.40gb",
+        "4": "nvidia.com/gpu",
     }
     # Non-GPU options carry no "gpu" key.
     assert "gpu" not in profiles._parse_profiles(VALUES_YAML)[0]["options"]["0-cpu"]

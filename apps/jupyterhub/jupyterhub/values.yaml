@@ -83,6 +83,11 @@ singleuser:
               kubespawner_override:
                 extra_resource_limits:
                   nvidia.com/mig-7g.40gb: 1
+            4:
+              display_name: "1 NVIDIA T4 GPU (16GB)"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/gpu: 1
         2-memory:
           display_name: "Memory"
           choices:
@@ -176,6 +181,11 @@ singleuser:
               kubespawner_override:
                 extra_resource_limits:
                   nvidia.com/mig-7g.40gb: 1
+            4:
+              display_name: "1 NVIDIA T4 GPU (16GB)"
+              kubespawner_override:
+                extra_resource_limits:
+                  nvidia.com/gpu: 1
   extraContainers:
     - name: af-pod-monitor
       image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-pod-monitor:latest
@@ -397,9 +407,9 @@ hub:
     agentic-interface:
       url: "http://agentic-interface.${namespace}.svc.cluster.local:8888"
       oauth_no_confirm: true
-    # full 40GB GPUs are scarce: cull sessions holding one after 24h of
-    # inactivity (the global `cull` service allows 14 days); keep the timeout
-    # in sync with the form note in gpu-availability.py
+    # GPU sessions of every flavor are scarce relative to demand: cull them
+    # after 24h of inactivity (the global `cull` service allows 14 days); keep
+    # the timeout in sync with the form notes in gpu-availability.py
     gpu-culler:
       command:
         - python3
@@ -419,7 +429,7 @@ hub:
         - "access:servers!server"
         - "read:servers!user"
     gpu-culler:
-      description: "Stop idle sessions that hold a full GPU"
+      description: "Stop idle sessions that hold a GPU"
       scopes: ["read:users:activity", "read:servers", "delete:servers"]
       services: ["gpu-culler"]
 scheduling:

@@ -14,10 +14,10 @@ is self-describing, so call a tool and follow its result.
 | --- | --- |
 | CPUs | 4, 16, 32, 64, 128 |
 | Memory | 16, 32, 64, 128 GB |
-| GPU | none, 1 A100 slice (5 GB), 1 full A100 (40 GB) |
+| GPU | none, 1 A100 slice (5 GB), 1 full A100 (40 GB), 1 NVIDIA T4 (16 GB) |
 | Interface | JupyterLab, VS Code (code-server) |
 
-One session is capped at 128 cores / 128 GB RAM. Sessions holding a full A100 are
+One session is capped at 128 cores / 128 GB RAM. Sessions holding any GPU are
 culled after 24 h idle; all others after 14 days.
 
 ### Storage
@@ -126,8 +126,9 @@ Hammer is the only Slurm backend; there is no Gautschi Dask gateway.
 **Rules.** Slurm GPU jobs need `--gpus-per-node=1`. `/depot` is the only volume
 shared between the AF and the Gilbreth cluster (`ssh gilbreth`).
 
-Facility-wide there are 14 A100 5 GB slices and 4 full 40 GB A100s; the spawn
-form shows live availability. Hammer has 22 nodes with NVIDIA T4. A session
+Facility-wide there are 14 A100 5 GB slices, 4 full 40 GB A100s, and T4s
+(`nvidia.com/gpu`); the spawn form shows live availability. Any GPU session is
+culled after 24 h idle. Hammer has 22 nodes with NVIDIA T4 for Slurm. A session
 without a GPU has no `nvidia-smi`.
 
 Full user documentation: https://analysis-facility.physics.purdue.edu

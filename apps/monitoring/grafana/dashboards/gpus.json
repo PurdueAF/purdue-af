@@ -64,7 +64,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "<h1 style=\"text-align:center;\">USCMS Dedicated GPUs (SONIC)</h1>",
+        "content": "<h1 style=\"text-align:center;\">T4 GPUs (AF + SONIC)</h1>",
         "mode": "html"
       },
       "pluginVersion": "12.1.0",
@@ -759,7 +759,7 @@
           "refId": "A"
         }
       ],
-      "title": "GPU Utilization: SONIC",
+      "title": "GPU Utilization: T4 (AF + SONIC)",
       "type": "timeseries"
     },
     {
@@ -1052,7 +1052,7 @@
           "refId": "A"
         }
       ],
-      "title": "GPU Memory Utilization: SONIC",
+      "title": "GPU Memory Utilization: T4 (AF + SONIC)",
       "type": "timeseries"
     },
     {

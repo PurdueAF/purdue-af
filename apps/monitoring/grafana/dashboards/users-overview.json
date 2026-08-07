@@ -1103,7 +1103,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "kube_pod_container_resource_requests{namespace=~\"cms\",pod=~\"purdue-af-.*\",resource=\"nvidia_com_mig_1g_5gb\",container=\"notebook\"}",
+          "expr": "sum by (pod) (\n  kube_pod_container_resource_requests{\n    namespace=~\"cms\",\n    pod=~\"purdue-af-.*\",\n    resource=~\"nvidia_com_(mig_.+|gpu)\",\n    container=\"notebook\"\n  }\n)",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1151,7 +1151,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{\n  namespace=~\"cms\",\n  pod=~\"purdue-af-.*\",\n  kubernetes_node=~\"geddes-g00.*\"\n})\n",
+          "expr": "sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{\n  namespace=~\"cms\",\n  pod=~\"purdue-af-.*\"\n})\n",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1163,7 +1163,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum by (pod) (\n  ( DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00.*\",namespace=~\"cms\",pod=~\"purdue-af-.*\"}\n    / ( \n      DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00.*\",namespace=~\"cms\",pod=~\"purdue-af-.*\"} +\n      DCGM_FI_DEV_FB_FREE{kubernetes_node=~\"geddes-g00.*\",namespace=~\"cms\",pod=~\"purdue-af-.*\"}\n    )\n  )\n)\n",
+          "expr": "sum by (pod) (\n  ( DCGM_FI_DEV_FB_USED{namespace=~\"cms\",pod=~\"purdue-af-.*\"}\n    / ( \n      DCGM_FI_DEV_FB_USED{namespace=~\"cms\",pod=~\"purdue-af-.*\"} +\n      DCGM_FI_DEV_FB_FREE{namespace=~\"cms\",pod=~\"purdue-af-.*\"}\n    )\n  )\n)\n",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1194,7 +1194,7 @@
           "id": "filterFieldsByName",
           "options": {
             "exclude": {
-              "pattern": "^(pod|.*podStatus|.*#userId|.*gpuRequest)$"
+              "pattern": "^(pod|.*podStatus|.*#userId)$"
             },
             "include": {
               "pattern": "^(Value.*|userId|username|username 1|node|node 1|docker_image_tag|docker_image_tag 1)$"
@@ -1208,6 +1208,7 @@
               "Value #cpuRequest": 14,
               "Value #daskWorkers": 13,
               "Value #gpuMemUtilCurrent": 10,
+              "Value #gpuRequest": 16,
               "Value #gpuUtilCurrent": 9,
               "Value #homeStorageUtil": 11,
               "Value #memRequest": 15,
@@ -1218,8 +1219,8 @@
               "Value #workStorageUtil": 12,
               "docker_image_tag": 3,
               "docker_image_tag 1": 4,
-              "node": 16,
-              "node 1": 17,
+              "node": 17,
+              "node 1": 18,
               "userId": 0,
               "username": 1,
               "username 1": 2

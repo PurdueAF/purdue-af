@@ -135,7 +135,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node=~\"geddes-g00.*\",pod=~\"$user\"})\n",
+          "expr": "sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"$user\"})\n",
           "interval": "",
           "legendFormat": "GPU engine utilization",
           "refId": "C"
@@ -145,7 +145,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum by (pod) (\n  ( DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00.*\",pod=~\"$user\"}\n    / ( \n      DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00.*\",pod=~\"$user\"} +\n      DCGM_FI_DEV_FB_FREE{kubernetes_node=~\"geddes-g00.*\",pod=~\"$user\"}\n    )\n  )\n)\n",
+          "expr": "sum by (pod) (\n  ( DCGM_FI_DEV_FB_USED{pod=~\"$user\"}\n    / ( \n      DCGM_FI_DEV_FB_USED{pod=~\"$user\"} +\n      DCGM_FI_DEV_FB_FREE{pod=~\"$user\"}\n    )\n  )\n)\n",
           "interval": "",
           "legendFormat": "GPU memory utilization",
           "refId": "D"

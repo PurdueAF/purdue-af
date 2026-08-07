@@ -916,6 +916,72 @@
     },
     {
       "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "description": "Whole nvidia.com/gpu devices (T4). Used counts all consumers on cms-af nodes (AF sessions and SONIC).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 6,
+        "y": 15
+      },
+      "id": 22,
+      "options": {
+        "displayLabels": ["value"],
+        "legend": {
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "label_replace(\n  sum by (resource)(\n    kube_pod_container_resource_requests{resource=\"nvidia_com_gpu\"}\n      * on(node) group_left() kube_node_spec_taint{value=\"cms-af\"}\n  ),\n  \"state\", \"Used\", \"\", \"\"\n)\nor\nlabel_replace(\n  (\n    sum by (resource)(\n      kube_node_status_allocatable{resource=\"nvidia_com_gpu\"}\n        * on(node) group_left() kube_node_spec_taint{value=\"cms-af\"}\n    )\n    -\n    sum by (resource)(\n      kube_pod_container_resource_requests{resource=\"nvidia_com_gpu\"}\n        * on(node) group_left() kube_node_spec_taint{value=\"cms-af\"}\n    )\n  ),\n  \"state\", \"Free\", \"\", \"\"\n)",
+          "hide": false,
+          "legendFormat": "{{state}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "GPUs: T4 16GB",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },

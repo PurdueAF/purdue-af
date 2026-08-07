@@ -12,9 +12,9 @@ GPUs to [accelerate RooFit fits](guide-roofit-cuda.md).
 
 ### 1. Direct connection
 
-You can start an AF session with interactive access to an **Nvidia A100** GPU by
-selecting it at the resource selection step (see screenshot below). You will have
-a choice of either a 5 GB "slice" of an A100, or a full 40 GB A100.
+You can start an AF session with interactive access to an **Nvidia A100** or
+**Nvidia T4** GPU by selecting it at the resource selection step (see screenshot
+below). For A100s you can choose either a 5 GB "slice" or a full 40 GB GPU.
 
 <figure markdown="span">
   ![](images/gpu-selection.png){ width="500" }
@@ -24,12 +24,13 @@ a choice of either a 5 GB "slice" of an A100, or a full 40 GB A100.
 | -------------------- | ------ | ------------------- | ------------ |
 | 5 GB "slice" of A100 | 5 GB   | 14                  | Usually immediate |
 | Full A100 GPU        | 40 GB  | 4                   | Subject to availability |
+| NVIDIA T4            | 16 GB  | 8                   | Subject to availability |
 
 !!! tip
 
     The resource selection form shows the **current availability** of each GPU
     configuration next to the corresponding option, so you can see before starting
-    the session whether a full A100 is free.
+    the session whether a GPU of that flavor is free.
 
 !!! note
 
@@ -41,9 +42,9 @@ a choice of either a 5 GB "slice" of an A100, or a full 40 GB A100.
 !!! important
 
     Please terminate your session after using a GPU in order to release it for
-    other users. Full 40 GB A100 instances are in short supply, and sessions
-    holding one are **automatically shut down after 24 hours of inactivity**
-    (regular sessions are only shut down after 14 days).
+    other users. GPU sessions of every flavor (A100 slices, full A100s, and T4s)
+    are **automatically shut down after 24 hours of inactivity** (regular
+    sessions are only shut down after 14 days).
 
 ### 2. Slurm jobs (Purdue users only)
 

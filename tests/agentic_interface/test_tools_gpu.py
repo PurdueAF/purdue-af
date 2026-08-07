@@ -8,8 +8,13 @@ CHOICES = {
     "1": "0",
     "2": "1 A100 GPU slice (5GB)",
     "3": "1 full A100 GPU (40GB) - subject to availability",
+    "4": "1 NVIDIA T4 GPU (16GB)",
 }
-GPU_MAP = {"2": "nvidia.com/mig-1g.5gb", "3": "nvidia.com/mig-7g.40gb"}
+GPU_MAP = {
+    "2": "nvidia.com/mig-1g.5gb",
+    "3": "nvidia.com/mig-7g.40gb",
+    "4": "nvidia.com/gpu",
+}
 
 
 @pytest.fixture(autouse=True)
@@ -23,18 +28,27 @@ def clear_gpu_cache():
 
 
 def test_apply_availability_annotates_and_hides():
-    free = {"nvidia.com/mig-1g.5gb": 3, "nvidia.com/mig-7g.40gb": 0}
+    free = {
+        "nvidia.com/mig-1g.5gb": 3,
+        "nvidia.com/mig-7g.40gb": 0,
+        "nvidia.com/gpu": 2,
+    }
     labels, keys = gpu.apply_availability(CHOICES, GPU_MAP, free)
 
     # "0" (no GPU) always kept and untouched.
-    assert keys == ["1", "2"]  # flavor with 0 free is hidden
+    assert keys == ["1", "2", "4"]  # flavor with 0 free is hidden
     assert labels["1"] == "0"
     assert labels["2"] == "1 A100 GPU slice (5GB) — 3 available now"
+    assert labels["4"] == "1 NVIDIA T4 GPU (16GB) — 2 available now"
     assert "3" not in labels
 
 
 def test_apply_availability_strips_subject_to_availability_suffix():
-    free = {"nvidia.com/mig-1g.5gb": 0, "nvidia.com/mig-7g.40gb": 2}
+    free = {
+        "nvidia.com/mig-1g.5gb": 0,
+        "nvidia.com/mig-7g.40gb": 2,
+        "nvidia.com/gpu": 0,
+    }
     labels, keys = gpu.apply_availability(CHOICES, GPU_MAP, free)
 
     assert keys == ["1", "3"]
@@ -43,7 +57,7 @@ def test_apply_availability_strips_subject_to_availability_suffix():
 
 def test_apply_availability_unknown_keeps_everything():
     labels, keys = gpu.apply_availability(CHOICES, GPU_MAP, None)
-    assert keys == ["1", "2", "3"]
+    assert keys == ["1", "2", "3", "4"]
     assert labels == CHOICES  # untouched (fail-open)
 
 
@@ -64,9 +78,13 @@ async def test_free_gpus_subtracts_used_from_allocatable():
             data = [
                 _prom_result("nvidia_com_mig_1g_5gb", 8),
                 _prom_result("nvidia_com_mig_7g_40gb", 2),
+                _prom_result("nvidia_com_gpu", 8),
             ]
         else:
-            data = [_prom_result("nvidia_com_mig_1g_5gb", 5)]
+            data = [
+                _prom_result("nvidia_com_mig_1g_5gb", 5),
+                _prom_result("nvidia_com_gpu", 3),
+            ]
         return _httpx.Response(200, json={"data": {"result": data}})
 
     respx.get(f"{gpu.PROMETHEUS_URL}/api/v1/query").mock(side_effect=responder)
@@ -75,6 +93,7 @@ async def test_free_gpus_subtracts_used_from_allocatable():
     assert free == {
         "nvidia.com/mig-1g.5gb": 3,  # 8 - 5
         "nvidia.com/mig-7g.40gb": 2,  # 2 - 0
+        "nvidia.com/gpu": 5,  # 8 - 3
     }
 
 

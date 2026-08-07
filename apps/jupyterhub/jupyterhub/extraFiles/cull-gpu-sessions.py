@@ -1,13 +1,13 @@
-"""Cull sessions that hold a full A100 GPU after 24 hours of inactivity.
+"""Cull sessions that hold any GPU after 24 hours of inactivity.
 
 Runs as a JupyterHub *managed service* inside the hub pod (see
 hub.services.gpu-culler and hub.loadRoles.gpu-culler in values.yaml), the
 same mechanism z2jh uses for its own idle culler. The global culler stops
-any session after `cull.timeout` (14 days) of inactivity; full 40GB GPUs
-are scarce, so sessions holding one get a much shorter leash.
+any session after `cull.timeout` (14 days) of inactivity; GPU sessions of
+every flavor (A100 MIG slices, full A100s, T4s) get a much shorter leash.
 
-Full-GPU pods are found through the Kubernetes API (the service runs with
-the hub's service account, which kubespawner already grants pod list/get).
+GPU pods are found through the Kubernetes API (the service runs with the
+hub's service account, which kubespawner already grants pod list/get).
 Idleness comes from the hub REST API — the same last_activity signal
 (proxy traffic + notebook activity reports) the global culler uses. The
 pod's hub.jupyter.org/username and /servername annotations (set by
@@ -24,22 +24,24 @@ from urllib.parse import quote
 
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 
-GPU_RESOURCE = "nvidia.com/mig-7g.40gb"
+# Keep in sync with GPU_FLAVORS in gpu-availability.py / singleuser profileList.
+GPU_RESOURCES = (
+    "nvidia.com/mig-1g.5gb",
+    "nvidia.com/mig-7g.40gb",
+    "nvidia.com/gpu",
+)
 # Only pods spawned by our hub carry this label (singleuser.extraLabels).
 POD_SELECTOR = "username_unescaped"
 
 
-def pod_holds_full_gpu(pod: Any) -> bool:
-    """True if any container in the pod requests at least one full GPU."""
-    return any(
-        int(
-            ((container.resources and container.resources.limits) or {}).get(
-                GPU_RESOURCE, 0
-            )
-        )
-        > 0
-        for container in pod.spec.containers
-    )
+def pod_holds_gpu(pod: Any) -> bool:
+    """True if any container in the pod requests at least one known GPU."""
+    for container in pod.spec.containers:
+        limits = (container.resources and container.resources.limits) or {}
+        for resource in GPU_RESOURCES:
+            if int(limits.get(resource, 0)) > 0:
+                return True
+    return False
 
 
 def pod_server(pod: Any) -> tuple[str | None, str]:
@@ -51,8 +53,8 @@ def pod_server(pod: Any) -> tuple[str | None, str]:
     return username, servername
 
 
-async def full_gpu_servers(namespace: str) -> list[tuple[str, str]]:
-    """[(username, server name)] of running pods that hold a full GPU."""
+async def gpu_servers(namespace: str) -> list[tuple[str, str]]:
+    """[(username, server name)] of running pods that hold a GPU."""
     # Imported lazily so the unit tests don't need the kubernetes client.
     from kubernetes_asyncio import client, config
 
@@ -63,7 +65,7 @@ async def full_gpu_servers(namespace: str) -> list[tuple[str, str]]:
         )
     servers = []
     for pod in pods.items:
-        if pod.status.phase != "Running" or not pod_holds_full_gpu(pod):
+        if pod.status.phase != "Running" or not pod_holds_gpu(pod):
             continue
         username, servername = pod_server(pod)
         if username is not None:
@@ -95,7 +97,7 @@ def idle_seconds(server: dict[str, Any], now: datetime.datetime) -> float:
 
 async def cull_once(namespace: str, timeout: float) -> None:
     now = datetime.datetime.now(datetime.timezone.utc)
-    for username, servername in await full_gpu_servers(namespace):
+    for username, servername in await gpu_servers(namespace):
         user = await hub_api("GET", f"/users/{quote(username, safe='')}")
         server = (user.get("servers") or {}).get(servername)
         if server is None or server.get("pending"):
@@ -105,7 +107,7 @@ async def cull_once(namespace: str, timeout: float) -> None:
             continue
         print(
             f"[gpu-culler] stopping server {username}/{servername or 'default'}: "
-            f"holds a full GPU and idle for {idle / 3600:.1f}h"
+            f"holds a GPU and idle for {idle / 3600:.1f}h"
         )
         path = f"/users/{quote(username, safe='')}"
         path += f"/servers/{quote(servername, safe='')}" if servername else "/server"
@@ -114,7 +116,7 @@ async def cull_once(namespace: str, timeout: float) -> None:
 
 async def main(namespace: str, timeout: float, every: float) -> None:
     print(
-        f"[gpu-culler] culling {GPU_RESOURCE} sessions idle > {timeout}s "
+        f"[gpu-culler] culling GPU sessions idle > {timeout}s "
         f"in namespace {namespace}, checking every {every}s"
     )
     while True:

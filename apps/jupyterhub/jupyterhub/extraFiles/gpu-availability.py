@@ -40,12 +40,17 @@ GPU_FLAVORS = {
     "nvidia.com/mig-1g.5gb": {
         "metric": "nvidia_com_mig_1g_5gb",
         "label": "A100 GPU slices (5GB)",
-        "note": "idle session timeout 14 days",
+        # keep in sync with the gpu-culler --timeout in values.yaml
+        "note": "idle session timeout 24h",
     },
     "nvidia.com/mig-7g.40gb": {
         "metric": "nvidia_com_mig_7g_40gb",
         "label": "full A100 GPUs (40GB)",
-        # keep in sync with the gpu-culler --timeout in values.yaml
+        "note": "idle session timeout 24h",
+    },
+    "nvidia.com/gpu": {
+        "metric": "nvidia_com_gpu",
+        "label": "NVIDIA T4 GPUs (16GB)",
         "note": "idle session timeout 24h",
     },
 }
@@ -58,15 +63,19 @@ _NODE_SCOPE = (
     " * on (node) group_left() (kube_node_spec_unschedulable == bool 0)"
     ' * on (node) group_left() group by (node) (kube_node_spec_taint{value="cms-af"})'
 )
+# MIG slices (A100) and whole GPUs (T4 via nvidia.com/gpu).
+_GPU_RESOURCE = 'resource=~"nvidia_com_(mig_.+|gpu)"'
 _ALLOC_QUERY = (
     "sum by (resource) ("
-    'kube_node_status_allocatable{resource=~"nvidia_com_mig_.+"}' + _NODE_SCOPE + ")"
+    "kube_node_status_allocatable{" + _GPU_RESOURCE + "}" + _NODE_SCOPE + ")"
 )
 # Completed/failed pods keep their kube-state-metrics request series, so only
 # count pods that are currently Pending or Running.
 _USED_QUERY = (
     "sum by (resource) ("
-    'kube_pod_container_resource_requests{resource=~"nvidia_com_mig_.+"}'
+    "kube_pod_container_resource_requests{"
+    + _GPU_RESOURCE
+    + "}"
     + _NODE_SCOPE
     + " * on (namespace, pod) group_left() (max by (namespace, pod) "
     '(kube_pod_status_phase{phase=~"Pending|Running"}) == bool 1)'

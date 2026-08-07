@@ -20,23 +20,30 @@ PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090
 GPU_METRICS = {
     "nvidia.com/mig-1g.5gb": "nvidia_com_mig_1g_5gb",
     "nvidia.com/mig-7g.40gb": "nvidia_com_mig_7g_40gb",
+    "nvidia.com/gpu": "nvidia_com_gpu",
 }
 
 # Availability = allocatable - requested on schedulable (not cordoned) tainted
 # cms-af nodes; only Pending/Running pods count as using a GPU. Identical to the
-# Hub's queries so the numbers agree.
+# Hub's queries so the numbers agree. Covers MIG slices (A100) and whole GPUs
+# (T4 via nvidia.com/gpu).
 _NODE_SCOPE = (
     " * on (node) group_left() (kube_node_spec_unschedulable == bool 0)"
     ' * on (node) group_left() group by (node) (kube_node_spec_taint{value="cms-af"})'
 )
+_GPU_RESOURCE = 'resource=~"nvidia_com_(mig_.+|gpu)"'
 _ALLOC_QUERY = (
-    'sum by (resource) (kube_node_status_allocatable{resource=~"nvidia_com_mig_.+"}'
+    "sum by (resource) (kube_node_status_allocatable{"
+    + _GPU_RESOURCE
+    + "}"
     + _NODE_SCOPE
     + ")"
 )
 _USED_QUERY = (
     "sum by (resource) ("
-    'kube_pod_container_resource_requests{resource=~"nvidia_com_mig_.+"}'
+    "kube_pod_container_resource_requests{"
+    + _GPU_RESOURCE
+    + "}"
     + _NODE_SCOPE
     + " * on (namespace, pod) group_left() (max by (namespace, pod) "
     '(kube_pod_status_phase{phase=~"Pending|Running"}) == bool 1))'

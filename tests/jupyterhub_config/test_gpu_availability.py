@@ -9,6 +9,7 @@ from hub_helpers import load_snippet
 
 SLICE = "nvidia.com/mig-1g.5gb"
 FULL = "nvidia.com/mig-7g.40gb"
+T4 = "nvidia.com/gpu"
 
 
 def gpu_profiles():
@@ -45,6 +46,12 @@ def gpu_profiles():
                             "display_name": "1 full A100 GPU (40GB) - subject to availability",
                             "kubespawner_override": {
                                 "extra_resource_limits": {FULL: 1}
+                            },
+                        },
+                        "4": {
+                            "display_name": "1 NVIDIA T4 GPU (16GB)",
+                            "kubespawner_override": {
+                                "extra_resource_limits": {T4: 1}
                             },
                         },
                     },
@@ -90,7 +97,7 @@ def fake_spawner():
 
 async def test_form_shows_live_counts(monkeypatch):
     ns = load(monkeypatch)
-    set_free(ns, {SLICE: 12, FULL: 2})
+    set_free(ns, {SLICE: 12, FULL: 2, T4: 5})
 
     profiles = await ns["profile_list_with_gpu_counts"](None)
 
@@ -99,11 +106,15 @@ async def test_form_shows_live_counts(monkeypatch):
     # static "subject to availability" hedge is replaced by the live count
     assert (
         choices["2"]["display_name"]
-        == "1 A100 GPU slice (5GB) — 12 available now, idle session timeout 14 days"
+        == "1 A100 GPU slice (5GB) — 12 available now, idle session timeout 24h"
     )
     assert (
         choices["3"]["display_name"]
         == "1 full A100 GPU (40GB) — 2 available now, idle session timeout 24h"
+    )
+    assert (
+        choices["4"]["display_name"]
+        == "1 NVIDIA T4 GPU (16GB) — 5 available now, idle session timeout 24h"
     )
     # zero-GPU choice and non-GPU options stay untouched
     assert choices["1"]["display_name"] == "0"
@@ -114,17 +125,21 @@ async def test_form_shows_live_counts(monkeypatch):
 
 async def test_form_marks_exhausted_flavor(monkeypatch):
     ns = load(monkeypatch)
-    set_free(ns, {SLICE: 3, FULL: 0})
+    set_free(ns, {SLICE: 3, FULL: 0, T4: 0})
 
     choices = gpu_choices(await ns["profile_list_with_gpu_counts"](None))
 
     assert (
         choices["2"]["display_name"]
-        == "1 A100 GPU slice (5GB) — 3 available now, idle session timeout 14 days"
+        == "1 A100 GPU slice (5GB) — 3 available now, idle session timeout 24h"
     )
     assert (
         choices["3"]["display_name"]
         == "1 full A100 GPU (40GB) — none available right now, idle session timeout 24h"
+    )
+    assert (
+        choices["4"]["display_name"]
+        == "1 NVIDIA T4 GPU (16GB) — none available right now, idle session timeout 24h"
     )
 
 
@@ -138,17 +153,21 @@ async def test_form_keeps_static_labels_when_availability_unknown(monkeypatch):
     # but the idle-timeout notes still show
     assert (
         choices["2"]["display_name"]
-        == "1 A100 GPU slice (5GB) — idle session timeout 14 days"
+        == "1 A100 GPU slice (5GB) — idle session timeout 24h"
     )
     assert (
         choices["3"]["display_name"]
         == "1 full A100 GPU (40GB) - subject to availability — idle session timeout 24h"
     )
+    assert (
+        choices["4"]["display_name"]
+        == "1 NVIDIA T4 GPU (16GB) — idle session timeout 24h"
+    )
 
 
 async def test_static_profile_list_is_not_mutated(monkeypatch):
     ns = load(monkeypatch)
-    set_free(ns, {SLICE: 1, FULL: 1})
+    set_free(ns, {SLICE: 1, FULL: 1, T4: 1})
 
     await ns["profile_list_with_gpu_counts"](None)
 
@@ -163,12 +182,19 @@ async def test_get_free_gpus_subtracts_usage(monkeypatch):
 
     async def prom(query):
         if "kube_node_status_allocatable" in query:
-            return {"nvidia_com_mig_1g_5gb": 21.0, "nvidia_com_mig_7g_40gb": 2.0}
-        return {"nvidia_com_mig_1g_5gb": 20.0}  # no 40GB pods running
+            return {
+                "nvidia_com_mig_1g_5gb": 21.0,
+                "nvidia_com_mig_7g_40gb": 2.0,
+                "nvidia_com_gpu": 8.0,
+            }
+        return {
+            "nvidia_com_mig_1g_5gb": 20.0,  # no 40GB pods running
+            "nvidia_com_gpu": 3.0,
+        }
 
     ns["_prom_query"] = prom
 
-    assert await ns["get_free_gpus"]() == {SLICE: 1, FULL: 2}
+    assert await ns["get_free_gpus"]() == {SLICE: 1, FULL: 2, T4: 5}
 
 
 async def test_get_free_gpus_clamps_at_zero(monkeypatch):
@@ -176,12 +202,12 @@ async def test_get_free_gpus_clamps_at_zero(monkeypatch):
 
     async def prom(query):
         if "kube_node_status_allocatable" in query:
-            return {"nvidia_com_mig_1g_5gb": 1.0}  # no 40GB capacity at all
+            return {"nvidia_com_mig_1g_5gb": 1.0}  # no 40GB/T4 capacity at all
         return {"nvidia_com_mig_1g_5gb": 5.0}  # over-reported usage
 
     ns["_prom_query"] = prom
 
-    assert await ns["get_free_gpus"]() == {SLICE: 0, FULL: 0}
+    assert await ns["get_free_gpus"]() == {SLICE: 0, FULL: 0, T4: 0}
 
 
 async def test_get_free_gpus_unknown_on_query_failure(monkeypatch):
@@ -211,19 +237,27 @@ async def test_get_free_gpus_unknown_when_metrics_missing(monkeypatch):
 
 async def test_spawn_refused_when_flavor_exhausted(monkeypatch):
     ns = load(monkeypatch)
-    set_free(ns, {SLICE: 5, FULL: 0})
+    set_free(ns, {SLICE: 5, FULL: 0, T4: 0})
 
     with pytest.raises(ns["GPUsUnavailableError"], match="full A100 GPUs"):
         await ns["refuse_gpu_spawn_if_unavailable"](
             fake_spawner(), fake_pod({FULL: "1"})
         )
 
+    with pytest.raises(ns["GPUsUnavailableError"], match="NVIDIA T4 GPUs"):
+        await ns["refuse_gpu_spawn_if_unavailable"](
+            fake_spawner(), fake_pod({T4: "1"})
+        )
+
 
 async def test_spawn_allowed_when_available(monkeypatch):
     ns = load(monkeypatch)
-    set_free(ns, {SLICE: 5, FULL: 1})
+    set_free(ns, {SLICE: 5, FULL: 1, T4: 2})
     pod = fake_pod({FULL: "1", "cpu": "256", "memory": "256G"})
 
+    assert await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner(), pod) is pod
+
+    pod = fake_pod({T4: "1"})
     assert await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner(), pod) is pod
 
 
@@ -261,7 +295,7 @@ async def test_gpu_spawn_env_left_untouched(monkeypatch):
     # GPU sessions must keep exactly the device-plugin-injected environment:
     # the hook may not add or change NVIDIA_VISIBLE_DEVICES for them
     ns = load(monkeypatch)
-    set_free(ns, {SLICE: 5, FULL: 1})
+    set_free(ns, {SLICE: 5, FULL: 1, T4: 1})
     pod = fake_pod({FULL: "1"})
 
     assert await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner(), pod) is pod
@@ -296,7 +330,7 @@ async def test_admitted_spawn_reserves_the_gpu(monkeypatch):
     ns = load(monkeypatch)
 
     async def one_full_free():
-        return {SLICE: 0, FULL: 1}
+        return {SLICE: 0, FULL: 1, T4: 0}
 
     ns["get_free_gpus"] = one_full_free
 
