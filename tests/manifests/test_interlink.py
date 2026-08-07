@@ -382,3 +382,12 @@ def test_image_build_proves_each_extracted_client_can_run():
     assert "rm -f /usr/lib64/slurm" in dockerfile, (
         "build-time link must be removed, or startup.sh refuses to activate"
     )
+    # Regression: without SLURM_CONF, sbatch --version hunts for a controller
+    # via DNS SRV and exits fatal, so the smoke test failed the build on a
+    # perfectly good image.
+    assert "SLURM_CONF=/tmp/smoke.conf" in dockerfile, (
+        "smoke test needs a throwaway config or it fails for the wrong reason"
+    )
+    assert "smoke.conf" in dockerfile.split("rm -rf /etc/slurm/*")[1], (
+        "the throwaway config must not ship in the image"
+    )
