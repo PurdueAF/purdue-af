@@ -50,9 +50,7 @@ def gpu_profiles():
                         },
                         "4": {
                             "display_name": "1 NVIDIA T4 GPU (16GB)",
-                            "kubespawner_override": {
-                                "extra_resource_limits": {T4: 1}
-                            },
+                            "kubespawner_override": {"extra_resource_limits": {T4: 1}},
                         },
                     },
                 },
@@ -245,9 +243,7 @@ async def test_spawn_refused_when_flavor_exhausted(monkeypatch):
         )
 
     with pytest.raises(ns["GPUsUnavailableError"], match="NVIDIA T4 GPUs"):
-        await ns["refuse_gpu_spawn_if_unavailable"](
-            fake_spawner(), fake_pod({T4: "1"})
-        )
+        await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner(), fake_pod({T4: "1"}))
 
 
 async def test_spawn_allowed_when_available(monkeypatch):
