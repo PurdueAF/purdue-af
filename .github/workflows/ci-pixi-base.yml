@@ -52,7 +52,7 @@ jobs:
       - name: Verified reuse — identical input state already passed
         if: steps.memo.outputs.cache-hit == 'true'
         run: echo "skipping — ${{ steps.key.outputs.key }} already green" | tee -a "$GITHUB_STEP_SUMMARY"
-      - uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f # v0.10.0 # Renovate pins to digest
+      - uses: prefix-dev/setup-pixi@f00437f565399d418b0acc85936d12c1fb668347 # v0.10.1 # Renovate pins to digest
         if: steps.memo.outputs.cache-hit != 'true'
         with:
           # Frozen at 0.62.2 (lock format v6) — do not bump; see renovate.json5.
