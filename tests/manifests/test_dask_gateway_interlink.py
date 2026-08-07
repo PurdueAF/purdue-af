@@ -93,8 +93,11 @@ def test_interlink_sbatch_targets():
         clusters["gautschi"]["sbatch_flags"]
         == "--account=cms --partition=cpu --qos=standby"
     )
-    # Negishi owns a cms partition that denies the standby QoS
-    assert clusters["negishi"]["sbatch_flags"] == "--account=cms --partition=cms"
+    # Negishi mirrors Gautschi apart from the account it charges against
+    assert (
+        clusters["negishi"]["sbatch_flags"]
+        == "--account=cms-a --partition=cpu --qos=standby"
+    )
 
 
 def test_every_interlink_cluster_has_a_deployed_node():

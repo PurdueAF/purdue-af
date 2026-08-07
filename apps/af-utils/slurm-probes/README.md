@@ -5,7 +5,7 @@ question. Today there is one: how long a job would wait before starting, per
 cluster and per account/partition/QoS selector.
 
 ```
-af_slurm_backlog_seconds{cluster="gautschi",account="cms",partition="cpu",qos="standby"} 291360
+af_slurm_backlog_seconds{cluster="gautschi",account="cms",partition="cpu",qos="standby",flags="--account=cms --partition=cpu --qos=standby"} 291360
 ```
 
 `sbatch --test-only` validates the account/partition/QoS combination and
@@ -17,7 +17,9 @@ showed 10,246 idle CPUs — `standby` yields to owners.
 no "queue" separate from the partition, and job shape does not move the
 prediction — measured identical for 1 core / 5 min and 64 cores / 4 h on both
 Hammer and Gautschi. The labels are parsed from the flags actually submitted,
-so they cannot describe a different job than the one measured.
+so they cannot describe a different job than the one measured. `flags` is
+the same string unsplit — the Grafana legend prints it verbatim so a user can
+line it up against their own `sbatch` invocation.
 
 QoS is the axis that dominates: on the same account and partition, Gautschi
 predicted 3.4 days with `--qos=standby` and 1.9 days without it.

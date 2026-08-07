@@ -220,3 +220,24 @@ def test_panel_is_in_the_slurm_row_and_the_row_still_fits():
 def test_panel_renders_seconds_as_a_duration():
     """The values run to hundreds of thousands; unitless they read as noise."""
     assert _backlog_panel()["fieldConfig"]["defaults"]["unit"] == "s"
+
+
+def test_flags_label_carries_the_submitted_line_verbatim():
+    """The Grafana legend prints this, so it must be the real sbatch line and
+    not a reassembly: rendering the parsed labels instead emits a dangling
+    "--qos=" for clusters that pass no QoS, which reads as a copyable flag."""
+    probe = (APP / "probe.sh").read_text()
+    assert 'flags=\\"${FLAGS}\\"' in probe
+
+
+def test_panel_legend_shows_the_flags():
+    panel = _backlog_panel()
+    legend = panel["targets"][0]["legendFormat"]
+    assert "{{flags}}" in legend, legend
+    assert "{{cluster}}" in legend, legend
+
+
+def test_panel_legend_has_no_calc_columns():
+    """One series per cluster — a "Last *" column restates the value the axis
+    and tooltip already show, and squeezes the flags off a quarter-width panel."""
+    assert _backlog_panel()["options"]["legend"]["calcs"] == []

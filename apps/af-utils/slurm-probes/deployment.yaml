@@ -86,7 +86,7 @@ spec:
             - name: SLURM_CLUSTER
               value: "negishi"
             - name: PROBE_SBATCH_FLAGS
-              value: "--account=cms --partition=cms"
+              value: "--account=cms-a --partition=cpu --qos=standby"
             - name: PROBE_UID
               value: "616617"
           volumeMounts:

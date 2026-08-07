@@ -15,7 +15,9 @@ CLUSTER="${SLURM_CLUSTER:?SLURM_CLUSTER is required}"
 FLAGS="${PROBE_SBATCH_FLAGS:?PROBE_SBATCH_FLAGS is required}"
 
 # Labels are parsed from the flags rather than configured separately, so they
-# cannot drift from what was actually submitted. These three are the whole
+# cannot drift from what was actually submitted. The whole flag string also
+# ships verbatim as `flags`, which is what the Grafana legend prints: users
+# compare it against their own sbatch line. These three are the whole
 # eligibility selector: Slurm has no "queue" distinct from the partition, and
 # job shape does not move the prediction (measured: identical wait for
 # 1 core/5 min and 64 cores/4 h on both Hammer and Gautschi).
@@ -30,7 +32,7 @@ INTERVAL="${PROBE_INTERVAL_S:-300}"
 TIMEOUT="${PROBE_TIMEOUT_S:-30}"
 OUT_DIR="${PROBE_OUT_DIR:-/var/lib/slurm-probes}"
 OUT="${OUT_DIR}/${CLUSTER}.prom"
-LABELS="cluster=\"${CLUSTER}\",account=\"${ACCOUNT}\",partition=\"${PARTITION}\",qos=\"${QOS}\""
+LABELS="cluster=\"${CLUSTER}\",account=\"${ACCOUNT}\",partition=\"${PARTITION}\",qos=\"${QOS}\",flags=\"${FLAGS}\""
 
 probe_once() {
 	local out rc now stamp start backlog tmp="${OUT}.tmp"

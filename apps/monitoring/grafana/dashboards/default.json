@@ -2296,7 +2296,7 @@
       "id": 55,
       "options": {
         "legend": {
-          "calcs": ["lastNotNull"],
+          "calcs": [],
           "displayMode": "list",
           "placement": "right",
           "showLegend": true
@@ -2317,7 +2317,7 @@
           "editorMode": "code",
           "expr": "af_slurm_backlog_seconds",
           "interval": "",
-          "legendFormat": "{{cluster}}",
+          "legendFormat": "{{cluster}}: {{flags}}",
           "range": true,
           "refId": "A"
         }

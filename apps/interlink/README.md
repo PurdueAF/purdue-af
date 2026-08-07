@@ -9,7 +9,7 @@ to Kubernetes it still looks like an ordinary pod.
 | -------------------- | -------- | --------------- | ----------------------------------------- | -------------------- | --------------- | -------- |
 | `interlink-hammer`   | Hammer   | `hammer-nodes`  | `/depot/cms/purdue-af/interlink`          | `munge-key-hammer`   | `hammer`        | yes      |
 | `interlink-gautschi` | Gautschi | `cpu`           | `/depot/cms/purdue-af/interlink/gautschi` | `munge-key-gautschi` | `gautschi`      | yes      |
-| `interlink-negishi`  | Negishi  | —               | `/depot/itap/interlink/negishi`           | `munge-key-negishi`  | `negishi`       | yes      |
+| `interlink-negishi`  | Negishi  | `cpu`           | `/depot/itap/interlink/negishi`           | `munge-key-negishi`  | `negishi`       | yes      |
 
 All three nodes share one plugin image tagged with the upstream plugin
 ref (`PLUGIN_REF`, e.g. `…/interlink-slurm-plugin:0.6.2-pre3`). Cluster

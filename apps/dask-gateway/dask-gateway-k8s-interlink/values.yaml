@@ -163,7 +163,7 @@ gateway:
           # DenyQOS=standby, so no --qos here.
           "negishi": {
               "node": "interlink-negishi",
-              "sbatch_flags": "--account=cms --partition=cms",
+              "sbatch_flags": "--account=cms-a --partition=cpu --qos=standby",
           },
       }
       # ExportPodData materializes the dask-credentials Secret under
