@@ -2,8 +2,10 @@
 
 Site image for the [interlink-slurm-plugin](https://github.com/interlink-hq/interlink-slurm-plugin)
 sidecar. Upstream’s published image is a self-contained demo Slurm cluster;
-this one is a **thin client** against RCAC Slurm on the same NVIDIA
-Rocky Linux 8 CUDA base as the AF session image, plus the site Slurm RPM(s).
+this one is a **thin client** against RCAC Slurm on Rocky Linux 8, plus the
+site Slurm RPM(s). It deliberately does **not** use the AF CUDA devel base —
+the sidecar never runs GPU code, and that base made GHCR pushes flaky
+(`blob upload unknown` on a ~4 GiB image).
 
 ## Versioning
 

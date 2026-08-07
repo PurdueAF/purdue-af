@@ -18,6 +18,10 @@
 # editing PLUGIN_REF only — the Dockerfile ARG default, the image tag, and
 # the values pins are asserted equal in tests.
 #
+# Base is plain Rocky 8 (not the AF CUDA devel image): the sidecar is a thin
+# Slurm client and does not need CUDA. The CUDA base made the image ~4 GiB and
+# GHCR pushes failed intermittently with "blob upload unknown".
+#
 # Adding a cluster:
 #   1. Drop client configs at slurm/slurm-configs-<name>/ (must include slurm.conf)
 #   2. Add "<name> <version>" to slurm/client-versions (+ the matching RPM if new)
@@ -28,8 +32,8 @@
 # Keep the default in sync with PLUGIN_REF; CI passes --build-arg explicitly.
 ARG SLURM_PLUGIN_REF=0.6.2-pre3
 ARG GOLANG_IMAGE=golang:1.26
-# Same EL8 CUDA base as docker/purdue-af (Alma/Rocky-compatible for the site RPM).
-ARG BASE_IMAGE=geddes-registry.rcac.purdue.edu/docker-hub-cache/nvidia/cuda:12.4.1-devel-rockylinux8
+# EL8 for the site Slurm RPMs; no CUDA — this is not a session image.
+ARG BASE_IMAGE=docker.io/rockylinux/rockylinux:8
 
 FROM ${GOLANG_IMAGE} AS build-stage
 
@@ -46,11 +50,11 @@ FROM ${BASE_IMAGE}
 # Fix: https://github.com/hadolint/hadolint/wiki/DL4006 (SC3040)
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Runtime deps for munge + extracting the site Slurm client RPMs.
+# munge at runtime; cpio/rpm only needed to extract the site client RPMs below
+# (removed again in the next layer so they do not inflate the final image).
 RUN dnf install -y \
         https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm \
-        wget sudo gcc make openssl-devel bzip2-devel zlib-devel diffutils \
-        findutils cpio rpm munge && \
+        sudo findutils cpio rpm munge && \
     dnf clean all && rm -rf /var/cache/dnf
 
 # Site Slurm client RPMs (one or more versions) + every per-cluster config tree.
@@ -92,6 +96,7 @@ RUN set -euo pipefail \
     done \
  && rm -rf /etc/slurm/* /tmp/slurm-build \
  && chown -R slurm:slurm /var/log/slurm \
+ && dnf remove -y cpio rpm rpm-libs rpm-build-libs python3-rpm || true \
  && dnf clean all && rm -rf /var/cache/dnf \
  && test -n "$(find /opt/purdue-af/slurm-configs -mindepth 1 -maxdepth 1 -type d -print -quit)" \
  || { echo "no slurm/slurm-configs-* trees found in build context" >&2; exit 1; }

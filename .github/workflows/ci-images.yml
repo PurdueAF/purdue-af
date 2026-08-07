@@ -303,7 +303,6 @@ jobs:
           if [ "${{ matrix.name }}" = interlink-slurm-plugin ]; then
             plugin_ref=$(tr -d '[:space:]' < docker/interlink-slurm-plugin/PLUGIN_REF)
             build_args="SLURM_PLUGIN_REF=${plugin_ref}"
-            build_contexts="${GEDDES_BASE}=docker-image://${PUBLIC_BASE}"
           fi
           {
             echo "image=$image"
@@ -353,4 +352,14 @@ jobs:
       # Only smoke-tested images ever reach the registry.
       - name: Push in- tag to ghcr.io
         if: steps.meta.outputs.exists != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        run: docker push ${{ steps.meta.outputs.image }}
+        run: |
+          # GHCR occasionally returns "blob upload unknown" on large pushes;
+          # a couple of retries usually clear a transient registry glitch.
+          for attempt in 1 2 3; do
+            if docker push ${{ steps.meta.outputs.image }}; then
+              exit 0
+            fi
+            echo "push attempt ${attempt} failed; retrying in 20s..." >&2
+            sleep 20
+          done
+          exit 1
