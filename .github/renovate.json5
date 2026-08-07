@@ -160,9 +160,10 @@
       // rolled back (af19f790). CUDA 13.x MVC lists >=580 as the floor, but
       // 26.07 failed in practice on R580 — pin the image here. The host
       // NVIDIA driver is not a Renovate-tracked dep in this repo.
+      // docker versioning has no range support — use a regex pin.
       matchDatasources: ['docker'],
       matchPackageNames: ['nvcr.io/nvidia/tritonserver'],
-      allowedVersions: '<26.05',
+      allowedVersions: '/^26\\.04/',
     },
     {
       // interlink-slurm-plugin base must stay on Rocky 8: site clients are
@@ -171,9 +172,10 @@
       // would break the dnf/EPEL layer and mismatch the relocated clients.
       // Relax only when RCAC ships EL9/EL10 Slurm RPMs and the sidecar is
       // retargeted (Dockerfile + epel + rpm glob together).
+      // docker versioning has no range support — use a regex pin.
       matchDatasources: ['docker'],
       matchPackageNames: ['docker.io/rockylinux/rockylinux', 'rockylinux/rockylinux'],
-      allowedVersions: '<9',
+      allowedVersions: '/^8([.-]|$)/',
     },
     {
       // Manifest-only: CI regenerates pixi.lock (see ci-pixi-*.yml). Skipping
