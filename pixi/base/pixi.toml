@@ -11,7 +11,7 @@ conda         = "==26.7.0"
 mamba         = "==2.9.0"
 jupyter_core  = "==5.9.1"
 jupyter       = "==1.1.1"
-code-server   = "==4.132.0"
+code-server   = "==4.133.0"
 jupyter-vscode-proxy = "==0.7"
 jupyter-server-proxy = "==4.5.0"
 
@@ -25,7 +25,7 @@ nodejs        = "22.*"
 
 # Kernel discovery / misc
 nb_conda_kernels      = "==2.5.1"
-metakernel            = "==1.0.0"
+metakernel            = "==1.0.7"
 importlib-metadata    = "<8.8"   # opentelemetry-api requires <8.8.0
 
 # Other tools
@@ -36,7 +36,7 @@ xrootd        = "==5.9.2"  # matches the global env
 rucio-clients = "==41.1.1"
 pytest        = "==9.1.1"
 lz4           = "==4.4.5"
-ipywidgets    = "==8.1.8"
+ipywidgets    = "==8.1.9"
 ipympl        = "==0.10.0"
 bokeh         = "==3.9.2"
 # p-suffix = upstream "portable" releases (stable, not pre-release); Renovate
