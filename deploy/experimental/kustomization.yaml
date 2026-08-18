@@ -31,6 +31,9 @@ resources:
 
   - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic/helmrepo.yaml
+  # CPU-control-plane SuperSONIC from the SuperSONIC git branch (not the Helm repo).
+  - ../../apps/sonic/supersonic-dev/helmrelease.yaml
+  - ../../apps/sonic/supersonic-dev/gitrepo.yaml
   # Model repository dashboard for the supersonic release above. Needs the
   # supersonic-model-manager-auth Secret to exist in the namespace.
   - ../../apps/sonic/model-manager/helmrelease.yaml
@@ -128,6 +131,10 @@ configMapGenerator:
   - name: supersonic-config
     files:
       - values.yaml=../../apps/sonic/supersonic/values.yaml
+
+  - name: supersonic-dev-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic-dev/values.yaml
 
   - name: supersonic-model-manager-config
     files:

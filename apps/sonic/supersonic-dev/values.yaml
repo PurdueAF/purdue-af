@@ -1,0 +1,22 @@
+# Instance-specific overrides on top of SuperSONIC
+# values/values-geddes-cms-cpu.yaml (triton-cpu). That file is based on the
+# production `supersonic` hostnames; these keep HelmRelease `supersonic-dev`
+# from colliding with it. The chart also requires dashboardsConfigMaps.default
+# to equal <release>-grafana-default-dashboard.
+
+grafana:
+  dashboardsConfigMaps:
+    default: supersonic-dev-grafana-default-dashboard
+  ingress:
+    hosts:
+      - supersonic-dev-grafana.geddes.rcac.purdue.edu
+    tls:
+      - hosts:
+          - supersonic-dev-grafana.geddes.rcac.purdue.edu
+  grafana.ini:
+    server:
+      root_url: https://supersonic-dev-grafana.geddes.rcac.purdue.edu
+
+envoy:
+  ingress:
+    hostName: supersonic-dev.geddes.rcac.purdue.edu

@@ -1,0 +1,87 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: supersonic-dev
+spec:
+  suspend: false
+  interval: 1m
+  chart:
+    spec:
+      chart: helm/supersonic
+      sourceRef:
+        kind: GitRepository
+        name: supersonic-dev
+      # Track git commits on triton-cpu, not Chart.yaml version (still 0.3.1).
+      reconcileStrategy: Revision
+      # valuesFiles replace the chart values.yaml; include it first so this
+      # matches `helm install helm/supersonic -f values/values-geddes-cms-cpu.yaml`.
+      valuesFiles:
+        - helm/supersonic/values.yaml
+        - values/values-geddes-cms-cpu.yaml
+      interval: 1m
+  install:
+    remediation:
+      retries: -1
+  upgrade:
+    remediation:
+      retries: -1
+  valuesFrom:
+    - kind: ConfigMap
+      name: supersonic-dev-config
+      valuesKey: values.yaml
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: ScaledObject
+              name: "supersonic-dev-keda-so"
+            patch: |
+              - op: add
+                path: /spec/triggers/0/metadata/timeout
+                value: "60000"
+          # SuperSONIC chart validation forbids :9090 on the Grafana datasource
+          # URL when using prometheus.external, but prometheus-server only
+          # listens on 9090. Rewrite the provisioned ConfigMap after render.
+          - target:
+              kind: ConfigMap
+              name: "supersonic-dev-grafana"
+            patch: |
+              - op: replace
+                path: /data/datasources.yaml
+                value: |
+                  apiVersion: 1
+                  datasources:
+                  - access: proxy
+                    isDefault: true
+                    jsonData:
+                      timeInterval: 5s
+                      tlsSkipVerify: true
+                    name: prometheus
+                    uid: prometheus
+                    type: prometheus
+                    url: http://prometheus-server.cms.svc.cluster.local:9090
+          # Keep one Envoy available across rollouts without raising replicas:
+          # surge a new pod first (maxUnavailable: 0), and only cut over once
+          # Envoy's admin /ready succeeds — the chart entrypoint runs apt-get
+          # before envoy starts, so Ready≠containerStarted.
+          - target:
+              kind: Deployment
+              name: "supersonic-dev-envoy"
+            patch: |
+              - op: add
+                path: /spec/strategy
+                value:
+                  type: RollingUpdate
+                  rollingUpdate:
+                    maxUnavailable: 0
+                    maxSurge: 1
+              - op: add
+                path: /spec/template/spec/containers/0/readinessProbe
+                value:
+                  httpGet:
+                    path: /ready
+                    port: 9901
+                  initialDelaySeconds: 3
+                  periodSeconds: 2
+                  timeoutSeconds: 1
+                  failureThreshold: 60

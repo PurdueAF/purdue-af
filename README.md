@@ -69,6 +69,7 @@ Whether each component on the cluster is running what is on `main`
 ![servicex-s3][experimental-servicex-s3]
 ![servicex-test][experimental-servicex-test]
 ![supersonic][experimental-sonic-supersonic]
+![supersonic-dev][experimental-sonic-supersonic-dev]
 ![model-manager][experimental-sonic-model-manager]
 
 **Images** — `purdue-af` is released on its own semver stream and pinned at
@@ -131,6 +132,7 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-servicex-test]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex-test.json
 [experimental-sonic-model-manager]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-model-manager.json
 [experimental-sonic-supersonic]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic.json
+[experimental-sonic-supersonic-dev]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic-dev.json
 [image-purdue-af]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-purdue-af.json
 [image-agentic-interface]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-agentic-interface.json
 [image-af-pod-monitor]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-af-pod-monitor.json
