@@ -8,7 +8,7 @@ serverLoadThreshold: 100
 
 triton:
   replicas: 0
-  image: nvcr.io/nvidia/tritonserver:26.04-py3
+  image: fastml/triton-torchgeo:26.04-py3-geometric
   command: ["/bin/sh", "-c"]
   args:
     - |
