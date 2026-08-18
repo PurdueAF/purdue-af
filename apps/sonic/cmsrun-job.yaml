@@ -1,0 +1,58 @@
+# MiniAOD cmsrun client against SuperSONIC. Not Flux-managed — apply by hand:
+#   kubectl -n cms apply -f apps/sonic/cmsrun-job.yaml
+# Source: https://github.com/PurdueAF/sonic/blob/main/resources/cmsrun-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cmsrun-job
+  namespace: cms
+spec:
+  parallelism: 10
+  completions: 10
+  template:
+    spec:
+      containers:
+        - name: cmsrun-job
+          image: geddes-registry.rcac.purdue.edu/docker-hub-cache/kondratyevd/sonic-client-cms-miniaod:cmssw_17
+          args:
+            - "--address=supersonic-dev.cms.svc.cluster.local"
+            # - "--address=cms-run3-miniaod.sonic.geddes.rcac.purdue.edu"
+            - "--port=8001"
+            # - "--redir=root://cmsxrootd.fnal.gov/"
+            - "--redir=root://eos.cms.rcac.purdue.edu/"
+            - "--verboseDiscovery"
+            # - "--tries=30"
+          env:
+            - name: X509_USER_PROXY
+              value: /etc/grid-security-ro/x509up
+          volumeMounts:
+            - name: cvmfs
+              mountPath: /cvmfs
+              mountPropagation: HostToContainer
+            - name: x509-proxy
+              mountPath: /etc/grid-security-ro
+              readOnly: true
+          resources:
+            requests:
+              memory: "16Gi"
+              cpu: "4"
+            limits:
+              memory: "16Gi"
+              cpu: "4"
+      restartPolicy: Never
+      volumes:
+        - name: cvmfs
+          persistentVolumeClaim:
+            claimName: cvmfs
+        - name: x509-proxy
+          secret:
+            secretName: x509-proxy
+            defaultMode: 384
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+        - key: hub.jupyter.org/dedicated
+          operator: Equal
+          value: cms-af
+          effect: NoSchedule
+  backoffLimit: 0
