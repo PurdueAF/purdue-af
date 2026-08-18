@@ -1,13 +1,12 @@
-# SuperSONIC triton-cpu values for HelmRelease `supersonic-dev`.
-# Based on values/values-geddes-cms-cpu.yaml from
-# https://github.com/fastmachinelearning/SuperSONIC/blob/triton-cpu/values/values-geddes-cms-cpu.yaml
+# SuperSONIC scale-from-zero values for HelmRelease `supersonic-dev`.
+# Based on values/values-geddes-cms-scale-zero.yaml from
+# https://github.com/fastmachinelearning/SuperSONIC/blob/scale-from-zero/values/values-geddes-cms-scale-zero.yaml
 # Hostnames and dashboardsConfigMaps are rewritten so this release does not
 # collide with production `supersonic`. GPU Triton loads CMSSW 17 models from CVMFS.
 
 serverLoadThreshold: 100
 
 triton:
-  replicas: 0
   image: fastml/triton-torchgeo:26.04-py3-geometric
   command: ["/bin/sh", "-c"]
   args:
@@ -70,34 +69,6 @@ triton:
       path: /v2/health/ready
       port: http
 
-  cpuServer:
-    enabled: true
-    replicas: 1
-    # Same CVMFS repositories, explicit mode, no model load (index/metadata only).
-    args:
-      - |
-        /opt/tritonserver/bin/tritonserver \
-        --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoBTag/Combined/data/models/ \
-        --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoEgamma/EgammaPhotonProducers/data/models/ \
-        --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoTauTag/TrainingFiles/data/DeepTauIdSONIC/ \
-        --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoMET/METPUSubtraction/data/models/ \
-        --model-control-mode=explicit \
-        --allow-gpu-metrics=false \
-        --log-verbose=0 \
-        --strict-model-config=false \
-        --exit-timeout-secs=60
-    resources:
-      requests:
-        cpu: 2
-        memory: 4G
-      limits:
-        cpu: 4
-        memory: 8G
-    scheduleTimeoutSeconds: 30
-    demandTTLSeconds: 180
-    indexTimeout: 45s
-    modelConfigTimeout: 180s
-
 envoy:
   enabled: true
   nodeSelector: { "cms-af-prod": "true" }
@@ -124,15 +95,17 @@ keda:
   minReplicaCount: 0
   maxReplicaCount: 10
   pollingInterval: 1
-  cooldownPeriod: 180
+  cooldownPeriod: 300
+  scaleFromZero:
+    enabled: true
+    readyTimeoutSeconds: 300
+    holdMinReplicasSeconds: 300
   scaleUp:
     stabilizationWindowSeconds: 0
     periodSeconds: 15
     stepsize: 1
   scaleDown:
-    # Cover GPU warmup + first infers so KEDA does not scale back to 0
-    # before Prometheus has a load metric.
-    stabilizationWindowSeconds: 180
+    stabilizationWindowSeconds: 300
     periodSeconds: 45
     stepsize: 1
 

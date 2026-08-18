@@ -31,7 +31,7 @@ resources:
 
   - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic/helmrepo.yaml
-  # CPU-control-plane SuperSONIC from the SuperSONIC git branch (not the Helm repo).
+  # GPU scale-from-zero SuperSONIC from the SuperSONIC git branch (not the Helm repo).
   - ../../apps/sonic/supersonic-dev/helmrelease.yaml
   - ../../apps/sonic/supersonic-dev/gitrepo.yaml
   # Model repository dashboard for the supersonic release above. Needs the

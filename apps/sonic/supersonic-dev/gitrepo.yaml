@@ -6,4 +6,4 @@ spec:
   interval: 1m
   url: https://github.com/fastmachinelearning/SuperSONIC
   ref:
-    branch: triton-cpu
+    branch: scale-from-zero
