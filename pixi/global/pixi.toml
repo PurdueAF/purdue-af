@@ -8,7 +8,7 @@ version = "0.1.0"
 [dependencies]
 awkward = "*"
 awkward-pandas = "*"
-bokeh = "3.9.2.*"
+bokeh = "3.10.0.*"
 # boost = "*"
 cabinetry = "*"
 ca-certificates = "*"
