@@ -230,6 +230,18 @@
       allowedVersions: '<8.8',
     },
     {
+      // Hold tensorflow at ==2.19.1 (cuda*) — the pixi/global pin. 2.19.1 is
+      // the newest conda-forge version; every linux-64 cuda build is against
+      // libprotobuf ==6.31.1, and no protobuf-7 tensorflow exists at any
+      // version. A bump would unsolve pytorch (see next rule) and the rest
+      // of the science stack. Relax when conda-forge ships a newer tensorflow
+      // that solves (check: pixi/check-env.py will gate it). See the
+      // tensorflow-anchor note at the top of this file.
+      matchPackageNames: ['tensorflow'],
+      matchFileNames: ['pixi/global/pixi.toml'],
+      allowedVersions: '==2.19.1',
+    },
+    {
       // pytorch 2.13 -> libtorch 2.13 requires libprotobuf >=7.35.1, which
       // nothing else in pixi/global can accept (seen in PR #96):
       //   - tensorflow 2.19.1 is built against libprotobuf ==6.31.1 on every
