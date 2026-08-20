@@ -91,7 +91,7 @@ seaborn = "*"
 setuptools = "*"
 sysroot_linux-64 = "*"
 tbb = "*"
-tensorflow = {version = "==2.19.1", build = "cuda*"} #
+tensorflow = {version = "==2.21.0", build = "cuda*"} #
 tensorflow-probability = "*" #
 tf-keras = "*" #
 torch-geometric = "*"
