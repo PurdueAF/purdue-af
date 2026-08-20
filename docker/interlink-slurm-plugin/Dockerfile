@@ -38,7 +38,7 @@
 
 # Keep the default in sync with PLUGIN_REF; CI passes --build-arg explicitly.
 ARG SLURM_PLUGIN_REF=0.6.2-pre3
-ARG GOLANG_IMAGE=golang:1.26
+ARG GOLANG_IMAGE=golang:1.27
 # EL8 for the site Slurm RPMs; no CUDA — this is not a session image.
 ARG BASE_IMAGE=docker.io/rockylinux/rockylinux:8
 
