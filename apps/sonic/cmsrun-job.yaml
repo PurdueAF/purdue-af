@@ -21,6 +21,7 @@ spec:
             # - "--redir=root://cmsxrootd.fnal.gov/"
             - "--redir=root://eos.cms.rcac.purdue.edu/"
             - "--verboseDiscovery"
+            - "--maxEvents=1000"
             # - "--tries=30"
           env:
             - name: X509_USER_PROXY
