@@ -4,7 +4,20 @@
 # Hostnames and dashboardsConfigMaps are rewritten so this release does not
 # collide with production `supersonic`.
 
-serverLoadThreshold: 100
+# serverLoadThreshold: 100
+
+serverLoadThreshold: 2
+
+serverLoadMetric: |-
+  sum(rate(envoy_cluster_upstream_rq_time_sum{release="supersonic-dev", envoy_cluster_name="triton_grpc_service"}[1m])) / 1000
+  /
+  clamp_min(
+    clamp_min(
+      (sum(rate(nv_inference_request_duration_us{release="supersonic-dev"}[1m])) - sum(rate(nv_inference_queue_duration_us{release="supersonic-dev"}[1m]))) / 1e6,
+      scalar(sum(envoy_cluster_membership_healthy{release="supersonic-dev", envoy_cluster_name="triton_grpc_service"}))
+    ),
+    1
+  )
 
 scaleFromZero:
   enabled: true

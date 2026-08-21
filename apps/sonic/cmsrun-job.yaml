@@ -7,8 +7,8 @@ metadata:
   name: cmsrun-job
   namespace: cms
 spec:
-  parallelism: 10
-  completions: 10
+  parallelism: 30
+  completions: 30
   template:
     spec:
       containers:
