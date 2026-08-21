@@ -1,10 +1,15 @@
 # SuperSONIC scale-from-zero values for HelmRelease `supersonic-dev`.
-# Based on values/values-geddes-cms-scale-zero.yaml from
-# https://github.com/fastmachinelearning/SuperSONIC/blob/scale-from-zero/values/values-geddes-cms-scale-zero.yaml
+# Based on values/values-geddes-cms.yaml from
+# https://github.com/fastmachinelearning/SuperSONIC/blob/scale-from-zero/values/values-geddes-cms.yaml
 # Hostnames and dashboardsConfigMaps are rewritten so this release does not
-# collide with production `supersonic`. GPU Triton loads CMSSW 17 models from CVMFS.
+# collide with production `supersonic`.
 
 serverLoadThreshold: 100
+
+scaleFromZero:
+  enabled: true
+  readyTimeoutSeconds: 300
+  holdMinReplicasSeconds: 300
 
 triton:
   image: fastml/triton-torchgeo:26.04-py3-geometric
@@ -96,10 +101,6 @@ keda:
   maxReplicaCount: 10
   pollingInterval: 1
   cooldownPeriod: 300
-  scaleFromZero:
-    enabled: true
-    readyTimeoutSeconds: 300
-    holdMinReplicasSeconds: 300
   scaleUp:
     stabilizationWindowSeconds: 0
     periodSeconds: 15
@@ -109,13 +110,7 @@ keda:
     periodSeconds: 45
     stepsize: 1
 
-ingress:
-  enabled: false
-
 prometheus:
-  # Use the AF Prometheus already running in cms (HelmRelease `prometheus`).
-  # FQDN required: KEDA operator runs in the keda namespace and cannot
-  # resolve the short name prometheus-server.
   external:
     enabled: true
     url: prometheus-server.cms.svc.cluster.local

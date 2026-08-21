@@ -14,10 +14,10 @@ spec:
       # Track git commits on scale-from-zero, not Chart.yaml version (still 0.3.1).
       reconcileStrategy: Revision
       # valuesFiles replace the chart values.yaml; include it first so this
-      # matches `helm install helm/supersonic -f values/values-geddes-cms-scale-zero.yaml`.
+      # matches `helm install helm/supersonic -f values/values-geddes-cms.yaml`.
       valuesFiles:
         - helm/supersonic/values.yaml
-        - values/values-geddes-cms-scale-zero.yaml
+        - values/values-geddes-cms.yaml
       interval: 1m
   install:
     remediation:
