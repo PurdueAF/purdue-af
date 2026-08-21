@@ -49,7 +49,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/code-server-4.133.0-h65c4c7d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/comm-0.2.3-pyhe01879c_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/conda-26.7.0-py312h20c3967_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/conda-26.7.1-py312h20c3967_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-index-0.12.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-libmamba-solver-26.4.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-lockfiles-0.2.1-pyhd8ed1ab_0.conda
@@ -107,7 +107,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/jedi-0.20.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/json5-0.15.0-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/jsonpatch-1.33-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jsonpointer-3.1.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jsonschema-specifications-2025.9.1-pyhcf101f3_0.conda
@@ -368,7 +367,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/a6/0e/49df70d9b81fb5cbae4bbf2a49d865b09bcbcbc4eb53f5851b1027738d78/opentelemetry_semantic_conventions-0.65b0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/71/e7/40fb618334dcdf7c5a316c0e7343c5cd82d3d866edc100d98e29bc945ecd/partd-1.4.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/36/ce5f75aa7c736a663a901766edc3580098c7ea3959a0e878363a54a3714e/pixi_kernel-0.7.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/e4/be/5b3cfe508bfab6761414ff944e3366eb13be4fd71efcd69450f89ba39f43/protobuf-7.35.1-cp310-abi3-manylinux2014_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/c7/f8/bd5804695ba400e423c33fd4d9f58c28d86633d5ba1945c36ff3967d98cb/protobuf-7.36.0-cp310-abi3-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a1/ad/1500dece815f714c4f98910d5860df77567a25cbfa27ff9f17406ec32edc/purdue_af_shutdown_button-0.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0e/18/dbd0de664ac7ddf40574cc266fdc12f613b956892f09a9eb73b6f45b700d/purdue_af_vscode_button-0.1.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/de/1c/a7dac80341fe67ae775a33f9d0da2c04445479be3ce8a96e4b62df210c6e/pyroscope_io-1.2.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
@@ -428,7 +427,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/code-server-4.133.0-h65c4c7d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/comm-0.2.3-pyhe01879c_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/conda-26.7.0-py312h20c3967_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/conda-26.7.1-py312h20c3967_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-index-0.12.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-libmamba-solver-26.4.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-lockfiles-0.2.1-pyhd8ed1ab_0.conda
@@ -486,7 +485,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/jedi-0.20.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/json5-0.15.0-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/jsonpatch-1.33-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jsonpointer-3.1.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jsonschema-specifications-2025.9.1-pyhcf101f3_0.conda
@@ -747,7 +745,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/a6/0e/49df70d9b81fb5cbae4bbf2a49d865b09bcbcbc4eb53f5851b1027738d78/opentelemetry_semantic_conventions-0.65b0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/71/e7/40fb618334dcdf7c5a316c0e7343c5cd82d3d866edc100d98e29bc945ecd/partd-1.4.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/36/ce5f75aa7c736a663a901766edc3580098c7ea3959a0e878363a54a3714e/pixi_kernel-0.7.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/e4/be/5b3cfe508bfab6761414ff944e3366eb13be4fd71efcd69450f89ba39f43/protobuf-7.35.1-cp310-abi3-manylinux2014_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/c7/f8/bd5804695ba400e423c33fd4d9f58c28d86633d5ba1945c36ff3967d98cb/protobuf-7.36.0-cp310-abi3-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a1/ad/1500dece815f714c4f98910d5860df77567a25cbfa27ff9f17406ec32edc/purdue_af_shutdown_button-0.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0e/18/dbd0de664ac7ddf40574cc266fdc12f613b956892f09a9eb73b6f45b700d/purdue_af_vscode_button-0.1.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/de/1c/a7dac80341fe67ae775a33f9d0da2c04445479be3ce8a96e4b62df210c6e/pyroscope_io-1.2.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
@@ -1306,9 +1304,9 @@ packages:
   - pkg:pypi/comm?source=hash-mapping
   size: 14690
   timestamp: 1753453984907
-- conda: https://conda.anaconda.org/conda-forge/linux-64/conda-26.7.0-py312h20c3967_0.conda
-  sha256: 44a171d3859dcf5ac809822d17d36be9a64e0e2e4db868477ff7fa31e93e56f2
-  md5: 412b7f5ca58882a115d29b04c9a1ff18
+- conda: https://conda.anaconda.org/conda-forge/linux-64/conda-26.7.1-py312h20c3967_0.conda
+  sha256: 279ca6cd60377ef90b7de1f17c9f66b7558b068e6c1a9dc5f17ba4ad2c750349
+  md5: 00415808011949d33f78fed3c32c9668
   depends:
   - archspec >=0.2.3
   - backports.zstd >=1.3.0
@@ -1317,8 +1315,8 @@ packages:
   - conda-package-handling >=2.2.0
   - distro >=1.5.0
   - frozendict >=2.4.2
-  - jsonpatch >=1.32
   - menuinst >=2
+  - msgpack-python >=1.1.1
   - packaging >=23.0
   - platformdirs >=3.10.0
   - pluggy >=1.6.0
@@ -1341,9 +1339,9 @@ packages:
   - conda-env >=2.6
   license: BSD-3-Clause
   purls:
-  - pkg:pypi/conda?source=compressed-mapping
-  size: 1400649
-  timestamp: 1785769800247
+  - pkg:pypi/conda?source=hash-mapping
+  size: 1401608
+  timestamp: 1787306255937
 - conda: https://conda.anaconda.org/conda-forge/noarch/conda-index-0.12.1-pyhd8ed1ab_0.conda
   sha256: 39f8f4b24e6c6b701679949950af3220bcf42bd634a68d63f7d39f64752b79a6
   md5: 1b8035639db6b74dcdc6b5412ae89011
@@ -2324,18 +2322,6 @@ packages:
   - pkg:pypi/json5?source=compressed-mapping
   size: 39373
   timestamp: 1781926894833
-- conda: https://conda.anaconda.org/conda-forge/noarch/jsonpatch-1.33-pyhd8ed1ab_1.conda
-  sha256: 304955757d1fedbe344af43b12b5467cca072f83cce6109361ba942e186b3993
-  md5: cb60ae9cf02b9fcb8004dec4089e5691
-  depends:
-  - jsonpointer >=1.9
-  - python >=3.9
-  license: BSD-3-Clause
-  license_family: BSD
-  purls:
-  - pkg:pypi/jsonpatch?source=hash-mapping
-  size: 17311
-  timestamp: 1733814664790
 - conda: https://conda.anaconda.org/conda-forge/noarch/jsonpointer-3.1.1-pyhcf101f3_0.conda
   sha256: a3d10301b6ff399ba1f3d39e443664804a3d28315a4fb81e745b6817845f70ae
   md5: 89bf346df77603055d3c8fe5811691e6
@@ -4481,10 +4467,10 @@ packages:
   - pkg:pypi/propcache?source=compressed-mapping
   size: 51586
   timestamp: 1780037816755
-- pypi: https://files.pythonhosted.org/packages/e4/be/5b3cfe508bfab6761414ff944e3366eb13be4fd71efcd69450f89ba39f43/protobuf-7.35.1-cp310-abi3-manylinux2014_x86_64.whl
+- pypi: https://files.pythonhosted.org/packages/c7/f8/bd5804695ba400e423c33fd4d9f58c28d86633d5ba1945c36ff3967d98cb/protobuf-7.36.0-cp310-abi3-manylinux2014_x86_64.whl
   name: protobuf
-  version: 7.35.1
-  sha256: 74758715c53d7158fb76caf4f0cfdacc5329a4b1bb994f865d6cf302d413a1c4
+  version: 7.36.0
+  sha256: 70f5ec8eb0da81a44360c0dc0beac99a0d78071d21956a7076bae8bd2051841b
   requires_python: '>=3.10'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/psutil-7.2.2-py312h5253ce2_0.conda
   sha256: d834fd656133c9e4eaf63ffe9a117c7d0917d86d89f7d64073f4e3a0020bd8a7
