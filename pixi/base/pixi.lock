@@ -282,7 +282,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/rpds-py-2026.6.3-py312h192e038_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ruamel.yaml-0.18.17-py312h5253ce2_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ruamel.yaml.clib-0.2.15-py312h5253ce2_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.1.1-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.2.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/scitokens-cpp-1.4.0-h096d96b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/send2trash-2.1.0-pyha191276_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
@@ -660,7 +660,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/rpds-py-2026.6.3-py312h192e038_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ruamel.yaml-0.18.17-py312h5253ce2_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ruamel.yaml.clib-0.2.15-py312h5253ce2_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.1.1-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.2.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/scitokens-cpp-1.4.0-h096d96b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/send2trash-2.1.0-pyha191276_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
@@ -5061,9 +5061,9 @@ packages:
   - pkg:pypi/ruamel-yaml-clib?source=hash-mapping
   size: 148221
   timestamp: 1766159515069
-- conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.1.1-pyhd8ed1ab_0.conda
-  sha256: 5346b1046948315c322317ca325709e31e54f3758a417c6b3a53de56942568a2
-  md5: c31f5732063a38a197b1483989b8b079
+- conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.2.0-pyhd8ed1ab_0.conda
+  sha256: bc67002a163a556a2d03309c63edab72eed1ccdfb39409dc3c71912e103c37aa
+  md5: 67ac570d429af384f492f56244d0bb2f
   depends:
   - click
   - dogpile.cache
@@ -5078,8 +5078,8 @@ packages:
   license: Apache-2.0
   purls:
   - pkg:pypi/rucio-clients?source=hash-mapping
-  size: 269515
-  timestamp: 1785500248260
+  size: 269596
+  timestamp: 1787318526405
 - conda: https://conda.anaconda.org/conda-forge/linux-64/scitokens-cpp-1.4.0-h096d96b_0.conda
   sha256: 48b6a8088232220d69949916a64c3e8b5fe0f763a47d8a530246cf233181545a
   md5: d0b9190c5937652677d4822d8f9abba9
