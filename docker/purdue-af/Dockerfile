@@ -164,7 +164,7 @@ RUN chmod +x /usr/local/bin/pixi && \
 # so the runtime stage can COPY them as one directory. Both ship the same
 # config files their code-server extensions read, so registering the AF MCP
 # server once (config-agents.sh) covers terminal and editor alike.
-ARG CLAUDE_CODE_VERSION="2.1.238"
+ARG CLAUDE_CODE_VERSION="2.1.241"
 ARG CODEX_VERSION="0.149.1"
 ENV NPM_GLOBAL="/opt/npm-global"
 # hadolint ignore=DL3016  # versions ARE pinned, via the ARGs above
