@@ -11,7 +11,7 @@ conda         = "==26.7.1"
 mamba         = "==2.9.0"
 jupyter_core  = "==5.9.1"
 jupyter       = "==1.1.1"
-code-server   = "==4.133.0"
+code-server   = "==4.134.0"
 jupyter-vscode-proxy = "==0.7"
 jupyter-server-proxy = "==4.5.0"
 
