@@ -11,12 +11,12 @@ conda         = "==26.7.1"
 mamba         = "==2.9.0"
 jupyter_core  = "==5.9.1"
 jupyter       = "==1.1.1"
-code-server   = "==4.134.0"
+code-server   = "==4.135.0"
 jupyter-vscode-proxy = "==0.7"
 jupyter-server-proxy = "==4.5.0"
 
 # Jupyter pieces
-jupyter_server = "==2.20.0"
+jupyter_server = "==2.21.0"
 notebook      = "==7.6.2"
 jupyterhub    = "==5.5.1"
 jupyterlab    = "==4.6.3"
@@ -43,7 +43,7 @@ bokeh         = "==3.10.0"
 # parses them via the regex-versioning rule in renovate.json5.
 # >=10.2p1 required alongside mamba >=2.8 (both sides must agree on krb5 1.22).
 openssh       = "==10.4p1"
-uv            = "==0.12.5"
+uv            = "==0.12.7"
 
 [pypi-dependencies]
 jupyterlab-git            = "==0.54.1"
