@@ -230,7 +230,7 @@ file:
 
 ```python
 cluster = gateway.new_cluster(
-    pixi_project = "/path/to/pixi/project",
+    pixi_project="/path/to/pixi/project",
     # ...
 )
 ```

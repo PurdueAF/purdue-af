@@ -15,10 +15,13 @@ Below is a simple example of parallelizing the execution of a function using Das
 
 ```python
 from distributed import Client
+
 client = Client(...)
 
+
 def func(x):
-    return x*x
+    return x * x
+
 
 args = [1, 2, 3, 4, 5]
 futures = client.map(func, args)
@@ -60,8 +63,9 @@ selected during session creation (**up to 128 cores** and **up to 128 GB RAM**).
 
     ```python
     from distributed import LocalCluster, Client
+
     cluster = LocalCluster()
-    cluster.scale(4) # create 4 local workers
+    cluster.scale(4)  # create 4 local workers
     client = Client(cluster)
     ```
 

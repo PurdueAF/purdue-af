@@ -66,11 +66,11 @@ os.environ["X509_USER_PROXY"] = "/path-to-voms-proxy/"
 
 # Create the cluster
 cluster = gateway.new_cluster(
-    pixi_project = "/path/to/pixi/project", # path to pixi project (directory containing pixi.toml file)
+    pixi_project="/path/to/pixi/project",  # path to pixi project (directory containing pixi.toml file)
     # conda_env = "/path/to/conda/environment", # path to conda environment - can be used instead of pixi_project
-    worker_cores = 1,    # cores per worker
-    worker_memory = 4,   # memory per worker in GB
-    env = dict(os.environ), # pass environment as a dictionary
+    worker_cores=1,  # cores per worker
+    worker_memory=4,  # memory per worker in GB
+    env=dict(os.environ),  # pass environment as a dictionary
 )
 
 # If working in a Jupyter Notebook, the following will create a widget
@@ -120,7 +120,7 @@ volumes, Pixi or Conda environments, Python packages, C++ libraries, etc.
 
     ```python
     cluster = gateway.new_cluster(
-        pixi_project = "/path/to/pixi/project", # path to pixi project (directory containing pixi.toml file)
+        pixi_project="/path/to/pixi/project",  # path to pixi project (directory containing pixi.toml file)
         # ...
     )
     ```
@@ -130,8 +130,8 @@ volumes, Pixi or Conda environments, Python packages, C++ libraries, etc.
 
     ```python
     cluster = gateway.new_cluster(
-        pixi_project = "/path/to/pixi/project",
-        pixi_env = "my-env", # pixi environment name
+        pixi_project="/path/to/pixi/project",
+        pixi_env="my-env",  # pixi environment name
         # ...
     )
     ```
@@ -141,7 +141,7 @@ volumes, Pixi or Conda environments, Python packages, C++ libraries, etc.
 
     ```python
     cluster = gateway.new_cluster(
-        conda_env = "/path/to/conda/environment", # path to conda environment
+        conda_env="/path/to/conda/environment",  # path to conda environment
         # ...
     )
     ```
@@ -164,8 +164,8 @@ volumes, Pixi or Conda environments, Python packages, C++ libraries, etc.
     os.environ["X509_USER_PROXY"] = "/path-to-proxy"
 
     cluster = gateway.new_cluster(
-        #...
-        env = dict(os.environ)
+        # ...
+        env=dict(os.environ)
     )
     ```
 

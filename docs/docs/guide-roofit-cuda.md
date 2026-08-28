@@ -57,29 +57,31 @@ file = rt.TFile.Open(inputfile)
 canvas = rt.TCanvas()
 canvas.cd()
 
-mass =  rt.RooRealVar("mh_ggh","mass (GeV)",100,85,99)
+mass = rt.RooRealVar("mh_ggh", "mass (GeV)", 100, 85, 99)
 frame = mass.frame()
 
 # Breit Wigner
-bwWidth = rt.RooRealVar("bwz_Width" , "widthZ", 2.5, 0, 30)
-bwmZ = rt.RooRealVar("bwz_mZ" , "mZ", 91.2, 90, 92)
-sigma = rt.RooRealVar("sigma" , "sigma", 2, 0.0, 5.0)
+bwWidth = rt.RooRealVar("bwz_Width", "widthZ", 2.5, 0, 30)
+bwmZ = rt.RooRealVar("bwz_mZ", "mZ", 91.2, 90, 92)
+sigma = rt.RooRealVar("sigma", "sigma", 2, 0.0, 5.0)
 bwWidth.setConstant(True)
-model1_1 = rt.RooBreitWigner("bwz", "BWZ",mass, bwmZ, bwWidth)
+model1_1 = rt.RooBreitWigner("bwz", "BWZ", mass, bwmZ, bwWidth)
 
 # Double Sided Crystal Ball
-mean = rt.RooRealVar("mean" , "mean", 0, -10, 10) # mean is mean relative to BW
-sigma = rt.RooRealVar("sigma" , "sigma", 2, .2, 4.0)
-alpha1 = rt.RooRealVar("alpha1" , "alpha1", 2, 0.01, 45)
-n1 = rt.RooRealVar("n1" , "n1", 10, 0.01, 185)
-alpha2 = rt.RooRealVar("alpha2" , "alpha2", 2.0, 0.01, 65)
-n2 = rt.RooRealVar("n2" , "n2", 25, 0.01, 385)
-model1_2 = rt.RooCrystalBall("dcb","dcb",mass, mean, sigma, alpha1, n1, alpha2, n2)
+mean = rt.RooRealVar("mean", "mean", 0, -10, 10)  # mean is mean relative to BW
+sigma = rt.RooRealVar("sigma", "sigma", 2, 0.2, 4.0)
+alpha1 = rt.RooRealVar("alpha1", "alpha1", 2, 0.01, 45)
+n1 = rt.RooRealVar("n1", "n1", 10, 0.01, 185)
+alpha2 = rt.RooRealVar("alpha2", "alpha2", 2.0, 0.01, 65)
+n2 = rt.RooRealVar("n2", "n2", 25, 0.01, 385)
+model1_2 = rt.RooCrystalBall("dcb", "dcb", mass, mean, sigma, alpha1, n1, alpha2, n2)
 
-mass.setBins(10000,"cache") # cache is repre of the variable only used in FFT
-mass.setBins(200) # bin to 200 bins otherwise, fitting with FFT conv is gonna take forever
-mass.setMin("cache",50.5)
-mass.setMax("cache",130.5)
+mass.setBins(10000, "cache")  # cache is repre of the variable only used in FFT
+mass.setBins(
+    200
+)  # bin to 200 bins otherwise, fitting with FFT conv is gonna take forever
+mass.setMin("cache", 50.5)
+mass.setMax("cache", 130.5)
 model1 = rt.RooFFTConvPdf("BWxDCB", "BWxDCB", mass, model1_1, model1_2)
 
 # Exponential background
@@ -89,16 +91,16 @@ shifted_mass = rt.RooFormulaVar("shifted_mass", "@0-@1", rt.RooArgList(mass, shi
 model2 = rt.RooExponential("bkg", "bkg", shifted_mass, coeff)
 
 sigfrac = rt.RooRealVar("sigfrac", "sigfrac", 0.99, 0, 1.0)
-model = rt.RooAddPdf("model3", "model3", [model1, model2],sigfrac)
+model = rt.RooAddPdf("model3", "model3", [model1, model2], sigfrac)
 
 data = file.w.data("data_Zfit_no_e_cut_UL_calib_cat5")
 
-model.fitTo(data, rt.RooFit.Save(), rt.RooFit.EvalBackend.Cuda()) #GPU
+model.fitTo(data, rt.RooFit.Save(), rt.RooFit.EvalBackend.Cuda())  # GPU
 
 data.plotOn(frame)
 model.plotOn(frame, rt.RooFit.LineColor(rt.kRed))
-model.plotOn(frame, rt.RooFit.Components("BWxDCB"),rt.RooFit.LineColor(rt.kBlue))
-model.plotOn(frame, rt.RooFit.Components("bkg"),rt.RooFit.LineColor(rt.kGreen))
+model.plotOn(frame, rt.RooFit.Components("BWxDCB"), rt.RooFit.LineColor(rt.kBlue))
+model.plotOn(frame, rt.RooFit.Components("bkg"), rt.RooFit.LineColor(rt.kGreen))
 
 
 frame.Draw()
