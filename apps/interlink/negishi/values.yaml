@@ -70,7 +70,7 @@ virtualNode:
   network:
     # creates the wstunnel template ConfigMap
     enableTunnel: true
-    tunnelImage: "ghcr.io/erebe/wstunnel:v10.6.2"
+    tunnelImage: "ghcr.io/erebe/wstunnel:v10.7.0"
     # each pod gets its own tunnel at "<podname>.<wildcardDNS>"
     wildcardDNS: "geddes.rcac.purdue.edu"
     wstunnelTemplatePath: "/etc/templates/wstunnel.yaml"
