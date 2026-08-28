@@ -87,6 +87,7 @@ You can verify that your session sees the GPU with `nvidia-smi`, or from Python:
 
 ```python
 import torch
+
 print(torch.cuda.is_available())
 print(torch.cuda.get_device_name())
 ```
