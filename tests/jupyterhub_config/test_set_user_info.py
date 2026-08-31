@@ -15,7 +15,16 @@ def test_ldap_lookup_parses_uid_gid(monkeypatch, fake_ldap):
     ns = load(monkeypatch, fake_ldap)
     uid, gid = ns["ldap_lookup"]("alice")
     assert (uid, gid) == (12345, 67890)
-    assert fake_ldap["searches"] == ["(uid=alice*)"]
+    assert fake_ldap["searches"] == [
+        "(&(objectClass=inetOrgPerson)(|(uid=alice)(cn=alice)))"
+    ]
+
+
+def test_ldap_lookup_no_entries_raises(monkeypatch, fake_ldap):
+    fake_ldap["empty"] = True
+    ns = load(monkeypatch, fake_ldap)
+    with pytest.raises(RuntimeError, match="no entries"):
+        ns["ldap_lookup"]("missing")
 
 
 # ── passthrough_auth_state_hook ───────────────────────────────────────────────
@@ -32,7 +41,9 @@ def test_purdue_user_resolved_via_ldap(monkeypatch, fake_ldap):
     assert spawner.environment["NB_USER"] == "alice"
     assert spawner.environment["NB_UID"] == "12345"
     assert spawner.environment["NB_GID"] == "67890"
-    assert fake_ldap["searches"] == ["(uid=alice*)"]
+    assert fake_ldap["searches"] == [
+        "(&(objectClass=inetOrgPerson)(|(uid=alice)(cn=alice)))"
+    ]
 
 
 def test_external_user_mapped_to_paf_account(monkeypatch, fake_ldap):
@@ -45,7 +56,9 @@ def test_external_user_mapped_to_paf_account(monkeypatch, fake_ldap):
 
     # external users keep their hub username but get a mapped paf account uid
     assert spawner.environment["NB_USER"] == "carol-cern"
-    assert fake_ldap["searches"] == ["(uid=paf0007*)"]
+    assert fake_ldap["searches"] == [
+        "(&(objectClass=inetOrgPerson)(|(uid=paf0007)(cn=paf0007)))"
+    ]
     assert spawner.environment["NB_UID"] == "12345"
 
 

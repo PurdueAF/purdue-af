@@ -24,6 +24,8 @@ def fake_ldap(monkeypatch):
         def response_to_json(self):
             import json
 
+            if state.get("empty"):
+                return json.dumps({"entries": []})
             return json.dumps(
                 {
                     "entries": [

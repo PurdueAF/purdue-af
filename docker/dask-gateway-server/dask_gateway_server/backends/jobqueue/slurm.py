@@ -17,7 +17,7 @@ __all__ = ("SlurmBackend", "SlurmClusterConfig")
 def ldap_lookup(username):
     url = "geddes-auth.rcac.purdue.edu"
     baseDN = "ou=People,dc=geddes,dc=rcac,dc=purdue,dc=edu"
-    search_filter = "(uid={0}*)"
+    search_filter = "(&(objectClass=inetOrgPerson)(|(uid={0})(cn={0})))"
     attrs = ['uidNumber','gidNumber']
     s = Server(host=url, use_ssl=True, get_info='ALL')
     conn = Connection(s, version = 3, authentication = "ANONYMOUS")

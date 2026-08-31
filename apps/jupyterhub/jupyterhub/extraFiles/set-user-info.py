@@ -17,7 +17,9 @@ def ldap_lookup(username: str) -> tuple[Any, Any]:
     url = os.environ.get("AF_LDAP_HOST", "geddes-auth.rcac.purdue.edu")
     use_tls = os.environ.get("AF_LDAP_TLS", "true").lower() != "false"
     baseDN = "ou=People,dc=geddes,dc=rcac,dc=purdue,dc=edu"
-    search_filter = "(uid={0}*)"
+    # geddes-auth: login attr is uid, username attr is cn; exact match (no
+    # substring wildcard — the old `(uid=…*)` filter returns no entries).
+    search_filter = "(&(objectClass=inetOrgPerson)(|(uid={0})(cn={0})))"
     attrs = ["uidNumber", "gidNumber"]
     s = Server(host=url, use_ssl=use_tls, get_info="ALL")
     conn = Connection(s, version=3, authentication="ANONYMOUS")
@@ -33,7 +35,10 @@ def ldap_lookup(username: str) -> tuple[Any, Any]:
     )
     ldap_result_id = json.loads(conn.response_to_json())
     print(ldap_result_id)
-    result = ldap_result_id["entries"][0]["attributes"]
+    entries = ldap_result_id["entries"]
+    if not entries:
+        raise RuntimeError(f"LDAP lookup for {username!r} returned no entries")
+    result = entries[0]["attributes"]
     uid_number = result["uidNumber"]
     gid_number = result["gidNumber"]
     print("UID", +uid_number)
