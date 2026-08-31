@@ -159,7 +159,7 @@ gateway:
 
           from ldap3 import Server, Connection, SUBTREE
           url = "geddes-auth.rcac.purdue.edu"
-          baseDN = "ou=People,dc=rcac,dc=purdue,dc=edu"
+          baseDN = "ou=People,dc=geddes,dc=rcac,dc=purdue,dc=edu"
           search_filter = "(uid={0}*)"
           attrs = ['uidNumber','gidNumber']
           s = Server(host= url ,use_ssl= True, get_info= 'ALL')

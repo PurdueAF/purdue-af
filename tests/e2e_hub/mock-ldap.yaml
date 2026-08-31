@@ -22,7 +22,7 @@ spec:
             - name: LDAP_ORGANISATION
               value: "RCAC Mock"
             - name: LDAP_DOMAIN
-              value: "rcac.purdue.edu" # -> base dc=rcac,dc=purdue,dc=edu, as in prod
+              value: "geddes.rcac.purdue.edu" # -> base dc=geddes,dc=rcac,dc=purdue,dc=edu, as in prod
             - name: LDAP_ADMIN_PASSWORD
               value: "not-a-secret"
             - name: LDAP_TLS

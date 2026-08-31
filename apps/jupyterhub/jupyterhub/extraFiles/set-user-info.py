@@ -16,7 +16,7 @@ def ldap_lookup(username: str) -> tuple[Any, Any]:
     # TLS path byte-for-byte.
     url = os.environ.get("AF_LDAP_HOST", "geddes-auth.rcac.purdue.edu")
     use_tls = os.environ.get("AF_LDAP_TLS", "true").lower() != "false"
-    baseDN = "ou=People,dc=rcac,dc=purdue,dc=edu"
+    baseDN = "ou=People,dc=geddes,dc=rcac,dc=purdue,dc=edu"
     search_filter = "(uid={0}*)"
     attrs = ["uidNumber", "gidNumber"]
     s = Server(host=url, use_ssl=use_tls, get_info="ALL")
