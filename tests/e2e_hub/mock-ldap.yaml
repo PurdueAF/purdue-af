@@ -1,4 +1,4 @@
-# Mock LDAP (openldap seeded with posixAccounts) — stands in for geddes-aux
+# Mock LDAP (openldap seeded with posixAccounts) — stands in for geddes-auth
 # so set-user-info.py's ldap_lookup() runs for real at spawn time. The seed
 # LDIF and the anonymous-read ACL come from ConfigMaps created by
 # setup-kind.sh from mock-ldap-users.ldif / mock-ldap-acl.ldif.

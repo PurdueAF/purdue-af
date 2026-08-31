@@ -1,4 +1,4 @@
-# Seed entries for the mock LDAP (osixia/openldap) — mirrors the geddes-aux
+# Seed entries for the mock LDAP (osixia/openldap) — mirrors the geddes-auth
 # layout that set-user-info.py queries: posixAccounts under ou=People with
 # uidNumber/gidNumber. uid/gid values are deliberately distinct so a swapped
 # assignment fails the e2e assertions.

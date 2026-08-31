@@ -158,7 +158,7 @@ gateway:
               subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "ldap3"])
 
           from ldap3 import Server, Connection, SUBTREE
-          url = "geddes-aux.rcac.purdue.edu"
+          url = "geddes-auth.rcac.purdue.edu"
           baseDN = "ou=People,dc=rcac,dc=purdue,dc=edu"
           search_filter = "(uid={0}*)"
           attrs = ['uidNumber','gidNumber']
