@@ -1,0 +1,73 @@
+# Shared Grafana datasource provisioning, merged into both instances
+# (grafana and grafana-private) via a second valuesFrom entry on each
+# HelmRelease — single source of truth so the instances cannot drift.
+# Instance-specific datasources (e.g. Infinity on the public instance)
+# live in that instance's values file under a different provisioning
+# filename, which the values merge keeps alongside this one.
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: prometheus
+        uid: prometheus
+        type: prometheus
+        url: http://prometheus-server:9090
+        access: proxy
+        isDefault: true
+      - name: prometheus-rancher
+        uid: prometheus-rancher
+        type: prometheus
+        url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
+        access: proxy
+        isDefault: false
+      - name: prometheus-hammer
+        uid: prometheus-hammer
+        type: prometheus
+        url: http://grafana.cms.rcac.purdue.edu:9090
+        access: proxy
+        isDefault: false
+      - name: tempo
+        uid: tempo
+        type: tempo
+        url: http://tempo.cms.svc.cluster.local:3100
+        access: proxy
+        isDefault: false
+        basicAuth: false
+        jsonData:
+          httpMethod: GET
+          timeInterval: 5s
+          tlsSkipVerify: true
+          nodeGraph:
+            enabled: true
+          serviceMap:
+            datasourceUid: prometheus
+          tracesToMetrics:
+            datasourceUid: prometheus
+          tracesToLogs:
+            datasourceUid: loki
+      - name: thanos
+        uid: thanos
+        type: prometheus
+        url: http://thanos-query.cms.svc.cluster.local:10902
+        access: proxy
+        isDefault: false
+        jsonData:
+          httpMethod: POST
+          timeInterval: 15s
+          manageAlerts: false
+      # uid pinned so dashboards can reference it stably across instances
+      # (a fresh database would otherwise generate a random uid)
+      - name: pyroscope
+        uid: pyroscope
+        type: grafana-pyroscope-datasource
+        url: http://pyroscope.cms.svc.cluster.local:4040
+        jsonData:
+          minStep: 15s
+      - name: loki
+        uid: loki
+        type: loki
+        url: http://loki.cms.svc.cluster.local:3100
+        access: proxy
+        isDefault: false
+        jsonData:
+          maxLines: 1000

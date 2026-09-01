@@ -92,6 +92,10 @@ configMapGenerator:
     files:
       - values.yaml=../../apps/monitoring/grafana/values-private.yaml
 
+  - name: grafana-datasources
+    files:
+      - values.yaml=../../apps/monitoring/grafana/datasources.yaml
+
   - name: grafana-public-dashboards
     files:
       - ../../apps/monitoring/grafana/dashboards/default.json

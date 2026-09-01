@@ -42,8 +42,7 @@ securityContext:
 initChownData:
   enabled: false
 
-# Temp dirs stay on emptyDir. Plugins live on the RWO PVC so they are not
-# reinstalled (and rewritten into SQLite) on every restart.
+# Temp dirs stay on emptyDir.
 extraVolumes:
   - name: grafana-png-tmp
     emptyDir: {}
@@ -59,12 +58,6 @@ extraVolumeMounts:
     mountPath: /var/lib/grafana/pdf
   - name: grafana-csv-tmp
     mountPath: /var/lib/grafana/csv
-
-extraConfigmapMounts:
-  - name: grafana-plugins-provisioning
-    mountPath: /etc/grafana/provisioning/plugins
-    configMap: grafana-plugins-provisioning
-    readOnly: true
 
 # Resources
 resources:
@@ -111,71 +104,6 @@ dashboardProviders:
 dashboardsConfigMaps:
   private: grafana-private-dashboards
 
-datasources:
-  datasources.yaml:
-    apiVersion: 1
-    datasources:
-      - name: prometheus
-        uid: prometheus
-        type: prometheus
-        url: http://prometheus-server:9090
-        access: proxy
-        isDefault: true
-      - name: prometheus-rancher
-        uid: prometheus-rancher
-        type: prometheus
-        url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
-        access: proxy
-        isDefault: false
-      - name: prometheus-hammer
-        uid: prometheus-hammer
-        type: prometheus
-        url: http://grafana.cms.rcac.purdue.edu:9090
-        access: proxy
-        isDefault: false
-      - name: tempo
-        uid: tempo
-        type: tempo
-        url: http://tempo.cms.svc.cluster.local:3100
-        access: proxy
-        isDefault: false
-        basicAuth: false
-        jsonData:
-          httpMethod: GET
-          timeInterval: 5s
-          tlsSkipVerify: true
-          nodeGraph:
-            enabled: true
-          serviceMap:
-            datasourceUid: prometheus
-          tracesToMetrics:
-            datasourceUid: prometheus
-          tracesToLogs:
-            datasourceUid: loki
-      - name: thanos
-        uid: thanos
-        type: prometheus
-        url: http://thanos-query.cms.svc.cluster.local:10902
-        access: proxy
-        isDefault: false
-        jsonData:
-          httpMethod: POST
-          timeInterval: 15s
-          manageAlerts: false
-      - name: pyroscope
-        type: grafana-pyroscope-datasource
-        url: http://pyroscope.cms.svc.cluster.local:4040
-        jsonData:
-          minStep: 15s
-      - name: loki
-        uid: loki
-        type: loki
-        url: http://loki.cms.svc.cluster.local:3100
-        access: proxy
-        isDefault: false
-        jsonData:
-          maxLines: 1000
-
-plugins:
-  - grafana-llm-app
-  - grafana-pyroscope-app
+# Datasources come from the shared datasources.yaml (second valuesFrom
+# entry on the HelmRelease). The private dashboards use only core panels
+# and datasource types, so no plugins are installed on this instance.

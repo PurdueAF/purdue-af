@@ -22,3 +22,6 @@ spec:
     - kind: ConfigMap
       name: grafana-config
       valuesKey: values.yaml
+    - kind: ConfigMap
+      name: grafana-datasources
+      valuesKey: values.yaml

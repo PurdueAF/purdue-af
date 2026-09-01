@@ -55,6 +55,10 @@ extraVolumes:
     emptyDir: {}
   - name: grafana-csv-tmp
     emptyDir: {}
+  # TRANSITIONAL — empty dir backing the private-dashboards cleanup
+  # provider (see dashboardProviders); remove together with it.
+  - name: private-dashboards-cleanup
+    emptyDir: {}
   - name: work
     existingClaim: af-shared-storage
   - name: announcements-nginx-conf
@@ -71,6 +75,8 @@ extraVolumeMounts:
     mountPath: /var/lib/grafana/pdf
   - name: grafana-csv-tmp
     mountPath: /var/lib/grafana/csv
+  - name: private-dashboards-cleanup
+    mountPath: /var/lib/grafana/dashboards/private
   - name: work
     mountPath: /work/
     mountPropagation: HostToContainer
@@ -127,18 +133,6 @@ extraContainers: |
         cpu: 1000m
         memory: 2Gi
 
-extraConfigmapMounts:
-  - name: grafana-plugins-provisioning
-    mountPath: /etc/grafana/provisioning/plugins
-    configMap: grafana-plugins-provisioning
-    readOnly: true
-
-# envValueFrom:
-#   OPENAI_API_KEY:
-#     secretKeyRef:
-#       name: a2rchi-openai-api-key
-#       key: OPENAI_API_KEY
-
 # Resources
 resources:
   requests:
@@ -182,75 +176,35 @@ dashboardProviders:
         allowUiUpdates: true
         options:
           path: /var/lib/grafana/dashboards/public
+      # TRANSITIONAL — remove after this has deployed once. The private
+      # dashboards moved to the grafana-private instance, but dashboards
+      # already provisioned into this instance's database are not removed
+      # by simply dropping their provider. Keeping the provider pointed at
+      # an empty directory (emptyDir below) makes Grafana's sync delete
+      # them (disableDeletion: false). Afterwards this provider and the
+      # private-dashboards-cleanup volume can be deleted; the leftover
+      # empty "Private Dashboards" folder can be removed in the UI.
+      - name: "private"
+        orgId: 1
+        folder: "Private Dashboards"
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 10
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards/private
 
 # Use ConfigMap for dashboards
 dashboardsConfigMaps:
   public: grafana-public-dashboards
 
+# Shared datasources come from datasources.yaml (second valuesFrom entry
+# on the HelmRelease); only public-instance-specific ones live here, under
+# a distinct provisioning filename so the values merge keeps both.
 datasources:
-  datasources.yaml:
+  infinity-datasources.yaml:
     apiVersion: 1
     datasources:
-      - name: prometheus
-        uid: prometheus
-        type: prometheus
-        url: http://prometheus-server:9090
-        access: proxy
-        isDefault: true
-      - name: prometheus-rancher
-        uid: prometheus-rancher
-        type: prometheus
-        url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
-        access: proxy
-        isDefault: false
-      - name: prometheus-hammer
-        uid: prometheus-hammer
-        type: prometheus
-        url: http://grafana.cms.rcac.purdue.edu:9090
-        access: proxy
-        isDefault: false
-      - name: tempo
-        uid: tempo
-        type: tempo
-        url: http://tempo.cms.svc.cluster.local:3100
-        access: proxy
-        isDefault: false
-        basicAuth: false
-        jsonData:
-          httpMethod: GET
-          timeInterval: 5s
-          tlsSkipVerify: true
-          nodeGraph:
-            enabled: true
-          serviceMap:
-            datasourceUid: prometheus
-          tracesToMetrics:
-            datasourceUid: prometheus
-          tracesToLogs:
-            datasourceUid: loki
-      - name: thanos
-        uid: thanos
-        type: prometheus
-        url: http://thanos-query.cms.svc.cluster.local:10902
-        access: proxy
-        isDefault: false
-        jsonData:
-          httpMethod: POST
-          timeInterval: 15s
-          manageAlerts: false
-      - name: pyroscope
-        type: grafana-pyroscope-datasource
-        url: http://pyroscope.cms.svc.cluster.local:4040
-        jsonData:
-          minStep: 15s
-      - name: loki
-        uid: loki
-        type: loki
-        url: http://loki.cms.svc.cluster.local:3100
-        access: proxy
-        isDefault: false
-        jsonData:
-          maxLines: 1000
       - name: Infinity
         type: yesoreyeram-infinity-datasource
         uid: infinity
@@ -261,7 +215,5 @@ datasources:
             - "http://localhost:8080"
 
 plugins:
-  - grafana-llm-app
-  - grafana-pyroscope-app
   - marcusolsson-dynamictext-panel
   - yesoreyeram-infinity-datasource
