@@ -144,8 +144,13 @@ jobs:
     #                                          the last release, PATCH
     #                                          otherwise (promote the digest,
     #                                          rewrite the pin, commit + tag).
-    #                                          Needs AF_RELEASE_TOKEN so the
-    #                                          bump commit triggers its own CI.
+    #                                          Token-free: the GITHUB_TOKEN
+    #                                          push triggers no CI, so the
+    #                                          bump commit is validated
+    #                                          in-run (one-line-retag check),
+    #                                          stamped ci-ok via the API, and
+    #                                          main-validated advances to it
+    #                                          directly.
     # purdue-af promotion to production stays human: release-image.yml.
     needs: [ci-ok, images]
     if: >-
@@ -155,8 +160,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write # main-validated branch
+      contents: write # main-validated branch + auto-release commit/tag
       packages: write
+      checks: write # synthetic ci-ok on manifest-only auto-release commits
     steps:
       - name: Refuse to promote off main
         run: |
@@ -246,14 +252,13 @@ jobs:
           echo "published $repo@$AF_DIGEST -> :sha-${GITHUB_SHA::12} + :pre-release" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          # Full history so the auto-release step can commit on the current
-          # tip of main; the PAT so its push triggers CI (a GITHUB_TOKEN push
-          # would leave the bump commit unvalidated and undeployed).
+          # Full history + tags: the auto-release step commits on main and
+          # compares the skill tree against the last release tag.
           fetch-depth: 0
-          token: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
       - name: Auto-release agentic-interface (version bump when the image changed)
+        id: autorelease
         env:
-          HAVE_RELEASE_PAT: ${{ secrets.AF_RELEASE_TOKEN != '' }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # Same transient-GHCR-failure guard as the aux publish step; progress
@@ -279,11 +284,18 @@ jobs:
             docker buildx imagetools inspect "$repo:$want" --format '{{json .Manifest}}' | jq -r .digest)
           [ -n "$want_digest" ] && [ "$want_digest" != "null" ] \
             || { echo "::error::cannot resolve $repo:$want"; exit 1; }
-          # Compare against what the LATEST main pins — a run for an earlier
-          # commit may have auto-released while this one was in flight. Tags
-          # are needed to locate the skill state of the last release.
+          # The bump commit is pushed with GITHUB_TOKEN (no PAT in this repo),
+          # so it will never trigger its own CI run. That is safe ONLY when it
+          # sits directly on the tree THIS run validated — if main moved on
+          # while we ran, defer to the newer commit's own publish run, which
+          # will redo this comparison and release on validated state.
           git fetch --tags origin main
-          git checkout -B autorelease origin/main
+          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
+            echo "main moved past ${GITHUB_SHA::12} — deferring auto-release" \
+              "to the newer run" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git checkout -B autorelease "$GITHUB_SHA"
           cur=$(python3 .github/workflows/bump-agentic-version.py --print-current)
           if [ "$cur" = "0.0.0" ]; then
             cur_digest="" # pin is still `latest` — nothing released yet
@@ -296,12 +308,6 @@ jobs:
             echo "agentic-interface :$cur is already this digest — no release" \
               | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
-          fi
-          if [ "$HAVE_RELEASE_PAT" != "true" ]; then
-            echo "::error::agentic-interface image changed but AF_RELEASE_TOKEN" \
-              " is not set — the auto-release commit would not trigger CI, so" \
-              " the new version could never deploy"
-            exit 1
           fi
           # Bump kind: MINOR when the skill — the user-facing contract of the
           # MCP server — changed since the last release; PATCH otherwise.
@@ -324,22 +330,50 @@ jobs:
           git config user.name "af-release-bot"
           git config user.email "af-release-bot@users.noreply.github.com"
           git add apps/agentic-interface/deployment.yaml
-          git commit -m "auto-release agentic-interface image $new"
-          # The bump commit races only other pushes to main in a narrow
-          # window; rebase (manifest-only, conflict-free) and retry.
-          for attempt in 1 2 3; do
-            if git push origin HEAD:refs/heads/main; then break; fi
-            [ "$attempt" = 3 ] && { echo "::error::pushing the auto-release commit failed"; exit 1; }
-            git fetch origin main && git rebase origin/main
-          done
+          # [skip ci] is belt-and-braces: GITHUB_TOKEN pushes trigger nothing
+          # anyway, and this commit is validated in-run (below) instead.
+          git commit -m "auto-release agentic-interface image $new [skip ci]"
+          # In-run validation, replacing the CI run this commit will never
+          # get: it must differ from the tree THIS pipeline validated by
+          # exactly the one rewritten image-tag line.
+          if [ "$(git diff --numstat "$GITHUB_SHA" HEAD)" != \
+               "$(printf '1\t1\tapps/agentic-interface/deployment.yaml')" ]; then
+            echo "::error::auto-release commit is not the expected one-line manifest retag:"
+            git diff --stat "$GITHUB_SHA" HEAD
+            exit 1
+          fi
+          # A racing push loses here (non-fast-forward) — fail rather than
+          # rebase onto a tree this run did not validate; the orphaned ghcr
+          # version tag is harmless and the next run releases past it.
+          git push origin HEAD:refs/heads/main \
+            || { echo "::error::pushing the auto-release commit failed (main moved?)"; exit 1; }
+          bump_sha=$(git rev-parse HEAD)
           git tag -a "agentic-interface-v$new" -m "agentic-interface image $new
           image: $repo:$new
           digest: $want_digest"
           git push origin "agentic-interface-v$new"
+          # Stamp ci-ok on the bump commit so consumers of that check (the
+          # purdue-af release gate) keep working: no pipeline will ever run
+          # for this commit, and its content — validated tree + the one-line
+          # retag checked above — has passed this run's gates by construction.
+          gh api "repos/${GITHUB_REPOSITORY}/check-runs" \
+            -f name=ci-ok -f head_sha="$bump_sha" \
+            -f status=completed -f conclusion=success \
+            -f 'output[title]=auto-release (manifest-only)' \
+            -f "output[summary]=One-line image retag on the tree validated as ${GITHUB_SHA} by ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}; no separate pipeline runs for GITHUB_TOKEN pushes." \
+            > /dev/null
+          echo "sha=$bump_sha" >> "$GITHUB_OUTPUT"
           echo "auto-released agentic-interface $new -> $want_digest" \
-            "(deploys once the bump commit's CI is green)" | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: Advance main-validated to this commit
+            "(main-validated advances to the bump commit below)" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Advance main-validated
+        env:
+          # When this run minted an auto-release, advance to the bump commit —
+          # it IS this run's validated tree plus the one-line retag checked
+          # above, and no pipeline of its own will ever run for it. Otherwise
+          # advance to the commit this run validated, as always.
+          AUTORELEASE_SHA: ${{ steps.autorelease.outputs.sha }}
         run: |
           set -euo pipefail
-          git push --force origin "${GITHUB_SHA}:refs/heads/main-validated"
-          echo "main-validated -> ${GITHUB_SHA}" | tee -a "$GITHUB_STEP_SUMMARY"
+          target="${AUTORELEASE_SHA:-$GITHUB_SHA}"
+          git push --force origin "${target}:refs/heads/main-validated"
+          echo "main-validated -> ${target}" | tee -a "$GITHUB_STEP_SUMMARY"

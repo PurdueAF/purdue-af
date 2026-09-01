@@ -7,7 +7,7 @@ CI-owned. Never create a version tag or move a channel tag by hand.
 | ----------------------------------------------------- | --------------------------------- | -------------------------------------- | ------------------------------------------------------ |
 | **Platform** (everything Flux deploys)                | CalVer `YYYY.M.SEQ` (`2026.7.8`)  | **Release platform** workflow          | immediately — core Flux tracks the newest `2026.x` tag |
 | **purdue-af image**                                   | semver `v0.X.Y` (`v0.13.0`)       | **Release image** workflow             | at the next platform release                           |
-| **agentic-interface image**                           | semver `agentic-interface-vX.Y.Z` | `ci.yml` publish stage — **automatic** | when the auto-release commit passes CI (~one CI round) |
+| **agentic-interface image**                           | semver `agentic-interface-vX.Y.Z` | `ci.yml` publish stage — **automatic** | same pipeline — experimental Flux reconcile (~1 min)   |
 | Continuous (`:latest`, `:pre-release`, `in-`, `sha-`) | moving tags                       | `ci.yml` publish stage, behind `ci-ok` | on pod restart / session spawn                         |
 | Experimental Flux source (`main-validated`)           | moving branch                     | `ci.yml` publish stage, behind `ci-ok` | experimental Flux reconcile (~1 min)                   |
 
@@ -24,7 +24,7 @@ released semver tag — the pod moves only when an auto-release rewrites the pin
 | AF image content (Dockerfile, `pixi/base`)        | push to `main` → CI builds + e2e → `:pre-release` moves → mint new image version (manual), then a new platform tag (manual) |
 | Experimental component                            | push to `main` → CI green → publish advances `main-validated` → experimental Flux reconciles (~1 min)                       |
 | Global env (`pixi/global`)                        | push to `main` → CI validates the lock → `pixi-global-sync` applies it to `/work/pixi/global`                               |
-| agentic-interface image                           | push to `main` → CI green → publish auto-releases the next patch version → bump commit CI green → Flux rolls pod            |
+| agentic-interface image                           | push to `main` → CI green → publish auto-releases the next version and advances `main-validated` → Flux rolls pod (~1 min)  |
 | Monitor images (af-pod-monitor, af-node-monitor)  | push to `main` → CI green → `:latest` moves → pod restart picks it up                                                       |
 
 Every commit runs one pipeline ([ci.yml](.github/workflows/ci.yml)) and
@@ -97,16 +97,16 @@ forever; the registry GC never deletes release tags.
 
 ## agentic-interface image auto-release
 
-No button. The publish stage of every green `main` pipeline checks whether
-the digest it just validated (`in-<hash>` of the tested tree) is what
+No button, no token. The publish stage of every green `main` pipeline checks
+whether the digest it just validated (`in-<hash>` of the tested tree) is what
 [apps/agentic-interface/deployment.yaml](apps/agentic-interface/deployment.yaml)
 pins. If not, it mints the next version: promotes that exact digest to a bare
 `X.Y.Z` tag on ghcr (never a rebuild), rewrites the Deployment pin
 (`bump-agentic-version.py`, count-verified), pushes an `auto-release` commit
-to `main`, and tags `agentic-interface-v<version>`. The bump commit's own CI
-(everything memoized except the cheap checks) then advances `main-validated`,
-and experimental Flux rolls the pod onto the released tag — merge → deployed
-version in about one extra CI round, with no human step.
+to `main`, tags `agentic-interface-v<version>`, and advances `main-validated`
+to the bump commit in the same run — experimental Flux rolls the pod onto the
+released tag about a minute later. Merge → deployed version in one pipeline,
+with no human step.
 
 The bump kind is chosen automatically: **minor** when the skill
 (`.claude/skills/purdue-af-agentic-interface` — the user-facing contract of
@@ -116,10 +116,16 @@ a new version, and the version number tells users whether their side of the
 interface moved. Major versions are never minted automatically; if one is
 ever wanted, `--set` it by hand in a normal commit and let CI validate it.
 
-The bump commit changes only the Deployment (not an image input), so its own
-publish run sees digest == pin and no-ops — the cycle terminates after one
-bump. `AF_RELEASE_TOKEN` is REQUIRED for this path: the step fails loudly
-rather than pushing a bump commit that would never trigger CI.
+The bump commit is the ONE deliberate exception to "everything on
+`main-validated` ran its own pipeline": it is pushed with `GITHUB_TOKEN`
+(which triggers no workflows — no PAT exists in this repo), so instead it is
+validated in-run — the step proves the commit differs from the tree this
+pipeline just validated by exactly the one rewritten image-tag line, refuses
+to release if `main` moved during the run, and stamps a `ci-ok` check run on
+the bump commit via the API (annotated with the validating run) so the
+purdue-af release gate keeps working. The bump commit changes only the
+Deployment (not an image input), so the next pipeline sees digest == pin and
+no-ops — the cycle terminates after one bump.
 
 Note the deploy is `strategy: Recreate` (stateful in-process MCP sessions),
 so each auto-release drops in-flight MCP sessions for a few seconds.
