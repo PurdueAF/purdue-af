@@ -31,9 +31,10 @@ spec:
           type: RuntimeDefault
       containers:
         - name: agentic-interface
-          # Versioned via release-image.yml (image=agentic-interface): a
-          # release rewrites this tag (bump-agentic-version.py) and Flux rolls
-          # the pod onto it. `latest` only until the first release is minted.
+          # Auto-versioned: when a green pipeline on main changes this image,
+          # ci.yml's publish stage patch-bumps this tag (bump-agentic-version.py)
+          # in an auto-release commit, and Flux rolls the pod onto it once that
+          # commit's own CI is green. `latest` only until the first auto-release.
           image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-interface:latest
           securityContext:
             allowPrivilegeEscalation: false

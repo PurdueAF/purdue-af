@@ -44,14 +44,19 @@ def test_every_imagetools_call_is_retried():
 def test_retry_progress_does_not_pollute_captured_output():
     """The digest is read from stdout; a warning printed there would be
     substituted into the image reference."""
+    found = 0
     for step in publish_steps():
-        run = step["run"]
-        if "ghcr_retry()" not in run:
-            continue
-        body = run[run.index("ghcr_retry()") : run.index("retag()")]
-        for line in body.splitlines():
-            if "::warning::" in line or "::error::" in line:
-                assert ">&2" in line, f"annotation not sent to stderr: {line.strip()}"
+        # extract each ghcr_retry() function body (steps define their own copy)
+        for body in re.findall(
+            r"ghcr_retry\(\)\s*\{.*?\n\s*\}", step["run"], re.DOTALL
+        ):
+            found += 1
+            for line in body.splitlines():
+                if "::warning::" in line or "::error::" in line:
+                    assert ">&2" in line, (
+                        f"annotation not sent to stderr: {line.strip()}"
+                    )
+    assert found, "no ghcr_retry() definitions found in publish steps"
 
 
 def test_retry_is_bounded():

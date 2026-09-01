@@ -134,11 +134,19 @@ jobs:
     #   git                → main-validated  (Flux experimental source;
     #                                          moving branch — visible in the
     #                                          GH UI, not pushed by --tags;
-    #                                          GITHUB_TOKEN on purpose: no
-    #                                          workflow listens to this branch,
-    #                                          and AF_RELEASE_TOKEN is optional
-    #                                          in this repo)
-    # Versioned promotion to production stays human: release-image.yml.
+    #                                          no workflow listens to this
+    #                                          branch)
+    #   agentic-interface  → AUTO-RELEASE:    when the validated digest is not
+    #                                          what the Deployment pins, mint
+    #                                          the next version — MINOR if the
+    #                                          skill (the user-facing contract,
+    #                                          an image input) changed since
+    #                                          the last release, PATCH
+    #                                          otherwise (promote the digest,
+    #                                          rewrite the pin, commit + tag).
+    #                                          Needs AF_RELEASE_TOKEN so the
+    #                                          bump commit triggers its own CI.
+    # purdue-af promotion to production stays human: release-image.yml.
     needs: [ci-ok, images]
     if: >-
       github.event_name == 'push'
@@ -237,6 +245,99 @@ jobs:
             "$repo@$AF_DIGEST"
           echo "published $repo@$AF_DIGEST -> :sha-${GITHUB_SHA::12} + :pre-release" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Full history so the auto-release step can commit on the current
+          # tip of main; the PAT so its push triggers CI (a GITHUB_TOKEN push
+          # would leave the bump commit unvalidated and undeployed).
+          fetch-depth: 0
+          token: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
+      - name: Auto-release agentic-interface (version bump when the image changed)
+        env:
+          HAVE_RELEASE_PAT: ${{ secrets.AF_RELEASE_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          # Same transient-GHCR-failure guard as the aux publish step; progress
+          # goes to stderr because stdout is captured for digests.
+          ghcr_retry() {
+            local what="$1"; shift
+            local attempt=1 max=5 delay=15
+            until "$@"; do
+              if [ "$attempt" -ge "$max" ]; then
+                echo "::error::${what} failed after ${max} attempts" >&2
+                return 1
+              fi
+              echo "::warning::${what} failed (attempt ${attempt}/${max}); retrying in ${delay}s" >&2
+              sleep "$delay"
+              attempt=$((attempt + 1))
+              delay=$((delay * 2))
+            done
+          }
+          repo="ghcr.io/purdueaf/agentic-interface"
+          # The image this run validated: the input-hash tag of the tested tree.
+          want=$(./.github/workflows/image-inputs.sh agentic-interface)
+          want_digest=$(ghcr_retry "imagetools inspect $repo:$want" \
+            docker buildx imagetools inspect "$repo:$want" --format '{{json .Manifest}}' | jq -r .digest)
+          [ -n "$want_digest" ] && [ "$want_digest" != "null" ] \
+            || { echo "::error::cannot resolve $repo:$want"; exit 1; }
+          # Compare against what the LATEST main pins — a run for an earlier
+          # commit may have auto-released while this one was in flight. Tags
+          # are needed to locate the skill state of the last release.
+          git fetch --tags origin main
+          git checkout -B autorelease origin/main
+          cur=$(python3 .github/workflows/bump-agentic-version.py --print-current)
+          if [ "$cur" = "0.0.0" ]; then
+            cur_digest="" # pin is still `latest` — nothing released yet
+          else
+            cur_digest=$(ghcr_retry "imagetools inspect $repo:$cur" \
+              docker buildx imagetools inspect "$repo:$cur" --format '{{json .Manifest}}' | jq -r .digest) \
+              || cur_digest=""
+          fi
+          if [ "$cur_digest" = "$want_digest" ]; then
+            echo "agentic-interface :$cur is already this digest — no release" \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ "$HAVE_RELEASE_PAT" != "true" ]; then
+            echo "::error::agentic-interface image changed but AF_RELEASE_TOKEN" \
+              " is not set — the auto-release commit would not trigger CI, so" \
+              " the new version could never deploy"
+            exit 1
+          fi
+          # Bump kind: MINOR when the skill — the user-facing contract of the
+          # MCP server — changed since the last release; PATCH otherwise.
+          # Compared as git tree ids at the validated commit vs the release
+          # tag of the currently pinned version.
+          skill=".claude/skills/purdue-af-agentic-interface"
+          kind=patch
+          if [ "$cur" != "0.0.0" ]; then
+            prev_skill=$(git rev-parse "agentic-interface-v$cur:$skill" 2>/dev/null || echo none)
+            now_skill=$(git rev-parse "$GITHUB_SHA:$skill")
+            if [ "$prev_skill" != "$now_skill" ]; then
+              kind=minor
+            fi
+          fi
+          new=$(python3 .github/workflows/bump-agentic-version.py --bump "$kind" | tail -1)
+          # Promote-by-digest: the version tag lands on the exact bytes this
+          # pipeline tested, never a rebuild.
+          ghcr_retry "imagetools create" \
+            docker buildx imagetools create -t "$repo:$new" "$repo@$want_digest"
+          git config user.name "af-release-bot"
+          git config user.email "af-release-bot@users.noreply.github.com"
+          git add apps/agentic-interface/deployment.yaml
+          git commit -m "auto-release agentic-interface image $new"
+          # The bump commit races only other pushes to main in a narrow
+          # window; rebase (manifest-only, conflict-free) and retry.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:refs/heads/main; then break; fi
+            [ "$attempt" = 3 ] && { echo "::error::pushing the auto-release commit failed"; exit 1; }
+            git fetch origin main && git rebase origin/main
+          done
+          git tag -a "agentic-interface-v$new" -m "agentic-interface image $new
+          image: $repo:$new
+          digest: $want_digest"
+          git push origin "agentic-interface-v$new"
+          echo "auto-released agentic-interface $new -> $want_digest" \
+            "(deploys once the bump commit's CI is green)" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Advance main-validated to this commit
         run: |
           set -euo pipefail

@@ -1,5 +1,5 @@
-"""Tests for .github/workflows/bump-agentic-version.py (release-image.yml's
-deployment.yaml rewriter for image=agentic-interface). Runs against the REAL
+"""Tests for .github/workflows/bump-agentic-version.py (the deployment.yaml
+rewriter used by ci.yml's auto-release publish step). Runs against the REAL
 deployment.yaml text, so if the manifest's layout drifts away from what the
 release automation expects, this suite fails before a release does."""
 

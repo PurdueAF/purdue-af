@@ -44,8 +44,13 @@ paths_for() {
 		EOF
 		;;
 	agentic-interface)
+		# The skill is the user-facing contract of the MCP server, versioned
+		# WITH it: a skill change alters this hash, so the publish stage's
+		# auto-release mints a new version (minor for skill changes — see
+		# ci.yml) even when the server code is untouched.
 		cat <<-EOF
 			docker/agentic-interface
+			.claude/skills/purdue-af-agentic-interface
 			.github/workflows/ci-images.yml
 			.github/workflows/image-inputs.sh
 		EOF

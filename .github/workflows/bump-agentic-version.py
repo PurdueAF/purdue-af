@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rewrite the agentic-interface image version in its Deployment — the
-file-editing half of the image release workflow
-(.github/workflows/release-image.yml, image=agentic-interface).
+file-editing half of the AUTOMATIC release in ci.yml's publish stage
+(the "Auto-release agentic-interface" step).
 
 deployment.yaml is the single source of truth for "what production runs":
 the current version is READ from it (--print-current), and a release

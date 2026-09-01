@@ -1,17 +1,11 @@
 name: Release image
 
-# The manual greenlight for the VERSIONED images — semver X.Y.Z promoted
-# by digest, GitHub Release, count-verified manifest rewrite:
-#
-#   - purdue-af (default): repo tag vX.Y.Z; rewrites values.yaml
-#     (bump-af-version.py).
-#   - agentic-interface: repo tag agentic-interface-vX.Y.Z; rewrites its
-#     Deployment image tag (bump-agentic-version.py) — Flux then rolls the
-#     pod onto the released tag, so deploys happen ONLY through this
-#     workflow and roll back with `git revert`.
-#
-# The remaining first-party images (af-pod-monitor, af-node-monitor) are on
-# the continuous :latest channel, moved only by the ci.yml publish stage.
+# The manual greenlight for the ONE hand-versioned image, purdue-af —
+# semver 0.X.Y, repo tag v0.X.Y, GitHub Release; rewrites values.yaml
+# (bump-af-version.py, count-verified). agentic-interface is versioned
+# AUTOMATICALLY (patch bumps in the ci.yml publish stage — see the
+# auto-release step there); the monitor images (af-pod-monitor,
+# af-node-monitor) are on the continuous :latest channel.
 #
 # Two gates make "assumed success" impossible:
 #
@@ -21,9 +15,9 @@ name: Release image
 #      untested state.
 #   2. Exact-state gate — the digest being promoted must be the digest of
 #      ghcr :in-<hash(HEAD)> (image-inputs.sh, same definition CI builds
-#      from), AND the soak channel's digest must match it too (purdue-af
-#      soaks on :pre-release, agentic-interface's channel is :latest) —
-#      the release ships the exact bytes built from THIS repo state.
+#      from), AND the :pre-release digest must match it too — the release
+#      ships the exact bytes users have been soaking, built from THIS
+#      repo state.
 #
 # Promotion is by digest: the semver tag is added to the SAME digest that
 # passed the pipeline, never a rebuild. ROLLBACK: `git revert` the release
@@ -33,7 +27,7 @@ name: Release image
 #   - platform:        YYYY.M.SEQ  → release-platform.yml
 #   - purdue-af image: semver 0.X.Y (repo tag v0.X.Y) → THIS workflow
 #   - agentic-interface image: semver X.Y.Z (repo tag
-#     agentic-interface-vX.Y.Z) → THIS workflow
+#     agentic-interface-vX.Y.Z) → ci.yml publish auto-release, never by hand
 #   - everything else: :latest / :pre-release / :sha- / :in- moving tags
 #     → ci.yml only, never versioned by humans
 #
@@ -45,11 +39,6 @@ name: Release image
 on:
   workflow_dispatch:
     inputs:
-      image:
-        description: "Which versioned image to release"
-        type: choice
-        options: [purdue-af, agentic-interface]
-        default: purdue-af
       bump:
         description: "Semver bump for the new version"
         type: choice
@@ -71,6 +60,9 @@ concurrency:
   group: release-image # never run two releases concurrently, never cancel one
   cancel-in-progress: false
 
+env:
+  IMAGE_REPO: ghcr.io/purdueaf/purdue-af
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -84,28 +76,6 @@ jobs:
         with:
           fetch-depth: 0 # full history for release notes
           token: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
-      # Everything that differs between the versioned images lives here.
-      - name: Per-image configuration
-        id: cfg
-        run: |
-          case "${{ inputs.image }}" in
-            purdue-af)
-              echo "repo=ghcr.io/purdueaf/purdue-af"
-              echo "soak_tag=pre-release"
-              echo "tag_prefix=v"
-              echo "bump_script=.github/workflows/bump-af-version.py"
-              echo "manifest=apps/jupyterhub/jupyterhub/values.yaml"
-              ;;
-            agentic-interface)
-              echo "repo=ghcr.io/purdueaf/agentic-interface"
-              echo "soak_tag=latest"
-              echo "tag_prefix=agentic-interface-v"
-              echo "bump_script=.github/workflows/bump-agentic-version.py"
-              echo "manifest=apps/agentic-interface/deployment.yaml"
-              ;;
-            *)
-              echo "::error::unknown image '${{ inputs.image }}'"; exit 1 ;;
-          esac | tee -a "$GITHUB_OUTPUT"
       - name: Warn if running with the default token
         if: env.HAVE_RELEASE_PAT != 'true'
         run: |
@@ -133,11 +103,8 @@ jobs:
           fi
       - name: "Gate 2: resolve the exact-state digest"
         id: src
-        env:
-          IMAGE_REPO: ${{ steps.cfg.outputs.repo }}
-          SOAK_TAG: ${{ steps.cfg.outputs.soak_tag }}
         run: |
-          tag=$(./.github/workflows/image-inputs.sh "${{ inputs.image }}")
+          tag=$(./.github/workflows/image-inputs.sh purdue-af)
           ref="$IMAGE_REPO:$tag"
           digest=$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' | jq -r .digest) || true
           if [ -z "$digest" ] || [ "$digest" = "null" ]; then
@@ -145,32 +112,29 @@ jobs:
             exit 1
           fi
           echo "exact-state image: $ref @ $digest"
-          soak=$(docker buildx imagetools inspect "$IMAGE_REPO:$SOAK_TAG" --format '{{json .Manifest}}' | jq -r .digest) || true
-          echo ":$SOAK_TAG digest: ${soak:-none}"
+          soak=$(docker buildx imagetools inspect "$IMAGE_REPO:pre-release" --format '{{json .Manifest}}' | jq -r .digest) || true
+          echo ":pre-release digest: ${soak:-none}"
           if [ "$soak" != "$digest" ]; then
             if [ "${{ inputs.force }}" = "true" ]; then
-              echo "::warning::releasing $digest which is NOT the soaking :$SOAK_TAG ($soak) — force=true"
+              echo "::warning::releasing $digest which is NOT the soaking :pre-release ($soak) — force=true"
             else
-              echo "::error::the :$SOAK_TAG users are soaking ($soak) is not the image of this" \
+              echo "::error::the :pre-release users are soaking ($soak) is not the image of this" \
                 "repo state ($digest) — wait for CI on main to promote, or use force"
               exit 1
             fi
           fi
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-      - name: Bump version in the manifest
+      - name: Bump version in values.yaml
         id: ver
         run: |
-          bump="${{ steps.cfg.outputs.bump_script }}"
           if [ -n "${{ inputs.version }}" ]; then
-            new=$(python3 "$bump" --set "${{ inputs.version }}" | tail -1)
+            new=$(python3 .github/workflows/bump-af-version.py --set "${{ inputs.version }}" | tail -1)
           else
-            new=$(python3 "$bump" --bump "${{ inputs.bump }}" | tail -1)
+            new=$(python3 .github/workflows/bump-af-version.py --bump "${{ inputs.bump }}" | tail -1)
           fi
           echo "version=$new" >> "$GITHUB_OUTPUT"
           git diff --stat
       - name: Tag the digest on ghcr (promote-by-digest, no rebuild)
-        env:
-          IMAGE_REPO: ${{ steps.cfg.outputs.repo }}
         run: |
           docker buildx imagetools create \
             -t "$IMAGE_REPO:${{ steps.ver.outputs.version }}" \
@@ -179,28 +143,23 @@ jobs:
             | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Commit, tag, push, publish release
         env:
-          IMAGE: ${{ inputs.image }}
-          IMAGE_REPO: ${{ steps.cfg.outputs.repo }}
-          MANIFEST: ${{ steps.cfg.outputs.manifest }}
-          # v for purdue-af (distinct from bare platform CalVer tags);
-          # agentic-interface-v namespaces the second image's tags.
-          TAG: ${{ steps.cfg.outputs.tag_prefix }}${{ steps.ver.outputs.version }}
           VERSION: ${{ steps.ver.outputs.version }}
           DIGEST: ${{ steps.src.outputs.digest }}
         run: |
           git config user.name "af-release-bot"
           git config user.email "af-release-bot@users.noreply.github.com"
-          git add "$MANIFEST"
-          git commit -m "release $IMAGE image $VERSION"
-          git tag -a "$TAG" -m "$IMAGE image $VERSION
+          git add apps/jupyterhub/jupyterhub/values.yaml
+          git commit -m "release purdue-af image $VERSION"
+          # the v prefix keeps image tags distinct from bare platform CalVer tags
+          git tag -a "v$VERSION" -m "purdue-af image $VERSION
           image: $IMAGE_REPO:$VERSION
           digest: $DIGEST"
-          git push origin main "$TAG"
-          gh release create "$TAG" \
-            --title "$IMAGE image $VERSION" \
+          git push origin main "v$VERSION"
+          gh release create "v$VERSION" \
+            --title "purdue-af image $VERSION" \
             --generate-notes \
             --notes "Image: \`$IMAGE_REPO:$VERSION\`
-          Digest: \`$DIGEST\` (identical bytes to the :${{ steps.cfg.outputs.soak_tag }} that passed CI)
+          Digest: \`$DIGEST\` (identical bytes to the pre-release that passed CI + e2e)
           " \
             2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
-          echo "released $IMAGE $VERSION -> $DIGEST" >> "$GITHUB_STEP_SUMMARY"
+          echo "released purdue-af $VERSION -> $DIGEST" >> "$GITHUB_STEP_SUMMARY"
