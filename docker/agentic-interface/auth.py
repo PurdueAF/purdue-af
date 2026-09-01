@@ -69,7 +69,7 @@ def _evict_negative(now: float) -> None:
     for key in [k for k, expiry in _negative_cache.items() if expiry <= now]:
         del _negative_cache[key]
     while len(_negative_cache) >= _NEG_CACHE_MAX:
-        del _negative_cache[min(_negative_cache, key=_negative_cache.get)]
+        del _negative_cache[min(_negative_cache, key=lambda k: _negative_cache[k])]
 
 
 async def resolve_user(token: str) -> Optional[dict]:

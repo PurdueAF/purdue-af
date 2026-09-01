@@ -169,7 +169,7 @@ def instrument_mcp(mcp: Any) -> None:
     """
     tool_manager = getattr(mcp, "_tool_manager", None)
     original_call_tool = getattr(tool_manager, "call_tool", None)
-    if original_call_tool is None:
+    if tool_manager is None or original_call_tool is None:
         raise RuntimeError(
             "instrument_mcp: FastMCP no longer exposes _tool_manager.call_tool "
             "— the MCP SDK's tool dispatch moved; update the instrumentation "

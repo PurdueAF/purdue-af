@@ -1,17 +1,20 @@
 # Releasing
 
-Two version streams are minted by hand; everything else is CI-owned. Never
+Three version streams are minted by hand; everything else is CI-owned. Never
 create a version tag or move a channel tag by hand.
 
-| Stream                                                | Scheme                           | Minted by                              | Reaches the cluster                                    |
-| ----------------------------------------------------- | -------------------------------- | -------------------------------------- | ------------------------------------------------------ |
-| **Platform** (everything Flux deploys)                | CalVer `YYYY.M.SEQ` (`2026.7.8`) | **Release platform** workflow          | immediately — core Flux tracks the newest `2026.x` tag |
-| **purdue-af image**                                   | semver `v0.X.Y` (`v0.13.0`)      | **Release image** workflow             | at the next platform release                           |
-| Continuous (`:latest`, `:pre-release`, `in-`, `sha-`) | moving tags                      | `ci.yml` publish stage, behind `ci-ok` | on pod restart / session spawn                         |
-| Experimental Flux source (`main-validated`)           | moving branch                    | `ci.yml` publish stage, behind `ci-ok` | experimental Flux reconcile (~1 min)                   |
+| Stream                                                | Scheme                                   | Minted by                                       | Reaches the cluster                                    |
+| ----------------------------------------------------- | ---------------------------------------- | ----------------------------------------------- | ------------------------------------------------------ |
+| **Platform** (everything Flux deploys)                | CalVer `YYYY.M.SEQ` (`2026.7.8`)         | **Release platform** workflow                   | immediately — core Flux tracks the newest `2026.x` tag |
+| **purdue-af image**                                   | semver `v0.X.Y` (`v0.13.0`)              | **Release image** workflow                      | at the next platform release                           |
+| **agentic-interface image**                           | semver `agentic-interface-vX.Y.Z`        | **Release image** workflow (`agentic-interface`) | when the release commit passes CI (experimental Flux)  |
+| Continuous (`:latest`, `:pre-release`, `in-`, `sha-`) | moving tags                              | `ci.yml` publish stage, behind `ci-ok`          | on pod restart / session spawn                         |
+| Experimental Flux source (`main-validated`)           | moving branch                            | `ci.yml` publish stage, behind `ci-ok`          | experimental Flux reconcile (~1 min)                   |
 
-The aux images (agentic-interface, af-pod-monitor, af-node-monitor) have no
-release step at all: every green pipeline on `main` moves `:latest`.
+The monitor images (af-pod-monitor, af-node-monitor) have no release step at
+all: every green pipeline on `main` moves `:latest`. The agentic-interface
+image also publishes to `:latest` continuously, but its Deployment pins a
+released semver tag — the pod moves only when a release rewrites the pin.
 
 ## How changes reach the cluster
 
@@ -21,7 +24,8 @@ release step at all: every green pipeline on `main` moves `:latest`.
 | AF image content (Dockerfile, `pixi/base`)        | push to `main` → CI builds + e2e → `:pre-release` moves → mint new image version (manual), then a new platform tag (manual) |
 | Experimental component                            | push to `main` → CI green → publish advances `main-validated` → experimental Flux reconciles (~1 min)                       |
 | Global env (`pixi/global`)                        | push to `main` → CI validates the lock → `pixi-global-sync` applies it to `/work/pixi/global`                               |
-| Aux images (agentic-interface, monitors)          | push to `main` → CI green → `:latest` moves → pod restart picks it up                                                       |
+| agentic-interface image                           | push to `main` → CI green → `:latest` moves (soak) → mint image version (manual) → release commit CI green → Flux rolls pod |
+| Monitor images (af-pod-monitor, af-node-monitor)  | push to `main` → CI green → `:latest` moves → pod restart picks it up                                                       |
 
 Every commit runs one pipeline ([ci.yml](.github/workflows/ci.yml)) and
 nothing is published unless every stage passed for that exact commit. The
@@ -90,6 +94,25 @@ the current repo state. Complete the manual checklist in
 platform tag. Never delete a `v*` tag — the pin lives in a values.yaml
 commit, so deleting the tag rolls back nothing. Old semver tags stay on ghcr
 forever; the registry GC never deletes release tags.
+
+## agentic-interface image release
+
+Same workflow, `image: agentic-interface`. Release when the content soaking
+on `:latest` should become what the MCP server pod runs. The gates are the
+same shape: `ci-ok` green on main HEAD, and the `:latest` digest identical to
+the image of the current repo state (`in-<hash>`). The workflow promotes that
+digest to a bare `X.Y.Z` tag on ghcr, rewrites the image tag in
+[apps/agentic-interface/deployment.yaml](apps/agentic-interface/deployment.yaml)
+(`bump-agentic-version.py`, count-verified), commits to `main`, tags
+`agentic-interface-v<version>`, and publishes a Release. Once the release
+commit's own CI is green, `main-validated` advances and experimental Flux
+rolls the pod onto the released tag — no second (platform) release step.
+
+Note the deploy is `strategy: Recreate` (stateful in-process MCP sessions),
+so each release drops in-flight MCP sessions for a few seconds.
+
+**Rollback**: `git revert` the release commit on `main`. The Deployment pin
+reverts with it; never delete an `agentic-interface-v*` tag.
 
 ## Rules of the road
 
