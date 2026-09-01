@@ -35,7 +35,7 @@ spec:
           # ci.yml's publish stage patch-bumps this tag (bump-agentic-version.py)
           # in an auto-release commit, and Flux rolls the pod onto it once that
           # commit's own CI is green. `latest` only until the first auto-release.
-          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-interface:latest
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-interface:0.0.1
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
