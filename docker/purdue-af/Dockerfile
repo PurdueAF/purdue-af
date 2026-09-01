@@ -165,7 +165,7 @@ RUN chmod +x /usr/local/bin/pixi && \
 # config files their code-server extensions read, so registering the AF MCP
 # server once (config-agents.sh) covers terminal and editor alike.
 ARG CLAUDE_CODE_VERSION="2.1.250"
-ARG CODEX_VERSION="0.150.1"
+ARG CODEX_VERSION="0.152.0"
 ENV NPM_GLOBAL="/opt/npm-global"
 # hadolint ignore=DL3016  # versions ARE pinned, via the ARGs above
 RUN PATH="${BASE_ENV_DIR}/bin:${PATH}" \
