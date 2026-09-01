@@ -2,6 +2,8 @@
 
 import base64
 import json
+import pathlib
+import re
 
 import pytest
 import respx
@@ -1213,6 +1215,62 @@ async def test_create_rejects_over_cap_explicit_and_elicited(user_ctx):
     out = await tools["create_dask_cluster"](ctx)
     assert f"≤ {dask.MAX_WORKERS}" in out
     assert not respx.calls
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    ("gateway", "cores", "memory", "fragment"),
+    [
+        ("k8s", 65, 4, "worker_cores must be between 0.1 and 64"),
+        ("k8s", 0.05, 4, "worker_cores must be between 0.1 and 64"),
+        ("k8s", 1, 65, "worker_memory must be between 0.1 and 64"),
+        ("slurm", 17, 4, "worker_cores must be between 1 and 16"),
+        ("slurm", 1.5, 4, "whole number of worker_cores"),
+        ("slurm", 1, 0.5, "worker_memory must be between 1 and 64"),
+    ],
+)
+async def test_create_rejects_size_beyond_gateway_limits(
+    user_ctx, gateway, cores, memory, fragment
+):
+    """Per-worker size caps mirror the gateway configs (see _WORKER_LIMITS)."""
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"](
+        FakeCtx(),
+        gateway=gateway,
+        conda_env="/depot/cms/alice/env",
+        worker_cores=cores,
+        worker_memory=memory,
+        n_workers=0,
+    )
+    assert fragment in out
+    assert not respx.calls  # rejected before anything left the process
+
+
+@respx.mock
+async def test_create_rejects_elicited_size_beyond_limits(user_ctx):
+    """The elicited custom-size path goes through the same gateway limits."""
+    tools = register_tools(dask).tools
+    ctx = FakeCtx(
+        accept(dask._BackendChoice(gateway="k8s")),
+        accept(dask._EnvChoice(env_source="global")),
+        accept(dask._SizeChoice(size="custom")),
+        accept(dask._CustomSize(worker_cores=128, worker_memory=4)),
+        count("0"),
+    )
+    out = await tools["create_dask_cluster"](ctx)
+    assert "worker_cores must be between 0.1 and 64" in out
+    assert not respx.calls
+
+
+def test_max_workers_matches_gateway_config():
+    """MAX_WORKERS mirrors cluster_max_workers in the k8s gateway values."""
+    values = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "apps/dask-gateway/dask-gateway-k8s/values.yaml"
+    ).read_text()
+    m = re.search(r"cluster_max_workers\s*=\s*(\d+)", values)
+    assert m, "cluster_max_workers not found in gateway values"
+    assert dask.MAX_WORKERS == int(m.group(1))
 
 
 @respx.mock

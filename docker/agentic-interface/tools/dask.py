@@ -70,9 +70,42 @@ def _prom_client(target: str) -> httpx.AsyncClient:
     return shared_client(target)
 
 
-# Sanity cap on requested worker counts — the gateway enforces its own limits,
-# but don't rely on it alone.
-MAX_WORKERS = 500
+# Limits mirrored from the gateway configs — keep in sync with
+# apps/dask-gateway/dask-gateway-k8s/values.yaml (cluster_max_workers = 200,
+# Float worker_cores/worker_memory 0.1–64) and
+# apps/dask-gateway/dask-gateway-k8s-slurm/values.yaml (Integer worker_cores
+# 1–16, Float worker_memory 1–64; it sets no cluster_max_workers, so the k8s
+# ceiling doubles as the sanity bound there).
+MAX_WORKERS = 200
+_WORKER_LIMITS: dict[str, dict] = {
+    "k8s": {"cores": (0.1, 64.0), "memory": (0.1, 64.0), "integer_cores": False},
+    "slurm": {"cores": (1.0, 16.0), "memory": (1.0, 64.0), "integer_cores": True},
+}
+
+
+def _check_worker_size(
+    gateway: str, worker_cores: float, worker_memory: float
+) -> Optional[str]:
+    """Return an error string if the per-worker size exceeds the gateway's
+    configured option limits, else None. The gateway enforces these too; checking
+    here turns a 422 round-trip into an immediate, precise message."""
+    lim = _WORKER_LIMITS[gateway]
+    lo, hi = lim["cores"]
+    if not lo <= worker_cores <= hi:
+        return (
+            f"Error: worker_cores must be between {lo:g} and {hi:g} "
+            f"on gateway '{gateway}'."
+        )
+    if lim["integer_cores"] and worker_cores != int(worker_cores):
+        return f"Error: gateway '{gateway}' requires a whole number of worker_cores."
+    lo, hi = lim["memory"]
+    if not lo <= worker_memory <= hi:
+        return (
+            f"Error: worker_memory must be between {lo:g} and {hi:g} GiB "
+            f"on gateway '{gateway}'."
+        )
+    return None
+
 
 # Cluster names land in gateway URL paths and (via _cluster_id) in PromQL
 # regexes, so only accept the character set gateways actually emit.
@@ -360,9 +393,11 @@ class _CustomSize(BaseModel):
     """Custom per-worker resources."""
 
     worker_cores: float = Field(
-        gt=0, description="Cores per worker (k8s ≤ 64, Slurm ≤ 16)."
+        gt=0, description="Cores per worker (k8s: 0.1–64; Slurm: whole numbers 1–16)."
     )
-    worker_memory: float = Field(gt=0, description="Memory per worker in GiB (≤ 64).")
+    worker_memory: float = Field(
+        gt=0, description="Memory per worker in GiB (k8s: 0.1–64; Slurm: 1–64)."
+    )
 
 
 class _CountChoice(BaseModel):
@@ -548,11 +583,12 @@ def register(mcp: Any) -> None:
             pixi_env: Pixi environment name within the project (default 'default').
             conda_env: Path to a conda/mamba env prefix (mutually exclusive with
                        pixi_project).
-            worker_cores: Cores per worker (k8s ≤ 64, Slurm ≤ 16). Defaults to
-                          1 if the user picks the default size.
-            worker_memory: Memory per worker in GiB (≤ 64). Defaults to 4 if the
-                           user picks the default size.
-            n_workers: Workers to start with (0–500). 0 (or omitted with a
+            worker_cores: Cores per worker (k8s: 0.1–64; Slurm: whole numbers
+                          1–16). Defaults to 1 if the user picks the default
+                          size.
+            worker_memory: Memory per worker in GiB (k8s: 0.1–64; Slurm: 1–64).
+                           Defaults to 4 if the user picks the default size.
+            n_workers: Workers to start with (0–200). 0 (or omitted with a
                        non-eliciting client) starts the cluster empty.
             env: Extra environment variables for workers (e.g. X509_USER_PROXY,
                  PYTHONPATH, NB_UID/NB_GID for CERN/FNAL users).
@@ -645,6 +681,9 @@ def register(mcp: Any) -> None:
             worker_cores = DEFAULT_WORKER_CORES
         if worker_memory is None:
             worker_memory = DEFAULT_WORKER_MEMORY
+        err = _check_worker_size(gateway, worker_cores, worker_memory)
+        if err:
+            return err
 
         # ── Worker count: ask only if n_workers was not supplied ──
         if n_workers is None:
@@ -969,7 +1008,7 @@ def register(mcp: Any) -> None:
 
         Args:
             cluster_name: Cluster identifier returned by list_dask_clusters.
-            n_workers: Target worker count (0–500).
+            n_workers: Target worker count (0–200).
             gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
         err = _validate_cluster_name(cluster_name)
