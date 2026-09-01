@@ -1,9 +1,9 @@
-# Grafana Helm Chart Values — public instance (grafana)
+# Grafana Helm Chart Values — private instance (grafana-private)
 # https://github.com/grafana/helm-charts/tree/main/charts/grafana
 #
-# Anonymous-viewer instance serving the public dashboards; private
-# dashboards live in the admin-only grafana-private instance
-# (values-private.yaml).
+# Admin-only instance: anonymous access is disabled, so nothing is visible
+# without logging in. Serves the private dashboards; the public instance
+# (values.yaml) serves the public ones.
 
 # Persistence: RWO block storage for SQLite. CephFS/RWX cannot reliably
 # provide the file locks SQLite needs and caused recurring CrashLoopBackOff
@@ -20,14 +20,10 @@ persistence:
 ingress:
   enabled: ${enable_ingresses}
   ingressClassName: public
-  path: /grafana
+  path: /grafana-private
   pathType: Prefix
   hosts:
     - cms.geddes.rcac.purdue.edu
-  # tls:
-  #   - secretName: grafana-tls
-  #     hosts:
-  #       - cms.geddes.rcac.purdue.edu
 
 # Service configuration
 service:
@@ -55,14 +51,6 @@ extraVolumes:
     emptyDir: {}
   - name: grafana-csv-tmp
     emptyDir: {}
-  - name: work
-    existingClaim: af-shared-storage
-  - name: announcements-nginx-conf
-    configMap:
-      name: announcements-nginx-conf
-      items:
-        - key: default.conf
-          path: default.conf
 
 extraVolumeMounts:
   - name: grafana-png-tmp
@@ -71,61 +59,6 @@ extraVolumeMounts:
     mountPath: /var/lib/grafana/pdf
   - name: grafana-csv-tmp
     mountPath: /var/lib/grafana/csv
-  - name: work
-    mountPath: /work/
-    mountPropagation: HostToContainer
-    readOnly: true
-
-# Add an init container that sets permissive mode on the PVC root without chown
-# extraInitContainers:
-#   - name: init-chmod-data
-#     image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.36
-#     imagePullPolicy: IfNotPresent
-#     command:
-#       - sh
-#       - -c
-#       - >-
-#         mkdir -p /var/lib/grafana &&
-#         chmod -R 0777 /var/lib/grafana || true &&
-#         ls -ld /var/lib/grafana || true
-#     securityContext:
-#       runAsUser: 0
-#       runAsNonRoot: false
-#       allowPrivilegeEscalation: false
-#       readOnlyRootFilesystem: true
-#       seccompProfile:
-#         type: RuntimeDefault
-#     resources:
-#       requests:
-#         cpu: 50m
-#         memory: 64Mi
-#       limits:
-#         cpu: 200m
-#         memory: 128Mi
-#     volumeMounts:
-#       - name: storage
-#         mountPath: /var/lib/grafana
-
-extraContainers: |
-  - name: announcements-server
-    image: geddes-registry.rcac.purdue.edu/docker-hub-cache/nginxinc/nginx-unprivileged:alpine
-    ports:
-      - containerPort: 8080
-    volumeMounts:
-      - name: work
-        mountPath: /work/
-        mountPropagation: HostToContainer
-        readOnly: true
-      - name: announcements-nginx-conf
-        mountPath: /etc/nginx/conf.d
-        readOnly: true
-    resources:
-      requests:
-        cpu: 100m
-        memory: 1Gi
-      limits:
-        cpu: 1000m
-        memory: 2Gi
 
 extraConfigmapMounts:
   - name: grafana-plugins-provisioning
@@ -133,20 +66,14 @@ extraConfigmapMounts:
     configMap: grafana-plugins-provisioning
     readOnly: true
 
-# envValueFrom:
-#   OPENAI_API_KEY:
-#     secretKeyRef:
-#       name: a2rchi-openai-api-key
-#       key: OPENAI_API_KEY
-
 # Resources
 resources:
   requests:
-    cpu: 4000m
-    memory: 8Gi
+    cpu: 1000m
+    memory: 2Gi
   limits:
-    cpu: 4000m
-    memory: 8Gi
+    cpu: 1000m
+    memory: 2Gi
 
 # RWO + SQLite: never run two pods against the same DB.
 deploymentStrategy:
@@ -155,37 +82,34 @@ deploymentStrategy:
 # Grafana configuration
 grafana.ini:
   server:
-    root_url: https://cms.geddes.rcac.purdue.edu/grafana/
+    root_url: https://cms.geddes.rcac.purdue.edu/grafana-private/
     serve_from_sub_path: true
   database:
     wal: true
     query_retries: 10
   dashboards:
-    default_home_dashboard_path: /var/lib/grafana/dashboards/public/default.json
+    default_home_dashboard_path: /var/lib/grafana/dashboards/private/users-overview.json
   auth.anonymous:
-    enabled: true
-    org_name: "Main Org."
-    org_role: Viewer
-    hide_version: true
+    enabled: false
 
 # Dashboard and datasource provisioning
 dashboardProviders:
   dashboardproviders.yaml:
     apiVersion: 1
     providers:
-      - name: "public"
+      - name: "private"
         orgId: 1
-        folder: "Public Dashboards"
+        folder: "Private Dashboards"
         type: file
         disableDeletion: false
         updateIntervalSeconds: 10
         allowUiUpdates: true
         options:
-          path: /var/lib/grafana/dashboards/public
+          path: /var/lib/grafana/dashboards/private
 
 # Use ConfigMap for dashboards
 dashboardsConfigMaps:
-  public: grafana-public-dashboards
+  private: grafana-private-dashboards
 
 datasources:
   datasources.yaml:
@@ -251,17 +175,7 @@ datasources:
         isDefault: false
         jsonData:
           maxLines: 1000
-      - name: Infinity
-        type: yesoreyeram-infinity-datasource
-        uid: infinity
-        access: proxy
-        editable: false
-        jsonData:
-          allowedHosts:
-            - "http://localhost:8080"
 
 plugins:
   - grafana-llm-app
   - grafana-pyroscope-app
-  - marcusolsson-dynamictext-panel
-  - yesoreyeram-infinity-datasource

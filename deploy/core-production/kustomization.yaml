@@ -28,6 +28,7 @@ resources:
   - ../../apps/monitoring/helmrepo-prometheus.yaml
   - ../../apps/monitoring/af-monitoring/services.yaml
   - ../../apps/monitoring/grafana/helmrelease.yaml
+  - ../../apps/monitoring/grafana/helmrelease-private.yaml
   - ../../apps/monitoring/grafana/plugins-provisioning-cm.yaml
   - ../../apps/monitoring/grafana/announcements-nginx-conf.yaml
   - ../../apps/monitoring/prometheus/helmrelease.yaml
@@ -85,6 +86,10 @@ configMapGenerator:
   - name: grafana-config
     files:
       - values.yaml=../../apps/monitoring/grafana/values.yaml
+
+  - name: grafana-private-config
+    files:
+      - values.yaml=../../apps/monitoring/grafana/values-private.yaml
 
   - name: grafana-public-dashboards
     files:

@@ -27,6 +27,7 @@ resources:
   - ../../apps/monitoring/af-monitoring/af-node-monitor-rbac.yaml
   - ../../apps/infrastructure/af-node-monitor-storage.yaml
   - ../../apps/monitoring/grafana/helmrelease.yaml
+  - ../../apps/monitoring/grafana/helmrelease-private.yaml
   - ../../apps/monitoring/prometheus/helmrelease.yaml
   - ../../apps/monitoring/prometheus/servicemonitors.yaml
   - ../../apps/monitoring/prometheus/pod-monitor-svc.yaml
@@ -86,6 +87,10 @@ configMapGenerator:
   - name: grafana-config
     files:
       - values.yaml=../../apps/monitoring/grafana/values.yaml
+
+  - name: grafana-private-config
+    files:
+      - values.yaml=../../apps/monitoring/grafana/values-private.yaml
 
   - name: grafana-public-dashboards
     files:
