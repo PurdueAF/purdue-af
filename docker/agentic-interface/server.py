@@ -32,6 +32,11 @@ SERVICE_PREFIX = os.environ.get(
     "JUPYTERHUB_SERVICE_PREFIX", "/services/agentic-interface"
 ).rstrip("/")
 
+# Cap on buffered POST bodies. The middleware buffers the whole body to sniff
+# the JSON-RPC method; MCP messages are tiny, and the pod has a 256Mi memory
+# limit, so anything larger is rejected with 413 before reaching the app.
+MAX_BODY_BYTES = 5 * 1024 * 1024
+
 
 class _PathStripper:
     """Strip SERVICE_PREFIX from request paths before forwarding to the MCP app.
@@ -58,17 +63,26 @@ class _PathStripper:
         await self._app(scope, receive, send)
 
 
-async def _buffer_body(receive: Receive) -> tuple[bytes, Receive]:
+async def _buffer_body(receive: Receive) -> tuple[bytes | None, Receive]:
     """Drain the request body, returning (body, replay_receive).
 
     The MCP JSON-RPC method lives in the POST body, so the middleware has to
     read it before the app does; replay_receive hands the buffered messages
     back to the app in order, then delegates to the original receive.
+
+    Buffering stops once more than MAX_BODY_BYTES have been read: the body is
+    returned as None and the caller must reject the request (413) without
+    forwarding it to the app.
     """
     messages = []
+    total = 0
     while True:
         message = await receive()
         messages.append(message)
+        if message["type"] == "http.request":
+            total += len(message.get("body", b""))
+            if total > MAX_BODY_BYTES:
+                return None, receive
         if message["type"] != "http.request" or not message.get("more_body"):
             break
     body = b"".join(m.get("body", b"") for m in messages if m["type"] == "http.request")
@@ -105,7 +119,14 @@ class _AuthMiddleware:
         self._app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] not in ("http", "websocket"):
+        # Streamable HTTP never uses websockets — refuse the handshake outright
+        # rather than fall through to HTTP route logic (whose _respond would
+        # send http.response messages on a websocket scope).
+        if scope["type"] == "websocket":
+            await send({"type": "websocket.close"})
+            return
+
+        if scope["type"] != "http":
             await self._app(scope, receive, send)
             return
 
@@ -160,6 +181,10 @@ class _AuthMiddleware:
         # request metrics.
         if scope.get("method") == "POST":
             body, receive = await _buffer_body(receive)
+            if body is None:  # exceeded MAX_BODY_BYTES
+                await self._respond(send, 413, "Request body too large")
+                record_request(route, 413)
+                return
             for method in _jsonrpc_methods(body):
                 record_jsonrpc(method, user_info["username"])
 
@@ -184,7 +209,11 @@ class _AuthMiddleware:
     def _route_for(path: str) -> str:
         if path in ("/health", f"{SERVICE_PREFIX}/health"):
             return "health"
-        if path in ("/metrics", f"{SERVICE_PREFIX}/metrics"):
+        # Prometheus scrapes the pod directly (Service label scrape-metrics,
+        # unprefixed path). The proxied ${SERVICE_PREFIX}/metrics form would be
+        # publicly reachable and the metric families carry username labels, so
+        # only the exact unprefixed path is served; the prefixed form is 404.
+        if path == "/metrics":
             return "metrics"
         if path.startswith(f"{SERVICE_PREFIX}/mcp"):
             return "mcp"
@@ -222,7 +251,7 @@ class _AuthMiddleware:
 
     @staticmethod
     async def _respond(send: Send, status: int, detail: str) -> None:
-        body = f'{{"error":"{detail}"}}'.encode()
+        body = json.dumps({"error": detail}).encode()
         await send(
             {
                 "type": "http.response.start",

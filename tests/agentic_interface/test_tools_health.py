@@ -12,6 +12,7 @@ import time
 import pytest
 import respx
 from agentic_helpers import register_tools
+from context import current_user
 from httpx import Response
 from tools import health
 
@@ -233,6 +234,30 @@ async def test_output_avoids_internal_mechanics(user_ctx):
     )
     for jargon in ("probe", "Prometheus", "af_node_mount", "kubectl", "Job"):
         assert jargon not in out
+
+
+@pytest.mark.asyncio
+async def test_quota_query_escapes_quotes_in_username():
+    """A crafted username cannot break out of the PromQL label matcher."""
+    captured: list[str] = []
+
+    def responder(request):
+        captured.append(request.url.params.get("query", ""))
+        return Response(200, json={"data": {"result": []}})
+
+    token = current_user.set({"username": 'al"ice', "namespace": "cms", "token": "t"})
+    try:
+        tools = register_tools(health)
+        with respx.mock:
+            respx.get(PROM_URL).mock(side_effect=responder)
+            await tools.tools["get_facility_health"]()
+    finally:
+        current_user.reset(token)
+
+    quota_queries = [q for q in captured if "af_home_dir" in q]
+    assert quota_queries
+    for q in quota_queries:
+        assert 'username="al\\"ice"' in q
 
 
 @pytest.mark.asyncio

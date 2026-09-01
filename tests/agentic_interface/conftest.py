@@ -18,10 +18,12 @@ from context import current_user  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def clean_user_cache():
-    """Each test starts with an empty token cache."""
+    """Each test starts with empty token caches (positive and negative)."""
     auth._user_cache.clear()
+    auth._negative_cache.clear()
     yield
     auth._user_cache.clear()
+    auth._negative_cache.clear()
 
 
 @pytest.fixture

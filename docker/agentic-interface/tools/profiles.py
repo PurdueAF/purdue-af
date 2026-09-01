@@ -5,6 +5,7 @@ data key.  We parse singleuser.profileList from that YAML so the service stays i
 sync with whatever the admin has configured — no hardcoded option keys or slugs.
 """
 
+import asyncio
 import os
 import re
 import time
@@ -12,7 +13,7 @@ from typing import Any, Optional
 
 import httpx
 import yaml
-from metrics import instrumented_transport
+from shared import shared_client
 
 from tools.gpu import free_gpus
 
@@ -26,6 +27,8 @@ _CONFIGMAP = "jupyterhub-config"
 # (expiry_monotonic, profiles) — refresh every 5 minutes
 _cache: tuple[float, list[dict]] | None = None
 _CACHE_TTL = 300.0
+# Single-flights the refresh so concurrent cache misses don't dogpile the API.
+_refresh_lock = asyncio.Lock()
 
 
 # ── slug computation (mirrors KubeSpawner internals) ─────────────────────────
@@ -70,18 +73,16 @@ async def _read_configmap() -> Optional[str]:
         return None  # not running inside k8s (local dev)
 
     # verify= goes to the transport: httpx ignores client-level TLS settings
-    # once a custom transport is supplied.
-    async with httpx.AsyncClient(
-        transport=instrumented_transport("kubernetes-api", verify=_CA_PATH)
-    ) as client:
-        try:
-            resp = await client.get(
-                f"{_K8S_API}/api/v1/namespaces/{_NAMESPACE}/configmaps/{_CONFIGMAP}",
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=5.0,
-            )
-        except httpx.RequestError:
-            return None
+    # once a custom transport is supplied (applied on first creation only).
+    client = shared_client("kubernetes-api", verify=_CA_PATH)
+    try:
+        resp = await client.get(
+            f"{_K8S_API}/api/v1/namespaces/{_NAMESPACE}/configmaps/{_CONFIGMAP}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=5.0,
+        )
+    except httpx.RequestError:
+        return None
 
     if resp.status_code != 200:
         return None
@@ -151,19 +152,24 @@ def _parse_profiles(values_yaml: str) -> list[dict]:
 async def get_profiles(force: bool = False) -> list[dict]:
     """Return the profile list, with a 5-minute cache."""
     global _cache
-    now = time.monotonic()
-    if not force and _cache and now < _cache[0]:
+    if not force and _cache and time.monotonic() < _cache[0]:
         return _cache[1]
 
-    raw = await _read_configmap()
-    if raw:
-        profiles = _parse_profiles(raw)
-        if profiles:
-            _cache = (now + _CACHE_TTL, profiles)
-            return profiles
+    async with _refresh_lock:
+        # Re-check after acquiring — another task may have refreshed while
+        # we waited on the lock.
+        if not force and _cache and time.monotonic() < _cache[0]:
+            return _cache[1]
 
-    # Return stale cache rather than nothing
-    return _cache[1] if _cache else []
+        raw = await _read_configmap()
+        if raw:
+            profiles = _parse_profiles(raw)
+            if profiles:
+                _cache = (time.monotonic() + _CACHE_TTL, profiles)
+                return profiles
+
+        # Return stale cache rather than nothing
+        return _cache[1] if _cache else []
 
 
 def find_profile(profiles: list[dict], name: str) -> Optional[dict]:

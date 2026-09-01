@@ -5,6 +5,7 @@ from urllib.parse import parse_qs, urlparse
 
 import respx
 from agentic_helpers import register_tools
+from context import current_user
 from httpx import ConnectError
 from tools import logs
 
@@ -188,6 +189,36 @@ async def test_limit_reached_hint(user_ctx):
     tools = register_tools(logs).tools
     out = await tools["query_notebook_logs"](limit=3, dedup=False)
     assert "limit=3 reached" in out
+
+
+@respx.mock
+async def test_limit_hint_survives_dedup(user_ctx):
+    """Truncation is judged on the raw line count: dedup collapsing the output
+    below the limit must not hide that Loki cut the window short."""
+    ts_ns = str(int(time.time() * 1e9))
+    values = [[ts_ns, "same"] for _ in range(3)]
+    respx.get(LOKI_RANGE_URL).respond(200, json=loki_response(values))
+
+    tools = register_tools(logs).tools
+    out = await tools["query_notebook_logs"](limit=3, dedup=True)
+
+    assert "identical lines omitted" in out  # dedup collapsed the run
+    assert "limit=3 reached" in out  # …but the hint still fires
+
+
+@respx.mock
+async def test_selector_escapes_quotes_in_username():
+    """A crafted username cannot break out of its own LogQL selector."""
+    route = respx.get(LOKI_RANGE_URL).respond(200, json=loki_response([]))
+    token = current_user.set({"username": 'ali"ce', "namespace": "cms", "token": "t"})
+    try:
+        tools = register_tools(logs).tools
+        await tools["query_notebook_logs"]()
+    finally:
+        current_user.reset(token)
+
+    q = query_of(route)["query"][0]
+    assert 'username="ali\\"ce"' in q
 
 
 @respx.mock

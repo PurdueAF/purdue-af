@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from context import require_user
-from metrics import instrumented_transport
+from shared import quote_label, shared_client
 
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
 EASTERN = ZoneInfo("America/New_York")
@@ -175,25 +175,21 @@ def register(mcp: Any) -> None:
         user = require_user()
         username = user["username"]
 
-        async with httpx.AsyncClient(
-            transport=instrumented_transport("prometheus")
-        ) as client:
-            firing = await _query(client, 'ALERTS{alertstate="firing"}')
-            # ALERTS_FOR_STATE carries the moment each alert started, which is
-            # what a user needs in order to correlate it with their own trouble.
-            since = await _query(client, "ALERTS_FOR_STATE")
-            # An alert that came and went in the window is a different situation
-            # from something steadily broken.
-            recent = await _query(
-                client,
-                "count by (alertname) (changes(ALERTS_FOR_STATE[6h]) > 0)",
-            )
-            home_util = await _scalar(
-                client, f'af_home_dir_util{{username="{username}"}}'
-            )
-            home_size = await _scalar(
-                client, f'af_home_dir_size_kb{{username="{username}"}}'
-            )
+        quoted = quote_label(username)
+
+        client = shared_client("prometheus")
+        firing = await _query(client, 'ALERTS{alertstate="firing"}')
+        # ALERTS_FOR_STATE carries the moment each alert started, which is
+        # what a user needs in order to correlate it with their own trouble.
+        since = await _query(client, "ALERTS_FOR_STATE")
+        # An alert that came and went in the window is a different situation
+        # from something steadily broken.
+        recent = await _query(
+            client,
+            "count by (alertname) (changes(ALERTS_FOR_STATE[6h]) > 0)",
+        )
+        home_util = await _scalar(client, f'af_home_dir_util{{username="{quoted}"}}')
+        home_size = await _scalar(client, f'af_home_dir_size_kb{{username="{quoted}"}}')
 
         if not firing and home_util is None:
             return (

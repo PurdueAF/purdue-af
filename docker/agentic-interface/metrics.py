@@ -70,7 +70,34 @@ UPSTREAM_DURATION = Histogram(
 AUTH_TOTAL = Counter(
     "purdue_af_mcp_auth_total",
     "Bearer-token validation results",
-    ["result"],  # cache_hit | validated | invalid_token | hub_unreachable
+    # cache_hit | neg_cache_hit | validated | invalid_token | hub_unreachable
+    ["result"],
+)
+
+# The JSON-RPC `method` label comes straight from the client's POST body, so
+# clamp it to the known MCP protocol methods (plus the synthetic 'response' /
+# 'invalid' labels from server._jsonrpc_methods) — otherwise a client could
+# mint unbounded Prometheus label cardinality with arbitrary method strings.
+_KNOWN_JSONRPC_METHODS = frozenset(
+    {
+        "initialize",
+        "ping",
+        "tools/list",
+        "tools/call",
+        "resources/list",
+        "resources/read",
+        "resources/templates/list",
+        "prompts/list",
+        "prompts/get",
+        "completion/complete",
+        "logging/setLevel",
+        "notifications/initialized",
+        "notifications/cancelled",
+        "notifications/progress",
+        "notifications/roots/list_changed",
+        "response",
+        "invalid",
+    }
 )
 
 
@@ -79,6 +106,8 @@ def record_request(route: str, status: int) -> None:
 
 
 def record_jsonrpc(method: str, username: str) -> None:
+    if method not in _KNOWN_JSONRPC_METHODS:
+        method = "other"
     JSONRPC_REQUESTS_TOTAL.labels(method=method, username=username).inc()
 
 
@@ -132,8 +161,20 @@ def _username() -> str:
 
 
 def instrument_mcp(mcp: Any) -> None:
-    """Record metrics and a structured log line on every MCP tool invocation."""
-    original_call_tool = mcp._tool_manager.call_tool
+    """Record metrics and a structured log line on every MCP tool invocation.
+
+    This monkeypatches the SDK-private ``mcp._tool_manager.call_tool``; fail
+    loudly at instrumentation time if an SDK upgrade moved that attribute, so
+    tool metrics can't silently disappear.
+    """
+    tool_manager = getattr(mcp, "_tool_manager", None)
+    original_call_tool = getattr(tool_manager, "call_tool", None)
+    if original_call_tool is None:
+        raise RuntimeError(
+            "instrument_mcp: FastMCP no longer exposes _tool_manager.call_tool "
+            "— the MCP SDK's tool dispatch moved; update the instrumentation "
+            "in metrics.py to match the new SDK layout."
+        )
 
     def _record(name: str, outcome: str, username: str, start: float) -> None:
         elapsed = time.monotonic() - start
@@ -168,7 +209,7 @@ def instrument_mcp(mcp: Any) -> None:
         _record(name, tool_outcome(result), username, start)
         return result
 
-    mcp._tool_manager.call_tool = call_tool
+    tool_manager.call_tool = call_tool
 
 
 class _InstrumentedTransport(httpx.AsyncBaseTransport):

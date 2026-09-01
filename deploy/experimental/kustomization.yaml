@@ -51,6 +51,7 @@ resources:
   - ../../apps/agentic-interface/rbac.yaml
   - ../../apps/agentic-interface/deployment.yaml
   - ../../apps/agentic-interface/service.yaml
+  - ../../apps/agentic-interface/networkpolicy.yaml
 
   - ../../apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml
   - ../../apps/monitoring/af-monitoring/af-node-monitor-rbac.yaml

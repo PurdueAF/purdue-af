@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 import httpx
 from context import require_user
-from metrics import instrumented_transport
+from shared import quote_label, shared_client
 
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
 _DIRS = ("home", "work")
@@ -52,48 +52,47 @@ def register(mcp: Any) -> None:
         username = user["username"]
         # Metrics are labeled by username via Kubernetes SD (username_unescaped).
         # No Hub admin state / pod_name required.
-        user_selector = f'username="{username}"'
+        user_selector = f'username="{quote_label(username)}"'
 
-        async with httpx.AsyncClient(
-            transport=instrumented_transport("prometheus")
-        ) as client:
-            rows: list[str] = ["# Storage usage (data age ≤ 5 min)\n"]
-            any_data = False
+        client = shared_client("prometheus")
 
-            for prefix in _DIRS:
-                used_kb, size_kb, util, last_accessed = await asyncio.gather(
-                    *(
-                        _prom_scalar(
-                            client, f"af_{prefix}_dir_{metric}{{{user_selector}}}"
-                        )
-                        for metric in ("used_kb", "size_kb", "util", "last_accessed")
-                    )
+        async def _dir_metrics(prefix: str) -> list[Optional[float]]:
+            return await asyncio.gather(
+                *(
+                    _prom_scalar(client, f"af_{prefix}_dir_{metric}{{{user_selector}}}")
+                    for metric in ("used_kb", "size_kb", "util", "last_accessed")
                 )
+            )
 
-                if used_kb is None or size_kb is None:
-                    rows.append(f"/{prefix}/: no data\n")
-                    continue
+        # Query both directories concurrently; rows still render home-then-work.
+        per_dir = await asyncio.gather(*(_dir_metrics(prefix) for prefix in _DIRS))
 
-                any_data = True
-                used_gb = used_kb / 1024 / 1024
-                size_gb = size_kb / 1024 / 1024
-                pct = (
-                    util if util is not None else (used_kb / size_kb if size_kb else 0)
-                ) * 100
+        rows: list[str] = ["# Storage usage (data age ≤ 5 min)\n"]
+        any_data = False
 
-                accessed_str = ""
-                if last_accessed:
-                    dt = datetime.fromtimestamp(last_accessed, tz=timezone.utc)
-                    accessed_str = (
-                        f"  last accessed {dt.strftime('%Y-%m-%d %H:%M UTC')}"
-                    )
+        for prefix, (used_kb, size_kb, util, last_accessed) in zip(_DIRS, per_dir):
+            if used_kb is None or size_kb is None:
+                rows.append(f"/{prefix}/: no data\n")
+                continue
 
-                rows.append(
-                    f"/{prefix}/\n"
-                    f"  {used_gb:.2f} GB / {size_gb:.2f} GB  "
-                    f"[{_bar(pct / 100)}]  {pct:.1f}%"
-                    f"{accessed_str}\n"
-                )
+            any_data = True
+            used_gb = used_kb / 1024 / 1024
+            size_gb = size_kb / 1024 / 1024
+            pct = (
+                util if util is not None else (used_kb / size_kb if size_kb else 0)
+            ) * 100
+
+            accessed_str = ""
+            if last_accessed:
+                dt = datetime.fromtimestamp(last_accessed, tz=timezone.utc)
+                accessed_str = f"  last accessed {dt.strftime('%Y-%m-%d %H:%M UTC')}"
+
+            rows.append(
+                f"/{prefix}/\n"
+                f"  {used_gb:.2f} GB / {size_gb:.2f} GB  "
+                f"[{_bar(pct / 100)}]  {pct:.1f}%"
+                f"{accessed_str}\n"
+            )
 
         if not any_data:
             return (

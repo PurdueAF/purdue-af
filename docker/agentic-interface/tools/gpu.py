@@ -12,7 +12,7 @@ import time
 from typing import Optional
 
 import httpx
-from metrics import instrumented_transport
+from shared import shared_client
 
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
 
@@ -73,11 +73,9 @@ async def free_gpus() -> Optional[dict[str, int]]:
 
     free: Optional[dict[str, int]] = None
     try:
-        async with httpx.AsyncClient(
-            transport=instrumented_transport("prometheus")
-        ) as client:
-            allocatable = await _prom_query(client, _ALLOC_QUERY)
-            used = await _prom_query(client, _USED_QUERY)
+        client = shared_client("prometheus")
+        allocatable = await _prom_query(client, _ALLOC_QUERY)
+        used = await _prom_query(client, _USED_QUERY)
         if allocatable:  # empty => kube-state-metrics missing => unknown, not zero
             free = {
                 resource: max(int(allocatable.get(m, 0) - used.get(m, 0)), 0)

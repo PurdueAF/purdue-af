@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 import httpx
 from context import require_user
-from metrics import instrumented_transport
+from shared import quote_label, shared_client
 
 LOKI_URL = os.environ.get("LOKI_URL", "http://loki.cms.svc.cluster.local:3100")
 
@@ -109,15 +109,15 @@ async def _loki_query(
     if end_param:
         params["end"] = end_param
 
-    async with httpx.AsyncClient(transport=instrumented_transport("loki")) as client:
-        try:
-            resp = await client.get(
-                f"{LOKI_URL}/loki/api/v1/query_range",
-                params=params,
-                timeout=30.0,
-            )
-        except httpx.RequestError as exc:
-            return f"Error: Loki connection failed — {exc}"
+    client = shared_client("loki")
+    try:
+        resp = await client.get(
+            f"{LOKI_URL}/loki/api/v1/query_range",
+            params=params,
+            timeout=30.0,
+        )
+    except httpx.RequestError as exc:
+        return f"Error: Loki connection failed — {exc}"
 
     if resp.status_code != 200:
         return f"Error: Loki returned HTTP {resp.status_code} — {resp.text[:500]}"
@@ -137,11 +137,15 @@ async def _loki_query(
     if not lines:
         return "No logs found for the specified time range."
 
+    # Judge truncation on the raw count — dedup can shrink the output below
+    # the cap while Loki still cut the window short.
+    truncated = len(lines) >= capped
+
     if dedup:
         lines = _dedup(lines)
 
     header = f"# {len(lines)} line(s)"
-    if len(lines) >= capped:
+    if truncated:
         header += f" (limit={limit} reached — narrow the time range or add a filter)"
     return header + "\n\n" + "\n".join(lines)
 
@@ -181,8 +185,10 @@ def register(mcp: Any) -> None:
         namespace = user["namespace"]
         username = user["username"]
         # Scope by username + notebook container — no Hub admin pod_name needed.
+        # quote_label keeps a crafted name from breaking out of the matcher.
         selector = (
-            f'{{namespace="{namespace}",username="{username}",container="notebook"}}'
+            f'{{namespace="{quote_label(namespace)}",'
+            f'username="{quote_label(username)}",container="notebook"}}'
         )
         if filter:
             selector = f"{selector} {filter}"
@@ -215,7 +221,8 @@ def register(mcp: Any) -> None:
         namespace = user["namespace"]
         username = user["username"]
         selector = (
-            f'{{namespace="{namespace}",username="{username}",container!="notebook"}}'
+            f'{{namespace="{quote_label(namespace)}",'
+            f'username="{quote_label(username)}",container!="notebook"}}'
         )
         if filter:
             selector = f"{selector} {filter}"

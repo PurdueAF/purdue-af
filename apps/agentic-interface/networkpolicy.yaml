@@ -1,0 +1,55 @@
+# Restrict ingress to the MCP server to its known clients. Egress is
+# deliberately unrestricted (the server calls hub:8081, Loki, two Prometheis,
+# and two dask-gateway APIs).
+#
+# Kubelet probes (readiness /health, liveness tcp:8888) originate from the
+# node's host IP and are not blocked by NetworkPolicy under Calico, so they
+# need no rule here.
+#
+# All pod label selectors below were verified against the live pods in the
+# cms and cattle-monitoring-system namespaces (z2jh 4.4.1, prometheus chart
+# 29.27.0, rancher-monitoring).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agentic-interface
+  labels:
+    app: agentic-interface
+spec:
+  podSelector:
+    matchLabels:
+      app: agentic-interface
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # (a) JupyterHub proxy — external user traffic arrives via
+        # https://cms.geddes.rcac.purdue.edu/services/agentic-interface.
+        - podSelector:
+            matchLabels:
+              app: jupyterhub
+              component: proxy
+        # (b) AF user sessions — the README documents direct in-cluster access
+        # from singleuser pods (config-agents.sh registers
+        # http://agentic-interface.<ns>.svc.cluster.local:8888 automatically).
+        - podSelector:
+            matchLabels:
+              app: jupyterhub
+              component: singleuser-server
+        # (c) Rancher Prometheus — scrapes /metrics via the scrape-metrics
+        # ServiceMonitor (purdue_af_mcp_* metrics live there).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cattle-monitoring-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+        # (d) AF prometheus-server (same namespace). It does not currently
+        # scrape this service (its scrape_configs are explicit), but allowing
+        # it keeps adding a job a one-file change.
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 8888

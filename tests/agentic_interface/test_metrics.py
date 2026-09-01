@@ -150,6 +150,25 @@ def test_jsonrpc_methods_batch():
     ]
 
 
+def test_bogus_jsonrpc_method_is_recorded_as_other():
+    # The method label comes straight from the client body — arbitrary strings
+    # must be clamped to "other" to keep Prometheus label cardinality bounded.
+    before = _jsonrpc_counter_value("other", "alice")
+    bogus = _jsonrpc_counter_value("totally/bogus-method", "alice")
+
+    metrics.record_jsonrpc("totally/bogus-method", "alice")
+
+    assert _jsonrpc_counter_value("other", "alice") == before + 1
+    assert _jsonrpc_counter_value("totally/bogus-method", "alice") == bogus  # unchanged
+
+
+def test_known_jsonrpc_methods_keep_their_label():
+    for method in ("tools/call", "initialize", "response", "invalid"):
+        before = _jsonrpc_counter_value(method, "alice")
+        metrics.record_jsonrpc(method, "alice")
+        assert _jsonrpc_counter_value(method, "alice") == before + 1
+
+
 def test_jsonrpc_methods_response_and_invalid():
     # A client-to-server response carries no method field.
     assert server._jsonrpc_methods(b'{"jsonrpc":"2.0","id":1,"result":{}}') == [
@@ -328,6 +347,16 @@ async def test_instrumented_tool_records_exception():
         await mcp._tool_manager.call_tool("fail_hard", {})
 
     assert _tool_counter_value("fail_hard", "exception") == before + 1
+
+
+def test_instrument_mcp_raises_if_sdk_layout_changed():
+    # instrument_mcp monkeypatches SDK-private _tool_manager.call_tool; an SDK
+    # upgrade that moves it must fail loudly, not silently drop tool metrics.
+    class NoToolManager:
+        pass
+
+    with pytest.raises(RuntimeError, match="_tool_manager.call_tool"):
+        metrics.instrument_mcp(NoToolManager())
 
 
 # ── upstream (outbound) request metrics ───────────────────────────────────────

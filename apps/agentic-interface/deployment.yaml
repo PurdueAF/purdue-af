@@ -6,11 +6,13 @@ metadata:
     app: agentic-interface
 spec:
   replicas: 1
+  # Recreate, not RollingUpdate: MCP sessions are stateful and pinned
+  # in-process to the single replica (MCP_STATELESS_HTTP=false). During a
+  # rolling update two replicas coexist and clients mid-session hit the
+  # wrong pod; a brief downtime during deploys is more honest than
+  # split-brain sessions.
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+    type: Recreate
   selector:
     matchLabels:
       app: agentic-interface
@@ -19,9 +21,22 @@ spec:
       labels:
         app: agentic-interface
     spec:
+      # Matches the fixed UID baked into the image (docker/agentic-interface/
+      # Dockerfile: useradd --uid 1000).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: agentic-interface
           image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-interface:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           ports:
             - containerPort: 8888
           env:
@@ -65,6 +80,17 @@ spec:
               port: 8888
             initialDelaySeconds: 5
             periodSeconds: 10
+          volumeMounts:
+            # Nothing writes to disk in normal operation (the uv venv is baked
+            # at build time; httpx/prometheus_client are in-memory), but with
+            # readOnlyRootFilesystem a writable /tmp is a cheap safety valve
+            # for tempfile/TLS/etc. HOME also points here (see Dockerfile).
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
       serviceAccountName: agentic-interface
       nodeSelector:
         cms-af-prod: "true"

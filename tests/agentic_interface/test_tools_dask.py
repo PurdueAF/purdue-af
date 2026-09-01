@@ -519,14 +519,16 @@ async def test_create_unsupported_client_returns_help(user_ctx):
     assert "needs two choices" in out
 
 
-async def test_create_declined_cancels(user_ctx):
+async def test_create_declined_falls_back(user_ctx):
+    # Agent clients may auto-decline elicitation without showing the user a
+    # form — return the ask-in-chat guidance, not a dead-end "cancelled".
     ctx = FakeCtx(("decline", None))
     tools = register_tools(dask).tools
     out = await tools["create_dask_cluster"](ctx)
-    assert "cancelled" in out.lower()
+    assert "needs two choices" in out
 
 
-async def test_create_declined_size_cancels(user_ctx):
+async def test_create_declined_size_falls_back(user_ctx):
     ctx = FakeCtx(
         accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="global")),
@@ -534,7 +536,7 @@ async def test_create_declined_size_cancels(user_ctx):
     )
     tools = register_tools(dask).tools
     out = await tools["create_dask_cluster"](ctx)
-    assert "cancelled" in out.lower()
+    assert "needs two choices" in out
 
 
 # ── stop_dask_cluster ─────────────────────────────────────────────────────────
@@ -867,7 +869,7 @@ async def test_create_cancel_and_unsupported_mid_flow(user_ctx):
         accept(dask._BackendChoice(gateway="k8s")),
         ("cancel", None),
     )
-    assert "cancelled" in (await tools["create_dask_cluster"](ctx)).lower()
+    assert "needs two choices" in await tools["create_dask_cluster"](ctx)
 
     class BoomCtx(FakeCtx):
         async def elicit(self, message, schema):
@@ -1046,14 +1048,14 @@ async def test_create_cancel_on_pixi_conda_custom(user_ctx):
         accept(dask._EnvChoice(env_source="pixi")),
         ("cancel", None),
     )
-    assert "cancelled" in (await tools["create_dask_cluster"](ctx)).lower()
+    assert "needs two choices" in await tools["create_dask_cluster"](ctx)
 
     ctx = FakeCtx(
         accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="conda")),
         ("cancel", None),
     )
-    assert "cancelled" in (await tools["create_dask_cluster"](ctx)).lower()
+    assert "needs two choices" in await tools["create_dask_cluster"](ctx)
 
     ctx = FakeCtx(
         accept(dask._BackendChoice(gateway="k8s")),
@@ -1061,7 +1063,7 @@ async def test_create_cancel_on_pixi_conda_custom(user_ctx):
         accept(dask._SizeChoice(size="custom")),
         ("cancel", None),
     )
-    assert "cancelled" in (await tools["create_dask_cluster"](ctx)).lower()
+    assert "needs two choices" in await tools["create_dask_cluster"](ctx)
 
     ctx = FakeCtx(
         accept(dask._BackendChoice(gateway="k8s")),
@@ -1070,7 +1072,7 @@ async def test_create_cancel_on_pixi_conda_custom(user_ctx):
         count("custom"),
         ("cancel", None),
     )
-    assert "cancelled" in (await tools["create_dask_cluster"](ctx)).lower()
+    assert "needs two choices" in await tools["create_dask_cluster"](ctx)
 
 
 async def test_create_unsupported_on_pixi_conda_and_count(user_ctx):
@@ -1113,7 +1115,7 @@ async def test_create_cancel_on_worker_count_prompt(user_ctx):
         accept(dask._SizeChoice(size="default")),
         ("cancel", None),
     )
-    assert "cancelled" in (await tools["create_dask_cluster"](ctx)).lower()
+    assert "needs two choices" in await tools["create_dask_cluster"](ctx)
 
 
 @respx.mock
@@ -1154,3 +1156,116 @@ async def test_usage_cpu_missing_memory_present(user_ctx):
     out = await tools["get_dask_cluster_usage"]("cms.abc")
     assert "CPU (cores): no data" in out
     assert "Memory (GiB):" in out
+
+
+# ── hardening: cluster-name validation, worker caps, PromQL escaping ──────────
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "c1/evil",  # path traversal into the gateway URL
+        "../clusters",  # dotdot segment
+        "cms.abc(.+)",  # regex metachars would widen the PromQL pod match
+        'a"b',  # quote would break out of a label matcher
+        "a b",
+        "",
+    ],
+)
+@respx.mock
+async def test_malformed_cluster_name_rejected_everywhere(user_ctx, bad):
+    """Every cluster_name-taking tool rejects unsafe names before any request."""
+    tools = register_tools(dask).tools
+    for out in [
+        await tools["get_dask_cluster_info"](bad),
+        await tools["get_dask_worker_count"](bad),
+        await tools["get_dask_cluster_usage"](bad),
+        await tools["scale_dask_cluster"](bad, 1),
+        await tools["stop_dask_cluster"](bad),
+    ]:
+        assert "invalid cluster name" in out
+        assert "list_dask_clusters" in out
+    assert not respx.calls  # rejected before anything left the process
+
+
+@respx.mock
+async def test_scale_rejects_over_cap(user_ctx):
+    tools = register_tools(dask).tools
+    out = await tools["scale_dask_cluster"]("c1", dask.MAX_WORKERS + 1)
+    assert f"≤ {dask.MAX_WORKERS}" in out
+    assert not respx.calls
+
+
+@respx.mock
+async def test_create_rejects_over_cap_explicit_and_elicited(user_ctx):
+    tools = register_tools(dask).tools
+    out = await tools["create_dask_cluster"](FakeCtx(), n_workers=dask.MAX_WORKERS + 1)
+    assert f"≤ {dask.MAX_WORKERS}" in out
+
+    # elicited custom-count path is capped too
+    ctx = FakeCtx(
+        accept(dask._BackendChoice(gateway="k8s")),
+        accept(dask._EnvChoice(env_source="global")),
+        default_size(),
+        count("custom"),
+        accept(dask._CustomCount(n_workers=dask.MAX_WORKERS + 1)),
+    )
+    out = await tools["create_dask_cluster"](ctx)
+    assert f"≤ {dask.MAX_WORKERS}" in out
+    assert not respx.calls
+
+
+@respx.mock
+async def test_worker_count_escapes_username_in_promql():
+    """A username with quotes cannot break out of the PromQL label matcher."""
+    from context import current_user
+    from shared import quote_label
+
+    hostile = 'ali"} or {job!="'
+    token = current_user.set({"username": hostile, "namespace": "cms", "token": "t"})
+    try:
+        respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+            200, json={"name": "cms.abc", "status": "RUNNING"}
+        )
+        seen = []
+
+        def responder(request):
+            import httpx
+
+            seen.append(request.url.params["query"])
+            return httpx.Response(200, json=prom_scalar(1))
+
+        respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").mock(side_effect=responder)
+
+        tools = register_tools(dask).tools
+        await tools["get_dask_worker_count"]("cms.abc")
+    finally:
+        current_user.reset(token)
+
+    assert seen
+    for q in seen:
+        assert f'user="{hostile}"' not in q  # raw interpolation would inject
+        assert quote_label(hostile) in q
+
+
+@respx.mock
+async def test_usage_regex_escapes_cluster_id(user_ctx):
+    """The pod regex uses re.escape on the cluster id (defense in depth)."""
+    respx.get(f"{K8S}/api/v1/clusters/abc-1").respond(
+        200, json={"name": "abc-1", "status": "RUNNING"}
+    )
+    seen = []
+
+    def responder(request):
+        import httpx
+
+        seen.append(request.url.params["query"])
+        return httpx.Response(200, json={"data": {"result": []}})
+
+    respx.get(f"{dask.CLUSTER_PROMETHEUS_URL}/api/v1/query").mock(side_effect=responder)
+    tools = register_tools(dask).tools
+    await tools["get_dask_cluster_usage"]("abc-1")
+
+    assert seen
+    for q in seen:
+        assert 'pod=~"dask-worker-abc\\-1-.+"' in q

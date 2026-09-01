@@ -129,6 +129,30 @@ async def test_unknown_path_is_404():
     assert send.status == 404
 
 
+async def test_unprefixed_metrics_is_served():
+    # Prometheus scrapes the pod directly at the unprefixed path.
+    send = SendCollector()
+    await server._AuthMiddleware(RecordingApp())(
+        http_scope("/metrics"), noop_receive, send
+    )
+    assert send.status == 200
+    assert b"purdue_af_mcp_api_calls_total" in send.body
+
+
+async def test_prefixed_metrics_is_404():
+    # The proxied form is publicly reachable and the metric families carry
+    # username labels — it must not be served.
+    inner = RecordingApp()
+    send = SendCollector()
+
+    await server._AuthMiddleware(inner)(
+        http_scope(f"{PREFIX}/metrics"), noop_receive, send
+    )
+
+    assert send.status == 404
+    assert inner.calls == 0
+
+
 async def test_missing_token_is_401():
     inner = RecordingApp()
     send = SendCollector()
@@ -215,3 +239,60 @@ async def test_non_http_scope_passes_through():
     await server._AuthMiddleware(inner)(scope, noop_receive, SendCollector())
 
     assert inner.scope is scope
+
+
+async def test_websocket_scope_is_closed_not_forwarded():
+    # Streamable HTTP never uses websockets — the middleware must refuse the
+    # handshake rather than send http.response messages on a websocket scope.
+    inner = RecordingApp()
+    send = SendCollector()
+    scope = {"type": "websocket", "path": f"{PREFIX}/mcp", "headers": []}
+
+    await server._AuthMiddleware(inner)(scope, noop_receive, send)
+
+    assert send.messages == [{"type": "websocket.close"}]
+    assert inner.calls == 0
+
+
+async def test_oversized_post_body_is_413(accept_alice, monkeypatch):
+    monkeypatch.setattr(server, "MAX_BODY_BYTES", 64)
+    chunks = [
+        {"type": "http.request", "body": b"x" * 50, "more_body": True},
+        {"type": "http.request", "body": b"y" * 50, "more_body": True},
+        # never reached — buffering must stop once the cap is exceeded
+        {"type": "http.request", "body": b"z" * 50, "more_body": False},
+    ]
+
+    async def receive():
+        return chunks.pop(0)
+
+    inner = RecordingApp()
+    send = SendCollector()
+    scope = {**http_scope(f"{PREFIX}/mcp", headers=bearer("good")), "method": "POST"}
+
+    from prometheus_client import REGISTRY
+
+    def counter_413():
+        return (
+            REGISTRY.get_sample_value(
+                "purdue_af_mcp_api_calls_total", {"route": "mcp", "status": "413"}
+            )
+            or 0.0
+        )
+
+    before = counter_413()
+    await server._AuthMiddleware(inner)(scope, receive, send)
+
+    assert send.status == 413
+    assert json.loads(send.body)["error"] == "Request body too large"
+    assert inner.calls == 0
+    assert len(chunks) == 1  # the third chunk was never drained
+    assert counter_413() == before + 1
+
+
+async def test_respond_emits_valid_json_for_details_with_quotes():
+    send = SendCollector()
+
+    await server._AuthMiddleware._respond(send, 400, 'detail with "quotes"')
+
+    assert json.loads(send.body)["error"] == 'detail with "quotes"'

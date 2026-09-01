@@ -15,13 +15,14 @@ worker pods.
 import asyncio
 import base64
 import os
+import re
 from typing import Any, Optional
 
 import httpx
 from context import require_user
 from mcp.server.fastmcp import Context
-from metrics import instrumented_transport
 from pydantic import BaseModel, Field
+from shared import quote_label, shared_client
 
 from tools.elicitation import elicit as _elicit
 
@@ -60,12 +61,32 @@ def _gateway_target(request: httpx.Request) -> str:
     return f"dask-gateway-{_HOST_TO_GATEWAY.get(request.url.host, 'unknown')}"
 
 
+# Pooled process-wide clients (see shared.py) — never close these at call sites.
 def _client() -> httpx.AsyncClient:
-    return httpx.AsyncClient(transport=instrumented_transport(_gateway_target))
+    return shared_client("dask-gateway", target=_gateway_target)
 
 
 def _prom_client(target: str) -> httpx.AsyncClient:
-    return httpx.AsyncClient(transport=instrumented_transport(target))
+    return shared_client(target)
+
+
+# Sanity cap on requested worker counts — the gateway enforces its own limits,
+# but don't rely on it alone.
+MAX_WORKERS = 500
+
+# Cluster names land in gateway URL paths and (via _cluster_id) in PromQL
+# regexes, so only accept the character set gateways actually emit.
+_CLUSTER_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _validate_cluster_name(cluster_name: str) -> Optional[str]:
+    """Return an error string if ``cluster_name`` is not a safe name, else None."""
+    if not _CLUSTER_NAME_RE.match(cluster_name or ""):
+        return (
+            f"Error: invalid cluster name {cluster_name!r} — use a name "
+            "returned by list_dask_clusters."
+        )
+    return None
 
 
 def _resolve_gateway(name: str) -> tuple[str, str]:
@@ -363,8 +384,12 @@ class _CustomCount(BaseModel):
     n_workers: int = Field(ge=0, description="Number of workers to start with.")
 
 
-# Fallback shown when the client cannot render elicitation forms. Doubles as
-# guidance for the create_cluster prompt so the agent asks in plain chat.
+# Returned whenever an interactive choice couldn't be collected — the client
+# can't render elicitation, or the prompt came back declined/cancelled. Agent
+# clients (Claude Code among them) may auto-decline elicitation without ever
+# showing the user a form, so a non-accept never proves the user said no;
+# rather than dead-ending, hand the agent everything it needs to ask in chat
+# and retry. Doubles as guidance for the create_cluster prompt.
 _CREATE_CHOICES_HELP = (
     "create_dask_cluster needs two choices from the user. Ask them (use the "
     "client's multiple-choice UI if available), then call create_dask_cluster "
@@ -394,13 +419,13 @@ def register(mcp: Any) -> None:
         user = require_user()
         username = user["username"]
 
-        async with _client() as client:
-            results = await asyncio.gather(
-                *[
-                    _fetch_clusters(client, gw, url, username)
-                    for gw, url in _GATEWAYS.items()
-                ]
-            )
+        client = _client()
+        results = await asyncio.gather(
+            *[
+                _fetch_clusters(client, gw, url, username)
+                for gw, url in _GATEWAYS.items()
+            ]
+        )
 
         sections: list[str] = []
         total = 0
@@ -440,15 +465,14 @@ def register(mcp: Any) -> None:
         except ValueError as e:
             return str(e)
 
-        async with _client() as client:
-            try:
-                resp = await client.get(
-                    f"{url}/api/v1/options",
-                    headers=_auth(user["username"]),
-                    timeout=10.0,
-                )
-            except httpx.RequestError as exc:
-                return f"Error: gateway '{gateway}' unreachable — {exc}"
+        try:
+            resp = await _client().get(
+                f"{url}/api/v1/options",
+                headers=_auth(user["username"]),
+                timeout=10.0,
+            )
+        except httpx.RequestError as exc:
+            return f"Error: gateway '{gateway}' unreachable — {exc}"
 
         if resp.status_code in (401, 403):
             return f"Error: not authorised for gateway '{gateway}'."
@@ -497,9 +521,11 @@ def register(mcp: Any) -> None:
 
         Any choice not supplied is asked interactively via the client's
         multiple-choice UI (MCP elicitation), one question at a time: backend →
-        environment → worker size → worker count. Clients that don't support
-        elicitation get a short instruction listing the choices — collect them
-        from the user and call again with explicit args.
+        environment → worker size → worker count. If a choice can't be
+        collected (the client doesn't support elicitation, or the prompt is
+        declined or dismissed), a short instruction listing the choices is
+        returned instead — collect them from the user and call again with
+        explicit args.
 
         Backend (``gateway``):
           • 'k8s' — Geddes Kubernetes workers (can use /work and /depot)
@@ -526,13 +552,15 @@ def register(mcp: Any) -> None:
                           1 if the user picks the default size.
             worker_memory: Memory per worker in GiB (≤ 64). Defaults to 4 if the
                            user picks the default size.
-            n_workers: Workers to start with (≥ 0). 0 (or omitted with a
+            n_workers: Workers to start with (0–500). 0 (or omitted with a
                        non-eliciting client) starts the cluster empty.
             env: Extra environment variables for workers (e.g. X509_USER_PROXY,
                  PYTHONPATH, NB_UID/NB_GID for CERN/FNAL users).
         """
         if n_workers is not None and n_workers < 0:
             return "Error: n_workers must be ≥ 0."
+        if n_workers is not None and n_workers > MAX_WORKERS:
+            return f"Error: n_workers must be ≤ {MAX_WORKERS}."
         if worker_cores is not None and worker_cores <= 0:
             return "Error: worker_cores must be > 0."
         if worker_memory is not None and worker_memory <= 0:
@@ -543,10 +571,8 @@ def register(mcp: Any) -> None:
             status, data = await _elicit(
                 ctx, "Choose the compute backend for your Dask cluster.", _BackendChoice
             )
-            if status == "unsupported":
-                return _CREATE_CHOICES_HELP
             if status != "accept":
-                return "Cluster creation cancelled."
+                return _CREATE_CHOICES_HELP
             gateway = data.gateway
 
         try:
@@ -566,10 +592,8 @@ def register(mcp: Any) -> None:
             status, data = await _elicit(
                 ctx, "Choose the worker environment.", _EnvChoice
             )
-            if status == "unsupported":
-                return _CREATE_CHOICES_HELP
             if status != "accept":
-                return "Cluster creation cancelled."
+                return _CREATE_CHOICES_HELP
             env_source = data.env_source
 
         if env_source == "global":
@@ -586,10 +610,8 @@ def register(mcp: Any) -> None:
                 status, data = await _elicit(
                     ctx, "Provide the path to your pixi project.", _PixiChoice
                 )
-                if status == "unsupported":
-                    return _CREATE_CHOICES_HELP
                 if status != "accept":
-                    return "Cluster creation cancelled."
+                    return _CREATE_CHOICES_HELP
                 pixi_project = data.pixi_project
                 pixi_env = data.pixi_env
         elif env_source == "conda":
@@ -597,10 +619,8 @@ def register(mcp: Any) -> None:
                 status, data = await _elicit(
                     ctx, "Provide the path to your conda environment.", _CondaChoice
                 )
-                if status == "unsupported":
-                    return _CREATE_CHOICES_HELP
                 if status != "accept":
-                    return "Cluster creation cancelled."
+                    return _CREATE_CHOICES_HELP
                 conda_env = data.conda_env
         else:
             return (
@@ -611,18 +631,14 @@ def register(mcp: Any) -> None:
         # ── Worker size: ask only if neither cores nor memory was supplied ──
         if worker_cores is None and worker_memory is None:
             status, data = await _elicit(ctx, "Choose the worker size.", _SizeChoice)
-            if status == "unsupported":
-                return _CREATE_CHOICES_HELP
             if status != "accept":
-                return "Cluster creation cancelled."
+                return _CREATE_CHOICES_HELP
             if data.size == "custom":
                 status, size = await _elicit(
                     ctx, "Specify the resources per worker.", _CustomSize
                 )
-                if status == "unsupported":
-                    return _CREATE_CHOICES_HELP
                 if status != "accept":
-                    return "Cluster creation cancelled."
+                    return _CREATE_CHOICES_HELP
                 worker_cores = size.worker_cores
                 worker_memory = size.worker_memory
         if worker_cores is None:
@@ -635,19 +651,17 @@ def register(mcp: Any) -> None:
             status, data = await _elicit(
                 ctx, "How many workers should the cluster start with?", _CountChoice
             )
-            if status == "unsupported":
-                return _CREATE_CHOICES_HELP
             if status != "accept":
-                return "Cluster creation cancelled."
+                return _CREATE_CHOICES_HELP
             if data.count == "custom":
                 status, count = await _elicit(
                     ctx, "Specify the number of workers to start with.", _CustomCount
                 )
-                if status == "unsupported":
-                    return _CREATE_CHOICES_HELP
                 if status != "accept":
-                    return "Cluster creation cancelled."
+                    return _CREATE_CHOICES_HELP
                 n_workers = count.n_workers
+                if n_workers > MAX_WORKERS:
+                    return f"Error: n_workers must be ≤ {MAX_WORKERS}."
             else:
                 n_workers = int(data.count)
 
@@ -663,79 +677,79 @@ def register(mcp: Any) -> None:
         if isinstance(options, str):
             return options
 
-        async with _client() as client:
-            try:
-                resp = await client.post(
-                    f"{url}/api/v1/clusters/",
-                    headers=_auth(username),
-                    json={"cluster_options": options},
-                    timeout=60.0,
-                )
-            except httpx.RequestError as exc:
-                return f"Error: gateway '{gateway}' unreachable — {exc}"
-
-            if resp.status_code == 422:
-                reason = resp.reason_phrase or ""
-                try:
-                    reason = resp.json().get("message") or resp.text[:400]
-                except Exception:
-                    reason = resp.text[:400] or reason
-                return f"Error: gateway rejected create — {reason}"
-            if resp.status_code not in (200, 201):
-                return f"Error: HTTP {resp.status_code} — {resp.text[:400]}"
-
-            cluster_name = resp.json().get("name", "")
-            if not cluster_name:
-                return f"Error: create succeeded but no cluster name in response — {resp.text[:300]}"
-
-            lines = [
-                f"Cluster '{cluster_name}' created on gateway '{gateway}'.",
-                f"workers: cores={worker_cores} memory={worker_memory} GiB each",
-            ]
-            if options.get("pixi_project"):
-                lines.append(
-                    f"env: pixi_project={options['pixi_project']} "
-                    f"pixi_env={options['pixi_env']}"
-                )
-            else:
-                lines.append(f"env: conda_env={options['conda_env']}")
-
-            if not n_workers:
-                lines += [
-                    "",
-                    "Cluster starts with 0 workers. Next: scale_dask_cluster(...).",
-                ]
-                return "\n".join(lines)
-
-            try:
-                scale = await client.post(
-                    f"{url}/api/v1/clusters/{cluster_name}/scale",
-                    headers=_auth(username),
-                    json={"count": n_workers},
-                    timeout=30.0,
-                )
-            except httpx.RequestError as exc:
-                lines += [
-                    "",
-                    f"Created, but scale failed (gateway unreachable): {exc}",
-                    "Retry with scale_dask_cluster.",
-                ]
-                return "\n".join(lines)
-
-            if scale.status_code not in (200, 204):
-                lines += [
-                    "",
-                    f"Created, but scale returned HTTP {scale.status_code}: "
-                    f"{scale.text[:300]}",
-                    "Retry with scale_dask_cluster.",
-                ]
-                return "\n".join(lines)
-
-            lines.append(f"Scaling to {n_workers} worker(s).")
-            lines.append(
-                "Next: get_dask_worker_count / get_dask_cluster_info to confirm ready."
+        client = _client()
+        try:
+            resp = await client.post(
+                f"{url}/api/v1/clusters/",
+                headers=_auth(username),
+                json={"cluster_options": options},
+                timeout=60.0,
             )
+        except httpx.RequestError as exc:
+            return f"Error: gateway '{gateway}' unreachable — {exc}"
+
+        if resp.status_code == 422:
+            reason = resp.reason_phrase or ""
+            try:
+                reason = resp.json().get("message") or resp.text[:400]
+            except Exception:
+                reason = resp.text[:400] or reason
+            return f"Error: gateway rejected create — {reason}"
+        if resp.status_code not in (200, 201):
+            return f"Error: HTTP {resp.status_code} — {resp.text[:400]}"
+
+        cluster_name = resp.json().get("name", "")
+        if not cluster_name:
+            return f"Error: create succeeded but no cluster name in response — {resp.text[:300]}"
+
+        lines = [
+            f"Cluster '{cluster_name}' created on gateway '{gateway}'.",
+            f"workers: cores={worker_cores} memory={worker_memory} GiB each",
+        ]
+        if options.get("pixi_project"):
+            lines.append(
+                f"env: pixi_project={options['pixi_project']} "
+                f"pixi_env={options['pixi_env']}"
+            )
+        else:
+            lines.append(f"env: conda_env={options['conda_env']}")
+
+        if not n_workers:
+            lines += [
+                "",
+                "Cluster starts with 0 workers. Next: scale_dask_cluster(...).",
+            ]
             return "\n".join(lines)
+
+        try:
+            scale = await client.post(
+                f"{url}/api/v1/clusters/{cluster_name}/scale",
+                headers=_auth(username),
+                json={"count": n_workers},
+                timeout=30.0,
+            )
+        except httpx.RequestError as exc:
+            lines += [
+                "",
+                f"Created, but scale failed (gateway unreachable): {exc}",
+                "Retry with scale_dask_cluster.",
+            ]
+            return "\n".join(lines)
+
+        if scale.status_code not in (200, 204):
+            lines += [
+                "",
+                f"Created, but scale returned HTTP {scale.status_code}: "
+                f"{scale.text[:300]}",
+                "Retry with scale_dask_cluster.",
+            ]
+            return "\n".join(lines)
+
+        lines.append(f"Scaling to {n_workers} worker(s).")
+        lines.append(
+            "Next: get_dask_worker_count / get_dask_cluster_info to confirm ready."
+        )
+        return "\n".join(lines)
 
     @mcp.tool()
     async def get_dask_cluster_info(cluster_name: str, gateway: str = "k8s") -> str:
@@ -745,21 +759,23 @@ def register(mcp: Any) -> None:
             cluster_name: Cluster identifier returned by list_dask_clusters.
             gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
+        err = _validate_cluster_name(cluster_name)
+        if err:
+            return err
         user = require_user()
         try:
             _, url = _resolve_gateway(gateway)
         except ValueError as e:
             return str(e)
 
-        async with _client() as client:
-            try:
-                resp = await client.get(
-                    f"{url}/api/v1/clusters/{cluster_name}",
-                    headers=_auth(user["username"]),
-                    timeout=10.0,
-                )
-            except httpx.RequestError as exc:
-                return f"Error: gateway '{gateway}' unreachable — {exc}"
+        try:
+            resp = await _client().get(
+                f"{url}/api/v1/clusters/{cluster_name}",
+                headers=_auth(user["username"]),
+                timeout=10.0,
+            )
+        except httpx.RequestError as exc:
+            return f"Error: gateway '{gateway}' unreachable — {exc}"
 
         if resp.status_code == 404:
             return f"Cluster '{cluster_name}' not found on gateway '{gateway}'."
@@ -797,6 +813,9 @@ def register(mcp: Any) -> None:
             cluster_name: Cluster identifier returned by list_dask_clusters.
             gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
+        err = _validate_cluster_name(cluster_name)
+        if err:
+            return err
         user = require_user()
         username = user["username"]
         try:
@@ -804,28 +823,30 @@ def register(mcp: Any) -> None:
         except ValueError as e:
             return str(e)
 
-        async with _client() as gw_client:
-            err = await _require_owned_cluster(
-                gw_client, url, username, cluster_name, gateway
-            )
-            if err:
-                return err
+        err = await _require_owned_cluster(
+            _client(), url, username, cluster_name, gateway
+        )
+        if err:
+            return err
 
         cid = _cluster_id(cluster_name)
+        quser = quote_label(username)
         sched_pod = f"dask-scheduler-{cid}"
-        total_q = f'sum(dask_scheduler_workers{{user="{username}",pod="{sched_pod}"}})'
+        total_q = f'sum(dask_scheduler_workers{{user="{quser}",pod="{sched_pod}"}})'
         by_state_q = (
             f"sum by (state) ("
-            f'dask_scheduler_workers{{user="{username}",pod="{sched_pod}"}})'
+            f'dask_scheduler_workers{{user="{quser}",pod="{sched_pod}"}})'
         )
-        desired_q = f'sum(dask_scheduler_desired_workers{{user="{username}",pod="{sched_pod}"}})'
+        desired_q = (
+            f'sum(dask_scheduler_desired_workers{{user="{quser}",pod="{sched_pod}"}})'
+        )
 
-        async with _prom_client("prometheus") as prom:
-            total, by_state, desired = await asyncio.gather(
-                _prom_scalar(prom, PROMETHEUS_URL, total_q),
-                _prom_vector(prom, PROMETHEUS_URL, by_state_q),
-                _prom_scalar(prom, PROMETHEUS_URL, desired_q),
-            )
+        prom = _prom_client("prometheus")
+        total, by_state, desired = await asyncio.gather(
+            _prom_scalar(prom, PROMETHEUS_URL, total_q),
+            _prom_vector(prom, PROMETHEUS_URL, by_state_q),
+            _prom_scalar(prom, PROMETHEUS_URL, desired_q),
+        )
 
         if total is None:
             return (
@@ -859,6 +880,9 @@ def register(mcp: Any) -> None:
             cluster_name: Cluster identifier returned by list_dask_clusters.
             gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
+        err = _validate_cluster_name(cluster_name)
+        if err:
+            return err
         user = require_user()
         username = user["username"]
         try:
@@ -866,15 +890,15 @@ def register(mcp: Any) -> None:
         except ValueError as e:
             return str(e)
 
-        async with _client() as gw_client:
-            err = await _require_owned_cluster(
-                gw_client, url, username, cluster_name, gateway
-            )
-            if err:
-                return err
+        err = await _require_owned_cluster(
+            _client(), url, username, cluster_name, gateway
+        )
+        if err:
+            return err
 
         cid = _cluster_id(cluster_name)
-        worker_re = f"dask-worker-{cid}-.+"
+        # re.escape: '.' is a regex metachar and legitimately appears in names.
+        worker_re = f"dask-worker-{re.escape(cid)}-.+"
         # Only Running pods — cadvisor keeps series for terminated workers.
         running = (
             f'kube_pod_status_phase{{namespace="cms",phase="Running",'
@@ -893,11 +917,11 @@ def register(mcp: Any) -> None:
             f" * on(namespace,pod) group_left {running})"
         )
 
-        async with _prom_client("cluster-prometheus") as prom:
-            cpu_rows, mem_rows = await asyncio.gather(
-                _prom_vector(prom, CLUSTER_PROMETHEUS_URL, cpu_q),
-                _prom_vector(prom, CLUSTER_PROMETHEUS_URL, mem_q),
-            )
+        prom = _prom_client("cluster-prometheus")
+        cpu_rows, mem_rows = await asyncio.gather(
+            _prom_vector(prom, CLUSTER_PROMETHEUS_URL, cpu_q),
+            _prom_vector(prom, CLUSTER_PROMETHEUS_URL, mem_q),
+        )
 
         cpu_vals = [v for _, v in cpu_rows]
         mem_vals = [v for _, v in mem_rows]
@@ -945,11 +969,16 @@ def register(mcp: Any) -> None:
 
         Args:
             cluster_name: Cluster identifier returned by list_dask_clusters.
-            n_workers: Target worker count (≥ 0).
+            n_workers: Target worker count (0–500).
             gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
+        err = _validate_cluster_name(cluster_name)
+        if err:
+            return err
         if n_workers < 0:
             return "Error: n_workers must be ≥ 0."
+        if n_workers > MAX_WORKERS:
+            return f"Error: n_workers must be ≤ {MAX_WORKERS}."
 
         user = require_user()
         try:
@@ -957,16 +986,15 @@ def register(mcp: Any) -> None:
         except ValueError as e:
             return str(e)
 
-        async with _client() as client:
-            try:
-                resp = await client.post(
-                    f"{url}/api/v1/clusters/{cluster_name}/scale",
-                    headers=_auth(user["username"]),
-                    json={"count": n_workers},
-                    timeout=10.0,
-                )
-            except httpx.RequestError as exc:
-                return f"Error: gateway '{gateway}' unreachable — {exc}"
+        try:
+            resp = await _client().post(
+                f"{url}/api/v1/clusters/{cluster_name}/scale",
+                headers=_auth(user["username"]),
+                json={"count": n_workers},
+                timeout=10.0,
+            )
+        except httpx.RequestError as exc:
+            return f"Error: gateway '{gateway}' unreachable — {exc}"
 
         if resp.status_code == 404:
             return f"Cluster '{cluster_name}' not found on gateway '{gateway}'."
@@ -987,21 +1015,23 @@ def register(mcp: Any) -> None:
             cluster_name: Cluster identifier returned by list_dask_clusters.
             gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
+        err = _validate_cluster_name(cluster_name)
+        if err:
+            return err
         user = require_user()
         try:
             _, url = _resolve_gateway(gateway)
         except ValueError as e:
             return str(e)
 
-        async with _client() as client:
-            try:
-                resp = await client.delete(
-                    f"{url}/api/v1/clusters/{cluster_name}",
-                    headers=_auth(user["username"]),
-                    timeout=10.0,
-                )
-            except httpx.RequestError as exc:
-                return f"Error: gateway '{gateway}' unreachable — {exc}"
+        try:
+            resp = await _client().delete(
+                f"{url}/api/v1/clusters/{cluster_name}",
+                headers=_auth(user["username"]),
+                timeout=10.0,
+            )
+        except httpx.RequestError as exc:
+            return f"Error: gateway '{gateway}' unreachable — {exc}"
 
         if resp.status_code == 404:
             return f"Cluster '{cluster_name}' not found on gateway '{gateway}' (may have already stopped)."

@@ -4,6 +4,7 @@ import re
 
 import respx
 from agentic_helpers import register_tools
+from context import current_user
 from httpx import AsyncClient, ConnectError
 from tools import storage
 
@@ -98,9 +99,27 @@ async def test_storage_reports_usage(user_ctx):
     assert "50.00 GB / 100.00 GB" in out
     assert "50.0%" in out
     assert "last accessed 2023-11-14" in out
+    # directories are queried concurrently but render home-then-work
+    assert out.index("/home/") < out.index("/work/")
     # every query is scoped to the authenticated username
     for call in route.calls:
         assert 'username="alice"' in call.request.url.params["query"]
+
+
+@respx.mock
+async def test_storage_username_is_escaped():
+    """A crafted username cannot break out of the PromQL label matcher."""
+    route = respx.get(PROM_URL).respond(200, json={"data": {"result": []}})
+    token = current_user.set({"username": 'al"ice', "namespace": "cms", "token": "t"})
+    try:
+        tools = register_tools(storage).tools
+        await tools["query_storage_usage"]()
+    finally:
+        current_user.reset(token)
+
+    assert route.calls
+    for call in route.calls:
+        assert 'username="al\\"ice"' in call.request.url.params["query"]
 
 
 @respx.mock

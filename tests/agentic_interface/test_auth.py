@@ -73,12 +73,38 @@ async def test_second_call_is_served_from_cache():
 
 
 @respx.mock
-async def test_failed_validation_is_not_cached():
+async def test_invalid_token_is_negatively_cached():
     route = respx.get(HUB_USER_URL).respond(403)
 
     assert await auth.resolve_user("tok-1") is None
-    assert await auth.resolve_user("tok-1") is None
+    assert await auth.resolve_user("tok-1") is None  # served from negative cache
+
+    assert route.call_count == 1
+
+
+@respx.mock
+async def test_negative_cache_expires_after_ttl(monkeypatch):
+    route = respx.get(HUB_USER_URL).respond(403)
+
+    now = 1000.0
+    monkeypatch.setattr(auth.time, "monotonic", lambda: now)
+    await auth.resolve_user("tok-1")
+
+    now += auth._NEG_CACHE_TTL + 1
+    await auth.resolve_user("tok-1")
+
     assert route.call_count == 2
+
+
+@respx.mock
+async def test_hub_unreachable_is_not_negatively_cached():
+    route = respx.get(HUB_USER_URL).mock(side_effect=httpx.ConnectError("boom"))
+
+    assert await auth.resolve_user("tok-1") is None
+    assert await auth.resolve_user("tok-1") is None
+
+    assert route.call_count == 2  # each request retried against the Hub
+    assert not auth._negative_cache
 
 
 @respx.mock
@@ -140,9 +166,31 @@ async def test_eviction_prefers_expired_entries(monkeypatch):
     await auth.resolve_user("tok-live")
     await auth.resolve_user("tok-new")  # at cap — must evict tok-old, not tok-live
 
-    assert "tok-old" not in auth._user_cache
-    assert "tok-live" in auth._user_cache
-    assert "tok-new" in auth._user_cache
+    assert auth._hash_token("tok-old") not in auth._user_cache
+    assert auth._hash_token("tok-live") in auth._user_cache
+    assert auth._hash_token("tok-new") in auth._user_cache
+
+
+@respx.mock
+async def test_cache_keys_are_hashed_not_raw_tokens():
+    respx.get(HUB_USER_URL).respond(200, json=hub_user_payload())
+
+    user = await auth.resolve_user("tok-secret")
+
+    assert "tok-secret" not in auth._user_cache
+    assert auth._hash_token("tok-secret") in auth._user_cache
+    # the user_info dict still carries the raw token — tools need it downstream
+    assert user["token"] == "tok-secret"
+
+
+@respx.mock
+async def test_negative_cache_keys_are_hashed_not_raw_tokens():
+    respx.get(HUB_USER_URL).respond(403)
+
+    await auth.resolve_user("tok-bad")
+
+    assert "tok-bad" not in auth._negative_cache
+    assert auth._hash_token("tok-bad") in auth._negative_cache
 
 
 @respx.mock
@@ -164,7 +212,13 @@ async def test_auth_metrics_record_each_result():
     route.respond(200, json=hub_user_payload())
     before = {
         r: _auth_counter_value(r)
-        for r in ("validated", "cache_hit", "invalid_token", "hub_unreachable")
+        for r in (
+            "validated",
+            "cache_hit",
+            "neg_cache_hit",
+            "invalid_token",
+            "hub_unreachable",
+        )
     }
 
     await auth.resolve_user("tok-1")  # validated
@@ -172,11 +226,13 @@ async def test_auth_metrics_record_each_result():
 
     route.respond(403)
     await auth.resolve_user("tok-bad")  # invalid_token
+    await auth.resolve_user("tok-bad")  # neg_cache_hit
 
     route.mock(side_effect=httpx.ConnectError("boom"))
     await auth.resolve_user("tok-down")  # hub_unreachable
 
     assert _auth_counter_value("validated") == before["validated"] + 1
     assert _auth_counter_value("cache_hit") == before["cache_hit"] + 1
+    assert _auth_counter_value("neg_cache_hit") == before["neg_cache_hit"] + 1
     assert _auth_counter_value("invalid_token") == before["invalid_token"] + 1
     assert _auth_counter_value("hub_unreachable") == before["hub_unreachable"] + 1

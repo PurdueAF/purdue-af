@@ -1,5 +1,7 @@
 """Tests for tools/profiles.py — values.yaml parsing, slugs, and caching."""
 
+import asyncio
+
 import pytest
 from agentic_helpers import register_tools
 from tools import profiles
@@ -158,6 +160,23 @@ async def test_get_profiles_force_refresh(monkeypatch):
     await profiles.get_profiles()
     await profiles.get_profiles(force=True)
     assert calls == 2
+
+
+async def test_get_profiles_concurrent_misses_fetch_once(monkeypatch):
+    """Concurrent cache misses are single-flighted — no ConfigMap dogpile."""
+    calls = 0
+
+    async def slow_read():
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0)  # yield so the other callers reach the lock
+        return VALUES_YAML
+
+    monkeypatch.setattr(profiles, "_read_configmap", slow_read)
+
+    results = await asyncio.gather(*(profiles.get_profiles() for _ in range(5)))
+    assert calls == 1
+    assert all(r == results[0] for r in results)
 
 
 async def test_get_profiles_stale_cache_fallback(monkeypatch):

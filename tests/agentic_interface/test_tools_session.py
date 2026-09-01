@@ -11,6 +11,8 @@ from tools import profiles, session
 
 USER_URL = f"{session.HUB_API_URL}/users/alice"
 SERVER_URL = f"{session.HUB_API_URL}/users/alice/server"
+# auth caches by sha256(token), never the raw token.
+TOK_KEY = auth._hash_token("tok-alice")
 
 
 class _Result:
@@ -183,6 +185,32 @@ async def test_status_vscode_active_marker(user_ctx):
 
 
 @respx.mock
+async def test_status_interface_scan_survives_renumbering(user_ctx):
+    """The interface key is found by scanning ("*-interface"), not hardcoded —
+    profile renumbering (e.g. "4-interface") must still mark VS Code active."""
+    respx.get(USER_URL).respond(200, json=server_payload(options={"4-interface": "2"}))
+
+    tools = register_tools(session).tools
+    out = await tools["get_session_status"]()
+
+    vscode_line = next(line for line in out.splitlines() if "VS Code" in line)
+    assert "← active" in vscode_line
+
+
+@respx.mock
+async def test_status_bare_interface_key(user_ctx):
+    respx.get(USER_URL).respond(
+        200, json=server_payload(options={"0-cpu": "1", "interface": "2"})
+    )
+
+    tools = register_tools(session).tools
+    out = await tools["get_session_status"]()
+
+    vscode_line = next(line for line in out.splitlines() if "VS Code" in line)
+    assert "← active" in vscode_line
+
+
+@respx.mock
 async def test_status_pending(user_ctx):
     respx.get(USER_URL).respond(200, json=server_payload(ready=False, pending="spawn"))
 
@@ -260,12 +288,12 @@ async def test_start_rejected_options_not_masked(user_ctx):
 @respx.mock
 async def test_start_session_clears_token_cache(user_ctx):
     respx.post(SERVER_URL).respond(201)
-    auth._user_cache["tok-alice"] = (9e9, {"username": "alice"})
+    auth._user_cache[TOK_KEY] = (9e9, {"username": "alice"})
 
     tools = register_tools(session).tools
     await tools["start_af_session"](FakeCtx())
 
-    assert "tok-alice" not in auth._user_cache
+    assert TOK_KEY not in auth._user_cache
 
 
 # ── start_af_session: elicitation flows ───────────────────────────────────────
@@ -418,13 +446,13 @@ async def test_start_gpu_question_unknown_keeps_all(user_ctx, monkeypatch):
 @respx.mock
 async def test_stop_session_clears_token_cache(user_ctx):
     respx.delete(SERVER_URL).respond(204)
-    auth._user_cache["tok-alice"] = (9e9, {"username": "alice"})
+    auth._user_cache[TOK_KEY] = (9e9, {"username": "alice"})
 
     tools = register_tools(session).tools
     out = await tools["stop_af_session"]()
 
     assert "Session is stopping" in out
-    assert "tok-alice" not in auth._user_cache
+    assert TOK_KEY not in auth._user_cache
 
 
 @respx.mock
@@ -442,7 +470,7 @@ async def test_stop_session_not_running(user_ctx):
 @respx.mock
 async def test_wait_returns_when_ready(user_ctx):
     respx.get(USER_URL).respond(200, json=server_payload(ready=True))
-    auth._user_cache["tok-alice"] = (9e9, {"username": "alice"})
+    auth._user_cache[TOK_KEY] = (9e9, {"username": "alice"})
 
     tools = register_tools(session).tools
     out = await tools["wait_for_session"]()
@@ -450,17 +478,46 @@ async def test_wait_returns_when_ready(user_ctx):
     assert "Session is running" in out
     assert "started: 2026-01-01T00:00:00Z" in out
     assert "pod:" not in out
-    assert "tok-alice" not in auth._user_cache  # cache invalidated
+    assert TOK_KEY not in auth._user_cache  # cache invalidated
+
+
+def _fake_clock(monkeypatch):
+    """Drive wait_for_session's clock manually so timeout tests don't sleep."""
+    clock = {"t": 0.0}
+
+    async def fake_sleep(seconds):
+        clock["t"] += seconds
+
+    monkeypatch.setattr(session.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(
+        session, "time", types.SimpleNamespace(monotonic=lambda: clock["t"])
+    )
+    return clock
 
 
 @respx.mock
-async def test_wait_times_out(user_ctx):
+async def test_wait_times_out(user_ctx, monkeypatch):
+    _fake_clock(monkeypatch)
     respx.get(USER_URL).respond(200, json=server_payload(ready=False))
 
     tools = register_tools(session).tools
     out = await tools["wait_for_session"](timeout_seconds=0)
 
-    assert "did not become ready" in out
+    # 0 is clamped up to the 1 s minimum, then times out.
+    assert "did not become ready within 1 s" in out
+
+
+@respx.mock
+async def test_wait_timeout_is_clamped_to_600s(user_ctx, monkeypatch):
+    """A huge timeout must not hold the request open indefinitely."""
+    clock = _fake_clock(monkeypatch)
+    respx.get(USER_URL).respond(200, json=server_payload(ready=False))
+
+    tools = register_tools(session).tools
+    out = await tools["wait_for_session"](timeout_seconds=100_000)
+
+    assert "did not become ready within 600 s" in out
+    assert clock["t"] == 600  # polling stopped exactly at the cap
 
 
 # ── restart_af_session ────────────────────────────────────────────────────────
@@ -514,12 +571,12 @@ async def test_restart_clears_token_cache_after_stop(user_ctx, monkeypatch):
     respx.get(USER_URL).respond(200, json=server_payload())
     respx.delete(SERVER_URL).respond(204)
     respx.post(SERVER_URL).respond(201)
-    auth._user_cache["tok-alice"] = (9e9, {"username": "alice"})
+    auth._user_cache[TOK_KEY] = (9e9, {"username": "alice"})
 
     tools = register_tools(session).tools
     await tools["restart_af_session"]()
 
-    assert "tok-alice" not in auth._user_cache
+    assert TOK_KEY not in auth._user_cache
 
 
 @respx.mock
