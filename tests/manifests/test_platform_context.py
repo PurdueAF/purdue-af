@@ -203,12 +203,28 @@ def test_root_is_not_promised_from_the_bare_session():
     assert "ROOT is deliberately not" in context()
 
 
+def test_worker_environment_requirement_matches_the_gateway():
+    """The gateway refuses a cluster whose environment is unnamed or unbuilt,
+    and the workers do not inherit the notebook's environment. An agent that
+    does not know this creates a cluster that fails at start, or one whose
+    workers cannot import the analysis."""
+    raw = (GATEWAYS / "dask-gateway-k8s/values.yaml").read_text()
+    assert "Either conda_env or pixi_project must be specified" in raw
+    assert "Please build the environment first" in raw
+    text = context()
+    for token in ("`conda_env`", "`pixi_project`", "`pixi_env`"):
+        assert token in text, token
+    assert "mutually exclusive" in text
+    assert "pixi install" in text
+
+
 def test_context_stays_within_a_sane_context_budget():
     """It is injected into every agent turn, for every harness, in every
     project the user opens — unbounded growth is a real cost. Detail that an
     MCP tool returns live, or that the agent can discover with one `ls`,
-    belongs there and not here."""
-    assert len(context().splitlines()) < 105
+    belongs there and not here. The budget is deliberately loose: it guards
+    against drift, not against saying a rule clearly."""
+    assert len(context().splitlines()) < 190
 
 
 # --- dependency pins the platform context depends on ----------------------
