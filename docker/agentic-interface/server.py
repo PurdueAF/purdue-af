@@ -48,8 +48,8 @@ TOKEN_URL = (
 #
 # An MCP client that is refused here shows the user nothing but the HTTP
 # status and (at best) this body, so the body must carry the whole diagnosis:
-# what was wrong with the credential and what to do about it. The `error`
-# strings are stable — the skill and the docs quote them.
+# what was wrong with the credential and what to do about it. Nothing else
+# documents these messages — they are the single source of truth.
 
 # What a client sends when the token it was configured with was never filled
 # in: an unexpanded ${VAR}/$VAR/%VAR%, or a placeholder copied from the docs.

@@ -378,7 +378,9 @@ def test_skill_keeps_what_descriptions_cannot_carry():
     skill = (REPO / SKILL_SOURCE).read_text()
     assert "never `du`" in skill  # routing against the shell
     assert "kill the process you are running" in skill  # destructive warning
-    assert "When something fails" in skill  # failure-mode mapping
+    # No failure-mode table: tool results and refusals are self-describing,
+    # and a table here would drift from the messages in the code.
+    assert "Authentication errors" not in skill
 
 
 def test_bundled_python_scripts_do_not_use_the_system_interpreter():
