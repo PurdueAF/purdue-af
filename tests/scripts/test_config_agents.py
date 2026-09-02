@@ -243,6 +243,67 @@ def test_opencode_instructions_are_omitted_when_the_context_is_missing(
     assert "mcp" in config, "the MCP server must still be registered"
 
 
+@pytest.fixture(scope="session")
+def managed_block():
+    from common import load_script
+
+    return load_script(
+        REPO / "docker/purdue-af/scripts/managed-block.py", "managed_block"
+    )
+
+
+# --- retiring the opencode AGENTS.md written by an earlier image -----------
+
+
+OPENCODE_AGENTS_MD = ".config/opencode/AGENTS.md"
+
+
+def test_a_stale_opencode_agents_md_is_removed(run_script, agent_home, managed_block):
+    """Homes are persistent. An earlier image wrote the context here, so simply
+    dropping the target would leave every existing user loading it alongside
+    `instructions` — the doubling forever, fixed only for new homes."""
+    stale = agent_home / OPENCODE_AGENTS_MD
+    stale.parent.mkdir(parents=True)
+    stale.write_text(managed_block.apply_block("", "old platform context\n"))
+    result, _ = run_script()
+    assert result.returncode == 0
+    assert not stale.exists(), "the stale managed file should be gone entirely"
+
+
+def test_retiring_it_keeps_anything_the_user_wrote(
+    run_script, agent_home, managed_block
+):
+    """It was a user-owned file with a block of ours in it. Removing our part
+    must not take their part with it."""
+    stale = agent_home / OPENCODE_AGENTS_MD
+    stale.parent.mkdir(parents=True)
+    stale.write_text(
+        managed_block.apply_block("# My notes\n\nAlways use pytest -x.\n", "old\n")
+    )
+    run_script()
+    assert stale.is_file(), "a file with user content must survive"
+    after = stale.read_text()
+    assert "Always use pytest -x." in after
+    assert managed_block.BEGIN not in after
+    assert "old" not in after
+
+
+def test_an_unmanaged_opencode_agents_md_is_never_touched(run_script, agent_home):
+    """A file the user wrote themselves, with no block of ours, is theirs."""
+    mine = agent_home / OPENCODE_AGENTS_MD
+    mine.parent.mkdir(parents=True)
+    mine.write_text("# entirely mine\n")
+    run_script()
+    assert mine.read_text() == "# entirely mine\n"
+
+
+def test_retiring_a_file_that_was_never_there_is_not_fatal(run_script, agent_home):
+    """The common case after the first migrated start: nothing to do."""
+    result, _ = run_script()
+    assert result.returncode == 0
+    assert not (agent_home / OPENCODE_AGENTS_MD).exists()
+
+
 def test_opencode_config_is_exported_so_the_session_picks_it_up(run_script):
     """NAMESPACE is templated per deployment and the path depends on the
     session user, so this cannot be a Dockerfile ENV. start.sh sources the hook
@@ -460,15 +521,6 @@ def test_agent_files_are_image_inputs():
 
 
 # --- the managed section in user-owned agent files ------------------------
-
-
-@pytest.fixture(scope="session")
-def managed_block():
-    from common import load_script
-
-    return load_script(
-        REPO / "docker/purdue-af/scripts/managed-block.py", "managed_block"
-    )
 
 
 SECTION = "## Purdue Analysis Facility\n\nAF content.\n"
