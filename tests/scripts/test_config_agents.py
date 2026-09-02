@@ -179,6 +179,27 @@ def test_opencode_config_is_a_separate_layer_not_the_users_file(run_script, agen
     assert not (agent_home / ".config/opencode/opencode.json").exists()
 
 
+def test_opencode_config_is_written_with_privileges_dropped(run_script):
+    """~/.config lives in a persistent home the user controls between sessions,
+    so they can replace it with a symlink before restarting. A root mkdir and
+    redirect would follow that symlink, and a bare `chown` on it dereferences —
+    handing the user ownership of whatever it points at. Everything under
+    ~/.config is therefore written as the session user, and nothing chowns it
+    back."""
+    hook = SCRIPT.read_text()
+    assert "_as_user \"mkdir -p '${NEW_HOME}/.config/opencode'" in hook, (
+        "the opencode config must be written as the user, not as root"
+    )
+    assert "${NEW_HOME}/.config" not in hook.split("chown -R")[-1], (
+        "nothing under ~/.config may be chowned: chown dereferences a symlink "
+        "the user planted there"
+    )
+    for line in hook.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("chown ") and not stripped.startswith("chown -R"):
+            raise AssertionError(f"non-recursive chown dereferences symlinks: {line}")
+
+
 def test_opencode_config_is_exported_so_the_session_picks_it_up(run_script):
     """NAMESPACE is templated per deployment and the path depends on the
     session user, so this cannot be a Dockerfile ENV. start.sh sources the hook

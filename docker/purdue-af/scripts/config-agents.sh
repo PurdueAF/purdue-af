@@ -91,8 +91,15 @@ _config_agents() {
 	# AGENTS.md suppresses the global one, and the guardrails would vanish exactly
 	# where an analysis repo needs them.
 	OPENCODE_CFG="${NEW_HOME}/.config/opencode/purdue-af.json"
+	# Written AS THE USER. This path runs through ~/.config, which lives in a
+	# persistent home the user can replace with a symlink between sessions: a
+	# root mkdir and redirect would follow it, and a root `chown` on it would
+	# dereference it and hand them ownership of whatever it points at (/etc,
+	# say). Dropping privileges first makes the question moot and removes the
+	# need to chown anything back afterwards.
+	#
 	# The heredoc is unquoted so ${MCP_URL} expands; \$schema must not.
-	if mkdir -p "${NEW_HOME}/.config/opencode" && cat >"${OPENCODE_CFG}" <<-JSON
+	if _as_user "mkdir -p '${NEW_HOME}/.config/opencode' && cat >'${OPENCODE_CFG}'" <<-JSON
 		{
 		  "\$schema": "https://opencode.ai/config.json",
 		  "instructions": ["${AGENT_SECTION}"],
@@ -109,12 +116,6 @@ _config_agents() {
 		}
 	JSON
 	then
-		# Written as root, so hand both directories back: ~/.config may not have
-		# existed, and a root-owned one would block every later write the user
-		# makes anywhere under it. Non-recursive on ~/.config itself — it is
-		# shared with unrelated tools whose ownership is not ours to rewrite.
-		chown "${NB_USER}:users" "${NEW_HOME}/.config" 2>/dev/null || true
-		chown -R "${NB_USER}:users" "${NEW_HOME}/.config/opencode" 2>/dev/null || true
 		# Exported, not baked into the image: NAMESPACE is templated per
 		# deployment and the path depends on the session user. start.sh sources
 		# this hook and then execs `sudo --preserve-env`, so the export reaches
@@ -165,8 +166,10 @@ _config_agents() {
 				echo "config-agents: WARNING could not update ${target}" >&2
 			fi
 		done
-		chown -R "${NB_USER}:users" \
-			"${NEW_HOME}/.claude" "${NEW_HOME}/.codex" "${NEW_HOME}/.config/opencode" \
+		# .claude only: the skill `cp -r` above runs as root. managed-block.py
+		# runs as the user and creates its own parent directories, so nothing
+		# under ~/.config needs its ownership rewritten.
+		chown -R "${NB_USER}:users" "${NEW_HOME}/.claude" "${NEW_HOME}/.codex" \
 			2>/dev/null || true
 	else
 		echo "config-agents: no bundled agent section, skipping" >&2
