@@ -5,6 +5,7 @@ component that no longer exists — fails here instead of quietly rendering
 `resource not found` in the README."""
 
 import json
+import re
 
 import pytest
 import yaml
@@ -224,6 +225,27 @@ def test_af_image_version_is_read_from_values_yaml(cs):
     version = cs.af_image_version()
     assert version is not None, "docker_image_tag no longer matches"
     assert version in (REPO / cs.VALUES_YAML).read_text()
+
+
+def test_agentic_version_is_read_from_the_deployment(cs):
+    """The regex must track the real manifest: a `latest` pin (pre-release)
+    reads as None; a released pin reads back exactly."""
+    text = (REPO / cs.AGENTIC_DEPLOYMENT).read_text()
+    version = cs.agentic_interface_version()
+    if re.search(r"/agentic-interface:latest\s*$", text, re.MULTILINE):
+        assert version is None
+    else:
+        assert version is not None, "image pin no longer matches the regex"
+        assert f"/agentic-interface:{version}" in text
+
+
+def test_versioned_badge_leads_with_the_version(cs):
+    payload = cs.badge("agentic-interface", "deployed", 0, "1.2.3")
+    assert payload["message"] == "1.2.3 · deployed"
+    payload = cs.badge("agentic-interface", "awaiting release", 2, "1.2.3")
+    assert payload["message"] == "1.2.3 · awaiting release · 2"
+    # unversioned badges are unchanged
+    assert cs.badge("x", "deployed", 0)["message"] == "deployed"
 
 
 def test_latest_platform_tag_is_calver(cs):

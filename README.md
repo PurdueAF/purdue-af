@@ -73,7 +73,9 @@ Whether each component on the cluster is running what is on `main`
 ![model-manager][experimental-sonic-model-manager]
 
 **Images** — `purdue-af` is released on its own semver stream and pinned at
-![AF image][af-image-version]; most aux images ride `:latest`.
+![AF image][af-image-version]. `agentic-interface` is auto-versioned (every
+change mints the next version — see [RELEASING.md](RELEASING.md)); its badge
+leads with the deployed version. The other aux images ride `:latest`.
 `interlink-slurm-plugin` is pinned to its upstream plugin ref (`PLUGIN_REF`).
 
 ![purdue-af][image-purdue-af]
@@ -91,6 +93,7 @@ Reading the badges:
 - `validating` — CI has not finished on those commits yet
 - `failed CI` — do not release; the drift is broken
 - the trailing number is how many commits it has moved since it was deployed
+- a leading `X.Y.Z` is the deployed version, for images on a version stream
 
 Recomputed hourly and after every CI run by
 [`component-status.yml`](.github/workflows/component-status.yml); the badge

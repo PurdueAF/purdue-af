@@ -47,10 +47,12 @@ CHANNELS = {
     "experimental": Path("deploy/experimental/kustomization.yaml"),
 }
 IMAGE_INPUTS = Path(".github/workflows/image-inputs.sh")
-# Images ci-images.yml builds. purdue-af ships on a semver stream of its own;
-# most aux images ride :latest (publish moves it with main-validated).
-# interlink-slurm-plugin is pinned to PLUGIN_REF but still rebuilt whenever
-# its input tree changes, so main-validated remains a useful deployed ref.
+# Images ci-images.yml builds. purdue-af ships on a hand-minted semver stream;
+# agentic-interface on an auto-minted one (its Deployment pins the version and
+# its badge shows it). The remaining aux images ride :latest (publish moves it
+# with main-validated). interlink-slurm-plugin is pinned to PLUGIN_REF but
+# still rebuilt whenever its input tree changes, so main-validated remains a
+# useful deployed ref.
 CI_IMAGES = [
     "purdue-af",
     "agentic-interface",
@@ -60,6 +62,7 @@ CI_IMAGES = [
     "interlink-slurm-plugin",
 ]
 VALUES_YAML = Path("apps/jupyterhub/jupyterhub/values.yaml")
+AGENTIC_DEPLOYMENT = Path("apps/agentic-interface/deployment.yaml")
 
 COLORS = {
     "deployed": "brightgreen",
@@ -220,10 +223,15 @@ def label_for(component: str) -> str:
     return LABEL_OVERRIDES.get(component, Path(component).name)
 
 
-def badge(label: str, status: str, ahead: int) -> dict[str, Any]:
+def badge(
+    label: str, status: str, ahead: int, version: str | None = None
+) -> dict[str, Any]:
     """One badge per component per channel — self-describing, since the README
-    lists them as a bare wall with no surrounding text."""
+    lists them as a bare wall with no surrounding text. Versioned images lead
+    with their deployed version."""
     message = status if not ahead else f"{status} · {ahead}"
+    if version:
+        message = f"{version} · {message}"
     return {
         "schemaVersion": 1,
         "label": label,
@@ -249,6 +257,14 @@ def image_paths(name: str) -> list[str]:
 def af_image_version() -> str | None:
     text = (REPO / VALUES_YAML).read_text()
     m = re.search(r'docker_image_tag: "(\d+\.\d+\.\d+)"', text)
+    return m.group(1) if m else None
+
+
+def agentic_interface_version() -> str | None:
+    """The version the agentic-interface Deployment pins (auto-released by the
+    ci.yml publish stage). None while the pin is still `latest` (pre-release)."""
+    text = (REPO / AGENTIC_DEPLOYMENT).read_text()
+    m = re.search(r"/agentic-interface:(\d+\.\d+\.\d+)\s*$", text, re.MULTILINE)
     return m.group(1) if m else None
 
 
@@ -290,11 +306,19 @@ def main() -> int:
     # images are their own stream, not part of either Flux channel
     version = af_image_version()
     af_tag = f"v{version}" if version else None
+    agentic_version = agentic_interface_version()
+    agentic_tag = f"agentic-interface-v{agentic_version}" if agentic_version else None
+    versions: dict[tuple[str, str], str] = {}
     for name in CI_IMAGES:
         if name == "purdue-af":
             if not (af_tag and ref_exists(af_tag)):
                 continue
             deployed_ref = af_tag
+        elif name == "agentic-interface" and agentic_tag and ref_exists(agentic_tag):
+            # auto-released stream: drift is measured against the release the
+            # Deployment pins, and the badge leads with that version
+            deployed_ref = agentic_tag
+            versions[("image", name)] = agentic_version or ""
         else:
             deployed_ref = validated
         paths = image_paths(name)
@@ -309,7 +333,12 @@ def main() -> int:
             write_badge(
                 args.out,
                 slugify(channel, component),
-                badge(label_for(component), status, ahead),
+                badge(
+                    label_for(component),
+                    status,
+                    ahead,
+                    versions.get((channel, component)),
+                ),
             )
         pending = sum(1 for row in rows if row[2] != "deployed")
         write_badge(
