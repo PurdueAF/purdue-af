@@ -69,14 +69,5 @@ the active one marked. Present them as clickable links — that is what the user
 actually wants when they ask about their session. It works with no session
 running too; the links land on the spawn form.
 
-## Authentication errors
-
-| Symptom | Cause |
-|---|---|
-| `{"error":"Missing Bearer token"}` | No Authorization header reached the server — check the MCP server config (outside an AF session, the token file it reads) |
-| `{"error":"Invalid JupyterHub token"}` | Token expired. Inside an AF session, restart the session; outside one, mint a new token at `/hub/token` |
-| `"No active session"` in result | Pod not running — use `start_af_session` |
-| HTTP 404 on the service URL | Service not deployed or not registered with JupyterHub |
-
 Deployment details, and how to call the endpoint by hand, are in
 [apps/agentic-interface/README.md](../../../apps/agentic-interface/README.md).

@@ -2,8 +2,11 @@
 
 Metric families:
   purdue_af_mcp_api_calls_total          HTTP requests by route/status
-  purdue_af_mcp_jsonrpc_requests_total   MCP messages by JSON-RPC method/username
   purdue_af_mcp_tool_calls_total         tool invocations by tool/outcome/username
+                                         (success | needs_input | user_error |
+                                          auth_error | upstream_error |
+                                          exception — the errors.Failure
+                                          subclass raised)
   purdue_af_mcp_tool_duration_seconds    tool invocation latency by tool
   purdue_af_mcp_upstream_requests_total  outbound backend requests by target/outcome
   purdue_af_mcp_upstream_duration_seconds  outbound backend latency by target
@@ -19,12 +22,19 @@ from typing import Any, Callable, Union
 
 import httpx
 from context import current_user
+from errors import Failure, invalid_arguments, unexpected_failure
+from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.exceptions import ToolError
+from mcp.shared.exceptions import UrlElicitationRequiredError
+from mcp.types import TextContent
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     Counter,
     Histogram,
     generate_latest,
 )
+from pydantic import ValidationError
+from tools.elicitation import NeedsChoices
 
 logger = logging.getLogger("agentic.tools")
 
@@ -32,13 +42,6 @@ API_CALLS_TOTAL = Counter(
     "purdue_af_mcp_api_calls_total",
     "Total HTTP requests to the Purdue AF MCP server",
     ["route", "status"],
-)
-
-JSONRPC_REQUESTS_TOTAL = Counter(
-    "purdue_af_mcp_jsonrpc_requests_total",
-    "MCP JSON-RPC messages received, by protocol method "
-    "(tools/call, tools/list, initialize, notifications/…)",
-    ["method", "username"],
 )
 
 TOOL_CALLS_TOTAL = Counter(
@@ -74,41 +77,9 @@ AUTH_TOTAL = Counter(
     ["result"],
 )
 
-# The JSON-RPC `method` label comes straight from the client's POST body, so
-# clamp it to the known MCP protocol methods (plus the synthetic 'response' /
-# 'invalid' labels from server._jsonrpc_methods) — otherwise a client could
-# mint unbounded Prometheus label cardinality with arbitrary method strings.
-_KNOWN_JSONRPC_METHODS = frozenset(
-    {
-        "initialize",
-        "ping",
-        "tools/list",
-        "tools/call",
-        "resources/list",
-        "resources/read",
-        "resources/templates/list",
-        "prompts/list",
-        "prompts/get",
-        "completion/complete",
-        "logging/setLevel",
-        "notifications/initialized",
-        "notifications/cancelled",
-        "notifications/progress",
-        "notifications/roots/list_changed",
-        "response",
-        "invalid",
-    }
-)
-
 
 def record_request(route: str, status: int) -> None:
     API_CALLS_TOTAL.labels(route=route, status=str(status)).inc()
-
-
-def record_jsonrpc(method: str, username: str) -> None:
-    if method not in _KNOWN_JSONRPC_METHODS:
-        method = "other"
-    JSONRPC_REQUESTS_TOTAL.labels(method=method, username=username).inc()
 
 
 def record_tool_call(tool: str, outcome: str, username: str) -> None:
@@ -124,58 +95,69 @@ def record_auth(result: str) -> None:
     AUTH_TOTAL.labels(result=result).inc()
 
 
-# Substrings that mark a tool error string as a backend failure rather than
-# a user mistake.  Matches the error-string conventions used across tools/
-# ("… unreachable — …", "… returned HTTP …", "Error: HTTP …",
-#  "… connection failed …", "Could not …", "… misconfigured …").
-_UPSTREAM_MARKERS = (
-    "unreachable",
-    "connection failed",
-    "returned http",
-    "error: http",
-    "could not",
-    "misconfigured",
-)
-
-
-def tool_outcome(result: Any) -> str:
-    """Classify a tool return value.
-
-    Returns 'success', 'user_error' (bad input / nothing running), or
-    'upstream_error' (a backend the tool depends on failed).  Exceptions are
-    recorded separately as 'exception' by instrument_mcp.
-    """
-    if not isinstance(result, str):
-        return "success"
-    if not result.startswith(("Error", "Unknown ", "Could not")):
-        return "success"
-    lowered = result.lower()
-    if any(marker in lowered for marker in _UPSTREAM_MARKERS):
-        return "upstream_error"
-    return "user_error"
-
-
 def _username() -> str:
     user = current_user.get(None)
     return (user or {}).get("username") or "unknown"
 
 
-def instrument_mcp(mcp: Any) -> None:
-    """Record metrics and a structured log line on every MCP tool invocation.
+def _translate(name: str, username: str, exc: Exception) -> tuple[Exception, str]:
+    """Decide what a tool's exception means: ``(exception to raise, outcome)``.
 
-    This monkeypatches the SDK-private ``mcp._tool_manager.call_tool``; fail
-    loudly at instrumentation time if an SDK upgrade moved that attribute, so
-    tool metrics can't silently disappear.
+    Tools raise errors.Failure subclasses, which FastMCP wraps in a generic
+    ToolError ("Error executing tool X: …") on the way out; unwrap those so
+    the user reads our message. Anything else is either the caller's
+    arguments (pydantic) or a fault in this service — the one place that sees
+    the original exception, so it is logged with its traceback here.
     """
-    tool_manager = getattr(mcp, "_tool_manager", None)
-    original_call_tool = getattr(tool_manager, "call_tool", None)
-    if tool_manager is None or original_call_tool is None:
-        raise RuntimeError(
-            "instrument_mcp: FastMCP no longer exposes _tool_manager.call_tool "
-            "— the MCP SDK's tool dispatch moved; update the instrumentation "
-            "in metrics.py to match the new SDK layout."
+    if isinstance(exc, UrlElicitationRequiredError):
+        # carries its own protocol semantics (error code -32042)
+        return exc, "elicitation_required"
+    cause = exc.__cause__ if isinstance(exc, ToolError) and exc.__cause__ else exc
+    if isinstance(cause, Failure):
+        logger.info("tool_call tool=%s user=%s failed: %s", name, username, cause)
+        return cause, cause.outcome
+    if isinstance(cause, ValidationError):
+        logger.warning(
+            "tool_call tool=%s user=%s invalid arguments: %s", name, username, cause
         )
+        return invalid_arguments(name, cause), "user_error"
+    if isinstance(exc, ToolError) and exc.__cause__ is None:
+        # Raised deliberately by the SDK with a complete message (unknown tool).
+        logger.warning("tool_call tool=%s user=%s refused: %s", name, username, exc)
+        return exc, "user_error"
+    logger.exception("tool_call tool=%s user=%s raised", name, username)
+    return unexpected_failure(name, cause), "exception"
 
+
+class InstrumentedFastMCP(FastMCP):
+    """FastMCP that records metrics and a structured log line per tool call.
+
+    ``call_tool`` is the SDK's public dispatch entry point (the low-level
+    server calls it for every tools/call), so overriding it here needs no
+    private attributes. It is also where a tool's NeedsChoices becomes an
+    ordinary result: the help text is an instruction to the agent, not an
+    error.
+    """
+
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        username = _username()
+        start = time.monotonic()
+        try:
+            result = await super().call_tool(name, arguments)
+        except Exception as exc:
+            cause = exc.__cause__ if isinstance(exc, ToolError) else None
+            if isinstance(cause, NeedsChoices):
+                self._record(name, "needs_input", username, start)
+                return [TextContent(type="text", text=str(cause))]
+            failure, outcome = _translate(name, username, exc)
+            self._record(name, outcome, username, start)
+            if failure is exc:
+                raise
+            raise failure from None
+        self._record(name, "success", username, start)
+        return result
+
+    @staticmethod
     def _record(name: str, outcome: str, username: str, start: float) -> None:
         elapsed = time.monotonic() - start
         TOOL_DURATION.labels(tool=name).observe(elapsed)
@@ -187,29 +169,6 @@ def instrument_mcp(mcp: Any) -> None:
             outcome,
             elapsed * 1000,
         )
-
-    async def call_tool(
-        name: str,
-        arguments: dict[str, Any],
-        context: Any = None,
-        convert_result: bool = False,
-    ) -> Any:
-        username = _username()
-        start = time.monotonic()
-        try:
-            result = await original_call_tool(
-                name,
-                arguments,
-                context=context,
-                convert_result=convert_result,
-            )
-        except Exception:
-            _record(name, "exception", username, start)
-            raise
-        _record(name, tool_outcome(result), username, start)
-        return result
-
-    tool_manager.call_tool = call_tool
 
 
 class _InstrumentedTransport(httpx.AsyncBaseTransport):

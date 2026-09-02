@@ -77,6 +77,24 @@ async def elicit(ctx: Any, message: str, schema: type[BaseModel]) -> tuple[str, 
     return action, None
 
 
+class NeedsChoices(Exception):
+    """A choice could not be collected interactively.
+
+    Carries the text the tool hands back instead of a result: everything the
+    agent needs to ask the user in chat and call again with explicit
+    arguments. Raised by ``ask`` and turned into an ordinary (non-error)
+    result by the server, so no tool has to check elicitation statuses.
+    """
+
+
+async def ask(ctx: Any, message: str, schema: type[BaseModel], help_text: str) -> Any:
+    """``elicit`` that returns the submitted data or raises NeedsChoices."""
+    status, data = await elicit(ctx, message, schema)
+    if status != "accept":
+        raise NeedsChoices(help_text)
+    return data
+
+
 def single_choice_model(
     model_name: str,
     keys: list[str],

@@ -7,9 +7,10 @@ import pytest
 
 # The service is a flat application (server.py, auth.py, tools/), not an
 # installed package — make its directory importable before anything else.
-sys.path.insert(
-    0, str(Path(__file__).resolve().parents[2] / "docker" / "agentic-interface")
-)
+_REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO / "docker" / "agentic-interface"))
+# gpu_queries.py is shared with the hub config and copied into the image.
+sys.path.insert(1, str(_REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles"))
 
 import auth  # noqa: E402
 from agentic_helpers import USER  # noqa: E402

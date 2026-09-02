@@ -34,3 +34,34 @@ def register_tools(module):
     recorder = ToolRecorder()
     module.register(recorder)
     return recorder
+
+
+async def failure(awaitable):
+    """Await a tool call that must fail; return the failure's message.
+
+    Tools raise errors.Failure (an MCP ToolError) instead of returning error
+    strings, so tests that assert on a failure message go through here.
+    """
+    from errors import Failure
+
+    try:
+        result = await awaitable
+    except Failure as exc:
+        return str(exc)
+    raise AssertionError(f"tool call succeeded instead of failing: {result!r}")
+
+
+async def needs_choices(awaitable):
+    """Await a tool call that must ask for choices; return the help text.
+
+    Tools raise NeedsChoices when a choice could not be elicited; the server
+    turns it into an ordinary result, so tests that call tools directly go
+    through here.
+    """
+    from tools.elicitation import NeedsChoices
+
+    try:
+        result = await awaitable
+    except NeedsChoices as exc:
+        return str(exc)
+    raise AssertionError(f"tool call did not ask for choices: {result!r}")

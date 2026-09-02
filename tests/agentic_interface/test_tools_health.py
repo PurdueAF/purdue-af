@@ -1,47 +1,53 @@
 """Tests for tools/health.py — the "is the AF healthy" answer.
 
-The tool reads whatever Prometheus is firing, so these stub Prometheus and
-assert on the resulting prose. Properties that matter more than wording:
-a warning must not make the facility look **Degraded**, storage slowness
-must show as **Impaired** with a per-component line, mount failures are
-warnings (Impaired) not errors, an unknown must not look healthy, and no
-other user's alert may ever appear."""
+The tool reads whatever Prometheus is firing (its alerts endpoint, which
+carries each rule's rendered ``annotations.summary``), so these stub that
+endpoint and assert on the resulting prose. Properties that matter more than
+wording: a warning must not make the facility look **Degraded**, storage
+slowness must show as **Impaired** with a per-component line, mount failures
+are warnings (Impaired) not errors, an unknown must not look healthy, the
+rule's own summary is what the user reads, and no other user's alert may
+ever appear."""
 
 import time
+from datetime import datetime, timezone
 
 import pytest
 import respx
-from agentic_helpers import register_tools
+from agentic_helpers import failure, register_tools
 from context import current_user
-from httpx import Response
+from httpx import ConnectError, Response
 from tools import health
 
 PROM_URL = f"{health.PROMETHEUS_URL}/api/v1/query"
+ALERTS_URL = f"{health.PROMETHEUS_URL}/api/v1/alerts"
 NOW = time.time()
 
 
-def series(name, severity, component, **labels):
+def alert(name, severity, component, summary=None, active_at=None, **labels):
+    """One firing alert as Prometheus's /api/v1/alerts reports it."""
+    when = datetime.fromtimestamp(active_at or NOW, tz=timezone.utc)
     return {
-        "metric": {
+        "labels": {
             "alertname": name,
             "severity": severity,
             "component": component,
             **labels,
         },
-        "value": [NOW, "1"],
+        "annotations": {"summary": summary or name},
+        "state": "firing",
+        "activeAt": when.strftime("%Y-%m-%dT%H:%M:%S.123456789Z"),
+        "value": "1",
     }
 
 
-def prom(firing=(), since=(), recent=(), home_util=0.41, home_kb=25 * 1024 * 1024):
-    """Route each query this tool makes to a canned result."""
+def mock_prometheus(firing=(), recent=(), home_util=0.41, home_kb=25 * 1024 * 1024):
+    """Route the alerts endpoint and each instant query to a canned result."""
+    respx.get(ALERTS_URL).respond(200, json={"data": {"alerts": list(firing)}})
 
     def responder(request):
         query = request.url.params.get("query", "")
-        if 'alertstate="firing"' in query:
-            result = list(firing)
-        elif query == "ALERTS_FOR_STATE":
-            result = list(since)
-        elif "changes" in query:
+        if "changes" in query:
             result = list(recent)
         elif "af_home_dir_util" in query:
             result = [{"value": [NOW, str(home_util)]}] if home_util is not None else []
@@ -51,13 +57,13 @@ def prom(firing=(), since=(), recent=(), home_util=0.41, home_kb=25 * 1024 * 102
             result = []
         return Response(200, json={"data": {"result": result}})
 
-    return responder
+    respx.get(PROM_URL).mock(side_effect=responder)
 
 
 async def run(**kwargs):
     tools = register_tools(health)
     with respx.mock:
-        respx.get(PROM_URL).mock(side_effect=prom(**kwargs))
+        mock_prometheus(**kwargs)
         return await tools.tools["get_facility_health"]()
 
 
@@ -72,16 +78,24 @@ async def test_healthy_when_nothing_is_firing(user_ctx):
 async def test_warning_alone_does_not_degrade_the_facility(user_ctx):
     """A warning must not turn the headline to Degraded, or it stops meaning
     anything — but it also must not claim Healthy when storage is slow."""
-    out = await run(firing=[series("AFMountHealthUnknown", "warning", "data")])
+    out = await run(firing=[alert("AFMountHealthUnknown", "warning", "data")])
     assert "**Degraded**" not in out
 
 
 @pytest.mark.asyncio
 async def test_unknown_storage_is_not_reported_as_healthy(user_ctx):
-    out = await run(firing=[series("AFMountHealthUnknown", "warning", "data")])
+    out = await run(
+        firing=[
+            alert(
+                "AFMountHealthUnknown",
+                "warning",
+                "data",
+                summary="Data access unknown for eos on node n1",
+            )
+        ]
+    )
     assert "**Partly unknown**" in out
-    assert "unknown" in out
-    assert "offline nodes are omitted" in out
+    assert "Data access unknown for eos on node n1" in out
 
 
 @pytest.mark.asyncio
@@ -89,7 +103,14 @@ async def test_mount_slow_is_impaired_not_healthy(user_ctx):
     """Elevated metadata latency is felt by users; reporting Healthy with a
     buried warning is how the MCP used to miss EOS slowdowns."""
     many = [
-        series("AFMountSlow", "warning", "data", mount_name="eos", node=f"n{i}")
+        alert(
+            "AFMountSlow",
+            "warning",
+            "data",
+            summary=f"eos is slow on node n{i}",
+            mount_name="eos",
+            node=f"n{i}",
+        )
         for i in range(14)
     ]
     out = await run(firing=many)
@@ -98,9 +119,9 @@ async def test_mount_slow_is_impaired_not_healthy(user_ctx):
     assert "**Degraded**" not in out
     assert "Nothing is failing" not in out
     assert "**Data access**" in out
-    assert "eos is slow" in out
-    assert "14 nodes" in out
-    assert "will crawl" in out
+    # the rule's own summary, plus the scale the summary cannot express
+    assert "eos is slow on node n0" in out
+    assert "and 13 more, 14 nodes affected" in out
 
 
 @pytest.mark.asyncio
@@ -108,14 +129,7 @@ async def test_own_quota_warning_does_not_impair_the_facility(user_ctx):
     """Home quota is already reported as a percent; it must not flip the
     facility headline."""
     out = await run(
-        firing=[
-            series(
-                "AFHomeDirUtilHigh",
-                "warning",
-                "storage",
-                username="alice",
-            )
-        ],
+        firing=[alert("AFHomeDirUtilHigh", "warning", "storage", username="alice")],
         home_util=0.93,
     )
     assert "**Healthy**" in out
@@ -124,7 +138,7 @@ async def test_own_quota_warning_does_not_impair_the_facility(user_ctx):
 
 @pytest.mark.asyncio
 async def test_error_degrades_the_facility(user_ctx):
-    out = await run(firing=[series("AFHubDown", "critical", "access")])
+    out = await run(firing=[alert("AFHubDown", "critical", "access")])
     assert "**Degraded**" in out
 
 
@@ -133,45 +147,41 @@ async def test_mount_invalid_is_impaired_not_degraded(user_ctx):
     """Mount failures are often transient EOS/NFS blips — warn, don't page
     the facility as Degraded."""
     out = await run(
-        firing=[series("AFMountInvalid", "warning", "data", mount_name="eos")]
+        firing=[
+            alert(
+                "AFMountInvalid",
+                "warning",
+                "data",
+                summary="eos is failing on node n1",
+                mount_name="eos",
+            )
+        ]
     )
     assert "**Impaired**" in out
     assert "**Degraded**" not in out
-    assert "**Data access**" in out
+    assert "**Data access**: eos is failing on node n1." in out
+    assert "more" not in out  # a single instance carries no scale suffix
 
 
 @pytest.mark.asyncio
 async def test_not_ready_workers_degrade_compute_capacity(user_ctx):
     """Offline AF nodes must show under compute — not look like healthy storage."""
     many = [
-        series("AFProdNodesNotReady", "error", "compute", node=f"paf-{i}")
+        alert(
+            "AFProdNodesNotReady",
+            "error",
+            "compute",
+            summary=f"AF worker node paf-{i} is NotReady",
+            node=f"paf-{i}",
+        )
         for i in range(9)
     ]
     out = await run(firing=many)
     assert "**Degraded**" in out
-    assert "**Compute capacity**" in out
-    assert "9 worker nodes NotReady" in out
-    assert "sessions and Dask workers cannot run" in out
+    assert "**Compute capacity**: AF worker node paf-0 is NotReady" in out
+    assert "and 8 more, 9 nodes affected" in out
     assert "facility access, data access" in out.lower()
     assert "compute capacity" not in out.lower().split("normal:")[-1]
-
-
-@pytest.mark.asyncio
-async def test_widespread_failure_reads_as_a_system_problem(user_ctx):
-    """Storage rarely breaks on one machine; the wording has to distinguish."""
-    many = [
-        series("AFMountInvalid", "warning", "data", mount_name="eos", node=f"n{i}")
-        for i in range(14)
-    ]
-    out = await run(firing=many)
-    assert "14 nodes" in out
-    assert "storage-system or network" in out
-    assert "**Impaired**" in out
-    assert "**Degraded**" not in out
-
-    one = [series("AFMountInvalid", "warning", "data", mount_name="eos", node="n1")]
-    out = await run(firing=one)
-    assert "single machine" in out
 
 
 @pytest.mark.asyncio
@@ -179,7 +189,7 @@ async def test_never_reports_another_users_alert(user_ctx):
     """af-pod-monitor alerts carry a username; only the caller's own may show."""
     out = await run(
         firing=[
-            series("AFHomeDirUtilHigh", "warning", "storage", username="someone-else")
+            alert("AFHomeDirUtilHigh", "warning", "storage", username="someone-else")
         ]
     )
     assert "someone-else" not in out
@@ -191,7 +201,7 @@ async def test_never_reports_another_users_alert(user_ctx):
 async def test_a_hidden_alert_is_not_counted_as_resolved(user_ctx):
     """It is still firing — hiding it from this user must not turn it into
     "came and went"."""
-    hidden = series("AFHomeDirUtilHigh", "warning", "storage", username="someone-else")
+    hidden = alert("AFHomeDirUtilHigh", "warning", "storage", username="someone-else")
     out = await run(
         firing=[hidden], recent=[{"metric": {"alertname": "AFHomeDirUtilHigh"}}]
     )
@@ -199,16 +209,21 @@ async def test_a_hidden_alert_is_not_counted_as_resolved(user_ctx):
 
 
 @pytest.mark.asyncio
+async def test_resolved_alerts_are_counted(user_ctx):
+    out = await run(recent=[{"metric": {"alertname": "AFMountSlow"}}])
+    assert "In the last 6 hours, 1 issue came and went." in out
+
+
+@pytest.mark.asyncio
 async def test_times_are_eastern_and_labelled(user_ctx):
-    since = [
-        {"metric": {"alertname": "AFMountInvalid"}, "value": [NOW, str(NOW - 7200)]}
-    ]
     out = await run(
-        firing=[series("AFMountInvalid", "warning", "data", mount_name="eos")],
-        since=since,
+        firing=[
+            alert("AFMountInvalid", "warning", "data", active_at=NOW - 7200),
+            alert("AFMountInvalid", "warning", "data", active_at=NOW - 60),
+        ]
     )
     assert " ET, " in out
-    assert "ago)" in out
+    assert "(2h 00m ago)" in out  # the earliest instance dates the problem
 
 
 @pytest.mark.asyncio
@@ -221,16 +236,52 @@ async def test_reports_the_callers_own_quota(user_ctx):
 @pytest.mark.asyncio
 async def test_monitoring_outage_is_not_a_health_claim(user_ctx):
     """If Prometheus cannot be reached, say so rather than implying healthy."""
-    out = await run(home_util=None)
+    tools = register_tools(health)
+    with respx.mock:
+        respx.get(ALERTS_URL).mock(side_effect=ConnectError("down"))
+        out = await failure(tools.tools["get_facility_health"]())
+
+    assert out.startswith("Error: the monitoring system is unreachable")
     assert "cannot tell you" in out
     assert "**Healthy**" not in out
+
+
+@pytest.mark.asyncio
+async def test_monitoring_http_error_is_reported_with_its_reason(user_ctx):
+    tools = register_tools(health)
+    with respx.mock:
+        respx.get(ALERTS_URL).respond(503, json={"error": "query engine overloaded"})
+        out = await failure(tools.tools["get_facility_health"]())
+
+    assert "returned HTTP 503 — query engine overloaded" in out
+    assert "cannot tell you" in out
+
+
+@pytest.mark.asyncio
+async def test_malformed_alert_list_is_reported(user_ctx):
+    tools = register_tools(health)
+    with respx.mock:
+        respx.get(ALERTS_URL).respond(200, text="<html>login</html>")
+        out = await failure(tools.tools["get_facility_health"]())
+    assert "no alert list" in out
+
+
+@pytest.mark.asyncio
+async def test_healthy_without_a_running_session_is_still_healthy(user_ctx):
+    """No quota reading means no session — not a monitoring outage."""
+    out = await run(home_util=None)
+    assert "**Healthy**" in out
+    assert "cannot tell you" not in out
+    assert "No reading of your home directory quota" in out
 
 
 @pytest.mark.asyncio
 async def test_output_avoids_internal_mechanics(user_ctx):
     """Users get facility facts, not the monitoring implementation."""
     out = await run(
-        firing=[series("AFMountInvalid", "warning", "data", mount_name="eos")]
+        firing=[
+            alert("AFMountInvalid", "warning", "data", summary="eos is failing on n1")
+        ]
     )
     for jargon in ("probe", "Prometheus", "af_node_mount", "kubectl", "Job"):
         assert jargon not in out
@@ -249,6 +300,7 @@ async def test_quota_query_escapes_quotes_in_username():
     try:
         tools = register_tools(health)
         with respx.mock:
+            respx.get(ALERTS_URL).respond(200, json={"data": {"alerts": []}})
             respx.get(PROM_URL).mock(side_effect=responder)
             await tools.tools["get_facility_health"]()
     finally:
@@ -266,10 +318,11 @@ async def test_dev_hardware_is_invisible_to_users(user_ctx):
     asking about the facility must not see them, and they must not degrade it."""
     out = await run(
         firing=[
-            series("AFMountInvalidDev", "warning", "dev", node="a337"),
-            series("AFMountInvalid", "warning", "data", node_pool="dev", node="a337"),
+            alert("AFMountInvalidDev", "warning", "dev", node="a337"),
+            alert("AFMountSlow", "warning", "data", node_pool="dev", node="a338"),
         ]
     )
     assert "**Healthy**" in out
     assert "a337" not in out
-    assert "dev" not in out.lower().replace("device", "")
+    assert "a338" not in out
+    assert "dev" not in out.lower().split("normal:")[-1]

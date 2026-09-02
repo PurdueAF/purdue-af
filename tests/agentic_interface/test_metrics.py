@@ -1,6 +1,6 @@
 """Tests for Prometheus metrics (metrics.py + /metrics endpoint)."""
 
-import json
+import logging
 
 import httpx
 import metrics
@@ -8,6 +8,7 @@ import pytest
 import respx
 import server
 from context import current_user
+from mcp.server.auth.provider import AccessToken
 from prometheus_client import REGISTRY
 
 
@@ -56,9 +57,9 @@ async def test_metrics_endpoint_returns_prometheus_format():
     send = SendCollector()
     before = _counter_value("metrics", "200")
 
-    await server._AuthMiddleware(
-        server._PathStripper(lambda *a: None, server.SERVICE_PREFIX)
-    )(http_scope("/metrics"), noop_receive, send)
+    await server._AuthMiddleware((lambda *a: None))(
+        http_scope("/metrics"), noop_receive, send
+    )
 
     assert send.status == 200
     assert b"purdue_af_mcp_api_calls_total" in send.body
@@ -68,13 +69,9 @@ async def test_metrics_endpoint_returns_prometheus_format():
 
 async def test_mcp_request_increments_api_call_counter(monkeypatch):
     async def accept(token):
-        return {
-            "username": "alice",
-            "namespace": "cms",
-            "token": "t",
-        }
+        return AccessToken(token="t", client_id="alice", scopes=[])
 
-    monkeypatch.setattr(server, "resolve_user", accept)
+    monkeypatch.setattr(server, "verify_token", accept)
 
     class Inner:
         calls = 0
@@ -85,7 +82,7 @@ async def test_mcp_request_increments_api_call_counter(monkeypatch):
             await send({"type": "http.response.body", "body": b"ok"})
 
     inner = Inner()
-    app = server._AuthMiddleware(server._PathStripper(inner, server.SERVICE_PREFIX))
+    app = server._AuthMiddleware(inner)
     before = _counter_value("mcp", "200")
 
     await app(
@@ -105,9 +102,9 @@ async def test_unauthorized_mcp_request_records_401(monkeypatch):
     before = _counter_value("mcp", "401")
     send = SendCollector()
 
-    await server._AuthMiddleware(
-        server._PathStripper(lambda *a: None, server.SERVICE_PREFIX)
-    )(http_scope(f"{server.SERVICE_PREFIX}/mcp"), noop_receive, send)
+    await server._AuthMiddleware((lambda *a: None))(
+        http_scope(f"{server.SERVICE_PREFIX}/mcp"), noop_receive, send
+    )
 
     assert send.status == 401
     assert _counter_value("mcp", "401") == before + 1
@@ -117,108 +114,6 @@ def test_record_request_increments_counter():
     before = _counter_value("other", "418")
     metrics.record_request("other", 418)
     assert _counter_value("other", "418") == before + 1
-
-
-# ── JSON-RPC method breakdown ─────────────────────────────────────────────────
-
-
-def _jsonrpc_counter_value(method: str, username: str) -> float:
-    return (
-        REGISTRY.get_sample_value(
-            "purdue_af_mcp_jsonrpc_requests_total",
-            {"method": method, "username": username},
-        )
-        or 0.0
-    )
-
-
-def test_jsonrpc_methods_single_request():
-    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call"}).encode()
-    assert server._jsonrpc_methods(body) == ["tools/call"]
-
-
-def test_jsonrpc_methods_batch():
-    body = json.dumps(
-        [
-            {"jsonrpc": "2.0", "id": 1, "method": "initialize"},
-            {"jsonrpc": "2.0", "method": "notifications/initialized"},
-        ]
-    ).encode()
-    assert server._jsonrpc_methods(body) == [
-        "initialize",
-        "notifications/initialized",
-    ]
-
-
-def test_bogus_jsonrpc_method_is_recorded_as_other():
-    # The method label comes straight from the client body — arbitrary strings
-    # must be clamped to "other" to keep Prometheus label cardinality bounded.
-    before = _jsonrpc_counter_value("other", "alice")
-    bogus = _jsonrpc_counter_value("totally/bogus-method", "alice")
-
-    metrics.record_jsonrpc("totally/bogus-method", "alice")
-
-    assert _jsonrpc_counter_value("other", "alice") == before + 1
-    assert _jsonrpc_counter_value("totally/bogus-method", "alice") == bogus  # unchanged
-
-
-def test_known_jsonrpc_methods_keep_their_label():
-    for method in ("tools/call", "initialize", "response", "invalid"):
-        before = _jsonrpc_counter_value(method, "alice")
-        metrics.record_jsonrpc(method, "alice")
-        assert _jsonrpc_counter_value(method, "alice") == before + 1
-
-
-def test_jsonrpc_methods_response_and_invalid():
-    # A client-to-server response carries no method field.
-    assert server._jsonrpc_methods(b'{"jsonrpc":"2.0","id":1,"result":{}}') == [
-        "response"
-    ]
-    assert server._jsonrpc_methods(b"not json") == ["invalid"]
-    assert server._jsonrpc_methods(b"") == ["invalid"]
-
-
-async def test_post_mcp_request_records_jsonrpc_method(monkeypatch):
-    async def accept(token):
-        return {
-            "username": "alice",
-            "namespace": "cms",
-            "token": "t",
-        }
-
-    monkeypatch.setattr(server, "resolve_user", accept)
-
-    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).encode()
-    supplied = [{"type": "http.request", "body": body, "more_body": False}]
-
-    async def receive():
-        return supplied.pop(0)
-
-    seen_body = b""
-
-    async def inner(scope, receive, send):
-        # The replayed receive must hand the buffered body through unchanged.
-        nonlocal seen_body
-        message = await receive()
-        seen_body = message.get("body", b"")
-        await send({"type": "http.response.start", "status": 200, "headers": []})
-        await send({"type": "http.response.body", "body": b"ok"})
-
-    app = server._AuthMiddleware(server._PathStripper(inner, server.SERVICE_PREFIX))
-    before = _jsonrpc_counter_value("tools/list", "alice")
-
-    await app(
-        http_scope(
-            f"{server.SERVICE_PREFIX}/mcp",
-            headers=[(b"authorization", b"Bearer good"), (b"host", b"hub:9999")],
-            method="POST",
-        ),
-        receive,
-        SendCollector(),
-    )
-
-    assert seen_body == body
-    assert _jsonrpc_counter_value("tools/list", "alice") == before + 1
 
 
 # ── tool-call metrics ─────────────────────────────────────────────────────────
@@ -243,42 +138,42 @@ def _tool_duration_count(tool: str) -> float:
     )
 
 
-def test_tool_outcome_classifier():
-    assert metrics.tool_outcome("ok") == "success"
-    assert metrics.tool_outcome({"not": "a string"}) == "success"
-    # User mistakes / nothing running
-    assert (
-        metrics.tool_outcome("Error: no running server found — start a pod first.")
-        == "user_error"
-    )
-    assert metrics.tool_outcome("Error: n_workers must be ≥ 0.") == "user_error"
-    assert metrics.tool_outcome("Unknown gateway 'nope'.") == "user_error"
-    # Backend failures
-    assert (
-        metrics.tool_outcome("Error: JupyterHub API unreachable — boom")
-        == "upstream_error"
-    )
-    assert (
-        metrics.tool_outcome("Error: Loki connection failed — refused")
-        == "upstream_error"
-    )
-    assert metrics.tool_outcome("Error: HTTP 502 — bad gateway") == "upstream_error"
-    assert (
-        metrics.tool_outcome("Error: Loki returned HTTP 500 — oops") == "upstream_error"
-    )
-    assert (
-        metrics.tool_outcome(
-            "Could not read profile list — service may be misconfigured."
-        )
-        == "upstream_error"
-    )
+def _instrumented():
+    mcp = metrics.InstrumentedFastMCP("test-metrics-instrumented")
+    return mcp
+
+
+async def test_failure_subclass_sets_the_outcome_label():
+    """Tools raise errors.Failure subclasses; the subclass is the outcome."""
+    import errors
+
+    mcp = _instrumented()
+
+    @mcp.tool()
+    async def refuse(kind: str) -> str:
+        raise {
+            "user": errors.UserError,
+            "auth": errors.AuthError,
+            "upstream": errors.UpstreamError,
+            "fault": errors.ServiceFault,
+        }[kind]("Error: nope.")
+
+    for kind, outcome in (
+        ("user", "user_error"),
+        ("auth", "auth_error"),
+        ("upstream", "upstream_error"),
+        ("fault", "exception"),
+    ):
+        before = _tool_counter_value("refuse", outcome)
+        with pytest.raises(errors.Failure) as info:
+            await mcp.call_tool("refuse", {"kind": kind})
+        # the message reaches the client unwrapped — no "Error executing tool"
+        assert str(info.value) == "Error: nope."
+        assert _tool_counter_value("refuse", outcome) == before + 1
 
 
 async def test_instrumented_tool_records_success_and_duration():
-    from mcp.server.fastmcp import FastMCP
-
-    mcp = FastMCP("test-metrics")
-    metrics.instrument_mcp(mcp)
+    mcp = metrics.InstrumentedFastMCP("test-metrics")
 
     @mcp.tool()
     async def hello() -> str:
@@ -287,16 +182,14 @@ async def test_instrumented_tool_records_success_and_duration():
     before = _tool_counter_value("hello", "success")
     duration_before = _tool_duration_count("hello")
 
-    assert await mcp._tool_manager.call_tool("hello", {}) == "hi"
+    content, _structured = await mcp.call_tool("hello", {})
+    assert content[0].text == "hi"
     assert _tool_counter_value("hello", "success") == before + 1
     assert _tool_duration_count("hello") == duration_before + 1
 
 
 async def test_instrumented_tool_records_username_from_context():
-    from mcp.server.fastmcp import FastMCP
-
-    mcp = FastMCP("test-metrics")
-    metrics.instrument_mcp(mcp)
+    mcp = metrics.InstrumentedFastMCP("test-metrics")
 
     @mcp.tool()
     async def whoami() -> str:
@@ -305,37 +198,17 @@ async def test_instrumented_tool_records_username_from_context():
     before = _tool_counter_value("whoami", "success", username="alice")
     ctx_token = current_user.set({"username": "alice"})
     try:
-        await mcp._tool_manager.call_tool("whoami", {})
+        await mcp.call_tool("whoami", {})
     finally:
         current_user.reset(ctx_token)
 
     assert _tool_counter_value("whoami", "success", username="alice") == before + 1
 
 
-async def test_instrumented_tool_records_string_error():
-    from mcp.server.fastmcp import FastMCP
-
-    mcp = FastMCP("test-metrics")
-    metrics.instrument_mcp(mcp)
-
-    @mcp.tool()
-    async def fail_soft() -> str:
-        return "Error: something went wrong"
-
-    before = _tool_counter_value("fail_soft", "user_error")
-
-    out = await mcp._tool_manager.call_tool("fail_soft", {})
-
-    assert out.startswith("Error:")
-    assert _tool_counter_value("fail_soft", "user_error") == before + 1
-
-
 async def test_instrumented_tool_records_exception():
-    from mcp.server.fastmcp import FastMCP
     from mcp.server.fastmcp.exceptions import ToolError
 
-    mcp = FastMCP("test-metrics")
-    metrics.instrument_mcp(mcp)
+    mcp = metrics.InstrumentedFastMCP("test-metrics")
 
     @mcp.tool()
     async def fail_hard() -> str:
@@ -344,19 +217,9 @@ async def test_instrumented_tool_records_exception():
     before = _tool_counter_value("fail_hard", "exception")
 
     with pytest.raises(ToolError):
-        await mcp._tool_manager.call_tool("fail_hard", {})
+        await mcp.call_tool("fail_hard", {})
 
     assert _tool_counter_value("fail_hard", "exception") == before + 1
-
-
-def test_instrument_mcp_raises_if_sdk_layout_changed():
-    # instrument_mcp monkeypatches SDK-private _tool_manager.call_tool; an SDK
-    # upgrade that moves it must fail loudly, not silently drop tool metrics.
-    class NoToolManager:
-        pass
-
-    with pytest.raises(RuntimeError, match="_tool_manager.call_tool"):
-        metrics.instrument_mcp(NoToolManager())
 
 
 # ── upstream (outbound) request metrics ───────────────────────────────────────
@@ -425,3 +288,81 @@ async def test_instrumented_transport_callable_target():
         await client.get("http://a/x")
 
     assert _upstream_counter_value("host-a", "success") == before + 1
+
+
+# ── exception safety net ──────────────────────────────────────────────────────
+#
+# A tool that raises must still leave the user with a message that says whose
+# fault it is, and must leave operators a traceback in the log.
+
+
+async def test_unhandled_exception_becomes_a_clear_error_and_is_logged(caplog):
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    mcp = _instrumented()
+
+    @mcp.tool()
+    async def boom() -> str:
+        raise KeyError("name")
+
+    before = _tool_counter_value("boom", "exception")
+    with caplog.at_level(logging.ERROR, logger="agentic.tools"):
+        with pytest.raises(ToolError) as info:
+            await mcp.call_tool("boom", {})
+
+    message = str(info.value)
+    assert message.startswith("Error: boom failed unexpectedly (KeyError: 'name')")
+    assert "AF support" in message
+    assert "Error executing tool" not in message
+    assert _tool_counter_value("boom", "exception") == before + 1
+    record = next(r for r in caplog.records if "tool=boom" in r.getMessage())
+    assert record.exc_info is not None  # traceback attached for operators
+
+
+async def test_invalid_arguments_are_blamed_on_the_call():
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    mcp = _instrumented()
+
+    @mcp.tool()
+    async def add(n: int) -> str:
+        return str(n)
+
+    with pytest.raises(ToolError) as info:
+        await mcp.call_tool("add", {"n": "many"})
+
+    message = str(info.value)
+    assert message.startswith("Error: add was called with invalid arguments")
+    assert "argument names and types" in message
+    assert "failed unexpectedly" not in message
+
+
+async def test_unknown_tool_error_passes_through():
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    mcp = _instrumented()
+    with pytest.raises(ToolError, match="Unknown tool"):
+        await mcp.call_tool("nope", {})
+
+
+async def test_url_elicitation_error_is_not_rewritten():
+    """The SDK turns this one into a protocol error (-32042); leave it alone."""
+    from mcp.shared.exceptions import UrlElicitationRequiredError
+    from mcp.types import ElicitRequestURLParams
+
+    mcp = _instrumented()
+    needed = UrlElicitationRequiredError(
+        [
+            ElicitRequestURLParams(
+                message="authorise", url="https://example.org", elicitationId="e1"
+            )
+        ]
+    )
+
+    @mcp.tool()
+    async def needs_url() -> str:
+        raise needed
+
+    with pytest.raises(UrlElicitationRequiredError) as info:
+        await mcp.call_tool("needs_url", {})
+    assert info.value is needed
