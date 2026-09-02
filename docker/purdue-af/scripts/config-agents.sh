@@ -22,7 +22,7 @@ _config_agents() {
 	# Must match the skill's references and the repo .mcp.json — the skill names
 	# this server explicitly, so a mismatch makes its instructions wrong.
 	local MCP_NAME MCP_URL AUTH_HEADER SKILL_SRC AGENT_SECTION PYTHON NEW_HOME
-	local OPENCODE_CFG target
+	local OPENCODE_CFG OPENCODE_INSTRUCTIONS target
 	MCP_NAME="purdue-af-agentic-interface"
 	# In-cluster address of the hub-registered service. The public URL is not
 	# usable from inside a session (JUPYTERHUB_PUBLIC_HUB_URL is empty there), and
@@ -86,10 +86,20 @@ _config_agents() {
 	# theirs. Written even when the CLI is absent — a user who installs opencode
 	# into their own home afterwards finds it already wired up.
 	#
-	# `instructions` is what carries the platform context into a project that has
-	# its own AGENTS.md: opencode's rules lookup is first-match-wins, so a project
-	# AGENTS.md suppresses the global one, and the guardrails would vanish exactly
-	# where an analysis repo needs them.
+	# `instructions` is the ONLY channel that hands opencode the platform context,
+	# and deliberately so. The schema calls it "additional instruction files", i.e.
+	# it is ADDITIVE to opencode's own AGENTS.md lookup — so also writing
+	# ~/.config/opencode/AGENTS.md would load the same file twice on every turn.
+	# `instructions` is the half to keep: opencode's AGENTS.md lookup is
+	# first-match-wins, so a project AGENTS.md, which an analysis repo may well
+	# have, would suppress the global file exactly where the guardrails matter.
+	#
+	# Guarded like every other use of AGENT_SECTION: a config naming a file that
+	# is not there is worse than one that omits it.
+	OPENCODE_INSTRUCTIONS=""
+	if [[ -f "${AGENT_SECTION}" ]]; then
+		OPENCODE_INSTRUCTIONS="\"instructions\": [\"${AGENT_SECTION}\"],"
+	fi
 	OPENCODE_CFG="${NEW_HOME}/.config/opencode/purdue-af.json"
 	# Written AS THE USER. This path runs through ~/.config, which lives in a
 	# persistent home the user can replace with a symlink between sessions: a
@@ -102,7 +112,7 @@ _config_agents() {
 	if _as_user "mkdir -p '${NEW_HOME}/.config/opencode' && cat >'${OPENCODE_CFG}'" <<-JSON
 		{
 		  "\$schema": "https://opencode.ai/config.json",
-		  "instructions": ["${AGENT_SECTION}"],
+		  ${OPENCODE_INSTRUCTIONS}
 		  "mcp": {
 		    "${MCP_NAME}": {
 		      "type": "remote",
@@ -144,31 +154,30 @@ _config_agents() {
 
 	# One file per harness: the path it reads automatically at user scope, with no
 	# skill and no prompting. These files belong to the user — only the AF block
-	# between the markers is ours. Codex and opencode have no skill mechanism, so
-	# this is the only place they learn about the facility; for Claude Code it is
-	# a short pointer alongside the skill.
+	# between the markers is ours. Codex has no skill mechanism, so this is the
+	# only place it learns about the facility; for Claude Code it is a short
+	# pointer alongside the skill. opencode is absent here on purpose: it is
+	# served by `instructions` above, and a file here would duplicate that.
 	#
 	# Written whether or not the matching CLI is installed: the files are a few
 	# kB, and a user who installs a harness into their own home does so long
 	# after this hook has run.
 	#
-	# Cursor is deliberately absent. It has no user-scope instruction file at
+	# Cursor is deliberately absent too. It has no user-scope instruction file at
 	# all — its rules are project-scoped, and cross-project rules live in the
 	# Cursor UI, not on disk. See docs/docs/guide-agentic-interface.md.
 	if [[ -f "${AGENT_SECTION}" ]]; then
-		for target in \
-			"${NEW_HOME}/.claude/CLAUDE.md" \
-			"${NEW_HOME}/.codex/AGENTS.md" \
-			"${NEW_HOME}/.config/opencode/AGENTS.md"; do
+		for target in "${NEW_HOME}/.claude/CLAUDE.md" "${NEW_HOME}/.codex/AGENTS.md"; do
 			if _as_user "'${PYTHON}' /usr/local/bin/managed-block.py '${AGENT_SECTION}' '${target}'"; then
 				:
 			else
 				echo "config-agents: WARNING could not update ${target}" >&2
 			fi
 		done
-		# .claude only: the skill `cp -r` above runs as root. managed-block.py
-		# runs as the user and creates its own parent directories, so nothing
-		# under ~/.config needs its ownership rewritten.
+		# ~/.claude needs this: the skill `cp -r` above runs as root. ~/.codex is
+		# kept defensively for homes where an older image created it as root —
+		# managed-block.py runs as the user and makes its own parent directories,
+		# so neither would need it in a home created by this version.
 		chown -R "${NB_USER}:users" "${NEW_HOME}/.claude" "${NEW_HOME}/.codex" \
 			2>/dev/null || true
 	else

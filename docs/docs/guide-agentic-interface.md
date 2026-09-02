@@ -23,15 +23,21 @@ automatically at startup. You do not need to invoke anything — an agent in a
 session already knows, for example, that `pixi install` will be refused under
 `/home` and that `/work` is invisible to Slurm workers.
 
-| Agent      | Where the context is installed                | MCP server                             |
-| ---------- | --------------------------------------------- | -------------------------------------- |
-| Claude Code | `~/.claude/CLAUDE.md` (plus the AF skill)     | `claude mcp add`, user scope           |
-| Codex      | `~/.codex/AGENTS.md`                          | `codex mcp add`                        |
-| opencode   | `~/.config/opencode/AGENTS.md`                | `$OPENCODE_CONFIG` config layer        |
+| Agent       | Where the context is installed            | MCP server                      |
+| ----------- | ----------------------------------------- | ------------------------------- |
+| Claude Code | `~/.claude/CLAUDE.md` (plus the AF skill) | `claude mcp add`, user scope    |
+| Codex       | `~/.codex/AGENTS.md`                      | `codex mcp add`                 |
+| opencode    | `$OPENCODE_CONFIG` config layer           | `$OPENCODE_CONFIG` config layer |
 
-Only the block between the `PURDUE AF — managed` markers belongs to the
-facility; anything you write in those files outside it is preserved, and the
-block is refreshed on every session start.
+For Claude Code and Codex the context goes into a file you own, and only the
+block between the `PURDUE AF — managed` markers belongs to the facility —
+anything you write outside it is preserved. The block is refreshed on every
+session start.
+
+opencode is different: nothing of yours is touched at all. Both the context and
+the MCP server live in a facility-owned config layer, so the context reaches
+opencode even in a project that has its own `AGENTS.md` (its own lookup stops at
+the first match it finds, which a project file would win).
 
 Run `claude`, `codex` or `opencode` and ask for what you want. You still sign in
 to the agent with your own Anthropic, OpenAI or other provider account; the AF
@@ -55,7 +61,9 @@ ships no model credentials.
     is not tied to one provider — run `/connect` once with your own API key.
     Its facility configuration lives in a separate layer
     (`~/.config/opencode/purdue-af.json`, referenced by `$OPENCODE_CONFIG`) that
-    is merged with, and overridden by, your own `opencode.json`.
+    is merged with, and overridden by, your own `opencode.json`. One thing to
+    know: that layer sets `instructions`, so if you set `instructions` in your
+    own global config the facility layer takes precedence over it.
 
 ## Connecting from your own machine
 
