@@ -8,6 +8,7 @@ run. The property that matters most is that the session token is NEVER written
 into a config file — it rotates every spawn, and the home directory is
 persistent, so a baked-in token is stale the moment the session restarts."""
 
+import json
 import os
 import shlex
 import subprocess
@@ -151,8 +152,6 @@ def test_mcp_path_matches_the_service_prefix(run_script):
 
 
 def _opencode_config(agent_home):
-    import json
-
     path = agent_home / ".config" / "opencode" / "purdue-af.json"
     assert path.is_file(), "the hook wrote no opencode config"
     return json.loads(path.read_text())
@@ -190,14 +189,58 @@ def test_opencode_config_is_written_with_privileges_dropped(run_script):
     assert "_as_user \"mkdir -p '${NEW_HOME}/.config/opencode'" in hook, (
         "the opencode config must be written as the user, not as root"
     )
-    assert "${NEW_HOME}/.config" not in hook.split("chown -R")[-1], (
-        "nothing under ~/.config may be chowned: chown dereferences a symlink "
-        "the user planted there"
-    )
+    # every chown in the hook, not just the last: a recursive chown of
+    # ~/.config added anywhere would be as wrong as the one that was removed
     for line in hook.splitlines():
         stripped = line.strip()
-        if stripped.startswith("chown ") and not stripped.startswith("chown -R"):
-            raise AssertionError(f"non-recursive chown dereferences symlinks: {line}")
+        if not stripped.startswith("chown"):
+            continue
+        assert stripped.startswith("chown -R"), (
+            f"non-recursive chown dereferences symlinks: {stripped}"
+        )
+        assert "/.config" not in stripped, (
+            f"nothing under ~/.config may be chowned, it is user-controlled: {stripped}"
+        )
+
+
+def test_opencode_context_is_not_also_written_as_a_file(run_script, agent_home):
+    """opencode's `instructions` is documented in its schema as *additional*
+    instruction files — additive to its own AGENTS.md lookup, not a fallback
+    for it. Writing ~/.config/opencode/AGENTS.md as well would put the whole
+    platform context into every turn twice."""
+    run_script()
+    assert not (agent_home / ".config/opencode/AGENTS.md").exists(), (
+        "the context is delivered by `instructions`; a file here duplicates it"
+    )
+
+
+def test_opencode_instructions_are_omitted_when_the_context_is_missing(
+    tmp_path, agent_home
+):
+    """Guarded like every other use of the context path: a config naming a file
+    that is not there is worse than one that omits it."""
+    script = tmp_path / "guard.sh"
+    script.write_text(
+        SCRIPT.read_text()
+        .replace(
+            'NEW_HOME="/home/${NB_USER}"',
+            f'NEW_HOME="{agent_home.parent}/${{NB_USER}}"',
+        )
+        .replace(
+            '"/opt/purdue-af/agents/platform-context.md"',
+            f'"{tmp_path / "absent.md"}"',
+        )
+    )
+    result = subprocess.run(
+        ["bash", str(script)],
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "NB_USER": "jovyan"},
+    )
+    assert result.returncode == 0, result.stderr
+    config = json.loads((agent_home / ".config/opencode/purdue-af.json").read_text())
+    assert "instructions" not in config
+    assert "mcp" in config, "the MCP server must still be registered"
 
 
 def test_opencode_config_is_exported_so_the_session_picks_it_up(run_script):
@@ -254,7 +297,8 @@ def test_unwritable_opencode_config_is_not_fatal(run_script, agent_home):
 HARNESS_CONTEXT_FILES = (
     ".claude/CLAUDE.md",  # Claude Code
     ".codex/AGENTS.md",  # Codex
-    ".config/opencode/AGENTS.md",  # opencode
+    # opencode is served by `instructions` in its config layer, not a file here
+    # — see test_opencode_context_is_not_also_written_as_a_file
 )
 
 
@@ -482,7 +526,6 @@ def test_startup_hook_targets_every_harness_context_file():
     for target in (
         ".claude/CLAUDE.md",  # Claude Code
         ".codex/AGENTS.md",  # Codex
-        ".config/opencode/AGENTS.md",  # opencode
     ):
         assert target in text, target
 
