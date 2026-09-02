@@ -19,6 +19,7 @@ dependencies = [
     "oauthenticator>=17.0", # jupyterhub extraFiles
     "tornado>=6.4",
     "prometheus_client>=0.22", # exporters
+    "cachetools>=5.5", # agentic-interface
     "matplotlib>=3.9", # plot-af-users cron
     "pandas>=2.2",
 ]

@@ -49,9 +49,12 @@ Ask in plain language, for example:
 
 ## Troubleshooting
 
-- **401 / invalid token** — your token expired or is wrong; get a new one at `/hub/token`.
-- **"No active session"** — start a session first.
-- Treat the token like a password — don't share or commit it.
+Failures are self-describing. A tool result that fails says what was
+attempted, why it failed as the backend reported it, and what to do next; if
+the connection itself is refused, the HTTP response body carries the same in
+`{"error": …, "hint": …}`. Read the message — it is the diagnosis.
+
+Treat the token like a password — don't share or commit it.
 
 ## Calling the endpoint by hand
 

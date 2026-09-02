@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-COPY --from=ghcr.io/astral-sh/uv:0.12.8 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.9 /uv /uvx /bin/
 
 # Dedicated non-root user with a fixed UID so the Deployment's
 # runAsNonRoot/runAsUser can reference it. No home dir: the root
@@ -21,12 +21,16 @@ COPY docker/agentic-interface/pyproject.toml docker/agentic-interface/uv.lock ./
 RUN uv sync --frozen --no-dev
 ENV PATH="/app/.venv/bin:$PATH"
 
+COPY docker/agentic-interface/config.py .
 COPY docker/agentic-interface/context.py .
+COPY docker/agentic-interface/errors.py .
 COPY docker/agentic-interface/shared.py .
 COPY docker/agentic-interface/auth.py .
 COPY docker/agentic-interface/metrics.py .
 COPY docker/agentic-interface/server.py .
 COPY docker/agentic-interface/tools/ ./tools/
+# Shared with the Hub's profile form so both report the same GPU numbers.
+COPY apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py .
 
 USER 1000
 

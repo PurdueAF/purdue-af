@@ -3,35 +3,64 @@
 Extracted into its own module so that tool modules (e.g. session.py) can
 call clear_user_cache() after session state changes — without creating a
 circular import with server.py.
+
+``HubTokenVerifier`` is the MCP SDK's ``TokenVerifier`` protocol backed by
+the Hub: the middleware validates through it, and it is the seam the SDK's
+own auth stack (``FastMCP(token_verifier=…)``) would plug into.
 """
 
 import hashlib
-import os
 import time
 from typing import Optional
 
 import httpx
+from cachetools import TTLCache
+from config import HUB_API_URL, NAMESPACE
+from errors import describe_exception, json_body, response_detail
+from mcp.server.auth.provider import AccessToken
 from metrics import instrumented_transport, record_auth
 
-HUB_API_URL = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
-NAMESPACE = os.environ.get("NAMESPACE", "cms")
+
+class HubUnavailable(Exception):
+    """The Hub could not be asked whether a token is valid.
+
+    Kept apart from an invalid token on purpose: the caller must answer
+    "try again" (503), never "your token is wrong" (401), and nothing about
+    the token may be cached either way.
+    """
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
+        self.detail = detail
+
 
 # Cache keys are sha256 hex digests of the token, never the raw token — a
 # cache dump (debugger, core, log) must not hand out live credentials. The
 # cached user_info dict still carries the raw token; tools need it downstream.
-# sha256(token) → (expiry_monotonic, user_info_dict)
-_user_cache: dict[str, tuple[float, dict]] = {}
 _CACHE_TTL = 60.0
 _CACHE_MAX = 1024
 
 # Negative cache: tokens the Hub actively rejected. Short TTL so a garbage-
 # token flood doesn't amplify into a live Hub API call per request, while a
-# freshly issued token is never locked out for long. hub_unreachable errors
-# are deliberately NOT cached — they say nothing about the token.
-# sha256(token) → expiry_monotonic
-_negative_cache: dict[str, float] = {}
+# freshly issued token is never locked out for long. Hub failures are
+# deliberately NOT cached — they say nothing about the token.
 _NEG_CACHE_TTL = 5.0
 _NEG_CACHE_MAX = 4096
+
+
+def _now() -> float:
+    # Looked up at call time so tests can drive the clock.
+    return time.monotonic()
+
+
+# TTLCache drops expired entries first and least-recently-used ones once
+# full, which is exactly the bounding both caches need.
+# sha256(token) → user_info_dict
+_user_cache: TTLCache[str, dict] = TTLCache(_CACHE_MAX, _CACHE_TTL, timer=_now)
+# sha256(token) → True
+_negative_cache: TTLCache[str, bool] = TTLCache(
+    _NEG_CACHE_MAX, _NEG_CACHE_TTL, timer=_now
+)
 
 
 def _hash_token(token: str) -> str:
@@ -52,42 +81,25 @@ def _get_client() -> httpx.AsyncClient:
     return _client
 
 
-def _evict(now: float) -> None:
-    """Keep the cache bounded: drop expired entries, then oldest-expiring."""
-    if len(_user_cache) < _CACHE_MAX:
-        return
-    for key in [k for k, (expiry, _) in _user_cache.items() if expiry <= now]:
-        del _user_cache[key]
-    while len(_user_cache) >= _CACHE_MAX:
-        del _user_cache[min(_user_cache, key=lambda k: _user_cache[k][0])]
-
-
-def _evict_negative(now: float) -> None:
-    """Same bounding strategy for the negative cache (expiry-only values)."""
-    if len(_negative_cache) < _NEG_CACHE_MAX:
-        return
-    for key in [k for k, expiry in _negative_cache.items() if expiry <= now]:
-        del _negative_cache[key]
-    while len(_negative_cache) >= _NEG_CACHE_MAX:
-        del _negative_cache[min(_negative_cache, key=lambda k: _negative_cache[k])]
-
-
 async def resolve_user(token: str) -> Optional[dict]:
     """Validate a JupyterHub Bearer token; return {username, namespace, token}.
+
+    Returns None only when the Hub itself rejected the token. Raises
+    HubUnavailable when the Hub could not be reached, or answered with
+    anything other than a verdict on the token — that says nothing about
+    the token and must not be reported as "invalid".
 
     Does not read Hub server ``state`` (admin-only). Tools that need to know
     whether a session is running query Hub ``servers[""].ready`` themselves,
     or filter Loki/Prometheus by ``username``.
     """
-    now = time.monotonic()
     key = _hash_token(token)
     cached = _user_cache.get(key)
-    if cached and now < cached[0]:
+    if cached is not None:
         record_auth("cache_hit")
-        return cached[1]
+        return cached
 
-    neg_expiry = _negative_cache.get(key)
-    if neg_expiry and now < neg_expiry:
+    if key in _negative_cache:
         record_auth("neg_cache_hit")
         return None
 
@@ -96,33 +108,58 @@ async def resolve_user(token: str) -> Optional[dict]:
             f"{HUB_API_URL}/user",
             headers={"Authorization": f"Bearer {token}"},
         )
-    except httpx.RequestError:
+    except httpx.RequestError as exc:
         record_auth("hub_unreachable")
+        raise HubUnavailable(
+            f"JupyterHub API unreachable — {describe_exception(exc)}"
+        ) from exc
+
+    if resp.status_code in (401, 403):
+        _negative_cache[key] = True
+        record_auth("invalid_token")
         return None
 
     if resp.status_code != 200:
-        _evict_negative(now)
-        _negative_cache[key] = now + _NEG_CACHE_TTL
-        record_auth("invalid_token")
-        return None
+        # 5xx: the Hub is broken; 404 and friends: this service is pointed
+        # at the wrong place. Neither is the token's fault.
+        record_auth("hub_error")
+        detail = response_detail(resp, limit=120)
+        problem = f"JupyterHub API returned HTTP {resp.status_code}"
+        if resp.status_code == 404:
+            problem += f" for {HUB_API_URL}/user (JUPYTERHUB_API_URL misconfigured?)"
+        raise HubUnavailable(f"{problem} — {detail}" if detail else problem)
 
-    data = resp.json()
-    username = data.get("name")
-    if not username:
-        _evict_negative(now)
-        _negative_cache[key] = now + _NEG_CACHE_TTL
-        record_auth("invalid_token")
-        return None
+    data = json_body(resp)
+    username = data.get("name") if isinstance(data, dict) else None
+    if not isinstance(username, str) or not username:
+        record_auth("hub_error")
+        raise HubUnavailable(
+            "JupyterHub API returned HTTP 200 but no user record for the token"
+        )
 
     user_info = {
         "username": username,
         "namespace": NAMESPACE,
         "token": token,
     }
-    _evict(now)
-    _user_cache[key] = (now + _CACHE_TTL, user_info)
+    _user_cache[key] = user_info
     record_auth("validated")
     return user_info
+
+
+class HubTokenVerifier:
+    """``mcp.server.auth.provider.TokenVerifier`` backed by the Hub.
+
+    ``client_id`` carries the Hub username — the SDK's AccessToken has no
+    other identity field, and the middleware maps it back into the user
+    context tools read. Raises HubUnavailable when no verdict is possible.
+    """
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        user = await resolve_user(token)
+        if user is None:
+            return None
+        return AccessToken(token=token, client_id=user["username"], scopes=[])
 
 
 def clear_user_cache(token: str) -> None:

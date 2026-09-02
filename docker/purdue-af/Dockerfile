@@ -168,8 +168,8 @@ RUN chmod +x /usr/local/bin/pixi && \
 # opencode is bring-your-own-provider: the user still runs `/connect` with
 # their own model API key. The facility part — MCP server and platform
 # context — is wired up for them either way.
-ARG CLAUDE_CODE_VERSION="2.1.252"
-ARG CODEX_VERSION="0.152.0"
+ARG CLAUDE_CODE_VERSION="2.1.258"
+ARG CODEX_VERSION="0.152.1"
 ARG OPENCODE_VERSION="1.18.26"
 ENV NPM_GLOBAL="/opt/npm-global"
 # hadolint ignore=DL3016  # versions ARE pinned, via the ARGs above

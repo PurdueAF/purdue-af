@@ -2,7 +2,9 @@
 
 import auth
 import httpx
+import pytest
 import respx
+from cachetools import TTLCache
 from prometheus_client import REGISTRY
 
 HUB_USER_URL = f"{auth.HUB_API_URL}/user"
@@ -48,17 +50,21 @@ async def test_invalid_token_returns_none():
 
 
 @respx.mock
-async def test_hub_unreachable_returns_none():
+async def test_hub_unreachable_raises_not_invalid():
+    """A Hub that cannot be asked says nothing about the token."""
     respx.get(HUB_USER_URL).mock(side_effect=httpx.ConnectError("boom"))
 
-    assert await auth.resolve_user("tok-1") is None
+    with pytest.raises(auth.HubUnavailable, match="unreachable"):
+        await auth.resolve_user("tok-1")
 
 
 @respx.mock
-async def test_payload_without_username_returns_none():
+async def test_payload_without_username_is_a_hub_fault():
     respx.get(HUB_USER_URL).respond(200, json={"servers": {}})
 
-    assert await auth.resolve_user("tok-1") is None
+    with pytest.raises(auth.HubUnavailable, match="no user record"):
+        await auth.resolve_user("bad-token")
+    assert not auth._negative_cache  # the token was never judged
 
 
 @respx.mock
@@ -100,8 +106,9 @@ async def test_negative_cache_expires_after_ttl(monkeypatch):
 async def test_hub_unreachable_is_not_negatively_cached():
     route = respx.get(HUB_USER_URL).mock(side_effect=httpx.ConnectError("boom"))
 
-    assert await auth.resolve_user("tok-1") is None
-    assert await auth.resolve_user("tok-1") is None
+    for _ in range(2):
+        with pytest.raises(auth.HubUnavailable):
+            await auth.resolve_user("tok-1")
 
     assert route.call_count == 2  # each request retried against the Hub
     assert not auth._negative_cache
@@ -142,10 +149,17 @@ async def test_cache_expires_after_ttl(monkeypatch):
     assert route.call_count == 2
 
 
+def _small_cache(monkeypatch, maxsize):
+    """Swap in a user cache with a smaller bound (the real one is built at import)."""
+    cache = TTLCache(maxsize, auth._CACHE_TTL, timer=auth._now)
+    monkeypatch.setattr(auth, "_user_cache", cache)
+    return cache
+
+
 @respx.mock
 async def test_cache_is_bounded(monkeypatch):
     respx.get(HUB_USER_URL).respond(200, json=hub_user_payload())
-    monkeypatch.setattr(auth, "_CACHE_MAX", 3)
+    _small_cache(monkeypatch, 3)
 
     for i in range(10):
         await auth.resolve_user(f"tok-{i}")
@@ -156,7 +170,7 @@ async def test_cache_is_bounded(monkeypatch):
 @respx.mock
 async def test_eviction_prefers_expired_entries(monkeypatch):
     respx.get(HUB_USER_URL).respond(200, json=hub_user_payload())
-    monkeypatch.setattr(auth, "_CACHE_MAX", 2)
+    _small_cache(monkeypatch, 2)
 
     now = 1000.0
     monkeypatch.setattr(auth.time, "monotonic", lambda: now)
@@ -229,10 +243,63 @@ async def test_auth_metrics_record_each_result():
     await auth.resolve_user("tok-bad")  # neg_cache_hit
 
     route.mock(side_effect=httpx.ConnectError("boom"))
-    await auth.resolve_user("tok-down")  # hub_unreachable
+    with pytest.raises(auth.HubUnavailable):
+        await auth.resolve_user("tok-down")  # hub_unreachable
 
     assert _auth_counter_value("validated") == before["validated"] + 1
     assert _auth_counter_value("cache_hit") == before["cache_hit"] + 1
     assert _auth_counter_value("neg_cache_hit") == before["neg_cache_hit"] + 1
     assert _auth_counter_value("invalid_token") == before["invalid_token"] + 1
     assert _auth_counter_value("hub_unreachable") == before["hub_unreachable"] + 1
+
+
+@respx.mock
+async def test_hub_5xx_is_unavailable_not_invalid_and_not_cached():
+    respx.get(HUB_USER_URL).respond(503, text="hub restarting")
+    before = _auth_counter_value("hub_error")
+
+    with pytest.raises(auth.HubUnavailable, match="returned HTTP 503"):
+        await auth.resolve_user("tok-1")
+
+    assert not auth._negative_cache
+    assert _auth_counter_value("hub_error") == before + 1
+
+
+@respx.mock
+async def test_hub_404_names_the_misconfiguration():
+    respx.get(HUB_USER_URL).respond(404)
+
+    with pytest.raises(auth.HubUnavailable, match="JUPYTERHUB_API_URL"):
+        await auth.resolve_user("tok-1")
+
+
+@respx.mock
+async def test_hub_401_is_invalid_token():
+    respx.get(HUB_USER_URL).respond(401)
+
+    assert await auth.resolve_user("tok-1") is None
+    assert auth._negative_cache
+
+
+# ── HubTokenVerifier (the MCP SDK TokenVerifier protocol) ─────────────────────
+
+
+@respx.mock
+async def test_verifier_maps_hub_user_to_access_token():
+    respx.get(HUB_USER_URL).respond(200, json=hub_user_payload())
+
+    access = await auth.HubTokenVerifier().verify_token("tok-1")
+
+    assert access is not None
+    assert access.client_id == "alice"
+    assert access.token == "tok-1"
+
+
+@respx.mock
+async def test_verifier_returns_none_for_rejected_token_and_raises_for_hub_outage():
+    respx.get(HUB_USER_URL).respond(403)
+    assert await auth.HubTokenVerifier().verify_token("bad") is None
+
+    respx.get(HUB_USER_URL).mock(side_effect=httpx.ConnectError("boom"))
+    with pytest.raises(auth.HubUnavailable):
+        await auth.HubTokenVerifier().verify_token("tok-2")

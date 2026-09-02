@@ -3,7 +3,8 @@
 import asyncio
 
 import pytest
-from agentic_helpers import register_tools
+import respx
+from agentic_helpers import failure, register_tools
 from tools import profiles
 
 VALUES_YAML = """
@@ -33,9 +34,14 @@ singleuser:
 
 @pytest.fixture(autouse=True)
 def clear_profile_cache():
-    profiles._cache = None
+    def reset():
+        profiles._fresh.clear()
+        profiles._last_good = []
+        profiles._last_error = None
+
+    reset()
     yield
-    profiles._cache = None
+    reset()
 
 
 # ── _slug ─────────────────────────────────────────────────────────────────────
@@ -190,8 +196,7 @@ async def test_get_profiles_stale_cache_fallback(monkeypatch):
     cached = await profiles.get_profiles()
 
     # Expire the cache, then break the source: stale data is better than none.
-    expiry, data = profiles._cache
-    profiles._cache = (expiry - 10_000, data)
+    profiles._fresh.clear()
     monkeypatch.setattr(profiles, "_read_configmap", broken_read)
 
     assert await profiles.get_profiles() == cached
@@ -267,5 +272,111 @@ async def test_list_profiles_tool_unavailable(monkeypatch):
     monkeypatch.setattr(profiles, "_read_configmap", broken_read)
 
     tools = register_tools(profiles).tools
-    out = await tools["list_af_profiles"]()
+    out = await failure(tools["list_af_profiles"]())
     assert "Could not read profile list" in out
+
+
+# ── failure reasons ───────────────────────────────────────────────────────────
+#
+# An empty profile list always comes with a reason a user can act on (or at
+# least report), never a bare "misconfigured".
+
+CM_URL = (
+    f"{profiles._K8S_API}/api/v1/namespaces/{profiles._NAMESPACE}"
+    f"/configmaps/{profiles._CONFIGMAP}"
+)
+
+
+@pytest.fixture
+def in_cluster(monkeypatch, tmp_path):
+    """Pretend to run inside Kubernetes, with a plain (mockable) HTTP client."""
+    import httpx
+
+    token = tmp_path / "token"
+    token.write_text("sa-token")
+    monkeypatch.setattr(profiles, "_TOKEN_PATH", str(token))
+    monkeypatch.setattr(
+        profiles, "shared_client", lambda name, **kwargs: httpx.AsyncClient()
+    )
+
+
+async def test_read_configmap_outside_kubernetes_explains(monkeypatch, tmp_path):
+    monkeypatch.setattr(profiles, "_TOKEN_PATH", str(tmp_path / "missing"))
+    assert await profiles._read_configmap() is None
+    assert "not running inside Kubernetes" in profiles.profiles_error()
+
+
+@pytest.mark.parametrize(
+    "status, expected",
+    [(403, "RBAC"), (404, "does not exist"), (500, "returned HTTP 500")],
+)
+@respx.mock
+async def test_read_configmap_http_failures_are_explained(in_cluster, status, expected):
+    respx.get(CM_URL).respond(status)
+    assert await profiles._read_configmap() is None
+    assert expected in profiles.profiles_error()
+
+
+@respx.mock
+async def test_read_configmap_unreachable_missing_values_and_success(in_cluster):
+    from httpx import ConnectError
+
+    respx.get(CM_URL).mock(side_effect=ConnectError("down"))
+    assert await profiles._read_configmap() is None
+    assert profiles.profiles_error().startswith("Kubernetes API unreachable")
+
+    respx.get(CM_URL).respond(200, json={"data": {}})
+    assert await profiles._read_configmap() is None
+    assert "no values.yaml" in profiles.profiles_error()
+
+    respx.get(CM_URL).respond(200, json={"data": {"values.yaml": VALUES_YAML}})
+    assert await profiles._read_configmap() == VALUES_YAML
+    assert profiles.profiles_error() is None
+
+
+def test_parse_profiles_tolerates_non_mapping_yaml():
+    assert profiles._parse_profiles("") == []
+    assert profiles._parse_profiles("- a\n- b\n") == []
+    assert profiles._parse_profiles("singleuser: [1, 2]\n") == []
+    assert profiles._parse_profiles("singleuser:\n  profileList:\n    - 7\n") == []
+
+
+async def test_get_profiles_unparseable_config_has_a_reason(monkeypatch):
+    async def junk():
+        return "singleuser: {}\n"
+
+    monkeypatch.setattr(profiles, "_read_configmap", junk)
+    assert await profiles.get_profiles() == []
+    assert "profileList" in profiles.profiles_error()
+
+
+async def test_list_profiles_tool_reports_the_reason(monkeypatch):
+    async def broken_read():
+        profiles._last_error = "Kubernetes API unreachable — connection refused"
+        return None
+
+    monkeypatch.setattr(profiles, "_read_configmap", broken_read)
+    out = await failure(register_tools(profiles).tools["list_af_profiles"]())
+    assert out.startswith(
+        "Could not read profile list — Kubernetes API unreachable — connection refused."
+    )
+    assert "use_defaults=True" in out
+
+
+async def test_list_profiles_tool_names_why_gpu_counts_are_missing(monkeypatch):
+    async def fake_read():
+        return GPU_VALUES_YAML
+
+    async def fake_free():
+        return None
+
+    monkeypatch.setattr(profiles, "_read_configmap", fake_read)
+    monkeypatch.setattr(profiles, "free_gpus", fake_free)
+    monkeypatch.setattr(
+        profiles, "gpu_error", lambda: "Prometheus is unreachable — connection refused"
+    )
+    out = await register_tools(profiles).tools["list_af_profiles"]()
+    assert (
+        "live GPU availability is unknown right now (Prometheus is unreachable — "
+        "connection refused)" in out
+    )

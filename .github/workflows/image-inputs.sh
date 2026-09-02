@@ -50,6 +50,7 @@ paths_for() {
 		# ci.yml) even when the server code is untouched.
 		cat <<-EOF
 			docker/agentic-interface
+			apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py
 			.claude/skills/purdue-af-agentic-interface
 			.github/workflows/ci-images.yml
 			.github/workflows/image-inputs.sh

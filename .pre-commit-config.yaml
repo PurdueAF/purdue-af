@@ -68,6 +68,7 @@ repos:
           - pydantic>=2.9
           - prometheus_client>=0.22
           - types-PyYAML
+          - types-cachetools
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.11.0.1

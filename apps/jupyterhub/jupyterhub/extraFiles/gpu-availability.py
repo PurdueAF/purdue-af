@@ -18,6 +18,7 @@ import asyncio
 import copy
 import json
 import os
+import sys
 import time
 from typing import Any
 from urllib.parse import urlencode
@@ -34,53 +35,36 @@ PROMETHEUS_TIMEOUT = 5  # seconds
 CACHE_TTL = 30  # seconds; form renders reuse the last Prometheus answer this long
 GRANT_TTL = 120  # seconds; admitted spawns count as used until Prometheus sees them
 
-# k8s extended resource -> kube-state-metrics resource label + human-readable
-# name; an optional "note" is always appended to the choice on the profile form
+# The PromQL and the resource→metric mapping are shared with the agentic
+# interface (gpu_queries.py, mounted alongside this snippet) so both report
+# the same numbers. z2jh execs snippets rather than importing them, hence the
+# explicit path; JUPYTERHUB_CONFIG_D lets tests point at the source tree.
+_CONFIG_D = os.environ.get(
+    "JUPYTERHUB_CONFIG_D", "/usr/local/etc/jupyterhub/jupyterhub_config.d"
+)
+if _CONFIG_D not in sys.path:
+    sys.path.insert(0, _CONFIG_D)
+from gpu_queries import ALLOC_QUERY as _ALLOC_QUERY  # noqa: E402
+from gpu_queries import GPU_METRICS  # noqa: E402
+from gpu_queries import USED_QUERY as _USED_QUERY  # noqa: E402
+
+# k8s extended resource -> human-readable name for the profile form; an
+# optional "note" is always appended to the choice.
 GPU_FLAVORS = {
     "nvidia.com/mig-1g.5gb": {
-        "metric": "nvidia_com_mig_1g_5gb",
         "label": "A100 GPU slices (5GB)",
         # keep in sync with the gpu-culler --timeout in values.yaml
         "note": "idle session timeout 24h",
     },
     "nvidia.com/mig-7g.40gb": {
-        "metric": "nvidia_com_mig_7g_40gb",
         "label": "full A100 GPUs (40GB)",
         "note": "idle session timeout 24h",
     },
     "nvidia.com/gpu": {
-        "metric": "nvidia_com_gpu",
         "label": "NVIDIA T4 GPUs (16GB)",
         "note": "idle session timeout 24h",
     },
 }
-
-# Scope both sides of the subtraction to schedulable AF nodes: tainted cms-af
-# and not cordoned ("== bool" / "group by" turn the join vectors into 0/1
-# weights). Pods on a cordoned node keep running but neither they nor the
-# node's capacity count towards what a new pod can be scheduled on.
-_NODE_SCOPE = (
-    " * on (node) group_left() (kube_node_spec_unschedulable == bool 0)"
-    ' * on (node) group_left() group by (node) (kube_node_spec_taint{value="cms-af"})'
-)
-# MIG slices (A100) and whole GPUs (T4 via nvidia.com/gpu).
-_GPU_RESOURCE = 'resource=~"nvidia_com_(mig_.+|gpu)"'
-_ALLOC_QUERY = (
-    "sum by (resource) ("
-    "kube_node_status_allocatable{" + _GPU_RESOURCE + "}" + _NODE_SCOPE + ")"
-)
-# Completed/failed pods keep their kube-state-metrics request series, so only
-# count pods that are currently Pending or Running.
-_USED_QUERY = (
-    "sum by (resource) ("
-    "kube_pod_container_resource_requests{"
-    + _GPU_RESOURCE
-    + "}"
-    + _NODE_SCOPE
-    + " * on (namespace, pod) group_left() (max by (namespace, pod) "
-    '(kube_pod_status_phase{phase=~"Pending|Running"}) == bool 1)'
-    ")"
-)
 
 
 async def _prom_query(query: str) -> dict[str, float]:
@@ -111,10 +95,10 @@ async def get_free_gpus() -> dict[str, int] | None:
         return None
     return {
         resource: max(
-            int(allocatable.get(flavor["metric"], 0) - used.get(flavor["metric"], 0)),
+            int(allocatable.get(metric, 0) - used.get(metric, 0)),
             0,
         )
-        for resource, flavor in GPU_FLAVORS.items()
+        for resource, metric in GPU_METRICS.items()
     }
 
 

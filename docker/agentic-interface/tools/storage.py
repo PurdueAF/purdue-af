@@ -1,37 +1,28 @@
 """Storage quota tool — queries af-pod-monitor metrics from Prometheus."""
 
 import asyncio
-import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import httpx
+from config import PROMETHEUS_URL
 from context import require_user
-from shared import quote_label, shared_client
+from errors import UpstreamError
+from shared import prom_query, prom_scalar, quote_label, shared_client
 
-PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
 _DIRS = ("home", "work")
 
 
-async def _prom_scalar(client: httpx.AsyncClient, query: str) -> Optional[float]:
-    """Run an instant PromQL query and return the first scalar result."""
-    try:
-        resp = await client.get(
-            f"{PROMETHEUS_URL}/api/v1/query",
-            params={"query": query},
-            timeout=5.0,
-        )
-    except httpx.RequestError:
-        return None
-    if resp.status_code != 200:
-        return None
-    results = resp.json().get("data", {}).get("result", [])
-    if not results:
-        return None
-    try:
-        return float(results[0]["value"][1])
-    except (KeyError, IndexError, ValueError):
-        return None
+async def _prom_scalar(
+    client: httpx.AsyncClient, query: str
+) -> tuple[Optional[float], Optional[str]]:
+    """Run an instant PromQL query → (first scalar or None, problem or None).
+
+    The problem is set only when Prometheus could not be asked; a None value
+    with no problem means the series does not exist.
+    """
+    rows, problem = await prom_query(client, PROMETHEUS_URL, query, timeout=5.0)
+    return prom_scalar(rows), problem
 
 
 def _bar(fraction: float, width: int = 20) -> str:
@@ -56,7 +47,9 @@ def register(mcp: Any) -> None:
 
         client = shared_client("prometheus")
 
-        async def _dir_metrics(prefix: str) -> list[Optional[float]]:
+        async def _dir_metrics(
+            prefix: str,
+        ) -> list[tuple[Optional[float], Optional[str]]]:
             return await asyncio.gather(
                 *(
                     _prom_scalar(client, f"af_{prefix}_dir_{metric}{{{user_selector}}}")
@@ -67,10 +60,15 @@ def register(mcp: Any) -> None:
         # Query both directories concurrently; rows still render home-then-work.
         per_dir = await asyncio.gather(*(_dir_metrics(prefix) for prefix in _DIRS))
 
+        # "Prometheus is down" must never read as "no data": collect every
+        # problem and report the first if nothing at all could be read.
+        problems = [p for results in per_dir for _, p in results if p]
+
         rows: list[str] = ["# Storage usage (data age ≤ 5 min)\n"]
         any_data = False
 
-        for prefix, (used_kb, size_kb, util, last_accessed) in zip(_DIRS, per_dir):
+        for prefix, results in zip(_DIRS, per_dir):
+            used_kb, size_kb, util, last_accessed = (v for v, _ in results)
             if used_kb is None or size_kb is None:
                 rows.append(f"/{prefix}/: no data\n")
                 continue
@@ -95,10 +93,23 @@ def register(mcp: Any) -> None:
             )
 
         if not any_data:
+            if problems:
+                raise UpstreamError(
+                    f"Error: could not read storage metrics — Prometheus {problems[0]}. This "
+                    "is a monitoring problem, not a quota problem: your storage is "
+                    "unaffected. Try again in a minute; get_facility_health shows "
+                    "whether the facility itself is degraded."
+                )
             return (
                 "No storage metrics in Prometheus for this user — the session may "
                 "not be running, or af-pod-monitor may still be initialising "
                 "(first reading takes up to 5 minutes after pod start)."
+            )
+
+        if problems:
+            rows.append(
+                f"Note: some readings could not be fetched — Prometheus {problems[0]}. "
+                "Missing figures above are a monitoring gap, not empty storage."
             )
 
         return "\n".join(rows)

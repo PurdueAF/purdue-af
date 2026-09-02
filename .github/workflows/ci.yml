@@ -297,15 +297,20 @@ jobs:
           fi
           git checkout -B autorelease "$GITHUB_SHA"
           cur=$(python3 .github/workflows/bump-agentic-version.py --print-current)
+          # Has the image changed since the last release? Compare the digest of
+          # the tree we validated (:in-<hash>) against the SAME kind of digest
+          # recorded in the previous release's tag annotation. Do NOT inspect
+          # the version tag on ghcr: `imagetools create` rewraps the manifest,
+          # so a version tag's digest never equals the :in- digest it was cut
+          # from — comparing against it would re-release on every commit.
           if [ "$cur" = "0.0.0" ]; then
-            cur_digest="" # pin is still `latest` — nothing released yet
+            prev_digest="" # pin is still `latest` — nothing released yet
           else
-            cur_digest=$(ghcr_retry "imagetools inspect $repo:$cur" \
-              docker buildx imagetools inspect "$repo:$cur" --format '{{json .Manifest}}' | jq -r .digest) \
-              || cur_digest=""
+            prev_digest=$(git for-each-ref --format='%(contents)' \
+              "refs/tags/agentic-interface-v$cur" | sed -n 's/^digest: //p')
           fi
-          if [ "$cur_digest" = "$want_digest" ]; then
-            echo "agentic-interface :$cur is already this digest — no release" \
+          if [ "$prev_digest" = "$want_digest" ]; then
+            echo "agentic-interface image unchanged since :$cur — no release" \
               | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -348,8 +353,12 @@ jobs:
           git push origin HEAD:refs/heads/main \
             || { echo "::error::pushing the auto-release commit failed (main moved?)"; exit 1; }
           bump_sha=$(git rev-parse HEAD)
+          # The 'digest:' line is load-bearing: the next run reads it back to
+          # decide whether the image changed (see the no-release check above).
+          # It is the :in-<hash> digest, NOT the version tag's rewrapped digest.
           git tag -a "agentic-interface-v$new" -m "agentic-interface image $new
           image: $repo:$new
+          inputs: $want
           digest: $want_digest"
           git push origin "agentic-interface-v$new"
           # Stamp ci-ok on the bump commit so consumers of that check (the

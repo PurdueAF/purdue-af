@@ -3,12 +3,9 @@
 from agentic_helpers import register_tools
 from tools import prompts
 
-EXPECTED_PROMPTS = {
-    "launch_session",
-    "restart_session",
-    "stop_session",
-    "create_cluster",
-}
+# Tool results already name the next step; only the cluster workflow, whose
+# questions a client without elicitation must ask in chat, earns a prompt.
+EXPECTED_PROMPTS = {"create_cluster"}
 
 
 def test_all_prompts_registered():
@@ -32,15 +29,7 @@ def test_prompts_reference_existing_tools():
             if tool in text:
                 mentioned.add(tool)
 
-    # The playbooks should steer through the session lifecycle tools.
-    assert {
-        "get_session_status",
-        "start_af_session",
-        "wait_for_session",
-        "stop_af_session",
-        "restart_af_session",
-        "list_af_profiles",
-    } <= mentioned
+    assert {"create_dask_cluster", "list_dask_cluster_options"} <= mentioned
 
 
 def test_prompt_text_never_names_unknown_tools():

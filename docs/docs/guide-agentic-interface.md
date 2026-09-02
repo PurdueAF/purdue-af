@@ -168,20 +168,25 @@ The available tools cover:
 * **Logs** — query your JupyterLab / VS Code server logs and Dask worker and
   scheduler logs, with time ranges and filters.
 
-The server also exposes invocable **workflow prompts** (`launch_session`,
-`restart_session`, `stop_session`, `create_cluster`) that walk the agent through
-each multi-step workflow. In Claude Code they appear as
-`/mcp__purdue-af-agentic-interface__<name>` slash commands.
+The server also exposes one invocable **workflow prompt**, `create_cluster`,
+which walks the agent through the four cluster questions when its client
+cannot ask them itself. In Claude Code it appears as
+`/mcp__purdue-af-agentic-interface__create_cluster`.
 
 ## Troubleshooting
 
-| Symptom | Cause / solution |
+Failures are self-describing: a failing tool result (which the agent relays
+to you) says what was attempted, why it failed, and what to do next. If the
+connection itself is refused — the agent shows the server as failed or
+needing authentication — the server's response carries an `error` and a
+`hint` with the same information; ask the agent for it, or check your MCP
+client's server status.
+
+| Symptom | What to do |
 | --- | --- |
-| `401` / "Invalid JupyterHub token" | The token expired or is wrong — get a new one at [/hub/token](https://cms.geddes.rcac.purdue.edu/hub/token). |
-| "No active session" | No session is running — ask the agent to start one first. |
-| "Cannot read session state" | The agent's token is not allowed to list your sessions. Inside an AF session this means the image predates the fix — restart the session; from your own machine, mint a fresh token at [/hub/token](https://cms.geddes.rcac.purdue.edu/hub/token). |
 | Agent reports a facility problem | Check the [monitoring dashboard](https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-alerts) and [contact support](support.md) if it persists. |
 | HTTP 404 on the service URL | Check the URL — it must end with `/services/agentic-interface/mcp`. |
+| A message says the fault is in the service itself | [Contact support](support.md) with the tool name and the time. |
 
 !!! note "See also"
 

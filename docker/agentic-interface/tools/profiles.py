@@ -6,27 +6,33 @@ sync with whatever the admin has configured — no hardcoded option keys or slug
 """
 
 import asyncio
-import os
 import re
-import time
 from typing import Any, Optional
 
 import httpx
 import yaml
+from cachetools import TTLCache
+from config import NAMESPACE
+from errors import UpstreamError, describe_exception, json_body, response_detail
 from shared import shared_client
 
-from tools.gpu import free_gpus
+from tools.gpu import free_gpus, gpu_error
 
 # Kubernetes in-cluster service and credentials
 _K8S_API = "https://kubernetes.default.svc"
 _TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 _CA_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-_NAMESPACE = os.environ.get("NAMESPACE", "cms")
+_NAMESPACE = NAMESPACE
 _CONFIGMAP = "jupyterhub-config"
 
-# (expiry_monotonic, profiles) — refresh every 5 minutes
-_cache: tuple[float, list[dict]] | None = None
+# Fresh for 5 minutes; the last good read is kept separately so a broken
+# source degrades to stale data rather than nothing.
 _CACHE_TTL = 300.0
+_fresh: TTLCache[str, list[dict]] = TTLCache(1, _CACHE_TTL)
+_last_good: list[dict] = []
+# Why the last read failed, in user terms — reported instead of a bare
+# "service may be misconfigured". None after a successful read.
+_last_error: Optional[str] = None
 # Single-flights the refresh so concurrent cache misses don't dogpile the API.
 _refresh_lock = asyncio.Lock()
 
@@ -66,11 +72,20 @@ def _gpu_resource(kubespawner_override: Optional[dict]) -> Optional[str]:
 
 
 async def _read_configmap() -> Optional[str]:
-    """Return the values.yaml string from the jupyterhub-config ConfigMap, or None."""
+    """Return the values.yaml string from the jupyterhub-config ConfigMap, or None.
+
+    Every None is accompanied by ``_last_error`` saying why.
+    """
+    global _last_error
     try:
         token = open(_TOKEN_PATH).read().strip()
     except OSError:
-        return None  # not running inside k8s (local dev)
+        # not running inside k8s (local dev)
+        _last_error = (
+            "this service is not running inside Kubernetes (no service-account "
+            "token), so the JupyterHub configuration cannot be read"
+        )
+        return None
 
     # verify= goes to the transport: httpx ignores client-level TLS settings
     # once a custom transport is supplied (applied on first creation only).
@@ -81,14 +96,38 @@ async def _read_configmap() -> Optional[str]:
             headers={"Authorization": f"Bearer {token}"},
             timeout=5.0,
         )
-    except httpx.RequestError:
+    except httpx.RequestError as exc:
+        _last_error = f"Kubernetes API unreachable — {describe_exception(exc)}"
         return None
 
+    if resp.status_code == 403:
+        _last_error = (
+            "the agentic-interface service account is not allowed to read "
+            f"ConfigMap '{_CONFIGMAP}' in namespace '{_NAMESPACE}' (Kubernetes "
+            "API HTTP 403) — an RBAC problem on the facility side"
+        )
+        return None
+    if resp.status_code == 404:
+        _last_error = (
+            f"ConfigMap '{_CONFIGMAP}' does not exist in namespace '{_NAMESPACE}' "
+            "(Kubernetes API HTTP 404)"
+        )
+        return None
     if resp.status_code != 200:
+        detail = response_detail(resp, limit=120)
+        _last_error = f"Kubernetes API returned HTTP {resp.status_code}" + (
+            f" — {detail}" if detail else ""
+        )
         return None
 
-    values: Any = resp.json().get("data", {}).get("values.yaml")
-    return values if values is None else str(values)
+    payload = json_body(resp)
+    data = payload.get("data") if isinstance(payload, dict) else None
+    values: Any = data.get("values.yaml") if isinstance(data, dict) else None
+    if values is None:
+        _last_error = f"ConfigMap '{_CONFIGMAP}' has no values.yaml entry"
+        return None
+    _last_error = None
+    return str(values)
 
 
 def _parse_profiles(values_yaml: str) -> list[dict]:
@@ -97,11 +136,18 @@ def _parse_profiles(values_yaml: str) -> list[dict]:
         values = yaml.safe_load(values_yaml)
     except yaml.YAMLError:
         return []
+    if not isinstance(values, dict):
+        return []
 
-    raw = values.get("singleuser", {}).get("profileList", [])
+    singleuser = values.get("singleuser") or {}
+    raw = singleuser.get("profileList") if isinstance(singleuser, dict) else None
+    if not isinstance(raw, list):
+        return []
     profiles: list[dict] = []
 
     for p in raw:
+        if not isinstance(p, dict):
+            continue
         display_name = p.get("display_name", "")
         is_default = bool(p.get("default", False))
 
@@ -149,27 +195,40 @@ def _parse_profiles(values_yaml: str) -> list[dict]:
 # ── public helpers ────────────────────────────────────────────────────────────
 
 
+def profiles_error() -> Optional[str]:
+    """Why the profile list is (or was last) unavailable, or None."""
+    return _last_error
+
+
 async def get_profiles(force: bool = False) -> list[dict]:
-    """Return the profile list, with a 5-minute cache."""
-    global _cache
-    if not force and _cache and time.monotonic() < _cache[0]:
-        return _cache[1]
+    """Return the profile list, with a 5-minute cache.
+
+    An empty list always has a reason waiting in ``profiles_error()``.
+    """
+    global _last_good, _last_error
+    if not force and "profiles" in _fresh:
+        return _fresh["profiles"]
 
     async with _refresh_lock:
         # Re-check after acquiring — another task may have refreshed while
         # we waited on the lock.
-        if not force and _cache and time.monotonic() < _cache[0]:
-            return _cache[1]
+        if not force and "profiles" in _fresh:
+            return _fresh["profiles"]
 
         raw = await _read_configmap()
         if raw:
             profiles = _parse_profiles(raw)
             if profiles:
-                _cache = (time.monotonic() + _CACHE_TTL, profiles)
+                _fresh["profiles"] = profiles
+                _last_good = profiles
                 return profiles
+            _last_error = (
+                "the JupyterHub configuration was read but contains no parseable "
+                "singleuser.profileList"
+            )
 
-        # Return stale cache rather than nothing
-        return _cache[1] if _cache else []
+        # Return stale data rather than nothing
+        return _last_good
 
 
 def find_profile(profiles: list[dict], name: str) -> Optional[dict]:
@@ -195,9 +254,12 @@ def register(mcp: Any) -> None:
         """
         profiles = await get_profiles()
         if not profiles:
-            return (
-                "Could not read profile list — service may be misconfigured. "
-                "Try again shortly or contact AF support."
+            raise UpstreamError(
+                f"Could not read profile list — {profiles_error() or 'unknown reason'}. "
+                "This is a problem on the facility side, not with the request: "
+                "try again in a minute, and contact AF support if it persists. "
+                "start_af_session(use_defaults=True) still works — the Hub "
+                "applies its own default profile."
             )
 
         # Live GPU availability (only queried if some profile exposes a GPU option).
@@ -228,5 +290,13 @@ def register(mcp: Any) -> None:
                         )
 
             sections.append("\n".join(block))
+
+        if has_gpu and free is None:
+            sections.append(
+                "Note: live GPU availability is unknown right now "
+                f"({gpu_error() or 'the monitoring system did not answer'}), so GPU "
+                "choices are listed without live counts and a GPU flavour may "
+                "turn out to be exhausted when the session starts."
+            )
 
         return "\n\n".join(sections)
