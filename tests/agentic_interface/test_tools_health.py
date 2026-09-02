@@ -221,9 +221,40 @@ async def test_reports_the_callers_own_quota(user_ctx):
 @pytest.mark.asyncio
 async def test_monitoring_outage_is_not_a_health_claim(user_ctx):
     """If Prometheus cannot be reached, say so rather than implying healthy."""
-    out = await run(home_util=None)
+    from httpx import ConnectError
+
+    tools = register_tools(health)
+    with respx.mock:
+        respx.get(PROM_URL).mock(side_effect=ConnectError("down"))
+        out = await tools.tools["get_facility_health"]()
+
+    assert out.startswith("Error: the monitoring system is unreachable")
     assert "cannot tell you" in out
     assert "**Healthy**" not in out
+
+
+@pytest.mark.asyncio
+async def test_monitoring_http_error_is_reported_with_its_reason(user_ctx):
+    from httpx import Response
+
+    tools = register_tools(health)
+    with respx.mock:
+        respx.get(PROM_URL).mock(
+            return_value=Response(503, json={"error": "query engine overloaded"})
+        )
+        out = await tools.tools["get_facility_health"]()
+
+    assert "returned HTTP 503 — query engine overloaded" in out
+    assert "cannot tell you" in out
+
+
+@pytest.mark.asyncio
+async def test_healthy_without_a_running_session_is_still_healthy(user_ctx):
+    """No quota reading means no session — not a monitoring outage."""
+    out = await run(home_util=None)
+    assert "**Healthy**" in out
+    assert "cannot tell you" not in out
+    assert "No reading of your home directory quota" in out
 
 
 @pytest.mark.asyncio

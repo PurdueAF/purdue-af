@@ -8,6 +8,13 @@ from typing import Any, Optional
 
 import httpx
 from context import require_user
+from errors import (
+    http_error,
+    json_body,
+    malformed_response,
+    response_detail,
+    unreachable,
+)
 from shared import quote_label, shared_client
 
 LOKI_URL = os.environ.get("LOKI_URL", "http://loki.cms.svc.cluster.local:3100")
@@ -117,12 +124,26 @@ async def _loki_query(
             timeout=30.0,
         )
     except httpx.RequestError as exc:
-        return f"Error: Loki connection failed — {exc}"
+        return unreachable("the log store (Loki)", exc)
 
+    if resp.status_code == 400:
+        # Loki's 400 is a query it could not parse — the caller's filter or
+        # time range, not the facility.
+        return (
+            "Error: the log store (Loki) rejected the query (HTTP 400) — "
+            f"{response_detail(resp, limit=400) or 'no reason given'}. The filter "
+            "argument must be a LogQL pipe expression such as '|= \"ERROR\"' or "
+            "'|~ \"timeout|refused\"', and start/end must be durations ('1h', "
+            "'2d') or ISO-8601 timestamps."
+        )
     if resp.status_code != 200:
-        return f"Error: Loki returned HTTP {resp.status_code} — {resp.text[:500]}"
+        return http_error("the log store (Loki)", resp, action="query logs")
 
-    streams = resp.json().get("data", {}).get("result", [])
+    payload = json_body(resp)
+    data = payload.get("data") if isinstance(payload, dict) else None
+    streams = data.get("result") if isinstance(data, dict) else None
+    if not isinstance(streams, list):
+        return malformed_response("the log store (Loki)", resp, "a log query result")
     lines: list[str] = []
     for stream in streams:
         labels = stream.get("stream", {})

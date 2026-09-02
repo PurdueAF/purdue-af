@@ -22,28 +22,32 @@ def prom_result(value):
 async def test_prom_scalar_returns_float():
     respx.get(PROM_URL).respond(200, json=prom_result(42.5))
     async with AsyncClient() as client:
-        assert await storage._prom_scalar(client, "q") == 42.5
+        assert await storage._prom_scalar(client, "q") == (42.5, None)
 
 
 @respx.mock
-async def test_prom_scalar_empty_result_is_none():
+async def test_prom_scalar_empty_result_is_none_without_problem():
     respx.get(PROM_URL).respond(200, json={"data": {"result": []}})
     async with AsyncClient() as client:
-        assert await storage._prom_scalar(client, "q") is None
+        assert await storage._prom_scalar(client, "q") == (None, None)
 
 
 @respx.mock
-async def test_prom_scalar_http_error_is_none():
+async def test_prom_scalar_http_error_is_a_problem():
     respx.get(PROM_URL).respond(503)
     async with AsyncClient() as client:
-        assert await storage._prom_scalar(client, "q") is None
+        value, problem = await storage._prom_scalar(client, "q")
+    assert value is None
+    assert problem == "returned HTTP 503"
 
 
 @respx.mock
-async def test_prom_scalar_unreachable_is_none():
+async def test_prom_scalar_unreachable_is_a_problem():
     respx.get(PROM_URL).mock(side_effect=ConnectError("down"))
     async with AsyncClient() as client:
-        assert await storage._prom_scalar(client, "q") is None
+        value, problem = await storage._prom_scalar(client, "q")
+    assert value is None
+    assert problem.startswith("is unreachable")
 
 
 @respx.mock
@@ -52,7 +56,7 @@ async def test_prom_scalar_malformed_value_is_none():
         200, json={"data": {"result": [{"value": [1700000000, "NaN-ish?"]}]}}
     )
     async with AsyncClient() as client:
-        assert await storage._prom_scalar(client, "q") is None
+        assert await storage._prom_scalar(client, "q") == (None, None)
 
 
 # ── _bar ──────────────────────────────────────────────────────────────────────
@@ -167,3 +171,40 @@ async def test_storage_util_falls_back_to_ratio(user_ctx):
     out = await tools["query_storage_usage"]()
     # 10/40 = 25% computed from the used/size ratio
     assert re.search(r"25\.0%", out)
+
+
+@respx.mock
+async def test_storage_prometheus_down_is_an_error_not_no_data(user_ctx):
+    respx.get(PROM_URL).mock(side_effect=ConnectError("down"))
+
+    tools = register_tools(storage).tools
+    out = await tools["query_storage_usage"]()
+
+    assert out.startswith("Error: could not read storage metrics")
+    assert "unreachable" in out
+    assert "No storage metrics" not in out
+    assert "not a quota problem" in out
+
+
+@respx.mock
+async def test_storage_partial_outage_is_noted(user_ctx):
+    from httpx import Response
+
+    def responder(request):
+        query = request.url.params["query"]
+        if "af_work" in query:
+            return Response(502, text="bad gateway")
+        value = {"used_kb": 5 * 1024 * 1024, "size_kb": 25 * 1024 * 1024}
+        for metric, v in value.items():
+            if f"af_home_dir_{metric}" in query:
+                return Response(200, json=prom_result(v))
+        return Response(200, json={"data": {"result": []}})
+
+    respx.get(PROM_URL).mock(side_effect=responder)
+    tools = register_tools(storage).tools
+    out = await tools["query_storage_usage"]()
+
+    assert "/home/" in out
+    assert "/work/: no data" in out
+    assert "could not be fetched — Prometheus returned HTTP 502" in out
+    assert "monitoring gap, not empty storage" in out

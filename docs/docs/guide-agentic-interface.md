@@ -138,11 +138,20 @@ each multi-step workflow. In Claude Code they appear as
 
 ## Troubleshooting
 
+Every failure is reported where you can see it: in the tool result the agent
+relays to you, or — when the connection itself is refused — in the server's
+response, which carries an `error` and a `hint` saying what to do.
+
 | Symptom | Cause / solution |
 | --- | --- |
-| `401` / "Invalid JupyterHub token" | The token expired or is wrong — get a new one at [/hub/token](https://cms.geddes.rcac.purdue.edu/hub/token). |
+| `Missing Bearer token`, `Empty Bearer token`, `Unexpanded token placeholder` | The token never reached the server: the token file or environment variable in your agent's MCP configuration is missing, empty, or was not expanded. Fix it and reconnect the server. |
+| `Invalid JupyterHub token` | The token expired, is mistyped, or was revoked — get a new one at [/hub/token](https://cms.geddes.rcac.purdue.edu/hub/token). Inside an AF session the token rotates on every restart, so restart the agent. |
+| `JupyterHub API unavailable` (HTTP 503) | The hub cannot validate tokens right now — a facility problem, not a token problem. Retry in a minute. |
+| "not permitted … (HTTP 403)" | A session's own token can read the session but not start, stop, or restart it. From your own machine use a token from [/hub/token](https://cms.geddes.rcac.purdue.edu/hub/token). |
+| "Cannot read session state" | The agent's token is not allowed to list your sessions. Inside an AF session this means the image predates the fix — restart the session; from your own machine, mint a fresh token. |
+| "unreachable" / "returned HTTP 5xx" / "could not read … metrics" | A facility backend (hub, Dask gateway, log store, monitoring) is down or restarting. Ask the agent whether the facility is healthy, and retry in a minute. |
 | "No active session" | No session is running — ask the agent to start one first. |
-| "Cannot read session state" | The agent's token is not allowed to list your sessions. Inside an AF session this means the image predates the fix — restart the session; from your own machine, mint a fresh token at [/hub/token](https://cms.geddes.rcac.purdue.edu/hub/token). |
+| "failed unexpectedly" | A fault in the service itself — [contact support](support.md) with the tool name and the time. |
 | Agent reports a facility problem | Check the [monitoring dashboard](https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-alerts) and [contact support](support.md) if it persists. |
 | HTTP 404 on the service URL | Check the URL — it must end with `/services/agentic-interface/mcp`. |
 

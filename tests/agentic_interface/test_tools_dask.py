@@ -777,29 +777,39 @@ async def test_require_owned_cluster_error_shapes(user_ctx):
 
 
 @respx.mock
-async def test_prom_helpers_tolerate_failures():
+async def test_prom_helpers_report_problems_separately_from_no_data():
     import httpx
 
     async with httpx.AsyncClient() as client:
         respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").mock(
             side_effect=ConnectError("down")
         )
-        assert await dask._prom_scalar(client, dask.PROMETHEUS_URL, "up") is None
-        assert await dask._prom_vector(client, dask.PROMETHEUS_URL, "up") == []
+        value, problem = await dask._prom_scalar(client, dask.PROMETHEUS_URL, "up")
+        assert value is None and problem.startswith("is unreachable")
+        rows, problem = await dask._prom_vector(client, dask.PROMETHEUS_URL, "up")
+        assert rows == [] and problem.startswith("is unreachable")
 
         respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").respond(500)
-        assert await dask._prom_scalar(client, dask.PROMETHEUS_URL, "up") is None
-        assert await dask._prom_vector(client, dask.PROMETHEUS_URL, "up") == []
+        value, problem = await dask._prom_scalar(client, dask.PROMETHEUS_URL, "up")
+        assert value is None and problem == "returned HTTP 500"
+        rows, problem = await dask._prom_vector(client, dask.PROMETHEUS_URL, "up")
+        assert rows == [] and problem == "returned HTTP 500"
 
         respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").respond(
             200, json={"data": {"result": []}}
         )
-        assert await dask._prom_scalar(client, dask.PROMETHEUS_URL, "up") is None
+        assert await dask._prom_scalar(client, dask.PROMETHEUS_URL, "up") == (
+            None,
+            None,
+        )
 
         respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").respond(
             200, json={"data": {"result": [{"value": [0, "bad"]}]}}
         )
-        assert await dask._prom_scalar(client, dask.PROMETHEUS_URL, "up") is None
+        assert await dask._prom_scalar(client, dask.PROMETHEUS_URL, "up") == (
+            None,
+            None,
+        )
 
         respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").respond(
             200,
@@ -812,8 +822,9 @@ async def test_prom_helpers_tolerate_failures():
                 }
             },
         )
-        rows = await dask._prom_vector(client, dask.PROMETHEUS_URL, "up")
+        rows, problem = await dask._prom_vector(client, dask.PROMETHEUS_URL, "up")
         assert rows == [({"a": "1"}, 1.5)]
+        assert problem is None
 
 
 async def test_list_options_unknown_gateway(user_ctx):
@@ -903,7 +914,7 @@ async def test_create_gateway_errors_and_scale_failures(user_ctx):
     assert "HTTP 500" in await tools["create_dask_cluster"](FakeCtx(), **kwargs)
 
     respx.post(clusters_url(K8S)).respond(201, json={})
-    assert "no cluster name" in await tools["create_dask_cluster"](
+    assert "not a cluster record with a name" in await tools["create_dask_cluster"](
         FakeCtx(), **{**kwargs, "n_workers": 0}
     )
 
@@ -912,12 +923,14 @@ async def test_create_gateway_errors_and_scale_failures(user_ctx):
         side_effect=ConnectError("down")
     )
     out = await tools["create_dask_cluster"](FakeCtx(), **kwargs)
-    assert "Created, but scale failed" in out
+    assert "Created with 0 workers — the scale request failed" in out
+    assert "unreachable" in out
+    assert "scale_dask_cluster('cms.s', 2, gateway='k8s')" in out
 
     respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.s2"})
     respx.post(f"{K8S}/api/v1/clusters/cms.s2/scale").respond(500, text="no")
     out = await tools["create_dask_cluster"](FakeCtx(), **kwargs)
-    assert "scale returned HTTP 500" in out
+    assert "returned HTTP 500 while trying to scale to 2 worker(s)" in out
 
 
 @respx.mock
@@ -1327,3 +1340,127 @@ async def test_usage_regex_escapes_cluster_id(user_ctx):
     assert seen
     for q in seen:
         assert 'pod=~"dask-worker-abc\\-1-.+"' in q
+
+
+# ── failure translation ───────────────────────────────────────────────────────
+
+
+@respx.mock
+async def test_list_clusters_all_gateways_refused_is_an_error(user_ctx):
+    respx.get(url__regex=r".*/api/v1/clusters/").respond(403)
+    out = await register_tools(dask).tools["list_dask_clusters"]()
+    assert out.startswith("Error: not authorised on any gateway")
+    assert "No running Dask clusters" not in out
+
+
+@respx.mock
+async def test_list_clusters_notes_a_refused_gateway_when_nothing_is_listed(user_ctx):
+    import httpx
+
+    def responder(request):
+        if "k8s-slurm" in str(request.url):
+            return httpx.Response(403)
+        return httpx.Response(200, json={})
+
+    respx.get(url__regex=r".*/api/v1/clusters/").mock(side_effect=responder)
+    out = await register_tools(dask).tools["list_dask_clusters"]()
+    assert out.startswith(
+        "No running Dask clusters on any gateway (gateway slurm: not authorised"
+    )
+
+
+@respx.mock
+async def test_list_clusters_reports_the_gateways_reason(user_ctx):
+    import httpx
+
+    def responder(request):
+        if "k8s-slurm" in str(request.url):
+            return httpx.Response(503, json={"message": "scheduler restarting"})
+        return httpx.Response(200, json={})
+
+    respx.get(url__regex=r".*/api/v1/clusters/").mock(side_effect=responder)
+    out = await register_tools(dask).tools["list_dask_clusters"]()
+    assert "[slurm] error: HTTP 503 — scheduler restarting" in out
+
+
+@respx.mock
+async def test_worker_count_prometheus_down_is_not_no_metrics(user_ctx):
+    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+        200, json={"name": "cms.abc", "status": "RUNNING"}
+    )
+    respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").mock(
+        side_effect=ConnectError("down")
+    )
+    out = await register_tools(dask).tools["get_dask_worker_count"]("cms.abc")
+    assert out.startswith(
+        "Error: could not read worker metrics for 'cms.abc' — Prometheus is unreachable"
+    )
+    assert "No worker metrics" not in out
+    assert "get_dask_cluster_info" in out
+
+
+@respx.mock
+async def test_usage_monitoring_down_is_reported(user_ctx):
+    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+        200, json={"name": "cms.abc", "status": "RUNNING"}
+    )
+    respx.get(f"{dask.CLUSTER_PROMETHEUS_URL}/api/v1/query").respond(500, text="boom")
+    out = await register_tools(dask).tools["get_dask_cluster_usage"]("cms.abc")
+    assert out.startswith(
+        "Error: could not read resource usage for 'cms.abc' — the monitoring "
+        "system returned HTTP 500 — boom"
+    )
+
+
+@respx.mock
+async def test_gateway_refusal_not_found_and_conflict_are_explained(user_ctx):
+    tools = register_tools(dask).tools
+    respx.get(f"{SLURM}/api/v1/clusters/c1").respond(403)
+    out = await tools["get_dask_cluster_info"]("c1", gateway="slurm")
+    assert out.startswith(
+        "Error: not authorised on gateway 'slurm' to inspect cluster 'c1' (HTTP 403)."
+    )
+    assert "Hammer" in out
+
+    respx.post(f"{K8S}/api/v1/clusters/c1/scale").respond(404)
+    out = await tools["scale_dask_cluster"]("c1", 3)
+    assert out.startswith("Cluster 'c1' not found on gateway 'k8s'.")
+    assert "list_dask_clusters" in out
+
+    respx.post(f"{K8S}/api/v1/clusters/c1/scale").respond(
+        409, json={"message": "cluster is stopping"}
+    )
+    out = await tools["scale_dask_cluster"]("c1", 3)
+    assert out == (
+        "Error: gateway 'k8s' rejected the request to scale to 3 worker(s) — "
+        "cluster is stopping."
+    )
+
+    respx.get(f"{K8S}/api/v1/clusters/c1").respond(502, text="<h1>Bad Gateway</h1>")
+    out = await tools["get_dask_cluster_info"]("c1")
+    assert (
+        "returned HTTP 502 while trying to inspect cluster 'c1' (it is down or "
+        "restarting behind its proxy) — Bad Gateway" in out
+    )
+
+
+@respx.mock
+async def test_create_malformed_success_body_warns_about_duplicates(user_ctx):
+    respx.post(clusters_url(K8S)).respond(201, text="<html>proxy</html>")
+    out = await register_tools(dask).tools["create_dask_cluster"](
+        FakeCtx(),
+        gateway="k8s",
+        pixi_project="/p",
+        worker_cores=1,
+        worker_memory=4,
+        n_workers=0,
+    )
+    assert "not a cluster record with a name" in out
+    assert "list_dask_clusters before creating another" in out
+
+
+@respx.mock
+async def test_list_options_malformed_body(user_ctx):
+    respx.get(f"{K8S}/api/v1/options").respond(200, text="nope")
+    out = await register_tools(dask).tools["list_dask_cluster_options"]()
+    assert "not a cluster-options document" in out

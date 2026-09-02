@@ -11,9 +11,10 @@ functions can scope their queries per-request.
 import json
 import logging
 import os
+import re
 
 import uvicorn
-from auth import resolve_user
+from auth import HubUnavailable, resolve_user
 from context import current_user
 from mcp.server.fastmcp import FastMCP
 from metrics import (
@@ -36,6 +37,70 @@ SERVICE_PREFIX = os.environ.get(
 # the JSON-RPC method; MCP messages are tiny, and the pod has a 256Mi memory
 # limit, so anything larger is rejected with 413 before reaching the app.
 MAX_BODY_BYTES = 5 * 1024 * 1024
+
+# Where a user mints a token — every authentication failure points here.
+TOKEN_URL = (
+    os.environ.get("AF_PUBLIC_URL", "https://cms.geddes.rcac.purdue.edu").rstrip("/")
+    + "/hub/token"
+)
+
+# ── authentication failures ───────────────────────────────────────────────────
+#
+# An MCP client that is refused here shows the user nothing but the HTTP
+# status and (at best) this body, so the body must carry the whole diagnosis:
+# what was wrong with the credential and what to do about it. The `error`
+# strings are stable — the skill and the docs quote them.
+
+# What a client sends when the token it was configured with was never filled
+# in: an unexpanded ${VAR}/$VAR/%VAR%, or a placeholder copied from the docs.
+_PLACEHOLDER_RE = re.compile(
+    r"^(?:\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|%[A-Za-z_][A-Za-z0-9_]*%|<[^>]*>"
+    r"|YOUR[_-]?(?:API[_-]?)?TOKEN(?:[_-]?HERE)?|\.\.\.)$",
+    re.IGNORECASE,
+)
+
+_HINT_MISSING = (
+    "No Authorization header reached the service. Configure the MCP client to "
+    "send 'Authorization: Bearer <JupyterHub API token>' — mint a token at "
+    f"{TOKEN_URL}, or inside an AF session use the JUPYTERHUB_API_TOKEN the "
+    "session provides."
+)
+_HINT_EMPTY = (
+    "The Authorization header arrived as 'Bearer' with nothing after it: the "
+    "environment variable or token file the MCP client reads (for example "
+    "JUPYTERHUB_API_TOKEN, or ~/.config/purdue-af/token) is empty or unset. "
+    "Fill it in, then reconnect the MCP server."
+)
+_HINT_INVALID = (
+    "JupyterHub does not recognise this token: it is mistyped, expired, or was "
+    "revoked (inside an AF session the token changes on every restart). Mint a "
+    f"new one at {TOKEN_URL} — or, inside a session, restart the agent so it "
+    "picks up the current JUPYTERHUB_API_TOKEN — then reconnect the MCP server."
+)
+_HINT_UNAVAILABLE = (
+    "The token could not be checked because {detail}. This is a facility-side "
+    "problem, not a token problem — try again in a minute."
+)
+
+
+def _token_problem(token: str) -> tuple[str, str] | None:
+    """Reject credentials that cannot be a token before asking the Hub.
+
+    Returns ``(error, hint)`` or None. Catching these here turns a generic
+    "invalid token" into the actual mistake: an unset variable, a placeholder
+    that was never replaced.
+    """
+    if not token:
+        return "Empty Bearer token", _HINT_EMPTY
+    if _PLACEHOLDER_RE.match(token):
+        return "Unexpanded token placeholder", (
+            f"The token sent was the literal text {token[:40]!r}: the placeholder "
+            "in the MCP client configuration was never replaced with a real "
+            "token, or the environment variable it names is unset and the client "
+            "did not expand it. Put a real token there (mint one at "
+            f"{TOKEN_URL}), then reconnect the MCP server."
+        )
+    return None
 
 
 class _PathStripper:
@@ -149,24 +214,59 @@ class _AuthMiddleware:
 
         # Only serve the MCP endpoint; return 404 for anything else.
         if route != "mcp":
-            await self._respond(send, 404, "not found")
+            await self._respond(
+                send,
+                404,
+                "not found",
+                hint=f"The MCP endpoint is {SERVICE_PREFIX}/mcp.",
+            )
             record_request(route, 404)
             return
 
         headers = {k.lower(): v for k, v in scope.get("headers", [])}
-        auth = headers.get(b"authorization", b"").decode()
+        auth = headers.get(b"authorization", b"").decode(errors="replace").strip()
 
-        if not auth.startswith("Bearer "):
-            await self._respond(send, 401, "Missing Bearer token")
-            record_request(route, 401)
+        if not auth:
+            await self._reject(send, route, "Missing Bearer token", _HINT_MISSING)
             return
 
-        token = auth[len("Bearer ") :]
-        user_info = await resolve_user(token)
+        scheme, _, token = auth.partition(" ")
+        token = token.strip()
+        if scheme.lower() != "bearer":
+            await self._reject(
+                send,
+                route,
+                "Unsupported Authorization scheme",
+                f"The Authorization header used the scheme {scheme!r}; this "
+                "service expects 'Authorization: Bearer <JupyterHub API token>'. "
+                "(JupyterHub's own REST API takes 'token <…>', but the MCP "
+                "endpoint does not.)",
+            )
+            return
+
+        problem = _token_problem(token)
+        if problem is not None:
+            await self._reject(send, route, *problem, invalid=True)
+            return
+
+        try:
+            user_info = await resolve_user(token)
+        except HubUnavailable as exc:
+            logger.warning("token validation impossible: %s", exc.detail)
+            await self._respond(
+                send,
+                503,
+                "JupyterHub API unavailable",
+                hint=_HINT_UNAVAILABLE.format(detail=exc.detail),
+                extra_headers=[(b"retry-after", b"10")],
+            )
+            record_request(route, 503)
+            return
 
         if user_info is None:
-            await self._respond(send, 401, "Invalid JupyterHub token")
-            record_request(route, 401)
+            await self._reject(
+                send, route, "Invalid JupyterHub token", _HINT_INVALID, invalid=True
+            )
             return
 
         # Rewrite Host → localhost:8888 to satisfy the MCP SDK's DNS-rebinding
@@ -249,9 +349,43 @@ class _AuthMiddleware:
         )
         await send({"type": "http.response.body", "body": body})
 
+    @classmethod
+    async def _reject(
+        cls, send: Send, route: str, error: str, hint: str, *, invalid: bool = False
+    ) -> None:
+        """401 with the diagnosis in the body and an RFC 6750 challenge header.
+
+        ``invalid`` marks a credential that was presented but unusable; a
+        request that carried no usable credential at all gets the bare
+        challenge, as the RFC asks.
+        """
+        logger.info("rejected request: %s", error)
+        challenge = 'Bearer realm="purdue-af-agentic-interface"'
+        if invalid:
+            description = hint.replace('"', "'")
+            challenge += f', error="invalid_token", error_description="{description}"'
+        await cls._respond(
+            send,
+            401,
+            error,
+            hint=hint,
+            extra_headers=[(b"www-authenticate", challenge.encode())],
+        )
+        record_request(route, 401)
+
     @staticmethod
-    async def _respond(send: Send, status: int, detail: str) -> None:
-        body = json.dumps({"error": detail}).encode()
+    async def _respond(
+        send: Send,
+        status: int,
+        detail: str,
+        *,
+        hint: str | None = None,
+        extra_headers: list[tuple[bytes, bytes]] | None = None,
+    ) -> None:
+        payload: dict[str, str] = {"error": detail}
+        if hint:
+            payload["hint"] = hint
+        body = json.dumps(payload).encode()
         await send(
             {
                 "type": "http.response.start",
@@ -259,6 +393,7 @@ class _AuthMiddleware:
                 "headers": [
                     (b"content-type", b"application/json"),
                     (b"content-length", str(len(body)).encode()),
+                    *(extra_headers or []),
                 ],
             }
         )

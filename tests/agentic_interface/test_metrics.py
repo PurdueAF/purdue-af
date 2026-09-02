@@ -1,6 +1,7 @@
 """Tests for Prometheus metrics (metrics.py + /metrics endpoint)."""
 
 import json
+import logging
 
 import httpx
 import metrics
@@ -425,3 +426,125 @@ async def test_instrumented_transport_callable_target():
         await client.get("http://a/x")
 
     assert _upstream_counter_value("host-a", "success") == before + 1
+
+
+# ── exception safety net ──────────────────────────────────────────────────────
+#
+# A tool that raises must still leave the user with a message that says whose
+# fault it is, and must leave operators a traceback in the log.
+
+
+def _instrumented():
+    from mcp.server.fastmcp import FastMCP
+
+    mcp = FastMCP("test-metrics-safety-net")
+    metrics.instrument_mcp(mcp)
+    return mcp
+
+
+async def test_unhandled_exception_becomes_a_clear_error_and_is_logged(caplog):
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    mcp = _instrumented()
+
+    @mcp.tool()
+    async def boom() -> str:
+        raise KeyError("name")
+
+    before = _tool_counter_value("boom", "exception")
+    with caplog.at_level(logging.ERROR, logger="agentic.tools"):
+        with pytest.raises(ToolError) as info:
+            await mcp._tool_manager.call_tool("boom", {})
+
+    message = str(info.value)
+    assert message.startswith("Error: boom failed unexpectedly (KeyError: 'name')")
+    assert "AF support" in message
+    assert "Error executing tool" not in message
+    assert _tool_counter_value("boom", "exception") == before + 1
+    record = next(r for r in caplog.records if "tool=boom" in r.getMessage())
+    assert record.exc_info is not None  # traceback attached for operators
+
+
+async def test_invalid_arguments_are_blamed_on_the_call():
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    mcp = _instrumented()
+
+    @mcp.tool()
+    async def add(n: int) -> str:
+        return str(n)
+
+    with pytest.raises(ToolError) as info:
+        await mcp._tool_manager.call_tool("add", {"n": "many"})
+
+    message = str(info.value)
+    assert message.startswith("Error: add was called with invalid arguments")
+    assert "argument names and types" in message
+    assert "failed unexpectedly" not in message
+
+
+async def test_unknown_tool_error_passes_through():
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    mcp = _instrumented()
+    with pytest.raises(ToolError, match="Unknown tool"):
+        await mcp._tool_manager.call_tool("nope", {})
+
+
+def test_tool_outcome_auth_error():
+    assert (
+        metrics.tool_outcome(
+            "Error: JupyterHub rejected this token (HTTP 401) while trying to "
+            "start the session."
+        )
+        == "auth_error"
+    )
+    assert (
+        metrics.tool_outcome(
+            "Error: this token is not permitted to stop the session (JupyterHub HTTP 403)."
+        )
+        == "auth_error"
+    )
+    assert (
+        metrics.tool_outcome(
+            "Error: not authorised on gateway 'slurm' to create the cluster (HTTP 403)."
+        )
+        == "auth_error"
+    )
+    assert (
+        metrics.tool_outcome(
+            "Error: the monitoring system is unreachable — connection refused, so "
+            "I cannot tell you whether the facility is healthy."
+        )
+        == "upstream_error"
+    )
+    assert metrics.tool_outcome("Error: JupyterHub API unavailable") == "upstream_error"
+    assert (
+        metrics.tool_outcome(
+            "Error: add was called with invalid arguments — n must be an integer."
+        )
+        == "user_error"
+    )
+
+
+async def test_url_elicitation_error_is_not_rewritten():
+    """The SDK turns this one into a protocol error (-32042); leave it alone."""
+    from mcp.shared.exceptions import UrlElicitationRequiredError
+    from mcp.types import ElicitRequestURLParams
+
+    mcp = _instrumented()
+    needed = UrlElicitationRequiredError(
+        [
+            ElicitRequestURLParams(
+                message="authorise", url="https://example.org", elicitationId="e1"
+            )
+        ]
+    )
+
+    @mcp.tool()
+    async def needs_url() -> str:
+        raise needed
+
+    with pytest.raises(UrlElicitationRequiredError) as info:
+        await mcp._tool_manager.call_tool("needs_url", {})
+    assert info.value is needed

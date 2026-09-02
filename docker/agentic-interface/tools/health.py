@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from context import require_user
-from shared import quote_label, shared_client
+from shared import prom_query, prom_scalar, quote_label, shared_client
 
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
 EASTERN = ZoneInfo("America/New_York")
@@ -60,27 +60,17 @@ def _et(ts: float) -> str:
     return f"{when:%H:%M ET, %d %b} ({ago} ago)"
 
 
-async def _query(client: httpx.AsyncClient, expr: str) -> list[dict[str, Any]]:
-    try:
-        resp = await client.get(
-            f"{PROMETHEUS_URL}/api/v1/query", params={"query": expr}, timeout=10.0
-        )
-    except httpx.RequestError:
-        return []
-    if resp.status_code != 200:
-        return []
-    result: list[dict[str, Any]] = resp.json().get("data", {}).get("result", [])
-    return result
+async def _query(
+    client: httpx.AsyncClient, expr: str
+) -> tuple[list[dict[str, Any]], Optional[str]]:
+    """Instant query → (rows, problem). A problem means Prometheus could not
+    be asked — which is never the same as "nothing is firing"."""
+    return await prom_query(client, PROMETHEUS_URL, expr, timeout=10.0)
 
 
 async def _scalar(client: httpx.AsyncClient, expr: str) -> Optional[float]:
-    result = await _query(client, expr)
-    if not result:
-        return None
-    try:
-        return float(result[0]["value"][1])
-    except (KeyError, IndexError, ValueError):
-        return None
+    rows, _ = await _query(client, expr)
+    return prom_scalar(rows)
 
 
 def _node_names(series: list[dict[str, Any]]) -> list[str]:
@@ -178,25 +168,26 @@ def register(mcp: Any) -> None:
         quoted = quote_label(username)
 
         client = shared_client("prometheus")
-        firing = await _query(client, 'ALERTS{alertstate="firing"}')
+        firing, problem = await _query(client, 'ALERTS{alertstate="firing"}')
+        if problem:
+            # An empty alert list from a Prometheus that answered is good
+            # news; no answer at all is not news of any kind.
+            return (
+                f"Error: the monitoring system {problem}, so I cannot tell you "
+                "whether the facility is healthy. This is a monitoring problem, "
+                "not necessarily a facility problem — try your work and see."
+            )
         # ALERTS_FOR_STATE carries the moment each alert started, which is
         # what a user needs in order to correlate it with their own trouble.
-        since = await _query(client, "ALERTS_FOR_STATE")
+        since, _ = await _query(client, "ALERTS_FOR_STATE")
         # An alert that came and went in the window is a different situation
         # from something steadily broken.
-        recent = await _query(
+        recent, _ = await _query(
             client,
             "count by (alertname) (changes(ALERTS_FOR_STATE[6h]) > 0)",
         )
         home_util = await _scalar(client, f'af_home_dir_util{{username="{quoted}"}}')
         home_size = await _scalar(client, f'af_home_dir_size_kb{{username="{quoted}"}}')
-
-        if not firing and home_util is None:
-            return (
-                "Could not reach the monitoring system, so I cannot tell you "
-                "whether the facility is healthy. This is a monitoring problem, "
-                "not necessarily a facility problem — try your work and see."
-            )
 
         # group firing alerts by component, then by alert name
         by_component: dict[str, dict[str, list[dict[str, Any]]]] = {}
@@ -287,6 +278,12 @@ def register(mcp: Any) -> None:
             lines.append(
                 f"\nYour home directory is at {home_util * 100:.0f}% "
                 f"of its {quota_gb:.0f} GB quota.{note}"
+            )
+        else:
+            lines.append(
+                "\nNo reading of your home directory quota right now — it is "
+                "reported by your running session, so this is expected while no "
+                "session is running (query_storage_usage has the details)."
             )
 
         # "came and went" means resolved — an alert still firing is reported

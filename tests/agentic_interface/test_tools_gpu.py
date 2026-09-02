@@ -109,3 +109,34 @@ async def test_free_gpus_none_when_no_allocatable_metrics():
         200, json={"data": {"result": []}}
     )
     assert await gpu.free_gpus() is None
+
+
+# ── why availability is unknown ───────────────────────────────────────────────
+
+GPU_PROM_URL = f"{gpu.PROMETHEUS_URL}/api/v1/query"
+
+
+@respx.mock
+async def test_free_gpus_records_why_it_is_unknown():
+    from httpx import ConnectError, Response
+
+    respx.get(GPU_PROM_URL).mock(side_effect=ConnectError("down"))
+    assert await gpu.free_gpus() is None
+    assert gpu.gpu_error() == "Prometheus unreachable — connection failed (down)"
+
+    gpu._cache = (0.0, None)
+    respx.get(GPU_PROM_URL).mock(return_value=Response(500, text="boom"))
+    assert await gpu.free_gpus() is None
+    assert gpu.gpu_error() == "Prometheus returned HTTP 500 — boom"
+
+    gpu._cache = (0.0, None)
+    respx.get(GPU_PROM_URL).mock(
+        return_value=Response(200, json={"data": {"result": []}})
+    )
+    assert await gpu.free_gpus() is None
+    assert "no GPU capacity metrics" in gpu.gpu_error()
+
+    gpu._cache = (0.0, None)
+    respx.get(GPU_PROM_URL).mock(return_value=Response(200, json={"data": "junk"}))
+    assert await gpu.free_gpus() is None
+    assert "unexpected shape" in gpu.gpu_error()

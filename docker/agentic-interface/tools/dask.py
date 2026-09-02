@@ -20,9 +20,17 @@ from typing import Any, Optional
 
 import httpx
 from context import require_user
+from errors import (
+    describe_exception,
+    http_error,
+    json_body,
+    malformed_response,
+    response_detail,
+    unreachable,
+)
 from mcp.server.fastmcp import Context
 from pydantic import BaseModel, Field
-from shared import quote_label, shared_client
+from shared import prom_query, prom_scalar, prom_vector, quote_label, shared_client
 
 from tools.elicitation import elicit as _elicit
 
@@ -136,6 +144,50 @@ def _auth(username: str) -> dict:
     return {"Authorization": f"Basic {cred}"}
 
 
+# ── failure reporting ─────────────────────────────────────────────────────────
+
+
+def _gateway_unreachable(gateway: str, exc: BaseException) -> str:
+    return unreachable(f"gateway '{gateway}'", exc)
+
+
+def _gateway_http_error(
+    gateway: str,
+    resp: httpx.Response,
+    action: str,
+    cluster_name: Optional[str] = None,
+) -> str:
+    """What a non-2xx gateway answer means for this user.
+
+    Gateways authenticate by Hub username, so a refusal is about access to
+    that backend, not about the token; a 404 is about the cluster name.
+    """
+    code = resp.status_code
+    if code in (401, 403):
+        access = (
+            "Slurm (Hammer) clusters need an account on Hammer; "
+            if gateway == "slurm"
+            else ""
+        )
+        return (
+            f"Error: not authorised on gateway '{gateway}' to {action} "
+            f"(HTTP {code}). {access}if you believe you should have access, "
+            "contact AF support."
+        )
+    if code == 404 and cluster_name:
+        return (
+            f"Cluster '{cluster_name}' not found on gateway '{gateway}'. Call "
+            "list_dask_clusters for the current names — and check the gateway "
+            "argument, as names are per backend."
+        )
+    if code in (409, 422):
+        return (
+            f"Error: gateway '{gateway}' rejected the request to {action} — "
+            f"{response_detail(resp, limit=400) or 'no reason given'}."
+        )
+    return http_error(f"gateway '{gateway}'", resp, action=action)
+
+
 def _cluster_id(cluster_name: str) -> str:
     """Strip the namespace prefix from a gateway cluster name.
 
@@ -183,12 +235,16 @@ async def _fetch_clusters(
             f"{url}/api/v1/clusters/", headers=_auth(username), timeout=10.0
         )
     except httpx.RequestError as exc:
-        return gateway, f"unreachable ({exc})"
+        return gateway, f"unreachable ({describe_exception(exc)})"
     if resp.status_code in (401, 403):
         return gateway, "not authorised (no access to this backend)"
     if resp.status_code != 200:
-        return gateway, f"HTTP {resp.status_code}"
-    return gateway, _parse_clusters(resp.json())
+        detail = response_detail(resp, limit=120)
+        return gateway, f"HTTP {resp.status_code}" + (f" — {detail}" if detail else "")
+    payload = json_body(resp)
+    if payload is None:
+        return gateway, "returned a malformed cluster list"
+    return gateway, _parse_clusters(payload)
 
 
 async def _require_owned_cluster(
@@ -202,54 +258,28 @@ async def _require_owned_cluster(
             timeout=10.0,
         )
     except httpx.RequestError as exc:
-        return f"Error: gateway '{gateway}' unreachable — {exc}"
-    if resp.status_code == 404:
-        return f"Cluster '{cluster_name}' not found on gateway '{gateway}'."
-    if resp.status_code in (401, 403):
-        return f"Error: not authorised to access cluster '{cluster_name}'."
+        return _gateway_unreachable(gateway, exc)
     if resp.status_code != 200:
-        return f"Error: HTTP {resp.status_code} — {resp.text[:300]}"
+        return _gateway_http_error(
+            gateway, resp, f"access cluster '{cluster_name}'", cluster_name
+        )
     return None
 
 
 async def _prom_scalar(
     client: httpx.AsyncClient, base_url: str, query: str
-) -> Optional[float]:
-    try:
-        resp = await client.get(
-            f"{base_url}/api/v1/query", params={"query": query}, timeout=8.0
-        )
-    except httpx.RequestError:
-        return None
-    if resp.status_code != 200:
-        return None
-    results = resp.json().get("data", {}).get("result", [])
-    if not results:
-        return None
-    try:
-        return float(results[0]["value"][1])
-    except (KeyError, IndexError, ValueError):
-        return None
+) -> tuple[Optional[float], Optional[str]]:
+    """(first scalar or None, problem or None) — see shared.prom_query."""
+    rows, problem = await prom_query(client, base_url, query)
+    return prom_scalar(rows), problem
 
 
 async def _prom_vector(
     client: httpx.AsyncClient, base_url: str, query: str
-) -> list[tuple[dict, float]]:
-    try:
-        resp = await client.get(
-            f"{base_url}/api/v1/query", params={"query": query}, timeout=8.0
-        )
-    except httpx.RequestError:
-        return []
-    if resp.status_code != 200:
-        return []
-    out: list[tuple[dict, float]] = []
-    for row in resp.json().get("data", {}).get("result", []):
-        try:
-            out.append((row.get("metric") or {}, float(row["value"][1])))
-        except (KeyError, IndexError, ValueError, TypeError):
-            continue
-    return out
+) -> tuple[list[tuple[dict, float]], Optional[str]]:
+    """((labels, value) rows, problem or None) — see shared.prom_query."""
+    rows, problem = await prom_query(client, base_url, query)
+    return prom_vector(rows), problem
 
 
 def _stats(values: list[float]) -> Optional[tuple[float, float, float]]:
@@ -463,11 +493,16 @@ def register(mcp: Any) -> None:
         )
 
         sections: list[str] = []
+        refused: list[str] = []
         total = 0
         for gateway, data in results:
             if isinstance(data, str):
-                # error string — only surface if it isn't the "not authorised" case
-                if "not authorised" not in data:
+                # A backend the user has no access to is not an error for
+                # most users (few have Hammer accounts) — but if nothing at
+                # all can be listed it must not read as "no clusters".
+                if "not authorised" in data:
+                    refused.append(gateway)
+                else:
                     sections.append(f"[{gateway}] error: {data}")
                 continue
             if not data:
@@ -479,7 +514,19 @@ def register(mcp: Any) -> None:
             )
 
         if not sections:
-            return "No running Dask clusters on any gateway."
+            if refused and len(refused) == len(results):
+                return (
+                    f"Error: not authorised on any gateway ({', '.join(refused)}) "
+                    f"for user '{username}', so no clusters can be listed. "
+                    "Contact AF support if you expect access."
+                )
+            note = (
+                f" (gateway {', '.join(refused)}: not authorised — clusters "
+                "there, if any, are not visible to you)"
+                if refused
+                else ""
+            )
+            return f"No running Dask clusters on any gateway{note}."
 
         header = f"# {total} Dask cluster(s) across all gateways\n"
         return header + "\n\n".join(sections)
@@ -507,14 +554,17 @@ def register(mcp: Any) -> None:
                 timeout=10.0,
             )
         except httpx.RequestError as exc:
-            return f"Error: gateway '{gateway}' unreachable — {exc}"
+            return _gateway_unreachable(gateway, exc)
 
-        if resp.status_code in (401, 403):
-            return f"Error: not authorised for gateway '{gateway}'."
         if resp.status_code != 200:
-            return f"Error: HTTP {resp.status_code} — {resp.text[:300]}"
+            return _gateway_http_error(gateway, resp, "list cluster options")
 
-        fields = resp.json().get("cluster_options") or []
+        payload = json_body(resp)
+        if not isinstance(payload, dict):
+            return malformed_response(
+                f"gateway '{gateway}'", resp, "a cluster-options document"
+            )
+        fields = payload.get("cluster_options") or []
         backend = "Kubernetes (Geddes)" if gateway == "k8s" else "Slurm (Hammer)"
         lines = [
             f"# Cluster options for gateway={gateway} — {backend}",
@@ -725,21 +775,27 @@ def register(mcp: Any) -> None:
                 timeout=60.0,
             )
         except httpx.RequestError as exc:
-            return f"Error: gateway '{gateway}' unreachable — {exc}"
+            return unreachable(
+                f"gateway '{gateway}'",
+                exc,
+                next_step="No cluster was created. Try again in a minute; if the "
+                "gateway stays unreachable, get_facility_health shows whether "
+                "scale-out is degraded.",
+            )
 
-        if resp.status_code == 422:
-            reason = resp.reason_phrase or ""
-            try:
-                reason = resp.json().get("message") or resp.text[:400]
-            except Exception:
-                reason = resp.text[:400] or reason
-            return f"Error: gateway rejected create — {reason}"
         if resp.status_code not in (200, 201):
-            return f"Error: HTTP {resp.status_code} — {resp.text[:400]}"
+            return _gateway_http_error(gateway, resp, "create the cluster")
 
-        cluster_name = resp.json().get("name", "")
+        payload = json_body(resp)
+        cluster_name = payload.get("name", "") if isinstance(payload, dict) else ""
         if not cluster_name:
-            return f"Error: create succeeded but no cluster name in response — {resp.text[:300]}"
+            return (
+                malformed_response(
+                    f"gateway '{gateway}'", resp, "a cluster record with a name"
+                )
+                + " The cluster may have been created anyway — check "
+                "list_dask_clusters before creating another."
+            )
 
         lines = [
             f"Cluster '{cluster_name}' created on gateway '{gateway}'.",
@@ -770,17 +826,22 @@ def register(mcp: Any) -> None:
         except httpx.RequestError as exc:
             lines += [
                 "",
-                f"Created, but scale failed (gateway unreachable): {exc}",
-                "Retry with scale_dask_cluster.",
+                "Created with 0 workers — the scale request failed: gateway "
+                f"'{gateway}' unreachable — {describe_exception(exc)}.",
+                f"Retry with scale_dask_cluster('{cluster_name}', {n_workers}, "
+                f"gateway='{gateway}').",
             ]
             return "\n".join(lines)
 
         if scale.status_code not in (200, 204):
             lines += [
                 "",
-                f"Created, but scale returned HTTP {scale.status_code}: "
-                f"{scale.text[:300]}",
-                "Retry with scale_dask_cluster.",
+                "Created with 0 workers — the scale request failed: "
+                + _gateway_http_error(
+                    gateway, scale, f"scale to {n_workers} worker(s)", cluster_name
+                ),
+                f"Retry with scale_dask_cluster('{cluster_name}', {n_workers}, "
+                f"gateway='{gateway}').",
             ]
             return "\n".join(lines)
 
@@ -814,14 +875,16 @@ def register(mcp: Any) -> None:
                 timeout=10.0,
             )
         except httpx.RequestError as exc:
-            return f"Error: gateway '{gateway}' unreachable — {exc}"
+            return _gateway_unreachable(gateway, exc)
 
-        if resp.status_code == 404:
-            return f"Cluster '{cluster_name}' not found on gateway '{gateway}'."
         if resp.status_code != 200:
-            return f"Error: HTTP {resp.status_code} — {resp.text[:300]}"
+            return _gateway_http_error(
+                gateway, resp, f"inspect cluster '{cluster_name}'", cluster_name
+            )
 
-        c = resp.json()
+        c = json_body(resp)
+        if not isinstance(c, dict):
+            return malformed_response(f"gateway '{gateway}'", resp, "a cluster record")
         workers = c.get("workers") or {}
         worker_lines: list[str] = []
         if isinstance(workers, dict):
@@ -881,12 +944,19 @@ def register(mcp: Any) -> None:
         )
 
         prom = _prom_client("prometheus")
-        total, by_state, desired = await asyncio.gather(
+        (total, p1), (by_state, p2), (desired, p3) = await asyncio.gather(
             _prom_scalar(prom, PROMETHEUS_URL, total_q),
             _prom_vector(prom, PROMETHEUS_URL, by_state_q),
             _prom_scalar(prom, PROMETHEUS_URL, desired_q),
         )
 
+        problem = p1 or p2 or p3
+        if problem:
+            return (
+                f"Error: could not read worker metrics for '{cluster_name}' — "
+                f"Prometheus {problem}. The cluster itself may be fine: get_dask_cluster_info "
+                "shows the gateway's own view of its workers."
+            )
         if total is None:
             return (
                 f"No worker metrics for cluster '{cluster_name}' "
@@ -957,10 +1027,17 @@ def register(mcp: Any) -> None:
         )
 
         prom = _prom_client("cluster-prometheus")
-        cpu_rows, mem_rows = await asyncio.gather(
+        (cpu_rows, p1), (mem_rows, p2) = await asyncio.gather(
             _prom_vector(prom, CLUSTER_PROMETHEUS_URL, cpu_q),
             _prom_vector(prom, CLUSTER_PROMETHEUS_URL, mem_q),
         )
+        problem = p1 or p2
+        if problem:
+            return (
+                f"Error: could not read resource usage for '{cluster_name}' — "
+                f"the monitoring system {problem}. The cluster itself may be fine: get_dask_worker_count "
+                "and get_dask_cluster_info do not depend on this data."
+            )
 
         cpu_vals = [v for _, v in cpu_rows]
         mem_vals = [v for _, v in mem_rows]
@@ -1033,12 +1110,12 @@ def register(mcp: Any) -> None:
                 timeout=10.0,
             )
         except httpx.RequestError as exc:
-            return f"Error: gateway '{gateway}' unreachable — {exc}"
+            return _gateway_unreachable(gateway, exc)
 
-        if resp.status_code == 404:
-            return f"Cluster '{cluster_name}' not found on gateway '{gateway}'."
         if resp.status_code not in (200, 204):
-            return f"Error: HTTP {resp.status_code} — {resp.text[:300]}"
+            return _gateway_http_error(
+                gateway, resp, f"scale to {n_workers} worker(s)", cluster_name
+            )
 
         return (
             f"Cluster '{cluster_name}' on '{gateway}' scaling to {n_workers} worker(s)."
@@ -1070,11 +1147,13 @@ def register(mcp: Any) -> None:
                 timeout=10.0,
             )
         except httpx.RequestError as exc:
-            return f"Error: gateway '{gateway}' unreachable — {exc}"
+            return _gateway_unreachable(gateway, exc)
 
         if resp.status_code == 404:
             return f"Cluster '{cluster_name}' not found on gateway '{gateway}' (may have already stopped)."
         if resp.status_code not in (200, 204):
-            return f"Error: HTTP {resp.status_code} — {resp.text[:300]}"
+            return _gateway_http_error(
+                gateway, resp, f"stop cluster '{cluster_name}'", cluster_name
+            )
 
         return f"Cluster '{cluster_name}' on '{gateway}' stopped."

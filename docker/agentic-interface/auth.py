@@ -11,10 +11,25 @@ import time
 from typing import Optional
 
 import httpx
+from errors import describe_exception, json_body, response_detail
 from metrics import instrumented_transport, record_auth
 
 HUB_API_URL = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
 NAMESPACE = os.environ.get("NAMESPACE", "cms")
+
+
+class HubUnavailable(Exception):
+    """The Hub could not be asked whether a token is valid.
+
+    Kept apart from an invalid token on purpose: the caller must answer
+    "try again" (503), never "your token is wrong" (401), and nothing about
+    the token may be cached either way.
+    """
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
+        self.detail = detail
+
 
 # Cache keys are sha256 hex digests of the token, never the raw token — a
 # cache dump (debugger, core, log) must not hand out live credentials. The
@@ -75,6 +90,11 @@ def _evict_negative(now: float) -> None:
 async def resolve_user(token: str) -> Optional[dict]:
     """Validate a JupyterHub Bearer token; return {username, namespace, token}.
 
+    Returns None only when the Hub itself rejected the token. Raises
+    HubUnavailable when the Hub could not be reached, or answered with
+    anything other than a verdict on the token — that says nothing about
+    the token and must not be reported as "invalid".
+
     Does not read Hub server ``state`` (admin-only). Tools that need to know
     whether a session is running query Hub ``servers[""].ready`` themselves,
     or filter Loki/Prometheus by ``username``.
@@ -96,23 +116,35 @@ async def resolve_user(token: str) -> Optional[dict]:
             f"{HUB_API_URL}/user",
             headers={"Authorization": f"Bearer {token}"},
         )
-    except httpx.RequestError:
+    except httpx.RequestError as exc:
         record_auth("hub_unreachable")
+        raise HubUnavailable(
+            f"JupyterHub API unreachable — {describe_exception(exc)}"
+        ) from exc
+
+    if resp.status_code in (401, 403):
+        _evict_negative(now)
+        _negative_cache[key] = now + _NEG_CACHE_TTL
+        record_auth("invalid_token")
         return None
 
     if resp.status_code != 200:
-        _evict_negative(now)
-        _negative_cache[key] = now + _NEG_CACHE_TTL
-        record_auth("invalid_token")
-        return None
+        # 5xx: the Hub is broken; 404 and friends: this service is pointed
+        # at the wrong place. Neither is the token's fault.
+        record_auth("hub_error")
+        detail = response_detail(resp, limit=120)
+        problem = f"JupyterHub API returned HTTP {resp.status_code}"
+        if resp.status_code == 404:
+            problem += f" for {HUB_API_URL}/user (JUPYTERHUB_API_URL misconfigured?)"
+        raise HubUnavailable(f"{problem} — {detail}" if detail else problem)
 
-    data = resp.json()
-    username = data.get("name")
-    if not username:
-        _evict_negative(now)
-        _negative_cache[key] = now + _NEG_CACHE_TTL
-        record_auth("invalid_token")
-        return None
+    data = json_body(resp)
+    username = data.get("name") if isinstance(data, dict) else None
+    if not isinstance(username, str) or not username:
+        record_auth("hub_error")
+        raise HubUnavailable(
+            "JupyterHub API returned HTTP 200 but no user record for the token"
+        )
 
     user_info = {
         "username": username,

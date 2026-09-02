@@ -167,7 +167,8 @@ async def test_loki_unreachable_is_reported(user_ctx):
 
     tools = register_tools(logs).tools
     out = await tools["query_notebook_logs"]()
-    assert "Loki connection failed" in out
+    assert out.startswith("Error: the log store (Loki) unreachable")
+    assert "connection failed (down)" in out
 
 
 @respx.mock
@@ -245,3 +246,28 @@ async def test_loki_request_uses_start_end_and_direction(user_ctx):
     q = query_of(route)
     assert int(q["start"][0]) < int(q["end"][0])
     assert q["direction"][0] == "backward"
+
+
+@respx.mock
+async def test_loki_400_blames_the_query_not_the_facility(user_ctx):
+    respx.get(LOKI_RANGE_URL).respond(
+        400, text="parse error at line 1, col 38: syntax error: unexpected IDENTIFIER"
+    )
+
+    tools = register_tools(logs).tools
+    out = await tools["query_notebook_logs"](filter="|= ERROR")
+
+    assert "rejected the query (HTTP 400)" in out
+    assert "syntax error" in out
+    assert "filter argument must be a LogQL pipe expression" in out
+    assert "unreachable" not in out
+
+
+@respx.mock
+async def test_loki_malformed_success_body_is_reported(user_ctx):
+    respx.get(LOKI_RANGE_URL).respond(200, text="<html>proxy page</html>")
+
+    tools = register_tools(logs).tools
+    out = await tools["query_notebook_logs"]()
+
+    assert "returned HTTP 200 but the response was not a log query result" in out

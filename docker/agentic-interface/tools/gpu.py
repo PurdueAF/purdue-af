@@ -12,6 +12,7 @@ import time
 from typing import Optional
 
 import httpx
+from errors import describe_exception, response_detail
 from shared import shared_client
 
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
@@ -51,6 +52,13 @@ _USED_QUERY = (
 
 _CACHE_TTL = 30.0
 _cache: tuple[float, Optional[dict[str, int]]] = (0.0, None)
+# Why availability is unknown, for the tools that show it. None when known.
+_last_error: Optional[str] = None
+
+
+def gpu_error() -> Optional[str]:
+    """Why free_gpus() last answered None, or None when it answered."""
+    return _last_error
 
 
 async def _prom_query(client: httpx.AsyncClient, query: str) -> dict[str, float]:
@@ -66,7 +74,7 @@ async def _prom_query(client: httpx.AsyncClient, query: str) -> dict[str, float]
 
 async def free_gpus() -> Optional[dict[str, int]]:
     """{k8s GPU resource: free count} on schedulable AF nodes; None if unknown."""
-    global _cache
+    global _cache, _last_error
     now = time.monotonic()
     if now < _cache[0]:
         return _cache[1]
@@ -81,7 +89,25 @@ async def free_gpus() -> Optional[dict[str, int]]:
                 resource: max(int(allocatable.get(m, 0) - used.get(m, 0)), 0)
                 for resource, m in GPU_METRICS.items()
             }
-    except (httpx.HTTPError, KeyError, ValueError, TypeError):
+            _last_error = None
+        else:
+            _last_error = (
+                "the monitoring system has no GPU capacity metrics "
+                "(kube-state-metrics may be down)"
+            )
+    except httpx.HTTPStatusError as exc:
+        detail = response_detail(exc.response, limit=120)
+        _last_error = f"Prometheus returned HTTP {exc.response.status_code}" + (
+            f" — {detail}" if detail else ""
+        )
+        free = None
+    except httpx.HTTPError as exc:
+        _last_error = f"Prometheus unreachable — {describe_exception(exc)}"
+        free = None
+    except (KeyError, ValueError, TypeError):
+        _last_error = (
+            "the monitoring system returned GPU metrics in an unexpected shape"
+        )
         free = None
 
     _cache = (now + _CACHE_TTL, free)

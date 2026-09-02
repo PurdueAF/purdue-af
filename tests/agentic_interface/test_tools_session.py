@@ -754,7 +754,8 @@ async def test_restart_error_paths(user_ctx, monkeypatch):
     # stop unexpected status
     respx.get(USER_URL).respond(200, json=server_payload())
     respx.delete(SERVER_URL).respond(500, text="no")
-    assert "Error stopping session" in await tools["restart_af_session"]()
+    out = await tools["restart_af_session"]()
+    assert "returned HTTP 500 while trying to stop the session" in out
 
     # start unreachable after stop
     respx.get(USER_URL).respond(200, json=server_payload())
@@ -768,7 +769,8 @@ async def test_restart_error_paths(user_ctx, monkeypatch):
     respx.delete(SERVER_URL).respond(204)
     respx.post(SERVER_URL).respond(500, text="no")
     out = await tools["restart_af_session"]()
-    assert "restart returned HTTP 500" in out
+    assert out.startswith("Session was stopped, but the restart failed.")
+    assert "returned HTTP 500 while trying to start the session" in out
 
 
 @respx.mock
@@ -844,3 +846,232 @@ async def test_status_still_reports_a_genuinely_stopped_session(user_ctx):
         )
         out = await tools.tools["get_session_status"]()
     assert "No active session" in out
+
+
+# ── failure translation ───────────────────────────────────────────────────────
+
+
+@respx.mock
+async def test_status_401_explains_revoked_token(user_ctx):
+    respx.get(USER_URL).respond(401)
+    out = await register_tools(session).tools["get_session_status"]()
+    assert out.startswith("Error: JupyterHub rejected this token (HTTP 401)")
+    assert "JUPYTERHUB_API_TOKEN" in out
+    assert "/hub/token" in out
+
+
+@respx.mock
+async def test_status_403_explains_token_permissions(user_ctx):
+    respx.get(USER_URL).respond(
+        403, json={"message": "Action is not authorized with current scopes"}
+    )
+    out = await register_tools(session).tools["get_session_status"]()
+    assert out.startswith(
+        "Error: this token is not permitted to read the session state"
+    )
+    assert "current scopes" in out
+    assert "/hub/token" in out
+
+
+@respx.mock
+async def test_status_5xx_carries_reason_and_retry_advice(user_ctx):
+    respx.get(USER_URL).respond(502, text="<html><body>Bad Gateway</body></html>")
+    out = await register_tools(session).tools["get_session_status"]()
+    assert (
+        "returned HTTP 502 while trying to read the session state (it is down or "
+        "restarting behind its proxy) — Bad Gateway" in out
+    )
+    assert "get_facility_health" in out
+
+
+@respx.mock
+async def test_status_malformed_body_is_reported(user_ctx):
+    respx.get(USER_URL).respond(200, text="<html>login</html>")
+    out = await register_tools(session).tools["get_session_status"]()
+    assert "not a user record" in out
+
+
+@respx.mock
+async def test_start_403_and_rejected_options_are_explained(user_ctx):
+    tools = register_tools(session).tools
+    respx.post(SERVER_URL).respond(403)
+    out = await tools["start_af_session"](FakeCtx())
+    assert "not permitted to start the session" in out
+
+    respx.post(SERVER_URL).respond(
+        400, json={"message": "Invalid profile option: 9-gpu"}
+    )
+    out = await tools["start_af_session"](FakeCtx())
+    assert out.startswith(
+        "Error: JupyterHub rejected the spawn request — Invalid profile option: 9-gpu."
+    )
+    assert "list_af_profiles" in out
+
+
+@pytest.fixture
+def no_profile_list(monkeypatch):
+    async def none(force=False):
+        return []
+
+    monkeypatch.setattr(profiles, "get_profiles", none)
+    monkeypatch.setattr(
+        profiles,
+        "profiles_error",
+        lambda: "Kubernetes API unreachable — connection refused",
+    )
+
+
+@respx.mock
+async def test_start_notes_when_profile_list_was_unavailable(user_ctx, no_profile_list):
+    respx.post(SERVER_URL).respond(201)
+    out = await register_tools(session).tools["start_af_session"](FakeCtx())
+    assert "Session is starting" in out
+    assert (
+        "profile list could not be read (Kubernetes API unreachable — "
+        "connection refused)" in out
+    )
+
+
+@respx.mock
+async def test_start_named_profile_without_a_list_is_explained(
+    user_ctx, no_profile_list
+):
+    out = await register_tools(session).tools["start_af_session"](
+        FakeCtx(), profile_name="stable"
+    )
+    assert out.startswith("Error: cannot check profile 'stable'")
+    assert "connection refused" in out
+    assert "use_defaults=True" in out
+
+
+@respx.mock
+async def test_stop_403_is_explained(user_ctx):
+    respx.delete(SERVER_URL).respond(403)
+    out = await register_tools(session).tools["stop_af_session"]()
+    assert "not permitted to stop the session" in out
+
+
+# ── wait_for_session: stop as soon as waiting cannot help ─────────────────────
+
+
+@respx.mock
+async def test_wait_stops_on_revoked_or_unpermitted_token(user_ctx, monkeypatch):
+    _fake_clock(monkeypatch)
+    tools = register_tools(session).tools
+    respx.get(USER_URL).respond(401)
+    out = await tools["wait_for_session"](timeout_seconds=300)
+    assert "rejected this token" in out
+    assert "did not become ready" not in out
+
+    respx.get(USER_URL).respond(403)
+    out = await tools["wait_for_session"](timeout_seconds=300)
+    assert "not permitted to check the session state" in out
+
+
+@respx.mock
+async def test_wait_stops_when_token_cannot_see_servers(user_ctx, monkeypatch):
+    _fake_clock(monkeypatch)
+    respx.get(USER_URL).respond(200, json={"name": "alice"})  # no servers key
+    out = await register_tools(session).tools["wait_for_session"](timeout_seconds=300)
+    assert out.startswith("Error: cannot read session state")
+    assert "did not become ready" not in out
+
+
+@respx.mock
+async def test_wait_detects_a_failed_or_never_started_spawn(user_ctx, monkeypatch):
+    clock = _fake_clock(monkeypatch)
+    route = respx.get(USER_URL).respond(200, json={"name": "alice", "servers": {}})
+    out = await register_tools(session).tools["wait_for_session"](timeout_seconds=300)
+    assert out.startswith("Error: no session is starting or running")
+    assert "start_af_session" in out
+    assert route.call_count == 2  # two looks, then stop — not the full timeout
+    assert clock["t"] < 300
+
+
+@respx.mock
+async def test_wait_tolerates_a_single_empty_look(user_ctx, monkeypatch):
+    """One empty answer can be a race with the Hub; the second is conclusive."""
+    import httpx
+
+    _fake_clock(monkeypatch)
+    calls = {"n": 0}
+
+    def responder(_request):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(200, json={"name": "alice", "servers": {}})
+        return httpx.Response(200, json=server_payload(ready=True))
+
+    respx.get(USER_URL).mock(side_effect=responder)
+    out = await register_tools(session).tools["wait_for_session"](timeout_seconds=300)
+    assert "Session is running" in out
+
+
+@respx.mock
+async def test_wait_stops_when_session_is_stopping(user_ctx, monkeypatch):
+    _fake_clock(monkeypatch)
+    respx.get(USER_URL).respond(200, json=server_payload(ready=False, pending="stop"))
+    out = await register_tools(session).tools["wait_for_session"](timeout_seconds=300)
+    assert "stopping, not starting" in out
+
+
+@respx.mock
+async def test_wait_timeout_reports_what_it_saw(user_ctx, monkeypatch):
+    import httpx
+    from httpx import ConnectError
+
+    _fake_clock(monkeypatch)
+    calls = {"n": 0}
+
+    def responder(_request):
+        calls["n"] += 1
+        if calls["n"] % 2:
+            raise ConnectError("blip")
+        return httpx.Response(200, json=server_payload(ready=False, pending="spawn"))
+
+    respx.get(USER_URL).mock(side_effect=responder)
+    out = await register_tools(session).tools["wait_for_session"](timeout_seconds=40)
+    assert "did not become ready within 40 s" in out
+    assert "Last observed:" in out
+    assert "session pending (spawn)" in out or "JupyterHub API unreachable" in out
+    assert "status check(s) failed to reach JupyterHub" in out
+    assert "query_notebook_logs" in out
+
+
+@respx.mock
+async def test_restart_reports_unreadable_prior_options(user_ctx, monkeypatch):
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(session.asyncio, "sleep", no_sleep)
+    respx.get(USER_URL).respond(500)
+    respx.delete(SERVER_URL).respond(204)
+    respx.post(SERVER_URL).respond(201)
+    out = await register_tools(session).tools["restart_af_session"]()
+    assert (
+        "default options (the previous options could not be read: JupyterHub API "
+        "returned HTTP 500)" in out
+    )
+
+
+@respx.mock
+async def test_restart_403_on_read_does_not_stop_the_session(user_ctx):
+    respx.get(USER_URL).respond(403)
+    delete = respx.delete(SERVER_URL).respond(204)
+    out = await register_tools(session).tools["restart_af_session"]()
+    assert "not permitted to read the session state" in out
+    assert delete.call_count == 0
+
+
+@respx.mock
+async def test_restart_rejected_options_after_stop_are_explained(user_ctx, monkeypatch):
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(session.asyncio, "sleep", no_sleep)
+    respx.get(USER_URL).respond(200, json=server_payload())
+    respx.delete(SERVER_URL).respond(204)
+    respx.post(SERVER_URL).respond(400, json={"message": "Invalid option"})
+    out = await register_tools(session).tools["restart_af_session"]()
+    assert "JupyterHub rejected the restart options — Invalid option" in out
+    assert "start_af_session" in out

@@ -4,6 +4,8 @@ Metric families:
   purdue_af_mcp_api_calls_total          HTTP requests by route/status
   purdue_af_mcp_jsonrpc_requests_total   MCP messages by JSON-RPC method/username
   purdue_af_mcp_tool_calls_total         tool invocations by tool/outcome/username
+                                         (success | user_error | auth_error |
+                                          upstream_error | exception)
   purdue_af_mcp_tool_duration_seconds    tool invocation latency by tool
   purdue_af_mcp_upstream_requests_total  outbound backend requests by target/outcome
   purdue_af_mcp_upstream_duration_seconds  outbound backend latency by target
@@ -15,16 +17,20 @@ dashboards aggregate over it.
 
 import logging
 import time
-from typing import Any, Callable, Union
+from typing import Any, Callable, Union, cast
 
 import httpx
 from context import current_user
+from errors import invalid_arguments, unexpected_failure
+from mcp.server.fastmcp.exceptions import ToolError
+from mcp.shared.exceptions import UrlElicitationRequiredError
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     Counter,
     Histogram,
     generate_latest,
 )
+from pydantic import ValidationError
 
 logger = logging.getLogger("agentic.tools")
 
@@ -125,9 +131,8 @@ def record_auth(result: str) -> None:
 
 
 # Substrings that mark a tool error string as a backend failure rather than
-# a user mistake.  Matches the error-string conventions used across tools/
-# ("… unreachable — …", "… returned HTTP …", "Error: HTTP …",
-#  "… connection failed …", "Could not …", "… misconfigured …").
+# a user mistake.  Matches the error-string conventions in errors.py
+# ("… unreachable — …", "… returned HTTP …", "Could not …", "… misconfigured …").
 _UPSTREAM_MARKERS = (
     "unreachable",
     "connection failed",
@@ -135,13 +140,23 @@ _UPSTREAM_MARKERS = (
     "error: http",
     "could not",
     "misconfigured",
+    "unavailable",
+)
+
+# Substrings that mark a credential the backend would not accept for the
+# attempted action — neither a facility failure nor a malformed request.
+_AUTH_MARKERS = (
+    "rejected this token",
+    "not permitted",
+    "not authorised",
 )
 
 
 def tool_outcome(result: Any) -> str:
     """Classify a tool return value.
 
-    Returns 'success', 'user_error' (bad input / nothing running), or
+    Returns 'success', 'user_error' (bad input / nothing running),
+    'auth_error' (the token was refused for the attempted action), or
     'upstream_error' (a backend the tool depends on failed).  Exceptions are
     recorded separately as 'exception' by instrument_mcp.
     """
@@ -150,9 +165,39 @@ def tool_outcome(result: Any) -> str:
     if not result.startswith(("Error", "Unknown ", "Could not")):
         return "success"
     lowered = result.lower()
+    if any(marker in lowered for marker in _AUTH_MARKERS):
+        return "auth_error"
     if any(marker in lowered for marker in _UPSTREAM_MARKERS):
         return "upstream_error"
     return "user_error"
+
+
+def _translate(name: str, username: str, exc: Exception) -> Exception:
+    """Turn an exception no tool caught into a message a user can act on.
+
+    FastMCP already converts exceptions into an error result, but its text is
+    "Error executing tool X: <exception>" and nothing logs the traceback. This
+    is the one place that sees the original exception, so it logs it and
+    replaces the text with one that says whose fault it is: bad arguments are
+    the caller's, anything else is a fault in this service.
+    """
+    # casts: the mcp SDK is untyped (ignore_missing_imports), so its exception
+    # classes — and anything isinstance-narrowed to them — read as Any to mypy.
+    if isinstance(exc, UrlElicitationRequiredError):
+        # carries its own protocol semantics (error code -32042)
+        return cast(Exception, exc)
+    cause = exc.__cause__ if isinstance(exc, ToolError) and exc.__cause__ else exc
+    if isinstance(cause, ValidationError):
+        logger.warning(
+            "tool_call tool=%s user=%s invalid arguments: %s", name, username, cause
+        )
+        return cast(Exception, ToolError(invalid_arguments(name, cause)))
+    if isinstance(exc, ToolError) and exc.__cause__ is None:
+        # Raised deliberately by the SDK with a complete message (unknown tool).
+        logger.warning("tool_call tool=%s user=%s refused: %s", name, username, exc)
+        return cast(Exception, exc)
+    logger.exception("tool_call tool=%s user=%s raised", name, username)
+    return cast(Exception, ToolError(unexpected_failure(name, cause)))
 
 
 def _username() -> str:
@@ -203,9 +248,12 @@ def instrument_mcp(mcp: Any) -> None:
                 context=context,
                 convert_result=convert_result,
             )
-        except Exception:
+        except Exception as exc:
             _record(name, "exception", username, start)
-            raise
+            translated = _translate(name, username, exc)
+            if translated is exc:
+                raise
+            raise translated from exc
         _record(name, tool_outcome(result), username, start)
         return result
 

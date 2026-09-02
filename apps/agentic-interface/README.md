@@ -49,7 +49,23 @@ Ask in plain language, for example:
 
 ## Troubleshooting
 
-- **401 / invalid token** — your token expired or is wrong; get a new one at `/hub/token`.
+Every failure is reported where you can see it: in the tool result, or — when
+the connection itself is refused — in the HTTP response body as
+`{"error": …, "hint": …}`. The hint says what to do; the short version:
+
+- **401 `Missing Bearer token` / `Empty Bearer token` / `Unexpanded token placeholder`** —
+  the token never reached the server: the token file or environment variable
+  your agent's config reads is missing, empty, or was not expanded.
+- **401 `Invalid JupyterHub token`** — expired, mistyped, or revoked; get a new
+  one at `/hub/token`. Inside an AF session the token rotates on every restart,
+  so restart the agent.
+- **503 `JupyterHub API unavailable`** — the hub cannot validate tokens right
+  now; retry in a minute.
+- **"not permitted … (HTTP 403)"** in a tool result — a session's own token can
+  read its session but not start, stop, or restart it; use a token from
+  `/hub/token`.
+- **"unreachable" / "returned HTTP 5xx"** — a facility backend is down; ask for
+  the facility health, and retry in a minute.
 - **"No active session"** — start a session first.
 - Treat the token like a password — don't share or commit it.
 
