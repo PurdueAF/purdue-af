@@ -11,15 +11,51 @@ token and a one-time setup.
 
 ## Inside an AF session
 
-Nothing to set up. `claude` and `codex` are on `PATH` in any terminal, their
-extensions are installed in the VS Code interface, and both are already
-connected to the MCP server as you — no token, re-registered on every session
-start. The AF skill and a short platform context (storage volumes, scale-out
-limits, GPU options) are installed too.
+Nothing to set up. `claude`, `codex` and `opencode` are on `PATH` in any
+terminal, the Claude Code and Codex extensions are installed in the VS Code
+interface, and all three are already connected to the MCP server as you — no
+token, re-registered on every session start.
 
-Run `claude` or `codex` and ask for what you want. You still sign in to the
-agent with your own Anthropic or OpenAI account; the AF ships no model
-credentials.
+A short **platform context** is installed too: the facility's rules and
+recommendations (storage volumes and quotas, where environments may live,
+scale-out limits, GPU options) written into the file each agent reads
+automatically at startup. You do not need to invoke anything — an agent in a
+session already knows, for example, that `pixi install` will be refused under
+`/home` and that `/work` is invisible to Slurm workers.
+
+| Agent      | Where the context is installed                | MCP server                             |
+| ---------- | --------------------------------------------- | -------------------------------------- |
+| Claude Code | `~/.claude/CLAUDE.md` (plus the AF skill)     | `claude mcp add`, user scope           |
+| Codex      | `~/.codex/AGENTS.md`                          | `codex mcp add`                        |
+| opencode   | `~/.config/opencode/AGENTS.md`                | `$OPENCODE_CONFIG` config layer        |
+
+Only the block between the `PURDUE AF — managed` markers belongs to the
+facility; anything you write in those files outside it is preserved, and the
+block is refreshed on every session start.
+
+Run `claude`, `codex` or `opencode` and ask for what you want. You still sign in
+to the agent with your own Anthropic, OpenAI or other provider account; the AF
+ships no model credentials.
+
+??? info "Why Cursor is not in that table"
+
+    Cursor has no user-scope instruction file. Its rules are project-scoped
+    (`.cursor/rules/`, or an `AGENTS.md` in a project root), and cross-project
+    rules live in the Cursor UI under **Customize → Rules** rather than on
+    disk — so there is nothing the facility can install on your behalf.
+
+    Cursor also runs on your own machine rather than inside a session, so use
+    the setup below, and paste the contents of
+    [`platform-context.md`](https://github.com/PurdueAF/purdue-af/blob/main/docker/purdue-af/agents/platform-context.md)
+    into your User Rules if you want the same guardrails.
+
+!!! note "opencode brings its own model provider"
+
+    The facility wires up the MCP server and the platform context, but opencode
+    is not tied to one provider — run `/connect` once with your own API key.
+    Its facility configuration lives in a separate layer
+    (`~/.config/opencode/purdue-af.json`, referenced by `$OPENCODE_CONFIG`) that
+    is merged with, and overridden by, your own `opencode.json`.
 
 ## Connecting from your own machine
 
@@ -96,9 +132,10 @@ The skill then activates automatically whenever you mention your Purdue AF
 session, Dask clusters, or AF logs/storage.
 
 For **other agents**, copy the same file's contents into whatever your agent
-uses for persistent instructions (e.g. `AGENTS.md`, Cursor rules, a custom
-system prompt) — it is plain Markdown with no Claude-specific content beyond
-the front-matter header.
+uses for persistent instructions — `~/.codex/AGENTS.md` for Codex,
+`~/.config/opencode/AGENTS.md` for opencode, **Customize → Rules** for Cursor.
+It is plain Markdown with no Claude-specific content beyond the front-matter
+header.
 
 ## What you can do
 

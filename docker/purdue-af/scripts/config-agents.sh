@@ -1,12 +1,14 @@
 #!/bin/bash
 # Set up the coding agents for this session: register the Purdue AF MCP server
-# with both CLIs (which also covers their code-server extensions, since each
-# extension reads the config its CLI writes) and install the bundled skill.
+# with each CLI (which also covers their code-server extensions, since each
+# extension reads the config its CLI writes), install the bundled skill, and
+# write the platform context into the file every harness reads automatically.
 #
-# Neither config stores the token. Claude Code expands ${VAR} in MCP headers
-# at read time and Codex reads `bearer_token_env_var` at connect time, so both
-# pick up the session's own JUPYTERHUB_API_TOKEN — which rotates on every
-# spawn and would otherwise go stale in the persistent home directory.
+# No config stores the token. Claude Code expands ${VAR} in MCP headers at read
+# time, Codex reads `bearer_token_env_var` at connect time, and opencode expands
+# `{env:...}`, so all three pick up the session's own JUPYTERHUB_API_TOKEN —
+# which rotates on every spawn and would otherwise go stale in the persistent
+# home directory.
 #
 # Never fatal: a session must start even if an agent CLI is broken or the MCP
 # service is mid-redeploy.
@@ -19,7 +21,8 @@
 _config_agents() {
 	# Must match the skill's references and the repo .mcp.json — the skill names
 	# this server explicitly, so a mismatch makes its instructions wrong.
-	local MCP_NAME MCP_URL AUTH_HEADER SKILL_SRC AGENT_SECTION PYTHON NEW_HOME target
+	local MCP_NAME MCP_URL AUTH_HEADER SKILL_SRC AGENT_SECTION PYTHON NEW_HOME
+	local OPENCODE_CFG target
 	MCP_NAME="purdue-af-agentic-interface"
 	# In-cluster address of the hub-registered service. The public URL is not
 	# usable from inside a session (JUPYTERHUB_PUBLIC_HUB_URL is empty there), and
@@ -77,6 +80,51 @@ _config_agents() {
 		"codex mcp remove '${MCP_NAME}'" \
 		"codex mcp add '${MCP_NAME}' --url '${MCP_URL}' --bearer-token-env-var JUPYTERHUB_API_TOKEN"
 
+	# opencode has no `mcp add`, and it does not need one: OPENCODE_CONFIG names a
+	# config layer that opencode merges BETWEEN the user's global config and their
+	# project config, so the facility gets a file of its own and never edits
+	# theirs. Written even when the CLI is absent — a user who installs opencode
+	# into their own home afterwards finds it already wired up.
+	#
+	# `instructions` is what carries the platform context into a project that has
+	# its own AGENTS.md: opencode's rules lookup is first-match-wins, so a project
+	# AGENTS.md suppresses the global one, and the guardrails would vanish exactly
+	# where an analysis repo needs them.
+	OPENCODE_CFG="${NEW_HOME}/.config/opencode/purdue-af.json"
+	# The heredoc is unquoted so ${MCP_URL} expands; \$schema must not.
+	if mkdir -p "${NEW_HOME}/.config/opencode" && cat >"${OPENCODE_CFG}" <<-JSON
+		{
+		  "\$schema": "https://opencode.ai/config.json",
+		  "instructions": ["${AGENT_SECTION}"],
+		  "mcp": {
+		    "${MCP_NAME}": {
+		      "type": "remote",
+		      "url": "${MCP_URL}",
+		      "enabled": true,
+		      "headers": {
+		        "Authorization": "Bearer {env:JUPYTERHUB_API_TOKEN}"
+		      }
+		    }
+		  }
+		}
+	JSON
+	then
+		# Written as root, so hand both directories back: ~/.config may not have
+		# existed, and a root-owned one would block every later write the user
+		# makes anywhere under it. Non-recursive on ~/.config itself — it is
+		# shared with unrelated tools whose ownership is not ours to rewrite.
+		chown "${NB_USER}:users" "${NEW_HOME}/.config" 2>/dev/null || true
+		chown -R "${NB_USER}:users" "${NEW_HOME}/.config/opencode" 2>/dev/null || true
+		# Exported, not baked into the image: NAMESPACE is templated per
+		# deployment and the path depends on the session user. start.sh sources
+		# this hook and then execs `sudo --preserve-env`, so the export reaches
+		# the notebook server and every terminal under it.
+		export OPENCODE_CONFIG="${OPENCODE_CFG}"
+		echo "config-agents: registered '${MCP_NAME}' with opencode"
+	else
+		echo "config-agents: WARNING could not write ${OPENCODE_CFG}" >&2
+	fi
+
 	# Claude Code skills, prepared at build time (prepare-skill.py). Refreshed on
 	# every start so an image upgrade ships an updated skill, the same way the
 	# Continue config is refreshed. Codex has no equivalent on-demand mechanism.
@@ -93,19 +141,33 @@ _config_agents() {
 		echo "config-agents: no bundled skills at ${SKILL_SRC}, skipping" >&2
 	fi
 
-	# Agent instruction files belong to the user; only the AF block between the
-	# markers is ours. Codex has no skill mechanism, so this is the only place it
-	# learns about the facility; for Claude Code it is a short pointer alongside
-	# the skill.
+	# One file per harness: the path it reads automatically at user scope, with no
+	# skill and no prompting. These files belong to the user — only the AF block
+	# between the markers is ours. Codex and opencode have no skill mechanism, so
+	# this is the only place they learn about the facility; for Claude Code it is
+	# a short pointer alongside the skill.
+	#
+	# Written whether or not the matching CLI is installed: the files are a few
+	# kB, and a user who installs a harness into their own home does so long
+	# after this hook has run.
+	#
+	# Cursor is deliberately absent. It has no user-scope instruction file at
+	# all — its rules are project-scoped, and cross-project rules live in the
+	# Cursor UI, not on disk. See docs/docs/guide-agentic-interface.md.
 	if [[ -f "${AGENT_SECTION}" ]]; then
-		for target in "${NEW_HOME}/.codex/AGENTS.md" "${NEW_HOME}/.claude/CLAUDE.md"; do
+		for target in \
+			"${NEW_HOME}/.claude/CLAUDE.md" \
+			"${NEW_HOME}/.codex/AGENTS.md" \
+			"${NEW_HOME}/.config/opencode/AGENTS.md"; do
 			if _as_user "'${PYTHON}' /usr/local/bin/managed-block.py '${AGENT_SECTION}' '${target}'"; then
 				:
 			else
 				echo "config-agents: WARNING could not update ${target}" >&2
 			fi
 		done
-		chown -R "${NB_USER}:users" "${NEW_HOME}/.claude" "${NEW_HOME}/.codex" 2>/dev/null || true
+		chown -R "${NB_USER}:users" \
+			"${NEW_HOME}/.claude" "${NEW_HOME}/.codex" "${NEW_HOME}/.config/opencode" \
+			2>/dev/null || true
 	else
 		echo "config-agents: no bundled agent section, skipping" >&2
 	fi

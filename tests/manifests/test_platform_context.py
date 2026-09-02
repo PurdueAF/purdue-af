@@ -204,8 +204,11 @@ def test_root_is_not_promised_from_the_bare_session():
 
 
 def test_context_stays_within_a_sane_context_budget():
-    """It is injected into every agent turn; unbounded growth is a real cost."""
-    assert len(context().splitlines()) < 140
+    """It is injected into every agent turn, for every harness, in every
+    project the user opens — unbounded growth is a real cost. Detail that an
+    MCP tool returns live, or that the agent can discover with one `ls`,
+    belongs there and not here."""
+    assert len(context().splitlines()) < 105
 
 
 # --- dependency pins the platform context depends on ----------------------
