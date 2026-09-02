@@ -169,6 +169,19 @@ def test_opencode_gets_the_mcp_server_without_a_cli(run_script, agent_home):
     assert "/services/agentic-interface/mcp" in server["url"]
 
 
+def test_opencode_persona_still_asks_before_editing_or_running(run_script, agent_home):
+    """jupyter-ai ships its OpenCode persona with edit/bash set to "ask" and
+    injects that as OPENCODE_CONFIG — but only when OPENCODE_CONFIG is unset,
+    and the export in this hook means it never is. Restating the two settings
+    is what keeps the JupyterLab chat asking before it edits a file or runs a
+    command; drop them and the approval prompts disappear with no other sign."""
+    run_script(tools=("claude", "codex", "opencode"))
+    assert _opencode_config(agent_home)["permission"] == {
+        "edit": "ask",
+        "bash": "ask",
+    }
+
+
 def test_opencode_config_is_a_separate_layer_not_the_users_file(run_script, agent_home):
     """OPENCODE_CONFIG is merged between the user's global config and their
     project config, so the facility never edits a file the user owns. Writing

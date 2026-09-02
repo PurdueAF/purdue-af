@@ -78,20 +78,68 @@ if "GEN_CERT" in os.environ:
 if "NB_UMASK" in os.environ:
     os.umask(int(os.environ["NB_UMASK"], 8))
 
-# c.AiExtension.help_message_template = """
-# Hello! I am {persona_name}, a JupyterLab AI assistant.
-
-# I use open LLM models served by <a href="https://www.rcac.purdue.edu/knowledge/genaistudio" target="_blank">Purdue GenAI Studio</a>.
-# I also have the knowledge of <a href="https://analysis-facility.physics.purdue.edu/" target="_blank">Purdue AF doucmentation</a>.
-
-# <a href="https://www.rcac.purdue.edu/knowledge/genaistudio/api" target="_blank">How to obtain API key</a>
-
-# **WARNING: do not rely exclusively on AI responses, as models may hallucinate.**
-# """
-# c.AiExtension.default_language_model = "genaistudio:purdue-cms-af"
-# c.AiExtension.allowed_providers = ["genaistudio"]
-
 c.KernelSpecManager.ensure_native_kernel = False
+
+
+# --------------------------------------------------------------------------
+# AI in JupyterLab (jupyter-ai)
+# --------------------------------------------------------------------------
+# The chat panel and its personas come from the installed stack and need no
+# config; what needs config is which MCP servers those personas can reach.
+#
+# jupyter_server_mcp's own defaults, restated because setting the AF server
+# below replaces PersonaManager's default `builtin_mcp_servers` wholesale --
+# including the entry that gives personas the notebook toolkit, without which
+# they cannot touch the notebook they are sitting in. Pinning both sides here
+# is what keeps that entry pointing at the port the extension actually binds.
+_JUPYTER_MCP_NAME = "Jupyter MCP Server"
+_JUPYTER_MCP_PORT = 3001
+
+# Must match config-agents.sh: same in-cluster address, same server name. The
+# skill and the platform context name this server, so an agent reaching it
+# under a different name in JupyterLab than in the terminal gets instructions
+# that do not match what it sees.
+_AF_MCP_NAME = "purdue-af-agentic-interface"
+_AF_MCP_URL = (
+    "http://agentic-interface.{namespace}.svc.cluster.local:8888"
+    "/services/agentic-interface/mcp"
+)
+
+
+def _builtin_mcp_servers():
+    """The MCP servers every persona gets, before the user's own
+    `.jupyter/mcp_settings.json` is merged on top."""
+    servers = [
+        {
+            "type": "http",
+            "name": _JUPYTER_MCP_NAME,
+            "url": f"http://localhost:{_JUPYTER_MCP_PORT}/mcp",
+            "headers": [],
+        }
+    ]
+    # The token rotates on every spawn. Reading it here, at server start, is the
+    # reason this registration lives in the server config and not in the
+    # `.jupyter/mcp_settings.json` jupyter-ai also reads: that file takes
+    # literal strings, expands nothing, and sits in a persistent home, so a
+    # token written into it is stale the moment the session restarts.
+    token = os.environ.get("JUPYTERHUB_API_TOKEN")
+    if token:
+        servers.append(
+            {
+                "type": "http",
+                "name": _AF_MCP_NAME,
+                "url": _AF_MCP_URL.format(
+                    namespace=os.environ.get("NAMESPACE") or "cms"
+                ),
+                "headers": [{"name": "Authorization", "value": f"Bearer {token}"}],
+            }
+        )
+    return servers
+
+
+c.MCPExtensionApp.mcp_name = _JUPYTER_MCP_NAME
+c.MCPExtensionApp.mcp_port = _JUPYTER_MCP_PORT
+c.PersonaManager.builtin_mcp_servers = _builtin_mcp_servers()
 
 
 def _patch_websocket_protocol_ping_units():

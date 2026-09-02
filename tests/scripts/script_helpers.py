@@ -16,8 +16,12 @@ JUPYTER_CONFIG = REPO / "docker" / "purdue-af" / "jupyter" / "jupyter_server_con
 def load_jupyter_config(monkeypatch, data_dir, env=None):
     """Exec jupyter_server_config.py the way `jupyter server` does; return
     (globals, config sink). jupyter_core is faked so jupyter_data_dir() points
-    at data_dir."""
-    for var in ("GEN_CERT", "NB_UMASK"):
+    at data_dir.
+
+    Every session variable the config reads is cleared unless a test sets it,
+    so a developer's own shell cannot decide what the config under test
+    produces."""
+    for var in ("GEN_CERT", "NB_UMASK", "JUPYTERHUB_API_TOKEN", "NAMESPACE"):
         monkeypatch.delenv(var, raising=False)
     for key, value in (env or {}).items():
         monkeypatch.setenv(key, value)
