@@ -161,19 +161,26 @@ RUN chmod +x /usr/local/bin/pixi && \
 
 # Coding-agent CLIs. Installed with the base env's node (nodejs 22 from
 # pixi/base) into their own prefix so a pixi rebuild cannot clobber them, and
-# so the runtime stage can COPY them as one directory. Both ship the same
-# config files their code-server extensions read, so registering the AF MCP
-# server once (config-agents.sh) covers terminal and editor alike.
+# so the runtime stage can COPY them as one directory. claude and codex ship
+# the same config files their code-server extensions read, so registering the
+# AF MCP server once (config-agents.sh) covers terminal and editor alike.
+#
+# opencode is bring-your-own-provider: the user still runs `/connect` with
+# their own model API key. The facility part — MCP server and platform
+# context — is wired up for them either way.
 ARG CLAUDE_CODE_VERSION="2.1.258"
 ARG CODEX_VERSION="0.152.1"
+ARG OPENCODE_VERSION="1.18.26"
 ENV NPM_GLOBAL="/opt/npm-global"
 # hadolint ignore=DL3016  # versions ARE pinned, via the ARGs above
 RUN PATH="${BASE_ENV_DIR}/bin:${PATH}" \
     npm install -g --prefix "${NPM_GLOBAL}" --no-fund --no-audit \
         "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
-        "@openai/codex@${CODEX_VERSION}" && \
+        "@openai/codex@${CODEX_VERSION}" \
+        "opencode-ai@${OPENCODE_VERSION}" && \
     PATH="${NPM_GLOBAL}/bin:${BASE_ENV_DIR}/bin:${PATH}" claude --version && \
     PATH="${NPM_GLOBAL}/bin:${BASE_ENV_DIR}/bin:${PATH}" codex --version && \
+    PATH="${NPM_GLOBAL}/bin:${BASE_ENV_DIR}/bin:${PATH}" opencode --version && \
     rm -rf "${HOME}/.npm" || true
 
 # Import-smoke every direct dependency of the base env, each in a fresh
@@ -208,7 +215,8 @@ ENV PIXI_HOME="/opt/pixi" \
 # Copy pixi env from stack stage
 COPY --from=stack /opt/pixi /opt/pixi
 
-# Coding-agent CLIs (claude, codex) — their shebangs resolve `node` from PATH,
+# Coding-agent CLIs (claude, codex, opencode) — their shebangs resolve `node`
+# from PATH,
 # which the ENV below puts in the base env.
 COPY --from=stack /opt/npm-global /opt/npm-global
 
@@ -313,6 +321,7 @@ RUN nvcc --version >/dev/null && \
     xrdcp --version >/dev/null 2>&1 && \
     claude --version >/dev/null && \
     codex --version >/dev/null && \
+    opencode --version >/dev/null && \
     python3 -c "import jupyterlab; print('smoke ok:', jupyterlab.__version__)"
 
 # The published image: a bare alias of `runtime` so the smoke stage above

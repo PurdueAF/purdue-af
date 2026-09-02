@@ -1,5 +1,6 @@
 """Tests for docker/purdue-af/scripts/config-agents.sh — the startup hook that
-points Claude Code and Codex at the AF MCP server.
+points Claude Code, Codex and opencode at the AF MCP server and writes the
+platform context into the file each of them reads automatically.
 
 Nothing here reaches the cluster: `claude` and `codex` are replaced with stubs
 that record their argv, so the tests assert the exact commands a session would
@@ -17,6 +18,7 @@ from common import REPO
 SCRIPT = REPO / "docker" / "purdue-af" / "scripts" / "config-agents.sh"
 DOCKERFILE = REPO / "docker" / "purdue-af" / "Dockerfile"
 SKILL_SOURCE = ".claude/skills/purdue-af-agentic-interface/SKILL.md"
+CONTEXT = REPO / "docker/purdue-af/agents/platform-context.md"
 
 STUB = """#!/bin/bash
 printf '%s\\n' "$*" >> "$AGENT_LOG"
@@ -34,8 +36,37 @@ def prepare_skill():
 
 
 @pytest.fixture()
-def run_script(tmp_path):
-    """Run the hook with stubbed agent CLIs; returns (result, [argv lines])."""
+def agent_home(tmp_path):
+    """The session home the hook writes into."""
+    home = tmp_path / "home" / "jovyan"
+    home.mkdir(parents=True)
+    return home
+
+
+@pytest.fixture()
+def run_script(tmp_path, agent_home):
+    """Run the hook with stubbed agent CLIs; returns (result, [argv lines]).
+
+    The hook addresses three paths that only exist inside the image: the
+    session home, managed-block.py, and the platform context. The copy under
+    test has exactly those redirected at the sandbox and the repo, so the files
+    it produces can be asserted on directly. Nothing else is rewritten."""
+    script = tmp_path / "config-agents.sh"
+    script.write_text(
+        SCRIPT.read_text()
+        .replace(
+            'NEW_HOME="/home/${NB_USER}"',
+            f'NEW_HOME="{agent_home.parent}/${{NB_USER}}"',
+        )
+        .replace(
+            "/usr/local/bin/managed-block.py",
+            str(REPO / "docker/purdue-af/scripts/managed-block.py"),
+        )
+        .replace(
+            '"/opt/purdue-af/agents/platform-context.md"',
+            f'"{CONTEXT}"',
+        )
+    )
 
     def _run(tools=("claude", "codex"), stub_exit=0, **env):
         bindir = tmp_path / "bin"
@@ -47,7 +78,7 @@ def run_script(tmp_path):
             stub.write_text(STUB)
             stub.chmod(0o755)
         result = subprocess.run(
-            ["bash", str(SCRIPT)],
+            ["bash", str(script)],
             capture_output=True,
             text=True,
             env={
@@ -114,6 +145,142 @@ def test_mcp_path_matches_the_service_prefix(run_script):
     carry it — /mcp alone 404s."""
     _, calls = run_script()
     assert all("/services/agentic-interface/mcp" in c for c in _adds(calls))
+
+
+# --- opencode: a config layer of our own, never the user's file -----------
+
+
+def _opencode_config(agent_home):
+    import json
+
+    path = agent_home / ".config" / "opencode" / "purdue-af.json"
+    assert path.is_file(), "the hook wrote no opencode config"
+    return json.loads(path.read_text())
+
+
+def test_opencode_gets_the_mcp_server_without_a_cli(run_script, agent_home):
+    """opencode has no `mcp add`, so registration is a file — which also means
+    it does not depend on the CLI being installed at the moment the hook runs.
+    A user who installs opencode into their own home later finds it wired."""
+    result, _ = run_script(tools=("claude", "codex"))
+    assert result.returncode == 0
+    server = _opencode_config(agent_home)["mcp"]["purdue-af-agentic-interface"]
+    assert server["type"] == "remote"
+    assert server["enabled"] is True
+    assert "/services/agentic-interface/mcp" in server["url"]
+
+
+def test_opencode_config_is_a_separate_layer_not_the_users_file(run_script, agent_home):
+    """OPENCODE_CONFIG is merged between the user's global config and their
+    project config, so the facility never edits a file the user owns. Writing
+    into ~/.config/opencode/opencode.json would risk clobbering their settings
+    — and could not be parsed safely at all if they wrote it as JSONC."""
+    run_script()
+    assert not (agent_home / ".config/opencode/opencode.json").exists()
+
+
+def test_opencode_config_is_written_with_privileges_dropped(run_script):
+    """~/.config lives in a persistent home the user controls between sessions,
+    so they can replace it with a symlink before restarting. A root mkdir and
+    redirect would follow that symlink, and a bare `chown` on it dereferences —
+    handing the user ownership of whatever it points at. Everything under
+    ~/.config is therefore written as the session user, and nothing chowns it
+    back."""
+    hook = SCRIPT.read_text()
+    assert "_as_user \"mkdir -p '${NEW_HOME}/.config/opencode'" in hook, (
+        "the opencode config must be written as the user, not as root"
+    )
+    assert "${NEW_HOME}/.config" not in hook.split("chown -R")[-1], (
+        "nothing under ~/.config may be chowned: chown dereferences a symlink "
+        "the user planted there"
+    )
+    for line in hook.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("chown ") and not stripped.startswith("chown -R"):
+            raise AssertionError(f"non-recursive chown dereferences symlinks: {line}")
+
+
+def test_opencode_config_is_exported_so_the_session_picks_it_up(run_script):
+    """NAMESPACE is templated per deployment and the path depends on the
+    session user, so this cannot be a Dockerfile ENV. start.sh sources the hook
+    and then execs `sudo --preserve-env`, which carries the export through."""
+    hook = SCRIPT.read_text()
+    assert 'export OPENCODE_CONFIG="${OPENCODE_CFG}"' in hook
+    start = (REPO / "docker/purdue-af/jupyter/start.sh").read_text()
+    assert "--preserve-env" in start
+
+
+def test_opencode_config_carries_the_platform_context(run_script, agent_home):
+    """opencode's rules lookup is first-match-wins: a project AGENTS.md
+    suppresses the global one. `instructions` is what keeps the guardrails
+    present in an analysis repo that has its own AGENTS.md."""
+    run_script()
+    instructions = _opencode_config(agent_home)["instructions"]
+    assert any("platform-context.md" in i for i in instructions)
+
+
+def test_opencode_url_follows_the_namespace(run_script, agent_home):
+    run_script(NAMESPACE="cms-other")
+    url = _opencode_config(agent_home)["mcp"]["purdue-af-agentic-interface"]["url"]
+    assert "agentic-interface.cms-other.svc.cluster.local:8888" in url
+
+
+def test_opencode_config_never_stores_the_token(run_script, agent_home):
+    """Same property as the other two harnesses: opencode expands `{env:...}`
+    at connect time, so the rotating session token stays out of a file that
+    lives in a persistent home directory."""
+    run_script(JUPYTERHUB_API_TOKEN="super-secret-value")
+    raw = (agent_home / ".config/opencode/purdue-af.json").read_text()
+    assert "super-secret-value" not in raw
+    assert "{env:JUPYTERHUB_API_TOKEN}" in raw
+
+
+def test_unwritable_opencode_config_is_not_fatal(run_script, agent_home):
+    """Never break a session start: a home restored read-only, or a stale
+    root-owned ~/.config, must warn rather than take JupyterLab down."""
+    (agent_home / ".config").mkdir()
+    (agent_home / ".config").chmod(0o500)
+    try:
+        result, _ = run_script()
+    finally:
+        (agent_home / ".config").chmod(0o700)
+    assert result.returncode == 0
+    assert "WARNING" in result.stderr
+
+
+# --- the platform context reaches every harness ---------------------------
+
+
+HARNESS_CONTEXT_FILES = (
+    ".claude/CLAUDE.md",  # Claude Code
+    ".codex/AGENTS.md",  # Codex
+    ".config/opencode/AGENTS.md",  # opencode
+)
+
+
+@pytest.mark.parametrize("relative", HARNESS_CONTEXT_FILES)
+def test_context_is_written_for_every_harness(run_script, agent_home, relative):
+    """The whole point of the feature: an agent started in a session knows the
+    facility's rules without anyone telling it to look them up."""
+    result, _ = run_script()
+    assert result.returncode == 0
+    written = (agent_home / relative).read_text()
+    assert "Purdue Analysis Facility" in written
+    # a guardrail from the context, not just the heading
+    assert "refuse to run on a project under `/home/`" in written
+
+
+@pytest.mark.parametrize("relative", HARNESS_CONTEXT_FILES)
+def test_a_users_own_instructions_survive(run_script, agent_home, relative):
+    """These files belong to the user; only the block between the markers is
+    ours. A session start must never cost them their own notes."""
+    target = agent_home / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("# My notes\n\nAlways use pytest -x.\n")
+    run_script()
+    after = target.read_text()
+    assert "Always use pytest -x." in after
+    assert "Purdue Analysis Facility" in after
 
 
 # --- never break a session start -----------------------------------------
@@ -199,9 +366,9 @@ def test_skill_is_an_image_input():
 # --- the image actually ships what the hook needs ------------------------
 
 
-def test_dockerfile_pins_both_agent_versions():
+def test_dockerfile_pins_every_agent_version():
     text = DOCKERFILE.read_text()
-    for arg in ("CLAUDE_CODE_VERSION", "CODEX_VERSION"):
+    for arg in ("CLAUDE_CODE_VERSION", "CODEX_VERSION", "OPENCODE_VERSION"):
         line = next(ln for ln in text.splitlines() if ln.startswith(f"ARG {arg}="))
         version = shlex.split(line.split("=", 1)[1])[0]
         assert version and version[0].isdigit(), f"{arg} must pin a version"
@@ -214,7 +381,8 @@ def test_dockerfile_installs_and_runs_the_hook():
     # the CLIs must be on PATH for both the terminal and the extensions
     assert "/opt/npm-global/bin" in text
     # and proven to run in the final image, not just installed
-    assert "claude --version" in text and "codex --version" in text
+    for cli in ("claude", "codex", "opencode"):
+        assert f"{cli} --version" in text, cli
     # xrdcp is promised on PATH by the platform context; prove it in the image
     assert "xrdcp --version" in text
 
@@ -307,10 +475,27 @@ def test_markers_warn_that_edits_are_overwritten(managed_block):
     assert "overwrit" in managed_block.BEGIN.lower()
 
 
-def test_startup_hook_targets_both_agent_files():
+def test_startup_hook_targets_every_harness_context_file():
+    """One file per harness, each the path that harness reads automatically at
+    user scope — no skill, no prompt, no per-project setup."""
     text = (REPO / "docker/purdue-af/scripts/config-agents.sh").read_text()
-    assert ".codex/AGENTS.md" in text
-    assert ".claude/CLAUDE.md" in text
+    for target in (
+        ".claude/CLAUDE.md",  # Claude Code
+        ".codex/AGENTS.md",  # Codex
+        ".config/opencode/AGENTS.md",  # opencode
+    ):
+        assert target in text, target
+
+
+def test_cursor_is_documented_as_deliberately_unsupported():
+    """Cursor has no user-scope instruction file: its rules are project-scoped
+    and cross-project rules live in the Cursor UI, not on disk. Nothing here
+    can reach it, so the omission is recorded rather than left to look like an
+    oversight somebody 'fixes' with a file Cursor never reads."""
+    hook = (REPO / "docker/purdue-af/scripts/config-agents.sh").read_text()
+    assert "Cursor" in hook
+    guide = (REPO / "docs/docs/guide-agentic-interface.md").read_text()
+    assert "Cursor" in guide
 
 
 def test_section_source_is_shipped_and_is_an_image_input():

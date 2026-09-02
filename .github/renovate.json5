@@ -103,6 +103,13 @@
       depNameTemplate: '@openai/codex',
     },
     {
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)Dockerfile$/'],
+      matchStrings: ['ARG OPENCODE_VERSION="(?<currentValue>[^"]+)"'],
+      datasourceTemplate: 'npm',
+      depNameTemplate: 'opencode-ai',
+    },
+    {
       // The IRIS-HEP integration challenge revision the stage-1c analysis
       // smoke test runs against. Pinned to a commit so upstream movement
       // arrives as a PR that runs the full chain: a breaking upstream change
