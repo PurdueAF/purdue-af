@@ -23,6 +23,13 @@ jupyterlab    = "==4.6.3"
 ipyparallel   = "==9.2.0"
 nodejs        = "22.*"
 
+# AI in JupyterLab: the chat panel, and the ACP personas that reach the same
+# claude/codex/opencode agents the terminal has. Pulls in
+# jupyter_server_documents, which replaces the notebook document and execution
+# engine with the RTC-backed one -- that is what lets a persona edit the
+# notebook you have open, and it applies to every notebook in the session.
+jupyter-ai    = "==3.1.3"
+
 # Kernel discovery / misc
 nb_conda_kernels      = "==2.5.1"
 metakernel            = "==1.0.7"

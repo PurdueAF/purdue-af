@@ -110,6 +110,24 @@
       depNameTemplate: 'opencode-ai',
     },
     {
+      // ACP adapters — Claude and Codex again, reached from JupyterLab through
+      // jupyter-ai instead of a terminal. Separate packages on their own
+      // release cadences, so they get their own ARGs and their own managers.
+      // opencode needs no adapter: jupyter-ai drives its binary directly.
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)Dockerfile$/'],
+      matchStrings: ['ARG CLAUDE_AGENT_ACP_VERSION="(?<currentValue>[^"]+)"'],
+      datasourceTemplate: 'npm',
+      depNameTemplate: '@agentclientprotocol/claude-agent-acp',
+    },
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)Dockerfile$/'],
+      matchStrings: ['ARG CODEX_ACP_VERSION="(?<currentValue>[^"]+)"'],
+      datasourceTemplate: 'npm',
+      depNameTemplate: '@zed-industries/codex-acp',
+    },
+    {
       // The IRIS-HEP integration challenge revision the stage-1c analysis
       // smoke test runs against. Pinned to a commit so upstream movement
       // arrives as a PR that runs the full chain: a breaking upstream change

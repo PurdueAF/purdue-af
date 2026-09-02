@@ -108,11 +108,25 @@ _config_agents() {
 	# say). Dropping privileges first makes the question moot and removes the
 	# need to chown anything back afterwards.
 	#
+	# `permission` is here because of jupyter-ai, not opencode. jupyter-ai ships
+	# its OpenCode persona with edit/bash set to "ask" and injects that as
+	# OPENCODE_CONFIG — but only when OPENCODE_CONFIG is unset, which it never is
+	# in a session, because the export below sets it. Without restating the two
+	# settings, wiring the facility layer in would quietly take the approval
+	# prompts away from the JupyterLab chat. Stating them also makes the terminal
+	# behaviour explicit rather than whatever opencode defaults to; a user who
+	# wants neither prompt can override in their own opencode.json, which is
+	# merged on top of this layer.
+	#
 	# The heredoc is unquoted so ${MCP_URL} expands; \$schema must not.
 	if _as_user "mkdir -p '${NEW_HOME}/.config/opencode' && cat >'${OPENCODE_CFG}'" <<-JSON
 		{
 		  "\$schema": "https://opencode.ai/config.json",
 		  ${OPENCODE_INSTRUCTIONS}
+		  "permission": {
+		    "edit": "ask",
+		    "bash": "ask"
+		  },
 		  "mcp": {
 		    "${MCP_NAME}": {
 		      "type": "remote",

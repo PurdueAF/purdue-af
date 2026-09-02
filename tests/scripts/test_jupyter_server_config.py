@@ -215,3 +215,91 @@ class TestWebSocketPingUnitsPatch:
         monkeypatch.setitem(sys.modules, "tornado.websocket", None)
         ns, c = load_jupyter_config(monkeypatch, tmp_path)
         assert c["ServerApp"]["ip"] == "0.0.0.0"
+
+
+class TestJupyterAIMCPServers:
+    """What the chat's agents can reach. Registering the AF server replaces
+    jupyter-ai's default list, so the notebook toolkit has to be restated or
+    personas silently lose the ability to touch the notebook they are in."""
+
+    def _servers(self, monkeypatch, tmp_path, **env):
+        _, c = load_jupyter_config(monkeypatch, tmp_path, env=env)
+        return {s["name"]: s for s in c["PersonaManager"]["builtin_mcp_servers"]}
+
+    def test_notebook_toolkit_is_kept(self, monkeypatch, tmp_path):
+        servers = self._servers(monkeypatch, tmp_path)
+        assert "Jupyter MCP Server" in servers
+
+    def test_notebook_toolkit_url_matches_the_port_we_pin(self, monkeypatch, tmp_path):
+        _, c = load_jupyter_config(monkeypatch, tmp_path)
+        port = c["MCPExtensionApp"]["mcp_port"]
+        jupyter = next(
+            s
+            for s in c["PersonaManager"]["builtin_mcp_servers"]
+            if s["name"] == c["MCPExtensionApp"]["mcp_name"]
+        )
+        assert jupyter["url"] == f"http://localhost:{port}/mcp"
+
+    def test_af_server_registered_with_the_session_token(self, monkeypatch, tmp_path):
+        servers = self._servers(
+            monkeypatch, tmp_path, JUPYTERHUB_API_TOKEN="tok-123", NAMESPACE="cms-dev"
+        )
+        af = servers["purdue-af-agentic-interface"]
+        assert af["url"] == (
+            "http://agentic-interface.cms-dev.svc.cluster.local:8888"
+            "/services/agentic-interface/mcp"
+        )
+        assert af["headers"] == [{"name": "Authorization", "value": "Bearer tok-123"}]
+
+    def test_namespace_defaults_to_cms(self, monkeypatch, tmp_path):
+        servers = self._servers(monkeypatch, tmp_path, JUPYTERHUB_API_TOKEN="tok")
+        assert (
+            "agentic-interface.cms.svc" in servers["purdue-af-agentic-interface"]["url"]
+        )
+
+    def test_no_token_means_no_af_server(self, monkeypatch, tmp_path):
+        """Half a registration is worse than none: the persona would show the
+        server, then fail every call with a 403 the user cannot act on."""
+        servers = self._servers(monkeypatch, tmp_path)
+        assert "purdue-af-agentic-interface" not in servers
+
+    def test_token_never_reaches_a_file_in_the_persistent_home(
+        self, monkeypatch, tmp_path
+    ):
+        """The token rotates every spawn and the home directory outlives it.
+        This registration is built at server start for exactly that reason;
+        assert nothing was written down on the way."""
+        self._servers(monkeypatch, tmp_path, JUPYTERHUB_API_TOKEN="tok-secret")
+        written = [
+            path
+            for path in tmp_path.rglob("*")
+            if path.is_file() and "tok-secret" in path.read_text(errors="ignore")
+        ]
+        assert written == []
+
+
+class TestJupyterAIServerNameAgreement:
+    """The MCP server has one name across the facility. The skill and the
+    platform context name it explicitly, so an agent that meets it under a
+    different name in JupyterLab than in the terminal is working from
+    instructions that do not describe what it can see."""
+
+    def test_name_and_url_match_config_agents(self, monkeypatch, tmp_path):
+        from common import REPO
+
+        hook = (REPO / "docker/purdue-af/scripts/config-agents.sh").read_text()
+        _, c = load_jupyter_config(
+            monkeypatch, tmp_path, env={"JUPYTERHUB_API_TOKEN": "t"}
+        )
+        af = next(
+            s
+            for s in c["PersonaManager"]["builtin_mcp_servers"]
+            if s["name"] == "purdue-af-agentic-interface"
+        )
+        assert 'MCP_NAME="purdue-af-agentic-interface"' in hook
+        # Same in-cluster address, with the hook's ${NAMESPACE:-cms} resolved.
+        assert af["url"] == (
+            "http://agentic-interface.cms.svc.cluster.local:8888"
+            "/services/agentic-interface/mcp"
+        )
+        assert "svc.cluster.local:8888/services/agentic-interface/mcp" in hook

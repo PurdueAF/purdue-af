@@ -14,7 +14,8 @@ Purdue AF provides several user interfaces for analysis development:
 * [Agentic interface (MCP server)](guide-agentic-interface.md) — manage your AF
   session and Dask clusters from any MCP-capable AI agent. Claude Code and Codex
   come pre-installed and pre-connected in the session (terminal and VS Code
-  extensions); agents on your own machine (Cursor, etc.) connect with a token.
+  extensions), and can be
+  [used as a chat panel inside JupyterLab](guide-agentic-interface.md#ai-in-jupyterlab); agents on your own machine (Cursor, etc.) connect with a token.
 
 ## Python code development
 
