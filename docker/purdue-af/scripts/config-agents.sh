@@ -184,6 +184,20 @@ _config_agents() {
 		echo "config-agents: no bundled agent section, skipping" >&2
 	fi
 
+	# Migration, not cleanup-for-tidiness. An earlier image wrote the platform
+	# context into ~/.config/opencode/AGENTS.md, and homes are persistent, so
+	# dropping that target from the loop above does not remove what is already
+	# there. Left in place it is loaded alongside `instructions` — the exact
+	# doubling that target was removed to stop, and it would persist for every
+	# existing user while only new homes saw the fix.
+	#
+	# Runs unconditionally: it is undoing our own past writes, so it must not
+	# depend on the current context being present. The file survives with the
+	# user's own content if they added any, and is deleted only when our block
+	# was all it held. Removable once no live home predates this change.
+	_as_user "'${PYTHON}' /usr/local/bin/managed-block.py --remove '${NEW_HOME}/.config/opencode/AGENTS.md'" ||
+		echo "config-agents: WARNING could not retire ${NEW_HOME}/.config/opencode/AGENTS.md" >&2
+
 	return 0
 }
 
