@@ -18,7 +18,7 @@ jupyter-server-proxy = "==4.5.0"
 # Jupyter pieces
 jupyter_server = "==2.21.0"
 notebook      = "==7.6.2"
-jupyterhub    = "==5.5.2"
+jupyterhub    = "==6.0.0"
 jupyterlab    = "==4.6.3"
 ipyparallel   = "==9.2.0"
 nodejs        = "22.*"
