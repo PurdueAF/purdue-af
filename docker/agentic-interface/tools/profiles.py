@@ -8,12 +8,12 @@ sync with whatever the admin has configured — no hardcoded option keys or slug
 import asyncio
 import os
 import re
-import time
 from typing import Any, Optional
 
 import httpx
 import yaml
-from errors import describe_exception, json_body, response_detail
+from cachetools import TTLCache
+from errors import UpstreamError, describe_exception, json_body, response_detail
 from shared import shared_client
 
 from tools.gpu import free_gpus, gpu_error
@@ -25,9 +25,11 @@ _CA_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 _NAMESPACE = os.environ.get("NAMESPACE", "cms")
 _CONFIGMAP = "jupyterhub-config"
 
-# (expiry_monotonic, profiles) — refresh every 5 minutes
-_cache: tuple[float, list[dict]] | None = None
+# Fresh for 5 minutes; the last good read is kept separately so a broken
+# source degrades to stale data rather than nothing.
 _CACHE_TTL = 300.0
+_fresh: TTLCache[str, list[dict]] = TTLCache(1, _CACHE_TTL)
+_last_good: list[dict] = []
 # Why the last read failed, in user terms — reported instead of a bare
 # "service may be misconfigured". None after a successful read.
 _last_error: Optional[str] = None
@@ -203,29 +205,30 @@ async def get_profiles(force: bool = False) -> list[dict]:
 
     An empty list always has a reason waiting in ``profiles_error()``.
     """
-    global _cache, _last_error
-    if not force and _cache and time.monotonic() < _cache[0]:
-        return _cache[1]
+    global _last_good, _last_error
+    if not force and "profiles" in _fresh:
+        return _fresh["profiles"]
 
     async with _refresh_lock:
         # Re-check after acquiring — another task may have refreshed while
         # we waited on the lock.
-        if not force and _cache and time.monotonic() < _cache[0]:
-            return _cache[1]
+        if not force and "profiles" in _fresh:
+            return _fresh["profiles"]
 
         raw = await _read_configmap()
         if raw:
             profiles = _parse_profiles(raw)
             if profiles:
-                _cache = (time.monotonic() + _CACHE_TTL, profiles)
+                _fresh["profiles"] = profiles
+                _last_good = profiles
                 return profiles
             _last_error = (
                 "the JupyterHub configuration was read but contains no parseable "
                 "singleuser.profileList"
             )
 
-        # Return stale cache rather than nothing
-        return _cache[1] if _cache else []
+        # Return stale data rather than nothing
+        return _last_good
 
 
 def find_profile(profiles: list[dict], name: str) -> Optional[dict]:
@@ -251,7 +254,7 @@ def register(mcp: Any) -> None:
         """
         profiles = await get_profiles()
         if not profiles:
-            return (
+            raise UpstreamError(
                 f"Could not read profile list — {profiles_error() or 'unknown reason'}. "
                 "This is a problem on the facility side, not with the request: "
                 "try again in a minute, and contact AF support if it persists. "

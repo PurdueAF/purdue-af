@@ -90,14 +90,18 @@ def test_response_detail_handles_empty_and_non_json_bodies():
 
 
 def test_unreachable_names_service_reason_and_next_step():
-    out = errors.unreachable("gateway 'k8s'", httpx.ConnectError("down"))
+    exc = errors.unreachable("gateway 'k8s'", httpx.ConnectError("down"))
+    assert isinstance(exc, errors.UpstreamError)
+    out = str(exc)
     assert out.startswith(
         "Error: gateway 'k8s' unreachable — connection failed (down)."
     )
     assert out.endswith(errors.RETRY_LATER)
 
-    custom = errors.unreachable(
-        "JupyterHub API", httpx.ReadTimeout(""), next_step="Nothing changed."
+    custom = str(
+        errors.unreachable(
+            "JupyterHub API", httpx.ReadTimeout(""), next_step="Nothing changed."
+        )
     )
     assert custom == (
         "Error: JupyterHub API unreachable — timed out waiting for a response. "
@@ -106,8 +110,10 @@ def test_unreachable_names_service_reason_and_next_step():
 
 
 def test_http_error_explains_5xx_and_includes_the_body():
-    out = errors.http_error(
-        "JupyterHub API", _resp(503, text="hub down"), action="start the session"
+    out = str(
+        errors.http_error(
+            "JupyterHub API", _resp(503, text="hub down"), action="start the session"
+        )
     )
     assert out.startswith(
         "Error: JupyterHub API returned HTTP 503 while trying to start the session "
@@ -115,36 +121,59 @@ def test_http_error_explains_5xx_and_includes_the_body():
     )
     assert out.endswith(errors.RETRY_LATER)
 
-    out = errors.http_error("Loki", _resp(500, text=""))
+    out = str(errors.http_error("Loki", _resp(500, text="")))
     assert out.startswith("Error: Loki returned HTTP 500 (it hit an internal error).")
 
 
 def test_http_error_4xx_has_no_retry_advice_by_default():
     out = errors.http_error("gateway 'k8s'", _resp(418, json={"message": "teapot"}))
-    assert out == "Error: gateway 'k8s' returned HTTP 418 — teapot."
+    assert isinstance(out, errors.UpstreamError)
+    assert str(out) == "Error: gateway 'k8s' returned HTTP 418 — teapot."
 
 
 def test_malformed_response_and_argument_and_bug_messages():
     out = errors.malformed_response(
         "gateway 'k8s'", _resp(201, text="<html>oops</html>"), "a cluster record"
     )
-    assert "returned HTTP 201 but the response was not a cluster record — oops" in out
-    assert "report it to AF support" in out
+    assert isinstance(out, errors.UpstreamError)
+    assert "returned HTTP 201 but the response was not a cluster record — oops" in str(
+        out
+    )
+    assert "report it to AF support" in str(out)
 
-    out = errors.invalid_arguments(
+    exc = errors.invalid_arguments(
         "scale_dask_cluster", ValueError("n_workers\n  must be int")
     )
+    assert isinstance(exc, errors.UserError)
+    out = str(exc)
     assert out.startswith(
         "Error: scale_dask_cluster was called with invalid arguments — n_workers must be int."
     )
     assert "argument names and types" in out
 
-    out = errors.unexpected_failure("create_dask_cluster", KeyError("name"))
+    exc = errors.unexpected_failure("create_dask_cluster", KeyError("name"))
+    assert isinstance(exc, errors.ServiceFault)
+    out = str(exc)
     assert out.startswith(
         "Error: create_dask_cluster failed unexpectedly (KeyError: 'name')."
     )
     assert "not in the request" in out
     assert "AF support" in out
+
+
+def test_failures_are_mcp_tool_errors_with_an_outcome_label():
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    for cls, outcome in (
+        (errors.UserError, "user_error"),
+        (errors.AuthError, "auth_error"),
+        (errors.UpstreamError, "upstream_error"),
+        (errors.ServiceFault, "exception"),
+    ):
+        exc = cls("Error: x.")
+        assert isinstance(exc, ToolError) and isinstance(exc, errors.Failure)
+        assert exc.outcome == outcome
+        assert str(exc) == "Error: x."
 
 
 # ── shared.prom_query ─────────────────────────────────────────────────────────

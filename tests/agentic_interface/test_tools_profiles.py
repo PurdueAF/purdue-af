@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 import respx
-from agentic_helpers import register_tools
+from agentic_helpers import failure, register_tools
 from tools import profiles
 
 VALUES_YAML = """
@@ -34,11 +34,14 @@ singleuser:
 
 @pytest.fixture(autouse=True)
 def clear_profile_cache():
-    profiles._cache = None
-    profiles._last_error = None
+    def reset():
+        profiles._fresh.clear()
+        profiles._last_good = []
+        profiles._last_error = None
+
+    reset()
     yield
-    profiles._cache = None
-    profiles._last_error = None
+    reset()
 
 
 # ── _slug ─────────────────────────────────────────────────────────────────────
@@ -193,8 +196,7 @@ async def test_get_profiles_stale_cache_fallback(monkeypatch):
     cached = await profiles.get_profiles()
 
     # Expire the cache, then break the source: stale data is better than none.
-    expiry, data = profiles._cache
-    profiles._cache = (expiry - 10_000, data)
+    profiles._fresh.clear()
     monkeypatch.setattr(profiles, "_read_configmap", broken_read)
 
     assert await profiles.get_profiles() == cached
@@ -270,7 +272,7 @@ async def test_list_profiles_tool_unavailable(monkeypatch):
     monkeypatch.setattr(profiles, "_read_configmap", broken_read)
 
     tools = register_tools(profiles).tools
-    out = await tools["list_af_profiles"]()
+    out = await failure(tools["list_af_profiles"]())
     assert "Could not read profile list" in out
 
 
@@ -354,7 +356,7 @@ async def test_list_profiles_tool_reports_the_reason(monkeypatch):
         return None
 
     monkeypatch.setattr(profiles, "_read_configmap", broken_read)
-    out = await register_tools(profiles).tools["list_af_profiles"]()
+    out = await failure(register_tools(profiles).tools["list_af_profiles"]())
     assert out.startswith(
         "Could not read profile list — Kubernetes API unreachable — connection refused."
     )

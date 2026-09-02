@@ -96,16 +96,14 @@ MCP_HEADERS = {"Accept": "application/json, text/event-stream"}
 async def test_full_stack_handshake_and_auth(monkeypatch):
     """One lifespan (the session manager is single-run), both auth outcomes."""
 
+    from mcp.server.auth.provider import AccessToken
+
     async def accept(token):
         if token != "good-token":
             return None
-        return {
-            "username": "alice",
-            "namespace": "cms",
-            "token": token,
-        }
+        return AccessToken(token=token, client_id="alice", scopes=[])
 
-    monkeypatch.setattr(server, "resolve_user", accept)
+    monkeypatch.setattr(server, "verify_token", accept)
 
     app = server._AuthMiddleware(
         server._PathStripper(server.mcp.streamable_http_app(), server.SERVICE_PREFIX)

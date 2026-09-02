@@ -18,6 +18,10 @@ import httpx
 from auth import clear_user_cache
 from context import require_user
 from errors import (
+    AuthError,
+    Failure,
+    UpstreamError,
+    UserError,
     describe_exception,
     http_error,
     json_body,
@@ -46,7 +50,7 @@ def _auth(token: str) -> dict:
 # ── failure reporting ─────────────────────────────────────────────────────────
 
 
-def _hub_error(resp: httpx.Response, action: str, username: str) -> str:
+def _hub_error(resp: httpx.Response, action: str, username: str) -> Failure:
     """What a non-2xx Hub answer means for this user, and what to do next.
 
     The token passed the service's own check moments earlier, so a 401 here
@@ -56,7 +60,7 @@ def _hub_error(resp: httpx.Response, action: str, username: str) -> str:
     """
     code = resp.status_code
     if code == 401:
-        return (
+        return AuthError(
             f"Error: JupyterHub rejected this token (HTTP 401) while trying to "
             f"{action}. It was accepted when this request was authenticated, so "
             "it has just expired or been revoked — inside an AF session the token "
@@ -66,7 +70,7 @@ def _hub_error(resp: httpx.Response, action: str, username: str) -> str:
         )
     if code == 403:
         detail = response_detail(resp, limit=160)
-        return (
+        return AuthError(
             f"Error: this token is not permitted to {action} (JupyterHub HTTP 403"
             + (f": {detail}" if detail else "")
             + "). Tokens issued to a running session can only read their own "
@@ -74,7 +78,7 @@ def _hub_error(resp: httpx.Response, action: str, username: str) -> str:
             f"at {TOKEN_URL} from outside the session."
         )
     if code == 404:
-        return (
+        return AuthError(
             f"Error: JupyterHub has no user '{username}' (HTTP 404) while trying "
             f"to {action} — the account may have been removed from the hub. "
             "Contact AF support."
@@ -92,9 +96,11 @@ _CANNOT_SEE_SERVERS = (
 )
 
 
-def _cannot_see_servers(username: str) -> str:
-    return _CANNOT_SEE_SERVERS.format(
-        username=username, token_url=TOKEN_URL, public_url=PUBLIC_URL
+def _cannot_see_servers(username: str) -> AuthError:
+    return AuthError(
+        _CANNOT_SEE_SERVERS.format(
+            username=username, token_url=TOKEN_URL, public_url=PUBLIC_URL
+        )
     )
 
 
@@ -165,18 +171,18 @@ def register(mcp: Any) -> None:
                 timeout=10.0,
             )
         except httpx.RequestError as exc:
-            return unreachable("JupyterHub API", exc)
+            raise unreachable("JupyterHub API", exc)
 
         if resp.status_code != 200:
-            return _hub_error(resp, "read the session state", username)
+            raise _hub_error(resp, "read the session state", username)
 
         data = json_body(resp)
         if not isinstance(data, dict):
-            return malformed_response("JupyterHub API", resp, "a user record")
+            raise malformed_response("JupyterHub API", resp, "a user record")
         servers = _servers(data)
 
         if servers is None:
-            return _cannot_see_servers(username)
+            raise _cannot_see_servers(username)
 
         if not servers:
             base = f"{PUBLIC_URL}/user/{username}"
@@ -287,7 +293,7 @@ def register(mcp: Any) -> None:
             selected = find_profile(profiles, profile_name)
             if selected is None:
                 if not profiles:
-                    return (
+                    raise UpstreamError(
                         f"Error: cannot check profile '{profile_name}' — the "
                         "profile list could not be read "
                         f"({profiles_error() or 'unknown reason'}). Try again in "
@@ -295,7 +301,7 @@ def register(mcp: Any) -> None:
                         "to launch the Hub's default profile."
                     )
                 known = ", ".join(f'"{p["slug"]}"' for p in profiles)
-                return (
+                raise UserError(
                     f"Unknown profile '{profile_name}'. "
                     f"Call list_af_profiles to see available options. "
                     f"Known slugs: {known}"
@@ -369,7 +375,7 @@ def register(mcp: Any) -> None:
                 timeout=15.0,
             )
         except httpx.RequestError as exc:
-            return unreachable(
+            raise unreachable(
                 "JupyterHub API",
                 exc,
                 next_step="The session was not started. Try again in a minute; if "
@@ -385,14 +391,14 @@ def register(mcp: Any) -> None:
                 return (
                     "Session is already running. Use get_session_status to see its URL."
                 )
-            return (
+            raise UserError(
                 "Error: JupyterHub rejected the spawn request — "
                 f"{response_detail(resp) or 'no reason given'}. Check the profile "
                 "and options against list_af_profiles and call start_af_session "
                 "again."
             )
         if resp.status_code not in (200, 201, 202):
-            return _hub_error(resp, "start the session", username)
+            raise _hub_error(resp, "start the session", username)
 
         clear_user_cache(token)
 
@@ -435,7 +441,7 @@ def register(mcp: Any) -> None:
                 timeout=15.0,
             )
         except httpx.RequestError as exc:
-            return unreachable(
+            raise unreachable(
                 "JupyterHub API",
                 exc,
                 next_step="The session was not stopped. Try again in a minute.",
@@ -444,7 +450,7 @@ def register(mcp: Any) -> None:
         if resp.status_code == 400:
             return "No session is currently running."
         if resp.status_code not in (200, 202, 204):
-            return _hub_error(resp, "stop the session", username)
+            raise _hub_error(resp, "stop the session", username)
 
         clear_user_cache(token)
         return (
@@ -498,7 +504,7 @@ def register(mcp: Any) -> None:
             else:
                 if resp.status_code in (401, 403, 404):
                     # No amount of waiting changes what the token may see.
-                    return _hub_error(resp, "check the session state", username)
+                    raise _hub_error(resp, "check the session state", username)
                 if resp.status_code != 200:
                     failed_polls += 1
                     last_seen = f"JupyterHub API returned HTTP {resp.status_code}"
@@ -506,7 +512,7 @@ def register(mcp: Any) -> None:
                     data = json_body(resp)
                     servers = _servers(data if isinstance(data, dict) else {})
                     if servers is None:
-                        return _cannot_see_servers(username)
+                        raise _cannot_see_servers(username)
                     default = servers.get("")
                     if default is None:
                         # A spawn in progress is always listed (pending="spawn");
@@ -514,7 +520,7 @@ def register(mcp: Any) -> None:
                         # already failed. Two looks rule out a momentary gap.
                         absent_polls += 1
                         if absent_polls >= 2:
-                            return (
+                            raise UserError(
                                 "Error: no session is starting or running — "
                                 f"JupyterHub lists no server for '{username}', "
                                 "so either start_af_session was not called or the "
@@ -541,7 +547,7 @@ def register(mcp: Any) -> None:
                             return "\n".join(lines)
                         pending = default.get("pending")
                         if pending == "stop":
-                            return (
+                            raise UserError(
                                 "Error: the session is stopping, not starting. "
                                 "Wait for get_session_status to report no active "
                                 "session, then call start_af_session."
@@ -614,7 +620,7 @@ def register(mcp: Any) -> None:
             )
         else:
             if info.status_code in (401, 403, 404):
-                return _hub_error(info, "read the session state", username)
+                raise _hub_error(info, "read the session state", username)
             if info.status_code != 200:
                 prior_note = (
                     " (the previous options could not be read: JupyterHub API "
@@ -638,7 +644,7 @@ def register(mcp: Any) -> None:
                     if profiles
                     else f"unavailable ({profiles_error() or 'unknown reason'})"
                 )
-                return (
+                raise UserError(
                     f"Unknown profile '{profile_name}'. "
                     f"Call list_af_profiles to see options. "
                     f"Known slugs: {known}"
@@ -653,14 +659,14 @@ def register(mcp: Any) -> None:
                 timeout=15.0,
             )
         except httpx.RequestError as exc:
-            return unreachable(
+            raise unreachable(
                 "JupyterHub API",
                 exc,
                 next_step="The session was not touched. Try again in a minute.",
             )
 
         if stop.status_code not in (200, 202, 204, 400):
-            return _hub_error(stop, "stop the session", username)
+            raise _hub_error(stop, "stop the session", username)
 
         was_running = stop.status_code != 400  # 400 = no server was running
         if was_running:
@@ -681,7 +687,7 @@ def register(mcp: Any) -> None:
                 timeout=15.0,
             )
         except httpx.RequestError as exc:
-            return (
+            raise UpstreamError(
                 "Session was stopped but restart failed: JupyterHub API "
                 f"unreachable — {describe_exception(exc)}. "
                 "Use start_af_session to try again."
@@ -689,22 +695,22 @@ def register(mcp: Any) -> None:
 
         if start.status_code == 400:
             body = start.text.lower()
-            if "pending" in body or "running" in body:
+            if any(w in body for w in ("pending", "running", "stop", "terminat")):
                 # Pod still terminating — ask the user to retry
-                return (
+                raise UpstreamError(
                     "Session stopped but the pod is still terminating. "
                     "Wait a few seconds then call start_af_session to complete the restart."
                 )
-            return (
+            raise UserError(
                 "Session was stopped, but JupyterHub rejected the restart options — "
                 f"{response_detail(start) or 'no reason given'}. Call "
                 "start_af_session with valid options (see list_af_profiles)."
             )
         if start.status_code not in (200, 201, 202):
-            return (
-                "Session was stopped, but the restart failed. "
-                + _hub_error(start, "start the session", username)
-                + " Use start_af_session to try again."
+            err = _hub_error(start, "start the session", username)
+            raise type(err)(
+                f"Session was stopped, but the restart failed. {err} "
+                "Use start_af_session to try again."
             )
 
         opts_summary = (

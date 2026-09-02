@@ -9,6 +9,7 @@ from typing import Any, Optional
 import httpx
 from context import require_user
 from errors import (
+    UserError,
     http_error,
     json_body,
     malformed_response,
@@ -124,12 +125,12 @@ async def _loki_query(
             timeout=30.0,
         )
     except httpx.RequestError as exc:
-        return unreachable("the log store (Loki)", exc)
+        raise unreachable("the log store (Loki)", exc)
 
     if resp.status_code == 400:
         # Loki's 400 is a query it could not parse — the caller's filter or
         # time range, not the facility.
-        return (
+        raise UserError(
             "Error: the log store (Loki) rejected the query (HTTP 400) — "
             f"{response_detail(resp, limit=400) or 'no reason given'}. The filter "
             "argument must be a LogQL pipe expression such as '|= \"ERROR\"' or "
@@ -137,13 +138,13 @@ async def _loki_query(
             "'2d') or ISO-8601 timestamps."
         )
     if resp.status_code != 200:
-        return http_error("the log store (Loki)", resp, action="query logs")
+        raise http_error("the log store (Loki)", resp, action="query logs")
 
     payload = json_body(resp)
     data = payload.get("data") if isinstance(payload, dict) else None
     streams = data.get("result") if isinstance(data, dict) else None
     if not isinstance(streams, list):
-        return malformed_response("the log store (Loki)", resp, "a log query result")
+        raise malformed_response("the log store (Loki)", resp, "a log query result")
     lines: list[str] = []
     for stream in streams:
         labels = stream.get("stream", {})

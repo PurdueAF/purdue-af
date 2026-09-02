@@ -7,6 +7,7 @@ from typing import Any, Optional
 
 import httpx
 from context import require_user
+from errors import UpstreamError
 from shared import prom_query, prom_scalar, quote_label, shared_client
 
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
@@ -94,7 +95,7 @@ def register(mcp: Any) -> None:
 
         if not any_data:
             if problems:
-                return (
+                raise UpstreamError(
                     f"Error: could not read storage metrics — Prometheus {problems[0]}. This "
                     "is a monitoring problem, not a quota problem: your storage is "
                     "unaffected. Try again in a minute; get_facility_health shows "

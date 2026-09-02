@@ -6,7 +6,7 @@ import types
 import auth
 import pytest
 import respx
-from agentic_helpers import register_tools
+from agentic_helpers import failure, register_tools
 from tools import profiles, session
 
 USER_URL = f"{session.HUB_API_URL}/users/alice"
@@ -224,7 +224,7 @@ async def test_status_api_error(user_ctx):
     respx.get(USER_URL).respond(500)
 
     tools = register_tools(session).tools
-    out = await tools["get_session_status"]()
+    out = await failure(tools["get_session_status"]())
     assert "HTTP 500" in out
 
 
@@ -261,7 +261,7 @@ async def test_start_unknown_profile(user_ctx, monkeypatch):
     fake_profiles(monkeypatch)
 
     tools = register_tools(session).tools
-    out = await tools["start_af_session"](FakeCtx(), profile_name="ghost")
+    out = await failure(tools["start_af_session"](FakeCtx(), profile_name="ghost"))
 
     assert "Unknown profile 'ghost'" in out
     assert '"stable"' in out  # known slugs listed
@@ -281,7 +281,7 @@ async def test_start_rejected_options_not_masked(user_ctx):
     respx.post(SERVER_URL).respond(400, text="Invalid profile option 'x'")
 
     tools = register_tools(session).tools
-    out = await tools["start_af_session"](FakeCtx())
+    out = await failure(tools["start_af_session"](FakeCtx()))
     assert "rejected the spawn request" in out
 
 
@@ -603,7 +603,7 @@ async def test_restart_pod_still_terminating(user_ctx, monkeypatch):
     respx.post(SERVER_URL).respond(400, text="pod still terminating")
 
     tools = register_tools(session).tools
-    out = await tools["restart_af_session"]()
+    out = await failure(tools["restart_af_session"]())
     assert "still terminating" in out
     assert "start_af_session" in out  # recovery hint
 
@@ -631,7 +631,7 @@ async def test_status_hub_unreachable(user_ctx):
 
     respx.get(USER_URL).mock(side_effect=ConnectError("down"))
     tools = register_tools(session).tools
-    assert "unreachable" in await tools["get_session_status"]()
+    assert "unreachable" in await failure(tools["get_session_status"]())
 
 
 @respx.mock
@@ -670,7 +670,7 @@ async def test_start_hub_unreachable_and_status_codes(user_ctx):
 
     tools = register_tools(session).tools
     respx.post(SERVER_URL).mock(side_effect=ConnectError("down"))
-    assert "unreachable" in await tools["start_af_session"](FakeCtx())
+    assert "unreachable" in await failure(tools["start_af_session"](FakeCtx()))
 
     respx.post(SERVER_URL).respond(202)
     assert "already pending" in await tools["start_af_session"](FakeCtx())
@@ -679,7 +679,7 @@ async def test_start_hub_unreachable_and_status_codes(user_ctx):
     assert "Session starting" in await tools["start_af_session"](FakeCtx())
 
     respx.post(SERVER_URL).respond(500, text="boom")
-    assert "HTTP 500" in await tools["start_af_session"](FakeCtx())
+    assert "HTTP 500" in await failure(tools["start_af_session"](FakeCtx()))
 
 
 @respx.mock
@@ -688,10 +688,10 @@ async def test_stop_unreachable_and_http_error(user_ctx):
 
     tools = register_tools(session).tools
     respx.delete(SERVER_URL).mock(side_effect=ConnectError("down"))
-    assert "unreachable" in await tools["stop_af_session"]()
+    assert "unreachable" in await failure(tools["stop_af_session"]())
 
     respx.delete(SERVER_URL).respond(500, text="boom")
-    assert "HTTP 500" in await tools["stop_af_session"]()
+    assert "HTTP 500" in await failure(tools["stop_af_session"]())
 
 
 @respx.mock
@@ -743,32 +743,32 @@ async def test_restart_error_paths(user_ctx, monkeypatch):
 
     monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
     respx.get(USER_URL).respond(200, json=server_payload())
-    out = await tools["restart_af_session"](profile_name="ghost")
+    out = await failure(tools["restart_af_session"](profile_name="ghost"))
     assert "Unknown profile" in out
 
     # stop unreachable
     respx.get(USER_URL).respond(200, json=server_payload())
     respx.delete(SERVER_URL).mock(side_effect=ConnectError("down"))
-    assert "unreachable" in await tools["restart_af_session"]()
+    assert "unreachable" in await failure(tools["restart_af_session"]())
 
     # stop unexpected status
     respx.get(USER_URL).respond(200, json=server_payload())
     respx.delete(SERVER_URL).respond(500, text="no")
-    out = await tools["restart_af_session"]()
+    out = await failure(tools["restart_af_session"]())
     assert "returned HTTP 500 while trying to stop the session" in out
 
     # start unreachable after stop
     respx.get(USER_URL).respond(200, json=server_payload())
     respx.delete(SERVER_URL).respond(204)
     respx.post(SERVER_URL).mock(side_effect=ConnectError("down"))
-    out = await tools["restart_af_session"]()
+    out = await failure(tools["restart_af_session"]())
     assert "stopped but restart failed" in out
 
     # start unexpected status
     respx.get(USER_URL).respond(200, json=server_payload())
     respx.delete(SERVER_URL).respond(204)
     respx.post(SERVER_URL).respond(500, text="no")
-    out = await tools["restart_af_session"]()
+    out = await failure(tools["restart_af_session"]())
     assert out.startswith("Session was stopped, but the restart failed.")
     assert "returned HTTP 500 while trying to start the session" in out
 
@@ -781,7 +781,7 @@ async def test_restart_unknown_profile_when_list_empty(user_ctx, monkeypatch):
     monkeypatch.setattr(profiles, "get_profiles", empty_profiles)
     respx.get(USER_URL).respond(200, json=server_payload())
     tools = register_tools(session).tools
-    out = await tools["restart_af_session"](profile_name="ghost")
+    out = await failure(tools["restart_af_session"](profile_name="ghost"))
     assert "Unknown profile" in out
     assert "unavailable" in out
 
@@ -829,7 +829,7 @@ async def test_status_never_claims_no_session_when_it_cannot_see(user_ctx):
         respx.get(USER_URL).mock(
             return_value=Response(200, json={"name": "alice", "kind": "user"})
         )
-        out = await tools.tools["get_session_status"]()
+        out = await failure(tools.tools["get_session_status"]())
     assert "No active session" not in out
     assert "cannot tell" in out.lower() or "cannot read" in out.lower()
 
@@ -854,7 +854,7 @@ async def test_status_still_reports_a_genuinely_stopped_session(user_ctx):
 @respx.mock
 async def test_status_401_explains_revoked_token(user_ctx):
     respx.get(USER_URL).respond(401)
-    out = await register_tools(session).tools["get_session_status"]()
+    out = await failure(register_tools(session).tools["get_session_status"]())
     assert out.startswith("Error: JupyterHub rejected this token (HTTP 401)")
     assert "JUPYTERHUB_API_TOKEN" in out
     assert "/hub/token" in out
@@ -865,7 +865,7 @@ async def test_status_403_explains_token_permissions(user_ctx):
     respx.get(USER_URL).respond(
         403, json={"message": "Action is not authorized with current scopes"}
     )
-    out = await register_tools(session).tools["get_session_status"]()
+    out = await failure(register_tools(session).tools["get_session_status"]())
     assert out.startswith(
         "Error: this token is not permitted to read the session state"
     )
@@ -876,7 +876,7 @@ async def test_status_403_explains_token_permissions(user_ctx):
 @respx.mock
 async def test_status_5xx_carries_reason_and_retry_advice(user_ctx):
     respx.get(USER_URL).respond(502, text="<html><body>Bad Gateway</body></html>")
-    out = await register_tools(session).tools["get_session_status"]()
+    out = await failure(register_tools(session).tools["get_session_status"]())
     assert (
         "returned HTTP 502 while trying to read the session state (it is down or "
         "restarting behind its proxy) — Bad Gateway" in out
@@ -887,7 +887,7 @@ async def test_status_5xx_carries_reason_and_retry_advice(user_ctx):
 @respx.mock
 async def test_status_malformed_body_is_reported(user_ctx):
     respx.get(USER_URL).respond(200, text="<html>login</html>")
-    out = await register_tools(session).tools["get_session_status"]()
+    out = await failure(register_tools(session).tools["get_session_status"]())
     assert "not a user record" in out
 
 
@@ -895,13 +895,13 @@ async def test_status_malformed_body_is_reported(user_ctx):
 async def test_start_403_and_rejected_options_are_explained(user_ctx):
     tools = register_tools(session).tools
     respx.post(SERVER_URL).respond(403)
-    out = await tools["start_af_session"](FakeCtx())
+    out = await failure(tools["start_af_session"](FakeCtx()))
     assert "not permitted to start the session" in out
 
     respx.post(SERVER_URL).respond(
         400, json={"message": "Invalid profile option: 9-gpu"}
     )
-    out = await tools["start_af_session"](FakeCtx())
+    out = await failure(tools["start_af_session"](FakeCtx()))
     assert out.startswith(
         "Error: JupyterHub rejected the spawn request — Invalid profile option: 9-gpu."
     )
@@ -936,8 +936,10 @@ async def test_start_notes_when_profile_list_was_unavailable(user_ctx, no_profil
 async def test_start_named_profile_without_a_list_is_explained(
     user_ctx, no_profile_list
 ):
-    out = await register_tools(session).tools["start_af_session"](
-        FakeCtx(), profile_name="stable"
+    out = await failure(
+        register_tools(session).tools["start_af_session"](
+            FakeCtx(), profile_name="stable"
+        )
     )
     assert out.startswith("Error: cannot check profile 'stable'")
     assert "connection refused" in out
@@ -947,7 +949,7 @@ async def test_start_named_profile_without_a_list_is_explained(
 @respx.mock
 async def test_stop_403_is_explained(user_ctx):
     respx.delete(SERVER_URL).respond(403)
-    out = await register_tools(session).tools["stop_af_session"]()
+    out = await failure(register_tools(session).tools["stop_af_session"]())
     assert "not permitted to stop the session" in out
 
 
@@ -959,12 +961,12 @@ async def test_wait_stops_on_revoked_or_unpermitted_token(user_ctx, monkeypatch)
     _fake_clock(monkeypatch)
     tools = register_tools(session).tools
     respx.get(USER_URL).respond(401)
-    out = await tools["wait_for_session"](timeout_seconds=300)
+    out = await failure(tools["wait_for_session"](timeout_seconds=300))
     assert "rejected this token" in out
     assert "did not become ready" not in out
 
     respx.get(USER_URL).respond(403)
-    out = await tools["wait_for_session"](timeout_seconds=300)
+    out = await failure(tools["wait_for_session"](timeout_seconds=300))
     assert "not permitted to check the session state" in out
 
 
@@ -972,7 +974,9 @@ async def test_wait_stops_on_revoked_or_unpermitted_token(user_ctx, monkeypatch)
 async def test_wait_stops_when_token_cannot_see_servers(user_ctx, monkeypatch):
     _fake_clock(monkeypatch)
     respx.get(USER_URL).respond(200, json={"name": "alice"})  # no servers key
-    out = await register_tools(session).tools["wait_for_session"](timeout_seconds=300)
+    out = await failure(
+        register_tools(session).tools["wait_for_session"](timeout_seconds=300)
+    )
     assert out.startswith("Error: cannot read session state")
     assert "did not become ready" not in out
 
@@ -981,7 +985,9 @@ async def test_wait_stops_when_token_cannot_see_servers(user_ctx, monkeypatch):
 async def test_wait_detects_a_failed_or_never_started_spawn(user_ctx, monkeypatch):
     clock = _fake_clock(monkeypatch)
     route = respx.get(USER_URL).respond(200, json={"name": "alice", "servers": {}})
-    out = await register_tools(session).tools["wait_for_session"](timeout_seconds=300)
+    out = await failure(
+        register_tools(session).tools["wait_for_session"](timeout_seconds=300)
+    )
     assert out.startswith("Error: no session is starting or running")
     assert "start_af_session" in out
     assert route.call_count == 2  # two looks, then stop — not the full timeout
@@ -1011,7 +1017,9 @@ async def test_wait_tolerates_a_single_empty_look(user_ctx, monkeypatch):
 async def test_wait_stops_when_session_is_stopping(user_ctx, monkeypatch):
     _fake_clock(monkeypatch)
     respx.get(USER_URL).respond(200, json=server_payload(ready=False, pending="stop"))
-    out = await register_tools(session).tools["wait_for_session"](timeout_seconds=300)
+    out = await failure(
+        register_tools(session).tools["wait_for_session"](timeout_seconds=300)
+    )
     assert "stopping, not starting" in out
 
 
@@ -1058,7 +1066,7 @@ async def test_restart_reports_unreadable_prior_options(user_ctx, monkeypatch):
 async def test_restart_403_on_read_does_not_stop_the_session(user_ctx):
     respx.get(USER_URL).respond(403)
     delete = respx.delete(SERVER_URL).respond(204)
-    out = await register_tools(session).tools["restart_af_session"]()
+    out = await failure(register_tools(session).tools["restart_af_session"]())
     assert "not permitted to read the session state" in out
     assert delete.call_count == 0
 
@@ -1072,6 +1080,6 @@ async def test_restart_rejected_options_after_stop_are_explained(user_ctx, monke
     respx.get(USER_URL).respond(200, json=server_payload())
     respx.delete(SERVER_URL).respond(204)
     respx.post(SERVER_URL).respond(400, json={"message": "Invalid option"})
-    out = await register_tools(session).tools["restart_af_session"]()
+    out = await failure(register_tools(session).tools["restart_af_session"]())
     assert "JupyterHub rejected the restart options — Invalid option" in out
     assert "start_af_session" in out

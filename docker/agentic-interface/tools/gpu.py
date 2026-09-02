@@ -8,10 +8,10 @@ unreachable the count is unknown and no choice is hidden.
 """
 
 import os
-import time
 from typing import Optional
 
 import httpx
+from cachetools import TTLCache
 from errors import describe_exception, response_detail
 from shared import shared_client
 
@@ -51,7 +51,9 @@ _USED_QUERY = (
 )
 
 _CACHE_TTL = 30.0
-_cache: tuple[float, Optional[dict[str, int]]] = (0.0, None)
+# "free" → {resource: count} or None (unknown); both outcomes are cached so
+# a broken Prometheus is not re-asked on every profile question.
+_cache: TTLCache[str, Optional[dict[str, int]]] = TTLCache(1, _CACHE_TTL)
 # Why availability is unknown, for the tools that show it. None when known.
 _last_error: Optional[str] = None
 
@@ -74,10 +76,9 @@ async def _prom_query(client: httpx.AsyncClient, query: str) -> dict[str, float]
 
 async def free_gpus() -> Optional[dict[str, int]]:
     """{k8s GPU resource: free count} on schedulable AF nodes; None if unknown."""
-    global _cache, _last_error
-    now = time.monotonic()
-    if now < _cache[0]:
-        return _cache[1]
+    global _last_error
+    if "free" in _cache:
+        return _cache["free"]
 
     free: Optional[dict[str, int]] = None
     try:
@@ -110,7 +111,7 @@ async def free_gpus() -> Optional[dict[str, int]]:
         )
         free = None
 
-    _cache = (now + _CACHE_TTL, free)
+    _cache["free"] = free
     return free
 
 

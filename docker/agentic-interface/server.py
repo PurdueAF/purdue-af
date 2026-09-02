@@ -3,8 +3,9 @@
 Registered with JupyterHub as a service; accessible at
   https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp
 
-Auth: incoming JupyterHub Bearer tokens are validated against the Hub API.
-The resolved user identity (username) is stored in a ContextVar so tool
+Auth: incoming JupyterHub Bearer tokens are validated against the Hub API
+through the MCP SDK's TokenVerifier protocol (auth.HubTokenVerifier). The
+resolved user identity (username) is stored in a ContextVar so tool
 functions can scope their queries per-request.
 """
 
@@ -14,7 +15,7 @@ import os
 import re
 
 import uvicorn
-from auth import HubUnavailable, resolve_user
+from auth import NAMESPACE, HubTokenVerifier, HubUnavailable
 from context import current_user
 from mcp.server.fastmcp import FastMCP
 from metrics import (
@@ -81,6 +82,10 @@ _HINT_UNAVAILABLE = (
     "The token could not be checked because {detail}. This is a facility-side "
     "problem, not a token problem — try again in a minute."
 )
+
+
+# Module-level so tests can substitute a verifier.
+verify_token = HubTokenVerifier().verify_token
 
 
 def _token_problem(token: str) -> tuple[str, str] | None:
@@ -250,7 +255,7 @@ class _AuthMiddleware:
             return
 
         try:
-            user_info = await resolve_user(token)
+            access = await verify_token(token)
         except HubUnavailable as exc:
             logger.warning("token validation impossible: %s", exc.detail)
             await self._respond(
@@ -263,11 +268,16 @@ class _AuthMiddleware:
             record_request(route, 503)
             return
 
-        if user_info is None:
+        if access is None:
             await self._reject(
                 send, route, "Invalid JupyterHub token", _HINT_INVALID, invalid=True
             )
             return
+        user_info = {
+            "username": access.client_id,
+            "namespace": NAMESPACE,
+            "token": access.token,
+        }
 
         # Rewrite Host → localhost:8888 to satisfy the MCP SDK's DNS-rebinding
         # protection.  Our own token check above is the real auth gate.

@@ -3,7 +3,7 @@
 import re
 
 import respx
-from agentic_helpers import register_tools
+from agentic_helpers import failure, register_tools
 from context import current_user
 from httpx import AsyncClient, ConnectError
 from tools import storage
@@ -178,7 +178,7 @@ async def test_storage_prometheus_down_is_an_error_not_no_data(user_ctx):
     respx.get(PROM_URL).mock(side_effect=ConnectError("down"))
 
     tools = register_tools(storage).tools
-    out = await tools["query_storage_usage"]()
+    out = await failure(tools["query_storage_usage"]())
 
     assert out.startswith("Error: could not read storage metrics")
     assert "unreachable" in out

@@ -26,6 +26,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from context import require_user
+from errors import UpstreamError
 from shared import prom_query, prom_scalar, quote_label, shared_client
 
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
@@ -172,7 +173,7 @@ def register(mcp: Any) -> None:
         if problem:
             # An empty alert list from a Prometheus that answered is good
             # news; no answer at all is not news of any kind.
-            return (
+            raise UpstreamError(
                 f"Error: the monitoring system {problem}, so I cannot tell you "
                 "whether the facility is healthy. This is a monitoring problem, "
                 "not necessarily a facility problem — try your work and see."

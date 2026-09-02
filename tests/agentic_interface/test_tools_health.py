@@ -11,7 +11,7 @@ import time
 
 import pytest
 import respx
-from agentic_helpers import register_tools
+from agentic_helpers import failure, register_tools
 from context import current_user
 from httpx import Response
 from tools import health
@@ -226,7 +226,7 @@ async def test_monitoring_outage_is_not_a_health_claim(user_ctx):
     tools = register_tools(health)
     with respx.mock:
         respx.get(PROM_URL).mock(side_effect=ConnectError("down"))
-        out = await tools.tools["get_facility_health"]()
+        out = await failure(tools.tools["get_facility_health"]())
 
     assert out.startswith("Error: the monitoring system is unreachable")
     assert "cannot tell you" in out
@@ -242,7 +242,7 @@ async def test_monitoring_http_error_is_reported_with_its_reason(user_ctx):
         respx.get(PROM_URL).mock(
             return_value=Response(503, json={"error": "query engine overloaded"})
         )
-        out = await tools.tools["get_facility_health"]()
+        out = await failure(tools.tools["get_facility_health"]())
 
     assert "returned HTTP 503 — query engine overloaded" in out
     assert "cannot tell you" in out

@@ -168,7 +168,7 @@ async def test_invalid_token_is_401(monkeypatch):
     async def reject(token):
         return None
 
-    monkeypatch.setattr(server, "resolve_user", reject)
+    monkeypatch.setattr(server, "verify_token", reject)
     inner = RecordingApp()
     send = SendCollector()
 
@@ -183,12 +183,14 @@ async def test_invalid_token_is_401(monkeypatch):
 
 @pytest.fixture
 def accept_alice(monkeypatch):
-    user = {"username": "alice", "namespace": "cms", "token": "t"}
+    from mcp.server.auth.provider import AccessToken
+
+    user = {"username": "alice", "namespace": server.NAMESPACE, "token": "t"}
 
     async def accept(token):
-        return user
+        return AccessToken(token="t", client_id="alice", scopes=[])
 
-    monkeypatch.setattr(server, "resolve_user", accept)
+    monkeypatch.setattr(server, "verify_token", accept)
     return user
 
 
@@ -316,9 +318,9 @@ def _body(send):
 @pytest.fixture
 def never_resolve(monkeypatch):
     async def fail(token):
-        raise AssertionError(f"resolve_user must not be called for {token!r}")
+        raise AssertionError(f"verify_token must not be called for {token!r}")
 
-    monkeypatch.setattr(server, "resolve_user", fail)
+    monkeypatch.setattr(server, "verify_token", fail)
 
 
 async def test_missing_token_carries_a_hint_and_a_bare_challenge():
@@ -403,7 +405,7 @@ async def test_invalid_token_hint_says_how_to_recover(monkeypatch):
     async def reject(token):
         return None
 
-    monkeypatch.setattr(server, "resolve_user", reject)
+    monkeypatch.setattr(server, "verify_token", reject)
     send = SendCollector()
     await server._AuthMiddleware(RecordingApp())(
         http_scope(f"{PREFIX}/mcp", headers=bearer("bad")), noop_receive, send
@@ -424,7 +426,7 @@ async def test_hub_unavailable_is_503_not_401(monkeypatch):
     async def down(token):
         raise HubUnavailable("JupyterHub API unreachable — connection refused")
 
-    monkeypatch.setattr(server, "resolve_user", down)
+    monkeypatch.setattr(server, "verify_token", down)
 
     def counter():
         return (

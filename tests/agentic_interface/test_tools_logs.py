@@ -4,7 +4,7 @@ import time
 from urllib.parse import parse_qs, urlparse
 
 import respx
-from agentic_helpers import register_tools
+from agentic_helpers import failure, register_tools
 from context import current_user
 from httpx import ConnectError
 from tools import logs
@@ -156,7 +156,7 @@ async def test_loki_http_error_is_reported(user_ctx):
     respx.get(LOKI_RANGE_URL).respond(500, text="overloaded")
 
     tools = register_tools(logs).tools
-    out = await tools["query_notebook_logs"]()
+    out = await failure(tools["query_notebook_logs"]())
     assert "HTTP 500" in out
     assert "overloaded" in out
 
@@ -166,7 +166,7 @@ async def test_loki_unreachable_is_reported(user_ctx):
     respx.get(LOKI_RANGE_URL).mock(side_effect=ConnectError("down"))
 
     tools = register_tools(logs).tools
-    out = await tools["query_notebook_logs"]()
+    out = await failure(tools["query_notebook_logs"]())
     assert out.startswith("Error: the log store (Loki) unreachable")
     assert "connection failed (down)" in out
 
@@ -255,7 +255,7 @@ async def test_loki_400_blames_the_query_not_the_facility(user_ctx):
     )
 
     tools = register_tools(logs).tools
-    out = await tools["query_notebook_logs"](filter="|= ERROR")
+    out = await failure(tools["query_notebook_logs"](filter="|= ERROR"))
 
     assert "rejected the query (HTTP 400)" in out
     assert "syntax error" in out
@@ -268,6 +268,6 @@ async def test_loki_malformed_success_body_is_reported(user_ctx):
     respx.get(LOKI_RANGE_URL).respond(200, text="<html>proxy page</html>")
 
     tools = register_tools(logs).tools
-    out = await tools["query_notebook_logs"]()
+    out = await failure(tools["query_notebook_logs"]())
 
     assert "returned HTTP 200 but the response was not a log query result" in out

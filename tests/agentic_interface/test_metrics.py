@@ -9,6 +9,7 @@ import pytest
 import respx
 import server
 from context import current_user
+from mcp.server.auth.provider import AccessToken
 from prometheus_client import REGISTRY
 
 
@@ -69,13 +70,9 @@ async def test_metrics_endpoint_returns_prometheus_format():
 
 async def test_mcp_request_increments_api_call_counter(monkeypatch):
     async def accept(token):
-        return {
-            "username": "alice",
-            "namespace": "cms",
-            "token": "t",
-        }
+        return AccessToken(token="t", client_id="alice", scopes=[])
 
-    monkeypatch.setattr(server, "resolve_user", accept)
+    monkeypatch.setattr(server, "verify_token", accept)
 
     class Inner:
         calls = 0
@@ -181,13 +178,9 @@ def test_jsonrpc_methods_response_and_invalid():
 
 async def test_post_mcp_request_records_jsonrpc_method(monkeypatch):
     async def accept(token):
-        return {
-            "username": "alice",
-            "namespace": "cms",
-            "token": "t",
-        }
+        return AccessToken(token="t", client_id="alice", scopes=[])
 
-    monkeypatch.setattr(server, "resolve_user", accept)
+    monkeypatch.setattr(server, "verify_token", accept)
 
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).encode()
     supplied = [{"type": "http.request", "body": body, "more_body": False}]
@@ -244,35 +237,41 @@ def _tool_duration_count(tool: str) -> float:
     )
 
 
-def test_tool_outcome_classifier():
-    assert metrics.tool_outcome("ok") == "success"
-    assert metrics.tool_outcome({"not": "a string"}) == "success"
-    # User mistakes / nothing running
-    assert (
-        metrics.tool_outcome("Error: no running server found — start a pod first.")
-        == "user_error"
-    )
-    assert metrics.tool_outcome("Error: n_workers must be ≥ 0.") == "user_error"
-    assert metrics.tool_outcome("Unknown gateway 'nope'.") == "user_error"
-    # Backend failures
-    assert (
-        metrics.tool_outcome("Error: JupyterHub API unreachable — boom")
-        == "upstream_error"
-    )
-    assert (
-        metrics.tool_outcome("Error: Loki connection failed — refused")
-        == "upstream_error"
-    )
-    assert metrics.tool_outcome("Error: HTTP 502 — bad gateway") == "upstream_error"
-    assert (
-        metrics.tool_outcome("Error: Loki returned HTTP 500 — oops") == "upstream_error"
-    )
-    assert (
-        metrics.tool_outcome(
-            "Could not read profile list — service may be misconfigured."
-        )
-        == "upstream_error"
-    )
+def _instrumented():
+    from mcp.server.fastmcp import FastMCP
+
+    mcp = FastMCP("test-metrics-instrumented")
+    metrics.instrument_mcp(mcp)
+    return mcp
+
+
+async def test_failure_subclass_sets_the_outcome_label():
+    """Tools raise errors.Failure subclasses; the subclass is the outcome."""
+    import errors
+
+    mcp = _instrumented()
+
+    @mcp.tool()
+    async def refuse(kind: str) -> str:
+        raise {
+            "user": errors.UserError,
+            "auth": errors.AuthError,
+            "upstream": errors.UpstreamError,
+            "fault": errors.ServiceFault,
+        }[kind]("Error: nope.")
+
+    for kind, outcome in (
+        ("user", "user_error"),
+        ("auth", "auth_error"),
+        ("upstream", "upstream_error"),
+        ("fault", "exception"),
+    ):
+        before = _tool_counter_value("refuse", outcome)
+        with pytest.raises(errors.Failure) as info:
+            await mcp._tool_manager.call_tool("refuse", {"kind": kind})
+        # the message reaches the client unwrapped — no "Error executing tool"
+        assert str(info.value) == "Error: nope."
+        assert _tool_counter_value("refuse", outcome) == before + 1
 
 
 async def test_instrumented_tool_records_success_and_duration():
@@ -311,24 +310,6 @@ async def test_instrumented_tool_records_username_from_context():
         current_user.reset(ctx_token)
 
     assert _tool_counter_value("whoami", "success", username="alice") == before + 1
-
-
-async def test_instrumented_tool_records_string_error():
-    from mcp.server.fastmcp import FastMCP
-
-    mcp = FastMCP("test-metrics")
-    metrics.instrument_mcp(mcp)
-
-    @mcp.tool()
-    async def fail_soft() -> str:
-        return "Error: something went wrong"
-
-    before = _tool_counter_value("fail_soft", "user_error")
-
-    out = await mcp._tool_manager.call_tool("fail_soft", {})
-
-    assert out.startswith("Error:")
-    assert _tool_counter_value("fail_soft", "user_error") == before + 1
 
 
 async def test_instrumented_tool_records_exception():
@@ -434,14 +415,6 @@ async def test_instrumented_transport_callable_target():
 # fault it is, and must leave operators a traceback in the log.
 
 
-def _instrumented():
-    from mcp.server.fastmcp import FastMCP
-
-    mcp = FastMCP("test-metrics-safety-net")
-    metrics.instrument_mcp(mcp)
-    return mcp
-
-
 async def test_unhandled_exception_becomes_a_clear_error_and_is_logged(caplog):
     from mcp.server.fastmcp.exceptions import ToolError
 
@@ -489,42 +462,6 @@ async def test_unknown_tool_error_passes_through():
     mcp = _instrumented()
     with pytest.raises(ToolError, match="Unknown tool"):
         await mcp._tool_manager.call_tool("nope", {})
-
-
-def test_tool_outcome_auth_error():
-    assert (
-        metrics.tool_outcome(
-            "Error: JupyterHub rejected this token (HTTP 401) while trying to "
-            "start the session."
-        )
-        == "auth_error"
-    )
-    assert (
-        metrics.tool_outcome(
-            "Error: this token is not permitted to stop the session (JupyterHub HTTP 403)."
-        )
-        == "auth_error"
-    )
-    assert (
-        metrics.tool_outcome(
-            "Error: not authorised on gateway 'slurm' to create the cluster (HTTP 403)."
-        )
-        == "auth_error"
-    )
-    assert (
-        metrics.tool_outcome(
-            "Error: the monitoring system is unreachable — connection refused, so "
-            "I cannot tell you whether the facility is healthy."
-        )
-        == "upstream_error"
-    )
-    assert metrics.tool_outcome("Error: JupyterHub API unavailable") == "upstream_error"
-    assert (
-        metrics.tool_outcome(
-            "Error: add was called with invalid arguments — n must be an integer."
-        )
-        == "user_error"
-    )
 
 
 async def test_url_elicitation_error_is_not_rewritten():

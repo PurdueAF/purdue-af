@@ -7,12 +7,18 @@ failure is ever downgraded into "no data", "not ready" or an empty list.
 A user reading a tool result must always be able to tell a facility that is
 quiet from a facility that could not be asked.
 
-Conventions the rest of the service (and metrics.tool_outcome) rely on:
+Failures are *raised*, as subclasses of the MCP SDK's ``ToolError``, never
+returned as strings: the SDK then delivers them on the protocol's own error
+channel (``isError: true``), so every client recognises a failure without
+parsing prose, while the message still carries the diagnosis. The subclass
+says whose fault it was, which is also the metrics label for the call.
 
-* failure strings start with ``Error:``;
-* transport failures contain ``unreachable``, HTTP failures ``returned HTTP``;
-* the message names the backend in the user's terms ("JupyterHub", "gateway
-  'k8s'", "the monitoring system"), never an internal hostname.
+Conventions the messages keep:
+
+* they start with ``Error:`` and name the backend in the user's terms
+  ("JupyterHub", "gateway 'k8s'", "the monitoring system"), never an
+  internal hostname;
+* transport failures say ``unreachable``, HTTP failures ``returned HTTP``.
 """
 
 import json
@@ -20,6 +26,42 @@ import re
 from typing import Any
 
 import httpx
+from mcp.server.fastmcp.exceptions import ToolError
+
+
+class Failure(ToolError):
+    """A failed tool call, delivered on MCP's own error channel.
+
+    ``outcome`` is the label recorded in purdue_af_mcp_tool_calls_total.
+    """
+
+    outcome = "user_error"
+
+
+class UserError(Failure):
+    """The request itself cannot succeed as made: bad argument, no such
+    cluster, a spawn that was never started."""
+
+    outcome = "user_error"
+
+
+class AuthError(Failure):
+    """The credential was refused for the attempted action."""
+
+    outcome = "auth_error"
+
+
+class UpstreamError(Failure):
+    """A backend the tool depends on could not be used."""
+
+    outcome = "upstream_error"
+
+
+class ServiceFault(Failure):
+    """A fault in this service — never the user's, always reportable."""
+
+    outcome = "exception"
+
 
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
@@ -97,17 +139,21 @@ def _finish(message: str, next_step: str) -> str:
     return f"{message} {next_step}" if next_step else message
 
 
-def unreachable(service: str, exc: BaseException, *, next_step: str = "") -> str:
+def unreachable(
+    service: str, exc: BaseException, *, next_step: str = ""
+) -> UpstreamError:
     """``service`` could not be contacted at all."""
-    return _finish(
-        f"Error: {service} unreachable — {describe_exception(exc)}",
-        next_step or RETRY_LATER,
+    return UpstreamError(
+        _finish(
+            f"Error: {service} unreachable — {describe_exception(exc)}",
+            next_step or RETRY_LATER,
+        )
     )
 
 
 def http_error(
     service: str, resp: httpx.Response, *, action: str = "", next_step: str = ""
-) -> str:
+) -> UpstreamError:
     """``service`` answered, but with a status the caller could not use.
 
     Auth and not-found statuses mean something different per backend, so
@@ -127,10 +173,12 @@ def http_error(
         message += f" — {detail}"
     if not next_step and code >= 500:
         next_step = RETRY_LATER
-    return _finish(message, next_step)
+    return UpstreamError(_finish(message, next_step))
 
 
-def malformed_response(service: str, resp: httpx.Response, expected: str) -> str:
+def malformed_response(
+    service: str, resp: httpx.Response, expected: str
+) -> UpstreamError:
     """``service`` answered successfully but not in the shape we rely on."""
     detail = response_detail(resp, limit=120)
     message = (
@@ -139,27 +187,34 @@ def malformed_response(service: str, resp: httpx.Response, expected: str) -> str
     )
     if detail:
         message += f" — {detail}"
-    return _finish(
-        message,
-        "This is a fault between the agentic interface and the facility, not in "
-        "the request; report it to AF support if it persists.",
+    return UpstreamError(
+        _finish(
+            message,
+            "This is a fault between the agentic interface and the facility, not "
+            "in the request; report it to AF support if it persists.",
+        )
     )
 
 
-def invalid_arguments(tool: str, exc: BaseException) -> str:
+def invalid_arguments(tool: str, exc: BaseException) -> UserError:
     """The caller's arguments did not fit the tool's signature."""
     detail = _WS_RE.sub(" ", str(exc)).strip()
-    return _finish(
-        f"Error: {tool} was called with invalid arguments — {detail}",
-        "Check the argument names and types in the tool description and call it again.",
+    return UserError(
+        _finish(
+            f"Error: {tool} was called with invalid arguments — {detail}",
+            "Check the argument names and types in the tool description and call "
+            "it again.",
+        )
     )
 
 
-def unexpected_failure(tool: str, exc: BaseException) -> str:
+def unexpected_failure(tool: str, exc: BaseException) -> ServiceFault:
     """An exception no tool handled — a fault in this service, never the user's."""
     detail = str(exc).strip() or type(exc).__name__
-    return _finish(
-        f"Error: {tool} failed unexpectedly ({type(exc).__name__}: {detail})",
-        "This is a fault in the AF agentic interface, not in the request — "
-        "report it to AF support with the tool name and the time it happened.",
+    return ServiceFault(
+        _finish(
+            f"Error: {tool} failed unexpectedly ({type(exc).__name__}: {detail})",
+            "This is a fault in the AF agentic interface, not in the request — "
+            "report it to AF support with the tool name and the time it happened.",
+        )
     )
