@@ -10,12 +10,12 @@ and no state is ever inferred from a call that did not succeed.
 """
 
 import asyncio
-import os
 import time
 from typing import Any, Optional
 
 import httpx
 from auth import clear_user_cache
+from config import HUB_API_URL, PUBLIC_URL, TOKEN_URL
 from context import require_user
 from errors import (
     AuthError,
@@ -32,15 +32,8 @@ from errors import (
 from mcp.server.fastmcp import Context
 from shared import shared_client
 
-from tools.elicitation import elicit, single_choice_model
+from tools.elicitation import ask, single_choice_model
 from tools.gpu import apply_availability, free_gpus
-
-HUB_API_URL = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
-# Public base URL of the facility, used to build user-facing interface links.
-PUBLIC_URL = os.environ.get(
-    "AF_PUBLIC_URL", "https://cms.geddes.rcac.purdue.edu"
-).rstrip("/")
-TOKEN_URL = f"{PUBLIC_URL}/hub/token"
 
 
 def _auth(token: str) -> dict:
@@ -84,6 +77,40 @@ def _hub_error(resp: httpx.Response, action: str, username: str) -> Failure:
             "Contact AF support."
         )
     return http_error("JupyterHub API", resp, action=action)
+
+
+async def _hub(
+    method: str,
+    path: str,
+    *,
+    token: str,
+    username: str,
+    action: str,
+    ok: tuple[int, ...] = (200,),
+    timeout: float = 10.0,
+    json: Any = None,
+) -> httpx.Response:
+    """One Hub API call — or the Failure that explains why it could not be
+    made. ``ok`` lists the statuses the caller handles itself."""
+    try:
+        resp = await shared_client("hub").request(
+            method,
+            f"{HUB_API_URL}{path}",
+            headers=_auth(token),
+            json=json,
+            timeout=timeout,
+        )
+    except httpx.RequestError as exc:
+        raise unreachable(
+            "JupyterHub API",
+            exc,
+            next_step=f"The request to {action} was not made. Try again in a "
+            "minute; if the hub stays unreachable, get_facility_health shows "
+            "whether the facility is down.",
+        )
+    if resp.status_code not in ok:
+        raise _hub_error(resp, action, username)
+    return resp
 
 
 _CANNOT_SEE_SERVERS = (
@@ -163,37 +190,33 @@ def register(mcp: Any) -> None:
         token = user["token"]
         username = user["username"]
 
-        client = shared_client("hub")
-        try:
-            resp = await client.get(
-                f"{HUB_API_URL}/users/{username}",
-                headers=_auth(token),
-                timeout=10.0,
-            )
-        except httpx.RequestError as exc:
-            raise unreachable("JupyterHub API", exc)
-
-        if resp.status_code != 200:
-            raise _hub_error(resp, "read the session state", username)
-
+        resp = await _hub(
+            "GET",
+            f"/users/{username}",
+            token=token,
+            username=username,
+            action="read the session state",
+        )
         data = json_body(resp)
         if not isinstance(data, dict):
             raise malformed_response("JupyterHub API", resp, "a user record")
         servers = _servers(data)
-
         if servers is None:
             raise _cannot_see_servers(username)
 
+        base = f"{PUBLIC_URL}/user/{username}"
+        lab_url = f"{base}/lab"
+        vscode_url = f"{base}/vscode/?folder=/home/{username}"
+
         if not servers:
-            base = f"{PUBLIC_URL}/user/{username}"
             return "\n".join(
                 [
                     f"No active session for user '{username}'.",
                     "Use start_af_session to launch one.",
                     "",
                     "Interface links (will redirect to spawn form until a session is running):",
-                    f"  JupyterLab  {base}/lab",
-                    f"  VS Code     {base}/vscode/?folder=/home/{username}",
+                    f"  JupyterLab  {lab_url}",
+                    f"  VS Code     {vscode_url}",
                 ]
             )
 
@@ -221,10 +244,6 @@ def register(mcp: Any) -> None:
             "1",
         )
         vscode_active = interface_choice == "2"
-
-        base = f"{PUBLIC_URL}/user/{username}"
-        lab_url = f"{base}/lab"
-        vscode_url = f"{base}/vscode/?folder=/home/{username}"
 
         lines = [
             f"# Session status: {status_str}",
@@ -308,26 +327,25 @@ def register(mcp: Any) -> None:
                 )
         elif use_defaults:
             selected = _default_profile(profiles)
-        elif profiles:
+        elif len(profiles) == 1:
             # Only ask when there is a genuine choice to make.
-            if len(profiles) == 1:
-                selected = profiles[0]
-            else:
-                model = single_choice_model(
-                    "ProfileChoice",
-                    [p["slug"] for p in profiles],
-                    labels=[
-                        p["display_name"] + (" (default)" if p.get("default") else "")
-                        for p in profiles
-                    ],
-                    default=(_default_profile(profiles) or {}).get("slug"),
-                    description="Analysis Facility session profile.",
-                    field="profile",
-                )
-                status, data = await elicit(ctx, "Choose a session profile.", model)
-                if status != "accept":
-                    return _ELICIT_FALLBACK
-                selected = find_profile(profiles, data.profile)
+            selected = profiles[0]
+        elif profiles:
+            model = single_choice_model(
+                "ProfileChoice",
+                [p["slug"] for p in profiles],
+                labels=[
+                    p["display_name"] + (" (default)" if p.get("default") else "")
+                    for p in profiles
+                ],
+                default=(_default_profile(profiles) or {}).get("slug"),
+                description="Analysis Facility session profile.",
+                field="profile",
+            )
+            choice = await ask(
+                ctx, "Choose a session profile.", model, _ELICIT_FALLBACK
+            )
+            selected = find_profile(profiles, choice.profile)
         # profiles empty (e.g. local/dev) → selected stays None → Hub default.
 
         if selected is not None:
@@ -359,29 +377,24 @@ def register(mcp: Any) -> None:
                         default=_default_choice_key(choices),
                         description=opt_info.get("display_name", opt_key),
                     )
-                    status, data = await elicit(
-                        ctx, f"{opt_info.get('display_name', opt_key)}:", model
+                    choice = await ask(
+                        ctx,
+                        f"{opt_info.get('display_name', opt_key)}:",
+                        model,
+                        _ELICIT_FALLBACK,
                     )
-                    if status != "accept":
-                        return _ELICIT_FALLBACK
-                    opts[opt_key] = data.value
+                    opts[opt_key] = choice.value
 
-        client = shared_client("hub")
-        try:
-            resp = await client.post(
-                f"{HUB_API_URL}/users/{username}/server",
-                headers=_auth(token),
-                json=opts,
-                timeout=15.0,
-            )
-        except httpx.RequestError as exc:
-            raise unreachable(
-                "JupyterHub API",
-                exc,
-                next_step="The session was not started. Try again in a minute; if "
-                "the hub stays unreachable, get_facility_health shows whether the "
-                "facility is down.",
-            )
+        resp = await _hub(
+            "POST",
+            f"/users/{username}/server",
+            token=token,
+            username=username,
+            action="start the session",
+            ok=(200, 201, 202, 400),
+            timeout=15.0,
+            json=opts,
+        )
 
         if resp.status_code == 400:
             # 400 is most commonly "already running", but JupyterHub also uses it
@@ -397,8 +410,6 @@ def register(mcp: Any) -> None:
                 "and options against list_af_profiles and call start_af_session "
                 "again."
             )
-        if resp.status_code not in (200, 201, 202):
-            raise _hub_error(resp, "start the session", username)
 
         clear_user_cache(token)
 
@@ -433,24 +444,17 @@ def register(mcp: Any) -> None:
         token = user["token"]
         username = user["username"]
 
-        client = shared_client("hub")
-        try:
-            resp = await client.delete(
-                f"{HUB_API_URL}/users/{username}/server",
-                headers=_auth(token),
-                timeout=15.0,
-            )
-        except httpx.RequestError as exc:
-            raise unreachable(
-                "JupyterHub API",
-                exc,
-                next_step="The session was not stopped. Try again in a minute.",
-            )
-
+        resp = await _hub(
+            "DELETE",
+            f"/users/{username}/server",
+            token=token,
+            username=username,
+            action="stop the session",
+            ok=(200, 202, 204, 400),
+            timeout=15.0,
+        )
         if resp.status_code == 400:
             return "No session is currently running."
-        if resp.status_code not in (200, 202, 204):
-            raise _hub_error(resp, "stop the session", username)
 
         clear_user_cache(token)
         return (
@@ -600,36 +604,26 @@ def register(mcp: Any) -> None:
         token = user["token"]
         username = user["username"]
 
-        client = shared_client("hub")
-
-        # 1. Capture current user_options before stopping. A failure here is
-        #    not fatal — but it is reported, because "same options as before"
-        #    silently becoming "default options" is a surprise.
+        # 1. Capture current user_options before stopping. A hub that cannot
+        #    answer is not fatal — but it is reported, because "same options
+        #    as before" silently becoming "default options" is a surprise.
+        #    A token that may not read the state is fatal: nothing else works.
         prior_opts: dict = {}
         prior_note = ""
         try:
-            info = await client.get(
-                f"{HUB_API_URL}/users/{username}",
-                headers=_auth(token),
-                timeout=10.0,
+            info = await _hub(
+                "GET",
+                f"/users/{username}",
+                token=token,
+                username=username,
+                action="read the session state",
             )
-        except httpx.RequestError as exc:
-            prior_note = (
-                " (the previous options could not be read: JupyterHub API "
-                f"unreachable — {describe_exception(exc)})"
-            )
+        except UpstreamError as exc:
+            prior_note = f" (the previous options could not be read: {exc})"
         else:
-            if info.status_code in (401, 403, 404):
-                raise _hub_error(info, "read the session state", username)
-            if info.status_code != 200:
-                prior_note = (
-                    " (the previous options could not be read: JupyterHub API "
-                    f"returned HTTP {info.status_code})"
-                )
-            else:
-                data = json_body(info)
-                servers = _servers(data if isinstance(data, dict) else {}) or {}
-                prior_opts = servers.get("", {}).get("user_options", {}) or {}
+            data = json_body(info)
+            servers = _servers(data if isinstance(data, dict) else {}) or {}
+            prior_opts = servers.get("", {}).get("user_options", {}) or {}
 
         # 2. Decide on spawn options: caller overrides take precedence over prior state.
         spawn_opts: dict = dict(user_options or prior_opts)
@@ -652,44 +646,38 @@ def register(mcp: Any) -> None:
             spawn_opts["profile"] = profile["slug"]
 
         # 3. Stop.
-        try:
-            stop = await client.delete(
-                f"{HUB_API_URL}/users/{username}/server",
-                headers=_auth(token),
-                timeout=15.0,
-            )
-        except httpx.RequestError as exc:
-            raise unreachable(
-                "JupyterHub API",
-                exc,
-                next_step="The session was not touched. Try again in a minute.",
-            )
-
-        if stop.status_code not in (200, 202, 204, 400):
-            raise _hub_error(stop, "stop the session", username)
-
+        stop = await _hub(
+            "DELETE",
+            f"/users/{username}/server",
+            token=token,
+            username=username,
+            action="stop the session",
+            ok=(200, 202, 204, 400),
+            timeout=15.0,
+        )
         was_running = stop.status_code != 400  # 400 = no server was running
         if was_running:
             # The old pod is gone — invalidate cached user info so tools
             # don't target a terminated pod for up to a cache TTL.
             clear_user_cache(token)
-
-        # 4. Brief pause to let Kubernetes terminate the pod before re-spawning.
-        if was_running:
+            # 4. Brief pause to let Kubernetes terminate the pod before re-spawning.
             await asyncio.sleep(3)
 
         # 5. Start.
         try:
-            start = await client.post(
-                f"{HUB_API_URL}/users/{username}/server",
-                headers=_auth(token),
-                json=spawn_opts,
+            start = await _hub(
+                "POST",
+                f"/users/{username}/server",
+                token=token,
+                username=username,
+                action="start the session",
+                ok=(200, 201, 202, 400),
                 timeout=15.0,
+                json=spawn_opts,
             )
-        except httpx.RequestError as exc:
-            raise UpstreamError(
-                "Session was stopped but restart failed: JupyterHub API "
-                f"unreachable — {describe_exception(exc)}. "
+        except Failure as exc:
+            raise type(exc)(
+                f"Session was stopped, but the restart failed. {exc} "
                 "Use start_af_session to try again."
             )
 
@@ -705,12 +693,6 @@ def register(mcp: Any) -> None:
                 "Session was stopped, but JupyterHub rejected the restart options — "
                 f"{response_detail(start) or 'no reason given'}. Call "
                 "start_af_session with valid options (see list_af_profiles)."
-            )
-        if start.status_code not in (200, 201, 202):
-            err = _hub_error(start, "start the session", username)
-            raise type(err)(
-                f"Session was stopped, but the restart failed. {err} "
-                "Use start_af_session to try again."
             )
 
         opts_summary = (

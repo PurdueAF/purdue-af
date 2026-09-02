@@ -1,8 +1,9 @@
 """Facility health tool — reads the alerts Prometheus is already evaluating.
 
-Thresholds live in apps/monitoring/prometheus/values.yaml, not here: this tool
-reports what is firing, so adding an alert rule improves it automatically and
-there is only ever one definition of "unhealthy".
+Thresholds AND wording live in apps/monitoring/prometheus/values.yaml, not
+here: each rule's ``annotations.summary`` is what a user sees, so adding or
+rewording an alert improves this tool with no code change, and there is only
+ever one definition of "unhealthy" and one sentence describing it.
 
 Three rules shape the output:
 
@@ -10,26 +11,24 @@ Three rules shape the output:
   that still affect users (failed or slow data access, monitor gaps) yield
   **Impaired** — between healthy and broken — so the headline stays honest
   without crying wolf over transient storage blips.
-* A signal that could not be collected is ``unknown``, never ``ok`` — the
-  data-access checks in particular go blank when they cannot be scheduled,
-  which says nothing about the storage itself.
+* A signal that could not be collected is ``unknown``, never ``ok``.
 * Every firing alert a user may see is listed under its component; "Normal"
   only covers components with nothing firing at all.
 
 Output is for the calling user: their own quota is reported, no other user's.
 """
 
-import os
+import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 import httpx
+from config import PROMETHEUS_URL
 from context import require_user
-from errors import UpstreamError
+from errors import UpstreamError, describe_exception, json_body, response_detail
 from shared import prom_query, prom_scalar, quote_label, shared_client
 
-PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
 EASTERN = ZoneInfo("America/New_York")
 
 # component label -> the heading a user sees. Anything not listed still shows
@@ -50,6 +49,7 @@ HIDDEN_COMPONENTS = {"dev"}
 # Per-user quota warnings are already reported as a percent figure below; they
 # must not flip the facility headline to Impaired.
 SKIP_IMPAIR_PREFIXES = ("AFHomeDir",)
+_FRACTION_RE = re.compile(r"\.(\d{6})\d+")
 
 
 def _et(ts: float) -> str:
@@ -61,93 +61,56 @@ def _et(ts: float) -> str:
     return f"{when:%H:%M ET, %d %b} ({ago} ago)"
 
 
-async def _query(
-    client: httpx.AsyncClient, expr: str
-) -> tuple[list[dict[str, Any]], Optional[str]]:
-    """Instant query → (rows, problem). A problem means Prometheus could not
-    be asked — which is never the same as "nothing is firing"."""
-    return await prom_query(client, PROMETHEUS_URL, expr, timeout=10.0)
+def _active_at(alert: dict[str, Any]) -> Optional[float]:
+    """Prometheus reports activeAt as RFC 3339 with nanoseconds."""
+    raw = alert.get("activeAt")
+    if not isinstance(raw, str):
+        return None
+    try:
+        return datetime.fromisoformat(_FRACTION_RE.sub(r".\1", raw)).timestamp()
+    except ValueError:
+        return None
 
 
-async def _scalar(client: httpx.AsyncClient, expr: str) -> Optional[float]:
-    rows, _ = await _query(client, expr)
-    return prom_scalar(rows)
-
-
-def _node_names(series: list[dict[str, Any]]) -> list[str]:
-    """Worker node under test.
-
-    Prefer ``exported_node`` when present: older scrapes collided the monitor
-    pod host onto ``node`` and renamed the AF worker to ``exported_node``.
-    New scrapes keep the exporter label as ``node`` only.
-    """
-    names: set[str] = set()
-    for s in series:
-        m = s["metric"]
-        names.add(m.get("exported_node") or m.get("node") or "")
-    return sorted(names - {""})
-
-
-def _describe(alertname: str, series: list[dict[str, Any]]) -> str:
-    """One line per alert, in facility terms rather than metric terms."""
-    count = len(series)
-    mounts = sorted({s["metric"].get("mount_name", "") for s in series} - {""})
-    nodes = _node_names(series)
-    where = f"{len(nodes)} node{'s' if len(nodes) != 1 else ''}"
-    widespread = len(nodes) > 2
-    scope_system = (
-        "across most of the facility — likely a storage-system or network "
-        "issue rather than one machine"
-        if widespread
-        else "on a single machine"
-    )
-    mount_list = ", ".join(mounts) or "a data path"
-
-    if alertname == "AFMountInvalid":
-        return f"{mount_list} failing on {where}, {scope_system}"
-    if alertname == "AFMountSlow":
-        detail = "across most of the facility" if widespread else "on a single machine"
-        return (
-            f"{mount_list} is slow on {where}, {detail} — "
-            "reads still work, but analyses on affected nodes will crawl"
+async def _firing_alerts(client: httpx.AsyncClient) -> list[dict[str, Any]]:
+    """Every firing alert with its labels and rendered annotations."""
+    try:
+        resp = await client.get(f"{PROMETHEUS_URL}/api/v1/alerts", timeout=10.0)
+    except httpx.RequestError as exc:
+        raise UpstreamError(
+            f"Error: the monitoring system is unreachable — {describe_exception(exc)}, "
+            "so I cannot tell you whether the facility is healthy. This is a "
+            "monitoring problem, not necessarily a facility problem — try your "
+            "work and see."
         )
-    if alertname == "AFMountHealthUnknown":
-        return (
-            f"data-access checks have not reported on {len(nodes)} Ready node"
-            f"{'s' if len(nodes) != 1 else ''} — state is unknown there "
-            "(not the same as a failed check, and offline nodes are omitted)"
+    if resp.status_code != 200:
+        detail = response_detail(resp, limit=160)
+        raise UpstreamError(
+            f"Error: the monitoring system returned HTTP {resp.status_code}"
+            + (f" — {detail}" if detail else "")
+            + ", so I cannot tell you whether the facility is healthy. This is a "
+            "monitoring problem, not necessarily a facility problem — try your "
+            "work and see."
         )
-    if alertname == "AFProdNodesNotReady":
-        listed = ", ".join(nodes[:8])
-        more = f" (+{len(nodes) - 8} more)" if len(nodes) > 8 else ""
-        return (
-            f"{len(nodes)} worker node{'s' if len(nodes) != 1 else ''} NotReady"
-            f"{f' ({listed}{more})' if listed else ''} — "
-            "sessions and Dask workers cannot run on them"
+    payload = json_body(resp)
+    data = payload.get("data") if isinstance(payload, dict) else None
+    alerts = data.get("alerts") if isinstance(data, dict) else None
+    if not isinstance(alerts, list):
+        raise UpstreamError(
+            "Error: the monitoring system returned HTTP 200 but no alert list, so "
+            "I cannot tell you whether the facility is healthy."
         )
-    if alertname == "AFHubDown":
-        return "the hub is not responding; sessions cannot be started or reached"
-    if alertname == "AFSpawnFailures":
-        return "sessions have been failing to start"
-    if alertname == "AFSessionStuckPending":
-        return f"{count} session{'s' if count != 1 else ''} stuck waiting to start"
-    if alertname == "AFDaskGatewayDown":
-        return "a Dask gateway is unavailable; new clusters may not start"
-    if alertname == "AFGlobalEnvDaemonStale":
-        return (
-            "the global pixi sync loop looks wedged — heartbeat is stale, "
-            "rebuilds may be hung"
-        )
-    if alertname == "AFGlobalEnvSyncDown":
-        return "global pixi sync metrics are missing; the reconciler may be down"
-    if alertname.startswith("AFGlobalEnv"):
-        return "the shared pixi environment is not in sync with the AF repository"
-    if alertname == "AFNodeMonitorStale":
-        return (
-            "data-access health checks have not completed recently — "
-            "mount state may be stale"
-        )
-    return alertname
+    return [a for a in alerts if isinstance(a, dict) and a.get("state") == "firing"]
+
+
+def _nodes(alerts: list[dict[str, Any]]) -> set[str]:
+    """Nodes an alert group covers (``exported_node`` when a scrape collided
+    the monitor pod's host onto ``node``)."""
+    names = {
+        a["labels"].get("exported_node") or a["labels"].get("node") or ""
+        for a in alerts
+    }
+    return names - {""}
 
 
 def register(mcp: Any) -> None:
@@ -165,39 +128,38 @@ def register(mcp: Any) -> None:
         """
         user = require_user()
         username = user["username"]
-
         quoted = quote_label(username)
 
         client = shared_client("prometheus")
-        firing, problem = await _query(client, 'ALERTS{alertstate="firing"}')
-        if problem:
-            # An empty alert list from a Prometheus that answered is good
-            # news; no answer at all is not news of any kind.
-            raise UpstreamError(
-                f"Error: the monitoring system {problem}, so I cannot tell you "
-                "whether the facility is healthy. This is a monitoring problem, "
-                "not necessarily a facility problem — try your work and see."
-            )
-        # ALERTS_FOR_STATE carries the moment each alert started, which is
-        # what a user needs in order to correlate it with their own trouble.
-        since, _ = await _query(client, "ALERTS_FOR_STATE")
+        firing = await _firing_alerts(client)
         # An alert that came and went in the window is a different situation
         # from something steadily broken.
-        recent, _ = await _query(
+        recent, _ = await prom_query(
             client,
+            PROMETHEUS_URL,
             "count by (alertname) (changes(ALERTS_FOR_STATE[6h]) > 0)",
+            timeout=10.0,
         )
-        home_util = await _scalar(client, f'af_home_dir_util{{username="{quoted}"}}')
-        home_size = await _scalar(client, f'af_home_dir_size_kb{{username="{quoted}"}}')
+        home_rows, _ = await prom_query(
+            client, PROMETHEUS_URL, f'af_home_dir_util{{username="{quoted}"}}'
+        )
+        size_rows, _ = await prom_query(
+            client, PROMETHEUS_URL, f'af_home_dir_size_kb{{username="{quoted}"}}'
+        )
+        home_util = prom_scalar(home_rows)
+        home_size = prom_scalar(size_rows)
 
         # group firing alerts by component, then by alert name
         by_component: dict[str, dict[str, list[dict[str, Any]]]] = {}
         severities: dict[str, str] = {}
         # every firing name, including ones hidden below — used to tell a
         # resolved alert apart from one that is simply not shown to this user
-        firing_names: set[str] = {s["metric"].get("alertname", "") for s in firing}
-        for series in firing:
-            labels = series["metric"]
+        firing_names: set[str] = set()
+        for alert in firing:
+            labels = alert.get("labels") or {}
+            alert["labels"] = labels
+            name = labels.get("alertname", "unknown")
+            firing_names.add(name)
             # Never surface another user's alert. Checked on the label rather
             # than the component so an alert added later cannot leak by being
             # filed under a component this tool does not know about.
@@ -209,19 +171,8 @@ def register(mcp: Any) -> None:
             if labels.get("node_pool") == "dev":
                 continue
             component = labels.get("component", "other")
-            name = labels.get("alertname", "unknown")
-            by_component.setdefault(component, {}).setdefault(name, []).append(series)
+            by_component.setdefault(component, {}).setdefault(name, []).append(alert)
             severities[name] = labels.get("severity", "warning")
-
-        started: dict[str, float] = {}
-        for series in since:
-            name = series["metric"].get("alertname", "")
-            try:
-                ts = float(series["value"][1])
-            except (KeyError, IndexError, ValueError):
-                continue
-            if name and (name not in started or ts < started[name]):
-                started[name] = ts
 
         blocking = [n for n, sev in severities.items() if sev in BLOCKING]
         unknown = "AFMountHealthUnknown" in severities
@@ -255,8 +206,17 @@ def register(mcp: Any) -> None:
                 continue  # per-user, reported separately below
             for name, matched in sorted(alerts.items()):
                 mark = "!" if severities[name] in BLOCKING else "-"
-                when = f" Since {_et(started[name])}." if name in started else ""
-                lines.append(f"{mark} **{title}**: {_describe(name, matched)}.{when}")
+                # The rule's own summary, rendered by Prometheus for the first
+                # instance; the rest are counted so scale is never lost.
+                summary = (matched[0].get("annotations") or {}).get("summary") or name
+                scale = ""
+                if len(matched) > 1:
+                    nodes = _nodes(matched)
+                    scale = f" (and {len(matched) - 1} more"
+                    scale += f", {len(nodes)} nodes affected)" if nodes else ")"
+                starts = [t for t in map(_active_at, matched) if t is not None]
+                when = f" Since {_et(min(starts))}." if starts else ""
+                lines.append(f"{mark} **{title}**: {summary}{scale}.{when}")
 
         clean = [
             title
@@ -292,7 +252,7 @@ def register(mcp: Any) -> None:
         settled = [
             r["metric"].get("alertname")
             for r in recent
-            if r["metric"].get("alertname") not in firing_names
+            if r.get("metric", {}).get("alertname") not in firing_names
         ]
         if settled:
             lines.append(

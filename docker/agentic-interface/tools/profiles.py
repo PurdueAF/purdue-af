@@ -6,13 +6,13 @@ sync with whatever the admin has configured — no hardcoded option keys or slug
 """
 
 import asyncio
-import os
 import re
 from typing import Any, Optional
 
 import httpx
 import yaml
 from cachetools import TTLCache
+from config import NAMESPACE
 from errors import UpstreamError, describe_exception, json_body, response_detail
 from shared import shared_client
 
@@ -22,7 +22,7 @@ from tools.gpu import free_gpus, gpu_error
 _K8S_API = "https://kubernetes.default.svc"
 _TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 _CA_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-_NAMESPACE = os.environ.get("NAMESPACE", "cms")
+_NAMESPACE = NAMESPACE
 _CONFIGMAP = "jupyterhub-config"
 
 # Fresh for 5 minutes; the last good read is kept separately so a broken

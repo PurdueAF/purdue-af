@@ -1,12 +1,12 @@
 """Log querying tools — notebook and Dask pods via Loki."""
 
-import os
 import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import httpx
+from config import LOKI_URL
 from context import require_user
 from errors import (
     UserError,
@@ -17,9 +17,6 @@ from errors import (
     unreachable,
 )
 from shared import quote_label, shared_client
-
-LOKI_URL = os.environ.get("LOKI_URL", "http://loki.cms.svc.cluster.local:3100")
-
 
 # ── time helpers ──────────────────────────────────────────────────────────────
 

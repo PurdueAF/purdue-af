@@ -60,44 +60,6 @@ def bearer(token):
 # ── _PathStripper ─────────────────────────────────────────────────────────────
 
 
-async def test_pathstripper_strips_prefix_and_sets_root_path():
-    inner = RecordingApp()
-    app = server._PathStripper(inner, PREFIX)
-
-    await app(http_scope(f"{PREFIX}/mcp"), noop_receive, SendCollector())
-
-    assert inner.scope["path"] == "/mcp"
-    assert inner.scope["root_path"] == PREFIX
-
-
-async def test_pathstripper_bare_prefix_becomes_root():
-    inner = RecordingApp()
-    app = server._PathStripper(inner, PREFIX)
-
-    await app(http_scope(PREFIX), noop_receive, SendCollector())
-
-    assert inner.scope["path"] == "/"
-
-
-async def test_pathstripper_leaves_other_paths_alone():
-    inner = RecordingApp()
-    app = server._PathStripper(inner, PREFIX)
-
-    await app(http_scope("/other"), noop_receive, SendCollector())
-
-    assert inner.scope["path"] == "/other"
-
-
-async def test_pathstripper_passes_non_http_scopes_through():
-    inner = RecordingApp()
-    app = server._PathStripper(inner, PREFIX)
-    scope = {"type": "lifespan"}
-
-    await app(scope, noop_receive, SendCollector())
-
-    assert inner.scope is scope
-
-
 # ── _AuthMiddleware ───────────────────────────────────────────────────────────
 
 
@@ -254,42 +216,6 @@ async def test_websocket_scope_is_closed_not_forwarded():
 
     assert send.messages == [{"type": "websocket.close"}]
     assert inner.calls == 0
-
-
-async def test_oversized_post_body_is_413(accept_alice, monkeypatch):
-    monkeypatch.setattr(server, "MAX_BODY_BYTES", 64)
-    chunks = [
-        {"type": "http.request", "body": b"x" * 50, "more_body": True},
-        {"type": "http.request", "body": b"y" * 50, "more_body": True},
-        # never reached — buffering must stop once the cap is exceeded
-        {"type": "http.request", "body": b"z" * 50, "more_body": False},
-    ]
-
-    async def receive():
-        return chunks.pop(0)
-
-    inner = RecordingApp()
-    send = SendCollector()
-    scope = {**http_scope(f"{PREFIX}/mcp", headers=bearer("good")), "method": "POST"}
-
-    from prometheus_client import REGISTRY
-
-    def counter_413():
-        return (
-            REGISTRY.get_sample_value(
-                "purdue_af_mcp_api_calls_total", {"route": "mcp", "status": "413"}
-            )
-            or 0.0
-        )
-
-    before = counter_413()
-    await server._AuthMiddleware(inner)(scope, receive, send)
-
-    assert send.status == 413
-    assert json.loads(send.body)["error"] == "Request body too large"
-    assert inner.calls == 0
-    assert len(chunks) == 1  # the third chunk was never drained
-    assert counter_413() == before + 1
 
 
 async def test_respond_emits_valid_json_for_details_with_quotes():

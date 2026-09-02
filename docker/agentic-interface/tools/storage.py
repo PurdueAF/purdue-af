@@ -1,16 +1,15 @@
 """Storage quota tool — queries af-pod-monitor metrics from Prometheus."""
 
 import asyncio
-import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import httpx
+from config import PROMETHEUS_URL
 from context import require_user
 from errors import UpstreamError
 from shared import prom_query, prom_scalar, quote_label, shared_client
 
-PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
 _DIRS = ("home", "work")
 
 

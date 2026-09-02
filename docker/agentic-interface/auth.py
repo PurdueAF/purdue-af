@@ -10,18 +10,15 @@ own auth stack (``FastMCP(token_verifier=…)``) would plug into.
 """
 
 import hashlib
-import os
 import time
 from typing import Optional
 
 import httpx
 from cachetools import TTLCache
+from config import HUB_API_URL, NAMESPACE
 from errors import describe_exception, json_body, response_detail
 from mcp.server.auth.provider import AccessToken
 from metrics import instrumented_transport, record_auth
-
-HUB_API_URL = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
-NAMESPACE = os.environ.get("NAMESPACE", "cms")
 
 
 class HubUnavailable(Exception):

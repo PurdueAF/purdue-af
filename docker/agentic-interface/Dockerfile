@@ -21,6 +21,7 @@ COPY docker/agentic-interface/pyproject.toml docker/agentic-interface/uv.lock ./
 RUN uv sync --frozen --no-dev
 ENV PATH="/app/.venv/bin:$PATH"
 
+COPY docker/agentic-interface/config.py .
 COPY docker/agentic-interface/context.py .
 COPY docker/agentic-interface/errors.py .
 COPY docker/agentic-interface/shared.py .
@@ -28,6 +29,8 @@ COPY docker/agentic-interface/auth.py .
 COPY docker/agentic-interface/metrics.py .
 COPY docker/agentic-interface/server.py .
 COPY docker/agentic-interface/tools/ ./tools/
+# Shared with the Hub's profile form so both report the same GPU numbers.
+COPY apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py .
 
 USER 1000
 

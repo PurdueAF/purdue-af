@@ -37,12 +37,7 @@ EXPECTED_TOOLS = {
     "restart_af_session",
 }
 
-EXPECTED_PROMPTS = {
-    "launch_session",
-    "restart_session",
-    "stop_session",
-    "create_cluster",
-}
+EXPECTED_PROMPTS = {"create_cluster"}
 
 
 async def test_all_tools_registered_with_schemas():
@@ -105,9 +100,7 @@ async def test_full_stack_handshake_and_auth(monkeypatch):
 
     monkeypatch.setattr(server, "verify_token", accept)
 
-    app = server._AuthMiddleware(
-        server._PathStripper(server.mcp.streamable_http_app(), server.SERVICE_PREFIX)
-    )
+    app = server._AuthMiddleware(server.mcp.streamable_http_app())
     async with LifespanManager(app) as manager:
         transport = httpx.ASGITransport(app=manager.app)
         async with httpx.AsyncClient(transport=transport, base_url="http://hub") as c:
@@ -178,13 +171,3 @@ async def test_full_stack_handshake_and_auth(monkeypatch):
                 or 0
             )
             assert after == before + 1
-
-            # The middleware sniffs the JSON-RPC method from the POST body and
-            # must replay it intact to the MCP app (asserted by the 200 above).
-            assert (
-                REGISTRY.get_sample_value(
-                    "purdue_af_mcp_jsonrpc_requests_total",
-                    {"method": "tools/call", "username": "alice"},
-                )
-                or 0
-            ) >= 1

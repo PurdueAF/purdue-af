@@ -15,6 +15,9 @@ EXTRA_FILES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles"
 def load_snippet(filename, monkeypatch, namespace="cms", extra_globals=None):
     """Exec an extraFiles snippet the way JupyterHub does; return its globals."""
     monkeypatch.setenv("POD_NAMESPACE", namespace)
+    # gpu-availability.py imports the shared gpu_queries module from the
+    # snippet directory; in the source tree that is extraFiles itself.
+    monkeypatch.setenv("JUPYTERHUB_CONFIG_D", str(EXTRA_FILES))
     ns = {"c": ConfigSink()}
     if extra_globals:
         ns.update(extra_globals)

@@ -11,39 +11,22 @@ functions can scope their queries per-request.
 
 import json
 import logging
-import os
 import re
 
 import uvicorn
-from auth import NAMESPACE, HubTokenVerifier, HubUnavailable
+from auth import HubTokenVerifier, HubUnavailable
+from config import NAMESPACE, SERVICE_PREFIX, STATELESS_HTTP, TOKEN_URL
 from context import current_user
-from mcp.server.fastmcp import FastMCP
 from metrics import (
-    instrument_mcp,
+    InstrumentedFastMCP,
     metrics_body,
     metrics_content_type,
-    record_jsonrpc,
     record_request,
 )
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from tools import dask, health, logs, profiles, prompts, session, storage
 
 logger = logging.getLogger(__name__)
-
-SERVICE_PREFIX = os.environ.get(
-    "JUPYTERHUB_SERVICE_PREFIX", "/services/agentic-interface"
-).rstrip("/")
-
-# Cap on buffered POST bodies. The middleware buffers the whole body to sniff
-# the JSON-RPC method; MCP messages are tiny, and the pod has a 256Mi memory
-# limit, so anything larger is rejected with 413 before reaching the app.
-MAX_BODY_BYTES = 5 * 1024 * 1024
-
-# Where a user mints a token — every authentication failure points here.
-TOKEN_URL = (
-    os.environ.get("AF_PUBLIC_URL", "https://cms.geddes.rcac.purdue.edu").rstrip("/")
-    + "/hub/token"
-)
 
 # ── authentication failures ───────────────────────────────────────────────────
 #
@@ -106,80 +89,6 @@ def _token_problem(token: str) -> tuple[str, str] | None:
             f"{TOKEN_URL}), then reconnect the MCP server."
         )
     return None
-
-
-class _PathStripper:
-    """Strip SERVICE_PREFIX from request paths before forwarding to the MCP app.
-
-    JupyterHub's proxy passes the full path (including /services/agentic-interface)
-    to the service. The MCP app is mounted at /mcp, so we strip the prefix so it
-    receives /mcp as expected.
-    """
-
-    def __init__(self, app: ASGIApp, prefix: str) -> None:
-        self._app = app
-        self._prefix = prefix.rstrip("/")
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "http":
-            path = scope.get("path", "")
-            if path.startswith(self._prefix):
-                stripped = path[len(self._prefix) :] or "/"
-                scope = {
-                    **scope,
-                    "path": stripped,
-                    "root_path": scope.get("root_path", "") + self._prefix,
-                }
-        await self._app(scope, receive, send)
-
-
-async def _buffer_body(receive: Receive) -> tuple[bytes | None, Receive]:
-    """Drain the request body, returning (body, replay_receive).
-
-    The MCP JSON-RPC method lives in the POST body, so the middleware has to
-    read it before the app does; replay_receive hands the buffered messages
-    back to the app in order, then delegates to the original receive.
-
-    Buffering stops once more than MAX_BODY_BYTES have been read: the body is
-    returned as None and the caller must reject the request (413) without
-    forwarding it to the app.
-    """
-    messages = []
-    total = 0
-    while True:
-        message = await receive()
-        messages.append(message)
-        if message["type"] == "http.request":
-            total += len(message.get("body", b""))
-            if total > MAX_BODY_BYTES:
-                return None, receive
-        if message["type"] != "http.request" or not message.get("more_body"):
-            break
-    body = b"".join(m.get("body", b"") for m in messages if m["type"] == "http.request")
-
-    async def replay() -> Message:
-        if messages:
-            return messages.pop(0)
-        return await receive()
-
-    return body, replay
-
-
-def _jsonrpc_methods(body: bytes) -> list[str]:
-    """Extract JSON-RPC method names from an MCP POST body.
-
-    Client-to-server responses carry no method field — label them 'response'.
-    Unparseable bodies are labelled 'invalid'.
-    """
-    try:
-        payload = json.loads(body)
-    except (ValueError, UnicodeDecodeError):
-        return ["invalid"]
-    messages = payload if isinstance(payload, list) else [payload]
-    return [
-        m.get("method", "response") if isinstance(m, dict) else "invalid"
-        for m in messages
-    ]
 
 
 class _AuthMiddleware:
@@ -285,18 +194,6 @@ class _AuthMiddleware:
             (b"host", b"localhost:8888") if k.lower() == b"host" else (k, v)
             for k, v in scope.get("headers", [])
         ]
-
-        # Record the JSON-RPC method so tool traffic is distinguishable from
-        # protocol overhead (initialize, tools/list, notifications/…) in the
-        # request metrics.
-        if scope.get("method") == "POST":
-            body, receive = await _buffer_body(receive)
-            if body is None:  # exceeded MAX_BODY_BYTES
-                await self._respond(send, 413, "Request body too large")
-                record_request(route, 413)
-                return
-            for method in _jsonrpc_methods(body):
-                record_jsonrpc(method, user_info["username"])
 
         # Bind user context for the duration of this request so tool functions
         # can call current_user.get() without needing extra arguments.
@@ -417,19 +314,12 @@ class _McpAccessFilter(logging.Filter):
 
 # ── MCP server ────────────────────────────────────────────────────────────────
 
-# Stateful streamable-HTTP sessions are required for server→client requests such
-# as elicitation (create_dask_cluster's multiple-choice prompts). Stateless mode
-# keeps one-shot POSTs working (handy for curl) but disables elicitation. The
-# deployment (single replica) sets MCP_STATELESS_HTTP=false to enable it.
-STATELESS_HTTP = os.environ.get("MCP_STATELESS_HTTP", "true").lower() in (
-    "1",
-    "true",
-    "yes",
-)
-
-mcp = FastMCP(
+# JupyterHub's proxy passes the full path (including the service prefix) to
+# the service, so the MCP app is told to serve exactly that path.
+mcp = InstrumentedFastMCP(
     "purdue-af-agentic-interface",
     stateless_http=STATELESS_HTTP,
+    streamable_http_path=f"{SERVICE_PREFIX}/mcp",
     instructions=(
         "Tools for the Purdue Analysis Facility. "
         "Use query_notebook_logs / query_dask_logs for log queries; "
@@ -439,12 +329,9 @@ mcp = FastMCP(
         "get_dask_worker_count / get_dask_cluster_usage / scale_dask_cluster / "
         "stop_dask_cluster for Dask; "
         "use get_session_status / start_af_session / stop_af_session for pod lifecycle. "
-        "Each tool result names the next step. Invocable workflow prompts "
-        "(launch/restart/stop/create_cluster) are also available."
+        "Each tool result names the next step."
     ),
 )
-
-instrument_mcp(mcp)
 
 logs.register(mcp)
 storage.register(mcp)
@@ -464,16 +351,9 @@ def main() -> None:
     )
     logging.getLogger("uvicorn.access").addFilter(_McpAccessFilter())
 
-    if not os.environ.get("JUPYTERHUB_SERVICE_PREFIX"):
-        logger.warning(
-            "JUPYTERHUB_SERVICE_PREFIX is not set — defaulting to /services/agentic-interface"
-        )
-
-    inner = mcp.streamable_http_app()  # handles /mcp
-    stripped = _PathStripper(
-        inner, SERVICE_PREFIX
-    )  # strips /services/agentic-interface
-    app = _AuthMiddleware(stripped)  # validates Bearer token
+    # Bearer-token validation in front of the MCP app, which serves
+    # {SERVICE_PREFIX}/mcp itself.
+    app = _AuthMiddleware(mcp.streamable_http_app())
     uvicorn.run(app, host="0.0.0.0", port=8888, log_level="info")
 
 

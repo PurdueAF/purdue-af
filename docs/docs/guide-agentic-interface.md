@@ -131,10 +131,10 @@ The available tools cover:
 * **Logs** — query your JupyterLab / VS Code server logs and Dask worker and
   scheduler logs, with time ranges and filters.
 
-The server also exposes invocable **workflow prompts** (`launch_session`,
-`restart_session`, `stop_session`, `create_cluster`) that walk the agent through
-each multi-step workflow. In Claude Code they appear as
-`/mcp__purdue-af-agentic-interface__<name>` slash commands.
+The server also exposes one invocable **workflow prompt**, `create_cluster`,
+which walks the agent through the four cluster questions when its client
+cannot ask them itself. In Claude Code it appears as
+`/mcp__purdue-af-agentic-interface__create_cluster`.
 
 ## Troubleshooting
 

@@ -2,11 +2,11 @@
 
 Metric families:
   purdue_af_mcp_api_calls_total          HTTP requests by route/status
-  purdue_af_mcp_jsonrpc_requests_total   MCP messages by JSON-RPC method/username
   purdue_af_mcp_tool_calls_total         tool invocations by tool/outcome/username
-                                         (success | user_error | auth_error |
-                                          upstream_error | exception — the
-                                          errors.Failure subclass raised)
+                                         (success | needs_input | user_error |
+                                          auth_error | upstream_error |
+                                          exception — the errors.Failure
+                                          subclass raised)
   purdue_af_mcp_tool_duration_seconds    tool invocation latency by tool
   purdue_af_mcp_upstream_requests_total  outbound backend requests by target/outcome
   purdue_af_mcp_upstream_duration_seconds  outbound backend latency by target
@@ -23,8 +23,10 @@ from typing import Any, Callable, Union
 import httpx
 from context import current_user
 from errors import Failure, invalid_arguments, unexpected_failure
+from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.shared.exceptions import UrlElicitationRequiredError
+from mcp.types import TextContent
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     Counter,
@@ -32,6 +34,7 @@ from prometheus_client import (
     generate_latest,
 )
 from pydantic import ValidationError
+from tools.elicitation import NeedsChoices
 
 logger = logging.getLogger("agentic.tools")
 
@@ -39,13 +42,6 @@ API_CALLS_TOTAL = Counter(
     "purdue_af_mcp_api_calls_total",
     "Total HTTP requests to the Purdue AF MCP server",
     ["route", "status"],
-)
-
-JSONRPC_REQUESTS_TOTAL = Counter(
-    "purdue_af_mcp_jsonrpc_requests_total",
-    "MCP JSON-RPC messages received, by protocol method "
-    "(tools/call, tools/list, initialize, notifications/…)",
-    ["method", "username"],
 )
 
 TOOL_CALLS_TOTAL = Counter(
@@ -81,41 +77,9 @@ AUTH_TOTAL = Counter(
     ["result"],
 )
 
-# The JSON-RPC `method` label comes straight from the client's POST body, so
-# clamp it to the known MCP protocol methods (plus the synthetic 'response' /
-# 'invalid' labels from server._jsonrpc_methods) — otherwise a client could
-# mint unbounded Prometheus label cardinality with arbitrary method strings.
-_KNOWN_JSONRPC_METHODS = frozenset(
-    {
-        "initialize",
-        "ping",
-        "tools/list",
-        "tools/call",
-        "resources/list",
-        "resources/read",
-        "resources/templates/list",
-        "prompts/list",
-        "prompts/get",
-        "completion/complete",
-        "logging/setLevel",
-        "notifications/initialized",
-        "notifications/cancelled",
-        "notifications/progress",
-        "notifications/roots/list_changed",
-        "response",
-        "invalid",
-    }
-)
-
 
 def record_request(route: str, status: int) -> None:
     API_CALLS_TOTAL.labels(route=route, status=str(status)).inc()
-
-
-def record_jsonrpc(method: str, username: str) -> None:
-    if method not in _KNOWN_JSONRPC_METHODS:
-        method = "other"
-    JSONRPC_REQUESTS_TOTAL.labels(method=method, username=username).inc()
 
 
 def record_tool_call(tool: str, outcome: str, username: str) -> None:
@@ -165,22 +129,35 @@ def _translate(name: str, username: str, exc: Exception) -> tuple[Exception, str
     return unexpected_failure(name, cause), "exception"
 
 
-def instrument_mcp(mcp: Any) -> None:
-    """Record metrics and a structured log line on every MCP tool invocation.
+class InstrumentedFastMCP(FastMCP):
+    """FastMCP that records metrics and a structured log line per tool call.
 
-    This monkeypatches the SDK-private ``mcp._tool_manager.call_tool``; fail
-    loudly at instrumentation time if an SDK upgrade moved that attribute, so
-    tool metrics can't silently disappear.
+    ``call_tool`` is the SDK's public dispatch entry point (the low-level
+    server calls it for every tools/call), so overriding it here needs no
+    private attributes. It is also where a tool's NeedsChoices becomes an
+    ordinary result: the help text is an instruction to the agent, not an
+    error.
     """
-    tool_manager = getattr(mcp, "_tool_manager", None)
-    original_call_tool = getattr(tool_manager, "call_tool", None)
-    if tool_manager is None or original_call_tool is None:
-        raise RuntimeError(
-            "instrument_mcp: FastMCP no longer exposes _tool_manager.call_tool "
-            "— the MCP SDK's tool dispatch moved; update the instrumentation "
-            "in metrics.py to match the new SDK layout."
-        )
 
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        username = _username()
+        start = time.monotonic()
+        try:
+            result = await super().call_tool(name, arguments)
+        except Exception as exc:
+            cause = exc.__cause__ if isinstance(exc, ToolError) else None
+            if isinstance(cause, NeedsChoices):
+                self._record(name, "needs_input", username, start)
+                return [TextContent(type="text", text=str(cause))]
+            failure, outcome = _translate(name, username, exc)
+            self._record(name, outcome, username, start)
+            if failure is exc:
+                raise
+            raise failure from None
+        self._record(name, "success", username, start)
+        return result
+
+    @staticmethod
     def _record(name: str, outcome: str, username: str, start: float) -> None:
         elapsed = time.monotonic() - start
         TOOL_DURATION.labels(tool=name).observe(elapsed)
@@ -192,32 +169,6 @@ def instrument_mcp(mcp: Any) -> None:
             outcome,
             elapsed * 1000,
         )
-
-    async def call_tool(
-        name: str,
-        arguments: dict[str, Any],
-        context: Any = None,
-        convert_result: bool = False,
-    ) -> Any:
-        username = _username()
-        start = time.monotonic()
-        try:
-            result = await original_call_tool(
-                name,
-                arguments,
-                context=context,
-                convert_result=convert_result,
-            )
-        except Exception as exc:
-            failure, outcome = _translate(name, username, exc)
-            _record(name, outcome, username, start)
-            if failure is exc:
-                raise
-            raise failure from None
-        _record(name, "success", username, start)
-        return result
-
-    tool_manager.call_tool = call_tool
 
 
 class _InstrumentedTransport(httpx.AsyncBaseTransport):

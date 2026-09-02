@@ -49,3 +49,19 @@ async def failure(awaitable):
     except Failure as exc:
         return str(exc)
     raise AssertionError(f"tool call succeeded instead of failing: {result!r}")
+
+
+async def needs_choices(awaitable):
+    """Await a tool call that must ask for choices; return the help text.
+
+    Tools raise NeedsChoices when a choice could not be elicited; the server
+    turns it into an ordinary result, so tests that call tools directly go
+    through here.
+    """
+    from tools.elicitation import NeedsChoices
+
+    try:
+        result = await awaitable
+    except NeedsChoices as exc:
+        return str(exc)
+    raise AssertionError(f"tool call did not ask for choices: {result!r}")

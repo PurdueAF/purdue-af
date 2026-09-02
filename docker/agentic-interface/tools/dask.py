@@ -14,11 +14,16 @@ worker pods.
 
 import asyncio
 import base64
-import os
 import re
 from typing import Any, Optional
 
 import httpx
+from config import (
+    CLUSTER_PROMETHEUS_URL,
+    DASK_GATEWAYS,
+    GLOBAL_PIXI_PROJECT,
+    PROMETHEUS_URL,
+)
 from context import require_user
 from errors import (
     AuthError,
@@ -36,33 +41,10 @@ from mcp.server.fastmcp import Context
 from pydantic import BaseModel, Field
 from shared import prom_query, prom_scalar, prom_vector, quote_label, shared_client
 
-from tools.elicitation import elicit as _elicit
+from tools.elicitation import ask
 
-# Gateway name → internal k8s service URL.
-# Override individual entries via env vars if needed.
-_GATEWAYS: dict[str, str] = {
-    "k8s": os.environ.get(
-        "DASK_GATEWAY_K8S_URL",
-        "http://api-dask-gateway-k8s.cms.svc.cluster.local:8000",
-    ),
-    "slurm": os.environ.get(
-        "DASK_GATEWAY_SLURM_URL",
-        "http://api-dask-gateway-k8s-slurm.cms.svc.cluster.local:8000",
-    ),
-}
+_GATEWAYS = DASK_GATEWAYS
 _GATEWAY_LIST = ", ".join(_GATEWAYS)
-
-# Shared pixi env pre-built for everyone. Lives on /work, so it is only usable
-# by Kubernetes workers — Slurm (Hammer) workers can see /depot but not /work.
-GLOBAL_PIXI_PROJECT = os.environ.get("DASK_GLOBAL_PIXI_PROJECT", "/work/pixi/global")
-
-PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
-# cadvisor / kubelet metrics (container_*) live on the Rancher Prometheus, not
-# the AF prometheus-server that scrapes dask-gateway-monitor.
-CLUSTER_PROMETHEUS_URL = os.environ.get(
-    "CLUSTER_PROMETHEUS_URL",
-    "http://rancher-monitoring-prometheus.cattle-monitoring-system.svc.cluster.local:9090",
-)
 
 # Upstream-metrics target labels, derived per request so one client can talk
 # to several gateway backends and still be broken down by backend.
@@ -249,22 +231,49 @@ async def _fetch_clusters(
     return gateway, _parse_clusters(payload)
 
 
-async def _require_owned_cluster(
-    client: httpx.AsyncClient, url: str, username: str, cluster_name: str, gateway: str
-) -> None:
-    """Raise a Failure if the user cannot access ``cluster_name``."""
+async def _gateway(
+    method: str,
+    gateway: str,
+    url: str,
+    path: str,
+    *,
+    username: str,
+    action: str,
+    cluster_name: Optional[str] = None,
+    ok: tuple[int, ...] = (200,),
+    timeout: float = 10.0,
+    json: Any = None,
+) -> httpx.Response:
+    """One gateway API call — or the Failure that explains why it could not
+    be made. ``ok`` lists the statuses the caller handles itself."""
     try:
-        resp = await client.get(
-            f"{url}/api/v1/clusters/{cluster_name}",
+        resp = await _client().request(
+            method,
+            f"{url}{path}",
             headers=_auth(username),
-            timeout=10.0,
+            json=json,
+            timeout=timeout,
         )
     except httpx.RequestError as exc:
         raise _gateway_unreachable(gateway, exc)
-    if resp.status_code != 200:
-        raise _gateway_http_error(
-            gateway, resp, f"access cluster '{cluster_name}'", cluster_name
-        )
+    if resp.status_code not in ok:
+        raise _gateway_http_error(gateway, resp, action, cluster_name)
+    return resp
+
+
+async def _require_owned_cluster(
+    url: str, username: str, cluster_name: str, gateway: str
+) -> None:
+    """Raise a Failure if the user cannot access ``cluster_name``."""
+    await _gateway(
+        "GET",
+        gateway,
+        url,
+        f"/api/v1/clusters/{cluster_name}",
+        username=username,
+        action=f"access cluster '{cluster_name}'",
+        cluster_name=cluster_name,
+    )
 
 
 async def _prom_scalar(
@@ -545,19 +554,14 @@ def register(mcp: Any) -> None:
         """
         user = require_user()
         gateway, url = _resolve_gateway(gateway)
-
-        try:
-            resp = await _client().get(
-                f"{url}/api/v1/options",
-                headers=_auth(user["username"]),
-                timeout=10.0,
-            )
-        except httpx.RequestError as exc:
-            raise _gateway_unreachable(gateway, exc)
-
-        if resp.status_code != 200:
-            raise _gateway_http_error(gateway, resp, "list cluster options")
-
+        resp = await _gateway(
+            "GET",
+            gateway,
+            url,
+            "/api/v1/options",
+            username=user["username"],
+            action="list cluster options",
+        )
         payload = json_body(resp)
         if not isinstance(payload, dict):
             raise malformed_response(
@@ -651,15 +655,17 @@ def register(mcp: Any) -> None:
         if worker_memory is not None and worker_memory <= 0:
             raise UserError("Error: worker_memory must be > 0 (GiB).")
 
+        help_text = _CREATE_CHOICES_HELP
+
         # ── Backend: ask the user if not supplied ──
         if gateway is None:
-            status, data = await _elicit(
-                ctx, "Choose the compute backend for your Dask cluster.", _BackendChoice
+            choice = await ask(
+                ctx,
+                "Choose the compute backend for your Dask cluster.",
+                _BackendChoice,
+                help_text,
             )
-            if status != "accept":
-                return _CREATE_CHOICES_HELP
-            gateway = data.gateway
-
+            gateway = choice.gateway
         gateway, url = _resolve_gateway(gateway)
 
         user = require_user()
@@ -671,12 +677,10 @@ def register(mcp: Any) -> None:
         elif conda_env:
             env_source = "conda"
         elif env_source is None:
-            status, data = await _elicit(
-                ctx, "Choose the worker environment.", _EnvChoice
+            choice = await ask(
+                ctx, "Choose the worker environment.", _EnvChoice, help_text
             )
-            if status != "accept":
-                return _CREATE_CHOICES_HELP
-            env_source = data.env_source
+            env_source = choice.env_source
 
         if env_source == "global":
             if gateway == "slurm":
@@ -689,21 +693,22 @@ def register(mcp: Any) -> None:
             pixi_env = "default"
         elif env_source == "pixi":
             if not pixi_project:
-                status, data = await _elicit(
-                    ctx, "Provide the path to your pixi project.", _PixiChoice
+                choice = await ask(
+                    ctx,
+                    "Provide the path to your pixi project.",
+                    _PixiChoice,
+                    help_text,
                 )
-                if status != "accept":
-                    return _CREATE_CHOICES_HELP
-                pixi_project = data.pixi_project
-                pixi_env = data.pixi_env
+                pixi_project, pixi_env = choice.pixi_project, choice.pixi_env
         elif env_source == "conda":
             if not conda_env:
-                status, data = await _elicit(
-                    ctx, "Provide the path to your conda environment.", _CondaChoice
+                choice = await ask(
+                    ctx,
+                    "Provide the path to your conda environment.",
+                    _CondaChoice,
+                    help_text,
                 )
-                if status != "accept":
-                    return _CREATE_CHOICES_HELP
-                conda_env = data.conda_env
+                conda_env = choice.conda_env
         else:
             raise UserError(
                 f"Error: unknown env_source '{env_source}'. "
@@ -712,17 +717,12 @@ def register(mcp: Any) -> None:
 
         # ── Worker size: ask only if neither cores nor memory was supplied ──
         if worker_cores is None and worker_memory is None:
-            status, data = await _elicit(ctx, "Choose the worker size.", _SizeChoice)
-            if status != "accept":
-                return _CREATE_CHOICES_HELP
-            if data.size == "custom":
-                status, size = await _elicit(
-                    ctx, "Specify the resources per worker.", _CustomSize
+            choice = await ask(ctx, "Choose the worker size.", _SizeChoice, help_text)
+            if choice.size == "custom":
+                size = await ask(
+                    ctx, "Specify the resources per worker.", _CustomSize, help_text
                 )
-                if status != "accept":
-                    return _CREATE_CHOICES_HELP
-                worker_cores = size.worker_cores
-                worker_memory = size.worker_memory
+                worker_cores, worker_memory = size.worker_cores, size.worker_memory
         if worker_cores is None:
             worker_cores = DEFAULT_WORKER_CORES
         if worker_memory is None:
@@ -731,22 +731,24 @@ def register(mcp: Any) -> None:
 
         # ── Worker count: ask only if n_workers was not supplied ──
         if n_workers is None:
-            status, data = await _elicit(
-                ctx, "How many workers should the cluster start with?", _CountChoice
+            choice = await ask(
+                ctx,
+                "How many workers should the cluster start with?",
+                _CountChoice,
+                help_text,
             )
-            if status != "accept":
-                return _CREATE_CHOICES_HELP
-            if data.count == "custom":
-                status, count = await _elicit(
-                    ctx, "Specify the number of workers to start with.", _CustomCount
+            if choice.count == "custom":
+                count = await ask(
+                    ctx,
+                    "Specify the number of workers to start with.",
+                    _CustomCount,
+                    help_text,
                 )
-                if status != "accept":
-                    return _CREATE_CHOICES_HELP
                 n_workers = count.n_workers
                 if n_workers > MAX_WORKERS:
                     raise UserError(f"Error: n_workers must be ≤ {MAX_WORKERS}.")
             else:
-                n_workers = int(data.count)
+                n_workers = int(choice.count)
 
         options = _build_cluster_options(
             username=username,
@@ -758,26 +760,17 @@ def register(mcp: Any) -> None:
             env=env,
         )
 
-        client = _client()
-        try:
-            resp = await client.post(
-                f"{url}/api/v1/clusters/",
-                headers=_auth(username),
-                json={"cluster_options": options},
-                timeout=60.0,
-            )
-        except httpx.RequestError as exc:
-            raise unreachable(
-                f"gateway '{gateway}'",
-                exc,
-                next_step="No cluster was created. Try again in a minute; if the "
-                "gateway stays unreachable, get_facility_health shows whether "
-                "scale-out is degraded.",
-            )
-
-        if resp.status_code not in (200, 201):
-            raise _gateway_http_error(gateway, resp, "create the cluster")
-
+        resp = await _gateway(
+            "POST",
+            gateway,
+            url,
+            "/api/v1/clusters/",
+            username=username,
+            action="create the cluster",
+            ok=(200, 201),
+            timeout=60.0,
+            json={"cluster_options": options},
+        )
         payload = json_body(resp)
         cluster_name = payload.get("name", "") if isinstance(payload, dict) else ""
         if not cluster_name:
@@ -808,32 +801,25 @@ def register(mcp: Any) -> None:
             ]
             return "\n".join(lines)
 
+        # The cluster exists whatever happens next, so a failed scale is
+        # reported inside the result rather than as a failure of the call.
         try:
-            scale = await client.post(
-                f"{url}/api/v1/clusters/{cluster_name}/scale",
-                headers=_auth(username),
-                json={"count": n_workers},
+            await _gateway(
+                "POST",
+                gateway,
+                url,
+                f"/api/v1/clusters/{cluster_name}/scale",
+                username=username,
+                action=f"scale to {n_workers} worker(s)",
+                cluster_name=cluster_name,
+                ok=(200, 204),
                 timeout=30.0,
+                json={"count": n_workers},
             )
-        except httpx.RequestError as exc:
+        except Failure as exc:
             lines += [
                 "",
-                "Created with 0 workers — the scale request failed: gateway "
-                f"'{gateway}' unreachable — {describe_exception(exc)}.",
-                f"Retry with scale_dask_cluster('{cluster_name}', {n_workers}, "
-                f"gateway='{gateway}').",
-            ]
-            return "\n".join(lines)
-
-        if scale.status_code not in (200, 204):
-            lines += [
-                "",
-                "Created with 0 workers — the scale request failed: "
-                + str(
-                    _gateway_http_error(
-                        gateway, scale, f"scale to {n_workers} worker(s)", cluster_name
-                    )
-                ),
+                f"Created with 0 workers — the scale request failed: {exc}",
                 f"Retry with scale_dask_cluster('{cluster_name}', {n_workers}, "
                 f"gateway='{gateway}').",
             ]
@@ -855,22 +841,16 @@ def register(mcp: Any) -> None:
         """
         _validate_cluster_name(cluster_name)
         user = require_user()
-        _, url = _resolve_gateway(gateway)
-
-        try:
-            resp = await _client().get(
-                f"{url}/api/v1/clusters/{cluster_name}",
-                headers=_auth(user["username"]),
-                timeout=10.0,
-            )
-        except httpx.RequestError as exc:
-            raise _gateway_unreachable(gateway, exc)
-
-        if resp.status_code != 200:
-            raise _gateway_http_error(
-                gateway, resp, f"inspect cluster '{cluster_name}'", cluster_name
-            )
-
+        gateway, url = _resolve_gateway(gateway)
+        resp = await _gateway(
+            "GET",
+            gateway,
+            url,
+            f"/api/v1/clusters/{cluster_name}",
+            username=user["username"],
+            action=f"inspect cluster '{cluster_name}'",
+            cluster_name=cluster_name,
+        )
         c = json_body(resp)
         if not isinstance(c, dict):
             raise malformed_response(f"gateway '{gateway}'", resp, "a cluster record")
@@ -905,11 +885,9 @@ def register(mcp: Any) -> None:
             gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
         _validate_cluster_name(cluster_name)
-        user = require_user()
-        username = user["username"]
-        _, url = _resolve_gateway(gateway)
-
-        await _require_owned_cluster(_client(), url, username, cluster_name, gateway)
+        username = require_user()["username"]
+        gateway, url = _resolve_gateway(gateway)
+        await _require_owned_cluster(url, username, cluster_name, gateway)
 
         cid = _cluster_id(cluster_name)
         quser = quote_label(username)
@@ -934,8 +912,8 @@ def register(mcp: Any) -> None:
         if problem:
             raise UpstreamError(
                 f"Error: could not read worker metrics for '{cluster_name}' — "
-                f"Prometheus {problem}. The cluster itself may be fine: get_dask_cluster_info "
-                "shows the gateway's own view of its workers."
+                f"Prometheus {problem}. The cluster itself may be fine: "
+                "get_dask_cluster_info shows the gateway's own view of its workers."
             )
         if total is None:
             return (
@@ -970,11 +948,9 @@ def register(mcp: Any) -> None:
             gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
         _validate_cluster_name(cluster_name)
-        user = require_user()
-        username = user["username"]
-        _, url = _resolve_gateway(gateway)
-
-        await _require_owned_cluster(_client(), url, username, cluster_name, gateway)
+        username = require_user()["username"]
+        gateway, url = _resolve_gateway(gateway)
+        await _require_owned_cluster(url, username, cluster_name, gateway)
 
         cid = _cluster_id(cluster_name)
         # re.escape: '.' is a regex metachar and legitimately appears in names.
@@ -1006,8 +982,9 @@ def register(mcp: Any) -> None:
         if problem:
             raise UpstreamError(
                 f"Error: could not read resource usage for '{cluster_name}' — "
-                f"the monitoring system {problem}. The cluster itself may be fine: get_dask_worker_count "
-                "and get_dask_cluster_info do not depend on this data."
+                f"the monitoring system {problem}. The cluster itself may be "
+                "fine: get_dask_worker_count and get_dask_cluster_info do not "
+                "depend on this data."
             )
 
         cpu_vals = [v for _, v in cpu_rows]
@@ -1064,25 +1041,19 @@ def register(mcp: Any) -> None:
             raise UserError("Error: n_workers must be ≥ 0.")
         if n_workers > MAX_WORKERS:
             raise UserError(f"Error: n_workers must be ≤ {MAX_WORKERS}.")
-
-        user = require_user()
-        _, url = _resolve_gateway(gateway)
-
-        try:
-            resp = await _client().post(
-                f"{url}/api/v1/clusters/{cluster_name}/scale",
-                headers=_auth(user["username"]),
-                json={"count": n_workers},
-                timeout=10.0,
-            )
-        except httpx.RequestError as exc:
-            raise _gateway_unreachable(gateway, exc)
-
-        if resp.status_code not in (200, 204):
-            raise _gateway_http_error(
-                gateway, resp, f"scale to {n_workers} worker(s)", cluster_name
-            )
-
+        username = require_user()["username"]
+        gateway, url = _resolve_gateway(gateway)
+        await _gateway(
+            "POST",
+            gateway,
+            url,
+            f"/api/v1/clusters/{cluster_name}/scale",
+            username=username,
+            action=f"scale to {n_workers} worker(s)",
+            cluster_name=cluster_name,
+            ok=(200, 204),
+            json={"count": n_workers},
+        )
         return (
             f"Cluster '{cluster_name}' on '{gateway}' scaling to {n_workers} worker(s)."
         )
@@ -1098,23 +1069,18 @@ def register(mcp: Any) -> None:
             gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
         _validate_cluster_name(cluster_name)
-        user = require_user()
-        _, url = _resolve_gateway(gateway)
-
-        try:
-            resp = await _client().delete(
-                f"{url}/api/v1/clusters/{cluster_name}",
-                headers=_auth(user["username"]),
-                timeout=10.0,
-            )
-        except httpx.RequestError as exc:
-            raise _gateway_unreachable(gateway, exc)
-
+        username = require_user()["username"]
+        gateway, url = _resolve_gateway(gateway)
+        resp = await _gateway(
+            "DELETE",
+            gateway,
+            url,
+            f"/api/v1/clusters/{cluster_name}",
+            username=username,
+            action=f"stop cluster '{cluster_name}'",
+            cluster_name=cluster_name,
+            ok=(200, 204, 404),
+        )
         if resp.status_code == 404:
             return f"Cluster '{cluster_name}' not found on gateway '{gateway}' (may have already stopped)."
-        if resp.status_code not in (200, 204):
-            raise _gateway_http_error(
-                gateway, resp, f"stop cluster '{cluster_name}'", cluster_name
-            )
-
         return f"Cluster '{cluster_name}' on '{gateway}' stopped."

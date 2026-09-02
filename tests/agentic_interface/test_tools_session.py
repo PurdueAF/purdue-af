@@ -6,7 +6,7 @@ import types
 import auth
 import pytest
 import respx
-from agentic_helpers import failure, register_tools
+from agentic_helpers import failure, needs_choices, register_tools
 from tools import profiles, session
 
 USER_URL = f"{session.HUB_API_URL}/users/alice"
@@ -367,7 +367,7 @@ async def test_start_unsupported_client_returns_fallback(user_ctx, monkeypatch):
     fake_profiles_with_options(monkeypatch, multi=True)
 
     tools = register_tools(session).tools
-    out = await tools["start_af_session"](None)
+    out = await needs_choices(tools["start_af_session"](None))
     assert "use_defaults=True" in out
     assert "list_af_profiles" in out
 
@@ -380,7 +380,7 @@ async def test_start_cancel_falls_back_not_dead_end(user_ctx, monkeypatch):
 
     ctx = FakeCtx(("cancel", None))
     tools = register_tools(session).tools
-    out = await tools["start_af_session"](ctx)
+    out = await needs_choices(tools["start_af_session"](ctx))
     assert "list_af_profiles" in out
     assert "use_defaults=True" in out
 
@@ -390,7 +390,7 @@ async def test_start_decline_falls_back(user_ctx, monkeypatch):
 
     ctx = FakeCtx(("decline", None))
     tools = register_tools(session).tools
-    out = await tools["start_af_session"](ctx)
+    out = await needs_choices(tools["start_af_session"](ctx))
     assert "list_af_profiles" in out
 
 
@@ -659,7 +659,7 @@ async def test_start_skips_empty_choices_and_option_cancel(user_ctx, monkeypatch
 
     tools = register_tools(session).tools
     ctx = FakeCtx(("cancel", None))
-    out = await tools["start_af_session"](ctx)
+    out = await needs_choices(tools["start_af_session"](ctx))
     assert "list_af_profiles" in out  # option cancel → fallback
     assert len(ctx.calls) == 1  # empty choices skipped; only cpu asked
 
@@ -762,7 +762,7 @@ async def test_restart_error_paths(user_ctx, monkeypatch):
     respx.delete(SERVER_URL).respond(204)
     respx.post(SERVER_URL).mock(side_effect=ConnectError("down"))
     out = await failure(tools["restart_af_session"]())
-    assert "stopped but restart failed" in out
+    assert "Session was stopped, but the restart failed" in out
 
     # start unexpected status
     respx.get(USER_URL).respond(200, json=server_payload())
@@ -1056,10 +1056,8 @@ async def test_restart_reports_unreadable_prior_options(user_ctx, monkeypatch):
     respx.delete(SERVER_URL).respond(204)
     respx.post(SERVER_URL).respond(201)
     out = await register_tools(session).tools["restart_af_session"]()
-    assert (
-        "default options (the previous options could not be read: JupyterHub API "
-        "returned HTTP 500)" in out
-    )
+    assert "default options (the previous options could not be read:" in out
+    assert "returned HTTP 500 while trying to read the session state" in out
 
 
 @respx.mock
