@@ -178,7 +178,7 @@ RUN chmod +x /usr/local/bin/pixi && \
 # `opencode /connect`; the facility ships no model credentials for any surface.
 ARG CLAUDE_CODE_VERSION="2.1.258"
 ARG CODEX_VERSION="0.152.1"
-ARG OPENCODE_VERSION="1.18.26"
+ARG OPENCODE_VERSION="1.18.27"
 ARG CLAUDE_AGENT_ACP_VERSION="0.73.0"
 ARG CODEX_ACP_VERSION="0.16.0"
 ENV NPM_GLOBAL="/opt/npm-global"
