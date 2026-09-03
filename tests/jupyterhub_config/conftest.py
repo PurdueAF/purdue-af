@@ -9,7 +9,7 @@ import pytest
 @pytest.fixture
 def fake_ldap(monkeypatch):
     """Install a fake `ldap3` module; returns a dict to configure responses."""
-    state = {"uid": 12345, "gid": 67890, "searches": []}
+    state = {"uid": 12345, "gid": 67890, "searches": [], "bases": [], "hosts": []}
 
     class FakeConnection:
         def __init__(self, server, version, authentication):
@@ -20,6 +20,7 @@ def fake_ldap(monkeypatch):
 
         def search(self, search_base, search_filter, search_scope, attributes):
             state["searches"].append(search_filter)
+            state["bases"].append(search_base)
 
         def response_to_json(self):
             import json
@@ -37,9 +38,13 @@ def fake_ldap(monkeypatch):
                 }
             )
 
+    def fake_server(host, use_ssl, get_info):
+        state["hosts"].append(host)
+        return None
+
     ldap3 = types.ModuleType("ldap3")
     ldap3.SUBTREE = "SUBTREE"
-    ldap3.Server = lambda host, use_ssl, get_info: None
+    ldap3.Server = fake_server
     ldap3.Connection = FakeConnection
     monkeypatch.setitem(sys.modules, "ldap3", ldap3)
     return state
