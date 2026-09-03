@@ -84,9 +84,23 @@ c.KernelSpecManager.ensure_native_kernel = False
 # --------------------------------------------------------------------------
 # AI in JupyterLab (jupyter-ai)
 # --------------------------------------------------------------------------
-# The chat panel and its personas come from the installed stack and need no
-# config; what needs config is which MCP servers those personas can reach.
+# The chat panel and its personas come from the installed stack; what needs
+# config is which persona answers by default and which MCP servers they reach.
 #
+# jupyter-ai's own default names JupyternautPersona, which lives in the
+# `jupyternaut` extra we do not install -- so out of the box nothing answers a
+# message until the user picks someone from the composer. OpenCode is the one
+# persona that works with no account of any kind (its Zen free tier serves
+# unauthenticated), so it is the only sensible thing to land on: Claude and
+# Codex would greet a new user with a login prompt.
+#
+# The format is fixed by BasePersona.id --
+# `jupyter-ai-personas::<package>::<class>` -- and a name that resolves to
+# nothing degrades to no default rather than an error (`default_persona`
+# is a plain `.get()` on the loaded personas), so a session without the
+# opencode binary behaves exactly as it does today.
+_DEFAULT_PERSONA_ID = "jupyter-ai-personas::jupyter_ai_acp_client::OpenCodeAcpPersona"
+
 # jupyter_server_mcp's own defaults, restated because setting the AF server
 # below replaces PersonaManager's default `builtin_mcp_servers` wholesale --
 # including the entry that gives personas the notebook toolkit, without which
@@ -137,6 +151,7 @@ def _builtin_mcp_servers():
     return servers
 
 
+c.PersonaManager.default_persona_id = _DEFAULT_PERSONA_ID
 c.MCPExtensionApp.mcp_name = _JUPYTER_MCP_NAME
 c.MCPExtensionApp.mcp_port = _JUPYTER_MCP_PORT
 c.PersonaManager.builtin_mcp_servers = _builtin_mcp_servers()
