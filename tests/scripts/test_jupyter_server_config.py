@@ -217,6 +217,36 @@ class TestWebSocketPingUnitsPatch:
         assert c["ServerApp"]["ip"] == "0.0.0.0"
 
 
+class TestJupyterAIDefaultPersona:
+    """Who answers when the user just types, without picking anyone."""
+
+    def test_opencode_is_the_default(self, monkeypatch, tmp_path):
+        _, c = load_jupyter_config(monkeypatch, tmp_path)
+        assert c["PersonaManager"]["default_persona_id"] == (
+            "jupyter-ai-personas::jupyter_ai_acp_client::OpenCodeAcpPersona"
+        )
+
+    def test_id_follows_the_format_base_persona_builds(self, monkeypatch, tmp_path):
+        """`BasePersona.id` is
+        `jupyter-ai-personas::<package>::<class>`, derived from the module
+        path -- not something we get to name. A typo here does not raise: the
+        lookup is a plain `.get()`, so the chat just silently answers nobody."""
+        _, c = load_jupyter_config(monkeypatch, tmp_path)
+        prefix, package, klass = c["PersonaManager"]["default_persona_id"].split("::")
+        assert prefix == "jupyter-ai-personas"
+        # The distribution that ships the ACP personas, and the class inside it
+        # whose module is jupyter_ai_acp_client.acp_personas.opencode.
+        assert package == "jupyter_ai_acp_client"
+        assert klass == "OpenCodeAcpPersona"
+
+    def test_default_is_the_persona_that_needs_no_account(self, monkeypatch, tmp_path):
+        """Claude and Codex refuse until the user logs in with their own
+        provider account; OpenCode answers out of the box. Defaulting to either
+        of the other two would meet every new user with a login prompt."""
+        _, c = load_jupyter_config(monkeypatch, tmp_path)
+        assert "OpenCode" in c["PersonaManager"]["default_persona_id"]
+
+
 class TestJupyterAIMCPServers:
     """What the chat's agents can reach. Registering the AF server replaces
     jupyter-ai's default list, so the notebook toolkit has to be restated or
