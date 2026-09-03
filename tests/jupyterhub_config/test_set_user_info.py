@@ -18,6 +18,16 @@ def test_ldap_lookup_parses_uid_gid(monkeypatch, fake_ldap):
     assert fake_ldap["searches"] == ["(uid=alice*)"]
 
 
+def test_ldap_lookup_targets_geddes_auth(monkeypatch, fake_ldap):
+    """geddes-aux was retired; the lookup must hit geddes-auth under the
+    AllPeople tree. Host and base DN move together — the old
+    ou=People,dc=rcac base does not exist on the new server."""
+    ns = load(monkeypatch, fake_ldap)
+    ns["ldap_lookup"]("alice")
+    assert fake_ldap["hosts"] == ["geddes-auth.rcac.purdue.edu"]
+    assert fake_ldap["bases"] == ["ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"]
+
+
 # ── passthrough_auth_state_hook ───────────────────────────────────────────────
 
 

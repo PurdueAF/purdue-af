@@ -11,7 +11,7 @@ mocked. Never touches the production cluster.
 | ------------------------------------------ | --------------------------------------------- |
 | z2jh chart version (from helmrelease.yaml) | CILogon → `mock-cilogon.py` (OAuth code flow) |
 | `values.yaml` (flux-envsubst'd, like Flux) | userlist secrets → test users                 |
-| all 3 `jupyterhub_config.d` snippets       | LDAP → openldap seeded like geddes-aux        |
+| all 3 `jupyterhub_config.d` snippets       | LDAP → openldap seeded like geddes-auth       |
 | OAuth code flow, auth_state, KubeSpawner   | storage/nodeSelectors/registry → nulled       |
 | `ldap_lookup()` query/parse path           | Prometheus → absent (gpu script fails open)   |
 | singleuser image (the real AF image)       |                                               |

@@ -12,11 +12,11 @@ c: Any
 
 def ldap_lookup(username: str) -> tuple[Any, Any]:
     # AF_LDAP_* are only set by the e2e harness (tests/e2e_hub), which points
-    # at a plaintext mock; unset (production) keeps the original geddes-aux
-    # TLS path byte-for-byte.
-    url = os.environ.get("AF_LDAP_HOST", "geddes-aux.rcac.purdue.edu")
+    # at a plaintext mock; unset (production) keeps the geddes-auth TLS
+    # path byte-for-byte.
+    url = os.environ.get("AF_LDAP_HOST", "geddes-auth.rcac.purdue.edu")
     use_tls = os.environ.get("AF_LDAP_TLS", "true").lower() != "false"
-    baseDN = "ou=People,dc=rcac,dc=purdue,dc=edu"
+    baseDN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
     search_filter = "(uid={0}*)"
     attrs = ["uidNumber", "gidNumber"]
     s = Server(host=url, use_ssl=use_tls, get_info="ALL")

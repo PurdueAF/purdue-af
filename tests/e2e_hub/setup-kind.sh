@@ -107,7 +107,7 @@ kubectl -n "$NS" create configmap mock-cilogon \
 	--dry-run=client -o yaml | kubectl apply -f -
 kubectl -n "$NS" apply -f "$E2E_DIR/mock-cilogon.yaml"
 
-echo "==> mock LDAP (geddes-aux stand-in for set-user-info.py)"
+echo "==> mock LDAP (geddes-auth stand-in for set-user-info.py)"
 kubectl -n "$NS" create configmap mock-ldap \
 	--from-file=10-users.ldif="$E2E_DIR/mock-ldap-users.ldif" \
 	--from-file=20-acl.ldif="$E2E_DIR/mock-ldap-acl.ldif" \
