@@ -3,12 +3,30 @@ set -euo pipefail
 
 REAL_PIXI="/opt/pixi/bin/pixi"
 HOME_PREFIX="/home/"
+# Environments the platform owns, not the user. The base env is baked into the
+# session image and is not writable from a session; the shared global env is
+# generated from the platform repository and reconciled by pixi-global-sync, so
+# a package added to it is reverted without warning. Both fail confusingly
+# rather than usefully, so say what is going on and where to go instead.
+BASE_ENV_PROJECT="/opt/pixi"
+GLOBAL_ENV_PROJECT="/work/pixi/global"
 
 SUBCMD="${1:-}"
 
 is_project_env_command() {
   case "$SUBCMD" in
     add|build|init|install|import|reinstall|remove|shell|shell-hook|update|upgrade|upload)
+      return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Project commands that write to the project or to its environment. `shell` and
+# `shell-hook` are deliberately absent: activating a platform environment is a
+# normal thing to do — changing one is not.
+is_env_mutating_command() {
+  case "$SUBCMD" in
+    add|build|import|init|install|reinstall|remove|update|upgrade|upload)
       return 0 ;;
     *) return 1 ;;
   esac
@@ -61,6 +79,50 @@ get_manifest_path_dir() {
   echo "$dir"
 }
 
+# Physical path, so `~/work/...` (a symlink to /work) and relative
+# --manifest-path arguments resolve to what they actually name. Falls back to
+# the input for a path that does not exist yet, which `init` legitimately does.
+resolve_dir() {
+  ( cd -P "$1" 2>/dev/null && pwd ) || echo "$1"
+}
+
+# True when $1 is $2 or lies under it.
+is_within() {
+  [[ "$1" == "$2" || "$1" == "$2"/* ]]
+}
+
+project_dir_for() {
+  local manifest_dir
+  manifest_dir="$(get_manifest_path_dir "$@")"
+  if [[ -n "$manifest_dir" ]]; then
+    echo "$manifest_dir"
+  else
+    find_project_root
+  fi
+}
+
+block_platform_env_mutation() {
+  local project_dir
+  project_dir="$(resolve_dir "$(project_dir_for "$@")")"
+
+  if is_within "$project_dir" "$BASE_ENV_PROJECT"; then
+    echo "Error: ${BASE_ENV_PROJECT} is the session image's own environment and cannot be modified." >&2
+    echo "Project directory: ${project_dir}" >&2
+    echo "Create a project of your own instead:" >&2
+    echo "  cd /work/users/\${USER} && pixi init myproject && cd myproject && pixi add <package>" >&2
+    exit 1
+  fi
+
+  if is_within "$project_dir" "$GLOBAL_ENV_PROJECT"; then
+    echo "Error: ${GLOBAL_ENV_PROJECT} is generated from the platform repository." >&2
+    echo "Project directory: ${project_dir}" >&2
+    echo "It is reconciled automatically, so changes made here are reverted without warning." >&2
+    echo "For yourself:  cd /work/users/\${USER} && pixi init myproject && cd myproject && pixi add <package>" >&2
+    echo "For everyone:  open a PR against pixi/global/pixi.toml in PurdueAF/purdue-af" >&2
+    exit 1
+  fi
+}
+
 block_project_env_if_in_home() {
   local project_dir manifest_dir
   manifest_dir="$(get_manifest_path_dir "$@")"
@@ -92,6 +154,13 @@ block_global_env_if_in_home() {
     exit 1
   fi
 }
+
+if is_env_mutating_command; then
+  # Before the /home check on purpose: `~/work/pixi/global` reaches the shared
+  # env through a symlink out of /home, and "move it off /home" would be the
+  # wrong answer to give for it.
+  block_platform_env_mutation "$@"
+fi
 
 if is_project_env_command; then
   block_project_env_if_in_home "$@"
