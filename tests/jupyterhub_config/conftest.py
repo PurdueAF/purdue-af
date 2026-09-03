@@ -38,13 +38,13 @@ def fake_ldap(monkeypatch):
                 }
             )
 
-    ldap3 = types.ModuleType("ldap3")
-    ldap3.SUBTREE = "SUBTREE"
-    def _server(host, use_ssl, get_info):
+    def fake_server(host, use_ssl, get_info):
         state["hosts"].append(host)
         return None
 
-    ldap3.Server = _server
+    ldap3 = types.ModuleType("ldap3")
+    ldap3.SUBTREE = "SUBTREE"
+    ldap3.Server = fake_server
     ldap3.Connection = FakeConnection
     monkeypatch.setitem(sys.modules, "ldap3", ldap3)
     return state
