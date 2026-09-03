@@ -218,13 +218,104 @@ def test_worker_environment_requirement_matches_the_gateway():
     assert "pixi install" in text
 
 
+def test_platform_owned_environments_are_declared_off_limits():
+    """The wrapper refuses these; the context has to say so, or an agent burns
+    a turn discovering it and may then try to work around the refusal."""
+    wrapper = (REPO / "docker/purdue-af/pixi-wrapper").read_text()
+    assert 'BASE_ENV_PROJECT="/opt/pixi"' in wrapper
+    assert 'GLOBAL_ENV_PROJECT="/work/pixi/global"' in wrapper
+    text = context()
+    assert "/opt/pixi" in text and "/work/pixi/global" in text
+    # and that activating them is still allowed, which the wrapper permits
+    assert "pixi shell" in text
+
+
+def test_write_scope_distinguishes_the_two_shared_volumes():
+    """The asymmetry is the whole guardrail, and getting it backwards is worse
+    than saying nothing. /depot/cms is group-owned, so a successful write there
+    is an entitled one and the filesystem can be trusted. /work/projects has no
+    groups, so the session can write into any project directory including ones
+    nothing to do with the user — there, and only there, success is no evidence
+    the write was wanted."""
+    text = context()
+    assert "**Scope.**" in text
+    assert "/work/users/<username>/" in text
+    assert "/depot/cms/users/<username>/" in text
+
+    scope = text.split("**Scope.**")[1].split("**Guidance.**")[0]
+    depot, work = scope.index("/depot/cms/<project>/"), scope.index("/work/projects/")
+    assert "group-owned" in scope[depot:work], "the /depot clause must say why"
+    assert "no group ownership" in scope[work:], "the /work clause must say why"
+    # and the table has to agree about /depot being group-owned
+    assert "group-owned" in _row("/depot/cms/")
+
+
+def test_xrootd_worker_env_is_documented_and_has_a_channel():
+    """A cluster that reads over XRootD needs all three X509 variables passed
+    at creation; miss one and the cluster starts and every read fails, which
+    is the least self-diagnosing failure on the facility. The gateways take
+    them through the `env` cluster option, so the advice has somewhere to go."""
+    text = context()
+    for var in ("X509_USER_PROXY", "X509_CERT_DIR", "X509_VOMS_DIR"):
+        assert var in text, var
+    # the proxy must not be left in /tmp, which no worker can see
+    assert "/tmp" in text and "/depot" in text
+    passes_env = [
+        p
+        for p in GATEWAYS.glob("dask-gateway-k8s*/values.yaml")
+        if 'Mapping("env"' in p.read_text()
+    ]
+    assert passes_env, "no gateway exposes an `env` cluster option any more"
+
+
+def test_the_default_environment_is_the_shared_global_one():
+    """Left to itself an agent reaches for whatever is already on PATH, which
+    is the base env — the image's plumbing, not somewhere analysis code
+    belongs. Say which environment is the default, not just which are
+    off-limits."""
+    text = context()
+    default = text.split("### Software environments")[1].split("**Rules.**")[0]
+    assert "/work/pixi/global/" in default
+    assert "unless the user asks" in default
+    assert "/opt/pixi" in default and "should not be run in it" in default
+
+
+def test_dask_workloads_are_told_not_to_depend_on_the_eos_mount():
+    """The k8s worker spec does mount /eos while the scheduler does not, so an
+    agent reading the config could reasonably conclude a POSIX path is fine.
+    It is not something to build on — Slurm workers have none at all — and the
+    rule is about dependence, not about whether a mount happens to exist."""
+    text = context()
+    assert "never depend on the EOS mount" in text
+    assert "XCache" in text
+    row = _row("/eos/purdue/")
+    assert "not to be relied on" in row, row
+
+
+def test_how_to_run_python_is_spelled_out():
+    """Left to itself an agent types `python script.py`, which is the base env
+    — the image's plumbing. Naming the default is not enough; the context has
+    to give the interpreter to use instead, and the order to choose it in."""
+    text = context()
+    interpreter = "/work/pixi/global/.pixi/envs/default/bin/python"
+    assert interpreter in text
+    assert "pixi run python" in text
+    assert "never the answer" in text
+
+    # the interpreter path is the one pixi-global-sync actually builds
+    sync = (REPO / "apps/af-utils/pixi-global-sync/sync-global-env.py").read_text()
+    assert '"envs" / ENV_NAME / "bin" / "python"' in sync
+    assert 'ENV_NAME = os.environ.get("ENV_NAME", "default")' in sync
+    assert 'WORK_ROOT = Path(os.environ.get("WORK_ROOT", "/work/pixi"))' in sync
+
+
 def test_context_stays_within_a_sane_context_budget():
     """It is injected into every agent turn, for every harness, in every
     project the user opens — unbounded growth is a real cost. Detail that an
     MCP tool returns live, or that the agent can discover with one `ls`,
     belongs there and not here. The budget is deliberately loose: it guards
     against drift, not against saying a rule clearly."""
-    assert len(context().splitlines()) < 190
+    assert len(context().splitlines()) < 260
 
 
 # --- dependency pins the platform context depends on ----------------------

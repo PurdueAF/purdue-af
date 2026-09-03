@@ -47,10 +47,16 @@ job — a path that works in the notebook may not exist on the worker.
 | `/home/<username>/` | 25 GB (hard quota) | read/write | no | no |
 | `/work/users/<username>/` | 100 GB | read/write | no | yes |
 | `/work/projects/<project>/` | up to 1 TB | read/write | no | yes |
-| `/depot/cms/` | up to 1 TB | read/write for Purdue accounts, read-only for others | yes | yes |
-| `/eos/purdue/` | up to 100 TB | read-only over POSIX; write via `gfal`/`xrdcp` | yes | yes |
+| `/depot/cms/` | up to 1 TB | group-owned; read/write for Purdue accounts, read-only for others | yes | yes |
+| `/eos/purdue/` | up to 100 TB | read-only POSIX mount, for browsing; read/write over XRootD (`gfal`/`xrdcp`) | not to be relied on | not to be relied on |
 | `/cvmfs/` | n/a | read-only | yes | yes |
 | `/eos/cern/` (CERNBox) | n/a | read/write, mounted on request | no | no |
+
+A Dask workload must never depend on the EOS mount. Slurm workers have no
+`/eos` at all, and where a mount does exist it is not something to build on:
+worker code reads EOS data over XRootD — better still through XCache — rather
+than as a file path. The POSIX mount in the session is read-only and useful
+mainly for looking around.
 
 The session's own username is `whoami` (also `$NB_USER`) and `$HOME` is
 `/home/<username>`; build paths from those rather than guessing the name.
@@ -68,23 +74,68 @@ all — the next spawn fails, not merely the write. `/eos/purdue/` cannot be
 written through the POSIX mount; write there with `gfal-copy` or `xrdcp`.
 `/home` and `/work` do not exist inside Slurm jobs or Dask/Slurm workers.
 
+**Scope.** The user's own directories — `/work/users/<username>/` and
+`/depot/cms/users/<username>/` — and the project directories they actually work
+in are all fair game. Working in a project directory is normal; the two shared
+volumes just differ in whether the filesystem can be trusted to say which one
+is theirs:
+
+- `/depot/cms/<project>/` is group-owned, so permissions already answer the
+  question. A write that succeeds there is one the user is entitled to make.
+- `/work/projects/` has no group ownership behind it. Unless an owner has
+  restricted their own directory, the session can write into project
+  directories belonging to people the user has nothing to do with, so a write
+  succeeding is no evidence it was wanted. Stay in the project the user named;
+  if none has been named, ask rather than infer one from what happens to be
+  writable.
+
+Never write into another user's directory. Be strictest about deleting — prefer
+moving something aside inside the user's own space — and when a task looks like
+it needs a path outside these, name the path and say why instead of acting on
+your own initiative.
+
 **Guidance.** Keep code, environments and outputs off `/home` — it is small and
 invisible to every worker. `/work/users/<username>/` is the usual home for a
 project; use `/depot` when Slurm or Dask/Slurm workers have to read it. Writing
 many files to `/depot` at once degrades it for everyone, so stage to `/tmp` on
-the worker and copy once.
+the worker and copy once. None of `/home`, `/work` or `/depot` is unlimited and
+the last two are shared, so check `query_storage_usage` before writing a large
+output rather than after filling a volume.
 
 ### Software environments
 
 Pixi is the platform's package manager, and `pixi` here is a wrapper, not
 upstream pixi — it enforces the rules below rather than reporting them.
 
+Analysis work goes in the shared global environment at `/work/pixi/global/`
+unless the user asks for something else: it is maintained for exactly that, and
+the project-aware kernel already falls back to it. The base environment at
+`/opt/pixi` is the image's own plumbing — it is what puts the tools below on
+PATH — and analysis code should not be run in it.
+
+Running Python follows from that. Inside a project that has a built pixi
+environment, use that project's own — `pixi run python …` from the project
+directory, or its project-aware kernel. Anywhere else, use the global
+environment's interpreter directly:
+
+    /work/pixi/global/.pixi/envs/default/bin/python
+
+Bare `python`/`python3` is the base environment, so it is never the answer to
+"run this script". Prefer that interpreter path over `pixi run --manifest-path
+/work/pixi/global`, which can try to re-solve and write into the shared
+environment. In a notebook, the equivalent choice is the kernel: the
+project-aware one, or the global one.
+
 **Rules.** Project commands (`add`, `install`, `shell`, `update`, `init`,
 `remove`, …) **refuse to run on a project under `/home/`**; the wrapper exits
 with an error naming the directory. This is deliberate — pixi environments are
 large and would exhaust the 25 GB home quota. `PIXI_HOME` and `PIXI_CACHE_DIR`
 are preset under `/work/users/<username>/` for the same reason, and pointing
-them back under `/home` is refused too. A pixi or conda environment becomes a
+them back under `/home` is refused too. The wrapper likewise refuses project
+commands aimed at the platform's own environments — `/opt/pixi`, the image's
+base env, and `/work/pixi/global`, the shared one — because both are built
+outside the session and a package added to either is lost. Activating them
+(`pixi shell`) is fine; changing them is not. A pixi or conda environment becomes a
 Jupyter kernel only if it has `ipykernel` installed and sits in a world-readable
 directory, which `/depot/cms/private/` directories are not. Environments used
 from Slurm jobs or Dask/Slurm workers must live on `/depot`, the only writable
@@ -92,10 +143,9 @@ volume those workers see.
 
 **Guidance.** Create the project under `/work/users/<username>/` and run `pixi
 init` / `pixi add` there; put it on `/depot` instead when Slurm or Dask/Slurm
-workers must import it. The shared environment `/work/pixi/global/` is
-generated from the platform repository and re-synchronised automatically, so
-edits made in place are overwritten — copy it into a project rather than
-modifying it.
+workers must import it. To build on the shared environment, copy its manifest
+into a project of your own; to change it for everyone, it is generated from
+`pixi/global/pixi.toml` in the platform repository.
 
 **On PATH in a terminal:** `pixi`, `conda`, `rucio`, `kinit`, `gfal-*`,
 `voms-proxy-init`, `xrdcp`/`xrdfs`, `sbatch`, `squeue`. ROOT is deliberately not
@@ -149,6 +199,22 @@ exists and is already built before the cluster starts, so run `pixi install`
 first. That environment has to sit where the workers can read it — `/work` or
 `/depot` for Kubernetes, `/depot` only for Slurm — and to contain every package
 the analysis imports.
+
+Workers inherit none of the session's environment variables either. Reading data
+over XRootD from a worker needs all three of these passed through the cluster's
+`env` option at creation — the session's own `X509_CERT_DIR` is a different path
+and copying it will not work:
+
+    X509_USER_PROXY = /depot/cms/users/<username>/x509up_u<uid>
+    X509_CERT_DIR   = /cvmfs/grid.cern.ch/etc/grid-security/certificates
+    X509_VOMS_DIR   = /cvmfs/grid.cern.ch/etc/grid-security/vomsdir
+
+The proxy itself has to live where the workers can read it, and
+`voms-proxy-init` writes to `/tmp` by default, which no worker sees. `/depot`
+works for either backend; `/work/users/<username>/` is fine for Kubernetes
+workers but invisible to Slurm ones. Export `X509_USER_PROXY` to the chosen path
+before running `voms-proxy-init`. Miss any of the three and the cluster comes up
+fine and then fails on every read.
 
 At most one active Dask Gateway cluster per user per gateway; creating another
 requires stopping the existing one. `Gateway()` with no arguments
