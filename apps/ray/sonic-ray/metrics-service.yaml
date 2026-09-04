@@ -1,12 +1,18 @@
-# The ray-cluster chart creates no Service the AF Prometheus can find: the head
-# Service KubeRay builds carries every Ray port (gcs, client, dashboard, serve),
-# and the `pods` scrape job would try /metrics on all of them. This Service
-# exposes only Ray's Prometheus port, on both the head and the workers, and
-# carries the scrape_metrics label that job keeps.
+# The head Service KubeRay builds carries every Ray port (gcs, client,
+# dashboard, serve), so pointing the AF Prometheus at it would mean scraping
+# /metrics on all of them. This Service exposes only Ray's Prometheus port, on
+# the head and the workers alike, and carries the label the `pods` scrape job
+# keeps on.
 #
-# The app/release/component labels below become the `app`, `release` and
-# `component` Prometheus labels (see apps/monitoring/prometheus/values.yaml),
-# matching how the supersonic release's Triton metrics are labelled.
+# The app/release/component labels become the `app`, `release` and `component`
+# Prometheus labels (see apps/monitoring/prometheus/values.yaml), matching how
+# the supersonic release's Triton metrics are labelled. Ray Serve's own metrics
+# (ray_serve_num_http_requests, replica counts, latencies) arrive on the same
+# endpoint.
+#
+# It selects on the labels the RayService pod templates set rather than on
+# ray.io/cluster: RayService names the cluster it owns <name>-raycluster-<hash>
+# and renames it on every NewCluster upgrade.
 apiVersion: v1
 kind: Service
 metadata:
@@ -20,7 +26,8 @@ spec:
   type: ClusterIP
   clusterIP: None
   selector:
-    ray.io/cluster: sonic-ray
+    app.kubernetes.io/name: ray
+    app.kubernetes.io/instance: sonic-ray
   ports:
     - name: metrics
       port: 8080

@@ -1,0 +1,184 @@
+# Ray Serve inference server approximating the production SuperSONIC release
+# (apps/sonic/supersonic): same nodes, same per-server GPU/CPU/memory shape,
+# same replica range, same model repository, same private-pool entry point.
+#
+#   SuperSONIC                          | this release
+#   ------------------------------------+-------------------------------------
+#   triton (GPU inference servers)      | Serve replicas on the "gpu-group"
+#                                       |   workers, one GPU each
+#   envoy (gRPC entry point, LB svc)    | Ray head, Serve HTTP proxy, LB svc
+#   KEDA ScaledObject, 1 -> 10 replicas | Serve autoscaling 1 -> 10, which
+#                                       |   drives the Ray worker autoscaler
+#   model repository PVC at /models     | same PVC, read-only
+#   KServe v2 over HTTP/gRPC            | KServe v2 over HTTP (JSON only)
+#
+# A RayService rather than the ray-cluster Helm chart because the chart renders
+# a bare RayCluster: it has no field for a Serve application, so a cluster it
+# installs answers no inference requests. RayService owns both.
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: sonic-ray
+  labels:
+    app.kubernetes.io/name: ray
+    app.kubernetes.io/instance: sonic-ray
+spec:
+  # Roll a new cluster in and cut over once its Serve app is healthy, rather
+  # than mutating the running one — the closest thing to the maxUnavailable: 0
+  # rollout the supersonic Envoy Deployment is patched with.
+  upgradeStrategy:
+    type: NewCluster
+
+  serveConfigV2: |
+    applications:
+      - name: sonic
+        import_path: sonic_serve:app
+        route_prefix: /
+        runtime_env:
+          # The Ray image carries CUDA but no inference runtime. ORT dlopen()s
+          # cuDNN by soname, so the matching wheel has to come along; the app
+          # loads both out of site-packages before creating a session.
+          pip:
+            - onnxruntime-gpu==1.29.0
+            - nvidia-cudnn-cu12>=9.0,<10
+          env_vars:
+            MODEL_REPOSITORY: /models
+        deployments:
+          - name: InferenceServer
+            # One replica per GPU, exactly like one Triton pod per GPU. The
+            # GPU is what pins it: a second replica cannot fit on a worker.
+            ray_actor_options:
+              num_gpus: 1
+              num_cpus: 4
+            max_ongoing_requests: 32
+            autoscaling_config:
+              # keda.minReplicaCount / maxReplicaCount of the supersonic release.
+              min_replicas: 1
+              max_replicas: 10
+              target_ongoing_requests: 16
+              # keda.scaleUp/scaleDown.stabilizationWindowSeconds.
+              upscale_delay_s: 30
+              downscale_delay_s: 45
+
+  rayClusterConfig:
+    rayVersion: "2.52.0"
+
+    # Adds worker pods when Serve asks for replicas that do not fit — the
+    # second half of what KEDA does for Triton.
+    enableInTreeAutoscaling: true
+    autoscalerOptions:
+      upscalingMode: Default
+      idleTimeoutSeconds: 45
+      resources:
+        limits: { cpu: 500m, memory: 512Mi }
+        requests: { cpu: 500m, memory: 512Mi }
+
+    headGroupSpec:
+      # Mirrors envoy.service.type: clients reach Serve on the geddes private
+      # pool, never through a public ingress.
+      serviceType: LoadBalancer
+      headService:
+        metadata:
+          annotations:
+            metallb.universe.tf/address-pool: geddes-private-pool
+      rayStartParams:
+        # The head runs the Serve HTTP proxy and nothing else — it holds no
+        # models, exactly like Envoy. num-cpus: 0 keeps replicas off it.
+        num-cpus: "0"
+        dashboard-host: 0.0.0.0
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: ray
+            app.kubernetes.io/instance: sonic-ray
+            app.kubernetes.io/component: head
+        spec:
+          containers:
+            - name: ray-head
+              image: rayproject/ray:2.52.0
+              imagePullPolicy: IfNotPresent
+              env:
+                # Where the Serve app is imported from.
+                - name: PYTHONPATH
+                  value: /serve_app
+              ports:
+                - { name: gcs-server, containerPort: 6379 }
+                - { name: client, containerPort: 10001 }
+                - { name: dashboard, containerPort: 8265 }
+                - { name: metrics, containerPort: 8080 }
+                - { name: serve, containerPort: 8000 }
+              resources:
+                limits: { cpu: "2", memory: 8Gi }
+                requests: { cpu: "2", memory: 8Gi }
+              volumeMounts:
+                - { name: serve-app, mountPath: /serve_app }
+                - { name: log-volume, mountPath: /tmp/ray }
+          volumes:
+            - name: serve-app
+              configMap: { name: sonic-ray-serve-app }
+            - name: log-volume
+              emptyDir: {}
+          # Same placement as supersonic's triton and envoy pods.
+          nodeSelector: { "cms-af-prod": "true" }
+          tolerations:
+            - key: hub.jupyter.org/dedicated
+              operator: Equal
+              value: cms-af
+              effect: NoSchedule
+
+    workerGroupSpecs:
+      - groupName: gpu-group
+        replicas: 1
+        minReplicas: 1
+        maxReplicas: 10
+        template:
+          metadata:
+            labels:
+              app.kubernetes.io/name: ray
+              app.kubernetes.io/instance: sonic-ray
+              app.kubernetes.io/component: worker
+          spec:
+            containers:
+              - name: ray-worker
+                # CUDA base; the runtime_env adds the inference runtime.
+                image: rayproject/ray:2.52.0-gpu
+                imagePullPolicy: IfNotPresent
+                env:
+                  - name: PYTHONPATH
+                    value: /serve_app
+                # Identical to supersonic's triton.resources.
+                resources:
+                  limits:
+                    nvidia.com/gpu: 1
+                    cpu: 16
+                    memory: 16G
+                  requests:
+                    nvidia.com/gpu: 1
+                    cpu: 16
+                    memory: 16G
+                volumeMounts:
+                  - { name: serve-app, mountPath: /serve_app }
+                  - { name: log-volume, mountPath: /tmp/ray }
+                  - {
+                      name: model-repository,
+                      mountPath: /models,
+                      readOnly: true,
+                    }
+            volumes:
+              - name: serve-app
+                configMap: { name: sonic-ray-serve-app }
+              - name: log-volume
+                emptyDir: {}
+              # The claim the SuperSONIC model manager writes
+              # (apps/sonic/model-manager). Read-only here: this release
+              # consumes the repository, it never owns it.
+              - name: model-repository
+                persistentVolumeClaim:
+                  claimName: supersonic-model-repository
+                  readOnly: true
+            nodeSelector: { "cms-af-prod": "true" }
+            tolerations:
+              - key: hub.jupyter.org/dedicated
+                operator: Equal
+                value: cms-af
+                effect: NoSchedule

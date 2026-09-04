@@ -34,10 +34,20 @@ cd "$(git rev-parse --show-toplevel)"
 # with the cluster note in .github/renovate.json5 when it is upgraded.
 KUBE_VERSION="${KUBE_VERSION:-1.29.0}"
 
+# Kinds with no published JSON schema anywhere kubeconform can reach. Without
+# this they fail as "could not find schema" — indistinguishable from a typo'd
+# apiVersion — and the alternative (-ignore-missing-schemas) would silence that
+# error for every kind at once.
+#   RayService: the CRDs-catalog has no ray.io/ directory at all (checked
+#   2026-09-03). apps/ray/sonic-ray/rayservice.yaml is covered by
+#   tests/manifests/test_ray.py instead.
+KUBECONFORM_SKIP="RayService"
+
 # shellcheck disable=SC2054  # commas below are kubeconform list syntax
 KUBECONFORM=(
 	kubeconform
 	-summary
+	-skip "$KUBECONFORM_SKIP"
 	-schema-location default
 	-schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
 )

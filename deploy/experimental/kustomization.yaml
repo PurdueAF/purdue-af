@@ -42,7 +42,7 @@ resources:
   # operator that reconciles it. See apps/ray/README.md.
   - ../../apps/ray/helmrepo.yaml
   - ../../apps/ray/operator/helmrelease.yaml
-  - ../../apps/ray/sonic-ray/helmrelease.yaml
+  - ../../apps/ray/sonic-ray/rayservice.yaml
   - ../../apps/ray/sonic-ray/metrics-service.yaml
 
   - ../../apps/interlink/helmrepo.yaml
@@ -161,9 +161,14 @@ configMapGenerator:
     files:
       - values.yaml=../../apps/ray/operator/values.yaml
 
-  - name: sonic-ray-config
+  - name: sonic-ray-serve-app
+    options:
+      annotations:
+        # application source, not config — never rewrite it, whatever a
+        # future edit happens to contain
+        kustomize.toolkit.fluxcd.io/substitute: disabled
     files:
-      - values.yaml=../../apps/ray/sonic-ray/values.yaml
+      - ../../apps/ray/sonic-ray/serve/sonic_serve.py
 
   - name: interlink-hammer-config
     files:
