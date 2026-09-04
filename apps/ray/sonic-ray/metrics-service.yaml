@@ -1,0 +1,27 @@
+# The ray-cluster chart creates no Service the AF Prometheus can find: the head
+# Service KubeRay builds carries every Ray port (gcs, client, dashboard, serve),
+# and the `pods` scrape job would try /metrics on all of them. This Service
+# exposes only Ray's Prometheus port, on both the head and the workers, and
+# carries the scrape_metrics label that job keeps.
+#
+# The app/release/component labels below become the `app`, `release` and
+# `component` Prometheus labels (see apps/monitoring/prometheus/values.yaml),
+# matching how the supersonic release's Triton metrics are labelled.
+apiVersion: v1
+kind: Service
+metadata:
+  name: sonic-ray-metrics
+  labels:
+    app.kubernetes.io/name: ray
+    app.kubernetes.io/instance: sonic-ray
+    app.kubernetes.io/component: ray
+    scrape_metrics: "true"
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    ray.io/cluster: sonic-ray
+  ports:
+    - name: metrics
+      port: 8080
+      targetPort: 8080

@@ -38,6 +38,13 @@ resources:
   # supersonic-model-manager-auth Secret to exist in the namespace.
   - ../../apps/sonic/model-manager/helmrelease.yaml
 
+  # Ray cluster approximating the supersonic release above, plus the KubeRay
+  # operator that reconciles it. See apps/ray/README.md.
+  - ../../apps/ray/helmrepo.yaml
+  - ../../apps/ray/operator/helmrelease.yaml
+  - ../../apps/ray/sonic-ray/helmrelease.yaml
+  - ../../apps/ray/sonic-ray/metrics-service.yaml
+
   - ../../apps/interlink/helmrepo.yaml
   - ../../apps/interlink/hammer/helmrelease.yaml
   - ../../apps/interlink/gautschi/helmrelease.yaml
@@ -149,6 +156,14 @@ configMapGenerator:
     files:
       - ../../apps/af-utils/slurm-probes/probe.sh
       - ../../apps/af-utils/slurm-probes/serve.py
+
+  - name: kuberay-operator-config
+    files:
+      - values.yaml=../../apps/ray/operator/values.yaml
+
+  - name: sonic-ray-config
+    files:
+      - values.yaml=../../apps/ray/sonic-ray/values.yaml
 
   - name: interlink-hammer-config
     files:
