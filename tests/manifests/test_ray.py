@@ -5,13 +5,14 @@ Two jobs here.
 One: the *parity*. The whole point of sonic-ray is that each worker pod runs
 the same Triton, with the same arguments and resources, over the same model
 repository as `supersonic` — so it serves what supersonic serves. If somebody
-retunes supersonic and forgets Ray, these tests say so.
+retunes supersonic and forgets Ray, these tests say so. Autoscaling is
+deliberately *not* mirrored: there is no KEDA and no Prometheus in this loop.
 
 Two: standing in for kubeconform. ray.io has no schema in the CRDs-catalog, so
 the RayService is skipped there (see .github/workflows/validate-manifests.sh)
-and the wiring inside it — the Serve config, the ConfigMap the app is imported
-from, the resource that pairs a replica with a Triton, the labels the Services
-select on — is checked here instead.
+and the wiring inside it — the Serve config, the ConfigMap the controller is
+imported from, the custom resources the scaling policy is written in, the
+labels the Services select on — is checked here instead.
 """
 
 import ast
@@ -203,44 +204,93 @@ def test_pods_land_where_supersonic_pods_land():
     assert [c["name"] for c in head_pod()["containers"]] == ["ray-head"]
 
 
-# -- one replica, one Triton ------------------------------------------------
+# -- autoscaling is Ray's, and nothing else's ------------------------------
 
 
-def test_replica_is_pinned_to_a_pod_with_a_triton():
-    """The custom resource is what stops a replica landing where no Triton is,
-    and what makes "one more replica" mean "one more GPU"."""
-    declared = worker_group()["rayStartParams"]["resources"]
-    assert "triton" in declared
-    claimed = deployment_config()["ray_actor_options"]["resources"]
-    assert claimed == {"triton": 1}
+def test_no_keda_resources():
+    """Scaling here is the Ray autoscaler's job. A ScaledObject would mean two
+    controllers fighting over the same worker group — and KEDA could not drive
+    it anyway: RayCluster exposes no scale subresource."""
+    for path in sorted(RAY.rglob("*.yaml")):
+        for doc in yaml.safe_load_all(path.read_text()):
+            if not isinstance(doc, dict):
+                continue
+            assert doc.get("kind") != "ScaledObject", path
+            assert "keda.sh" not in str(doc.get("apiVersion", "")), path
 
 
-def test_replica_range_matches_keda():
-    keda = supersonic_values()["keda"]
-    autoscaling = deployment_config()["autoscaling_config"]
-    assert autoscaling["min_replicas"] == keda["minReplicaCount"]
-    assert autoscaling["max_replicas"] == keda["maxReplicaCount"]
-    # Serve asks for replicas; the Ray autoscaler has to be able to add pods.
+def test_controller_drives_the_ray_autoscaler():
+    """request_resources() is the Ray-native "make room for this" API, and the
+    triton resource is what makes a bundle mean a GPU pod with a Triton in it."""
+    source = SERVE_APP.read_text()
+    assert "from ray.autoscaler.sdk import request_resources" in source
+    assert "nv_inference_pending_request_count" in source
     assert cluster()["enableInTreeAutoscaling"] is True
-    assert worker_group()["minReplicas"] == keda["minReplicaCount"]
-    assert worker_group()["maxReplicas"] == keda["maxReplicaCount"]
+
+    # Demand is expressed in the resource the workers advertise.
+    assert "triton" in worker_group()["rayStartParams"]["resources"]
 
 
-def test_proxy_talks_to_its_own_pods_triton():
-    endpoint = serve_app()["runtime_env"]["env_vars"]["TRITON_HTTP"]
-    # Anything but loopback would break the one-replica-one-Triton pairing.
-    assert "127.0.0.1:8000" in endpoint
-    triton_http = {
-        p["name"]: p["containerPort"]
-        for p in container(worker_pod(), "triton")["ports"]
-    }
-    assert triton_http["http"] == 8000
+def test_controller_runs_on_the_head_and_holds_no_gpu():
+    """A controller that landed on a worker would pin a GPU pod and stop the
+    autoscaler ever reclaiming it."""
+    options = deployment_config()["ray_actor_options"]
+    assert options["num_cpus"] == 0
+    assert options["resources"] == {"controller": 1}
+    assert "num_gpus" not in options
+    # Only the head advertises it.
+    assert "controller" in cluster()["headGroupSpec"]["rayStartParams"]["resources"]
+    assert "controller" not in worker_group()["rayStartParams"]["resources"]
+    assert deployment_config()["num_replicas"] == 1
 
 
-# -- the Serve app gets to the replicas ------------------------------------
+def test_workers_run_no_ray_work():
+    """The autoscaler reclaims idle nodes. An actor on a worker — a Serve
+    replica, or an HTTP proxy — would make every worker permanently busy."""
+    serve_config = yaml.safe_load(rayservice()["spec"]["serveConfigV2"])
+    assert serve_config["proxy_location"] == "HeadOnly"
+    # No app to import, so nothing can be scheduled there by accident either.
+    ray_worker = container(worker_pod(), "ray-worker")
+    assert "volumeMounts" in ray_worker
+    assert all(m["name"] != "serve-app" for m in ray_worker["volumeMounts"])
 
 
-def test_serve_app_is_mounted_and_importable():
+def test_scaling_policy_is_declared_where_it_can_be_retuned():
+    """user_config reaches reconfigure() without restarting the replica."""
+    policy = deployment_config()["user_config"]
+    assert policy["min_servers"] >= 1
+    assert policy["max_servers"] > policy["min_servers"]
+    assert policy["target_pending_per_server"] > 0
+    # Releasing a pod kills a Triton; a lull must not look like the end.
+    assert policy["downscale_delay_s"] >= 60
+    assert policy["control_interval_s"] < policy["downscale_delay_s"]
+
+    source = SERVE_APP.read_text()
+    assert "def reconfigure" in source
+    for key in policy:
+        assert key in source, f"user_config key {key} is not read by the controller"
+
+
+def test_worker_group_bounds_contain_the_policy():
+    """The autoscaler cannot honour a request outside the group's own bounds."""
+    policy = deployment_config()["user_config"]
+    group = worker_group()
+    assert group["minReplicas"] <= policy["min_servers"]
+    assert group["maxReplicas"] >= policy["max_servers"]
+
+
+def test_triton_is_given_time_to_drain():
+    """Scale-down deletes the pod; Triton's --exit-timeout-secs is worth
+    nothing if the kubelet does not wait for it."""
+    triton_args = container(worker_pod(), "triton")["args"][0]
+    exit_timeout = int(triton_args.split("--exit-timeout-secs=")[1].split()[0])
+    assert worker_pod()["terminationGracePeriodSeconds"] > exit_timeout
+
+
+# -- the controller gets to the head ---------------------------------------
+
+
+def test_controller_is_mounted_and_importable():
     """import_path resolves only if the ConfigMap lands on PYTHONPATH."""
     generated = {cm["name"]: cm for cm in load(EXPERIMENTAL)["configMapGenerator"]}
     assert generated["sonic-ray-serve-app"]["files"] == [
@@ -265,37 +315,12 @@ def test_serve_app_is_mounted_and_importable():
         n.name for n in module.body if isinstance(n, ast.ClassDef)
     }
 
-    # The controller imports the app on the head; replicas import it on the
-    # workers. Both need the mount, and both need it on the path.
-    for pod, name in ((head_pod(), "ray-head"), (worker_pod(), "ray-worker")):
-        volume = next(v for v in pod["volumes"] if v["name"] == "serve-app")
-        assert volume["configMap"]["name"] == "sonic-ray-serve-app"
-        assert (
-            env_of(pod, name, "PYTHONPATH")
-            == mount_of(pod, name, "serve-app")["mountPath"]
-        )
-
-
-def test_health_check_tolerates_a_cold_triton():
-    """Triton binds its HTTP endpoint only after the initial --load-model pass.
-    A health check that failed during that window would have Serve restart the
-    replica on a loop while the repository was still loading."""
-    source = SERVE_APP.read_text()
-    assert "STARTUP_GRACE_S" in source
-    assert "_was_healthy" in source
-    # /v2/health/ready stays false for as long as a model is loading; liveness
-    # is the question Serve should be asking.
-    assert "/v2/health/live" in source
-
-
-def test_proxy_forwards_rather_than_reimplements():
-    """Parity depends on the proxy being transparent: no endpoint allowlist, no
-    body rewriting, and the binary tensor extension's header left alone."""
-    source = SERVE_APP.read_text()
-    assert "request.method" in source and "request.url.path" in source
-    assert "await request.body()" in source
-    # Hop-by-hop headers must be stripped, everything else forwarded.
-    assert "transfer-encoding" in source and "content-length" in source
+    volume = next(v for v in head_pod()["volumes"] if v["name"] == "serve-app")
+    assert volume["configMap"]["name"] == "sonic-ray-serve-app"
+    assert (
+        env_of(head_pod(), "ray-head", "PYTHONPATH")
+        == mount_of(head_pod(), "ray-head", "serve-app")["mountPath"]
+    )
 
 
 # -- services ---------------------------------------------------------------
@@ -308,24 +333,23 @@ def test_grpc_entry_point_is_a_private_pool_load_balancer():
     annotations = svc["metadata"]["annotations"]
     assert annotations["metallb.universe.tf/address-pool"] == "geddes-private-pool"
     ports = {p["name"]: p["port"] for p in svc["spec"]["ports"]}
-    # gRPC is what CMSSW's SONIC clients speak.
+    # gRPC is what CMSSW's SONIC clients speak, and nothing proxies it.
     assert ports["grpc"] == 8001
     assert ports["http"] == 8000
     # The head runs no Triton.
     assert svc["spec"]["selector"]["app.kubernetes.io/component"] == "worker"
 
 
-def test_head_service_is_the_serve_entry_point():
+def test_head_is_not_exposed():
+    """The dashboard has no auth, and the controller's status endpoint is not
+    something to reach from outside. Inference has its own address."""
     head = cluster()["headGroupSpec"]
-    assert head["serviceType"] == "LoadBalancer"
-    annotations = head["headService"]["metadata"]["annotations"]
-    assert annotations["metallb.universe.tf/address-pool"] == "geddes-private-pool"
+    assert head["serviceType"] == "ClusterIP"
+    assert "headService" not in head
     ports = {
         p["name"]: p["containerPort"]
         for p in container(head_pod(), "ray-head")["ports"]
     }
-    # Without an explicit serve port the head Service cannot reach the proxy.
-    assert ports["serve"] == 8000
     assert ports["metrics"] == 8080
 
 

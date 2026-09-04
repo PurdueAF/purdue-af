@@ -1,25 +1,26 @@
-# Triton on Ray: the production SuperSONIC serving stack, with Ray doing what
-# Envoy and KEDA do in apps/sonic/supersonic.
+# Triton on Ray: the production SuperSONIC serving stack, scheduled and
+# autoscaled by KubeRay instead of by Envoy and KEDA.
 #
 # Every worker pod runs the same Triton image, with the same arguments, the
-# same resources and the same model repository as the supersonic release — so
-# feature parity is not approximated, it is the same server. Ray owns the pods
-# and scales them; a Serve replica sits beside each Triton and proxies HTTP to
-# it, which is what ties "one more replica" to "one more Triton".
+# same resources and the same model repository as apps/sonic/supersonic — so
+# feature parity is not approximated, it is the same server. What is not
+# copied is the autoscaling: there is no KEDA here and no Prometheus in the
+# loop. The Ray autoscaler owns the worker group, and a single controller
+# replica on the head turns Triton's own queue depth into Ray resource demand
+# (apps/ray/sonic-ray/serve/sonic_serve.py).
 #
 #   SuperSONIC                          | this release
 #   ------------------------------------+-------------------------------------
 #   triton (GPU inference servers)      | the triton container in each
 #                                       |   gpu-group worker pod, unchanged
-#   envoy (entry point, LB svc)         | sonic-ray-triton Service (gRPC, HTTP)
-#                                       |   and the Serve proxy for HTTP
-#   KEDA ScaledObject, 1 -> 10 replicas | Serve autoscaling 1 -> 10, driving
-#                                       |   the Ray worker autoscaler
+#   envoy (entry point, LB svc)         | sonic-ray-triton Service
+#   KEDA ScaledObject + Prometheus      | Ray autoscaler, driven by
+#                                       |   request_resources() from Triton's
+#                                       |   own nv_inference_pending_request_count
 #   model repository PVC at /models     | same PVC, read-only
 #
 # A RayService rather than the ray-cluster Helm chart: the chart renders a bare
-# RayCluster with no Serve application, and it is the Serve application that
-# makes replica count and Triton count the same number.
+# RayCluster with nowhere to declare the controller that does the scaling.
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
@@ -28,67 +29,68 @@ metadata:
     app.kubernetes.io/name: ray
     app.kubernetes.io/instance: sonic-ray
 spec:
-  # Roll a new cluster in and cut over once its Serve app is healthy, rather
-  # than mutating the running one — the closest thing to the maxUnavailable: 0
-  # rollout the supersonic Envoy Deployment is patched with.
+  # Roll a new cluster in and cut over once it is healthy, rather than mutating
+  # the running one. It costs one extra GPU for the length of an upgrade; if
+  # none is free the new cluster simply waits and the old one keeps serving.
   upgradeStrategy:
     type: NewCluster
 
   serveConfigV2: |
+    # Nothing routes inference through Serve — gRPC goes straight to the Triton
+    # containers — so the proxy belongs only where the controller runs.
+    proxy_location: HeadOnly
     applications:
       - name: sonic
         import_path: sonic_serve:app
         route_prefix: /
-        runtime_env:
-          env_vars:
-            # Same pod, same network namespace as the Triton container.
-            TRITON_HTTP: http://127.0.0.1:8000
         deployments:
-          - name: TritonProxy
+          - name: TritonAutoscaler
+            num_replicas: 1
             ray_actor_options:
-              num_cpus: 0.5
-              # Each worker advertises exactly one "triton", so a replica can
-              # only land on a pod that has a Triton — and one more replica
-              # means one more pod, which brings one more Triton.
+              # No CPU reservation and no GPU: it scrapes and decides. The
+              # controller resource pins it to the head, where nothing else
+              # runs, so it can never occupy a GPU pod.
+              num_cpus: 0
               resources:
-                triton: 1
-            # Triton does its own batching and queueing; the proxy must not
-            # become the queue.
-            max_ongoing_requests: 256
-            autoscaling_config:
-              # keda.minReplicaCount / maxReplicaCount of the supersonic release.
-              min_replicas: 1
-              max_replicas: 10
-              target_ongoing_requests: 64
-              # keda.scaleUp/scaleDown.stabilizationWindowSeconds.
-              upscale_delay_s: 30
-              downscale_delay_s: 45
+                controller: 1
+            # The scaling policy. Changing it is a config update, not a
+            # restart — Serve calls reconfigure() with this.
+            user_config:
+              min_servers: 1
+              max_servers: 10
+              # Queued-or-executing requests per Triton before another is asked
+              # for; Ray Serve's target_ongoing_requests, in Triton's currency.
+              target_pending_per_server: 16
+              control_interval_s: 10
+              # Releasing a pod kills the Triton in it, so a lull between
+              # batches must not be mistaken for the end of the workload.
+              downscale_delay_s: 300
 
   rayClusterConfig:
     rayVersion: "2.52.0"
 
-    # Adds worker pods when Serve asks for replicas that do not fit — the
-    # second half of what KEDA does for Triton.
+    # The controller's request_resources() calls land here.
     enableInTreeAutoscaling: true
     autoscalerOptions:
       upscalingMode: Default
-      idleTimeoutSeconds: 45
+      # Only ever reclaims pods the controller has stopped asking for: nothing
+      # else in the cluster wants the triton resource, so an unwanted worker
+      # goes idle immediately. The delay is the second half of downscale_delay_s.
+      idleTimeoutSeconds: 60
       resources:
         limits: { cpu: 500m, memory: 512Mi }
         requests: { cpu: 500m, memory: 512Mi }
 
     headGroupSpec:
-      # The Serve HTTP entry point. Clients on the geddes private pool, never a
-      # public ingress — same as envoy.service.type in the supersonic release.
-      serviceType: LoadBalancer
-      headService:
-        metadata:
-          annotations:
-            metallb.universe.tf/address-pool: geddes-private-pool
+      # ClusterIP: the head serves the dashboard and the controller's status
+      # endpoint, neither of which belongs on a load balancer. Inference has
+      # its own entry point in triton-service.yaml.
+      serviceType: ClusterIP
       rayStartParams:
-        # The head runs the Serve HTTP proxy and nothing else — no Triton, no
-        # replicas, exactly like Envoy. num-cpus: 0 keeps replicas off it.
+        # No Ray work of any kind belongs on the head — except the controller,
+        # which asks for the resource below instead of for CPU.
         num-cpus: "0"
+        resources: '"{\"controller\": 1}"'
         dashboard-host: 0.0.0.0
       template:
         metadata:
@@ -102,7 +104,7 @@ spec:
               image: rayproject/ray:2.52.0
               imagePullPolicy: IfNotPresent
               env:
-                # Where the Serve app is imported from.
+                # Where the controller is imported from.
                 - name: PYTHONPATH
                   value: /serve_app
               ports:
@@ -136,8 +138,9 @@ spec:
         minReplicas: 1
         maxReplicas: 10
         rayStartParams:
-          # The resource the Serve replica claims. It is what pairs one replica
-          # with one Triton, and what the Ray autoscaler provisions pods for.
+          # One "triton" per pod is the whole scaling vocabulary: the
+          # controller asks for N of them, the autoscaler runs N pods, and each
+          # pod carries one Triton on one GPU.
           resources: '"{\"triton\": 1}"'
         template:
           metadata:
@@ -146,20 +149,22 @@ spec:
               app.kubernetes.io/instance: sonic-ray
               app.kubernetes.io/component: worker
           spec:
+            # Triton drains in-flight requests on SIGTERM (--exit-timeout-secs
+            # below); the kubelet must wait for it rather than killing the pod
+            # out from under a client.
+            terminationGracePeriodSeconds: 90
             containers:
-              # The Ray side of the pod: the Serve replica and the raylet. It
-              # holds no models and needs no GPU — it forwards over loopback.
+              # The Ray side of the pod: a raylet advertising the triton
+              # resource, and nothing else. It runs no actors, which is exactly
+              # what lets the autoscaler reclaim this pod when the controller
+              # stops asking for it.
               - name: ray-worker
                 image: rayproject/ray:2.52.0
                 imagePullPolicy: IfNotPresent
-                env:
-                  - name: PYTHONPATH
-                    value: /serve_app
                 resources:
                   limits: { cpu: "1", memory: 2Gi }
                   requests: { cpu: "1", memory: 2Gi }
                 volumeMounts:
-                  - { name: serve-app, mountPath: /serve_app }
                   - { name: log-volume, mountPath: /tmp/ray }
 
               # The inference server itself — image, arguments and resources
@@ -213,8 +218,6 @@ spec:
                       readOnly: true,
                     }
             volumes:
-              - name: serve-app
-                configMap: { name: sonic-ray-serve-app }
               - name: log-volume
                 emptyDir: {}
               # The claim the SuperSONIC model manager writes

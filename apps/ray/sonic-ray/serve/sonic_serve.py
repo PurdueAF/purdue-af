@@ -1,153 +1,186 @@
-"""Ray Serve front door for the Triton server co-located in each worker pod.
+"""Ray-native autoscaler for the Triton servers riding in the Ray worker pods.
 
-Mounted into the Ray pods from a ConfigMap and imported by Ray Serve as
+Mounted into the Ray head pod from a ConfigMap and imported by Ray Serve as
 ``sonic_serve:app`` — see apps/ray/sonic-ray/rayservice.yaml.
 
-Every worker pod runs the production Triton image beside the Ray container, so
-this is a *transparent* HTTP reverse proxy rather than a reimplementation of
-anything: it forwards the method, path, query, headers and body byte-for-byte
-to Triton on localhost and returns the response the same way. Whatever Triton
-serves, this serves — every backend, every endpoint (``/v2/...``, model
-control, statistics, tracing, logging), and the binary tensor extension, whose
-``Inference-Header-Content-Length`` header rides through untouched.
+Ray's autoscaler grows and shrinks the cluster from *Ray* resource demand, and
+Triton is invisible to it: the inference traffic arrives over gRPC straight at
+the Triton containers, never touching a Ray task or actor, so left alone the
+worker group would sit at its floor no matter the load. This turns Triton's own
+view of its queues into exactly that Ray demand::
 
-Two things it is deliberately *not*:
+    pending  = Σ nv_inference_pending_request_count over every live Triton
+    desired  = clamp(ceil(pending / target_pending_per_server), min, max)
+    request_resources(bundles=[{"triton": 1}] * desired)
 
-- **Not the gRPC path.** CMSSW's SONIC clients speak gRPC, and Ray Serve's gRPC
-  ingress routes by an ``application`` metadata key that a stock Triton client
-  never sends. gRPC therefore reaches the Triton containers directly through
-  the sonic-ray-triton Service; only HTTP comes through here.
-- **Not a load balancer of its own.** Serve routes each request to a replica
-  and the replica talks to *its own* pod's Triton, which is what makes replica
-  count and Triton count the same number — and what lets Serve's autoscaler add
-  worker pods, each of which brings a Triton with it.
+``request_resources`` is the Ray autoscaler's public "make room for this" API;
+each worker advertises ``triton: 1``, so a bundle is a GPU pod with a Triton in
+it, and the autoscaler adds and removes pods to match. Nothing else in the
+cluster asks for that resource, which is what lets nodes above the floor go
+idle and be reclaimed.
+
+Scaling up is immediate. Scaling down waits for ``downscale_delay_s`` of
+sustained low demand, because the alternative is releasing a pod — and killing
+the Triton inside it — during a lull between batches.
+
+Tunables live in the deployment's ``user_config`` in the RayService, so
+retuning the policy is a config change rather than a restart. ``GET /`` on the
+Serve port returns the last decision and what it was based on.
 """
 
 from __future__ import annotations
 
 import logging
-import os
+import math
+import threading
 import time
+import urllib.error
+import urllib.request
+from typing import Any
 
-import aiohttp
+import ray
 from ray import serve
-from starlette.requests import Request
-from starlette.responses import Response
+from ray.autoscaler.sdk import request_resources
 
 logger = logging.getLogger("ray.serve")
 
-TRITON_HTTP = os.environ.get("TRITON_HTTP", "http://127.0.0.1:8000")
+# The Ray resource a worker advertises for the Triton it carries.
+TRITON_RESOURCE = "triton"
+# Triton's Prometheus gauge of requests queued or executing, per model.
+PENDING_METRIC = "nv_inference_pending_request_count"
 
-# Triton binds its HTTP endpoint only after the initial --load-model pass, so a
-# replica that starts beside a cold Triton has nothing to health-check for as
-# long as the repository takes to load. Failing during that window would have
-# Serve restart the replica, which restarts nothing that matters and hides the
-# real state behind a crash loop.
-STARTUP_GRACE_S = float(os.environ.get("TRITON_STARTUP_GRACE_S", 900))
-
-# Headers that describe *this* connection rather than the message, plus the
-# two whose values are recomputed by whoever sends the next message.
-HOP_BY_HOP = frozenset(
-    {
-        "connection",
-        "keep-alive",
-        "proxy-authenticate",
-        "proxy-authorization",
-        "te",
-        "trailer",
-        "trailers",
-        "transfer-encoding",
-        "upgrade",
-        "content-length",
-        "host",
-    }
-)
+DEFAULTS: dict[str, Any] = {
+    "min_servers": 1,
+    "max_servers": 10,
+    # Ray Serve's target_ongoing_requests, in Triton's currency.
+    "target_pending_per_server": 16,
+    "control_interval_s": 10.0,
+    "downscale_delay_s": 300.0,
+    "metrics_port": 8002,
+    "scrape_timeout_s": 3.0,
+}
 
 
-def _forwardable(headers) -> dict[str, str]:
-    return {k: v for k, v in headers.items() if k.lower() not in HOP_BY_HOP}
+def _sum_pending(metrics_text: str) -> float:
+    """Total queued-or-executing requests in one Triton's /metrics output."""
+    total = 0.0
+    for line in metrics_text.splitlines():
+        if not line.startswith(PENDING_METRIC):
+            continue
+        # nv_inference_pending_request_count{model="x",version="1"} 3
+        _, _, value = line.rpartition(" ")
+        try:
+            total += float(value)
+        except ValueError:  # a HELP/TYPE line for the same metric name
+            continue
+    return total
 
 
 @serve.deployment
-class TritonProxy:
-    """One replica per worker pod, fronting that pod's Triton.
+class TritonAutoscaler:
+    """One replica, pinned to the head by the ``controller`` resource.
 
-    The pairing is enforced by the ``triton`` custom resource: each worker
-    advertises exactly one, and each replica claims one, so a replica can only
-    ever be placed on a pod that has a Triton to talk to — and asking for
-    another replica is what makes the Ray autoscaler add another pod.
+    It holds no GPU and serves no inference — the Triton containers do that,
+    and clients reach them through the sonic-ray-triton Service directly.
     """
 
-    def __init__(self, endpoint: str = TRITON_HTTP, timeout_s: float = 300.0):
-        self._endpoint = endpoint.rstrip("/")
-        self._timeout = aiohttp.ClientTimeout(total=timeout_s)
-        self._session: aiohttp.ClientSession | None = None
-        self._deadline = time.monotonic() + STARTUP_GRACE_S
-        self._was_healthy = False
-        logger.info("proxying to %s", self._endpoint)
+    def __init__(self) -> None:
+        self._config = dict(DEFAULTS)
+        self._lock = threading.Lock()
+        self._status: dict[str, Any] = {"state": "starting"}
+        self._low_since: float | None = None
+        self._requested = int(DEFAULTS["min_servers"])
+        self._stop = threading.Event()
+        self._thread = threading.Thread(
+            target=self._run, name="triton-autoscaler", daemon=True
+        )
+        self._thread.start()
 
-    async def _client(self) -> aiohttp.ClientSession:
-        # Built on first use: a ClientSession binds to the running event loop,
-        # which does not exist yet while the replica is being constructed.
-        if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(
-                timeout=self._timeout,
-                # Triton sets Content-Encoding itself when asked to; decoding
-                # here would leave the header describing a body we changed.
-                auto_decompress=False,
-            )
-        return self._session
+    def reconfigure(self, config: dict[str, Any]) -> None:
+        """Serve calls this with user_config, at startup and on every change."""
+        with self._lock:
+            self._config = {**DEFAULTS, **(config or {})}
+        logger.info("autoscaler config: %s", self._config)
 
-    async def __call__(self, request: Request) -> Response:
-        url = f"{self._endpoint}{request.url.path}"
-        if request.url.query:
-            url = f"{url}?{request.url.query}"
+    async def __call__(self, request) -> dict[str, Any]:  # noqa: ARG002 - status only
+        with self._lock:
+            return {"config": dict(self._config), **self._status}
 
-        session = await self._client()
+    # -- control loop -------------------------------------------------------
+
+    def _run(self) -> None:
+        while not self._stop.wait(self._snapshot()["control_interval_s"]):
+            try:
+                self._tick()
+            except Exception:  # noqa: BLE001 - a bad tick must not end the loop
+                logger.exception("autoscaler tick failed")
+
+    def _snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            return dict(self._config)
+
+    def _servers(self) -> list[str]:
+        """Addresses of the live workers carrying a Triton."""
+        return [
+            node["NodeManagerAddress"]
+            for node in ray.nodes()
+            if node.get("Alive") and node.get("Resources", {}).get(TRITON_RESOURCE)
+        ]
+
+    def _pending(self, address: str, config: dict[str, Any]) -> float | None:
+        url = f"http://{address}:{int(config['metrics_port'])}/metrics"
         try:
-            async with session.request(
-                request.method,
-                url,
-                headers=_forwardable(request.headers),
-                data=await request.body(),
-            ) as upstream:
-                body = await upstream.read()
-                return Response(
-                    content=body,
-                    status_code=upstream.status,
-                    headers=_forwardable(upstream.headers),
-                )
-        except aiohttp.ClientError as exc:
-            # The local Triton is down or still loading. 503 tells the client
-            # to retry elsewhere; Serve's health check decides the replica's
-            # fate separately.
-            logger.warning("upstream %s failed: %s", url, exc)
-            return Response(content=f"Triton unreachable: {exc}", status_code=503)
+            with urllib.request.urlopen(url, timeout=config["scrape_timeout_s"]) as r:
+                return _sum_pending(r.read().decode("utf-8", "replace"))
+        except (urllib.error.URLError, OSError, TimeoutError) as exc:
+            # Still starting, or on its way out. Counted as a server (it holds a
+            # GPU either way) but contributing no load.
+            logger.debug("no metrics from %s: %s", address, exc)
+            return None
 
-    async def check_health(self) -> None:
-        """Serve restarts the replica if this raises.
+    def _tick(self) -> None:
+        config = self._snapshot()
+        servers = self._servers()
+        samples = [self._pending(address, config) for address in servers]
+        reachable = [s for s in samples if s is not None]
+        pending = sum(reachable)
 
-        ``/v2/health/live`` and not ``/v2/health/ready``: a Triton busy loading
-        a large model is not ready, but it is alive, and killing replicas for
-        being slow to warm up is how a rollout turns into a loop. Traffic is
-        gated by the pod's own readiness probe instead, which watches
-        ``/v2/health/ready`` on the same container.
+        target = max(1.0, float(config["target_pending_per_server"]))
+        desired = math.ceil(pending / target) if pending else int(config["min_servers"])
+        desired = max(
+            int(config["min_servers"]), min(int(config["max_servers"]), desired)
+        )
 
-        Until the first success, failures are logged and tolerated — see
-        STARTUP_GRACE_S. Afterwards a dead Triton is a dead replica, and Serve
-        should replace it.
-        """
-        try:
-            session = await self._client()
-            async with session.get(f"{self._endpoint}/v2/health/live") as response:
-                if response.status != 200:
-                    raise RuntimeError(f"Triton liveness returned {response.status}")
-        except Exception as exc:  # noqa: BLE001 - re-raised below once warmed up
-            if self._was_healthy or time.monotonic() > self._deadline:
-                raise
-            logger.info("Triton not up yet (%s); still within startup grace", exc)
-            return
-        self._was_healthy = True
+        now = time.monotonic()
+        if desired > self._requested:
+            # A queue is already forming; waiting makes it worse.
+            self._apply(desired)
+            self._low_since = None
+        elif desired < self._requested:
+            self._low_since = self._low_since or now
+            if now - self._low_since >= config["downscale_delay_s"]:
+                self._apply(desired)
+                self._low_since = None
+        else:
+            self._low_since = None
+
+        with self._lock:
+            self._status = {
+                "state": "running",
+                "servers": len(servers),
+                "servers_reporting": len(reachable),
+                "pending_requests": pending,
+                "requested_servers": self._requested,
+                "desired_servers": desired,
+                "downscale_pending_for_s": (
+                    round(now - self._low_since, 1) if self._low_since else 0.0
+                ),
+            }
+
+    def _apply(self, desired: int) -> None:
+        logger.info("requesting %d Triton server(s) (was %d)", desired, self._requested)
+        request_resources(bundles=[{TRITON_RESOURCE: 1}] * desired)
+        self._requested = desired
 
 
-app = TritonProxy.bind()
+app = TritonAutoscaler.bind()

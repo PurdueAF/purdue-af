@@ -2,11 +2,13 @@
 # Envoy Service: one address on the geddes private pool, fronting every Triton,
 # with kube-proxy doing the round-robin Envoy's loadBalancerPolicy does.
 #
-# gRPC has to come this way. CMSSW's SONIC clients speak Triton's gRPC service,
-# and Ray Serve's gRPC ingress routes on an `application` metadata key a stock
-# Triton client never sends — so gRPC reaches the Triton containers directly
-# rather than through Serve. HTTP works here too; send it to the Ray head's
-# Serve port instead when you want Serve's autoscaler to see the traffic.
+# The only way in, for gRPC and HTTP alike: nothing proxies inference through
+# Ray. CMSSW's SONIC clients point at :8001 here exactly as they point at the
+# supersonic release's Envoy address.
+#
+# Traffic bypassing Ray is also why the worker group cannot be autoscaled on
+# Ray's own request metrics — the controller in serve/sonic_serve.py reads
+# Triton's queue depth instead.
 #
 # It selects worker pods only: the head runs no Triton.
 apiVersion: v1
