@@ -38,12 +38,14 @@ resources:
   # supersonic-model-manager-auth Secret to exist in the namespace.
   - ../../apps/sonic/model-manager/helmrelease.yaml
 
-  # Ray cluster approximating the supersonic release above, plus the KubeRay
-  # operator that reconciles it. See apps/ray/README.md.
+  # The supersonic release's Triton, run on Ray instead of behind Envoy and
+  # KEDA, plus the KubeRay operator that reconciles it. Mounts the same model
+  # repository claim as the release above. See apps/ray/README.md.
   - ../../apps/ray/helmrepo.yaml
   - ../../apps/ray/operator/helmrelease.yaml
   - ../../apps/ray/sonic-ray/rayservice.yaml
-  - ../../apps/ray/sonic-ray/metrics-service.yaml
+  - ../../apps/ray/sonic-ray/triton-service.yaml
+  - ../../apps/ray/sonic-ray/metrics-services.yaml
 
   - ../../apps/interlink/helmrepo.yaml
   - ../../apps/interlink/hammer/helmrelease.yaml

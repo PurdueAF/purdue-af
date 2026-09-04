@@ -1,0 +1,34 @@
+# The inference entry point, and the direct analogue of the supersonic release's
+# Envoy Service: one address on the geddes private pool, fronting every Triton,
+# with kube-proxy doing the round-robin Envoy's loadBalancerPolicy does.
+#
+# gRPC has to come this way. CMSSW's SONIC clients speak Triton's gRPC service,
+# and Ray Serve's gRPC ingress routes on an `application` metadata key a stock
+# Triton client never sends — so gRPC reaches the Triton containers directly
+# rather than through Serve. HTTP works here too; send it to the Ray head's
+# Serve port instead when you want Serve's autoscaler to see the traffic.
+#
+# It selects worker pods only: the head runs no Triton.
+apiVersion: v1
+kind: Service
+metadata:
+  name: sonic-ray-triton
+  labels:
+    app.kubernetes.io/name: ray
+    app.kubernetes.io/instance: sonic-ray
+    app.kubernetes.io/component: triton
+  annotations:
+    metallb.universe.tf/address-pool: geddes-private-pool
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: ray
+    app.kubernetes.io/instance: sonic-ray
+    app.kubernetes.io/component: worker
+  ports:
+    - name: grpc
+      port: 8001
+      targetPort: grpc
+    - name: http
+      port: 8000
+      targetPort: http

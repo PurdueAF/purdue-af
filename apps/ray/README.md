@@ -1,108 +1,103 @@
 # Ray on the Analysis Facility
 
-A Ray Serve inference server approximating the production SuperSONIC release
-(`apps/sonic/supersonic`) as closely as Ray can, so the two can be compared on
-the same hardware — same nodes, same GPU shape, same replica range, same model
-repository, same private-pool entry point.
+The production SuperSONIC serving stack, run on Ray: every worker pod runs the
+**same Triton** — same image, same arguments, same resources, same model
+repository as `apps/sonic/supersonic` — with Ray doing what Envoy and KEDA do
+there.
+
+Feature parity is not approximated here. It is the same server, so every
+backend (ONNX, TensorRT, PyTorch, TensorFlow, Python, ensembles), every
+endpoint, gRPC and HTTP alike, and the binary tensor extension all work exactly
+as they do in the supersonic release.
 
 | path | what it is |
 | --- | --- |
 | `helmrepo.yaml` | `HelmRepository` for the KubeRay charts |
 | `operator/` | `kuberay-operator` 1.7.0 — the `ray.io` CRDs and the controller. Namespaced (`singleNamespaceInstall: true`), so both the watch and the RBAC stay in `cms`. |
-| `sonic-ray/rayservice.yaml` | the `RayService`: the Ray cluster *and* the Serve application it runs |
-| `sonic-ray/serve/sonic_serve.py` | the server itself, mounted into the pods from a ConfigMap |
-| `sonic-ray/metrics-service.yaml` | the Service the AF Prometheus scrapes |
+| `sonic-ray/rayservice.yaml` | the `RayService`: the Ray cluster, the Triton container in every worker pod, and the Serve app that pairs them |
+| `sonic-ray/serve/sonic_serve.py` | the Serve replica — a transparent HTTP proxy to the Triton beside it |
+| `sonic-ray/triton-service.yaml` | the inference entry point (gRPC + HTTP) on the private pool |
+| `sonic-ray/metrics-services.yaml` | what the AF Prometheus scrapes |
 
-A `RayService` rather than the upstream `ray-cluster` chart because that chart
-renders a bare `RayCluster`: it has no field for a Serve application, so a
-cluster it installs answers no inference requests. RayService owns both, and
-rolls a new cluster in on upgrade (`upgradeStrategy: NewCluster`) rather than
-mutating the running one.
-
-## What it serves
-
-`sonic_serve.py` speaks the **KServe v2 REST protocol** (the Open Inference
-Protocol) — the same protocol Triton serves in the SuperSONIC release — over
-the **same Triton model repository**, mounted read-only from
-`supersonic-model-repository`:
+## Shape
 
 ```
-GET  /v2                       server metadata, incl. the active ORT providers
-GET  /v2/health/live
-GET  /v2/health/ready
-GET  /v2/repository/index      what the repository holds, and why anything is not served
-GET  /v2/models/{name}         model metadata (inputs/outputs, from the ONNX graph)
-GET  /v2/models/{name}/ready
-POST /v2/models/{name}/infer   inference
+                  sonic-ray-triton (LoadBalancer, private pool)
+                     │  gRPC :8001, HTTP :8000
+                     ▼
+  ┌──────────────────────────────────────────┐   × 1…10 pods
+  │ worker pod                               │
+  │   triton      1 GPU, 16 CPU, 16G, /models│
+  │   ray-worker  Serve replica ──loopback──▶│
+  └──────────────────────────────────────────┘
+                     ▲
+                     │  HTTP :8000 (Serve)
+              sonic-ray-head-svc (LoadBalancer, private pool)
 ```
 
-The repository layout is Triton's (`<repo>/<model>/<version>/model.onnx`,
-`config.pbtxt` optional) but the backend is **ONNX Runtime, not Triton**. Two
-consequences, both deliberate:
+A `RayService` rather than the upstream `ray-cluster` chart: that chart renders
+a bare `RayCluster` with no Serve application, and it is the Serve application
+that ties replica count to Triton count.
 
-- **ONNX only.** TensorRT plans, SavedModels and TorchScript are listed by
-  `/v2/repository/index` as `UNAVAILABLE` with a reason rather than served.
-  Serving those would mean embedding Triton in the Ray replicas, which would
-  make the comparison meaningless — the point is Ray Serve's own serving stack.
-- **JSON tensors only.** Triton's binary tensor extension is not implemented,
-  so large inputs pay JSON encoding. Fine for correctness and for comparing
-  scheduling behaviour; not a throughput benchmark.
+**One replica, one Triton.** Each worker advertises a custom Ray resource
+`triton: 1` and the Serve replica claims one, so a replica can only land on a
+pod that has a Triton — and asking for another replica is what makes the Ray
+autoscaler add another pod, which brings another GPU and another Triton.
 
-Models load on first request and stay loaded, so a replica warms up as traffic
-reaches it instead of paying for the whole repository at startup.
-
-The Ray image ships CUDA but no inference runtime, so the Serve config's
-`runtime_env` pins `onnxruntime-gpu` and the matching `nvidia-cudnn-cu12`
-wheel; the app loads those shared objects out of site-packages before creating
-a session. If the GPU provider still cannot be built, the replica serves on CPU
-and says so — in the replica log and in `GET /v2` — rather than failing to come
-up.
+**Two ways in, on purpose.** gRPC goes straight to the Triton containers
+through `sonic-ray-triton`, because Ray Serve's gRPC ingress routes on an
+`application` metadata key that a stock Triton client never sends — CMSSW's
+SONIC clients would not be routable through it. HTTP works there too, but sent
+to the Ray head's Serve port it goes through the proxy, which is what lets
+Serve's autoscaler see the load. The trade is explicit: **gRPC traffic does not
+feed the autoscaler.** Raise `min_replicas` for a gRPC-heavy workload, or scale
+the group by hand.
 
 ## How it lines up with SuperSONIC
 
 | SuperSONIC (`supersonic`) | Ray (`sonic-ray`) |
 | --- | --- |
-| Triton pods: 1 GPU, 16 CPU, 16G | Serve replicas on `gpu-group` workers, identical requests/limits, one GPU each |
-| Envoy: entry point behind a `LoadBalancer` on `geddes-private-pool` | Ray head running the Serve HTTP proxy, same MetalLB pool, port 8000 |
+| Triton: 1 GPU, 16 CPU, 16G, `--model-control-mode=explicit --load-model=*` | the same container, argument for argument |
+| Envoy: entry point behind a `LoadBalancer` on `geddes-private-pool`, `ROUND_ROBIN` | `sonic-ray-triton`, same pool, kube-proxy round-robin |
 | `ingress.enabled: false` — private pool only | no ingress; the Ray dashboard has no auth and must not be exposed |
-| KEDA `ScaledObject`, 1 → 10 Triton replicas | Serve autoscaling 1 → 10, which drives the Ray worker autoscaler to add pods |
-| `nodeSelector: cms-af-prod=true` + the `hub.jupyter.org/dedicated` toleration | same, on head and workers |
-| model repository PVC at `/models` | same PVC, mounted **read-only** |
-| Triton Service labelled `scrape_metrics: "true"` | `sonic-ray-metrics`, same label; Ray and Ray Serve metrics both land there |
-| KServe v2 over HTTP **and gRPC** | KServe v2 over HTTP |
+| KEDA `ScaledObject`, 1 → 10 Triton replicas | Serve autoscaling 1 → 10, driving the Ray worker autoscaler |
+| `nodeSelector: cms-af-prod=true` + the `hub.jupyter.org/dedicated` toleration | same, head and workers |
+| model repository PVC at `/models` | same PVC, mounted **read-only** — the model manager owns the writes |
+| Triton Service labelled `scrape_metrics: "true"` | `sonic-ray-triton-metrics` (`nv_*`) and `sonic-ray-metrics` (Ray and Serve), same label, `release="sonic-ray"` |
 
-`tests/manifests/test_ray.py` asserts the mirroring against
-`apps/sonic/supersonic/values.yaml` itself, so retuning supersonic and
-forgetting Ray turns the build red. Those tests also stand in for kubeconform,
-which skips `RayService` — `ray.io` has no schema in the CRDs-catalog.
+`tests/manifests/test_ray.py` asserts this against `apps/sonic/supersonic/values.yaml`
+itself — including a token-by-token comparison of Triton's arguments — so
+retuning supersonic and forgetting Ray turns the build red. Those tests also
+stand in for kubeconform, which skips `RayService`: `ray.io` has no schema in
+the CRDs-catalog.
 
-Two differences are structural rather than gaps:
+Two differences remain, both structural:
 
 - **Autoscaling signal.** KEDA scales Triton on a Prometheus expression
-  (`serverLoadMetric`, threshold 100). Serve scales on ongoing requests per
-  replica, so the two react to the same load differently even with identical
-  bounds.
+  (`serverLoadMetric`, threshold 100); Serve scales on ongoing requests per
+  replica, and only sees HTTP that arrives through the proxy. KubeRay 1.7.0
+  exposes no `scale` subresource on `RayCluster`, so KEDA cannot drive a worker
+  group directly — closing this properly means a controller that patches
+  `workerGroupSpecs[].replicas` from the same PromQL.
 - **Dashboards.** SuperSONIC ships its own Grafana at
-  `supersonic-grafana.geddes.rcac.purdue.edu`. Ray's metrics land in the AF
-  Prometheus (`prometheus-server.cms`) and can be added to the central AF
-  Grafana; no second Grafana is deployed here.
+  `supersonic-grafana.geddes.rcac.purdue.edu`. The `nv_*` series land in the AF
+  Prometheus tagged `release="sonic-ray"`, ready for the central AF Grafana; no
+  second Grafana is deployed here.
 
 ## Using it
 
 ```bash
-kubectl -n cms get svc sonic-ray-head-svc     # MetalLB address on the private pool
-RAY=<address>
+kubectl -n cms get svc sonic-ray-triton      # MetalLB address on the private pool
+SONIC=<address>
 
-curl -s "http://$RAY:8000/v2/health/ready"
-curl -s "http://$RAY:8000/v2/repository/index" | jq
-curl -s "http://$RAY:8000/v2/models/<model>" | jq
-
-curl -s -X POST "http://$RAY:8000/v2/models/<model>/infer" \
-  -H 'Content-Type: application/json' \
-  -d '{"inputs":[{"name":"input","datatype":"FP32","shape":[1,4],"data":[1,2,3,4]}]}'
+curl -s "http://$SONIC:8000/v2/health/ready" -o /dev/null -w '%{http_code}\n'
+curl -s "http://$SONIC:8000/v2/repository/index" | jq
 ```
 
-The Ray dashboard, which shows Serve deployment status and replica logs:
+CMSSW clients point at `$SONIC:8001`, exactly as they point at the supersonic
+release's Envoy address.
+
+The Ray dashboard, for Serve deployment status and replica logs:
 
 ```bash
 kubectl -n cms port-forward svc/sonic-ray-head-svc 8265:8265
@@ -110,7 +105,7 @@ kubectl -n cms port-forward svc/sonic-ray-head-svc 8265:8265
 
 ## Cost
 
-The worker group idles at one GPU (`minReplicas: 1`), on the same
-`cms-af-prod` nodes SuperSONIC and the user sessions compete for. Set the
-group's `replicas`/`minReplicas` and the Serve deployment's `min_replicas` to 0
-to park it without uninstalling.
+The worker group idles at one GPU (`minReplicas: 1`) on the same `cms-af-prod`
+nodes SuperSONIC and the user sessions compete for. Set the group's
+`replicas`/`minReplicas` and the Serve deployment's `min_replicas` to 0 to park
+it without uninstalling.

@@ -1,20 +1,25 @@
-# Ray Serve inference server approximating the production SuperSONIC release
-# (apps/sonic/supersonic): same nodes, same per-server GPU/CPU/memory shape,
-# same replica range, same model repository, same private-pool entry point.
+# Triton on Ray: the production SuperSONIC serving stack, with Ray doing what
+# Envoy and KEDA do in apps/sonic/supersonic.
+#
+# Every worker pod runs the same Triton image, with the same arguments, the
+# same resources and the same model repository as the supersonic release — so
+# feature parity is not approximated, it is the same server. Ray owns the pods
+# and scales them; a Serve replica sits beside each Triton and proxies HTTP to
+# it, which is what ties "one more replica" to "one more Triton".
 #
 #   SuperSONIC                          | this release
 #   ------------------------------------+-------------------------------------
-#   triton (GPU inference servers)      | Serve replicas on the "gpu-group"
-#                                       |   workers, one GPU each
-#   envoy (gRPC entry point, LB svc)    | Ray head, Serve HTTP proxy, LB svc
-#   KEDA ScaledObject, 1 -> 10 replicas | Serve autoscaling 1 -> 10, which
-#                                       |   drives the Ray worker autoscaler
+#   triton (GPU inference servers)      | the triton container in each
+#                                       |   gpu-group worker pod, unchanged
+#   envoy (entry point, LB svc)         | sonic-ray-triton Service (gRPC, HTTP)
+#                                       |   and the Serve proxy for HTTP
+#   KEDA ScaledObject, 1 -> 10 replicas | Serve autoscaling 1 -> 10, driving
+#                                       |   the Ray worker autoscaler
 #   model repository PVC at /models     | same PVC, read-only
-#   KServe v2 over HTTP/gRPC            | KServe v2 over HTTP (JSON only)
 #
-# A RayService rather than the ray-cluster Helm chart because the chart renders
-# a bare RayCluster: it has no field for a Serve application, so a cluster it
-# installs answers no inference requests. RayService owns both.
+# A RayService rather than the ray-cluster Helm chart: the chart renders a bare
+# RayCluster with no Serve application, and it is the Serve application that
+# makes replica count and Triton count the same number.
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
@@ -35,27 +40,26 @@ spec:
         import_path: sonic_serve:app
         route_prefix: /
         runtime_env:
-          # The Ray image carries CUDA but no inference runtime. ORT dlopen()s
-          # cuDNN by soname, so the matching wheel has to come along; the app
-          # loads both out of site-packages before creating a session.
-          pip:
-            - onnxruntime-gpu==1.29.0
-            - nvidia-cudnn-cu12>=9.0,<10
           env_vars:
-            MODEL_REPOSITORY: /models
+            # Same pod, same network namespace as the Triton container.
+            TRITON_HTTP: http://127.0.0.1:8000
         deployments:
-          - name: InferenceServer
-            # One replica per GPU, exactly like one Triton pod per GPU. The
-            # GPU is what pins it: a second replica cannot fit on a worker.
+          - name: TritonProxy
             ray_actor_options:
-              num_gpus: 1
-              num_cpus: 4
-            max_ongoing_requests: 32
+              num_cpus: 0.5
+              # Each worker advertises exactly one "triton", so a replica can
+              # only land on a pod that has a Triton — and one more replica
+              # means one more pod, which brings one more Triton.
+              resources:
+                triton: 1
+            # Triton does its own batching and queueing; the proxy must not
+            # become the queue.
+            max_ongoing_requests: 256
             autoscaling_config:
               # keda.minReplicaCount / maxReplicaCount of the supersonic release.
               min_replicas: 1
               max_replicas: 10
-              target_ongoing_requests: 16
+              target_ongoing_requests: 64
               # keda.scaleUp/scaleDown.stabilizationWindowSeconds.
               upscale_delay_s: 30
               downscale_delay_s: 45
@@ -74,16 +78,16 @@ spec:
         requests: { cpu: 500m, memory: 512Mi }
 
     headGroupSpec:
-      # Mirrors envoy.service.type: clients reach Serve on the geddes private
-      # pool, never through a public ingress.
+      # The Serve HTTP entry point. Clients on the geddes private pool, never a
+      # public ingress — same as envoy.service.type in the supersonic release.
       serviceType: LoadBalancer
       headService:
         metadata:
           annotations:
             metallb.universe.tf/address-pool: geddes-private-pool
       rayStartParams:
-        # The head runs the Serve HTTP proxy and nothing else — it holds no
-        # models, exactly like Envoy. num-cpus: 0 keeps replicas off it.
+        # The head runs the Serve HTTP proxy and nothing else — no Triton, no
+        # replicas, exactly like Envoy. num-cpus: 0 keeps replicas off it.
         num-cpus: "0"
         dashboard-host: 0.0.0.0
       template:
@@ -131,6 +135,10 @@ spec:
         replicas: 1
         minReplicas: 1
         maxReplicas: 10
+        rayStartParams:
+          # The resource the Serve replica claims. It is what pairs one replica
+          # with one Triton, and what the Ray autoscaler provisions pods for.
+          resources: '"{\"triton\": 1}"'
         template:
           metadata:
             labels:
@@ -139,14 +147,42 @@ spec:
               app.kubernetes.io/component: worker
           spec:
             containers:
+              # The Ray side of the pod: the Serve replica and the raylet. It
+              # holds no models and needs no GPU — it forwards over loopback.
               - name: ray-worker
-                # CUDA base; the runtime_env adds the inference runtime.
-                image: rayproject/ray:2.52.0-gpu
+                image: rayproject/ray:2.52.0
                 imagePullPolicy: IfNotPresent
                 env:
                   - name: PYTHONPATH
                     value: /serve_app
-                # Identical to supersonic's triton.resources.
+                resources:
+                  limits: { cpu: "1", memory: 2Gi }
+                  requests: { cpu: "1", memory: 2Gi }
+                volumeMounts:
+                  - { name: serve-app, mountPath: /serve_app }
+                  - { name: log-volume, mountPath: /tmp/ray }
+
+              # The inference server itself — image, arguments and resources
+              # copied from apps/sonic/supersonic/values.yaml, so this is the
+              # production Triton, not an approximation of it.
+              - name: triton
+                image: nvcr.io/nvidia/tritonserver:26.04-py3
+                imagePullPolicy: IfNotPresent
+                command: ["/bin/sh", "-c"]
+                args:
+                  - |
+                    /opt/tritonserver/bin/tritonserver \
+                    --model-repository=/models \
+                    --model-control-mode=explicit \
+                    --load-model=* \
+                    --allow-gpu-metrics=true \
+                    --log-verbose=0 \
+                    --disable-auto-complete-config \
+                    --exit-timeout-secs=60
+                ports:
+                  - { name: http, containerPort: 8000 }
+                  - { name: grpc, containerPort: 8001 }
+                  - { name: triton-metrics, containerPort: 8002 }
                 resources:
                   limits:
                     nvidia.com/gpu: 1
@@ -156,9 +192,21 @@ spec:
                     nvidia.com/gpu: 1
                     cpu: 16
                     memory: 16G
+                # A large repository can take minutes to load; the startup
+                # probe buys that time without making readiness lax afterwards.
+                startupProbe:
+                  httpGet: { path: /v2/health/ready, port: http }
+                  periodSeconds: 10
+                  timeoutSeconds: 15
+                  failureThreshold: 24
+                readinessProbe:
+                  httpGet: { path: /v2/health/ready, port: http }
+                  periodSeconds: 10
+                  timeoutSeconds: 15
+                  failureThreshold: 3
+                  # supersonic's triton.readinessProbe.successThreshold.
+                  successThreshold: 3
                 volumeMounts:
-                  - { name: serve-app, mountPath: /serve_app }
-                  - { name: log-volume, mountPath: /tmp/ray }
                   - {
                       name: model-repository,
                       mountPath: /models,
@@ -170,8 +218,8 @@ spec:
               - name: log-volume
                 emptyDir: {}
               # The claim the SuperSONIC model manager writes
-              # (apps/sonic/model-manager). Read-only here: this release
-              # consumes the repository, it never owns it.
+              # (apps/sonic/model-manager). Read-only here: Triton only reads
+              # it, and this release does not own the repository.
               - name: model-repository
                 persistentVolumeClaim:
                   claimName: supersonic-model-repository
