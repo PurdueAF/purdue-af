@@ -1,5 +1,6 @@
-# Values for the `sonic-ray` release: the supersonic release's Triton, run on
-# Ray in the cms namespace on Geddes, with Ray Serve carrying its gRPC.
+# Values for the `sonic-ray` release: Triton, configured as in the `supersonic`
+# release, run on Ray in the cms namespace on Geddes, with Ray Serve carrying
+# its gRPC.
 #
 # The triton: block is apps/sonic/supersonic/values.yaml's, key for key —
 # image, command, arguments, resources, readiness, model repository — so what
@@ -35,7 +36,7 @@ triton:
   readinessProbe:
     successThreshold: 3
   # The claim the SuperSONIC model manager creates and writes
-  # (apps/sonic/model-manager) and the supersonic Triton pods mount.
+  # (apps/sonic/model-manager) and the Triton pods of the supersonic release mount.
   modelRepository:
     claimName: supersonic-model-repository
     mountPath: /models
@@ -53,7 +54,8 @@ serve:
   minReplicas: 1
   maxReplicas: 4
 
-# Same placement as supersonic's triton and envoy pods, for every pod here.
+# Same placement as the supersonic release's triton and envoy pods, for every
+# pod here.
 nodeSelector: { "cms-af-prod": "true" }
 tolerations:
   - key: hub.jupyter.org/dedicated

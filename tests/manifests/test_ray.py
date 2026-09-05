@@ -1,5 +1,5 @@
-"""Tests for apps/ray — the supersonic release's Triton, run on Ray with Ray
-Serve carrying its gRPC.
+"""Tests for apps/ray — Triton, configured as in the supersonic release, run on
+Ray with Ray Serve carrying its gRPC.
 
 Two jobs.
 
@@ -272,7 +272,7 @@ def test_code_reaches_every_pod(rendered, head_pod, worker_group):
     )
 
 
-# -- the Triton in the pod is supersonic's Triton ---------------------------
+# -- the Triton in the pod is configured as in supersonic ---------------------
 
 
 def test_triton_values_match_supersonic(values, supersonic):

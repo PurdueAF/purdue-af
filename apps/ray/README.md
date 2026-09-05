@@ -1,8 +1,8 @@
 # Ray on the Analysis Facility
 
-SuperSONIC's **Triton**, run on Ray: every worker pod carries the same Triton
-as `apps/sonic/supersonic` — same image, arguments, resources, model
-repository — and **Ray Serve's gRPC proxy carries Triton's protocol** to it.
+**Triton on Ray**: every worker pod carries NVIDIA's Triton Inference Server,
+configured exactly as in the `supersonic` release (`apps/sonic/supersonic`) —
+same image, arguments, resources, model repository — and **Ray Serve's gRPC proxy carries Triton's protocol** to it.
 Serve speaks that protocol because it is handed Triton's own generated
 servicer; the only code of ours is a forwarder that passes each RPC from the
 proxy to the Triton in its pod. Serve counts every request on the way through,
@@ -19,7 +19,7 @@ pip-installed by an init container.
 | `operator/` | `kuberay-operator` 1.7.0 — the `ray.io` CRDs and the controller. Namespaced (`singleNamespaceInstall: true`), so both the watch and the RBAC stay in `cms`. |
 | `sonic-ray/chart/` | the `sonic-ray` chart: a `RayService` with a Triton in every worker pod and the forwarder as its Serve application, the ConfigMap carrying the forwarder, two metrics Services |
 | `sonic-ray/chart/files/sonic_ray/serve_app.py` | the forwarder — one replica per pod, every unary RPC of `GRPCInferenceService` handed to the pod's Triton unchanged |
-| `sonic-ray/helmrelease.yaml`, `sonic-ray/values.yaml` | the AF release: `dependsOn` the operator, values with supersonic's `triton:` block |
+| `sonic-ray/helmrelease.yaml`, `sonic-ray/values.yaml` | the AF release: `dependsOn` the operator, values with the `triton:` block of the `supersonic` release's values |
 | [`tests/sonic_ray/`](../../tests/sonic_ray), [`tests/manifests/test_ray.py`](../../tests/manifests/test_ray.py) | source-level checks of the forwarder; rendered-chart checks incl. parity with `apps/sonic/supersonic/values.yaml` |
 
 The chart lives here (like `apps/sonic/model-manager`) rather than being a raw

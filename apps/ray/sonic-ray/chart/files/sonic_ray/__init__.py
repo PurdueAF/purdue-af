@@ -1,4 +1,4 @@
-"""sonic-ray: SuperSONIC's Triton, with Ray Serve carrying the gRPC traffic.
+"""sonic-ray: Triton on Ray, with Ray Serve carrying the gRPC traffic.
 
 One module, ``serve_app``: a Ray Serve deployment that forwards every unary
 RPC of Triton's ``GRPCInferenceService`` to the Triton running beside it in

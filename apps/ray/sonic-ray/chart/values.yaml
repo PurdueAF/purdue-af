@@ -95,7 +95,7 @@ triton:
     repository: nvcr.io/nvidia/tritonserver
     tag: "26.04-py3"
     pullPolicy: IfNotPresent
-  # -- Exactly what a SuperSONIC release's triton.command/args would be; the
+  # -- Exactly the triton.command/args values a SuperSONIC chart release uses; the
   # model repository path in args must be modelRepository.mountPath.
   command: ["tritonserver"]
   args:
