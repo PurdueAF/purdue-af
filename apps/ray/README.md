@@ -137,6 +137,7 @@ release's Envoy address. From Python:
 
 ```python
 import tritonclient.grpc as grpcclient
+
 client = grpcclient.InferenceServerClient("<address>:8001")
 client.is_server_ready()
 client.get_model_repository_index()
