@@ -317,7 +317,10 @@ hub:
     # deliberately unset: the chart default equals the chart version, so the
     # image follows the version in helmrelease.yaml automatically.
     name: geddes-registry.rcac.purdue.edu/docker-hub-cache/jupyterhub/k8s-hub-slim
-  nodeSelector: { "cms-af-prod": "true" }
+  # geddes-auth (LDAP uid/gid lookups in extraFiles/set-user-info.py) only
+  # answers from the 172.21.160.0/24 nodes; `role: storage-node` is exactly
+  # those cms-af-prod nodes. Drop it once RCAC allows 172.18.29.0/24 (paf-*).
+  nodeSelector: { "cms-af-prod": "true", "role": "storage-node" }
   db:
     type: sqlite-pvc
     pvc:
