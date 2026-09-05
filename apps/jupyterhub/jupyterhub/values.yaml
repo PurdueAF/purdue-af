@@ -317,7 +317,12 @@ hub:
     # deliberately unset: the chart default equals the chart version, so the
     # image follows the version in helmrelease.yaml automatically.
     name: geddes-registry.rcac.purdue.edu/docker-hub-cache/jupyterhub/k8s-hub-slim
-  nodeSelector: { "cms-af-prod": "true" }
+  # `role: storage-node` is carried by the geddes-b*/g* cms-af-prod nodes
+  # (172.21.160.0/24) and by none of the paf-* nodes (172.18.29.0/24).
+  # geddes-auth only answers LDAP searches from the former, and pod traffic
+  # leaves with the node address, so the hub has to run there until RCAC
+  # widens the ACL (apps/jupyterhub/README.md). Drop `role` after that.
+  nodeSelector: { "cms-af-prod": "true", "role": "storage-node" }
   db:
     type: sqlite-pvc
     pvc:

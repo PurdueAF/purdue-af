@@ -16,6 +16,9 @@ gateway:
       password: null
   nodeSelector:
     cms-af-prod: "true"
+    # geddes-auth answers ldap_lookup() only from the 172.21.160.0/24
+    # nodes, which carry this label (apps/jupyterhub/README.md).
+    role: storage-node
   tolerations:
     - key: "hub.jupyter.org/dedicated"
       operator: "Equal"
@@ -314,17 +317,25 @@ gateway:
           baseDN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
           search_filter = "(uid={0}*)"
           attrs = ['uidNumber','gidNumber']
+          # geddes-auth only answers anonymous searches from the 172.21.160.0/24
+          # node subnet and takes 15-35 s per search (apps/jupyterhub/README.md).
           s = Server(host= url ,use_ssl= True, get_info= 'ALL')
-          conn = Connection(s, version = 3, authentication = "ANONYMOUS")
-          conn.start_tls()
+          conn = Connection(s, version = 3, authentication = "ANONYMOUS", receive_timeout = 120)
+          if not conn.bind():
+              raise RuntimeError(f"LDAP bind to {url} failed: {conn.result}")
           conn.search(
               search_base = baseDN,
               search_filter = search_filter.format(username),
               search_scope = SUBTREE,
               attributes = attrs
           )
+          if (conn.result or {}).get("result", 0) != 0:
+              raise RuntimeError(f"LDAP search for uid={username} on {url} failed: {conn.result}")
           ldap_result_id = json.loads(conn.response_to_json())
-          result = ldap_result_id[u'entries'][0][u'attributes']
+          entries = ldap_result_id[u'entries']
+          if not entries:
+              raise LookupError(f"no LDAP entry for uid={username}* under {baseDN} on {url}")
+          result = entries[0][u'attributes']
           uid_number = result[u'uidNumber']
           gid_number = result [u'gidNumber']
           return uid_number, gid_number
