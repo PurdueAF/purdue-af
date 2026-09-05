@@ -1,24 +1,24 @@
 # Ray on the Analysis Facility
 
-The SuperSONIC model repository, served by **Ray Serve** instead of Triton:
-one Ray Serve deployment loads every ONNX model of the repository onto a GPU
-and answers the KServe v2 HTTP API (the protocol Triton's HTTP clients speak);
-Ray Serve runs as many replicas as the request load calls for, and the Ray
-autoscaler adds a GPU pod for each replica that has nowhere to run.
+The SuperSONIC model repository's ONNX models, served by **Ray Serve** instead
+of Triton: one Ray Serve deployment loads every ONNX model of the repository
+onto a GPU and answers plain JSON inference requests for them; Ray Serve runs
+as many replicas as the request load calls for, and the Ray autoscaler adds a
+GPU pod for each replica that has nowhere to run.
 
-This is the minimal shape: one chart, one deployment, **no custom image** —
-the pods run the official Ray CUDA image, the server code reaches them as a
-ConfigMap, and ONNX Runtime is installed by Ray Serve's `runtime_env` when a
-replica starts. It scales from one GPU to as many as the worker group allows,
-runs beside the `supersonic` release on the same model repository, and does
-not replace it.
+This is the minimal shape: one chart, one deployment, **no custom image** and
+**no Triton compatibility** — the pods run the official Ray CUDA image, the
+server code (two short Python files) reaches them as a ConfigMap, and ONNX
+Runtime is installed by Ray Serve's `runtime_env` when a replica starts. It
+scales from one GPU to as many as the worker group allows, runs beside the
+`supersonic` release on the same model repository, and does not replace it.
 
 | path | what it is |
 | --- | --- |
 | `helmrepo.yaml` | `HelmRepository` for the KubeRay charts |
 | `operator/` | `kuberay-operator` 1.7.0 — the `ray.io` CRDs and the controller. Namespaced (`singleNamespaceInstall: true`), so both the watch and the RBAC stay in `cms`. |
 | `sonic-ray/chart/` | the `sonic-ray` chart: a `RayService` running the Serve application, the ConfigMap carrying the code, and a metrics Service |
-| `sonic-ray/chart/files/sonic_ray/` | the server: `repository.py` (Triton-layout repository + ONNX Runtime), `protocol.py` (KServe v2 wire format), `serve_app.py` (the Ray Serve deployment) |
+| `sonic-ray/chart/files/sonic_ray/` | the server: `models.py` (find the ONNX models in the Triton-layout directory, run them with ONNX Runtime), `serve_app.py` (the Ray Serve deployment and its JSON endpoints) |
 | `sonic-ray/helmrelease.yaml`, `sonic-ray/values.yaml` | the AF release: `dependsOn` the operator, supersonic's claim, placement and address pool |
 | [`tests/sonic_ray/`](../../tests/sonic_ray), [`tests/manifests/test_ray.py`](../../tests/manifests/test_ray.py) | unit tests for the server (CPU onnxruntime, models built in the tests) and for the chart |
 
@@ -33,7 +33,7 @@ would install them. `dependsOn: kuberay-operator` is the fix, and a
 
 ```
      clients ──▶ sonic-ray-serve (LoadBalancer, private pool) :8000
-                    │  KServe v2 HTTP: /v2/models/<name>/infer, …
+                    │  POST /models/<name>  {"inputs": {...}}
                     ▼
    ┌─────────────────────────────────────────────┐   × 1…4 pods
    │ worker pod  (1 GPU, 8 CPU, 16Gi, /models ro) │
@@ -55,49 +55,57 @@ exactly one GPU per pod, and the chart refuses to render otherwise.
 
 The repository is `supersonic-model-repository`, the claim the
 [model manager](../sonic/model-manager) writes and the `supersonic` Triton
-reads — mounted read-only at `/models` on the workers. Every directory with a
-`config.pbtxt` is a model; the ones whose platform is `onnxruntime_onnx` are
-loaded with ONNX Runtime (CUDA execution provider, CPU fallback), the rest are
-**listed but not served**:
+reads — mounted read-only at `/models` on the workers. Every subdirectory is a
+model; its highest numbered version directory holding `model.onnx` is loaded
+with ONNX Runtime (CUDA execution provider, CPU fallback). Directories without
+an ONNX model are **listed but not served**, with the reason:
 
-| model | platform | here |
+| model | format | here |
 | --- | --- | --- |
-| `particleNetFromMiniAODAK4CHSCentral`, `…AK4CHSForward`, `…AK4PuppiCentral`, `…AK4PuppiForward`, `…AK8`, `particlenet` | `onnxruntime_onnx` | served |
-| `higgsInteractionNet` | `onnxruntime_onnx` | served |
-| `deepmet`, `deeptau_2017v2p1`, `deeptau_2018v2p5` | `tensorflow_graphdef` | listed `UNAVAILABLE` with the reason |
+| `particleNetFromMiniAODAK4CHSCentral`, `…AK4CHSForward`, `…AK4PuppiCentral`, `…AK4PuppiForward`, `…AK8`, `particlenet` | ONNX | served |
+| `higgsInteractionNet` | ONNX | served |
+| `deepmet`, `deeptau_2017v2p1`, `deeptau_2018v2p5` | TensorFlow graphdef | listed under `skipped` |
 
-`POST /v2/repository/index` reports exactly that, per model, with the version
-picked (highest numeric version directory, as Triton's default policy does).
-Adding a TensorFlow runtime to the image is the obvious next step if those
-three are wanted here.
-
-Model metadata comes from `config.pbtxt` (batch dimension omitted when
-`max_batch_size > 0`), because that is the contract the clients were written
-against; inference validates input names, dtypes and the batch size the way
-Triton does and answers 400 with the reason.
+Nothing else in the Triton layout is read — not `config.pbtxt`, not the
+labels files. ONNX Runtime knows each model's inputs and outputs itself, and
+that is what `GET /models/<name>` reports. Adding a TensorFlow runtime is the
+obvious next step if those three models are wanted here.
 
 ## Protocol
 
-KServe v2 over HTTP, including the **binary tensor extension**
-(`Inference-Header-Content-Length`, `binary_data_size`, `binary_data`) that
-`tritonclient.http` uses by default — so a Python client written against the
-supersonic release works with the endpoint swapped:
+Plain JSON, deliberately **not** Triton's. Four endpoints:
+
+| | |
+| --- | --- |
+| `GET /healthz` | `{"models": <count loaded>}` |
+| `GET /models` | `{"models": [...], "skipped": {<name>: <reason>}}` |
+| `GET /models/<name>` | inputs and outputs (name, dtype, shape with -1 for dynamic dims), version, execution providers |
+| `POST /models/<name>` | body `{"inputs": {<name>: <nested list>, ...}}` → `{"model", "version", "outputs": {<name>: <nested list>}}` |
+
+Inputs are cast to the model's dtypes; a wrong name, rank or shape is a 400
+with the reason, an unknown or unloaded model a 404 with the reason.
 
 ```python
-import numpy as np, tritonclient.http as http
+import numpy as np, requests
 
-client = http.InferenceServerClient("<sonic-ray-serve address>:8000")
-client.get_model_repository_index()
-inputs = [http.InferInput("pf_features", [3, 32, 100], "FP32"), ...]
-inputs[0].set_data_from_numpy(np.zeros((3, 32, 100), np.float32))
-client.infer("particleNetFromMiniAODAK8", inputs).as_numpy("output")
+url = "http://<sonic-ray-serve address>:8000"
+requests.get(f"{url}/models").json()
+r = requests.post(f"{url}/models/particleNetFromMiniAODAK8", json={"inputs": {
+    "pf_features": np.zeros((3, 32, 100), np.float32).tolist(),
+    "pf_mask": np.ones((3, 1, 100), np.float32).tolist(),
+    "sv_features": np.zeros((3, 10, 7), np.float32).tolist(),
+    # ... every input the model declares
+}})
+np.asarray(r.json()["outputs"]["output"])
 ```
 
-What is **not** here, and why it matters: **gRPC**. CMSSW's SONIC client
-(`TritonClient`) speaks gRPC only, so this endpoint serves Python, Coffea and
-curl clients, not `cmsRun` jobs. Ray Serve has a gRPC proxy that takes a
-user-defined servicer; implementing `GRPCInferenceService` on it is the piece
-that would close that gap.
+What this means: **no existing SONIC client works against it yet.** CMSSW's
+`TritonClient` speaks gRPC and `tritonclient.http` speaks KServe v2; both are
+Triton's protocol, and Triton compatibility was left out on purpose to keep
+this first version small. Adding it later is a bounded piece of work — the
+v2 HTTP protocol with its binary tensor extension is a few hundred lines,
+gRPC a Ray Serve gRPC proxy with a `GRPCInferenceService` servicer — and it
+slots in beside these endpoints without changing anything else here.
 
 Also not here: cross-request dynamic batching (Triton's `dynamic_batching`).
 Clients batch per request already (a `pf_features` tensor is a batch of jets);
@@ -136,8 +144,8 @@ request waiting for a pod, an image pull and the model load.
 
 | SuperSONIC (`supersonic`) | Ray (`sonic-ray`) |
 | --- | --- |
-| Triton, every backend, gRPC + HTTP | Ray Serve + ONNX Runtime, HTTP (KServe v2 incl. binary tensors) |
-| model repository PVC at `/models`, `--load-model=*` | same PVC, read-only, every `onnxruntime_onnx` model |
+| Triton, every backend, gRPC + HTTP (KServe v2) | Ray Serve + ONNX Runtime, plain JSON over HTTP |
+| model repository PVC at `/models`, `--load-model=*` | same PVC, read-only, every `model.onnx` in it |
 | Envoy behind a `LoadBalancer` on `geddes-private-pool` | KubeRay's serve Service, same pool |
 | KEDA `ScaledObject` on a Prometheus expression, 1–10 Triton pods | Ray Serve request-based autoscaling, 1–4 replicas/GPUs |
 | `nodeSelector: cms-af-prod=true` + the `hub.jupyter.org/dedicated` toleration | same, head and workers |
@@ -152,9 +160,9 @@ placement, address pool — against `apps/sonic/supersonic/values.yaml` itself.
 kubectl -n cms get svc sonic-ray-serve            # MetalLB address on the private pool
 SONIC=<address>:8000
 
-curl -s "http://$SONIC/v2/health/ready" -o /dev/null -w '%{http_code}\n'
-curl -s -X POST "http://$SONIC/v2/repository/index" | jq
-curl -s "http://$SONIC/v2/models/particleNetFromMiniAODAK8" | jq
+curl -s "http://$SONIC/healthz"
+curl -s "http://$SONIC/models" | jq
+curl -s "http://$SONIC/models/particleNetFromMiniAODAK8" | jq
 ```
 
 The Ray dashboard, for Serve and autoscaler state:
@@ -164,8 +172,7 @@ kubectl -n cms port-forward svc/sonic-ray-head-svc 8265:8265
 ```
 
 Server-side configuration is by environment variable, set by the chart on
-every container: `MODEL_REPOSITORY`, `ONNX_EXECUTION_PROVIDERS`, `MODELS`
-(comma-separated allowlist of directories to load), `LOG_LEVEL`.
+every container: `MODEL_REPOSITORY`, `ONNX_EXECUTION_PROVIDERS`, `LOG_LEVEL`.
 
 ## Image, or rather none
 
@@ -188,7 +195,7 @@ wheel (~300 MB) and installs it before its replica can load models — expect a
 minute or two per scale-up, and a dependency on PyPI being reachable from the
 GPU nodes. That trade was chosen deliberately over maintaining a custom Ray
 image; if startup latency matters later, baking the wheel into an image is a
-contained change (the code already imports onnxruntime lazily).
+contained change (the code imports onnxruntime only when a model is loaded).
 
 The chart's `ray.version` selects the image tag *and* pins the autoscaler
 sidecar KubeRay adds, so the two cannot drift.

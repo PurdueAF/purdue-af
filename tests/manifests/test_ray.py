@@ -1,5 +1,5 @@
-"""Tests for apps/ray — the supersonic release's model repository, served by
-Ray Serve.
+"""Tests for apps/ray — the supersonic release's ONNX models, served by Ray
+Serve.
 
 Two jobs.
 

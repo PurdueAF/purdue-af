@@ -1,6 +1,6 @@
 apiVersion: v2
 name: sonic-ray
-description: The SuperSONIC model repository served by Ray Serve — ONNX Runtime on GPU behind the KServe v2 HTTP API, autoscaled by Ray.
+description: The SuperSONIC model repository's ONNX models served by Ray Serve — ONNX Runtime on GPU behind plain JSON endpoints, autoscaled by Ray.
 type: application
 version: 0.1.0
 appVersion: "0.1.0"

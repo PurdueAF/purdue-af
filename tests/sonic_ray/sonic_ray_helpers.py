@@ -1,54 +1,9 @@
-"""Model builders and configs shared by the sonic-ray suite (uniquely named:
-multiple modules called `conftest` cannot be imported from test code)."""
+"""Tiny ONNX models shared by the sonic-ray suite (uniquely named: multiple
+modules called `conftest` cannot be imported from test code)."""
 
 import numpy as np
 import onnx
 from onnx import TensorProto, helper
-
-# Every model here is one config.pbtxt away from the repository layout the
-# SuperSONIC model manager writes; the ParticleNet one is the real config of
-# particleNetFromMiniAODAK8 with the model swapped for a tiny stand-in.
-PARTICLENET_CONFIG = """\
-name: "particleNetFromMiniAODAK8"
-platform: "onnxruntime_onnx"
-max_batch_size : 500
-dynamic_batching {
-   preferred_batch_size: [ 200 ]
-}
-input [
-  {
-    name: "pf_features"
-    data_type: TYPE_FP32
-    dims: [ 4, -1 ]
-  },
-  {
-    name: "pf_mask"
-    data_type: TYPE_FP32
-    dims: [ 1, -1 ]
-  }
-]
-output [
-  {
-    name: "output"
-    data_type: TYPE_FP32
-    dims: [ 4 ]
-    label_filename: "particlenet_labels.txt"
-  }
-]
-optimization {graph : {level : -1}}
-"""
-
-DEEPMET_CONFIG = """\
-name: "deepmet"
-platform: "tensorflow_graphdef"
-max_batch_size: 100
-input [
-  { name: "input", data_type: TYPE_FP32, dims: [ 4500, 8 ] }
-]
-output [
-  { name: "output/BiasAdd", data_type: TYPE_FP32, dims: [ 2 ] }
-]
-"""
 
 
 def particlenet_like_model() -> onnx.ModelProto:
@@ -78,8 +33,7 @@ def particlenet_like_model() -> onnx.ModelProto:
 
 
 def doubler_model() -> onnx.ModelProto:
-    """y = 2x on an int32 vector, unbatched: exercises a non-float dtype and
-    max_batch_size 0."""
+    """y = 2x on an int32 vector: a non-float dtype and a fixed shape."""
     x = helper.make_tensor_value_info("x", TensorProto.INT32, [3])
     y = helper.make_tensor_value_info("y", TensorProto.INT32, [3])
     graph = helper.make_graph(

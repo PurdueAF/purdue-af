@@ -51,10 +51,6 @@ import on either sees the same configuration.
   value: {{ .Values.executionProviders | quote }}
 - name: LOG_LEVEL
   value: {{ .Values.logLevel | quote }}
-{{- with .Values.modelRepository.models }}
-- name: MODELS
-  value: {{ . | quote }}
-{{- end }}
 {{- end -}}
 
 {{/*

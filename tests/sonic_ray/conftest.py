@@ -24,12 +24,7 @@ sys.path.insert(
     ),
 )
 
-from sonic_ray_helpers import (  # noqa: E402
-    DEEPMET_CONFIG,
-    PARTICLENET_CONFIG,
-    doubler_model,
-    particlenet_like_model,
-)
+from sonic_ray_helpers import doubler_model, particlenet_like_model  # noqa: E402
 
 
 @pytest.fixture
@@ -42,13 +37,11 @@ def repo(tmp_path):
 
 @pytest.fixture
 def make_model(repo):
-    """Lay out one model directory: config + version dirs + artifact."""
+    """Lay out one Triton-style model directory: version dirs + artifact."""
 
-    def _make(name, config, versions=("1",), artifact="model.onnx", model=None):
+    def _make(name, versions=("1",), artifact="model.onnx", model=None):
         model_dir = repo / name
         model_dir.mkdir()
-        if config is not None:
-            (model_dir / "config.pbtxt").write_text(config)
         for version in versions:
             (model_dir / version).mkdir()
             if model is not None:
@@ -61,24 +54,12 @@ def make_model(repo):
 
 
 @pytest.fixture
-def populated(make_model):
+def store(make_model, repo):
     """A repository shaped like the AF's: ONNX models that load, a TensorFlow
     one that does not."""
-    make_model(
-        "particleNetFromMiniAODAK8", PARTICLENET_CONFIG, model=particlenet_like_model()
-    )
-    make_model(
-        "doubler",
-        'name: "doubler"\nplatform: "onnxruntime_onnx"\nmax_batch_size: 0\n',
-        model=doubler_model(),
-    )
-    make_model(
-        "deepmet", DEEPMET_CONFIG, versions=("1", "2", "3"), artifact="model.graphdef"
-    )
+    from sonic_ray.models import ModelStore
 
-
-@pytest.fixture
-def repository(populated, repo):
-    from sonic_ray.repository import ModelRepository
-
-    return ModelRepository(repo, providers=("CPUExecutionProvider",))
+    make_model("particleNetFromMiniAODAK8", model=particlenet_like_model())
+    make_model("doubler", model=doubler_model())
+    make_model("deepmet", versions=("1", "2", "3"), artifact="model.graphdef")
+    return ModelStore(repo, providers=("CPUExecutionProvider",))

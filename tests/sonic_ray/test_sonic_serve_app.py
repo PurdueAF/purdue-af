@@ -1,6 +1,6 @@
 """The Ray Serve layer, checked without Ray: the module is read as source,
-since `ray` is not a test dependency and the interesting logic lives in the
-two modules the other test files exercise directly."""
+since `ray` is not a test dependency and the interesting logic lives in
+models.py, which test_sonic_models.py exercises directly."""
 
 import ast
 import re
@@ -19,18 +19,11 @@ SERVE_APP = (
     / "serve_app.py"
 )
 
-# What a Triton HTTP client (tritonclient.http, CMSSW's or a curl) expects.
-KSERVE_V2 = {
-    ("GET", "/v2"),
-    ("GET", "/v2/health/live"),
-    ("GET", "/v2/health/ready"),
-    ("GET", "/v2/models/{model_name}"),
-    ("GET", "/v2/models/{model_name}/versions/{model_version}"),
-    ("GET", "/v2/models/{model_name}/ready"),
-    ("GET", "/v2/models/{model_name}/versions/{model_version}/ready"),
-    ("POST", "/v2/models/{model_name}/infer"),
-    ("POST", "/v2/models/{model_name}/versions/{model_version}/infer"),
-    ("POST", "/v2/repository/index"),
+ENDPOINTS = {
+    ("GET", "/healthz"),
+    ("GET", "/models"),
+    ("GET", "/models/{model_name}"),
+    ("POST", "/models/{model_name}"),
 }
 
 
@@ -64,8 +57,8 @@ def routes(cls):
     return found
 
 
-def test_every_kserve_v2_endpoint_is_routed(server_class):
-    assert KSERVE_V2 <= routes(server_class), KSERVE_V2 - routes(server_class)
+def test_the_documented_endpoints_are_routed(server_class):
+    assert routes(server_class) == ENDPOINTS
 
 
 def test_deployment_is_a_serve_ingress_and_bound_for_import(module, server_class):
@@ -95,16 +88,18 @@ def test_route_handlers_take_self_first(server_class):
             assert node.args.args[0].arg == "self", node.name
 
 
-def test_inference_runs_off_the_event_loop(module):
+def test_inference_runs_off_the_event_loop():
     """ORT releases the GIL; running it in a thread is what lets one replica
     serve concurrent requests to different models."""
-    source = SERVE_APP.read_text()
-    assert re.search(r"await asyncio\.to_thread\(model\.infer", source)
+    assert re.search(r"await asyncio\.to_thread\(model\.infer", SERVE_APP.read_text())
 
 
-def test_configuration_is_by_environment(module):
+def test_configuration_is_by_environment():
     """The chart sets these on every container (templates/_helpers.tpl); the
     names must match what the code reads."""
     source = SERVE_APP.read_text()
-    for var in ("MODEL_REPOSITORY", "ONNX_EXECUTION_PROVIDERS", "MODELS", "LOG_LEVEL"):
+    for var in ("MODEL_REPOSITORY", "ONNX_EXECUTION_PROVIDERS", "LOG_LEVEL"):
         assert f'"{var}"' in source, var
+    assert '"MODELS"' not in source, (
+        "the allowlist is gone; the chart no longer sets it"
+    )
