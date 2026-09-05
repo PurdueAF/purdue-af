@@ -1,12 +1,12 @@
-# Seed entries for the mock LDAP (osixia/openldap) — mirrors the geddes-auth
-# layout that set-user-info.py queries: posixAccounts under ou=AllPeople with
+# Seed entries for the mock LDAP (osixia/openldap) — mirrors the geddes-aux
+# layout that set-user-info.py queries: posixAccounts under ou=People with
 # uidNumber/gidNumber. uid/gid values are deliberately distinct so a swapped
 # assignment fails the e2e assertions.
-dn: ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+dn: ou=People,dc=rcac,dc=purdue,dc=edu
 objectClass: organizationalUnit
-ou: AllPeople
+ou: People
 
-dn: uid=alice,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+dn: uid=alice,ou=People,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson
 objectClass: posixAccount
 uid: alice
@@ -16,7 +16,7 @@ uidNumber: 20001
 gidNumber: 21001
 homeDirectory: /home/alice
 
-dn: uid=bob,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+dn: uid=bob,ou=People,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson
 objectClass: posixAccount
 uid: bob
@@ -26,7 +26,7 @@ uidNumber: 20002
 gidNumber: 21002
 homeDirectory: /home/bob
 
-dn: uid=dkondra,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+dn: uid=dkondra,ou=People,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson
 objectClass: posixAccount
 uid: dkondra
@@ -36,7 +36,7 @@ uidNumber: 20003
 gidNumber: 21003
 homeDirectory: /home/dkondra
 
-dn: uid=dave,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+dn: uid=dave,ou=People,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson
 objectClass: posixAccount
 uid: dave
@@ -49,7 +49,7 @@ homeDirectory: /home/dave
 # Pooled paf#### accounts for external (non-purdue.edu) hub users —
 # set-user-info.py maps hub user id N → uid=paf00NN. Seed enough for
 # the handful of identities the e2e suite creates.
-dn: uid=paf0001,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+dn: uid=paf0001,ou=People,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson
 objectClass: posixAccount
 uid: paf0001
@@ -59,7 +59,7 @@ uidNumber: 30001
 gidNumber: 31001
 homeDirectory: /home/paf0001
 
-dn: uid=paf0002,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+dn: uid=paf0002,ou=People,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson
 objectClass: posixAccount
 uid: paf0002
@@ -69,7 +69,7 @@ uidNumber: 30002
 gidNumber: 31002
 homeDirectory: /home/paf0002
 
-dn: uid=paf0003,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+dn: uid=paf0003,ou=People,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson
 objectClass: posixAccount
 uid: paf0003
@@ -79,7 +79,7 @@ uidNumber: 30003
 gidNumber: 31003
 homeDirectory: /home/paf0003
 
-dn: uid=paf0004,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+dn: uid=paf0004,ou=People,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson
 objectClass: posixAccount
 uid: paf0004
@@ -89,7 +89,7 @@ uidNumber: 30004
 gidNumber: 31004
 homeDirectory: /home/paf0004
 
-dn: uid=paf0005,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+dn: uid=paf0005,ou=People,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson
 objectClass: posixAccount
 uid: paf0005
@@ -99,7 +99,7 @@ uidNumber: 30005
 gidNumber: 31005
 homeDirectory: /home/paf0005
 
-dn: uid=paf0006,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+dn: uid=paf0006,ou=People,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson
 objectClass: posixAccount
 uid: paf0006
@@ -109,7 +109,7 @@ uidNumber: 30006
 gidNumber: 31006
 homeDirectory: /home/paf0006
 
-dn: uid=paf0007,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+dn: uid=paf0007,ou=People,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson
 objectClass: posixAccount
 uid: paf0007
@@ -119,7 +119,7 @@ uidNumber: 30007
 gidNumber: 31007
 homeDirectory: /home/paf0007
 
-dn: uid=paf0008,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+dn: uid=paf0008,ou=People,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson
 objectClass: posixAccount
 uid: paf0008
@@ -129,7 +129,7 @@ uidNumber: 30008
 gidNumber: 31008
 homeDirectory: /home/paf0008
 
-dn: uid=paf0009,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+dn: uid=paf0009,ou=People,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson
 objectClass: posixAccount
 uid: paf0009
@@ -139,7 +139,7 @@ uidNumber: 30009
 gidNumber: 31009
 homeDirectory: /home/paf0009
 
-dn: uid=paf0010,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+dn: uid=paf0010,ou=People,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson
 objectClass: posixAccount
 uid: paf0010

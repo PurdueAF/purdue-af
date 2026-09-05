@@ -18,14 +18,17 @@ def test_ldap_lookup_parses_uid_gid(monkeypatch, fake_ldap):
     assert fake_ldap["searches"] == ["(uid=alice*)"]
 
 
-def test_ldap_lookup_targets_geddes_auth(monkeypatch, fake_ldap):
-    """geddes-aux was retired; the lookup must hit geddes-auth under the
-    AllPeople tree. Host and base DN move together — the old
-    ou=People,dc=rcac base does not exist on the new server."""
+def test_ldap_lookup_targets_geddes_aux(monkeypatch, fake_ldap):
+    """Pin the production LDAP target. The geddes-auth move (#203) had to be
+    rolled back: from inside the cluster an anonymous bind to geddes-auth
+    succeeds but every search, even a base read of dc=rcac,dc=purdue,dc=edu,
+    returns noSuchObject (result 32), so the tree is invisible to the hub and
+    every Purdue spawn 500s. geddes-aux still resolves users from the cluster.
+    Move host and base DN together, and verify from the hub pod first."""
     ns = load(monkeypatch, fake_ldap)
     ns["ldap_lookup"]("alice")
-    assert fake_ldap["hosts"] == ["geddes-auth.rcac.purdue.edu"]
-    assert fake_ldap["bases"] == ["ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"]
+    assert fake_ldap["hosts"] == ["geddes-aux.rcac.purdue.edu"]
+    assert fake_ldap["bases"] == ["ou=People,dc=rcac,dc=purdue,dc=edu"]
 
 
 # ── passthrough_auth_state_hook ───────────────────────────────────────────────

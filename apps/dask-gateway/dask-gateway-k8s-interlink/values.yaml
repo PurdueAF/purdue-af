@@ -310,8 +310,8 @@ gateway:
               subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "ldap3"])
 
           from ldap3 import Server, Connection, SUBTREE
-          url = "geddes-auth.rcac.purdue.edu"
-          baseDN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
+          url = "geddes-aux.rcac.purdue.edu"
+          baseDN = "ou=People,dc=rcac,dc=purdue,dc=edu"
           search_filter = "(uid={0}*)"
           attrs = ['uidNumber','gidNumber']
           s = Server(host= url ,use_ssl= True, get_info= 'ALL')
