@@ -1,0 +1,29 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: kuberay-operator
+spec:
+  suspend: false
+  interval: 1m
+  chart:
+    spec:
+      chart: kuberay-operator
+      version: "1.7.0"
+      sourceRef:
+        kind: HelmRepository
+        name: kuberay
+      interval: 1m
+  install:
+    # The ray.io CRDs (RayCluster/RayJob/RayService/RayCronJob) ship in the
+    # chart's crds/ directory; nothing else in the cluster installs them.
+    crds: Create
+    remediation:
+      retries: -1
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: -1
+  valuesFrom:
+    - kind: ConfigMap
+      name: kuberay-operator-config
+      valuesKey: values.yaml

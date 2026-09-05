@@ -23,7 +23,8 @@ cluster pulls ◀── geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purduea
   ci.yml publish stage after the full pipeline is green), semver (immutable,
   added only by release-image.yml, promote-by-digest).
 - **CI-built images**: purdue-af, agentic-interface, af-pod-monitor,
-  af-node-monitor, supersonic-model-manager, interlink-slurm-plugin. Two
+  af-node-monitor, supersonic-model-manager, sonic-ray,
+  interlink-slurm-plugin. Two
   larger images (dask-gateway-server, servicex-science-coffea) still exceed
   GitHub-hosted runner limits and are built in-cluster with kaniko instead —
   see [kaniko-build-jobs/README.md](kaniko-build-jobs/README.md). Pixi
@@ -47,7 +48,7 @@ crictl pull geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-in
 ## What pulls what
 
 Most aux images (agentic-interface, af-pod-monitor, af-node-monitor,
-supersonic-model-manager) pull `:latest` through the `ghcr-proxy-cache`
+supersonic-model-manager, sonic-ray) pull `:latest` through the `ghcr-proxy-cache`
 project — the continuous channel, moved only by the ci.yml publish stage
 after a fully green pipeline. `interlink-slurm-plugin` is pinned to its
 upstream plugin ref (`PLUGIN_REF`, e.g. `0.6.2-pre3`) instead of

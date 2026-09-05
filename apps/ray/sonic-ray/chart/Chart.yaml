@@ -1,0 +1,9 @@
+apiVersion: v2
+name: sonic-ray
+description: The SuperSONIC model repository served by Ray Serve — ONNX Runtime on GPU behind the KServe v2 HTTP API, autoscaled by Ray.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/PurdueAF/purdue-af/tree/main/apps/ray
+annotations:
+  artifacthub.io/category: ai-machine-learning

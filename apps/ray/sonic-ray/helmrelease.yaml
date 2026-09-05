@@ -1,0 +1,33 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: sonic-ray
+spec:
+  suspend: false
+  interval: 1m
+  # The chart renders a RayService, so the ray.io CRDs — and the operator that
+  # reconciles them — have to exist first. A raw RayService in the Flux
+  # Kustomization could not wait for that: kustomize-controller aborts an
+  # apply on the first kind the API server does not know, which on a fresh
+  # cluster is this one, before the HelmRelease that would install it.
+  dependsOn:
+    - name: kuberay-operator
+  chart:
+    spec:
+      # Chart lives in this repository, so it is sourced from the same
+      # GitRepository Flux already syncs for the experimental environment.
+      chart: ./apps/ray/sonic-ray/chart
+      sourceRef:
+        kind: GitRepository
+        name: purdue-af-experimental
+      interval: 1m
+  install:
+    remediation:
+      retries: -1
+  upgrade:
+    remediation:
+      retries: -1
+  valuesFrom:
+    - kind: ConfigMap
+      name: sonic-ray-config
+      valuesKey: values.yaml

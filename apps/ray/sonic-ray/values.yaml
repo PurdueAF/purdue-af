@@ -1,0 +1,40 @@
+# Values for the `sonic-ray` release: the supersonic release's model
+# repository, served by Ray Serve in the cms namespace on Geddes.
+#
+# The models are the ones apps/sonic/supersonic serves — same claim, same
+# mount path, written by apps/sonic/model-manager. Only the ONNX ones are
+# loaded here (see apps/ray/README.md); the rest are listed as unavailable.
+# tests/manifests/test_ray.py keeps the claim, the placement and the address
+# pool equal to supersonic's.
+
+modelRepository:
+  claimName: supersonic-model-repository
+  mountPath: /models
+
+ray:
+  worker:
+    # The GPU ceiling of the release. The supersonic release's KEDA maximum is
+    # 10 Triton pods; start smaller here, since both compete for the same GPUs.
+    minReplicas: 0
+    maxReplicas: 4
+
+serve:
+  # One GPU idling so the first request does not wait for a pod, an image
+  # pull and the model load; up to every GPU the worker group may have.
+  minReplicas: 1
+  maxReplicas: 4
+
+# Same placement as supersonic's triton and envoy pods, for every pod here.
+nodeSelector: { "cms-af-prod": "true" }
+tolerations:
+  - key: hub.jupyter.org/dedicated
+    operator: Equal
+    value: cms-af
+    effect: NoSchedule
+
+# Same private pool as supersonic's Envoy: reachable from the AF, never a
+# public ingress.
+service:
+  type: LoadBalancer
+  annotations:
+    metallb.universe.tf/address-pool: geddes-private-pool

@@ -1,0 +1,100 @@
+# Default values for sonic-ray.
+#
+# A RayService running one Ray Serve application: `SonicServer`, which loads
+# every ONNX model of a Triton-layout model repository onto one GPU and
+# answers KServe v2 HTTP requests for them. A replica is a server; Serve runs
+# as many as the load calls for, and the Ray autoscaler adds a GPU pod for
+# each one that has nowhere to go.
+
+# -- Instance name (release name by default). Names every resource and is the
+# app.kubernetes.io/instance label the Services select pods by.
+nameOverride: ""
+
+image:
+  # -- docker/sonic-ray, published by ci.yml as :latest through the geddes
+  # proxy cache (docker/REGISTRY.md). Same Ray version as ray.version.
+  repository: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/sonic-ray
+  tag: latest
+  # -- :latest moves, so pull on every pod start.
+  pullPolicy: Always
+
+ray:
+  # -- Ray version inside the image; the autoscaler sidecar is pinned to it.
+  version: "2.52.0"
+  # -- NewCluster brings a second cluster up and cuts over once its Serve
+  # application is healthy — zero downtime, at the cost of a second set of
+  # GPUs for the duration; if none are free it waits and the old cluster
+  # keeps serving. None never replaces the running cluster.
+  upgradeStrategy: NewCluster
+  head:
+    # -- GCS, dashboard, Serve controller and an HTTP proxy. No replicas run
+    # here: num-cpus is pinned to 0 and there is no GPU.
+    resources:
+      limits: { cpu: "2", memory: 8Gi }
+      requests: { cpu: "2", memory: 8Gi }
+  worker:
+    # -- One GPU per pod: one pod hosts one SonicServer replica. CPU/memory are
+    # what the SuperSONIC Triton pods get; a replica holding every ONNX model
+    # needs far less than 16Gi, but Ray's object store also lives here.
+    resources:
+      limits: { nvidia.com/gpu: 1, cpu: "8", memory: 16Gi }
+      requests: { nvidia.com/gpu: 1, cpu: "8", memory: 16Gi }
+    # -- Pod count bounds. maxReplicas is the GPU ceiling of the release; the
+    # chart refuses to render if Serve may ask for more replicas than this.
+    minReplicas: 0
+    maxReplicas: 4
+    # -- Ray Serve drains a replica for serve.gracefulShutdownTimeoutS before
+    # the pod goes; the kubelet must wait at least that long.
+    terminationGracePeriodSeconds: 90
+  autoscaler:
+    # -- How long a worker with no replica on it lingers before the Ray
+    # autoscaler reclaims it.
+    idleTimeoutSeconds: 60
+    resources:
+      limits: { cpu: 500m, memory: 512Mi }
+      requests: { cpu: 500m, memory: 512Mi }
+
+serve:
+  # -- Replicas of SonicServer: each is one GPU with every servable model on
+  # it. Serve adds one when the average number of in-flight requests per
+  # replica exceeds targetOngoingRequests, and removes one when it falls
+  # well below. Scale-to-zero (minReplicas: 0) works but the first request
+  # then waits for a pod, an image pull and the model load.
+  minReplicas: 1
+  maxReplicas: 4
+  targetOngoingRequests: 8
+  # -- Requests a replica queues before the proxy backs off to another.
+  maxOngoingRequests: 64
+  # -- How fast Serve reacts. Up quickly; down slowly, since a replica gone is
+  # a GPU pod gone.
+  upscaleDelayS: 10
+  downscaleDelayS: 300
+  # -- In-flight requests get this long to finish when a replica is retired.
+  gracefulShutdownTimeoutS: 60
+  # -- A replica loading a large repository is not unhealthy for a while.
+  healthCheckPeriodS: 10
+  healthCheckTimeoutS: 30
+
+modelRepository:
+  # -- An existing claim with a Triton-layout repository (ReadWriteMany if
+  # anything else mounts it). Mounted read-only on the workers: this release
+  # only reads it.
+  claimName: ""
+  mountPath: /models
+  # -- Comma-separated allowlist of model directories to load; empty = all.
+  models: ""
+
+# -- ONNX Runtime execution providers, in preference order.
+executionProviders: CUDAExecutionProvider,CPUExecutionProvider
+logLevel: INFO
+
+# -- Placement for every pod of the release, head and workers alike.
+nodeSelector: {}
+tolerations: []
+
+# -- The inference entry point: KubeRay's serve Service, fronting the HTTP
+# proxies on port 8000. The head's own Service is never exposed — the Ray
+# dashboard has no authentication.
+service:
+  type: LoadBalancer
+  annotations: {}

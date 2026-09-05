@@ -59,6 +59,7 @@ CI_IMAGES = [
     "af-pod-monitor",
     "af-node-monitor",
     "supersonic-model-manager",
+    "sonic-ray",
     "interlink-slurm-plugin",
 ]
 VALUES_YAML = Path("apps/jupyterhub/jupyterhub/values.yaml")

@@ -191,6 +191,15 @@
       allowedVersions: '/^26\\.04/',
     },
     {
+      // onnxruntime-gpu 1.27+ is built against CUDA 13 (its [cuda] extras
+      // pull nvidia-*-cu13). docker/sonic-ray runs on rayproject/ray *-cu128
+      // (CUDA 12.8 / cuDNN 9) and dlopens the image's libraries, so ORT must
+      // stay on the CUDA 12 line until the base image moves to a cu13 tag.
+      matchDatasources: ['pypi'],
+      matchPackageNames: ['onnxruntime-gpu'],
+      allowedVersions: '<1.27',
+    },
+    {
       // interlink-slurm-plugin base must stay on Rocky 8: site clients are
       // slurm-*-1.el8.x86_64.rpm, the Dockerfile installs EPEL 8, and RCAC
       // Slurm itself runs on EL8. A jump to Rocky 10 (Renovate dashboard)

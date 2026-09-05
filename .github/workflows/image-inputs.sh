@@ -14,8 +14,8 @@
 #   image-inputs.sh --paths <name>  → prints the input path list (one per line)
 #
 # Names: purdue-af, agentic-interface, af-pod-monitor, af-node-monitor,
-#        supersonic-model-manager, interlink-slurm-plugin, pixi-base,
-#        pixi-global, e2e-hub
+#        supersonic-model-manager, sonic-ray, interlink-slurm-plugin,
+#        pixi-base, pixi-global, e2e-hub
 #
 # The hash covers file content, names and modes of every TRACKED file under
 # the listed pathspecs (git ls-files -s), so it is independent of commit
@@ -66,6 +66,13 @@ paths_for() {
 	supersonic-model-manager)
 		cat <<-EOF
 			docker/supersonic-model-manager
+			.github/workflows/ci-images.yml
+			.github/workflows/image-inputs.sh
+		EOF
+		;;
+	sonic-ray)
+		cat <<-EOF
+			docker/sonic-ray
 			.github/workflows/ci-images.yml
 			.github/workflows/image-inputs.sh
 		EOF

@@ -22,10 +22,19 @@ dependencies = [
     "cachetools>=5.5", # agentic-interface
     "matplotlib>=3.9", # plot-af-users cron
     "pandas>=2.2",
+    "numpy>=1.26", # sonic-ray
+    "onnx>=1.16", # sonic-ray tests build tiny models
+    "onnxruntime>=1.20", # sonic-ray (CPU build; the image uses onnxruntime-gpu)
 ]
 
 [tool.uv]
 package = false
+# The suites also run locally under an x86_64 uv on macOS (Intel Macs, or a
+# Rosetta-installed uv on Apple Silicon), where recent onnxruntime releases
+# ship no wheel; make the lock resolve to a version that installs there too.
+# CI runs on Linux either way; the tests only need the CPU runtime for tiny
+# models.
+required-environments = ["sys_platform == 'darwin' and platform_machine == 'x86_64'"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
