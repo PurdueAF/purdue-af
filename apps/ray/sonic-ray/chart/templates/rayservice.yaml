@@ -22,6 +22,11 @@ spec:
       - name: sonic
         import_path: sonic_ray.serve_app:sonic
         route_prefix: /
+        # The stock Ray image has no inference runtime: Ray installs these
+        # into a virtualenv (inheriting the image's packages) once per pod,
+        # when the first replica starts there.
+        runtime_env:
+          pip: {{ toJson .Values.serve.pip }}
         deployments:
           - name: SonicServer
             # One GPU per replica is the unit of scaling: a replica is a
@@ -84,11 +89,13 @@ spec:
           labels:
             {{- include "sonic-ray.podSelector" . | nindent 12 }}
             app.kubernetes.io/component: head
+          annotations:
+            checksum/code: {{ include "sonic-ray.codeChecksum" . }}
         spec:
           containers:
             - name: ray-head
               image: {{ include "sonic-ray.image" . }}
-              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              imagePullPolicy: {{ .Values.ray.image.pullPolicy }}
               env:
                 {{- include "sonic-ray.env" . | nindent 16 }}
               ports:
@@ -101,9 +108,15 @@ spec:
                 {{- toYaml .Values.ray.head.resources | nindent 16 }}
               volumeMounts:
                 - { name: log-volume, mountPath: /tmp/ray }
+                - name: code
+                  mountPath: {{ include "sonic-ray.codeDir" . }}/sonic_ray
+                  readOnly: true
           volumes:
             - name: log-volume
               emptyDir: {}
+            - name: code
+              configMap:
+                name: {{ $name }}-code
           {{- with .Values.nodeSelector }}
           nodeSelector:
             {{- toYaml . | nindent 12 }}
@@ -125,12 +138,14 @@ spec:
             labels:
               {{- include "sonic-ray.podSelector" . | nindent 14 }}
               app.kubernetes.io/component: worker
+            annotations:
+              checksum/code: {{ include "sonic-ray.codeChecksum" . }}
           spec:
             terminationGracePeriodSeconds: {{ .Values.ray.worker.terminationGracePeriodSeconds }}
             containers:
               - name: ray-worker
                 image: {{ include "sonic-ray.image" . }}
-                imagePullPolicy: {{ .Values.image.pullPolicy }}
+                imagePullPolicy: {{ .Values.ray.image.pullPolicy }}
                 env:
                   {{- include "sonic-ray.env" . | nindent 18 }}
                 ports:
@@ -140,12 +155,18 @@ spec:
                   {{- toYaml .Values.ray.worker.resources | nindent 18 }}
                 volumeMounts:
                   - { name: log-volume, mountPath: /tmp/ray }
+                  - name: code
+                    mountPath: {{ include "sonic-ray.codeDir" . }}/sonic_ray
+                    readOnly: true
                   - name: model-repository
                     mountPath: {{ .Values.modelRepository.mountPath }}
                     readOnly: true
             volumes:
               - name: log-volume
                 emptyDir: {}
+              - name: code
+                configMap:
+                  name: {{ $name }}-code
               - name: model-repository
                 persistentVolumeClaim:
                   claimName: {{ .Values.modelRepository.claimName }}

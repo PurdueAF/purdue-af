@@ -6,17 +6,20 @@ and answers the KServe v2 HTTP API (the protocol Triton's HTTP clients speak);
 Ray Serve runs as many replicas as the request load calls for, and the Ray
 autoscaler adds a GPU pod for each replica that has nowhere to run.
 
-This is the minimal shape: one image, one chart, one deployment, scaling from
-one GPU to as many as the worker group allows. It runs beside the `supersonic`
-release, on the same model repository, and does not replace it.
+This is the minimal shape: one chart, one deployment, **no custom image** —
+the pods run the official Ray CUDA image, the server code reaches them as a
+ConfigMap, and ONNX Runtime is installed by Ray Serve's `runtime_env` when a
+replica starts. It scales from one GPU to as many as the worker group allows,
+runs beside the `supersonic` release on the same model repository, and does
+not replace it.
 
 | path | what it is |
 | --- | --- |
 | `helmrepo.yaml` | `HelmRepository` for the KubeRay charts |
 | `operator/` | `kuberay-operator` 1.7.0 — the `ray.io` CRDs and the controller. Namespaced (`singleNamespaceInstall: true`), so both the watch and the RBAC stay in `cms`. |
-| `sonic-ray/chart/` | the `sonic-ray` chart: a `RayService` running the Serve application, and a metrics Service |
+| `sonic-ray/chart/` | the `sonic-ray` chart: a `RayService` running the Serve application, the ConfigMap carrying the code, and a metrics Service |
+| `sonic-ray/chart/files/sonic_ray/` | the server: `repository.py` (Triton-layout repository + ONNX Runtime), `protocol.py` (KServe v2 wire format), `serve_app.py` (the Ray Serve deployment) |
 | `sonic-ray/helmrelease.yaml`, `sonic-ray/values.yaml` | the AF release: `dependsOn` the operator, supersonic's claim, placement and address pool |
-| [`docker/sonic-ray/`](../../docker/sonic-ray) | the image: `rayproject/ray` (CUDA 12.8) + `onnxruntime-gpu` + the `sonic_ray` package |
 | [`tests/sonic_ray/`](../../tests/sonic_ray), [`tests/manifests/test_ray.py`](../../tests/manifests/test_ray.py) | unit tests for the server (CPU onnxruntime, models built in the tests) and for the chart |
 
 The chart lives here (like `apps/sonic/model-manager`) rather than being a raw
@@ -164,16 +167,31 @@ Server-side configuration is by environment variable, set by the chart on
 every container: `MODEL_REPOSITORY`, `ONNX_EXECUTION_PROVIDERS`, `MODELS`
 (comma-separated allowlist of directories to load), `LOG_LEVEL`.
 
-## Image
+## Image, or rather none
 
-`docker/sonic-ray/Dockerfile` — `rayproject/ray:2.52.0-py312-cu128` plus
-`onnxruntime-gpu==1.26.0` (the last CUDA 12 build; 1.27+ is CUDA 13, held by
-Renovate) and the `sonic_ray` package. Built by `ci.yml` like the other aux
-images and pulled as `:latest` through the geddes proxy cache
-([docker/REGISTRY.md](../../docker/REGISTRY.md)). The build fails, rather than
-the first replica, if the CUDA provider or any library it dlopens is missing
-from the image. The chart's `ray.version` must equal the base tag's Ray
-version (the autoscaler sidecar is pinned to it) — a test checks.
+The pods run `rayproject/ray:2.52.0-py312-cu128` (through the geddes Docker
+Hub proxy cache) exactly as published: Ray with every extra, CUDA 12.8, cuDNN
+9. Two things are added at deploy time instead of build time:
+
+- **the code** — `files/sonic_ray/*.py` become the `sonic-ray-code` ConfigMap,
+  mounted at `/serve_app/sonic_ray` on head and workers with
+  `PYTHONPATH=/serve_app`. Their hash is annotated onto both pod templates, so
+  a code change rolls the cluster.
+- **ONNX Runtime** — `serve.pip` (`onnxruntime-gpu==1.26.0`, the last CUDA 12
+  build; 1.27+ is CUDA 13) goes into the Serve application's `runtime_env`.
+  Ray installs it into a virtualenv that inherits the image's packages the
+  first time a replica starts on a pod, and reuses it for the pod's life. It
+  dlopens the image's CUDA and cuDNN libraries.
+
+The price is paid at pod start: after the image pull, a new pod downloads the
+wheel (~300 MB) and installs it before its replica can load models — expect a
+minute or two per scale-up, and a dependency on PyPI being reachable from the
+GPU nodes. That trade was chosen deliberately over maintaining a custom Ray
+image; if startup latency matters later, baking the wheel into an image is a
+contained change (the code already imports onnxruntime lazily).
+
+The chart's `ray.version` selects the image tag *and* pins the autoscaler
+sidecar KubeRay adds, so the two cannot drift.
 
 ## Cost
 

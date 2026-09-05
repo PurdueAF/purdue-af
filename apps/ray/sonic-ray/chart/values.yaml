@@ -5,22 +5,25 @@
 # answers KServe v2 HTTP requests for them. A replica is a server; Serve runs
 # as many as the load calls for, and the Ray autoscaler adds a GPU pod for
 # each one that has nowhere to go.
+#
+# No custom image. The pods run the official Ray CUDA image; the server code
+# (files/sonic_ray) reaches them as a ConfigMap on PYTHONPATH, and ONNX
+# Runtime is installed by Ray Serve's runtime_env when a replica starts.
 
 # -- Instance name (release name by default). Names every resource and is the
 # app.kubernetes.io/instance label the Services select pods by.
 nameOverride: ""
 
-image:
-  # -- docker/sonic-ray, published by ci.yml as :latest through the geddes
-  # proxy cache (docker/REGISTRY.md). Same Ray version as ray.version.
-  repository: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/sonic-ray
-  tag: latest
-  # -- :latest moves, so pull on every pod start.
-  pullPolicy: Always
-
 ray:
-  # -- Ray version inside the image; the autoscaler sidecar is pinned to it.
+  # -- Ray version: selects the image tag below and pins the autoscaler sidecar.
   version: "2.52.0"
+  image:
+    # -- The official Ray image, through the geddes Docker Hub proxy cache.
+    # Tag is <version>-<flavor>: rayproject/ray:2.52.0-py312-cu128 carries
+    # CUDA 12.8 + cuDNN 9, which is what onnxruntime-gpu below links against.
+    repository: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray
+    flavor: py312-cu128
+    pullPolicy: IfNotPresent
   # -- NewCluster brings a second cluster up and cuts over once its Serve
   # application is healthy — zero downtime, at the cost of a second set of
   # GPUs for the duration; if none are free it waits and the old cluster
@@ -55,6 +58,12 @@ ray:
       requests: { cpu: 500m, memory: 512Mi }
 
 serve:
+  # -- Installed into a per-node virtualenv (inheriting the image's packages)
+  # the first time a replica starts on a pod, then reused for the pod's life.
+  # onnxruntime-gpu 1.27+ is built against CUDA 13; the image is CUDA 12.8, so
+  # stay on the last CUDA 12 build until the image moves to a cu13 tag.
+  pip:
+    - onnxruntime-gpu==1.26.0
   # -- Replicas of SonicServer: each is one GPU with every servable model on
   # it. Serve adds one when the average number of in-flight requests per
   # replica exceeds targetOngoingRequests, and removes one when it falls

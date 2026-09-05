@@ -29,13 +29,11 @@ REPO = Path(__file__).resolve().parents[2]
 RAY = REPO / "apps" / "ray"
 CHART = RAY / "sonic-ray" / "chart"
 VALUES = RAY / "sonic-ray" / "values.yaml"
-IMAGE = REPO / "docker" / "sonic-ray"
-SERVE_APP = IMAGE / "sonic_ray" / "serve_app.py"
+CODE = CHART / "files" / "sonic_ray"
+SERVE_APP = CODE / "serve_app.py"
 SUPERSONIC = REPO / "apps" / "sonic" / "supersonic" / "values.yaml"
 EXPERIMENTAL = REPO / "deploy" / "experimental" / "kustomization.yaml"
 VALIDATOR = REPO / ".github" / "workflows" / "validate-manifests.sh"
-IMAGE_INPUTS = REPO / ".github" / "workflows" / "image-inputs.sh"
-CI_IMAGES = REPO / ".github" / "workflows" / "ci-images.yml"
 
 
 def load(path):
@@ -180,48 +178,65 @@ def test_validator_renders_this_chart():
     assert "RayService" not in text, "the kubeconform skip is gone; keep it gone"
 
 
-# -- the image ---------------------------------------------------------------
+# -- no custom image ---------------------------------------------------------
 
 
-def test_image_is_built_and_published_by_ci():
-    """An aux image nobody builds is a pod that never pulls."""
-    assert "sonic-ray)" in IMAGE_INPUTS.read_text()
-    ci = CI_IMAGES.read_text()
-    assert "- name: sonic-ray" in ci
-    assert re.search(r"for name in .*\bsonic-ray\b.*; do", ci), (
-        "publish loop misses sonic-ray"
+def test_pods_run_the_stock_ray_image(head_pod, worker_group, chart_defaults):
+    """The official Ray image through the Docker Hub proxy cache; the tag's
+    version is ray.version, which also pins the autoscaler sidecar KubeRay
+    adds — a mismatch is a cluster that never comes up."""
+    ray = chart_defaults["ray"]
+    expected = f"{ray['image']['repository']}:{ray['version']}-{ray['image']['flavor']}"
+    assert expected.startswith(
+        "geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray:"
     )
-    assert (IMAGE / "Dockerfile").is_file()
+    for template, name in (
+        (head_pod, "ray-head"),
+        (worker_group["template"], "ray-worker"),
+    ):
+        c = container(template, name)
+        assert c["image"] == expected
+        assert c["imagePullPolicy"] == "IfNotPresent"  # immutable tag
+    assert not (REPO / "docker" / "sonic-ray").exists(), "no custom image, by decision"
 
 
-def test_chart_pulls_the_ci_image(chart_defaults):
-    image = chart_defaults["image"]
-    assert image["repository"].endswith("/ghcr-proxy-cache/purdueaf/sonic-ray")
-    assert image["tag"] == "latest"
-    assert image["pullPolicy"] == "Always", (
-        ":latest moves; a cached pull would pin an old build"
+def test_onnxruntime_comes_from_runtime_env_on_the_cuda12_line(
+    serve_config, chart_defaults
+):
+    """The stock image has no inference runtime; Serve installs it. The image
+    carries CUDA 12.8, and onnxruntime-gpu 1.27+ links against CUDA 13."""
+    app = serve_config["applications"][0]
+    assert app["runtime_env"]["pip"] == chart_defaults["serve"]["pip"]
+    (spec,) = [
+        p for p in app["runtime_env"]["pip"] if p.startswith("onnxruntime-gpu==")
+    ]
+    major, minor, _ = spec.removeprefix("onnxruntime-gpu==").split(".")
+    assert (int(major), int(minor)) < (1, 27)
+    assert "cu12" in chart_defaults["ray"]["image"]["flavor"]
+
+
+def test_code_reaches_every_pod(rendered, head_pod, worker_group):
+    """import_path resolves only if the ConfigMap holds the package and lands
+    on PYTHONPATH — on the head (where Serve builds the application) and the
+    workers (where replicas run). A code change must roll the cluster."""
+    configmap = rendered[("ConfigMap", "sonic-ray-code")]
+    files = {p.name: p.read_text() for p in CODE.glob("*.py")}
+    assert files and configmap["data"] == files
+    for template, name in (
+        (head_pod, "ray-head"),
+        (worker_group["template"], "ray-worker"),
+    ):
+        volume = next(v for v in template["spec"]["volumes"] if v["name"] == "code")
+        assert volume["configMap"]["name"] == "sonic-ray-code"
+        c = container(template, name)
+        mount = next(m for m in c["volumeMounts"] if m["name"] == "code")
+        assert mount["readOnly"] is True
+        assert mount["mountPath"] == f"{env_of(c)['PYTHONPATH']}/sonic_ray"
+        assert template["metadata"]["annotations"]["checksum/code"]
+    assert (
+        head_pod["metadata"]["annotations"]["checksum/code"]
+        == worker_group["template"]["metadata"]["annotations"]["checksum/code"]
     )
-
-
-def test_ray_version_is_the_images(chart_defaults):
-    """The autoscaler sidecar KubeRay adds is pinned to rayVersion; a mismatch
-    with the Ray inside the image is a cluster that never comes up."""
-    dockerfile = (IMAGE / "Dockerfile").read_text()
-    match = re.search(
-        r"^FROM rayproject/ray:(\d+\.\d+\.\d+)-", dockerfile, re.MULTILINE
-    )
-    assert match, "Dockerfile FROM must be an official rayproject/ray tag"
-    assert chart_defaults["ray"]["version"] == match.group(1)
-
-
-def test_onnxruntime_is_the_cuda12_line():
-    """The Ray base image carries CUDA 12.8; onnxruntime-gpu 1.27+ links
-    against CUDA 13. Renovate holds the pin — make sure it still does."""
-    pyproject = (IMAGE / "pyproject.toml").read_text()
-    match = re.search(r'"onnxruntime-gpu==(\d+)\.(\d+)\.\d+"', pyproject)
-    assert match and (int(match.group(1)), int(match.group(2))) < (1, 27)
-    renovate = (REPO / ".github" / "renovate.json5").read_text()
-    assert "onnxruntime-gpu" in renovate and "'<1.27'" in renovate
 
 
 # -- the models are supersonic's ---------------------------------------------
@@ -429,6 +444,7 @@ def test_metrics_service_selects_labels_kuberay_leaves_alone(
             "ray.worker.terminationGracePeriodSeconds=30",
             "must exceed serve.gracefulShutdownTimeoutS",
         ),
+        ("serve.pip={onnxruntime-gpu}", "must pin onnxruntime-gpu=="),
     ],
 )
 def test_chart_fails_on_values_that_cannot_work(override, message):

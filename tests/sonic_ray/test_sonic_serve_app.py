@@ -10,8 +10,11 @@ import pytest
 
 SERVE_APP = (
     Path(__file__).resolve().parents[2]
-    / "docker"
+    / "apps"
+    / "ray"
     / "sonic-ray"
+    / "chart"
+    / "files"
     / "sonic_ray"
     / "serve_app.py"
 )

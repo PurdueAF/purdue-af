@@ -22,7 +22,20 @@ app.kubernetes.io/instance: {{ include "sonic-ray.name" . }}
 {{- end -}}
 
 {{- define "sonic-ray.image" -}}
-{{ .Values.image.repository }}:{{ .Values.image.tag }}
+{{ .Values.ray.image.repository }}:{{ .Values.ray.version }}-{{ .Values.ray.image.flavor }}
+{{- end -}}
+
+{{/*
+Where the ConfigMap with the server code is mounted; its parent is PYTHONPATH.
+*/}}
+{{- define "sonic-ray.codeDir" -}}/serve_app{{- end -}}
+
+{{/*
+Hash of the server code, annotated onto both pod templates so a code change
+rolls the cluster like any other change to it would.
+*/}}
+{{- define "sonic-ray.codeChecksum" -}}
+{{ (.Files.Glob "files/sonic_ray/*.py").AsConfig | sha256sum }}
 {{- end -}}
 
 {{/*
@@ -30,6 +43,8 @@ Environment the sonic_ray package reads, identical on head and workers so an
 import on either sees the same configuration.
 */}}
 {{- define "sonic-ray.env" -}}
+- name: PYTHONPATH
+  value: {{ include "sonic-ray.codeDir" . | quote }}
 - name: MODEL_REPOSITORY
   value: {{ .Values.modelRepository.mountPath | quote }}
 - name: ONNX_EXECUTION_PROVIDERS
@@ -46,6 +61,12 @@ import on either sees the same configuration.
 Refuse to render what cannot work.
 */}}
 {{- define "sonic-ray.validate" -}}
+{{- if not (.Files.Glob "files/sonic_ray/*.py") -}}
+  {{- fail "files/sonic_ray/*.py is empty: nothing to serve." -}}
+{{- end -}}
+{{- if not (regexMatch "^onnxruntime-gpu==" (join " " .Values.serve.pip)) -}}
+  {{- fail "serve.pip must pin onnxruntime-gpu==<version>: the stock Ray image has no inference runtime." -}}
+{{- end -}}
 {{- if not .Values.modelRepository.claimName -}}
   {{- fail "modelRepository.claimName is required: the PVC holding the model repository." -}}
 {{- end -}}

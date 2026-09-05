@@ -78,7 +78,7 @@ jobs:
             af_digest=""
           fi
           aux_tags=""
-          for name in agentic-interface af-pod-monitor af-node-monitor supersonic-model-manager sonic-ray interlink-slurm-plugin; do
+          for name in agentic-interface af-pod-monitor af-node-monitor supersonic-model-manager interlink-slurm-plugin; do
             tag=$(./.github/workflows/image-inputs.sh "$name")
             # Most aux images ride :latest. interlink-slurm-plugin is pinned to
             # the upstream plugin checkout (PLUGIN_REF) so values and the
@@ -259,22 +259,6 @@ jobs:
               assert (STATIC_DIR / 'index.html').is_file();
               assert (STATIC_DIR / 'img' / 'supersonic-mark.svg').is_file();
               print('ok:', len(routes), 'routes')"
-          # Ray Serve + ONNX Runtime on the official Ray CUDA image (large —
-          # free the runner's disk first). No GPU on the runner: the smoke
-          # asserts the CUDA provider is compiled in, the sonic_ray package
-          # imports under Ray Serve, and the KServe v2 routes are wired.
-          - name: sonic-ray
-            dockerfile: docker/sonic-ray/Dockerfile
-            context: .
-            free_disk: true
-            smoke: >-
-              python -c "import onnxruntime as ort;
-              from sonic_ray import serve_app;
-              assert 'CUDAExecutionProvider' in ort.get_available_providers();
-              paths = {getattr(r, 'path', None) for r in serve_app.app.routes};
-              assert {'/v2/health/ready', '/v2/repository/index',
-                      '/v2/models/{model_name}/infer'} <= paths, paths;
-              print('ok:', ort.__version__, len(paths), 'routes')"
           # Thin Slurm client for every RCAC cluster; SLURM_CLUSTER selects
           # the baked config tree at runtime. Smoke does not start munged
           # (needs the site key PVC) — just asserts the multi-cluster layout.

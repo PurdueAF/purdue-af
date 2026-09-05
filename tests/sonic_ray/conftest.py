@@ -1,6 +1,6 @@
 """Fixtures for the sonic-ray suite.
 
-The server is a package (``sonic_ray``) living under docker/, not an
+The server is a package (``sonic_ray``) living in the chart's files/, not an
 installed distribution — make its directory importable before anything else.
 The models are built in sonic_ray_helpers with onnx.helper, so the suite
 needs no fixture files and no GPU: the CPU build of onnxruntime runs them.
@@ -12,7 +12,17 @@ from pathlib import Path
 import onnx
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "docker" / "sonic-ray"))
+sys.path.insert(
+    0,
+    str(
+        Path(__file__).resolve().parents[2]
+        / "apps"
+        / "ray"
+        / "sonic-ray"
+        / "chart"
+        / "files"
+    ),
+)
 
 from sonic_ray_helpers import (  # noqa: E402
     DEEPMET_CONFIG,

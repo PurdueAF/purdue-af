@@ -8,7 +8,8 @@ Ray Serve runs as many replicas as the request load calls for (see the
 adds a GPU pod for each replica that has nowhere to go. That is the whole
 scaling story; nothing here reads a metric.
 
-Configuration is by environment variable, so the image runs anywhere::
+Configuration is by environment variable (the chart sets them on every
+container), so the package runs anywhere::
 
     MODEL_REPOSITORY         /models        the Triton-layout repository
     ONNX_EXECUTION_PROVIDERS CUDAExecutionProvider,CPUExecutionProvider

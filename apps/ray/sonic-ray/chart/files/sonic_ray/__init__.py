@@ -12,4 +12,8 @@ Three modules, in dependency order:
 
 The split is what keeps the first two unit-testable on a laptop with the CPU
 build of onnxruntime; the deployment itself is a thin layer over them.
+
+These files ship to the cluster as a ConfigMap rendered by the chart (see
+templates/configmap.yaml) and land on PYTHONPATH in the stock Ray image; there
+is no custom image. onnxruntime is installed by Ray Serve's runtime_env.
 """

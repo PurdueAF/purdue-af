@@ -85,7 +85,6 @@ leads with the deployed version. The other aux images ride `:latest`.
 ![af-pod-monitor][image-af-pod-monitor]
 ![af-node-monitor][image-af-node-monitor]
 ![supersonic-model-manager][image-supersonic-model-manager]
-![sonic-ray][image-sonic-ray]
 ![interlink-slurm-plugin][image-interlink-slurm-plugin]
 
 Reading the badges:
@@ -146,7 +145,6 @@ How a change reaches the cluster, version rules and rollback:
 [image-af-pod-monitor]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-af-pod-monitor.json
 [image-af-node-monitor]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-af-node-monitor.json
 [image-supersonic-model-manager]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-supersonic-model-manager.json
-[image-sonic-ray]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-sonic-ray.json
 [image-interlink-slurm-plugin]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-interlink-slurm-plugin.json
 [status-pending]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/_pending.json
 [platform-version]: https://img.shields.io/github/v/tag/PurdueAF/purdue-af?filter=2*&sort=semver&label=platform&color=blue
