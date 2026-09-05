@@ -12,6 +12,9 @@ gateway:
       password: null
   nodeSelector:
     cms-af-prod: "true"
+    # geddes-auth (ldap_lookup in options_handler) only answers from the
+    # 172.21.160.0/24 nodes, which carry this label.
+    role: storage-node
   tolerations:
     - key: "hub.jupyter.org/dedicated"
       operator: "Equal"
