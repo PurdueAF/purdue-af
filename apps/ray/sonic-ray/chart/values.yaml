@@ -1,0 +1,138 @@
+# Default values for sonic-ray.
+#
+# A RayService whose worker pods each carry a Triton Inference Server beside
+# the Ray container, and whose Serve application forwards every Triton gRPC
+# call to the Triton in its own pod. Ray Serve's gRPC proxy speaks Triton's
+# protocol (it is handed Triton's generated servicer), counts every request,
+# and sizes the deployment from that; the Ray autoscaler adds a GPU pod for
+# each replica with nowhere to go. Triton does all of the inference.
+#
+# No custom image: the Ray containers run the official Ray image, the Triton
+# container the official Triton image, the forwarder reaches the pods as a
+# ConfigMap on PYTHONPATH, and Triton's Python stubs are pip-installed into an
+# emptyDir by an init container.
+
+# -- Instance name (release name by default). Names every resource and is the
+# app.kubernetes.io/instance label the Services select pods by.
+nameOverride: ""
+
+ray:
+  # -- Ray version: selects the image tag below and pins the autoscaler sidecar.
+  version: "2.52.0"
+  image:
+    # -- The official Ray image, through the geddes Docker Hub proxy cache.
+    # Tag is <version>-<flavor>. No Ray process touches a GPU, so the CPU
+    # flavor; Triton brings its own CUDA.
+    repository: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray
+    flavor: py312-cpu
+    pullPolicy: IfNotPresent
+  # -- NewCluster brings a second cluster up and cuts over once its Serve
+  # application is healthy — zero downtime, at the cost of a second set of
+  # GPUs for the duration; if none are free it waits and the old cluster
+  # keeps serving. None never replaces the running cluster.
+  upgradeStrategy: NewCluster
+  head:
+    # -- GCS, dashboard, Serve controller and the proxies. No replicas run
+    # here: num-cpus is pinned to 0 and there is no Triton.
+    resources:
+      limits: { cpu: "2", memory: 8Gi }
+      requests: { cpu: "2", memory: 8Gi }
+  worker:
+    # -- The Ray side of a worker pod: a raylet, a Serve proxy and the one
+    # forwarding replica. Triton's own resources are under triton.resources.
+    resources:
+      limits: { cpu: "2", memory: 4Gi }
+      requests: { cpu: "2", memory: 4Gi }
+    # -- Pod count bounds. maxReplicas is the GPU ceiling of the release; the
+    # chart refuses to render if Serve may ask for more replicas than this.
+    minReplicas: 0
+    maxReplicas: 4
+    # -- Scaling down deletes the pod. Triton drains in-flight requests for
+    # --exit-timeout-secs after SIGTERM; the kubelet must wait at least that
+    # long (the chart refuses to render otherwise).
+    terminationGracePeriodSeconds: 90
+  autoscaler:
+    # -- How long a worker with no replica on it lingers before the Ray
+    # autoscaler reclaims it.
+    idleTimeoutSeconds: 60
+    resources:
+      limits: { cpu: 500m, memory: 512Mi }
+      requests: { cpu: 500m, memory: 512Mi }
+
+python:
+  # -- Installed by an init container into an emptyDir that every Ray process
+  # sees on PYTHONPATH — proxies included, which is where Triton's generated
+  # servicer has to be importable. --no-deps: grpcio, protobuf, numpy and
+  # packaging come from the image, and tritonclient 2.48 is the last release
+  # whose stubs match the image's protobuf 4.
+  pip:
+    - tritonclient==2.48.0
+    - python-rapidjson==1.24
+
+serve:
+  # -- Replicas of the forwarder: one per GPU pod, each fronting that pod's
+  # Triton. Serve adds one when the average number of in-flight requests per
+  # replica exceeds targetOngoingRequests, and removes one when it falls well
+  # below. Scale-to-zero (minReplicas: 0) works but the first request then
+  # waits for a pod, two image pulls and Triton's model load.
+  minReplicas: 1
+  maxReplicas: 4
+  targetOngoingRequests: 16
+  # -- Requests a replica queues before the proxy backs off to another.
+  maxOngoingRequests: 128
+  # -- How fast Serve reacts. Up quickly; down slowly, since a replica gone is
+  # a GPU pod gone.
+  upscaleDelayS: 10
+  downscaleDelayS: 300
+  # -- In-flight requests get this long to finish when a replica is retired.
+  gracefulShutdownTimeoutS: 60
+  # -- The forwarder polls its Triton's ServerLive on this schedule.
+  healthCheckPeriodS: 10
+  healthCheckTimeoutS: 30
+
+triton:
+  image:
+    repository: nvcr.io/nvidia/tritonserver
+    tag: "26.04-py3"
+    pullPolicy: IfNotPresent
+  # -- Passed to the Triton container as-is; the model repository path in args
+  # must be modelRepository.mountPath.
+  command: ["tritonserver"]
+  args:
+    - --model-repository=/models
+    - --exit-timeout-secs=60
+  # -- One GPU per Triton is the unit of scaling: a pod is one Triton, and a
+  # Serve replica is one pod.
+  resources:
+    limits: { nvidia.com/gpu: 1 }
+    requests: { nvidia.com/gpu: 1 }
+  modelRepository:
+    # -- An existing claim (ReadWriteMany if anything else mounts it). Mounted
+    # read-only: Triton only reads it, and this release does not own it.
+    claimName: ""
+    mountPath: /models
+  # -- A large repository takes minutes to load; the startup probe buys that
+  # time without loosening readiness afterwards.
+  startupProbe:
+    httpGet: { path: /v2/health/ready, port: http }
+    periodSeconds: 10
+    timeoutSeconds: 15
+    failureThreshold: 60
+  readinessProbe:
+    httpGet: { path: /v2/health/ready, port: http }
+    periodSeconds: 10
+    timeoutSeconds: 15
+    failureThreshold: 3
+    successThreshold: 1
+
+# -- Placement for every pod of the release, head and workers alike.
+nodeSelector: {}
+tolerations: []
+
+# -- The inference entry point: KubeRay's serve Service, fronting Serve's
+# proxies. gRPC on 8001 (Triton's conventional port, so clients keep their
+# address:port habit) to the gRPC proxy; HTTP 8000 carries only Serve's own
+# /-/healthz and /-/routes. The head's own Service is never exposed.
+service:
+  type: LoadBalancer
+  annotations: {}

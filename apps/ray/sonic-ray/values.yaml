@@ -1,0 +1,61 @@
+# Values for the `sonic-ray` release: Triton on Ray in the cms namespace on
+# Geddes, with Ray Serve carrying its gRPC. Autoscaling is Ray's alone: no
+# KEDA, no Prometheus in the loop. See the chart.
+
+triton:
+  image:
+    repository: nvcr.io/nvidia/tritonserver
+    tag: "26.04-py3"
+  command: ["/bin/sh", "-c"]
+  args:
+    - |
+      /opt/tritonserver/bin/tritonserver \
+      --model-repository=/models \
+      --model-control-mode=explicit \
+      --load-model=* \
+      --allow-gpu-metrics=true \
+      --log-verbose=0 \
+      --disable-auto-complete-config \
+      --exit-timeout-secs=60
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      cpu: 16
+      memory: 16G
+    requests:
+      nvidia.com/gpu: 1
+      cpu: 16
+      memory: 16G
+  readinessProbe:
+    successThreshold: 3
+  # The CMS model repository claim, created and written by the model manager
+  # (apps/sonic/model-manager); mounted read-only here.
+  modelRepository:
+    claimName: supersonic-model-repository
+    mountPath: /models
+
+ray:
+  worker:
+    # The GPU ceiling of the release; start small, the GPUs are shared.
+    minReplicas: 0
+    maxReplicas: 4
+
+serve:
+  # One GPU idling so the first request does not wait for a pod, two image
+  # pulls and Triton's model load; up to every GPU the worker group may have.
+  minReplicas: 1
+  maxReplicas: 4
+
+# The CMS GPU nodes, for every pod here.
+nodeSelector: { "cms-af-prod": "true" }
+tolerations:
+  - key: hub.jupyter.org/dedicated
+    operator: Equal
+    value: cms-af
+    effect: NoSchedule
+
+# The private address pool: reachable from the AF, never a public ingress.
+service:
+  type: LoadBalancer
+  annotations:
+    metallb.universe.tf/address-pool: geddes-private-pool

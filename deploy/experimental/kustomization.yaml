@@ -38,6 +38,13 @@ resources:
   # supersonic-model-manager-auth Secret to exist in the namespace.
   - ../../apps/sonic/model-manager/helmrelease.yaml
 
+  # Triton on Ray: Ray Serve's gRPC proxy in front of a Triton per GPU pod,
+  # plus the KubeRay operator that reconciles it. Mounts the model repository
+  # claim of the release above. See apps/ray/README.md.
+  - ../../apps/ray/helmrepo.yaml
+  - ../../apps/ray/operator/helmrelease.yaml
+  - ../../apps/ray/sonic-ray/helmrelease.yaml
+
   - ../../apps/interlink/helmrepo.yaml
   - ../../apps/interlink/hammer/helmrelease.yaml
   - ../../apps/interlink/gautschi/helmrelease.yaml
@@ -149,6 +156,14 @@ configMapGenerator:
     files:
       - ../../apps/af-utils/slurm-probes/probe.sh
       - ../../apps/af-utils/slurm-probes/serve.py
+
+  - name: kuberay-operator-config
+    files:
+      - values.yaml=../../apps/ray/operator/values.yaml
+
+  - name: sonic-ray-config
+    files:
+      - values.yaml=../../apps/ray/sonic-ray/values.yaml
 
   - name: interlink-hammer-config
     files:
