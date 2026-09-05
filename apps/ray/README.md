@@ -1,26 +1,26 @@
 # Ray on the Analysis Facility
 
-The SuperSONIC model repository's ONNX models, served by **Ray Serve** instead
-of Triton: one Ray Serve deployment loads every ONNX model of the repository
-onto a GPU and answers plain JSON inference requests for them; Ray Serve runs
-as many replicas as the request load calls for, and the Ray autoscaler adds a
-GPU pod for each replica that has nowhere to run.
+SuperSONIC's **Triton**, run on Ray: every worker pod carries the same Triton
+as `apps/sonic/supersonic` — same image, arguments, resources, model
+repository — and **Ray Serve's gRPC proxy carries Triton's protocol** to it.
+Serve speaks that protocol because it is handed Triton's own generated
+servicer; the only code of ours is a forwarder that passes each RPC from the
+proxy to the Triton in its pod. Serve counts every request on the way through,
+sizes the deployment from that, and the Ray autoscaler adds a GPU pod for each
+replica with nowhere to go.
 
-This is the minimal shape: one chart, one deployment, **no custom image** and
-**no Triton compatibility** — the pods run the official Ray CUDA image, the
-server code (two short Python files) reaches them as a ConfigMap, and ONNX
-Runtime is installed by Ray Serve's `runtime_env` when a replica starts. It
-scales from one GPU to as many as the worker group allows, runs beside the
-`supersonic` release on the same model repository, and does not replace it.
+No custom image, no protocol code, no model code: official Ray, official
+Triton, ~100 lines of glue shipped as a ConfigMap, Triton's Python stubs
+pip-installed by an init container.
 
 | path | what it is |
 | --- | --- |
 | `helmrepo.yaml` | `HelmRepository` for the KubeRay charts |
 | `operator/` | `kuberay-operator` 1.7.0 — the `ray.io` CRDs and the controller. Namespaced (`singleNamespaceInstall: true`), so both the watch and the RBAC stay in `cms`. |
-| `sonic-ray/chart/` | the `sonic-ray` chart: a `RayService` running the Serve application, the ConfigMap carrying the code, and a metrics Service |
-| `sonic-ray/chart/files/sonic_ray/` | the server: `models.py` (find the ONNX models in the Triton-layout directory, run them with ONNX Runtime), `serve_app.py` (the Ray Serve deployment and its JSON endpoints) |
-| `sonic-ray/helmrelease.yaml`, `sonic-ray/values.yaml` | the AF release: `dependsOn` the operator, supersonic's claim, placement and address pool |
-| [`tests/sonic_ray/`](../../tests/sonic_ray), [`tests/manifests/test_ray.py`](../../tests/manifests/test_ray.py) | unit tests for the server (CPU onnxruntime, models built in the tests) and for the chart |
+| `sonic-ray/chart/` | the `sonic-ray` chart: a `RayService` with a Triton in every worker pod and the forwarder as its Serve application, the ConfigMap carrying the forwarder, two metrics Services |
+| `sonic-ray/chart/files/sonic_ray/serve_app.py` | the forwarder — one replica per pod, every unary RPC of `GRPCInferenceService` handed to the pod's Triton unchanged |
+| `sonic-ray/helmrelease.yaml`, `sonic-ray/values.yaml` | the AF release: `dependsOn` the operator, values with supersonic's `triton:` block |
+| [`tests/sonic_ray/`](../../tests/sonic_ray), [`tests/manifests/test_ray.py`](../../tests/manifests/test_ray.py) | source-level checks of the forwarder; rendered-chart checks incl. parity with `apps/sonic/supersonic/values.yaml` |
 
 The chart lives here (like `apps/sonic/model-manager`) rather than being a raw
 `RayService` because of ordering: until the operator's chart has installed the
@@ -32,137 +32,114 @@ would install them. `dependsOn: kuberay-operator` is the fix, and a
 ## Shape
 
 ```
-     clients ──▶ sonic-ray-serve (LoadBalancer, private pool) :8000
-                    │  POST /models/<name>  {"inputs": {...}}
+     clients ──▶ sonic-ray-serve (LoadBalancer, private pool) :8001
+                    │  Triton gRPC: ModelInfer, ModelMetadata, …
                     ▼
-   ┌─────────────────────────────────────────────┐   × 1…4 pods
-   │ worker pod  (1 GPU, 8 CPU, 16Gi, /models ro) │
-   │   Serve proxy → SonicServer replica          │
-   │                 every ONNX model, ORT+CUDA   │
-   └─────────────────────────────────────────────┘
-          ▲ replica demand           │ ray_serve_* metrics :8080
-          │                          ▼
-   ┌─────────────────────────────────────────────┐
-   │ head pod: Serve controller, Ray autoscaler  │  (0 CPUs for work, no GPU)
-   └─────────────────────────────────────────────┘
+     Serve gRPC proxy (Triton's servicer) on head and every worker
+                    │  counted, balanced, autoscaled by Serve
+                    ▼
+   ┌─────────────────────────────────────────────────┐   × 1…4 pods
+   │ worker pod                                      │
+   │   ray-worker  raylet advertising triton: 1,     │
+   │               proxy, TritonProxy replica ──┐    │
+   │   triton      1 GPU, 16 CPU, 16G, /models ◀┘    │  localhost:8001
+   └─────────────────────────────────────────────────┘
+                    ▲ replica demand
+   ┌─────────────────────────────────────────────────┐
+   │ head pod: Serve controller, Ray autoscaler      │  (0 CPUs for work, no GPU)
+   └─────────────────────────────────────────────────┘
 ```
 
-A **replica is a server**: one GPU with every servable model loaded, the same
-unit a Triton pod is. A **pod is a replica**: the worker group hands out
-exactly one GPU per pod, and the chart refuses to render otherwise.
+A **pod is one Triton on one GPU**, the unit SuperSONIC scales by too. A
+**replica is one pod**: every worker advertises one `triton` resource and
+every replica claims one, so a replica lands next to its Triton and nowhere
+else. Nothing else claims the resource, which is what leaves a pod without a
+replica idle and therefore reclaimable, and a replica without a pod pending —
+the request that grows the group.
 
-## What it serves
+## What it serves and speaks
 
-The repository is `supersonic-model-repository`, the claim the
-[model manager](../sonic/model-manager) writes and the `supersonic` Triton
-reads — mounted read-only at `/models` on the workers. Every subdirectory is a
-model; its highest numbered version directory holding `model.onnx` is loaded
-with ONNX Runtime (CUDA execution provider, CPU fallback). Directories without
-an ONNX model are **listed but not served**, with the reason:
+Everything the `supersonic` release does, because it is the same server on
+the same repository (`supersonic-model-repository`, read-only, written by the
+[model manager](../sonic/model-manager)): all ten CMS models, every backend,
+`config.pbtxt` semantics, dynamic batching, the repository index.
 
-| model | format | here |
-| --- | --- | --- |
-| `particleNetFromMiniAODAK4CHSCentral`, `…AK4CHSForward`, `…AK4PuppiCentral`, `…AK4PuppiForward`, `…AK8`, `particlenet` | ONNX | served |
-| `higgsInteractionNet` | ONNX | served |
-| `deepmet`, `deeptau_2017v2p1`, `deeptau_2018v2p5` | TensorFlow graphdef | listed under `skipped` |
+The wire protocol is Triton's gRPC. `GET`-style HTTP is **not** carried
+(Serve's HTTP proxy on 8000 answers only its own `/-/healthz` and
+`/-/routes`); Triton's HTTP port stays inside the pod. CMSSW's `TritonClient`
+speaks gRPC, so `cmsRun` jobs point at `sonic-ray-serve:8001` exactly as they
+point at supersonic's Envoy — the port is Triton's conventional one on purpose.
+`tritonclient.grpc` works the same way.
 
-Nothing else in the Triton layout is read — not `config.pbtxt`, not the
-labels files. ONNX Runtime knows each model's inputs and outputs itself, and
-that is what `GET /models/<name>` reports. Adding a TensorFlow runtime is the
-obvious next step if those three models are wanted here.
-
-## Protocol
-
-Plain JSON, deliberately **not** Triton's. Four endpoints:
-
-| | |
-| --- | --- |
-| `GET /healthz` | `{"models": <count loaded>}` |
-| `GET /models` | `{"models": [...], "skipped": {<name>: <reason>}}` |
-| `GET /models/<name>` | inputs and outputs (name, dtype, shape with -1 for dynamic dims), version, execution providers |
-| `POST /models/<name>` | body `{"inputs": {<name>: <nested list>, ...}}` → `{"model", "version", "outputs": {<name>: <nested list>}}` |
-
-Inputs are cast to the model's dtypes; a wrong name, rank or shape is a 400
-with the reason, an unknown or unloaded model a 404 with the reason.
-
-```python
-import numpy as np, requests
-
-url = "http://<sonic-ray-serve address>:8000"
-requests.get(f"{url}/models").json()
-r = requests.post(f"{url}/models/particleNetFromMiniAODAK8", json={"inputs": {
-    "pf_features": np.zeros((3, 32, 100), np.float32).tolist(),
-    "pf_mask": np.ones((3, 1, 100), np.float32).tolist(),
-    "sv_features": np.zeros((3, 10, 7), np.float32).tolist(),
-    # ... every input the model declares
-}})
-np.asarray(r.json()["outputs"]["output"])
-```
-
-What this means: **no existing SONIC client works against it yet.** CMSSW's
-`TritonClient` speaks gRPC and `tritonclient.http` speaks KServe v2; both are
-Triton's protocol, and Triton compatibility was left out on purpose to keep
-this first version small. Adding it later is a bounded piece of work — the
-v2 HTTP protocol with its binary tensor extension is a few hundred lines,
-gRPC a Ray Serve gRPC proxy with a `GRPCInferenceService` servicer — and it
-slots in beside these endpoints without changing anything else here.
-
-Also not here: cross-request dynamic batching (Triton's `dynamic_batching`).
-Clients batch per request already (a `pf_features` tensor is a batch of jets);
-`@serve.batch` per model is the follow-up if replicas turn out GPU-idle under
-many small requests.
+The one RPC not forwarded is `ModelStreamInfer`, Triton's bidirectional
+stream: Serve's proxy carries unary and server-streaming calls only. CMSSW
+uses the unary `ModelInfer`.
 
 ## Autoscaling
 
 Two loops, both Ray's, nothing else in between:
 
-1. **Ray Serve** sizes the deployment. Every replica reports its in-flight
-   requests; when the average exceeds `serve.targetOngoingRequests` (8) for
-   `upscaleDelayS` (10 s) Serve adds a replica, and when it falls well below
-   for `downscaleDelayS` (300 s) it removes one — retired replicas get
-   `gracefulShutdownTimeoutS` (60 s) to finish what they hold. Bounds are
+1. **Ray Serve** sizes the deployment from the requests its gRPC proxy
+   forwards. When the average number in flight per replica exceeds
+   `serve.targetOngoingRequests` (16) for `upscaleDelayS` (10 s) it adds a
+   replica; when it falls well below for `downscaleDelayS` (300 s) it removes
+   one, giving in-flight requests `gracefulShutdownTimeoutS` (60 s). Bounds are
    `serve.minReplicas`/`maxReplicas` (1/4 on the AF).
-2. **The Ray autoscaler** sizes the cluster. A new replica needs one GPU; if
-   no worker has a free one, that is a pending resource request and the
+2. **The Ray autoscaler** sizes the cluster. A new replica needs a `triton`
+   resource; if no worker has one free, that is a pending request and the
    autoscaler adds a pod to `gpu-group` (bounded by `ray.worker.minReplicas`/
    `maxReplicas`, 0/4). A worker whose replica is gone idles for
-   `idleTimeoutSeconds` (60 s) and is reclaimed.
+   `idleTimeoutSeconds` (60 s) and is reclaimed; the pod then gets
+   `terminationGracePeriodSeconds` against Triton's `--exit-timeout-secs` to
+   drain (the chart refuses to render if the first is not larger).
 
 The chart ties the two together: `serve.maxReplicas` may not exceed
-`ray.worker.maxReplicas`, or the extra replicas could never be placed. Raising
-the GPU ceiling is one edit in `sonic-ray/values.yaml`:
+`ray.worker.maxReplicas`. Raising the GPU ceiling is one edit in
+`sonic-ray/values.yaml`:
 
 ```yaml
 ray: { worker: { maxReplicas: 8 } }
 serve: { maxReplicas: 8 }
 ```
 
-Scale-to-zero (`serve.minReplicas: 0`) works, at the cost of the first
-request waiting for a pod, an image pull and the model load.
+A replica only becomes ready once its Triton answers `ServerReady`, and it
+polls `ServerLive` as its health check, so Serve never routes to a pod whose
+Triton is still loading or has died — Serve restarts the replica, and Ray
+reclaims a pod that stays broken.
 
 ## How it lines up with SuperSONIC
 
 | SuperSONIC (`supersonic`) | Ray (`sonic-ray`) |
 | --- | --- |
-| Triton, every backend, gRPC + HTTP (KServe v2) | Ray Serve + ONNX Runtime, plain JSON over HTTP |
-| model repository PVC at `/models`, `--load-model=*` | same PVC, read-only, every `model.onnx` in it |
-| Envoy behind a `LoadBalancer` on `geddes-private-pool` | KubeRay's serve Service, same pool |
-| KEDA `ScaledObject` on a Prometheus expression, 1–10 Triton pods | Ray Serve request-based autoscaling, 1–4 replicas/GPUs |
+| Triton: 1 GPU, 16 CPU, 16G, `--model-control-mode=explicit --load-model=*` | the same container, argument for argument |
+| Envoy: gRPC entry point behind a `LoadBalancer` on `geddes-private-pool`, `ROUND_ROBIN` | Serve's gRPC proxy behind KubeRay's serve Service, same pool, port 8001 |
+| `ingress.enabled: false` — private pool only | no ingress; the head is `ClusterIP`, dashboard by port-forward only |
+| KEDA `ScaledObject` on a Prometheus expression, 1–10 pods | Ray Serve request-based autoscaling, 1–4 pods — see above |
 | `nodeSelector: cms-af-prod=true` + the `hub.jupyter.org/dedicated` toleration | same, head and workers |
-| Triton `nv_*` metrics scraped by label | Ray `ray_serve_*` metrics (request counts, latencies, queue depth per deployment) scraped by the same label, `release="sonic-ray"` |
+| model repository PVC at `/models` | same PVC, mounted **read-only** — the model manager owns the writes |
+| Triton Service labelled `scrape_metrics: "true"` | `sonic-ray-triton-metrics` (`nv_*`) and `sonic-ray-metrics` (Ray, incl. `ray_serve_*`), same label, `release="sonic-ray"` |
+| Envoy's Lua rate limiter on `RepositoryIndex` | none; Serve's `maxOngoingRequests` back-pressure instead |
 
-`tests/manifests/test_ray.py` asserts the shared parts — claim, mount path,
-placement, address pool — against `apps/sonic/supersonic/values.yaml` itself.
+`tests/manifests/test_ray.py` asserts the parity against
+`apps/sonic/supersonic/values.yaml` itself — including a token-by-token
+comparison of Triton's arguments — so retuning supersonic and forgetting Ray
+turns the build red.
 
 ## Using it
 
 ```bash
 kubectl -n cms get svc sonic-ray-serve            # MetalLB address on the private pool
-SONIC=<address>:8000
+SONIC=<address>:8001
+```
 
-curl -s "http://$SONIC/healthz"
-curl -s "http://$SONIC/models" | jq
-curl -s "http://$SONIC/models/particleNetFromMiniAODAK8" | jq
+CMSSW clients point at `$SONIC`, exactly as they point at the supersonic
+release's Envoy address. From Python:
+
+```python
+import tritonclient.grpc as grpcclient
+client = grpcclient.InferenceServerClient("<address>:8001")
+client.is_server_ready()
+client.get_model_repository_index()
 ```
 
 The Ray dashboard, for Serve and autoscaler state:
@@ -171,34 +148,25 @@ The Ray dashboard, for Serve and autoscaler state:
 kubectl -n cms port-forward svc/sonic-ray-head-svc 8265:8265
 ```
 
-Server-side configuration is by environment variable, set by the chart on
-every container: `MODEL_REPOSITORY`, `ONNX_EXECUTION_PROVIDERS`, `LOG_LEVEL`.
+## What is not an image
 
-## Image, or rather none
+The Ray containers run `rayproject/ray:2.52.0-py312-cpu` (through the geddes
+Docker Hub proxy cache) exactly as published; the Triton container runs
+`nvcr.io/nvidia/tritonserver:26.04-py3`, the tag supersonic runs. Two things
+are added at deploy time instead of build time:
 
-The pods run `rayproject/ray:2.52.0-py312-cu128` (through the geddes Docker
-Hub proxy cache) exactly as published: Ray with every extra, CUDA 12.8, cuDNN
-9. Two things are added at deploy time instead of build time:
+- **the forwarder** — `files/sonic_ray/*.py` become the `sonic-ray-code`
+  ConfigMap, mounted at `/serve_app/sonic_ray` on head and workers. Its hash
+  is annotated onto both pod templates, so a code change rolls the cluster.
+- **Triton's Python stubs** — `python.pip` (`tritonclient==2.48.0`, the last
+  release whose generated stubs match the protobuf 4 in the Ray image, plus
+  `python-rapidjson`) is pip-installed `--no-deps --target` into an emptyDir
+  by an init container on every pod, and that directory is on `PYTHONPATH`.
+  Serve's proxies import the servicer from it at startup, on every node,
+  which is why a `runtime_env` (replicas only) would not do.
 
-- **the code** — `files/sonic_ray/*.py` become the `sonic-ray-code` ConfigMap,
-  mounted at `/serve_app/sonic_ray` on head and workers with
-  `PYTHONPATH=/serve_app`. Their hash is annotated onto both pod templates, so
-  a code change rolls the cluster.
-- **ONNX Runtime** — `serve.pip` (`onnxruntime-gpu==1.26.0`, the last CUDA 12
-  build; 1.27+ is CUDA 13) goes into the Serve application's `runtime_env`.
-  Ray installs it into a virtualenv that inherits the image's packages the
-  first time a replica starts on a pod, and reuses it for the pod's life. It
-  dlopens the image's CUDA and cuDNN libraries.
-
-The price is paid at pod start: after the image pull, a new pod downloads the
-wheel (~300 MB) and installs it before its replica can load models — expect a
-minute or two per scale-up, and a dependency on PyPI being reachable from the
-GPU nodes. That trade was chosen deliberately over maintaining a custom Ray
-image; if startup latency matters later, baking the wheel into an image is a
-contained change (the code imports onnxruntime only when a model is loaded).
-
-The chart's `ray.version` selects the image tag *and* pins the autoscaler
-sidecar KubeRay adds, so the two cannot drift.
+The price is a small pip download per pod start and a dependency on PyPI
+being reachable from the nodes — chosen over maintaining an image.
 
 ## Cost
 
@@ -206,4 +174,5 @@ One GPU idles (`serve.minReplicas: 1`) on the same `cms-af-prod` nodes
 SuperSONIC and the user sessions compete for. An upgrade costs a second set
 for its duration: `upgradeStrategy: NewCluster` brings a second cluster up
 before cutting over, and if no GPU is free it waits while the old one keeps
-serving.
+serving. A GPU node here has 128 cores, so the two extra CPUs the Ray
+container adds to each pod change nothing about what fits.

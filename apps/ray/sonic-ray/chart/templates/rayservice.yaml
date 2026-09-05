@@ -1,11 +1,17 @@
 {{- include "sonic-ray.validate" . -}}
 {{- $name := include "sonic-ray.name" . -}}
-# The cluster and the Serve application on it.
+# The cluster, its Tritons, and the Serve application that fronts them.
 #
-# A RayService rather than a RayCluster because the server is a Ray Serve
+# A RayService rather than a RayCluster because the forwarder is a Ray Serve
 # application, and RayService is what runs one declaratively — with a health
 # check on the application, and with NewCluster upgrades that only cut over
 # once it answers.
+#
+# One custom Ray resource does the placement:
+#   triton — one per worker pod. A forwarding replica claims it, so exactly
+#            one replica lands in each pod, next to that pod's Triton. A
+#            replica with no `triton` left to claim is a pending resource
+#            request, and the Ray autoscaler adds a worker pod for it.
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
@@ -18,22 +24,26 @@ spec:
     type: {{ .Values.ray.upgradeStrategy }}
 
   serveConfigV2: |
+    # Serve's gRPC proxy, speaking Triton's protocol: the servicer function is
+    # Triton's own generated one (pip-installed onto PYTHONPATH by the init
+    # container). Each RPC is dispatched to the replica method of that name.
+    grpc_options:
+      port: 9000
+      grpc_servicer_functions:
+        - tritonclient.grpc.service_pb2_grpc.add_GRPCInferenceServiceServicer_to_server
     applications:
       - name: sonic
-        import_path: sonic_ray.serve_app:sonic
+        import_path: sonic_ray.serve_app:triton
         route_prefix: /
-        # The stock Ray image has no inference runtime: Ray installs these
-        # into a virtualenv (inheriting the image's packages) once per pod,
-        # when the first replica starts there.
-        runtime_env:
-          pip: {{ toJson .Values.serve.pip }}
         deployments:
-          - name: SonicServer
-            # One GPU per replica is the unit of scaling: a replica is a
-            # server with every servable model loaded, and a worker pod has
-            # exactly one GPU, so a replica is a pod.
+          - name: TritonProxy
+            # One replica per pod: it claims the pod's `triton` resource and
+            # forwards to the Triton beside it. num_cpus 0 keeps the worker's
+            # CPU count out of the placement decision.
             ray_actor_options:
-              num_gpus: 1
+              num_cpus: 0
+              resources:
+                triton: 1
             max_ongoing_requests: {{ .Values.serve.maxOngoingRequests }}
             graceful_shutdown_timeout_s: {{ .Values.serve.gracefulShutdownTimeoutS }}
             health_check_period_s: {{ .Values.serve.healthCheckPeriodS }}
@@ -45,9 +55,9 @@ spec:
               upscale_delay_s: {{ .Values.serve.upscaleDelayS }}
               downscale_delay_s: {{ .Values.serve.downscaleDelayS }}
 
-  # KubeRay's Service for the Serve HTTP proxies — the inference entry point.
-  # It selects pods whose proxy is healthy, so a worker still loading models
-  # is not in rotation.
+  # KubeRay's Service for the Serve proxies — the inference entry point. It
+  # selects pods whose proxy is healthy, so a pod whose Triton is still
+  # loading is not in rotation.
   serveService:
     metadata:
       name: {{ $name }}-serve
@@ -61,6 +71,10 @@ spec:
     spec:
       type: {{ .Values.service.type }}
       ports:
+        - name: grpc
+          port: 8001
+          targetPort: 9000
+          protocol: TCP
         - name: http
           port: 8000
           targetPort: 8000
@@ -68,8 +82,8 @@ spec:
 
   rayClusterConfig:
     rayVersion: {{ .Values.ray.version | quote }}
-    # Serve's replica demand lands here: a replica with no GPU to run on is
-    # a pending resource request, and the autoscaler adds a worker for it.
+    # Serve's replica demand lands here: a replica with no `triton` resource
+    # to claim is a pending request, and the autoscaler adds a worker for it.
     enableInTreeAutoscaling: true
     autoscalerOptions:
       upscalingMode: Default
@@ -92,31 +106,27 @@ spec:
           annotations:
             checksum/code: {{ include "sonic-ray.codeChecksum" . }}
         spec:
+          initContainers:
+            {{- include "sonic-ray.pipInitContainer" . | nindent 12 }}
           containers:
             - name: ray-head
-              image: {{ include "sonic-ray.image" . }}
+              image: {{ include "sonic-ray.rayImage" . }}
               imagePullPolicy: {{ .Values.ray.image.pullPolicy }}
               env:
-                {{- include "sonic-ray.env" . | nindent 16 }}
+                {{- include "sonic-ray.rayEnv" . | nindent 16 }}
               ports:
                 - { name: gcs-server, containerPort: 6379 }
                 - { name: client, containerPort: 10001 }
                 - { name: dashboard, containerPort: 8265 }
                 - { name: metrics, containerPort: 8080 }
                 - { name: serve, containerPort: 8000 }
+                - { name: serve-grpc, containerPort: 9000 }
               resources:
                 {{- toYaml .Values.ray.head.resources | nindent 16 }}
               volumeMounts:
-                - { name: log-volume, mountPath: /tmp/ray }
-                - name: code
-                  mountPath: {{ include "sonic-ray.codeDir" . }}/sonic_ray
-                  readOnly: true
+                {{- include "sonic-ray.rayMounts" . | nindent 16 }}
           volumes:
-            - name: log-volume
-              emptyDir: {}
-            - name: code
-              configMap:
-                name: {{ $name }}-code
+            {{- include "sonic-ray.rayVolumes" . | nindent 12 }}
           {{- with .Values.nodeSelector }}
           nodeSelector:
             {{- toYaml . | nindent 12 }}
@@ -131,8 +141,8 @@ spec:
         replicas: {{ .Values.ray.worker.minReplicas }}
         minReplicas: {{ .Values.ray.worker.minReplicas }}
         maxReplicas: {{ .Values.ray.worker.maxReplicas }}
-        # KubeRay derives num-gpus from the container's nvidia.com/gpu limit.
-        rayStartParams: {}
+        rayStartParams:
+          resources: '"{\"triton\": 1}"'
         template:
           metadata:
             labels:
@@ -142,34 +152,52 @@ spec:
               checksum/code: {{ include "sonic-ray.codeChecksum" . }}
           spec:
             terminationGracePeriodSeconds: {{ .Values.ray.worker.terminationGracePeriodSeconds }}
+            initContainers:
+              {{- include "sonic-ray.pipInitContainer" . | nindent 14 }}
             containers:
+              # The Ray side of the pod: a raylet advertising the triton
+              # resource, a Serve proxy, and the forwarding replica.
               - name: ray-worker
-                image: {{ include "sonic-ray.image" . }}
+                image: {{ include "sonic-ray.rayImage" . }}
                 imagePullPolicy: {{ .Values.ray.image.pullPolicy }}
                 env:
-                  {{- include "sonic-ray.env" . | nindent 18 }}
+                  {{- include "sonic-ray.rayEnv" . | nindent 18 }}
                 ports:
                   - { name: metrics, containerPort: 8080 }
                   - { name: serve, containerPort: 8000 }
+                  - { name: serve-grpc, containerPort: 9000 }
                 resources:
                   {{- toYaml .Values.ray.worker.resources | nindent 18 }}
                 volumeMounts:
-                  - { name: log-volume, mountPath: /tmp/ray }
-                  - name: code
-                    mountPath: {{ include "sonic-ray.codeDir" . }}/sonic_ray
-                    readOnly: true
+                  {{- include "sonic-ray.rayMounts" . | nindent 18 }}
+
+              # The inference server. Holds the pod's GPU; Ray never sees it.
+              - name: triton
+                image: {{ include "sonic-ray.tritonImage" . }}
+                imagePullPolicy: {{ .Values.triton.image.pullPolicy }}
+                command:
+                  {{- toYaml .Values.triton.command | nindent 18 }}
+                args:
+                  {{- toYaml .Values.triton.args | nindent 18 }}
+                ports:
+                  - { name: http, containerPort: 8000 }
+                  - { name: grpc, containerPort: 8001 }
+                  - { name: triton-metrics, containerPort: 8002 }
+                resources:
+                  {{- toYaml .Values.triton.resources | nindent 18 }}
+                startupProbe:
+                  {{- toYaml .Values.triton.startupProbe | nindent 18 }}
+                readinessProbe:
+                  {{- toYaml .Values.triton.readinessProbe | nindent 18 }}
+                volumeMounts:
                   - name: model-repository
-                    mountPath: {{ .Values.modelRepository.mountPath }}
+                    mountPath: {{ .Values.triton.modelRepository.mountPath }}
                     readOnly: true
             volumes:
-              - name: log-volume
-                emptyDir: {}
-              - name: code
-                configMap:
-                  name: {{ $name }}-code
+              {{- include "sonic-ray.rayVolumes" . | nindent 14 }}
               - name: model-repository
                 persistentVolumeClaim:
-                  claimName: {{ .Values.modelRepository.claimName }}
+                  claimName: {{ .Values.triton.modelRepository.claimName }}
                   readOnly: true
             {{- with .Values.nodeSelector }}
             nodeSelector:

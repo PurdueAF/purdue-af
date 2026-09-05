@@ -1,9 +1,9 @@
-"""The Ray Serve layer, checked without Ray: the module is read as source,
-since `ray` is not a test dependency and the interesting logic lives in
-models.py, which test_sonic_models.py exercises directly."""
+"""The Ray Serve layer, checked without Ray or tritonclient (neither is a test
+dependency): the module is read as source. What matters is small — it must
+forward every unary RPC of Triton's service and nothing else, be importable
+under the name the chart uses, and gate readiness on Triton's."""
 
 import ast
-import re
 from pathlib import Path
 
 import pytest
@@ -19,87 +19,55 @@ SERVE_APP = (
     / "serve_app.py"
 )
 
-ENDPOINTS = {
-    ("GET", "/healthz"),
-    ("GET", "/models"),
-    ("GET", "/models/{model_name}"),
-    ("POST", "/models/{model_name}"),
-}
+
+@pytest.fixture(scope="module")
+def source():
+    return SERVE_APP.read_text()
 
 
 @pytest.fixture(scope="module")
-def module():
-    return ast.parse(SERVE_APP.read_text())
+def module(source):
+    return ast.parse(source)
 
 
-@pytest.fixture(scope="module")
-def server_class(module):
-    return next(
-        n
-        for n in module.body
-        if isinstance(n, ast.ClassDef) and n.name == "SonicServer"
-    )
+def test_forwards_every_rpc_but_the_bidirectional_stream(source):
+    """The RPC list is derived from Triton's generated servicer at import, so
+    a new Triton RPC is forwarded without an edit here; the one stream Serve
+    cannot carry is the only exclusion."""
+    assert "vars(service_pb2_grpc.GRPCInferenceServiceServicer)" in source
+    assert 'name != "ModelStreamInfer"' in source
+    assert "setattr(TritonProxy, _rpc, _forwarder(_rpc))" in source
+    assert "await getattr(self._stub, rpc)(request)" in source
 
 
-def routes(cls):
-    found = set()
-    for node in cls.body:
-        if not isinstance(node, ast.AsyncFunctionDef):
-            continue
-        for decorator in node.decorator_list:
-            if (
-                isinstance(decorator, ast.Call)
-                and isinstance(decorator.func, ast.Attribute)
-                and isinstance(decorator.func.value, ast.Name)
-                and decorator.func.value.id == "app"
-            ):
-                found.add((decorator.func.attr.upper(), decorator.args[0].value))
-    return found
-
-
-def test_the_documented_endpoints_are_routed(server_class):
-    assert routes(server_class) == ENDPOINTS
-
-
-def test_deployment_is_a_serve_ingress_and_bound_for_import(module, server_class):
-    """serveConfigV2's import_path is `sonic_ray.serve_app:sonic`: the module
-    must define `sonic` as the bound deployment of the class."""
-    names = {
-        d.func.value.id + "." + d.func.attr
-        if isinstance(d, ast.Call)
-        else d.value.id + "." + d.attr
-        for d in server_class.decorator_list
-    }
-    assert {"serve.deployment", "serve.ingress"} <= names
+def test_bound_under_the_name_the_chart_imports(module):
+    """serveConfigV2's import_path is `sonic_ray.serve_app:triton`."""
     bound = next(
         n
         for n in module.body
         if isinstance(n, ast.Assign)
-        and any(isinstance(t, ast.Name) and t.id == "sonic" for t in n.targets)
+        and any(isinstance(t, ast.Name) and t.id == "triton" for t in n.targets)
     )
-    assert ast.unparse(bound.value) == "SonicServer.bind()"
+    assert ast.unparse(bound.value) == "serve.deployment(TritonProxy).bind()"
 
 
-def test_route_handlers_take_self_first(server_class):
-    """serve.ingress binds `self`; a handler without it would be registered
-    with the replica missing."""
-    for node in server_class.body:
-        if isinstance(node, ast.AsyncFunctionDef) and node.decorator_list:
-            assert node.args.args[0].arg == "self", node.name
-
-
-def test_inference_runs_off_the_event_loop():
-    """ORT releases the GIL; running it in a thread is what lets one replica
-    serve concurrent requests to different models."""
-    assert re.search(r"await asyncio\.to_thread\(model\.infer", SERVE_APP.read_text())
-
-
-def test_configuration_is_by_environment():
-    """The chart sets these on every container (templates/_helpers.tpl); the
-    names must match what the code reads."""
-    source = SERVE_APP.read_text()
-    for var in ("MODEL_REPOSITORY", "ONNX_EXECUTION_PROVIDERS", "LOG_LEVEL"):
-        assert f'"{var}"' in source, var
-    assert '"MODELS"' not in source, (
-        "the allowlist is gone; the chart no longer sets it"
+def test_replica_readiness_is_tritons(module):
+    """A replica that came up before its Triton finished loading would be
+    routed to; __init__ blocks on ServerReady and check_health polls ServerLive."""
+    cls = next(
+        n
+        for n in module.body
+        if isinstance(n, ast.ClassDef) and n.name == "TritonProxy"
     )
+    methods = {n.name for n in cls.body if isinstance(n, ast.FunctionDef)}
+    assert {"__init__", "_wait_for_triton", "check_health"} <= methods
+    init = next(
+        n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "__init__"
+    )
+    assert "self._wait_for_triton()" in ast.unparse(init)
+
+
+def test_nothing_here_parses_a_request(source):
+    """Triton does the inference; this file must stay a pass-through."""
+    for forbidden in ("numpy", "onnxruntime", "fastapi", "json", "InferInput"):
+        assert forbidden not in source, forbidden

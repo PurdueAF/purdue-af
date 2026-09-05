@@ -1,20 +1,20 @@
-"""Tests for apps/ray — the supersonic release's ONNX models, served by Ray
-Serve.
+"""Tests for apps/ray — the supersonic release's Triton, run on Ray with Ray
+Serve carrying its gRPC.
 
 Two jobs.
 
-One: the release serves *supersonic's* models. It mounts the claim the model
-manager writes and supersonic's Triton reads, at the same path, on the same
-nodes, behind the same address pool — and this file keeps that equal to
-apps/sonic/supersonic/values.yaml so retuning one and forgetting the other
-turns the build red.
+One: *parity*. Each worker pod runs the same Triton — image, arguments,
+resources, readiness, model repository — as `supersonic`, so it serves what
+supersonic serves. The values file says so in a comment; these tests make it
+true. Autoscaling is deliberately not mirrored.
 
 Two: the properties the scaling loop depends on, which no schema can
-express: a replica is one GPU and a pod is one replica, Serve can never ask
-for more replicas than the worker group may hold, nothing runs on the head,
-the Services select on labels KubeRay leaves alone, and the chart's Ray
-version is the image's. Those run against the rendered chart when helm is on
-PATH (it is in CI), and against the values and source otherwise.
+express: one forwarding replica per Triton pod (the `triton` resource), Serve
+never asking for more replicas than the worker group may hold, nothing on the
+head, Serve's gRPC proxy handed Triton's own servicer from a package every
+pod installs, the Services selecting on labels KubeRay leaves alone. Those
+run against the rendered chart when helm is on PATH (it is in CI), and
+against the values and source otherwise.
 """
 
 import re
@@ -112,12 +112,14 @@ def head_pod(cluster):
 @pytest.fixture(scope="module")
 def worker_group(cluster):
     groups = cluster["workerGroupSpecs"]
-    assert len(groups) == 1, "one replica is one GPU pod; more groups needs a rethink"
+    assert len(groups) == 1, (
+        "one replica is one Triton pod; more groups needs a rethink"
+    )
     return groups[0]
 
 
-def container(pod_template, name):
-    return next(c for c in pod_template["spec"]["containers"] if c["name"] == name)
+def container(pod_template, name, kind="containers"):
+    return next(c for c in pod_template["spec"][kind] if c["name"] == name)
 
 
 def env_of(container_spec):
@@ -178,41 +180,71 @@ def test_validator_renders_this_chart():
     assert "RayService" not in text, "the kubeconform skip is gone; keep it gone"
 
 
-# -- no custom image ---------------------------------------------------------
+# -- no custom image -----------------------------------------------------------
 
 
-def test_pods_run_the_stock_ray_image(head_pod, worker_group, chart_defaults):
-    """The official Ray image through the Docker Hub proxy cache; the tag's
-    version is ray.version, which also pins the autoscaler sidecar KubeRay
-    adds — a mismatch is a cluster that never comes up."""
+def test_pods_run_stock_images(head_pod, worker_group, chart_defaults, values):
+    """Official Ray (CPU flavour: no Ray process touches a GPU) through the
+    Docker Hub proxy cache, official Triton straight from NVIDIA — the same
+    registry supersonic pulls from. The Ray tag's version is ray.version,
+    which also pins the autoscaler sidecar KubeRay adds."""
     ray = chart_defaults["ray"]
-    expected = f"{ray['image']['repository']}:{ray['version']}-{ray['image']['flavor']}"
-    assert expected.startswith(
+    ray_image = (
+        f"{ray['image']['repository']}:{ray['version']}-{ray['image']['flavor']}"
+    )
+    assert ray_image.startswith(
         "geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray:"
     )
+    assert ray_image.endswith("-cpu")
     for template, name in (
         (head_pod, "ray-head"),
         (worker_group["template"], "ray-worker"),
     ):
         c = container(template, name)
-        assert c["image"] == expected
-        assert c["imagePullPolicy"] == "IfNotPresent"  # immutable tag
+        assert c["image"] == ray_image
+        assert c["imagePullPolicy"] == "IfNotPresent"  # immutable tags
+        assert (
+            container(template, "pip-install", "initContainers")["image"] == ray_image
+        )
+    triton = container(worker_group["template"], "triton")
+    assert (
+        triton["image"]
+        == f"{values['triton']['image']['repository']}:{values['triton']['image']['tag']}"
+    )
     assert not (REPO / "docker" / "sonic-ray").exists(), "no custom image, by decision"
 
 
-def test_onnxruntime_comes_from_runtime_env_on_the_cuda12_line(
-    serve_config, chart_defaults
+def test_tritons_servicer_is_installed_where_the_proxies_run(
+    head_pod, worker_group, chart_defaults
 ):
-    """The stock image has no inference runtime; Serve installs it. The image
-    carries CUDA 12.8, and onnxruntime-gpu 1.27+ links against CUDA 13."""
-    app = serve_config["applications"][0]
-    assert app["runtime_env"]["pip"] == chart_defaults["serve"]["pip"]
-    (spec,) = [
-        p for p in app["runtime_env"]["pip"] if p.startswith("onnxruntime-gpu==")
-    ]
-    major, minor, _ = spec.removeprefix("onnxruntime-gpu==").split(".")
-    assert (int(major), int(minor)) < (1, 27)
-    assert "cu12" in chart_defaults["ray"]["image"]["flavor"]
+    """Serve's gRPC proxy imports Triton's generated servicer at startup, on
+    every node, outside any runtime_env — so the package must be on PYTHONPATH
+    for the whole pod. --no-deps keeps the image's grpcio/protobuf in charge;
+    tritonclient 2.48 is the last release whose stubs match protobuf 4."""
+    pins = chart_defaults["python"]["pip"]
+    (tc,) = [p for p in pins if p.startswith("tritonclient==")]
+    major, minor = map(int, tc.removeprefix("tritonclient==").split(".")[:2])
+    assert (major, minor) <= (2, 48)
+    for template, name in (
+        (head_pod, "ray-head"),
+        (worker_group["template"], "ray-worker"),
+    ):
+        init = container(template, "pip-install", "initContainers")
+        assert init["args"] == pins
+        assert "--no-deps" in init["command"] and "--target" in init["command"]
+        deps_dir = init["command"][init["command"].index("--target") + 1]
+        deps_mount = next(m for m in init["volumeMounts"] if m["name"] == "python-deps")
+        assert deps_mount["mountPath"] == deps_dir
+        c = container(template, name)
+        assert deps_dir in env_of(c)["PYTHONPATH"].split(":")
+        assert any(
+            m["name"] == "python-deps" and m["mountPath"] == deps_dir
+            for m in c["volumeMounts"]
+        )
+        assert any(
+            v["name"] == "python-deps" and "emptyDir" in v
+            for v in template["spec"]["volumes"]
+        )
 
 
 def test_code_reaches_every_pod(rendered, head_pod, worker_group):
@@ -231,7 +263,8 @@ def test_code_reaches_every_pod(rendered, head_pod, worker_group):
         c = container(template, name)
         mount = next(m for m in c["volumeMounts"] if m["name"] == "code")
         assert mount["readOnly"] is True
-        assert mount["mountPath"] == f"{env_of(c)['PYTHONPATH']}/sonic_ray"
+        code_dir = mount["mountPath"].removesuffix("/sonic_ray")
+        assert code_dir in env_of(c)["PYTHONPATH"].split(":")
         assert template["metadata"]["annotations"]["checksum/code"]
     assert (
         head_pod["metadata"]["annotations"]["checksum/code"]
@@ -239,13 +272,27 @@ def test_code_reaches_every_pod(rendered, head_pod, worker_group):
     )
 
 
-# -- the models are supersonic's ---------------------------------------------
+# -- the Triton in the pod is supersonic's Triton ---------------------------
 
 
-def test_model_repository_is_supersonics(values, supersonic):
-    theirs = supersonic["triton"]["modelRepository"]
-    assert values["modelRepository"]["claimName"] == theirs["pvc"]["claimName"]
-    assert values["modelRepository"]["mountPath"] == theirs["mountPath"]
+def test_triton_values_match_supersonic(values, supersonic):
+    ours, theirs = values["triton"], supersonic["triton"]
+    assert f"{ours['image']['repository']}:{ours['image']['tag']}" == theirs["image"]
+    assert ours["command"] == theirs["command"]
+    # Token for token: copied arguments drift silently.
+    assert ours["args"][0].split() == theirs["args"][0].split()
+    assert ours["resources"] == theirs["resources"]
+    assert (
+        ours["readinessProbe"]["successThreshold"]
+        == theirs["readinessProbe"]["successThreshold"]
+    )
+    assert (
+        ours["modelRepository"]["claimName"]
+        == theirs["modelRepository"]["pvc"]["claimName"]
+    )
+    assert (
+        ours["modelRepository"]["mountPath"] == theirs["modelRepository"]["mountPath"]
+    )
 
 
 def test_pods_land_where_supersonic_pods_land(values, supersonic):
@@ -260,29 +307,41 @@ def test_pods_land_where_supersonic_pods_land(values, supersonic):
     )
 
 
-def test_model_repository_is_mounted_read_only_on_workers(
-    worker_group, head_pod, values
-):
-    """Replicas only read it; the model manager owns the writes. The head runs
-    no replica and mounts nothing."""
+def test_rendered_triton_is_the_one_in_values(worker_group, values):
+    """The values are only parity if the template actually uses them."""
+    triton = container(worker_group["template"], "triton")
+    assert triton["command"] == values["triton"]["command"]
+    assert triton["args"] == values["triton"]["args"]
+    assert triton["resources"] == values["triton"]["resources"]
+    assert triton["readinessProbe"]["successThreshold"] == 3
+    assert {p["name"]: p["containerPort"] for p in triton["ports"]} == {
+        "http": 8000,
+        "grpc": 8001,
+        "triton-metrics": 8002,
+    }
+
+
+def test_model_repository_is_mounted_read_only(worker_group, values):
+    """Triton only reads it; the model manager owns the writes."""
     volume = next(
         v
         for v in worker_group["template"]["spec"]["volumes"]
         if v["name"] == "model-repository"
     )
     assert volume["persistentVolumeClaim"] == {
-        "claimName": values["modelRepository"]["claimName"],
+        "claimName": values["triton"]["modelRepository"]["claimName"],
         "readOnly": True,
     }
-    worker = container(worker_group["template"], "ray-worker")
-    mount = next(m for m in worker["volumeMounts"] if m["name"] == "model-repository")
+    mount = next(
+        m
+        for m in container(worker_group["template"], "triton")["volumeMounts"]
+        if m["name"] == "model-repository"
+    )
     assert mount == {
         "name": "model-repository",
         "mountPath": "/models",
         "readOnly": True,
     }
-    assert env_of(worker)["MODEL_REPOSITORY"] == mount["mountPath"]
-    assert all(v["name"] != "model-repository" for v in head_pod["spec"]["volumes"])
 
 
 def test_placement_applies_to_every_pod(head_pod, worker_group, values):
@@ -291,7 +350,7 @@ def test_placement_applies_to_every_pod(head_pod, worker_group, values):
         assert template["spec"]["tolerations"] == values["tolerations"]
 
 
-# -- scaling: a replica is a GPU, a pod is a replica -------------------------
+# -- scaling: one replica per Triton pod, all of it Ray's -------------------
 
 
 def test_no_keda_resources():
@@ -308,16 +367,30 @@ def test_no_keda_resources():
                 assert "keda.sh" not in str(doc.get("apiVersion", "")), path
 
 
-def test_replica_is_one_gpu_and_pod_is_one_replica(deployment, worker_group, cluster):
-    assert deployment["ray_actor_options"] == {"num_gpus": 1}
-    worker = container(worker_group["template"], "ray-worker")
-    assert worker["resources"]["limits"]["nvidia.com/gpu"] == 1
-    assert worker["resources"]["requests"]["nvidia.com/gpu"] == 1
+def test_one_replica_per_triton_pod(deployment, worker_group, cluster):
+    """Each worker advertises one `triton`; each replica claims one. Nothing
+    else does, so a pod without a replica is idle and reclaimable, and a
+    replica without a pod is the pending request that grows the group."""
+    assert deployment["ray_actor_options"] == {
+        "num_cpus": 0,
+        "resources": {"triton": 1},
+    }
+    assert '\\"triton\\": 1' in worker_group["rayStartParams"]["resources"]
+    assert "resources" not in cluster["headGroupSpec"]["rayStartParams"]
     assert cluster["enableInTreeAutoscaling"] is True
+    # The GPU is Triton's; Ray never sees it and never schedules onto it.
+    ray_worker = container(worker_group["template"], "ray-worker")
+    assert "nvidia.com/gpu" not in ray_worker["resources"]["limits"]
+    assert (
+        container(worker_group["template"], "triton")["resources"]["limits"][
+            "nvidia.com/gpu"
+        ]
+        == 1
+    )
 
 
 def test_serve_cannot_outgrow_the_worker_group(deployment, worker_group):
-    """A replica with no GPU pod to land on pends forever (the chart refuses
+    """A replica with no Triton pod to land on pends forever (the chart refuses
     to render otherwise)."""
     autoscaling = deployment["autoscaling_config"]
     assert autoscaling["max_replicas"] <= worker_group["maxReplicas"]
@@ -332,25 +405,40 @@ def test_scale_down_is_slower_than_scale_up(deployment):
     assert autoscaling["target_ongoing_requests"] < deployment["max_ongoing_requests"]
 
 
-def test_replicas_are_given_time_to_drain(deployment, worker_group):
-    """Scale-down deletes the pod; graceful_shutdown_timeout_s is worth nothing
-    if the kubelet does not wait for it. (The chart refuses to render otherwise.)"""
-    assert (
-        worker_group["template"]["spec"]["terminationGracePeriodSeconds"]
-        > deployment["graceful_shutdown_timeout_s"]
-    )
+def test_triton_is_given_time_to_drain(worker_group, deployment):
+    """Scale-down deletes the pod; --exit-timeout-secs and Serve's graceful
+    shutdown are worth nothing if the kubelet does not wait for them. (The
+    chart refuses to render otherwise.)"""
+    args = container(worker_group["template"], "triton")["args"][0]
+    exit_timeout = int(args.split("--exit-timeout-secs=")[1].split()[0])
+    grace = worker_group["template"]["spec"]["terminationGracePeriodSeconds"]
+    assert grace > exit_timeout
+    assert grace > deployment["graceful_shutdown_timeout_s"]
 
 
 def test_nothing_runs_on_the_head(cluster, head_pod):
-    """The head holds the Serve controller and a proxy; a replica there would
-    need a GPU the head does not have."""
+    """The head holds the Serve controller and proxies; a replica there would
+    have no Triton to forward to."""
     assert cluster["headGroupSpec"]["rayStartParams"]["num-cpus"] == "0"
-    head = container(head_pod, "ray-head")
-    assert "nvidia.com/gpu" not in head["resources"]["limits"]
+    assert all(c["name"] != "triton" for c in head_pod["spec"]["containers"])
+
+
+# -- Serve speaks Triton's protocol -------------------------------------------
+
+
+def test_grpc_proxy_is_handed_tritons_servicer(serve_config):
+    """The proxy accepts exactly the RPCs of Triton's GRPCInferenceService and
+    dispatches each to the replica method of the same name — which the
+    forwarder defines for every one of them (tests/sonic_ray)."""
+    grpc = serve_config["grpc_options"]
+    assert grpc["grpc_servicer_functions"] == [
+        "tritonclient.grpc.service_pb2_grpc.add_GRPCInferenceServiceServicer_to_server"
+    ]
+    assert grpc["port"] == 9000
 
 
 def test_serve_import_path_resolves(serve_config, deployment):
-    """import_path names a module in the image and an attribute in it; the
+    """import_path names a module in the ConfigMap and an attribute in it; the
     deployment name is the class serve.deployment wraps."""
     module_path, _, attribute = serve_config["applications"][0][
         "import_path"
@@ -358,28 +446,23 @@ def test_serve_import_path_resolves(serve_config, deployment):
     assert module_path == "sonic_ray.serve_app"
     source = SERVE_APP.read_text()
     assert re.search(
-        rf"^{attribute} = {deployment['name']}\.bind\(\)", source, re.MULTILINE
+        rf"^{attribute} = serve\.deployment\({deployment['name']}\)\.bind\(\)",
+        source,
+        re.MULTILINE,
     )
     assert re.search(rf"^class {deployment['name']}\b", source, re.MULTILINE)
-
-
-def test_environment_reaches_head_and_workers_alike(
-    head_pod, worker_group, chart_defaults
-):
-    """An import on either must see the same configuration."""
-    head_env = env_of(container(head_pod, "ray-head"))
-    worker_env = env_of(container(worker_group["template"], "ray-worker"))
-    assert head_env == worker_env
-    assert head_env["ONNX_EXECUTION_PROVIDERS"] == chart_defaults["executionProviders"]
-    assert head_env["ONNX_EXECUTION_PROVIDERS"].startswith("CUDAExecutionProvider")
 
 
 # -- services ---------------------------------------------------------------
 
 
-def test_inference_entry_point_is_kuberays_serve_service(rayservice):
-    """Envoy's job in the supersonic release: one address on the private
-    pool. KubeRay keeps it pointed at pods whose Serve proxy is healthy."""
+def test_inference_entry_point_is_kuberays_serve_service(
+    rayservice, head_pod, worker_group
+):
+    """Envoy's job in the supersonic release: one gRPC address on the private
+    pool, on Triton's conventional port. Behind it is Serve's gRPC proxy, so
+    every request is counted. KubeRay keeps the Service pointed at pods whose
+    proxy is healthy."""
     svc = rayservice["spec"]["serveService"]
     assert svc["metadata"]["name"] == "sonic-ray-serve"
     assert (
@@ -387,10 +470,17 @@ def test_inference_entry_point_is_kuberays_serve_service(rayservice):
         == "geddes-private-pool"
     )
     assert svc["spec"]["type"] == "LoadBalancer"
-    assert [(p["port"], p["targetPort"]) for p in svc["spec"]["ports"]] == [
-        (8000, 8000)
-    ]
+    ports = {p["name"]: (p["port"], p["targetPort"]) for p in svc["spec"]["ports"]}
+    assert ports["grpc"] == (8001, 9000)
     assert "scrape_metrics" not in svc["metadata"]["labels"]
+    for template, name in (
+        (head_pod, "ray-head"),
+        (worker_group["template"], "ray-worker"),
+    ):
+        assert {p["containerPort"] for p in container(template, name)["ports"]} >= {
+            8000,
+            9000,
+        }
 
 
 def test_head_is_not_exposed(cluster):
@@ -399,32 +489,33 @@ def test_head_is_not_exposed(cluster):
     assert "headService" not in cluster["headGroupSpec"]
 
 
-def test_metrics_service_selects_labels_kuberay_leaves_alone(
+def test_metrics_services_select_labels_kuberay_leaves_alone(
     rendered, head_pod, worker_group
 ):
     """KubeRay stamps app.kubernetes.io/name onto every pod it creates and
     names the cluster <service>-raycluster-<hash>, renamed on each upgrade.
     Selecting on either would match nothing, silently."""
-    svc = rendered[("Service", "sonic-ray-metrics")]
-    assert svc["metadata"]["labels"]["scrape_metrics"] == "true"
-    assert svc["spec"]["clusterIP"] == "None"
-    assert [p["port"] for p in svc["spec"]["ports"]] == [8080]
-    assert svc["spec"]["selector"].items() <= head_pod["metadata"]["labels"].items()
-    assert (
-        svc["spec"]["selector"].items()
-        <= worker_group["template"]["metadata"]["labels"].items()
-    )
-    assert "app.kubernetes.io/name" not in svc["spec"]["selector"]
-    assert "ray.io/cluster" not in svc["spec"]["selector"]
-    # release="sonic-ray" is how the AF dashboards will select ray_serve_*.
-    assert svc["metadata"]["labels"]["app.kubernetes.io/instance"] == "sonic-ray"
-    for template in (head_pod, worker_group["template"]):
-        ports = {
-            p["name"]
-            for c in template["spec"]["containers"]
-            for p in c.get("ports", [])
-        }
-        assert "metrics" in ports
+    head_labels = head_pod["metadata"]["labels"]
+    worker_labels = worker_group["template"]["metadata"]["labels"]
+
+    ray_metrics = rendered[("Service", "sonic-ray-metrics")]
+    assert ray_metrics["metadata"]["labels"]["scrape_metrics"] == "true"
+    assert [p["port"] for p in ray_metrics["spec"]["ports"]] == [8080]
+    assert ray_metrics["spec"]["selector"].items() <= head_labels.items()
+    assert ray_metrics["spec"]["selector"].items() <= worker_labels.items()
+
+    triton_metrics = rendered[("Service", "sonic-ray-triton-metrics")]
+    assert triton_metrics["metadata"]["labels"]["scrape_metrics"] == "true"
+    assert [p["port"] for p in triton_metrics["spec"]["ports"]] == [8002]
+    assert triton_metrics["spec"]["selector"].items() <= worker_labels.items()
+    # Only the workers run Triton; scraping 8002 on the head would just fail.
+    assert not triton_metrics["spec"]["selector"].items() <= head_labels.items()
+
+    for svc in (ray_metrics, triton_metrics):
+        assert "app.kubernetes.io/name" not in svc["spec"]["selector"]
+        assert "ray.io/cluster" not in svc["spec"]["selector"]
+        # release="sonic-ray" is how the SuperSONIC dashboards select nv_*.
+        assert svc["metadata"]["labels"]["app.kubernetes.io/instance"] == "sonic-ray"
 
 
 # -- the chart refuses what cannot work ----------------------------------------
@@ -433,18 +524,19 @@ def test_metrics_service_selects_labels_kuberay_leaves_alone(
 @pytest.mark.parametrize(
     "override, message",
     [
-        ("modelRepository.claimName=", "claimName is required"),
+        ("triton.modelRepository.claimName=", "claimName is required"),
         ("serve.maxReplicas=9", "exceeds ray.worker.maxReplicas"),
         ("serve.minReplicas=5", "serve.minReplicas exceeds"),
-        (
-            "ray.worker.resources.limits.nvidia\\.com/gpu=2",
-            "exactly one nvidia.com/gpu",
-        ),
+        ("triton.resources.limits.nvidia\\.com/gpu=2", "exactly one nvidia.com/gpu"),
         (
             "ray.worker.terminationGracePeriodSeconds=30",
-            "must exceed serve.gracefulShutdownTimeoutS",
+            "must exceed Triton's --exit-timeout-secs",
         ),
-        ("serve.pip={onnxruntime-gpu}", "must pin onnxruntime-gpu=="),
+        (
+            "triton.modelRepository.mountPath=/elsewhere",
+            "never mention triton.modelRepository.mountPath",
+        ),
+        ("python.pip={grpcio}", "must pin tritonclient=="),
     ],
 )
 def test_chart_fails_on_values_that_cannot_work(override, message):

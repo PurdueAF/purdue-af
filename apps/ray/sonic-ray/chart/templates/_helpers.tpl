@@ -21,36 +21,74 @@ app.kubernetes.io/instance and /component are ours alone.
 app.kubernetes.io/instance: {{ include "sonic-ray.name" . }}
 {{- end -}}
 
-{{- define "sonic-ray.image" -}}
+{{- define "sonic-ray.rayImage" -}}
 {{ .Values.ray.image.repository }}:{{ .Values.ray.version }}-{{ .Values.ray.image.flavor }}
 {{- end -}}
 
-{{/*
-Where the ConfigMap with the server code is mounted; its parent is PYTHONPATH.
-*/}}
-{{- define "sonic-ray.codeDir" -}}/serve_app{{- end -}}
+{{- define "sonic-ray.tritonImage" -}}
+{{ .Values.triton.image.repository }}:{{ .Values.triton.image.tag }}
+{{- end -}}
 
 {{/*
-Hash of the server code, annotated onto both pod templates so a code change
-rolls the cluster like any other change to it would.
+Where the forwarder's ConfigMap and the pip-installed stubs are mounted; both
+are on PYTHONPATH.
+*/}}
+{{- define "sonic-ray.codeDir" -}}/serve_app{{- end -}}
+{{- define "sonic-ray.depsDir" -}}/python-deps{{- end -}}
+
+{{/*
+Hash of the forwarder's source, annotated onto both pod templates so a code
+change rolls the cluster like any other change to it would.
 */}}
 {{- define "sonic-ray.codeChecksum" -}}
 {{ (.Files.Glob "files/sonic_ray/*.py").AsConfig | sha256sum }}
 {{- end -}}
 
 {{/*
-Environment the sonic_ray package reads, identical on head and workers so an
-import on either sees the same configuration.
+Shared by head and worker Ray containers: environment, the code + deps
+mounts, and the init container that pip-installs Triton's stubs.
 */}}
-{{- define "sonic-ray.env" -}}
+{{- define "sonic-ray.rayEnv" -}}
 - name: PYTHONPATH
-  value: {{ include "sonic-ray.codeDir" . | quote }}
-- name: MODEL_REPOSITORY
-  value: {{ .Values.modelRepository.mountPath | quote }}
-- name: ONNX_EXECUTION_PROVIDERS
-  value: {{ .Values.executionProviders | quote }}
-- name: LOG_LEVEL
-  value: {{ .Values.logLevel | quote }}
+  value: {{ printf "%s:%s" (include "sonic-ray.codeDir" .) (include "sonic-ray.depsDir" .) | quote }}
+{{- end -}}
+
+{{- define "sonic-ray.rayMounts" -}}
+- { name: log-volume, mountPath: /tmp/ray }
+- name: code
+  mountPath: {{ include "sonic-ray.codeDir" . }}/sonic_ray
+  readOnly: true
+- name: python-deps
+  mountPath: {{ include "sonic-ray.depsDir" . }}
+  readOnly: true
+{{- end -}}
+
+{{- define "sonic-ray.rayVolumes" -}}
+- name: log-volume
+  emptyDir: {}
+- name: code
+  configMap:
+    name: {{ include "sonic-ray.name" . }}-code
+- name: python-deps
+  emptyDir: {}
+{{- end -}}
+
+{{- define "sonic-ray.pipInitContainer" -}}
+# Triton's generated gRPC servicer must be importable by Serve's proxies,
+# which run outside any runtime_env — so it goes on PYTHONPATH for the
+# whole pod. --no-deps keeps the image's grpcio/protobuf/numpy in charge.
+- name: pip-install
+  image: {{ include "sonic-ray.rayImage" . }}
+  imagePullPolicy: {{ .Values.ray.image.pullPolicy }}
+  command: ["pip", "install", "--no-cache-dir", "--no-deps", "--target", {{ include "sonic-ray.depsDir" . | quote }}]
+  args:
+    {{- toYaml .Values.python.pip | nindent 4 }}
+  volumeMounts:
+    - name: python-deps
+      mountPath: {{ include "sonic-ray.depsDir" . }}
+  resources:
+    limits: { cpu: "1", memory: 1Gi }
+    requests: { cpu: 100m, memory: 256Mi }
 {{- end -}}
 
 {{/*
@@ -60,11 +98,11 @@ Refuse to render what cannot work.
 {{- if not (.Files.Glob "files/sonic_ray/*.py") -}}
   {{- fail "files/sonic_ray/*.py is empty: nothing to serve." -}}
 {{- end -}}
-{{- if not (regexMatch "^onnxruntime-gpu==" (join " " .Values.serve.pip)) -}}
-  {{- fail "serve.pip must pin onnxruntime-gpu==<version>: the stock Ray image has no inference runtime." -}}
+{{- if not (regexMatch "(^| )tritonclient==" (join " " .Values.python.pip)) -}}
+  {{- fail "python.pip must pin tritonclient==<version>: it carries Triton's gRPC servicer for Serve's proxy." -}}
 {{- end -}}
-{{- if not .Values.modelRepository.claimName -}}
-  {{- fail "modelRepository.claimName is required: the PVC holding the model repository." -}}
+{{- if not .Values.triton.modelRepository.claimName -}}
+  {{- fail "triton.modelRepository.claimName is required: the PVC holding the Triton model repository." -}}
 {{- end -}}
 {{- if gt (int .Values.serve.minReplicas) (int .Values.serve.maxReplicas) -}}
   {{- fail "serve.minReplicas exceeds serve.maxReplicas." -}}
@@ -72,14 +110,24 @@ Refuse to render what cannot work.
 {{- if gt (int .Values.ray.worker.minReplicas) (int .Values.ray.worker.maxReplicas) -}}
   {{- fail "ray.worker.minReplicas exceeds ray.worker.maxReplicas." -}}
 {{- end -}}
-{{- $gpus := index .Values.ray.worker.resources.limits "nvidia.com/gpu" | default 0 | int -}}
-{{- if ne $gpus 1 -}}
-  {{- fail "ray.worker.resources.limits must request exactly one nvidia.com/gpu: a replica is one GPU, a pod is one replica." -}}
-{{- end -}}
 {{- if gt (int .Values.serve.maxReplicas) (int .Values.ray.worker.maxReplicas) -}}
-  {{- fail (printf "serve.maxReplicas (%d) exceeds ray.worker.maxReplicas (%d): each replica needs its own GPU pod, so the extra replicas could never be placed." (int .Values.serve.maxReplicas) (int .Values.ray.worker.maxReplicas)) -}}
+  {{- fail (printf "serve.maxReplicas (%d) exceeds ray.worker.maxReplicas (%d): each replica fronts its own Triton pod, so the extra replicas could never be placed." (int .Values.serve.maxReplicas) (int .Values.ray.worker.maxReplicas)) -}}
+{{- end -}}
+{{- $gpus := index .Values.triton.resources.limits "nvidia.com/gpu" | default 0 | int -}}
+{{- if ne $gpus 1 -}}
+  {{- fail "triton.resources.limits must request exactly one nvidia.com/gpu: a pod is one Triton on one GPU." -}}
+{{- end -}}
+{{- $args := join " " .Values.triton.args -}}
+{{- if not (contains .Values.triton.modelRepository.mountPath $args) -}}
+  {{- fail (printf "triton.args never mention triton.modelRepository.mountPath (%s): Triton would not see the repository that is mounted." .Values.triton.modelRepository.mountPath) -}}
+{{- end -}}
+{{- with regexFind "--exit-timeout-secs=[0-9]+" $args -}}
+  {{- $exit := trimPrefix "--exit-timeout-secs=" . | int -}}
+  {{- if le (int $.Values.ray.worker.terminationGracePeriodSeconds) $exit -}}
+    {{- fail (printf "ray.worker.terminationGracePeriodSeconds (%d) must exceed Triton's --exit-timeout-secs (%d), or a scale-down kills in-flight requests." (int $.Values.ray.worker.terminationGracePeriodSeconds) $exit) -}}
+  {{- end -}}
 {{- end -}}
 {{- if le (int .Values.ray.worker.terminationGracePeriodSeconds) (int .Values.serve.gracefulShutdownTimeoutS) -}}
-  {{- fail (printf "ray.worker.terminationGracePeriodSeconds (%d) must exceed serve.gracefulShutdownTimeoutS (%d), or a scale-down kills in-flight requests." (int .Values.ray.worker.terminationGracePeriodSeconds) (int .Values.serve.gracefulShutdownTimeoutS)) -}}
+  {{- fail (printf "ray.worker.terminationGracePeriodSeconds (%d) must exceed serve.gracefulShutdownTimeoutS (%d)." (int .Values.ray.worker.terminationGracePeriodSeconds) (int .Values.serve.gracefulShutdownTimeoutS)) -}}
 {{- end -}}
 {{- end -}}

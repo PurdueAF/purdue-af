@@ -1,12 +1,13 @@
 {{- $name := include "sonic-ray.name" . -}}
-# What the AF Prometheus scrapes, by the scrape_metrics label: Ray's own
-# metrics — including Serve's per-deployment request counts, latencies and
-# queue depths — from head and workers alike. Headless, so each pod is a
-# target of its own. Not the serve Service above: a scrape job keyed on the
-# label hits /metrics on every port of the Service it keeps.
+# What the AF Prometheus scrapes, by the scrape_metrics label. Two Services
+# because Ray and Triton expose /metrics on different ports and only the
+# workers run Triton: one Service carrying both ports would have 8002 scraped
+# on the head, where nothing listens. Neither can be the serve Service — a
+# scrape job keyed on the label hits /metrics on every port of the Service it
+# keeps.
 #
 # The app/instance labels become the Prometheus app/release labels, so the
-# ray_serve_* series here carry release="{{ $name }}".
+# ray_serve_* and nv_* series here carry release="{{ $name }}".
 apiVersion: v1
 kind: Service
 metadata:
@@ -22,6 +23,29 @@ spec:
   selector:
     {{- include "sonic-ray.podSelector" . | nindent 4 }}
   ports:
+    # Ray's own metrics — including Serve's per-deployment request counts,
+    # latencies and queue depths — from head and workers alike.
     - name: metrics
       port: 8080
       targetPort: metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-triton-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sonic-ray.labels" . | nindent 4 }}
+    app.kubernetes.io/component: triton
+    scrape_metrics: "true"
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    {{- include "sonic-ray.podSelector" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+  ports:
+    # Triton's nv_* metrics — the series the SuperSONIC dashboards plot.
+    - name: triton-metrics
+      port: 8002
+      targetPort: triton-metrics

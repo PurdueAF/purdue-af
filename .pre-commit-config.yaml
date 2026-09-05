@@ -67,8 +67,6 @@ repos:
           - starlette>=0.40
           - pydantic>=2.9
           - prometheus_client>=0.22
-          - numpy>=2.0
-          - fastapi>=0.115
           - types-PyYAML
           - types-cachetools
 

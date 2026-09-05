@@ -1,123 +1,102 @@
-"""The Ray Serve deployment: the model repository's ONNX models behind plain
-JSON endpoints.
+"""Triton behind Ray Serve's gRPC proxy.
 
-One deployment, ``SonicServer``, holds every ONNX model of the repository on
-one GPU — a replica *is* a server. Ray Serve runs as many replicas as the
-request load calls for (see ``autoscaling_config`` in the chart's
-serveConfigV2), and the Ray autoscaler adds a GPU pod for each replica that
-has nowhere to go. That is the whole scaling story; nothing here reads a
-metric.
+Every worker pod runs two containers: Triton (the SuperSONIC one — same image,
+arguments, model repository) and Ray. This deployment runs on the Ray side,
+one replica per pod (pinned there by the ``triton`` resource each worker
+advertises), and forwards each RPC it receives to Triton on localhost.
 
-Endpoints::
+Ray Serve's gRPC proxy is configured (in the chart's serveConfigV2) with
+Triton's generated ``add_GRPCInferenceServiceServicer_to_server``, so it
+accepts exactly Triton's protocol; it dispatches each call to the method of
+this class with the RPC's name, and that method hands the protobuf message
+to Triton and returns Triton's protobuf answer. Serve counts the request on
+the way through, which is what its autoscaler and load balancing key on.
 
-    GET  /healthz                 200 once the models are loaded
-    GET  /models                  {"models": [...], "skipped": {name: reason}}
-    GET  /models/{name}           inputs/outputs (names, dtypes, shapes), version
-    POST /models/{name}           {"inputs": {name: nested list}} →
-                                  {"model", "version", "outputs": {name: nested list}}
-
-Configuration is by environment variable (the chart sets them on every
-container)::
-
-    MODEL_REPOSITORY         /models        the Triton-layout repository
-    ONNX_EXECUTION_PROVIDERS CUDAExecutionProvider,CPUExecutionProvider
-    LOG_LEVEL                INFO
+``ModelStreamInfer`` — Triton's one bidirectional stream — is not forwarded:
+Serve's proxy carries unary and server-streaming calls only. CMSSW's client
+uses the unary ``ModelInfer``.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 import time
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+import grpc
 from ray import serve
-
-from sonic_ray.models import DEFAULT_PROVIDERS, InvalidInput, Model, ModelStore
+from tritonclient.grpc import service_pb2, service_pb2_grpc
 
 LOGGER = logging.getLogger("sonic_ray")
-LOGGER.setLevel(os.environ.get("LOG_LEVEL", "INFO").upper())
 
-app = FastAPI(title="sonic-ray")
+# Triton's gRPC endpoint in this pod, and how long a fresh Triton may take to
+# load the repository before the replica gives up on it.
+TRITON = os.environ.get("TRITON_GRPC", "localhost:8001")
+READY_TIMEOUT_S = float(os.environ.get("TRITON_READY_TIMEOUT_S", "900"))
+# Inference payloads are large; match Serve's own proxy limit rather than
+# grpc's 4 MB default.
+MAX_MESSAGE_BYTES = 2**31 - 1
+CHANNEL_OPTIONS = [
+    ("grpc.max_send_message_length", MAX_MESSAGE_BYTES),
+    ("grpc.max_receive_message_length", MAX_MESSAGE_BYTES),
+]
+
+# Every RPC of Triton's service except the bidirectional stream.
+RPCS = tuple(
+    name
+    for name in vars(service_pb2_grpc.GRPCInferenceServiceServicer)
+    if not name.startswith("_") and name != "ModelStreamInfer"
+)
 
 
-def _providers_from_env() -> tuple[str, ...]:
-    raw = os.environ.get("ONNX_EXECUTION_PROVIDERS", "")
-    chosen = tuple(p.strip() for p in raw.split(",") if p.strip())
-    return chosen or DEFAULT_PROVIDERS
-
-
-@serve.deployment
-@serve.ingress(app)
-class SonicServer:
-    """One replica = one GPU = every ONNX model in the repository."""
+class TritonProxy:
+    """One replica = one pod = one Triton; every RPC goes to it unchanged."""
 
     def __init__(self) -> None:
-        started = time.monotonic()
-        self.store = ModelStore(
-            os.environ.get("MODEL_REPOSITORY", "/models"), _providers_from_env()
+        self._sync = service_pb2_grpc.GRPCInferenceServiceStub(
+            grpc.insecure_channel(TRITON, options=CHANNEL_OPTIONS)
         )
-        LOGGER.info(
-            "ready in %.1fs: loaded %s; skipped %s",
-            time.monotonic() - started,
-            sorted(self.store.models) or "nothing",
-            self.store.skipped or "nothing",
+        self._stub = service_pb2_grpc.GRPCInferenceServiceStub(
+            grpc.aio.insecure_channel(TRITON, options=CHANNEL_OPTIONS)
         )
+        self._wait_for_triton()
 
-    @app.get("/healthz")
-    async def healthz(self) -> dict[str, int]:
-        return {"models": len(self.store.models)}
+    def _wait_for_triton(self) -> None:
+        """Block until Triton answers ServerReady: the replica is not ready
+        until its Triton is, so Serve never routes to a still-loading pod."""
+        deadline = time.monotonic() + READY_TIMEOUT_S
+        while True:
+            try:
+                if self._sync.ServerReady(
+                    service_pb2.ServerReadyRequest(), timeout=5
+                ).ready:
+                    LOGGER.info("triton at %s is ready", TRITON)
+                    return
+            except grpc.RpcError as exc:
+                if time.monotonic() > deadline:
+                    raise RuntimeError(
+                        f"triton at {TRITON} not ready after {READY_TIMEOUT_S}s"
+                    ) from exc
+            time.sleep(2)
 
-    @app.get("/models")
-    async def list_models(self) -> dict[str, Any]:
-        return {"models": sorted(self.store.models), "skipped": self.store.skipped}
-
-    @app.get("/models/{model_name}")
-    async def model_metadata(self, model_name: str) -> dict[str, Any]:
-        return self._model(model_name).metadata()
-
-    @app.post("/models/{model_name}")
-    async def infer(self, http_request: Request, model_name: str) -> dict[str, Any]:
-        model = self._model(model_name)
-        try:
-            body = await http_request.json()
-        except ValueError:
-            raise HTTPException(
-                status_code=400, detail="body is not valid JSON"
-            ) from None
-        inputs = body.get("inputs") if isinstance(body, dict) else None
-        if not isinstance(inputs, dict) or not inputs:
-            raise HTTPException(
-                status_code=400,
-                detail='body must be {"inputs": {<name>: <array>, ...}}',
-            )
-        started = time.monotonic()
-        try:
-            # ORT releases the GIL while it runs, so a thread lets the event
-            # loop keep accepting requests for the other models meanwhile.
-            outputs = await asyncio.to_thread(model.infer, inputs)
-        except InvalidInput as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from None
-        LOGGER.debug("infer %s %.1fms", model.name, (time.monotonic() - started) * 1000)
-        return {
-            "model": model.name,
-            "version": model.version,
-            "outputs": {name: array.tolist() for name, array in outputs.items()},
-        }
-
-    def _model(self, name: str) -> Model:
-        try:
-            return self.store.get(name)
-        except KeyError:
-            detail = f"unknown model {name!r}"
-            if name in self.store.skipped:
-                detail = f"model {name!r} is not loaded: {self.store.skipped[name]}"
-            raise HTTPException(status_code=404, detail=detail) from None
+    def check_health(self) -> None:
+        """Serve restarts the replica — and Ray then reclaims the pod — when
+        its Triton stops answering."""
+        if not self._sync.ServerLive(service_pb2.ServerLiveRequest(), timeout=5).live:
+            raise RuntimeError(f"triton at {TRITON} is not live")
 
 
-# What serveConfigV2's import_path points at: `sonic_ray.serve_app:sonic`.
-# (ray ships no type information: to mypy the decorated class is still the
-# plain class, which has no bind.)
-sonic = SonicServer.bind()  # type: ignore[attr-defined]
+def _forwarder(rpc: str) -> Any:
+    async def forward(self: TritonProxy, request: Any) -> Any:
+        return await getattr(self._stub, rpc)(request)
+
+    forward.__name__ = rpc
+    return forward
+
+
+for _rpc in RPCS:
+    setattr(TritonProxy, _rpc, _forwarder(_rpc))
+
+# What serveConfigV2's import_path points at: `sonic_ray.serve_app:triton`.
+triton = serve.deployment(TritonProxy).bind()

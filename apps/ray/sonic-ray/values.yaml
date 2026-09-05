@@ -1,15 +1,44 @@
-# Values for the `sonic-ray` release: the supersonic release's model
-# repository, served by Ray Serve in the cms namespace on Geddes.
+# Values for the `sonic-ray` release: the supersonic release's Triton, run on
+# Ray in the cms namespace on Geddes, with Ray Serve carrying its gRPC.
 #
-# The models are the ones apps/sonic/supersonic serves — same claim, same
-# mount path, written by apps/sonic/model-manager. Only the ONNX ones are
-# loaded here (see apps/ray/README.md); the rest are listed as unavailable.
-# tests/manifests/test_ray.py keeps the claim, the placement and the address
-# pool equal to supersonic's.
+# The triton: block is apps/sonic/supersonic/values.yaml's, key for key —
+# image, command, arguments, resources, readiness, model repository — so what
+# this release serves is what supersonic serves. tests/manifests/test_ray.py
+# keeps the two equal.
+#
+# Autoscaling is not copied: no KEDA, no Prometheus in the loop. See the chart.
 
-modelRepository:
-  claimName: supersonic-model-repository
-  mountPath: /models
+triton:
+  image:
+    repository: nvcr.io/nvidia/tritonserver
+    tag: "26.04-py3"
+  command: ["/bin/sh", "-c"]
+  args:
+    - |
+      /opt/tritonserver/bin/tritonserver \
+      --model-repository=/models \
+      --model-control-mode=explicit \
+      --load-model=* \
+      --allow-gpu-metrics=true \
+      --log-verbose=0 \
+      --disable-auto-complete-config \
+      --exit-timeout-secs=60
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      cpu: 16
+      memory: 16G
+    requests:
+      nvidia.com/gpu: 1
+      cpu: 16
+      memory: 16G
+  readinessProbe:
+    successThreshold: 3
+  # The claim the SuperSONIC model manager creates and writes
+  # (apps/sonic/model-manager) and the supersonic Triton pods mount.
+  modelRepository:
+    claimName: supersonic-model-repository
+    mountPath: /models
 
 ray:
   worker:
@@ -19,8 +48,8 @@ ray:
     maxReplicas: 4
 
 serve:
-  # One GPU idling so the first request does not wait for a pod, an image
-  # pull and the model load; up to every GPU the worker group may have.
+  # One GPU idling so the first request does not wait for a pod, two image
+  # pulls and Triton's model load; up to every GPU the worker group may have.
   minReplicas: 1
   maxReplicas: 4
 
