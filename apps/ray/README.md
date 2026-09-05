@@ -18,10 +18,16 @@ controller that reads Triton's own queue depth.
 | --- | --- |
 | `helmrepo.yaml` | `HelmRepository` for the KubeRay charts |
 | `operator/` | `kuberay-operator` 1.7.0 — the `ray.io` CRDs and the controller. Namespaced (`singleNamespaceInstall: true`), so both the watch and the RBAC stay in `cms`. |
-| `sonic-ray/rayservice.yaml` | the `RayService`: the Ray cluster, the Triton container in every worker pod, and the autoscaling controller |
-| `sonic-ray/serve/sonic_serve.py` | the controller — turns Triton queue depth into Ray resource demand |
-| `sonic-ray/triton-service.yaml` | the inference entry point (gRPC + HTTP) on the private pool |
-| `sonic-ray/metrics-services.yaml` | what the AF Prometheus scrapes |
+| `sonic-ray/chart/` | the `sonic-ray` chart: a `RayService` with a Triton in every worker pod, the autoscaling controller, and the Services |
+| `sonic-ray/chart/files/sonic_serve.py` | the controller — turns Triton queue depth into Ray resource demand |
+| `sonic-ray/helmrelease.yaml`, `sonic-ray/values.yaml` | the AF release: `dependsOn` the operator, values with supersonic's `triton:` block |
+
+The chart lives here (like `apps/sonic/model-manager`) rather than being a raw
+`RayService` because of ordering: until the operator's chart has installed the
+`ray.io` CRDs that is an unknown kind, and kustomize-controller aborts an apply
+on the first one it meets — on a fresh cluster, before the HelmRelease that
+would install them. `dependsOn: kuberay-operator` is the fix, and a
+`HelmRelease` is the only object that can carry it.
 
 ## Shape
 
@@ -45,42 +51,45 @@ Nothing proxies inference. Clients reach Triton directly through
 `sonic-ray-triton`, the way they reach Envoy in the supersonic release —
 one address, kube-proxy doing the round-robin.
 
-A `RayService` rather than the upstream `ray-cluster` chart: that chart renders
-a bare `RayCluster`, with nowhere to declare the controller.
-
 ## Autoscaling
 
-Because inference never touches a Ray task or actor, Ray sees no demand and
-would leave the group at its floor forever. `TritonAutoscaler` — one replica,
-pinned to the head, holding no GPU — closes that loop every 10 seconds:
+Inference never touches a Ray task or actor, so Ray sees no demand and would
+leave the group at its floor forever. `TritonAutoscaler` — one replica, pinned
+to the head, holding no GPU — closes that loop every `control_interval_s`:
 
 ```
-pending  = Σ nv_inference_pending_request_count over every live Triton
+pending  = Σ nv_inference_pending_request_count over every live Triton,
+           averaged over look_back_s
 desired  = clamp(ceil(pending / target_pending_per_server), min, max)
 request_resources(bundles=[{"triton": 1}] * desired)
 ```
 
-`request_resources` is the Ray autoscaler's public "make room for this" API.
+`request_resources` is the Ray autoscaler's public "keep room for this" API.
 Each worker advertises `triton: 1`, so a bundle *is* a GPU pod with a Triton in
 it, and the autoscaler adds and removes pods to match. **Nothing else in the
 cluster asks for that resource** — no Serve replicas on workers, no proxies
-(`proxy_location: HeadOnly`) — which is what leaves an unwanted worker idle and
-therefore reclaimable.
+(`proxy_location: HeadOnly`), a bare raylet beside Triton — which is what
+leaves an unwanted worker idle and therefore reclaimable.
 
-Scaling up is immediate. Scaling down waits for `downscale_delay_s` of
-sustained low demand, because releasing a pod kills the Triton in it; the pod
-then gets `terminationGracePeriodSeconds: 90` against Triton's
-`--exit-timeout-secs=60` to drain in-flight requests.
+Up is immediate. Down releases `downscale_step` pods per `downscale_delay_s`
+of sustained low demand, since each one kills a Triton; the pod then gets
+`terminationGracePeriodSeconds` against Triton's `--exit-timeout-secs` to
+drain (the chart refuses to render if the first is not larger). The request is
+re-asserted every tick, so a restarted controller starts from the cluster it
+finds rather than from a stale floor left in GCS.
 
-The policy lives in the deployment's `user_config`, so retuning it is a config
-change rather than a restart:
+The policy is the chart's `autoscaling:` block, delivered as Serve
+`user_config` — retuning it reconfigures the running replica without a
+restart:
 
 | key | default | meaning |
 | --- | --- | --- |
-| `min_servers` / `max_servers` | 1 / 10 | bounds, inside the worker group's own `minReplicas`/`maxReplicas` |
-| `target_pending_per_server` | 16 | queued-or-executing requests per Triton before another is asked for |
+| `min_servers` / `max_servers` | 1 / 10 | bounds; the worker group's `minReplicas`/`maxReplicas` are derived from them |
+| `target_pending_per_server` | 16 | requests awaiting execution per Triton before another is asked for |
+| `look_back_s` | 30 | averaging window for the queue gauge |
 | `control_interval_s` | 10 | how often the decision is made |
-| `downscale_delay_s` | 300 | sustained low demand required before giving a pod back |
+| `downscale_delay_s` | 120 | sustained low demand required before giving a pod back |
+| `downscale_step` | 1 | pods released per delay window |
 
 `GET /` on the head's Serve port returns the last decision and what it was
 based on:
@@ -89,6 +98,9 @@ based on:
 kubectl -n cms port-forward svc/sonic-ray-head-svc 8000:8000
 curl -s localhost:8000 | jq
 ```
+
+Scale-to-zero is not supported: with no Triton there is no queue to read, so
+`min_servers: 0` parks the release rather than sleeping it.
 
 ## How it lines up with SuperSONIC
 
@@ -102,13 +114,14 @@ curl -s localhost:8000 | jq
 | model repository PVC at `/models` | same PVC, mounted **read-only** — the model manager owns the writes |
 | Triton Service labelled `scrape_metrics: "true"` | `sonic-ray-triton-metrics` (`nv_*`) and `sonic-ray-metrics` (Ray), same label, `release="sonic-ray"` |
 
-`tests/manifests/test_ray.py` asserts the Triton parity against
+`tests/manifests/test_ray.py` asserts the parity against
 `apps/sonic/supersonic/values.yaml` itself — including a token-by-token
 comparison of Triton's arguments — so retuning supersonic and forgetting Ray
-turns the build red. It also asserts the properties the scaling loop depends
-on: the controller stays off the workers, the workers stay free of Ray work,
-and no KEDA resource creeps back in. Those tests stand in for kubeconform,
-which skips `RayService`: `ray.io` has no schema in the CRDs-catalog.
+turns the build red. Against the rendered chart it also asserts the properties
+the scaling loop depends on: the controller stays on the head and off the GPUs,
+the workers stay free of Ray work, the Services select on labels KubeRay does
+not overwrite, and the policy handed to the controller is one it reads.
+`validate-manifests.sh` renders the chart with the AF values on every CI run.
 
 The remaining difference is **dashboards**: SuperSONIC ships its own Grafana at
 `supersonic-grafana.geddes.rcac.purdue.edu`, while the `nv_*` series here land
@@ -136,9 +149,9 @@ kubectl -n cms port-forward svc/sonic-ray-head-svc 8265:8265
 
 ## Cost
 
-The worker group idles at one GPU (`minReplicas: 1` and `min_servers: 1`) on
-the same `cms-af-prod` nodes SuperSONIC and the user sessions compete for. An
-upgrade costs one more for its duration (`upgradeStrategy: NewCluster` brings a
-second cluster up before cutting over; if no GPU is free it waits and the old
-one keeps serving). Set both floors to 0 to park the release without
-uninstalling it.
+The worker group idles at one GPU (`min_servers: 1`) on the same `cms-af-prod`
+nodes SuperSONIC and the user sessions compete for. An upgrade costs one more
+for its duration: `upgradeStrategy: NewCluster` brings a second cluster up
+before cutting over, and if no GPU is free it waits while the old one keeps
+serving. A GPU node here has 128 cores, so the extra CPU the Ray container
+adds to each pod changes nothing about what fits.

@@ -1,0 +1,13 @@
+# The controller's source, mounted into the head pod. Its hash is annotated
+# onto the head pod template, so a code change rolls the cluster like any
+# other change to it would.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sonic-ray.name" . }}-serve-app
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sonic-ray.labels" . | nindent 4 }}
+data:
+  sonic_serve.py: |
+{{ .Files.Get "files/sonic_serve.py" | indent 4 }}

@@ -1,0 +1,114 @@
+# Default values for sonic-ray.
+#
+# A RayService whose every worker pod carries a Triton Inference Server beside
+# the Ray container. Ray schedules the pods; a controller replica on the head
+# (files/sonic_serve.py) turns Triton's queue depth into Ray resource demand,
+# and the Ray autoscaler sizes the group from that. Inference never touches
+# Ray: clients reach Triton through the release's <name>-triton Service.
+
+# -- Instance name (release name by default). Names every resource, and is the
+# app.kubernetes.io/instance label the Services select pods by.
+nameOverride: ""
+
+ray:
+  # -- Ray version in the image below; the autoscaler sidecar is pinned to it.
+  version: "2.52.0"
+  image:
+    repository: rayproject/ray
+    # -- Defaults to ray.version. The plain CPU tag: no Ray process touches a GPU.
+    tag: ""
+    pullPolicy: IfNotPresent
+  # -- NewCluster brings a second cluster up and cuts over once it is healthy —
+  # zero downtime, at the cost of one extra GPU for the duration; if none is
+  # free it waits and the old cluster keeps serving. None never replaces the
+  # running cluster, so changes below stop reaching it.
+  upgradeStrategy: NewCluster
+  head:
+    # -- GCS, dashboard, Serve controller and the autoscaling controller. No
+    # Ray tasks or actors run here (num-cpus is pinned to 0).
+    resources:
+      limits: { cpu: "2", memory: 8Gi }
+      requests: { cpu: "2", memory: 8Gi }
+  worker:
+    # -- The Ray side of a worker pod: a raylet advertising the triton resource
+    # and nothing else. Triton's own resources are under triton.resources.
+    resources:
+      limits: { cpu: "1", memory: 2Gi }
+      requests: { cpu: "1", memory: 2Gi }
+    # -- Scaling down deletes the pod. Triton drains in-flight requests for
+    # --exit-timeout-secs after SIGTERM; the kubelet must wait at least that
+    # long (the chart refuses to render otherwise).
+    terminationGracePeriodSeconds: 90
+  autoscaler:
+    # -- How long a pod the controller has stopped asking for lingers before
+    # the Ray autoscaler reclaims it. Nothing else in the cluster wants the
+    # triton resource, so such a pod is idle from the moment the request drops.
+    idleTimeoutSeconds: 60
+    resources:
+      limits: { cpu: 500m, memory: 512Mi }
+      requests: { cpu: 500m, memory: 512Mi }
+
+# -- The scaling policy, handed to the controller as Serve user_config —
+# changing it reconfigures the running replica without a restart.
+#
+#   pending = Σ nv_inference_pending_request_count across every live Triton,
+#             averaged over look_back_s
+#   servers = clamp(ceil(pending / target_pending_per_server), min, max)
+#
+# Up is immediate. Down releases downscale_step servers per downscale_delay_s
+# of sustained low demand, since every server released is a Triton killed.
+autoscaling:
+  min_servers: 1
+  max_servers: 10
+  # -- Requests awaiting execution per Triton before another is asked for;
+  # Ray Serve's target_ongoing_requests, in Triton's currency.
+  target_pending_per_server: 16
+  look_back_s: 30
+  control_interval_s: 10
+  downscale_delay_s: 120
+  downscale_step: 1
+
+triton:
+  image:
+    repository: nvcr.io/nvidia/tritonserver
+    tag: "26.04-py3"
+    pullPolicy: IfNotPresent
+  # -- Exactly what a SuperSONIC release's triton.command/args would be; the
+  # model repository path in args must be modelRepository.mountPath.
+  command: ["tritonserver"]
+  args:
+    - --model-repository=/models
+    - --exit-timeout-secs=60
+  # -- One GPU per server is the unit of scaling: with more, a "server" would
+  # no longer be one bundle of the triton resource.
+  resources:
+    limits: { nvidia.com/gpu: 1 }
+    requests: { nvidia.com/gpu: 1 }
+  modelRepository:
+    # -- An existing claim (ReadWriteMany if anything else mounts it). Mounted
+    # read-only: Triton only reads it, and this release does not own it.
+    claimName: ""
+    mountPath: /models
+  # -- A large repository takes minutes to load; the startup probe buys that
+  # time without loosening readiness afterwards.
+  startupProbe:
+    httpGet: { path: /v2/health/ready, port: http }
+    periodSeconds: 10
+    timeoutSeconds: 15
+    failureThreshold: 60
+  readinessProbe:
+    httpGet: { path: /v2/health/ready, port: http }
+    periodSeconds: 10
+    timeoutSeconds: 15
+    failureThreshold: 3
+    successThreshold: 1
+
+# -- Placement for every pod of the release, head and workers alike.
+nodeSelector: {}
+tolerations: []
+
+# -- The inference entry point: gRPC :8001 and HTTP :8000 across every Triton.
+# The head is never exposed — the Ray dashboard has no authentication.
+service:
+  type: LoadBalancer
+  annotations: {}

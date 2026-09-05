@@ -1,0 +1,78 @@
+{{- $name := include "sonic-ray.name" . -}}
+# The inference entry point — what Envoy is in a SuperSONIC release: one
+# address fronting every Triton, kube-proxy doing the round-robin. gRPC and
+# HTTP alike come this way; nothing proxies inference through Ray.
+# Selects worker pods only: the head runs no Triton.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-triton
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sonic-ray.labels" . | nindent 4 }}
+    app.kubernetes.io/component: triton
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "sonic-ray.podSelector" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+  ports:
+    - name: grpc
+      port: 8001
+      targetPort: grpc
+    - name: http
+      port: 8000
+      targetPort: http
+---
+# What Prometheus scrapes, by the scrape_metrics label. Two Services because
+# Ray and Triton expose /metrics on different ports and only the workers run
+# Triton: one Service carrying both ports would have 8002 scraped on the head,
+# where nothing listens. Neither can be the LoadBalancer above — a scrape job
+# keyed on the label hits /metrics on every port of the Service it keeps.
+#
+# The app/instance labels become the Prometheus app/release labels, so the
+# nv_* series here carry release="{{ $name }}".
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sonic-ray.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ray
+    scrape_metrics: "true"
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    {{- include "sonic-ray.podSelector" . | nindent 4 }}
+  ports:
+    # Ray's own metrics from head and workers alike.
+    - name: metrics
+      port: 8080
+      targetPort: metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-triton-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sonic-ray.labels" . | nindent 4 }}
+    app.kubernetes.io/component: triton
+    scrape_metrics: "true"
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    {{- include "sonic-ray.podSelector" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+  ports:
+    # Triton's nv_* metrics — the series the SuperSONIC dashboards plot.
+    - name: triton-metrics
+      port: 8002
+      targetPort: triton-metrics

@@ -1,0 +1,171 @@
+{{- include "sonic-ray.validate" . -}}
+{{- $name := include "sonic-ray.name" . -}}
+# The cluster and its Triton servers, and the controller that sizes it.
+#
+# A RayService rather than a RayCluster because the controller is a Ray Serve
+# application, and RayService is what runs one declaratively — with a health
+# check, and with NewCluster upgrades that only cut over once it is up.
+#
+# The scaling vocabulary is two custom Ray resources:
+#   triton     — one per worker pod. The controller asks the Ray autoscaler
+#                for N of them; the autoscaler runs N pods; each pod carries
+#                one Triton on one GPU. Nothing else ever claims it, so a pod
+#                the controller stops asking for is idle at once and reclaimed.
+#   controller — one on the head, claimed by the controller replica. Pins it
+#                where no GPU is, and where nothing else runs.
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sonic-ray.labels" . | nindent 4 }}
+spec:
+  upgradeStrategy:
+    type: {{ .Values.ray.upgradeStrategy }}
+
+  serveConfigV2: |
+    # Inference never goes through Serve, so the proxy belongs only where the
+    # controller runs. A proxy on every worker would also be an actor there —
+    # and an actor on a worker is a worker the autoscaler may never reclaim.
+    proxy_location: HeadOnly
+    applications:
+      - name: sonic
+        import_path: sonic_serve:app
+        route_prefix: /
+        deployments:
+          - name: TritonAutoscaler
+            num_replicas: 1
+            ray_actor_options:
+              num_cpus: 0
+              resources:
+                controller: 1
+            user_config:
+              {{- toYaml .Values.autoscaling | nindent 14 }}
+
+  rayClusterConfig:
+    rayVersion: {{ .Values.ray.version | quote }}
+    # The controller's request_resources() calls land here.
+    enableInTreeAutoscaling: true
+    autoscalerOptions:
+      upscalingMode: Default
+      idleTimeoutSeconds: {{ .Values.ray.autoscaler.idleTimeoutSeconds }}
+      resources:
+        {{- toYaml .Values.ray.autoscaler.resources | nindent 8 }}
+
+    headGroupSpec:
+      # Never exposed: the dashboard has no authentication, and the only thing
+      # worth reaching here from outside — the controller's status — is a
+      # port-forward away. Inference has its own Service.
+      serviceType: ClusterIP
+      rayStartParams:
+        num-cpus: "0"
+        resources: '"{\"controller\": 1}"'
+        dashboard-host: 0.0.0.0
+      template:
+        metadata:
+          labels:
+            {{- include "sonic-ray.podSelector" . | nindent 12 }}
+            app.kubernetes.io/component: head
+          annotations:
+            checksum/serve-app: {{ .Files.Get "files/sonic_serve.py" | sha256sum }}
+        spec:
+          containers:
+            - name: ray-head
+              image: {{ include "sonic-ray.rayImage" . }}
+              imagePullPolicy: {{ .Values.ray.image.pullPolicy }}
+              env:
+                # Where the controller is imported from.
+                - name: PYTHONPATH
+                  value: /serve_app
+              ports:
+                - { name: gcs-server, containerPort: 6379 }
+                - { name: client, containerPort: 10001 }
+                - { name: dashboard, containerPort: 8265 }
+                - { name: metrics, containerPort: 8080 }
+                - { name: serve, containerPort: 8000 }
+              resources:
+                {{- toYaml .Values.ray.head.resources | nindent 16 }}
+              volumeMounts:
+                - { name: serve-app, mountPath: /serve_app }
+                - { name: log-volume, mountPath: /tmp/ray }
+          volumes:
+            - name: serve-app
+              configMap:
+                name: {{ $name }}-serve-app
+            - name: log-volume
+              emptyDir: {}
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+
+    workerGroupSpecs:
+      - groupName: gpu-group
+        replicas: {{ .Values.autoscaling.min_servers }}
+        minReplicas: {{ .Values.autoscaling.min_servers }}
+        maxReplicas: {{ .Values.autoscaling.max_servers }}
+        rayStartParams:
+          resources: '"{\"triton\": 1}"'
+        template:
+          metadata:
+            labels:
+              {{- include "sonic-ray.podSelector" . | nindent 14 }}
+              app.kubernetes.io/component: worker
+          spec:
+            terminationGracePeriodSeconds: {{ .Values.ray.worker.terminationGracePeriodSeconds }}
+            containers:
+              # The Ray side of the pod: a raylet advertising the triton
+              # resource, and nothing else. It runs no actors, which is exactly
+              # what lets the autoscaler reclaim the pod.
+              - name: ray-worker
+                image: {{ include "sonic-ray.rayImage" . }}
+                imagePullPolicy: {{ .Values.ray.image.pullPolicy }}
+                ports:
+                  - { name: metrics, containerPort: 8080 }
+                resources:
+                  {{- toYaml .Values.ray.worker.resources | nindent 18 }}
+                volumeMounts:
+                  - { name: log-volume, mountPath: /tmp/ray }
+
+              # The inference server. Holds the pod's GPU; Ray never sees it.
+              - name: triton
+                image: {{ include "sonic-ray.tritonImage" . }}
+                imagePullPolicy: {{ .Values.triton.image.pullPolicy }}
+                command:
+                  {{- toYaml .Values.triton.command | nindent 18 }}
+                args:
+                  {{- toYaml .Values.triton.args | nindent 18 }}
+                ports:
+                  - { name: http, containerPort: 8000 }
+                  - { name: grpc, containerPort: 8001 }
+                  - { name: triton-metrics, containerPort: 8002 }
+                resources:
+                  {{- toYaml .Values.triton.resources | nindent 18 }}
+                startupProbe:
+                  {{- toYaml .Values.triton.startupProbe | nindent 18 }}
+                readinessProbe:
+                  {{- toYaml .Values.triton.readinessProbe | nindent 18 }}
+                volumeMounts:
+                  - name: model-repository
+                    mountPath: {{ .Values.triton.modelRepository.mountPath }}
+                    readOnly: true
+            volumes:
+              - name: log-volume
+                emptyDir: {}
+              - name: model-repository
+                persistentVolumeClaim:
+                  claimName: {{ .Values.triton.modelRepository.claimName }}
+                  readOnly: true
+            {{- with .Values.nodeSelector }}
+            nodeSelector:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+            {{- with .Values.tolerations }}
+            tolerations:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
