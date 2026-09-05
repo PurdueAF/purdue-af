@@ -1,15 +1,8 @@
-"""Tests for apps/ray — Triton, configured as in the supersonic release, run on
-Ray with Ray Serve carrying its gRPC.
+"""Tests for apps/ray — Triton on Ray with Ray Serve carrying its gRPC.
 
-Two jobs.
-
-One: *parity*. Each worker pod runs the same Triton — image, arguments,
-resources, readiness, model repository — as `supersonic`, so it serves what
-supersonic serves. The values file says so in a comment; these tests make it
-true. Autoscaling is deliberately not mirrored.
-
-Two: the properties the scaling loop depends on, which no schema can
-express: one forwarding replica per Triton pod (the `triton` resource), Serve
+The properties the deployment depends on, which no schema can express: the
+Triton container is the one the values describe, on a read-only model
+repository; one forwarding replica per Triton pod (the `triton` resource), Serve
 never asking for more replicas than the worker group may hold, nothing on the
 head, Serve's gRPC proxy handed Triton's own servicer from a package every
 pod installs, the Services selecting on labels KubeRay leaves alone. Those
@@ -31,7 +24,6 @@ CHART = RAY / "sonic-ray" / "chart"
 VALUES = RAY / "sonic-ray" / "values.yaml"
 CODE = CHART / "files" / "sonic_ray"
 SERVE_APP = CODE / "serve_app.py"
-SUPERSONIC = REPO / "apps" / "sonic" / "supersonic" / "values.yaml"
 EXPERIMENTAL = REPO / "deploy" / "experimental" / "kustomization.yaml"
 VALIDATOR = REPO / ".github" / "workflows" / "validate-manifests.sh"
 
@@ -48,11 +40,6 @@ def values():
 @pytest.fixture(scope="module")
 def chart_defaults():
     return load(CHART / "values.yaml")
-
-
-@pytest.fixture(scope="module")
-def supersonic():
-    return load(SUPERSONIC)
 
 
 @pytest.fixture(scope="module")
@@ -185,8 +172,8 @@ def test_validator_renders_this_chart():
 
 def test_pods_run_stock_images(head_pod, worker_group, chart_defaults, values):
     """Official Ray (CPU flavour: no Ray process touches a GPU) through the
-    Docker Hub proxy cache, official Triton straight from NVIDIA — the same
-    registry supersonic pulls from. The Ray tag's version is ray.version,
+    Docker Hub proxy cache, official Triton straight from NVIDIA. The Ray
+    tag's version is ray.version,
     which also pins the autoscaler sidecar KubeRay adds."""
     ray = chart_defaults["ray"]
     ray_image = (
@@ -272,39 +259,7 @@ def test_code_reaches_every_pod(rendered, head_pod, worker_group):
     )
 
 
-# -- the Triton in the pod is configured as in supersonic ---------------------
-
-
-def test_triton_values_match_supersonic(values, supersonic):
-    ours, theirs = values["triton"], supersonic["triton"]
-    assert f"{ours['image']['repository']}:{ours['image']['tag']}" == theirs["image"]
-    assert ours["command"] == theirs["command"]
-    # Token for token: copied arguments drift silently.
-    assert ours["args"][0].split() == theirs["args"][0].split()
-    assert ours["resources"] == theirs["resources"]
-    assert (
-        ours["readinessProbe"]["successThreshold"]
-        == theirs["readinessProbe"]["successThreshold"]
-    )
-    assert (
-        ours["modelRepository"]["claimName"]
-        == theirs["modelRepository"]["pvc"]["claimName"]
-    )
-    assert (
-        ours["modelRepository"]["mountPath"] == theirs["modelRepository"]["mountPath"]
-    )
-
-
-def test_pods_land_where_supersonic_pods_land(values, supersonic):
-    assert values["nodeSelector"] == supersonic["triton"]["nodeSelector"]
-    assert values["tolerations"] == supersonic["triton"]["tolerations"]
-    pool = values["service"]["annotations"]["metallb.universe.tf/address-pool"]
-    assert (
-        pool
-        == supersonic["triton"]["service"]["annotations"][
-            "metallb.universe.tf/address-pool"
-        ]
-    )
+# -- the Triton in the pod is the one in the values ---------------------------
 
 
 def test_rendered_triton_is_the_one_in_values(worker_group, values):
@@ -459,8 +414,7 @@ def test_serve_import_path_resolves(serve_config, deployment):
 def test_inference_entry_point_is_kuberays_serve_service(
     rayservice, head_pod, worker_group
 ):
-    """Envoy's job in the supersonic release: one gRPC address on the private
-    pool, on Triton's conventional port. Behind it is Serve's gRPC proxy, so
+    """One gRPC address on the private pool, on Triton's conventional port. Behind it is Serve's gRPC proxy, so
     every request is counted. KubeRay keeps the Service pointed at pods whose
     proxy is healthy."""
     svc = rayservice["spec"]["serveService"]
@@ -514,7 +468,7 @@ def test_metrics_services_select_labels_kuberay_leaves_alone(
     for svc in (ray_metrics, triton_metrics):
         assert "app.kubernetes.io/name" not in svc["spec"]["selector"]
         assert "ray.io/cluster" not in svc["spec"]["selector"]
-        # release="sonic-ray" is how the SuperSONIC dashboards select nv_*.
+        # release="sonic-ray" is how dashboards select this release's series.
         assert svc["metadata"]["labels"]["app.kubernetes.io/instance"] == "sonic-ray"
 
 

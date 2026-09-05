@@ -38,10 +38,9 @@ resources:
   # supersonic-model-manager-auth Secret to exist in the namespace.
   - ../../apps/sonic/model-manager/helmrelease.yaml
 
-  # The supersonic release's model repository served by Ray Serve (ONNX
-  # Runtime on GPU, KServe v2 HTTP), plus the KubeRay operator that
-  # reconciles it. Mounts the same model repository claim as the release
-  # above. See apps/ray/README.md.
+  # Triton on Ray: Ray Serve's gRPC proxy in front of a Triton per GPU pod,
+  # plus the KubeRay operator that reconciles it. Mounts the model repository
+  # claim of the release above. See apps/ray/README.md.
   - ../../apps/ray/helmrepo.yaml
   - ../../apps/ray/operator/helmrelease.yaml
   - ../../apps/ray/sonic-ray/helmrelease.yaml

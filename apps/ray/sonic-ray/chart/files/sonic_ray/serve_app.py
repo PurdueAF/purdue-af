@@ -1,7 +1,6 @@
 """Triton behind Ray Serve's gRPC proxy.
 
-Every worker pod runs two containers: Triton (configured as in the AF's
-`supersonic` release — same image, arguments, model repository) and Ray. This deployment runs on the Ray side,
+Every worker pod runs two containers: Triton and Ray. This deployment runs on the Ray side,
 one replica per pod (pinned there by the ``triton`` resource each worker
 advertises), and forwards each RPC it receives to Triton on localhost.
 

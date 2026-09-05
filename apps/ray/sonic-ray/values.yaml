@@ -1,13 +1,6 @@
-# Values for the `sonic-ray` release: Triton, configured as in the `supersonic`
-# release, run on Ray in the cms namespace on Geddes, with Ray Serve carrying
-# its gRPC.
-#
-# The triton: block is apps/sonic/supersonic/values.yaml's, key for key —
-# image, command, arguments, resources, readiness, model repository — so what
-# this release serves is what supersonic serves. tests/manifests/test_ray.py
-# keeps the two equal.
-#
-# Autoscaling is not copied: no KEDA, no Prometheus in the loop. See the chart.
+# Values for the `sonic-ray` release: Triton on Ray in the cms namespace on
+# Geddes, with Ray Serve carrying its gRPC. Autoscaling is Ray's alone: no
+# KEDA, no Prometheus in the loop. See the chart.
 
 triton:
   image:
@@ -35,16 +28,15 @@ triton:
       memory: 16G
   readinessProbe:
     successThreshold: 3
-  # The claim the SuperSONIC model manager creates and writes
-  # (apps/sonic/model-manager) and the Triton pods of the supersonic release mount.
+  # The CMS model repository claim, created and written by the model manager
+  # (apps/sonic/model-manager); mounted read-only here.
   modelRepository:
     claimName: supersonic-model-repository
     mountPath: /models
 
 ray:
   worker:
-    # The GPU ceiling of the release. The supersonic release's KEDA maximum is
-    # 10 Triton pods; start smaller here, since both compete for the same GPUs.
+    # The GPU ceiling of the release; start small, the GPUs are shared.
     minReplicas: 0
     maxReplicas: 4
 
@@ -54,8 +46,7 @@ serve:
   minReplicas: 1
   maxReplicas: 4
 
-# Same placement as the supersonic release's triton and envoy pods, for every
-# pod here.
+# The CMS GPU nodes, for every pod here.
 nodeSelector: { "cms-af-prod": "true" }
 tolerations:
   - key: hub.jupyter.org/dedicated
@@ -63,8 +54,7 @@ tolerations:
     value: cms-af
     effect: NoSchedule
 
-# Same private pool as supersonic's Envoy: reachable from the AF, never a
-# public ingress.
+# The private address pool: reachable from the AF, never a public ingress.
 service:
   type: LoadBalancer
   annotations:

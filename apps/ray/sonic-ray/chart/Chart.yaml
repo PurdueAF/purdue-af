@@ -1,6 +1,6 @@
 apiVersion: v2
 name: sonic-ray
-description: Triton Inference Server on Ray, configured as in a SuperSONIC release — Ray Serve's gRPC proxy carries Triton's protocol to a Triton in every GPU pod, and Ray autoscales the pods from the requests.
+description: Triton Inference Server on Ray — Ray Serve's gRPC proxy carries Triton's protocol to a Triton in every GPU pod, and Ray autoscales the pods from the requests.
 type: application
 version: 0.1.0
 appVersion: "26.04"

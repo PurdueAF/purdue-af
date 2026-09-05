@@ -45,7 +45,7 @@ spec:
     {{- include "sonic-ray.podSelector" . | nindent 4 }}
     app.kubernetes.io/component: worker
   ports:
-    # Triton's nv_* metrics — the series the SuperSONIC dashboards plot.
+    # Triton's nv_* metrics — the series the Triton dashboards plot.
     - name: triton-metrics
       port: 8002
       targetPort: triton-metrics
