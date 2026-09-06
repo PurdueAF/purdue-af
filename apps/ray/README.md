@@ -42,7 +42,7 @@ would install them. `dependsOn: kuberay-operator` is the fix, and a
    │ worker pod                                      │
    │   ray-worker  raylet advertising triton: 1,     │
    │               proxy, TritonProxy replica ──┐    │
-   │   triton      1 GPU, 16 CPU, 16G, /models ◀┘    │  localhost:8001
+   │   triton      1 GPU, 4 CPU, 16G, /cvmfs ro ◀┘   │  localhost:8001
    └─────────────────────────────────────────────────┘
                     ▲ replica demand
    ┌─────────────────────────────────────────────────┐
@@ -59,17 +59,31 @@ the request that grows the group.
 
 ## What it serves and speaks
 
-Everything the `supersonic` release does, because it is the same server on
-the same repository (`supersonic-model-repository`, read-only, written by the
-[model manager](../sonic/model-manager)): all ten CMS models, every backend,
-`config.pbtxt` semantics, dynamic batching, the repository index.
+Whatever Triton is pointed at. On the AF that is the models CMSSW ships:
+`sonic-ray/values.yaml` mounts the cluster's CVMFS claim read-only at `/cvmfs`
+and gives Triton four `--model-repository` directories inside a CMSSW release
+(`CMSSW_17_0_0_pre2` today — RecoBTag, RecoEgamma, RecoTauTag, RecoMET) with
+an explicit load list:
 
-The wire protocol is Triton's gRPC. `GET`-style HTTP is **not** carried
-(Serve's HTTP proxy on 8000 answers only its own `/-/healthz` and
-`/-/routes`); Triton's HTTP port stays inside the pod. CMSSW's `TritonClient`
-speaks gRPC, so `cmsRun` jobs point at `sonic-ray-serve:8001` exactly as they
-point at supersonic's Envoy — the port is Triton's conventional one on purpose.
-`tritonclient.grpc` works the same way.
+`deepmet`, `deeptau_2018v2p5`, `particleNetFromMiniAODAK4CHSCentral`,
+`particleNetFromMiniAODAK4PuppiCentral`, `particleNetFromMiniAODAK4PuppiForward`,
+`particleNetFromMiniAODAK8`, `particlenet_AK8_MD-2prong_PT`,
+`particlenet_AK8_MassRegression_PT`, `particlenet_PT`,
+`unifiedparticletransformer_AK4_V01`.
+
+Nothing is uploaded anywhere and there is no model manager: a new CMSSW
+release, or a different model set, is a path change in the values. Every
+backend, `config.pbtxt` semantics, dynamic batching and the repository index
+work as in any Triton, because it is Triton. The first load from CVMFS pulls
+the files over the network into the node's cache, so the startup probe allows
+four minutes.
+
+The wire protocol is Triton's gRPC. HTTP is **not** carried (Serve's HTTP
+proxy on 8000 answers only its own `/-/healthz` and `/-/routes`); Triton's
+HTTP port stays inside the pod. CMSSW's `TritonClient` speaks gRPC, so
+`cmsRun` jobs point at `sonic-ray-serve:8001` as at any Triton endpoint — the
+port is Triton's conventional one on purpose. `tritonclient.grpc` works the
+same way.
 
 The one RPC not forwarded is `ModelStreamInfer`, Triton's bidirectional
 stream: Serve's proxy carries unary and server-streaming calls only. CMSSW
@@ -111,19 +125,14 @@ reclaims a pod that stays broken.
 
 | SuperSONIC (`supersonic`) | Ray (`sonic-ray`) |
 | --- | --- |
-| Triton: 1 GPU, 16 CPU, 16G, `--model-control-mode=explicit --load-model=*` | the same container, argument for argument |
+| Triton on a per-site PVC or CVMFS, explicit load list | Triton on CVMFS, explicit load list — a plain `--model-repository` path |
 | Envoy: gRPC entry point behind a `LoadBalancer` on `geddes-private-pool`, `ROUND_ROBIN` | Serve's gRPC proxy behind KubeRay's serve Service, same pool, port 8001 |
 | `ingress.enabled: false` — private pool only | no ingress; the head is `ClusterIP`, dashboard by port-forward only |
 | KEDA `ScaledObject` on a Prometheus expression, 1–10 pods | Ray Serve request-based autoscaling, 1–4 pods — see above |
 | `nodeSelector: cms-af-prod=true` + the `hub.jupyter.org/dedicated` toleration | same, head and workers |
-| model repository PVC at `/models` | same PVC, mounted **read-only** — the model manager owns the writes |
+| model repository from a PVC or CVMFS | the cluster's `cvmfs` claim, mounted **read-only** |
 | Triton Service labelled `scrape_metrics: "true"` | `sonic-ray-triton-metrics` (`nv_*`) and `sonic-ray-metrics` (Ray, incl. `ray_serve_*`), same label, `release="sonic-ray"` |
 | Envoy's Lua rate limiter on `RepositoryIndex` | none; Serve's `maxOngoingRequests` back-pressure instead |
-
-`tests/manifests/test_ray.py` asserts the parity against
-`apps/sonic/supersonic/values.yaml` itself — including a token-by-token
-comparison of Triton's arguments — so retuning supersonic and forgetting Ray
-turns the build red.
 
 ## Using it
 
@@ -152,8 +161,9 @@ kubectl -n cms port-forward svc/sonic-ray-head-svc 8265:8265
 ## What is not an image
 
 The Ray containers run `rayproject/ray:2.52.0-py312-cpu` (through the geddes
-Docker Hub proxy cache) exactly as published; the Triton container runs
-`nvcr.io/nvidia/tritonserver:26.04-py3`, the tag supersonic runs. Two things
+Docker Hub proxy cache) exactly as published; the Triton container runs the
+image the values name (the chart default is `nvcr.io/nvidia/tritonserver`;
+the AF values use the lighter `docexoty/tritonserver:light`). Two things
 are added at deploy time instead of build time:
 
 - **the forwarder** — `files/sonic_ray/*.py` become the `sonic-ray-code`

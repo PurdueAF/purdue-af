@@ -193,6 +193,9 @@ spec:
                   - name: model-repository
                     mountPath: {{ .Values.triton.modelRepository.mountPath }}
                     readOnly: true
+                    {{- with .Values.triton.modelRepository.mountPropagation }}
+                    mountPropagation: {{ . }}
+                    {{- end }}
             volumes:
               {{- include "sonic-ray.rayVolumes" . | nindent 14 }}
               - name: model-repository

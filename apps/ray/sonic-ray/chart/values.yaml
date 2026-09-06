@@ -107,10 +107,15 @@ triton:
     limits: { nvidia.com/gpu: 1 }
     requests: { nvidia.com/gpu: 1 }
   modelRepository:
-    # -- An existing claim (ReadWriteMany if anything else mounts it). Mounted
-    # read-only: Triton only reads it, and this release does not own it.
+    # -- An existing claim holding the model repositories named in args —
+    # typically the cluster's CVMFS claim, with Triton pointed at model
+    # directories inside a CMSSW release. Mounted read-only: Triton only
+    # reads it, and this release does not own it.
     claimName: ""
     mountPath: /models
+    # -- Set to HostToContainer for CVMFS and other FUSE/autofs mounts, so
+    # repositories mounted on the host after the pod starts still appear.
+    mountPropagation: ""
   # -- A large repository takes minutes to load; the startup probe buys that
   # time without loosening readiness afterwards.
   startupProbe:

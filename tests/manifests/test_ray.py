@@ -172,8 +172,8 @@ def test_validator_renders_this_chart():
 
 def test_pods_run_stock_images(head_pod, worker_group, chart_defaults, values):
     """Official Ray (CPU flavour: no Ray process touches a GPU) through the
-    Docker Hub proxy cache, official Triton straight from NVIDIA. The Ray
-    tag's version is ray.version,
+    Docker Hub proxy cache; the Triton image is whatever the values name. The
+    Ray tag's version is ray.version,
     which also pins the autoscaler sidecar KubeRay adds."""
     ray = chart_defaults["ray"]
     ray_image = (
@@ -268,7 +268,8 @@ def test_rendered_triton_is_the_one_in_values(worker_group, values):
     assert triton["command"] == values["triton"]["command"]
     assert triton["args"] == values["triton"]["args"]
     assert triton["resources"] == values["triton"]["resources"]
-    assert triton["readinessProbe"]["successThreshold"] == 3
+    assert triton["readinessProbe"] == values["triton"]["readinessProbe"]
+    assert triton["startupProbe"] == values["triton"]["startupProbe"]
     assert {p["name"]: p["containerPort"] for p in triton["ports"]} == {
         "http": 8000,
         "grpc": 8001,
@@ -276,17 +277,19 @@ def test_rendered_triton_is_the_one_in_values(worker_group, values):
     }
 
 
-def test_model_repository_is_mounted_read_only(worker_group, values):
-    """Triton only reads it; the model manager owns the writes."""
+def test_models_come_from_cvmfs_read_only(worker_group, values):
+    """The cluster's CVMFS claim, mounted read-only with host-to-container
+    propagation (CVMFS repositories are autofs mounts on the node), and every
+    --model-repository Triton is given lives under that mount, loaded from an
+    explicit list: what is served is exactly what the values say."""
+    repo = values["triton"]["modelRepository"]
+    assert repo["claimName"] == "cvmfs"
     volume = next(
         v
         for v in worker_group["template"]["spec"]["volumes"]
         if v["name"] == "model-repository"
     )
-    assert volume["persistentVolumeClaim"] == {
-        "claimName": values["triton"]["modelRepository"]["claimName"],
-        "readOnly": True,
-    }
+    assert volume["persistentVolumeClaim"] == {"claimName": "cvmfs", "readOnly": True}
     mount = next(
         m
         for m in container(worker_group["template"], "triton")["volumeMounts"]
@@ -294,9 +297,20 @@ def test_model_repository_is_mounted_read_only(worker_group, values):
     )
     assert mount == {
         "name": "model-repository",
-        "mountPath": "/models",
+        "mountPath": repo["mountPath"],
         "readOnly": True,
+        "mountPropagation": "HostToContainer",
     }
+    args = values["triton"]["args"][0].split()
+    repositories = [
+        a.removeprefix("--model-repository=")
+        for a in args
+        if a.startswith("--model-repository=")
+    ]
+    assert repositories, "Triton is given no model repository"
+    assert all(r.startswith(repo["mountPath"] + "/") for r in repositories)
+    assert "--model-control-mode=explicit" in args
+    assert [a for a in args if a.startswith("--load-model=")], "no --load-model"
 
 
 def test_placement_applies_to_every_pod(head_pod, worker_group, values):

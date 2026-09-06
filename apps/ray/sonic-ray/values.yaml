@@ -1,38 +1,67 @@
 # Values for the `sonic-ray` release: Triton on Ray in the cms namespace on
 # Geddes, with Ray Serve carrying its gRPC. Autoscaling is Ray's alone: no
 # KEDA, no Prometheus in the loop. See the chart.
+#
+# The models are the ones CMSSW ships: Triton is pointed at model directories
+# inside a CMSSW release on CVMFS, with an explicit load list. Nothing is
+# uploaded anywhere; a new CMSSW release is a path change here.
 
 triton:
   image:
-    repository: nvcr.io/nvidia/tritonserver
-    tag: "26.04-py3"
+    repository: docker.io/docexoty/tritonserver
+    tag: light
   command: ["/bin/sh", "-c"]
   args:
     - |
       /opt/tritonserver/bin/tritonserver \
-      --model-repository=/models \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoBTag/Combined/data/models/ \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoEgamma/EgammaPhotonProducers/data/models/ \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoTauTag/TrainingFiles/data/DeepTauIdSONIC/ \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoMET/METPUSubtraction/data/models/ \
       --model-control-mode=explicit \
-      --load-model=* \
+      --load-model=deepmet \
+      --load-model=deeptau_2018v2p5 \
+      --load-model=particleNetFromMiniAODAK4CHSCentral \
+      --load-model=particleNetFromMiniAODAK4PuppiCentral \
+      --load-model=particleNetFromMiniAODAK4PuppiForward \
+      --load-model=particleNetFromMiniAODAK8 \
+      --load-model=particlenet_AK8_MD-2prong_PT \
+      --load-model=particlenet_AK8_MassRegression_PT \
+      --load-model=particlenet_PT \
+      --load-model=unifiedparticletransformer_AK4_V01 \
       --allow-gpu-metrics=true \
       --log-verbose=0 \
-      --disable-auto-complete-config \
+      --strict-model-config=false \
       --exit-timeout-secs=60
   resources:
     limits:
       nvidia.com/gpu: 1
-      cpu: 16
+      cpu: 4
       memory: 16G
     requests:
       nvidia.com/gpu: 1
-      cpu: 16
+      cpu: 4
       memory: 16G
+  # Loading from CVMFS is slow the first time (the files come over the
+  # network into the local cache): the startup probe allows four minutes.
+  startupProbe:
+    periodSeconds: 10
+    failureThreshold: 24
+    timeoutSeconds: 15
+    httpGet: { path: /v2/health/ready, port: http }
   readinessProbe:
-    successThreshold: 3
-  # The CMS model repository claim, created and written by the model manager
-  # (apps/sonic/model-manager); mounted read-only here.
+    timeoutSeconds: 15
+    periodSeconds: 10
+    failureThreshold: 10
+    successThreshold: 1
+    httpGet: { path: /v2/health/ready, port: http }
+  # The cluster's CVMFS claim (apps/infrastructure/cvmfs-pvc.yaml), read-only.
+  # HostToContainer: CVMFS repositories are autofs mounts on the node, and the
+  # pod must see the ones mounted after it started.
   modelRepository:
-    claimName: supersonic-model-repository
-    mountPath: /models
+    claimName: cvmfs
+    mountPath: /cvmfs
+    mountPropagation: HostToContainer
 
 ray:
   worker:
