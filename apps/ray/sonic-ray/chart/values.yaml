@@ -16,6 +16,18 @@
 # app.kubernetes.io/instance label the Services select pods by.
 nameOverride: ""
 
+# -- How many Tritons: the one pair of numbers that sizes the release. A
+# replica of the forwarder is one GPU pod with one Triton in it, so this
+# bounds Serve's replica count and the worker group alike (the group's own
+# minimum is always 0 — Serve's minimum is what keeps pods alive). Serve adds
+# a replica when the average number of in-flight requests per replica exceeds
+# serve.targetOngoingRequests, and removes one when it falls well below.
+# min: 0 (scale-to-zero) works, but the first request then waits for a pod,
+# two image pulls and Triton's model load.
+replicas:
+  min: 1
+  max: 4
+
 ray:
   # -- Ray version: selects the image tag below and pins the autoscaler sidecar.
   version: "2.52.0"
@@ -43,10 +55,6 @@ ray:
     resources:
       limits: { cpu: "2", memory: 4Gi }
       requests: { cpu: "2", memory: 4Gi }
-    # -- Pod count bounds. maxReplicas is the GPU ceiling of the release; the
-    # chart refuses to render if Serve may ask for more replicas than this.
-    minReplicas: 0
-    maxReplicas: 4
     # -- Scaling down deletes the pod. Triton drains in-flight requests for
     # --exit-timeout-secs after SIGTERM; the kubelet must wait at least that
     # long (the chart refuses to render otherwise).
@@ -70,13 +78,9 @@ python:
     - python-rapidjson==1.24
 
 serve:
-  # -- Replicas of the forwarder: one per GPU pod, each fronting that pod's
-  # Triton. Serve adds one when the average number of in-flight requests per
-  # replica exceeds targetOngoingRequests, and removes one when it falls well
-  # below. Scale-to-zero (minReplicas: 0) works but the first request then
-  # waits for a pod, two image pulls and Triton's model load.
-  minReplicas: 1
-  maxReplicas: 4
+  # -- In-flight requests per replica above which Serve adds one (bounds are
+  # `replicas` above). Set near the concurrency at which one Triton saturates
+  # its GPU.
   targetOngoingRequests: 16
   # -- Requests a replica queues before the proxy backs off to another.
   maxOngoingRequests: 128

@@ -98,22 +98,21 @@ Two loops, both Ray's, nothing else in between:
    `serve.targetOngoingRequests` (16) for `upscaleDelayS` (10 s) it adds a
    replica; when it falls well below for `downscaleDelayS` (300 s) it removes
    one, giving in-flight requests `gracefulShutdownTimeoutS` (60 s). Bounds are
-   `serve.minReplicas`/`maxReplicas` (1/4 on the AF).
+   `replicas.min`/`max` (1/4 on the AF).
 2. **The Ray autoscaler** sizes the cluster. A new replica needs a `triton`
    resource; if no worker has one free, that is a pending request and the
-   autoscaler adds a pod to `gpu-group` (bounded by `ray.worker.minReplicas`/
-   `maxReplicas`, 0/4). A worker whose replica is gone idles for
+   autoscaler adds a pod to `gpu-group` (ceiling: the same `replicas.max`; the
+   group's own floor is 0, since a pod with a replica on it is never idle and
+   Serve's minimum therefore keeps pods alive). A worker whose replica is gone idles for
    `idleTimeoutSeconds` (60 s) and is reclaimed; the pod then gets
    `terminationGracePeriodSeconds` against Triton's `--exit-timeout-secs` to
    drain (the chart refuses to render if the first is not larger).
 
-The chart ties the two together: `serve.maxReplicas` may not exceed
-`ray.worker.maxReplicas`. Raising the GPU ceiling is one edit in
-`sonic-ray/values.yaml`:
+One pair of numbers sizes both, because a replica *is* a pod. Raising the GPU
+ceiling is one edit in `sonic-ray/values.yaml`:
 
 ```yaml
-ray: { worker: { maxReplicas: 8 } }
-serve: { maxReplicas: 8 }
+replicas: { min: 1, max: 8 }
 ```
 
 A replica only becomes ready once its Triton answers `ServerReady`, and it
@@ -181,7 +180,7 @@ being reachable from the nodes — chosen over maintaining an image.
 
 ## Cost
 
-One GPU idles (`serve.minReplicas: 1`) on the same `cms-af-prod` nodes
+One GPU idles (`replicas.min: 1`) on the same `cms-af-prod` nodes
 SuperSONIC and the user sessions compete for. An upgrade costs a second set
 for its duration: `upgradeStrategy: NewCluster` brings a second cluster up
 before cutting over, and if no GPU is free it waits while the old one keeps

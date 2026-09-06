@@ -104,14 +104,11 @@ Refuse to render what cannot work.
 {{- if not .Values.triton.modelRepository.claimName -}}
   {{- fail "triton.modelRepository.claimName is required: the PVC holding the Triton model repository." -}}
 {{- end -}}
-{{- if gt (int .Values.serve.minReplicas) (int .Values.serve.maxReplicas) -}}
-  {{- fail "serve.minReplicas exceeds serve.maxReplicas." -}}
+{{- if gt (int .Values.replicas.min) (int .Values.replicas.max) -}}
+  {{- fail "replicas.min exceeds replicas.max." -}}
 {{- end -}}
-{{- if gt (int .Values.ray.worker.minReplicas) (int .Values.ray.worker.maxReplicas) -}}
-  {{- fail "ray.worker.minReplicas exceeds ray.worker.maxReplicas." -}}
-{{- end -}}
-{{- if gt (int .Values.serve.maxReplicas) (int .Values.ray.worker.maxReplicas) -}}
-  {{- fail (printf "serve.maxReplicas (%d) exceeds ray.worker.maxReplicas (%d): each replica fronts its own Triton pod, so the extra replicas could never be placed." (int .Values.serve.maxReplicas) (int .Values.ray.worker.maxReplicas)) -}}
+{{- if lt (int .Values.replicas.min) 0 -}}
+  {{- fail "replicas.min is negative." -}}
 {{- end -}}
 {{- $gpus := index .Values.triton.resources.limits "nvidia.com/gpu" | default 0 | int -}}
 {{- if ne $gpus 1 -}}

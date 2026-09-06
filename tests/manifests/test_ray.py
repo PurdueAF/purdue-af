@@ -358,14 +358,21 @@ def test_one_replica_per_triton_pod(deployment, worker_group, cluster):
     )
 
 
-def test_serve_cannot_outgrow_the_worker_group(deployment, worker_group):
-    """A replica with no Triton pod to land on pends forever (the chart refuses
-    to render otherwise)."""
+def test_one_setting_bounds_serve_and_the_worker_group(
+    deployment, worker_group, values
+):
+    """`replicas` is the only pair of numbers: Serve's bounds are it, the
+    group's ceiling is it (a replica needs a pod), the group starts with as
+    many pods as Serve will immediately ask for, and the group's own minimum
+    is 0 — Serve's minimum keeps pods alive, a pod with a replica is never
+    idle."""
+    bounds = values["replicas"]
     autoscaling = deployment["autoscaling_config"]
-    assert autoscaling["max_replicas"] <= worker_group["maxReplicas"]
-    assert autoscaling["min_replicas"] <= autoscaling["max_replicas"]
-    assert worker_group["minReplicas"] <= worker_group["maxReplicas"]
-    assert worker_group["replicas"] == worker_group["minReplicas"]
+    assert autoscaling["min_replicas"] == bounds["min"]
+    assert autoscaling["max_replicas"] == bounds["max"]
+    assert worker_group["maxReplicas"] == bounds["max"]
+    assert worker_group["replicas"] == bounds["min"]
+    assert worker_group["minReplicas"] == 0
 
 
 def test_scale_down_is_slower_than_scale_up(deployment):
@@ -493,8 +500,7 @@ def test_metrics_services_select_labels_kuberay_leaves_alone(
     "override, message",
     [
         ("triton.modelRepository.claimName=", "claimName is required"),
-        ("serve.maxReplicas=9", "exceeds ray.worker.maxReplicas"),
-        ("serve.minReplicas=5", "serve.minReplicas exceeds"),
+        ("replicas.min=5", "replicas.min exceeds replicas.max"),
         ("triton.resources.limits.nvidia\\.com/gpu=2", "exactly one nvidia.com/gpu"),
         (
             "ray.worker.terminationGracePeriodSeconds=30",

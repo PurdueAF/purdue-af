@@ -63,17 +63,11 @@ triton:
     mountPath: /cvmfs
     mountPropagation: HostToContainer
 
-ray:
-  worker:
-    # The GPU ceiling of the release; start small, the GPUs are shared.
-    minReplicas: 0
-    maxReplicas: 4
-
-serve:
-  # One GPU idling so the first request does not wait for a pod, two image
-  # pulls and Triton's model load; up to every GPU the worker group may have.
-  minReplicas: 1
-  maxReplicas: 4
+# One Triton idling so the first request does not wait for a pod, two image
+# pulls and a model load from CVMFS; at most four, since the GPUs are shared.
+replicas:
+  min: 1
+  max: 4
 
 # The CMS GPU nodes, for every pod here.
 nodeSelector: { "cms-af-prod": "true" }
