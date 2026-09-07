@@ -32,6 +32,11 @@ def load(path):
     return yaml.safe_load(path.read_text())
 
 
+def values_doc():
+    """The AF values, for tests that take no fixture."""
+    return load(VALUES)
+
+
 @pytest.fixture(scope="module")
 def values():
     return load(VALUES)
@@ -268,8 +273,10 @@ def test_rendered_triton_is_the_one_in_values(worker_group, values):
     assert triton["command"] == values["triton"]["command"]
     assert triton["args"] == values["triton"]["args"]
     assert triton["resources"] == values["triton"]["resources"]
-    assert triton["readinessProbe"] == values["triton"]["readinessProbe"]
-    assert triton["startupProbe"] == values["triton"]["startupProbe"]
+    # Probes come from the chart; the release overrides individual keys, and
+    # Helm merges rather than replaces — so assert containment, not equality.
+    for name in ("readinessProbe", "startupProbe"):
+        assert values["triton"].get(name, {}).items() <= triton[name].items()
     assert {p["name"]: p["containerPort"] for p in triton["ports"]} == {
         "http": values["triton"]["httpPort"],
         "grpc": values["triton"]["grpcPort"],
@@ -316,6 +323,65 @@ def test_the_forwarder_is_told_where_its_triton_is(head_pod, worker_group, value
     ):
         assert env_of(container(template, name))["TRITON_GRPC"] == expected
     assert f'"TRITON_GRPC", "{expected}"' in SERVE_APP.read_text()
+
+
+def test_triton_image_is_pinned_to_the_line_the_driver_supports():
+    """26.06+ is CUDA 13, whose driver floor is above the R580 on the GPU
+    nodes. The values pick the image; Renovate has to be holding whichever one
+    they pick, or a bump walks past the driver."""
+    image = values_doc()["triton"]["image"]
+    assert image["tag"].startswith("26.04"), image["tag"]
+    renovate = (REPO / ".github" / "renovate.json5").read_text()
+    name = image["repository"].removeprefix("docker.io/")
+    assert name in renovate, f"{name} is not pinned in renovate.json5"
+    assert r"'/^26\\.04/'" in renovate, "the 26.04 pin is gone"
+
+
+# The probe timings the facility's other Triton deployments run, read off
+# their rendered pod. Kept here so a change to ours is a deliberate edit with
+# this list in front of you, not a drift nobody notices.
+ELSEWHERE = {
+    "startupProbe": {
+        "initialDelaySeconds": 0,
+        "periodSeconds": 10,
+        "failureThreshold": 12,
+    },
+    "readinessProbe": {
+        "initialDelaySeconds": 10,
+        "periodSeconds": 10,
+        "timeoutSeconds": 5,
+        "successThreshold": 3,
+        "failureThreshold": 10,
+    },
+}
+
+
+def test_probe_timings_match_the_other_triton_deployments(worker_group):
+    """Same server, same judgement of healthy. The one deliberate difference:
+    this repository loads over the network into the node's CVMFS cache, so the
+    startup budget is larger. Everything else is theirs."""
+    triton = container(worker_group["template"], "triton")
+
+    readiness = triton["readinessProbe"]
+    assert {k: readiness[k] for k in ELSEWHERE["readinessProbe"]} == ELSEWHERE[
+        "readinessProbe"
+    ]
+
+    startup = triton["startupProbe"]
+    budget = "failureThreshold"
+    assert startup[budget] > ELSEWHERE["startupProbe"][budget], (
+        "the CVMFS load needs a longer startup budget than a local claim does"
+    )
+    assert {k: startup[k] for k in ELSEWHERE["startupProbe"] if k != budget} == {
+        k: v for k, v in ELSEWHERE["startupProbe"].items() if k != budget
+    }
+    # A timeout on the startup probe would be shorter than the period; a
+    # loading Triton refuses the connection rather than hanging.
+    assert "timeoutSeconds" not in startup
+
+    # Both must address Triton's own port, never the Ray proxy on 8000.
+    for probe in (readiness, startup):
+        assert probe["httpGet"]["port"] == "http"
 
 
 def test_models_come_from_cvmfs_read_only(worker_group, values):

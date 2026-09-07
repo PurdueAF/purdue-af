@@ -1,16 +1,15 @@
 # Ray on the Analysis Facility
 
 **Triton on Ray**: every worker pod carries NVIDIA's Triton Inference Server,
-configured exactly as in the `supersonic` release (`apps/sonic/supersonic`) —
-same image, arguments, resources, model repository — and **Ray Serve's gRPC proxy carries Triton's protocol** to it.
+and **Ray Serve's gRPC proxy carries Triton's protocol** to it.
 Serve speaks that protocol because it is handed Triton's own generated
 servicer; the only code of ours is a forwarder that passes each RPC from the
 proxy to the Triton in its pod. Serve counts every request on the way through,
 sizes the deployment from that, and the Ray autoscaler adds a GPU pod for each
 replica with nowhere to go.
 
-No custom image, no protocol code, no model code: official Ray, official
-Triton, ~100 lines of glue shipped as a ConfigMap, Triton's Python stubs
+No custom image, no protocol code, no model code: official Ray, a stock
+Triton image, ~100 lines of glue shipped as a ConfigMap, Triton's Python stubs
 pip-installed by an init container.
 
 | path                                                                                                            | what it is                                                                                                                                                                     |
@@ -19,8 +18,8 @@ pip-installed by an init container.
 | `operator/`                                                                                                     | `kuberay-operator` 1.7.0 — the `ray.io` CRDs and the controller. Namespaced (`singleNamespaceInstall: true`), so both the watch and the RBAC stay in `cms`.                    |
 | `sonic-ray/chart/`                                                                                              | the `sonic-ray` chart: a `RayService` with a Triton in every worker pod and the forwarder as its Serve application, the ConfigMap carrying the forwarder, two metrics Services |
 | `sonic-ray/chart/files/sonic_ray/serve_app.py`                                                                  | the forwarder — one replica per pod, every unary RPC of `GRPCInferenceService` handed to the pod's Triton unchanged                                                            |
-| `sonic-ray/helmrelease.yaml`, `sonic-ray/values.yaml`                                                           | the AF release: `dependsOn` the operator, values with the `triton:` block of the `supersonic` release's values                                                                 |
-| [`tests/sonic_ray/`](../../tests/sonic_ray), [`tests/manifests/test_ray.py`](../../tests/manifests/test_ray.py) | source-level checks of the forwarder; rendered-chart checks incl. parity with `apps/sonic/supersonic/values.yaml`                                                              |
+| `sonic-ray/helmrelease.yaml`, `sonic-ray/values.yaml`                                                           | the AF release: `dependsOn` the operator, the Triton image, arguments, resources and probes, and the CVMFS model repositories                                                  |
+| [`tests/sonic_ray/`](../../tests/sonic_ray), [`tests/manifests/test_ray.py`](../../tests/manifests/test_ray.py) | source-level checks of the forwarder; rendered-chart checks of the pod, its ports, its probes and the scaling bounds                                                           |
 
 The chart lives here (like `apps/sonic/model-manager`) rather than being a raw
 `RayService` because of ordering: until the operator's chart has installed the
@@ -50,7 +49,7 @@ would install them. `dependsOn: kuberay-operator` is the fix, and a
    └─────────────────────────────────────────────────┘
 ```
 
-A **pod is one Triton on one GPU**, the unit SuperSONIC scales by too. A
+A **pod is one Triton on one GPU**, the unit a Triton deployment scales by. A
 **replica is one pod**: every worker advertises one `triton` resource and
 every replica claims one, so a replica lands next to its Triton and nowhere
 else. Nothing else claims the resource, which is what leaves a pod without a
@@ -96,7 +95,10 @@ release, or a different model set, is a path change in the values. Every
 backend, `config.pbtxt` semantics, dynamic batching and the repository index
 work as in any Triton, because it is Triton. The first load from CVMFS pulls
 the files over the network into the node's cache, so the startup probe allows
-four minutes.
+four minutes; readiness then requires three consecutive successes, because
+Triton answers ready while it is still loading the rest of the repository and
+can flap back. The probe timings otherwise match the facility's other Triton
+deployments, so a server judged healthy there is judged healthy here.
 
 The wire protocol is Triton's gRPC. HTTP is **not** carried (Serve's HTTP
 proxy on 8000 answers only its own `/-/healthz` and `/-/routes`); Triton's
@@ -140,9 +142,12 @@ polls `ServerLive` as its health check, so Serve never routes to a pod whose
 Triton is still loading or has died — Serve restarts the replica, and Ray
 reclaims a pod that stays broken.
 
-## How it lines up with SuperSONIC
+## How it lines up with Triton behind Envoy and KEDA
 
-| SuperSONIC (`supersonic`)                                                               | Ray (`sonic-ray`)                                                                                                         |
+The facility's other Triton deployments put Envoy in front and KEDA on the
+side. This is the same server, reached and scaled differently:
+
+| Triton behind Envoy + KEDA                                                              | Ray (`sonic-ray`)                                                                                                         |
 | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Triton on a per-site PVC or CVMFS, explicit load list                                   | Triton on CVMFS, explicit load list — a plain `--model-repository` path                                                   |
 | Envoy: gRPC entry point behind a `LoadBalancer` on `geddes-private-pool`, `ROUND_ROBIN` | Serve's gRPC proxy behind KubeRay's serve Service, same pool, port 8001                                                   |
@@ -160,8 +165,8 @@ kubectl -n cms get svc sonic-ray-serve            # MetalLB address on the priva
 SONIC=<address>:8001
 ```
 
-CMSSW clients point at `$SONIC`, exactly as they point at the supersonic
-release's Envoy address. From Python:
+CMSSW clients point at `$SONIC`, the way they point at any Triton endpoint.
+From Python:
 
 ```python
 import tritonclient.grpc as grpcclient
@@ -182,8 +187,10 @@ kubectl -n cms port-forward svc/sonic-ray-head-svc 8265:8265
 The Ray containers run `rayproject/ray:2.52.0-py312-cpu` (through the geddes
 Docker Hub proxy cache) exactly as published; the Triton container runs the
 image the values name (the chart default is `nvcr.io/nvidia/tritonserver`;
-the AF values use the lighter `docexoty/tritonserver:light`). Two things
-are added at deploy time instead of build time:
+the AF values use `fastml/triton-torchgeo:26.04-py3-geometric`, which
+carries the PyTorch, TensorFlow, ONNX and torch-geometric backends every
+model in the load list needs). Two things are added at deploy time instead of
+build time:
 
 - **the forwarder** — `files/sonic_ray/*.py` become the `sonic-ray-code`
   ConfigMap, mounted at `/serve_app/sonic_ray` on head and workers. Its hash
@@ -200,8 +207,10 @@ being reachable from the nodes — chosen over maintaining an image.
 
 ## Cost
 
-One GPU idles (`replicas.min: 1`) on the same `cms-af-prod` nodes
-SuperSONIC and the user sessions compete for. An upgrade costs a second set
+One GPU idles (`replicas.min: 1`) on the same `cms-af-prod` nodes the other
+Triton deployments and the user sessions compete for. That floor also hides the worst
+of the scale-up latency: a pod on a node that has never pulled the Triton
+image waits on 7.8 GB before the model load even begins. An upgrade costs a second set
 for its duration: `upgradeStrategy: NewCluster` brings a second cluster up
 before cutting over, and if no GPU is free it waits while the old one keeps
 serving. A GPU node here has 128 cores, so the two extra CPUs the Ray

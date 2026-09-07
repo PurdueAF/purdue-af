@@ -7,9 +7,20 @@
 # uploaded anywhere; a new CMSSW release is a path change here.
 
 triton:
+  # Triton with the PyTorch, TensorFlow and ONNX backends plus
+  # torch-geometric, so every model in the repository below has a backend to
+  # run on — the image the facility's other Triton deployments already use.
+  # Held at the 26.04 line by Renovate for the same reason as the plain Triton
+  # image: 26.06+ is CUDA 13, whose driver floor is above the R580 on these
+  # nodes.
+  #
+  # 7.8 GB compressed. A pod on a node that has not pulled it before waits for
+  # that before Triton even starts, which is scale-up latency on top of the
+  # model load — one reason replicas.min stays at 1. Pull it through
+  # geddes-registry's docker-hub-cache instead if that becomes the bottleneck.
   image:
-    repository: docker.io/docexoty/tritonserver
-    tag: light
+    repository: docker.io/fastml/triton-torchgeo
+    tag: 26.04-py3-geometric
   command: ["/bin/sh", "-c"]
   args:
     - |
@@ -43,19 +54,14 @@ triton:
       nvidia.com/gpu: 1
       cpu: 4
       memory: 16G
-  # Loading from CVMFS is slow the first time (the files come over the
-  # network into the local cache): the startup probe allows four minutes.
+  # Probe timings come from the chart, which carries the ones the facility's
+  # other Triton deployments run. The single release-specific number: this
+  # repository is loaded over the network into the node's CVMFS cache the
+  # first time, which takes minutes, so the startup budget is 24 x 10s rather
+  # than the chart's 12. Image pull time is not charged against it — the
+  # kubelet only starts probing once the container is running.
   startupProbe:
-    periodSeconds: 10
     failureThreshold: 24
-    timeoutSeconds: 15
-    httpGet: { path: /v2/health/ready, port: http }
-  readinessProbe:
-    timeoutSeconds: 15
-    periodSeconds: 10
-    failureThreshold: 10
-    successThreshold: 1
-    httpGet: { path: /v2/health/ready, port: http }
   # Triton's HTTP moves off its default 8000: the Ray container in this pod
   # binds that for Ray Serve's HTTP proxy, and containers of a pod share one
   # network namespace. gRPC keeps 8001, which is what the forwarder dials.
