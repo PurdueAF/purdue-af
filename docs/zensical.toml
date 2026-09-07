@@ -9,10 +9,9 @@ site_name = "Purdue Analysis Facility"
 site_description = "Documentation for the Purdue Analysis Facility — an interactive environment for fast and scalable CMS physics analyses using dedicated computing resources at Purdue."
 site_author = "Dmitry Kondratyev, Stefan Piperov"
 
-# This edition of the docs is deployed as a sub-site of the main GitHub Pages
-# project site, so that it can be compared against the current documentation
-# at https://purdueaf.github.io/purdue-af/.
-site_url = "https://purdueaf.github.io/purdue-af/"
+# The site is published to GitHub Pages and served from the custom domain below;
+# site_url must match it, since it is what canonical links and sitemap.xml use.
+site_url = "https://analysis-facility.physics.purdue.edu/"
 
 copyright = "Copyright &copy; 2023, Purdue University"
 
@@ -72,6 +71,7 @@ nav = [
         ] },
         { "Special workflows" = [
             "guide-mc-gen.md",
+            "guide-binderhub.md",
         ] },
     ] },
     { "Agentic AI" = [

@@ -16,7 +16,7 @@ for fast and scalable CMS physics analyses using dedicated computing resources a
 ## What you get
 
 * **A personal JupyterLab session** with up to 128 CPU cores, 128 GB RAM, and
-  optional Nvidia A100 GPUs — see [Getting started](getting-started.md).
+  optional Nvidia A100 or T4 GPUs — see [Getting started](getting-started.md).
 * **A modern HEP software stack** managed via [Pixi environments](software.md),
   including `coffea`, `ROOT`, `RDataFrame`, and popular machine learning libraries
   such as `pytorch`, `tensorflow`, and `xgboost`.

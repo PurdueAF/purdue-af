@@ -98,12 +98,13 @@ available — see [Scaling out](scaling-out.md) for a detailed comparison:
 ## GPUs
 
 At Purdue AF, you can start a session with a GPU by selecting it at the resource
-selection step. We have a limited number of Nvidia A100 GPUs, available in two
+selection step. We have a limited number of Nvidia GPUs, available in three
 configurations:
 
-| Configuration       | Memory | Number of instances |
-| ------------------- | ------ | ------------------- |
-| Full A100 GPU       | 40 GB  | 4                   |
+| Configuration        | Memory | Number of instances |
+| -------------------- | ------ | ------------------- |
 | 5 GB "slice" of A100 | 5 GB   | 14                  |
+| Full A100 GPU        | 40 GB  | 4                   |
+| Nvidia T4 GPU        | 16 GB  | 8                   |
 
 See [GPU access at Purdue AF](gpus.md) for more details.

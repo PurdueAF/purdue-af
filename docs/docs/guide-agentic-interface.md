@@ -68,20 +68,15 @@ ships no model credentials.
 ### AI in JupyterLab
 
 The same agents are also available as a chat panel inside JupyterLab, via
-[Jupyter AI](https://jupyter-ai.readthedocs.io). Nothing to enable — open the
-chat from the left sidebar and `@`-mention **Claude**, **Codex** or
-**OpenCode**.
+[Jupyter AI](https://jupyter-ai.readthedocs.io) — nothing to enable, just open
+the chat from the left sidebar and `@`-mention **Claude**, **Codex** or
+**OpenCode**. See the
+[Jupyter AI documentation](https://jupyter-ai.readthedocs.io) for how the chat
+itself works.
 
-They are the same agents as in the terminal, using the same login: if `claude`
-works in your terminal, the Claude persona works in the chat. They can read and
-write files, run commands, and edit the notebook you have open, asking for
-approval before each. The AF MCP server is connected for them too, so you can
-ask about your session, Dask clusters, storage and logs without leaving the
-notebook.
-
-The platform context reaches them by the same route it reaches your terminal —
-each persona runs the agent's own binary with its own settings, so the files in
-the table above apply unchanged. There is nothing extra to install for the chat.
+They are the same agents as in the terminal, using the same login and the same
+platform context and MCP server, so you can ask about your session, Dask
+clusters, storage and logs without leaving the notebook.
 
 !!! note "Notebooks are now collaborative"
 
@@ -90,13 +85,6 @@ the table above apply unchanged. There is nothing extra to install for the chat.
     also means notebooks save themselves as you work and keep executing when
     your browser disconnects. If you see a notebook behave in a way you do not
     expect, [tell us](support.md) — this is new.
-
-!!! note
-
-    Continue (VS Code interface, backed by
-    [Purdue GenAI Studio](https://genai.rcac.purdue.edu)) is unaffected. It is
-    still the option that needs no account of your own, and the only one
-    offering inline code completion.
 
 ## Connecting from your own machine
 
