@@ -71,7 +71,6 @@ nav = [
         ] },
         { "Special workflows" = [
             "guide-mc-gen.md",
-            "guide-binderhub.md",
         ] },
     ] },
     { "Agentic AI" = [
