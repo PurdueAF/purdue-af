@@ -42,15 +42,11 @@ jobs:
         with:
           python-version: "3.14"
       - run: pip install zensical
-      - name: Build current docs
+      - name: Build the docs
         working-directory: docs
         run: zensical build --clean
-      - name: Assemble combined site
-        run: |
-          mkdir -p _site
-          cp -r docs/site/. _site/
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
-          path: _site
+          path: docs/site
       - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
         id: deployment
