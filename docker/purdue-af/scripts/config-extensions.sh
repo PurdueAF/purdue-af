@@ -17,18 +17,38 @@ OVERRIDES_EOF
 
 # Configure topbar extension
 NEW_HOME=/home/$NB_USER
+
+# Everything this hook writes under $NEW_HOME belongs to the user, so it is
+# written AS the user. Doing it as root looks harmless and is not: a user may
+# symlink part of their home onto /depot to keep it out of their quota, and
+# /depot is NFS with root_squash — root is the one identity that cannot write
+# there, while the user can. Root's mkdir then returned EACCES, `set -e` in
+# start.sh turned that into an exit before JupyterLab ever bound its port, and
+# the container crash-looped, which the hub could only report as "server didn't
+# respond in 600 seconds" — pointing nowhere near the home directory.
+#
+# Writing as the user also means nothing here lands root-owned, so the chowns
+# this hook used to need afterwards are gone.
+_af_as_user() {
+	if [ "$(id -u)" -eq 0 ]; then
+		runuser -u "$NB_USER" -- "$@"
+	else
+		"$@"
+	fi
+}
+
 TOPBAR_CONFIG_PATH=$NEW_HOME/.jupyter/lab/user-settings/@jupyterlab/application-extension/
 TOPBAR_TEXT_CONFIG_PATH=$NEW_HOME/.jupyter/lab/user-settings/jupyterlab-topbar-text/
 
-mkdir -p $TOPBAR_CONFIG_PATH
-mkdir -p $TOPBAR_TEXT_CONFIG_PATH
-rm -rf $NEW_HOME/.jupyter/lab/user-settings/jupyterlab-topbar-extension/
+_af_as_user mkdir -p $TOPBAR_CONFIG_PATH
+_af_as_user mkdir -p $TOPBAR_TEXT_CONFIG_PATH
+_af_as_user rm -rf $NEW_HOME/.jupyter/lab/user-settings/jupyterlab-topbar-extension/
 
 IMAGE_VERSION=${JUPYTER_IMAGE#*:}
 
 text='{"text":"Purdue AF v'"$IMAGE_VERSION"'  |  👤 '"$NB_USER"'  |  "}'
 
-echo "$text" >"$TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings"
+echo "$text" | _af_as_user tee "$TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings" >/dev/null
 
 echo '{
     "toolbar": [
@@ -64,13 +84,10 @@ echo '{
             "rank": 170
         }
     ]
-}' >$TOPBAR_CONFIG_PATH/top-bar.jupyterlab-settings
-
-chown -R $NB_USER:users $TOPBAR_TEXT_CONFIG_PATH
-chown -R $NB_USER:users $TOPBAR_CONFIG_PATH
+}' | _af_as_user tee $TOPBAR_CONFIG_PATH/top-bar.jupyterlab-settings >/dev/null
 
 JIL_PATH=$NEW_HOME/.jupyter/lab/user-settings/purdue-af-grafana-iframe/
-mkdir -p $JIL_PATH
+_af_as_user mkdir -p $JIL_PATH
 DASHBOARD_URL="https://cms.geddes.rcac.purdue.edu/grafana/d-solo/single-user-stat-dashboard/single-user-statistics"
 THEME="&theme=light"
 echo "{
@@ -78,7 +95,7 @@ echo "{
     \"label\": \"Resource usage\",
     \"caption\": \"Open grafana panel\",
     \"rank\": 0
-}" >$JIL_PATH/plugin.jupyterlab-settings
+}" | _af_as_user tee $JIL_PATH/plugin.jupyterlab-settings >/dev/null
 
 # Pre-install code-server extensions into the notebook user's dirs; fail if CLI is unavailable
 CODE_SERVER_BIN="${base_env_dir%/}/bin/code-server"
@@ -98,16 +115,12 @@ if [ "$code_server_ok" = 1 ]; then
 	export CODE_USERDATADIR="$NEW_HOME/.local/share/code-server"
 	CODE_SERVER_USER_SETTINGS="$CODE_USERDATADIR/User"
 
-	# The same rule, for the directories those settings live in. $NEW_HOME/.local
-	# is the user's to arrange, and some of them symlink it onto /depot to keep it
-	# out of the home quota; /depot is NFS with root_squash and this hook runs as
-	# root, so mkdir through such a symlink fails with EACCES. Unguarded, `set -e`
-	# in start.sh turns that into an exit before JupyterLab ever binds, and the
-	# container crash-loops — which the hub can only report as "server didn't
-	# respond in 600 seconds", pointing nowhere near the user's home directory.
-	if ! mkdir -p "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR" "$CODE_SERVER_USER_SETTINGS"; then
+	# Backstop only: as the user this succeeds wherever ~/.local actually lives.
+	# If it still fails — a full quota, a dangling symlink — the session must
+	# survive it, so skip the editor rather than exiting the hook.
+	if ! _af_as_user mkdir -p \
+		"$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR" "$CODE_SERVER_USER_SETTINGS"; then
 		echo "ERROR: cannot create code-server directories under $NEW_HOME/.local" >&2
-		echo "ERROR: is $NEW_HOME/.local a symlink onto /depot? this hook runs as root, which NFS squashes" >&2
 		echo "ERROR: skipping code-server setup; JupyterLab is unaffected" >&2
 		code_server_ok=0
 	fi
@@ -123,7 +136,10 @@ if [ "$code_server_ok" = 1 ]; then
 	if [[ "${JUPYTERHUB_BASE_URL:-}" == http* ]]; then
 		HUB_ORIGIN="${JUPYTERHUB_BASE_URL%/}"
 	fi
-	cat >"$CODE_SERVER_USER_SETTINGS/settings.json" <<EOF
+	# `_af_as_user tee` rather than a plain redirect: the redirect is opened by
+	# this shell, which is root, so it would fail on a depot-backed ~/.local
+	# exactly as the mkdir did.
+	_af_as_user tee "$CODE_SERVER_USER_SETTINGS/settings.json" >/dev/null <<EOF
 {
   "chat.disableAIFeatures": true,
   "chat.commandCenter.enabled": false,
@@ -141,17 +157,15 @@ if [ "$code_server_ok" = 1 ]; then
 }
 EOF
 
-	chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
-
 	# Install extension only if not already present; avoids ~3 s CLI overhead per extension on warm starts
 	_cs_install_if_missing() {
 		local spec="$1"
 		local id="${spec%@*}" # strip @version suffix for the presence check
-		if "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
+		if _af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
 			--list-extensions 2>/dev/null | grep -qi "^${id}$"; then
 			echo "code-server extension '${spec}' already installed, skipping."
 		else
-			"$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
+			_af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
 				--install-extension "$spec"
 		fi
 	}
@@ -173,7 +187,7 @@ EOF
 
 	_cs_clear_extension_state() {
 		local ext_id="$1"
-		python - "$CODE_EXTENSIONSDIR" "$ext_id" <<'PY'
+		_af_as_user python - "$CODE_EXTENSIONSDIR" "$ext_id" <<'PY'
 import glob
 import json
 import os
@@ -221,23 +235,27 @@ PY
 
 	if [ -f "$PAF_CS_EXT_VSIX" ]; then
 		_cs_clear_extension_state "$PAF_CS_EXT_ID"
-		"$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
+		_af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
 			--uninstall-extension "$PAF_CS_EXT_ID" >/dev/null 2>&1 || true
-		"$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
+		_af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
 			--install-extension "$PAF_CS_EXT_VSIX"
 		echo "Installed Purdue AF code-server extension from ${PAF_CS_EXT_VSIX}"
 	else
 		echo "WARNING: bundled Purdue AF code-server VSIX not found at ${PAF_CS_EXT_VSIX}" >&2
 	fi
 
-	chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
+	# Everything above was created as the user, so this only repairs homes an
+	# earlier image left root-owned. It cannot work on a depot-backed ~/.local
+	# (root_squash again) and must not be fatal there.
+	chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR" || true
 
 fi
 
 # Continue extension config (from bundled file)
 CONTINUE_DIR="$NEW_HOME/.continue"
-mkdir -p "$CONTINUE_DIR"
-cp /etc/jupyter/continue-config.yaml "$CONTINUE_DIR/config.yaml"
+_af_as_user mkdir -p "$CONTINUE_DIR"
+# Read the bundled file as root (it lives in the image), write it as the user.
+_af_as_user tee "$CONTINUE_DIR/config.yaml" </etc/jupyter/continue-config.yaml >/dev/null
 # If user previously saved an API key, inject it into all apiKey fields so config survives image startup
 if [[ -s "$CONTINUE_DIR/api-key.txt" ]]; then
 	KEY=$(tr -d '\n\r' <"$CONTINUE_DIR/api-key.txt")
@@ -250,7 +268,11 @@ if [[ -s "$CONTINUE_DIR/api-key.txt" ]]; then
 				printf '%s\n' "$line"
 			fi
 		done <"$CONTINUE_DIR/config.yaml" >"$tmp"
-		mv "$tmp" "$CONTINUE_DIR/config.yaml"
+		# Not `mv`: the rename would be done by root, and the key travels on
+		# stdin rather than in argv, where `ps` would show it.
+		_af_as_user tee "$CONTINUE_DIR/config.yaml" <"$tmp" >/dev/null
+		rm -f "$tmp"
 	fi
 fi
-chown -R $NB_USER:users "$CONTINUE_DIR"
+# Only repairs homes an earlier image left root-owned; must not be fatal.
+chown -R $NB_USER:users "$CONTINUE_DIR" || true

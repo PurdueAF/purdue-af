@@ -5,8 +5,14 @@ start.sh *sources* this hook, under `set -e`, as root. That combination is the
 whole risk: any command that exits non-zero here takes the container down
 before JupyterLab binds its port, and the hub reports that only as "server
 didn't respond in 600 seconds" — a message that points nowhere near the real
-cause. The hook therefore has to degrade rather than fail, and these tests run
-it the way start.sh does so a regression shows up as a non-zero exit.
+cause. These tests run it the way start.sh does, so a regression shows up as a
+non-zero exit.
+
+The directories the hook creates live in the user's own $HOME, so it drops to
+the user to create them. That is what makes a depot-backed ~/.local work at all
+— /depot is NFS with root_squash, so root is the one identity that cannot write
+there — and the tests below pin it, since running as root would look correct
+everywhere except on the homes that actually broke.
 
 The paths that only exist inside the image are redirected at a sandbox; the
 `code-server` and `chown` the hook shells out to are replaced with stubs."""
@@ -29,6 +35,21 @@ exit 0
 """
 
 NOOP_STUB = "#!/bin/bash\nexit 0\n"
+
+# Stubs that let the tests take the root branch of _cs_as_user without root:
+# `id -u` reports 0, and `runuser -u <user> -- cmd...` logs the call and then
+# runs the command as the (unprivileged) test user.
+ID_ROOT_STUB = """#!/bin/bash
+if [ "$1" = "-u" ]; then echo 0; exit 0; fi
+exec /usr/bin/id "$@"
+"""
+
+RUNUSER_STUB = """#!/bin/bash
+# runuser -u <user> -- <cmd> ...
+printf '%s\\n' "$*" >> "$RUNUSER_LOG"
+shift 3
+exec "$@"
+"""
 
 
 @pytest.fixture()
@@ -73,7 +94,17 @@ def run_hook(sandbox):
         stub.write_text(NOOP_STUB)
         stub.chmod(0o755)
 
-    def _run():
+    runuser_log = tmp_path / "runuser.log"
+
+    def _run(as_root=False):
+        """as_root=True stubs `id` and `runuser` so the hook takes the same
+        branch it takes in a real session, and records what it delegated."""
+        if as_root:
+            runuser_log.write_text("")
+            for name, body in (("id", ID_ROOT_STUB), ("runuser", RUNUSER_STUB)):
+                stub = bindir / name
+                stub.write_text(body)
+                stub.chmod(0o755)
         return subprocess.run(
             ["bash", "-c", f"set -e; source {script}"],
             capture_output=True,
@@ -84,9 +115,14 @@ def run_hook(sandbox):
                 "NB_USER": "jovyan",
                 "JUPYTER_IMAGE": "purdueaf/purdue-af:0.13.4",
                 "HOSTNAME": "purdue-af-1",
+                "RUNUSER_LOG": str(runuser_log),
             },
         )
 
+    def _delegated():
+        return [ln for ln in runuser_log.read_text().splitlines() if ln.strip()]
+
+    _run.delegated = _delegated
     return _run, home
 
 
@@ -142,3 +178,45 @@ def test_jupyterlab_config_is_written_regardless(run_hook):
     topbar = home / ".jupyter/lab/user-settings/jupyterlab-topbar-text"
     assert (topbar / "plugin.jupyterlab-settings").is_file()
     assert "0.13.4" in (topbar / "plugin.jupyterlab-settings").read_text()
+
+
+def test_as_root_the_writes_are_delegated_to_the_user(run_hook):
+    """The heart of the fix. Running as root, every write into the user's home
+    must go through `runuser -u $NB_USER`. Doing it as root works on an
+    ordinary home and fails on exactly the ones that broke — a ~/.local
+    symlinked onto /depot, which is NFS with root_squash."""
+    run, _ = run_hook
+    result = run(as_root=True)
+    assert result.returncode == 0, result.stderr
+
+    calls = run.delegated()
+    assert calls, "nothing was delegated: the hook still writes as root"
+
+    # Every area of the home the hook touches, not just code-server: the same
+    # trap applies to whichever directory a user has moved onto depot.
+    for needle in (
+        ".jupyter/lab/user-settings",  # topbar + grafana panel settings
+        ".local/share/code-server",  # extensions and user data
+        ".continue",  # bundled Continue config
+    ):
+        assert any(needle in c for c in calls), f"{needle} not delegated: {calls}"
+
+    assert any("mkdir -p" in c for c in calls), calls
+    assert any("tee" in c and "settings.json" in c for c in calls), calls
+    assert any("--install-extension" in c for c in calls), calls
+    # Always to the notebook user, never anyone else.
+    assert all(c.startswith("-u jovyan --") for c in calls), calls
+
+
+def test_as_root_nothing_in_the_home_is_left_owned_by_root(run_hook):
+    """The corollary: run-as-root.sh exists partly to chown back what this hook
+    used to create as root. Delegating means there is nothing to repair."""
+    run, home = run_hook
+    assert run(as_root=True).returncode == 0
+    settings = home / ".local/share/code-server/User/settings.json"
+    assert settings.is_file()
+    assert "purdueaf.jupyterLabPath" in settings.read_text()
+    # Written through the delegation path too, not just created there.
+    topbar = home / ".jupyter/lab/user-settings/jupyterlab-topbar-text"
+    assert (topbar / "plugin.jupyterlab-settings").is_file()
+    assert (home / ".continue" / "config.yaml").is_file()
