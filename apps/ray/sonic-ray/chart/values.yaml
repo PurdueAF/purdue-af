@@ -133,19 +133,29 @@ triton:
     # -- Set to HostToContainer for CVMFS and other FUSE/autofs mounts, so
     # repositories mounted on the host after the pod starts still appear.
     mountPropagation: ""
-  # -- A large repository takes minutes to load; the startup probe buys that
-  # time without loosening readiness afterwards.
+  # -- Probe timings as the facility's other Triton deployments run them, so
+  # a server judged healthy there is judged healthy here. A release whose
+  # repository loads slowly (over the network rather than from a local claim)
+  # raises startupProbe.failureThreshold and nothing else.
+  #
+  # No timeoutSeconds on the startup probe: a Triton still loading refuses the
+  # connection rather than hanging, so the Kubernetes default is enough, and
+  # failureThreshold is what actually sets the budget.
   startupProbe:
     httpGet: { path: /v2/health/ready, port: http }
+    initialDelaySeconds: 0
     periodSeconds: 10
-    timeoutSeconds: 15
-    failureThreshold: 60
+    failureThreshold: 12
+  # -- successThreshold 3: Triton reports ready while it is still loading the
+  # rest of the repository and can flap back; three consecutive successes keep
+  # a half-loaded server out of the Service's endpoints.
   readinessProbe:
     httpGet: { path: /v2/health/ready, port: http }
+    initialDelaySeconds: 10
     periodSeconds: 10
-    timeoutSeconds: 15
-    failureThreshold: 3
-    successThreshold: 1
+    timeoutSeconds: 5
+    successThreshold: 3
+    failureThreshold: 10
 
 # -- Placement for every pod of the release, head and workers alike.
 nodeSelector: {}

@@ -273,8 +273,10 @@ def test_rendered_triton_is_the_one_in_values(worker_group, values):
     assert triton["command"] == values["triton"]["command"]
     assert triton["args"] == values["triton"]["args"]
     assert triton["resources"] == values["triton"]["resources"]
-    assert triton["readinessProbe"] == values["triton"]["readinessProbe"]
-    assert triton["startupProbe"] == values["triton"]["startupProbe"]
+    # Probes come from the chart; the release overrides individual keys, and
+    # Helm merges rather than replaces — so assert containment, not equality.
+    for name in ("readinessProbe", "startupProbe"):
+        assert values["triton"].get(name, {}).items() <= triton[name].items()
     assert {p["name"]: p["containerPort"] for p in triton["ports"]} == {
         "http": values["triton"]["httpPort"],
         "grpc": values["triton"]["grpcPort"],
@@ -335,13 +337,51 @@ def test_triton_image_is_pinned_to_the_line_the_driver_supports():
     assert r"'/^26\\.04/'" in renovate, "the 26.04 pin is gone"
 
 
-def test_readiness_needs_repeated_successes(values):
-    """Triton reports ready while it is still loading the rest of the
-    repository and can flap back; the supersonic release requires three
-    consecutive successes for that reason, and so does this one."""
-    assert values["triton"]["readinessProbe"]["successThreshold"] == 3
-    # A startup probe is still what covers the slow first load from CVMFS.
-    assert values["triton"]["startupProbe"]["failureThreshold"] >= 24
+# The probe timings the facility's other Triton deployments run, read off
+# their rendered pod. Kept here so a change to ours is a deliberate edit with
+# this list in front of you, not a drift nobody notices.
+ELSEWHERE = {
+    "startupProbe": {
+        "initialDelaySeconds": 0,
+        "periodSeconds": 10,
+        "failureThreshold": 12,
+    },
+    "readinessProbe": {
+        "initialDelaySeconds": 10,
+        "periodSeconds": 10,
+        "timeoutSeconds": 5,
+        "successThreshold": 3,
+        "failureThreshold": 10,
+    },
+}
+
+
+def test_probe_timings_match_the_other_triton_deployments(worker_group):
+    """Same server, same judgement of healthy. The one deliberate difference:
+    this repository loads over the network into the node's CVMFS cache, so the
+    startup budget is larger. Everything else is theirs."""
+    triton = container(worker_group["template"], "triton")
+
+    readiness = triton["readinessProbe"]
+    assert {k: readiness[k] for k in ELSEWHERE["readinessProbe"]} == ELSEWHERE[
+        "readinessProbe"
+    ]
+
+    startup = triton["startupProbe"]
+    budget = "failureThreshold"
+    assert startup[budget] > ELSEWHERE["startupProbe"][budget], (
+        "the CVMFS load needs a longer startup budget than a local claim does"
+    )
+    assert {k: startup[k] for k in ELSEWHERE["startupProbe"] if k != budget} == {
+        k: v for k, v in ELSEWHERE["startupProbe"].items() if k != budget
+    }
+    # A timeout on the startup probe would be shorter than the period; a
+    # loading Triton refuses the connection rather than hanging.
+    assert "timeoutSeconds" not in startup
+
+    # Both must address Triton's own port, never the Ray proxy on 8000.
+    for probe in (readiness, startup):
+        assert probe["httpGet"]["port"] == "http"
 
 
 def test_models_come_from_cvmfs_read_only(worker_group, values):
