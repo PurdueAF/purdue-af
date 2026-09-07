@@ -17,6 +17,13 @@ spec:
       # Chart lives in this repository, so it is sourced from the same
       # GitRepository Flux already syncs for the experimental environment.
       chart: ./apps/ray/sonic-ray/chart
+      # Charts in this repository keep a static version (0.1.0), and Flux's
+      # default reconcileStrategy is ChartVersion: source-controller only
+      # re-packages when that string changes, so template edits are ignored
+      # while values edits still trigger an upgrade — the release then runs
+      # NEW values against the OLD chart. Revision re-packages on every Git
+      # revision, which is what a chart living beside its values needs.
+      reconcileStrategy: Revision
       sourceRef:
         kind: GitRepository
         name: purdue-af-experimental
