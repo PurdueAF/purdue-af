@@ -40,7 +40,7 @@ shut down the session (`File → Hub Control Panel → Stop My Server`, or the
       for inference and small-scale training;
     * **Full 40 GB instance** of an Nvidia A100 GPU — more powerful, but subject
       to availability;
-    * **Nvidia T4 GPU** (16 GB) — subject to availability.
+    * **Nvidia T4 GPU** (16 GB) — almost always available.
 
     The resource selection form shows **live availability** next to each GPU option.
 

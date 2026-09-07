@@ -24,7 +24,7 @@ below). For A100s you can choose either a 5 GB "slice" or a full 40 GB GPU.
 | -------------------- | ------ | ------------------- | ------------ |
 | 5 GB "slice" of A100 | 5 GB   | 14                  | Usually immediate |
 | Full A100 GPU        | 40 GB  | 4                   | Subject to availability |
-| NVIDIA T4            | 16 GB  | 8                   | Subject to availability |
+| NVIDIA T4            | 16 GB  | 8                   | Usually immediate |
 
 !!! tip
 
