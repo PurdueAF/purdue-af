@@ -186,8 +186,15 @@
       // 26.07 failed in practice on R580 — pin the image here. The host
       // NVIDIA driver is not a Renovate-tracked dep in this repo.
       // docker versioning has no range support — use a regex pin.
+      // fastml/triton-torchgeo is the same Triton with extra backends
+      // (apps/ray/sonic-ray), tagged <triton version>-py3-geometric, so the
+      // same driver constraint and the same regex hold for it.
       matchDatasources: ['docker'],
-      matchPackageNames: ['nvcr.io/nvidia/tritonserver'],
+      matchPackageNames: [
+        'nvcr.io/nvidia/tritonserver',
+        'fastml/triton-torchgeo',
+        'docker.io/fastml/triton-torchgeo',
+      ],
       allowedVersions: '/^26\\.04/',
     },
     {

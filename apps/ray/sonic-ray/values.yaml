@@ -7,9 +7,19 @@
 # uploaded anywhere; a new CMSSW release is a path change here.
 
 triton:
+  # The image the SuperSONIC releases are built around: Triton with the
+  # PyTorch/TensorFlow/ONNX backends plus torch-geometric, so every CMSSW
+  # model in the repository below has a backend to run on. Held at the 26.04
+  # line by Renovate for the same reason as the plain Triton image: 26.06+ is
+  # CUDA 13, whose driver floor is above the R580 on these nodes.
+  #
+  # 7.8 GB compressed. A pod on a node that has not pulled it before waits for
+  # that before Triton even starts, which is scale-up latency on top of the
+  # model load — one reason replicas.min stays at 1. Pull it through
+  # geddes-registry's docker-hub-cache instead if that becomes the bottleneck.
   image:
-    repository: docker.io/docexoty/tritonserver
-    tag: light
+    repository: docker.io/fastml/triton-torchgeo
+    tag: 26.04-py3-geometric
   command: ["/bin/sh", "-c"]
   args:
     - |
@@ -45,16 +55,22 @@ triton:
       memory: 16G
   # Loading from CVMFS is slow the first time (the files come over the
   # network into the local cache): the startup probe allows four minutes.
+  # Image pull time is not charged against it — the kubelet only starts the
+  # probe once the container is running.
   startupProbe:
     periodSeconds: 10
     failureThreshold: 24
     timeoutSeconds: 15
     httpGet: { path: /v2/health/ready, port: http }
+  # successThreshold: 3, as the supersonic release runs it. Triton reports
+  # ready while it is still loading the rest of the repository and can flap
+  # back; three consecutive successes keep a half-loaded server out of the
+  # Service's endpoints. The cost is 30s of extra wait after startup.
   readinessProbe:
     timeoutSeconds: 15
     periodSeconds: 10
     failureThreshold: 10
-    successThreshold: 1
+    successThreshold: 3
     httpGet: { path: /v2/health/ready, port: http }
   # Triton's HTTP moves off its default 8000: the Ray container in this pod
   # binds that for Ray Serve's HTTP proxy, and containers of a pod share one

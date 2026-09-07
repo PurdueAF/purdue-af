@@ -32,6 +32,11 @@ def load(path):
     return yaml.safe_load(path.read_text())
 
 
+def values_doc():
+    """The AF values, for tests that take no fixture."""
+    return load(VALUES)
+
+
 @pytest.fixture(scope="module")
 def values():
     return load(VALUES)
@@ -316,6 +321,27 @@ def test_the_forwarder_is_told_where_its_triton_is(head_pod, worker_group, value
     ):
         assert env_of(container(template, name))["TRITON_GRPC"] == expected
     assert f'"TRITON_GRPC", "{expected}"' in SERVE_APP.read_text()
+
+
+def test_triton_image_is_pinned_to_the_line_the_driver_supports():
+    """26.06+ is CUDA 13, whose driver floor is above the R580 on the GPU
+    nodes. The values pick the image; Renovate has to be holding whichever one
+    they pick, or a bump walks past the driver."""
+    image = values_doc()["triton"]["image"]
+    assert image["tag"].startswith("26.04"), image["tag"]
+    renovate = (REPO / ".github" / "renovate.json5").read_text()
+    name = image["repository"].removeprefix("docker.io/")
+    assert name in renovate, f"{name} is not pinned in renovate.json5"
+    assert r"'/^26\\.04/'" in renovate, "the 26.04 pin is gone"
+
+
+def test_readiness_needs_repeated_successes(values):
+    """Triton reports ready while it is still loading the rest of the
+    repository and can flap back; the supersonic release requires three
+    consecutive successes for that reason, and so does this one."""
+    assert values["triton"]["readinessProbe"]["successThreshold"] == 3
+    # A startup probe is still what covers the slow first load from CVMFS.
+    assert values["triton"]["startupProbe"]["failureThreshold"] >= 24
 
 
 def test_models_come_from_cvmfs_read_only(worker_group, values):

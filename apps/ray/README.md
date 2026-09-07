@@ -9,8 +9,8 @@ proxy to the Triton in its pod. Serve counts every request on the way through,
 sizes the deployment from that, and the Ray autoscaler adds a GPU pod for each
 replica with nowhere to go.
 
-No custom image, no protocol code, no model code: official Ray, official
-Triton, ~100 lines of glue shipped as a ConfigMap, Triton's Python stubs
+No custom image, no protocol code, no model code: official Ray, a stock
+Triton image, ~100 lines of glue shipped as a ConfigMap, Triton's Python stubs
 pip-installed by an init container.
 
 | path                                                                                                            | what it is                                                                                                                                                                     |
@@ -96,7 +96,9 @@ release, or a different model set, is a path change in the values. Every
 backend, `config.pbtxt` semantics, dynamic batching and the repository index
 work as in any Triton, because it is Triton. The first load from CVMFS pulls
 the files over the network into the node's cache, so the startup probe allows
-four minutes.
+four minutes; readiness then requires three consecutive successes, as the
+supersonic release does, because Triton answers ready while it is still
+loading the rest of the repository and can flap back.
 
 The wire protocol is Triton's gRPC. HTTP is **not** carried (Serve's HTTP
 proxy on 8000 answers only its own `/-/healthz` and `/-/routes`); Triton's
@@ -182,7 +184,10 @@ kubectl -n cms port-forward svc/sonic-ray-head-svc 8265:8265
 The Ray containers run `rayproject/ray:2.52.0-py312-cpu` (through the geddes
 Docker Hub proxy cache) exactly as published; the Triton container runs the
 image the values name (the chart default is `nvcr.io/nvidia/tritonserver`;
-the AF values use the lighter `docexoty/tritonserver:light`). Two things
+the AF values use `fastml/triton-torchgeo:26.04-py3-geometric`, the same
+image the SuperSONIC releases are built around, which carries the PyTorch,
+TensorFlow, ONNX and torch-geometric backends every CMSSW model needs). Two
+things
 are added at deploy time instead of build time:
 
 - **the forwarder** — `files/sonic_ray/*.py` become the `sonic-ray-code`
@@ -201,7 +206,9 @@ being reachable from the nodes — chosen over maintaining an image.
 ## Cost
 
 One GPU idles (`replicas.min: 1`) on the same `cms-af-prod` nodes
-SuperSONIC and the user sessions compete for. An upgrade costs a second set
+SuperSONIC and the user sessions compete for. That floor also hides the worst
+of the scale-up latency: a pod on a node that has never pulled the Triton
+image waits on 7.8 GB before the model load even begins. An upgrade costs a second set
 for its duration: `upgradeStrategy: NewCluster` brings a second cluster up
 before cutting over, and if no GPU is free it waits while the old one keeps
 serving. A GPU node here has 128 cores, so the two extra CPUs the Ray
