@@ -7,6 +7,17 @@
 datasources:
   datasources.yaml:
     apiVersion: 1
+    # Grafana cannot CHANGE an existing datasource's uid via provisioning:
+    # the update looks the row up by id AND the uid from this file, gets
+    # "data source not found", and the failed provisioning module crash-
+    # loops the whole instance (took the public instance down 2026-09-07
+    # when uid: pyroscope was pinned over the old auto-generated uid).
+    # Deleting the row first makes provisioning re-create it with the
+    # pinned uid — Grafana skips the delete event when the datasource is
+    # re-created in the same pass, and skips rows that don't exist.
+    deleteDatasources:
+      - name: pyroscope
+        orgId: 1
     datasources:
       - name: prometheus
         uid: prometheus
