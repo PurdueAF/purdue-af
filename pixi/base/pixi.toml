@@ -7,7 +7,7 @@ platforms = ["linux-64"]
 [dependencies]
 # Core runtime
 python        = "3.12.*"
-conda         = "==26.7.1"
+conda         = "==26.7.2"
 mamba         = "==2.9.0"
 jupyter_core  = "==5.9.1"
 jupyter       = "==1.1.1"
@@ -28,7 +28,7 @@ nodejs        = "22.*"
 # jupyter_server_documents, which replaces the notebook document and execution
 # engine with the RTC-backed one -- that is what lets a persona edit the
 # notebook you have open, and it applies to every notebook in the session.
-jupyter-ai    = "==3.1.3"
+jupyter-ai    = "==3.2.0"
 
 # Kernel discovery / misc
 nb_conda_kernels      = "==2.5.1"
@@ -50,7 +50,7 @@ bokeh         = "==3.10.0"
 # parses them via the regex-versioning rule in renovate.json5.
 # >=10.2p1 required alongside mamba >=2.8 (both sides must agree on krb5 1.22).
 openssh       = "==10.4p1"
-uv            = "==0.12.9"
+uv            = "==0.12.10"
 
 [pypi-dependencies]
 jupyterlab-git            = "==0.54.1"
