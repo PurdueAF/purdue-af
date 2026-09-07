@@ -171,3 +171,56 @@ async def test_full_stack_handshake_and_auth(monkeypatch):
                 or 0
             )
             assert after == before + 1
+
+
+# ── a declined elicitation must still be readable by the agent ────────────────
+#
+# Tools that ask the user for choices raise NeedsChoices when the client cannot
+# (or will not) render the prompt, and metrics.InstrumentedFastMCP turns that
+# into an ordinary result carrying the help text. Because every tool is `-> str`
+# FastMCP declares an outputSchema for it, and the low-level server discards any
+# result without structuredContent — so the help text only survives the round
+# trip if it is returned in both halves. These two tests pin that down: the
+# shape assumption, and the actual round trip through the real server.
+
+
+async def test_every_tool_declares_a_wrapped_string_output_schema():
+    """metrics._needs_input_result hard-codes {"result": <string>}.
+
+    If a tool ever returns something other than a plain string, that helper has
+    to learn the new shape or the NeedsChoices path silently regresses.
+    """
+    for tool in await server.mcp.list_tools():
+        schema = tool.outputSchema
+        assert schema is not None, f"{tool.name} declares no output schema"
+        assert schema.get("type") == "object", f"{tool.name}: {schema}"
+        assert list(schema.get("required", [])) == ["result"], f"{tool.name}: {schema}"
+        assert schema["properties"]["result"].get("type") == "string", (
+            f"{tool.name}: {schema}"
+        )
+
+
+async def test_declined_elicitation_returns_help_text_not_a_validation_error():
+    """Regression: the NeedsChoices result used to fail output validation.
+
+    An agent client may decline elicitation without ever showing a form. The
+    tool must then hand back the instructions for asking in chat — not
+    "Output validation error: outputSchema defined but no structured output
+    returned".
+    """
+    from mcp.shared.memory import create_connected_server_and_client_session
+    from mcp.types import ElicitResult
+
+    async def decline(context, params):
+        return ElicitResult(action="decline")
+
+    async with create_connected_server_and_client_session(
+        server.mcp, elicitation_callback=decline
+    ) as session:
+        result = await session.call_tool("create_dask_cluster", {})
+
+    assert result.isError is False
+    assert result.structuredContent is not None
+    text = result.content[0].text
+    assert text == result.structuredContent["result"]
+    assert "create_dask_cluster needs" in text

@@ -129,6 +129,22 @@ def _translate(name: str, username: str, exc: Exception) -> tuple[Exception, str
     return unexpected_failure(name, cause), "exception"
 
 
+def _needs_input_result(text: str) -> tuple[list[TextContent], dict[str, str]]:
+    """Package NeedsChoices help text as an ordinary (non-error) tool result.
+
+    Every tool is annotated ``-> str``, so FastMCP generates an outputSchema
+    for it ({"result": <string>}) and the low-level server rejects any result
+    that carries content but no structuredContent — it substitutes
+    "Output validation error: outputSchema defined but no structured output
+    returned", which is exactly the instruction the agent needed to read. So
+    return both halves in the shape the normal dispatch path produces.
+
+    test_mcp_contract keeps the assumed ``{"result": <string>}`` output shape
+    honest across the whole tool surface.
+    """
+    return [TextContent(type="text", text=text)], {"result": text}
+
+
 class InstrumentedFastMCP(FastMCP):
     """FastMCP that records metrics and a structured log line per tool call.
 
@@ -148,7 +164,7 @@ class InstrumentedFastMCP(FastMCP):
             cause = exc.__cause__ if isinstance(exc, ToolError) else None
             if isinstance(cause, NeedsChoices):
                 self._record(name, "needs_input", username, start)
-                return [TextContent(type="text", text=str(cause))]
+                return _needs_input_result(str(cause))
             failure, outcome = _translate(name, username, exc)
             self._record(name, outcome, username, start)
             if failure is exc:
