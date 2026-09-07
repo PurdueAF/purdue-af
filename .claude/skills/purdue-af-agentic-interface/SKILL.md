@@ -62,6 +62,32 @@ answer for anything the platform tracks centrally:
 - Only **one active Dask cluster per user** is allowed, so creating one may
   require stopping another.
 
+## Reporting back
+
+Work through the tool calls without narrating them, then report once at the end.
+A run of "Checking the session…", "Still pending…", "Now scaling…" messages is
+noise: the user cannot act on any of it, and it buries the actual result. This
+is about the running commentary only — none of the substance below is optional.
+
+- **Report the outcome once**, when the work is done: what now exists, its name
+  and state, and the single next thing the user does. Session links and a Dask
+  cluster's connect snippet belong here.
+- **Speak up immediately, not at the end,** for anything that needs the user's
+  agreement (see above), anything that blocks you, and anything you are about to
+  do that they would not expect.
+- **Flag what surprised you** — a call that failed and worked on retry, two
+  tools that disagree, a limit you hit. One line each in the final report, even
+  when the end state is fine. This interface gets fixed from those reports.
+- **Summarise tool output, never paste it.** Tool results are written to steer
+  you, not to be read by the user.
+- **Skip process narration** — changes of approach, which tool you are reaching
+  for next, notes you saved. Correct yourself out loud only when the correction
+  changes what the user should do or believe.
+
+Waiting is the tools' job, not the shell's: `wait_for_session` blocks until the
+session is ready and returns as soon as it is. Never `sleep` in a shell to pace
+a tool, and never poll one in a loop when a waiting variant exists.
+
 ## Presenting a session
 
 `get_session_status` returns both interface links (JupyterLab and VS Code) with
