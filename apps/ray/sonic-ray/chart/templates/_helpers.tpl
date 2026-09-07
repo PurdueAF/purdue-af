@@ -51,6 +51,9 @@ mounts, and the init container that pip-installs Triton's stubs.
 {{- define "sonic-ray.rayEnv" -}}
 - name: PYTHONPATH
   value: {{ printf "%s:%s" (include "sonic-ray.codeDir" .) (include "sonic-ray.depsDir" .) | quote }}
+# Where the forwarder dials the Triton in its own pod.
+- name: TRITON_GRPC
+  value: {{ printf "localhost:%d" (int .Values.triton.grpcPort) | quote }}
 {{- end -}}
 
 {{- define "sonic-ray.rayMounts" -}}
@@ -115,6 +118,36 @@ Refuse to render what cannot work.
   {{- fail "triton.resources.limits must request exactly one nvidia.com/gpu: a pod is one Triton on one GPU." -}}
 {{- end -}}
 {{- $args := join " " .Values.triton.args -}}
+{{/*
+Triton and Ray share the pod's network namespace. Ray binds 8000 (Serve HTTP
+proxy — KubeRay probes it there, so it is not the one that moves), 9000
+(Serve gRPC proxy) and 8080 (metrics); Triton must sit elsewhere and its args
+must say the same numbers as the values, or the probes and the forwarder
+would address a port nothing listens on.
+*/}}
+{{- range $name, $port := dict "httpPort" .Values.triton.httpPort "grpcPort" .Values.triton.grpcPort -}}
+  {{- if has (int $port) (list 8000 8080 9000) -}}
+    {{- fail (printf "triton.%s is %d, which Ray binds in this pod (8000 Serve HTTP, 9000 Serve gRPC, 8080 metrics). Triton would fail to bind it." $name (int $port)) -}}
+  {{- end -}}
+{{- end -}}
+{{- if eq (int .Values.triton.httpPort) (int .Values.triton.grpcPort) -}}
+  {{- fail "triton.httpPort and triton.grpcPort are the same port." -}}
+{{- end -}}
+{{- $http := regexFind "--http-port=[0-9]+" $args -}}
+{{- if not $http -}}
+  {{- fail (printf "triton.args must pass --http-port=%d: Triton defaults to 8000, which Ray Serve's HTTP proxy already binds in this pod." (int .Values.triton.httpPort)) -}}
+{{- end -}}
+{{- if ne (trimPrefix "--http-port=" $http | int) (int .Values.triton.httpPort) -}}
+  {{- fail (printf "triton.args say %s but triton.httpPort is %d: the probes would address a port Triton does not listen on." $http (int .Values.triton.httpPort)) -}}
+{{- end -}}
+{{- $grpc := regexFind "--grpc-port=[0-9]+" $args -}}
+{{- if $grpc -}}
+  {{- if ne (trimPrefix "--grpc-port=" $grpc | int) (int .Values.triton.grpcPort) -}}
+    {{- fail (printf "triton.args say %s but triton.grpcPort is %d: the forwarder would dial a port Triton does not listen on." $grpc (int .Values.triton.grpcPort)) -}}
+  {{- end -}}
+{{- else if ne (int .Values.triton.grpcPort) 8001 -}}
+  {{- fail (printf "triton.grpcPort is %d but triton.args do not pass --grpc-port, so Triton listens on its default 8001." (int .Values.triton.grpcPort)) -}}
+{{- end -}}
 {{- if not (contains .Values.triton.modelRepository.mountPath $args) -}}
   {{- fail (printf "triton.args never mention triton.modelRepository.mountPath (%s): Triton would not see the repository that is mounted." .Values.triton.modelRepository.mountPath) -}}
 {{- end -}}

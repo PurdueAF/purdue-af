@@ -13,14 +13,14 @@ No custom image, no protocol code, no model code: official Ray, official
 Triton, ~100 lines of glue shipped as a ConfigMap, Triton's Python stubs
 pip-installed by an init container.
 
-| path | what it is |
-| --- | --- |
-| `helmrepo.yaml` | `HelmRepository` for the KubeRay charts |
-| `operator/` | `kuberay-operator` 1.7.0 — the `ray.io` CRDs and the controller. Namespaced (`singleNamespaceInstall: true`), so both the watch and the RBAC stay in `cms`. |
-| `sonic-ray/chart/` | the `sonic-ray` chart: a `RayService` with a Triton in every worker pod and the forwarder as its Serve application, the ConfigMap carrying the forwarder, two metrics Services |
-| `sonic-ray/chart/files/sonic_ray/serve_app.py` | the forwarder — one replica per pod, every unary RPC of `GRPCInferenceService` handed to the pod's Triton unchanged |
-| `sonic-ray/helmrelease.yaml`, `sonic-ray/values.yaml` | the AF release: `dependsOn` the operator, values with the `triton:` block of the `supersonic` release's values |
-| [`tests/sonic_ray/`](../../tests/sonic_ray), [`tests/manifests/test_ray.py`](../../tests/manifests/test_ray.py) | source-level checks of the forwarder; rendered-chart checks incl. parity with `apps/sonic/supersonic/values.yaml` |
+| path                                                                                                            | what it is                                                                                                                                                                     |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `helmrepo.yaml`                                                                                                 | `HelmRepository` for the KubeRay charts                                                                                                                                        |
+| `operator/`                                                                                                     | `kuberay-operator` 1.7.0 — the `ray.io` CRDs and the controller. Namespaced (`singleNamespaceInstall: true`), so both the watch and the RBAC stay in `cms`.                    |
+| `sonic-ray/chart/`                                                                                              | the `sonic-ray` chart: a `RayService` with a Triton in every worker pod and the forwarder as its Serve application, the ConfigMap carrying the forwarder, two metrics Services |
+| `sonic-ray/chart/files/sonic_ray/serve_app.py`                                                                  | the forwarder — one replica per pod, every unary RPC of `GRPCInferenceService` handed to the pod's Triton unchanged                                                            |
+| `sonic-ray/helmrelease.yaml`, `sonic-ray/values.yaml`                                                           | the AF release: `dependsOn` the operator, values with the `triton:` block of the `supersonic` release's values                                                                 |
+| [`tests/sonic_ray/`](../../tests/sonic_ray), [`tests/manifests/test_ray.py`](../../tests/manifests/test_ray.py) | source-level checks of the forwarder; rendered-chart checks incl. parity with `apps/sonic/supersonic/values.yaml`                                                              |
 
 The chart lives here (like `apps/sonic/model-manager`) rather than being a raw
 `RayService` because of ordering: until the operator's chart has installed the
@@ -56,6 +56,26 @@ every replica claims one, so a replica lands next to its Triton and nowhere
 else. Nothing else claims the resource, which is what leaves a pod without a
 replica idle and therefore reclaimable, and a replica without a pod pending —
 the request that grows the group.
+
+### Ports
+
+Both containers share the pod's network namespace, so they cannot both use
+Triton's defaults:
+
+| port | who                  | why it is where it is                                                                  |
+| ---- | -------------------- | -------------------------------------------------------------------------------------- |
+| 8000 | Ray Serve HTTP proxy | KubeRay probes the proxy here; it does not move                                        |
+| 9000 | Ray Serve gRPC proxy | the inference entry point, behind the release's Service on 8001                        |
+| 8080 | Ray metrics          | scraped by `sonic-ray-metrics`                                                         |
+| 8100 | Triton HTTP          | **moved** off Triton's default 8000, which Ray holds; serves only the kubelet's probes |
+| 8001 | Triton gRPC          | Triton's default; what the forwarder dials on localhost                                |
+| 8002 | Triton metrics       | scraped by `sonic-ray-triton-metrics`                                                  |
+
+Leaving Triton on 8000 is what makes it exit with `failed to start HTTP
+service: Unavailable - Socket '0.0.0.0:8000' already in use`. The ports are
+chart values (`triton.httpPort`, `triton.grpcPort`), and the chart refuses to
+render if they collide with Ray's, if they disagree with the `--http-port` /
+`--grpc-port` in `triton.args`, or if the args leave Triton on 8000.
 
 ## What it serves and speaks
 
@@ -108,7 +128,7 @@ Two loops, both Ray's, nothing else in between:
    `terminationGracePeriodSeconds` against Triton's `--exit-timeout-secs` to
    drain (the chart refuses to render if the first is not larger).
 
-One pair of numbers sizes both, because a replica *is* a pod. Raising the GPU
+One pair of numbers sizes both, because a replica _is_ a pod. Raising the GPU
 ceiling is one edit in `sonic-ray/values.yaml`:
 
 ```yaml
@@ -122,16 +142,16 @@ reclaims a pod that stays broken.
 
 ## How it lines up with SuperSONIC
 
-| SuperSONIC (`supersonic`) | Ray (`sonic-ray`) |
-| --- | --- |
-| Triton on a per-site PVC or CVMFS, explicit load list | Triton on CVMFS, explicit load list — a plain `--model-repository` path |
-| Envoy: gRPC entry point behind a `LoadBalancer` on `geddes-private-pool`, `ROUND_ROBIN` | Serve's gRPC proxy behind KubeRay's serve Service, same pool, port 8001 |
-| `ingress.enabled: false` — private pool only | no ingress; the head is `ClusterIP`, dashboard by port-forward only |
-| KEDA `ScaledObject` on a Prometheus expression, 1–10 pods | Ray Serve request-based autoscaling, 1–4 pods — see above |
-| `nodeSelector: cms-af-prod=true` + the `hub.jupyter.org/dedicated` toleration | same, head and workers |
-| model repository from a PVC or CVMFS | the cluster's `cvmfs` claim, mounted **read-only** |
-| Triton Service labelled `scrape_metrics: "true"` | `sonic-ray-triton-metrics` (`nv_*`) and `sonic-ray-metrics` (Ray, incl. `ray_serve_*`), same label, `release="sonic-ray"` |
-| Envoy's Lua rate limiter on `RepositoryIndex` | none; Serve's `maxOngoingRequests` back-pressure instead |
+| SuperSONIC (`supersonic`)                                                               | Ray (`sonic-ray`)                                                                                                         |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Triton on a per-site PVC or CVMFS, explicit load list                                   | Triton on CVMFS, explicit load list — a plain `--model-repository` path                                                   |
+| Envoy: gRPC entry point behind a `LoadBalancer` on `geddes-private-pool`, `ROUND_ROBIN` | Serve's gRPC proxy behind KubeRay's serve Service, same pool, port 8001                                                   |
+| `ingress.enabled: false` — private pool only                                            | no ingress; the head is `ClusterIP`, dashboard by port-forward only                                                       |
+| KEDA `ScaledObject` on a Prometheus expression, 1–10 pods                               | Ray Serve request-based autoscaling, 1–4 pods — see above                                                                 |
+| `nodeSelector: cms-af-prod=true` + the `hub.jupyter.org/dedicated` toleration           | same, head and workers                                                                                                    |
+| model repository from a PVC or CVMFS                                                    | the cluster's `cvmfs` claim, mounted **read-only**                                                                        |
+| Triton Service labelled `scrape_metrics: "true"`                                        | `sonic-ray-triton-metrics` (`nv_*`) and `sonic-ray-metrics` (Ray, incl. `ray_serve_*`), same label, `release="sonic-ray"` |
+| Envoy's Lua rate limiter on `RepositoryIndex`                                           | none; Serve's `maxOngoingRequests` back-pressure instead                                                                  |
 
 ## Using it
 

@@ -184,8 +184,10 @@ spec:
                 args:
                   {{- toYaml .Values.triton.args | nindent 18 }}
                 ports:
-                  - { name: http, containerPort: 8000 }
-                  - { name: grpc, containerPort: 8001 }
+                  # Named, because the probes address http by name. Neither is
+                  # Triton's default: Ray has 8000 in this pod (see values).
+                  - { name: http, containerPort: {{ .Values.triton.httpPort }} }
+                  - { name: grpc, containerPort: {{ .Values.triton.grpcPort }} }
                   - { name: triton-metrics, containerPort: 8002 }
                 resources:
                   {{- toYaml .Values.triton.resources | nindent 18 }}

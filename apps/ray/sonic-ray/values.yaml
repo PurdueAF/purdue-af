@@ -14,6 +14,7 @@ triton:
   args:
     - |
       /opt/tritonserver/bin/tritonserver \
+      --http-port=8100 \
       --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoBTag/Combined/data/models/ \
       --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoEgamma/EgammaPhotonProducers/data/models/ \
       --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoTauTag/TrainingFiles/data/DeepTauIdSONIC/ \
@@ -55,6 +56,11 @@ triton:
     failureThreshold: 10
     successThreshold: 1
     httpGet: { path: /v2/health/ready, port: http }
+  # Triton's HTTP moves off its default 8000: the Ray container in this pod
+  # binds that for Ray Serve's HTTP proxy, and containers of a pod share one
+  # network namespace. gRPC keeps 8001, which is what the forwarder dials.
+  httpPort: 8100
+  grpcPort: 8001
   # The cluster's CVMFS claim (apps/infrastructure/cvmfs-pvc.yaml), read-only.
   # HostToContainer: CVMFS repositories are autofs mounts on the node, and the
   # pod must see the ones mounted after it started.
