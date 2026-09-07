@@ -264,6 +264,34 @@ serverFiles:
           - source_labels: [__address__]
             regex: ".*:(8888|8889)$"
             action: drop
+      # Loki was not scraped at all until storage-loki-0 filled up, so a log
+      # store that could neither ingest nor answer a single query showed up
+      # only as "the Grafana log panels are empty". Two ports on the one pod:
+      # 3100 is Loki's own /metrics, 9101 is the fs-exporter sidecar that
+      # reports PVC free space (see apps/monitoring/loki/values.yaml).
+      # Pod SD rather than the Service on purpose — a full disk makes Loki
+      # unready, which would drop it out of Endpoints exactly when the
+      # LokiStorage* alerts need the data.
+      - job_name: "loki"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - ${namespace}
+        relabel_configs:
+          # component=single-binary excludes the memcached chunks/results-cache
+          # pods, which carry app.kubernetes.io/name=loki from the same release.
+          - source_labels:
+              [
+                __meta_kubernetes_pod_label_app_kubernetes_io_component,
+                __meta_kubernetes_pod_container_port_number,
+              ]
+            action: keep
+            regex: "single-binary;(3100|9101)"
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: "pod"
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: "pod_node"
       - job_name: "envoy-monitor"
         metrics_path: "/stats/prometheus"
         kubernetes_sd_configs:
@@ -674,6 +702,81 @@ serverFiles:
                 Users cannot create or reach clusters on this gateway; already
                 running clusters may survive.
                 Check: kubectl -n cms get deploy {{ $labels.deployment }}
+
+      # Can we still see what the facility is doing? -------------------------
+      # storage-loki-0 ran to 100% because limits_config.retention_period was
+      # left at its 0s default ("keep forever"), and nothing watched the volume:
+      # node-exporter skips kubelet pod mounts, kubelet_volume_stats_* needs
+      # cluster-scoped scrape access prometheus-sa does not have, and Loki
+      # exports no filesystem gauge. node_filesystem_*{job="loki"} below comes
+      # from the fs-exporter sidecar added in apps/monitoring/loki/values.yaml.
+      - name: af-observability
+        rules:
+          - alert: LokiStorageWillFill
+            # The alert that would have caught this one months early: fires when
+            # the trend says the PVC runs out within a week, whatever the cause
+            # (retention unset, retention window raised, log volume grown).
+            expr: |
+              predict_linear(
+                node_filesystem_avail_bytes{job="loki",mountpoint="/var/loki"}[6h],
+                7 * 24 * 3600
+              ) < 0
+            for: 1h
+            labels:
+              severity: warning
+              component: observability
+            annotations:
+              summary: Loki PVC is on track to fill within 7 days
+              description: >
+                storage-loki-0 free space is trending to 0 inside a week. Expect
+                the retention
+                window (loki.structuredConfig.limits_config.retention_period) to
+                no longer fit the current log volume — shorten it, or grow the
+                PVC. Loki stops ingesting AND stops answering every query the
+                moment this volume is full.
+          - alert: LokiStorageAlmostFull
+            expr: |
+              1 - (
+                node_filesystem_avail_bytes{job="loki",mountpoint="/var/loki"}
+                / node_filesystem_size_bytes{job="loki",mountpoint="/var/loki"}
+              ) > 0.90
+            for: 10m
+            labels:
+              severity: error
+              component: observability
+            annotations:
+              summary: Loki PVC is {{ $value | humanizePercentage }} full
+              description: >
+                Act now — at 100% Loki loses both ingest and query. The compactor
+                needs free space to apply retention, so recovering from a full
+                volume means growing the PVC first:
+                kubectl -n cms patch pvc storage-loki-0 -p
+                '{"spec":{"resources":{"requests":{"storage":"<bigger>Gi"}}}}'
+          - alert: LokiStorageFull
+            # Loki's own "I could not write" counter, as a backstop for the case
+            # where the sidecar or its scrape is the thing that broke.
+            expr: increase(loki_ingester_wal_disk_full_failures_total{job="loki"}[15m]) > 0
+            for: 5m
+            labels:
+              severity: critical
+              component: observability
+            annotations:
+              summary: Loki is out of disk and dropping logs
+              description: >
+                storage-loki-0 is full: chunk flushes fail with "no space left on
+                device" and every query 500s. Logs arriving now are lost — Alloy
+                buffers only briefly and Loki rejects samples older than 168h.
+          - alert: LokiDown
+            expr: up{job="loki"} == 0
+            for: 15m
+            labels:
+              severity: error
+              component: observability
+            annotations:
+              summary: Loki is not scrapeable
+              description: >
+                No log search for the facility, and the LokiStorage* alerts above
+                are blind while this fires. Check: kubectl -n cms get pod loki-0
 alertmanager:
   enabled: true
   config:
