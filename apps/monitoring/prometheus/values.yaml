@@ -271,7 +271,7 @@ serverFiles:
       # reports PVC free space (see apps/monitoring/loki/values.yaml).
       # Pod SD rather than the Service on purpose — a full disk makes Loki
       # unready, which would drop it out of Endpoints exactly when the
-      # LokiStorage* alerts need the data.
+      # AFLokiStorage* alerts need the data.
       - job_name: "loki"
         kubernetes_sd_configs:
           - role: pod
@@ -712,7 +712,7 @@ serverFiles:
       # from the fs-exporter sidecar added in apps/monitoring/loki/values.yaml.
       - name: af-observability
         rules:
-          - alert: LokiStorageWillFill
+          - alert: AFLokiStorageWillFill
             # The alert that would have caught this one months early: fires when
             # the trend says the PVC runs out within a week, whatever the cause
             # (retention unset, retention window raised, log volume grown).
@@ -734,7 +734,7 @@ serverFiles:
                 no longer fit the current log volume — shorten it, or grow the
                 PVC. Loki stops ingesting AND stops answering every query the
                 moment this volume is full.
-          - alert: LokiStorageAlmostFull
+          - alert: AFLokiStorageAlmostFull
             expr: |
               1 - (
                 node_filesystem_avail_bytes{job="loki",mountpoint="/var/loki"}
@@ -752,7 +752,7 @@ serverFiles:
                 volume means growing the PVC first:
                 kubectl -n cms patch pvc storage-loki-0 -p
                 '{"spec":{"resources":{"requests":{"storage":"<bigger>Gi"}}}}'
-          - alert: LokiStorageFull
+          - alert: AFLokiStorageFull
             # Loki's own "I could not write" counter, as a backstop for the case
             # where the sidecar or its scrape is the thing that broke.
             expr: increase(loki_ingester_wal_disk_full_failures_total{job="loki"}[15m]) > 0
@@ -766,7 +766,7 @@ serverFiles:
                 storage-loki-0 is full: chunk flushes fail with "no space left on
                 device" and every query 500s. Logs arriving now are lost — Alloy
                 buffers only briefly and Loki rejects samples older than 168h.
-          - alert: LokiDown
+          - alert: AFLokiDown
             expr: up{job="loki"} == 0
             for: 15m
             labels:
@@ -775,7 +775,7 @@ serverFiles:
             annotations:
               summary: Loki is not scrapeable
               description: >
-                No log search for the facility, and the LokiStorage* alerts above
+                No log search for the facility, and the AFLokiStorage* alerts above
                 are blind while this fires. Check: kubectl -n cms get pod loki-0
 alertmanager:
   enabled: true
