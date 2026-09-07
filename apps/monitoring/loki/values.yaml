@@ -58,7 +58,7 @@ singleBinary:
   # Reports free/used bytes for the Loki PVC, which nothing else can see:
   # node-exporter excludes kubelet pod mounts, kubelet_volume_stats_* needs
   # cluster-scoped scrape access that prometheus-sa does not have, and Loki
-  # itself exports no filesystem gauge. Scraped as job "loki-storage"; see the
+  # itself exports no filesystem gauge. Scraped as part of job "loki"; see the
   # AFLokiStorage* alerts in apps/monitoring/prometheus/values.yaml.
   extraContainers:
     - name: fs-exporter
@@ -66,7 +66,14 @@ singleBinary:
       args:
         - --collector.disable-defaults
         - --collector.filesystem
-        - --collector.filesystem.mount-points-include=^/var/loki$
+        # node-exporter has NO mount-points-include flag — only the two
+        # excludes below (verified against v1.8.2 --help; an invented include
+        # flag made this container exit 1 on every start). The pod's other
+        # mounts are /etc/hosts, /etc/hostname and /etc/resolv.conf, which are
+        # bind mounts off the NODE's root filesystem and would otherwise
+        # report the node's disk under a Loki-looking mountpoint. Excluding
+        # them leaves exactly one series set: mountpoint="/var/loki".
+        - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|etc|run|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
         - --web.listen-address=:9101
       ports:
         - name: fs-metrics
