@@ -24,7 +24,7 @@
     {
       "datasource": {
         "type": "grafana-pyroscope-datasource",
-        "uid": "PAF2BCAF32F82481F"
+        "uid": "pyroscope"
       },
       "fieldConfig": {
         "defaults": {},
@@ -43,7 +43,7 @@
         {
           "datasource": {
             "type": "grafana-pyroscope-datasource",
-            "uid": "PAF2BCAF32F82481F"
+            "uid": "pyroscope"
           },
           "groupBy": [],
           "labelSelector": "",

@@ -1,0 +1,109 @@
+# Grafana Helm Chart Values — private instance (grafana-private)
+# https://github.com/grafana/helm-charts/tree/main/charts/grafana
+#
+# Admin-only instance: anonymous access is disabled, so nothing is visible
+# without logging in. Serves the private dashboards; the public instance
+# (values.yaml) serves the public ones.
+
+# Persistence: RWO block storage for SQLite. CephFS/RWX cannot reliably
+# provide the file locks SQLite needs and caused recurring CrashLoopBackOff
+# (database is locked / hung /api/health probes).
+persistence:
+  enabled: true
+  type: pvc
+  size: 20Gi
+  storageClassName: ${singlenode_storage_class}
+  accessModes:
+    - ReadWriteOnce
+
+# Ingress configuration
+ingress:
+  enabled: ${enable_ingresses}
+  ingressClassName: public
+  path: /grafana-private
+  pathType: Prefix
+  hosts:
+    - cms.geddes.rcac.purdue.edu
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 472
+  fsGroup: 472
+  fsGroupChangePolicy: OnRootMismatch
+
+# Disable init chown; rely on fsGroup on RBD
+initChownData:
+  enabled: false
+
+# Temp dirs stay on emptyDir.
+extraVolumes:
+  - name: grafana-png-tmp
+    emptyDir: {}
+  - name: grafana-pdf-tmp
+    emptyDir: {}
+  - name: grafana-csv-tmp
+    emptyDir: {}
+
+extraVolumeMounts:
+  - name: grafana-png-tmp
+    mountPath: /var/lib/grafana/png
+  - name: grafana-pdf-tmp
+    mountPath: /var/lib/grafana/pdf
+  - name: grafana-csv-tmp
+    mountPath: /var/lib/grafana/csv
+
+# Resources
+resources:
+  requests:
+    cpu: 1000m
+    memory: 2Gi
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+
+# RWO + SQLite: never run two pods against the same DB.
+deploymentStrategy:
+  type: Recreate
+
+# Grafana configuration
+grafana.ini:
+  server:
+    root_url: https://cms.geddes.rcac.purdue.edu/grafana-private/
+    serve_from_sub_path: true
+  database:
+    wal: true
+    query_retries: 10
+  dashboards:
+    default_home_dashboard_path: /var/lib/grafana/dashboards/private/users-overview.json
+  auth.anonymous:
+    enabled: false
+
+# Dashboard and datasource provisioning
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: "private"
+        orgId: 1
+        folder: "Private Dashboards"
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 10
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards/private
+
+# Use ConfigMap for dashboards
+dashboardsConfigMaps:
+  private: grafana-private-dashboards
+
+# Datasources come from the shared datasources.yaml (second valuesFrom
+# entry on the HelmRelease). The private dashboards use only core panels
+# and datasource types, so no plugins are installed on this instance.

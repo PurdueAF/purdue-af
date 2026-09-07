@@ -1,5 +1,9 @@
-# Grafana Helm Chart Values
+# Grafana Helm Chart Values — public instance (grafana)
 # https://github.com/grafana/helm-charts/tree/main/charts/grafana
+#
+# Anonymous-viewer instance serving the public dashboards; private
+# dashboards live in the admin-only grafana-private instance
+# (values-private.yaml).
 
 # Persistence: RWO block storage for SQLite. CephFS/RWX cannot reliably
 # provide the file locks SQLite needs and caused recurring CrashLoopBackOff
@@ -51,6 +55,10 @@ extraVolumes:
     emptyDir: {}
   - name: grafana-csv-tmp
     emptyDir: {}
+  # TRANSITIONAL — empty dir backing the private-dashboards cleanup
+  # provider (see dashboardProviders); remove together with it.
+  - name: private-dashboards-cleanup
+    emptyDir: {}
   - name: work
     existingClaim: af-shared-storage
   - name: announcements-nginx-conf
@@ -67,40 +75,43 @@ extraVolumeMounts:
     mountPath: /var/lib/grafana/pdf
   - name: grafana-csv-tmp
     mountPath: /var/lib/grafana/csv
+  - name: private-dashboards-cleanup
+    mountPath: /var/lib/grafana/dashboards/private
   - name: work
     mountPath: /work/
     mountPropagation: HostToContainer
     readOnly: true
 
-# Add an init container that sets permissive mode on the PVC root without chown
-# extraInitContainers:
-#   - name: init-chmod-data
-#     image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.36
-#     imagePullPolicy: IfNotPresent
-#     command:
-#       - sh
-#       - -c
-#       - >-
-#         mkdir -p /var/lib/grafana &&
-#         chmod -R 0777 /var/lib/grafana || true &&
-#         ls -ld /var/lib/grafana || true
-#     securityContext:
-#       runAsUser: 0
-#       runAsNonRoot: false
-#       allowPrivilegeEscalation: false
-#       readOnlyRootFilesystem: true
-#       seccompProfile:
-#         type: RuntimeDefault
-#     resources:
-#       requests:
-#         cpu: 50m
-#         memory: 64Mi
-#       limits:
-#         cpu: 200m
-#         memory: 128Mi
-#     volumeMounts:
-#       - name: storage
-#         mountPath: /var/lib/grafana
+# TRANSITIONAL — remove together with the private-dashboards cleanup
+# provider above. GF_INSTALL_PLUGINS only installs plugins; the llm-app
+# and pyroscope-app removed from the plugins list stay installed on the
+# PVC (and keep loading) until deleted from it.
+extraInitContainers:
+  - name: remove-unused-plugins
+    image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.36
+    imagePullPolicy: IfNotPresent
+    command:
+      - sh
+      - -c
+      - >-
+        rm -rf /var/lib/grafana/plugins/grafana-llm-app
+        /var/lib/grafana/plugins/grafana-pyroscope-app
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 472
+      allowPrivilegeEscalation: false
+      seccompProfile:
+        type: RuntimeDefault
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+    volumeMounts:
+      - name: storage
+        mountPath: /var/lib/grafana
 
 extraContainers: |
   - name: announcements-server
@@ -122,18 +133,6 @@ extraContainers: |
       limits:
         cpu: 1000m
         memory: 2Gi
-
-extraConfigmapMounts:
-  - name: grafana-plugins-provisioning
-    mountPath: /etc/grafana/provisioning/plugins
-    configMap: grafana-plugins-provisioning
-    readOnly: true
-
-# envValueFrom:
-#   OPENAI_API_KEY:
-#     secretKeyRef:
-#       name: a2rchi-openai-api-key
-#       key: OPENAI_API_KEY
 
 # Resources
 resources:
@@ -178,6 +177,14 @@ dashboardProviders:
         allowUiUpdates: true
         options:
           path: /var/lib/grafana/dashboards/public
+      # TRANSITIONAL — remove after this has deployed once. The private
+      # dashboards moved to the grafana-private instance, but dashboards
+      # already provisioned into this instance's database are not removed
+      # by simply dropping their provider. Keeping the provider pointed at
+      # an empty directory (emptyDir below) makes Grafana's sync delete
+      # them (disableDeletion: false). Afterwards this provider and the
+      # private-dashboards-cleanup volume can be deleted; the leftover
+      # empty "Private Dashboards" folder can be removed in the UI.
       - name: "private"
         orgId: 1
         folder: "Private Dashboards"
@@ -191,72 +198,14 @@ dashboardProviders:
 # Use ConfigMap for dashboards
 dashboardsConfigMaps:
   public: grafana-public-dashboards
-  private: grafana-private-dashboards
 
+# Shared datasources come from datasources.yaml (second valuesFrom entry
+# on the HelmRelease); only public-instance-specific ones live here, under
+# a distinct provisioning filename so the values merge keeps both.
 datasources:
-  datasources.yaml:
+  infinity-datasources.yaml:
     apiVersion: 1
     datasources:
-      - name: prometheus
-        uid: prometheus
-        type: prometheus
-        url: http://prometheus-server:9090
-        access: proxy
-        isDefault: true
-      - name: prometheus-rancher
-        uid: prometheus-rancher
-        type: prometheus
-        url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
-        access: proxy
-        isDefault: false
-      - name: prometheus-hammer
-        uid: prometheus-hammer
-        type: prometheus
-        url: http://grafana.cms.rcac.purdue.edu:9090
-        access: proxy
-        isDefault: false
-      - name: tempo
-        uid: tempo
-        type: tempo
-        url: http://tempo.cms.svc.cluster.local:3100
-        access: proxy
-        isDefault: false
-        basicAuth: false
-        jsonData:
-          httpMethod: GET
-          timeInterval: 5s
-          tlsSkipVerify: true
-          nodeGraph:
-            enabled: true
-          serviceMap:
-            datasourceUid: prometheus
-          tracesToMetrics:
-            datasourceUid: prometheus
-          tracesToLogs:
-            datasourceUid: loki
-      - name: thanos
-        uid: thanos
-        type: prometheus
-        url: http://thanos-query.cms.svc.cluster.local:10902
-        access: proxy
-        isDefault: false
-        jsonData:
-          httpMethod: POST
-          timeInterval: 15s
-          manageAlerts: false
-      - name: pyroscope
-        type: grafana-pyroscope-datasource
-        url: http://pyroscope.cms.svc.cluster.local:4040
-        jsonData:
-          minStep: 15s
-      - name: loki
-        uid: loki
-        type: loki
-        url: http://loki.cms.svc.cluster.local:3100
-        access: proxy
-        isDefault: false
-        jsonData:
-          maxLines: 1000
       - name: Infinity
         type: yesoreyeram-infinity-datasource
         uid: infinity
@@ -267,7 +216,5 @@ datasources:
             - "http://localhost:8080"
 
 plugins:
-  - grafana-llm-app
-  - grafana-pyroscope-app
   - marcusolsson-dynamictext-panel
   - yesoreyeram-infinity-datasource
