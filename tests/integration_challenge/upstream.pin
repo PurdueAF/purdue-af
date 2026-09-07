@@ -8,4 +8,4 @@
 # forces the stage-1c job to actually re-run rather than reuse a green marker.
 
 repo=https://github.com/iris-hep/integration-challenge
-ref=b3607535b4b3b763f99ce1e9c84c0aa857723bea
+ref=f6cd7e1cf6801cad1a743b332c9deed073b70a00
