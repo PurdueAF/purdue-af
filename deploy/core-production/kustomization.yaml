@@ -102,6 +102,7 @@ configMapGenerator:
       - ../../apps/monitoring/grafana/dashboards/agentic-interface.json
       - ../../apps/monitoring/grafana/dashboards/single-user.json
       - ../../apps/monitoring/grafana/dashboards/sonic.json
+      - ../../apps/monitoring/grafana/dashboards/sonic-ray.json
       - ../../apps/monitoring/grafana/dashboards/alerts.json
       - ../../apps/monitoring/grafana/dashboards/gpus.json
       - ../../apps/monitoring/grafana/dashboards/phys390.json
