@@ -1,0 +1,16 @@
+# The server code (files/sonic_ray), mounted into every pod as the package
+# directory {{ include "sonic-ray.codeDir" . }}/sonic_ray. The checksum of
+# these files is annotated onto the pod templates, so a code change rolls the
+# cluster like any other change to it would.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sonic-ray.name" . }}-code
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sonic-ray.labels" . | nindent 4 }}
+data:
+{{- range $path, $_ := .Files.Glob "files/sonic_ray/*.py" }}
+  {{ base $path }}: |
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}

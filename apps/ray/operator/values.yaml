@@ -1,0 +1,24 @@
+# KubeRay operator for the AF. Deployed only so RayCluster CRs can be
+# reconciled — see apps/ray/sonic-ray for the cluster itself.
+
+# Watch the release namespace (cms) only, and create namespaced Role/RoleBinding
+# instead of cluster-wide ClusterRole/ClusterRoleBinding. The AF has no Ray
+# workloads outside cms, so there is no reason to grant cluster scope.
+singleNamespaceInstall: true
+
+# The operator is a controller, not a data-plane component: keep it off the
+# GPU nodes' dedicated taint and let it land anywhere in the cluster.
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+metrics:
+  enabled: true
+  # The AF Prometheus scrapes by Service label (scrape_metrics: "true"),
+  # not through prometheus-operator ServiceMonitors.
+  serviceMonitor:
+    enabled: false
