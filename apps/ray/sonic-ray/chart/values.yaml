@@ -99,12 +99,25 @@ triton:
     repository: nvcr.io/nvidia/tritonserver
     tag: "26.04-py3"
     pullPolicy: IfNotPresent
-  # -- Passed to the Triton container as-is; the model repository path in args
-  # must be modelRepository.mountPath.
+  # -- Passed to the Triton container as-is. The model repository path in args
+  # must be modelRepository.mountPath, and the ports in args must be the ones
+  # below — the chart refuses to render otherwise.
   command: ["tritonserver"]
   args:
     - --model-repository=/models
+    - --http-port=8100
     - --exit-timeout-secs=60
+  # -- Ports Triton listens on. The Ray container shares this pod's network
+  # namespace, so these must avoid the ports Ray binds there: 8000 (Serve's
+  # HTTP proxy), 9000 (Serve's gRPC proxy), 8080 (metrics). HTTP therefore
+  # cannot be Triton's default 8000 — it would fail to bind with "Socket
+  # '0.0.0.0:8000' already in use" — and Serve's proxy is the one that has to
+  # keep 8000, since KubeRay probes the proxy there. Nothing outside the pod
+  # reaches either of these: inference arrives at Serve's gRPC proxy, which
+  # forwards to grpcPort on localhost, and httpPort serves only the kubelet's
+  # probes.
+  httpPort: 8100
+  grpcPort: 8001
   # -- One GPU per Triton is the unit of scaling: a pod is one Triton, and a
   # Serve replica is one pod.
   resources:

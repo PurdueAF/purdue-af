@@ -271,10 +271,51 @@ def test_rendered_triton_is_the_one_in_values(worker_group, values):
     assert triton["readinessProbe"] == values["triton"]["readinessProbe"]
     assert triton["startupProbe"] == values["triton"]["startupProbe"]
     assert {p["name"]: p["containerPort"] for p in triton["ports"]} == {
-        "http": 8000,
-        "grpc": 8001,
+        "http": values["triton"]["httpPort"],
+        "grpc": values["triton"]["grpcPort"],
         "triton-metrics": 8002,
     }
+
+
+def test_triton_and_ray_do_not_fight_over_a_port(worker_group, values):
+    """Containers of a pod share one network namespace. Triton's defaults
+    collide with Ray Serve's HTTP proxy on 8000 — it fails to start with
+    "Socket '0.0.0.0:8000' already in use" — so Triton moves, and Serve keeps
+    8000 because KubeRay probes the proxy there. The args must name the same
+    ports as the values, or the probes and the forwarder address nothing."""
+    declared = [
+        (c["name"], p["name"], p["containerPort"])
+        for c in worker_group["template"]["spec"]["containers"]
+        for p in c.get("ports", [])
+    ]
+    numbers = [port for _, _, port in declared]
+    assert len(numbers) == len(set(numbers)), (
+        f"two containers claim one port: {declared}"
+    )
+
+    ray_ports = {port for owner, _, port in declared if owner == "ray-worker"}
+    assert 8000 in ray_ports, (
+        "Serve's HTTP proxy must keep 8000: KubeRay probes it there"
+    )
+    triton = values["triton"]
+    assert triton["httpPort"] != 8000
+    args = triton["args"][0].split()
+    assert f"--http-port={triton['httpPort']}" in args
+    # gRPC is left at Triton's default, which is what the forwarder dials.
+    assert triton["grpcPort"] == 8001
+    assert not [a for a in args if a.startswith("--grpc-port=")]
+
+
+def test_the_forwarder_is_told_where_its_triton_is(head_pod, worker_group, values):
+    """The forwarder dials TRITON_GRPC; unset, it falls back to a default that
+    would be wrong the moment grpcPort changed."""
+    expected = f"localhost:{values['triton']['grpcPort']}"
+    for template, name in (
+        (head_pod, "ray-head"),
+        (worker_group["template"], "ray-worker"),
+    ):
+        assert env_of(container(template, name))["TRITON_GRPC"] == expected
+    assert f'"TRITON_GRPC", "{expected}"' in SERVE_APP.read_text()
 
 
 def test_models_come_from_cvmfs_read_only(worker_group, values):
@@ -501,6 +542,9 @@ def test_metrics_services_select_labels_kuberay_leaves_alone(
     [
         ("triton.modelRepository.claimName=", "claimName is required"),
         ("replicas.min=5", "replicas.min exceeds replicas.max"),
+        ("triton.httpPort=8000", "which Ray binds in this pod"),
+        ("triton.httpPort=8200", "but triton.httpPort is 8200"),
+        ("triton.grpcPort=8500", "do not pass --grpc-port"),
         ("triton.resources.limits.nvidia\\.com/gpu=2", "exactly one nvidia.com/gpu"),
         (
             "ray.worker.terminationGracePeriodSeconds=30",
