@@ -96,11 +96,26 @@ if [ "$code_server_ok" = 1 ]; then
 
 	export CODE_EXTENSIONSDIR="$NEW_HOME/.local/share/code-server/extensions"
 	export CODE_USERDATADIR="$NEW_HOME/.local/share/code-server"
-	mkdir -p "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR"
+	CODE_SERVER_USER_SETTINGS="$CODE_USERDATADIR/User"
+
+	# The same rule, for the directories those settings live in. $NEW_HOME/.local
+	# is the user's to arrange, and some of them symlink it onto /depot to keep it
+	# out of the home quota; /depot is NFS with root_squash and this hook runs as
+	# root, so mkdir through such a symlink fails with EACCES. Unguarded, `set -e`
+	# in start.sh turns that into an exit before JupyterLab ever binds, and the
+	# container crash-loops — which the hub can only report as "server didn't
+	# respond in 600 seconds", pointing nowhere near the user's home directory.
+	if ! mkdir -p "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR" "$CODE_SERVER_USER_SETTINGS"; then
+		echo "ERROR: cannot create code-server directories under $NEW_HOME/.local" >&2
+		echo "ERROR: is $NEW_HOME/.local a symlink onto /depot? this hook runs as root, which NFS squashes" >&2
+		echo "ERROR: skipping code-server setup; JupyterLab is unaffected" >&2
+		code_server_ok=0
+	fi
+fi
+
+if [ "$code_server_ok" = 1 ]; then
 
 	# Disable default GitHub chat in code-server
-	CODE_SERVER_USER_SETTINGS="$CODE_USERDATADIR/User"
-	mkdir -p "$CODE_SERVER_USER_SETTINGS"
 	HUB_PREFIX="${JUPYTERHUB_SERVICE_PREFIX:-/user/${NB_USER}/}"
 	LAB_PATH="${HUB_PREFIX%/}/lab"
 	HUB_HOME_PATH="/hub/home"
