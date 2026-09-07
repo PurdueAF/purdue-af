@@ -15,6 +15,7 @@ worker pods.
 import asyncio
 import base64
 import re
+import time
 from typing import Any, Optional
 
 import httpx
@@ -98,6 +99,18 @@ def _check_worker_size(gateway: str, worker_cores: float, worker_memory: float) 
             f"Error: worker_memory must be between {lo:g} and {hi:g} GiB "
             f"on gateway '{gateway}'."
         )
+
+
+# A freshly created cluster is PENDING while its scheduler pod is scheduled and
+# pulled; the gateway refuses to scale a cluster that is not yet RUNNING. So the
+# create and scale paths wait for the scheduler instead of handing back a
+# cluster with no workers. These bound that wait — a scheduler that is not up
+# within the timeout is reported, never waited on forever.
+SCHEDULER_READY_TIMEOUT = 120.0
+SCHEDULER_POLL_INTERVAL = 3.0
+
+# Statuses from which a cluster will never reach RUNNING — waiting is pointless.
+_TERMINAL_STATUSES = frozenset({"STOPPING", "STOPPED", "FAILED"})
 
 
 # Cluster names land in gateway URL paths and (via _cluster_id) in PromQL
@@ -229,6 +242,65 @@ async def _fetch_clusters(
     if payload is None:
         return gateway, "returned a malformed cluster list"
     return gateway, _parse_clusters(payload)
+
+
+async def _cluster_status(
+    gateway: str, url: str, cluster_name: str, username: str
+) -> str:
+    """The gateway's current status word for ``cluster_name`` (upper-case)."""
+    resp = await _gateway(
+        "GET",
+        gateway,
+        url,
+        f"/api/v1/clusters/{cluster_name}",
+        username=username,
+        action=f"check the state of cluster '{cluster_name}'",
+        cluster_name=cluster_name,
+    )
+    record = json_body(resp)
+    if not isinstance(record, dict):
+        raise malformed_response(f"gateway '{gateway}'", resp, "a cluster record")
+    return str(record.get("status") or "UNKNOWN").upper()
+
+
+async def _await_scheduler(
+    gateway: str,
+    url: str,
+    cluster_name: str,
+    username: str,
+    timeout: Optional[float] = None,
+) -> tuple[str, float]:
+    """Poll until ``cluster_name`` is RUNNING, or the wait runs out.
+
+    Returns ``(last_status, seconds_waited)``; the caller decides what a
+    still-PENDING cluster means for it. A cluster that has entered a terminal
+    state raises instead — no amount of waiting brings it back.
+
+    An already-RUNNING cluster costs exactly one GET, so this is safe to call
+    on the normal path.
+
+    The bounds are read at call time, not bound as defaults, so tests can
+    shorten them.
+    """
+    deadline = time.monotonic() + (
+        SCHEDULER_READY_TIMEOUT if timeout is None else timeout
+    )
+    start = time.monotonic()
+    while True:
+        status = await _cluster_status(gateway, url, cluster_name, username)
+        if status == "RUNNING":
+            return status, time.monotonic() - start
+        if status in _TERMINAL_STATUSES:
+            raise UserError(
+                f"Error: cluster '{cluster_name}' on gateway '{gateway}' is "
+                f"{status} — it will not accept workers. Call list_dask_clusters "
+                "to confirm, then create_dask_cluster for a fresh one; "
+                "query_dask_logs shows why the scheduler stopped."
+            )
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return status, time.monotonic() - start
+        await asyncio.sleep(min(SCHEDULER_POLL_INTERVAL, remaining))
 
 
 async def _gateway(
@@ -483,6 +555,24 @@ _CREATE_CHOICES_HELP = (
 )
 
 
+# Appended after a successful scale. Scaling is asynchronous — pods are
+# scheduled, then register with the scheduler — and get_dask_worker_count reads
+# a Prometheus scrape, so a check made straight afterwards legitimately reports
+# fewer workers than requested. Saying so up front stops a caller concluding the
+# scale failed and re-scaling (or hunting through logs) while it is still
+# working.
+_WORKERS_PENDING_NEXT = [
+    "",
+    "Workers start asynchronously: the pods are scheduled first, then register "
+    "with the scheduler. get_dask_worker_count reads Prometheus, so its numbers "
+    "trail reality by up to one scrape interval — a low or zero count in the "
+    "first minute is expected, not a failed scale.",
+    "Next: get_dask_worker_count after ~30-60 s. If it is still short after "
+    "that, query_dask_logs shows what the workers are doing and "
+    "get_facility_health shows whether the facility is short of capacity.",
+]
+
+
 def register(mcp: Any) -> None:
     @mcp.tool()
     async def list_dask_clusters() -> str:
@@ -642,7 +732,10 @@ def register(mcp: Any) -> None:
             worker_memory: Memory per worker in GiB (k8s: 0.1–64; Slurm: 1–64).
                            Defaults to 4 if the user picks the default size.
             n_workers: Workers to start with (0–200). 0 (or omitted with a
-                       non-eliciting client) starts the cluster empty.
+                       non-eliciting client) starts the cluster empty. A
+                       non-zero count waits for the scheduler to come up
+                       before scaling, so the call takes as long as the
+                       cluster takes to start.
             env: Extra environment variables for workers (e.g. X509_USER_PROXY,
                  PYTHONPATH, NB_UID/NB_GID for CERN/FNAL users).
         """
@@ -801,8 +894,32 @@ def register(mcp: Any) -> None:
             ]
             return "\n".join(lines)
 
-        # The cluster exists whatever happens next, so a failed scale is
-        # reported inside the result rather than as a failure of the call.
+        # The cluster exists whatever happens next, so anything that goes wrong
+        # from here is reported inside the result rather than as a failure of
+        # the call — the caller still needs the name.
+        try:
+            status, waited = await _await_scheduler(
+                gateway, url, cluster_name, username
+            )
+        except Failure as exc:
+            lines += [
+                "",
+                f"Created with 0 workers — waiting for the scheduler failed: {exc}",
+            ]
+            return "\n".join(lines)
+
+        if status != "RUNNING":
+            lines += [
+                "",
+                f"Created with 0 workers: the scheduler was still {status} after "
+                f"{waited:.0f} s, and the gateway only accepts workers once the "
+                "cluster is RUNNING.",
+                f"Next: scale_dask_cluster('{cluster_name}', {n_workers}, "
+                f"gateway='{gateway}') — it waits for the scheduler too, so "
+                "calling it again is usually all that is needed.",
+            ]
+            return "\n".join(lines)
+
         try:
             await _gateway(
                 "POST",
@@ -825,10 +942,10 @@ def register(mcp: Any) -> None:
             ]
             return "\n".join(lines)
 
+        if waited >= SCHEDULER_POLL_INTERVAL:
+            lines.append(f"Scheduler became RUNNING after {waited:.0f} s.")
         lines.append(f"Scaling to {n_workers} worker(s).")
-        lines.append(
-            "Next: get_dask_worker_count / get_dask_cluster_info to confirm ready."
-        )
+        lines += _WORKERS_PENDING_NEXT
         return "\n".join(lines)
 
     @mcp.tool()
@@ -1031,6 +1148,11 @@ def register(mcp: Any) -> None:
     ) -> str:
         """Scale a Dask cluster to the requested number of workers.
 
+        A cluster that is still starting cannot take workers, so this waits for
+        its scheduler to reach RUNNING (up to 120 s) before scaling —
+        call it straight after create_dask_cluster without polling first. The
+        scale itself is asynchronous: workers appear over the following seconds.
+
         Args:
             cluster_name: Cluster identifier returned by list_dask_clusters.
             n_workers: Target worker count (0–200).
@@ -1043,6 +1165,22 @@ def register(mcp: Any) -> None:
             raise UserError(f"Error: n_workers must be ≤ {MAX_WORKERS}.")
         username = require_user()["username"]
         gateway, url = _resolve_gateway(gateway)
+
+        # A cluster that is still starting rejects the scale request, which used
+        # to surface as a flat failure right after create_dask_cluster. Wait for
+        # the scheduler instead; an already-RUNNING cluster costs one extra GET.
+        status, waited = await _await_scheduler(gateway, url, cluster_name, username)
+        if status != "RUNNING":
+            return (
+                f"No scale request was sent: cluster '{cluster_name}' on "
+                f"'{gateway}' was still {status} after {waited:.0f} s, and the "
+                "gateway only accepts workers once the cluster is RUNNING.\n"
+                "Next: get_dask_cluster_info for the current status, or "
+                "query_dask_logs if it stays pending — the scheduler pod may "
+                "be waiting for capacity. Calling scale_dask_cluster again "
+                "resumes the wait."
+            )
+
         await _gateway(
             "POST",
             gateway,
@@ -1054,9 +1192,14 @@ def register(mcp: Any) -> None:
             ok=(200, 204),
             json={"count": n_workers},
         )
-        return (
+        lines = [
             f"Cluster '{cluster_name}' on '{gateway}' scaling to {n_workers} worker(s)."
-        )
+        ]
+        if waited >= SCHEDULER_POLL_INTERVAL:
+            lines.insert(0, f"Scheduler became RUNNING after {waited:.0f} s.")
+        if n_workers:
+            lines += _WORKERS_PENDING_NEXT
+        return "\n".join(lines)
 
     @mcp.tool()
     async def stop_dask_cluster(cluster_name: str, gateway: str = "k8s") -> str:
