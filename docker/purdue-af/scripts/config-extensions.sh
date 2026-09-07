@@ -18,37 +18,22 @@ OVERRIDES_EOF
 # Configure topbar extension
 NEW_HOME=/home/$NB_USER
 
-# Everything this hook writes under $NEW_HOME belongs to the user, so it is
-# written AS the user. Doing it as root looks harmless and is not: a user may
-# symlink part of their home onto /depot to keep it out of their quota, and
-# /depot is NFS with root_squash — root is the one identity that cannot write
-# there, while the user can. Root's mkdir then returned EACCES, `set -e` in
-# start.sh turned that into an exit before JupyterLab ever bound its port, and
-# the container crash-looped, which the hub could only report as "server didn't
-# respond in 600 seconds" — pointing nowhere near the home directory.
-#
-# Writing as the user also means nothing here lands root-owned, so the chowns
-# this hook used to need afterwards are gone.
-_af_as_user() {
-	if [ "$(id -u)" -eq 0 ]; then
-		runuser -u "$NB_USER" -- "$@"
-	else
-		"$@"
-	fi
-}
+# Every write below lands under $NEW_HOME, which belongs to the user, so it is
+# done as the user. See the helper for why that matters.
+source /usr/local/bin/af-as-user.sh
 
 TOPBAR_CONFIG_PATH=$NEW_HOME/.jupyter/lab/user-settings/@jupyterlab/application-extension/
 TOPBAR_TEXT_CONFIG_PATH=$NEW_HOME/.jupyter/lab/user-settings/jupyterlab-topbar-text/
 
-_af_as_user mkdir -p $TOPBAR_CONFIG_PATH
-_af_as_user mkdir -p $TOPBAR_TEXT_CONFIG_PATH
-_af_as_user rm -rf $NEW_HOME/.jupyter/lab/user-settings/jupyterlab-topbar-extension/
+af_as_user mkdir -p $TOPBAR_CONFIG_PATH
+af_as_user mkdir -p $TOPBAR_TEXT_CONFIG_PATH
+af_as_user rm -rf $NEW_HOME/.jupyter/lab/user-settings/jupyterlab-topbar-extension/
 
 IMAGE_VERSION=${JUPYTER_IMAGE#*:}
 
 text='{"text":"Purdue AF v'"$IMAGE_VERSION"'  |  👤 '"$NB_USER"'  |  "}'
 
-echo "$text" | _af_as_user tee "$TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings" >/dev/null
+echo "$text" | af_as_user tee "$TOPBAR_TEXT_CONFIG_PATH/plugin.jupyterlab-settings" >/dev/null
 
 echo '{
     "toolbar": [
@@ -84,10 +69,10 @@ echo '{
             "rank": 170
         }
     ]
-}' | _af_as_user tee $TOPBAR_CONFIG_PATH/top-bar.jupyterlab-settings >/dev/null
+}' | af_as_user tee $TOPBAR_CONFIG_PATH/top-bar.jupyterlab-settings >/dev/null
 
 JIL_PATH=$NEW_HOME/.jupyter/lab/user-settings/purdue-af-grafana-iframe/
-_af_as_user mkdir -p $JIL_PATH
+af_as_user mkdir -p $JIL_PATH
 DASHBOARD_URL="https://cms.geddes.rcac.purdue.edu/grafana/d-solo/single-user-stat-dashboard/single-user-statistics"
 THEME="&theme=light"
 echo "{
@@ -95,7 +80,7 @@ echo "{
     \"label\": \"Resource usage\",
     \"caption\": \"Open grafana panel\",
     \"rank\": 0
-}" | _af_as_user tee $JIL_PATH/plugin.jupyterlab-settings >/dev/null
+}" | af_as_user tee $JIL_PATH/plugin.jupyterlab-settings >/dev/null
 
 # Pre-install code-server extensions into the notebook user's dirs; fail if CLI is unavailable
 CODE_SERVER_BIN="${base_env_dir%/}/bin/code-server"
@@ -118,7 +103,7 @@ if [ "$code_server_ok" = 1 ]; then
 	# Backstop only: as the user this succeeds wherever ~/.local actually lives.
 	# If it still fails — a full quota, a dangling symlink — the session must
 	# survive it, so skip the editor rather than exiting the hook.
-	if ! _af_as_user mkdir -p \
+	if ! af_as_user mkdir -p \
 		"$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR" "$CODE_SERVER_USER_SETTINGS"; then
 		echo "ERROR: cannot create code-server directories under $NEW_HOME/.local" >&2
 		echo "ERROR: skipping code-server setup; JupyterLab is unaffected" >&2
@@ -136,10 +121,10 @@ if [ "$code_server_ok" = 1 ]; then
 	if [[ "${JUPYTERHUB_BASE_URL:-}" == http* ]]; then
 		HUB_ORIGIN="${JUPYTERHUB_BASE_URL%/}"
 	fi
-	# `_af_as_user tee` rather than a plain redirect: the redirect is opened by
+	# `af_as_user tee` rather than a plain redirect: the redirect is opened by
 	# this shell, which is root, so it would fail on a depot-backed ~/.local
 	# exactly as the mkdir did.
-	_af_as_user tee "$CODE_SERVER_USER_SETTINGS/settings.json" >/dev/null <<EOF
+	af_as_user tee "$CODE_SERVER_USER_SETTINGS/settings.json" >/dev/null <<EOF
 {
   "chat.disableAIFeatures": true,
   "chat.commandCenter.enabled": false,
@@ -161,11 +146,11 @@ EOF
 	_cs_install_if_missing() {
 		local spec="$1"
 		local id="${spec%@*}" # strip @version suffix for the presence check
-		if _af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
+		if af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
 			--list-extensions 2>/dev/null | grep -qi "^${id}$"; then
 			echo "code-server extension '${spec}' already installed, skipping."
 		else
-			_af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
+			af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
 				--install-extension "$spec"
 		fi
 	}
@@ -187,7 +172,7 @@ EOF
 
 	_cs_clear_extension_state() {
 		local ext_id="$1"
-		_af_as_user python - "$CODE_EXTENSIONSDIR" "$ext_id" <<'PY'
+		af_as_user python - "$CODE_EXTENSIONSDIR" "$ext_id" <<'PY'
 import glob
 import json
 import os
@@ -235,9 +220,9 @@ PY
 
 	if [ -f "$PAF_CS_EXT_VSIX" ]; then
 		_cs_clear_extension_state "$PAF_CS_EXT_ID"
-		_af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
+		af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
 			--uninstall-extension "$PAF_CS_EXT_ID" >/dev/null 2>&1 || true
-		_af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
+		af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
 			--install-extension "$PAF_CS_EXT_VSIX"
 		echo "Installed Purdue AF code-server extension from ${PAF_CS_EXT_VSIX}"
 	else
@@ -253,9 +238,9 @@ fi
 
 # Continue extension config (from bundled file)
 CONTINUE_DIR="$NEW_HOME/.continue"
-_af_as_user mkdir -p "$CONTINUE_DIR"
+af_as_user mkdir -p "$CONTINUE_DIR"
 # Read the bundled file as root (it lives in the image), write it as the user.
-_af_as_user tee "$CONTINUE_DIR/config.yaml" </etc/jupyter/continue-config.yaml >/dev/null
+af_as_user tee "$CONTINUE_DIR/config.yaml" </etc/jupyter/continue-config.yaml >/dev/null
 # If user previously saved an API key, inject it into all apiKey fields so config survives image startup
 if [[ -s "$CONTINUE_DIR/api-key.txt" ]]; then
 	KEY=$(tr -d '\n\r' <"$CONTINUE_DIR/api-key.txt")
@@ -270,7 +255,7 @@ if [[ -s "$CONTINUE_DIR/api-key.txt" ]]; then
 		done <"$CONTINUE_DIR/config.yaml" >"$tmp"
 		# Not `mv`: the rename would be done by root, and the key travels on
 		# stdin rather than in argv, where `ps` would show it.
-		_af_as_user tee "$CONTINUE_DIR/config.yaml" <"$tmp" >/dev/null
+		af_as_user tee "$CONTINUE_DIR/config.yaml" <"$tmp" >/dev/null
 		rm -f "$tmp"
 	fi
 fi

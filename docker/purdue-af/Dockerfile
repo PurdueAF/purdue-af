@@ -258,6 +258,9 @@ COPY --chown=root:root docker/purdue-af/scripts/run-as-root.sh \
     docker/purdue-af/scripts/create-symlinks.sh \
     docker/purdue-af/scripts/clean-session-state.sh \
     /usr/local/bin/before-notebook.d/
+# Sourced by the hooks above, not run as one: it only defines af_as_user, and a
+# file in before-notebook.d would be sourced in name order rather than on demand.
+COPY --chown=root:root docker/purdue-af/scripts/af-as-user.sh /usr/local/bin/
 COPY --chown=root:root \
     docker/purdue-af/jupyter/start.sh \
     docker/purdue-af/jupyter/start-notebook.sh \

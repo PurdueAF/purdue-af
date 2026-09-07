@@ -75,6 +75,10 @@ def sandbox(tmp_path):
             f"base_env_dir={base_env}/",
         )
         .replace("NEW_HOME=/home/$NB_USER", f"NEW_HOME={home}")
+        .replace(
+            "source /usr/local/bin/af-as-user.sh",
+            f"source {REPO / 'docker/purdue-af/scripts/af-as-user.sh'}",
+        )
         .replace("/etc/jupyter/continue-config.yaml", str(continue_config))
     )
     return script, home, tmp_path
