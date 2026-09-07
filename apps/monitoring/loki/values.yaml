@@ -1,4 +1,4 @@
-# Chart: grafana/loki 6.44.0
+# Chart: grafana/loki 7.3.0
 deploymentMode: SingleBinary
 
 singleBinary:
@@ -28,10 +28,67 @@ singleBinary:
   persistence:
     enabled: true
     accessModes: ["ReadWriteOnce"]
+    # DRIFT, deliberate: the live storage-loki-0 was expanded to 100Gi by hand on
+    # 2026-09-07 to recover from a full volume, and this still says 50Gi.
+    # volumeClaimTemplates is immutable, so raising this number makes the Helm
+    # upgrade fail permanently (the HelmRelease retries forever). To reconcile,
+    # in this order: (1) land enableStatefulSetAutoDeletePVC: false below on its
+    # own — it is a mutable StatefulSet field, and it strips the PVC's
+    # ownerReference; (2) only then set 100Gi together with
+    # enableStatefulSetRecreationForSizeChange: true, whose pre-upgrade hook
+    # runs `kubectl delete statefulset --cascade=orphan loki`. Leaving the two
+    # numbers apart is harmless: the StatefulSet controller never shrinks an
+    # existing PVC.
     size: 50Gi
-    storageClassName: ${multinode_storage_class}
+    # The chart's key is `storageClass`, not `storageClassName`, so the line
+    # that used to sit here (${multinode_storage_class}) was silently ignored
+    # and storage-loki-0 was provisioned on the DEFAULT class instead
+    # (geddes-standard-singlenode, Ceph RBD). Leaving it unset keeps a fresh
+    # install matching what production actually runs. Do not "fix" this to
+    # storageClass without planning a data migration: the class is part of the
+    # immutable volumeClaimTemplate, and RWO RBD is why loki-0 is pinned to one
+    # node.
+    #
+    # Single-binary Loki is the only copy of the facility's logs, and the chart
+    # defaults both whenScaled and whenDeleted to Delete — so `scale --replicas=0`
+    # or any StatefulSet delete would take the PVC with it. Opt out.
+    enableStatefulSetAutoDeletePVC: false
     annotations: {}
     mountPath: /var/loki
+  # Reports free/used bytes for the Loki PVC, which nothing else can see:
+  # node-exporter excludes kubelet pod mounts, kubelet_volume_stats_* needs
+  # cluster-scoped scrape access that prometheus-sa does not have, and Loki
+  # itself exports no filesystem gauge. Scraped as job "loki-storage"; see the
+  # AFLokiStorage* alerts in apps/monitoring/prometheus/values.yaml.
+  extraContainers:
+    - name: fs-exporter
+      image: geddes-registry.rcac.purdue.edu/docker-hub-cache/prom/node-exporter:v1.8.2
+      args:
+        - --collector.disable-defaults
+        - --collector.filesystem
+        - --collector.filesystem.mount-points-include=^/var/loki$
+        - --web.listen-address=:9101
+      ports:
+        - name: fs-metrics
+          containerPort: 9101
+          protocol: TCP
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        # Same PVC as the loki container; statfs only, never written to.
+        - name: storage
+          mountPath: /var/loki
+          readOnly: true
 
 # IMPORTANT: keep config as empty string so the legacy templated path is inert
 loki:
@@ -120,9 +177,28 @@ loki:
       per_stream_rate_limit_burst: 15MB
       volume_enabled: true
 
+      # THIS is what makes compactor.retention_enabled below do anything.
+      # Loki defaults limits_config.retention_period to 0s, which means "keep
+      # forever" — retention_enabled on its own is a no-op. Without this line
+      # storage-loki-0 accumulated every log line since the PVC was created and
+      # hit 100%, at which point Loki could neither ingest ("no space left on
+      # device" on every chunk flush) nor serve ANY query, because each query
+      # first mkdirs a tsdb-cache directory.
+      #
+      # Sizing: the AF pushes ~6 GB/day of raw log lines. At Loki's usual 5-10x
+      # compression that is ~0.6-1.2 GB/day of chunks on disk, so a 30d window
+      # settles somewhere around 20-40 GB. The measured number is
+      # node_filesystem_avail_bytes{job="loki"} once the fs-exporter sidecar is
+      # up — check it before trusting this estimate, and size the PVC for the
+      # top of the range, since steady-state bytes scale linearly with the
+      # window and a full volume takes out ingest AND query at once.
+      retention_period: 720h
+
     compactor:
       working_directory: /var/loki/compactor
       compaction_interval: 10m
+      # Needs limits_config.retention_period above to be non-zero; on its own
+      # this flag deletes nothing.
       retention_enabled: true
       delete_request_store: filesystem
       retention_delete_delay: 2h
