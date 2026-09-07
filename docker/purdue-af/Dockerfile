@@ -256,7 +256,11 @@ COPY --chown=root:root docker/purdue-af/scripts/run-as-root.sh \
     docker/purdue-af/scripts/config-extensions.sh \
     docker/purdue-af/scripts/config-agents.sh \
     docker/purdue-af/scripts/create-symlinks.sh \
+    docker/purdue-af/scripts/clean-session-state.sh \
     /usr/local/bin/before-notebook.d/
+# Sourced by the hooks above, not run as one: it only defines af_as_user, and a
+# file in before-notebook.d would be sourced in name order rather than on demand.
+COPY --chown=root:root docker/purdue-af/scripts/af-as-user.sh /usr/local/bin/
 COPY --chown=root:root \
     docker/purdue-af/jupyter/start.sh \
     docker/purdue-af/jupyter/start-notebook.sh \
@@ -322,6 +326,19 @@ RUN NB_USER=jovyan NAMESPACE=cms bash -c \
     cat /tmp/hooks.log; \
     grep -q HOOKS_SURVIVED /tmp/hooks.log || { \
         echo "FATAL: sourcing config-agents.sh exited the shell — start.sh would die" >&2; \
+        exit 1; \
+    }; \
+    rm -f /tmp/hooks.log
+# clean-session-state.sh deletes things, so it is sourced under `set -e` as
+# start.sh actually runs it: any command inside that returns non-zero — a
+# missing directory, an rm the squashed root is not allowed to do — has to be
+# swallowed, or a user's home layout takes their session down with it.
+RUN NB_USER=jovyan bash -c \
+        'set -e; source /usr/local/bin/before-notebook.d/clean-session-state.sh; echo HOOKS_SURVIVED' \
+        >/tmp/hooks.log 2>&1; \
+    cat /tmp/hooks.log; \
+    grep -q HOOKS_SURVIVED /tmp/hooks.log || { \
+        echo "FATAL: sourcing clean-session-state.sh exited the shell — start.sh would die" >&2; \
         exit 1; \
     }; \
     rm -f /tmp/hooks.log

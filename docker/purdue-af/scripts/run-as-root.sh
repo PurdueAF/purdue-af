@@ -2,6 +2,13 @@
 
 # Configuration
 NEW_HOME="/home/$NB_USER"
+
+# Anything this script writes *below* $NEW_HOME is written as the user: parts
+# of a home can be symlinked onto /depot, where root_squash makes root the one
+# identity that cannot write. Files directly in $NEW_HOME stay as they are —
+# they are always on the CephFS home volume, and .bashrc_af is deliberately
+# root-owned.
+source /usr/local/bin/af-as-user.sh
 BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env"
 PIXI_GLOBAL="/work/pixi/global"
 PIXI_GLOBAL_PYTHON="${PIXI_GLOBAL}/.pixi/envs/default/bin/python"
@@ -23,10 +30,14 @@ fi
 _HOME_SETUP_VER=2
 _HOME_SETUP_SENTINEL="$NEW_HOME/.jupyter/.af-home-setup-v${_HOME_SETUP_VER}"
 if [ ! -f "$_HOME_SETUP_SENTINEL" ]; then
-	mkdir -p "$NEW_HOME/.jupyter/lab/workspaces"
-	mkdir -p "$NEW_HOME/.local/share/jupyter/runtime"
-	mkdir -p "$NEW_HOME/.config/dask"
-	chown "$NB_USER:users" \
+	# Best effort: a home the user cannot fully write (a dangling symlink, a
+	# full quota) costs them these directories, never the whole session.
+	af_as_user mkdir -p "$NEW_HOME/.jupyter/lab/workspaces" || true
+	af_as_user mkdir -p "$NEW_HOME/.local/share/jupyter/runtime" || true
+	af_as_user mkdir -p "$NEW_HOME/.config/dask" || true
+	# Created as the user above, so this only repairs homes an older image left
+	# root-owned — and it cannot work through a depot symlink, so never fatal.
+	chown -h "$NB_USER:users" \
 		"$NEW_HOME/.jupyter" \
 		"$NEW_HOME/.jupyter/lab" \
 		"$NEW_HOME/.jupyter/lab/workspaces" \
@@ -35,21 +46,20 @@ if [ ! -f "$_HOME_SETUP_SENTINEL" ]; then
 		"$NEW_HOME/.local/share/jupyter" \
 		"$NEW_HOME/.local/share/jupyter/runtime" \
 		"$NEW_HOME/.config" \
-		"$NEW_HOME/.config/dask"
-	touch "$_HOME_SETUP_SENTINEL"
-	chown "$NB_USER:users" "$_HOME_SETUP_SENTINEL"
+		"$NEW_HOME/.config/dask" || true
+	af_as_user touch "$_HOME_SETUP_SENTINEL" || true
 fi
 chmod 755 "$NEW_HOME"
 # Recreate the migrated flag every start — prevents the Jupyter migration dialog
 # and is cheap (3 ops on a single small file).
-mkdir -p "$NEW_HOME/.jupyter"
-rm -rf "$NEW_HOME/.jupyter/migrated"
-touch "$NEW_HOME/.jupyter/migrated"
-chmod 777 "$NEW_HOME/.jupyter/migrated"
+af_as_user mkdir -p "$NEW_HOME/.jupyter" || true
+af_as_user rm -rf "$NEW_HOME/.jupyter/migrated" || true
+af_as_user touch "$NEW_HOME/.jupyter/migrated" || true
+af_as_user chmod 777 "$NEW_HOME/.jupyter/migrated" || true
 # .ssh: directory 700 (required by SSH); key/authorized_keys files 600 (not 700)
 if [ -d "$NEW_HOME/.ssh" ]; then
-	chmod 700 "$NEW_HOME/.ssh"
-	chmod 600 "$NEW_HOME/.ssh"/* 2>/dev/null || true
+	af_as_user chmod 700 "$NEW_HOME/.ssh" || true
+	af_as_user chmod 600 "$NEW_HOME/.ssh"/* 2>/dev/null || true
 fi
 
 # Setup work directory
@@ -109,20 +119,25 @@ if [ -d "${PIXI_GLOBAL}" ] && [ -f "${PIXI_GLOBAL}/pixi.toml" ] && [ -f "${PIXI_
 	BASE_PY3_KERNEL="${BASE_ENV_DIR}/share/jupyter/kernels/python3"
 	USER_KERNEL_DIR="${NEW_HOME}/.local/share/jupyter/kernels"
 	if [ -d "${BASE_PY3_KERNEL}" ]; then
-		mkdir -p "${USER_KERNEL_DIR}"
-		rm -rf "${USER_KERNEL_DIR}/python3"
-		cp -r "${BASE_PY3_KERNEL}" "${USER_KERNEL_DIR}/python3"
-		chown -R "${NB_USER}:users" "${NEW_HOME}/.local/share/jupyter"
+		af_as_user mkdir -p "${USER_KERNEL_DIR}" || true
+		af_as_user rm -rf "${USER_KERNEL_DIR}/python3" || true
+		af_as_user cp -r "${BASE_PY3_KERNEL}" "${USER_KERNEL_DIR}/python3" || true
 	fi
 fi
 
-# config-extensions.sh and kernel install run as root and may recreate root-owned
-# parents under ~/.local/share/jupyter; reconcile every start (a few paths only).
+# Everything under ~/.local is now created as the user, so this is only a repair
+# for homes an older image left root-owned. It runs as root and therefore cannot
+# touch a depot-backed ~/.local at all — which is exactly the case it must not
+# abort on, since start.sh sources this file under `set -e`.
 _JUPYTER_USER_DATA="$NEW_HOME/.local/share/jupyter"
-mkdir -p "$_JUPYTER_USER_DATA/runtime"
+af_as_user mkdir -p "$_JUPYTER_USER_DATA/runtime" || true
 for _d in "$NEW_HOME/.local" "$NEW_HOME/.local/share" "$_JUPYTER_USER_DATA" "$_JUPYTER_USER_DATA/runtime"; do
-	chown "$NB_USER:users" "$_d"
-	chmod u+rwx "$_d"
+	# -h, and skip symlinks for chmod: both follow links by default, and these
+	# paths are user-controlled. Root dereferencing a symlink the user planted
+	# is how a chown of ~/.local turns into a chown of something else entirely.
+	[ -L "$_d" ] && continue
+	chown -h "$NB_USER:users" "$_d" || true
+	chmod u+rwx "$_d" || true
 done
 
 # Setup system files
