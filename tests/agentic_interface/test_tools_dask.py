@@ -29,6 +29,13 @@ def basic_alice():
     return "Basic " + base64.b64encode(b"alice:").decode()
 
 
+def scheduler_running(base, name):
+    """Mock the status GET that create/scale use to wait for the scheduler."""
+    return respx.get(f"{base}/api/v1/clusters/{name}").respond(
+        200, json={"name": name, "status": "RUNNING"}
+    )
+
+
 class _FakeResult:
     def __init__(self, action, data=None):
         self.action = action
@@ -190,6 +197,7 @@ async def test_cluster_info_renders_details(user_ctx):
 
 @respx.mock
 async def test_scale_posts_count(user_ctx):
+    scheduler_running(K8S, "c1")
     route = respx.post(f"{K8S}/api/v1/clusters/c1/scale").respond(200)
 
     tools = register_tools(dask).tools
@@ -198,6 +206,156 @@ async def test_scale_posts_count(user_ctx):
     assert json.loads(route.calls.last.request.content) == {"count": 8}
     assert route.calls.last.request.headers["Authorization"] == basic_alice()
     assert "scaling to 8 worker(s)" in out
+
+
+# ── waiting for the scheduler before scaling ──────────────────────────────────
+#
+# A freshly created cluster is PENDING until its scheduler pod is up, and the
+# gateway refuses to scale a cluster that is not RUNNING. create/scale therefore
+# poll the cluster record first; these tests pin that they wait rather than fail.
+
+
+def pending_then_running(base, name, pending=2):
+    """Status GET that reports PENDING `pending` times, then RUNNING."""
+    seen = {"n": 0}
+
+    def responder(request):
+        seen["n"] += 1
+        status = "PENDING" if seen["n"] <= pending else "RUNNING"
+        return httpx.Response(200, json={"name": name, "status": status})
+
+    respx.get(f"{base}/api/v1/clusters/{name}").mock(side_effect=responder)
+    return seen
+
+
+@respx.mock
+async def test_scale_waits_for_a_pending_scheduler(user_ctx, monkeypatch):
+    monkeypatch.setattr(dask, "SCHEDULER_POLL_INTERVAL", 0)
+    polls = pending_then_running(K8S, "c1", pending=2)
+    scale = respx.post(f"{K8S}/api/v1/clusters/c1/scale").respond(204)
+
+    out = await register_tools(dask).tools["scale_dask_cluster"]("c1", 4)
+
+    assert polls["n"] == 3  # PENDING, PENDING, RUNNING
+    assert scale.called
+    assert json.loads(scale.calls[0].request.content) == {"count": 4}
+    assert "scaling to 4 worker(s)" in out
+
+
+@respx.mock
+async def test_scale_does_not_post_when_the_scheduler_never_comes_up(
+    user_ctx, monkeypatch
+):
+    monkeypatch.setattr(dask, "SCHEDULER_POLL_INTERVAL", 0)
+    monkeypatch.setattr(dask, "SCHEDULER_READY_TIMEOUT", 0.01)
+    respx.get(f"{K8S}/api/v1/clusters/c1").respond(
+        200, json={"name": "c1", "status": "PENDING"}
+    )
+    scale = respx.post(f"{K8S}/api/v1/clusters/c1/scale").respond(204)
+
+    out = await register_tools(dask).tools["scale_dask_cluster"]("c1", 4)
+
+    assert not scale.called
+    assert "No scale request was sent" in out
+    assert "still PENDING" in out
+    assert "query_dask_logs" in out
+
+
+@pytest.mark.parametrize("status", ["STOPPED", "FAILED", "STOPPING"])
+@respx.mock
+async def test_scale_refuses_a_cluster_that_will_never_run(user_ctx, status):
+    respx.get(f"{K8S}/api/v1/clusters/c1").respond(
+        200, json={"name": "c1", "status": status}
+    )
+    scale = respx.post(f"{K8S}/api/v1/clusters/c1/scale").respond(204)
+
+    message = await failure(register_tools(dask).tools["scale_dask_cluster"]("c1", 4))
+
+    assert not scale.called
+    assert status in message
+    assert "will not accept workers" in message
+
+
+@respx.mock
+async def test_create_waits_for_the_scheduler_before_scaling(user_ctx, monkeypatch):
+    """The regression: create used to race the scheduler and scale 0 workers."""
+    monkeypatch.setattr(dask, "SCHEDULER_POLL_INTERVAL", 0)
+    respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.slow"})
+    polls = pending_then_running(K8S, "cms.slow", pending=3)
+    scale = respx.post(f"{K8S}/api/v1/clusters/cms.slow/scale").respond(204)
+
+    out = await register_tools(dask).tools["create_dask_cluster"](
+        FakeCtx(),
+        gateway="k8s",
+        env_source="global",
+        worker_cores=1,
+        worker_memory=4,
+        n_workers=2,
+    )
+
+    assert polls["n"] == 4
+    assert scale.called
+    assert json.loads(scale.calls[0].request.content) == {"count": 2}
+    assert "Scaling to 2 worker(s)." in out
+    # the count is a Prometheus scrape, so say it lags before the caller looks
+    assert "trail reality" in out
+
+
+@respx.mock
+async def test_create_reports_a_scheduler_that_never_came_up(user_ctx, monkeypatch):
+    monkeypatch.setattr(dask, "SCHEDULER_POLL_INTERVAL", 0)
+    monkeypatch.setattr(dask, "SCHEDULER_READY_TIMEOUT", 0.01)
+    respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.stuck"})
+    respx.get(f"{K8S}/api/v1/clusters/cms.stuck").respond(
+        200, json={"name": "cms.stuck", "status": "PENDING"}
+    )
+    scale = respx.post(f"{K8S}/api/v1/clusters/cms.stuck/scale").respond(204)
+
+    out = await register_tools(dask).tools["create_dask_cluster"](
+        FakeCtx(),
+        gateway="k8s",
+        env_source="global",
+        worker_cores=1,
+        worker_memory=4,
+        n_workers=2,
+    )
+
+    # the cluster exists, so this is a result with a next step, not a failure
+    assert not scale.called
+    assert "cms.stuck" in out
+    assert "Created with 0 workers" in out
+    assert "still PENDING" in out
+    assert "scale_dask_cluster('cms.stuck', 2, gateway='k8s')" in out
+
+
+@respx.mock
+async def test_create_with_zero_workers_never_waits(user_ctx):
+    """No scale to make, so nothing should poll the cluster record."""
+    respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.empty"})
+    status = respx.get(f"{K8S}/api/v1/clusters/cms.empty")
+
+    out = await register_tools(dask).tools["create_dask_cluster"](
+        FakeCtx(),
+        gateway="k8s",
+        env_source="global",
+        worker_cores=1,
+        worker_memory=4,
+        n_workers=0,
+    )
+
+    assert not status.called
+    assert "starts with 0 workers" in out
+
+
+@respx.mock
+async def test_running_cluster_costs_one_status_check(user_ctx):
+    """The normal path must not add polling latency."""
+    status = scheduler_running(K8S, "c1")
+    respx.post(f"{K8S}/api/v1/clusters/c1/scale").respond(204)
+
+    await register_tools(dask).tools["scale_dask_cluster"]("c1", 1)
+
+    assert status.call_count == 1
 
 
 # ── _build_cluster_options / create / options ─────────────────────────────────
@@ -296,6 +454,7 @@ async def test_list_cluster_options(user_ctx):
 @respx.mock
 async def test_create_cluster_explicit_args_pixi_then_scale(user_ctx):
     create = respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.abc"})
+    scheduler_running(K8S, "cms.abc")
     scale = respx.post(f"{K8S}/api/v1/clusters/cms.abc/scale").respond(204)
 
     tools = register_tools(dask).tools
@@ -430,6 +589,7 @@ async def test_create_elicits_conda_path_on_slurm(user_ctx):
 @respx.mock
 async def test_create_elicits_preset_count_scales(user_ctx):
     respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.n"})
+    scheduler_running(K8S, "cms.n")
     scale = respx.post(f"{K8S}/api/v1/clusters/cms.n/scale").respond(204)
 
     ctx = FakeCtx(
@@ -449,6 +609,7 @@ async def test_create_elicits_preset_count_scales(user_ctx):
 @respx.mock
 async def test_create_elicits_custom_size_and_count(user_ctx):
     create = respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.x"})
+    scheduler_running(K8S, "cms.x")
     scale = respx.post(f"{K8S}/api/v1/clusters/cms.x/scale").respond(204)
 
     ctx = FakeCtx(
@@ -819,6 +980,7 @@ async def test_create_gateway_errors_and_scale_failures(user_ctx):
     )
 
     respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.s"})
+    scheduler_running(K8S, "cms.s")
     respx.post(f"{K8S}/api/v1/clusters/cms.s/scale").mock(
         side_effect=ConnectError("down")
     )
@@ -828,6 +990,7 @@ async def test_create_gateway_errors_and_scale_failures(user_ctx):
     assert "scale_dask_cluster('cms.s', 2, gateway='k8s')" in out
 
     respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.s2"})
+    scheduler_running(K8S, "cms.s2")
     respx.post(f"{K8S}/api/v1/clusters/cms.s2/scale").respond(500, text="no")
     out = await tools["create_dask_cluster"](FakeCtx(), **kwargs)
     assert "returned HTTP 500 while trying to scale to 2 worker(s)" in out
@@ -1362,6 +1525,13 @@ async def test_gateway_answers_are_translated(
     user_ctx, tool, arguments, method, url, answer, cls, fragments
 ):
     import errors
+
+    # scale_dask_cluster waits for the scheduler before scaling; these cases
+    # are about how the scale POST itself is translated, so let that check pass.
+    if tool == "scale_dask_cluster":
+        scheduler_running(
+            dask._GATEWAYS[arguments.get("gateway", "k8s")], arguments["cluster_name"]
+        )
 
     route = respx.request(method, url)
     if isinstance(answer, Exception):
