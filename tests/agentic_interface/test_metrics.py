@@ -205,6 +205,30 @@ async def test_instrumented_tool_records_username_from_context():
     assert _tool_counter_value("whoami", "success", username="alice") == before + 1
 
 
+async def test_needs_choices_returns_the_help_text_as_a_normal_result():
+    """NeedsChoices is an instruction to the agent, not an error.
+
+    The result must carry structuredContent as well as content: every tool is
+    `-> str`, so FastMCP declares an outputSchema and the low-level server
+    replaces a structured-content-less result with an output-validation error.
+    """
+    from tools.elicitation import NeedsChoices
+
+    mcp = _instrumented()
+
+    @mcp.tool()
+    async def pick() -> str:
+        raise NeedsChoices("Ask the user for a backend, then call again.")
+
+    before = _tool_counter_value("pick", "needs_input")
+
+    content, structured = await mcp.call_tool("pick", {})
+
+    assert content[0].text == "Ask the user for a backend, then call again."
+    assert structured == {"result": "Ask the user for a backend, then call again."}
+    assert _tool_counter_value("pick", "needs_input") == before + 1
+
+
 async def test_instrumented_tool_records_exception():
     from mcp.server.fastmcp.exceptions import ToolError
 
