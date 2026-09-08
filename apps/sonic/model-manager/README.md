@@ -25,7 +25,9 @@ can be loaded and unloaded, but not deleted.
 ## Deployment
 
 Flux deploys it from [`deploy/experimental/`](../../../deploy/experimental/kustomization.yaml) into
-the `cms` namespace, alongside the [`supersonic`](../supersonic/) release it manages. Credentials
+the `cms` namespace, alongside the [`supersonic-af`](../supersonic-af/) release it manages — the
+one SuperSONIC release with a PVC model repository, so the only one there is anything to manage.
+Credentials
 are not in git — create the Secret once, or the HelmRelease keeps retrying:
 
 ```bash
@@ -42,16 +44,16 @@ kubectl -n cms port-forward svc/supersonic-model-manager 8080:80
 Standalone install:
 
 ```bash
-helm install model-manager ./chart -n cms -f values-supersonic.yaml --set auth.password='...'
+helm install model-manager ./chart -n cms -f values-supersonic-af.yaml --set auth.password='...'
 ```
 
 `supersonicRelease` is the value worth setting: it derives the Triton pod selector
 (`app.kubernetes.io/component=triton,app.kubernetes.io/instance=<release>`) and the Prometheus
 matcher (`release="<release>"`). The latter must be overridden when a ServiceMonitor-based
-Prometheus scrapes Triton without adding a `release` label — as in `values-supersonic.yaml`.
+Prometheus scrapes Triton without adding a `release` label — as in `values-supersonic-af.yaml`.
 
 To let Triton serve what you upload, point it at the same claim — this is how
-[`apps/sonic/supersonic/values.yaml`](../supersonic/values.yaml) is wired:
+[`apps/sonic/supersonic-af/values.yaml`](../supersonic-af/values.yaml) is wired:
 
 ```yaml
 triton:

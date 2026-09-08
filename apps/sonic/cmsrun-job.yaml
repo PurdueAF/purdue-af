@@ -15,8 +15,10 @@ spec:
         - name: cmsrun-job
           image: geddes-registry.rcac.purdue.edu/docker-hub-cache/kondratyevd/sonic-client-cms-miniaod:cmssw_17
           args:
-            - "--address=supersonic-dev.cms.svc.cluster.local"
-            # - "--address=cms-run3-miniaod.sonic.geddes.rcac.purdue.edu"
+            # Any SuperSONIC release in cms; all serve gRPC on 8001.
+            - "--address=supersonic.cms.svc.cluster.local"
+            # - "--address=supersonic-pr.cms.svc.cluster.local"
+            # - "--address=supersonic-interlink.cms.svc.cluster.local"
             - "--port=8001"
             # - "--redir=root://cmsxrootd.fnal.gov/"
             - "--redir=root://eos.cms.rcac.purdue.edu/"

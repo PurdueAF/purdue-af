@@ -1,7 +1,7 @@
 apiVersion: helm.toolkit.fluxcd.io/v2beta1
 kind: HelmRelease
 metadata:
-  name: supersonic
+  name: supersonic-af
 spec:
   suspend: false
   interval: 1m
@@ -22,14 +22,14 @@ spec:
       retries: -1
   valuesFrom:
     - kind: ConfigMap
-      name: supersonic-config
+      name: supersonic-af-config
       valuesKey: values.yaml
   postRenderers:
     - kustomize:
         patches:
           - target:
               kind: ScaledObject
-              name: "supersonic-keda-so"
+              name: "supersonic-af-keda-so"
             patch: |
               - op: add
                 path: /spec/triggers/0/metadata/timeout
@@ -39,7 +39,7 @@ spec:
           # listens on 9090. Rewrite the provisioned ConfigMap after render.
           - target:
               kind: ConfigMap
-              name: "supersonic-grafana"
+              name: "supersonic-af-grafana"
             patch: |
               - op: replace
                 path: /data/datasources.yaml
@@ -61,7 +61,7 @@ spec:
           # before envoy starts, so Ready≠containerStarted.
           - target:
               kind: Deployment
-              name: "supersonic-envoy"
+              name: "supersonic-af-envoy"
             patch: |
               - op: add
                 path: /spec/strategy

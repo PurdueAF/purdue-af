@@ -1,0 +1,79 @@
+admin:
+  access_log_path: /tmp/admin_access.log
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 9901
+static_resources:
+  listeners:
+    - name: listener_grpc
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 8001
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                generate_request_id: true
+                stat_prefix: ingress_grpc
+                codec_type: AUTO
+                route_config:
+                  name: local_route_grpc
+                  virtual_hosts:
+                    - name: backend_grpc
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: triton_grpc_service
+                            timeout: 0s
+                            retry_policy:
+                              retry_on: 5xx,gateway-error,reset,reset-before-request,connect-failure,refused-stream,retriable-status-codes,cancelled,deadline-exceeded,internal,resource-exhausted,unavailable
+                              num_retries: 15
+                              retriable_status_codes:
+                                - 404
+                                - 502
+                                - 503
+                                - 504
+                              retry_host_predicate:
+                                - name: envoy.retry_host_predicates.previous_hosts
+                                  typed_config:
+                                    "@type": type.googleapis.com/envoy.extensions.retry.host.previous_hosts.v3.PreviousHostsPredicate
+                              host_selection_retry_max_attempts: 10
+                              retry_back_off:
+                                base_interval: 0.2s
+                                max_interval: 5s
+                http_filters:
+                  - name: envoy.filters.http.buffer
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.Buffer
+                      max_request_bytes: 33554432
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                http2_protocol_options: {}
+  clusters:
+    - name: triton_grpc_service
+      connect_timeout: 0.25s
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      outlier_detection:
+        split_external_local_origin_errors: true
+        consecutive_5xx: 5
+        consecutive_gateway_failure: 5
+        interval: 10s
+        base_ejection_time: 30s
+        max_ejection_percent: 50
+      http2_protocol_options: {}
+      load_assignment:
+        cluster_name: triton_grpc_service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: supersonic-interlink-triton
+                      port_value: 8001
