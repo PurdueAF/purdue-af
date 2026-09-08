@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "How the facility's agentic features are actually used: which agents people run, on which interface, what they ask them to do, and what that costs. Three sources — OpenTelemetry from the agent CLIs (Prometheus + Loki), the AF MCP server's own metrics (Rancher Prometheus), and the wrapper records that cover agents with no telemetry of their own. Prompts, responses, shell commands and tool inputs are never collected; see docs/docs/guide-agentic-telemetry.md.",
+  "description": "How the facility's agentic features are used: which agents people run, on which interface, what they ask them to do, and what it costs. Sources: OTel from the agent CLIs, the AF MCP server's own metrics, and the wrapper records that cover agents with no telemetry. Prompts, responses, shell commands and tool inputs are never collected — see docs/docs/guide-agentic-telemetry.md.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -26,7 +26,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Distinct AF users whose Claude Code or codex reported at least one session in the last day. `user` comes from OTEL_RESOURCE_ATTRIBUTES, set per session by config-agents.sh.",
+      "description": "Distinct AF users whose agent reported a session in the last day.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -90,7 +90,7 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "Distinct users who invoked a tool on the AF MCP server — a subset of the agent users to the left: everyone here ran an agent, but plenty of agent use never touches the facility's own tools.",
+      "description": "Distinct users who invoked a tool on the AF MCP server — a subset of the agent users to the left.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -218,7 +218,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Total tokens across all users and models. Reported by the agent, so it covers the user's own account — the facility ships no model credentials.",
+      "description": "Total tokens, all users and models. Charged to the user's own account; the facility ships no model credentials.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -283,7 +283,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Sum of claude_code.cost.usage. This is the agent's own estimate of what the user's account was charged, not a facility cost.",
+      "description": "The agent's own estimate of what the user's account was charged, not a facility cost.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -412,7 +412,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "claude_code.session.count, split by the service that reported it. `job` carries service.name; agent-wrapper.sh sets OTEL_SERVICE_NAME per agent, so an agent started through the wrapper names itself here.",
+      "description": "claude_code.session.count by service name, which agent-wrapper.sh sets per agent.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -503,7 +503,7 @@
         "type": "loki",
         "uid": "loki"
       },
-      "description": "Counted from the agent_run records agent-wrapper.sh writes to the pod's stdout. This is the only signal for opencode, which exports no telemetry of its own, and a cross-check on the two agents that do — a gap between this and the panel to its left means telemetry was switched off, or the agent was started by its full path.",
+      "description": "From the wrapper's agent_run records — the only signal for opencode, and a cross-check on the two agents that export telemetry.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -607,7 +607,7 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "Handshakes on the AF MCP server, by the agent that opened them. The name comes from the clientInfo in the MCP initialize request and is clamped to an allowlist (docker/agentic-interface/clients.py); \"other\" is a harness nobody has classified yet — find its real name in the audit log at the bottom of this dashboard.",
+      "description": "Handshakes by the agent that opened them, from the MCP clientInfo. \"other\" is an unclassified harness; its real name is in the audit log below.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -698,7 +698,7 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "Where the session came from. `in_session` reached the ClusterIP Service directly, which only an AF session pod can do; `external` arrived through the JupyterHub proxy — a laptop, or an agent in a session that was pointed at the public URL.",
+      "description": "in_session reached the ClusterIP Service directly; external came through the JupyterHub proxy.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -789,7 +789,7 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "Which harness is actually doing the work, as opposed to merely connecting.",
+      "description": "Which harness does the work, as opposed to merely connecting.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1071,7 +1071,7 @@
         "type": "loki",
         "uid": "loki"
       },
-      "description": "From claude_code.tool_result events. Covers every tool the agent ran — Bash, Edit, WebFetch, and MCP tools from any server, not just the facility's. Tool *parameters* are dropped at the collector for everything except MCP tools; see apps/monitoring/alloy/values.yaml.",
+      "description": "Every tool the agent ran, including MCP tools from servers other than the facility's. Parameters are dropped at the collector except for MCP tools.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1160,7 +1160,7 @@
         "type": "loki",
         "uid": "loki"
       },
-      "description": "From claude_code.mcp_server_connection events — including servers a user configured themselves, which is the one place they become visible. A failed connection counts here too; check `status` in the log detail.",
+      "description": "Includes servers a user configured themselves. Failed connections count too — see status in the log detail.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1249,7 +1249,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "claude_code.token.usage. Split by user; add `type` to the grouping to separate input, output and cache reads.",
+      "description": "Add `type` to the grouping to split input, output and cache reads.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1341,7 +1341,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "claude_code.code_edit_tool.decision — how often users accept what an agent proposes. A useful proxy for whether agent output is landing.",
+      "description": "How often users accept what an agent proposes.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1432,7 +1432,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "claude_code.lines_of_code.count, by whether the agent added or removed them.",
+      "description": "claude_code.lines_of_code.count, by added or removed.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1536,7 +1536,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "terminal.type as the agent detected it: `vscode` is the code-server interface, `tmux`/`xterm`-like values are a JupyterLab or SSH terminal. The clearest available answer to 'where do people run agents from'.",
+      "description": "terminal.type as the agent detected it: vscode is the code-server interface, tmux/xterm a JupyterLab or SSH terminal.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1625,7 +1625,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "app.entrypoint: `cli` is a terminal, `claude-vscode` the code-server extension, `sdk-*` a programmatic driver such as a jupyter-ai persona. Enabled by OTEL_METRICS_INCLUDE_ENTRYPOINT in the managed settings.",
+      "description": "cli is a terminal, claude-vscode the code-server extension, sdk-* a programmatic driver such as a jupyter-ai persona.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1816,7 +1816,7 @@
         "type": "loki",
         "uid": "loki"
       },
-      "description": "One line per tool invocation on the AF MCP server: who, which tool, which harness, from where, and the outcome. `client_raw` is the harness's own name for itself — the way an unclassified client is identified before adding it to clients._CLIENT_PATTERNS.",
+      "description": "One line per tool invocation: who, which tool, which harness, from where, and the outcome. client_raw is the harness's own name for itself.",
       "gridPos": {
         "h": 11,
         "w": 24,
@@ -1856,7 +1856,7 @@
         "type": "loki",
         "uid": "loki"
       },
-      "description": "The raw agent_run records from agent-wrapper.sh: agent, version, user, duration and exit code, one pair of lines per invocation.",
+      "description": "Raw agent_run records: agent, version, user, duration and exit code.",
       "gridPos": {
         "h": 10,
         "w": 24,

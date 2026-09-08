@@ -1,25 +1,13 @@
 #!/usr/bin/env python3
-"""Maintain the Purdue AF ``[otel]`` section inside ``~/.codex/config.toml``.
-
-Codex has no managed-settings equivalent: its only configuration file is the
-user's own, which ``codex mcp add`` also rewrites. So the AF telemetry block
-is maintained the way the agent instruction files are — a marked section that
-is replaced on every session start, with everything outside it left alone.
+"""Maintain the Purdue AF ``[otel]`` block in a user-owned ``config.toml``.
 
     otel-toml-block.py <block.toml|-> <target.toml>
     otel-toml-block.py --remove <target.toml>
 
-"-" reads the block from stdin, which is how config-agents.sh passes it: the
-hook runs as root and this script as the session user, so a temp file would
-have to be made world-readable to cross that boundary.
-
-A TOML table header owns every key after it, so the block always goes at the
-end of the file. Any existing ``[otel]`` table is removed first, marked or
-not — ``codex mcp add`` rewrites this file through its own TOML writer and
-does not promise to keep the markers, and a duplicate table would not parse.
-
-The result is parsed before it is written; if it would not, the original is
-left alone and the exit status is 1.
+The block always goes last (a table header owns every key after it), any
+existing ``[otel]`` table is removed first (``codex mcp add`` rewrites this
+file and may drop the markers; a duplicate table would not parse), and the
+result is parsed before it is written.
 """
 
 from __future__ import annotations

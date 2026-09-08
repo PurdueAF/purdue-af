@@ -85,17 +85,13 @@ _config_agents() {
 		"codex mcp remove '${MCP_NAME}'" \
 		"codex mcp add '${MCP_NAME}' --url '${MCP_URL}' --bearer-token-env-var JUPYTERHUB_API_TOKEN"
 
-	# Agent telemetry. What is collected, and what is not, is stated in
-	# docs/docs/guide-agentic-telemetry.md; these settings and the Alloy
-	# redaction are what hold it true.
-	#
-	# Exported rather than set in the pod spec: start.sh sources this hook, so
-	# the value reaches the notebook server and everything under it without
-	# {username} templating. agent-wrapper.sh appends the per-agent half.
+	# Agent telemetry; docs/docs/guide-agentic-telemetry.md states the policy
+	# these settings and the Alloy redaction implement. Exported rather than
+	# set in the pod spec because start.sh sources this hook, so the value
+	# reaches every process under the notebook server.
 	export OTEL_RESOURCE_ATTRIBUTES="user=${NB_USER},af.facility=purdue-af"
 
-	# Managed settings outrank every level a user can write, and live under
-	# /etc where a session user cannot edit them.
+	# Managed settings outrank anything a user can write, under /etc.
 	if mkdir -p "$(dirname "${CLAUDE_MANAGED}")" 2>/dev/null &&
 		cat >"${CLAUDE_MANAGED}" <<-JSON
 			{
@@ -123,15 +119,12 @@ _config_agents() {
 		echo "config-agents: WARNING could not write ${CLAUDE_MANAGED}" >&2
 	fi
 
-	# Per-signal endpoints above, never the OTEL_EXPORTER_OTLP_ENDPOINT base:
-	# the pod points that one at Tempo, and a base endpoint would send agent
-	# telemetry there instead.
+	# Per-signal endpoints above, never the OTEL_EXPORTER_OTLP_ENDPOINT base —
+	# the pod points that one at Tempo.
 	#
-	# Codex has no managed-settings equivalent, so the same policy goes into
-	# the user's own config.toml. Must run AFTER `codex mcp add`, which
-	# rewrites that file and may drop the block's markers. On stdin because
-	# this hook runs as root and the script as the user: mktemp's 0600 would
-	# be unreadable across that.
+	# Codex has no managed settings, so the policy goes in the user's own
+	# config.toml. After `codex mcp add`, which rewrites that file. On stdin
+	# because root writes and the user reads: mktemp's 0600 would not cross.
 	if _as_user "'${PYTHON}' /usr/local/bin/otel-toml-block.py - '${NEW_HOME}/.codex/config.toml'" <<-TOML
 		[otel]
 		environment = "purdue-af"

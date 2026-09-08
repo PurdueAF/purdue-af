@@ -23,8 +23,7 @@ controller:
     cms-af-dev: "true"
 
 # Top level, not controller.service — the chart does not read that key, so the
-# "enabled: false" that used to sit there disabled nothing. Session pods reach
-# the OTLP receiver below at alloy.cms.svc.cluster.local.
+# "enabled: false" that used to sit there disabled nothing.
 service:
   enabled: true
   type: ClusterIP
@@ -38,8 +37,7 @@ rbac:
 alloy:
   initialDelaySeconds: 30
   timeoutSeconds: 5
-  # OTLP/HTTP intake for the agents; the chart puts extraPorts on both the
-  # container and the Service.
+  # OTLP/HTTP intake for the agents, on the container and the Service.
   extraPorts:
     - name: otlp-http
       port: 4318
@@ -132,9 +130,7 @@ alloy:
       // ── agent telemetry ───────────────────────────────────────────────
       //
       // Claude Code and codex export OTel themselves; config-agents.sh points
-      // them here. Both signals could reach their backends directly, but they
-      // come through Alloy so that the redaction below is a hop the data
-      // cannot skip.
+      // them here. Via Alloy so the redaction below cannot be skipped.
 
       otelcol.receiver.otlp "agents" {
         http {
@@ -147,14 +143,11 @@ alloy:
         }
       }
 
-      // Raw request/response bodies, if a user turns OTEL_LOG_RAW_API_BODIES
-      // on for themselves. Whole conversations — dropped as a class.
+      // Whole conversations, if a user sets OTEL_LOG_RAW_API_BODIES.
       otelcol.processor.filter "agents" {
         error_mode = "ignore"
         logs {
-          // Matched by suffix: the docs give the event id as
-          // claude_code.api_request_body but the attribute as
-          // "api_request_body", and this drops both.
+          // By suffix: the event id is prefixed, the attribute is not.
           log_record = [
             `IsMatch(attributes["event.name"], "api_(request|response)_body$")`,
           ]
@@ -164,15 +157,14 @@ alloy:
         }
       }
 
-      // What may be kept. The managed settings bind only Claude Code launched
-      // with them; this binds anything that can reach the port.
+      // The managed settings bind only Claude Code launched with them; this
+      // binds anything that can reach the port.
       otelcol.processor.transform "agents" {
         error_mode = "ignore"
 
-        // The user's model-provider account. OTEL_RESOURCE_ATTRIBUTES already
-        // carries the AF username, which is what everything else joins on —
-        // and resource_to_telemetry_conversion below would make labels of
-        // whatever survives.
+        // The model-provider account; the AF username is the identity we
+        // join on. resource_to_telemetry_conversion would label whatever
+        // survives here.
         metric_statements {
           context = "resource"
           statements = [
@@ -202,9 +194,8 @@ alloy:
           statements = [
             `delete_key(attributes, "prompt")`,
             `delete_key(attributes, "response")`,
-            // tool_parameters survives only for MCP tools, where it carries
-            // mcp_server_name/mcp_tool_name — the reason OTEL_LOG_TOOL_DETAILS
-            // is on. Elsewhere it is the command line and the file content.
+            // Kept only for MCP tools, where it carries the server and tool
+            // name. Elsewhere it is the command line and file content.
             `delete_key(attributes, "tool_input")`,
             `delete_key(attributes, "tool_parameters") where attributes["tool_name"] == nil`,
             `delete_key(attributes, "tool_parameters") where not IsMatch(attributes["tool_name"], "^mcp__")`,
@@ -228,9 +219,8 @@ alloy:
       otelcol.exporter.prometheus "agents" {
         // claude_code_token_usage, not claude_code_token_usage_tokens_total.
         add_metric_suffixes = false
-        // Without this the AF username, which arrives as a resource
-        // attribute, never becomes a label. Safe only because the transform
-        // above already dropped the attributes that must not become one.
+        // The AF username arrives as a resource attribute; without this it
+        // never becomes a label.
         resource_to_telemetry_conversion = true
         include_target_info = false
         include_scope_info  = false
