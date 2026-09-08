@@ -9,25 +9,24 @@ Nothing else. `/work/pixi/global` stays a **plain pixi project directory**
 — no symlinks, no build copies, no versioned dirs. The only addition on
 the share is the persistent package cache at `/work/pixi/.cache`.
 
-## Why this shape
+## How a change arrives
 
-- **Validation happens upstream, once — and the delivery channel is the
-  gate.** `ci-pixi-global.yml` solves and import-smokes every lock change
-  inside the AF image, and the manifests reach the daemon via the Flux
+- **Validation is upstream, and the delivery channel is the gate.**
+  `ci-pixi-global.yml` solves and import-smokes every lock change inside
+  the AF image. The manifests then reach the daemon via the Flux
   `experimental` channel, which tracks the `main-validated` branch —
-  advanced only by the ci.yml publish stage behind `ci-ok`. Content that
-  did not pass the full pipeline structurally cannot arrive here. The daemon re-verifies
-  after each install (and every 6 h), so a broken-on-disk env alerts and
-  self-heals, but it doesn't duplicate CI's staging pipeline on `/work`.
-- **In-place updates are short and boring.** With the cache on the same
-  filesystem, `pixi install --locked` is mostly hardlink swaps. Running
-  kernels keep already-imported modules; as with any env update (manual
-  ones included), lazily-imported packages can mix until the kernel
-  restarts.
-- **No state files.** Drift = byte-difference between the mounted desired
-  manifests (ConfigMap, kubelet-refreshed ~1 min after Flux applies) and
-  the live ones. Change latency merge→live ≈ Flux interval + 1 min +
-  install time.
+  advanced only by the ci.yml publish stage behind `ci-ok` — so content
+  that did not pass the full pipeline cannot arrive here. The daemon
+  re-verifies after each install and every 6 h: a broken-on-disk env
+  alerts and self-heals.
+- **Updates are in place.** With the cache on the same filesystem,
+  `pixi install --locked` is mostly hardlink swaps. Running kernels keep
+  already-imported modules; as with any env update (manual ones
+  included), lazily-imported packages can mix until the kernel restarts.
+- **No state files.** Drift is a byte-difference between the mounted
+  desired manifests (ConfigMap, kubelet-refreshed ~1 min after Flux
+  applies) and the live ones. Change latency merge→live ≈ Flux interval
+  + 1 min + install time.
 
 ## Manual work / escape hatch
 

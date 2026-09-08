@@ -38,7 +38,7 @@ Hammer's 25.11 RPM.
 
 Copy from `/etc/slurm` on a login node **only** submit-client material:
 
-| Keep | Why |
+| Keep | What it is |
 | --- | --- |
 | `slurm.conf` | Required — `sbatch` / `squeue` find the controller |
 | `cgroup.conf`, `gres.conf` | Harmless; some client tools expect them |
