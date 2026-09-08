@@ -8,7 +8,11 @@ serverLoadThreshold: 20
 serverLoadMetric: 'sum (rate(nv_inference_queue_duration_us{app=~"supersonic", release=~"supersonic-interlink", namespace=~"cms"}[30s])) / sum ((rate(nv_inference_exec_count{app=~"supersonic", release=~"supersonic-interlink", namespace=~"cms"}[30s]) * 1000))'
 
 triton:
-  image: /cvmfs/unpacked.cern.ch/nvcr.io/nvidia/tritonserver:26.04-py3
+  # Singularity on Hammer runs the image straight off CVMFS, so the tag has to
+  # be one unpacked.cern.ch actually carries — today that is only 24.11-py3:
+  #   ls /cvmfs/unpacked.cern.ch/nvcr.io/nvidia/
+  # A tag that is not there fails the job at startup, not at pull time.
+  image: /cvmfs/unpacked.cern.ch/nvcr.io/nvidia/tritonserver:24.11-py3
   command: ["/bin/sh", "-c"]
   args:
     - |
