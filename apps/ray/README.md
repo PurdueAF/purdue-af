@@ -16,17 +16,22 @@ pip-installed by an init container.
 | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `helmrepo.yaml`                                                                                                 | `HelmRepository` for the KubeRay charts                                                                                                                                        |
 | `operator/`                                                                                                     | `kuberay-operator` 1.7.0 — the `ray.io` CRDs and the controller. Namespaced (`singleNamespaceInstall: true`), so both the watch and the RBAC stay in `cms`.                    |
-| `sonic-ray/chart/`                                                                                              | the `sonic-ray` chart: a `RayService` with a Triton in every worker pod and the forwarder as its Serve application, the ConfigMap carrying the forwarder, two metrics Services |
-| `sonic-ray/chart/files/sonic_ray/serve_app.py`                                                                  | the forwarder — one replica per pod, every unary RPC of `GRPCInferenceService` handed to the pod's Triton unchanged                                                            |
+| [`helm/sonic-ray/`](../../helm/sonic-ray)                                                                       | the `sonic-ray` chart: a `RayService` with a Triton in every worker pod and the forwarder as its Serve application, the ConfigMap carrying the forwarder, two metrics Services |
+| [`helm/sonic-ray/files/sonic_ray/serve_app.py`](../../helm/sonic-ray/files/sonic_ray/serve_app.py)              | the forwarder — one replica per pod, every unary RPC of `GRPCInferenceService` handed to the pod's Triton unchanged                                                            |
 | `sonic-ray/helmrelease.yaml`, `sonic-ray/values.yaml`                                                           | the AF release: `dependsOn` the operator, the Triton image, arguments, resources and probes, and the CVMFS model repositories                                                  |
 | [`tests/sonic_ray/`](../../tests/sonic_ray), [`tests/manifests/test_ray.py`](../../tests/manifests/test_ray.py) | source-level checks of the forwarder; rendered-chart checks of the pod, its ports, its probes and the scaling bounds                                                           |
 
-The chart lives here (like `apps/sonic/model-manager`) rather than being a raw
-`RayService` because of ordering: until the operator's chart has installed the
-`ray.io` CRDs that is an unknown kind, and kustomize-controller aborts an apply
-on the first one it meets — on a fresh cluster, before the HelmRelease that
-would install them. `dependsOn: kuberay-operator` is the fix, and a
-`HelmRelease` is the only object that can carry it.
+This is a chart and not a raw `RayService` because of ordering: until the
+operator's chart has installed the `ray.io` CRDs that is an unknown kind, and
+kustomize-controller aborts an apply on the first one it meets — on a fresh
+cluster, before the HelmRelease that would install them. `dependsOn:
+kuberay-operator` is the fix, and a `HelmRelease` is the only object that can
+carry it.
+
+The chart itself sits in [`helm/`](../../helm) rather than beside its release
+here, so that it can be lifted into a repository of its own if Ray earns a
+place — see [`helm/README.md`](../../helm/README.md). What stays in this
+directory is the AF deployment: the operator, and the release's own values.
 
 ## Shape
 

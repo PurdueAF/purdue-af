@@ -4,6 +4,6 @@ description: Triton Inference Server on Ray — Ray Serve's gRPC proxy carries T
 type: application
 version: 0.1.0
 appVersion: "26.04"
-home: https://github.com/PurdueAF/purdue-af/tree/main/apps/ray
+home: https://github.com/PurdueAF/purdue-af/tree/main/helm/sonic-ray
 annotations:
   artifacthub.io/category: ai-machine-learning

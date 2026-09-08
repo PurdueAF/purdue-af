@@ -36,7 +36,7 @@ repos:
         # Helm templates are Go templates, not YAML — prettier cannot parse
         # `{{- include ... | nindent 4 }}` and fails on the whole file.
         # Chart values.yaml (real YAML) is still formatted.
-        exclude: ^apps/.*/chart/templates/
+        exclude: ^(apps/.*/chart|helm/[^/]+)/templates/
 
       - id: shfmt
         name: shfmt
