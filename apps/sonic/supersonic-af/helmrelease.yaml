@@ -5,6 +5,11 @@ metadata:
 spec:
   suspend: false
   interval: 1m
+  # Helm waits for Triton to become Ready and gives up after 5m by default.
+  # A cold pull of the Triton image alone has taken ~10m on these nodes, so the
+  # upgrade timed out mid-pull, rolled back, timed out again, and churned —
+  # deleting the Envoy ServiceAccount out from under the running pod.
+  timeout: 20m
   chart:
     spec:
       chart: helm/supersonic
