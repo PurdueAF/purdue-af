@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: supersonic-interlink-pod-pruner
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: supersonic-interlink-pod-pruner
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: supersonic-interlink-pod-pruner
+subjects:
+  - kind: ServiceAccount
+    name: supersonic-interlink-pod-pruner
+roleRef:
+  kind: Role
+  name: supersonic-interlink-pod-pruner
+  apiGroup: rbac.authorization.k8s.io

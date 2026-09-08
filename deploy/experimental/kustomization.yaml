@@ -40,6 +40,9 @@ resources:
   - ../../apps/sonic/supersonic-pr/gitrepo.yaml
   # Triton offloaded to Slurm on Hammer through the interlink-hammer node.
   - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
+  # Sweeps the Failed Triton pods interLink leaves behind, keeping the newest.
+  - ../../apps/sonic/supersonic-interlink/pod-pruner-rbac.yaml
+  - ../../apps/sonic/supersonic-interlink/pod-pruner-cronjob.yaml
   # Model repository dashboard for the supersonic-af release above. Needs the
   # supersonic-model-manager-auth Secret to exist in the namespace.
   - ../../apps/sonic/model-manager/helmrelease.yaml

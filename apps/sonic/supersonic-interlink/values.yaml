@@ -2,9 +2,20 @@
 # Hammer through interLink, while Envoy stays on the AF nodes. Moved here
 # from PurdueAF/sonic (namespace `sonic`, release `sonic-interlink`); it
 # now uses this repo's own interLink node (apps/interlink/hammer) and the
-# cms Prometheus.
+# cms Prometheus, and holds no Slurm allocation while idle.
 
 serverLoadThreshold: 20
+
+# Waking means queueing a Slurm job on Hammer and waiting for it to start, not
+# scheduling a pod, so the window is minutes rather than seconds. 900s is a
+# guess at Hammer's queue for one GPU; if RepositoryIndex starts timing out,
+# this and idle_timeout in envoy-config.yaml are the two numbers to raise
+# (the chart wants idle_timeout >= readyTimeoutSeconds + 120).
+scaleFromZero:
+  enabled: true
+  readyTimeoutSeconds: 900
+  holdMinReplicasSeconds: 900
+
 serverLoadMetric: 'sum (rate(nv_inference_queue_duration_us{app=~"supersonic", release=~"supersonic-interlink", namespace=~"cms"}[30s])) / sum ((rate(nv_inference_exec_count{app=~"supersonic", release=~"supersonic-interlink", namespace=~"cms"}[30s]) * 1000))'
 
 triton:
@@ -77,8 +88,9 @@ envoy:
   # inference ingress on any SuperSONIC release here.
   ingress:
     enabled: false
-  # Hand-written Envoy config (retries and outlier ejection tuned for a Triton
-  # that lives behind a Slurm-side wstunnel), from envoy-config.yaml.
+  # Hand-written Envoy config (retries, outlier ejection and a 32 MB request
+  # buffer for a Triton behind a Slurm-side wstunnel, plus everything
+  # scaleFromZero needs), from envoy-config.yaml.
   external_config:
     load_from_configmap: true
     configmap_name: "supersonic-interlink-envoy-config-custom"
@@ -86,13 +98,10 @@ envoy:
 
 keda:
   enabled: true
-  # The one release here that cannot scale from zero. The chart refuses the
-  # combination outright ("scaleFromZero.enabled is incompatible with
-  # envoy.external_config.load_from_configmap"): the wake path is a Lua filter
-  # the chart injects into the Envoy config it generates, and this release
-  # supplies its own. Waking would also mean queueing a Slurm job inside
-  # readyTimeoutSeconds, which Hammer does not promise.
-  minReplicaCount: 1
+  # No Slurm allocation held while idle. RepositoryIndex raises this to 1
+  # through the Envoy admission sidecar; the wake path lives in
+  # envoy-config.yaml, since a custom config replaces the generated one.
+  minReplicaCount: 0
   maxReplicaCount: 10
   scaleUp:
     stabilizationWindowSeconds: 120

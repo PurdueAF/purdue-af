@@ -1,0 +1,58 @@
+# Triton for this release runs on Slurm through interLink. When the Slurm job
+# exits, the virtual kubelet marks the pod Failed rather than restarting the
+# container in place, so the ReplicaSet creates a replacement and the corpse
+# stays: one new Failed pod every couple of minutes for as long as the job
+# keeps failing. Nothing in Kubernetes sweeps them — PodGC only fires at the
+# cluster-wide terminated-pod threshold, and ttlSecondsAfterFinished is a Job
+# field. This keeps the newest one, for diagnosis, and deletes the rest.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: supersonic-interlink-pod-pruner
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  suspend: false
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 120
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          enableServiceLinks: false
+          serviceAccountName: supersonic-interlink-pod-pruner
+          restartPolicy: Never
+          nodeSelector: { "cms-af-prod": "true" }
+          tolerations:
+            - key: "hub.jupyter.org/dedicated"
+              operator: "Equal"
+              value: "cms-af"
+              effect: "NoSchedule"
+          containers:
+            - name: pruner
+              image: alpine/kubectl:1.34.1
+              command:
+                - /bin/sh
+                - -c
+                # Oldest first; `sed $d` drops the newest, which is kept for
+                # diagnosis. Both are busybox-safe (no tac, no head -n -1).
+                # An empty list stays empty through sed and xargs -r runs
+                # nothing, so no failed pods is a no-op rather than an error.
+                - |
+                  set -eu
+                  kubectl get pods \
+                    -l app.kubernetes.io/instance=supersonic-interlink,app.kubernetes.io/component=triton \
+                    --field-selector status.phase=Failed \
+                    --sort-by=.metadata.creationTimestamp \
+                    -o name \
+                  | sed '$d' | xargs -r kubectl delete --wait=false
+              resources:
+                requests:
+                  memory: "32Mi"
+                  cpu: "10m"
+                limits:
+                  memory: "128Mi"
+                  cpu: "200m"
