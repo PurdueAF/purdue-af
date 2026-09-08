@@ -30,6 +30,17 @@ spec:
           serviceAccountName: af-userlist-sync
           restartPolicy: Never
           nodeSelector: { "cms-af-prod": "true" }
+          # auth.hammer answers only from 172.18.29.0/24 (the paf-* nodes);
+          # the 7 geddes cms-af-prod nodes are 172.21.160.0/24 and carry
+          # role=storage-node, so excluding that label leaves exactly the
+          # nodes that can reach it. Drop once RCAC opens 172.21.160.0/24.
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: role
+                        operator: DoesNotExist
           tolerations:
             - key: "hub.jupyter.org/dedicated"
               operator: "Equal"
