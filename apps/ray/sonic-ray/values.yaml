@@ -67,7 +67,7 @@ triton:
   # network namespace. gRPC keeps 8001, which is what the forwarder dials.
   httpPort: 8100
   grpcPort: 8001
-  # The cluster's CVMFS claim (apps/infrastructure/cvmfs-pvc.yaml), read-only.
+  # The cluster's CVMFS claim (apps/storage/cvmfs-pvc.yaml), read-only.
   # HostToContainer: CVMFS repositories are autofs mounts on the node, and the
   # pod must see the ones mounted after it started.
   modelRepository:
