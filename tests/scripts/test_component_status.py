@@ -128,7 +128,7 @@ def test_generator_owner_falls_back_to_its_own_name(cs):
 
 
 def test_slugs_are_unique_across_channels(cs, components):
-    """apps/infrastructure and af-monitoring are deployed in BOTH channels;
+    """apps/storage and af-monitoring are deployed in BOTH channels;
     colliding slugs would make one overwrite the other's badge."""
     slugs = [
         cs.slugify(channel, component)

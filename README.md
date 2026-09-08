@@ -36,7 +36,6 @@ Whether each component on the cluster is running what is on `main`
 **Core** — the newest platform tag, currently ![platform][platform-version]
 
 ![af-users-graph][core-af-utils-af-users-graph]
-![infrastructure][core-infrastructure]
 ![af-x509-secrets][core-jupyterhub-af-x509-secrets]
 ![database-backup][core-jupyterhub-database-backup]
 ![jupyterhub][core-jupyterhub-jupyterhub]
@@ -45,6 +44,7 @@ Whether each component on the cluster is running what is on `main`
 ![af-monitoring][core-monitoring-af-monitoring]
 ![grafana][core-monitoring-grafana]
 ![prometheus][core-monitoring-prometheus]
+![storage][core-storage]
 
 **Experimental** — `main-validated`
 
@@ -54,7 +54,6 @@ Whether each component on the cluster is running what is on `main`
 ![dask-gateway-k8s][experimental-dask-gateway-dask-gateway-k8s]
 ![dask-gateway-k8s-interlink][experimental-dask-gateway-dask-gateway-k8s-interlink]
 ![dask-gateway-k8s-slurm][experimental-dask-gateway-dask-gateway-k8s-slurm]
-![infrastructure][experimental-infrastructure]
 ![interlink-gautschi][experimental-interlink-gautschi]
 ![interlink-hammer][experimental-interlink-hammer]
 ![interlink-negishi][experimental-interlink-negishi]
@@ -76,6 +75,7 @@ Whether each component on the cluster is running what is on `main`
 ![model-manager][experimental-sonic-model-manager]
 ![kuberay-operator][experimental-ray-operator]
 ![sonic-ray][experimental-ray-sonic-ray]
+![storage][experimental-storage]
 
 **Images** — `purdue-af` is released on its own semver stream and pinned at
 ![AF image][af-image-version]. `agentic-interface` is auto-versioned (every
@@ -109,7 +109,6 @@ How a change reaches the cluster, version rules and rollback:
 [RELEASING.md](RELEASING.md).
 
 [core-af-utils-af-users-graph]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-af-utils-af-users-graph.json
-[core-infrastructure]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-infrastructure.json
 [core-jupyterhub-af-x509-secrets]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-jupyterhub-af-x509-secrets.json
 [core-jupyterhub-database-backup]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-jupyterhub-database-backup.json
 [core-jupyterhub-jupyterhub]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-jupyterhub-jupyterhub.json
@@ -118,13 +117,13 @@ How a change reaches the cluster, version rules and rollback:
 [core-monitoring-af-monitoring]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-monitoring-af-monitoring.json
 [core-monitoring-grafana]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-monitoring-grafana.json
 [core-monitoring-prometheus]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-monitoring-prometheus.json
+[core-storage]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-storage.json
 [experimental-af-utils-pixi-global-sync]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-af-utils-pixi-global-sync.json
 [experimental-af-utils-slurm-probes]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-af-utils-slurm-probes.json
 [experimental-agentic-interface]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-agentic-interface.json
 [experimental-dask-gateway-dask-gateway-k8s]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-dask-gateway-dask-gateway-k8s.json
 [experimental-dask-gateway-dask-gateway-k8s-interlink]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-dask-gateway-dask-gateway-k8s-interlink.json
 [experimental-dask-gateway-dask-gateway-k8s-slurm]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-dask-gateway-dask-gateway-k8s-slurm.json
-[experimental-infrastructure]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-infrastructure.json
 [experimental-interlink-gautschi]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-gautschi.json
 [experimental-interlink-hammer]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-hammer.json
 [experimental-interlink-negishi]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-negishi.json
@@ -146,6 +145,7 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-sonic-supersonic-pr]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic-pr.json
 [experimental-ray-operator]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-ray-operator.json
 [experimental-ray-sonic-ray]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-ray-sonic-ray.json
+[experimental-storage]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-storage.json
 [image-purdue-af]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-purdue-af.json
 [image-agentic-interface]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-agentic-interface.json
 [image-af-pod-monitor]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-af-pod-monitor.json

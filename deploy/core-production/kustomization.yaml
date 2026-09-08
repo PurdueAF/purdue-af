@@ -7,10 +7,6 @@ resources:
   - ../../apps/af-utils/af-users-graph/ingress.yaml
   - ../../apps/af-utils/af-users-graph/cronjob.yaml
 
-  - ../../apps/infrastructure/af-shared-storage.yaml
-  - ../../apps/infrastructure/cvmfs-pvc.yaml
-  - ../../apps/infrastructure/docker-secret.yaml
-
   - ../../apps/jupyterhub/af-x509-secrets/cronjob.yaml
   - ../../apps/jupyterhub/af-x509-secrets/rbac.yaml
   - ../../apps/jupyterhub/jupyterhub/helmrelease.yaml
@@ -35,6 +31,10 @@ resources:
   - ../../apps/monitoring/prometheus/pod-monitor-svc.yaml
   - ../../apps/monitoring/prometheus/pvc.yaml
   - ../../apps/monitoring/prometheus/rbac.yaml
+
+  - ../../apps/storage/af-shared-storage.yaml
+  - ../../apps/storage/cvmfs-pvc.yaml
+  - ../../apps/storage/docker-secret.yaml
 
 generatorOptions:
   disableNameSuffixHash: true

@@ -72,7 +72,7 @@ resources:
   - ../../apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml
   - ../../apps/monitoring/af-monitoring/af-node-monitor-rbac.yaml
   - ../../apps/monitoring/af-monitoring/services.yaml
-  - ../../apps/infrastructure/af-node-monitor-storage.yaml
+  - ../../apps/storage/af-node-monitor-storage.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
