@@ -12,12 +12,13 @@
 #      the chart version, HelmRepository URL and valuesFrom-ConfigMap values
 #      resolved from that same stream — this is what catches breaking chart
 #      schema changes when a chart version is bumped (e.g. by Renovate).
-#      Charts that live in this repository (sourced from its GitRepository,
-#      path ./apps/...) are rendered from the working tree with the same
-#      values, so a broken template or a values/template mismatch fails here
-#      rather than in the cluster. A chart in someone else's repository is
-#      rendered from a shallow clone of the ref its GitRepository names —
-#      several track a branch, where the chart changes with no version to bump.
+#      Charts that live in this repository (sourced from its GitRepository
+#      under a relative path — helm/ or apps/) are rendered from the working
+#      tree with the same values, so a broken template or a values/template
+#      mismatch fails here rather than in the cluster. A chart in someone
+#      else's repository is rendered from a shallow clone of the ref its
+#      GitRepository names — several track a branch, where the chart changes
+#      with no version to bump.
 #   5. `promtool check rules` on Prometheus alerting/recording rules embedded
 #      in Helm values — a typo'd PromQL expression otherwise deploys silently
 #      and the alert simply never fires.

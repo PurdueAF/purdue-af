@@ -10,10 +10,8 @@ import pytest
 
 SERVE_APP = (
     Path(__file__).resolve().parents[2]
-    / "apps"
-    / "ray"
+    / "helm"
     / "sonic-ray"
-    / "chart"
     / "files"
     / "sonic_ray"
     / "serve_app.py"

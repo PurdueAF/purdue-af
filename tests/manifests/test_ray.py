@@ -1,4 +1,5 @@
-"""Tests for apps/ray — Triton on Ray with Ray Serve carrying its gRPC.
+"""Tests for apps/ray and helm/sonic-ray — Triton on Ray with Ray Serve
+carrying its gRPC.
 
 The properties the deployment depends on, which no schema can express: the
 Triton container is the one the values describe, on a read-only model
@@ -20,7 +21,8 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[2]
 RAY = REPO / "apps" / "ray"
-CHART = RAY / "sonic-ray" / "chart"
+# The chart is in helm/, extractable; apps/ray keeps only the AF release of it.
+CHART = REPO / "helm" / "sonic-ray"
 VALUES = RAY / "sonic-ray" / "values.yaml"
 CODE = CHART / "files" / "sonic_ray"
 SERVE_APP = CODE / "serve_app.py"
@@ -154,7 +156,7 @@ def test_release_waits_for_the_crds():
     Kustomization would have blocked the apply that installs them."""
     release = load(RAY / "sonic-ray" / "helmrelease.yaml")
     assert release["spec"]["dependsOn"] == [{"name": "kuberay-operator"}]
-    assert release["spec"]["chart"]["spec"]["chart"] == "./apps/ray/sonic-ray/chart"
+    assert release["spec"]["chart"]["spec"]["chart"] == "./helm/sonic-ray"
     assert release["spec"]["chart"]["spec"]["sourceRef"]["kind"] == "GitRepository"
 
     operator = load(RAY / "operator" / "helmrelease.yaml")

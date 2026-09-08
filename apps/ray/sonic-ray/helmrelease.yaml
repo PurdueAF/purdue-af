@@ -14,15 +14,17 @@ spec:
     - name: kuberay-operator
   chart:
     spec:
-      # Chart lives in this repository, so it is sourced from the same
-      # GitRepository Flux already syncs for the experimental environment.
-      chart: ./apps/ray/sonic-ray/chart
+      # The chart is in this repository but not under apps/ (see
+      # helm/README.md), so it is sourced from the same GitRepository Flux
+      # already syncs for the experimental environment. Moving it out is a
+      # change to chart + sourceRef here, and nothing else in this file.
+      chart: ./helm/sonic-ray
       # Charts in this repository keep a static version (0.1.0), and Flux's
       # default reconcileStrategy is ChartVersion: source-controller only
       # re-packages when that string changes, so template edits are ignored
       # while values edits still trigger an upgrade — the release then runs
       # NEW values against the OLD chart. Revision re-packages on every Git
-      # revision, which is what a chart living beside its values needs.
+      # revision, which is what a chart versioned by nothing but Git needs.
       reconcileStrategy: Revision
       sourceRef:
         kind: GitRepository
