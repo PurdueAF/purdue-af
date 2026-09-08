@@ -1,5 +1,20 @@
+# Envoy configuration for the supersonic-interlink release, loaded through
+# envoy.external_config. It is the configuration the chart would generate,
+# plus three things a Triton reached over a Slurm-side wstunnel needs and the
+# chart cannot express: a 32 MB request buffer, outlier ejection, and a retry
+# policy on the inference route.
+#
+# Because it replaces the generated file wholesale, it also has to carry
+# everything scaleFromZero relies on: the Lua filter, the triton_admission
+# and envoy_admin clusters, the RepositoryIndex route, and the cluster's
+# dns_refresh_rate. Keep those in step with helm/supersonic/templates/envoy
+# on the SuperSONIC branch this release tracks.
 admin:
-  access_log_path: /tmp/admin_access.log
+  access_log:
+    - name: envoy.access_loggers.file
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.access_loggers.file.v3.FileAccessLog
+        path: /tmp/admin_access.log
   address:
     socket_address:
       address: 0.0.0.0
@@ -25,6 +40,24 @@ static_resources:
                     - name: backend_grpc
                       domains: ["*"]
                       routes:
+                        # Woken by the Lua filter, which holds the stream until
+                        # Envoy has a healthy Triton upstream. idle_timeout must
+                        # stay above scaleFromZero.readyTimeoutSeconds in
+                        # values.yaml; the chart uses that value + 120s and this
+                        # file cannot read it, so the two move together by hand.
+                        - match:
+                            path: "/inference.GRPCInferenceService/RepositoryIndex"
+                          route:
+                            cluster: triton_grpc_service
+                            timeout: 0s
+                            idle_timeout: 1020s
+                            retry_policy:
+                              retry_on: 5xx,connect-failure,refused-stream,unavailable
+                              num_retries: 15
+                              per_try_timeout: 2s
+                              retry_back_off:
+                                base_interval: 0.25s
+                                max_interval: 1s
                         - match:
                             prefix: "/"
                           route:
@@ -47,6 +80,13 @@ static_resources:
                                 base_interval: 0.2s
                                 max_interval: 5s
                 http_filters:
+                  # Ahead of the buffer, so a RepositoryIndex wake starts on the
+                  # headers rather than after a body has been buffered.
+                  - name: envoy.filters.http.lua
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                      default_source_code:
+                        filename: /etc/envoy/lua/envoy-filter.lua
                   - name: envoy.filters.http.buffer
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.Buffer
@@ -56,10 +96,49 @@ static_resources:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
                 http2_protocol_options: {}
   clusters:
+    # The admission sidecar on this pod: the Lua filter posts /wake to it to
+    # raise the ScaledObject's minReplicaCount, and polls Envoy's own admin
+    # endpoint to learn when a Triton upstream is healthy.
+    - name: triton_admission
+      type: STATIC
+      connect_timeout: 1s
+      load_assignment:
+        cluster_name: triton_admission
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 127.0.0.1
+                      port_value: 8080
+    - name: envoy_admin
+      type: STATIC
+      connect_timeout: 1s
+      load_assignment:
+        cluster_name: envoy_admin
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 127.0.0.1
+                      port_value: 9901
+
     - name: triton_grpc_service
-      connect_timeout: 0.25s
+      # 2s, not the chart's usual 0.25s: from zero the first connection races
+      # a pod that is still coming up on the far side of the tunnel.
+      connect_timeout: 2s
       type: STRICT_DNS
+      # NOTE: dns_refresh_rate is deprecated in Envoy in favor of the
+      # envoy.extensions.clusters.dns.v3.DnsCluster custom cluster type.
+      # Kept for now (warn-only) because migrating to DnsCluster is a larger change.
+      dns_refresh_rate: 1s
       lb_policy: ROUND_ROBIN
+      # Resolve the absolute in-cluster FQDN (trailing dot) so c-ares never walks the pod's
+      # search domains: a single refresh tick falling through to NXDOMAIN would empty the
+      # host set for ~1s and surface as "no healthy upstream".
+      dns_lookup_family: V4_ONLY
+      # Eject a Triton whose Slurm job has gone away rather than keep routing to it.
       outlier_detection:
         split_external_local_origin_errors: true
         consecutive_5xx: 5
@@ -67,7 +146,11 @@ static_resources:
         interval: 10s
         base_ejection_time: 30s
         max_ejection_percent: 50
-      http2_protocol_options: {}
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
       load_assignment:
         cluster_name: triton_grpc_service
         endpoints:
@@ -75,5 +158,5 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: supersonic-interlink-triton
+                      address: supersonic-interlink-triton.cms.svc.cluster.local.
                       port_value: 8001
