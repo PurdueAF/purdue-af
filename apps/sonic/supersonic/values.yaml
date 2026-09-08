@@ -1,10 +1,15 @@
 # Default SuperSONIC: the CMS Run 3 MiniAOD model set, served straight off
 # CVMFS. Moved here from PurdueAF/sonic, where it ran in the `sonic`
-# namespace as release `cms-run3-miniaod`. Two things changed in the move:
-# it uses the cms Prometheus instead of bundling its own, and its Grafana
-# host follows the release name.
+# namespace as release `cms-run3-miniaod`. Three things changed in the move:
+# it uses the cms Prometheus instead of bundling its own, its Grafana host
+# follows the release name, and it scales from zero.
 
 serverLoadThreshold: 100
+
+scaleFromZero:
+  enabled: true
+  readyTimeoutSeconds: 300
+  holdMinReplicasSeconds: 300
 
 triton:
   # image: fastml/triton-torchgeo:22.07-py3-geometric
@@ -99,17 +104,19 @@ envoy:
 
 keda:
   enabled: true
-  # Chart 0.3.1 has no scaleFromZero; minReplicaCount 0 cannot wake back up
-  # because the load metric comes from Triton itself. `supersonic-pr` runs
-  # the branch that adds it.
-  minReplicaCount: 1
+  # No GPU held while idle: RepositoryIndex raises this to 1 through the
+  # Envoy admission sidecar, which holds it there for holdMinReplicasSeconds.
+  minReplicaCount: 0
   maxReplicaCount: 10
+  # Poll often enough that the wake is not sitting behind a 30s KEDA tick.
+  pollingInterval: 1
+  cooldownPeriod: 300
   scaleUp:
-    stabilizationWindowSeconds: 30
+    stabilizationWindowSeconds: 0
     periodSeconds: 15
     stepsize: 1
   scaleDown:
-    stabilizationWindowSeconds: 45
+    stabilizationWindowSeconds: 300
     periodSeconds: 45
     stepsize: 1
 
@@ -129,12 +136,9 @@ prometheus:
     port: 9090
     scheme: http
 
-# No tracing on any SuperSONIC release here; both are chart defaults, set
-# explicitly so an upstream default flip cannot turn them on.
-tempo:
-  enabled: false
-opentelemetry-collector:
-  enabled: false
+# Nothing to disable for tracing: the Tempo and OpenTelemetry Collector
+# dependencies were removed from the chart after 0.3.1, so this branch has no
+# way to reach either.
 
 grafana:
   enabled: true

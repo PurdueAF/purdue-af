@@ -77,4 +77,3 @@ static_resources:
                     socket_address:
                       address: supersonic-interlink-triton
                       port_value: 8001
-

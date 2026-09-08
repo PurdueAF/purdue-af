@@ -29,13 +29,14 @@ resources:
   - ../../apps/servicex-eos/helmrelease.yaml
   - ../../apps/servicex-test/helmrelease.yaml
 
-  - ../../apps/sonic/helmrepo.yaml
+  # Chart source shared by the three releases below, on SuperSONIC main.
+  - ../../apps/sonic/supersonic/gitrepo.yaml
   # Default SuperSONIC: CMS Run 3 MiniAOD models off CVMFS.
   - ../../apps/sonic/supersonic/helmrelease.yaml
   # AF-facing SuperSONIC with a PVC model repository.
   - ../../apps/sonic/supersonic-af/helmrelease.yaml
-  # Same models as `supersonic`, from the SuperSONIC occupancy-ratio-metric
-  # branch (not the Helm repo), so scale-from-zero can be exercised.
+  # Same models as `supersonic`, from the occupancy-ratio-metric branch ahead
+  # of main, which replaces the scaling metric.
   - ../../apps/sonic/supersonic-pr/helmrelease.yaml
   - ../../apps/sonic/supersonic-pr/gitrepo.yaml
   # Triton offloaded to Slurm on Hammer through the interlink-hammer node.

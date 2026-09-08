@@ -7,11 +7,12 @@ spec:
   interval: 1m
   chart:
     spec:
-      chart: supersonic
-      version: "0.3.1"
+      chart: helm/supersonic
       sourceRef:
-        kind: HelmRepository
-        name: fastml
+        kind: GitRepository
+        name: supersonic
+      # Track git commits on main, not Chart.yaml version (still 0.3.1).
+      reconcileStrategy: Revision
       interval: 1m
   install:
     remediation:

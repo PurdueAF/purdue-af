@@ -1,13 +1,10 @@
-# Same MiniAOD model set and Triton image as the default `supersonic`
-# release, but installed from the SuperSONIC `occupancy-ratio-metric` branch
-# rather than the published chart — so the two can be compared side by side.
-#
-# Two things that branch adds and 0.3.1 cannot do:
-#   * scaleFromZero, so Triton holds no GPU while idle
-#   * a release-scoped default scaling metric, so serverLoadMetric stays
-#     unset here instead of being hand-written per release
-# serverLoadThreshold is left at the chart default (2), which on that metric
-# means "requests wait about as long as they are served".
+# Same MiniAOD model set and Triton image as the default `supersonic`, and
+# scale-from-zero like it, so the two can be compared side by side. The
+# difference is the chart branch: `occupancy-ratio-metric` sits five commits
+# ahead of main and replaces the scaling metric with a release-scoped
+# "occupancy ratio", so serverLoadMetric stays unset here rather than being
+# hand-written per release, and serverLoadThreshold is the chart default (2)
+# — on that metric, "requests wait about as long as they are served".
 
 scaleFromZero:
   enabled: true

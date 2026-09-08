@@ -15,7 +15,9 @@
 #      Charts that live in this repository (sourced from its GitRepository,
 #      path ./apps/...) are rendered from the working tree with the same
 #      values, so a broken template or a values/template mismatch fails here
-#      rather than in the cluster.
+#      rather than in the cluster. A chart in someone else's repository is
+#      rendered from a shallow clone of the ref its GitRepository names —
+#      several track a branch, where the chart changes with no version to bump.
 #   5. `promtool check rules` on Prometheus alerting/recording rules embedded
 #      in Helm values — a typo'd PromQL expression otherwise deploys silently
 #      and the alert simply never fires.
@@ -75,6 +77,24 @@ render_env() {
 # nothing to do with the manifests (seen: grafana.github.io and GitHub release
 # assets both dropping connections mid-run). Retry a few times before
 # believing it; a genuinely broken chart or values file fails all attempts.
+# Shallow-clone a GitRepository source once per (url, ref) and echo the path.
+# Charts there carry no packaged dependencies, so build them on first use.
+git_chart_dir() {
+	local url=$1 ref=$2 chart_path=$3
+	local key clone_dir
+	key=$(printf '%s@%s' "$url" "$ref" | shasum | cut -d' ' -f1)
+	clone_dir="$workdir/gitsrc-$key"
+	if [[ ! -d "$clone_dir" ]]; then
+		git clone --quiet --depth 1 --branch "$ref" "$url" "$clone_dir" >&2 || return 1
+	fi
+	[[ -d "$clone_dir/$chart_path" ]] || {
+		echo "chart path '${chart_path}' not in ${url}@${ref}" >&2
+		return 1
+	}
+	helm dependency build "$clone_dir/$chart_path" >/dev/null 2>&1 || true
+	printf '%s' "$clone_dir/$chart_path"
+}
+
 HELM_ATTEMPTS="${HELM_ATTEMPTS:-3}"
 HELM_RETRY_DELAY="${HELM_RETRY_DELAY:-5}"
 helm_template_retry() {
@@ -85,7 +105,7 @@ helm_template_retry() {
 	local attempt=1 out
 	while :; do
 		if out=$(helm template "$name" "${src[@]}" \
-			--version "$version" \
+			${version:+--version "$version"} \
 			--kube-version "$KUBE_VERSION" \
 			--namespace cms \
 			${vals[@]+"${vals[@]}"} 2>&1); then
@@ -109,8 +129,9 @@ validate_helmreleases() {
 	local rendered=$1
 	local repos_file=$2 # "name|type|url" lines from ALL envs: HelmRepositories
 	# may be created by a sibling Flux Kustomization on the same cluster
+	local git_repos_file=$3 # "name|url|ref" lines, same reasoning
 	local name chart version src_name src_kind repo_line repo_url repo_type
-	local values_files values_args vhash cm key i
+	local values_files values_args vhash cm key i local_chart out git_ref git_dir
 	while IFS= read -r name; do
 		releases_seen=$((releases_seen + 1))
 		chart=$(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec.chart.spec.chart" "$rendered")
@@ -118,24 +139,19 @@ validate_helmreleases() {
 		src_name=$(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec.chart.spec.sourceRef.name" "$rendered")
 		src_kind=$(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec.chart.spec.sourceRef.kind" "$rendered")
 
-		# A chart in this repository is rendered from the working tree. Only
-		# ./apps/... paths qualify: other GitRepository sources (supersonic-dev,
-		# servicex-dev) point at charts in someone else's repository.
+		# A chart in this repository is rendered from the working tree; a chart
+		# in someone else's, from a shallow clone of the ref its GitRepository
+		# names. Either way the values are the ones resolved below.
 		local_chart=""
-		if [[ "$src_kind" == "GitRepository" && "$chart" == ./apps/* && -f "$chart/Chart.yaml" ]]; then
-			local_chart="$chart"
-		elif [[ "$src_kind" != "HelmRepository" ]]; then
-			echo "  skip ${name}: chart sourced from ${src_kind} '${src_name}' (no registry version to validate)"
-			continue
-		fi
-
-		if [[ -z "$local_chart" ]]; then
+		git_ref=""
+		git_dir=""
+		case "$src_kind" in
+		HelmRepository)
 			if [[ -z "$version" || "$version" == "null" ]]; then
 				echo "✗ ${name}: chart version is not pinned (omitted version = Flux silently tracks latest)" >&2
 				failed=1
 				continue
 			fi
-
 			repo_line=$(grep -m1 "^${src_name}|" "$repos_file" || true)
 			if [[ -z "$repo_line" ]]; then
 				echo "✗ ${name}: HelmRepository '${src_name}' not found in any rendered environment" >&2
@@ -144,7 +160,35 @@ validate_helmreleases() {
 			fi
 			repo_type=$(cut -d'|' -f2 <<<"$repo_line")
 			repo_url=$(cut -d'|' -f3- <<<"$repo_line")
-		fi
+			;;
+		GitRepository)
+			if [[ "$chart" == ./* || "$chart" == /* ]]; then
+				# A relative path is this repository's own chart, on disk here.
+				if [[ ! -f "$chart/Chart.yaml" ]]; then
+					echo "✗ ${name}: chart path '${chart}' has no Chart.yaml in this repository" >&2
+					failed=1
+					continue
+				fi
+				local_chart="$chart"
+			else
+				repo_line=$(grep -m1 "^${src_name}|" "$git_repos_file" || true)
+				if [[ -z "$repo_line" ]]; then
+					echo "✗ ${name}: GitRepository '${src_name}' not found in any rendered environment" >&2
+					failed=1
+					continue
+				fi
+				repo_type="git"
+				repo_url=$(cut -d'|' -f2 <<<"$repo_line")
+				git_ref=$(cut -d'|' -f3- <<<"$repo_line")
+				# A git-sourced chart has no registry version; the ref is its identity.
+				version=""
+			fi
+			;;
+		*)
+			echo "  skip ${name}: chart sourced from ${src_kind} '${src_name}'"
+			continue
+			;;
+		esac
 
 		# Resolve valuesFrom ConfigMaps (generated by kustomize from values.yaml
 		# files) into temp files, in order.
@@ -204,15 +248,22 @@ validate_helmreleases() {
 			continue
 		fi
 
-		local fingerprint="${repo_url}|${chart}|${version}|${vhash}"
+		local fingerprint="${repo_url}|${git_ref}|${chart}|${version}|${vhash}"
 		if [[ "$seen_releases" == *"$fingerprint"* ]]; then
 			continue
 		fi
 		seen_releases="${seen_releases}${fingerprint}"$'\n'
 
-		echo "  helm template ${name} (${chart}@${version} from ${repo_url})"
+		echo "  helm template ${name} (${chart}@${version:-${git_ref}} from ${repo_url})"
 		local helm_src
-		if [[ "$repo_type" == "oci" ]]; then
+		if [[ "$repo_type" == "git" ]]; then
+			if ! git_dir=$(git_chart_dir "$repo_url" "$git_ref" "$chart"); then
+				echo "✗ ${name}: could not fetch chart from ${repo_url}@${git_ref}" >&2
+				failed=1
+				continue
+			fi
+			helm_src=("$git_dir")
+		elif [[ "$repo_type" == "oci" ]]; then
 			helm_src=("${repo_url}/${chart}")
 		else
 			helm_src=("$chart" --repo "$repo_url")
@@ -248,12 +299,17 @@ done >"$workdir/union.yaml"
 yq -N 'select(.kind=="HelmRepository") | .metadata.name + "|" + (.spec.type // "default") + "|" + .spec.url' \
 	"$workdir/union.yaml" | sort -u >"$workdir/helm-repos.txt"
 
+# Same table for GitRepositories ("name|url|ref"), so a chart sourced from one
+# can be cloned at the exact ref Flux would check out.
+yq -N 'select(.kind=="GitRepository") | .metadata.name + "|" + .spec.url + "|" + (.spec.ref.tag // .spec.ref.branch // .spec.ref.commit // "HEAD")' \
+	"$workdir/union.yaml" | sort -u >"$workdir/git-repos.txt"
+
 # Pass 2: validate.
 for rendered in "$workdir"/rendered-*.yaml; do
 	name=$(basename "$rendered" .yaml)
 	echo "──── ${name#rendered-} ────"
 	"${KUBECONFORM[@]}" <"$rendered" || failed=1
-	validate_helmreleases "$rendered" "$workdir/helm-repos.txt"
+	validate_helmreleases "$rendered" "$workdir/helm-repos.txt" "$workdir/git-repos.txt"
 done
 
 # --- Flux bootstrap objects ----------------------------------------------

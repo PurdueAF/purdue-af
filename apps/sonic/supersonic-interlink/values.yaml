@@ -82,8 +82,12 @@ envoy:
 
 keda:
   enabled: true
-  # Chart 0.3.1 has no scaleFromZero; minReplicaCount 0 cannot wake back up
-  # because the load metric comes from Triton itself.
+  # The one release here that cannot scale from zero. The chart refuses the
+  # combination outright ("scaleFromZero.enabled is incompatible with
+  # envoy.external_config.load_from_configmap"): the wake path is a Lua filter
+  # the chart injects into the Envoy config it generates, and this release
+  # supplies its own. Waking would also mean queueing a Slurm job inside
+  # readyTimeoutSeconds, which Hammer does not promise.
   minReplicaCount: 1
   maxReplicaCount: 10
   scaleUp:
@@ -105,12 +109,9 @@ prometheus:
     port: 9090
     scheme: http
 
-# No tracing on any SuperSONIC release here; both are chart defaults, set
-# explicitly so an upstream default flip cannot turn them on.
-tempo:
-  enabled: false
-opentelemetry-collector:
-  enabled: false
+# Nothing to disable for tracing: the Tempo and OpenTelemetry Collector
+# dependencies were removed from the chart after 0.3.1, so this branch has no
+# way to reach either.
 
 # Grafana stays off: this release is read through the shared SuperSONIC
 # dashboard in the AF Grafana, which is scoped by release.

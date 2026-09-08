@@ -1,0 +1,15 @@
+# Chart source for `supersonic`, `supersonic-af` and `supersonic-interlink`.
+# They track the branch rather than the published 0.3.1 chart because
+# scaleFromZero and the removal of the Tempo/OpenTelemetry dependencies
+# landed after that release and Chart.yaml still reads 0.3.1 — which is also
+# why every HelmRelease using this source sets reconcileStrategy: Revision.
+# `supersonic-pr` has its own source, on a branch ahead of this one.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: supersonic
+spec:
+  interval: 1m
+  url: https://github.com/fastmachinelearning/SuperSONIC
+  ref:
+    branch: main
