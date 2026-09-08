@@ -1,9 +1,9 @@
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
 metadata:
-  name: supersonic-dev
+  name: supersonic-pr
 spec:
   interval: 1m
   url: https://github.com/fastmachinelearning/SuperSONIC
   ref:
-    branch: scale-from-zero
+    branch: occupancy-ratio-metric

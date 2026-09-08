@@ -170,6 +170,18 @@ validate_helmreleases() {
 			values_files+=("$workdir/${name}-values-inline.yaml")
 		fi
 
+		# `helm template` has no cluster, so `lookup` returns empty. The
+		# SuperSONIC chart hard-fails when envoy.external_config.load_from_configmap
+		# is set and the ConfigMap cannot be looked up, so such a release only
+		# renders against a live cluster. The ConfigMap it reads is itself part
+		# of this stream and was kubeconform-validated above.
+		if [[ ${#values_files[@]} -gt 0 ]] &&
+			yq -N '(.envoy.external_config.load_from_configmap // false)' \
+				"${values_files[@]}" | grep -qx true; then
+			echo "  skip ${name}: Envoy config is looked up from a ConfigMap at render time"
+			continue
+		fi
+
 		values_args=()
 		vhash="none"
 		if [[ ${#values_files[@]} -gt 0 ]]; then

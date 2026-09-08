@@ -1,0 +1,118 @@
+# SuperSONIC whose Triton runs off-cluster: the pod is offloaded to Slurm on
+# Hammer through interLink, while Envoy stays on the AF nodes. Moved here
+# from PurdueAF/sonic (namespace `sonic`, release `sonic-interlink`); it
+# now uses this repo's own interLink node (apps/interlink/hammer) and the
+# cms Prometheus.
+
+serverLoadThreshold: 20
+serverLoadMetric: 'sum (rate(nv_inference_queue_duration_us{app=~"supersonic", release=~"supersonic-interlink", namespace=~"cms"}[30s])) / sum ((rate(nv_inference_exec_count{app=~"supersonic", release=~"supersonic-interlink", namespace=~"cms"}[30s]) * 1000))'
+
+triton:
+  image: /cvmfs/unpacked.cern.ch/nvcr.io/nvidia/tritonserver:26.04-py3
+  command: ["/bin/sh", "-c"]
+  args:
+    - |
+      # Optional extra repos (previously enabled; add as extra --model-repository=... lines before --allow-gpu-metrics):
+      # --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_16_0_0_pre4/external/el9_amd64_gcc13/data/RecoTauTag/TrainingFiles/data/DeepTauIdSONIC/
+      # --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_16_0_0_pre4/external/el9_amd64_gcc13/data/RecoMET/METPUSubtraction/data/models/
+      /opt/tritonserver/bin/tritonserver \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_16_0_0_pre4/external/el9_amd64_gcc13/data/RecoBTag/Combined/data/models/ \
+      --allow-gpu-metrics=true \
+      --log-verbose=0 \
+      --strict-model-config=false \
+      --exit-timeout-secs=60
+
+  resources:
+    limits: { cpu: 2, memory: 8G }
+    requests: { cpu: 2, memory: 8G }
+  nodeSelector:
+    kubernetes.io/hostname: interlink-hammer
+  tolerations:
+    - key: virtual-node.interlink/no-schedule
+      operator: Exists
+  annotations:
+    slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs --no-home --compat"
+    # slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --time=1-00:00:00" # no GPUs
+    slurm-job.vk.io/flags: "--uid=616617 -A cms --gres=gpu:1 --time=0-04:00:00"
+    interlink.virtual-kubelet.io/wstunnel-timeout: "5m"
+    interlink.eu/wstunnel-extra-ports: "8000:http:TCP,8001:grpc:TCP,8002:metrics:TCP"
+  service:
+    labels:
+      scrape_metrics: "true"
+    annotations:
+      metallb.universe.tf/address-pool: geddes-private-pool
+  modelRepository:
+    enabled: true
+    storageType: cvmfs-pvc
+    mountPath: /cvmfs
+  readinessProbe:
+    exec: null
+    grpc:
+      port: 8001
+    successThreshold: 3
+  startupProbe:
+    periodSeconds: 5
+    failureThreshold: 60
+    httpGet:
+      path: /v2/health/ready
+      port: http
+
+envoy:
+  enabled: true
+  nodeSelector: { "cms-af-prod": "true" }
+  tolerations:
+    - key: hub.jupyter.org/dedicated
+      operator: Equal
+      value: cms-af
+      effect: NoSchedule
+  loadBalancerPolicy: "ROUND_ROBIN"
+  service:
+    type: LoadBalancer
+  # Clients reach Envoy through the LoadBalancer service on the private pool,
+  # or in-cluster at supersonic-interlink.cms.svc.cluster.local:8001. No public
+  # inference ingress on any SuperSONIC release here.
+  ingress:
+    enabled: false
+  # Hand-written Envoy config (retries and outlier ejection tuned for a Triton
+  # that lives behind a Slurm-side wstunnel), from envoy-config.yaml.
+  external_config:
+    load_from_configmap: true
+    configmap_name: "supersonic-interlink-envoy-config-custom"
+    configmap_key: "envoy.yaml"
+
+keda:
+  enabled: true
+  # Chart 0.3.1 has no scaleFromZero; minReplicaCount 0 cannot wake back up
+  # because the load metric comes from Triton itself.
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  scaleUp:
+    stabilizationWindowSeconds: 120
+    periodSeconds: 120
+    stepsize: 1
+  scaleDown:
+    stabilizationWindowSeconds: 120
+    periodSeconds: 30
+    stepsize: 1
+
+prometheus:
+  # Was the bundled Prometheus of the `sonic` namespace's cms-run3-miniaod
+  # release, reached over its LoadBalancer hostname. In cms the shared AF
+  # Prometheus scrapes this Triton too, via the scrape_metrics service label.
+  external:
+    enabled: true
+    url: prometheus-server.cms.svc.cluster.local
+    port: 9090
+    scheme: http
+
+# No tracing on any SuperSONIC release here; both are chart defaults, set
+# explicitly so an upstream default flip cannot turn them on.
+tempo:
+  enabled: false
+opentelemetry-collector:
+  enabled: false
+
+# Grafana stays off: this release is read through the shared SuperSONIC
+# dashboard in the AF Grafana, which is scoped by release.
+grafana:
+  enabled: false

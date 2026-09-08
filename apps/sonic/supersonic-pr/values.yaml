@@ -1,24 +1,13 @@
-# SuperSONIC scale-from-zero values for HelmRelease `supersonic-dev`.
-# Based on values/values-geddes-cms.yaml from
-# https://github.com/fastmachinelearning/SuperSONIC/blob/scale-from-zero/values/values-geddes-cms.yaml
-# Hostnames and dashboardsConfigMaps are rewritten so this release does not
-# collide with production `supersonic`.
-
-# serverLoadThreshold: 100
-
-serverLoadThreshold: 2
-
-serverLoadMetric: |-
-  sum(rate(envoy_cluster_upstream_rq_time_sum{release="supersonic-dev", envoy_cluster_name="triton_grpc_service"}[1m])) / 1000
-  * scalar(clamp_min(sum(envoy_cluster_membership_healthy{release="supersonic-dev", envoy_cluster_name="triton_grpc_service"}), 1))
-  / clamp_min(
-      clamp_min(
-        (sum(rate(nv_inference_request_duration_us{release="supersonic-dev"}[1m])) - sum(rate(nv_inference_queue_duration_us{release="supersonic-dev"}[1m]))) / 1e6,
-        scalar(sum(envoy_cluster_membership_healthy{release="supersonic-dev", envoy_cluster_name="triton_grpc_service"}))
-      ),
-      1
-    )
-  / scalar(clamp_min(max(kube_deployment_spec_replicas{namespace="cms", deployment="supersonic-dev-triton"}), 1))
+# Same MiniAOD model set and Triton image as the default `supersonic`
+# release, but installed from the SuperSONIC `occupancy-ratio-metric` branch
+# rather than the published chart — so the two can be compared side by side.
+#
+# Two things that branch adds and 0.3.1 cannot do:
+#   * scaleFromZero, so Triton holds no GPU while idle
+#   * a release-scoped default scaling metric, so serverLoadMetric stays
+#     unset here instead of being hand-written per release
+# serverLoadThreshold is left at the chart default (2), which on that metric
+# means "requests wait about as long as they are served".
 
 scaleFromZero:
   enabled: true
@@ -26,7 +15,7 @@ scaleFromZero:
   holdMinReplicasSeconds: 300
 
 triton:
-  image: fastml/triton-torchgeo:26.04-py3-geometric
+  image: docker.io/docexoty/tritonserver:light
   command: ["/bin/sh", "-c"]
   args:
     - |
@@ -54,11 +43,11 @@ triton:
   resources:
     limits:
       nvidia.com/gpu: 1
-      cpu: 16
+      cpu: 4
       memory: 16G
     requests:
       nvidia.com/gpu: 1
-      cpu: 16
+      cpu: 4
       memory: 16G
   nodeSelector: { "cms-af-prod": "true" }
   tolerations:
@@ -99,24 +88,29 @@ envoy:
   loadBalancerPolicy: "ROUND_ROBIN"
   service:
     type: LoadBalancer
+  # Clients reach Envoy through the LoadBalancer service on the private pool,
+  # or in-cluster at supersonic-pr.cms.svc.cluster.local:8001. No public
+  # inference ingress on any SuperSONIC release here.
   ingress:
     enabled: false
-    hostName: supersonic-dev.geddes.rcac.purdue.edu
-    ingressClassName: public
   rate_limiter:
+    # Off, as on `supersonic`. The Lua filter is still mounted — scaleFromZero
+    # needs it to wake Triton on RepositoryIndex.
     prometheus_based:
-      enabled: true
+      enabled: false
     listener_level:
       enabled: false
 
 keda:
   enabled: true
+  # 0 is the point of this release: no GPU held while idle. RepositoryIndex
+  # raises it to 1 through the Envoy admission sidecar.
   minReplicaCount: 0
   maxReplicaCount: 10
   pollingInterval: 1
   cooldownPeriod: 300
   scaleUp:
-    stabilizationWindowSeconds: 30
+    stabilizationWindowSeconds: 0
     periodSeconds: 15
     stepsize: 1
   scaleDown:
@@ -124,25 +118,38 @@ keda:
     periodSeconds: 45
     stepsize: 1
 
+ingress:
+  enabled: false
+
 prometheus:
+  # Shared AF Prometheus in cms, as for every SuperSONIC release here.
+  # FQDN required: KEDA operator runs in the keda namespace and cannot
+  # resolve the short name prometheus-server.
   external:
     enabled: true
     url: prometheus-server.cms.svc.cluster.local
     port: 9090
     scheme: http
 
+# This branch's chart has no tempo or opentelemetry-collector dependency at
+# all, so there is nothing to disable — no tracing is reachable from here.
+
 grafana:
   enabled: true
   dashboardsConfigMaps:
-    default: supersonic-dev-grafana-default-dashboard
+    default: supersonic-pr-grafana-default-dashboard
   datasources:
     datasources.yaml:
       datasources:
         - name: prometheus
+          # Must match the chart dashboard's hardcoded datasource uid.
           uid: prometheus
           type: prometheus
           access: proxy
           isDefault: true
+          # Chart validation requires scheme://host with no port (must match
+          # prometheus.external.scheme + .url). Port 9090 is injected by the
+          # HelmRelease postRenderer in helmrelease.yaml.
           url: http://prometheus-server.cms.svc.cluster.local
           jsonData:
             timeInterval: "5s"
@@ -150,11 +157,11 @@ grafana:
   ingress:
     enabled: true
     hosts:
-      - supersonic-dev-grafana.geddes.rcac.purdue.edu
+      - supersonic-pr-grafana.geddes.rcac.purdue.edu
     tls:
       - hosts:
-          - supersonic-dev-grafana.geddes.rcac.purdue.edu
+          - supersonic-pr-grafana.geddes.rcac.purdue.edu
     ingressClassName: public
   grafana.ini:
     server:
-      root_url: https://supersonic-dev-grafana.geddes.rcac.purdue.edu
+      root_url: https://supersonic-pr-grafana.geddes.rcac.purdue.edu

@@ -1,51 +1,34 @@
-# Default SuperSONIC: the CMS Run 3 MiniAOD model set, served straight off
-# CVMFS. Moved here from PurdueAF/sonic, where it ran in the `sonic`
-# namespace as release `cms-run3-miniaod`. Two things changed in the move:
-# it uses the cms Prometheus instead of bundling its own, and its Grafana
-# host follows the release name.
+# AF-facing SuperSONIC: PVC model repository curated through the model
+# manager (apps/sonic/model-manager). The `supersonic` release next to it
+# serves the CMS Run 3 MiniAOD models straight off CVMFS.
 
 serverLoadThreshold: 100
 
 triton:
+  image: nvcr.io/nvidia/tritonserver:26.04-py3
+  # image: nvcr.io/nvidia/tritonserver:24.11-py3
   # image: fastml/triton-torchgeo:22.07-py3-geometric
   # image: fastml/triton-torchgeo:25.08-py3-geometric
-  # image: nvcr.io/nvidia/tritonserver:26.04-py3
-  # image: fastml/triton-torchgeo:26.04-py3-geometric
-  image: docker.io/docexoty/tritonserver:light
   command: ["/bin/sh", "-c"]
   args:
     - |
       /opt/tritonserver/bin/tritonserver \
-      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoBTag/Combined/data/models/ \
-      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoEgamma/EgammaPhotonProducers/data/models/ \
-      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoTauTag/TrainingFiles/data/DeepTauIdSONIC/ \
-      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoMET/METPUSubtraction/data/models/ \
+      --model-repository=/models \
       --model-control-mode=explicit \
-      --load-model=deepmet \
-      --load-model=deeptau_2018v2p5 \
-      --load-model=particleNetFromMiniAODAK4CHSCentral \
-      --load-model=particleNetFromMiniAODAK4PuppiCentral \
-      --load-model=particleNetFromMiniAODAK4PuppiForward \
-      --load-model=particleNetFromMiniAODAK8 \
-      --load-model=particlenet_AK8_MD-2prong_PT \
-      --load-model=particlenet_AK8_MassRegression_PT \
-      --load-model=particlenet_PT \
-      --load-model=unifiedparticletransformer_AK4_V01 \
+      --load-model=* \
       --allow-gpu-metrics=true \
       --log-verbose=0 \
-      --strict-model-config=false \
+      --disable-auto-complete-config \
       --exit-timeout-secs=60
 
   resources:
     limits:
       nvidia.com/gpu: 1
-      # nvidia.com/mig-1g.5gb: 1
-      cpu: 4
+      cpu: 16
       memory: 16G
     requests:
       nvidia.com/gpu: 1
-      # nvidia.com/mig-1g.5gb: 1
-      cpu: 4
+      cpu: 16
       memory: 16G
   nodeSelector: { "cms-af-prod": "true" }
   tolerations:
@@ -58,22 +41,18 @@ triton:
       scrape_metrics: "true"
     annotations:
       metallb.universe.tf/address-pool: geddes-private-pool
+  # Dedicated model repository claim, created and written by the model manager
+  # (apps/sonic/model-manager). Models previously served from
+  # /work/triton_models on af-shared-storage need copying across.
   modelRepository:
     enabled: true
-    storageType: cvmfs-pvc
-    mountPath: /cvmfs
+    storageType: pvc
+    pvc:
+      claimName: supersonic-model-repository
+    mountPath: /models
   readinessProbe:
-    timeoutSeconds: 15
-    periodSeconds: 10
-    failureThreshold: 10
-    successThreshold: 1
-  startupProbe:
-    periodSeconds: 10
-    failureThreshold: 24
-    timeoutSeconds: 15
-    httpGet:
-      path: /v2/health/ready
-      port: http
+    successThreshold: 3
+  #   reset: true
 
 envoy:
   enabled: true
@@ -87,21 +66,22 @@ envoy:
   service:
     type: LoadBalancer
   # Clients reach Envoy through the LoadBalancer service on the private pool,
-  # or in-cluster at supersonic.cms.svc.cluster.local:8001. No public
+  # or in-cluster at supersonic-af.cms.svc.cluster.local:8001. No public
   # inference ingress on any SuperSONIC release here.
   ingress:
     enabled: false
   rate_limiter:
+    # Rejects RepositoryIndex (and thus new client sessions) when
+    # serverLoadMetric exceeds serverLoadThreshold, via Lua → Prometheus.
     prometheus_based:
-      enabled: false
+      enabled: true
     listener_level:
       enabled: false
 
 keda:
   enabled: true
   # Chart 0.3.1 has no scaleFromZero; minReplicaCount 0 cannot wake back up
-  # because the load metric comes from Triton itself. `supersonic-pr` runs
-  # the branch that adds it.
+  # because the load metric comes from Triton itself.
   minReplicaCount: 1
   maxReplicaCount: 10
   scaleUp:
@@ -117,10 +97,9 @@ ingress:
   enabled: false
 
 prometheus:
-  # In PurdueAF/sonic this release bundled its own Prometheus (LoadBalancer
-  # service, hand-made SA and ConfigMap override in the `sonic` namespace).
-  # In cms the shared AF Prometheus already scrapes Triton via af-pod-monitor
-  # with the app/release labels the dashboard expects, so use it.
+  # Use the AF Prometheus already running in cms (HelmRelease `prometheus`).
+  # It scrapes Triton via af-pod-monitor and attaches app/release labels the
+  # SuperSONIC dashboard expects — rancher-monitoring does not.
   # FQDN required: KEDA operator runs in the keda namespace and cannot
   # resolve the short name prometheus-server.
   external:
@@ -139,7 +118,7 @@ opentelemetry-collector:
 grafana:
   enabled: true
   dashboardsConfigMaps:
-    default: supersonic-grafana-default-dashboard
+    default: supersonic-af-grafana-default-dashboard
   datasources:
     datasources.yaml:
       datasources:
@@ -159,11 +138,11 @@ grafana:
   ingress:
     enabled: true
     hosts:
-      - supersonic-grafana.geddes.rcac.purdue.edu
+      - supersonic-af-grafana.geddes.rcac.purdue.edu
     tls:
       - hosts:
-          - supersonic-grafana.geddes.rcac.purdue.edu
+          - supersonic-af-grafana.geddes.rcac.purdue.edu
     ingressClassName: public
   grafana.ini:
     server:
-      root_url: https://supersonic-grafana.geddes.rcac.purdue.edu
+      root_url: https://supersonic-af-grafana.geddes.rcac.purdue.edu

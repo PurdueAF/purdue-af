@@ -1,17 +1,18 @@
 apiVersion: helm.toolkit.fluxcd.io/v2beta1
 kind: HelmRelease
 metadata:
-  name: supersonic
+  name: supersonic-pr
 spec:
   suspend: false
   interval: 1m
   chart:
     spec:
-      chart: supersonic
-      version: "0.3.1"
+      chart: helm/supersonic
       sourceRef:
-        kind: HelmRepository
-        name: fastml
+        kind: GitRepository
+        name: supersonic-pr
+      # Track git commits on the branch, not Chart.yaml version (still 0.3.1).
+      reconcileStrategy: Revision
       interval: 1m
   install:
     remediation:
@@ -21,14 +22,14 @@ spec:
       retries: -1
   valuesFrom:
     - kind: ConfigMap
-      name: supersonic-config
+      name: supersonic-pr-config
       valuesKey: values.yaml
   postRenderers:
     - kustomize:
         patches:
           - target:
               kind: ScaledObject
-              name: "supersonic-keda-so"
+              name: "supersonic-pr-keda-so"
             patch: |
               - op: add
                 path: /spec/triggers/0/metadata/timeout
@@ -38,7 +39,7 @@ spec:
           # listens on 9090. Rewrite the provisioned ConfigMap after render.
           - target:
               kind: ConfigMap
-              name: "supersonic-grafana"
+              name: "supersonic-pr-grafana"
             patch: |
               - op: replace
                 path: /data/datasources.yaml
@@ -60,7 +61,7 @@ spec:
           # before envoy starts, so Ready≠containerStarted.
           - target:
               kind: Deployment
-              name: "supersonic-envoy"
+              name: "supersonic-pr-envoy"
             patch: |
               - op: add
                 path: /spec/strategy

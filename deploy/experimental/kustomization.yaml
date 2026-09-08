@@ -29,12 +29,18 @@ resources:
   - ../../apps/servicex-eos/helmrelease.yaml
   - ../../apps/servicex-test/helmrelease.yaml
 
+  - ../../apps/sonic/helmrepo.yaml
+  # Default SuperSONIC: CMS Run 3 MiniAOD models off CVMFS.
   - ../../apps/sonic/supersonic/helmrelease.yaml
-  - ../../apps/sonic/supersonic/helmrepo.yaml
-  # GPU scale-from-zero SuperSONIC from the SuperSONIC git branch (not the Helm repo).
-  - ../../apps/sonic/supersonic-dev/helmrelease.yaml
-  - ../../apps/sonic/supersonic-dev/gitrepo.yaml
-  # Model repository dashboard for the supersonic release above. Needs the
+  # AF-facing SuperSONIC with a PVC model repository.
+  - ../../apps/sonic/supersonic-af/helmrelease.yaml
+  # Same models as `supersonic`, from the SuperSONIC occupancy-ratio-metric
+  # branch (not the Helm repo), so scale-from-zero can be exercised.
+  - ../../apps/sonic/supersonic-pr/helmrelease.yaml
+  - ../../apps/sonic/supersonic-pr/gitrepo.yaml
+  # Triton offloaded to Slurm on Hammer through the interlink-hammer node.
+  - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
+  # Model repository dashboard for the supersonic-af release above. Needs the
   # supersonic-model-manager-auth Secret to exist in the namespace.
   - ../../apps/sonic/model-manager/helmrelease.yaml
 
@@ -140,13 +146,27 @@ configMapGenerator:
     files:
       - values.yaml=../../apps/sonic/supersonic/values.yaml
 
-  - name: supersonic-dev-config
+  - name: supersonic-af-config
     files:
-      - values.yaml=../../apps/sonic/supersonic-dev/values.yaml
+      - values.yaml=../../apps/sonic/supersonic-af/values.yaml
+
+  - name: supersonic-pr-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic-pr/values.yaml
+
+  - name: supersonic-interlink-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic-interlink/values.yaml
+
+  # Hand-written Envoy config for supersonic-interlink, referenced by
+  # envoy.external_config in its values.
+  - name: supersonic-interlink-envoy-config-custom
+    files:
+      - envoy.yaml=../../apps/sonic/supersonic-interlink/envoy-config.yaml
 
   - name: supersonic-model-manager-config
     files:
-      - values.yaml=../../apps/sonic/model-manager/values-supersonic.yaml
+      - values.yaml=../../apps/sonic/model-manager/values-supersonic-af.yaml
 
   - name: slurm-probes
     options:
