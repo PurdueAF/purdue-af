@@ -15,14 +15,9 @@ Metric families:
   purdue_af_mcp_auth_total               token validation results
 
 The username label exists for ad-hoc per-user queries in Prometheus;
-dashboards aggregate over it. `client` and `origin` come from clients.py,
-which clamps both to a small allowlist — the values are derived from
-caller-supplied strings and would otherwise be unbounded label cardinality.
-
-Only the counters carry client/origin. purdue_af_mcp_tool_duration_seconds
-stays keyed by tool alone: it is eleven buckets per series, and how long a
-tool takes is a property of the tool and its backends, not of the harness
-that asked for it.
+dashboards aggregate over it. `client` and `origin` come from clients.py.
+Only the counters carry them — the duration histogram is eleven buckets per
+series, and latency is a property of the tool, not of the caller.
 """
 
 import logging
@@ -212,14 +207,11 @@ class InstrumentedFastMCP(FastMCP):
         client, origin = _caller()
         TOOL_DURATION.labels(tool=name).observe(elapsed)
         record_tool_call(name, outcome, username, client.name, origin)
-        # logfmt, so Loki's `| logfmt` parses it and the usage dashboard can
-        # group by any field. This line — not the counters — is the audit
-        # record: it is the only place that says which agent did what, and
-        # client_raw is the harness's own spelling of its name, the one way a
-        # client missing from clients._CLIENT_PATTERNS becomes visible.
+        # The audit record: logfmt, so `| logfmt` parses it in Loki. client_raw
+        # is how a client missing from clients._CLIENT_PATTERNS gets noticed.
         logger.info(
             "tool_call tool=%s user=%s outcome=%s duration_ms=%.0f "
-            'client=%s client_raw="%s" client_version="%s" origin=%s session=%s',
+            'client=%s client_raw="%s" client_version="%s" origin=%s session="%s"',
             name,
             username,
             outcome,

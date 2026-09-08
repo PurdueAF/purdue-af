@@ -28,14 +28,12 @@ def require_user() -> dict[str, Any]:
     return user
 
 
-# Per-request caller context, set by the same middleware. Unlike current_user
-# these are never load-bearing — a tool must still run when the client could
-# not be identified — so they carry inert defaults rather than raising.
+# Per-request caller context, set by the same middleware. Never load-bearing:
+# a tool must still run when the client could not be identified.
 current_client: ContextVar[Optional[ClientInfo]] = ContextVar(
     "current_client", default=None
 )
 current_origin: ContextVar[str] = ContextVar("current_origin", default=UNKNOWN)
-# Short prefix of the Mcp-Session-Id, for correlating a run of tool calls
-# back to one agent conversation. Never the whole id: in stateful mode that
-# id is a live capability, and the audit log is not the place to copy one.
+# A short prefix of the Mcp-Session-Id, never the whole id — in stateful mode
+# that id is a live capability.
 current_session: ContextVar[str] = ContextVar("current_session", default="")

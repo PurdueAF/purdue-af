@@ -1,10 +1,8 @@
 """Tests for docker/purdue-af/scripts/otel-toml-block.py.
 
-This script edits a file that belongs to the user and that codex also
-rewrites, in a persistent home, on every single session start. The failure
-mode that matters is not "the block is missing" — it is "the config no longer
-parses", which would leave the user with a broken agent and no obvious cause.
-So most of what is asserted here is about not breaking the file.
+This edits a user-owned file, in a persistent home, on every session start.
+The failure that matters is not a missing block but a config that no longer
+parses, so most of these assert that the file survives.
 """
 
 import tomllib
@@ -143,3 +141,13 @@ def test_remove_deletes_a_file_that_held_only_the_block(block_file, target):
 
 def test_remove_on_a_missing_file_is_a_no_op(target):
     assert otel_block.main(["otel-toml-block.py", "--remove", str(target)]) == 0
+
+
+def test_block_can_be_read_from_stdin(block_file, target, monkeypatch):
+    """How config-agents.sh passes it: root writes, the session user reads, and
+    a temp file would need to be world-readable to cross that."""
+    import io
+
+    monkeypatch.setattr("sys.stdin", io.StringIO(BLOCK))
+    assert otel_block.main(["otel-toml-block.py", "-", str(target)]) == 0
+    assert tomllib.loads(target.read_text())["otel"]["environment"] == "purdue-af"

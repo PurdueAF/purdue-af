@@ -580,7 +580,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "sum by (agent) (count_over_time({namespace=\"cms\"} | json | event=\"agent_run\" | phase=\"start\" [$__auto]))",
+          "expr": "sum by (agent) (count_over_time({namespace=\"cms\", container=\"notebook\"} | json | event=\"agent_run\" | phase=\"start\" [$__auto]))",
           "legendFormat": "{{agent}}",
           "range": true,
           "refId": "A"
@@ -1144,7 +1144,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "topk(20, sum by (tool_name) (count_over_time({service_name=~\"claude.*|codex\"} | event_name=\"claude_code.tool_result\" [24h])))",
+          "expr": "topk(20, sum by (tool_name) (count_over_time({service_name=~\"claude.*|codex\"} | event_name=~\"(claude_code\\.)?tool_result\" [24h])))",
           "format": "table",
           "instant": true,
           "legendFormat": "{{label}}",
@@ -1233,7 +1233,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "topk(20, sum by (server_name) (count_over_time({service_name=~\"claude.*|codex\"} | event_name=\"claude_code.mcp_server_connection\" [24h])))",
+          "expr": "topk(20, sum by (server_name) (count_over_time({service_name=~\"claude.*|codex\"} | event_name=~\"(claude_code\\.)?mcp_server_connection\" [24h])))",
           "format": "table",
           "instant": true,
           "legendFormat": "{{label}}",
@@ -1787,7 +1787,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "topk(20, sum by (user) (count_over_time({namespace=\"cms\"} | json | event=\"agent_run\" | phase=\"start\" [7d])))",
+          "expr": "topk(20, sum by (user) (count_over_time({namespace=\"cms\", container=\"notebook\"} | json | event=\"agent_run\" | phase=\"start\" [7d])))",
           "format": "table",
           "instant": true,
           "legendFormat": "{{label}}",
@@ -1883,7 +1883,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "{namespace=\"cms\"} | json | event=\"agent_run\"",
+          "expr": "{namespace=\"cms\", container=\"notebook\"} | json | event=\"agent_run\"",
           "queryType": "range",
           "refId": "A"
         }

@@ -52,13 +52,9 @@ def claude_managed(tmp_path):
 
 
 @pytest.fixture()
-def run_script(tmp_path, agent_home, claude_managed):
-    """Run the hook with stubbed agent CLIs; returns (result, [argv lines]).
-
-    The hook addresses three paths that only exist inside the image: the
-    session home, managed-block.py, and the platform context. The copy under
-    test has exactly those redirected at the sandbox and the repo, so the files
-    it produces can be asserted on directly. Nothing else is rewritten."""
+def sandboxed_script(tmp_path, agent_home, claude_managed):
+    """The hook, with the paths that only exist inside the image redirected at
+    the sandbox and the repo. Nothing else is rewritten."""
     script = tmp_path / "config-agents.sh"
     script.write_text(
         SCRIPT.read_text()
@@ -91,6 +87,24 @@ def run_script(tmp_path, agent_home, claude_managed):
             f'[[ -x "${{PYTHON}}" ]] || PYTHON="{sys.executable}"',
         )
     )
+    return script
+
+
+@pytest.fixture()
+def script_env(tmp_path):
+    """The environment a session start hands the hook."""
+    (tmp_path / "bin").mkdir(exist_ok=True)
+    return {
+        "PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin",
+        "HOME": str(tmp_path),
+        "NB_USER": "jovyan",
+    }
+
+
+@pytest.fixture()
+def run_script(tmp_path, sandboxed_script):
+    """Run the hook with stubbed agent CLIs; returns (result, [argv lines])."""
+    script = sandboxed_script
 
     def _run(tools=("claude", "codex"), stub_exit=0, **env):
         bindir = tmp_path / "bin"
@@ -830,9 +844,8 @@ def test_hooks_have_no_top_level_exit(hook):
 
 # ── telemetry configuration ───────────────────────────────────────────────────
 #
-# The privacy guarantee in docs/docs/guide-agentic-telemetry.md is made of
-# exactly two things: these settings, and the redaction in the Alloy pipeline.
-# The tests below are the half that lives in this repo's shell.
+# Half of what holds the guarantee in docs/docs/guide-agentic-telemetry.md;
+# the other half is the redaction in the Alloy pipeline.
 
 
 def test_managed_settings_enable_telemetry(run_script, claude_managed):
@@ -845,9 +858,8 @@ def test_managed_settings_enable_telemetry(run_script, claude_managed):
 
 
 def test_managed_settings_never_enable_content_logging(run_script, claude_managed):
-    """Prompts and responses stay redacted; tool details are on because that
-    is where MCP server and tool names live, and the collector drops the
-    content-bearing half of them."""
+    """Tool details are on because MCP server and tool names live there; the
+    collector drops the content-bearing half."""
     run_script()
     env = json.loads(claude_managed.read_text())["env"]
     assert env["OTEL_LOG_USER_PROMPTS"] == "0"
@@ -884,8 +896,8 @@ def test_codex_gets_an_otel_block(run_script, agent_home):
 
 
 def test_codex_otel_block_is_idempotent(run_script, agent_home):
-    """Homes are persistent and this hook runs on every spawn, so a second
-    run must not leave two [otel] tables — which would not even parse."""
+    """Persistent homes, and this runs every spawn: two [otel] tables would
+    not parse."""
     import tomllib
 
     run_script()
@@ -896,11 +908,19 @@ def test_codex_otel_block_is_idempotent(run_script, agent_home):
     tomllib.loads(second)
 
 
-def test_username_is_exported_for_agent_telemetry(run_script):
-    """Without this, agent metrics cannot be joined to any other per-user
-    metric in the facility."""
-    result, _ = run_script()
-    assert 'OTEL_RESOURCE_ATTRIBUTES="user=jovyan' in (
-        SCRIPT.read_text().replace("${NB_USER}", "jovyan")
+def test_username_is_exported_for_agent_telemetry(sandboxed_script, script_env):
+    """start.sh SOURCES this hook, so the export has to reach the calling shell
+    — that is what puts the AF username on agent telemetry."""
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"source '{sandboxed_script}'; printenv OTEL_RESOURCE_ATTRIBUTES",
+        ],
+        capture_output=True,
+        text=True,
+        env=script_env,
     )
-    assert result.returncode == 0
+    assert result.returncode == 0, result.stderr
+    # The hook narrates its progress on stdout; printenv is the last line.
+    assert result.stdout.strip().splitlines()[-1] == "user=jovyan,af.facility=purdue-af"

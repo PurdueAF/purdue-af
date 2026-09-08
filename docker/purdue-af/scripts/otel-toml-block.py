@@ -6,22 +6,20 @@ user's own, which ``codex mcp add`` also rewrites. So the AF telemetry block
 is maintained the way the agent instruction files are — a marked section that
 is replaced on every session start, with everything outside it left alone.
 
-    otel-toml-block.py <block.toml> <target.toml>
+    otel-toml-block.py <block.toml|-> <target.toml>
     otel-toml-block.py --remove <target.toml>
 
-Two things make this different from the Markdown case (managed-block.py):
+"-" reads the block from stdin, which is how config-agents.sh passes it: the
+hook runs as root and this script as the session user, so a temp file would
+have to be made world-readable to cross that boundary.
 
-* A TOML table header owns every key that follows it, so the block is always
-  written **at the end of the file**. Anywhere else, a bare top-level key the
-  user adds later would silently become part of ``[otel]``.
-* ``codex mcp add`` round-trips the file through its own TOML writer, which
-  does not promise to keep our comment markers. So any ``[otel]`` table is
-  removed before the block is appended, marked or not — otherwise the second
-  session start would write a duplicate table and make the file unparseable.
+A TOML table header owns every key after it, so the block always goes at the
+end of the file. Any existing ``[otel]`` table is removed first, marked or
+not — ``codex mcp add`` rewrites this file through its own TOML writer and
+does not promise to keep the markers, and a duplicate table would not parse.
 
-The result is parsed before it is written. If this file would produce TOML
-codex cannot read, the original is left in place and the exit status is 1 —
-a session must never be left with a broken agent config.
+The result is parsed before it is written; if it would not, the original is
+left alone and the exit status is 1.
 """
 
 from __future__ import annotations
@@ -109,7 +107,8 @@ def main(argv: list[str]) -> int:
     if len(argv) != 3:
         raise SystemExit(__doc__)
 
-    block_path, target = Path(argv[1]), Path(argv[2])
+    block, target = argv[1], Path(argv[2])
+    content = sys.stdin.read() if block == "-" else Path(block).read_text()
     existing = target.read_text() if target.is_file() else ""
     # A config the user (or codex) already broke is not ours to rewrite:
     # appending to it would only bury the real error.
@@ -122,7 +121,7 @@ def main(argv: list[str]) -> int:
                 file=sys.stderr,
             )
             return 1
-    return _write_if_valid(target, apply_block(existing, block_path.read_text()))
+    return _write_if_valid(target, apply_block(existing, content))
 
 
 if __name__ == "__main__":

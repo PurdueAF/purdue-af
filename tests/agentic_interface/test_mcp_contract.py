@@ -256,3 +256,99 @@ def test_every_module_is_copied_into_the_image():
         if f"COPY docker/agentic-interface/{name} " not in dockerfile
     }
     assert not missing, f"not COPYed into the image: {sorted(missing)}"
+
+
+# ── stateful session attribution, through the real SDK ────────────────────────
+
+
+async def test_stateful_session_carries_the_client_to_later_tool_calls(monkeypatch):
+    """The deployment runs stateless_http=False, where later tool calls are
+    attributed from the Mcp-Session-Id alone. The SDK mints that id, so only a
+    real server proves the middleware reads it from the right place."""
+    import clients
+    import metrics
+    from mcp.server.auth.provider import AccessToken
+    from prometheus_client import REGISTRY
+
+    async def accept(token):
+        return AccessToken(token=token, client_id="alice", scopes=[])
+
+    monkeypatch.setattr(server, "verify_token", accept)
+    clients.reset_sessions()
+
+    mcp = metrics.InstrumentedFastMCP(
+        "stateful-test",
+        stateless_http=False,
+        streamable_http_path=f"{server.SERVICE_PREFIX}/mcp",
+    )
+
+    @mcp.tool()
+    async def ping_tool() -> str:
+        return "pong"
+
+    def counter():
+        return (
+            REGISTRY.get_sample_value(
+                "purdue_af_mcp_tool_calls_total",
+                {
+                    "tool": "ping_tool",
+                    "outcome": "success",
+                    "username": "alice",
+                    "client": "claude-code",
+                    "origin": "in_session",
+                },
+            )
+            or 0
+        )
+
+    app = server._AuthMiddleware(mcp.streamable_http_app())
+    async with LifespanManager(app) as manager:
+        transport = httpx.ASGITransport(app=manager.app)
+        # An in-cluster Host, so origin is exercised end to end too.
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://agentic-interface.cms.svc.cluster.local:8888",
+        ) as c:
+            auth = {"Authorization": "Bearer good-token"}
+            init = await c.post(
+                MCP_URL,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2025-03-26",
+                        "capabilities": {},
+                        "clientInfo": {"name": "claude-code", "version": "2.1.263"},
+                    },
+                },
+                headers={**MCP_HEADERS, **auth},
+            )
+            assert init.status_code == 200
+            session_id = init.headers.get("mcp-session-id")
+            assert session_id, "the SDK minted no session id for a stateful server"
+            remembered = clients.lookup(session_id)
+            assert remembered is not None and remembered.name == "claude-code"
+
+            sess = {**MCP_HEADERS, **auth, "mcp-session-id": session_id}
+            await c.post(
+                MCP_URL,
+                json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+                headers=sess,
+            )
+
+            before = counter()
+            called = await c.post(
+                MCP_URL,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/call",
+                    "params": {"name": "ping_tool", "arguments": {}},
+                },
+                headers=sess,
+            )
+            assert called.status_code == 200
+            # The tool call carried no clientInfo; the label can only have come
+            # from the session id.
+            assert counter() == before + 1

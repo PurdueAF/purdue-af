@@ -1,11 +1,8 @@
 """Tests for caller identification (clients.py) and its use in the middleware.
 
-Two things are worth pinning down here. The first is that neither label can be
-driven to arbitrary cardinality by a caller: `client` comes from a string the
-client chose for itself, and a Prometheus label with unbounded values is a
-Prometheus outage waiting to happen. The second is the stateful path — a
-clientInfo arrives once, on `initialize`, and every later tool call has to be
-attributed from the Mcp-Session-Id alone.
+Both labels come from strings the caller chose, so the properties that matter
+are that neither can reach Prometheus unclamped, and that a clientInfo seen
+once on `initialize` still attributes every later tool call.
 """
 
 import json
@@ -92,11 +89,20 @@ def test_client_from_initialize_keeps_the_raw_name_for_the_audit_line():
     assert info.name == "other" and info.raw == "brand-new-agent"
 
 
-def test_client_from_initialize_strips_newlines_from_the_raw_name():
-    """A newline in the raw name would forge extra lines in the logfmt record."""
-    info = clients.client_from_initialize(_initialize(name="evil\nclient_raw=spoofed"))
+@pytest.mark.parametrize(
+    "hostile",
+    [
+        "evil\nclient_raw=spoofed",
+        'x" origin=in_session user=root client_raw="safe',
+        "back\\slash",
+    ],
+)
+def test_the_raw_name_cannot_forge_audit_fields(hostile):
+    """client_raw sits in a quoted logfmt field; a caller must not be able to
+    close it or start a new record."""
+    info = clients.client_from_initialize(_initialize(name=hostile))
     assert info is not None
-    assert "\n" not in info.raw and "\r" not in info.raw
+    assert not set(info.raw) & set('"\\\n\r')
 
 
 def test_client_from_initialize_bounds_the_raw_name():

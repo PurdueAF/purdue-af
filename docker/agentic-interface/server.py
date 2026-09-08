@@ -94,27 +94,22 @@ def _token_problem(token: str) -> tuple[str, str] | None:
     return None
 
 
-# An MCP request body is a JSON-RPC message: kilobytes at most. The cap is
-# what keeps _buffer_body from holding an arbitrary upload in memory while it
-# looks for a handshake.
+# A JSON-RPC message is kilobytes at most; the cap bounds what _buffer_body
+# holds in memory.
 MAX_BODY_BYTES = 1 << 20
 
 
 async def _buffer_body(receive: Receive) -> tuple[Optional[bytes], Receive]:
-    """Read the request body, returning it and a `receive` that replays it.
+    """The request body, plus a `receive` that replays it for the app below.
 
-    ASGI hands the body over exactly once, so anything that inspects it must
-    put it back for the application underneath. Returns ``(None, receive)``
-    when the body exceeds MAX_BODY_BYTES — the caller answers 413 and never
-    reaches the replay.
+    Returns ``(None, receive)`` past MAX_BODY_BYTES; the caller answers 413.
     """
     messages: list[Message] = []
     body = bytearray()
     while True:
         message = await receive()
         messages.append(message)
-        if message["type"] != "http.request":
-            # http.disconnect: nothing more is coming.
+        if message["type"] != "http.request":  # http.disconnect
             break
         body += message.get("body", b"")
         if len(body) > MAX_BODY_BYTES:
@@ -239,20 +234,15 @@ class _AuthMiddleware:
             "token": access.token,
         }
 
-        # ── who is calling, and from where ────────────────────────────────
-        # Both are recorded on every tool call; clients.py documents how each
-        # is derived and why both are clamped to an allowlist.
         origin = clients.origin_of(headers)
         session_id = clients.session_id_of(headers)
         client = clients.lookup(session_id)
-        # Set when this very request is the handshake, so the response handler
-        # below knows to file the clientInfo it carried.
+        # Non-None when this request is the handshake, for counting_send below.
         handshake: Optional[clients.ClientInfo] = None
 
         if client is None and scope.get("method") == "POST":
-            # clientInfo rides on the initialize request and nowhere else, so
-            # the body is parsed only while the session is still unidentified
-            # — which, once a handshake has been seen, means never again.
+            # Only while the session is unidentified, so a tool call on an
+            # established session never pays for the parse.
             body, receive = await _buffer_body(receive)
             if body is None:
                 await self._respond(
@@ -289,17 +279,13 @@ class _AuthMiddleware:
                 status = message["status"]
                 response_headers = message.get("headers") or []
                 if handshake is not None and status < 400:
-                    # The MCP session id is minted by the server in its
-                    # initialize response: this is the one moment where the id
-                    # and the clientInfo that arrived with the request are both
-                    # in scope. In stateless mode there is no id and remember()
-                    # is a no-op — the handshake is still counted.
+                    # The SDK mints the session id here; this is the only point
+                    # where it and the request's clientInfo are both in scope.
                     clients.remember(
                         _header(response_headers, b"mcp-session-id"), handshake
                     )
                     record_session(handshake.name, origin)
                 elif scope.get("method") == "DELETE" and status < 400:
-                    # The client closed the session; stop holding its identity.
                     clients.forget(session_id)
             await send(message)
 

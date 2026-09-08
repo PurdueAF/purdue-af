@@ -1,10 +1,8 @@
 """Tests for docker/purdue-af/scripts/agent-wrapper.sh.
 
-The wrapper sits in front of every agent CLI in the image, on the path a user
-is waiting on. So the properties worth pinning down are mostly about it being
-invisible: the agent's arguments, streams and exit status must survive it
-untouched, and nothing it does for accounting may be able to stop an agent
-from starting.
+The wrapper fronts every agent CLI in the image, so most of what matters is
+that it stays invisible: arguments, streams and exit status pass through, and
+nothing it does for accounting can stop an agent starting.
 """
 
 import json
@@ -106,8 +104,7 @@ def test_unknown_version_when_the_manifest_is_missing(wrapper, tmp_path):
 
 
 def test_the_agent_gets_its_own_otel_identity(wrapper, tmp_path):
-    """Set here rather than pod-wide so jupyter-server's own tracer keeps its
-    service name, and so agent telemetry carries the AF username."""
+    """Set here, not pod-wide, so jupyter-server's tracer keeps its name."""
     real = tmp_path / "npm-global" / "bin" / "claude"
     real.parent.mkdir(parents=True, exist_ok=True)
     real.write_text(
@@ -166,11 +163,8 @@ def test_the_wrapper_is_named_after_every_agent_in_the_image():
 
 @pytest.mark.skipif(os.name != "posix", reason="signal semantics are POSIX")
 def test_the_agent_still_receives_an_interrupt(wrapper, tmp_path):
-    """`trap ':'` (not `trap ''`) is deliberate, and the difference is not
-    cosmetic: a signal *ignored* by the shell is inherited as ignored by its
-    children, which would leave the agent itself deaf to Ctrl-C. This runs the
-    real thing — SIGINT to the wrapper's process group, then check the agent
-    saw it."""
+    """An ignored disposition is inherited by children, so `trap ''` would
+    leave the agent deaf to Ctrl-C. Sends a real SIGINT to the group."""
     real = tmp_path / "npm-global" / "bin" / "claude"
     real.parent.mkdir(parents=True, exist_ok=True)
     marker = tmp_path / "agent-was-interrupted"
