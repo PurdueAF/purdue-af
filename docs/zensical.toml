@@ -75,6 +75,7 @@ nav = [
     ] },
     { "Agentic AI" = [
         "guide-agentic-interface.md",
+        "guide-agentic-telemetry.md",
     ] },
     { "Help" = [
         "troubleshooting.md",

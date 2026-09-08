@@ -9,6 +9,14 @@ facility is healthy, and inspect your Dask clusters, storage usage, and logs.
 Agents inside an AF session are ready to use; agents on your own machine need a
 token and a one-time setup.
 
+!!! info "What the facility records"
+
+    Using an agent here produces usage telemetry — sessions, token counts, and
+    the names of the tools and MCP servers it reached for. Your prompts,
+    the model's responses, and your shell commands are never collected.
+    [What the facility records about AI agent use](guide-agentic-telemetry.md)
+    is the full statement.
+
 ## Inside an AF session
 
 Nothing to set up. `claude`, `codex` and `opencode` are on `PATH` in any

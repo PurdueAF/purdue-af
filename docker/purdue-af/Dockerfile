@@ -195,6 +195,13 @@ RUN PATH="${BASE_ENV_DIR}/bin:${PATH}" \
     PATH="${NPM_GLOBAL}/bin:${BASE_ENV_DIR}/bin:${PATH}" opencode --version && \
     rm -rf "${HOME}/.npm" || true
 
+# The versions above, where agent-wrapper.sh can read them without paying for a
+# `--version` subprocess on every single agent launch. Travels to the runtime
+# stage with the /opt/npm-global copy below.
+RUN printf 'PAF_VERSION_claude=%s\nPAF_VERSION_codex=%s\nPAF_VERSION_opencode=%s\n' \
+        "${CLAUDE_CODE_VERSION}" "${CODEX_VERSION}" "${OPENCODE_VERSION}" \
+        > "${NPM_GLOBAL}/versions.env"
+
 # Import-smoke every direct dependency of the base env, each in a fresh
 # interpreter — catches broken installs (e.g. libstdc++ shadowing à la
 # GLIBCXX_3.4.29) at build time instead of in a user session.
@@ -278,7 +285,18 @@ COPY --chown=root:root .claude/skills/purdue-af-agentic-interface/SKILL.md \
 COPY --chown=root:root docker/purdue-af/agents/platform-context.md \
     /opt/purdue-af/agents/platform-context.md
 COPY --chown=root:root docker/purdue-af/scripts/managed-block.py \
-    /usr/local/bin/managed-block.py
+    docker/purdue-af/scripts/otel-toml-block.py \
+    /usr/local/bin/
+# Usage accounting for the agent CLIs. The symlinks shadow /opt/npm-global/bin
+# because ENV PATH below puts /usr/local/bin first; the wrapper dispatches on
+# its own basename and execs the real binary. opencode exports no telemetry of
+# its own, so for that agent this is the only record that it ran.
+COPY --chown=root:root docker/purdue-af/scripts/agent-wrapper.sh \
+    /usr/local/bin/agent-wrapper.sh
+RUN chmod 0755 /usr/local/bin/agent-wrapper.sh /usr/local/bin/otel-toml-block.py && \
+    for agent in claude codex opencode; do \
+        ln -sf /usr/local/bin/agent-wrapper.sh "/usr/local/bin/${agent}"; \
+    done
 COPY --chown=root:root docker/purdue-af/scripts/prepare-skill.py /tmp/prepare-skill.py
 # The pixi python, not the system one: this stage runs before ENV PATH below,
 # and Rocky 8's /usr/bin/python3 is 3.6 — too old for these scripts.

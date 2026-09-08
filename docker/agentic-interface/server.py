@@ -12,16 +12,19 @@ functions can scope their queries per-request.
 import json
 import logging
 import re
+from typing import Iterable, Optional
 
+import clients
 import uvicorn
 from auth import HubTokenVerifier, HubUnavailable
 from config import NAMESPACE, SERVICE_PREFIX, STATELESS_HTTP, TOKEN_URL
-from context import current_user
+from context import current_client, current_origin, current_session, current_user
 from metrics import (
     InstrumentedFastMCP,
     metrics_body,
     metrics_content_type,
     record_request,
+    record_session,
 )
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from tools import dask, health, logs, profiles, prompts, session, storage
@@ -89,6 +92,54 @@ def _token_problem(token: str) -> tuple[str, str] | None:
             f"{TOKEN_URL}), then reconnect the MCP server."
         )
     return None
+
+
+# An MCP request body is a JSON-RPC message: kilobytes at most. The cap is
+# what keeps _buffer_body from holding an arbitrary upload in memory while it
+# looks for a handshake.
+MAX_BODY_BYTES = 1 << 20
+
+
+async def _buffer_body(receive: Receive) -> tuple[Optional[bytes], Receive]:
+    """Read the request body, returning it and a `receive` that replays it.
+
+    ASGI hands the body over exactly once, so anything that inspects it must
+    put it back for the application underneath. Returns ``(None, receive)``
+    when the body exceeds MAX_BODY_BYTES — the caller answers 413 and never
+    reaches the replay.
+    """
+    messages: list[Message] = []
+    body = bytearray()
+    while True:
+        message = await receive()
+        messages.append(message)
+        if message["type"] != "http.request":
+            # http.disconnect: nothing more is coming.
+            break
+        body += message.get("body", b"")
+        if len(body) > MAX_BODY_BYTES:
+            return None, receive
+        if not message.get("more_body", False):
+            break
+
+    index = 0
+
+    async def replay() -> Message:
+        nonlocal index
+        if index < len(messages):
+            message = messages[index]
+            index += 1
+            return message
+        return await receive()
+
+    return bytes(body), replay
+
+
+def _header(headers: Iterable[tuple[bytes, bytes]], name: bytes) -> str:
+    for key, value in headers:
+        if key.lower() == name:
+            return value.decode(errors="replace")
+    return ""
 
 
 class _AuthMiddleware:
@@ -188,6 +239,39 @@ class _AuthMiddleware:
             "token": access.token,
         }
 
+        # ── who is calling, and from where ────────────────────────────────
+        # Both are recorded on every tool call; clients.py documents how each
+        # is derived and why both are clamped to an allowlist.
+        origin = clients.origin_of(headers)
+        session_id = clients.session_id_of(headers)
+        client = clients.lookup(session_id)
+        # Set when this very request is the handshake, so the response handler
+        # below knows to file the clientInfo it carried.
+        handshake: Optional[clients.ClientInfo] = None
+
+        if client is None and scope.get("method") == "POST":
+            # clientInfo rides on the initialize request and nowhere else, so
+            # the body is parsed only while the session is still unidentified
+            # — which, once a handshake has been seen, means never again.
+            body, receive = await _buffer_body(receive)
+            if body is None:
+                await self._respond(
+                    send,
+                    413,
+                    "Request body too large",
+                    hint=(
+                        "The MCP endpoint accepts at most "
+                        f"{MAX_BODY_BYTES} bytes per request."
+                    ),
+                )
+                record_request(route, 413)
+                return
+            handshake = clients.client_from_initialize(body)
+            client = handshake
+
+        if client is None:
+            client = clients.from_user_agent(headers)
+
         # Rewrite Host → localhost:8888 to satisfy the MCP SDK's DNS-rebinding
         # protection.  Our own token check above is the real auth gate.
         new_headers = [
@@ -203,13 +287,35 @@ class _AuthMiddleware:
             nonlocal status
             if message["type"] == "http.response.start":
                 status = message["status"]
+                response_headers = message.get("headers") or []
+                if handshake is not None and status < 400:
+                    # The MCP session id is minted by the server in its
+                    # initialize response: this is the one moment where the id
+                    # and the clientInfo that arrived with the request are both
+                    # in scope. In stateless mode there is no id and remember()
+                    # is a no-op — the handshake is still counted.
+                    clients.remember(
+                        _header(response_headers, b"mcp-session-id"), handshake
+                    )
+                    record_session(handshake.name, origin)
+                elif scope.get("method") == "DELETE" and status < 400:
+                    # The client closed the session; stop holding its identity.
+                    clients.forget(session_id)
             await send(message)
 
-        ctx_token = current_user.set(user_info)
+        ctx_tokens = (
+            current_user.set(user_info),
+            current_client.set(client),
+            current_origin.set(origin),
+            current_session.set(session_id[:8]),
+        )
         try:
             await self._app({**scope, "headers": new_headers}, receive, counting_send)
         finally:
-            current_user.reset(ctx_token)
+            current_session.reset(ctx_tokens[3])
+            current_origin.reset(ctx_tokens[2])
+            current_client.reset(ctx_tokens[1])
+            current_user.reset(ctx_tokens[0])
             record_request(route, status)
 
     @staticmethod

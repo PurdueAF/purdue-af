@@ -12,6 +12,7 @@ import json
 import os
 import shlex
 import subprocess
+import sys
 
 import pytest
 from common import REPO
@@ -45,7 +46,13 @@ def agent_home(tmp_path):
 
 
 @pytest.fixture()
-def run_script(tmp_path, agent_home):
+def claude_managed(tmp_path):
+    """Where the sandboxed hook writes Claude Code's managed settings."""
+    return tmp_path / "etc" / "claude-code" / "managed-settings.json"
+
+
+@pytest.fixture()
+def run_script(tmp_path, agent_home, claude_managed):
     """Run the hook with stubbed agent CLIs; returns (result, [argv lines]).
 
     The hook addresses three paths that only exist inside the image: the
@@ -66,6 +73,22 @@ def run_script(tmp_path, agent_home):
         .replace(
             '"/opt/purdue-af/agents/platform-context.md"',
             f'"{CONTEXT}"',
+        )
+        .replace(
+            "/usr/local/bin/otel-toml-block.py",
+            str(REPO / "docker/purdue-af/scripts/otel-toml-block.py"),
+        )
+        .replace(
+            'CLAUDE_MANAGED="/etc/claude-code/managed-settings.json"',
+            f'CLAUDE_MANAGED="{claude_managed}"',
+        )
+        # The hook falls back to whatever `python3` is on PATH when the image's
+        # pixi interpreter is absent, which it always is here. On a developer
+        # machine that fallback can be old enough to lack tomllib, so point it
+        # at the interpreter running the suite instead.
+        .replace(
+            '[[ -x "${PYTHON}" ]] || PYTHON="python3"',
+            f'[[ -x "${{PYTHON}}" ]] || PYTHON="{sys.executable}"',
         )
     )
 
@@ -803,3 +826,81 @@ def test_hooks_have_no_top_level_exit(hook):
         pytest.skip(f"{hook} not present")
     offenders = _top_level_exits(path.read_text())
     assert not offenders, f"{hook} exits the sourcing shell at {offenders}"
+
+
+# ── telemetry configuration ───────────────────────────────────────────────────
+#
+# The privacy guarantee in docs/docs/guide-agentic-telemetry.md is made of
+# exactly two things: these settings, and the redaction in the Alloy pipeline.
+# The tests below are the half that lives in this repo's shell.
+
+
+def test_managed_settings_enable_telemetry(run_script, claude_managed):
+    result, _ = run_script()
+    assert result.returncode == 0, result.stderr
+    env = json.loads(claude_managed.read_text())["env"]
+    assert env["CLAUDE_CODE_ENABLE_TELEMETRY"] == "1"
+    assert env["OTEL_METRICS_EXPORTER"] == "otlp"
+    assert env["OTEL_LOGS_EXPORTER"] == "otlp"
+
+
+def test_managed_settings_never_enable_content_logging(run_script, claude_managed):
+    """Prompts and responses stay redacted; tool details are on because that
+    is where MCP server and tool names live, and the collector drops the
+    content-bearing half of them."""
+    run_script()
+    env = json.loads(claude_managed.read_text())["env"]
+    assert env["OTEL_LOG_USER_PROMPTS"] == "0"
+    assert env["OTEL_LOG_ASSISTANT_RESPONSES"] == "0"
+    assert env["OTEL_LOG_TOOL_DETAILS"] == "1"
+    assert "OTEL_LOG_RAW_API_BODIES" not in env
+
+
+def test_managed_settings_use_per_signal_endpoints(run_script, claude_managed):
+    """Never the OTEL_EXPORTER_OTLP_ENDPOINT base: the pod points that at
+    Tempo for jupyter-server's tracer, and agent telemetry must not follow."""
+    run_script()
+    env = json.loads(claude_managed.read_text())["env"]
+    assert "OTEL_EXPORTER_OTLP_ENDPOINT" not in env
+    assert env["OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"].endswith("/v1/metrics")
+    assert env["OTEL_EXPORTER_OTLP_LOGS_ENDPOINT"].endswith("/v1/logs")
+
+
+def test_telemetry_endpoints_follow_the_namespace(run_script, claude_managed):
+    run_script(NAMESPACE="cms-other")
+    env = json.loads(claude_managed.read_text())["env"]
+    assert (
+        "alloy.cms-other.svc.cluster.local:4318"
+        in (env["OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"])
+    )
+
+
+def test_codex_gets_an_otel_block(run_script, agent_home):
+    run_script()
+    config = (agent_home / ".codex" / "config.toml").read_text()
+    assert "[otel]" in config
+    assert "log_user_prompt = false" in config
+    assert "alloy.cms.svc.cluster.local:4318/v1/logs" in config
+
+
+def test_codex_otel_block_is_idempotent(run_script, agent_home):
+    """Homes are persistent and this hook runs on every spawn, so a second
+    run must not leave two [otel] tables — which would not even parse."""
+    import tomllib
+
+    run_script()
+    first = (agent_home / ".codex" / "config.toml").read_text()
+    run_script()
+    second = (agent_home / ".codex" / "config.toml").read_text()
+    assert first == second
+    tomllib.loads(second)
+
+
+def test_username_is_exported_for_agent_telemetry(run_script):
+    """Without this, agent metrics cannot be joined to any other per-user
+    metric in the facility."""
+    result, _ = run_script()
+    assert 'OTEL_RESOURCE_ATTRIBUTES="user=jovyan' in (
+        SCRIPT.read_text().replace("${NB_USER}", "jovyan")
+    )
+    assert result.returncode == 0

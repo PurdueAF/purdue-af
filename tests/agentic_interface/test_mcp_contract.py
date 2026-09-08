@@ -6,6 +6,7 @@ of an `mcp` dependency bump). These tests are the canary for that.
 """
 
 import json
+from pathlib import Path
 
 import httpx
 import server
@@ -87,6 +88,20 @@ def initialize_payload():
 MCP_URL = f"{server.SERVICE_PREFIX}/mcp"
 MCP_HEADERS = {"Accept": "application/json, text/event-stream"}
 
+# The labels the tools/call below is expected to land on. This suite runs the
+# app in its default stateless mode, where no Mcp-Session-Id ties a tools/call
+# back to the initialize that named the client — so identification falls back
+# to the User-Agent, and httpx's is classified as "script". The deployment runs
+# stateful (MCP_STATELESS_HTTP=false), which test_clients.py covers instead.
+# Host is "hub", which is not an in-cluster address, hence origin "external".
+TOOL_LABELS = {
+    "tool": "list_af_profiles",
+    "outcome": "success",
+    "username": "alice",
+    "client": "script",
+    "origin": "external",
+}
+
 
 async def test_full_stack_handshake_and_auth(monkeypatch):
     """One lifespan (the session manager is single-run), both auth outcomes."""
@@ -140,11 +155,7 @@ async def test_full_stack_handshake_and_auth(monkeypatch):
             before = (
                 REGISTRY.get_sample_value(
                     "purdue_af_mcp_tool_calls_total",
-                    {
-                        "tool": "list_af_profiles",
-                        "outcome": "success",
-                        "username": "alice",
-                    },
+                    TOOL_LABELS,
                 )
                 or 0
             )
@@ -162,11 +173,7 @@ async def test_full_stack_handshake_and_auth(monkeypatch):
             after = (
                 REGISTRY.get_sample_value(
                     "purdue_af_mcp_tool_calls_total",
-                    {
-                        "tool": "list_af_profiles",
-                        "outcome": "success",
-                        "username": "alice",
-                    },
+                    TOOL_LABELS,
                 )
                 or 0
             )
@@ -224,3 +231,28 @@ async def test_declined_elicitation_returns_help_text_not_a_validation_error():
     text = result.content[0].text
     assert text == result.structuredContent["result"]
     assert "create_dask_cluster needs" in text
+
+
+# ── the image carries every module the service imports ────────────────────────
+
+
+def test_every_module_is_copied_into_the_image():
+    """The Dockerfile COPYs modules one by one, so a new file is invisible to
+    the image until a line is added for it — and the failure is an
+    ImportError at container start, long after the tests here have passed.
+    (clients.py shipped exactly this way once.)"""
+    root = Path(server.__file__).resolve().parent
+    dockerfile = (root / "Dockerfile").read_text()
+    modules = {
+        path.name
+        for path in root.glob("*.py")
+        # __init__.py and friends would be packaging, not service modules;
+        # there are none today, and a new one should be added deliberately.
+        if not path.name.startswith("_")
+    }
+    missing = {
+        name
+        for name in modules
+        if f"COPY docker/agentic-interface/{name} " not in dockerfile
+    }
+    assert not missing, f"not COPYed into the image: {sorted(missing)}"

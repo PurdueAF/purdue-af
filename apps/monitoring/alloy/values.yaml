@@ -3,8 +3,6 @@
 controller:
   type: daemonset
   replicas: 1
-  service:
-    enabled: false
   # Roll up to 3 nodes at a time; default maxUnavailable=1 is too slow for 12 nodes.
   updateStrategy:
     type: RollingUpdate
@@ -24,6 +22,16 @@ controller:
   nodeSelector:
     cms-af-dev: "true"
 
+# Top level, not controller.service: that key is not one this chart reads, so
+# the "enabled: false" that used to sit under controller never disabled
+# anything. The Service is what agent CLIs in session pods resolve as
+# alloy.cms.svc.cluster.local to reach the OTLP receiver below; a daemonset
+# behind a ClusterIP lands each export on an arbitrary node's Alloy, which is
+# all a stateless forwarder needs.
+service:
+  enabled: true
+  type: ClusterIP
+
 serviceAccount:
   create: true
 
@@ -33,6 +41,13 @@ rbac:
 alloy:
   initialDelaySeconds: 30
   timeoutSeconds: 5
+  # OTLP/HTTP intake for the coding agents. Named ports here appear on both the
+  # container and the Service (see the chart's service.yaml).
+  extraPorts:
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
   mounts:
     extra:
       - name: alloy-storage
@@ -114,6 +129,144 @@ alloy:
       loki.write "default" {
         endpoint {
           url = "http://loki.cms.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
+
+      // ── agent telemetry ───────────────────────────────────────────────
+      //
+      // Claude Code and codex export OpenTelemetry themselves; this is where
+      // it arrives (docker/purdue-af/scripts/config-agents.sh points them
+      // here). Both signals could in principle go straight to a backend —
+      // Prometheus has a remote-write receiver and Loki 3 ingests OTLP — but
+      // they come through Alloy because of the transform below: it is the one
+      // place that can drop what must never be stored, and a pipeline where
+      // redaction is a hop the data cannot skip is worth more than one hop
+      // fewer.
+
+      otelcol.receiver.otlp "agents" {
+        http {
+          endpoint = "0.0.0.0:4318"
+        }
+        // No gRPC listener: nothing is configured to use one, and an open
+        // port with no client is just surface.
+        output {
+          metrics = [otelcol.processor.transform.agents.input]
+          logs    = [otelcol.processor.filter.agents.input]
+        }
+      }
+
+      // Raw request/response bodies, if a user ever turns OTEL_LOG_RAW_API_BODIES
+      // on for themselves. These events are whole conversations; they are
+      // dropped as a class rather than redacted field by field.
+      otelcol.processor.filter "agents" {
+        error_mode = "ignore"
+        logs {
+          log_record = [
+            `attributes["event.name"] == "claude_code.api_request_body"`,
+            `attributes["event.name"] == "claude_code.api_response_body"`,
+          ]
+        }
+        output {
+          logs = [otelcol.processor.transform.agents.input]
+        }
+      }
+
+      // What the facility is allowed to keep. The managed settings already
+      // turn the content switches off, but those only bind Claude Code
+      // launched with them — this is what makes the guarantee true of
+      // anything that can reach the port, including a user who sets
+      // OTEL_LOG_USER_PROMPTS=1 in their own shell.
+      otelcol.processor.transform "agents" {
+        error_mode = "ignore"
+
+        // user.email and the account ids identify the user's Anthropic (or
+        // OpenAI) account. The facility neither needs them nor should hold
+        // them: OTEL_RESOURCE_ATTRIBUTES already carries the AF username,
+        // which is the identity every other per-user metric joins on. On
+        // metrics this matters twice over — resource_to_telemetry_conversion
+        // below turns whatever survives into Prometheus labels.
+        metric_statements {
+          context = "resource"
+          statements = [
+            `delete_key(attributes, "user.email")`,
+            `delete_key(attributes, "user.account_uuid")`,
+            `delete_key(attributes, "user.account_id")`,
+          ]
+        }
+        metric_statements {
+          context = "datapoint"
+          statements = [
+            `delete_key(attributes, "user.email")`,
+            `delete_key(attributes, "user.account_uuid")`,
+            `delete_key(attributes, "user.account_id")`,
+          ]
+        }
+        log_statements {
+          context = "resource"
+          statements = [
+            `delete_key(attributes, "user.email")`,
+            `delete_key(attributes, "user.account_uuid")`,
+            `delete_key(attributes, "user.account_id")`,
+          ]
+        }
+        log_statements {
+          context = "log"
+          statements = [
+            // Prompt and response text.
+            `delete_key(attributes, "prompt")`,
+            `delete_key(attributes, "response")`,
+            // Tool input, always. tool_parameters survives only for MCP
+            // tools, where it carries mcp_server_name and mcp_tool_name —
+            // the reason OTEL_LOG_TOOL_DETAILS is on at all. On Bash and the
+            // file-editing tools the same attribute is the command line and
+            // the file content, so it goes.
+            `delete_key(attributes, "tool_input")`,
+            `delete_key(attributes, "tool_parameters") where attributes["tool_name"] == nil`,
+            `delete_key(attributes, "tool_parameters") where not IsMatch(attributes["tool_name"], "^mcp__")`,
+            `delete_key(attributes, "error") where not IsMatch(attributes["tool_name"], "^mcp__")`,
+          ]
+        }
+
+        output {
+          metrics = [otelcol.processor.batch.agents.input]
+          logs    = [otelcol.processor.batch.agents.input]
+        }
+      }
+
+      otelcol.processor.batch "agents" {
+        output {
+          metrics = [otelcol.exporter.prometheus.agents.input]
+          logs    = [otelcol.exporter.otlphttp.agents.input]
+        }
+      }
+
+      otelcol.exporter.prometheus "agents" {
+        // Keep the names the docs use: claude_code.token.usage becomes
+        // claude_code_token_usage, not claude_code_token_usage_tokens_total.
+        add_metric_suffixes = false
+        // The AF username arrives as a resource attribute
+        // (OTEL_RESOURCE_ATTRIBUTES=user=…), and without this it would never
+        // become a label — which would leave every agent metric unattributable.
+        // Safe only because the transform above has already removed the
+        // resource attributes that must not become labels.
+        resource_to_telemetry_conversion = true
+        include_target_info = false
+        include_scope_info  = false
+        forward_to = [prometheus.remote_write.agents.receiver]
+      }
+
+      prometheus.remote_write "agents" {
+        endpoint {
+          // The AF Prometheus, which already runs with
+          // --web.enable-remote-write-receiver (apps/monitoring/prometheus/values.yaml).
+          url = "http://prometheus-server.cms.svc.cluster.local:9090/api/v1/write"
+        }
+      }
+
+      otelcol.exporter.otlphttp "agents" {
+        client {
+          // Loki 3 ingests OTLP natively; the exporter appends /v1/logs.
+          endpoint = "http://loki.cms.svc.cluster.local:3100/otlp"
         }
       }
 

@@ -23,6 +23,7 @@ _config_agents() {
 	# this server explicitly, so a mismatch makes its instructions wrong.
 	local MCP_NAME MCP_URL AUTH_HEADER SKILL_SRC AGENT_SECTION PYTHON NEW_HOME
 	local OPENCODE_CFG OPENCODE_INSTRUCTIONS target
+	local OTLP_BASE CLAUDE_MANAGED CODEX_BLOCK
 	MCP_NAME="purdue-af-agentic-interface"
 	# In-cluster address of the hub-registered service. The public URL is not
 	# usable from inside a session (JUPYTERHUB_PUBLIC_HUB_URL is empty there), and
@@ -37,6 +38,10 @@ _config_agents() {
 	# Rocky 8 is 3.6 — too old for the platform's scripts.
 	PYTHON="/opt/pixi/.pixi/envs/base-env/bin/python3"
 	[[ -x "${PYTHON}" ]] || PYTHON="python3"
+	# Alloy's OTLP receiver, which fans agent telemetry out to Prometheus
+	# (metrics) and Loki (events). See apps/monitoring/alloy/values.yaml.
+	OTLP_BASE="http://alloy.${NAMESPACE:-cms}.svc.cluster.local:4318"
+	CLAUDE_MANAGED="/etc/claude-code/managed-settings.json"
 
 	if [[ -z "${NB_USER:-}" ]]; then
 		echo "config-agents: NB_USER unset, skipping" >&2
@@ -79,6 +84,86 @@ _config_agents() {
 	_register codex \
 		"codex mcp remove '${MCP_NAME}'" \
 		"codex mcp add '${MCP_NAME}' --url '${MCP_URL}' --bearer-token-env-var JUPYTERHUB_API_TOKEN"
+
+	# ── agent telemetry ───────────────────────────────────────────────────
+	#
+	# What the facility learns from an agent, and what it deliberately does
+	# not: counts, durations, models, token and cost totals, and the names of
+	# the tools and MCP servers the agent reached for — never a prompt, a
+	# response, a shell command, or tool input. docs/docs/guide-agentic-telemetry.md
+	# is the user-facing statement of exactly that, and these settings, plus
+	# the redaction in the Alloy pipeline, are what hold it true.
+	#
+	# The AF username rides in OTEL_RESOURCE_ATTRIBUTES so agent telemetry
+	# joins every other per-user metric in the facility. Exported here rather
+	# than set in the pod spec because start.sh sources this hook and then
+	# execs `sudo --preserve-env`: the value reaches the notebook server and
+	# every terminal and code-server process under it, with no {username}
+	# templating to get wrong. agent-wrapper.sh appends the per-agent half.
+	export OTEL_RESOURCE_ATTRIBUTES="user=${NB_USER},af.facility=purdue-af"
+
+	# Claude Code reads managed settings above every other level, so this is
+	# the one agent whose telemetry a user cannot quietly redirect or enrich:
+	# the endpoints are pinned and every content-bearing switch is off. It
+	# lives under /etc, written as root, where a session user cannot edit it.
+	if mkdir -p "$(dirname "${CLAUDE_MANAGED}")" 2>/dev/null &&
+		cat >"${CLAUDE_MANAGED}" <<-JSON
+			{
+			  "env": {
+			    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+			    "OTEL_METRICS_EXPORTER": "otlp",
+			    "OTEL_LOGS_EXPORTER": "otlp",
+			    "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+			    "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "${OTLP_BASE}/v1/metrics",
+			    "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "${OTLP_BASE}/v1/logs",
+			    "OTEL_METRIC_EXPORT_INTERVAL": "60000",
+			    "OTEL_METRICS_INCLUDE_SESSION_ID": "false",
+			    "OTEL_METRICS_INCLUDE_ACCOUNT_UUID": "false",
+			    "OTEL_METRICS_INCLUDE_ENTRYPOINT": "true",
+			    "OTEL_LOG_TOOL_DETAILS": "1",
+			    "OTEL_LOG_USER_PROMPTS": "0",
+			    "OTEL_LOG_ASSISTANT_RESPONSES": "0"
+			  }
+			}
+		JSON
+	then
+		chmod 0644 "${CLAUDE_MANAGED}" 2>/dev/null || true
+		echo "config-agents: wrote Claude Code managed settings"
+	else
+		echo "config-agents: WARNING could not write ${CLAUDE_MANAGED}" >&2
+	fi
+
+	# Per-signal endpoints above, never the OTEL_EXPORTER_OTLP_ENDPOINT base:
+	# the pod already points that one at Tempo for jupyter-server's tracer,
+	# and a base endpoint would send agent metrics and events there instead.
+	#
+	# Codex has no managed-settings equivalent, so the same policy goes into
+	# the user's own config.toml as a replaceable block. It must run AFTER the
+	# `codex mcp add` above, which round-trips that file through codex's TOML
+	# writer and does not promise to keep the block's comment markers.
+	CODEX_BLOCK="$(mktemp)"
+	cat >"${CODEX_BLOCK}" <<-TOML
+		[otel]
+		environment = "purdue-af"
+		log_user_prompt = false
+
+		[otel.exporter.otlp-http]
+		endpoint = "${OTLP_BASE}/v1/logs"
+		protocol = "binary"
+
+		[otel.metrics_exporter.otlp-http]
+		endpoint = "${OTLP_BASE}/v1/metrics"
+		protocol = "binary"
+	TOML
+	if _as_user "'${PYTHON}' /usr/local/bin/otel-toml-block.py '${CODEX_BLOCK}' '${NEW_HOME}/.codex/config.toml'"; then
+		echo "config-agents: set codex telemetry config"
+	else
+		echo "config-agents: WARNING could not set codex telemetry config" >&2
+	fi
+	rm -f "${CODEX_BLOCK}"
+
+	# opencode exports no telemetry of its own; agent-wrapper.sh is the only
+	# record that it ran at all.
 
 	# opencode has no `mcp add`, and it does not need one: OPENCODE_CONFIG names a
 	# config layer that opencode merges BETWEEN the user's global config and their

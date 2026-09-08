@@ -119,11 +119,25 @@ def test_record_request_increments_counter():
 # ── tool-call metrics ─────────────────────────────────────────────────────────
 
 
-def _tool_counter_value(tool: str, outcome: str, username: str = "unknown") -> float:
+def _tool_counter_value(
+    tool: str,
+    outcome: str,
+    username: str = "unknown",
+    client: str = "unknown",
+    origin: str = "unknown",
+) -> float:
+    # client/origin default to what an unbound context reports, which is what
+    # a tool invoked outside the ASGI middleware (i.e. most of this file) sees.
     return (
         REGISTRY.get_sample_value(
             "purdue_af_mcp_tool_calls_total",
-            {"tool": tool, "outcome": outcome, "username": username},
+            {
+                "tool": tool,
+                "outcome": outcome,
+                "username": username,
+                "client": client,
+                "origin": origin,
+            },
         )
         or 0.0
     )

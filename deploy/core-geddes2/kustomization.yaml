@@ -110,6 +110,8 @@ configMapGenerator:
     files:
       - ../../apps/monitoring/grafana/dashboards/users-overview.json
       - ../../apps/monitoring/grafana/dashboards/pyroscope.json
+      # Private, not public: every panel is broken down by named user.
+      - ../../apps/monitoring/grafana/dashboards/agentic-usage.json
 
   - name: prometheus-config
     files:

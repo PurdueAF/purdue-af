@@ -2,7 +2,9 @@
 
 Metric families:
   purdue_af_mcp_api_calls_total          HTTP requests by route/status
+  purdue_af_mcp_sessions_total           MCP handshakes by client/origin
   purdue_af_mcp_tool_calls_total         tool invocations by tool/outcome/username
+                                         /client/origin
                                          (success | needs_input | user_error |
                                           auth_error | upstream_error |
                                           exception — the errors.Failure
@@ -13,7 +15,14 @@ Metric families:
   purdue_af_mcp_auth_total               token validation results
 
 The username label exists for ad-hoc per-user queries in Prometheus;
-dashboards aggregate over it.
+dashboards aggregate over it. `client` and `origin` come from clients.py,
+which clamps both to a small allowlist — the values are derived from
+caller-supplied strings and would otherwise be unbounded label cardinality.
+
+Only the counters carry client/origin. purdue_af_mcp_tool_duration_seconds
+stays keyed by tool alone: it is eleven buckets per series, and how long a
+tool takes is a property of the tool and its backends, not of the harness
+that asked for it.
 """
 
 import logging
@@ -21,7 +30,8 @@ import time
 from typing import Any, Callable, Union
 
 import httpx
-from context import current_user
+from clients import UNKNOWN, ClientInfo
+from context import current_client, current_origin, current_session, current_user
 from errors import Failure, invalid_arguments, unexpected_failure
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
@@ -44,10 +54,17 @@ API_CALLS_TOTAL = Counter(
     ["route", "status"],
 )
 
+SESSIONS_TOTAL = Counter(
+    "purdue_af_mcp_sessions_total",
+    "MCP initialize handshakes, by the agent that opened the session and the "
+    "route it arrived on",
+    ["client", "origin"],
+)
+
 TOOL_CALLS_TOTAL = Counter(
     "purdue_af_mcp_tool_calls_total",
     "Total MCP tool invocations",
-    ["tool", "outcome", "username"],
+    ["tool", "outcome", "username", "client", "origin"],
 )
 
 TOOL_DURATION = Histogram(
@@ -82,8 +99,16 @@ def record_request(route: str, status: int) -> None:
     API_CALLS_TOTAL.labels(route=route, status=str(status)).inc()
 
 
-def record_tool_call(tool: str, outcome: str, username: str) -> None:
-    TOOL_CALLS_TOTAL.labels(tool=tool, outcome=outcome, username=username).inc()
+def record_tool_call(
+    tool: str, outcome: str, username: str, client: str, origin: str
+) -> None:
+    TOOL_CALLS_TOTAL.labels(
+        tool=tool, outcome=outcome, username=username, client=client, origin=origin
+    ).inc()
+
+
+def record_session(client: str, origin: str) -> None:
+    SESSIONS_TOTAL.labels(client=client, origin=origin).inc()
 
 
 def record_upstream(target: str, outcome: str, seconds: float) -> None:
@@ -97,7 +122,15 @@ def record_auth(result: str) -> None:
 
 def _username() -> str:
     user = current_user.get(None)
-    return (user or {}).get("username") or "unknown"
+    return (user or {}).get("username") or UNKNOWN
+
+
+def _caller() -> tuple[ClientInfo, str]:
+    """The agent and ingress path behind the request now being served."""
+    client = current_client.get(None)
+    if client is None:
+        client = ClientInfo(name=UNKNOWN, raw="", version="")
+    return client, current_origin.get()
 
 
 def _translate(name: str, username: str, exc: Exception) -> tuple[Exception, str]:
@@ -176,14 +209,26 @@ class InstrumentedFastMCP(FastMCP):
     @staticmethod
     def _record(name: str, outcome: str, username: str, start: float) -> None:
         elapsed = time.monotonic() - start
+        client, origin = _caller()
         TOOL_DURATION.labels(tool=name).observe(elapsed)
-        record_tool_call(name, outcome, username)
+        record_tool_call(name, outcome, username, client.name, origin)
+        # logfmt, so Loki's `| logfmt` parses it and the usage dashboard can
+        # group by any field. This line — not the counters — is the audit
+        # record: it is the only place that says which agent did what, and
+        # client_raw is the harness's own spelling of its name, the one way a
+        # client missing from clients._CLIENT_PATTERNS becomes visible.
         logger.info(
-            "tool_call tool=%s user=%s outcome=%s duration_ms=%.0f",
+            "tool_call tool=%s user=%s outcome=%s duration_ms=%.0f "
+            'client=%s client_raw="%s" client_version="%s" origin=%s session=%s',
             name,
             username,
             outcome,
             elapsed * 1000,
+            client.name,
+            client.raw,
+            client.version,
+            origin,
+            current_session.get(),
         )
 
 
