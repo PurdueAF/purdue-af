@@ -88,12 +88,9 @@ def initialize_payload():
 MCP_URL = f"{server.SERVICE_PREFIX}/mcp"
 MCP_HEADERS = {"Accept": "application/json, text/event-stream"}
 
-# The labels the tools/call below is expected to land on. This suite runs the
-# app in its default stateless mode, where no Mcp-Session-Id ties a tools/call
-# back to the initialize that named the client — so identification falls back
-# to the User-Agent, and httpx's is classified as "script". The deployment runs
-# stateful (MCP_STATELESS_HTTP=false), which test_clients.py covers instead.
-# Host is "hub", which is not an in-cluster address, hence origin "external".
+# Stateless mode here, so no session ties the call back to the initialize and
+# identification falls back to httpx's User-Agent ("script"). Host "hub" is not
+# an in-cluster address. The stateful path is covered further down.
 TOOL_LABELS = {
     "tool": "list_af_profiles",
     "outcome": "success",
@@ -243,13 +240,7 @@ def test_every_module_is_copied_into_the_image():
     (clients.py shipped exactly this way once.)"""
     root = Path(server.__file__).resolve().parent
     dockerfile = (root / "Dockerfile").read_text()
-    modules = {
-        path.name
-        for path in root.glob("*.py")
-        # __init__.py and friends would be packaging, not service modules;
-        # there are none today, and a new one should be added deliberately.
-        if not path.name.startswith("_")
-    }
+    modules = {path.name for path in root.glob("*.py") if not path.name.startswith("_")}
     missing = {
         name
         for name in modules
@@ -349,6 +340,4 @@ async def test_stateful_session_carries_the_client_to_later_tool_calls(monkeypat
                 headers=sess,
             )
             assert called.status_code == 200
-            # The tool call carried no clientInfo; the label can only have come
-            # from the session id.
             assert counter() == before + 1

@@ -256,19 +256,11 @@ singleuser:
     NAMESPACE: ${namespace}
     PYROSCOPE_SERVER: "http://pyroscope.cms.svc.cluster.local:4040"
     PYROSCOPE_APP: "purdue-af"
-    # Traces, for the sitecustomize tracer above. Deliberately the *base*
-    # endpoint and nothing else: the coding agents in this image also read
-    # OTEL_* from their environment, and they are pointed at Alloy through
-    # per-signal endpoints (OTEL_EXPORTER_OTLP_{METRICS,LOGS}_ENDPOINT in
-    # /etc/claude-code/managed-settings.json, written by config-agents.sh),
-    # which take precedence over this one. Setting a metrics or logs endpoint
-    # here would send agent telemetry to Tempo instead.
+    # Base endpoint only: the agent CLIs read OTEL_* too, and are pointed at
+    # Alloy by per-signal endpoints that take precedence over this.
     OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo.cms.svc.cluster.local:4318"
-    # OTEL_SERVICE_NAME is intentionally NOT set. The sitecustomize above
-    # already defaults service.name to "jupyter-server", so nothing changes
-    # for the notebook server's own traces — while an agent CLI started in a
-    # session no longer inherits that name and reports itself instead
-    # (agent-wrapper.sh sets it per agent).
+    # OTEL_SERVICE_NAME unset on purpose — the sitecustomize above already
+    # defaults it, and an agent should not inherit "jupyter-server".
   networkPolicy:
     enabled: false
   storage:

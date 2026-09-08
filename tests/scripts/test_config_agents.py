@@ -78,10 +78,8 @@ def sandboxed_script(tmp_path, agent_home, claude_managed):
             'CLAUDE_MANAGED="/etc/claude-code/managed-settings.json"',
             f'CLAUDE_MANAGED="{claude_managed}"',
         )
-        # The hook falls back to whatever `python3` is on PATH when the image's
-        # pixi interpreter is absent, which it always is here. On a developer
-        # machine that fallback can be old enough to lack tomllib, so point it
-        # at the interpreter running the suite instead.
+        # The image's pixi interpreter is never here, and the `python3` the
+        # hook falls back to may predate tomllib.
         .replace(
             '[[ -x "${PYTHON}" ]] || PYTHON="python3"',
             f'[[ -x "${{PYTHON}}" ]] || PYTHON="{sys.executable}"',
@@ -844,8 +842,8 @@ def test_hooks_have_no_top_level_exit(hook):
 
 # ── telemetry configuration ───────────────────────────────────────────────────
 #
-# Half of what holds the guarantee in docs/docs/guide-agentic-telemetry.md;
-# the other half is the redaction in the Alloy pipeline.
+# Half of what holds the policy in docs/docs/guide-agentic-telemetry.md; the
+# Alloy redaction is the other half.
 
 
 def test_managed_settings_enable_telemetry(run_script, claude_managed):

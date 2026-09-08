@@ -28,12 +28,10 @@ def require_user() -> dict[str, Any]:
     return user
 
 
-# Per-request caller context, set by the same middleware. Never load-bearing:
-# a tool must still run when the client could not be identified.
+# Per-request caller context, set by the same middleware. Never load-bearing.
 current_client: ContextVar[Optional[ClientInfo]] = ContextVar(
     "current_client", default=None
 )
 current_origin: ContextVar[str] = ContextVar("current_origin", default=UNKNOWN)
-# A short prefix of the Mcp-Session-Id, never the whole id — in stateful mode
-# that id is a live capability.
+# A prefix, never the whole id — in stateful mode that id is a capability.
 current_session: ContextVar[str] = ContextVar("current_session", default="")

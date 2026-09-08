@@ -136,7 +136,6 @@ alloy:
         http {
           endpoint = "0.0.0.0:4318"
         }
-        // No gRPC listener: nothing uses one.
         output {
           metrics = [otelcol.processor.transform.agents.input]
           logs    = [otelcol.processor.filter.agents.input]

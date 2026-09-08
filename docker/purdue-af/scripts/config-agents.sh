@@ -38,8 +38,7 @@ _config_agents() {
 	# Rocky 8 is 3.6 — too old for the platform's scripts.
 	PYTHON="/opt/pixi/.pixi/envs/base-env/bin/python3"
 	[[ -x "${PYTHON}" ]] || PYTHON="python3"
-	# Alloy's OTLP receiver, which fans agent telemetry out to Prometheus
-	# (metrics) and Loki (events). See apps/monitoring/alloy/values.yaml.
+	# Alloy's OTLP receiver; see apps/monitoring/alloy/values.yaml.
 	OTLP_BASE="http://alloy.${NAMESPACE:-cms}.svc.cluster.local:4318"
 	CLAUDE_MANAGED="/etc/claude-code/managed-settings.json"
 
@@ -85,10 +84,8 @@ _config_agents() {
 		"codex mcp remove '${MCP_NAME}'" \
 		"codex mcp add '${MCP_NAME}' --url '${MCP_URL}' --bearer-token-env-var JUPYTERHUB_API_TOKEN"
 
-	# Agent telemetry; docs/docs/guide-agentic-telemetry.md states the policy
-	# these settings and the Alloy redaction implement. Exported rather than
-	# set in the pod spec because start.sh sources this hook, so the value
-	# reaches every process under the notebook server.
+	# Policy in docs/docs/guide-agentic-telemetry.md. Exported here, not in the
+	# pod spec: start.sh sources this, so it reaches every process below.
 	export OTEL_RESOURCE_ATTRIBUTES="user=${NB_USER},af.facility=purdue-af"
 
 	# Managed settings outrank anything a user can write, under /etc.
