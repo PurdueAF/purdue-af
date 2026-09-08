@@ -78,10 +78,13 @@ render_env() {
 # assets both dropping connections mid-run). Retry a few times before
 # believing it; a genuinely broken chart or values file fails all attempts.
 # Shallow-clone a GitRepository source once per (url, ref) and echo the path.
-# Charts there carry no packaged dependencies, so build them on first use.
+# A chart in git has no packaged dependencies, so fetch them on first use:
+# `dependency update`, not `build`, because build wants every repository in
+# Chart.yaml already registered via `helm repo add` and a fresh runner has
+# none — update resolves them from the URLs themselves.
 git_chart_dir() {
 	local url=$1 ref=$2 chart_path=$3
-	local key clone_dir
+	local key clone_dir out
 	key=$(printf '%s@%s' "$url" "$ref" | shasum | cut -d' ' -f1)
 	clone_dir="$workdir/gitsrc-$key"
 	if [[ ! -d "$clone_dir" ]]; then
@@ -91,7 +94,15 @@ git_chart_dir() {
 		echo "chart path '${chart_path}' not in ${url}@${ref}" >&2
 		return 1
 	}
-	helm dependency build "$clone_dir/$chart_path" >/dev/null 2>&1 || true
+	if [[ -f "$clone_dir/$chart_path/Chart.yaml" ]] &&
+		[[ $(yq -N '.dependencies | length' "$clone_dir/$chart_path/Chart.yaml") -gt 0 ]] &&
+		[[ ! -d "$clone_dir/$chart_path/charts" ]]; then
+		if ! out=$(helm dependency update "$clone_dir/$chart_path" 2>&1); then
+			printf '%s\n' "$out" >&2
+			echo "could not fetch chart dependencies for ${chart_path} in ${url}@${ref}" >&2
+			return 1
+		fi
+	fi
 	printf '%s' "$clone_dir/$chart_path"
 }
 
