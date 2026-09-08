@@ -13,7 +13,7 @@ reached for — never what you or the model said.**
 
 | | |
 |---|---|
-| **Sessions** | that an agent started, which agent, its version, how long it ran, and how it exited |
+| **Sessions** | that an agent started, which agent, and how long it was active |
 | **Interface** | whether it ran in a terminal, the VS Code interface, or a programmatic driver such as the JupyterLab chat |
 | **Volume** | token counts, the agent's own estimate of the cost, and how many lines of code it added or removed |
 | **Tools** | the *names* of the tools an agent invoked, whether each succeeded, and whether you accepted or rejected its proposed edits |
@@ -66,8 +66,11 @@ whichever model provider you logged in to, which is between you and them.
 Telemetry is on by default and the facility asks you to leave it on: the
 numbers are what justify keeping these tools available. It is not a lock,
 though. Setting `OTEL_METRICS_EXPORTER=none` and `OTEL_LOGS_EXPORTER=none` in
-your shell stops Claude Code and Codex reporting, and running an agent by its
-full path in `/opt/npm-global/bin` skips the wrapper that records launches.
+your shell stops Claude Code and Codex reporting.
+
+Nothing wraps, intercepts or replaces the agent binaries themselves. `claude`,
+`codex` and `opencode` on your `PATH` are the upstream releases, unmodified;
+the facility only sets configuration each of them reads on its own.
 
 What you cannot switch off is the AF MCP server's own record of the calls your
 agent makes to it. That is a server-side log of actions taken against

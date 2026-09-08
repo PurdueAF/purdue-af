@@ -94,6 +94,7 @@ _config_agents() {
 			{
 			  "env": {
 			    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+			    "OTEL_SERVICE_NAME": "claude-code",
 			    "OTEL_METRICS_EXPORTER": "otlp",
 			    "OTEL_LOGS_EXPORTER": "otlp",
 			    "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",

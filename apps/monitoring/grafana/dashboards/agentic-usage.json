@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "How the facility's agentic features are used: which agents people run, on which interface, what they ask them to do, and what it costs. Sources: OTel from the agent CLIs, the AF MCP server's own metrics, and the wrapper records that cover agents with no telemetry. Prompts, responses, shell commands and tool inputs are never collected — see docs/docs/guide-agentic-telemetry.md.",
+  "description": "How the facility's agentic features are used: which agents people run, on which interface, what they ask them to do, and what it costs. Sources: OTel from the agent CLIs, and the AF MCP server's own metrics — which is the only signal for an agent that exports no telemetry of its own. Prompts, responses, shell commands and tool inputs are never collected; see docs/docs/guide-agentic-telemetry.md.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -412,7 +412,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "claude_code.session.count by service name, which agent-wrapper.sh sets per agent.",
+      "description": "Sessions per agent, from the agents that export OpenTelemetry (Claude Code, codex). opencode exports none, so it appears only in the MCP panels below, and only when it talks to the facility.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -463,7 +463,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 24,
         "x": 0,
         "y": 5
       },
@@ -496,97 +496,6 @@
         }
       ],
       "title": "Agent sessions by agent",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "description": "From the wrapper's agent_run records — the only signal for opencode, and a cross-check on the two agents that export telemetry.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 6,
-            "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "decimals": 0,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": []
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 5
-      },
-      "id": 9,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "editorMode": "code",
-          "expr": "sum by (agent) (count_over_time({namespace=\"cms\", container=\"notebook\"} | json | event=\"agent_run\" | phase=\"start\" [$__auto]))",
-          "legendFormat": "{{agent}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Agent launches by agent (wrapper)",
       "type": "timeseries"
     },
     {
@@ -1574,7 +1483,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
+        "w": 12,
         "x": 0,
         "y": 50
       },
@@ -1663,8 +1572,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 8,
+        "w": 12,
+        "x": 12,
         "y": 50
       },
       "id": 24,
@@ -1707,95 +1616,6 @@
         }
       ],
       "title": "Sessions by entrypoint (7d)",
-      "type": "barchart"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "description": "Per-user launches from the wrapper records, so opencode is included.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisPlacement": "auto",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineWidth": 1,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "decimals": 0,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": []
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 50
-      },
-      "id": 25,
-      "options": {
-        "barRadius": 0,
-        "barWidth": 0.7,
-        "fullHighlight": false,
-        "groupWidth": 0.7,
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": false
-        },
-        "orientation": "horizontal",
-        "showValue": "auto",
-        "stacking": "none",
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        },
-        "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0
-      },
-      "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "editorMode": "code",
-          "expr": "topk(20, sum by (user) (count_over_time({namespace=\"cms\", container=\"notebook\"} | json | event=\"agent_run\" | phase=\"start\" [7d])))",
-          "format": "table",
-          "instant": true,
-          "legendFormat": "{{label}}",
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "Agent launches by user (7d, wrapper)",
       "type": "barchart"
     },
     {
@@ -1849,46 +1669,6 @@
         }
       ],
       "title": "AF MCP tool calls",
-      "type": "logs"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "description": "Raw agent_run records: agent, version, user, duration and exit code.",
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 70
-      },
-      "id": 28,
-      "options": {
-        "dedupStrategy": "none",
-        "enableInfiniteScrolling": true,
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": false,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": true
-      },
-      "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "editorMode": "code",
-          "expr": "{namespace=\"cms\", container=\"notebook\"} | json | event=\"agent_run\"",
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "Agent launches",
       "type": "logs"
     }
   ],
