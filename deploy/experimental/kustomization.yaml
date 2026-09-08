@@ -18,15 +18,15 @@ resources:
   # - ../../apps/monitoring/thanos/helmrelease.yaml
   # - ../../apps/monitoring/thanos/data-pvc.yaml
 
-  - ../../apps/servicex/helmrelease.yaml
+  - ../../apps/servicex/servicex/helmrelease.yaml
   - ../../apps/servicex/gitrepo.yaml
   - ../../apps/servicex/helmrepo.yaml
   - ../../apps/servicex/secrets-objectStore.yaml
-  - ../../apps/servicex-s3/helmrelease.yaml
-  - ../../apps/servicex-anvil/helmrelease.yaml
-  # - ../../apps/servicex-interlink/helmrelease.yaml
-  - ../../apps/servicex-eos/helmrelease.yaml
-  - ../../apps/servicex-test/helmrelease.yaml
+  - ../../apps/servicex/servicex-s3/helmrelease.yaml
+  - ../../apps/servicex/servicex-anvil/helmrelease.yaml
+  # - ../../apps/servicex/servicex-interlink/helmrelease.yaml
+  - ../../apps/servicex/servicex-eos/helmrelease.yaml
+  - ../../apps/servicex/servicex-test/helmrelease.yaml
 
   # Chart source shared by the three releases below, on SuperSONIC main.
   - ../../apps/sonic/supersonic/gitrepo.yaml
@@ -123,27 +123,27 @@ configMapGenerator:
 
   - name: servicex-config
     files:
-      - values.yaml=../../apps/servicex/values.yaml
+      - values.yaml=../../apps/servicex/servicex/values.yaml
 
   - name: servicex-s3-config
     files:
-      - values.yaml=../../apps/servicex-s3/values.yaml
+      - values.yaml=../../apps/servicex/servicex-s3/values.yaml
 
   - name: servicex-anvil-config
     files:
-      - values.yaml=../../apps/servicex-anvil/values.yaml
+      - values.yaml=../../apps/servicex/servicex-anvil/values.yaml
 
   # - name: servicex-interlink-config
   #   files:
-  #     - values.yaml=../../apps/servicex-interlink/values.yaml
+  #     - values.yaml=../../apps/servicex/servicex-interlink/values.yaml
 
   - name: servicex-eos-config
     files:
-      - values.yaml=../../apps/servicex-eos/values.yaml
+      - values.yaml=../../apps/servicex/servicex-eos/values.yaml
 
   - name: servicex-test-config
     files:
-      - values.yaml=../../apps/servicex-test/values.yaml
+      - values.yaml=../../apps/servicex/servicex-test/values.yaml
 
   - name: supersonic-config
     files:
