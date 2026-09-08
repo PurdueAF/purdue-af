@@ -7,23 +7,21 @@ by a `HelmRelease` under [`apps/`](../apps) that carries the AF's values.
 | --------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | [`sonic-ray/`](./sonic-ray) | [`apps/ray/sonic-ray/`](../apps/ray/sonic-ray) — see [its README](../apps/ray/README.md) | Triton Inference Server on Ray: Ray Serve's gRPC proxy carries Triton's protocol to a Triton in every GPU pod |
 
-## Why a directory of its own
+## What belongs here
 
-A chart here is a deliverable, not a manifest: nothing in it names the facility,
-and its defaults have to stand on their own. Keeping it out of `apps/` — where
-everything is specific to this cluster — is what makes that boundary visible,
-and what makes `git filter-repo`-ing a chart into a repository of its own a
-move rather than an untangling. `sonic-ray` is here on exactly that bet: if Ray
-proves useful, the chart leaves; if it does not, it goes with the release.
+A chart here names no facility: its templates and its defaults stand on their
+own, so the directory can be lifted into a repository of its own unchanged.
+Anything specific to this cluster — the release, its values, its `dependsOn` —
+belongs beside the `HelmRelease` in `apps/`.
 
-Two rules follow from being sourced out of Git:
+Two conventions come with being sourced out of Git:
 
 - **`reconcileStrategy: Revision`** in the HelmRelease. `Chart.yaml` keeps a
   static `0.1.0`, and Flux's default `ChartVersion` re-packages only when that
-  string changes — so template edits would never reach the cluster while values
-  edits still triggered an upgrade, running new values against the old chart.
+  string changes: template edits never reach the cluster, while values edits
+  still trigger an upgrade, running new values against the old chart.
 - **Values belong to the release, not the chart.** `helm/<chart>/values.yaml`
-  is the chart's documented defaults; the AF's own values live beside its
+  holds the chart's documented defaults; the AF's own values live beside its
   HelmRelease in `apps/` and arrive through a kustomize-generated ConfigMap.
 
 `apps/sonic/model-manager/chart/` predates this directory and still lives with
