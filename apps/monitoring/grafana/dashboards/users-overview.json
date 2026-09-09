@@ -436,7 +436,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Value #storageLastAccess"
+              "options": "Value #lastActivity"
             },
             "properties": [
               {
@@ -470,20 +470,16 @@
                       "value": null
                     },
                     {
-                      "color": "green",
+                      "color": "yellow",
                       "value": 86400
                     },
                     {
-                      "color": "yellow",
-                      "value": 1209600
-                    },
-                    {
                       "color": "orange",
-                      "value": 2592000
+                      "value": 604800
                     },
                     {
                       "color": "red",
-                      "value": 15552000
+                      "value": 1209600
                     }
                   ]
                 }
@@ -1067,12 +1063,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "time() - af_home_dir_last_accessed{namespace=~\"cms\", job=\"af-pod-monitor\",username!=\"\"}",
+          "expr": "time() - af_session_last_activity_seconds{job=\"jupyterhub\"}",
           "format": "table",
           "instant": true,
           "interval": "",
           "legendFormat": "",
-          "refId": "storageLastAccess"
+          "refId": "lastActivity"
         },
         {
           "datasource": {
@@ -1215,7 +1211,7 @@
               "Value #podAge": 5,
               "Value #podCpuUtilCurrent": 7,
               "Value #podMemUtilCurrent": 8,
-              "Value #storageLastAccess": 6,
+              "Value #lastActivity": 6,
               "Value #workStorageUtil": 12,
               "docker_image_tag": 3,
               "docker_image_tag 1": 4,
