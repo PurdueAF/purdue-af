@@ -33,7 +33,7 @@ def env(monkeypatch, tmp_path):
     results.mkdir()
     runtime.mkdir()
     monkeypatch.setattr(pa, "RESULTS_DIR", results)
-    monkeypatch.setattr(pa, "ATTEMPTS_DIR", results / ".attempts")
+    monkeypatch.setattr(pa, "ATTEMPTS_DIR", results / ".attempts" / pa.STEM)
     monkeypatch.setattr(pa, "RUNTIME_DIR", runtime)
     monkeypatch.setattr(pa, "HEARTBEAT", runtime / "heartbeat")
     monkeypatch.setattr(pa, "HEALTHY", runtime / "healthy")
@@ -187,14 +187,18 @@ def test_missing_child_script_is_a_failure(env, monkeypatch):
 
 
 def test_cycle_survives_an_exploding_attempt(env, monkeypatch):
+    """A crashed probe must stop advertising itself as Ready. Leaving that to
+    main()'s handler would make the invariant depend on the caller."""
+
     def boom(seq):
         raise RuntimeError("nope")
 
     monkeypatch.setattr(pa, "run_attempt", boom)
     pa.HEALTHY.touch()
-    # main()'s loop swallows this; assert the marker clearing it depends on.
-    with pytest.raises(RuntimeError):
-        pa.cycle(0)
+
+    assert pa.cycle(0) == "failed"
+    assert not pa.HEALTHY.exists()
+    assert pa.HEARTBEAT.exists()
 
 
 # ── the results volume is gone ────────────────────────────────────────────────
@@ -211,13 +215,11 @@ def test_unwritable_results_volume_is_a_failure_not_a_timeout(env, monkeypatch):
 
 
 def test_sweep_drops_attempts_from_earlier_pods(env, monkeypatch):
-    """Same stem, different pid: a crashlooping probe would otherwise leave one
-    file per restart on the shared PVC forever."""
+    """Different pid: a crashlooping probe would otherwise leave one file per
+    restart on the shared PVC forever."""
     pa.ATTEMPTS_DIR.mkdir(parents=True)
-    dead = pa.ATTEMPTS_DIR / f"{pa.STEM}-999999-4.json"
+    dead = pa.ATTEMPTS_DIR / "999999-4.json"
     dead.write_text("{}")
-    other = pa.ATTEMPTS_DIR / "work__node-a-1-1.json"
-    other.write_text("{}")
     keep = pa.attempt_path(7)
     keep.write_text("{}")
 
@@ -225,7 +227,22 @@ def test_sweep_drops_attempts_from_earlier_pods(env, monkeypatch):
 
     assert not dead.exists()
     assert keep.exists()
-    assert other.exists()  # another mount's probe owns that one
+
+
+def test_attempts_are_scoped_to_one_mount_and_node(env):
+    """Sweeping by filename prefix would let the probe on paf-a0 delete the
+    in-flight attempt of the probe on paf-a0-gpu; a per-stem directory cannot."""
+    assert pa.ATTEMPTS_DIR.name == pa.STEM
+    assert pa.attempt_path(0).parent == pa.ATTEMPTS_DIR
+    # A neighbouring stem that shares a prefix keeps its own directory.
+    sibling = pa.ATTEMPTS_DIR.parent / f"{pa.STEM}-gpu"
+    sibling.mkdir(parents=True)
+    victim = sibling / "1-1.json"
+    victim.write_text("{}")
+
+    pa.sweep_attempts(keep=None)
+
+    assert victim.exists()
 
 
 def test_sweep_is_quiet_when_there_is_nothing_to_sweep(env):

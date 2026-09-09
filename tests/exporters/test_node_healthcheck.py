@@ -758,3 +758,16 @@ def test_healthy_iteration_reports_results_available(metrics_env):
     metrics_env("/depot/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
     nh.update_metrics()
     assert REGISTRY.get_sample_value("af_node_monitor_results_available") == 1
+
+
+# ── gauge clearing ────────────────────────────────────────────────────────────
+
+
+def test_clear_gauges_holds_objects_not_names():
+    """Resolving a gauge by name through globals() turns a typo into the
+    KeyError that _clear_gauges swallows, and a gauge that is silently never
+    cleared is the frozen last-known-good green the clearing exists to stop."""
+    assert all(hasattr(g, "remove") for g in nh.RESULT_GAUGES)
+    assert nh.mount_probe_up in nh.ALL_MOUNT_GAUGES
+    assert nh.mount_probe_up not in nh.RESULT_GAUGES
+    assert set(nh.RESULT_GAUGES) < set(nh.ALL_MOUNT_GAUGES)

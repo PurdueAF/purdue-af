@@ -32,6 +32,16 @@ metadata:
     component: probe
     mount: depot
 spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # NOT the default 1. A probe pod that can never become available holds
+      # the whole budget forever and no other node is ever updated: a337 has
+      # no rook-ceph CSI driver so the results PVC never mounts there, and the
+      # depot export has been unreachable from the geddes subnet before. A
+      # percentage tolerates a few such nodes while still stalling a rollout
+      # that is broken everywhere.
+      maxUnavailable: 25%
   selector:
     matchLabels:
       app: af-node-monitor
@@ -84,6 +94,14 @@ spec:
               value: /depot/cms/purdue-af/.storage-monitoring-probe-1gb
             - name: ENABLE_FIO
               value: "true"
+            - name: PING_TIMEOUT_S
+              value: "3"
+            - name: METADATA_TIMEOUT_S
+              value: "10"
+            - name: FIO_TIMEOUT_S
+              value: "120"
+            - name: FIO_INTERVAL_S
+              value: "1800"
             - name: RESULTS_DIR
               value: /af-node-monitor/results
             - name: AF_NODE_MONITOR_VERBOSE
@@ -157,6 +175,16 @@ metadata:
     component: probe
     mount: work
 spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # NOT the default 1. A probe pod that can never become available holds
+      # the whole budget forever and no other node is ever updated: a337 has
+      # no rook-ceph CSI driver so the results PVC never mounts there, and the
+      # depot export has been unreachable from the geddes subnet before. A
+      # percentage tolerates a few such nodes while still stalling a rollout
+      # that is broken everywhere.
+      maxUnavailable: 25%
   selector:
     matchLabels:
       app: af-node-monitor
@@ -209,6 +237,14 @@ spec:
               value: /work/projects/purdue-af/.storage-monitoring-probe-1gb
             - name: ENABLE_FIO
               value: "true"
+            - name: PING_TIMEOUT_S
+              value: "3"
+            - name: METADATA_TIMEOUT_S
+              value: "10"
+            - name: FIO_TIMEOUT_S
+              value: "120"
+            - name: FIO_INTERVAL_S
+              value: "1800"
             - name: RESULTS_DIR
               value: /af-node-monitor/results
             - name: AF_NODE_MONITOR_VERBOSE
@@ -280,6 +316,16 @@ metadata:
     component: probe
     mount: eos
 spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # NOT the default 1. A probe pod that can never become available holds
+      # the whole budget forever and no other node is ever updated: a337 has
+      # no rook-ceph CSI driver so the results PVC never mounts there, and the
+      # depot export has been unreachable from the geddes subnet before. A
+      # percentage tolerates a few such nodes while still stalling a rollout
+      # that is broken everywhere.
+      maxUnavailable: 25%
   selector:
     matchLabels:
       app: af-node-monitor
@@ -332,6 +378,14 @@ spec:
               value: /eos/purdue/store/user/dkondrat/.storage-monitoring-probe-1gb
             - name: ENABLE_FIO
               value: "true"
+            - name: PING_TIMEOUT_S
+              value: "3"
+            - name: METADATA_TIMEOUT_S
+              value: "10"
+            - name: FIO_TIMEOUT_S
+              value: "120"
+            - name: FIO_INTERVAL_S
+              value: "1800"
             - name: RESULTS_DIR
               value: /af-node-monitor/results
             - name: AF_NODE_MONITOR_VERBOSE
@@ -404,6 +458,16 @@ metadata:
     component: probe
     mount: cvmfs
 spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # NOT the default 1. A probe pod that can never become available holds
+      # the whole budget forever and no other node is ever updated: a337 has
+      # no rook-ceph CSI driver so the results PVC never mounts there, and the
+      # depot export has been unreachable from the geddes subnet before. A
+      # percentage tolerates a few such nodes while still stalling a rollout
+      # that is broken everywhere.
+      maxUnavailable: 25%
   selector:
     matchLabels:
       app: af-node-monitor
@@ -454,6 +518,10 @@ spec:
               value: /cvmfs/cms.cern.ch/
             - name: ENABLE_FIO
               value: "false"
+            - name: PING_TIMEOUT_S
+              value: "3"
+            - name: METADATA_TIMEOUT_S
+              value: "10"
             - name: RESULTS_DIR
               value: /af-node-monitor/results
             - name: AF_NODE_MONITOR_VERBOSE

@@ -33,9 +33,14 @@ MOUNTS: Dict[str, str] = {
     "cvmfs": "cvmfs",
 }
 
+# Sentinels only: the value published for ping/metadata latency when a check
+# gives up. They do NOT bound anything here — the probe DaemonSets carry the
+# real timeouts. Both sides are set from the manifests and
+# tests/manifests/test_node_probes.py holds them equal, because a sentinel
+# that disagrees with the timeout it stands for charts a latency that was
+# never measured.
 PING_TIMEOUT_S = float(os.getenv("PING_TIMEOUT_S", "3"))
 METADATA_TIMEOUT_S = float(os.getenv("METADATA_TIMEOUT_S", "10"))
-FIO_TIMEOUT_S = float(os.getenv("FIO_TIMEOUT_S", "120"))
 
 CHECK_INTERVAL_S = float(os.getenv("CHECK_INTERVAL_S", "600"))
 RESULTS_DIR = Path(os.getenv("RESULTS_DIR", "/af-node-monitor/results"))
@@ -131,6 +136,20 @@ try:
         "1 when the results PVC could be read this iteration. On 0 every "
         "af_node_mount_* series goes absent, which no mount alert can see",
     )
+
+    # Held as objects, not names: a name resolved through globals() turns a
+    # typo into the KeyError that _clear_gauges swallows, and a gauge that is
+    # silently never cleared is exactly the frozen last-known-good green that
+    # clearing exists to prevent.
+    RESULT_GAUGES = (
+        mount_valid,
+        mount_ping_ms,
+        mount_data_rate_gbps,
+        mount_metadata_latency_ms,
+        mount_result_fresh,
+        mount_last_success_ts,
+    )
+    ALL_MOUNT_GAUGES = RESULT_GAUGES + (mount_probe_up,)
 except Exception as e:  # pragma: no cover - defensive
     print(f"Error defining Prometheus metrics: {e}")
 
@@ -335,27 +354,18 @@ def _list_af_nodes() -> List[tuple[str, str, bool]]:
     return _af_nodes_cache
 
 
-RESULT_GAUGES = (
-    "mount_valid",
-    "mount_ping_ms",
-    "mount_data_rate_gbps",
-    "mount_metadata_latency_ms",
-    "mount_result_fresh",
-    "mount_last_success_ts",
-)
-
-
-def _clear_gauges(labels: dict[str, str], names: tuple[str, ...]) -> None:
+def _clear_gauges(labels: dict[str, str], gauges: tuple[Any, ...]) -> None:
     labelvalues = (
         labels["mount_name"],
         labels["mount_path"],
         labels["node"],
         labels["node_pool"],
     )
-    for name in names:
+    for gauge in gauges:
         try:
-            globals()[name].remove(*labelvalues)
+            gauge.remove(*labelvalues)
         except KeyError:
+            # This label set was never published; nothing to drop.
             pass
 
 
@@ -374,7 +384,7 @@ def _clear_mount_gauges(labels: dict[str, str]) -> None:
 
     Counters are left alone — they are cumulative and do not drive green/red.
     """
-    _clear_gauges(labels, RESULT_GAUGES + ("mount_probe_up",))
+    _clear_gauges(labels, ALL_MOUNT_GAUGES)
 
 
 def _clear_node_pool_gauges(node_name: str, pool: str) -> None:
@@ -399,7 +409,7 @@ def _clear_node_pool_gauges(node_name: str, pool: str) -> None:
 def _publish_probe_up(labels: dict[str, str], ready: bool | None) -> None:
     """None means the pod list could not be read — absent, not 0."""
     if ready is None:
-        _clear_gauges(labels, ("mount_probe_up",))
+        _clear_gauges(labels, (mount_probe_up,))
         return
     mount_probe_up.labels(**labels).set(1 if ready else 0)
 

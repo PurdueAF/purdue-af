@@ -15,6 +15,7 @@ from common import REPO
 
 PROBES = REPO / "apps/monitoring/af-monitoring/daemonset-af-node-probe.yaml"
 EXPORTER = REPO / "docker/af-node-monitor/node_healthcheck.py"
+DEPLOYMENT = REPO / "apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml"
 DEPLOYMENTS = (
     REPO / "deploy/experimental/kustomization.yaml",
     REPO / "deploy/core-geddes2/kustomization.yaml",
@@ -226,3 +227,59 @@ def test_both_overlays_ship_every_script_the_probes_run():
         files = " ".join(config["files"])
         for script in ("node_healthcheck.py", "probe_agent.py", "job_runner.py"):
             assert script in files, (path, script)
+
+
+# ── one dead node must not freeze every other node ────────────────────────────
+
+
+def test_rollouts_tolerate_a_permanently_unavailable_node():
+    """maxUnavailable defaults to 1, and a probe pod that can never become
+    available holds that budget forever — a337 has no rook-ceph CSI driver, so
+    the results PVC never mounts there. At the default, no other node would
+    ever be updated again."""
+    for name, ds in daemonsets().items():
+        strategy = ds["spec"]["updateStrategy"]
+        assert strategy["type"] == "RollingUpdate", name
+        budget = strategy["rollingUpdate"]["maxUnavailable"]
+        assert budget != 1, name
+        assert str(budget).endswith("%"), (name, budget)
+
+
+# ── the sentinel and the timeout it stands for ────────────────────────────────
+
+
+def exporter_env():
+    doc = yaml.safe_load(DEPLOYMENT.read_text())
+    container = doc["spec"]["template"]["spec"]["containers"][0]
+    return {e["name"]: e.get("value") for e in container["env"]}
+
+
+def test_probes_carry_their_own_timeouts():
+    """The Jobs used to inherit these from the exporter. Nothing inherits now,
+    so an unset value silently falls back to job_runner's own default."""
+    for name, ds in daemonsets().items():
+        env = env_of(ds)
+        assert env.get("PING_TIMEOUT_S"), name
+        assert env.get("METADATA_TIMEOUT_S"), name
+        if env["ENABLE_FIO"] == "true":
+            assert env.get("FIO_TIMEOUT_S"), name
+            assert env.get("FIO_INTERVAL_S"), name
+
+
+def test_exporter_sentinels_match_the_probe_timeouts():
+    """af_node_mount_ping_ms reports PING_TIMEOUT_S when a check gives up. If
+    the exporter's copy drifts from the probe's real timeout, that gauge charts
+    a latency nothing ever measured — and AFMountSlow's `< 10000` guard, which
+    exists to keep timed-out probes out of that alert, stops matching."""
+    exporter = exporter_env()
+    for key in ("PING_TIMEOUT_S", "METADATA_TIMEOUT_S"):
+        assert exporter.get(key), f"exporter does not set {key}"
+        for name, ds in daemonsets().items():
+            assert env_of(ds)[key] == exporter[key], (name, key)
+
+
+def test_exporter_does_not_keep_a_timeout_it_cannot_enforce():
+    """FIO_TIMEOUT_S bounded the Jobs' fio runs. The exporter no longer runs
+    anything, and a knob that reads as configuration but changes nothing is
+    worse than no knob."""
+    assert "FIO_TIMEOUT_S" not in EXPORTER.read_text()

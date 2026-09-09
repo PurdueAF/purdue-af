@@ -80,7 +80,11 @@ STEM = f"{MOUNT_KEY}__{NODE_KEY}" if NODE_KEY else MOUNT_KEY
 # is an atomic rename and a late-waking child can never land on the published
 # path. os.replace() across .attempts/ and results/ stays atomic because both
 # sit under RESULTS_DIR.
-ATTEMPTS_DIR = RESULTS_DIR / ".attempts"
+#
+# Scoped per stem rather than swept by filename prefix: two nodes whose names
+# differ by a hyphenated suffix (paf-a0 and paf-a0-gpu) share a prefix, and one
+# probe would delete the other's in-flight attempt.
+ATTEMPTS_DIR = RESULTS_DIR / ".attempts" / STEM
 
 
 def result_path() -> Path:
@@ -88,7 +92,7 @@ def result_path() -> Path:
 
 
 def attempt_path(seq: int) -> Path:
-    return ATTEMPTS_DIR / f"{STEM}-{os.getpid()}-{seq}.json"
+    return ATTEMPTS_DIR / f"{os.getpid()}-{seq}.json"
 
 
 def reap_orphans() -> None:
@@ -114,8 +118,9 @@ def reap_orphans() -> None:
 def sweep_attempts(keep: Path | None) -> None:
     """Drop attempt files this pod is no longer waiting on.
 
-    Covers leftovers from earlier pod incarnations too — same stem, different
-    pid — so a crashlooping probe cannot fill the results PVC.
+    ATTEMPTS_DIR belongs to this (mount, node) alone, so everything in it is
+    ours — including leftovers from earlier pod incarnations, which is what
+    keeps a crashlooping probe from filling the results PVC.
     """
     try:
         entries = list(ATTEMPTS_DIR.iterdir())
@@ -125,8 +130,6 @@ def sweep_attempts(keep: Path | None) -> None:
         _elog(f"[probe_agent] cannot list {ATTEMPTS_DIR}: {e}")
         return
     for entry in entries:
-        if not entry.name.startswith(f"{STEM}-"):
-            continue
         if keep is not None and entry.name in (keep.name, keep.name + ".tmp"):
             continue
         try:
@@ -289,7 +292,14 @@ def run_attempt(seq: int) -> str:
 def cycle(seq: int) -> str:
     reap_orphans()
     touch(HEARTBEAT)
-    outcome = run_attempt(seq)
+    try:
+        outcome = run_attempt(seq)
+    except Exception as e:
+        # Handled here, not in main(): a probe that crashed must stop
+        # advertising itself as Ready, and that invariant should not depend on
+        # the caller remembering to clear the marker.
+        _elog(f"[probe_agent] {MOUNT_NAME}: attempt raised: {e}")
+        outcome = "failed"
     set_healthy(outcome in ("published", "timeout"))
     touch(HEARTBEAT)
     return outcome
@@ -305,7 +315,7 @@ def main() -> None:  # pragma: no cover - process entrypoint
         started = time.time()
         try:
             cycle(seq)
-        except Exception as e:
+        except Exception as e:  # pragma: no cover - cycle() handles its own
             _elog(f"[probe_agent] cycle failed: {e}")
             set_healthy(False)
         delay = PROBE_INTERVAL_S + (jitter if seq == 0 else 0.0)
