@@ -134,16 +134,15 @@ def test_refuses_empty_list(shims):
 
 
 def test_retries_flaky_fetch_until_it_answers(shims):
-    """Hammer LDAP answers intermittently: a run must survive early empty
-    replies instead of failing the pod (which is what littered the
-    namespace with Error pods)."""
+    """A transient empty reply must not fail the pod (which is what
+    littered the namespace with Error pods)."""
     counter = shims["bin"].parent / "attempts"
     (shims["bin"] / "ldapsearch").write_text(
         f"""#!/bin/bash
 echo "ldapsearch $*" >>"$SHIM_LOG"
 n=$(( $(cat {counter} 2>/dev/null || echo 0) + 1 ))
 echo "$n" >{counter}
-# first two attempts return nothing, as the real server does when flaky
+# first two attempts return nothing, as a transient upstream fault would
 [ "$n" -lt 3 ] && exit 0
 seq -f "uid: user%g" 1 250
 """
