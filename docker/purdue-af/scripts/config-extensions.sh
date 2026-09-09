@@ -142,17 +142,31 @@ if [ "$code_server_ok" = 1 ]; then
 }
 EOF
 
-	# Install extension only if not already present; avoids ~3 s CLI overhead per extension on warm starts
+	# Install when missing, or when a pinned version differs from what is there.
+	# Skipping avoids ~3 s CLI overhead per extension on warm starts.
 	_cs_install_if_missing() {
 		local spec="$1"
-		local id="${spec%@*}" # strip @version suffix for the presence check
-		if af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
-			--list-extensions 2>/dev/null | grep -qi "^${id}$"; then
-			echo "code-server extension '${spec}' already installed, skipping."
-		else
-			af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
-				--install-extension "$spec"
+		local id="${spec%@*}"
+		local want=""
+		if [ "$spec" != "$id" ]; then
+			want="${spec#*@}"
 		fi
+
+		local installed have
+		installed=$(af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
+			--list-extensions --show-versions 2>/dev/null | grep -i "^${id}@" | head -1)
+		have="${installed#*@}"
+
+		if [ -n "$installed" ] && { [ -z "$want" ] || [ "$have" = "$want" ]; }; then
+			echo "code-server extension '${spec}' already installed, skipping."
+			return 0
+		fi
+		if [ -n "$installed" ]; then
+			echo "code-server extension '${id}' is ${have}, want ${want}; reinstalling."
+		fi
+
+		af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
+			--install-extension "$spec" --force
 	}
 
 	_cs_install_if_missing ms-python.python
@@ -164,7 +178,9 @@ EOF
 	# for the editor and the terminal in one go. Open VSX is code-server's
 	# marketplace — these IDs are the Open VSX ones, not the MS Marketplace ones.
 	_cs_install_if_missing anthropic.claude-code
-	_cs_install_if_missing openai.chatgpt
+	# Pinned: 26.901.22334 emits `using` declarations, which the Node 22 bundled
+	# with code-server cannot parse, so the extension never activates.
+	_cs_install_if_missing openai.chatgpt@26.820.71523
 
 	# Install Purdue AF code-server UI controls via VSIX (proper extensions.json registration)
 	PAF_CS_EXT_VSIX="/opt/purdue-af/code-server/purdue-af-interface-controls.vsix"
