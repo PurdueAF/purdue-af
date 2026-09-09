@@ -6,9 +6,17 @@ rules:
   - apiGroups: [""]
     resources: ["nodes"]
     verbs: ["get", "list", "watch"]
+  # Probe DaemonSet pods: which (mount, node) pairs have a probe, and whether
+  # it is Ready. Without this the exporter cannot tell "no probe running" from
+  # "probe running but the mount never answered" and reports both as unknown.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  # Only to clear Jobs left by the pre-DaemonSet exporter. Nothing creates
+  # Jobs any more; drop this once no cluster is on that version.
   - apiGroups: ["batch"]
     resources: ["jobs"]
-    verbs: ["get", "list", "watch", "create", "delete"]
+    verbs: ["list", "delete"]
 
 ---
 apiVersion: v1

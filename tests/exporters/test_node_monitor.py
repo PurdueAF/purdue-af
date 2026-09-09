@@ -96,14 +96,14 @@ def test_run_subprocess_missing_binary():
 # ── check functions (subprocess mocked) ───────────────────────────────────────
 
 
-def stub_run_subprocess(monkeypatch, ok=True, timeout=False, reason=""):
+def stub_run_subprocess(monkeypatch, ok=True, timeout=False, reason="", stdout=""):
     calls = []
 
     def fake(cmd, timeout_s):
         calls.append(cmd)
-        return ok, timeout, reason
+        return ok, timeout, stdout, reason
 
-    monkeypatch.setattr(runner, "_run_subprocess", fake)
+    monkeypatch.setattr(runner, "_run_bounded", fake)
     return calls
 
 
@@ -135,30 +135,27 @@ def test_check_ping_timeout(monkeypatch):
 
 
 def test_check_ping_checksum_match(monkeypatch):
-    import types
-
     monkeypatch.setattr(runner, "CHECKSUM", "abc123")
-    stub_run_subprocess(monkeypatch)
-    monkeypatch.setattr(
-        runner.subprocess,
-        "run",
-        lambda *a, **kw: types.SimpleNamespace(stdout="abc123  /file\n"),
-    )
+    calls = stub_run_subprocess(monkeypatch, stdout="abc123  /file\n")
 
     ok, timeout, _ = runner._check_ping()
     assert (ok, timeout) == (True, False)
+    # One read, not two: re-reading to get the digest would double the load on
+    # the mount and can hang after the timed read already succeeded.
+    assert len(calls) == 1
 
 
 def test_check_ping_checksum_mismatch_means_corruption(monkeypatch):
-    import types
-
     monkeypatch.setattr(runner, "CHECKSUM", "abc123")
-    stub_run_subprocess(monkeypatch)
-    monkeypatch.setattr(
-        runner.subprocess,
-        "run",
-        lambda *a, **kw: types.SimpleNamespace(stdout="DIFFERENT  /file\n"),
-    )
+    stub_run_subprocess(monkeypatch, stdout="DIFFERENT  /file\n")
+
+    ok, timeout, _ = runner._check_ping()
+    assert (ok, timeout) == (False, False)
+
+
+def test_check_ping_checksum_with_no_output_is_corruption(monkeypatch):
+    monkeypatch.setattr(runner, "CHECKSUM", "abc123")
+    stub_run_subprocess(monkeypatch, stdout="")
 
     ok, timeout, _ = runner._check_ping()
     assert (ok, timeout) == (False, False)
@@ -198,16 +195,11 @@ def test_check_throughput_respects_interval(monkeypatch):
 
 def test_check_throughput_parses_fio_json(monkeypatch):
     import json as _json
-    import types
 
     monkeypatch.setattr(runner, "ENABLE_FIO", True)
     monkeypatch.setattr(runner, "FIO_FILE", "/probe")
     fio_out = _json.dumps({"jobs": [{"read": {"bw_bytes": 2_500_000_000}}]})
-    monkeypatch.setattr(
-        runner.subprocess,
-        "run",
-        lambda *a, **kw: types.SimpleNamespace(returncode=0, stdout=fio_out),
-    )
+    stub_run_subprocess(monkeypatch, stdout=fio_out)
 
     ok, timeout, gbps, ts = runner._check_throughput(None)
 
@@ -217,15 +209,9 @@ def test_check_throughput_parses_fio_json(monkeypatch):
 
 
 def test_check_throughput_fio_failure(monkeypatch):
-    import types
-
     monkeypatch.setattr(runner, "ENABLE_FIO", True)
     monkeypatch.setattr(runner, "FIO_FILE", "/probe")
-    monkeypatch.setattr(
-        runner.subprocess,
-        "run",
-        lambda *a, **kw: types.SimpleNamespace(returncode=1, stdout=""),
-    )
+    stub_run_subprocess(monkeypatch, ok=False)
 
     ok, timeout, gbps, ts = runner._check_throughput(None)
     assert (ok, gbps) == (False, 0.0)
@@ -233,30 +219,18 @@ def test_check_throughput_fio_failure(monkeypatch):
 
 
 def test_check_throughput_fio_timeout(monkeypatch):
-    import subprocess as sp
-
     monkeypatch.setattr(runner, "ENABLE_FIO", True)
     monkeypatch.setattr(runner, "FIO_FILE", "/probe")
-
-    def boom(*a, **kw):
-        raise sp.TimeoutExpired(cmd="fio", timeout=1)
-
-    monkeypatch.setattr(runner.subprocess, "run", boom)
+    stub_run_subprocess(monkeypatch, ok=False, timeout=True)
     ok, timeout, gbps, ts = runner._check_throughput(None)
     assert (ok, timeout, gbps) == (False, True, 0.0)
     assert ts is None
 
 
 def test_check_throughput_fio_bad_json(monkeypatch):
-    import types
-
     monkeypatch.setattr(runner, "ENABLE_FIO", True)
     monkeypatch.setattr(runner, "FIO_FILE", "/probe")
-    monkeypatch.setattr(
-        runner.subprocess,
-        "run",
-        lambda *a, **kw: types.SimpleNamespace(returncode=0, stdout="not-json"),
-    )
+    stub_run_subprocess(monkeypatch, stdout="not-json")
     ok, timeout, gbps, ts = runner._check_throughput(None)
     assert (ok, timeout, gbps) == (False, False, 0.0)
     assert ts is None
@@ -362,3 +336,47 @@ def test_main_tolerates_corrupt_previous_last_fio_ts(monkeypatch, tmp_path):
     result = json.loads(path.read_text())
     assert result["ok"] is True
     assert result["last_fio_ts"] is None
+
+
+# ── bounded execution ─────────────────────────────────────────────────────────
+
+
+def test_run_bounded_returns_stdout():
+    ok, timeout, out, err = runner._run_bounded(["echo", "hello"], timeout_s=5)
+    assert (ok, timeout, err) == (True, False, "")
+    assert out.strip() == "hello"
+
+
+def test_run_bounded_timeout_does_not_wait_for_an_unkillable_child():
+    """subprocess.run()'s own timeout path kills then waits without a bound,
+    which never returns for a read stuck in uninterruptible sleep — every
+    check here runs against a mount that can do exactly that."""
+    import time
+
+    started = time.time()
+    ok, timeout, _out, err = runner._run_bounded(["sleep", "30"], timeout_s=0.2)
+    assert (ok, timeout, err) == (False, True, "timeout")
+    assert time.time() - started < 5
+
+
+def test_run_bounded_missing_binary_is_not_a_timeout():
+    ok, timeout, _out, err = runner._run_bounded(["definitely-not-a-binary"], 5)
+    assert (ok, timeout) == (False, False)
+    assert err
+
+
+# ── result paths the supervisor supplies ──────────────────────────────────────
+
+
+def test_default_result_path_is_per_node(monkeypatch, tmp_path):
+    monkeypatch.setattr(runner, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(runner, "MOUNT_NAME", "/depot/")
+    monkeypatch.setattr(runner, "NODE_NAME", "node-a")
+    assert runner.default_result_path() == tmp_path / "depot__node-a.json"
+
+
+def test_default_result_path_without_a_node(monkeypatch, tmp_path):
+    monkeypatch.setattr(runner, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(runner, "MOUNT_NAME", "/depot/")
+    monkeypatch.setattr(runner, "NODE_NAME", "")
+    assert runner.default_result_path() == tmp_path / "depot.json"

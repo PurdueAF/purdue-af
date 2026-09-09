@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
-from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -20,116 +20,27 @@ except Exception:  # pragma: no cover - optional dependency for local runs
     config = None  # type: ignore[assignment]
     ApiException = Exception  # type: ignore[assignment]
 
-MOUNTS: Dict[str, Dict[str, Any]] = {
-    "/depot/": {
-        "mount_path": "/depot/",
-        "job": {
-            "check_file": "/depot/cms/purdue-af/validate-mount.txt",
-            "checksum": "13dede34ee8dc7e5b70c9cd06ac15467",
-            "metadata_dir": "/depot/cms/",
-            "fio_file": "/depot/cms/purdue-af/.storage-monitoring-probe-1gb",
-            "enable_fio": True,
-        },
-        "volumes": [
-            {
-                "name": "results",
-                "persistentVolumeClaim": {"claimName": "af-node-monitor-storage"},
-            },
-            {
-                "name": "depot",
-                "nfs": {
-                    "server": "datadepot.rcac.purdue.edu",
-                    "path": "/depot/cms",
-                },
-            },
-        ],
-        "volume_mounts": [
-            {"name": "results", "mountPath": "/af-node-monitor"},
-            {
-                "name": "depot",
-                "mountPath": "/depot/cms",
-                "mountPropagation": "HostToContainer",
-            },
-        ],
-    },
-    "/work/": {
-        "mount_path": "/work/",
-        "job": {
-            "check_file": "/work/projects/purdue-af/validate-mount.txt",
-            "checksum": "f4cb7f2740ba3e87edfbda6c70fa94c2",
-            "metadata_dir": "/work/users/",
-            "fio_file": "/work/projects/purdue-af/.storage-monitoring-probe-1gb",
-            "enable_fio": True,
-        },
-        "volumes": [
-            {
-                "name": "results",
-                "persistentVolumeClaim": {"claimName": "af-node-monitor-storage"},
-            },
-            {
-                "name": "work",
-                "persistentVolumeClaim": {"claimName": "af-shared-storage"},
-            },
-        ],
-        "volume_mounts": [
-            {"name": "results", "mountPath": "/af-node-monitor"},
-            {"name": "work", "mountPath": "/work"},
-        ],
-    },
-    "eos": {
-        "mount_path": "eos",
-        "job": {
-            "check_file": "/eos/purdue/store/user/dkondrat/test.root",
-            "checksum": "18864b0de8ae5a6a8d3b459a7999b431",
-            "metadata_dir": "/eos/purdue/store/user/",
-            "fio_file": "/eos/purdue/store/user/dkondrat/.storage-monitoring-probe-1gb",
-            "enable_fio": True,
-        },
-        "volumes": [
-            {
-                "name": "results",
-                "persistentVolumeClaim": {"claimName": "af-node-monitor-storage"},
-            },
-            {"name": "eos", "hostPath": {"path": "/eos"}},
-        ],
-        "volume_mounts": [
-            {"name": "results", "mountPath": "/af-node-monitor"},
-            {
-                "name": "eos",
-                "mountPath": "/eos",
-                "mountPropagation": "HostToContainer",
-            },
-        ],
-    },
-    "cvmfs": {
-        "mount_path": "cvmfs",
-        "job": {
-            "check_file": "/cvmfs/cms.cern.ch/SITECONF/T2_US_Purdue/Purdue-Hadoop/JobConfig/site-local-config.xml",
-            "checksum": "3b570d80272b7188c13cef51e58b7151",
-            "metadata_dir": "/cvmfs/cms.cern.ch/",
-            "enable_fio": False,
-        },
-        "volumes": [
-            {
-                "name": "results",
-                "persistentVolumeClaim": {"claimName": "af-node-monitor-storage"},
-            },
-            {"name": "cvmfs", "persistentVolumeClaim": {"claimName": "cvmfs"}},
-        ],
-        "volume_mounts": [
-            {"name": "results", "mountPath": "/af-node-monitor"},
-            {
-                "name": "cvmfs",
-                "mountPath": "/cvmfs",
-                "mountPropagation": "HostToContainer",
-            },
-        ],
-    },
+# mount_name -> mount_path, the two labels every af_node_mount_* series
+# carries. Everything else about a probe (check file, checksum, fio target,
+# volumes) belongs to the DaemonSet that runs it —
+# apps/monitoring/af-monitoring/daemonset-af-node-probe.yaml. Keeping one copy
+# of that config means it cannot drift; tests/manifests/test_node_probes.py
+# holds this dict and those DaemonSets to the same set of mounts.
+MOUNTS: Dict[str, str] = {
+    "/depot/": "/depot/",
+    "/work/": "/work/",
+    "eos": "eos",
+    "cvmfs": "cvmfs",
 }
 
+# Sentinels only: the value published for ping/metadata latency when a check
+# gives up. They do NOT bound anything here — the probe DaemonSets carry the
+# real timeouts. Both sides are set from the manifests and
+# tests/manifests/test_node_probes.py holds them equal, because a sentinel
+# that disagrees with the timeout it stands for charts a latency that was
+# never measured.
 PING_TIMEOUT_S = float(os.getenv("PING_TIMEOUT_S", "3"))
 METADATA_TIMEOUT_S = float(os.getenv("METADATA_TIMEOUT_S", "10"))
-FIO_TIMEOUT_S = float(os.getenv("FIO_TIMEOUT_S", "120"))
 
 CHECK_INTERVAL_S = float(os.getenv("CHECK_INTERVAL_S", "600"))
 RESULTS_DIR = Path(os.getenv("RESULTS_DIR", "/af-node-monitor/results"))
@@ -147,29 +58,23 @@ def _elog(msg: str) -> None:
     print(msg)
 
 
-JOB_INTERVAL_S = float(os.getenv("JOB_INTERVAL_S", "600"))  # 10 minutes
-JOB_TTL_SECONDS = int(
-    os.getenv("JOB_TTL_SECONDS", "120")
-)  # ttlSecondsAfterFinished for Jobs
-JOB_ACTIVE_DEADLINE_SECONDS = int(os.getenv("JOB_ACTIVE_DEADLINE_SECONDS", "180"))
-JOB_BACKOFF_LIMIT = int(os.getenv("JOB_BACKOFF_LIMIT", "0"))
-
-JOB_SUCCESS_RETENTION_S = float(
-    os.getenv("JOB_SUCCESS_RETENTION_S", "0")
-)  # delete successful Jobs immediately
-JOB_FAILED_RETENTION_S = float(
-    os.getenv("JOB_FAILED_RETENTION_S", "60")
-)  # keep failed Jobs for 1 minute
-JOB_MAX_RUNTIME_S = float(os.getenv("JOB_MAX_RUNTIME_S", "300"))  # 5 minutes
+# Cadence the probe DaemonSets write at (probe_agent.PROBE_INTERVAL_S). The
+# exporter does not drive it; it only needs to agree on what "recent" means.
+PROBE_INTERVAL_S = float(os.getenv("PROBE_INTERVAL_S", "600"))
 
 RESULT_STALE_WINDOW_S = float(
-    os.getenv("RESULT_STALE_WINDOW_S", str(3 * JOB_INTERVAL_S))
+    os.getenv("RESULT_STALE_WINDOW_S", str(3 * PROBE_INTERVAL_S))
 )
 
-JOB_IMAGE = os.getenv(
-    "JOB_IMAGE",
-    "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest",
-)
+# A result stamped in the future is a clock-skewed node, not a fresh check.
+# Without this a skewed node can never go stale, so a dead mount there would
+# stay green forever.
+CLOCK_SKEW_TOLERANCE_S = float(os.getenv("CLOCK_SKEW_TOLERANCE_S", "300"))
+
+# Reads of the results PVC are bounded: it is CephFS, and a read against a
+# wedged mount is uninterruptible. An unbounded one would freeze this loop and
+# take every mount on every node down to "unknown" at once.
+RESULTS_READ_TIMEOUT_S = float(os.getenv("RESULTS_READ_TIMEOUT_S", "15"))
 
 NODE_CACHE_TTL_S = float(os.getenv("NODE_CACHE_TTL_S", "300"))
 
@@ -214,10 +119,37 @@ try:
         "Unix timestamp of last successful metrics update for mount",
         ["mount_name", "mount_path", "node", "node_pool"],
     )
+    mount_probe_up = Gauge(
+        "af_node_mount_probe_up",
+        "1 when the probe DaemonSet pod for this mount/node is Ready, 0 when "
+        "it is missing or not Ready. Separates a broken mount (valid=0) from "
+        "a broken probe — both otherwise surface only as unknown",
+        ["mount_name", "mount_path", "node", "node_pool"],
+    )
+
     monitor_last_iteration_ts = Gauge(
         "af_node_monitor_last_iteration_timestamp_seconds",
         "Unix timestamp of last completed metrics iteration",
     )
+    monitor_results_available = Gauge(
+        "af_node_monitor_results_available",
+        "1 when the results PVC could be read this iteration. On 0 every "
+        "af_node_mount_* series goes absent, which no mount alert can see",
+    )
+
+    # Held as objects, not names: a name resolved through globals() turns a
+    # typo into the KeyError that _clear_gauges swallows, and a gauge that is
+    # silently never cleared is exactly the frozen last-known-good green that
+    # clearing exists to prevent.
+    RESULT_GAUGES = (
+        mount_valid,
+        mount_ping_ms,
+        mount_data_rate_gbps,
+        mount_metadata_latency_ms,
+        mount_result_fresh,
+        mount_last_success_ts,
+    )
+    ALL_MOUNT_GAUGES = RESULT_GAUGES + (mount_probe_up,)
 except Exception as e:  # pragma: no cover - defensive
     print(f"Error defining Prometheus metrics: {e}")
 
@@ -242,14 +174,11 @@ _core_v1: client.CoreV1Api | None  # type: ignore[type-arg]
 _batch_v1: client.BatchV1Api | None  # type: ignore[type-arg]
 _k8s_ready: bool = False
 
-# Ready nodes only — Jobs are pinned to these.
-_node_cache: List[str] = []
 # All AF-labelled nodes as (name, pool, ready). Metrics must cover NotReady
-# nodes too: otherwise last-known-good gauges freeze green while jobs cannot run.
+# nodes too: otherwise last-known-good gauges freeze green while probes cannot
+# run.
 _af_nodes_cache: List[tuple[str, str, bool]] = []
 _last_node_refresh: float = 0.0
-
-_last_job_start_ts: dict[str, dict[str, float]] = defaultdict(dict)
 
 
 def _init_k8s() -> None:
@@ -279,12 +208,44 @@ def _result_path(mount_name: str, node_name: str) -> Path:
     return RESULTS_DIR / f"{mount_key}.json"
 
 
+def _call_bounded(fn: Any, timeout_s: float) -> tuple[bool, Any]:
+    """Run fn in a throwaway thread; return (completed, value).
+
+    A read against a wedged CephFS mount sits in uninterruptible sleep, so the
+    thread is abandoned rather than joined — it is a daemon and unblocks when
+    the filesystem does. Callers must stop reading after the first timeout so
+    at most one thread leaks per iteration.
+    """
+    box: Dict[str, Any] = {}
+
+    def run() -> None:
+        try:
+            box["value"] = fn()
+        except BaseException as e:  # re-raised on the calling thread
+            box["error"] = e
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    t.join(timeout_s)
+    if t.is_alive():
+        return False, None
+    if "error" in box:
+        raise box["error"]
+    return True, box.get("value")
+
+
+def _read_result_file(path: Path) -> Dict[str, Any] | None:
+    with path.open("r", encoding="utf-8") as f:
+        loaded: Dict[str, Any] = json.load(f)
+        return loaded
+
+
 def _load_result(mount_name: str, node_name: str) -> Dict[str, Any] | None:
     path = _result_path(mount_name, node_name)
     try:
-        with path.open("r", encoding="utf-8") as f:
-            loaded: Dict[str, Any] = json.load(f)
-            return loaded
+        done, value = _call_bounded(
+            lambda: _read_result_file(path), RESULTS_READ_TIMEOUT_S
+        )
     except FileNotFoundError:
         # Per-node result file not present yet.
         return None
@@ -298,6 +259,14 @@ def _load_result(mount_name: str, node_name: str) -> Dict[str, Any] | None:
     except Exception as e:
         print(f"Error reading result for {mount_name} from {path}: {e}")
         return None
+
+    if not done:
+        _elog(
+            f"[node_healthcheck] Read of {path} did not return in "
+            f"{RESULTS_READ_TIMEOUT_S}s; results storage is wedged"
+        )
+        return {"_storage_error": True, "_timed_out": True}
+    return value  # type: ignore[no-any-return]
 
 
 # node name -> "prod" | "dev", filled by _refresh_node_caches()
@@ -321,7 +290,7 @@ def _refresh_node_caches() -> None:
     if not _k8s_ready or _core_v1 is None:
         return
 
-    global _node_cache, _af_nodes_cache, _last_node_refresh
+    global _af_nodes_cache, _last_node_refresh
     now = time.time()
     if _af_nodes_cache and (now - _last_node_refresh) < NODE_CACHE_TTL_S:
         return
@@ -370,23 +339,14 @@ def _refresh_node_caches() -> None:
         ((name, pool, ready) for name, (pool, ready) in by_name.items()),
         key=lambda row: row[0],
     )
-    _node_cache = [name for name, _pool, ready in _af_nodes_cache if ready]
     _last_node_refresh = now
-
-
-def _list_target_nodes() -> List[str]:
-    """Return Ready AF node names — Jobs are only scheduled on these."""
-    _refresh_node_caches()
-    if not _k8s_ready or _core_v1 is None:
-        return []
-    return _node_cache
 
 
 def _list_af_nodes() -> List[tuple[str, str, bool]]:
     """Return all AF-labelled nodes as (name, pool, ready).
 
     NotReady nodes are included so their last-known-good gauges can be cleared
-    (null in Prometheus) rather than freezing green while Jobs cannot run.
+    (null in Prometheus) rather than freezing green while probes cannot run.
     """
     _refresh_node_caches()
     if not _k8s_ready or _core_v1 is None:
@@ -394,29 +354,37 @@ def _list_af_nodes() -> List[tuple[str, str, bool]]:
     return _af_nodes_cache
 
 
-def _clear_mount_gauges(labels: dict[str, str]) -> None:
-    """Drop status gauges for a mount/node so scrapes show null, not stale values.
-
-    Counters are left alone — they are cumulative and do not drive green/red.
-    """
+def _clear_gauges(labels: dict[str, str], gauges: tuple[Any, ...]) -> None:
     labelvalues = (
         labels["mount_name"],
         labels["mount_path"],
         labels["node"],
         labels["node_pool"],
     )
-    for gauge in (
-        mount_valid,
-        mount_ping_ms,
-        mount_data_rate_gbps,
-        mount_metadata_latency_ms,
-        mount_result_fresh,
-        mount_last_success_ts,
-    ):
+    for gauge in gauges:
         try:
             gauge.remove(*labelvalues)
         except KeyError:
+            # This label set was never published; nothing to drop.
             pass
+
+
+def _clear_result_gauges(labels: dict[str, str]) -> None:
+    """Drop the result-derived gauges, keeping af_node_mount_probe_up.
+
+    Used when the results PVC cannot be read: what the check found is unknown,
+    but whether a probe is running is still known and is the only thing that
+    tells the two apart.
+    """
+    _clear_gauges(labels, RESULT_GAUGES)
+
+
+def _clear_mount_gauges(labels: dict[str, str]) -> None:
+    """Drop every status gauge for a mount/node so scrapes show null.
+
+    Counters are left alone — they are cumulative and do not drive green/red.
+    """
+    _clear_gauges(labels, ALL_MOUNT_GAUGES)
 
 
 def _clear_node_pool_gauges(node_name: str, pool: str) -> None:
@@ -427,15 +395,23 @@ def _clear_node_pool_gauges(node_name: str, pool: str) -> None:
     inactive pool's series must be dropped — otherwise scrapes keep exporting
     a frozen timeout sentinel that Grafana heatmaps can sum into a false red.
     """
-    for m_name, cfg in MOUNTS.items():
+    for m_name, m_path in MOUNTS.items():
         _clear_mount_gauges(
             {
                 "mount_name": m_name,
-                "mount_path": cfg["mount_path"],
+                "mount_path": m_path,
                 "node": node_name,
                 "node_pool": pool,
             }
         )
+
+
+def _publish_probe_up(labels: dict[str, str], ready: bool | None) -> None:
+    """None means the pod list could not be read — absent, not 0."""
+    if ready is None:
+        _clear_gauges(labels, (mount_probe_up,))
+        return
+    mount_probe_up.labels(**labels).set(1 if ready else 0)
 
 
 def _publish_unusable(labels: dict[str, str], check_type: str) -> None:
@@ -452,352 +428,109 @@ def _publish_unusable(labels: dict[str, str], check_type: str) -> None:
     mount_timeout_total.labels(check_type=check_type, **labels).inc()
 
 
-def _has_active_job(mount_name: str, node_name: str) -> bool:
-    _init_k8s()
-    if not _k8s_ready or _batch_v1 is None:
+def _probe_pod_ready(pod: Any) -> bool:
+    if getattr(pod.metadata, "deletion_timestamp", None):
+        # Terminating during a rolling update — do not count it as coverage.
         return False
-
-    mount_key = _sanitized_mount_name(mount_name)
-    label_selector = (
-        f"app=af-node-monitor,mount={mount_key},node={_sanitized_node_name(node_name)}"
-    )
-    try:
-        jobs = _batch_v1.list_namespaced_job(
-            namespace=POD_NAMESPACE, label_selector=label_selector
-        )
-    except ApiException as e:  # type: ignore[misc]
-        print(f"[node_healthcheck] Error listing Jobs: {e}")
+    status = getattr(pod, "status", None)
+    if not status or getattr(status, "phase", "") != "Running":
         return False
-    except Exception as e:  # pragma: no cover - defensive
-        print(f"[node_healthcheck] Unexpected error listing Jobs: {e}")
-        return False
-
-    for job in jobs.items:
-        status = job.status
-        if status and getattr(status, "active", 0):
-            return True
+    for cond in getattr(status, "conditions", None) or []:
+        if getattr(cond, "type", "") == "Ready":
+            return getattr(cond, "status", "") == "True"
     return False
 
 
-def _list_active_job_keys() -> set[tuple[str, str]]:
-    """Return {(mount_name, node_name)} keys that currently have active Jobs."""
-    _init_k8s()
-    if not _k8s_ready or _batch_v1 is None:
-        return set()
+def _probe_pod_states() -> Dict[tuple[str, str], bool] | None:
+    """{(mount_key, node_key): ready} for every probe DaemonSet pod.
 
-    keys: set[tuple[str, str]] = set()
+    The node comes from spec.nodeName rather than a label: one DaemonSet
+    template covers every node, so it cannot carry a per-node label the way
+    the old per-node Jobs did.
+
+    None on an API failure — distinct from an empty map. Reporting every node
+    as having no probe because one list call was refused would paint the whole
+    fleet as unmonitored over an RBAC blip.
+    """
+    _init_k8s()
+    if not _k8s_ready or _core_v1 is None:
+        return None
+
     try:
-        jobs = _batch_v1.list_namespaced_job(
-            namespace=POD_NAMESPACE, label_selector="app=af-node-monitor"
+        pods = _core_v1.list_namespaced_pod(
+            namespace=POD_NAMESPACE,
+            label_selector="app=af-node-monitor,component=probe",
         )
     except ApiException as e:  # type: ignore[misc]
-        _elog(f"[node_healthcheck] Error listing Jobs for active index: {e}")
-        return set()
+        _elog(f"[node_healthcheck] Error listing probe pods: {e}")
+        return None
     except Exception as e:  # pragma: no cover - defensive
-        _elog(f"[node_healthcheck] Unexpected error listing Jobs for active index: {e}")
-        return set()
+        _elog(f"[node_healthcheck] Unexpected error listing probe pods: {e}")
+        return None
 
-    for job in jobs.items:
-        status = job.status
-        if not status or not getattr(status, "active", 0):
-            continue
-        labels = getattr(job.metadata, "labels", None) or {}
+    states: Dict[tuple[str, str], bool] = {}
+    for pod in pods.items:
+        labels = getattr(pod.metadata, "labels", None) or {}
         mount_key = labels.get("mount", "")
-        node_key = labels.get("node", "")
+        node_key = _sanitized_node_name(getattr(pod.spec, "node_name", "") or "")
         if not mount_key or not node_key:
             continue
-        keys.add((mount_key, node_key))
-    return keys
+        key = (mount_key, node_key)
+        # Two pods for one node exist briefly during a rollout; Ready wins.
+        states[key] = states.get(key, False) or _probe_pod_ready(pod)
+    return states
 
 
-def _mount_job_env(mount_name: str, cfg: Dict[str, Any]) -> list[dict[str, Any]]:
-    env_cfg = cfg.get("job", {})
-    env: list[dict[str, Any]] = [
-        {"name": "MOUNT_NAME", "value": mount_name},
-    ]
-    if env_cfg.get("check_file"):
-        env.append({"name": "CHECK_FILE", "value": env_cfg["check_file"]})
-    if env_cfg.get("checksum"):
-        env.append({"name": "CHECKSUM", "value": env_cfg["checksum"]})
-    if env_cfg.get("metadata_dir"):
-        env.append({"name": "METADATA_DIR", "value": env_cfg["metadata_dir"]})
-    if env_cfg.get("fio_file"):
-        env.append({"name": "FIO_FILE", "value": env_cfg["fio_file"]})
-    if env_cfg.get("enable_fio") is not None:
-        env.append({"name": "ENABLE_FIO", "value": str(env_cfg["enable_fio"]).lower()})
+def _cleanup_legacy_jobs() -> None:
+    """Delete Jobs left behind by the pre-DaemonSet exporter.
 
-    # Timeouts and intervals.
-    env.extend(
-        [
-            {"name": "PING_TIMEOUT_S", "value": str(PING_TIMEOUT_S)},
-            {"name": "METADATA_TIMEOUT_S", "value": str(METADATA_TIMEOUT_S)},
-            {"name": "FIO_TIMEOUT_S", "value": str(FIO_TIMEOUT_S)},
-            {
-                "name": "FIO_INTERVAL_S",
-                "value": str(env_cfg.get("fio_interval_s", 1800)),
-            },
-            {"name": "RESULTS_DIR", "value": str(RESULTS_DIR)},
-            {
-                "name": "AF_NODE_MONITOR_VERBOSE",
-                "value": os.getenv("AF_NODE_MONITOR_VERBOSE", "false"),
-            },
-            {
-                "name": "NODE_NAME",
-                "valueFrom": {"fieldRef": {"fieldPath": "spec.nodeName"}},
-            },
-        ]
-    )
-    return env
-
-
-DEFAULT_TOLERATIONS: list[dict[str, Any]] = [
-    {
-        "key": "hub.jupyter.org/dedicated",
-        "operator": "Equal",
-        "value": "cms-af",
-        "effect": "NoSchedule",
-    }
-]
-
-DEFAULT_AFFINITY: dict[str, Any] = {
-    "nodeAffinity": {
-        "requiredDuringSchedulingIgnoredDuringExecution": {
-            "nodeSelectorTerms": [
-                {
-                    "matchExpressions": [
-                        {
-                            "key": "cms-af-prod",
-                            "operator": "In",
-                            "values": ["true"],
-                        }
-                    ]
-                },
-                {
-                    "matchExpressions": [
-                        {
-                            "key": "cms-af-dev",
-                            "operator": "In",
-                            "values": ["true"],
-                        }
-                    ]
-                },
-            ]
-        }
-    }
-}
-
-
-def _build_job_manifest(
-    mount_name: str, cfg: Dict[str, Any], node_name: str
-) -> Dict[str, Any]:
-    mount_key = _sanitized_mount_name(mount_name)
-    node_key = _sanitized_node_name(node_name)
-    ts = int(time.time())
-    job_name = f"af-node-monitor-{mount_key}-{node_key}-{ts}"
-
-    labels = {
-        "app": "af-node-monitor",
-        "mount": mount_key,
-        "node": node_key,
-    }
-
-    volumes = cfg.get("volumes", [])
-    volume_mounts = cfg.get("volume_mounts", [])
-
-    return {
-        "apiVersion": "batch/v1",
-        "kind": "Job",
-        "metadata": {
-            "name": job_name,
-            "labels": labels,
-        },
-        "spec": {
-            "ttlSecondsAfterFinished": JOB_TTL_SECONDS,
-            "backoffLimit": JOB_BACKOFF_LIMIT,
-            "activeDeadlineSeconds": JOB_ACTIVE_DEADLINE_SECONDS,
-            "template": {
-                "metadata": {
-                    "labels": labels,
-                },
-                "spec": {
-                    "restartPolicy": "Never",
-                    "enableServiceLinks": False,
-                    "nodeName": node_name,
-                    "affinity": DEFAULT_AFFINITY,
-                    "tolerations": DEFAULT_TOLERATIONS,
-                    "containers": [
-                        {
-                            "name": "af-node-monitor-job",
-                            "image": JOB_IMAGE,
-                            "command": ["python", "/opt/af-node-monitor/job_runner.py"],
-                            "env": _mount_job_env(mount_name, cfg),
-                            "resources": {
-                                "requests": {"cpu": "10m", "memory": "64Mi"},
-                                "limits": {"cpu": "200m", "memory": "256Mi"},
-                            },
-                            "volumeMounts": volume_mounts,
-                        }
-                    ],
-                    "volumes": volumes,
-                },
-            },
-        },
-    }
-
-
-def _ensure_jobs(now: float) -> None:
+    Their TTL would clear them within minutes anyway, but a Job wedged on a
+    node that cannot mount the results PVC only finishes when its deadline
+    expires, and until then it keeps a doomed Pod on that node.
+    """
     _init_k8s()
     if not _k8s_ready or _batch_v1 is None:
         return
-
-    nodes = _list_target_nodes()
-    if not nodes:
-        return
-
-    for mount_name, cfg in MOUNTS.items():
-        for node_name in nodes:
-            last_ts = _last_job_start_ts[mount_name].get(node_name, 0.0)
-            if now - last_ts < JOB_INTERVAL_S:
-                continue
-            if _has_active_job(mount_name, node_name):
-                continue
-
-            body = _build_job_manifest(mount_name, cfg, node_name)
-            try:
-                _batch_v1.create_namespaced_job(namespace=POD_NAMESPACE, body=body)
-                _last_job_start_ts[mount_name][node_name] = now
-                _vlog(
-                    "[node_healthcheck] Created Job "
-                    f"{body['metadata']['name']} for mount='{mount_name}' node='{node_name}'"
-                )
-            except ApiException as e:  # type: ignore[misc]
-                print(
-                    f"[node_healthcheck] Failed to create Job for mount='{mount_name}' "
-                    f"node='{node_name}': {e}"
-                )
-            except Exception as e:  # pragma: no cover - defensive
-                print(
-                    f"[node_healthcheck] Unexpected error creating Job for mount='{mount_name}' "
-                    f"node='{node_name}': {e}"
-                )
-
-
-def _cleanup_finished_jobs(now: float) -> None:
-    _init_k8s()
-    if not _k8s_ready or _batch_v1 is None:
-        return
-
     try:
         jobs = _batch_v1.list_namespaced_job(
             namespace=POD_NAMESPACE, label_selector="app=af-node-monitor"
         )
-    except ApiException as e:  # type: ignore[misc]
-        print(f"[node_healthcheck] Error listing Jobs for cleanup: {e}")
-        return
-    except Exception as e:  # pragma: no cover - defensive
-        print(f"[node_healthcheck] Unexpected error listing Jobs for cleanup: {e}")
+    except Exception as e:
+        _elog(f"[node_healthcheck] Could not list legacy Jobs: {e}")
         return
 
     for job in jobs.items:
-        status = job.status
-        metadata = job.metadata
-        if not status or not metadata or not metadata.name:
+        name = getattr(job.metadata, "name", None)
+        if not name:
             continue
-
-        start_time = getattr(status, "start_time", None)
-        active = getattr(status, "active", 0) or 0
-
-        # Force-kill long-running Jobs.
-        if active and start_time is not None:
-            runtime = now - start_time.timestamp()
-            if runtime > JOB_MAX_RUNTIME_S:
-                try:
-                    _batch_v1.delete_namespaced_job(
-                        name=metadata.name,
-                        namespace=POD_NAMESPACE,
-                        propagation_policy="Background",
-                        body=client.V1DeleteOptions(grace_period_seconds=0),
-                    )
-                    _vlog(
-                        f"[node_healthcheck] Force-deleted long-running Job "
-                        f"{metadata.name} after {int(runtime)}s"
-                    )
-                except ApiException as e:  # type: ignore[misc]
-                    print(
-                        f"[node_healthcheck] Failed to force-delete Job {metadata.name}: {e}"
-                    )
-                except Exception as e:  # pragma: no cover - defensive
-                    print(
-                        f"[node_healthcheck] Unexpected error force-deleting Job {metadata.name}: {e}"
-                    )
-                continue
-
-        if active:
-            # Still running but within allowed runtime.
-            continue
-
-        completion_time = getattr(status, "completion_time", None)
-        if completion_time is None:
-            completion_time = getattr(status, "start_time", None)
-        if completion_time is None:
-            continue
-
-        finished_ago = now - completion_time.timestamp()
-        # Classify Job outcome.
-        succeeded = bool(getattr(status, "succeeded", 0))
-        failed = bool(getattr(status, "failed", 0))
-        for cond in getattr(status, "conditions", []) or []:
-            ctype = getattr(cond, "type", "")
-            cstatus = getattr(cond, "status", "")
-            if ctype == "Complete" and cstatus == "True":
-                succeeded = True
-            if ctype == "Failed" and cstatus == "True":
-                failed = True
-
-        if succeeded and not failed:
-            # Successful Jobs: delete immediately (or after optional small delay).
-            if finished_ago < JOB_SUCCESS_RETENTION_S:
-                continue
-        else:
-            # Failed or unknown outcome: keep briefly for inspection.
-            if finished_ago < JOB_FAILED_RETENTION_S:
-                continue
-
         try:
             _batch_v1.delete_namespaced_job(
-                name=metadata.name,
+                name=name,
                 namespace=POD_NAMESPACE,
                 propagation_policy="Background",
             )
-            _vlog(
-                f"[node_healthcheck] Deleted finished Job {metadata.name} "
-                f"after {int(finished_ago)}s"
-            )
-        except ApiException as e:  # type: ignore[misc]
-            print(f"[node_healthcheck] Failed to delete Job {metadata.name}: {e}")
-        except Exception as e:  # pragma: no cover - defensive
-            print(
-                f"[node_healthcheck] Unexpected error deleting Job {metadata.name}: {e}"
-            )
+            print(f"[node_healthcheck] Deleted legacy Job {name}")
+        except Exception as e:
+            _elog(f"[node_healthcheck] Could not delete legacy Job {name}: {e}")
 
 
 def update_metrics() -> None:
     now = time.time()
 
-    # Ensure per-mount per-node Jobs are running.
-    _ensure_jobs(now)
-
-    # Explicitly clean up finished Jobs after a short retention.
-    _cleanup_finished_jobs(now)
-
     af_nodes = _list_af_nodes()
     if not af_nodes:
         # Fallback: still try to read legacy per-mount results.
         af_nodes = [("", "prod", True)]
-    active_job_keys = _list_active_job_keys()
+    probe_states = _probe_pod_states()
 
-    for m_name, cfg in MOUNTS.items():
-        mount_path = cfg["mount_path"]
+    # Set once a read of the results PVC fails to return. Every further read
+    # this iteration would wedge the same way, so they are skipped and the
+    # mounts reported as unreadable rather than as failing.
+    storage_wedged = False
+    storage_ok = True
+
+    for m_name, mount_path in MOUNTS.items():
+        mount_key = _sanitized_mount_name(m_name)
         for node_name, pool, ready in af_nodes:
             labels = {
                 "mount_name": m_name,
@@ -806,17 +539,33 @@ def update_metrics() -> None:
                 "node_pool": pool,
             }
 
-            # NotReady: Jobs cannot run. Clear gauges so Prometheus/Grafana see
-            # null (gap), not last-known-good green and not a false red. Red is
-            # reserved for a completed failing check on a Ready node (fresh=1).
+            # NotReady: probes cannot report. Clear gauges so Prometheus/Grafana
+            # see null (gap), not last-known-good green and not a false red. Red
+            # is reserved for a completed failing check on a Ready node
+            # (fresh=1).
             if node_name and not ready:
                 labels["node"] = node_name
                 _clear_mount_gauges(labels)
                 continue
 
+            node_key = _sanitized_node_name(node_name)
+            probe_ready = (
+                probe_states.get((mount_key, node_key), False)
+                if probe_states is not None
+                else None
+            )
+            has_probe = (
+                probe_states is not None and (mount_key, node_key) in probe_states
+            )
+
+            if storage_wedged:
+                _publish_probe_up(labels, probe_ready)
+                _clear_result_gauges(labels)
+                continue
+
             data = _load_result(m_name, node_name)
-            # Use node from result JSON (job pod's node); fallback to discovery
-            # so the metric always reflects the node that produced the data.
+            # Use node from result JSON (the probe pod's node); fallback to
+            # discovery so the metric always reflects the node that produced it.
             node_for_label = ((data.get("node") or "").strip() if data else "") or (
                 node_name or "unknown"
             )
@@ -827,26 +576,42 @@ def update_metrics() -> None:
                 "node": node_for_label,
                 "node_pool": _node_pools.get(node_for_label, pool),
             }
+            _publish_probe_up(labels, probe_ready)
 
             if data and data.get("_storage_error"):
-                # Results PVC is unavailable; drop series so they appear empty.
-                _clear_mount_gauges(labels)
+                # Results PVC is unavailable; drop the result series so they
+                # appear empty. af_node_mount_probe_up stays, and
+                # af_node_monitor_results_available says why.
+                storage_ok = False
+                if data.get("_timed_out"):
+                    storage_wedged = True
+                _clear_result_gauges(labels)
                 continue
 
             if not data:
-                # No result yet: expose timeout semantics for latency/throughput gauges
-                # so alerts/dashboards see an explicit failure signal.
+                # No result yet: expose timeout semantics for latency/throughput
+                # gauges so alerts/dashboards see an explicit failure signal.
                 check_type = "no_recent_result"
-                mount_key = _sanitized_mount_name(m_name)
-                node_key = _sanitized_node_name(node_name)
-                if node_key and (mount_key, node_key) in active_job_keys:
-                    # Distinguish the case where a Job exists but has not produced output
-                    # yet (for example stuck Pending/ContainerCreating).
+                if node_key and has_probe:
+                    # Distinguish the case where a probe exists but has not
+                    # produced output yet (for example stuck Pending or
+                    # ContainerCreating because a volume will not mount).
                     check_type = "job_never_started"
                 _publish_unusable(labels, check_type)
                 continue
 
-            timestamp = float(data.get("timestamp", 0))
+            try:
+                timestamp = float(data.get("timestamp", 0))
+            except (TypeError, ValueError):
+                timestamp = 0.0
+
+            # A missing or future-dated timestamp cannot say whether the check
+            # is recent. Treating it as fresh would let a skewed node hold a
+            # dead mount green indefinitely.
+            if timestamp <= 0 or timestamp > now + CLOCK_SKEW_TOLERANCE_S:
+                _publish_unusable(labels, "bad_timestamp")
+                continue
+
             timeout = bool(data.get("timeout", False))
             ok = bool(data.get("ok", False)) and not timeout
             stale = now - timestamp > RESULT_STALE_WINDOW_S
@@ -902,9 +667,12 @@ def update_metrics() -> None:
                             _timeout_metadata_ms()
                         )
 
+    monitor_results_available.set(1 if storage_ok else 0)
+
 
 if __name__ == "__main__":  # pragma: no cover - process entrypoint
     start_http_server(8000)
+    _cleanup_legacy_jobs()
     while True:
         try:
             update_metrics()

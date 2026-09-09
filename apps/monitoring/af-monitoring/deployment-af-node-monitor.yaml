@@ -28,6 +28,12 @@ spec:
           env:
             - name: RESULTS_DIR
               value: "/af-node-monitor/results"
+            # Timeout sentinels: must match the probe DaemonSets' real
+            # timeouts (daemonset-af-node-probe.yaml), not bound anything here.
+            - name: PING_TIMEOUT_S
+              value: "3"
+            - name: METADATA_TIMEOUT_S
+              value: "10"
             - name: AF_NODE_MONITOR_VERBOSE
               value: "false"
             - name: POD_NAMESPACE

@@ -1,15 +1,18 @@
 """Tests for docker/af-node-monitor/node_healthcheck.py.
 
 The kubernetes client is faked at module-global level (the real package is
-not installed in this suite), so the orchestration logic — job creation
-throttling, cleanup retention policies, metric decision matrix — is tested
-without a cluster.
+not installed in this suite), so the discovery logic — node and probe-pod
+listing, the metric decision matrix — is tested without a cluster.
+
+The exporter no longer creates anything: probes run as DaemonSets
+(apps/monitoring/af-monitoring/daemonset-af-node-probe.yaml). What is tested
+here is that it never confuses the three states those probes can be in — mount
+broken, probe broken, results unreadable.
 """
 
 import json
 import time
 import types
-from datetime import datetime, timezone
 
 import node_healthcheck as nh
 import pytest
@@ -29,54 +32,46 @@ def fake_node(name, ready=True):
     )
 
 
-def fake_job(
-    name="job-1",
-    labels=None,
-    active=0,
-    succeeded=0,
-    failed=0,
-    started_ago=None,
-    finished_ago=None,
-):
-    def ts(seconds_ago):
-        if seconds_ago is None:
-            return None
-        return datetime.fromtimestamp(NOW - seconds_ago, tz=timezone.utc)
-
+def fake_pod(mount="depot", node="node-a", ready=True, phase="Running", deleting=False):
+    conds = [types.SimpleNamespace(type="Ready", status="True" if ready else "False")]
     return types.SimpleNamespace(
-        metadata=types.SimpleNamespace(name=name, labels=labels or {}),
-        status=types.SimpleNamespace(
-            active=active,
-            succeeded=succeeded,
-            failed=failed,
-            conditions=[],
-            start_time=ts(started_ago),
-            completion_time=ts(finished_ago),
+        metadata=types.SimpleNamespace(
+            name=f"af-node-probe-{mount}-xyz",
+            labels={"app": "af-node-monitor", "component": "probe", "mount": mount},
+            deletion_timestamp=NOW if deleting else None,
         ),
+        spec=types.SimpleNamespace(node_name=node),
+        status=types.SimpleNamespace(phase=phase, conditions=conds),
     )
 
 
+def fake_job(name="job-1"):
+    return types.SimpleNamespace(metadata=types.SimpleNamespace(name=name))
+
+
 class FakeCoreV1:
-    def __init__(self, nodes):
+    def __init__(self, nodes, pods=None):
         self.nodes = nodes
+        self.pods = pods or []
         self.calls = 0
 
     def list_node(self, label_selector):
         self.calls += 1
         return types.SimpleNamespace(items=self.nodes)
 
+    def list_namespaced_pod(self, namespace, label_selector=None):
+        return types.SimpleNamespace(items=self.pods)
+
 
 class FakeBatchV1:
+    """Only what the one-shot legacy-Job sweep needs."""
+
     def __init__(self, jobs=None):
         self.jobs = jobs or []
-        self.created = []
         self.deleted = []
 
     def list_namespaced_job(self, namespace, label_selector=None):
         return types.SimpleNamespace(items=self.jobs)
-
-    def create_namespaced_job(self, namespace, body):
-        self.created.append(body)
 
     def delete_namespaced_job(self, name, namespace, propagation_policy, body=None):
         self.deleted.append(name)
@@ -92,8 +87,10 @@ def clear_metrics():
         nh.mount_result_fresh,
         nh.mount_timeout_total,
         nh.mount_last_success_ts,
+        nh.mount_probe_up,
     ):
         metric.clear()
+    nh.monitor_results_available.set(1)
     yield
 
 
@@ -110,10 +107,8 @@ def k8s(monkeypatch):
     monkeypatch.setattr(
         nh, "client", types.SimpleNamespace(V1DeleteOptions=lambda **kw: kw)
     )
-    monkeypatch.setattr(nh, "_node_cache", [])
     monkeypatch.setattr(nh, "_af_nodes_cache", [])
     monkeypatch.setattr(nh, "_last_node_refresh", 0.0)
-    nh._last_job_start_ts.clear()
     nh._node_pools.clear()
     return types.SimpleNamespace(core=core, batch=batch)
 
@@ -121,7 +116,7 @@ def k8s(monkeypatch):
 def sample(name, mount="/depot/", node="node-a", node_pool="prod", **extra):
     labels = {
         "mount_name": mount,
-        "mount_path": nh.MOUNTS[mount]["mount_path"],
+        "mount_path": nh.MOUNTS[mount],
         "node": node,
         "node_pool": node_pool,
         **extra,
@@ -162,51 +157,13 @@ def test_load_result_storage_error_flagged(monkeypatch, tmp_path):
     assert nh._load_result("/depot/", "node-a") == {"_storage_error": True}
 
 
-def test_mount_job_env_full_config():
-    cfg = nh.MOUNTS["/depot/"]
-    env = {e["name"]: e.get("value") for e in nh._mount_job_env("/depot/", cfg)}
-    assert env["MOUNT_NAME"] == "/depot/"
-    assert env["CHECK_FILE"] == cfg["job"]["check_file"]
-    assert env["CHECKSUM"] == cfg["job"]["checksum"]
-    assert env["ENABLE_FIO"] == "true"
-    assert "NODE_NAME" in env  # injected via fieldRef
-
-
-def test_mount_job_env_fio_disabled():
-    env = {
-        e["name"]: e.get("value")
-        for e in nh._mount_job_env("cvmfs", nh.MOUNTS["cvmfs"])
-    }
-    assert env["ENABLE_FIO"] == "false"
-    assert "FIO_FILE" not in env
-
-
-def test_build_job_manifest():
-    body = nh._build_job_manifest("/depot/", nh.MOUNTS["/depot/"], "node-a")
-    assert body["metadata"]["name"].startswith("af-node-monitor-depot-node-a-")
-    assert body["metadata"]["labels"] == {
-        "app": "af-node-monitor",
-        "mount": "depot",
-        "node": "node-a",
-    }
-    pod = body["spec"]["template"]["spec"]
-    assert pod["nodeName"] == "node-a"
-    assert pod["containers"][0]["image"] == nh.JOB_IMAGE
-    assert body["spec"]["ttlSecondsAfterFinished"] == nh.JOB_TTL_SECONDS
-    assert pod["volumes"] == nh.MOUNTS["/depot/"]["volumes"]
-
-
 # ── node discovery ────────────────────────────────────────────────────────────
 
 
-def test_list_target_nodes_filters_not_ready(k8s):
-    k8s.core.nodes = [fake_node("ready-1"), fake_node("broken", ready=False)]
-    assert nh._list_target_nodes() == ["ready-1"]
-
-
 def test_list_af_nodes_includes_not_ready(k8s):
-    """Jobs skip NotReady nodes, but metrics must still see them — otherwise
-    last-known-good gauges freeze green while checks cannot run."""
+    """Probes cannot report from NotReady nodes, but metrics must still see
+    them — otherwise last-known-good gauges freeze green while checks cannot
+    run."""
     k8s.core.nodes = [fake_node("ready-1"), fake_node("broken", ready=False)]
     assert nh._list_af_nodes() == [
         ("broken", "prod", False),
@@ -214,26 +171,25 @@ def test_list_af_nodes_includes_not_ready(k8s):
     ]
 
 
-def test_list_target_nodes_is_cached(k8s):
-    nh._list_target_nodes()
+def test_list_af_nodes_is_cached(k8s):
+    nh._list_af_nodes()
     first_calls = k8s.core.calls
-    nh._list_target_nodes()
+    nh._list_af_nodes()
     assert k8s.core.calls == first_calls  # served from cache
 
 
-def test_list_target_nodes_without_k8s(monkeypatch):
+def test_list_af_nodes_without_k8s(monkeypatch):
     monkeypatch.setattr(nh, "_k8s_ready", False)
     monkeypatch.setattr(nh, "_init_k8s", lambda: None)
-    assert nh._list_target_nodes() == []
     assert nh._list_af_nodes() == []
 
 
 def _seed_pool_gauges(node: str, pool: str, *, latency: float = 10000.0) -> None:
     """Create the full set of status gauges for every mount under one pool."""
-    for m_name, cfg in nh.MOUNTS.items():
+    for m_name, m_path in nh.MOUNTS.items():
         labels = {
             "mount_name": m_name,
-            "mount_path": cfg["mount_path"],
+            "mount_path": m_path,
             "node": node,
             "node_pool": pool,
         }
@@ -296,78 +252,15 @@ def test_pool_flip_dev_to_prod_drops_dev_series(k8s):
     assert sample("af_node_mount_metadata_latency_ms", node_pool="dev") is None
 
 
-# ── job orchestration ─────────────────────────────────────────────────────────
-
-
-def test_ensure_jobs_creates_one_per_mount_node(k8s):
-    nh._ensure_jobs(NOW)
-    created_mounts = {b["metadata"]["labels"]["mount"] for b in k8s.batch.created}
-    assert created_mounts == {"depot", "work", "eos", "cvmfs"}
-
-
-def test_ensure_jobs_throttled_by_interval(k8s):
-    nh._ensure_jobs(NOW)
-    n = len(k8s.batch.created)
-    nh._ensure_jobs(NOW + 1)  # well within JOB_INTERVAL_S
-    assert len(k8s.batch.created) == n
-
-
-def test_ensure_jobs_skips_active(k8s):
-    k8s.batch.jobs = [fake_job(active=1)]
-    nh._ensure_jobs(NOW)
-    assert k8s.batch.created == []
-
-
-def test_active_job_keys(k8s):
-    k8s.batch.jobs = [
-        fake_job(labels={"mount": "depot", "node": "node-a"}, active=1),
-        fake_job(labels={"mount": "work", "node": "node-a"}, active=0),
-        fake_job(labels={}, active=1),  # unlabeled: ignored
-    ]
-    assert nh._list_active_job_keys() == {("depot", "node-a")}
-
-
-def test_cleanup_deletes_succeeded_immediately(k8s):
-    k8s.batch.jobs = [fake_job(name="done", succeeded=1, finished_ago=1)]
-    nh._cleanup_finished_jobs(NOW)
-    assert k8s.batch.deleted == ["done"]
-
-
-def test_cleanup_retains_recent_failures(k8s, monkeypatch):
-    monkeypatch.setattr(nh, "JOB_FAILED_RETENTION_S", 60.0)
-    k8s.batch.jobs = [fake_job(name="crashed", failed=1, finished_ago=5)]
-    nh._cleanup_finished_jobs(NOW)
-    assert k8s.batch.deleted == []
-
-    k8s.batch.jobs = [fake_job(name="crashed", failed=1, finished_ago=120)]
-    nh._cleanup_finished_jobs(NOW)
-    assert k8s.batch.deleted == ["crashed"]
-
-
-def test_cleanup_force_kills_overrunning_jobs(k8s, monkeypatch):
-    monkeypatch.setattr(nh, "JOB_MAX_RUNTIME_S", 300.0)
-    k8s.batch.jobs = [fake_job(name="stuck", active=1, started_ago=400)]
-    nh._cleanup_finished_jobs(NOW)
-    assert k8s.batch.deleted == ["stuck"]
-
-
-def test_cleanup_leaves_running_jobs_alone(k8s):
-    k8s.batch.jobs = [fake_job(name="busy", active=1, started_ago=10)]
-    nh._cleanup_finished_jobs(NOW)
-    assert k8s.batch.deleted == []
-
-
 # ── update_metrics decision matrix ────────────────────────────────────────────
 
 
 @pytest.fixture
 def metrics_env(monkeypatch, tmp_path):
-    """update_metrics with orchestration stubbed and results in tmp_path."""
+    """update_metrics with discovery stubbed and results in tmp_path."""
     monkeypatch.setattr(nh, "RESULTS_DIR", tmp_path)
-    monkeypatch.setattr(nh, "_ensure_jobs", lambda now: None)
-    monkeypatch.setattr(nh, "_cleanup_finished_jobs", lambda now: None)
     monkeypatch.setattr(nh, "_list_af_nodes", lambda: [("node-a", "prod", True)])
-    monkeypatch.setattr(nh, "_list_active_job_keys", lambda: set())
+    monkeypatch.setattr(nh, "_probe_pod_states", lambda: {})
     nh._node_pools["node-a"] = "prod"
 
     def write(_mount, _node, **data):
@@ -406,8 +299,8 @@ def test_missing_result_reports_timeout_semantics(metrics_env):
     assert sample("af_node_mount_timeout_total", check_type="no_recent_result") == 1
 
 
-def test_missing_result_with_active_job_is_never_started(metrics_env, monkeypatch):
-    monkeypatch.setattr(nh, "_list_active_job_keys", lambda: {("depot", "node-a")})
+def test_missing_result_with_a_probe_pod_is_never_started(metrics_env, monkeypatch):
+    monkeypatch.setattr(nh, "_probe_pod_states", lambda: {("depot", "node-a"): False})
 
     nh.update_metrics()
 
@@ -596,135 +489,6 @@ def test_init_k8s_loads_config(monkeypatch):
     nh._init_k8s()
 
 
-def test_list_target_nodes_skips_incomplete_and_api_errors(k8s, monkeypatch):
-    nameless = types.SimpleNamespace(
-        metadata=types.SimpleNamespace(name=None),
-        status=types.SimpleNamespace(conditions=[]),
-    )
-    no_conds = types.SimpleNamespace(
-        metadata=types.SimpleNamespace(name="bare"),
-        status=types.SimpleNamespace(conditions=None),
-    )
-    k8s.core.nodes = [nameless, no_conds, fake_node("ok")]
-    assert nh._list_target_nodes() == ["ok"]
-
-    monkeypatch.setattr(nh, "_node_cache", [])
-    monkeypatch.setattr(nh, "_last_node_refresh", 0.0)
-
-    def boom(label_selector):
-        raise nh.ApiException("denied")
-
-    k8s.core.list_node = boom
-    assert nh._list_target_nodes() == []
-
-
-def test_has_active_job_and_keys_without_k8s_or_on_error(monkeypatch, k8s):
-    monkeypatch.setattr(nh, "_k8s_ready", False)
-    assert nh._has_active_job("/depot/", "node-a") is False
-    assert nh._list_active_job_keys() == set()
-
-    monkeypatch.setattr(nh, "_k8s_ready", True)
-    monkeypatch.setattr(nh, "_batch_v1", k8s.batch, raising=False)
-
-    def boom(**kwargs):
-        raise nh.ApiException("no")
-
-    k8s.batch.list_namespaced_job = boom
-    assert nh._has_active_job("/depot/", "node-a") is False
-    assert nh._list_active_job_keys() == set()
-
-
-def test_ensure_jobs_guards_and_create_failure(monkeypatch, k8s):
-    monkeypatch.setattr(nh, "_k8s_ready", False)
-    nh._ensure_jobs(NOW)
-    assert k8s.batch.created == []
-
-    monkeypatch.setattr(nh, "_k8s_ready", True)
-    monkeypatch.setattr(nh, "_batch_v1", k8s.batch, raising=False)
-    monkeypatch.setattr(nh, "_list_target_nodes", lambda: [])
-    nh._ensure_jobs(NOW)
-    assert k8s.batch.created == []
-
-    monkeypatch.setattr(nh, "_list_target_nodes", lambda: ["node-a"])
-    monkeypatch.setattr(nh, "_has_active_job", lambda *a: False)
-    nh._last_job_start_ts.clear()
-
-    def boom(**kwargs):
-        raise nh.ApiException("create failed")
-
-    k8s.batch.create_namespaced_job = boom
-    nh._ensure_jobs(NOW)  # does not raise
-    assert k8s.batch.created == []
-
-
-def test_cleanup_guards_conditions_and_errors(monkeypatch, k8s):
-    monkeypatch.setattr(nh, "_k8s_ready", False)
-    nh._cleanup_finished_jobs(NOW)
-
-    monkeypatch.setattr(nh, "_k8s_ready", True)
-    monkeypatch.setattr(nh, "_batch_v1", k8s.batch, raising=False)
-
-    def boom(**kwargs):
-        raise nh.ApiException("list failed")
-
-    k8s.batch.list_namespaced_job = boom
-    nh._cleanup_finished_jobs(NOW)
-
-    # restore list, exercise incomplete jobs + condition-based success/fail
-    k8s.batch = FakeBatchV1()
-    monkeypatch.setattr(nh, "_batch_v1", k8s.batch, raising=False)
-
-    incomplete = fake_job(name="incomplete", finished_ago=None, started_ago=None)
-    incomplete.status.completion_time = None
-    incomplete.status.start_time = None
-    incomplete.status.active = 0
-
-    no_meta = types.SimpleNamespace(
-        metadata=None,
-        status=types.SimpleNamespace(active=0, succeeded=1, failed=0, conditions=[]),
-    )
-
-    via_cond = fake_job(name="via-cond", finished_ago=1)
-    via_cond.status.succeeded = 0
-    via_cond.status.failed = 0
-    via_cond.status.conditions = [types.SimpleNamespace(type="Complete", status="True")]
-
-    failed_cond = fake_job(name="fail-cond", finished_ago=120)
-    failed_cond.status.succeeded = 0
-    failed_cond.status.failed = 0
-    failed_cond.status.conditions = [
-        types.SimpleNamespace(type="Failed", status="True")
-    ]
-
-    k8s.batch.jobs = [incomplete, no_meta, via_cond, failed_cond]
-    nh._cleanup_finished_jobs(NOW)
-    assert "via-cond" in k8s.batch.deleted
-    assert "fail-cond" in k8s.batch.deleted
-
-
-def test_cleanup_force_delete_and_delete_api_errors(monkeypatch, k8s):
-    monkeypatch.setattr(nh, "JOB_MAX_RUNTIME_S", 300.0)
-    k8s.batch.jobs = [fake_job(name="stuck", active=1, started_ago=400)]
-
-    def boom_delete(**kwargs):
-        raise nh.ApiException("cannot delete")
-
-    k8s.batch.delete_namespaced_job = boom_delete
-    nh._cleanup_finished_jobs(NOW)  # swallows ApiException
-
-    k8s.batch = FakeBatchV1(jobs=[fake_job(name="done", succeeded=1, finished_ago=1)])
-    monkeypatch.setattr(nh, "_batch_v1", k8s.batch, raising=False)
-    k8s.batch.delete_namespaced_job = boom_delete
-    nh._cleanup_finished_jobs(NOW)
-
-
-def test_cleanup_respects_success_retention(monkeypatch, k8s):
-    monkeypatch.setattr(nh, "JOB_SUCCESS_RETENTION_S", 60.0)
-    k8s.batch.jobs = [fake_job(name="fresh", succeeded=1, finished_ago=5)]
-    nh._cleanup_finished_jobs(NOW)
-    assert k8s.batch.deleted == []
-
-
 def test_update_metrics_fallback_empty_nodes(metrics_env, monkeypatch):
     monkeypatch.setattr(nh, "_list_af_nodes", lambda: [])
     metrics_env(
@@ -742,3 +506,268 @@ def test_timeout_result_without_partial_ping(metrics_env):
     metrics_env("/depot/", "node-a", ok=True, timeout=True, timestamp=time.time())
     nh.update_metrics()
     assert sample("af_node_mount_ping_ms") == nh._timeout_ping_ms()
+
+
+# ── probe discovery ───────────────────────────────────────────────────────────
+
+
+def test_probe_pod_states_keys_on_spec_node_name(k8s):
+    """One DaemonSet template covers every node, so the node cannot come from
+    a pod label the way it did from the per-node Jobs."""
+    k8s.core.pods = [
+        fake_pod(mount="depot", node="node-a", ready=True),
+        fake_pod(mount="work", node="node-b", ready=False),
+    ]
+    assert nh._probe_pod_states() == {
+        ("depot", "node-a"): True,
+        ("work", "node-b"): False,
+    }
+
+
+def test_probe_pod_not_running_is_not_ready(k8s):
+    """Pending or ContainerCreating — a volume that will not mount looks
+    exactly like this, and it must not read as coverage."""
+    k8s.core.pods = [fake_pod(phase="Pending", ready=False)]
+    assert nh._probe_pod_states() == {("depot", "node-a"): False}
+
+
+def test_terminating_probe_pod_is_not_ready(k8s):
+    k8s.core.pods = [fake_pod(ready=True, deleting=True)]
+    assert nh._probe_pod_states() == {("depot", "node-a"): False}
+
+
+def test_probe_pod_rollout_overlap_takes_ready(k8s):
+    """Both pods exist for a moment during a rollout; the Ready one wins."""
+    k8s.core.pods = [
+        fake_pod(ready=False, deleting=True),
+        fake_pod(ready=True),
+    ]
+    assert nh._probe_pod_states() == {("depot", "node-a"): True}
+
+
+def test_probe_pod_states_ignores_unplaced_and_unlabelled(k8s):
+    k8s.core.pods = [
+        fake_pod(node=""),  # not scheduled yet
+        types.SimpleNamespace(
+            metadata=types.SimpleNamespace(labels={}, deletion_timestamp=None),
+            spec=types.SimpleNamespace(node_name="node-a"),
+            status=types.SimpleNamespace(phase="Running", conditions=[]),
+        ),
+    ]
+    assert nh._probe_pod_states() == {}
+
+
+def test_probe_pod_states_is_none_when_the_api_cannot_answer(monkeypatch, k8s):
+    """None, not {} — an empty map would say "no probe on any node", which is
+    a fleet-wide monitoring outage reported over one refused list call."""
+    monkeypatch.setattr(nh, "_k8s_ready", False)
+    assert nh._probe_pod_states() is None
+
+    monkeypatch.setattr(nh, "_k8s_ready", True)
+
+    def boom(**kwargs):
+        raise nh.ApiException("denied")
+
+    k8s.core.list_namespaced_pod = boom
+    assert nh._probe_pod_states() is None
+
+
+def test_probe_up_is_absent_when_the_pod_list_is_unavailable(metrics_env, monkeypatch):
+    monkeypatch.setattr(nh, "_probe_pod_states", lambda: {("depot", "node-a"): True})
+    metrics_env("/depot/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
+    nh.update_metrics()
+    assert sample("af_node_mount_probe_up") == 1
+
+    monkeypatch.setattr(nh, "_probe_pod_states", lambda: None)
+    nh.update_metrics()
+    assert sample("af_node_mount_probe_up") is None
+    # The mount verdict is unaffected: it comes from the result file.
+    assert sample("af_node_mount_valid") == 1
+
+
+def test_probe_pod_without_ready_condition_is_not_ready(k8s):
+    pod = fake_pod()
+    pod.status.conditions = []
+    k8s.core.pods = [pod]
+    assert nh._probe_pod_states() == {("depot", "node-a"): False}
+
+
+# ── legacy Job sweep ──────────────────────────────────────────────────────────
+
+
+def test_cleanup_legacy_jobs_deletes_everything_it_finds(k8s):
+    k8s.batch.jobs = [fake_job("af-node-monitor-depot-a337-1"), fake_job("x")]
+    nh._cleanup_legacy_jobs()
+    assert k8s.batch.deleted == ["af-node-monitor-depot-a337-1", "x"]
+
+
+def test_cleanup_legacy_jobs_survives_api_errors(monkeypatch, k8s):
+    monkeypatch.setattr(nh, "_k8s_ready", False)
+    nh._cleanup_legacy_jobs()
+    assert k8s.batch.deleted == []
+
+    monkeypatch.setattr(nh, "_k8s_ready", True)
+
+    def boom(**kwargs):
+        raise nh.ApiException("denied")
+
+    k8s.batch.list_namespaced_job = boom
+    nh._cleanup_legacy_jobs()
+
+    k8s.batch = FakeBatchV1(jobs=[fake_job("stuck")])
+    monkeypatch.setattr(nh, "_batch_v1", k8s.batch, raising=False)
+    k8s.batch.delete_namespaced_job = boom
+    nh._cleanup_legacy_jobs()  # does not raise
+
+
+# ── probe_up: broken mount vs broken probe ────────────────────────────────────
+
+
+def test_probe_up_reports_a_ready_probe(metrics_env, monkeypatch):
+    monkeypatch.setattr(nh, "_probe_pod_states", lambda: {("depot", "node-a"): True})
+    metrics_env("/depot/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
+    nh.update_metrics()
+    assert sample("af_node_mount_probe_up") == 1
+    assert sample("af_node_mount_valid") == 1
+
+
+def test_probe_up_zero_when_no_probe_pod_exists(metrics_env):
+    metrics_env("/depot/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
+    nh.update_metrics()
+    assert sample("af_node_mount_probe_up") == 0
+    # The mount verdict still stands on the last result it did produce.
+    assert sample("af_node_mount_valid") == 1
+
+
+def test_probe_up_cleared_for_not_ready_nodes(metrics_env, monkeypatch):
+    """NotReady nodes publish nothing at all, probe state included."""
+    monkeypatch.setattr(nh, "_probe_pod_states", lambda: {("depot", "node-a"): True})
+    metrics_env("/depot/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
+    nh.update_metrics()
+    assert sample("af_node_mount_probe_up") == 1
+
+    monkeypatch.setattr(nh, "_list_af_nodes", lambda: [("node-a", "prod", False)])
+    nh.update_metrics()
+    assert sample("af_node_mount_probe_up") is None
+
+
+# ── clock skew ────────────────────────────────────────────────────────────────
+
+
+def test_future_timestamp_is_not_fresh(metrics_env):
+    """A node whose clock runs ahead can never go stale, so a dead mount there
+    would sit green forever."""
+    metrics_env(
+        "/depot/",
+        "node-a",
+        ok=True,
+        timestamp=time.time() + 10 * nh.CLOCK_SKEW_TOLERANCE_S,
+        ping_ms=1.0,
+    )
+    nh.update_metrics()
+    assert sample("af_node_mount_result_fresh") == 0
+    assert sample("af_node_mount_timeout_total", check_type="bad_timestamp") == 1
+
+
+def test_missing_timestamp_is_not_fresh(metrics_env):
+    metrics_env("/depot/", "node-a", ok=True, ping_ms=1.0)
+    nh.update_metrics()
+    assert sample("af_node_mount_result_fresh") == 0
+    assert sample("af_node_mount_timeout_total", check_type="bad_timestamp") == 1
+
+
+def test_unparseable_timestamp_is_not_fresh(metrics_env):
+    metrics_env("/depot/", "node-a", ok=True, timestamp="soon", ping_ms=1.0)
+    nh.update_metrics()
+    assert sample("af_node_mount_result_fresh") == 0
+
+
+def test_small_skew_is_still_accepted(metrics_env):
+    metrics_env(
+        "/depot/",
+        "node-a",
+        ok=True,
+        timestamp=time.time() + nh.CLOCK_SKEW_TOLERANCE_S / 2,
+        ping_ms=1.0,
+    )
+    nh.update_metrics()
+    assert sample("af_node_mount_valid") == 1
+
+
+# ── unreadable results volume ─────────────────────────────────────────────────
+
+
+def test_read_timeout_is_reported_as_unavailable_not_as_a_failing_mount(
+    metrics_env, monkeypatch
+):
+    """A wedged CephFS read must not be published as a broken mount, and must
+    not be silent either: the series go null and results_available goes 0."""
+    monkeypatch.setattr(nh, "RESULTS_READ_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(
+        nh, "_read_result_file", lambda path: time.sleep(5) or {"ok": True}
+    )
+    metrics_env("/depot/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
+    nh.update_metrics()
+
+    assert sample("af_node_mount_valid") is None
+    assert sample("af_node_mount_result_fresh") is None
+    assert REGISTRY.get_sample_value("af_node_monitor_results_available") == 0
+
+
+def test_one_wedged_read_stops_the_iteration_reading_more(metrics_env, monkeypatch):
+    """Every further read would hang the same way; each one costs a leaked
+    thread and 15s of the loop."""
+    monkeypatch.setattr(nh, "RESULTS_READ_TIMEOUT_S", 0.05)
+    reads = []
+
+    def slow(path):
+        reads.append(path)
+        time.sleep(5)
+
+    monkeypatch.setattr(nh, "_read_result_file", slow)
+    nh.update_metrics()
+    assert len(reads) == 1
+
+
+def test_probe_state_survives_an_unreadable_results_volume(metrics_env, monkeypatch):
+    """The one gauge that says whether monitoring itself is alive must not be
+    cleared by the fault it is there to explain."""
+    monkeypatch.setattr(nh, "RESULTS_READ_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(nh, "_read_result_file", lambda path: time.sleep(5))
+    monkeypatch.setattr(
+        nh,
+        "_probe_pod_states",
+        lambda: {(m, "node-a"): True for m in ("depot", "work", "eos", "cvmfs")},
+    )
+    nh.update_metrics()
+    assert sample("af_node_mount_probe_up") == 1
+    assert sample("af_node_mount_valid") is None
+
+
+def test_storage_error_sets_results_unavailable(metrics_env, monkeypatch):
+    monkeypatch.setattr(
+        nh,
+        "_read_result_file",
+        lambda path: (_ for _ in ()).throw(OSError("stale file handle")),
+    )
+    nh.update_metrics()
+    assert REGISTRY.get_sample_value("af_node_monitor_results_available") == 0
+
+
+def test_healthy_iteration_reports_results_available(metrics_env):
+    metrics_env("/depot/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
+    nh.update_metrics()
+    assert REGISTRY.get_sample_value("af_node_monitor_results_available") == 1
+
+
+# ── gauge clearing ────────────────────────────────────────────────────────────
+
+
+def test_clear_gauges_holds_objects_not_names():
+    """Resolving a gauge by name through globals() turns a typo into the
+    KeyError that _clear_gauges swallows, and a gauge that is silently never
+    cleared is the frozen last-known-good green the clearing exists to stop."""
+    assert all(hasattr(g, "remove") for g in nh.RESULT_GAUGES)
+    assert nh.mount_probe_up in nh.ALL_MOUNT_GAUGES
+    assert nh.mount_probe_up not in nh.RESULT_GAUGES
+    assert set(nh.RESULT_GAUGES) < set(nh.ALL_MOUNT_GAUGES)

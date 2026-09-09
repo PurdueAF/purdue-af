@@ -1,0 +1,585 @@
+# One DaemonSet per mount, not one carrying all four. A single pod holding
+# every volume goes to ContainerCreating when any one of them will not mount,
+# which would take all four mounts on that node to "unknown" over a fault in
+# one — the depot NFS export failure, exactly.
+#
+# af-node-monitor (the Deployment) reads what these write and turns it into
+# af_node_mount_* metrics. It no longer creates anything.
+#
+# The four specs are deliberately spelled out rather than shared through YAML
+# anchors, which do not cross document boundaries;
+# tests/manifests/test_node_probes.py holds them to the same scheduling,
+# probes and resources.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: af-node-probe
+value: 1000000
+# Queue ahead of user workloads without ever evicting one: on a node packed
+# with Dask workers an unscheduled probe reads as a storage fault, but killing
+# somebody's worker to measure a mount is worse than the gap.
+preemptionPolicy: Never
+globalDefault: false
+description: "Storage mount probes. Scheduled ahead of user pods, never preempts."
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: af-node-probe-depot
+  labels:
+    app: af-node-monitor
+    component: probe
+    mount: depot
+spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # NOT the default 1. A probe pod that can never become available holds
+      # the whole budget forever and no other node is ever updated: a337 has
+      # no rook-ceph CSI driver so the results PVC never mounts there, and the
+      # depot export has been unreachable from the geddes subnet before. A
+      # percentage tolerates a few such nodes while still stalling a rollout
+      # that is broken everywhere.
+      maxUnavailable: 25%
+  selector:
+    matchLabels:
+      app: af-node-monitor
+      component: probe
+      mount: depot
+  template:
+    metadata:
+      labels:
+        app: af-node-monitor
+        component: probe
+        mount: depot
+    spec:
+      priorityClassName: af-node-probe
+      enableServiceLinks: false
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: cms-af-prod
+                    operator: In
+                    values: ["true"]
+              - matchExpressions:
+                  - key: cms-af-dev
+                    operator: In
+                    values: ["true"]
+      tolerations:
+        - key: hub.jupyter.org/dedicated
+          operator: Equal
+          value: cms-af
+          effect: NoSchedule
+      containers:
+        - name: probe
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
+          # The scripts come from the ConfigMap, so the image only supplies
+          # python and fio. IfNotPresent keeps a registry outage from taking
+          # mount monitoring down with it — every Job used to re-pull :latest.
+          imagePullPolicy: IfNotPresent
+          command: ["python", "/scripts/probe_agent.py"]
+          env:
+            - name: MOUNT_NAME
+              value: "/depot/"
+            - name: CHECK_FILE
+              value: /depot/cms/purdue-af/validate-mount.txt
+            - name: CHECKSUM
+              value: "13dede34ee8dc7e5b70c9cd06ac15467"
+            - name: METADATA_DIR
+              value: /depot/cms/
+            - name: FIO_FILE
+              value: /depot/cms/purdue-af/.storage-monitoring-probe-1gb
+            - name: ENABLE_FIO
+              value: "true"
+            - name: PING_TIMEOUT_S
+              value: "3"
+            - name: METADATA_TIMEOUT_S
+              value: "10"
+            - name: FIO_TIMEOUT_S
+              value: "120"
+            - name: FIO_INTERVAL_S
+              value: "1800"
+            - name: RESULTS_DIR
+              value: /af-node-monitor/results
+            - name: AF_NODE_MONITOR_VERBOSE
+              value: "false"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          # Liveness reads the heartbeat off an emptyDir, never off the results
+          # PVC: probing the wedged filesystem would hang instead of failing,
+          # and kubelet would never restart the container it is meant to catch.
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - test $(( $(date +%s) - $(stat -c %Y /run/af-node-monitor/heartbeat) )) -lt 1500
+            initialDelaySeconds: 120
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+          # Ready means the probe machinery works, not that the mount is good.
+          # A mount that times out still publishes a verdict and stays Ready;
+          # only a probe that cannot produce one drops out, which is what
+          # af_node_mount_probe_up reports.
+          readinessProbe:
+            exec:
+              command: ["test", "-f", "/run/af-node-monitor/healthy"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 2
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: runtime
+              mountPath: /run/af-node-monitor
+            - name: results
+              mountPath: /af-node-monitor
+            - name: depot
+              mountPath: /depot/cms
+              mountPropagation: HostToContainer
+      volumes:
+        - name: scripts
+          configMap:
+            name: af-node-monitor-config
+        - name: runtime
+          emptyDir: {}
+        - name: results
+          persistentVolumeClaim:
+            claimName: af-node-monitor-storage
+        - name: depot
+          nfs:
+            server: datadepot.rcac.purdue.edu
+            path: /depot/cms
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: af-node-probe-work
+  labels:
+    app: af-node-monitor
+    component: probe
+    mount: work
+spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # NOT the default 1. A probe pod that can never become available holds
+      # the whole budget forever and no other node is ever updated: a337 has
+      # no rook-ceph CSI driver so the results PVC never mounts there, and the
+      # depot export has been unreachable from the geddes subnet before. A
+      # percentage tolerates a few such nodes while still stalling a rollout
+      # that is broken everywhere.
+      maxUnavailable: 25%
+  selector:
+    matchLabels:
+      app: af-node-monitor
+      component: probe
+      mount: work
+  template:
+    metadata:
+      labels:
+        app: af-node-monitor
+        component: probe
+        mount: work
+    spec:
+      priorityClassName: af-node-probe
+      enableServiceLinks: false
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: cms-af-prod
+                    operator: In
+                    values: ["true"]
+              - matchExpressions:
+                  - key: cms-af-dev
+                    operator: In
+                    values: ["true"]
+      tolerations:
+        - key: hub.jupyter.org/dedicated
+          operator: Equal
+          value: cms-af
+          effect: NoSchedule
+      containers:
+        - name: probe
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
+          # The scripts come from the ConfigMap, so the image only supplies
+          # python and fio. IfNotPresent keeps a registry outage from taking
+          # mount monitoring down with it — every Job used to re-pull :latest.
+          imagePullPolicy: IfNotPresent
+          command: ["python", "/scripts/probe_agent.py"]
+          env:
+            - name: MOUNT_NAME
+              value: "/work/"
+            - name: CHECK_FILE
+              value: /work/projects/purdue-af/validate-mount.txt
+            - name: CHECKSUM
+              value: "f4cb7f2740ba3e87edfbda6c70fa94c2"
+            - name: METADATA_DIR
+              value: /work/users/
+            - name: FIO_FILE
+              value: /work/projects/purdue-af/.storage-monitoring-probe-1gb
+            - name: ENABLE_FIO
+              value: "true"
+            - name: PING_TIMEOUT_S
+              value: "3"
+            - name: METADATA_TIMEOUT_S
+              value: "10"
+            - name: FIO_TIMEOUT_S
+              value: "120"
+            - name: FIO_INTERVAL_S
+              value: "1800"
+            - name: RESULTS_DIR
+              value: /af-node-monitor/results
+            - name: AF_NODE_MONITOR_VERBOSE
+              value: "false"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          # Liveness reads the heartbeat off an emptyDir, never off the results
+          # PVC: probing the wedged filesystem would hang instead of failing,
+          # and kubelet would never restart the container it is meant to catch.
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - test $(( $(date +%s) - $(stat -c %Y /run/af-node-monitor/heartbeat) )) -lt 1500
+            initialDelaySeconds: 120
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+          # Ready means the probe machinery works, not that the mount is good.
+          # A mount that times out still publishes a verdict and stays Ready;
+          # only a probe that cannot produce one drops out, which is what
+          # af_node_mount_probe_up reports.
+          readinessProbe:
+            exec:
+              command: ["test", "-f", "/run/af-node-monitor/healthy"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 2
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: runtime
+              mountPath: /run/af-node-monitor
+            - name: results
+              mountPath: /af-node-monitor
+            - name: work
+              mountPath: /work
+      volumes:
+        - name: scripts
+          configMap:
+            name: af-node-monitor-config
+        - name: runtime
+          emptyDir: {}
+        - name: results
+          persistentVolumeClaim:
+            claimName: af-node-monitor-storage
+        - name: work
+          persistentVolumeClaim:
+            claimName: af-shared-storage
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: af-node-probe-eos
+  labels:
+    app: af-node-monitor
+    component: probe
+    mount: eos
+spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # NOT the default 1. A probe pod that can never become available holds
+      # the whole budget forever and no other node is ever updated: a337 has
+      # no rook-ceph CSI driver so the results PVC never mounts there, and the
+      # depot export has been unreachable from the geddes subnet before. A
+      # percentage tolerates a few such nodes while still stalling a rollout
+      # that is broken everywhere.
+      maxUnavailable: 25%
+  selector:
+    matchLabels:
+      app: af-node-monitor
+      component: probe
+      mount: eos
+  template:
+    metadata:
+      labels:
+        app: af-node-monitor
+        component: probe
+        mount: eos
+    spec:
+      priorityClassName: af-node-probe
+      enableServiceLinks: false
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: cms-af-prod
+                    operator: In
+                    values: ["true"]
+              - matchExpressions:
+                  - key: cms-af-dev
+                    operator: In
+                    values: ["true"]
+      tolerations:
+        - key: hub.jupyter.org/dedicated
+          operator: Equal
+          value: cms-af
+          effect: NoSchedule
+      containers:
+        - name: probe
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
+          # The scripts come from the ConfigMap, so the image only supplies
+          # python and fio. IfNotPresent keeps a registry outage from taking
+          # mount monitoring down with it — every Job used to re-pull :latest.
+          imagePullPolicy: IfNotPresent
+          command: ["python", "/scripts/probe_agent.py"]
+          env:
+            - name: MOUNT_NAME
+              value: "eos"
+            - name: CHECK_FILE
+              value: /eos/purdue/store/user/dkondrat/test.root
+            - name: CHECKSUM
+              value: "18864b0de8ae5a6a8d3b459a7999b431"
+            - name: METADATA_DIR
+              value: /eos/purdue/store/user/
+            - name: FIO_FILE
+              value: /eos/purdue/store/user/dkondrat/.storage-monitoring-probe-1gb
+            - name: ENABLE_FIO
+              value: "true"
+            - name: PING_TIMEOUT_S
+              value: "3"
+            - name: METADATA_TIMEOUT_S
+              value: "10"
+            - name: FIO_TIMEOUT_S
+              value: "120"
+            - name: FIO_INTERVAL_S
+              value: "1800"
+            - name: RESULTS_DIR
+              value: /af-node-monitor/results
+            - name: AF_NODE_MONITOR_VERBOSE
+              value: "false"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          # Liveness reads the heartbeat off an emptyDir, never off the results
+          # PVC: probing the wedged filesystem would hang instead of failing,
+          # and kubelet would never restart the container it is meant to catch.
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - test $(( $(date +%s) - $(stat -c %Y /run/af-node-monitor/heartbeat) )) -lt 1500
+            initialDelaySeconds: 120
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+          # Ready means the probe machinery works, not that the mount is good.
+          # A mount that times out still publishes a verdict and stays Ready;
+          # only a probe that cannot produce one drops out, which is what
+          # af_node_mount_probe_up reports.
+          readinessProbe:
+            exec:
+              command: ["test", "-f", "/run/af-node-monitor/healthy"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 2
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: runtime
+              mountPath: /run/af-node-monitor
+            - name: results
+              mountPath: /af-node-monitor
+            - name: eos
+              mountPath: /eos
+              mountPropagation: HostToContainer
+      volumes:
+        - name: scripts
+          configMap:
+            name: af-node-monitor-config
+        - name: runtime
+          emptyDir: {}
+        - name: results
+          persistentVolumeClaim:
+            claimName: af-node-monitor-storage
+        - name: eos
+          hostPath:
+            path: /eos
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: af-node-probe-cvmfs
+  labels:
+    app: af-node-monitor
+    component: probe
+    mount: cvmfs
+spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # NOT the default 1. A probe pod that can never become available holds
+      # the whole budget forever and no other node is ever updated: a337 has
+      # no rook-ceph CSI driver so the results PVC never mounts there, and the
+      # depot export has been unreachable from the geddes subnet before. A
+      # percentage tolerates a few such nodes while still stalling a rollout
+      # that is broken everywhere.
+      maxUnavailable: 25%
+  selector:
+    matchLabels:
+      app: af-node-monitor
+      component: probe
+      mount: cvmfs
+  template:
+    metadata:
+      labels:
+        app: af-node-monitor
+        component: probe
+        mount: cvmfs
+    spec:
+      priorityClassName: af-node-probe
+      enableServiceLinks: false
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: cms-af-prod
+                    operator: In
+                    values: ["true"]
+              - matchExpressions:
+                  - key: cms-af-dev
+                    operator: In
+                    values: ["true"]
+      tolerations:
+        - key: hub.jupyter.org/dedicated
+          operator: Equal
+          value: cms-af
+          effect: NoSchedule
+      containers:
+        - name: probe
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
+          # The scripts come from the ConfigMap, so the image only supplies
+          # python and fio. IfNotPresent keeps a registry outage from taking
+          # mount monitoring down with it — every Job used to re-pull :latest.
+          imagePullPolicy: IfNotPresent
+          command: ["python", "/scripts/probe_agent.py"]
+          env:
+            - name: MOUNT_NAME
+              value: "cvmfs"
+            - name: CHECK_FILE
+              value: /cvmfs/cms.cern.ch/SITECONF/T2_US_Purdue/Purdue-Hadoop/JobConfig/site-local-config.xml
+            - name: CHECKSUM
+              value: "3b570d80272b7188c13cef51e58b7151"
+            - name: METADATA_DIR
+              value: /cvmfs/cms.cern.ch/
+            - name: ENABLE_FIO
+              value: "false"
+            - name: PING_TIMEOUT_S
+              value: "3"
+            - name: METADATA_TIMEOUT_S
+              value: "10"
+            - name: RESULTS_DIR
+              value: /af-node-monitor/results
+            - name: AF_NODE_MONITOR_VERBOSE
+              value: "false"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          # Liveness reads the heartbeat off an emptyDir, never off the results
+          # PVC: probing the wedged filesystem would hang instead of failing,
+          # and kubelet would never restart the container it is meant to catch.
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - test $(( $(date +%s) - $(stat -c %Y /run/af-node-monitor/heartbeat) )) -lt 1500
+            initialDelaySeconds: 120
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+          # Ready means the probe machinery works, not that the mount is good.
+          # A mount that times out still publishes a verdict and stays Ready;
+          # only a probe that cannot produce one drops out, which is what
+          # af_node_mount_probe_up reports.
+          readinessProbe:
+            exec:
+              command: ["test", "-f", "/run/af-node-monitor/healthy"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 2
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: runtime
+              mountPath: /run/af-node-monitor
+            - name: results
+              mountPath: /af-node-monitor
+            - name: cvmfs
+              mountPath: /cvmfs
+              mountPropagation: HostToContainer
+      volumes:
+        - name: scripts
+          configMap:
+            name: af-node-monitor-config
+        - name: runtime
+          emptyDir: {}
+        - name: results
+          persistentVolumeClaim:
+            claimName: af-node-monitor-storage
+        - name: cvmfs
+          persistentVolumeClaim:
+            claimName: cvmfs
