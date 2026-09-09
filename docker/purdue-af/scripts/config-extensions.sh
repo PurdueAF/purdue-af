@@ -25,6 +25,7 @@ source /usr/local/bin/af-as-user.sh
 TOPBAR_CONFIG_PATH=$NEW_HOME/.jupyter/lab/user-settings/@jupyterlab/application-extension/
 TOPBAR_TEXT_CONFIG_PATH=$NEW_HOME/.jupyter/lab/user-settings/jupyterlab-topbar-text/
 
+chown -Rh "$NB_USER:users" "$NEW_HOME/.jupyter/lab/user-settings" 2>/dev/null || true
 af_as_user mkdir -p $TOPBAR_CONFIG_PATH
 af_as_user mkdir -p $TOPBAR_TEXT_CONFIG_PATH
 af_as_user rm -rf $NEW_HOME/.jupyter/lab/user-settings/jupyterlab-topbar-extension/

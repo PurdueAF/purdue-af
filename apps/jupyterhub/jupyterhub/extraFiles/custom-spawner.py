@@ -12,11 +12,7 @@ c: Any
 
 class PurdueCILogonOAuthenticator(CILogonOAuthenticator):
     async def authenticate(self, handler: Any, data: Any = None) -> Any:
-        import pprint
-
         ret = await super().authenticate(handler, data)
-        print("in auth:")
-        pprint.pprint(ret)
         username, domain = ret["auth_state"]["cilogon_user"]["eppn"].split("@")
         fixedUsername = None
 
@@ -65,10 +61,6 @@ class PurdueCILogonOAuthenticator(CILogonOAuthenticator):
 def passthrough_post_auth_hook(
     authenticator: Any, handler: Any, authentication: Any
 ) -> Any:
-    import pprint
-
-    print("in post auth:")
-    pprint.pprint(authentication)
     if authentication["auth_state"] is None:
         authentication["auth_state"] = {}
     authentication["auth_state"]["name"] = authentication["name"]

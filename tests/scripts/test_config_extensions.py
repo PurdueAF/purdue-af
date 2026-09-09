@@ -148,3 +148,60 @@ def test_chatgpt_is_pinned_in_the_script():
     )
     assert line, "openai.chatgpt install line not found"
     assert line.group(1) == PINNED_CHATGPT
+
+
+def _user_settings_section():
+    """The block that writes ~/.jupyter/lab/user-settings, before code-server."""
+    text = SCRIPT.read_text()
+    start = text.index("TOPBAR_CONFIG_PATH=")
+    end = text.index("# Pre-install code-server extensions")
+    return text[start:end]
+
+
+def test_root_owned_user_settings_are_repaired_before_the_first_write(tmp_path):
+    """Images before 0.13.5 wrote user-settings as root and never chowned the
+    grafana-iframe dir, so a home from that window has a root-owned
+    plugin.jupyterlab-settings. Writing it as the user then fails, and the
+    sourced hook takes the container down with it."""
+    home = tmp_path / "home" / "jovyan"
+    home.mkdir(parents=True)
+    log = tmp_path / "calls.log"
+    log.write_text("")
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    chown = bindir / "chown"
+    chown.write_text('#!/bin/bash\nprintf \'chown %s\\n\' "$*" >> "$CALL_LOG"\n')
+    chown.chmod(0o755)
+
+    program = "\n".join(
+        [
+            'af_as_user() { printf \'as_user %s\\n\' "$*" >> "$CALL_LOG"; "$@"; }',
+            f'NEW_HOME="{home}"',
+            _user_settings_section(),
+        ]
+    )
+    result = subprocess.run(
+        ["bash", "-c", f"set -e\n{program}"],
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": f"{bindir}:/usr/bin:/bin",
+            "CALL_LOG": str(log),
+            "NB_USER": "jovyan",
+            "JUPYTER_IMAGE": "purdue-af:0.0.0",
+            "HOSTNAME": "purdue-af-1",
+        },
+    )
+    assert result.returncode == 0, result.stderr
+
+    calls = [line for line in log.read_text().splitlines() if line]
+    repair = f"chown -Rh jovyan:users {home}/.jupyter/lab/user-settings"
+    assert repair in calls, calls
+    assert calls.index(repair) < min(
+        i for i, c in enumerate(calls) if c.startswith("as_user")
+    ), calls
+    assert (
+        home
+        / ".jupyter/lab/user-settings/purdue-af-grafana-iframe"
+        / "plugin.jupyterlab-settings"
+    ).is_file()

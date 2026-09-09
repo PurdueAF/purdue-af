@@ -182,7 +182,7 @@ def _parse_profiles(values_yaml: str) -> list[dict]:
         profiles.append(
             {
                 "display_name": display_name,
-                "slug": _slug(display_name),
+                "slug": p.get("slug") or _slug(display_name),
                 "default": is_default,
                 "description": description,
                 "options": options,
