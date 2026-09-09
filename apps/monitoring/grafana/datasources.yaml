@@ -18,6 +18,11 @@ datasources:
     deleteDatasources:
       - name: pyroscope
         orgId: 1
+      # thanos was never reconciled from this repo again after the release
+      # was dropped; delete the provisioned row so the instance stops
+      # offering a datasource that points at nothing.
+      - name: thanos
+        orgId: 1
     datasources:
       - name: prometheus
         uid: prometheus
@@ -56,16 +61,6 @@ datasources:
             datasourceUid: prometheus
           tracesToLogs:
             datasourceUid: loki
-      - name: thanos
-        uid: thanos
-        type: prometheus
-        url: http://thanos-query.cms.svc.cluster.local:10902
-        access: proxy
-        isDefault: false
-        jsonData:
-          httpMethod: POST
-          timeInterval: 15s
-          manageAlerts: false
       # uid pinned so dashboards can reference it stably across instances
       # (a fresh database would otherwise generate a random uid)
       - name: pyroscope

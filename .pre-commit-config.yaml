@@ -16,7 +16,7 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
         args: ["--maxkb=2048"]
-        exclude: \.rpm$ # existing slurm/OSG rpms; removal tracked in Phase 0
+        exclude: \.rpm$ # site Slurm clients + OSG certs, vendored on purpose
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.6
@@ -44,8 +44,8 @@ repos:
         additional_dependencies: ["mvdan.cc/sh/v3/cmd/shfmt@v3.14.1"]
         entry: shfmt -w
         types: [shell]
-        # Slurm prolog/epilog scripts (no .sh extension) are deployed verbatim
-        # to clusters — keep them out of formatting (matches the old CI scope).
+        # slurm/ ships site scripts with no .sh extension (slist) that are
+        # deployed verbatim — restrict formatting to real .sh files.
         files: \.sh$
 
   - repo: https://github.com/pre-commit/mirrors-mypy
@@ -75,8 +75,9 @@ repos:
     hooks:
       - id: shellcheck
         args: ["--severity=warning"]
-        # Slurm prolog/epilog scripts predate this repo's standards and are
-        # deployed verbatim — audit them when they are next touched.
+        # slurm/ holds site-provided scripts (slist) that predate this
+        # repo's standards and are deployed verbatim — audit them when they
+        # are next touched.
         exclude: ^slurm/
 
   - repo: https://github.com/hadolint/hadolint

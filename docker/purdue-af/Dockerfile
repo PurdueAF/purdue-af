@@ -2,18 +2,14 @@
 # Distributed under the terms of the Modified BSD License.
 # Multi-stage build: system -> stack -> runtime
 #
-# EXPERIMENTAL slim rebuild of docker/purdue-af (target: purdue-af:0.13.0-preX).
-# Differences vs docker/purdue-af/Dockerfile — see README.md for the numbers:
-#   - base: nvidia/cuda devel on Rocky Linux 8 (EL8, Alma8-compatible) instead
-#     of CERN alma8-base + a hand-installed cuda-toolkit-12-4. CUDA arrives as
-#     immutable NVIDIA-maintained base layers; drops nsight-systems and the
-#     ~1.2 GB of kernel firmware that alma8-base + `dnf upgrade` carried.
+# The Purdue AF single-user session image. Notes on the base layers:
+#   - base: nvidia/cuda devel on Rocky Linux 8 (EL8, Alma8-compatible). CUDA
+#     arrives as immutable NVIDIA-maintained base layers rather than a
+#     hand-installed cuda-toolkit on CERN alma8-base.
 #   - libcudnn8 stays pinned (the base image ships NVIDIA's cuda.repo).
-#   - voms-clients-cpp instead of voms-clients (drops the Java 8 dependency).
-#   - CERN krb5/CA defaults vendored in configs/ (extracted byte-identical
+#   - voms-clients-cpp, not voms-clients (drops the Java 8 dependency).
+#   - CERN krb5/CA defaults are vendored in configs/ (extracted byte-identical
 #     from alma8-base:20250501-1), since the Rocky base has none.
-# Everything else (OSG, Slurm, user setup, pixi stack, runtime) matches the
-# original stage for stage.
 
 # ------------------------------------------------------------
 # Stage: system (dnf, OSG, Slurm, user; no pixi)

@@ -87,11 +87,11 @@ def test_components_are_not_too_deep(cs, components):
 
 
 def test_commented_out_resources_are_excluded(cs):
-    """The experimental kustomization keeps thanos commented out; a text-based
-    parser would report it as a live component."""
+    """The experimental kustomization keeps servicex-interlink commented out; a
+    text-based parser would report it as a live component."""
     experimental = cs.discover_components("experimental")
-    assert "apps/monitoring/thanos" not in experimental
-    assert (REPO / "apps/monitoring/thanos").is_dir()  # still on disk
+    assert "apps/servicex/servicex-interlink" not in experimental
+    assert (REPO / "apps/servicex/servicex-interlink").is_dir()  # still on disk
 
 
 def test_helm_repositories_are_not_components(components):

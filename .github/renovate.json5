@@ -51,7 +51,7 @@
   // which 0.62.2 cannot read — keep in sync across:
   //   - constraints.pixi (here)
   //   - pixi-version in .github/workflows/ci-pixi-{base,global}.yml
-  //   - ARG PIXI_VERSION in docker/purdue-af{,-old}/Dockerfile
+  //   - ARG PIXI_VERSION in docker/purdue-af/Dockerfile
   // packageRules below disable bumps; customManagers track the Docker ARG.
   constraints: {
     pixi: '0.62.2',
