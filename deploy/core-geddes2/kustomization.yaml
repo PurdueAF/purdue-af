@@ -103,12 +103,12 @@ configMapGenerator:
   - name: grafana-public-dashboards
     files:
       - ../../apps/monitoring/grafana/dashboards/default.json
-      - ../../apps/monitoring/grafana/dashboards/agentic-interface.json
       - ../../apps/monitoring/grafana/dashboards/single-user.json
       - ../../apps/monitoring/grafana/dashboards/alerts.json
 
   - name: grafana-private-dashboards
     files:
+      - ../../apps/monitoring/grafana/dashboards/agentic-interface.json
       - ../../apps/monitoring/grafana/dashboards/users-overview.json
       - ../../apps/monitoring/grafana/dashboards/pyroscope.json
 

@@ -1,228 +1,72 @@
 {
   "annotations": {
-    "list": [
-      {
-        "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
-        "enable": true,
-        "hide": true,
-        "iconColor": "rgba(0, 211, 255, 1)",
-        "name": "Annotations & Alerts",
-        "type": "dashboard"
-      }
-    ]
+    "list": []
   },
-  "description": "Purdue Analysis Facility \u2014 agentic interface (MCP server) monitoring",
+  "description": "Use of the Purdue AF agentic interface (MCP server): who is using it, what they use it for, and whether it works. Private instance — panels name individual users.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "links": [
-    {
-      "asDropdown": false,
-      "icon": "bolt",
-      "includeVars": false,
-      "keepTime": false,
-      "tags": [],
-      "targetBlank": true,
-      "title": "Purdue AF Login",
-      "tooltip": "Login to Purdue AF",
-      "type": "link",
-      "url": "https://cms.geddes.rcac.purdue.edu"
-    },
-    {
-      "asDropdown": false,
-      "icon": "doc",
-      "includeVars": false,
-      "keepTime": false,
-      "tags": [],
-      "targetBlank": true,
-      "title": "Purdue AF Documentation",
-      "tooltip": "Go to Purdue AF documentation website",
-      "type": "link",
-      "url": "https://analysis-facility.physics.purdue.edu/"
-    },
-    {
-      "asDropdown": false,
-      "icon": "cloud",
-      "includeVars": false,
-      "keepTime": false,
-      "tags": [],
-      "targetBlank": true,
-      "title": "GitHub Repository",
-      "tooltip": "",
-      "type": "link",
-      "url": "https://github.com/PurdueAF/purdue-af"
-    }
-  ],
+  "links": [],
   "panels": [
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus-rancher"
-      },
-      "description": "Authenticated MCP API requests to /mcp per 5-minute bucket, grouped by HTTP status.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 6,
-            "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "decimals": 0,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": []
-          }
-        },
-        "overrides": []
-      },
+      "collapsed": false,
       "gridPos": {
-        "h": 10,
-        "w": 12,
+        "h": 1,
+        "w": 24,
         "x": 0,
         "y": 0
       },
       "id": 1,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
-          "editorMode": "code",
-          "expr": "round(sum(increase(purdue_af_mcp_api_calls_total{route=\"mcp\"}[$__rate_interval])) by (status))",
-          "interval": "5m",
-          "legendFormat": "{{ status }}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "MCP API requests by status",
-      "type": "timeseries"
+      "panels": [],
+      "title": "Overview",
+      "type": "row"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "All HTTP traffic to the agentic interface per 5-minute bucket, including health and metrics probes.",
+      "description": "Distinct users who called a tool in the selected range.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 6,
-            "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "thresholds"
           },
           "decimals": 0,
           "mappings": [],
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
-            "steps": []
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
           }
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 12,
-        "y": 0
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
       },
       "id": 2,
       "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": true
+        "colorMode": "none",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
       },
       "pluginVersion": "12.1.0",
       "targets": [
@@ -232,89 +76,61 @@
             "uid": "prometheus-rancher"
           },
           "editorMode": "code",
-          "expr": "round(sum(increase(purdue_af_mcp_api_calls_total[$__rate_interval])) by (route))",
-          "interval": "5m",
-          "legendFormat": "{{ route }}",
-          "range": true,
+          "expr": "count(sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\"}[$__range])) > 0) or vector(0)",
+          "instant": true,
+          "range": false,
           "refId": "A"
         }
       ],
-      "title": "HTTP requests by route",
-      "type": "timeseries"
+      "title": "Active users",
+      "type": "stat"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "MCP tool invocations per 5-minute bucket, grouped by tool name.",
+      "description": "All tool invocations in the range.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 6,
-            "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "thresholds"
           },
           "decimals": 0,
           "mappings": [],
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
-            "steps": []
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
           }
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 0,
-        "y": 10
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 1
       },
       "id": 3,
       "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": true
+        "colorMode": "none",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
       },
       "pluginVersion": "12.1.0",
       "targets": [
@@ -324,89 +140,61 @@
             "uid": "prometheus-rancher"
           },
           "editorMode": "code",
-          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total[$__rate_interval])) by (tool))",
-          "interval": "5m",
-          "legendFormat": "{{ tool }}",
-          "range": true,
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\"}[$__range]))) or vector(0)",
+          "instant": true,
+          "range": false,
           "refId": "A"
         }
       ],
-      "title": "Tool calls by tool",
-      "type": "timeseries"
+      "title": "Tool calls",
+      "type": "stat"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "Failed tool invocations per 5-minute bucket. user_error = bad input or nothing running; upstream_error = a backend (Hub, Loki, Prometheus, Dask Gateway) failed; exception = unhandled bug.",
+      "description": "Calls that started, stopped or resized something: create dask cluster, scale dask cluster, stop dask cluster, start af session, stop af session, restart af session.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 6,
-            "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "thresholds"
           },
           "decimals": 0,
           "mappings": [],
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
-            "steps": []
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
           }
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 12,
-        "y": 10
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 1
       },
       "id": 4,
       "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": true
+        "colorMode": "none",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
       },
       "pluginVersion": "12.1.0",
       "targets": [
@@ -416,22 +204,240 @@
             "uid": "prometheus-rancher"
           },
           "editorMode": "code",
-          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{outcome!=\"success\"}[$__rate_interval])) by (tool, outcome))",
-          "interval": "5m",
-          "legendFormat": "{{ tool }} \u2014 {{ outcome }}",
-          "range": true,
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"create_dask_cluster|scale_dask_cluster|stop_dask_cluster|start_af_session|stop_af_session|restart_af_session\", outcome=\"success\"}[$__range]))) or vector(0)",
+          "instant": true,
+          "range": false,
           "refId": "A"
         }
       ],
-      "title": "Tool failures by tool and outcome",
-      "type": "timeseries"
+      "title": "Facility changes",
+      "type": "stat"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "All tool invocations per 5-minute bucket, by outcome: success, user_error (bad input / nothing running), upstream_error (backend failure), exception (bug).",
+      "description": "Share of tool calls that returned a result. needs_input counts as success — the agent was told what to ask for.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 90
+              },
+              {
+                "color": "green",
+                "value": 98
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "100 * sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", outcome=~\"success|needs_input\"}[$__range])) / clamp_min(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\"}[$__range])), 1)",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Success rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "description": "Tool calls that failed because a backend did — the facility's fault, not the caller's.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", outcome=\"upstream_error\"}[$__range]))) or vector(0)",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Upstream errors",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "description": "95th percentile across all tools.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(purdue_af_mcp_tool_duration_seconds_bucket[$__range])) by (le))",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "p95 latency",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 8,
+      "panels": [],
+      "title": "What people use it for",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "description": "Tool calls grouped by what they act on, so a session spent managing Dask reads as one band instead of eight overlapping tool names. Ungrouped means a tool exists that this dashboard does not know about.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -446,7 +452,892 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 6,
+            "fillOpacity": 25,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": []
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"list_dask_clusters|list_dask_cluster_options|create_dask_cluster|get_dask_cluster_info|get_dask_worker_count|get_dask_cluster_usage|scale_dask_cluster|stop_dask_cluster\"}[$__rate_interval])))",
+          "legendFormat": "Dask clusters",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"list_af_profiles|get_session_status|start_af_session|stop_af_session|restart_af_session|wait_for_session\"}[$__rate_interval])))",
+          "legendFormat": "Session",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"query_notebook_logs|query_dask_logs\"}[$__rate_interval])))",
+          "legendFormat": "Logs",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"query_storage_usage\"}[$__rate_interval])))",
+          "legendFormat": "Storage",
+          "range": true,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"get_facility_health\"}[$__rate_interval])))",
+          "legendFormat": "Health",
+          "range": true,
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool!~\"list_dask_clusters|list_dask_cluster_options|create_dask_cluster|get_dask_cluster_info|get_dask_worker_count|get_dask_cluster_usage|scale_dask_cluster|stop_dask_cluster|list_af_profiles|get_session_status|start_af_session|stop_af_session|restart_af_session|wait_for_session|query_notebook_logs|query_dask_logs|query_storage_usage|get_facility_health\"}[$__rate_interval])))",
+          "legendFormat": "Ungrouped",
+          "range": true,
+          "refId": "F"
+        }
+      ],
+      "title": "Activity by area",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "description": "One row per user over the selected range. Bars compare users within a column, so the longest bar under Dask clusters is the heaviest Dask user.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false,
+            "inspect": false
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dask clusters"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "gradient",
+                  "type": "gauge"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Session"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "gradient",
+                  "type": "gauge"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Logs"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "gradient",
+                  "type": "gauge"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Storage"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "gradient",
+                  "type": "gauge"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Health"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "gradient",
+                  "type": "gauge"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "id": 10,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Total"
+          }
+        ]
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"list_dask_clusters|list_dask_cluster_options|create_dask_cluster|get_dask_cluster_info|get_dask_worker_count|get_dask_cluster_usage|scale_dask_cluster|stop_dask_cluster\"}[$__range]))",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"list_af_profiles|get_session_status|start_af_session|stop_af_session|restart_af_session|wait_for_session\"}[$__range]))",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"query_notebook_logs|query_dask_logs\"}[$__range]))",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"query_storage_usage\"}[$__range]))",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"get_facility_health\"}[$__range]))",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"list_dask_clusters|list_dask_cluster_options|create_dask_cluster|get_dask_cluster_info|get_dask_worker_count|get_dask_cluster_usage|scale_dask_cluster|stop_dask_cluster|list_af_profiles|get_session_status|start_af_session|stop_af_session|restart_af_session|wait_for_session|query_notebook_logs|query_dask_logs|query_storage_usage|get_facility_health\"}[$__range]))",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "F"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "username",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "Time 4": true,
+              "Time 5": true,
+              "Time 6": true
+            },
+            "includeByName": {},
+            "indexByName": {},
+            "renameByName": {
+              "username": "User",
+              "Value #A": "Dask clusters",
+              "Value #B": "Session",
+              "Value #C": "Logs",
+              "Value #D": "Storage",
+              "Value #E": "Health",
+              "Value #F": "Total"
+            }
+          }
+        }
+      ],
+      "title": "Who works on what",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "description": "Individual tools, for when the area breakdown is not specific enough.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": []
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 23
+      },
+      "id": 11,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.7,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "topk(15, round(sum by (tool) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\"}[$__range]))))",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Busiest tools",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "description": "Only the calls that mutate state. A flat line here with activity above means agents were reading, not changing.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 25,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": []
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 23
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "round(sum by (tool) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"create_dask_cluster|scale_dask_cluster|stop_dask_cluster|start_af_session|stop_af_session|restart_af_session\", outcome=\"success\"}[$__rate_interval])))",
+          "legendFormat": "{{tool}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Facility changes over time",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "id": 13,
+      "panels": [],
+      "title": "Per user",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "description": "Top 10 users in the range.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 25,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": []
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 33
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "round(sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\"}[$__rate_interval])))",
+          "legendFormat": "{{username}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Tool calls by user",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "description": "Calls that returned an error, by user. user_error is usually a malformed request from the agent; upstream_error is ours.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": []
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 33
+      },
+      "id": 15,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.7,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "topk(15, round(sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", outcome=~\"user_error|upstream_error|exception\"}[$__range]))))",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Failed calls by user",
+      "type": "barchart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      },
+      "id": 16,
+      "panels": [],
+      "title": "Reliability",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "description": "success and needs_input are healthy; user_error is a bad request; upstream_error and exception are the facility's.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 25,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": []
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 42
+      },
+      "id": 17,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\"}[$__rate_interval])) by (outcome))",
+          "legendFormat": "{{outcome}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Outcomes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "description": "Which tool is failing, and how.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 8,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -481,12 +1372,12 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 0,
-        "y": 20
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 42
       },
-      "id": 6,
+      "id": 18,
       "options": {
         "legend": {
           "calcs": [],
@@ -497,7 +1388,7 @@
         "tooltip": {
           "hideZeros": false,
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       },
       "pluginVersion": "12.1.0",
@@ -508,14 +1399,13 @@
             "uid": "prometheus-rancher"
           },
           "editorMode": "code",
-          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total[$__rate_interval])) by (outcome))",
-          "interval": "5m",
-          "legendFormat": "{{ outcome }}",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", outcome!~\"success|needs_input\"}[$__rate_interval])) by (tool, outcome))",
+          "legendFormat": "{{tool}} · {{outcome}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Tool call outcomes",
+      "title": "Failures by tool",
       "type": "timeseries"
     },
     {
@@ -523,7 +1413,7 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "95th-percentile wall-clock duration of tool invocations. wait_for_session legitimately runs up to minutes; everything else should stay in single-digit seconds.",
+      "description": "Slow tools are usually waiting on a backend — compare with upstream latency.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -538,7 +1428,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 6,
+            "fillOpacity": 8,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -562,6 +1452,7 @@
               "mode": "off"
             }
           },
+          "decimals": 0,
           "mappings": [],
           "min": 0,
           "thresholds": {
@@ -573,12 +1464,12 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 0,
-        "y": 30
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 42
       },
-      "id": 7,
+      "id": 19,
       "options": {
         "legend": {
           "calcs": [],
@@ -589,7 +1480,7 @@
         "tooltip": {
           "hideZeros": false,
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       },
       "pluginVersion": "12.1.0",
@@ -601,12 +1492,12 @@
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.95, sum(rate(purdue_af_mcp_tool_duration_seconds_bucket[$__rate_interval])) by (tool, le))",
-          "legendFormat": "{{ tool }}",
+          "legendFormat": "{{tool}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Tool latency p95 by tool",
+      "title": "Tool latency p95",
       "type": "timeseries"
     },
     {
@@ -614,7 +1505,7 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "Failed outbound requests from the MCP server to its backends (hub, loki, prometheus, dask-gateway-*, kubernetes-api/exec). Pinpoints which dependency is behind a tool-error spike.",
+      "description": "The MCP server's own calls to the Hub, Prometheus, Loki and the Dask gateways.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -629,7 +1520,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 6,
+            "fillOpacity": 8,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -664,12 +1555,12 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 12,
-        "y": 30
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 50
       },
-      "id": 8,
+      "id": 20,
       "options": {
         "legend": {
           "calcs": [],
@@ -680,7 +1571,7 @@
         "tooltip": {
           "hideZeros": false,
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       },
       "pluginVersion": "12.1.0",
@@ -692,13 +1583,12 @@
           },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_upstream_requests_total{outcome!=\"success\"}[$__rate_interval])) by (target, outcome))",
-          "interval": "5m",
-          "legendFormat": "{{ target }} \u2014 {{ outcome }}",
+          "legendFormat": "{{target}} · {{outcome}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Upstream request failures by target",
+      "title": "Upstream failures",
       "type": "timeseries"
     },
     {
@@ -706,7 +1596,7 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "95th-percentile duration of outbound requests to each backend service.",
+      "description": "Per backend.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -721,7 +1611,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 6,
+            "fillOpacity": 8,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -745,6 +1635,7 @@
               "mode": "off"
             }
           },
+          "decimals": 0,
           "mappings": [],
           "min": 0,
           "thresholds": {
@@ -756,12 +1647,12 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 0,
-        "y": 40
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 50
       },
-      "id": 9,
+      "id": 21,
       "options": {
         "legend": {
           "calcs": [],
@@ -772,7 +1663,7 @@
         "tooltip": {
           "hideZeros": false,
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       },
       "pluginVersion": "12.1.0",
@@ -784,12 +1675,12 @@
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.95, sum(rate(purdue_af_mcp_upstream_duration_seconds_bucket[$__rate_interval])) by (target, le))",
-          "legendFormat": "{{ target }}",
+          "legendFormat": "{{target}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Upstream latency p95 by target",
+      "title": "Upstream latency p95",
       "type": "timeseries"
     },
     {
@@ -797,69 +1688,7 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "Distinct users who made at least one tool call in the last 24 hours (dashboards aggregate over usernames; per-user series are for ad-hoc Prometheus queries).",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "decimals": 0,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 6,
-        "x": 12,
-        "y": 40
-      },
-      "id": 10,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
-          "editorMode": "code",
-          "expr": "count(sum by (username) (increase(purdue_af_mcp_tool_calls_total[24h])) > 0) or vector(0)",
-          "legendFormat": "users",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Distinct tool users (24h)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus-rancher"
-      },
-      "description": "Bearer-token validation outcomes: cache_hit + validated are healthy; a spike in invalid_token or hub_unreachable means clients or the Hub API are misbehaving.",
+      "description": "invalid_token in bulk usually means a stale token in someone's agent config.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -874,7 +1703,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 6,
+            "fillOpacity": 8,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -909,12 +1738,12 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 6,
-        "x": 18,
-        "y": 40
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 50
       },
-      "id": 11,
+      "id": 22,
       "options": {
         "legend": {
           "calcs": [],
@@ -925,7 +1754,7 @@
         "tooltip": {
           "hideZeros": false,
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       },
       "pluginVersion": "12.1.0",
@@ -937,29 +1766,249 @@
           },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_auth_total[$__rate_interval])) by (result))",
-          "interval": "5m",
-          "legendFormat": "{{ result }}",
+          "legendFormat": "{{result}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Token validation results",
+      "title": "Token validation",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 58
+      },
+      "id": 23,
+      "panels": [],
+      "title": "HTTP traffic",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "description": "401s are unauthenticated callers and never reach a tool.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": []
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 59
+      },
+      "id": 24,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "round(sum(increase(purdue_af_mcp_api_calls_total{route=\"mcp\"}[$__rate_interval])) by (status))",
+          "legendFormat": "{{status}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "MCP requests by status",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "description": "health is the kubelet probe; metrics is Prometheus.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": []
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 59
+      },
+      "id": 25,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "editorMode": "code",
+          "expr": "round(sum(increase(purdue_af_mcp_api_calls_total[$__rate_interval])) by (route))",
+          "legendFormat": "{{route}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Requests by route",
       "type": "timeseries"
     }
   ],
   "preload": false,
-  "refresh": "1m",
+  "refresh": "5m",
   "schemaVersion": 41,
-  "tags": [],
+  "tags": ["agentic"],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "text": ["All"],
+          "value": ["$__all"]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus-rancher"
+        },
+        "definition": "label_values(purdue_af_mcp_tool_calls_total, username)",
+        "includeAll": true,
+        "label": "User",
+        "multi": true,
+        "name": "user",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(purdue_af_mcp_tool_calls_total, username)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-7d",
     "to": "now"
   },
   "timepicker": {},
-  "timezone": "browser",
+  "timezone": "",
   "title": "Purdue AF Agentic Interface",
   "uid": "purdue-af-agentic-interface",
   "version": 1
