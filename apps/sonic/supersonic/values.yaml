@@ -12,11 +12,9 @@ scaleFromZero:
   holdMinReplicasSeconds: 300
 
 triton:
-  # image: fastml/triton-torchgeo:22.07-py3-geometric
-  # image: fastml/triton-torchgeo:25.08-py3-geometric
-  # image: nvcr.io/nvidia/tritonserver:26.04-py3
-  # image: fastml/triton-torchgeo:26.04-py3-geometric
-  image: docker.io/docexoty/tritonserver:light
+  # Geometric build: ParticleNet and the unified particle transformer need the
+  # torch-geometric ops, which the stock tritonserver image does not carry.
+  image: fastml/triton-torchgeo:26.04-py3-geometric
   command: ["/bin/sh", "-c"]
   args:
     - |
