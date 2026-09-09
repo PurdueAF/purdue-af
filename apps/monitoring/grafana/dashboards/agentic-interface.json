@@ -450,9 +450,9 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 25,
+            "barWidthFactor": 1.0,
+            "drawStyle": "bars",
+            "fillOpacity": 70,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -460,8 +460,8 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 1,
+            "lineInterpolation": "linear",
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -493,6 +493,7 @@
         "y": 6
       },
       "id": 9,
+      "interval": "1h",
       "options": {
         "legend": {
           "calcs": ["sum"],
@@ -948,9 +949,9 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 25,
+            "barWidthFactor": 1.0,
+            "drawStyle": "bars",
+            "fillOpacity": 70,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -958,8 +959,8 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 1,
+            "lineInterpolation": "linear",
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -991,6 +992,7 @@
         "y": 23
       },
       "id": 12,
+      "interval": "1h",
       "options": {
         "legend": {
           "calcs": ["sum"],
@@ -1052,9 +1054,9 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 25,
+            "barWidthFactor": 1.0,
+            "drawStyle": "bars",
+            "fillOpacity": 70,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -1062,8 +1064,8 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 1,
+            "lineInterpolation": "linear",
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -1095,6 +1097,7 @@
         "y": 33
       },
       "id": 14,
+      "interval": "1h",
       "options": {
         "legend": {
           "calcs": ["sum"],
@@ -1244,9 +1247,9 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 25,
+            "barWidthFactor": 1.0,
+            "drawStyle": "bars",
+            "fillOpacity": 70,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -1254,8 +1257,8 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 1,
+            "lineInterpolation": "linear",
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -1287,6 +1290,7 @@
         "y": 42
       },
       "id": 17,
+      "interval": "1h",
       "options": {
         "legend": {
           "calcs": [],
@@ -1335,9 +1339,9 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 8,
+            "barWidthFactor": 1.0,
+            "drawStyle": "bars",
+            "fillOpacity": 70,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -1346,12 +1350,12 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "auto",
+            "showPoints": "never",
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1378,6 +1382,7 @@
         "y": 42
       },
       "id": 18,
+      "interval": "1h",
       "options": {
         "legend": {
           "calcs": [],
@@ -1428,7 +1433,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 8,
+            "fillOpacity": 15,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -1442,7 +1447,7 @@
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "auto",
+            "showPoints": "never",
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1470,6 +1475,7 @@
         "y": 42
       },
       "id": 19,
+      "interval": "1h",
       "options": {
         "legend": {
           "calcs": [],
@@ -1518,9 +1524,9 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 8,
+            "barWidthFactor": 1.0,
+            "drawStyle": "bars",
+            "fillOpacity": 70,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -1529,12 +1535,12 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "auto",
+            "showPoints": "never",
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1561,6 +1567,7 @@
         "y": 50
       },
       "id": 20,
+      "interval": "1h",
       "options": {
         "legend": {
           "calcs": [],
@@ -1611,7 +1618,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 8,
+            "fillOpacity": 15,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -1625,7 +1632,7 @@
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "auto",
+            "showPoints": "never",
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1653,6 +1660,7 @@
         "y": 50
       },
       "id": 21,
+      "interval": "1h",
       "options": {
         "legend": {
           "calcs": [],
@@ -1701,9 +1709,9 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 8,
+            "barWidthFactor": 1.0,
+            "drawStyle": "bars",
+            "fillOpacity": 70,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -1712,12 +1720,12 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "auto",
+            "showPoints": "never",
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1744,6 +1752,7 @@
         "y": 50
       },
       "id": 22,
+      "interval": "1h",
       "options": {
         "legend": {
           "calcs": [],
@@ -1805,9 +1814,9 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 8,
+            "barWidthFactor": 1.0,
+            "drawStyle": "bars",
+            "fillOpacity": 70,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -1816,12 +1825,12 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "auto",
+            "showPoints": "never",
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1848,6 +1857,7 @@
         "y": 59
       },
       "id": 24,
+      "interval": "1h",
       "options": {
         "legend": {
           "calcs": [],
@@ -1896,9 +1906,9 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 8,
+            "barWidthFactor": 1.0,
+            "drawStyle": "bars",
+            "fillOpacity": 70,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -1907,12 +1917,12 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineWidth": 0,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "auto",
+            "showPoints": "never",
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1939,6 +1949,7 @@
         "y": 59
       },
       "id": 25,
+      "interval": "1h",
       "options": {
         "legend": {
           "calcs": [],
