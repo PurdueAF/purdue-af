@@ -85,11 +85,9 @@ async def test_storage_reports_usage(user_ctx):
             "af_home_dir_used_kb": 5 * gb,
             "af_home_dir_size_kb": 25 * gb,
             "af_home_dir_util": 0.2,
-            "af_home_dir_last_accessed": 1700000000,
             "af_work_dir_used_kb": 50 * gb,
             "af_work_dir_size_kb": 100 * gb,
             "af_work_dir_util": 0.5,
-            "af_work_dir_last_accessed": 1700000000,
         }[q.split("{")[0]]
         return httpx.Response(200, json=prom_result(value))
 
@@ -102,7 +100,7 @@ async def test_storage_reports_usage(user_ctx):
     assert "20.0%" in out
     assert "50.00 GB / 100.00 GB" in out
     assert "50.0%" in out
-    assert "last accessed 2023-11-14" in out
+    assert "last accessed" not in out  # st_atime never measured the session
     # directories are queried concurrently but render home-then-work
     assert out.index("/home/") < out.index("/work/")
     # every query is scoped to the authenticated username
@@ -159,7 +157,7 @@ async def test_storage_util_falls_back_to_ratio(user_ctx):
         import httpx
 
         q = request.url.params["query"]
-        if "util" in q or "last_accessed" in q:
+        if "util" in q:
             return httpx.Response(200, json={"data": {"result": []}})
         if "used" in q:
             return httpx.Response(200, json=prom_result(10 * 1024 * 1024))

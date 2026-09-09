@@ -1,16 +1,26 @@
 """af-pod-monitor: exports storage usage metrics for a user's AF pod.
 
 Sidecar in every user pod; Prometheus scrapes :9090 every 5 minutes.
+
+One unreadable directory must not take the others down with it. An
+inaccessible /work used to raise out of the loop and kill the process, and
+with it the /home utilisation the quota alerts fire on — one pod restarted 275
+times that way. Each directory is now read independently and its af_*_dir_ok
+gauge says whether the last pass succeeded, so a stale reading is visible
+rather than indistinguishable from a fresh one.
 """
 
 import glob
+import logging
 import os
 import subprocess
+import sys
 import time
 
 from prometheus_client import Gauge, start_http_server
 
 WORK_QUOTA_KB = 104857600  # 100 GB
+INTERVAL = 300  # seconds between passes
 
 _DIRS = ("home", "work")
 metrics = {}
@@ -27,10 +37,12 @@ for _dl in _DIRS:
         f"af_{_dl}_dir_util",
         f"Storage utilization in {_dl} directory mounted to an Analysis Facility pod",
     )
-    metrics[f"{_dl}_dir_last_accessed"] = Gauge(
-        f"af_{_dl}_dir_last_accessed",
-        f"Last accessed timestamp for {_dl} directory in Analysis Facility",
+    metrics[f"{_dl}_dir_ok"] = Gauge(
+        f"af_{_dl}_dir_ok",
+        f"1 if the last pass could read the {_dl} directory, 0 otherwise",
     )
+
+log = logging.getLogger("af-pod-monitor")
 
 
 def discover_username(home_entries: list[str]) -> str:
@@ -80,19 +92,32 @@ def update_metrics(dir_label: str, directory: str) -> None:
     metrics[f"{dir_label}_dir_size"].set(size)
     metrics[f"{dir_label}_dir_util"].set(util)
 
+
+def update_directory(dir_label: str, directory: str) -> bool:
+    """One directory's pass. Never raises: a mount the pod cannot read is a
+    gap in that directory's metrics, not a reason to stop exporting."""
     try:
-        metrics[f"{dir_label}_dir_last_accessed"].set(os.stat(directory).st_atime)
-    except OSError:
-        pass
+        update_metrics(dir_label, directory)
+    except Exception:
+        log.exception("could not read %s directory (%s)", dir_label, directory)
+        metrics[f"{dir_label}_dir_ok"].set(0)
+        return False
+    metrics[f"{dir_label}_dir_ok"].set(1)
+    return True
 
 
 def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(name)s] %(asctime)s %(levelname)s %(message)s",
+        stream=sys.stderr,
+    )
     directories = discover_directories()
     start_http_server(9090)
     while True:
         for dir_label, directory in directories.items():
-            update_metrics(dir_label, directory)
-        time.sleep(300)
+            update_directory(dir_label, directory)
+        time.sleep(INTERVAL)
 
 
 if __name__ == "__main__":
