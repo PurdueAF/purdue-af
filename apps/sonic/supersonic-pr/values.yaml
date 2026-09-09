@@ -12,7 +12,8 @@ scaleFromZero:
   holdMinReplicasSeconds: 300
 
 triton:
-  image: docker.io/docexoty/tritonserver:light
+  # Same image as `supersonic`, so the two differ only in the chart branch.
+  image: fastml/triton-torchgeo:26.04-py3-geometric
   command: ["/bin/sh", "-c"]
   args:
     - |
