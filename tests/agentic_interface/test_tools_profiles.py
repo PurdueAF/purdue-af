@@ -102,6 +102,21 @@ singleuser:
 """
 
 
+def test_parse_profiles_explicit_slug_wins():
+    parsed = profiles._parse_profiles(
+        """
+singleuser:
+  profileList:
+    - display_name: "Purdue AF 0.13.5 – Pixi-based environment management."
+      slug: purdue-af
+      default: true
+    - display_name: "Latest pre-release version"
+"""
+    )
+    assert parsed[0]["slug"] == "purdue-af"
+    assert parsed[1]["slug"] == "latest-pre-release-version"
+
+
 def test_parse_profiles_gpu_map():
     parsed = profiles._parse_profiles(GPU_VALUES_YAML)
     gpu_opt = parsed[0]["options"]["1-gpu"]

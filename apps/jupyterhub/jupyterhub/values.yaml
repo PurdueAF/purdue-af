@@ -15,6 +15,7 @@ singleuser:
   startTimeout: 3600
   profileList:
     - display_name: "Purdue AF 0.13.5 – Pixi-based environment management."
+      slug: purdue-af
       default: true
       description: 'Please refer to the Purdue AF documentation for instructions on how to switch from Conda to Pixi: <a href="https://analysis-facility.physics.purdue.edu/guide-pixi/" target="_blank">https://analysis-facility.physics.purdue.edu/guide-pixi/</a>.'
       kubespawner_override:
