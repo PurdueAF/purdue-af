@@ -1,7 +1,6 @@
 """Storage quota tool — queries af-pod-monitor metrics from Prometheus."""
 
 import asyncio
-from datetime import datetime, timezone
 from typing import Any, Optional
 
 import httpx
@@ -36,8 +35,8 @@ def register(mcp: Any) -> None:
         """Report storage quota and usage for the authenticated user's home and work directories.
 
         Data is sourced from Prometheus (scraped from af-pod-monitor, refreshed every
-        5 minutes). Returns used / total space, utilisation percentage, and
-        last-accessed time for each directory.
+        5 minutes). Returns used / total space and utilisation percentage for
+        each directory.
         """
         user = require_user()
         username = user["username"]
@@ -53,7 +52,7 @@ def register(mcp: Any) -> None:
             return await asyncio.gather(
                 *(
                     _prom_scalar(client, f"af_{prefix}_dir_{metric}{{{user_selector}}}")
-                    for metric in ("used_kb", "size_kb", "util", "last_accessed")
+                    for metric in ("used_kb", "size_kb", "util")
                 )
             )
 
@@ -68,7 +67,7 @@ def register(mcp: Any) -> None:
         any_data = False
 
         for prefix, results in zip(_DIRS, per_dir):
-            used_kb, size_kb, util, last_accessed = (v for v, _ in results)
+            used_kb, size_kb, util = (v for v, _ in results)
             if used_kb is None or size_kb is None:
                 rows.append(f"/{prefix}/: no data\n")
                 continue
@@ -80,16 +79,10 @@ def register(mcp: Any) -> None:
                 util if util is not None else (used_kb / size_kb if size_kb else 0)
             ) * 100
 
-            accessed_str = ""
-            if last_accessed:
-                dt = datetime.fromtimestamp(last_accessed, tz=timezone.utc)
-                accessed_str = f"  last accessed {dt.strftime('%Y-%m-%d %H:%M UTC')}"
-
             rows.append(
                 f"/{prefix}/\n"
                 f"  {used_gb:.2f} GB / {size_gb:.2f} GB  "
-                f"[{_bar(pct / 100)}]  {pct:.1f}%"
-                f"{accessed_str}\n"
+                f"[{_bar(pct / 100)}]  {pct:.1f}%\n"
             )
 
         if not any_data:

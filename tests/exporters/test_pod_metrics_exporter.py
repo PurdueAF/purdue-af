@@ -71,7 +71,6 @@ def test_update_metrics_home(monkeypatch, tmp_path):
     assert gauge_value("af_home_dir_used_kb") == 5242880
     assert gauge_value("af_home_dir_size_kb") == 26214400
     assert gauge_value("af_home_dir_util") == pytest.approx(0.2)
-    assert gauge_value("af_home_dir_last_accessed") > 0
 
 
 def test_update_metrics_work_does_not_touch_home(monkeypatch, tmp_path):
@@ -92,10 +91,50 @@ def test_update_metrics_work_does_not_touch_home(monkeypatch, tmp_path):
     assert gauge_value("af_home_dir_used_kb") == 5242880
 
 
-def test_update_metrics_survives_missing_dir_stat(monkeypatch):
+# ── one unreadable directory must not stop the others ─────────────────────────
+
+
+def fail(_cmd):
+    raise exporter.subprocess.CalledProcessError(1, "du")
+
+
+def test_update_directory_reports_success(monkeypatch):
     monkeypatch.setattr(
         exporter.subprocess, "check_output", lambda cmd: DF_OUTPUT.encode()
     )
-    # nonexistent directory: os.stat fails, metric update must not raise
-    exporter.update_metrics("home", "/nonexistent-dir")
+
+    assert exporter.update_directory("home", "/home/alice") is True
+    assert gauge_value("af_home_dir_ok") == 1
+
+
+def test_update_directory_swallows_an_unreadable_mount(monkeypatch):
+    """`du: cannot access '/work/users/<user>/': Permission denied` used to
+    raise out of the loop and kill the sidecar — 275 restarts on one pod."""
+    monkeypatch.setattr(exporter.subprocess, "check_output", fail)
+
+    assert exporter.update_directory("work", "/work/users/alice/") is False
+    assert gauge_value("af_work_dir_ok") == 0
+
+
+def test_a_failing_work_dir_leaves_home_metrics_alone(monkeypatch):
+    """/home utilisation is what the quota alerts fire on, so it has to survive
+    /work being unreadable."""
+    monkeypatch.setattr(
+        exporter.subprocess, "check_output", lambda cmd: DF_OUTPUT.encode()
+    )
+    exporter.update_directory("home", "/home/alice")
+
+    monkeypatch.setattr(exporter.subprocess, "check_output", fail)
+    exporter.update_directory("work", "/work/users/alice/")
+
     assert gauge_value("af_home_dir_used_kb") == 5242880
+    assert gauge_value("af_home_dir_util") == pytest.approx(0.2)
+    assert gauge_value("af_home_dir_ok") == 1
+    assert gauge_value("af_work_dir_ok") == 0
+
+
+def test_last_accessed_gauges_are_gone():
+    """st_atime measured the mount, not the user: frozen for years on some
+    homes, and on /work only ever the exporter's own `du` walk."""
+    assert gauge_value("af_home_dir_last_accessed") is None
+    assert gauge_value("af_work_dir_last_accessed") is None
