@@ -413,9 +413,16 @@ hub:
     gpu-culler:
       command:
         - python3
+        - -u
         - /usr/local/etc/jupyterhub-gpu-culler/cull-gpu-sessions.py
         - --timeout=86400
         - --every=600
+      # A managed service gets a fresh environment (JUPYTERHUB_*, PATH, LANG),
+      # not the hub's, so load_incluster_config() has to be told where the
+      # apiserver is; without these the culler fails every pass.
+      environment:
+        KUBERNETES_SERVICE_HOST: kubernetes.default.svc
+        KUBERNETES_SERVICE_PORT: "443"
   loadRoles:
     # Singleuser server tokens ship with `users:activity!user` and
     # `access:servers!server` only, so `GET /users/<name>` comes back WITHOUT a

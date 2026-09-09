@@ -12,13 +12,21 @@ Idleness comes from the hub REST API — the same last_activity signal
 (proxy traffic + notebook activity reports) the global culler uses. The
 pod's hub.jupyter.org/username and /servername annotations (set by
 kubespawner) link the two.
+
+JupyterHub gives a managed service a fresh environment (JUPYTERHUB_*, PATH,
+LANG), not the hub's, so KUBERNETES_SERVICE_HOST/PORT come from
+hub.services.gpu-culler.environment and the namespace from the mounted service
+account. Logging goes to stderr — stdout here is a block-buffered pipe.
 """
 
 import argparse
 import asyncio
 import datetime
 import json
+import logging
 import os
+import sys
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
@@ -32,6 +40,17 @@ GPU_RESOURCES = (
 )
 # Only pods spawned by our hub carry this label (singleuser.extraLabels).
 POD_SELECTOR = "username_unescaped"
+NAMESPACE_FILE = Path("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+
+log = logging.getLogger("gpu-culler")
+
+
+def default_namespace() -> str:
+    """Namespace the hub pod runs in, from the mounted service account."""
+    override = os.environ.get("POD_NAMESPACE")
+    if override:
+        return override
+    return NAMESPACE_FILE.read_text().strip()
 
 
 def pod_holds_gpu(pod: Any) -> bool:
@@ -105,9 +124,11 @@ async def cull_once(namespace: str, timeout: float) -> None:
         idle = idle_seconds(server, now)
         if idle < timeout:
             continue
-        print(
-            f"[gpu-culler] stopping server {username}/{servername or 'default'}: "
-            f"holds a GPU and idle for {idle / 3600:.1f}h"
+        log.info(
+            "stopping server %s/%s: holds a GPU and idle for %.1fh",
+            username,
+            servername or "default",
+            idle / 3600,
         )
         path = f"/users/{quote(username, safe='')}"
         path += f"/servers/{quote(servername, safe='')}" if servername else "/server"
@@ -115,15 +136,17 @@ async def cull_once(namespace: str, timeout: float) -> None:
 
 
 async def main(namespace: str, timeout: float, every: float) -> None:
-    print(
-        f"[gpu-culler] culling GPU sessions idle > {timeout}s "
-        f"in namespace {namespace}, checking every {every}s"
+    log.info(
+        "culling GPU sessions idle > %ss in namespace %s, checking every %ss",
+        timeout,
+        namespace,
+        every,
     )
     while True:
         try:
             await cull_once(namespace, timeout)
-        except Exception as exc:
-            print(f"[gpu-culler] cull pass failed: {exc}")
+        except Exception:
+            log.exception("cull pass failed")
         await asyncio.sleep(every)
 
 
@@ -135,6 +158,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--every", type=int, default=600, help="seconds between cull passes"
     )
-    parser.add_argument("--namespace", default=os.environ.get("POD_NAMESPACE", "cms"))
+    parser.add_argument("--namespace", default=None)
     args = parser.parse_args()
-    asyncio.run(main(args.namespace, args.timeout, args.every))
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(name)s] %(asctime)s %(levelname)s %(message)s",
+        stream=sys.stderr,
+    )
+    asyncio.run(main(args.namespace or default_namespace(), args.timeout, args.every))

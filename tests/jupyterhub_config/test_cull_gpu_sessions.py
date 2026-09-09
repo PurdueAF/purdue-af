@@ -287,3 +287,45 @@ async def test_main_continues_after_cull_failure(monkeypatch):
 
     assert passes["n"] == 2
     assert sleeps == [7]
+
+
+# ── namespace + failure visibility ────────────────────────────────────────────
+
+
+def test_default_namespace_reads_service_account(tmp_path, monkeypatch):
+    mod = culler()
+    monkeypatch.delenv("POD_NAMESPACE", raising=False)
+    ns_file = tmp_path / "namespace"
+    ns_file.write_text("cms\n")
+    monkeypatch.setattr(mod, "NAMESPACE_FILE", ns_file)
+    assert mod.default_namespace() == "cms"
+
+    # POD_NAMESPACE wins when something does set it
+    monkeypatch.setenv("POD_NAMESPACE", "cms-dev")
+    assert mod.default_namespace() == "cms-dev"
+
+
+async def test_cull_failure_is_logged(monkeypatch, caplog):
+    """A failing pass must leave a trace: this one ran silently for two months
+    because print() went to a block-buffered stdout that never flushed."""
+    mod = culler()
+    passes = {"n": 0}
+
+    async def boom(namespace, timeout):
+        passes["n"] += 1
+        if passes["n"] == 1:
+            raise RuntimeError("Service host/port is not set.")
+        raise asyncio.CancelledError()
+
+    async def fake_sleep(seconds):
+        pass
+
+    monkeypatch.setattr(mod, "cull_once", boom)
+    monkeypatch.setattr(mod.asyncio, "sleep", fake_sleep)
+
+    with caplog.at_level("INFO", logger="gpu-culler"):
+        with pytest.raises(asyncio.CancelledError):
+            await mod.main("cms", ONE_DAY, every=7)
+
+    assert "cull pass failed" in caplog.text
+    assert "Service host/port is not set." in caplog.text
