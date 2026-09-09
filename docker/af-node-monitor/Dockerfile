@@ -15,6 +15,7 @@ WORKDIR /opt/af-node-monitor
 # may still mount updated versions via ConfigMap.
 COPY docker/af-node-monitor/node_healthcheck.py ./node_healthcheck.py
 COPY docker/af-node-monitor/job_runner.py ./job_runner.py
+COPY docker/af-node-monitor/probe_agent.py ./probe_agent.py
 
 CMD ["python", "node_healthcheck.py"]
 

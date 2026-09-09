@@ -46,6 +46,11 @@ ENABLE_FIO = _get_env("ENABLE_FIO", "false").lower() in {"1", "true", "yes"}
 RESULTS_DIR = Path(_get_env("RESULTS_DIR", "/af-node-monitor/results"))
 NODE_NAME = os.getenv("NODE_NAME") or ""
 
+# Set by probe_agent: where this attempt writes, and which file carries the
+# last_fio_ts it must honour. Unset means derive both, as standalone runs do.
+RESULT_PATH = os.getenv("RESULT_PATH") or ""
+PREV_RESULT_PATH = os.getenv("PREV_RESULT_PATH") or ""
+
 
 def _vlog(msg: str) -> None:
     print(msg)
@@ -79,23 +84,46 @@ def _write_result_atomic(path: Path, data: Dict[str, Any]) -> None:
     tmp_path.replace(path)
 
 
-def _run_subprocess(cmd: list[str], timeout_s: float) -> Tuple[bool, bool, str]:
-    """Return (ok, timeout, stderr_or_reason)."""
+# A read on a dead NFS/CephFS mount sits in uninterruptible sleep: SIGKILL is
+# recorded but not delivered until the syscall returns, so subprocess.run()'s
+# own timeout path (kill() then an unbounded wait()) never comes back. Every
+# check here is on exactly such a mount, so waits must be bounded and the
+# child abandoned rather than reaped. Orphans reparent to the supervisor,
+# which reaps them (see probe_agent.reap_orphans).
+def _run_bounded(cmd: list[str], timeout_s: float) -> Tuple[bool, bool, str, str]:
+    """Return (ok, timeout, stdout, stderr_or_reason). Never blocks past timeout_s."""
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout_s,
         )
-        if proc.returncode != 0:
-            return False, False, proc.stderr.strip()
-        return True, False, ""
-    except subprocess.TimeoutExpired:
-        return False, True, "timeout"
     except Exception as e:
-        return False, False, str(e)
+        return False, False, "", str(e)
+
+    try:
+        out, err = proc.communicate(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        try:
+            proc.kill()
+            # Bounded: a killable child dies at once, a D-state one never will.
+            out, err = proc.communicate(timeout=1)
+        except Exception:
+            pass
+        return False, True, "", "timeout"
+    except Exception as e:
+        return False, False, "", str(e)
+
+    if proc.returncode != 0:
+        return False, False, out, err.strip()
+    return True, False, out, ""
+
+
+def _run_subprocess(cmd: list[str], timeout_s: float) -> Tuple[bool, bool, str]:
+    """Return (ok, timeout, stderr_or_reason)."""
+    ok, timeout, _out, reason = _run_bounded(cmd, timeout_s)
+    return ok, timeout, reason
 
 
 def _check_ping() -> Tuple[bool, bool, float | None]:
@@ -104,7 +132,7 @@ def _check_ping() -> Tuple[bool, bool, float | None]:
         cmd = ["/usr/bin/md5sum", CHECK_FILE]
     else:
         cmd = ["cat", CHECK_FILE]
-    ok, timeout, reason = _run_subprocess(cmd, PING_TIMEOUT_S)
+    ok, timeout, out, reason = _run_bounded(cmd, PING_TIMEOUT_S)
     elapsed_ms = (time.time() - start) * 1000
     if not ok or timeout:
         msg = "[job_runner] Ping check failed"
@@ -118,15 +146,9 @@ def _check_ping() -> Tuple[bool, bool, float | None]:
         return False, timeout, elapsed_ms
 
     if CHECKSUM:
-        # Re-run md5sum to get stdout (we already know it is fast)
-        proc = subprocess.run(
-            ["/usr/bin/md5sum", CHECK_FILE],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=PING_TIMEOUT_S,
-        )
-        parts = proc.stdout.strip().split()
+        # stdout of the run we just timed — re-reading the file would double
+        # the load and could hang after the timed read already succeeded.
+        parts = out.strip().split()
         if not parts or parts[0] != CHECKSUM:
             actual = parts[0] if parts else "<missing>"
             _vlog(
@@ -183,44 +205,43 @@ def _check_throughput(
         "--readonly",
         "--output-format=json",
     ]
+    ok, timeout, out, _reason = _run_bounded(cmd, FIO_TIMEOUT_S)
+    if timeout:
+        return False, True, 0.0, last_fio_ts
+    if not ok:
+        return False, False, 0.0, last_fio_ts
     try:
-        proc = subprocess.run(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=FIO_TIMEOUT_S,
-        )
-        if proc.returncode != 0:
-            return False, False, 0.0, last_fio_ts
-        data = json.loads(proc.stdout)
+        data = json.loads(out)
         bw_bytes = data["jobs"][0]["read"]["bw_bytes"]
         gbps = bw_bytes / 1e9
-        return True, False, gbps, now
-    except subprocess.TimeoutExpired:
-        return False, True, 0.0, last_fio_ts
     except Exception:
         return False, False, 0.0, last_fio_ts
+    return True, False, gbps, now
 
 
-def main() -> None:
+def default_result_path() -> Path:
     mount_key = _sanitized_mount_name(MOUNT_NAME)
     node_key = _sanitized_node_name(NODE_NAME)
     if node_key:
-        result_path = RESULTS_DIR / f"{mount_key}__{node_key}.json"
-    else:
-        # Backwards-compatible path for legacy CronJobs without NODE_NAME.
-        result_path = RESULTS_DIR / f"{mount_key}.json"
+        return RESULTS_DIR / f"{mount_key}__{node_key}.json"
+    # Backwards-compatible path for legacy CronJobs without NODE_NAME.
+    return RESULTS_DIR / f"{mount_key}.json"
+
+
+def main() -> None:
+    result_path = Path(RESULT_PATH) if RESULT_PATH else default_result_path()
+    prev_path = Path(PREV_RESULT_PATH) if PREV_RESULT_PATH else result_path
 
     _vlog(
-        f"[job_runner] Starting checks for mount '{MOUNT_NAME}' (key='{mount_key}') "
+        f"[job_runner] Starting checks for mount '{MOUNT_NAME}' "
+        f"(result='{result_path}') "
         f"on node '{NODE_NAME or 'unknown'}'"
     )
     _vlog(
         f"[job_runner] CHECK_FILE={CHECK_FILE}, METADATA_DIR={METADATA_DIR}, FIO_FILE={FIO_FILE}, ENABLE_FIO={ENABLE_FIO}"
     )
 
-    prev = _load_previous_result(result_path)
+    prev = _load_previous_result(prev_path)
     last_fio_ts = prev.get("last_fio_ts")
     try:
         last_fio_ts = float(last_fio_ts) if last_fio_ts is not None else None

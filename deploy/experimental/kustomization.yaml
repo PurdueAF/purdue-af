@@ -70,6 +70,7 @@ resources:
   - ../../apps/agentic-interface/networkpolicy.yaml
 
   - ../../apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml
+  - ../../apps/monitoring/af-monitoring/daemonset-af-node-probe.yaml
   - ../../apps/monitoring/af-monitoring/af-node-monitor-rbac.yaml
   - ../../apps/monitoring/af-monitoring/services.yaml
   - ../../apps/storage/af-node-monitor-storage.yaml
@@ -203,3 +204,5 @@ configMapGenerator:
   - name: af-node-monitor-config
     files:
       - ../../docker/af-node-monitor/node_healthcheck.py
+      - ../../docker/af-node-monitor/probe_agent.py
+      - ../../docker/af-node-monitor/job_runner.py
