@@ -13,10 +13,11 @@ set -euo pipefail
 SOURCE=${1:?usage: sync-userlist.sh cern|purdue}
 SECRET_NAME="af-auth-${SOURCE}"
 MIN_USERS=${MIN_USERS:-200}
-# Upstream registries are flaky — Hammer LDAP in particular answers only
-# intermittently. Retry INSIDE the pod with spaced attempts rather than
-# letting the job fail and be recreated: one pod per run instead of a pile
-# of Error pods, and the gaps are long enough to outlive a brief outage.
+# Retry INSIDE the pod rather than letting the job fail and be recreated:
+# one pod per run instead of a pile of Error pods, and the gaps are long
+# enough to outlive a brief upstream outage. Note a retry only helps a
+# transient fault — anything tied to the pod (its node, its identity) is
+# fixed for the pod's lifetime and every attempt will hit it again.
 FETCH_ATTEMPTS=${FETCH_ATTEMPTS:-5}
 FETCH_RETRY_DELAY=${FETCH_RETRY_DELAY:-60}
 TMP_FILE=$(mktemp)
