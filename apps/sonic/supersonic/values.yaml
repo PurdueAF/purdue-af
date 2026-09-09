@@ -4,7 +4,19 @@
 # it uses the cms Prometheus instead of bundling its own, its Grafana host
 # follows the release name, and it scales from zero.
 
+# A/B against supersonic-pr: same chart, same window, same bounds. The old
+# metric is intensive, so it needs metricType Value.
+serverLoadMetric: |-
+  sum by (release) (
+      rate(nv_inference_queue_duration_us{release=~"supersonic"}[30s])
+  )
+    /
+  sum by (release) (
+      (rate(nv_inference_exec_count{release=~"supersonic"}[30s]) * 1000) + 0.001
+  )
+
 serverLoadThreshold: 100
+serverLoadRateInterval: "30s"
 
 scaleFromZero:
   enabled: true
@@ -104,8 +116,10 @@ keda:
   enabled: true
   # No GPU held while idle: RepositoryIndex raises this to 1 through the
   # Envoy admission sidecar, which holds it there for holdMinReplicasSeconds.
+  metricType: Value
   minReplicaCount: 0
-  maxReplicaCount: 10
+  # Below the free GPU count, so neither arm is ever starved.
+  maxReplicaCount: 5
   # Poll often enough that the wake is not sitting behind a 30s KEDA tick.
   pollingInterval: 1
   cooldownPeriod: 300

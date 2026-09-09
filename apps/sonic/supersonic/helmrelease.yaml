@@ -10,8 +10,9 @@ spec:
       chart: helm/supersonic
       sourceRef:
         kind: GitRepository
-        name: supersonic
-      # Track git commits on main, not Chart.yaml version (still 0.3.1).
+        # Shared with supersonic-pr for the scaling-metric A/B.
+        name: supersonic-pr
+      # Track git commits on the branch, not Chart.yaml version (still 0.3.1).
       reconcileStrategy: Revision
       interval: 1m
   install:
