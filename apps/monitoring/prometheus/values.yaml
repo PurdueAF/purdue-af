@@ -428,6 +428,69 @@ serverFiles:
               [__meta_kubernetes_service_label_app_kubernetes_io_name]
             action: keep
             regex: seldon-envoy
+  # Figures of merit for the supersonic / supersonic-pr scaling-metric A/B.
+  recording_rules.yml:
+    groups:
+      - name: sonic-scaling-fom
+        interval: 15s
+        rules:
+          - record: sonic:replicas_desired
+            expr: |-
+              max by (release) (
+                label_replace(
+                  kube_deployment_spec_replicas{namespace="cms", deployment=~"supersonic.*-triton"},
+                  "release", "$1", "deployment", "(.*)-triton"
+                )
+              )
+          - record: sonic:replicas_ready
+            expr: |-
+              max by (release) (
+                label_replace(
+                  kube_deployment_status_replicas_ready{namespace="cms", deployment=~"supersonic.*-triton"},
+                  "release", "$1", "deployment", "(.*)-triton"
+                )
+              )
+          # Above zero means the run is measuring GPU supply, not the metric.
+          - record: sonic:capacity_shortfall
+            expr: sonic:replicas_desired - sonic:replicas_ready
+          - record: sonic:scale_actions:changes10m
+            expr: |-
+              max by (release) (
+                label_replace(
+                  changes(kube_deployment_spec_replicas{namespace="cms", deployment=~"supersonic.*-triton"}[10m]),
+                  "release", "$1", "deployment", "(.*)-triton"
+                )
+              )
+          - record: sonic:throughput_inferences:rate30s
+            expr: sum by (release) (rate(nv_inference_count[30s]))
+          - record: sonic:throughput_requests:rate30s
+            expr: |-
+              sum by (release) (
+                rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="triton_grpc_service"}[30s])
+              )
+          - record: sonic:latency_envoy_mean_ms
+            expr: |-
+              sum by (release) (rate(envoy_cluster_upstream_rq_time_sum{envoy_cluster_name="triton_grpc_service"}[30s]))
+              / clamp_min(
+                  sum by (release) (rate(envoy_cluster_upstream_rq_time_count{envoy_cluster_name="triton_grpc_service"}[30s])),
+                  1
+                )
+          - record: sonic:latency_envoy_p95_ms
+            expr: |-
+              histogram_quantile(0.95,
+                sum by (release, le) (
+                  rate(envoy_cluster_upstream_rq_time_bucket{envoy_cluster_name="triton_grpc_service"}[30s])
+                )
+              )
+          - record: sonic:queue_fraction
+            expr: |-
+              sum by (release) (rate(nv_inference_queue_duration_us[30s]))
+              / clamp_min(sum by (release) (rate(nv_inference_request_duration_us[30s])), 1)
+          - record: sonic:gpu_util_mean
+            expr: avg by (release) (nv_gpu_utilization)
+          - record: sonic:gpu_util_max
+            expr: max by (release) (nv_gpu_utilization)
+
   alerting_rules.yml:
     groups:
       - name: af-pod-monitor

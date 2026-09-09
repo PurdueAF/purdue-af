@@ -1,10 +1,12 @@
 # Same MiniAOD model set and Triton image as the default `supersonic`, and
-# scale-from-zero like it, so the two can be compared side by side. The
-# difference is the chart branch: `occupancy-ratio-metric` sits five commits
-# ahead of main and replaces the scaling metric with a release-scoped
-# "occupancy ratio", so serverLoadMetric stays unset here rather than being
-# hand-written per release, and serverLoadThreshold is the chart default (2)
+# scale-from-zero like it, so the two can be compared side by side. Both run
+# the same chart now; the only difference is the metric. This arm takes the
+# branch default, a release-scoped "occupancy ratio", so serverLoadMetric
+# stays unset here, and serverLoadThreshold is the chart default (2)
 # — on that metric, "requests wait about as long as they are served".
+
+# Match supersonic's rate window; smoothing alone changes crossing counts.
+serverLoadRateInterval: "30s"
 
 scaleFromZero:
   enabled: true
@@ -103,8 +105,9 @@ keda:
   enabled: true
   # 0 is the point of this release: no GPU held while idle. RepositoryIndex
   # raises it to 1 through the Envoy admission sidecar.
+  metricType: AverageValue
   minReplicaCount: 0
-  maxReplicaCount: 10
+  maxReplicaCount: 5
   pollingInterval: 1
   cooldownPeriod: 300
   scaleUp:
