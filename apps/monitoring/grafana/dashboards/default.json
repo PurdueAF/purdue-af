@@ -439,7 +439,7 @@
         },
         {
           "refId": "M",
-          "expr": "min(label_replace(sum(af_session_responsive) / count(af_session_responsive), \"part\", \"probe\", \"\", \"\") or label_replace(sum((time() - af_pod_monitor_last_pass_timestamp_seconds) < bool 900) / count(af_pod_monitor_last_pass_timestamp_seconds), \"part\", \"fresh\", \"\", \"\"))",
+          "expr": "min(label_replace(sum(af_session_responsive) / count(af_session_responsive), \"part\", \"probe\", \"\", \"\") or label_replace(sum((time() - (af_pod_monitor_last_pass_timestamp_seconds > 0)) < bool 900) / count(af_pod_monitor_last_pass_timestamp_seconds > 0), \"part\", \"fresh\", \"\", \"\"))",
           "legendFormat": "Session responsiveness",
           "datasource": {
             "type": "prometheus",
