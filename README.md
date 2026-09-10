@@ -49,7 +49,6 @@ Whether each component on the cluster is running what is on `main`
 **Experimental** — `main-validated`
 
 ![pixi-global-sync][experimental-af-utils-pixi-global-sync]
-![slurm-probes][experimental-af-utils-slurm-probes]
 ![agentic-interface][experimental-agentic-interface]
 ![dask-gateway-k8s][experimental-dask-gateway-dask-gateway-k8s]
 ![dask-gateway-k8s-interlink][experimental-dask-gateway-dask-gateway-k8s-interlink]
@@ -119,7 +118,6 @@ How a change reaches the cluster, version rules and rollback:
 [core-monitoring-prometheus]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-monitoring-prometheus.json
 [core-storage]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-storage.json
 [experimental-af-utils-pixi-global-sync]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-af-utils-pixi-global-sync.json
-[experimental-af-utils-slurm-probes]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-af-utils-slurm-probes.json
 [experimental-agentic-interface]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-agentic-interface.json
 [experimental-dask-gateway-dask-gateway-k8s]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-dask-gateway-dask-gateway-k8s.json
 [experimental-dask-gateway-dask-gateway-k8s-interlink]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-dask-gateway-dask-gateway-k8s-interlink.json
