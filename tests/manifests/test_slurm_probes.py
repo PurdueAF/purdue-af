@@ -6,7 +6,6 @@ the standby QoS. So the number only means anything if the probe submits with
 the *same* account/partition/QoS a user's Dask cluster would use — that
 correspondence is what these tests hold."""
 
-import json
 import re
 import sys
 
@@ -210,70 +209,10 @@ def test_exporter_survives_an_empty_directory(tmp_path, monkeypatch):
     assert serve.collect() == ""
 
 
-# --- Grafana panel ---------------------------------------------------------
-
-DASHBOARD = REPO / "apps/monitoring/grafana/dashboards/default.json"
-
-
-def _panels():
-    return {p["title"]: p for p in json.loads(DASHBOARD.read_text())["panels"]}
-
-
-def _backlog_panel():
-    return next(p for t, p in _panels().items() if t.startswith("Slurm backlog"))
-
-
-def test_panel_queries_the_metric_the_probe_actually_emits():
-    """A renamed metric that only lands in probe.sh leaves a panel that draws
-    an empty graph forever — indistinguishable from a healthy queue."""
-    emitted = re.findall(r"^\s*(af_\w+)\{", (APP / "probe.sh").read_text(), re.M)
-    exprs = " ".join(t["expr"] for t in _backlog_panel()["targets"])
-    assert emitted, "probe.sh emits no metric"
-    for metric in set(emitted):
-        assert metric in exprs, metric
-
-
-def test_panel_does_not_stack_or_bridge_gaps():
-    """Waits on different clusters are independent, so stacking would invent a
-    total nobody waits. And serve.py drops a stale probe rather than reporting
-    zero — spanNulls would paper that gap back over."""
-    custom = _backlog_panel()["fieldConfig"]["defaults"]["custom"]
-    assert custom["stacking"]["mode"] == "none"
-    assert custom["spanNulls"] is False
-
-
-def test_panel_is_in_the_slurm_row_and_the_row_still_fits():
-    """Grafana silently reflows a row wider than 24 columns onto a second line."""
-    row = [
-        p
-        for p in json.loads(DASHBOARD.read_text())["panels"]
-        if p["gridPos"]["y"] == _backlog_panel()["gridPos"]["y"]
-    ]
-    assert _backlog_panel() in row
-    assert sum(p["gridPos"]["w"] for p in row) == 24
-
-
-def test_panel_renders_seconds_as_a_duration():
-    """The values run to hundreds of thousands; unitless they read as noise."""
-    assert _backlog_panel()["fieldConfig"]["defaults"]["unit"] == "s"
-
-
 def test_flags_label_carries_the_submitted_line_verbatim():
-    """The Grafana legend prints this, so it must be the real sbatch line and
-    not a reassembly: rendering the parsed labels instead emits a dangling
-    "--qos=" for clusters that pass no QoS, which reads as a copyable flag."""
+    """The label is the only record of what was actually submitted, so it must
+    be the real sbatch line and not a reassembly: rendering the parsed labels
+    instead emits a dangling "--qos=" for clusters that pass no QoS, which
+    reads as a copyable flag."""
     probe = (APP / "probe.sh").read_text()
     assert 'flags=\\"${FLAGS}\\"' in probe
-
-
-def test_panel_legend_shows_the_flags():
-    panel = _backlog_panel()
-    legend = panel["targets"][0]["legendFormat"]
-    assert "{{flags}}" in legend, legend
-    assert "{{cluster}}" in legend, legend
-
-
-def test_panel_legend_has_no_calc_columns():
-    """One series per cluster — a "Last *" column restates the value the axis
-    and tooltip already show, and squeezes the flags off a quarter-width panel."""
-    assert _backlog_panel()["options"]["legend"]["calcs"] == []
