@@ -430,12 +430,21 @@ hub:
     # `servers` key — an agent running inside a session could not see the very
     # session it runs in. `read:servers!user` scopes that to the token's own
     # user; it grants no visibility of anyone else.
+    #
+    # `delete:servers!server` lets a session stop itself, which is what the
+    # Shut Down button needs. Stopping the Jupyter server instead leaves the
+    # Hub believing the session is healthy: the pod keeps running with nothing
+    # listening on it. The browser cannot ask the Hub directly — the `_xsrf`
+    # cookie is scoped to `/hub/`, so a page at `/user/<name>/` cannot read
+    # the token it would have to send — so the session's own token does it.
+    # `!server` is the tightest form: this token, this session, nobody else's.
     server:
-      description: "Singleuser server token: report activity, read own session"
+      description: "Singleuser server token: report activity, read own session, stop itself"
       scopes:
         - "users:activity!user"
         - "access:servers!server"
         - "read:servers!user"
+        - "delete:servers!server"
     gpu-culler:
       description: "Stop idle sessions that hold a GPU"
       scopes: ["read:users:activity", "read:servers", "delete:servers"]
