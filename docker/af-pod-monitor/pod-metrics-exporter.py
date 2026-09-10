@@ -80,6 +80,15 @@ heartbeat = Gauge(
     "Unix time the exporter last completed a pass",
 )
 
+
+def start_heartbeat() -> None:
+    """Give the heartbeat a real time before the first scrape. A gauge starts
+    at 0, which reads as 1970 to anything asking how long ago the last pass
+    was — so a session that had only just started looked stale, and the
+    dashboard called it unresponsive until its first pass finished."""
+    heartbeat.set(time.time())
+
+
 log = logging.getLogger("af-pod-monitor")
 
 
@@ -191,6 +200,7 @@ def main() -> None:
         stream=sys.stderr,
     )
     directories = discover_directories()
+    start_heartbeat()
     start_http_server(9090)
     while True:
         if not probe_session(directories["home"]):

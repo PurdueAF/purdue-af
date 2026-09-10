@@ -190,3 +190,11 @@ def test_heartbeat_gauge_exists():
     """Every gauge can sit at its last value while the loop is wedged; only
     the heartbeat shows that no pass has finished."""
     assert exporter.heartbeat is not None
+
+
+def test_heartbeat_starts_at_a_real_time():
+    """A gauge starts at 0, which reads as 1970 to anything asking how long
+    ago the last pass was: a session that had only just started looked stale,
+    and the dashboard called it unresponsive until its first pass finished."""
+    exporter.start_heartbeat()
+    assert gauge_value("af_pod_monitor_last_pass_timestamp_seconds") > 1e9
