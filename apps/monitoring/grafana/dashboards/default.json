@@ -439,8 +439,8 @@
         },
         {
           "refId": "M",
-          "expr": "min(label_replace(sum(af_home_dir_responsive) / count(af_home_dir_responsive), \"part\", \"probe\", \"\", \"\") or label_replace(sum((time() - af_pod_monitor_last_pass_timestamp_seconds) < bool 900) / count(af_pod_monitor_last_pass_timestamp_seconds), \"part\", \"fresh\", \"\", \"\"))",
-          "legendFormat": "Session storage",
+          "expr": "min(label_replace(sum(af_session_responsive) / count(af_session_responsive), \"part\", \"probe\", \"\", \"\") or label_replace(sum((time() - af_pod_monitor_last_pass_timestamp_seconds) < bool 900) / count(af_pod_monitor_last_pass_timestamp_seconds), \"part\", \"fresh\", \"\", \"\"))",
+          "legendFormat": "Session responsiveness",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -460,7 +460,7 @@
           "instant": false
         }
       ],
-      "description": "Green: OK. Orange: partial, some prod nodes affected. Red: down. Evaluated on cms-af-prod nodes only; each row shows history over the selected time range. AF nodes and the four mounts are fractions of prod nodes passing. Session storage is the fraction of running sessions whose /home answered a bounded listing in time, measured from inside each pod; it is blank for sessions started before that probe shipped.",
+      "description": "Green: OK. Orange: partial, some prod nodes affected. Red: down. Evaluated on cms-af-prod nodes only; each row shows history over the selected time range. AF nodes and the four mounts are fractions of prod nodes passing. Session responsiveness is the fraction of running sessions that answered a bounded listing of their home directory in time, measured from inside each pod; it is blank for sessions started before that probe shipped.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -598,8 +598,8 @@
         },
         {
           "refId": "D",
-          "expr": "sum(increase(af_home_dir_probe_failures_total[$__range])) or vector(0)",
-          "legendFormat": "storage stalls",
+          "expr": "sum(increase(af_session_probe_failures_total[$__range])) or vector(0)",
+          "legendFormat": "unresponsive",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -608,7 +608,7 @@
           "instant": true
         }
       ],
-      "description": "Interactive JupyterLab sessions. Running: right now. Pending: waiting for a node right now, non-zero for long means no node has the requested CPU, RAM or GPU. Failed starts: sessions the hub could not start within the selected time range. Storage stalls: times a running session's /home did not answer in time, over the same range.",
+      "description": "Interactive JupyterLab sessions. Running: right now. Pending: waiting for a node right now, non-zero for long means no node has the requested CPU, RAM or GPU. Failed starts: sessions the hub could not start within the selected time range. Unresponsive: times a running session failed to answer in time, over the same range.",
       "fieldConfig": {
         "defaults": {
           "mappings": [],
@@ -682,7 +682,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "storage stalls"
+              "options": "unresponsive"
             },
             "properties": [
               {

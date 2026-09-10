@@ -11,12 +11,15 @@ rather than indistinguishable from a fresh one.
 
 Failing is not the same as hanging, though: a read on a wedged CephFS/NFS
 mount blocks forever in uninterruptible sleep, and an unbounded df would park
-the whole loop there while the HTTP server kept serving the last good values.
-Every pass therefore starts with a bounded responsiveness probe, and the usage
-commands carry timeouts of their own. af_*_dir_responsive is what a user feels
-— the directory answered in time — while af_*_dir_ok only says the reading
-succeeded eventually. The heartbeat gauge makes a wedged loop visible even if
-both stay at their last value.
+the whole loop there while the HTTP server kept serving the last good values —
+a session nobody can work in, reported as healthy.
+
+So every pass opens by asking the one question a user would: does this session
+still answer? af_session_responsive times a bounded listing of the user's home
+directory, which is where a shell or notebook sits, and the heartbeat makes a
+wedged pass visible even when every gauge holds its last value. Every command
+here runs bounded, because subprocess's own timeout kills the child and then
+waits for it — which never returns on a dead mount.
 """
 
 import glob
@@ -30,8 +33,8 @@ from prometheus_client import Counter, Gauge, start_http_server
 
 WORK_QUOTA_KB = 104857600  # 100 GB
 INTERVAL = 300  # seconds between passes
-# A directory a user would call responsive answers `ls` in well under a
-# second; ten is generous enough that load alone never trips it.
+# A session a user would call responsive answers `ls` in well under a second;
+# ten is generous enough that load alone never trips it.
 PROBE_TIMEOUT_S = 10
 # `df` is a statfs call and returns as fast as the mount allows. `du -s` walks
 # every file under /work and is legitimately slow on a large tree, so it gets
@@ -41,7 +44,6 @@ DU_TIMEOUT_S = 600
 
 _DIRS = ("home", "work")
 metrics = {}
-counters = {}
 for _dl in _DIRS:
     metrics[f"{_dl}_dir_used"] = Gauge(
         f"af_{_dl}_dir_used_kb",
@@ -59,23 +61,23 @@ for _dl in _DIRS:
         f"af_{_dl}_dir_ok",
         f"1 if the last pass could read the {_dl} directory, 0 otherwise",
     )
-    metrics[f"{_dl}_dir_responsive"] = Gauge(
-        f"af_{_dl}_dir_responsive",
-        f"1 if the {_dl} directory answered a bounded listing within "
-        f"{PROBE_TIMEOUT_S}s, 0 if it timed out or errored",
-    )
-    metrics[f"{_dl}_dir_probe_seconds"] = Gauge(
-        f"af_{_dl}_dir_probe_seconds",
-        f"Time the {_dl} directory took to answer that listing",
-    )
-    counters[f"{_dl}_dir_probe_failures"] = Counter(
-        f"af_{_dl}_dir_probe_failures",
-        f"Passes in which the {_dl} directory did not answer in time",
-    )
 
+session_responsive = Gauge(
+    "af_session_responsive",
+    "1 if this session answered a bounded listing of its home directory "
+    f"within {PROBE_TIMEOUT_S}s, 0 if it timed out or errored",
+)
+session_probe_seconds = Gauge(
+    "af_session_probe_seconds",
+    "Time this session took to answer that listing",
+)
+session_probe_failures = Counter(
+    "af_session_probe_failures",
+    "Passes in which this session did not answer in time",
+)
 heartbeat = Gauge(
     "af_pod_monitor_last_pass_timestamp_seconds",
-    "Unix time the exporter last completed a pass over every directory",
+    "Unix time the exporter last completed a pass",
 )
 
 log = logging.getLogger("af-pod-monitor")
@@ -116,54 +118,52 @@ def parse_du_output(
     return used, quota_kb, used / quota_kb
 
 
-def probe_directory(dir_label: str, directory: str) -> bool:
-    """Bounded liveness check. Never blocks past PROBE_TIMEOUT_S: a child stuck
-    on a dead mount is killed and abandoned rather than waited on, because
-    SIGKILL is not delivered until the syscall returns."""
-    start = time.monotonic()
-    ok = False
+def run_bounded(cmd: list[str], timeout_s: float) -> tuple[bool, str]:
+    """Return (ok, stdout). Never blocks past timeout_s: a child stuck on a
+    dead mount is killed and abandoned rather than reaped, because SIGKILL is
+    not delivered until the syscall returns. subprocess's own timeout waits
+    for that child, so it cannot be used here."""
     try:
         proc = subprocess.Popen(
-            ["ls", "-la", directory],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
         )
-    except Exception:
-        log.exception("could not probe %s directory (%s)", dir_label, directory)
-    else:
+    except OSError:
+        log.exception("could not run %s", cmd)
+        return False, ""
+    try:
+        out, _ = proc.communicate(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        log.error("%s did not return in %ss", cmd, timeout_s)
         try:
-            ok = proc.wait(timeout=PROBE_TIMEOUT_S) == 0
-        except subprocess.TimeoutExpired:
-            log.error(
-                "%s directory (%s) did not answer in %ss",
-                dir_label,
-                directory,
-                PROBE_TIMEOUT_S,
-            )
-            try:
-                proc.kill()
-            except Exception:
-                pass
+            proc.kill()
+            proc.communicate(timeout=1)  # a killable child dies at once
         except Exception:
-            log.exception("could not probe %s directory (%s)", dir_label, directory)
+            pass
+        return False, ""
+    return proc.returncode == 0, out
 
-    metrics[f"{dir_label}_dir_probe_seconds"].set(time.monotonic() - start)
-    metrics[f"{dir_label}_dir_responsive"].set(1 if ok else 0)
+
+def probe_session(home_dir: str) -> bool:
+    """The question a user would ask: does this session still answer?"""
+    start = time.monotonic()
+    ok, _ = run_bounded(["ls", "-la", home_dir], PROBE_TIMEOUT_S)
+    session_probe_seconds.set(time.monotonic() - start)
+    session_responsive.set(1 if ok else 0)
     if not ok:
-        counters[f"{dir_label}_dir_probe_failures"].inc()
+        session_probe_failures.inc()
     return ok
 
 
 def update_metrics(dir_label: str, directory: str) -> None:
     if dir_label == "work":
-        du_output = subprocess.check_output(
-            ["du", "-s", directory], timeout=DU_TIMEOUT_S
-        ).decode("utf-8")
+        ok, du_output = run_bounded(["du", "-s", directory], DU_TIMEOUT_S)
+        if not ok:
+            raise OSError(f"could not read {directory}")
         used, size, util = parse_du_output(du_output)
     else:
-        df_output = subprocess.check_output(
-            ["df", directory], timeout=DF_TIMEOUT_S
-        ).decode("utf-8")
+        ok, df_output = run_bounded(["df", directory], DF_TIMEOUT_S)
+        if not ok:
+            raise OSError(f"could not read {directory}")
         used, size, util = parse_df_output(df_output)
 
     metrics[f"{dir_label}_dir_used"].set(used)
@@ -174,11 +174,6 @@ def update_metrics(dir_label: str, directory: str) -> None:
 def update_directory(dir_label: str, directory: str) -> bool:
     """One directory's pass. Never raises: a mount the pod cannot read is a
     gap in that directory's metrics, not a reason to stop exporting."""
-    if not probe_directory(dir_label, directory):
-        # Reading usage means touching the same mount that just failed to
-        # answer; skip it rather than hand the loop to a hung syscall.
-        metrics[f"{dir_label}_dir_ok"].set(0)
-        return False
     try:
         update_metrics(dir_label, directory)
     except Exception:
@@ -198,6 +193,12 @@ def main() -> None:
     directories = discover_directories()
     start_http_server(9090)
     while True:
+        if not probe_session(directories["home"]):
+            # Reading usage means touching the mount that just failed to
+            # answer; skip the pass rather than hand it to a hung syscall.
+            heartbeat.set(time.time())
+            time.sleep(INTERVAL)
+            continue
         for dir_label, directory in directories.items():
             update_directory(dir_label, directory)
         heartbeat.set(time.time())
