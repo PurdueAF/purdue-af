@@ -4,7 +4,7 @@
 # stays: one new Failed pod every couple of minutes for as long as the job
 # keeps failing. Nothing in Kubernetes sweeps them — PodGC only fires at the
 # cluster-wide terminated-pod threshold, and ttlSecondsAfterFinished is a Job
-# field. This keeps the newest one, for diagnosis, and deletes the rest.
+# field. This deletes all of them.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -37,18 +37,15 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                # Oldest first; `sed $d` drops the newest, which is kept for
-                # diagnosis. Both are busybox-safe (no tac, no head -n -1).
-                # An empty list stays empty through sed and xargs -r runs
-                # nothing, so no failed pods is a no-op rather than an error.
+                # An empty list means xargs -r runs nothing, so no failed
+                # pods is a no-op rather than an error.
                 - |
                   set -eu
                   kubectl get pods \
                     -l app.kubernetes.io/instance=supersonic-interlink,app.kubernetes.io/component=triton \
                     --field-selector status.phase=Failed \
-                    --sort-by=.metadata.creationTimestamp \
                     -o name \
-                  | sed '$d' | xargs -r kubectl delete --wait=false
+                  | xargs -r kubectl delete --wait=false
               resources:
                 requests:
                   memory: "32Mi"
