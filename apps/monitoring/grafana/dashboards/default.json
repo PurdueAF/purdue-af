@@ -450,6 +450,17 @@
         },
         {
           "refId": "N",
+          "expr": "1 - 0.5 * ((sum(increase(csi_operations_seconds_count{driver_name=~\"rook-ceph.*\",method_name=~\".*Node(Stage|Publish)Volume\",grpc_status_code=~\"DeadlineExceeded|Unavailable|Internal|ResourceExhausted\"}[30m]) and on(node) group by (node)(kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) or vector(0)) > bool 0)",
+          "legendFormat": "Volume mounts",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "O",
           "expr": "max(up{job=\"loki\"}) or vector(0)",
           "legendFormat": "Logs",
           "datasource": {
@@ -460,7 +471,7 @@
           "instant": false
         }
       ],
-      "description": "Green: OK. Orange: partial, some prod nodes affected. Red: down. Evaluated on cms-af-prod nodes only; each row shows history over the selected time range. AF nodes and the four mounts are fractions of prod nodes passing. Session responsiveness is the fraction of running sessions that answered a bounded listing of their home directory in time, measured from inside each pod; it is blank for sessions started before that probe shipped.",
+      "description": "Green: OK. Orange: partial, some prod nodes affected. Red: down. Evaluated on cms-af-prod nodes only; each row shows history over the selected time range. AF nodes and the four mounts are fractions of prod nodes passing. Session responsiveness is the fraction of running sessions that answered a bounded listing of their home directory in time, measured from inside each pod; it is blank for sessions started before that probe shipped. Volume mounts turns orange when a session volume failed to mount on an AF node in the last 30 minutes.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -606,9 +617,20 @@
           },
           "range": false,
           "instant": true
+        },
+        {
+          "refId": "E",
+          "expr": "sum(increase(csi_operations_seconds_count{driver_name=~\"rook-ceph.*\",method_name=~\".*Node(Stage|Publish)Volume\",grpc_status_code=~\"DeadlineExceeded|Unavailable|Internal|ResourceExhausted\"}[$__range]) and on(node) group by (node)(kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) or vector(0)",
+          "legendFormat": "bad mounts",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": false,
+          "instant": true
         }
       ],
-      "description": "Interactive JupyterLab sessions. Running: right now. Pending: waiting for a node right now, non-zero for long means no node has the requested CPU, RAM or GPU. Failed starts: sessions the hub could not start within the selected time range. Unresponsive: times a running session failed to answer in time, over the same range.",
+      "description": "Interactive JupyterLab sessions. Running: right now. Pending: waiting for a node right now, non-zero for long means no node has the requested CPU, RAM or GPU. Failed starts: sessions the hub could not start within the selected time range. Unresponsive: times a running session failed to answer in time. Bad mounts: session volumes that could not be mounted on an AF node, both over the same range.",
       "fieldConfig": {
         "defaults": {
           "mappings": [],
@@ -683,6 +705,30 @@
             "matcher": {
               "id": "byName",
               "options": "unresponsive"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bad mounts"
             },
             "properties": [
               {
