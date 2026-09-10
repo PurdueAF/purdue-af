@@ -309,22 +309,35 @@ gateway:
           except pkg_resources.DistributionNotFound:
               subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "ldap3"])
 
-          from ldap3 import Server, Connection, SUBTREE
+          # geddes-auth has no index on uid: a filtered search under ou=AllPeople
+          # scans 69k entries for 15-25s, and options_handler runs synchronously
+          # on the gateway's event loop. Accounts sit at uid=<name>,<baseDN>, so
+          # read that DN (~0ms) and keep the search only as a fallback.
+          from ldap3 import BASE, SUBTREE, Server, Connection
           url = "geddes-auth.rcac.purdue.edu"
           baseDN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
-          search_filter = "(uid={0}*)"
           attrs = ['uidNumber','gidNumber']
           s = Server(host= url ,use_ssl= True, get_info= 'ALL')
           conn = Connection(s, version = 3, authentication = "ANONYMOUS")
           conn.start_tls()
           conn.search(
-              search_base = baseDN,
-              search_filter = search_filter.format(username),
-              search_scope = SUBTREE,
+              search_base = "uid={0},{1}".format(username, baseDN),
+              search_filter = "(objectClass=*)",
+              search_scope = BASE,
               attributes = attrs
           )
-          ldap_result_id = json.loads(conn.response_to_json())
-          result = ldap_result_id[u'entries'][0][u'attributes']
+          entries = json.loads(conn.response_to_json())[u'entries']
+          if not entries:
+              conn.search(
+                  search_base = baseDN,
+                  search_filter = "(uid={0}*)".format(username),
+                  search_scope = SUBTREE,
+                  attributes = attrs
+              )
+              entries = json.loads(conn.response_to_json())[u'entries']
+          if not entries:
+              raise ValueError("no LDAP entry for " + username)
+          result = entries[0][u'attributes']
           uid_number = result[u'uidNumber']
           gid_number = result [u'gidNumber']
           return uid_number, gid_number

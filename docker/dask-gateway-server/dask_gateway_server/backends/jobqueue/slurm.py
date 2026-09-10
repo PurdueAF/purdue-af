@@ -4,7 +4,7 @@ import shutil
 import subprocess
 import pwd
 import json
-from ldap3 import Server, Connection, SUBTREE
+from ldap3 import BASE, Server, Connection, SUBTREE
 
 from traitlets import Unicode, default
 
@@ -15,19 +15,24 @@ __all__ = ("SlurmBackend", "SlurmClusterConfig")
 
 
 def ldap_lookup(username):
+    # geddes-auth has no index on uid: a filtered search under ou=AllPeople
+    # scans 69k entries for 15-25s, and options_handler runs synchronously on
+    # the gateway's event loop. Accounts sit at uid=<name>,<baseDN>, so read
+    # that DN (~0ms) and keep the search only as a fallback.
     url = "geddes-auth.rcac.purdue.edu"
     baseDN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
-    search_filter = "(uid={0}*)"
     attrs = ['uidNumber','gidNumber']
     s = Server(host=url, use_ssl=True, get_info='ALL')
     conn = Connection(s, version = 3, authentication = "ANONYMOUS")
     conn.start_tls()
-    print(conn.result)
-    print(conn)
-    conn.search(search_base = baseDN, search_filter = search_filter.format(username), search_scope = SUBTREE, attributes = attrs)
-    ldap_result_id = json.loads(conn.response_to_json())
-    print(ldap_result_id)
-    result = ldap_result_id[u'entries'][0][u'attributes']
+    conn.search(search_base = "uid={0},{1}".format(username, baseDN), search_filter = "(objectClass=*)", search_scope = BASE, attributes = attrs)
+    entries = json.loads(conn.response_to_json())[u'entries']
+    if not entries:
+        conn.search(search_base = baseDN, search_filter = "(uid={0}*)".format(username), search_scope = SUBTREE, attributes = attrs)
+        entries = json.loads(conn.response_to_json())[u'entries']
+    if not entries:
+        raise ValueError("no LDAP entry for " + username)
+    result = entries[0][u'attributes']
     uid_number = result[u'uidNumber']
     gid_number = result [u'gidNumber']
     return uid_number, gid_number
