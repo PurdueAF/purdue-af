@@ -351,6 +351,17 @@
         },
         {
           "refId": "E",
+          "expr": "(sum(kube_deployment_status_replicas_available{namespace=\"cms\",deployment=\"agentic-interface\"}) > bool 0) or vector(0)",
+          "legendFormat": "Agentic interface",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "F",
           "expr": "sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"} and on(node) group by (node)(af_node_mount_result_fresh{node_pool=\"prod\"})) / count(group by (node)(af_node_mount_result_fresh{node_pool=\"prod\"}))",
           "legendFormat": "AF nodes",
           "datasource": {
@@ -361,7 +372,7 @@
           "instant": false
         },
         {
-          "refId": "F",
+          "refId": "G",
           "expr": "min(pixi_global_sync_env_healthy{job=\"pixi-global-sync\"}) or vector(0)",
           "legendFormat": "Global pixi env",
           "datasource": {
@@ -372,7 +383,7 @@
           "instant": false
         },
         {
-          "refId": "G",
+          "refId": "H",
           "expr": "sum(af_node_mount_valid{node_pool=\"prod\",mount_name=\"/depot/\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"/depot/\"} == 1)) / count(af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"/depot/\"})",
           "legendFormat": "/depot",
           "datasource": {
@@ -383,7 +394,7 @@
           "instant": false
         },
         {
-          "refId": "H",
+          "refId": "I",
           "expr": "sum(af_node_mount_valid{node_pool=\"prod\",mount_name=\"/work/\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"/work/\"} == 1)) / count(af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"/work/\"})",
           "legendFormat": "/work",
           "datasource": {
@@ -394,7 +405,7 @@
           "instant": false
         },
         {
-          "refId": "I",
+          "refId": "J",
           "expr": "sum(af_node_mount_valid{node_pool=\"prod\",mount_name=\"eos\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"eos\"} == 1)) / count(af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"eos\"})",
           "legendFormat": "/eos",
           "datasource": {
@@ -405,7 +416,7 @@
           "instant": false
         },
         {
-          "refId": "J",
+          "refId": "K",
           "expr": "sum(af_node_mount_valid{node_pool=\"prod\",mount_name=\"cvmfs\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"cvmfs\"} == 1)) / count(af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"cvmfs\"})",
           "legendFormat": "/cvmfs",
           "datasource": {
@@ -416,7 +427,7 @@
           "instant": false
         },
         {
-          "refId": "K",
+          "refId": "L",
           "expr": "((time() - max(af_node_monitor_last_iteration_timestamp_seconds)) < bool 900) or vector(0)",
           "legendFormat": "Storage checks",
           "datasource": {
@@ -427,7 +438,7 @@
           "instant": false
         },
         {
-          "refId": "L",
+          "refId": "M",
           "expr": "max(up{job=\"loki\"}) or vector(0)",
           "legendFormat": "Logs",
           "datasource": {
