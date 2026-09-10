@@ -63,7 +63,7 @@ def test_discover_username_no_user_raises():
 
 def test_update_metrics_home(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        exporter.subprocess, "check_output", lambda cmd: DF_OUTPUT.encode()
+        exporter.subprocess, "check_output", lambda cmd, **kw: DF_OUTPUT.encode()
     )
 
     exporter.update_metrics("home", str(tmp_path))
@@ -76,12 +76,12 @@ def test_update_metrics_home(monkeypatch, tmp_path):
 def test_update_metrics_work_does_not_touch_home(monkeypatch, tmp_path):
     """Regression: the old code wrote every reading into the same gauges."""
     monkeypatch.setattr(
-        exporter.subprocess, "check_output", lambda cmd: DF_OUTPUT.encode()
+        exporter.subprocess, "check_output", lambda cmd, **kw: DF_OUTPUT.encode()
     )
     exporter.update_metrics("home", str(tmp_path))
 
     monkeypatch.setattr(
-        exporter.subprocess, "check_output", lambda cmd: DU_OUTPUT.encode()
+        exporter.subprocess, "check_output", lambda cmd, **kw: DU_OUTPUT.encode()
     )
     exporter.update_metrics("work", str(tmp_path))
 
@@ -94,13 +94,20 @@ def test_update_metrics_work_does_not_touch_home(monkeypatch, tmp_path):
 # ── one unreadable directory must not stop the others ─────────────────────────
 
 
-def fail(_cmd):
+def fail(_cmd, **_kw):
     raise exporter.subprocess.CalledProcessError(1, "du")
+
+
+@pytest.fixture(autouse=True)
+def _responsive(monkeypatch):
+    """Every test below is about the usage read, not the probe; the probe has
+    its own tests and would otherwise shell out to paths that do not exist."""
+    monkeypatch.setattr(exporter, "probe_directory", lambda *a, **k: True)
 
 
 def test_update_directory_reports_success(monkeypatch):
     monkeypatch.setattr(
-        exporter.subprocess, "check_output", lambda cmd: DF_OUTPUT.encode()
+        exporter.subprocess, "check_output", lambda cmd, **kw: DF_OUTPUT.encode()
     )
 
     assert exporter.update_directory("home", "/home/alice") is True
@@ -120,7 +127,7 @@ def test_a_failing_work_dir_leaves_home_metrics_alone(monkeypatch):
     """/home utilisation is what the quota alerts fire on, so it has to survive
     /work being unreadable."""
     monkeypatch.setattr(
-        exporter.subprocess, "check_output", lambda cmd: DF_OUTPUT.encode()
+        exporter.subprocess, "check_output", lambda cmd, **kw: DF_OUTPUT.encode()
     )
     exporter.update_directory("home", "/home/alice")
 
@@ -138,3 +145,67 @@ def test_last_accessed_gauges_are_gone():
     homes, and on /work only ever the exporter's own `du` walk."""
     assert gauge_value("af_home_dir_last_accessed") is None
     assert gauge_value("af_work_dir_last_accessed") is None
+
+
+# ── responsiveness probe ──────────────────────────────────────────────────────
+
+
+class _HungProc:
+    """A child parked on a dead mount: wait() never returns on its own."""
+
+    def __init__(self):
+        self.killed = False
+
+    def wait(self, timeout=None):
+        raise exporter.subprocess.TimeoutExpired(cmd="ls", timeout=timeout)
+
+    def kill(self):
+        self.killed = True
+
+
+def counter_value(name):
+    return REGISTRY.get_sample_value(name)
+
+
+def test_probe_reports_a_readable_directory_as_responsive(monkeypatch, tmp_path):
+    monkeypatch.undo()  # this test wants the real probe
+    assert exporter.probe_directory("home", str(tmp_path)) is True
+    assert gauge_value("af_home_dir_responsive") == 1
+    assert gauge_value("af_home_dir_probe_seconds") >= 0
+
+
+def test_probe_does_not_wait_out_a_hung_mount(monkeypatch):
+    """The failure this exists for: an unbounded read on a wedged CephFS mount
+    parks the whole pass, and the HTTP server keeps serving the last good
+    values — the directory looks fine while nobody can use it."""
+    monkeypatch.undo()
+    hung = _HungProc()
+    monkeypatch.setattr(exporter.subprocess, "Popen", lambda *a, **k: hung)
+    before = counter_value("af_home_dir_probe_failures_total") or 0
+
+    assert exporter.probe_directory("home", "/home/alice") is False
+    assert hung.killed, "a child stuck on a dead mount must be abandoned"
+    assert gauge_value("af_home_dir_responsive") == 0
+    assert counter_value("af_home_dir_probe_failures_total") == before + 1
+
+
+def test_an_unresponsive_directory_is_not_then_read(monkeypatch):
+    """Reading usage means touching the mount that just failed to answer."""
+    monkeypatch.undo()
+    monkeypatch.setattr(exporter, "probe_directory", lambda *a, **k: False)
+    monkeypatch.setattr(exporter.subprocess, "check_output", fail)
+
+    assert exporter.update_directory("home", "/home/alice") is False
+    assert gauge_value("af_home_dir_ok") == 0
+
+
+def test_usage_commands_are_bounded():
+    """`df` on a dead mount blocks forever without one."""
+    assert exporter.DF_TIMEOUT_S > 0
+    assert exporter.DU_TIMEOUT_S > exporter.DF_TIMEOUT_S
+
+
+def test_heartbeat_gauge_exists():
+    """Both gauges can sit at their last value while the loop is wedged; only
+    the heartbeat shows that no pass has finished."""
+    assert exporter.heartbeat is not None

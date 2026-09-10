@@ -439,11 +439,11 @@
         },
         {
           "refId": "M",
-          "expr": "min(label_replace((sum(kube_deployment_status_replicas_available{namespace=\"rook-ceph\",deployment=~\"rook-ceph-mon-.*\"}) / sum(kube_deployment_spec_replicas{namespace=\"rook-ceph\",deployment=~\"rook-ceph-mon-.*\"})) or vector(0), \"part\", \"mon\", \"\", \"\") or label_replace((sum(kube_deployment_status_replicas_available{namespace=\"rook-ceph\",deployment=~\"rook-ceph-mgr-.*\"}) / sum(kube_deployment_spec_replicas{namespace=\"rook-ceph\",deployment=~\"rook-ceph-mgr-.*\"})) or vector(0), \"part\", \"mgr\", \"\", \"\") or label_replace((sum(kube_deployment_status_replicas_available{namespace=\"rook-ceph\",deployment=~\"rook-ceph-mds-.*\"}) / sum(kube_deployment_spec_replicas{namespace=\"rook-ceph\",deployment=~\"rook-ceph-mds-.*\"})) or vector(0), \"part\", \"mds\", \"\", \"\") or label_replace(min(kube_daemonset_status_number_ready{namespace=\"rook-ceph\",daemonset=~\"csi-(cephfs|rbd)plugin\"} / kube_daemonset_status_desired_number_scheduled{namespace=\"rook-ceph\",daemonset=~\"csi-(cephfs|rbd)plugin\"}) or vector(0), \"part\", \"csi\", \"\", \"\") or label_replace(clamp_max((sum(kube_deployment_status_replicas_available{namespace=\"rook-ceph\",deployment=~\"rook-ceph-osd-.*\"}) / sum(kube_deployment_spec_replicas{namespace=\"rook-ceph\",deployment=~\"rook-ceph-osd-.*\"})) / 0.9, 1) or vector(0), \"part\", \"osd\", \"\", \"\"))",
-          "legendFormat": "Ceph (Geddes)",
+          "expr": "min(label_replace(sum(af_home_dir_responsive) / count(af_home_dir_responsive), \"part\", \"probe\", \"\", \"\") or label_replace(sum((time() - af_pod_monitor_last_pass_timestamp_seconds) < bool 900) / count(af_pod_monitor_last_pass_timestamp_seconds), \"part\", \"fresh\", \"\", \"\"))",
+          "legendFormat": "Session storage",
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus-rancher"
+            "uid": "prometheus"
           },
           "range": true,
           "instant": false
@@ -460,7 +460,7 @@
           "instant": false
         }
       ],
-      "description": "Green: OK. Orange: partial, some prod nodes affected. Red: down. Evaluated on cms-af-prod nodes only; each row shows history over the selected time range. AF nodes and the four mounts are fractions of prod nodes passing. Ceph is the worst of its monitor, manager, metadata-server, CSI-driver and OSD groups on Geddes, as Kubernetes reports them; OSDs only count once availability drops below 90%.",
+      "description": "Green: OK. Orange: partial, some prod nodes affected. Red: down. Evaluated on cms-af-prod nodes only; each row shows history over the selected time range. AF nodes and the four mounts are fractions of prod nodes passing. Session storage is the fraction of running sessions whose /home answered a bounded listing in time, measured from inside each pod; it is blank for sessions started before that probe shipped.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -595,9 +595,20 @@
           },
           "range": false,
           "instant": true
+        },
+        {
+          "refId": "D",
+          "expr": "sum(increase(af_home_dir_probe_failures_total[$__range])) or vector(0)",
+          "legendFormat": "storage stalls",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
         }
       ],
-      "description": "Interactive JupyterLab sessions. Running: right now. Pending: waiting for a node right now, non-zero for long means no node has the requested CPU, RAM or GPU. Failed starts: sessions the hub could not start within the selected time range.",
+      "description": "Interactive JupyterLab sessions. Running: right now. Pending: waiting for a node right now, non-zero for long means no node has the requested CPU, RAM or GPU. Failed starts: sessions the hub could not start within the selected time range. Storage stalls: times a running session's /home did not answer in time, over the same range.",
       "fieldConfig": {
         "defaults": {
           "mappings": [],
@@ -662,6 +673,30 @@
                     {
                       "color": "red",
                       "value": 5
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "storage stalls"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
                     }
                   ]
                 }
