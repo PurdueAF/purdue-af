@@ -191,8 +191,8 @@ volumes, Pixi or Conda environments, Python packages, C++ libraries, etc.
 Monitoring your Dask jobs is possible in two ways:
 
 1. Via the Dask dashboard, which is created for each cluster (see below).
-2. Via the general Purdue AF monitoring page, in the "Slurm metrics" and "Dask
-   metrics" sections of the
+2. Via the general Purdue AF monitoring page, in the "Dask Gateway" and "Slurm
+   on Hammer" sections of the
    [monitoring dashboard](https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard){ target="_blank" }.
 
 When a cluster is created in a Jupyter Notebook, you can extract the link to the
