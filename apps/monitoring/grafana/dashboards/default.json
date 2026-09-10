@@ -1595,8 +1595,8 @@
     },
     {
       "id": 11,
-      "type": "marcusolsson-dynamictext-panel",
-      "title": "Storage",
+      "type": "bargauge",
+      "title": "Storage utilization",
       "gridPos": {
         "x": 12,
         "y": 9,
@@ -1607,95 +1607,88 @@
         "type": "datasource",
         "uid": "-- Mixed --"
       },
-      "description": "/work is the AF shared volume, as reported by kubelet. /home is per user: median and fullest among running sessions; at 100% a session stops working. The distribution over all users is on the right.",
       "targets": [
         {
           "refId": "A",
+          "expr": "max(kubelet_volume_stats_used_bytes{namespace=\"cms\",persistentvolumeclaim=\"af-shared-storage\"}) / max(kubelet_volume_stats_capacity_bytes{namespace=\"cms\",persistentvolumeclaim=\"af-shared-storage\"})",
+          "legendFormat": "/work, shared volume",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "max(kubelet_volume_stats_used_bytes{namespace=\"cms\",persistentvolumeclaim=\"af-shared-storage\"})",
-          "instant": true,
           "range": false,
-          "format": "table",
-          "legendFormat": ""
+          "instant": true
         },
         {
           "refId": "B",
+          "expr": "quantile(0.5, af_home_dir_util{namespace=\"cms\",job=\"af-pod-monitor\",username!=\"\"})",
+          "legendFormat": "/home, median user",
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus-rancher"
+            "uid": "prometheus"
           },
-          "expr": "max(kubelet_volume_stats_capacity_bytes{namespace=\"cms\",persistentvolumeclaim=\"af-shared-storage\"})",
-          "instant": true,
           "range": false,
-          "format": "table",
-          "legendFormat": ""
+          "instant": true
         },
         {
           "refId": "C",
+          "expr": "max(af_home_dir_util{namespace=\"cms\",job=\"af-pod-monitor\",username!=\"\"})",
+          "legendFormat": "/home, fullest user",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max(af_home_dir_util{namespace=\"cms\",job=\"af-pod-monitor\",username!=\"\"}) or vector(0)",
-          "instant": true,
           "range": false,
-          "format": "table",
-          "legendFormat": ""
-        },
-        {
-          "refId": "D",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "count(af_home_dir_util{namespace=\"cms\",job=\"af-pod-monitor\",username!=\"\"} > 0.9) or vector(0)",
-          "instant": true,
-          "range": false,
-          "format": "table",
-          "legendFormat": ""
-        },
-        {
-          "refId": "E",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "quantile(0.5, af_home_dir_util{namespace=\"cms\",job=\"af-pod-monitor\",username!=\"\"}) or vector(0)",
-          "instant": true,
-          "range": false,
-          "format": "table",
-          "legendFormat": ""
+          "instant": true
         }
       ],
-      "options": {
-        "renderMode": "allRows",
-        "content": "{{{storage}}}",
-        "defaultContent": "No data",
-        "helpers": "\nconst { handlebars, panelData } = context;\nconst val = (ref) => { for (const f of (panelData && panelData.series) || []) { const v = f.fields.find((x) => x.name === \"Value #\" + ref || (f.refId === ref && x.type === \"number\")); if (v) { const a = v.values.toArray ? v.values.toArray() : Array.from(v.values); for (let i = a.length - 1; i >= 0; i--) if (a[i] != null) return Number(a[i]); } } return NaN; };\nconst fmtBytes = (b) => { const u = [\"B\", \"KiB\", \"MiB\", \"GiB\", \"TiB\", \"PiB\"]; let i = 0; while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; } return (i >= 3 ? b.toFixed(1) : Math.round(b)) + \" \" + u[i]; };\nconst bar = (name, frac, note, warn, bad) => {\n  if (!(frac >= 0)) return `<div class=\"q\"><div class=\"q-h\"><span class=\"q-n\">${name}</span><span class=\"q-v\">no data</span></div></div>`;\n  const pct = Math.round(frac * 100), color = frac >= bad ? \"#F2495C\" : frac >= warn ? \"#FF9830\" : \"#73BF69\";\n  return `<div class=\"q\"><div class=\"q-h\"><span class=\"q-n\">${name}</span><span class=\"q-p\" style=\"color:${color}\">${pct}%</span></div>` +\n         `<div class=\"q-bar\"><div class=\"q-fill\" style=\"width:${Math.min(100, pct)}%;background:${color}\"></div></div><div class=\"q-v\">${note}</div></div>`;\n};\nhandlebars.registerHelper(\"storage\", () => {\n  const wUsed = val(\"A\"), wTotal = val(\"B\"), hMax = val(\"C\"), hOver = val(\"D\"), hMed = val(\"E\");\n  let html = bar(\"/work, shared volume\", wTotal > 0 ? wUsed / wTotal : NaN, wTotal > 0 ? `${fmtBytes(wUsed)} of ${fmtBytes(wTotal)} used` : \"\", 0.85, 0.95);\n  html += bar(\"/home, median user\", hMed, \"\", 0.9, 0.95);\n  html += bar(\"/home, fullest user\", hMax, isNaN(hOver) ? \"\" : (hOver === 0 ? \"no user above 90%\" : `${hOver} user${hOver === 1 ? \"\" : \"s\"} above 90%`), 0.9, 0.95);\n  return new handlebars.SafeString(html);\n});\n",
-        "styles": "\n.gt { width: 100%; border-collapse: collapse; font-size: 14px; }\n.gt th { text-align: left; font-weight: 500; color: rgb(204, 204, 220); padding: 6px 8px; border-bottom: 1px solid rgba(204, 204, 220, 0.12); }\n.gt td { padding: 9px 8px; border-bottom: 1px solid rgba(204, 204, 220, 0.07); color: rgb(204, 204, 220); white-space: nowrap; }\n.gt .r { text-align: right; }\n.gt .muted { color: rgba(204, 204, 220, 0.5); }\n.g { display: flex; align-items: center; gap: 8px; }\n.g-track { flex: 1; height: 18px; background: rgba(204, 204, 220, 0.12); border-radius: 2px; overflow: hidden; }\n.g-fill { height: 100%; border-radius: 2px; }\n.g-val { min-width: 40px; text-align: right; }\n.q { margin: 0 0 8px 0; font-family: inherit; }\n.q-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }\n.q-n { font-size: 13px; font-weight: 500; color: rgb(204, 204, 220); }\n.q-p { font-size: 20px; font-weight: 500; line-height: 1; }\n.q-bar { height: 8px; border-radius: 2px; background: rgba(204, 204, 220, 0.12); overflow: hidden; }\n.q-fill { height: 100%; border-radius: 2px; }\n.q-v { font-size: 12px; color: rgba(204, 204, 220, 0.65); margin-top: 4px; }\n",
-        "externalStyles": [],
-        "afterRender": "",
-        "editor": {
-          "format": "auto",
-          "language": "html"
-        },
-        "editors": ["styles", "helpers"],
-        "contentPartials": [],
-        "wrap": true
-      },
+      "description": "/work is the AF shared volume, as reported by kubelet. /home is a small per-user volume: median and fullest among running sessions. At 100% a session stops working. The distribution over all users is on the right.",
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.85
+              },
+              {
+                "color": "red",
+                "value": 0.95
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "min": 0,
+          "unit": "percentunit",
+          "max": 1,
+          "decimals": 0
+        },
         "overrides": []
       },
-      "transformations": [
-        {
-          "id": "merge",
-          "options": {}
-        }
-      ]
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "top",
+        "sizing": "auto",
+        "minVizHeight": 14,
+        "minVizWidth": 8,
+        "maxVizHeight": 26
+      }
     },
     {
       "id": 12,
