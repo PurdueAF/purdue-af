@@ -14,9 +14,6 @@ resources:
   - ../../apps/monitoring/loki/helmrelease.yaml
   - ../../apps/monitoring/alloy/helmrelease.yaml
   - ../../apps/monitoring/tempo/helmrelease.yaml
-  - ../../apps/monitoring/helmrepo-stevehipwell.yaml
-  # - ../../apps/monitoring/thanos/helmrelease.yaml
-  # - ../../apps/monitoring/thanos/data-pvc.yaml
 
   - ../../apps/servicex/servicex/helmrelease.yaml
   - ../../apps/servicex/gitrepo.yaml
@@ -114,10 +111,6 @@ configMapGenerator:
   - name: tempo-config
     files:
       - values.yaml=../../apps/monitoring/tempo/values.yaml
-
-  # - name: thanos-config
-  #   files:
-  #     - values.yaml=../../apps/monitoring/thanos/values.yaml
 
   - name: servicex-config
     files:

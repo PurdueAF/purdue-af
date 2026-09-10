@@ -40,10 +40,6 @@ generatorOptions:
   disableNameSuffixHash: true
 
 configMapGenerator:
-  - name: af-users-graph-script
-    files:
-      - ../../apps/af-utils/af-users-graph/plot-af-users.py
-
   - name: af-users-graph-nginx-config
     files:
       - ../../apps/af-utils/af-users-graph/nginx.conf
@@ -59,14 +55,6 @@ configMapGenerator:
         kustomize.toolkit.fluxcd.io/substitute: disabled
     files:
       - ../../apps/jupyterhub/userlist-sync/sync-userlist.sh
-
-  - name: database-backup-scripts
-    options:
-      annotations:
-        # shell scripts use ${...} freely — keep Flux substitution away
-        kustomize.toolkit.fluxcd.io/substitute: disabled
-    files:
-      - ../../apps/jupyterhub/database-backup/backup-database.sh
 
   - name: jupyterhub-extra-config
     files:
