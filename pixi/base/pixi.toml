@@ -40,7 +40,7 @@ importlib-metadata    = "<8.8"   # opentelemetry-api requires <8.8.0
 # (gfal, voms-proxy-init) are useless for XRootD reads without it, and users
 # should not need the global pixi env just to copy a file.
 xrootd        = "==5.9.2"  # matches the global env
-rucio-clients = "==41.2.1"
+rucio-clients = "==41.2.2"
 pytest        = "==9.1.1"
 lz4           = "==4.4.5"
 ipywidgets    = "==8.1.9"
@@ -50,7 +50,7 @@ bokeh         = "==3.10.0"
 # parses them via the regex-versioning rule in renovate.json5.
 # >=10.2p1 required alongside mamba >=2.8 (both sides must agree on krb5 1.22).
 openssh       = "==10.4p1"
-uv            = "==0.12.10"
+uv            = "==0.12.13"
 
 [pypi-dependencies]
 jupyterlab-git            = "==0.54.1"
@@ -63,7 +63,7 @@ purdue-af-vscode-button   = "==0.1.2"
 jupyterlab-topbar-text    = "==1.1.0"
 jupyterlab-theme-toggler  = "==1.1.0"
 dask-gateway              = "==2026.3.0"
-pyroscope-io              = "==1.2.1"
+pyroscope-io              = "==1.2.3"
 opentelemetry-api                      = "==1.44.0"
 opentelemetry-sdk                      = "==1.44.0"
 opentelemetry-exporter-otlp-proto-http = "==1.44.0"
