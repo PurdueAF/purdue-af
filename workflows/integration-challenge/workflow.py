@@ -168,11 +168,12 @@ def preprocess(dataset: Dataset, cluster: Cluster) -> Dir:
 def measure(dataset: Dataset, cluster: Cluster, metadata: Dir) -> Result:
     from coffea.nanoevents import NanoAODSchema
     from coffea.processor import DaskExecutor
-    from intccms.analysis import run_processor_workflow
-    from intccms.analysis.processors import SkimAndAnalyseProcessor
     from roastcoffea import MetricsCollector
 
     _checkout(dataset.ic_ref)
+    from intccms.analysis import run_processor_workflow
+    from intccms.analysis.processors import SkimAndAnalyseProcessor
+
     config = _config(dataset, metadata.download_sync(WORKDIR / "metadata"))
     outputs, generator = _metadata(dataset, config)
     generator.run()
