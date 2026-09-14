@@ -1,0 +1,65 @@
+fullnameOverride: flyte
+
+flyte-core-components:
+  runs:
+    storagePrefix: s3://flyte
+  actions:
+    kubernetes:
+      namespace: cms
+
+configuration:
+  database:
+    postgres:
+      host: flyte-postgres
+      dbname: flyte
+      username: flyte
+      password: flyte
+  storage:
+    metadataContainer: flyte
+    provider: s3
+    providerConfig:
+      s3:
+        region: us-east-1
+        disableSSL: true
+        endpoint: http://flyte-minio.cms.svc.cluster.local:9000
+        authType: accesskey
+        accessKey: flyte
+        secretKey: flyteflyte
+  inline:
+    plugins:
+      k8s:
+        default-pod-template-name: flyte-task
+        default-env-vars:
+          - FLYTE_AWS_ENDPOINT: http://flyte-minio.cms.svc.cluster.local:9000
+          - FLYTE_AWS_ACCESS_KEY_ID: flyte
+          - FLYTE_AWS_SECRET_ACCESS_KEY: flyteflyte
+          - _U_EP_OVERRIDE: flyte-http.cms:8090
+          - _U_INSECURE: "true"
+          - _U_USE_ACTIONS: "1"
+
+deployment:
+  waitForDB:
+    image:
+      repository: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/postgres
+      tag: 16-alpine
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      memory: 2Gi
+  extraPodSpec:
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: hub.jupyter.org/dedicated
+        operator: Equal
+        value: cms-af
+        effect: NoSchedule
+
+# The console only works behind an ingress on the same host as the API; none is exposed.
+console:
+  replicaCount: 0
+
+flyteconnector:
+  enabled: false

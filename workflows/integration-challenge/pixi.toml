@@ -1,0 +1,29 @@
+[workspace]
+channels = ["conda-forge"]
+name = "integration-challenge"
+platforms = ["linux-64"]
+
+[dependencies]
+python = "3.12.*"
+coffea = "2026.4.0.*"
+dask-gateway = "*"
+xrootd = "*"
+fsspec-xrootd = "*"
+cabinetry = "*"
+cloudpickle = "*"
+correctionlib = "*"
+cramjam = "*"
+dask-awkward = "*"
+hist = "*"
+matplotlib = "*"
+numba = "*"
+omegaconf = "*"
+pandas = "*"
+pydantic = "*"
+rich = "*"
+tabulate = "*"
+vector = "*"
+
+[pypi-dependencies]
+flyte = "*"
+roastcoffea = "==0.1.2"
