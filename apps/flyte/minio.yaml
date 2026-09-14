@@ -35,7 +35,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: minio
-          image: geddes-registry.rcac.purdue.edu/docker-hub-cache/minio/minio:RELEASE.2025-10-15T17-29-55Z
+          image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
           args: ["server", "/data"]
           env:
             - name: MINIO_ROOT_USER
