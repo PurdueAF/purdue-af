@@ -67,3 +67,31 @@ spec:
     app: flyte-minio
   ports:
     - port: 9000
+---
+# Flyte only creates the bucket on its own first write; a run's first write is the
+# client's presigned upload, which needs it to exist already.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: flyte-minio-bucket
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 30
+  template:
+    spec:
+      restartPolicy: OnFailure
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+        - key: hub.jupyter.org/dedicated
+          operator: Equal
+          value: cms-af
+          effect: NoSchedule
+      containers:
+        - name: mc
+          image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+          command:
+            - sh
+            - -c
+            - mc alias set flyte http://flyte-minio:9000 flyte flyteflyte && mc mb --ignore-existing flyte/flyte

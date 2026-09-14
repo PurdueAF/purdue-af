@@ -8,7 +8,7 @@ under [`workflows/`](../../workflows).
 | `helmrelease.yaml` | `flyte-binary` chart: one Deployment bundling the API, the task controller and the data proxy |
 | `values.yaml`      | Database, object store, and task-pod defaults                                            |
 | `postgres.yaml`    | Metadata database (runs, actions, cache)                                                 |
-| `minio.yaml`       | Object store for task inputs, outputs and code bundles                                   |
+| `minio.yaml`       | Object store for task inputs, outputs and code bundles, and the Job that creates its bucket |
 | `podtemplate.yaml` | Base pod spec for every task pod: AF node placement and the `/work` mount                |
 
 Task pods run in `cms` and reach the Dask Gateway, XCache and `/work` like a
