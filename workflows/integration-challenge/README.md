@@ -24,15 +24,16 @@ the challenge commit, the environment path and the Flyte run name.
 
 ## Environment
 
-The task pods and the Dask workers use the same pixi environment, installed once on `/work`:
+The task pods and the Dask workers use the same pixi environment as the launcher,
+so it must live on `/work`, where both can reach it:
 
 ```bash
-mkdir -p /work/projects/integration-challenge
-cp pixi.toml pixi.lock /work/projects/integration-challenge/
-pixi install --manifest-path /work/projects/integration-challenge/pixi.toml --locked
+cp pixi.toml pixi.lock /work/users/$USER/integration-challenge/
+PIXI_CACHE_DIR=/tmp/pixi-cache-$USER pixi install --manifest-path /work/users/$USER/integration-challenge/pixi.toml --locked
 ```
 
-`PIXI_PROJECT` in `workflow.py` is that path.
+`PIXI_PROJECT` in `workflow.py` is derived from the interpreter that launches the run.
+The cache goes to local disk because pixi 0.62.2 cannot keep it on CephFS.
 
 ## Running
 
@@ -41,7 +42,7 @@ From a notebook or terminal on the AF, with a valid VOMS proxy:
 ```bash
 export X509_USER_PROXY=/depot/cms/users/$USER/x509up_u$(id -u)
 cd workflows/integration-challenge
-PY=/work/projects/integration-challenge/.pixi/envs/default/bin
+PY=/work/users/$USER/integration-challenge/.pixi/envs/default/bin
 $PY/flyte --config config.yaml create project --id integration-challenge --name integration-challenge
 $PY/python workflow.py
 ```

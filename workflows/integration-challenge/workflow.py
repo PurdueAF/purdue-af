@@ -16,7 +16,7 @@ from flyte.io import Dir
 
 IC_REPO = "https://github.com/iris-hep/integration-challenge"
 IC_REF = "28da30f520faf4727073d26b65a82106c4b3df70"
-PIXI_PROJECT = "/work/projects/integration-challenge"
+PIXI_PROJECT = str(Path(sys.prefix).parents[2])  # the pixi project this runs from
 IMAGE = "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af:0.13.4"
 GATEWAY = "http://api-dask-gateway-k8s.cms.svc.cluster.local:8000"
 GATEWAY_PROXY = "traefik-dask-gateway-k8s.cms.svc.cluster.local:8786"
