@@ -1,0 +1,24 @@
+# Base for every task pod (plugins.k8s.default-pod-template-name in values.yaml).
+apiVersion: v1
+kind: PodTemplate
+metadata:
+  name: flyte-task
+template:
+  spec:
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: hub.jupyter.org/dedicated
+        operator: Equal
+        value: cms-af
+        effect: NoSchedule
+    containers:
+      - name: default
+        image: overridden-by-flyte
+        volumeMounts:
+          - name: work
+            mountPath: /work
+    volumes:
+      - name: work
+        persistentVolumeClaim:
+          claimName: af-shared-storage

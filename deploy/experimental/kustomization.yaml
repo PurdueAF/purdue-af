@@ -44,6 +44,12 @@ resources:
   # supersonic-model-manager-auth Secret to exist in the namespace.
   - ../../apps/sonic/model-manager/helmrelease.yaml
 
+  - ../../apps/flyte/helmrepo.yaml
+  - ../../apps/flyte/helmrelease.yaml
+  - ../../apps/flyte/postgres.yaml
+  - ../../apps/flyte/minio.yaml
+  - ../../apps/flyte/podtemplate.yaml
+
   # Triton on Ray: Ray Serve's gRPC proxy in front of a Triton per GPU pod,
   # plus the KubeRay operator that reconciles it. Models come from a CMSSW
   # release on CVMFS (the cvmfs claim). See apps/ray/README.md.
@@ -169,6 +175,10 @@ configMapGenerator:
   - name: sonic-ray-config
     files:
       - values.yaml=../../apps/ray/sonic-ray/values.yaml
+
+  - name: flyte-config
+    files:
+      - values.yaml=../../apps/flyte/values.yaml
 
   - name: interlink-hammer-config
     files:

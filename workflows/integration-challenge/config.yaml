@@ -1,0 +1,6 @@
+admin:
+  endpoint: dns:///flyte-http.cms.svc.cluster.local:8090
+  insecure: true
+task:
+  project: integration-challenge
+  domain: development
