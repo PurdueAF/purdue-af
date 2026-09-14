@@ -12,6 +12,11 @@ Availability = allocatable - requested on schedulable (not cordoned) cms-af
 nodes, from Prometheus / kube-state-metrics — the same data the Grafana
 dashboards use, so no extra hub RBAC is needed. If Prometheus is unreachable
 the form keeps the plain static labels and GPU spawns are allowed (fail open).
+
+A refusal here is admission control, not a fault, but JupyterHub has no
+ServerSpawnStatus for it (its own refusals are raised before the spawner
+runs), so one lands in the generic `failure` bucket AFSpawnFailures watches.
+GPU_SPAWN_REFUSED counts refusals separately so that alert can subtract them.
 """
 
 import asyncio
@@ -23,6 +28,7 @@ import time
 from typing import Any
 from urllib.parse import urlencode
 
+from prometheus_client import REGISTRY, Counter
 from tornado.httpclient import AsyncHTTPClient
 
 # `c` is the traitlets config object JupyterHub injects into this file's
@@ -67,6 +73,25 @@ GPU_FLAVORS = {
 }
 
 
+def _counter(name: str, documentation: str, labelnames: list[str]) -> Any:
+    """Counter tolerating a re-exec of this snippet (each test loads it afresh
+    against the process-wide prometheus_client registry)."""
+    try:
+        return Counter(name, documentation, labelnames)
+    except ValueError:
+        return REGISTRY._names_to_collectors[name]
+
+
+# reason="exhausted": Prometheus saw no free GPU of that flavor.
+# reason="reserved": it saw one, but an admission within GRANT_TTL claimed it
+# first. Sustained "reserved" means a reservation is outliving its pod.
+GPU_SPAWN_REFUSED = _counter(
+    "purdue_af_hub_gpu_spawn_refused_total",
+    "GPU spawns refused by the availability gate",
+    ["resource", "reason"],
+)
+
+
 async def _prom_query(query: str) -> dict[str, float]:
     """Instant PromQL query -> {resource label: value}. Raises on failure."""
     url = f"{PROMETHEUS_URL}/api/v1/query?" + urlencode({"query": query})
@@ -104,30 +129,50 @@ async def get_free_gpus() -> dict[str, int] | None:
 
 # kube-state-metrics only sees a newly admitted pod after the next scrape, so
 # remember our own recent admissions and subtract them from the availability.
-# [(monotonic timestamp, k8s resource name)]
-_recent_grants: list[tuple[float, str]] = []
+# Keyed by spawner so a reservation can be released when the pod it was made
+# for goes away; TTL alone would hold it for GRANT_TTL after a cancelled spawn
+# and refuse that same user their own GPU on the retry.
+# [(monotonic timestamp, k8s resource name, spawner key)]
+_recent_grants: list[tuple[float, str, str]] = []
 _cache_expires: float = 0.0
 _cache_free: dict[str, int] | None = None
 
 
+def _spawner_key(spawner: Any) -> str:
+    """Stable id for a spawner: one user's one named server."""
+    user = getattr(spawner, "user", None)
+    return f"{getattr(user, 'name', '?')}/{getattr(spawner, 'name', '')}"
+
+
 def _grants_in_flight(resource: str) -> int:
     now = time.monotonic()
-    _recent_grants[:] = [(t, r) for (t, r) in _recent_grants if now - t < GRANT_TTL]
-    return sum(1 for (_, r) in _recent_grants if r == resource)
+    _recent_grants[:] = [g for g in _recent_grants if now - g[0] < GRANT_TTL]
+    return sum(1 for g in _recent_grants if g[1] == resource)
 
 
-async def free_gpus(use_cache: bool = True) -> dict[str, int] | None:
-    """Cached availability minus spawns admitted in the last GRANT_TTL seconds."""
+def _release_grants(owner: str) -> None:
+    """Drop `owner`'s reservations; whatever they were held for is gone."""
+    _recent_grants[:] = [g for g in _recent_grants if g[2] != owner]
+
+
+async def observed_free_gpus(use_cache: bool = True) -> dict[str, int] | None:
+    """Cached availability as Prometheus reports it, before reservations."""
     global _cache_expires, _cache_free
     now = time.monotonic()
     if not use_cache or _cache_free is None or now >= _cache_expires:
         _cache_free = await get_free_gpus()
         _cache_expires = now + CACHE_TTL
-    if _cache_free is None:
+    return _cache_free
+
+
+async def free_gpus(use_cache: bool = True) -> dict[str, int] | None:
+    """Cached availability minus spawns admitted in the last GRANT_TTL seconds."""
+    observed = await observed_free_gpus(use_cache)
+    if observed is None:
         return None
     return {
         resource: max(count - _grants_in_flight(resource), 0)
-        for resource, count in _cache_free.items()
+        for resource, count in observed.items()
     }
 
 
@@ -234,26 +279,49 @@ async def refuse_gpu_spawn_if_unavailable(spawner: Any, pod: Any) -> Any:
     if not requested:
         return pod
 
-    free = await free_gpus(use_cache=False)
-    if free is None:
+    # This spawn supersedes any earlier one by the same spawner, so its
+    # reservation cannot still be backing a live pod. Release it before
+    # measuring, or a cancel-and-retry refuses the user their own GPU.
+    owner = _spawner_key(spawner)
+    _release_grants(owner)
+
+    observed = await observed_free_gpus(use_cache=False)
+    if observed is None:
         # Prometheus unreachable: don't lock users out, let the scheduler decide.
         spawner.log.warning("[gpu-availability] availability unknown, allowing spawn")
         return pod
 
     for resource, amount in requested.items():
-        if free.get(resource, 0) < amount:
-            label = GPU_FLAVORS[resource]["label"]
-            raise GPUsUnavailableError(
-                f"All {label} are currently in use by other sessions. "
-                "Please start a session without a GPU, or try again later."
-            )
+        if max(observed.get(resource, 0) - _grants_in_flight(resource), 0) >= amount:
+            continue
+        reason = "exhausted" if observed.get(resource, 0) < amount else "reserved"
+        GPU_SPAWN_REFUSED.labels(resource=resource, reason=reason).inc()
+        spawner.log.info(
+            "[gpu-availability] refused %s for %s (%s): %d observed free, "
+            "%d reserved in flight",
+            resource,
+            owner,
+            reason,
+            observed.get(resource, 0),
+            _grants_in_flight(resource),
+        )
+        label = GPU_FLAVORS[resource]["label"]
+        raise GPUsUnavailableError(
+            f"All {label} are currently in use by other sessions. "
+            "Please start a session without a GPU, or try again later."
+        )
 
     _recent_grants.extend(
-        (time.monotonic(), resource)
+        (time.monotonic(), resource, owner)
         for resource, amount in requested.items()
         for _ in range(amount)
     )
     return pod
+
+
+def release_gpu_grants_on_stop(spawner: Any) -> None:
+    """post_stop_hook: a stopped pod's reservation is void immediately."""
+    _release_grants(_spawner_key(spawner))
 
 
 if isinstance(_static_profile_list, list) and _static_profile_list:
@@ -262,3 +330,4 @@ else:
     print("[gpu-availability] static profileList not found; labels stay static")
 
 c.KubeSpawner.modify_pod_hook = refuse_gpu_spawn_if_unavailable
+c.KubeSpawner.post_stop_hook = release_gpu_grants_on_stop

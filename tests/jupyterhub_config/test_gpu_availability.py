@@ -68,12 +68,17 @@ def load(monkeypatch, profile_list=...):
 
 
 def set_free(ns, value):
-    """Stub the availability lookup the snippet's callables resolve at runtime."""
+    """Stub the availability lookups the snippet's callables resolve at runtime.
+
+    The form reads free_gpus (post-reservation); the spawn gate reads
+    observed_free_gpus and subtracts reservations itself.
+    """
 
     async def _free(use_cache=True):
         return value
 
     ns["free_gpus"] = _free
+    ns["observed_free_gpus"] = _free
 
 
 def gpu_choices(profiles):
@@ -86,8 +91,25 @@ def fake_pod(limits):
     return types.SimpleNamespace(spec=types.SimpleNamespace(containers=[main, sidecar]))
 
 
-def fake_spawner():
-    return types.SimpleNamespace(log=logging.getLogger("test-spawner"))
+def fake_spawner(user="someone"):
+    return types.SimpleNamespace(
+        log=logging.getLogger("test-spawner"),
+        name="",  # the default (unnamed) server
+        user=types.SimpleNamespace(name=user),
+    )
+
+
+def refusals(ns, resource, reason):
+    """Current value of the refusal counter (process-wide; compare deltas)."""
+    from prometheus_client import REGISTRY
+
+    return (
+        REGISTRY.get_sample_value(
+            "purdue_af_hub_gpu_spawn_refused_total",
+            {"resource": resource, "reason": reason},
+        )
+        or 0.0
+    )
 
 
 # ── profile form annotation ───────────────────────────────────────────────────
@@ -332,13 +354,15 @@ async def test_admitted_spawn_reserves_the_gpu(monkeypatch):
 
     # first spawn takes the last 40GB GPU ...
     pod = fake_pod({FULL: "1"})
-    assert await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner(), pod) is pod
+    assert (
+        await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner("alice"), pod) is pod
+    )
 
-    # ... so an immediate second spawn is refused even though Prometheus
+    # ... so another user's immediate spawn is refused even though Prometheus
     # has not seen the first pod yet
     with pytest.raises(ns["GPUsUnavailableError"]):
         await ns["refuse_gpu_spawn_if_unavailable"](
-            fake_spawner(), fake_pod({FULL: "1"})
+            fake_spawner("bob"), fake_pod({FULL: "1"})
         )
 
     # and the form shows the reservation too
@@ -349,6 +373,109 @@ async def test_admitted_spawn_reserves_the_gpu(monkeypatch):
     )
 
 
+async def test_retry_after_cancelled_spawn_is_not_refused(monkeypatch):
+    # a user who cancels a pending spawn and retries must not be blocked by
+    # the reservation their own cancelled attempt left behind
+    ns = load(monkeypatch)
+
+    async def one_full_free():
+        return {SLICE: 0, FULL: 1, T4: 0}
+
+    ns["get_free_gpus"] = one_full_free
+
+    pod = fake_pod({FULL: "1"})
+    assert (
+        await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner("alice"), pod) is pod
+    )
+
+    # ... they cancel (no post_stop_hook runs on an interrupted spawn) and
+    # immediately retry, well inside GRANT_TTL
+    retry = fake_pod({FULL: "1"})
+    assert (
+        await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner("alice"), retry)
+        is retry
+    )
+
+    # and the retry holds exactly one reservation, not two
+    assert ns["_grants_in_flight"](FULL) == 1
+
+
+async def test_stop_releases_the_reservation(monkeypatch):
+    ns = load(monkeypatch)
+
+    async def one_full_free():
+        return {SLICE: 0, FULL: 1, T4: 0}
+
+    ns["get_free_gpus"] = one_full_free
+
+    pod = fake_pod({FULL: "1"})
+    assert (
+        await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner("alice"), pod) is pod
+    )
+    assert ns["_grants_in_flight"](FULL) == 1
+
+    ns["release_gpu_grants_on_stop"](fake_spawner("alice"))
+
+    assert ns["_grants_in_flight"](FULL) == 0
+    # the freed GPU is available to the next user straight away
+    other = fake_pod({FULL: "1"})
+    assert (
+        await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner("bob"), other) is other
+    )
+
+
+def test_stop_releases_only_that_spawner(monkeypatch):
+    ns = load(monkeypatch)
+    ns["_recent_grants"].extend(
+        [
+            (ns["time"].monotonic(), FULL, "alice/"),
+            (ns["time"].monotonic(), FULL, "bob/"),
+        ]
+    )
+
+    ns["release_gpu_grants_on_stop"](fake_spawner("alice"))
+
+    assert [g[2] for g in ns["_recent_grants"]] == ["bob/"]
+
+
+async def test_refusal_counted_as_exhausted(monkeypatch):
+    # nothing free in Prometheus: the facility really is full
+    ns = load(monkeypatch)
+    set_free(ns, {SLICE: 5, FULL: 0, T4: 0})
+    before = refusals(ns, FULL, "exhausted")
+
+    with pytest.raises(ns["GPUsUnavailableError"]):
+        await ns["refuse_gpu_spawn_if_unavailable"](
+            fake_spawner("alice"), fake_pod({FULL: "1"})
+        )
+
+    assert refusals(ns, FULL, "exhausted") == before + 1
+
+
+async def test_refusal_counted_as_reserved(monkeypatch):
+    # Prometheus still sees a free GPU; only an in-flight admission took it.
+    # Sustained counts here mean reservations are outliving their pods.
+    ns = load(monkeypatch)
+
+    async def one_full_free():
+        return {SLICE: 0, FULL: 1, T4: 0}
+
+    ns["get_free_gpus"] = one_full_free
+    before = refusals(ns, FULL, "reserved")
+
+    pod = fake_pod({FULL: "1"})
+    assert (
+        await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner("alice"), pod) is pod
+    )
+
+    with pytest.raises(ns["GPUsUnavailableError"]):
+        await ns["refuse_gpu_spawn_if_unavailable"](
+            fake_spawner("bob"), fake_pod({FULL: "1"})
+        )
+
+    assert refusals(ns, FULL, "reserved") == before + 1
+
+
 # ── hub config wiring ─────────────────────────────────────────────────────────
 
 
@@ -357,6 +484,7 @@ def test_config_registers_callable_and_hook(monkeypatch):
     c = ns["c"]
     assert c["KubeSpawner"]["profile_list"] is ns["profile_list_with_gpu_counts"]
     assert c["KubeSpawner"]["modify_pod_hook"] is ns["refuse_gpu_spawn_if_unavailable"]
+    assert c["KubeSpawner"]["post_stop_hook"] is ns["release_gpu_grants_on_stop"]
 
 
 def test_profile_list_left_alone_without_static_list(monkeypatch):

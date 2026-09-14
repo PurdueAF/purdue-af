@@ -581,8 +581,16 @@ serverFiles:
           # throttled, too-many-users. Only `failure` is a real fault — the
           # others are the hub deliberately refusing, and alerting on them
           # would fire every time the facility is simply busy.
+          # The GPU gate refuses from modify_pod_hook, after the spawn has
+          # started, so its refusals land in `failure` too — subtract them to
+          # keep this alert about faults. They get their own alert below.
           - alert: AFSpawnFailures
-            expr: sum(increase(jupyterhub_server_spawn_duration_seconds_count{status="failure"}[30m])) > 3
+            expr: >
+              clamp_min(
+                sum(increase(jupyterhub_server_spawn_duration_seconds_count{status="failure"}[30m]))
+                - sum(increase(purdue_af_hub_gpu_spawn_refused_total[30m])) or
+                sum(increase(jupyterhub_server_spawn_duration_seconds_count{status="failure"}[30m])),
+                0) > 3
             for: 5m
             labels:
               severity: error
@@ -593,6 +601,24 @@ serverFiles:
                 {{ printf "%.0f" $value }} spawn failures in 30 minutes — users are
                 being turned away at login. Check the hub logs, and whether the
                 singleuser image still pulls.
+          # A refusal is expected when the GPUs really are taken
+          # (reason="exhausted"). reason="reserved" means the gate refused a
+          # user while Prometheus still saw a free GPU: a reservation from an
+          # admitted spawn outlived the pod it was made for. A short burst is
+          # a genuine race between two spawns; a sustained one is a bug in the
+          # gate, and it turns users away from GPUs that are sitting idle.
+          - alert: AFGpuSpawnRefusedWithGpuFree
+            expr: sum(increase(purdue_af_hub_gpu_spawn_refused_total{reason="reserved"}[30m])) > 3
+            for: 10m
+            labels:
+              severity: warning
+              component: compute
+            annotations:
+              summary: GPU spawns refused while GPUs were free
+              description: >
+                {{ printf "%.0f" $value }} GPU spawns refused in 30 minutes despite
+                free GPUs — a spawn reservation is outliving its pod. Check the hub
+                logs for "[gpu-availability] refused".
           - alert: AFSessionStuckPending
             expr: kube_pod_status_phase{namespace="cms",pod=~"purdue-af-.*",phase="Pending"} == 1
             for: 15m
