@@ -5,7 +5,7 @@ platforms = ["linux-64"]
 
 [dependencies]
 python = "3.12.*"
-coffea = "2026.4.0.*"
+coffea = "2026.9.0.*"
 dask-gateway = "*"
 xrootd = "*"
 fsspec-xrootd = "*"
