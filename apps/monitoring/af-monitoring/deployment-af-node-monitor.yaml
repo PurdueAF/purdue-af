@@ -19,6 +19,13 @@ spec:
     spec:
       serviceAccountName: af-node-monitor
       enableServiceLinks: false
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+        - key: hub.jupyter.org/dedicated
+          operator: Equal
+          value: cms-af
+          effect: NoSchedule
       containers:
         - name: af-node-monitor
           # continuous channel: ci.yml moves :latest after every fully green
