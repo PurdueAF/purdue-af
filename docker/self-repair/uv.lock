@@ -250,7 +250,7 @@ wheels = [
 
 [[package]]
 name = "flyte"
-version = "2.7.2"
+version = "2.8.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
@@ -278,7 +278,7 @@ dependencies = [
     { name = "toml" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/17/bf/87ad4d29400b5be6ea0cdd687ec9db6eb6ccaf518da7ba6ef8f8b8bfb644/flyte-2.7.2-py3-none-any.whl", hash = "sha256:bf3d1ce725daca0483ba3863f1074522bc757c081fe68d365a9bfd5f981bcf3c", size = 1073122, upload-time = "2026-09-08T21:23:40.443Z" },
+    { url = "https://files.pythonhosted.org/packages/fd/a4/e8552dc8cb578aeb5fbe05f03bb0c69ce6bf68fd6959f53d3064c11c424b/flyte-2.8.1-py3-none-any.whl", hash = "sha256:b8b93bb661f8543381ef3ded94a364a7398f6e4dc7528c03280515afcb74b2ab", size = 1093146, upload-time = "2026-09-16T13:20:46.652Z" },
 ]
 
 [[package]]
@@ -419,21 +419,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/43/4b/674af6ef2f97d56f0ab5153bf0bfa28ccb6c3ed4d1babf4305449668807b/keyring-25.7.0.tar.gz", hash = "sha256:fe01bd85eb3f8fb3dd0405defdeac9a5b4f6f0439edbb3149577f244a2e8245b", size = 63516, upload-time = "2025-11-16T16:26:09.482Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/81/db/e655086b7f3a705df045bf0933bdd9c2f79bb3c97bfef1384598bb79a217/keyring-25.7.0-py3-none-any.whl", hash = "sha256:be4a0b195f149690c166e850609a477c532ddbfbaed96a404d4e43f8d5e2689f", size = 39160, upload-time = "2025-11-16T16:26:08.402Z" },
-]
-
-[[package]]
-name = "self-repair"
-version = "0.0.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "flyte" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "flyte", specifier = "==2.7.2" },
-    { name = "ruff", specifier = ">=0.16" },
 ]
 
 [[package]]
@@ -998,6 +983,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/46/f5af3402b579fd5e11573ce652019a67074317e18c1935cc0b4ba9b35552/secretstorage-3.5.0-py3-none-any.whl", hash = "sha256:0ce65888c0725fcb2c5bc0fdb8e5438eece02c523557ea40ce0703c266248137", size = 15554, upload-time = "2025-11-23T19:02:51.545Z" },
+]
+
+[[package]]
+name = "self-repair"
+version = "0.0.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "flyte" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "flyte", specifier = "==2.8.1" },
+    { name = "ruff", specifier = ">=0.16" },
 ]
 
 [[package]]
