@@ -14,8 +14,8 @@
 #   image-inputs.sh --paths <name>  → prints the input path list (one per line)
 #
 # Names: purdue-af, agentic-interface, af-pod-monitor, af-node-monitor,
-#        supersonic-model-manager, interlink-slurm-plugin, pixi-base,
-#        pixi-global, e2e-hub
+#        self-repair, supersonic-model-manager, interlink-slurm-plugin,
+#        pixi-base, pixi-global, e2e-hub
 #
 # The hash covers file content, names and modes of every TRACKED file under
 # the listed pathspecs (git ls-files -s), so it is independent of commit
@@ -84,6 +84,15 @@ paths_for() {
 	af-node-monitor)
 		cat <<-EOF
 			docker/af-node-monitor
+			.github/workflows/ci-images.yml
+			.github/workflows/image-inputs.sh
+		EOF
+		;;
+	self-repair)
+		# Runtime only (Flyte SDK, git, opencode): the workflow code reaches
+		# the task pods as a Flyte code bundle, not through this image.
+		cat <<-EOF
+			docker/self-repair
 			.github/workflows/ci-images.yml
 			.github/workflows/image-inputs.sh
 		EOF

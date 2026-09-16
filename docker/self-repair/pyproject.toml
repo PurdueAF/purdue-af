@@ -1,0 +1,14 @@
+[project]
+name = "self-repair"
+version = "0.0.0"
+description = "Task image of the self-repair Flyte workflow"
+requires-python = ">=3.12"
+dependencies = [
+    # Same SDK version as workflows/integration-challenge/pixi.lock.
+    "flyte==2.7.2",
+    # For the agent's `ruff check --fix` / `ruff format` on the files it edits.
+    "ruff>=0.16",
+]
+
+[tool.uv]
+package = false

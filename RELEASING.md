@@ -11,8 +11,8 @@ CI-owned. Never create a version tag or move a channel tag by hand.
 | Continuous (`:latest`, `:pre-release`, `in-`, `sha-`) | moving tags                       | `ci.yml` publish stage, behind `ci-ok` | on pod restart / session spawn                         |
 | Experimental Flux source (`main-validated`)           | moving branch                     | `ci.yml` publish stage, behind `ci-ok` | experimental Flux reconcile (~1 min)                   |
 
-The monitor images (af-pod-monitor, af-node-monitor) have no release step at
-all: every green pipeline on `main` moves `:latest`. The agentic-interface
+The monitor images (af-pod-monitor, af-node-monitor) and self-repair have no
+release step at all: every green pipeline on `main` moves `:latest`. The agentic-interface
 image also publishes to `:latest` continuously, but its Deployment pins a
 released semver tag — the pod moves only when an auto-release rewrites the pin.
 

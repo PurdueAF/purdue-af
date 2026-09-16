@@ -57,6 +57,7 @@ Whether each component on the cluster is running what is on `main`
 ![interlink-gautschi][experimental-interlink-gautschi]
 ![interlink-hammer][experimental-interlink-hammer]
 ![interlink-negishi][experimental-interlink-negishi]
+![self-repair][experimental-self-repair]
 ![af-monitoring][experimental-monitoring-af-monitoring]
 ![alloy][experimental-monitoring-alloy]
 ![loki][experimental-monitoring-loki]
@@ -87,6 +88,7 @@ leads with the deployed version. The other aux images ride `:latest`.
 ![agentic-interface][image-agentic-interface]
 ![af-pod-monitor][image-af-pod-monitor]
 ![af-node-monitor][image-af-node-monitor]
+![self-repair][image-self-repair]
 ![supersonic-model-manager][image-supersonic-model-manager]
 ![interlink-slurm-plugin][image-interlink-slurm-plugin]
 
@@ -127,6 +129,7 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-interlink-gautschi]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-gautschi.json
 [experimental-interlink-hammer]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-hammer.json
 [experimental-interlink-negishi]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-negishi.json
+[experimental-self-repair]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-self-repair.json
 [experimental-monitoring-af-monitoring]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-af-monitoring.json
 [experimental-monitoring-alloy]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-alloy.json
 [experimental-monitoring-loki]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-loki.json
@@ -150,6 +153,7 @@ How a change reaches the cluster, version rules and rollback:
 [image-agentic-interface]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-agentic-interface.json
 [image-af-pod-monitor]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-af-pod-monitor.json
 [image-af-node-monitor]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-af-node-monitor.json
+[image-self-repair]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-self-repair.json
 [image-supersonic-model-manager]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-supersonic-model-manager.json
 [image-interlink-slurm-plugin]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-interlink-slurm-plugin.json
 [status-pending]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/_pending.json

@@ -1,0 +1,20 @@
+# Its own kustomization, not entries in deploy/experimental: that root
+# disables generator name hashes globally and kustomize lets no generator
+# opt back in, while the hash is the point here — it turns a code change into
+# a new ConfigMap name, hence a new Job spec, hence a `flyte deploy`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - podtemplate.yaml
+  - deploy-job.yaml
+configMapGenerator:
+  - name: self-repair-workflow
+    options:
+      annotations:
+        # python uses ${...}-like strings — keep Flux substitution away
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../workflows/self-repair/self_repair.py
+      - ../../workflows/self-repair/triage.py
+      - ../../workflows/self-repair/prompts.py
+      - ../../workflows/self-repair/config.yaml
