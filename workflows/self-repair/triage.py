@@ -159,10 +159,18 @@ class Summary:
 # ── Loki ───────────────────────────────────────────────────────────────────────
 
 
+_PREFIX = re.compile(r"[a-z0-9-]+")
+
+
 def pod_regex(prefixes: tuple[str, ...] = ALL_WORKLOADS) -> str:
     """A LogQL `pod=~` value matching `<prefix>` or `<prefix>-<anything>`.
-    Loki anchors the regex, so `purdue-af-182` matches nothing here."""
-    return "(" + "|".join(re.escape(prefix) for prefix in prefixes) + ")(-.*)?"
+    Loki anchors the regex. No escaping: LogQL parses the string literal
+    before the regex and rejects `\-` as an invalid char escape, so the
+    prefixes must be plain `[a-z0-9-]`, which they are checked to be."""
+    for prefix in prefixes:
+        if not _PREFIX.fullmatch(prefix):
+            raise ValueError(f"pod prefix {prefix!r} is not plain [a-z0-9-]")
+    return "(" + "|".join(prefixes) + ")(-.*)?"
 
 
 def watched(pod: str, prefixes: tuple[str, ...] = ALL_WORKLOADS) -> bool:
