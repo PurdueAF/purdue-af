@@ -7,7 +7,7 @@ plane ([`apps/flyte`](../flyte)).
 | File                 | What it is                                                                                      |
 | -------------------- | ----------------------------------------------------------------------------------------------- |
 | `podtemplate.yaml`   | Pod spec of every task pod: AF node placement, the image's user, the GitHub token from a Secret |
-| `cronjob.yaml`       | The launcher: starts one `triage` run per tick, from the code ConfigMap. Suspended for now      |
+| `cronjob.yaml`       | The launcher: starts one `triage` run per hour, from the code ConfigMap                         |
 | `secret-github.yaml` | The GitHub token, sops-encrypted                                                                |
 | `secret-genai.yaml`  | The GenAI Studio key, sops-encrypted                                                            |
 
@@ -16,9 +16,15 @@ The code ConfigMap (`self-repair-workflow`) is generated here from
 every tick, so a merged code change reaches the next run with no redeploy:
 the run registers the tasks it carries.
 
+The platform context ConfigMap (`self-repair-platform-context`) is generated
+from `docker/purdue-af/agents/platform-context.md`, the file every agent in an
+AF session reads, and mounted into every task pod at the path the purdue-af
+image bakes it into; the workflow names it in opencode's `instructions`, as
+`config-agents.sh` does in a session.
+
 ## Running by hand
 
-The CronJob is `suspend: true` while the workflow is being tested. One tick:
+The CronJob fires every hour. An extra tick:
 
 ```bash
 kubectl -n cms create job --from=cronjob/self-repair self-repair-manual-$(date +%s)
@@ -31,8 +37,6 @@ tick is the launch minute in base36 (5 characters; run names are capped at 30)
 and `fp` the first 4 of the fingerprint; the pod of each is `<run>-a0-0`. Follow along with
 `kubectl -n cms get pods -l flyte.org/project=self-repair` and
 `kubectl -n cms logs <pod>`, or in the Flyte console.
-
-To go live, set `suspend: false` and pick the `schedule`.
 
 ## Secrets
 

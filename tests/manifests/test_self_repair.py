@@ -36,11 +36,15 @@ def test_flux_deploys_the_app_as_one_kustomization():
         "secret-github.yaml",
         "secret-genai.yaml",
     ]
-    (generator,) = app["configMapGenerator"]
-    assert generator["name"] == "self-repair-workflow"
-    assert generator["options"]["annotations"] == {
-        "kustomize.toolkit.fluxcd.io/substitute": "disabled"
-    }
+    generators = {g["name"]: g for g in app["configMapGenerator"]}
+    assert set(generators) == {"self-repair-workflow", "self-repair-platform-context"}
+    for generator in generators.values():
+        assert generator["options"]["annotations"] == {
+            "kustomize.toolkit.fluxcd.io/substitute": "disabled"
+        }
+        for f in generator["files"]:
+            assert (APP / f).resolve().is_file(), f
+    generator = generators["self-repair-workflow"]
     files = {Path(f).name for f in generator["files"]}
     assert files == {
         "self_repair.py",
@@ -49,8 +53,6 @@ def test_flux_deploys_the_app_as_one_kustomization():
         "genai_proxy.py",
         "config.yaml",
     }
-    for f in generator["files"]:
-        assert (APP / f).resolve().is_file(), f
 
 
 def test_github_token_secret_is_encrypted():
@@ -74,12 +76,17 @@ def test_genai_key_secret_is_encrypted():
     assert any(r["recipient"].startswith("age1") for r in secret["sops"]["age"])
 
 
-def test_launcher_is_a_suspended_cronjob_running_the_module():
+def test_launcher_is_an_hourly_cronjob_running_the_module():
     (cronjob,) = docs(APP / "cronjob.yaml")
     assert cronjob["kind"] == "CronJob" and cronjob["metadata"]["name"] == "self-repair"
     spec = cronjob["spec"]
-    assert spec["suspend"] is True, "testing: ticks are started by hand"
+    assert spec["suspend"] is False
+    assert spec["schedule"] == "0 * * * *"
     assert spec["concurrencyPolicy"] == "Forbid"
+    # every tick must reach back past the previous one
+    workflow = (WORKFLOW / "self_repair.py").read_text()
+    window = int(re.search(r"window_minutes: int = (\d+)", workflow).group(1))
+    assert window > 60 + spec["startingDeadlineSeconds"] / 60
     pod = spec["jobTemplate"]["spec"]["template"]["spec"]
     (container,) = pod["containers"]
     script = "".join(container["args"])
@@ -108,6 +115,41 @@ def test_task_pods_get_the_github_token_from_the_pod_template():
 
     workflow = (WORKFLOW / "self_repair.py").read_text()
     assert 'pod_template="self-repair"' in workflow
+
+
+def test_agents_read_the_platform_context_the_sessions_read():
+    """One file, docker/purdue-af/agents/platform-context.md, reaches the
+    self-repair agents the way it reaches a session's agents: at the path the
+    purdue-af image bakes it into, named in opencode's `instructions`."""
+    source = "docker/purdue-af/agents/platform-context.md"
+    path = "/opt/purdue-af/agents/platform-context.md"
+    dockerfile = (REPO / "docker/purdue-af/Dockerfile").read_text()
+    assert re.search(
+        rf"COPY[^\n]*{re.escape(source)}\s*\\?\s*\n?\s*{re.escape(path)}", dockerfile
+    )
+    hook = (REPO / "docker/purdue-af/scripts/config-agents.sh").read_text()
+    assert f'AGENT_SECTION="{path}"' in hook
+    assert 'instructions\\": [\\"${AGENT_SECTION}' in hook
+
+    kustomization = yaml.safe_load((APP / "kustomization.yaml").read_text())
+    (generator,) = [
+        g
+        for g in kustomization["configMapGenerator"]
+        if g["name"] == "self-repair-platform-context"
+    ]
+    assert generator["files"] == [f"../../{source}"]
+
+    (template,) = docs(APP / "podtemplate.yaml")
+    pod = template["template"]["spec"]
+    (container,) = pod["containers"]
+    (mount,) = [m for m in container["volumeMounts"] if m["name"] == "platform-context"]
+    assert mount["mountPath"] == str(Path(path).parent) and mount["readOnly"]
+    (volume,) = [v for v in pod["volumes"] if v["name"] == "platform-context"]
+    assert volume["configMap"]["name"] == "self-repair-platform-context"
+
+    workflow = (WORKFLOW / "self_repair.py").read_text()
+    assert f'PLATFORM_CONTEXT = Path("{path}")' in workflow
+    assert 'config["instructions"] = [str(PLATFORM_CONTEXT)]' in workflow
 
 
 def test_workflow_names_its_runs_and_needs_no_trigger():
