@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 ERROR_PATTERN = r"(?i)\b(error|exception|traceback|fatal|panic)\b"
 MAX_SAMPLES = 8
@@ -234,12 +234,52 @@ class Reply:
     error: str = ""
 
 
-def collect_reply(events: Iterable[str]) -> Reply:
+def _brief(value: Any, limit: int = 100) -> str:
+    if isinstance(value, dict):
+        text = " ".join(f"{k}={_brief(v, 60)}" for k, v in list(value.items())[:3])
+    else:
+        text = str(value)
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def describe_event(event: dict[str, Any]) -> str | None:
+    """One log line for an opencode event worth narrating, else None."""
+    kind = event.get("type")
+    part = event.get("part") or {}
+    if kind == "text":
+        text = str(part.get("text", "")).strip()
+        return f"says: {_brief(text, 200)}" if text else None
+    if kind in ("tool", "tool_use", "tool_call", "tool-invocation"):
+        state = part.get("state") or {}
+        status = str(state.get("status") or "")
+        if status and status not in ("completed", "error"):
+            return None
+        tool = part.get("tool") or part.get("name") or "tool"
+        detail = state.get("title") or _brief(
+            state.get("input") or part.get("input") or ""
+        )
+        return f"{tool} {status}: {detail}".replace("  ", " ").strip()
+    if kind == "step_finish":
+        tokens = part.get("tokens") or {}
+        return (
+            f"step {part.get('reason', '?')} "
+            f"({tokens.get('input', 0)} in / {tokens.get('output', 0)} out tokens)"
+        )
+    if kind == "error":
+        return f"error: {_brief(event.get('error') or part, 300)}"
+    return None
+
+
+def collect_reply(
+    events: Iterable[str], observe: Callable[[dict[str, Any]], None] | None = None
+) -> Reply:
     """Fold `opencode run --format json` events into the assistant's text.
 
     Stops consuming at the step that ends with reason "stop": the model's
     final turn. opencode 1.18 keeps the process alive after that, so the
-    caller must not wait for exit before reading the answer."""
+    caller must not wait for exit before reading the answer. `observe` sees
+    every parsed event as it arrives."""
     parts: list[str] = []
     for raw in events:
         raw = raw.strip()
@@ -249,6 +289,8 @@ def collect_reply(events: Iterable[str]) -> Reply:
             event = json.loads(raw)
         except json.JSONDecodeError:
             continue
+        if observe is not None:
+            observe(event)
         kind = event.get("type")
         part = event.get("part") or {}
         if kind == "text":

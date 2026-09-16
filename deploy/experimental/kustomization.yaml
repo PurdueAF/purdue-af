@@ -49,6 +49,7 @@ resources:
   - ../../apps/flyte/postgres.yaml
   - ../../apps/flyte/minio.yaml
   - ../../apps/flyte/podtemplate.yaml
+  - ../../apps/flyte/secret-console-auth.yaml
 
   # Watches Loki for errors and opens draft PRs here when the fix is a code
   # change (workflows/self-repair). Needs the self-repair-github Secret to exist
