@@ -38,8 +38,12 @@ spec:
             - name: launch
               image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/self-repair:latest
               imagePullPolicy: Always
-              workingDir: /workflow
-              command: ["python", "self_repair.py"]
+              # Copied out of the mount first: kustomize serves ConfigMap files
+              # as symlinks, and Flyte's bundler skips symlinks that resolve
+              # outside the source root.
+              command: ["sh", "-c"]
+              args:
+                - mkdir /tmp/workflow && cp -L /workflow/*.py /workflow/config.yaml /tmp/workflow/ && cd /tmp/workflow && exec python self_repair.py
               resources:
                 requests:
                   cpu: 100m

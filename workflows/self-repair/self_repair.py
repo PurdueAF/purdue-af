@@ -2,7 +2,7 @@
 draft pull request when the fix belongs in this repository.
 
 `triage` orchestrates. It starts every other task as a run of its own, named
-after the task, so pods read `self-repair-<task>-<stamp>[-<fingerprint>]-a0-0`
+after the task, so pods read `self-repair-<task>-<tick>[-<fp>]-a0-0`
 and each run shows up by name in the console."""
 
 import asyncio
@@ -73,6 +73,30 @@ env = flyte.TaskEnvironment(
 
 def _log(message: str) -> None:
     print(f"[{datetime.now(timezone.utc):%H:%M:%S}] {message}", flush=True)
+
+
+# Run names are capped at 30 characters (the pod is `<run>-a0-0`), and every
+# one starts with the 12 of "self-repair-". A tick is the launch minute in
+# base36: 5 characters until late 2084. Four characters of fingerprint tell the
+# analyses of one tick apart; the full fingerprint is in the logs and branch.
+NAME_LIMIT = 30
+DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz"
+
+
+def tick_of(moment: datetime) -> str:
+    minutes = int(moment.timestamp()) // 60
+    out = ""
+    while minutes:
+        minutes, digit = divmod(minutes, 36)
+        out = DIGITS[digit] + out
+    return out.rjust(5, "0")
+
+
+def run_name(task: str, tick: str, fingerprint: str = "") -> str:
+    name = f"self-repair-{task}-{tick}" + (f"-{fingerprint[:4]}" if fingerprint else "")
+    if len(name) > NAME_LIMIT:
+        raise ValueError(f"run name {name!r} is longer than {NAME_LIMIT}")
+    return name
 
 
 def _git(*args: str, cwd: Path) -> str:
@@ -322,14 +346,14 @@ async def triage(
 ) -> Summary:
     if trigger_time.tzinfo is None:
         trigger_time = trigger_time.replace(tzinfo=timezone.utc)
-    stamp = f"{trigger_time:%Y%m%d-%H%M%S}"
+    tick = tick_of(trigger_time)
     start = trigger_time - timedelta(minutes=window_minutes)
     _log(
-        f"tick {stamp}: window {start:%H:%M:%S}..{trigger_time:%H:%M:%S} UTC, up to {max_incidents} analyses and {max_fixes} fixes"
+        f"tick {tick} = {trigger_time:%Y-%m-%d %H:%M} UTC: window {start:%H:%M:%S}..{trigger_time:%H:%M:%S}, up to {max_incidents} analyses and {max_fixes} fixes"
     )
 
     incidents: list[Incident] = await _spawn(
-        f"self-repair-watch-{stamp}",
+        run_name("watch", tick),
         watch,
         start,
         trigger_time,
@@ -342,7 +366,7 @@ async def triage(
     results = await asyncio.gather(
         *(
             _spawn(
-                f"self-repair-analyze-{stamp}-{incident.key.fingerprint}",
+                run_name("analyze", tick, incident.key.fingerprint),
                 analyze,
                 incident.key,
                 incident.evidence,
@@ -373,7 +397,7 @@ async def triage(
             _log(f"{fingerprint}: fixable, but {max_fixes} fix(es) already this tick")
             continue
         url = await _spawn(
-            f"self-repair-fix-{stamp}-{fingerprint}",
+            run_name("fix", tick, fingerprint),
             fix,
             incident.key,
             incident.evidence,
@@ -391,7 +415,7 @@ async def triage(
         pull_requests=pull_requests,
     )
     _log(
-        f"tick {stamp} done: {summary.lines} lines, {summary.incidents} incidents, "
+        f"tick {tick} done: {summary.lines} lines, {summary.incidents} incidents, "
         f"{summary.fixable} fixable, {failed} analysis failure(s), "
         f"{len(pull_requests)} PR(s) {' '.join(pull_requests)}"
     )
@@ -403,7 +427,7 @@ if __name__ == "__main__":
     # `kubectl create job --from=cronjob/self-repair ...` runs it by hand.
     flyte.init_from_config("config.yaml", root_dir=Path(__file__).parent)
     now = datetime.now(timezone.utc)
-    run = flyte.with_runcontext(name=f"self-repair-triage-{now:%Y%m%d-%H%M%S}").run(
+    run = flyte.with_runcontext(name=run_name("triage", tick_of(now))).run(
         triage, trigger_time=now
     )
     print(run.name, run.url)
