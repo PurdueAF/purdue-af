@@ -70,7 +70,7 @@ BRANCH_PREFIX = "self-repair-"
 # can be tried without a code change.
 # Through the proxy, gpt-oss:120b and gemma4:26b-a4b each ran the whole tool
 # loop in about 10 s (2026-09-16); qwen3.6:27b was not answering that day.
-MODEL = os.environ.get("SELF_REPAIR_MODEL", "genai/gpt-oss:120b")
+MODEL = os.environ.get("SELF_REPAIR_MODEL", "genai/gemma4:26b-a4b")
 # The vLLM-backed models with native tool calling; deployed context per the docs.
 PROVIDERS = {
     "genai": {
