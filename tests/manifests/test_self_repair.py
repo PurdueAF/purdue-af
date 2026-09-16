@@ -34,6 +34,7 @@ def test_flux_deploys_the_app_as_one_kustomization():
         "podtemplate.yaml",
         "cronjob.yaml",
         "secret-github.yaml",
+        "secret-genai.yaml",
     ]
     (generator,) = app["configMapGenerator"]
     assert generator["name"] == "self-repair-workflow"
@@ -61,6 +62,15 @@ def test_github_token_secret_is_encrypted():
     assert secret["metadata"]["name"] == "self-repair-github"
     assert secret["stringData"]["token"].startswith("ENC[AES256_GCM,")
     assert secret["sops"]["encrypted_regex"] == "^(data|stringData)$"
+    assert any(r["recipient"].startswith("age1") for r in secret["sops"]["age"])
+
+
+def test_genai_key_secret_is_encrypted():
+    raw = (APP / "secret-genai.yaml").read_text()
+    assert "sk-" not in raw
+    (secret,) = docs(APP / "secret-genai.yaml")
+    assert secret["metadata"]["name"] == "self-repair-genai"
+    assert secret["stringData"]["api-key"].startswith("ENC[AES256_GCM,")
     assert any(r["recipient"].startswith("age1") for r in secret["sops"]["age"])
 
 

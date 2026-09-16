@@ -5,6 +5,7 @@ resources:
   - cronjob.yaml
   # sops-encrypted (age recipient in .sops.yaml); the token value only.
   - secret-github.yaml
+  - secret-genai.yaml
 generatorOptions:
   disableNameSuffixHash: true
 configMapGenerator:

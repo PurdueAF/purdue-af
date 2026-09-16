@@ -9,6 +9,7 @@ plane ([`apps/flyte`](../flyte)).
 | `podtemplate.yaml`   | Pod spec of every task pod: AF node placement, the image's user, the GitHub token from a Secret |
 | `cronjob.yaml`       | The launcher: starts one `triage` run per tick, from the code ConfigMap. Suspended for now      |
 | `secret-github.yaml` | The GitHub token, sops-encrypted                                                                |
+| `secret-genai.yaml`  | The GenAI Studio key, sops-encrypted                                                            |
 
 The code ConfigMap (`self-repair-workflow`) is generated here from
 `workflows/self-repair/*.py` and `config.yaml`. The launcher mounts it at
@@ -45,7 +46,8 @@ The OpenCode key is created by hand only when a paid model is configured.
 | Secret                 | Key       | In repo | Holds                                                                                       |
 | ---------------------- | --------- | ------- | ------------------------------------------------------------------------------------------- |
 | `self-repair-github`   | `token`   | yes     | Fine-grained GitHub token: `contents:write` + `pull_requests:write` on `PurdueAF/purdue-af` |
-| `self-repair-opencode` | `api-key` | no      | OpenCode Zen key, for a paid model                                                          |
+| `self-repair-genai`    | `api-key` | yes     | Purdue GenAI Studio key (Settings → Account → API Keys), acts as its owner                  |
+| `self-repair-opencode` | `api-key` | no      | OpenCode Zen key, only for an `opencode/*` model                                            |
 
 The task image is `ghcr.io/purdueaf/self-repair` (`docker/self-repair`), on the
 continuous `:latest` channel like the monitor images.
