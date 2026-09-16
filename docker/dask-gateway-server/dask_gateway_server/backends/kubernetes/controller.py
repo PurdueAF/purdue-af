@@ -299,7 +299,7 @@ class KubeController(KubeBackendAndControllerMixin, Application):
         # Setup logging
         self.log.propagate = False
         for name in ["aiohttp.access", "aiohttp.server"]:
-            l = logging.getLogger(name)
+            logger = logging.getLogger(name)
             l.handlers[:] = []
             l.propagate = True
             l.parent = self.log
@@ -1217,7 +1217,7 @@ class KubeController(KubeBackendAndControllerMixin, Application):
         }
 
     def make_service_name(self, cluster_name):
-        return f"dask-{cluster_name}"
+        return cluster_name
 
     def make_service(self, cluster_name):
         return {
