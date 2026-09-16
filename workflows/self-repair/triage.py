@@ -455,6 +455,33 @@ def report_html(tick: str, window: str, rows: list[Row]) -> str:
     return "\n".join(parts)
 
 
+# ── opencode's own log ─────────────────────────────────────────────────────────
+
+_LOGFMT = re.compile(r'(\w[\w.]*)=("(?:[^"\\]|\\.)*"|\S+)')
+_PROVIDER_ERROR = ("stream error", "AI_APICallError", "rate limit", "APICallError")
+
+
+def opencode_log_line(raw: str) -> tuple[str, str | None] | None:
+    """(summary, provider error message or None) for an ERROR/WARN line of
+    ~/.local/share/opencode/log/opencode.log, else None. opencode 1.18 writes
+    a provider failure (a rate limit, say) here and nowhere else: not on
+    stdout as an event, and the process neither retries nor exits."""
+    fields = {k: v.strip('"') for k, v in _LOGFMT.findall(raw)}
+    level = fields.get("level", "")
+    if level not in ("ERROR", "WARN"):
+        return None
+    keep = {
+        k: v
+        for k, v in fields.items()
+        if k not in ("timestamp", "run", "session.id", "level")
+    }
+    summary = f"{level.lower()}: " + " ".join(f"{k}={v}" for k, v in keep.items())
+    error = fields.get("error.error") or fields.get("error") or ""
+    if any(marker.lower() in raw.lower() for marker in _PROVIDER_ERROR):
+        return summary[:300], (error or fields.get("message") or "provider error")[:200]
+    return summary[:300], None
+
+
 # ── Agent output ───────────────────────────────────────────────────────────────
 
 
