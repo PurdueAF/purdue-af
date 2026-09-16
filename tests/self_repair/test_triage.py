@@ -282,6 +282,45 @@ class TestNarration:
         assert line is not None and len(line) < 220 and line.endswith("…")
 
 
+class TestRunNames:
+    """Flyte caps run names at 30 characters; the pod is `<run>-a0-0`."""
+
+    def setup_method(self):
+        import types
+
+        source = (REPO / "workflows/self-repair/self_repair.py").read_text()
+        # only the naming helpers: the module imports flyte at the top
+        start = source.index("NAME_LIMIT = 30")
+        end = source.index("def _git(")
+        self.names = types.ModuleType("names")
+        self.names.datetime = datetime
+        exec(source[start:end], vars(self.names))
+
+    def test_every_run_name_fits(self):
+        tick = self.names.tick_of(datetime(2085, 1, 1, tzinfo=timezone.utc))
+        assert len(tick) == 5
+        for task, fp in (
+            ("triage", ""),
+            ("watch", ""),
+            ("analyze", "189fbee7047b"),
+            ("fix", "189fbee7047b"),
+        ):
+            name = self.names.run_name(task, tick, fp)
+            assert name.startswith(f"self-repair-{task}-{tick}"), name
+            assert len(name) <= 30, name
+        assert self.names.run_name("analyze", tick, "189fbee7047b").endswith("-189f")
+
+    def test_tick_is_the_minute_and_padded(self):
+        a = self.names.tick_of(datetime(2026, 9, 16, 16, 36, 5, tzinfo=timezone.utc))
+        b = self.names.tick_of(datetime(2026, 9, 16, 16, 36, 59, tzinfo=timezone.utc))
+        c = self.names.tick_of(datetime(2026, 9, 16, 16, 37, 0, tzinfo=timezone.utc))
+        assert a == b != c and len(a) == 5 and a.islower()
+        assert (
+            self.names.tick_of(datetime(1970, 1, 1, 0, 1, tzinfo=timezone.utc))
+            == "00001"
+        )
+
+
 class TestGitHub:
     def test_pull_request_body_is_draft_evidence_without_usernames(self):
         key = triage.IncidentKey("abc123def456", "notebook", "jupyter-*", "Error <hex>")

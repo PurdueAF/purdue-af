@@ -24,9 +24,10 @@ kubectl -n cms create job --from=cronjob/self-repair self-repair-manual-$(date +
 ```
 
 Every run and pod is named after its task:
-`self-repair-triage-<stamp>`, `self-repair-watch-<stamp>`,
-`self-repair-analyze-<stamp>-<fingerprint>`, `self-repair-fix-<stamp>-<fingerprint>`;
-the pod of each is `<run>-a0-0`. Follow along with
+`self-repair-triage-<tick>`, `self-repair-watch-<tick>`,
+`self-repair-analyze-<tick>-<fp>`, `self-repair-fix-<tick>-<fp>`, where the
+tick is the launch minute in base36 (5 characters; run names are capped at 30)
+and `fp` the first 4 of the fingerprint; the pod of each is `<run>-a0-0`. Follow along with
 `kubectl -n cms get pods -l flyte.org/project=self-repair` and
 `kubectl -n cms logs <pod>`, or in the Flyte console.
 

@@ -66,8 +66,11 @@ def test_launcher_is_a_suspended_cronjob_running_the_module():
     assert spec["concurrencyPolicy"] == "Forbid"
     pod = spec["jobTemplate"]["spec"]["template"]["spec"]
     (container,) = pod["containers"]
-    assert container["command"] == ["python", "self_repair.py"]
-    assert container["workingDir"] == "/workflow"
+    script = "".join(container["args"])
+    assert "cp -L /workflow/*.py" in script, (
+        "ConfigMap files are symlinks; the bundler skips them"
+    )
+    assert script.endswith("python self_repair.py")
     assert container["image"].endswith("/purdueaf/self-repair:latest")
     assert pod["volumes"][0]["configMap"]["name"] == "self-repair-workflow"
     assert pod["securityContext"]["runAsUser"] == 1000
@@ -100,13 +103,13 @@ def test_workflow_names_its_runs_and_needs_no_trigger():
 
     workflow = (WORKFLOW / "self_repair.py").read_text()
     assert "flyte.Trigger(" not in workflow and "triggers=" not in workflow
-    for run_name in (
-        'f"self-repair-triage-{now:%Y%m%d-%H%M%S}"',
-        'f"self-repair-watch-{stamp}"',
-        'f"self-repair-analyze-{stamp}-{incident.key.fingerprint}"',
-        'f"self-repair-fix-{stamp}-{fingerprint}"',
+    for call in (
+        'run_name("triage", tick_of(now))',
+        'run_name("watch", tick)',
+        'run_name("analyze", tick, incident.key.fingerprint)',
+        'run_name("fix", tick, fingerprint)',
     ):
-        assert run_name in workflow, run_name
+        assert call in workflow, call
     assert "flyte.with_runcontext(name=" in workflow
     assert 'ignored_inputs=("evidence",)' in workflow, (
         "analyze is cached on the key alone"

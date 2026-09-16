@@ -25,8 +25,10 @@ cluster side (task pods, secrets, the deploy Job) is
 | `fix`     | opencode with edit rights on a branch `self-repair-<fingerprint>`; commit, push, draft PR           | no (an open PR for the branch is returned as is)            |
 
 `triage` starts the others with `flyte.run` under names of its own —
-`self-repair-watch-<stamp>`, `self-repair-analyze-<stamp>-<fingerprint>`,
-`self-repair-fix-<stamp>-<fingerprint>` — so runs and pods say what they are,
+`self-repair-watch-<tick>`, `self-repair-analyze-<tick>-<fp>`,
+`self-repair-fix-<tick>-<fp>`, the tick being the launch minute in base36 and
+`fp` four characters of the fingerprint, within Flyte's 30-character cap on
+run names — so runs and pods say what they are,
 and a cache hit on `analyze` is visible as such. A failed analysis is logged
 and skipped; it does not end the tick.
 
