@@ -2,6 +2,7 @@
 query, error fingerprints, username redaction, the agent's verdict and the
 GitHub calls. No flyte import, so the tests run without the SDK."""
 
+import asyncio
 import hashlib
 import json
 import re
@@ -10,7 +11,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Iterable
+from typing import Any, Awaitable, Callable, Iterable
 
 ERROR_PATTERN = r"(?i)\b(error|exception|traceback|fatal|panic)\b"
 
@@ -287,6 +288,55 @@ def cluster(lines: list[dict[str, str]]) -> list[Incident]:
         key=lambda incident: (-incident.evidence.count, incident.key.fingerprint)
     )
     return incidents
+
+
+# ── Analysis budget ────────────────────────────────────────────────────────────
+
+CACHE_HIT = "CACHE_HIT"
+Spawn = Callable[[Incident], Awaitable[tuple[Verdict, str]]]
+
+
+async def analyze_within_budget(
+    incidents: list[Incident],
+    budget: int,
+    spawn: Spawn,
+    log: Callable[[str], None] = print,
+) -> list[tuple[Incident, Verdict | BaseException]]:
+    """Analyze incidents in order until `budget` of them were fresh analyses.
+
+    A cache hit costs nothing and does not count, so a list that starts with
+    known errors still reaches the new ones. At most `budget` are in flight,
+    since an in-flight analysis is assumed fresh until it reports otherwise;
+    a hit frees its slot for the next incident. A failure counts as fresh: it
+    used a pod. Returns (incident, verdict or exception) for every incident
+    attempted, in list order."""
+    pending = list(incidents)
+    in_flight: dict[asyncio.Task[tuple[Verdict, str]], Incident] = {}
+    results: dict[int, Verdict | BaseException] = {}
+    order: list[Incident] = []
+    fresh = 0
+    while pending or in_flight:
+        while pending and fresh + len(in_flight) < budget:
+            incident = pending.pop(0)
+            order.append(incident)
+            in_flight[asyncio.ensure_future(spawn(incident))] = incident
+        if not in_flight:
+            break
+        done, _ = await asyncio.wait(in_flight, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            incident = in_flight.pop(task)
+            try:
+                verdict, cache = task.result()
+            except BaseException as exc:  # noqa: BLE001 - reported per incident
+                results[id(incident)] = exc
+                fresh += 1
+                continue
+            results[id(incident)] = verdict
+            if cache != CACHE_HIT:
+                fresh += 1
+            else:
+                log(f"{incident.key.fingerprint}: known, from cache")
+    return [(incident, results[id(incident)]) for incident in order]
 
 
 # ── Agent output ───────────────────────────────────────────────────────────────
