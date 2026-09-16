@@ -134,7 +134,6 @@ class TestLoki:
             "loki-0",
             "loki-chunks-cache-0",
             "flyte-console-d78d4dc8f-gp26v",
-            "self-repair-analyze-hra3y-60ef-a0-0",
             "af-node-probe-cvmfs-abcde",
             "af-userlist-sync-purdue-29312345-abcde",
             "supersonic-pr-triton-7d9f8c6b5-abcde",
@@ -182,6 +181,7 @@ class TestLoki:
         "pod",
         [
             "jupyter-alice",
+            "self-repair-analyze-hra3y-60ef-a0-0",  # its own logs quote errors
             "gen3",
             "gen0-abcde",
             "etcd-0",

@@ -48,10 +48,10 @@ WATCHED_WORKLOADS = (
     "af-node-monitor",
     "af-node-probe",
     "af-pod-monitor",
-    # apps/agentic-interface, apps/flyte, apps/self-repair
+    # apps/agentic-interface, apps/flyte. Not this workflow's own pods: their
+    # logs quote every error they analyze, and would feed it back next tick.
     "agentic-interface",
     "flyte",
-    "self-repair",
     # apps/sonic, apps/ray
     "supersonic",
     "sonic-ray",
@@ -165,7 +165,8 @@ _PREFIX = re.compile(r"[a-z0-9-]+")
 def pod_regex(prefixes: tuple[str, ...] = ALL_WORKLOADS) -> str:
     """A LogQL `pod=~` value matching `<prefix>` or `<prefix>-<anything>`.
     Loki anchors the regex. No escaping: LogQL parses the string literal
-    before the regex and rejects `\-` as an invalid char escape, so the
+    before the regex and rejects a backslash-dash as an invalid char escape,
+    so the
     prefixes must be plain `[a-z0-9-]`, which they are checked to be."""
     for prefix in prefixes:
         if not _PREFIX.fullmatch(prefix):
