@@ -390,6 +390,7 @@ def _run_agent(cwd: Path, prompt: str, permission: dict[str, Any], label: str) -
 
 def _context(evidence: Evidence, container: str) -> str:
     if not evidence.first_pod:
+        _log("no sample pointer on the evidence; analyzing the samples alone")
         return "(none)"
     lines = query_context(
         LOKI_URL, NAMESPACE, evidence.first_pod, container, evidence.first_ts
@@ -510,10 +511,14 @@ def analyze(key: IncidentKey, evidence: Evidence) -> Verdict:
     with tempfile.TemporaryDirectory(prefix="self-repair-") as tmp:
         repo = Path(tmp) / "repo"
         _clone(repo)
+        context = _context(evidence, key.container)
         prompt = prompts.ANALYZE.substitute(
             incident=_describe(key, evidence),
-            context=_context(evidence, key.container),
+            context=context,
             minutes=AGENT_BUDGET_MINUTES,
+        )
+        _log(
+            f"{key.fingerprint}: prompt has {len(context.splitlines())} context line(s)"
         )
         reply = _run_agent(repo, prompt, READ_ONLY, key.fingerprint)
     verdict = parse_verdict(reply)

@@ -488,6 +488,8 @@ def representative(group: Group, incidents: list[Incident]) -> Incident:
             pods=sum(m.evidence.pods for m in members),
             first_seen=min(m.evidence.first_seen for m in members),
             last_seen=max(m.evidence.last_seen for m in members),
+            first_pod=head.evidence.first_pod,
+            first_ts=head.evidence.first_ts,
         ),
     )
 

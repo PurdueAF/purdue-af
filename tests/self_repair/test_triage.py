@@ -707,7 +707,9 @@ class TestGroups:
         return [
             triage.Incident(
                 triage.IncidentKey(f"fp{i}", "c", "w", f"m{i}"),
-                triage.Evidence([f"s{i}"], 10 - i, 1, f"t{i}", f"t{i}"),
+                triage.Evidence(
+                    [f"s{i}"], 10 - i, 1, f"t{i}", f"t{i}", f"pod{i}", f"t{i}"
+                ),
             )
             for i in range(4)
         ]
@@ -739,6 +741,13 @@ class TestGroups:
         assert rep.evidence.count == 10 + 9 + 8 and rep.evidence.pods == 3
         assert rep.evidence.first_seen == "t0" and rep.evidence.last_seen == "t2"
         assert rep.evidence.samples == ["s0"]
+
+    def test_representative_keeps_the_sample_pointer(self):
+        """The analysis fetches the lines around the first sample (a traceback's
+        exception is below its header); merging groups must not lose it."""
+        incidents = self.incidents()
+        rep = triage.representative(triage.Group("g", ["fp1", "fp2"]), incidents)
+        assert rep.evidence.first_pod == "pod1" and rep.evidence.first_ts == "t1"
 
 
 class TestGuards:
