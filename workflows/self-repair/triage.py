@@ -89,6 +89,19 @@ MAX_SAMPLES = 8
 MAX_LINE = 400
 MESSAGE_CHARS = 240
 
+# Names of OTHER pods inside a message (a tailer target, a "pod not found",
+# a scheduler line) must not split one incident per pod. Kubernetes builds
+# its random suffixes from this 27-character alphabet: no vowels, no 0 or 1.
+_K8S_SUFFIX = "[bcdfghjklmnpqrstvwxz2456789]{5}"
+_POD_NAMES = [
+    (re.compile(r"-[0-9a-f]{32}(?![0-9a-f])"), "-<id>"),  # dask-gateway cluster id
+    (
+        re.compile(rf"-[0-9a-f]{{8,10}}-{_K8S_SUFFIX}(?![a-z0-9])"),
+        "-<pod>",
+    ),  # ReplicaSet pod
+    (re.compile(rf"-{_K8S_SUFFIX}(?![a-z0-9])"), "-<pod>"),  # DaemonSet/Job pod
+]
+
 # Order matters: the specific shapes first, the bare number last.
 _NORMALIZE = [
     (
@@ -265,6 +278,8 @@ def redact(text: str) -> str:
 
 def normalize(line: str, pod: str) -> str:
     line = line.replace(pod, "<pod>")
+    for pattern, replacement in _POD_NAMES:
+        line = pattern.sub(replacement, line)
     for pattern, replacement in _NORMALIZE:
         line = pattern.sub(replacement, line)
     return redact(line.strip())[:MESSAGE_CHARS]
