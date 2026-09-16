@@ -60,3 +60,29 @@ def test_workflow_targets_the_same_control_plane():
     assert (
         "PIXI_PROJECT" in workflow and 'cache=flyte.Cache(behavior="auto"' in workflow
     )
+
+
+def test_console_is_served_behind_basic_auth_on_one_host():
+    """The console calls the API on its own origin, and the API has no auth of
+    its own: the ingress must carry both and gate both."""
+    values = yaml.safe_load((FLYTE / "values.yaml").read_text())
+    assert values["console"]["replicaCount"] == 1
+    assert values["console"]["image"]["tag"] != "latest"
+    ingress = values["ingress"]
+    assert ingress["create"] == "${enable_ingresses}"
+    assert ingress["host"] == "flyte-cms.geddes.rcac.purdue.edu"
+    assert ingress["tls"][0]["hosts"] == [ingress["host"]]
+    annotations = ingress["commonAnnotations"]
+    assert annotations["nginx.ingress.kubernetes.io/auth-type"] == "basic"
+    secret_name = annotations["nginx.ingress.kubernetes.io/auth-secret"]
+
+    (secret,) = [
+        d
+        for d in yaml.safe_load_all((FLYTE / "secret-console-auth.yaml").read_text())
+        if d
+    ]
+    assert secret["metadata"]["name"] == secret_name
+    assert secret["stringData"]["auth"].startswith("ENC[AES256_GCM,")
+    assert "$2y$" not in (FLYTE / "secret-console-auth.yaml").read_text()
+    kustomization = yaml.safe_load(EXPERIMENTAL.read_text())
+    assert "../../apps/flyte/secret-console-auth.yaml" in kustomization["resources"]

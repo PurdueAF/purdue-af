@@ -204,6 +204,84 @@ class TestReply:
         assert not truncated.finished and "ended before" in truncated.error
 
 
+class TestNarration:
+    def test_observe_sees_every_parsed_event_in_order(self):
+        seen = []
+        events = [
+            json.dumps({"type": "step_start", "part": {}}),
+            "not json",
+            json.dumps({"type": "text", "part": {"text": "hi"}}),
+            json.dumps({"type": "step_finish", "part": {"reason": "stop"}}),
+        ]
+        triage.collect_reply(events, seen.append)
+        assert [e["type"] for e in seen] == ["step_start", "text", "step_finish"]
+
+    @pytest.mark.parametrize(
+        "event, expected",
+        [
+            (
+                {"type": "text", "part": {"text": "  Looking at apps/x  "}},
+                "says: Looking at apps/x",
+            ),
+            ({"type": "text", "part": {"text": "   "}}, None),
+            ({"type": "step_start", "part": {}}, None),
+            (
+                {
+                    "type": "tool",
+                    "part": {
+                        "tool": "bash",
+                        "state": {"status": "running", "input": {"command": "ls"}},
+                    },
+                },
+                None,
+            ),
+            (
+                {
+                    "type": "tool",
+                    "part": {
+                        "tool": "bash",
+                        "state": {"status": "completed", "title": "git status"},
+                    },
+                },
+                "bash completed: git status",
+            ),
+            (
+                {
+                    "type": "tool",
+                    "part": {
+                        "tool": "read",
+                        "state": {
+                            "status": "completed",
+                            "input": {"filePath": "/r/a.py"},
+                        },
+                    },
+                },
+                "read completed: filePath=/r/a.py",
+            ),
+            (
+                {
+                    "type": "step_finish",
+                    "part": {
+                        "reason": "tool-calls",
+                        "tokens": {"input": 12, "output": 3},
+                    },
+                },
+                "step tool-calls (12 in / 3 out tokens)",
+            ),
+            (
+                {"type": "error", "error": {"name": "ProviderAuthError"}},
+                "error: name=ProviderAuthError",
+            ),
+        ],
+    )
+    def test_describe_event(self, event, expected):
+        assert triage.describe_event(event) == expected
+
+    def test_long_text_is_cut(self):
+        line = triage.describe_event({"type": "text", "part": {"text": "x" * 500}})
+        assert line is not None and len(line) < 220 and line.endswith("…")
+
+
 class TestGitHub:
     def test_pull_request_body_is_draft_evidence_without_usernames(self):
         key = triage.IncidentKey("abc123def456", "notebook", "jupyter-*", "Error <hex>")

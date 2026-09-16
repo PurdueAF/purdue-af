@@ -1,0 +1,56 @@
+# Starts one `triage` run per tick, named self-repair-triage-<stamp>; the
+# launcher exits as soon as the run is accepted. Registering the tasks
+# happens on the run itself, so there is no separate deploy step.
+#
+# Suspended while the workflow is being tested. Fire one by hand with
+#   kubectl -n cms create job --from=cronjob/self-repair self-repair-manual-$(date +%s)
+# and set `suspend: false` to go live.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: self-repair
+spec:
+  schedule: "0 * * * *"
+  suspend: true
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          restartPolicy: OnFailure
+          nodeSelector:
+            cms-af-prod: "true"
+          tolerations:
+            - key: hub.jupyter.org/dedicated
+              operator: Equal
+              value: cms-af
+              effect: NoSchedule
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+          containers:
+            - name: launch
+              image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/self-repair:latest
+              imagePullPolicy: Always
+              workingDir: /workflow
+              command: ["python", "self_repair.py"]
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  memory: 1Gi
+              volumeMounts:
+                - name: workflow
+                  mountPath: /workflow
+                  readOnly: true
+          volumes:
+            - name: workflow
+              configMap:
+                name: self-repair-workflow

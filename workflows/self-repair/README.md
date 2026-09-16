@@ -10,19 +10,25 @@ cluster side (task pods, secrets, the deploy Job) is
 
 | File             | What it is                                                                      |
 | ---------------- | ------------------------------------------------------------------------------- |
-| `self_repair.py` | The tasks, the environment and the cron trigger                                 |
+| `self_repair.py` | The tasks, the environment and the launcher (`__main__`)                        |
 | `triage.py`      | Loki query, error fingerprints, username redaction, verdict parsing, GitHub API |
 | `prompts.py`     | What the agent is told, for analysis and for the fix                            |
 | `config.yaml`    | Where `flyte` finds the control plane                                           |
 
 ## Tasks
 
-| Task      | Runs                                                                                                             | Cached                                                      |
-| --------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `triage`  | Every 15 minutes (`flyte.Cron`), over the previous 20 minutes: `watch`, then `analyze` each incident, then `fix` | no                                                          |
-| `watch`   | One Loki query for `error\|exception\|traceback\|fatal\|panic` in `cms`, grouped into incidents                  | no                                                          |
-| `analyze` | opencode, read-only, in a fresh checkout of `main`: is this fixable by a change in this repository?              | yes, on the incident key (a recurring error is judged once) |
-| `fix`     | opencode with edit rights on a branch `self-repair-<fingerprint>`; commit, push, draft PR                        | no (an open PR for the branch is returned as is)            |
+| Task      | Runs                                                                                                | Cached                                                      |
+| --------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `triage`  | One per tick: `watch`, then `analyze` per incident, then `fix`, each started as a run of its own    | no                                                          |
+| `watch`   | One Loki query for `error\|exception\|traceback\|fatal\|panic` in `cms`, grouped into incidents     | no                                                          |
+| `analyze` | opencode, read-only, in a fresh checkout of `main`: is this fixable by a change in this repository? | yes, on the incident key (a recurring error is judged once) |
+| `fix`     | opencode with edit rights on a branch `self-repair-<fingerprint>`; commit, push, draft PR           | no (an open PR for the branch is returned as is)            |
+
+`triage` starts the others with `flyte.run` under names of its own —
+`self-repair-watch-<stamp>`, `self-repair-analyze-<stamp>-<fingerprint>`,
+`self-repair-fix-<stamp>-<fingerprint>` — so runs and pods say what they are,
+and a cache hit on `analyze` is visible as such. A failed analysis is logged
+and skipped; it does not end the tick.
 
 An incident is `(container, workload, normalized message)`: timestamps, ids,
 addresses and numbers are replaced before hashing, so the same error from
@@ -38,10 +44,24 @@ draft.
 
 Guardrails and the definition of "fixable here" are in `prompts.py`.
 
+## Logs
+
+Every task narrates what it does: the Loki window and the top incidents, the
+clone, each opencode tool call and reply as it happens, the verdict and its
+reason, changed files, push and PR. `triage` logs each run it starts, its
+phase, duration and cache status. `kubectl -n cms logs <pod>` or
+`flyte get logs <run>`.
+
 ## Running
 
-Flux deploys the trigger; nothing else is needed. To trigger one run by hand
-from a pod that has the image (the deploy Job's, for instance):
+The launcher is a CronJob ([`apps/self-repair`](../../apps/self-repair)),
+suspended while testing; start a tick by hand with
+
+```bash
+kubectl -n cms create job --from=cronjob/self-repair self-repair-manual-$(date +%s)
+```
+
+or from any pod with the image and the code:
 
 ```bash
 cd /workflow
@@ -50,16 +70,10 @@ flyte --config config.yaml get run
 flyte --config config.yaml get logs <run-name>
 ```
 
-To pause:
-
-```bash
-flyte --config config.yaml update trigger every-15-minutes self-repair.triage --deactivate -p self-repair -d development
-```
-
 ## Tuning
 
 - `MODEL`: any `provider/model` opencode knows; a paid Zen model needs the
   `self-repair-opencode` Secret.
-- `triage` inputs (`window_minutes`, `max_incidents`, `max_fixes`) are trigger
-  defaults; override them in the `Trigger.inputs`.
+- `triage` inputs (`window_minutes`, `max_incidents`, `max_fixes`) have defaults
+  in the task signature; the launcher passes only `trigger_time`.
 - To re-judge every known error, add a `salt` to the `flyte.Cache` of `analyze`.

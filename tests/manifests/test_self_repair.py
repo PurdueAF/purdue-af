@@ -18,8 +18,6 @@ def docs(path: Path):
 
 
 def test_flux_deploys_the_app_as_one_kustomization():
-    """Its own kustomization, because deploy/experimental disables generator
-    name hashes and the deploy Job relies on the hash to be re-run."""
     experimental = yaml.safe_load(EXPERIMENTAL.read_text())
     assert "../../apps/self-repair" in experimental["resources"]
     assert not any(
@@ -34,10 +32,9 @@ def test_flux_deploys_the_app_as_one_kustomization():
     app = yaml.safe_load((APP / "kustomization.yaml").read_text())
     assert app["resources"] == [
         "podtemplate.yaml",
-        "deploy-job.yaml",
+        "cronjob.yaml",
         "secret-github.yaml",
     ]
-    assert "generatorOptions" not in app
     (generator,) = app["configMapGenerator"]
     assert generator["name"] == "self-repair-workflow"
     assert generator["options"]["annotations"] == {
@@ -61,35 +58,27 @@ def test_github_token_secret_is_encrypted():
     assert any(r["recipient"].startswith("age1") for r in secret["sops"]["age"])
 
 
-def test_deploy_job_is_forced_and_deploys_the_environment():
-    (job,) = docs(APP / "deploy-job.yaml")
-    assert job["kind"] == "Job"
-    assert (
-        job["metadata"]["annotations"]["kustomize.toolkit.fluxcd.io/force"] == "enabled"
-    )
-    spec = job["spec"]["template"]["spec"]
-    assert "ttlSecondsAfterFinished" not in job["spec"], (
-        "a TTL would make Flux re-run the deploy every minute"
-    )
-    assert spec["restartPolicy"] == "OnFailure"
-    (container,) = spec["containers"]
-    script = "".join(container["args"])
-    assert (
-        "flyte --config config.yaml deploy -p self-repair -d development self_repair.py env"
-        in script
-    )
-    assert "create project --id self-repair" in script
+def test_launcher_is_a_suspended_cronjob_running_the_module():
+    (cronjob,) = docs(APP / "cronjob.yaml")
+    assert cronjob["kind"] == "CronJob" and cronjob["metadata"]["name"] == "self-repair"
+    spec = cronjob["spec"]
+    assert spec["suspend"] is True, "testing: ticks are started by hand"
+    assert spec["concurrencyPolicy"] == "Forbid"
+    pod = spec["jobTemplate"]["spec"]["template"]["spec"]
+    (container,) = pod["containers"]
+    assert container["command"] == ["python", "self_repair.py"]
     assert container["workingDir"] == "/workflow"
-    assert spec["volumes"][0]["configMap"]["name"] == "self-repair-workflow"
     assert container["image"].endswith("/purdueaf/self-repair:latest")
+    assert pod["volumes"][0]["configMap"]["name"] == "self-repair-workflow"
+    assert pod["securityContext"]["runAsUser"] == 1000
+    # the manual trigger documented in the README must match the CronJob name
+    assert "create job --from=cronjob/self-repair" in (APP / "README.md").read_text()
 
 
 def test_task_pods_get_the_github_token_from_the_pod_template():
     (template,) = docs(APP / "podtemplate.yaml")
-    assert (
-        template["kind"] == "PodTemplate"
-        and template["metadata"]["name"] == "self-repair"
-    )
+    assert template["kind"] == "PodTemplate"
+    assert template["metadata"]["name"] == "self-repair"
     (container,) = template["template"]["spec"]["containers"]
     assert container["name"] == "default"
     env = {e["name"]: e["valueFrom"]["secretKeyRef"] for e in container["env"]}
@@ -101,7 +90,7 @@ def test_task_pods_get_the_github_token_from_the_pod_template():
     assert 'pod_template="self-repair"' in workflow
 
 
-def test_workflow_targets_the_control_plane_and_is_triggered():
+def test_workflow_names_its_runs_and_needs_no_trigger():
     config = yaml.safe_load((WORKFLOW / "config.yaml").read_text())
     flyte_values = yaml.safe_load((REPO / "apps/flyte/values.yaml").read_text())
     assert config["admin"]["endpoint"].startswith(
@@ -110,13 +99,23 @@ def test_workflow_targets_the_control_plane_and_is_triggered():
     assert config["task"] == {"project": "self-repair", "domain": "development"}
 
     workflow = (WORKFLOW / "self_repair.py").read_text()
-    assert re.search(r'flyte\.Cron\("\*/15 \* \* \* \*"\)', workflow)
-    assert 'inputs={"trigger_time": flyte.TriggerTime}' in workflow
-    assert "triggers=every_15_minutes" in workflow
+    assert "flyte.Trigger(" not in workflow and "triggers=" not in workflow
+    for run_name in (
+        'f"self-repair-triage-{now:%Y%m%d-%H%M%S}"',
+        'f"self-repair-watch-{stamp}"',
+        'f"self-repair-analyze-{stamp}-{incident.key.fingerprint}"',
+        'f"self-repair-fix-{stamp}-{fingerprint}"',
+    ):
+        assert run_name in workflow, run_name
+    assert "flyte.with_runcontext(name=" in workflow
     assert 'ignored_inputs=("evidence",)' in workflow, (
-        "analyze must be cached on the key alone"
+        "analyze is cached on the key alone"
+    )
+    assert "return_exceptions=True" in workflow, (
+        "one failed analysis must not end the tick"
     )
     assert '"git push*": "deny"' in workflow and '"git commit*": "deny"' in workflow
+    assert "CatalogCacheStatus.Name(" in workflow, "cache hits are logged"
 
 
 def test_image_is_built_published_and_pinned_consistently():
@@ -131,7 +130,7 @@ def test_image_is_built_published_and_pinned_consistently():
     assert "opencode --version" in matrix["self-repair"]["smoke"]
     resolve = ci["jobs"]["resolve"]["steps"][-1]["run"]
     assert "self-repair" in resolve, (
-        "the publish stage only moves :latest for names listed in resolve"
+        "publish only moves :latest for names listed in resolve"
     )
     status = (REPO / ".github/workflows/component-status.py").read_text()
     assert '"self-repair",' in status

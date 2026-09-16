@@ -57,9 +57,42 @@ deployment:
         value: cms-af
         effect: NoSchedule
 
-# The console only works behind an ingress on the same host as the API; none is exposed.
+# The console calls the API on its own origin, so the ingress below serves
+# both: the SPA under /v2, the flyteidl2.* services next to it. Basic auth in
+# front of everything — the API has no auth of its own, and anyone who reaches
+# it can run tasks in cms.
 console:
-  replicaCount: 0
+  replicaCount: 1
+  image:
+    # What :latest resolved to on 2026-09-16; the image publishes git-sha tags only.
+    tag: 51cf2bba8935adbd47280c41f56041f23fd10600
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: hub.jupyter.org/dedicated
+      operator: Equal
+      value: cms-af
+      effect: NoSchedule
+
+# Needs a DNS record for the host (RCAC, like loki-cms); the manifests are
+# ready for it. The auth Secret is secret-console-auth.yaml.
+ingress:
+  create: ${enable_ingresses}
+  host: flyte-cms.geddes.rcac.purdue.edu
+  ingressClassName: public
+  tls:
+    - hosts:
+        - flyte-cms.geddes.rcac.purdue.edu
+  commonAnnotations:
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: flyte-console-auth
+    nginx.ingress.kubernetes.io/auth-realm: Flyte console
 
 flyteconnector:
   enabled: false

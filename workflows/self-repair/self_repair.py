@@ -1,5 +1,9 @@
 """Flyte 2 tasks: watch Loki, analyze each error with opencode, and open a
-draft pull request when the fix belongs in this repository."""
+draft pull request when the fix belongs in this repository.
+
+`triage` orchestrates. It starts every other task as a run of its own, named
+after the task, so pods read `self-repair-<task>-<stamp>[-<fingerprint>]-a0-0`
+and each run shows up by name in the console."""
 
 import asyncio
 import json
@@ -7,6 +11,7 @@ import os
 import subprocess
 import tempfile
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -22,6 +27,7 @@ from triage import (
     cluster,
     collect_reply,
     create_pull_request,
+    describe_event,
     open_pull_request,
     parse_verdict,
     pull_request_body,
@@ -40,6 +46,7 @@ BRANCH_PREFIX = "self-repair-"
 MODEL = "opencode/big-pickle"
 MIN_CONFIDENCE = 0.7
 AGENT_TIMEOUT_S = 20 * 60
+LOG_INCIDENTS = 20
 
 READ_ONLY = {"edit": "deny", "bash": "deny", "webfetch": "deny"}
 EDIT = {
@@ -63,12 +70,9 @@ env = flyte.TaskEnvironment(
     resources=flyte.Resources(cpu=1, memory="2Gi"),
 )
 
-every_15_minutes = flyte.Trigger(
-    "every-15-minutes",
-    flyte.Cron("*/15 * * * *"),
-    inputs={"trigger_time": flyte.TriggerTime},
-    description="Triage the error lines of the last 20 minutes in cms",
-)
+
+def _log(message: str) -> None:
+    print(f"[{datetime.now(timezone.utc):%H:%M:%S}] {message}", flush=True)
 
 
 def _git(*args: str, cwd: Path) -> str:
@@ -79,6 +83,7 @@ def _git(*args: str, cwd: Path) -> str:
 
 
 def _clone(dest: Path) -> None:
+    started = time.monotonic()
     subprocess.run(
         [
             "git",
@@ -105,9 +110,11 @@ def _clone(dest: Path) -> None:
     )
     _git("config", "user.name", "self-repair", cwd=dest)
     _git("config", "user.email", "self-repair@users.noreply.github.com", cwd=dest)
+    head = _git("rev-parse", "--short", "HEAD", cwd=dest).strip()
+    _log(f"cloned {REPO}@{head} ({BASE_BRANCH}) in {time.monotonic() - started:.0f}s")
 
 
-def _run_agent(cwd: Path, prompt: str, permission: dict[str, Any]) -> str:
+def _run_agent(cwd: Path, prompt: str, permission: dict[str, Any], label: str) -> str:
     config = {
         "$schema": "https://opencode.ai/config.json",
         "model": MODEL,
@@ -118,6 +125,12 @@ def _run_agent(cwd: Path, prompt: str, permission: dict[str, Any]) -> str:
         "w", suffix=".json", prefix="opencode-", delete=False
     ) as handle:
         json.dump(config, handle)
+    mode = "read-only" if permission is READ_ONLY else "edit"
+    _log(f"{label}: opencode {MODEL} ({mode}) in {cwd}")
+    started = time.monotonic()
+    stderr = tempfile.NamedTemporaryFile(
+        "w+", suffix=".log", prefix="opencode-", delete=False
+    )
     proc = subprocess.Popen(
         [
             "opencode",
@@ -133,27 +146,48 @@ def _run_agent(cwd: Path, prompt: str, permission: dict[str, Any]) -> str:
         cwd=cwd,
         env={**os.environ, "OPENCODE_CONFIG": handle.name},
         stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
+        stderr=stderr,
         text=True,
     )
+
+    def narrate(event: dict[str, Any]) -> None:
+        line = describe_event(event)
+        if line:
+            _log(f"{label}: agent {line}")
+
     # The answer is complete at the model's final turn; the process is not
     # trusted to exit after it (opencode 1.18 lingers), so a timer bounds the
     # whole thing and the reader stops on its own.
-    timer = threading.Timer(AGENT_TIMEOUT_S, proc.kill)
+    timed_out = threading.Event()
+
+    def expire() -> None:
+        timed_out.set()
+        proc.kill()
+
+    timer = threading.Timer(AGENT_TIMEOUT_S, expire)
     timer.start()
     try:
         assert proc.stdout is not None
-        reply = collect_reply(proc.stdout)
+        reply = collect_reply(proc.stdout, narrate)
     finally:
         timer.cancel()
         if proc.poll() is None:
             proc.kill()
         proc.wait()
-    if reply.error:
-        raise RuntimeError(f"opencode failed: {reply.error}")
-    if not reply.finished:
-        raise RuntimeError(f"opencode gave no final answer within {AGENT_TIMEOUT_S}s")
-    return reply.text
+        stderr.seek(0)
+        errors = stderr.read().strip()
+        stderr.close()
+    elapsed = time.monotonic() - started
+    if errors:
+        _log(f"{label}: opencode stderr: {errors[-1500:]}")
+    if reply.finished:
+        _log(f"{label}: agent finished in {elapsed:.0f}s")
+        return reply.text
+    if timed_out.is_set():
+        raise RuntimeError(
+            f"opencode gave no final answer within {AGENT_TIMEOUT_S}s (killed)"
+        )
+    raise RuntimeError(f"opencode failed after {elapsed:.0f}s: {reply.error}")
 
 
 def _describe(key: IncidentKey, evidence: Evidence) -> str:
@@ -171,9 +205,20 @@ def _describe(key: IncidentKey, evidence: Evidence) -> str:
 
 @env.task(retries=2, timeout=timedelta(minutes=5))
 def watch(start: datetime, end: datetime) -> list[Incident]:
+    _log(
+        f"querying {LOKI_URL} for error lines in {NAMESPACE}, {start:%H:%M:%S}..{end:%H:%M:%S} UTC"
+    )
     lines = query_loki(LOKI_URL, NAMESPACE, start, end)
     incidents = cluster(lines)
-    print(f"{len(lines)} error lines in {len(incidents)} distinct incident(s)")
+    _log(
+        f"{len(lines)} error lines in {len(incidents)} distinct incident(s); top {min(LOG_INCIDENTS, len(incidents))}:"
+    )
+    for incident in incidents[:LOG_INCIDENTS]:
+        key, evidence = incident.key, incident.evidence
+        _log(
+            f"  {key.fingerprint} x{evidence.count} in {evidence.pods} pod(s) "
+            f"{key.workload}/{key.container}: {key.message[:100]}"
+        )
     return incidents
 
 
@@ -184,18 +229,20 @@ def watch(start: datetime, end: datetime) -> list[Incident]:
     timeout=timedelta(minutes=30),
 )
 def analyze(key: IncidentKey, evidence: Evidence) -> Verdict:
+    _log(
+        f"{key.fingerprint}: {key.workload}/{key.container} x{evidence.count}: {key.message[:120]}"
+    )
     with tempfile.TemporaryDirectory(prefix="self-repair-") as tmp:
         repo = Path(tmp) / "repo"
         _clone(repo)
-        reply = _run_agent(
-            repo,
-            prompts.ANALYZE.substitute(incident=_describe(key, evidence)),
-            READ_ONLY,
-        )
+        prompt = prompts.ANALYZE.substitute(incident=_describe(key, evidence))
+        reply = _run_agent(repo, prompt, READ_ONLY, key.fingerprint)
     verdict = parse_verdict(reply)
-    print(
-        f"{key.fingerprint}: fixable={verdict.fixable} confidence={verdict.confidence} {verdict.title}"
+    _log(
+        f"{key.fingerprint}: verdict fixable={verdict.fixable} confidence={verdict.confidence} "
+        f"component={verdict.component or '-'} title={verdict.title or '-'}"
     )
+    _log(f"{key.fingerprint}: reason: {verdict.reason}")
     return verdict
 
 
@@ -203,9 +250,10 @@ def analyze(key: IncidentKey, evidence: Evidence) -> Verdict:
 def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict) -> str:
     token = os.environ["GITHUB_TOKEN"]
     branch = BRANCH_PREFIX + key.fingerprint
+    _log(f"{key.fingerprint}: {verdict.title} ({verdict.component}); branch {branch}")
     existing = open_pull_request(REPO, branch, token)
     if existing:
-        print(f"{branch}: {existing} is already open")
+        _log(f"{key.fingerprint}: {existing} is already open, nothing to do")
         return existing
     with tempfile.TemporaryDirectory(prefix="self-repair-") as tmp:
         repo = Path(tmp) / "repo"
@@ -218,10 +266,12 @@ def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict) -> str:
             reason=verdict.reason,
             plan=verdict.plan,
         )
-        reply = _run_agent(repo, prompt, EDIT)
-        if not _git("status", "--porcelain", cwd=repo).strip():
-            print(f"{key.fingerprint}: the agent changed nothing")
+        reply = _run_agent(repo, prompt, EDIT, key.fingerprint)
+        changed = _git("status", "--porcelain", cwd=repo).strip()
+        if not changed:
+            _log(f"{key.fingerprint}: the agent changed nothing")
             return ""
+        _log(f"{key.fingerprint}: changed files:\n{changed}")
         _git("add", "-A", cwd=repo)
         _git(
             "commit",
@@ -232,15 +282,38 @@ def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict) -> str:
         )
         # A branch left behind by a closed PR is overwritten: it is this bot's.
         _git("push", "-q", "--force", "origin", branch, cwd=repo)
+        _log(f"{key.fingerprint}: pushed {branch}")
     ctx = flyte.ctx()
     run_name = (ctx.action.run_name or "") if ctx else ""
     body = pull_request_body(key, evidence, verdict, reply, run_name, MODEL)
     url = create_pull_request(REPO, token, branch, BASE_BRANCH, verdict.title, body)
-    print(f"{key.fingerprint}: opened {url}")
+    _log(f"{key.fingerprint}: opened {url}")
     return url
 
 
-@env.task(triggers=every_15_minutes, timeout=timedelta(hours=2))
+async def _spawn(name: str, task: Any, *args: Any, output_type: Any) -> Any:
+    """Run `task` as its own run called `name`, wait for it, and return its output.
+
+    Its pod is `<name>-a0-0`. A cache hit finishes without a pod and is logged as such."""
+    from flyteidl2.common import phase_pb2
+    from flyteidl2.core import catalog_pb2
+
+    started = time.monotonic()
+    run = await flyte.with_runcontext(name=name).run.aio(task, *args)
+    _log(f"{name}: started ({run.url})")
+    await run.wait.aio(quiet=True)
+    details = await run.details.aio()
+    status = details.action_details.pb2.status
+    phase = phase_pb2.ActionPhase.Name(status.phase).removeprefix("ACTION_PHASE_")
+    cache = catalog_pb2.CatalogCacheStatus.Name(status.cache_status)
+    _log(f"{name}: {phase.lower()} in {time.monotonic() - started:.0f}s, cache {cache}")
+    if phase != "SUCCEEDED":
+        raise RuntimeError(f"{name} ended in {phase}")
+    outputs = await run.typed_outputs.aio({"o0": output_type})
+    return outputs["o0"]
+
+
+@env.task(timeout=timedelta(hours=2))
 async def triage(
     trigger_time: datetime,
     window_minutes: int = 20,
@@ -249,25 +322,67 @@ async def triage(
 ) -> Summary:
     if trigger_time.tzinfo is None:
         trigger_time = trigger_time.replace(tzinfo=timezone.utc)
+    stamp = f"{trigger_time:%Y%m%d-%H%M%S}"
     start = trigger_time - timedelta(minutes=window_minutes)
-    incidents = await watch.aio(start, trigger_time)
-    selected = incidents[:max_incidents]
-    verdicts = await asyncio.gather(
-        *(analyze.aio(incident.key, incident.evidence) for incident in selected)
+    _log(
+        f"tick {stamp}: window {start:%H:%M:%S}..{trigger_time:%H:%M:%S} UTC, up to {max_incidents} analyses and {max_fixes} fixes"
     )
+
+    incidents: list[Incident] = await _spawn(
+        f"self-repair-watch-{stamp}",
+        watch,
+        start,
+        trigger_time,
+        output_type=list[Incident],
+    )
+    selected = incidents[:max_incidents]
+    _log(
+        f"analyzing {len(selected)} of {len(incidents)} incident(s): {', '.join(i.key.fingerprint for i in selected) or '-'}"
+    )
+    results = await asyncio.gather(
+        *(
+            _spawn(
+                f"self-repair-analyze-{stamp}-{incident.key.fingerprint}",
+                analyze,
+                incident.key,
+                incident.evidence,
+                output_type=Verdict,
+            )
+            for incident in selected
+        ),
+        return_exceptions=True,
+    )
+
     fixable = 0
+    failed = 0
     pull_requests: list[str] = []
-    for incident, verdict in zip(selected, verdicts):
+    for incident, result in zip(selected, results):
+        fingerprint = incident.key.fingerprint
+        if isinstance(result, BaseException):
+            failed += 1
+            _log(f"{fingerprint}: analysis failed, skipping: {result}")
+            continue
+        verdict: Verdict = result
         if not (verdict.fixable and verdict.confidence >= MIN_CONFIDENCE):
+            _log(
+                f"{fingerprint}: not fixable here (fixable={verdict.fixable}, confidence={verdict.confidence})"
+            )
             continue
         fixable += 1
         if len(pull_requests) >= max_fixes:
+            _log(f"{fingerprint}: fixable, but {max_fixes} fix(es) already this tick")
             continue
-        with flyte.group(f"fix-{incident.key.fingerprint}"):
-            url = await fix.aio(incident.key, incident.evidence, verdict)
+        url = await _spawn(
+            f"self-repair-fix-{stamp}-{fingerprint}",
+            fix,
+            incident.key,
+            incident.evidence,
+            verdict,
+            output_type=str,
+        )
         if url:
             pull_requests.append(url)
-    return Summary(
+    summary = Summary(
         window_start=start.isoformat(),
         window_end=trigger_time.isoformat(),
         lines=sum(incident.evidence.count for incident in incidents),
@@ -275,11 +390,20 @@ async def triage(
         fixable=fixable,
         pull_requests=pull_requests,
     )
+    _log(
+        f"tick {stamp} done: {summary.lines} lines, {summary.incidents} incidents, "
+        f"{summary.fixable} fixable, {failed} analysis failure(s), "
+        f"{len(pull_requests)} PR(s) {' '.join(pull_requests)}"
+    )
+    return summary
 
 
 if __name__ == "__main__":
+    # The launcher: apps/self-repair/cronjob.yaml runs this on its schedule,
+    # `kubectl create job --from=cronjob/self-repair ...` runs it by hand.
     flyte.init_from_config("config.yaml", root_dir=Path(__file__).parent)
-    run = flyte.run(triage, trigger_time=datetime.now(timezone.utc))
-    print(run.url)
-    run.wait()
-    print(run.outputs())
+    now = datetime.now(timezone.utc)
+    run = flyte.with_runcontext(name=f"self-repair-triage-{now:%Y%m%d-%H%M%S}").run(
+        triage, trigger_time=now
+    )
+    print(run.name, run.url)

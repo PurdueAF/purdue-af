@@ -1,15 +1,15 @@
-# Its own kustomization, not entries in deploy/experimental: that root
-# disables generator name hashes globally and kustomize lets no generator
-# opt back in, while the hash is the point here — it turns a code change into
-# a new ConfigMap name, hence a new Job spec, hence a `flyte deploy`.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - podtemplate.yaml
-  - deploy-job.yaml
+  - cronjob.yaml
   # sops-encrypted (age recipient in .sops.yaml); the token value only.
   - secret-github.yaml
+generatorOptions:
+  disableNameSuffixHash: true
 configMapGenerator:
+  # Read by the launcher at every tick, so a merged code change is picked up
+  # by the next run with no redeploy.
   - name: self-repair-workflow
     options:
       annotations:
