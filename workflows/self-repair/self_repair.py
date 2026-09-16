@@ -357,6 +357,13 @@ class ProviderError(RuntimeError):
     pass
 
 
+# The platform context every agent in an AF session reads, mounted by
+# apps/self-repair/podtemplate.yaml from the same file the purdue-af image
+# carries at this path. Handed to opencode the way config-agents.sh does it:
+# `instructions`, the additive channel, not an AGENTS.md.
+PLATFORM_CONTEXT = Path("/opt/purdue-af/agents/platform-context.md")
+
+
 def _run_agent(cwd: Path, prompt: str, permission: dict[str, Any], label: str) -> str:
     mode = "read-only" if permission is READ_ONLY else "edit"
     # opencode talks to the re-framing proxy (genai_proxy.py), the proxy to
@@ -371,6 +378,12 @@ def _run_agent(cwd: Path, prompt: str, permission: dict[str, Any], label: str) -
             "permission": permission,
             "share": "disabled",
         }
+        if PLATFORM_CONTEXT.is_file():
+            config["instructions"] = [str(PLATFORM_CONTEXT)]
+        else:
+            _log(
+                f"{label}: no platform context at {PLATFORM_CONTEXT}; agent runs without it"
+            )
         with tempfile.NamedTemporaryFile(
             "w", suffix=".json", prefix="opencode-", delete=False
         ) as handle:
@@ -655,7 +668,9 @@ async def _spawn(name: str, task: Any, *args: Any, output_type: Any) -> tuple[An
 @env.task(report=True, timeout=timedelta(hours=4))
 async def triage(
     trigger_time: datetime,
-    window_minutes: int = 20,
+    # One hourly tick, plus slack for a late start (startingDeadlineSeconds)
+    # and for lines Loki ingests late; repeats cost nothing, the cache has them.
+    window_minutes: int = 75,
     # 60 requests/min per user at GenAI Studio; a session makes several a
     # minute, so a handful in parallel is the ceiling, not 20.
     max_incidents: int = 6,

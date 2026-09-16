@@ -2,16 +2,16 @@
 # launcher exits as soon as the run is accepted. Registering the tasks
 # happens on the run itself, so there is no separate deploy step.
 #
-# Suspended while the workflow is being tested. Fire one by hand with
+# Hourly; each tick reads a little more than an hour of logs (triage's
+# window_minutes), so nothing falls between ticks. An extra tick by hand:
 #   kubectl -n cms create job --from=cronjob/self-repair self-repair-manual-$(date +%s)
-# and set `suspend: false` to go live.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: self-repair
 spec:
   schedule: "0 * * * *"
-  suspend: true
+  suspend: false
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 600
   successfulJobsHistoryLimit: 3

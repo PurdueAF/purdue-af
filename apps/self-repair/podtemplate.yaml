@@ -44,3 +44,13 @@ template:
                 name: self-repair-opencode
                 key: api-key
                 optional: true
+        volumeMounts:
+          # Same path as in the purdue-af image; opencode is pointed at it
+          # through `instructions`, exactly as config-agents.sh does.
+          - name: platform-context
+            mountPath: /opt/purdue-af/agents
+            readOnly: true
+    volumes:
+      - name: platform-context
+        configMap:
+          name: self-repair-platform-context

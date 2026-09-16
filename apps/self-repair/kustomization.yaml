@@ -22,3 +22,12 @@ configMapGenerator:
       - ../../workflows/self-repair/prompts.py
       - ../../workflows/self-repair/genai_proxy.py
       - ../../workflows/self-repair/config.yaml
+  # The platform context every agent in an AF session reads, from the one file
+  # the purdue-af image bakes in (docker/purdue-af/agents/platform-context.md);
+  # mounted at the same path by podtemplate.yaml.
+  - name: self-repair-platform-context
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../docker/purdue-af/agents/platform-context.md

@@ -121,7 +121,8 @@ silence ends the session, and a rate limit is retried once after a pause.
 ## Running
 
 The launcher is a CronJob ([`apps/self-repair`](../../apps/self-repair)),
-suspended while testing; start a tick by hand with
+hourly, each tick reading a little more than an hour of logs; start an extra
+tick by hand with
 
 ```bash
 kubectl -n cms create job --from=cronjob/self-repair self-repair-manual-$(date +%s)
@@ -143,4 +144,7 @@ flyte --config config.yaml get logs <run-name>
   `self-repair-opencode` Secret).
 - `triage` inputs (`window_minutes`, `max_incidents`, `max_fixes`) have defaults
   in the task signature; the launcher passes only `trigger_time`.
+- The agents get the same platform context as the agents in an AF session:
+  `docker/purdue-af/agents/platform-context.md`, mounted at
+  `/opt/purdue-af/agents/` and named in opencode's `instructions`.
 - To re-judge every known error, add a `salt` to the `flyte.Cache` of `analyze`.
