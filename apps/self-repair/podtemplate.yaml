@@ -31,7 +31,13 @@ template:
               secretKeyRef:
                 name: self-repair-github
                 key: token
-          # OpenCode Zen key. Optional: the default model is a free one.
+          # Purdue GenAI Studio key, from the sops-encrypted secret-genai.yaml.
+          - name: GENAI_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: self-repair-genai
+                key: api-key
+          # OpenCode Zen key. Optional: only for an opencode/* model.
           - name: OPENCODE_API_KEY
             valueFrom:
               secretKeyRef:

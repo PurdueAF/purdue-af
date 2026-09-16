@@ -19,4 +19,5 @@ configMapGenerator:
       - ../../workflows/self-repair/self_repair.py
       - ../../workflows/self-repair/triage.py
       - ../../workflows/self-repair/prompts.py
+      - ../../workflows/self-repair/genai_proxy.py
       - ../../workflows/self-repair/config.yaml

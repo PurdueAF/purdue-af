@@ -13,6 +13,7 @@ cluster side (task pods, secrets, the deploy Job) is
 | `self_repair.py` | The tasks, the environment and the launcher (`__main__`)                        |
 | `triage.py`      | Loki query, error fingerprints, username redaction, verdict parsing, GitHub API |
 | `prompts.py`     | What the agent is told, for analysis and for the fix                            |
+| `genai_proxy.py` | Re-framing proxy on 127.0.0.1 between opencode and GenAI Studio (see below)     |
 | `config.yaml`    | Where `flyte` finds the control plane                                           |
 
 ## Tasks
@@ -52,14 +53,28 @@ addresses and numbers are replaced before hashing, so the same error from
 every replica over every tick is one incident. Usernames are redacted from
 pod names, paths and `user=` fields before anything reaches a PR.
 
-The agent is [opencode](https://opencode.ai) with a free OpenCode Zen model
-(`MODEL` in `self_repair.py`). Analysis runs with edit and bash denied; the fix
+The agent is [opencode](https://opencode.ai) on
+[Purdue GenAI Studio](https://docs.rcac.purdue.edu/services/genai/), model
+`gemma4:26b-a4b` (`MODEL` and `PROVIDERS` in `self_repair.py`; the key is the
+`self-repair-genai` Secret). GenAI Studio allows 60 requests a minute per
+user and about 10 concurrent calls per model, which is what sizes
+`max_incidents`. Analysis runs with edit and bash denied; the fix
 runs with edit allowed and `git push`/`commit`/`checkout`/`reset` denied — the
 task commits and pushes. A PR is opened only when the verdict is fixable at
 confidence ≥ `MIN_CONFIDENCE`, at most `max_fixes` per tick, and always as a
 draft.
 
 Guardrails and the definition of "fixable here" are in `prompts.py`.
+
+opencode does not talk to GenAI Studio directly. GenAI Studio's streaming
+responses end by closing the connection without the chunked-encoding
+terminator; Node's fetch, which opencode uses, reports that as a reset, the
+adapter retries the step, and every tool call of the step runs again — the
+same `read` five times, then a hard failure. `genai_proxy.py` runs on
+127.0.0.1 in the task pod, reads the upstream leniently, and hands opencode
+well-formed responses; it also turns GenAI Studio's rate-limit signal, a JSON
+`null` body, into an HTTP 429. The provider's `baseURL` is set to the proxy
+per session.
 
 ## At a glance
 
@@ -99,8 +114,9 @@ flyte --config config.yaml get logs <run-name>
 
 ## Tuning
 
-- `MODEL`: any `provider/model` opencode knows; a paid Zen model needs the
-  `self-repair-opencode` Secret.
+- `MODEL`: `genai/<id>` for any GenAI Studio model listed in `PROVIDERS`, or any
+  `provider/model` opencode knows (an `opencode/*` Zen model needs the
+  `self-repair-opencode` Secret).
 - `triage` inputs (`window_minutes`, `max_incidents`, `max_fixes`) have defaults
   in the task signature; the launcher passes only `trigger_time`.
 - To re-judge every known error, add a `salt` to the `flyte.Cache` of `analyze`.
