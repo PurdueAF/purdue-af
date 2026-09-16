@@ -118,6 +118,9 @@ def test_workflow_names_its_runs_and_needs_no_trigger():
         "one failed analysis must not end the tick"
     )
     assert '"git push*": "deny"' in workflow and '"git commit*": "deny"' in workflow
+    assert workflow.count('"websearch": "deny"') == 2, (
+        "both permission sets stay off the web"
+    )
     assert "CatalogCacheStatus.Name(" in workflow, "cache hits are logged"
 
 

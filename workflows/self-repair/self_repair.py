@@ -48,10 +48,13 @@ MIN_CONFIDENCE = 0.7
 AGENT_TIMEOUT_S = 20 * 60
 LOG_INCIDENTS = 20
 
-READ_ONLY = {"edit": "deny", "bash": "deny", "webfetch": "deny"}
+# No web: the question is always about this repository, and a free model
+# searching the web for CRD docs is how an analysis runs into its timeout.
+READ_ONLY = {"edit": "deny", "bash": "deny", "webfetch": "deny", "websearch": "deny"}
 EDIT = {
     "edit": "allow",
     "webfetch": "deny",
+    "websearch": "deny",
     "bash": {
         "git push*": "deny",
         "git commit*": "deny",
