@@ -18,7 +18,7 @@ from typing import Any
 import flyte
 import prompts
 from triage import (
-    WATCHED_WORKLOADS,
+    ALL_WORKLOADS,
     Evidence,
     Incident,
     IncidentKey,
@@ -232,7 +232,7 @@ def _describe(key: IncidentKey, evidence: Evidence) -> str:
 def watch(start: datetime, end: datetime) -> list[Incident]:
     _log(
         f"querying {LOKI_URL} for error lines in {NAMESPACE}, {start:%H:%M:%S}..{end:%H:%M:%S} UTC, "
-        f"from {len(WATCHED_WORKLOADS)} watched workloads (triage.WATCHED_WORKLOADS)"
+        f"from {len(ALL_WORKLOADS)} watched workloads (triage.WATCHED_WORKLOADS + USER_WORKLOADS)"
     )
     lines = query_loki(LOKI_URL, NAMESPACE, start, end)
     incidents = cluster(lines)
