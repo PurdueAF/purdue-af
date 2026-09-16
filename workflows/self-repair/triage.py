@@ -4,6 +4,7 @@ GitHub calls. No flyte import, so the tests run without the SDK."""
 
 import asyncio
 import hashlib
+import html
 import json
 import re
 import urllib.error
@@ -388,6 +389,70 @@ async def analyze_within_budget(
             else:
                 log(f"{incident.key.fingerprint}: known, from cache")
     return [(incident, results[id(incident)]) for incident in order]
+
+
+# ── Report ─────────────────────────────────────────────────────────────────────
+
+STATUS_ORDER = ("fixable", "not fixable", "failed", "pending", "not analyzed")
+
+
+@dataclass
+class Row:
+    fingerprint: str
+    workload: str
+    container: str
+    count: int
+    status: str  # one of STATUS_ORDER
+    confidence: float = 0.0
+    title: str = ""
+    component: str = ""
+    reason: str = ""
+    pull_request: str = ""
+    cache: str = ""
+
+
+def report_html(tick: str, window: str, rows: list[Row]) -> str:
+    """The triage run's report tab: the verdict count first, then one line per
+    incident, fixable ones on top. Plain HTML, inserted into the console's div."""
+    analyzed = [r for r in rows if r.status in ("fixable", "not fixable")]
+    fixable = [r for r in analyzed if r.status == "fixable"]
+    failed = sum(r.status == "failed" for r in rows)
+    hits = sum(r.cache == CACHE_HIT for r in rows)
+    ordered = sorted(
+        rows, key=lambda r: (STATUS_ORDER.index(r.status), -r.count, r.fingerprint)
+    )
+    e = html.escape
+    parts = [
+        f"<h2>{len(fixable)} of {len(analyzed)} analyzed incidents fixable in this repository</h2>",
+        f"<p>tick <code>{e(tick)}</code>, window {e(window)} UTC: {len(rows)} incidents, "
+        f"{len(analyzed)} analyzed ({hits} from cache), {failed} failed, "
+        f"{sum(bool(r.pull_request) for r in rows)} pull request(s)</p>",
+        "<table><thead><tr><th>verdict</th><th>conf.</th><th>incident</th><th>x</th>"
+        "<th>title</th><th>component</th><th>PR</th><th>reason</th></tr></thead><tbody>",
+    ]
+    marks = {
+        "fixable": "&#10004; fixable",
+        "not fixable": "&#10008; not fixable",
+        "failed": "&#9888; failed",
+        "pending": "&#8230; pending",
+        "not analyzed": "&ndash; not analyzed",
+    }
+    for r in ordered:
+        pr = (
+            f'<a href="{e(r.pull_request)}">{e(r.pull_request.rsplit("/", 1)[-1])}</a>'
+            if r.pull_request
+            else ""
+        )
+        cache = " (cache)" if r.cache == CACHE_HIT else ""
+        parts.append(
+            f"<tr><td>{marks[r.status]}{cache}</td>"
+            f"<td>{r.confidence:.2f}</td>"
+            f"<td><code>{e(r.fingerprint)}</code> {e(r.workload)}/{e(r.container)}</td>"
+            f"<td>{r.count}</td><td>{e(r.title)}</td><td>{e(r.component)}</td><td>{pr}</td>"
+            f"<td>{e(r.reason[:300])}</td></tr>"
+        )
+    parts.append("</tbody></table>")
+    return "\n".join(parts)
 
 
 # ── Agent output ───────────────────────────────────────────────────────────────

@@ -22,6 +22,7 @@ from triage import (
     Evidence,
     Incident,
     IncidentKey,
+    Row,
     Summary,
     Verdict,
     analyze_within_budget,
@@ -33,6 +34,7 @@ from triage import (
     parse_verdict,
     pull_request_body,
     query_loki,
+    report_html,
 )
 
 IMAGE = "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/self-repair:latest"
@@ -345,7 +347,7 @@ async def _spawn(name: str, task: Any, *args: Any, output_type: Any) -> tuple[An
     return outputs["o0"], cache
 
 
-@env.task(timeout=timedelta(hours=4))
+@env.task(report=True, timeout=timedelta(hours=4))
 async def triage(
     trigger_time: datetime,
     window_minutes: int = 20,
@@ -371,6 +373,24 @@ async def triage(
         f"{len(incidents)} incident(s); up to {max_incidents} fresh analyses, cache hits are free: "
         f"{', '.join(i.key.fingerprint for i in incidents) or '-'}"
     )
+    window = f"{start:%H:%M:%S}..{trigger_time:%H:%M:%S}"
+    rows = {
+        i.key.fingerprint: Row(
+            i.key.fingerprint,
+            i.key.workload,
+            i.key.container,
+            i.evidence.count,
+            "pending",
+        )
+        for i in incidents
+    }
+
+    async def publish() -> None:
+        await flyte.report.replace.aio(
+            report_html(tick, window, list(rows.values())), do_flush=True
+        )
+
+    await publish()
 
     async def spawn_analysis(incident: Incident) -> tuple[Verdict, str]:
         verdict, cache = await _spawn(
@@ -380,11 +400,39 @@ async def triage(
             incident.evidence,
             output_type=Verdict,
         )
+        rows[incident.key.fingerprint].cache = cache
         return verdict, cache
 
     outcomes = await analyze_within_budget(
         incidents, max_incidents, spawn_analysis, _log
     )
+    for row in rows.values():
+        if row.status == "pending":
+            row.status = "not analyzed"
+    for incident, result in outcomes:
+        row = rows[incident.key.fingerprint]
+        if isinstance(result, BaseException):
+            row.status = "failed"
+            row.reason = str(result)
+        else:
+            row.status = (
+                "fixable"
+                if result.fixable and result.confidence >= MIN_CONFIDENCE
+                else "not fixable"
+            )
+            row.confidence, row.title, row.component, row.reason = (
+                result.confidence,
+                result.title,
+                result.component,
+                result.reason,
+            )
+    verdicts = [r for r in rows.values() if r.status in ("fixable", "not fixable")]
+    _log(
+        f"VERDICTS: {sum(r.status == 'fixable' for r in verdicts)} of {len(verdicts)} analyzed "
+        f"incidents fixable here ({sum(r.cache == 'CACHE_HIT' for r in verdicts)} from cache, "
+        f"{sum(r.status == 'failed' for r in rows.values())} failed)"
+    )
+    await publish()
 
     fixable = 0
     failed = 0
@@ -415,6 +463,8 @@ async def triage(
         )
         if url:
             pull_requests.append(url)
+            rows[fingerprint].pull_request = url
+    await publish()
     summary = Summary(
         window_start=start.isoformat(),
         window_end=trigger_time.isoformat(),
