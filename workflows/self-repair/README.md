@@ -22,7 +22,7 @@ cluster side (task pods, secrets, the deploy Job) is
 | `triage`  | Every 15 minutes (`flyte.Cron`), over the previous 20 minutes: `watch`, then `analyze` each incident, then `fix` | no                                                          |
 | `watch`   | One Loki query for `error\|exception\|traceback\|fatal\|panic` in `cms`, grouped into incidents                  | no                                                          |
 | `analyze` | opencode, read-only, in a fresh checkout of `main`: is this fixable by a change in this repository?              | yes, on the incident key (a recurring error is judged once) |
-| `fix`     | opencode with edit rights on a branch `self-repair/<fingerprint>`; commit, push, draft PR                        | no (an open PR for the branch is returned as is)            |
+| `fix`     | opencode with edit rights on a branch `self-repair-<fingerprint>`; commit, push, draft PR                        | no (an open PR for the branch is returned as is)            |
 
 An incident is `(container, workload, normalized message)`: timestamps, ids,
 addresses and numbers are replaced before hashing, so the same error from

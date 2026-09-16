@@ -32,7 +32,11 @@ def test_flux_deploys_the_app_as_one_kustomization():
     )
 
     app = yaml.safe_load((APP / "kustomization.yaml").read_text())
-    assert app["resources"] == ["podtemplate.yaml", "deploy-job.yaml"]
+    assert app["resources"] == [
+        "podtemplate.yaml",
+        "deploy-job.yaml",
+        "secret-github.yaml",
+    ]
     assert "generatorOptions" not in app
     (generator,) = app["configMapGenerator"]
     assert generator["name"] == "self-repair-workflow"
@@ -43,6 +47,18 @@ def test_flux_deploys_the_app_as_one_kustomization():
     assert files == {"self_repair.py", "triage.py", "prompts.py", "config.yaml"}
     for f in generator["files"]:
         assert (APP / f).resolve().is_file(), f
+
+
+def test_github_token_secret_is_encrypted():
+    """A plaintext token here would be public the moment it is pushed."""
+    raw = (APP / "secret-github.yaml").read_text()
+    assert "github_pat_" not in raw and "ghp_" not in raw
+    (secret,) = docs(APP / "secret-github.yaml")
+    assert secret["kind"] == "Secret"
+    assert secret["metadata"]["name"] == "self-repair-github"
+    assert secret["stringData"]["token"].startswith("ENC[AES256_GCM,")
+    assert secret["sops"]["encrypted_regex"] == "^(data|stringData)$"
+    assert any(r["recipient"].startswith("age1") for r in secret["sops"]["age"])
 
 
 def test_deploy_job_is_forced_and_deploys_the_environment():

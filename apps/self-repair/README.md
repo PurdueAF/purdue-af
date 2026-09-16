@@ -16,12 +16,16 @@ suffix: that suffix is what turns a merged code change into a new Job.
 
 ## Secrets
 
-Created by hand in `cms`; nothing here renders them.
+`secret-github.yaml` is sops-encrypted with the repository's age recipient
+(`.sops.yaml`) and decrypted by the experimental Flux Kustomization. To rotate:
+`sops apps/self-repair/secret-github.yaml`, replace the value, commit. On
+macOS point sops at the key first: `export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt`.
+The OpenCode key is created by hand only when a paid model is configured.
 
-| Secret                 | Key       | Required | Holds                                                                                       |
-| ---------------------- | --------- | -------- | ------------------------------------------------------------------------------------------- |
-| `self-repair-github`   | `token`   | yes      | Fine-grained GitHub token: `contents:write` + `pull_requests:write` on `PurdueAF/purdue-af` |
-| `self-repair-opencode` | `api-key` | no       | OpenCode Zen key, for a paid model                                                          |
+| Secret                 | Key       | In repo | Holds                                                                                       |
+| ---------------------- | --------- | ------- | ------------------------------------------------------------------------------------------- |
+| `self-repair-github`   | `token`   | yes     | Fine-grained GitHub token: `contents:write` + `pull_requests:write` on `PurdueAF/purdue-af` |
+| `self-repair-opencode` | `api-key` | no      | OpenCode Zen key, for a paid model                                                          |
 
 The task image is `ghcr.io/purdueaf/self-repair` (`docker/self-repair`), on the
 continuous `:latest` channel like the monitor images.

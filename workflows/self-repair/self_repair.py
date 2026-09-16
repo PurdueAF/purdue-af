@@ -33,7 +33,9 @@ LOKI_URL = "http://loki.cms.svc.cluster.local:3100"
 NAMESPACE = "cms"
 REPO = "PurdueAF/purdue-af"
 BASE_BRANCH = "main"
-BRANCH_PREFIX = "self-repair/"
+# A dash, not a slash: `self-repair/<x>` cannot be created while any branch
+# named `self-repair` exists.
+BRANCH_PREFIX = "self-repair-"
 # A free OpenCode Zen model; OPENCODE_API_KEY (podtemplate.yaml) is optional for these.
 MODEL = "opencode/big-pickle"
 MIN_CONFIDENCE = 0.7

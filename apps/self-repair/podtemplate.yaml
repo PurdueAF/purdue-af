@@ -25,8 +25,7 @@ template:
         image: overridden-by-flyte
         env:
           # Fine-grained token with contents:write and pull_requests:write on
-          # PurdueAF/purdue-af. Created by hand; nothing in this repository
-          # renders it.
+          # PurdueAF/purdue-af, from the sops-encrypted secret-github.yaml.
           - name: GITHUB_TOKEN
             valueFrom:
               secretKeyRef:
