@@ -13,6 +13,55 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Iterable
 
 ERROR_PATTERN = r"(?i)\b(error|exception|traceback|fatal|panic)\b"
+
+# Pod-name prefixes of what Flux deploys from this repository (deploy/*/
+# kustomization.yaml), i.e. what a change here can fix. Not listed on
+# purpose: user sessions (purdue-af-<id>) and user Dask clusters
+# (dask-scheduler-*, dask-worker-*), which run user code, and whatever else
+# lives in the namespace without a manifest here (gen*, etcd, eos-fuse, the
+# one-off kaniko builds).
+WATCHED_WORKLOADS = (
+    # apps/jupyterhub
+    "hub",
+    "proxy",
+    "user-scheduler",
+    "continuous-image-puller",
+    "hook-image",
+    "jupyterhub-ssh",
+    "jupyterhub-sftp",
+    "jupyterhub-database-backup",
+    "af-x509-secrets",
+    "af-userlist-sync",
+    # apps/af-utils
+    "af-users-graph",
+    "pixi-global-sync",
+    # apps/dask-gateway
+    "api-dask-gateway",
+    "controller-dask-gateway",
+    "traefik-dask-gateway",
+    # apps/monitoring
+    "alloy",
+    "loki",
+    "tempo",
+    "pyroscope",
+    "prometheus",
+    "grafana",
+    "af-node-monitor",
+    "af-node-probe",
+    "af-pod-monitor",
+    # apps/agentic-interface, apps/flyte, apps/self-repair
+    "agentic-interface",
+    "flyte",
+    "self-repair",
+    # apps/sonic, apps/ray
+    "supersonic",
+    "sonic-ray",
+    "kuberay-operator",
+    # apps/servicex
+    "servicex",
+    # apps/interlink
+    "interlink",
+)
 MAX_SAMPLES = 8
 MAX_LINE = 400
 MESSAGE_CHARS = 240
@@ -103,11 +152,27 @@ class Summary:
 # ── Loki ───────────────────────────────────────────────────────────────────────
 
 
+def pod_regex(prefixes: tuple[str, ...] = WATCHED_WORKLOADS) -> str:
+    """A LogQL `pod=~` value matching `<prefix>` or `<prefix>-<anything>`.
+    Loki anchors the regex, so `purdue-af-182` matches nothing here."""
+    return "(" + "|".join(re.escape(prefix) for prefix in prefixes) + ")(-.*)?"
+
+
+def watched(pod: str, prefixes: tuple[str, ...] = WATCHED_WORKLOADS) -> bool:
+    return re.fullmatch(pod_regex(prefixes), pod) is not None
+
+
 def loki_url(
-    base: str, namespace: str, start: datetime, end: datetime, limit: int
+    base: str,
+    namespace: str,
+    start: datetime,
+    end: datetime,
+    limit: int,
+    prefixes: tuple[str, ...] = WATCHED_WORKLOADS,
 ) -> str:
-    query = '{namespace="%s"} |~ "%s"' % (
+    query = '{namespace="%s", pod=~"%s"} |~ "%s"' % (
         namespace,
+        pod_regex(prefixes),
         ERROR_PATTERN.replace("\\", "\\\\"),
     )
     params = {
