@@ -136,15 +136,32 @@ class TestLoki:
             "flyte-console-d78d4dc8f-gp26v",
             "af-node-probe-cvmfs-abcde",
             "af-userlist-sync-purdue-29312345-abcde",
-            "supersonic-pr-triton-7d9f8c6b5-abcde",
-            "sonic-ray-hvfln-head",
             "servicex-eos-did-finder-xrootd-abcde",
-            "interlink-hammer-node-0",
             "api-dask-gateway-k8s-slurm-abcde",
         ],
     )
     def test_repo_workloads_are_watched(self, pod):
         assert triage.watched(pod), pod
+
+    @pytest.mark.parametrize(
+        "pod",
+        [
+            "supersonic-pr-triton-7d9f8c6b5-abcde",
+            "supersonic-af-envoy-abcde",
+            "supersonic-model-manager-abcde",
+            "sonic-ray-hvfln-head",
+            "kuberay-operator-abcde",
+            "interlink-hammer-node-0",
+            "interlink-negishi-node-0",
+        ],
+    )
+    def test_ignored_workloads_are_not_read(self, pod):
+        assert not triage.watched(pod), pod
+
+    def test_every_ignored_prefix_is_something_the_repo_deploys(self):
+        """A typo here would silently ignore nothing."""
+        for prefix in triage.IGNORED_WORKLOADS:
+            assert prefix in triage.WATCHED_WORKLOADS, prefix
 
     @pytest.mark.parametrize(
         "pod",

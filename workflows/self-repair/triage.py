@@ -68,7 +68,23 @@ WATCHED_WORKLOADS = (
 # notebook cell is not. Read, but ranked after everything above so they only
 # use analysis budget the infrastructure did not.
 USER_WORKLOADS = ("purdue-af", "dask-scheduler", "dask-worker")
-ALL_WORKLOADS = WATCHED_WORKLOADS + USER_WORKLOADS
+
+# Deployed from here, but not to be debugged by this workflow for now. Kept
+# as a separate list so WATCHED_WORKLOADS stays the inventory of what the
+# repository deploys; every entry must appear there.
+IGNORED_WORKLOADS = (
+    # apps/sonic and apps/ray: the whole SONIC stack
+    "supersonic",
+    "sonic-ray",
+    "kuberay-operator",
+    # apps/interlink
+    "interlink",
+)
+ALL_WORKLOADS = tuple(
+    prefix
+    for prefix in WATCHED_WORKLOADS + USER_WORKLOADS
+    if prefix not in IGNORED_WORKLOADS
+)
 MAX_SAMPLES = 8
 MAX_LINE = 400
 MESSAGE_CHARS = 240

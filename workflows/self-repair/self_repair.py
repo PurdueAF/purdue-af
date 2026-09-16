@@ -234,7 +234,7 @@ def _describe(key: IncidentKey, evidence: Evidence) -> str:
 def watch(start: datetime, end: datetime) -> list[Incident]:
     _log(
         f"querying {LOKI_URL} for error lines in {NAMESPACE}, {start:%H:%M:%S}..{end:%H:%M:%S} UTC, "
-        f"from {len(ALL_WORKLOADS)} watched workloads (triage.WATCHED_WORKLOADS + USER_WORKLOADS)"
+        f"from {len(ALL_WORKLOADS)} watched workloads (triage.WATCHED_WORKLOADS + USER_WORKLOADS - IGNORED_WORKLOADS)"
     )
     lines = query_loki(LOKI_URL, NAMESPACE, start, end)
     incidents = cluster(lines)
