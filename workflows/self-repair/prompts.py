@@ -23,7 +23,11 @@ A log line is FIXABLE HERE only when all of these hold:
 - it is produced by code or configuration tracked in this repository (find the
   component that emits it; the pod's workload name is your first clue)
 - a small, self-contained change here would stop it from recurring
-- it is not user code (notebook cells, user Dask tasks, user scripts), not a bug
+- it is not user code (notebook cells, user Dask tasks, user scripts). In a
+  user session (pod purdue-af-<id>) or a user Dask pod, this repository owns
+  the image (docker/purdue-af), its start hooks and scripts, the pixi
+  environments and the Dask Gateway worker configuration, and nothing else.
+- it is not a bug
   in an upstream image or chart this repository merely pins, not a transient
   infrastructure fault (timeouts, connection refused, DNS, OOM kills, evictions,
   node pressure, storage outages), not an expired credential or missing secret,

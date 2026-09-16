@@ -139,10 +139,38 @@ class TestLoki:
     @pytest.mark.parametrize(
         "pod",
         [
-            "purdue-af-182",  # a user session
-            "jupyter-alice",
+            "purdue-af-182",
             "dask-worker-96acb57f0729416b83289485f080ac8c-x7k2p",
             "dask-scheduler-96acb57f0729416b83289485f080ac8c",
+        ],
+    )
+    def test_user_workloads_are_watched_but_ranked_last(self, pod):
+        assert triage.watched(pod), pod
+        assert triage.workload_of(pod) in triage.USER_WORKLOADS
+
+    def test_infrastructure_outranks_user_workloads_regardless_of_count(self):
+        lines = [line(f"purdue-af-{i}", "notebook", "Error user") for i in range(50)]
+        lines += [
+            line(
+                "dask-worker-96acb57f0729416b83289485f080ac8c-x7k2p",
+                "dask-worker",
+                "Error dask",
+            )
+        ] * 20
+        lines += [line("hub-5f6d7c8b9-zz9zz", "hub", "Error hub")] * 2
+        lines += [line("alloy-abcde", "alloy", "Error alloy")] * 5
+        order = [(i.key.workload, i.evidence.count) for i in triage.cluster(lines)]
+        assert order == [
+            ("alloy", 5),
+            ("hub", 2),
+            ("purdue-af", 50),
+            ("dask-worker", 20),
+        ]
+
+    @pytest.mark.parametrize(
+        "pod",
+        [
+            "jupyter-alice",
             "gen3",
             "gen0-abcde",
             "etcd-0",
@@ -374,6 +402,73 @@ class TestPrompts:
         for text in (analyze, fix):
             assert "about 25 minutes" in text
             assert "$" not in text.replace("$schema", "")
+
+
+class TestAnalysisBudget:
+    """max_incidents caps fresh analyses; cache hits are free and never starve
+    the incidents further down the list."""
+
+    def incidents(self, n):
+        return [
+            triage.Incident(
+                triage.IncidentKey(f"fp{i:02d}", "c", "w", f"m{i}"),
+                triage.Evidence([], 1, 1, "t", "t"),
+            )
+            for i in range(n)
+        ]
+
+    def run(self, coro):
+        import asyncio
+
+        return asyncio.run(coro)
+
+    def test_hits_do_not_count_and_concurrency_stays_within_budget(self):
+        import asyncio
+
+        cached = {"fp00", "fp01", "fp02"}
+        in_flight = 0
+        peak = 0
+        logs = []
+
+        async def spawn(incident):
+            nonlocal in_flight, peak
+            in_flight += 1
+            peak = max(peak, in_flight)
+            await asyncio.sleep(0.001 if incident.key.fingerprint in cached else 0.02)
+            in_flight -= 1
+            hit = incident.key.fingerprint in cached
+            return triage.Verdict(False, 0.5, reason="r"), (
+                "CACHE_HIT" if hit else "CACHE_POPULATED"
+            )
+
+        outcomes = self.run(
+            triage.analyze_within_budget(self.incidents(8), 2, spawn, logs.append)
+        )
+        attempted = [incident.key.fingerprint for incident, _ in outcomes]
+        assert attempted == ["fp00", "fp01", "fp02", "fp03", "fp04"], (
+            "3 hits then 2 fresh"
+        )
+        assert peak <= 2
+        assert sum("known, from cache" in line for line in logs) == 3
+        assert all(isinstance(result, triage.Verdict) for _, result in outcomes)
+
+    def test_failures_count_as_fresh_and_are_returned(self):
+        async def spawn(incident):
+            if incident.key.fingerprint == "fp00":
+                raise RuntimeError("boom")
+            return triage.Verdict(True, 0.9), "CACHE_POPULATED"
+
+        outcomes = self.run(triage.analyze_within_budget(self.incidents(5), 2, spawn))
+        assert [i.key.fingerprint for i, _ in outcomes] == ["fp00", "fp01"]
+        assert isinstance(outcomes[0][1], RuntimeError)
+        assert isinstance(outcomes[1][1], triage.Verdict)
+
+    def test_empty_list_and_zero_budget(self):
+        async def spawn(incident):
+            raise AssertionError("must not be called")
+
+        assert self.run(triage.analyze_within_budget([], 5, spawn)) == []
+        assert self.run(triage.analyze_within_budget(self.incidents(3), 0, spawn)) == []
 
 
 class TestGitHub:

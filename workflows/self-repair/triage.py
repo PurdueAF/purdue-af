@@ -2,6 +2,7 @@
 query, error fingerprints, username redaction, the agent's verdict and the
 GitHub calls. No flyte import, so the tests run without the SDK."""
 
+import asyncio
 import hashlib
 import json
 import re
@@ -10,16 +11,14 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Iterable
+from typing import Any, Awaitable, Callable, Iterable
 
 ERROR_PATTERN = r"(?i)\b(error|exception|traceback|fatal|panic)\b"
 
 # Pod-name prefixes of what Flux deploys from this repository (deploy/*/
-# kustomization.yaml), i.e. what a change here can fix. Not listed on
-# purpose: user sessions (purdue-af-<id>) and user Dask clusters
-# (dask-scheduler-*, dask-worker-*), which run user code, and whatever else
-# lives in the namespace without a manifest here (gen*, etcd, eos-fuse, the
-# one-off kaniko builds).
+# kustomization.yaml), i.e. what a change here can fix. Whatever else lives
+# in the namespace without a manifest here (gen*, etcd, eos-fuse, the one-off
+# kaniko builds) is not read at all.
 WATCHED_WORKLOADS = (
     # apps/jupyterhub
     "hub",
@@ -62,6 +61,14 @@ WATCHED_WORKLOADS = (
     # apps/interlink
     "interlink",
 )
+
+# Pods this repository configures but which run user code: sessions
+# (purdue-af-<id>) and user Dask clusters. The image, its start hooks, the
+# pixi environments and the gateway's worker config are fixable here; a
+# notebook cell is not. Read, but ranked after everything above so they only
+# use analysis budget the infrastructure did not.
+USER_WORKLOADS = ("purdue-af", "dask-scheduler", "dask-worker")
+ALL_WORKLOADS = WATCHED_WORKLOADS + USER_WORKLOADS
 MAX_SAMPLES = 8
 MAX_LINE = 400
 MESSAGE_CHARS = 240
@@ -152,13 +159,13 @@ class Summary:
 # ── Loki ───────────────────────────────────────────────────────────────────────
 
 
-def pod_regex(prefixes: tuple[str, ...] = WATCHED_WORKLOADS) -> str:
+def pod_regex(prefixes: tuple[str, ...] = ALL_WORKLOADS) -> str:
     """A LogQL `pod=~` value matching `<prefix>` or `<prefix>-<anything>`.
     Loki anchors the regex, so `purdue-af-182` matches nothing here."""
     return "(" + "|".join(re.escape(prefix) for prefix in prefixes) + ")(-.*)?"
 
 
-def watched(pod: str, prefixes: tuple[str, ...] = WATCHED_WORKLOADS) -> bool:
+def watched(pod: str, prefixes: tuple[str, ...] = ALL_WORKLOADS) -> bool:
     return re.fullmatch(pod_regex(prefixes), pod) is not None
 
 
@@ -168,7 +175,7 @@ def loki_url(
     start: datetime,
     end: datetime,
     limit: int,
-    prefixes: tuple[str, ...] = WATCHED_WORKLOADS,
+    prefixes: tuple[str, ...] = ALL_WORKLOADS,
 ) -> str:
     query = '{namespace="%s", pod=~"%s"} |~ "%s"' % (
         namespace,
@@ -283,10 +290,64 @@ def cluster(lines: list[dict[str, str]]) -> list[Incident]:
         )
         for key, g in groups.items()
     ]
+    # Infrastructure first, user workloads after, most frequent first within each.
     incidents.sort(
-        key=lambda incident: (-incident.evidence.count, incident.key.fingerprint)
+        key=lambda incident: (
+            incident.key.workload in USER_WORKLOADS,
+            -incident.evidence.count,
+            incident.key.fingerprint,
+        )
     )
     return incidents
+
+
+# ── Analysis budget ────────────────────────────────────────────────────────────
+
+CACHE_HIT = "CACHE_HIT"
+Spawn = Callable[[Incident], Awaitable[tuple[Verdict, str]]]
+
+
+async def analyze_within_budget(
+    incidents: list[Incident],
+    budget: int,
+    spawn: Spawn,
+    log: Callable[[str], None] = print,
+) -> list[tuple[Incident, Verdict | BaseException]]:
+    """Analyze incidents in order until `budget` of them were fresh analyses.
+
+    A cache hit costs nothing and does not count, so a list that starts with
+    known errors still reaches the new ones. At most `budget` are in flight,
+    since an in-flight analysis is assumed fresh until it reports otherwise;
+    a hit frees its slot for the next incident. A failure counts as fresh: it
+    used a pod. Returns (incident, verdict or exception) for every incident
+    attempted, in list order."""
+    pending = list(incidents)
+    in_flight: dict[asyncio.Task[tuple[Verdict, str]], Incident] = {}
+    results: dict[int, Verdict | BaseException] = {}
+    order: list[Incident] = []
+    fresh = 0
+    while pending or in_flight:
+        while pending and fresh + len(in_flight) < budget:
+            incident = pending.pop(0)
+            order.append(incident)
+            in_flight[asyncio.ensure_future(spawn(incident))] = incident
+        if not in_flight:
+            break
+        done, _ = await asyncio.wait(in_flight, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            incident = in_flight.pop(task)
+            try:
+                verdict, cache = task.result()
+            except BaseException as exc:  # noqa: BLE001 - reported per incident
+                results[id(incident)] = exc
+                fresh += 1
+                continue
+            results[id(incident)] = verdict
+            if cache != CACHE_HIT:
+                fresh += 1
+            else:
+                log(f"{incident.key.fingerprint}: known, from cache")
+    return [(incident, results[id(incident)]) for incident in order]
 
 
 # ── Agent output ───────────────────────────────────────────────────────────────
