@@ -68,6 +68,8 @@ def test_console_is_served_behind_basic_auth_on_one_host():
     values = yaml.safe_load((FLYTE / "values.yaml").read_text())
     assert values["console"]["replicaCount"] == 1
     assert values["console"]["image"]["tag"] != "latest"
+    env = {e["name"]: e["value"] for e in values["console"]["env"]}
+    assert env["HOSTNAME"] == "0.0.0.0", "port-forward dials 127.0.0.1 in the pod"
     ingress = values["ingress"]
     assert ingress["create"] == "${enable_ingresses}"
     assert ingress["host"] == "flyte-cms.geddes.rcac.purdue.edu"

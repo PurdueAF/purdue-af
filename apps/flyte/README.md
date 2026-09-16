@@ -17,8 +17,9 @@ notebook does. In-cluster, the API is `flyte-http.cms.svc.cluster.local:8090`.
 
 The console is at `https://flyte-cms.geddes.rcac.purdue.edu/v2` behind basic
 auth (user `af`; the password is the one encrypted in `secret-console-auth.yaml`),
-once RCAC adds the DNS record for the host. Until then, from a laptop:
-`kubectl -n cms port-forward svc/flyte-http 18090:8090` and the `flyte` CLI with
-`endpoint: dns:///localhost:18090`.
+once RCAC adds the DNS record for the host. Until then, from a laptop, forward
+`svc/flyte-console` (port 80) and `svc/flyte-http` (8090) and put both behind one
+local origin (the console calls the API on its own origin), or use the `flyte`
+CLI against the API forward with `endpoint: dns:///localhost:<port>`.
 
 Flyte metadata is disposable. Nothing here is backed up.

@@ -66,6 +66,12 @@ console:
   image:
     # What :latest resolved to on 2026-09-16; the image publishes git-sha tags only.
     tag: 51cf2bba8935adbd47280c41f56041f23fd10600
+  env:
+    # The Next.js server binds to $HOSTNAME, which Kubernetes sets to the pod
+    # name, i.e. the pod IP only. Fine for the ingress, unreachable for
+    # `kubectl port-forward`, which dials 127.0.0.1 inside the pod.
+    - name: HOSTNAME
+      value: "0.0.0.0"
   resources:
     requests:
       cpu: 50m
