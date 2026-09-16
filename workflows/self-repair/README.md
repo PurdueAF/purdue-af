@@ -20,7 +20,7 @@ cluster side (task pods, secrets, the deploy Job) is
 | Task      | Runs                                                                                                | Cached                                                      |
 | --------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | `triage`  | One per tick: `watch`, then `analyze` per incident, then `fix`, each started as a run of its own    | no                                                          |
-| `watch`   | One Loki query for `error\|exception\|traceback\|fatal\|panic` in `cms`, grouped into incidents     | no                                                          |
+| `watch`   | One Loki query for `error\|exception\|traceback\|fatal\|panic` from the watched workloads in `cms`  | no                                                          |
 | `analyze` | opencode, read-only, in a fresh checkout of `main`: is this fixable by a change in this repository? | yes, on the incident key (a recurring error is judged once) |
 | `fix`     | opencode with edit rights on a branch `self-repair-<fingerprint>`; commit, push, draft PR           | no (an open PR for the branch is returned as is)            |
 
@@ -31,6 +31,12 @@ cluster side (task pods, secrets, the deploy Job) is
 run names — so runs and pods say what they are,
 and a cache hit on `analyze` is visible as such. A failed analysis is logged
 and skipped; it does not end the tick.
+
+Only pods that Flux deploys from this repository are read: the prefix
+allowlist `WATCHED_WORKLOADS` in `triage.py`, applied in the Loki selector.
+User sessions (`purdue-af-<id>`) and user Dask clusters run user code and are
+left out, as is anything in the namespace without a manifest here. A new app
+in `apps/` needs its pod prefix added there.
 
 An incident is `(container, workload, normalized message)`: timestamps, ids,
 addresses and numbers are replaced before hashing, so the same error from

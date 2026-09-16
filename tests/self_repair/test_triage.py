@@ -112,6 +112,47 @@ class TestLoki:
         assert f"start={int(start.timestamp()) * 10**9}" in url
         assert f"end={int(end.timestamp()) * 10**9}" in url
         assert "namespace%3D%22cms%22" in url and "limit=5000" in url
+        assert "pod%3D~%22" in url, "the allowlist is applied in the selector"
+
+    @pytest.mark.parametrize(
+        "pod",
+        [
+            "hub-5f6d7c8b9-zz9zz",
+            "proxy-7d9f8c6b5-abcde",
+            "alloy-abcde",
+            "loki-0",
+            "loki-chunks-cache-0",
+            "flyte-console-d78d4dc8f-gp26v",
+            "self-repair-analyze-hra3y-60ef-a0-0",
+            "af-node-probe-cvmfs-abcde",
+            "af-userlist-sync-purdue-29312345-abcde",
+            "supersonic-pr-triton-7d9f8c6b5-abcde",
+            "sonic-ray-hvfln-head",
+            "servicex-eos-did-finder-xrootd-abcde",
+            "interlink-hammer-node-0",
+            "api-dask-gateway-k8s-slurm-abcde",
+        ],
+    )
+    def test_repo_workloads_are_watched(self, pod):
+        assert triage.watched(pod), pod
+
+    @pytest.mark.parametrize(
+        "pod",
+        [
+            "purdue-af-182",  # a user session
+            "jupyter-alice",
+            "dask-worker-96acb57f0729416b83289485f080ac8c-x7k2p",
+            "dask-scheduler-96acb57f0729416b83289485f080ac8c",
+            "gen3",
+            "gen0-abcde",
+            "etcd-0",
+            "eos-fuse-nopriv-65dcf5689-vpbf9",
+            "kaniko-build-dask-hg5pd",
+            "hubris-abcde",  # a prefix without its dash is not a match
+        ],
+    )
+    def test_everything_else_is_not(self, pod):
+        assert not triage.watched(pod), pod
 
     def test_parse_orders_by_time_and_keeps_pod_and_container(self):
         payload = {
