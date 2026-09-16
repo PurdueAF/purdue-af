@@ -2,6 +2,7 @@
 agent's verdict and the pull request text."""
 
 import json
+import urllib.parse
 from datetime import datetime, timezone
 
 import pytest
@@ -113,6 +114,16 @@ class TestLoki:
         assert f"end={int(end.timestamp()) * 10**9}" in url
         assert "namespace%3D%22cms%22" in url and "limit=5000" in url
         assert "pod%3D~%22" in url, "the allowlist is applied in the selector"
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["query"][0]
+        selector = query.split("|~")[0]
+        assert "\\" not in selector, (
+            "LogQL parses the string before the regex: a backslash before a dash is "
+            "an invalid char escape and Loki answers 400"
+        )
+
+    def test_a_prefix_that_needs_escaping_is_refused(self):
+        with pytest.raises(ValueError):
+            triage.pod_regex(("hub", "web.app"))
 
     @pytest.mark.parametrize(
         "pod",
@@ -123,7 +134,6 @@ class TestLoki:
             "loki-0",
             "loki-chunks-cache-0",
             "flyte-console-d78d4dc8f-gp26v",
-            "self-repair-analyze-hra3y-60ef-a0-0",
             "af-node-probe-cvmfs-abcde",
             "af-userlist-sync-purdue-29312345-abcde",
             "supersonic-pr-triton-7d9f8c6b5-abcde",
@@ -171,6 +181,7 @@ class TestLoki:
         "pod",
         [
             "jupyter-alice",
+            "self-repair-analyze-hra3y-60ef-a0-0",  # its own logs quote errors
             "gen3",
             "gen0-abcde",
             "etcd-0",
