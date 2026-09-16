@@ -91,7 +91,13 @@ are the run's `Summary` output.
 Every task narrates what it does: the Loki window and the top incidents, the
 clone, each opencode tool call and reply as it happens, the verdict and its
 reason, changed files, push and PR. `triage` logs each run it starts, its
-phase, duration and cache status. `kubectl -n cms logs <pod>` or
+phase, duration and cache status. opencode's own log (`~/.local/share/opencode/log/opencode.log` in the
+pod) is relayed too: its ERROR and WARN lines appear as `opencode …`, which
+is where a provider failure such as a rate limit shows up, since opencode 1.18
+neither retries nor exits on one. A heartbeat reports every minute of silence
+with the agent's last action; a provider error followed by two minutes of
+silence ends the session, and a rate limit is retried once after a pause.
+`kubectl -n cms logs <pod>` or
 `flyte get logs <run>`.
 
 ## Running

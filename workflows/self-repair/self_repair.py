@@ -7,6 +7,7 @@ and each run shows up by name in the console."""
 
 import json
 import os
+import random
 import subprocess
 import tempfile
 import threading
@@ -32,6 +33,7 @@ from triage import (
     create_pull_request,
     describe_event,
     open_pull_request,
+    opencode_log_line,
     parse_verdict,
     pull_request_body,
     query_loki,
@@ -179,7 +181,159 @@ def _clone(dest: Path) -> None:
     _log(f"cloned {REPO}@{head} ({BASE_BRANCH}) in {time.monotonic() - started:.0f}s")
 
 
+OPENCODE_LOG = Path.home() / ".local/share/opencode/log/opencode.log"
+HEARTBEAT_S = 60
+# A provider error followed by this much silence means opencode is not
+# retrying: stop waiting for the hard timeout.
+PROVIDER_GRACE_S = 120
+RATE_LIMIT_RETRIES = 1
+RATE_LIMIT_PAUSE_S = (60, 120)
+
+
+class _Watch:
+    """Relays opencode's own log into ours, heartbeats through silence, and
+    pulls the plug when a provider error is followed by silence."""
+
+    def __init__(self, label: str, proc: subprocess.Popen[str]) -> None:
+        self.label = label
+        self.proc = proc
+        self.last_event = "start"
+        self.last_event_at = time.monotonic()
+        self.provider_error: str | None = None
+        self.provider_error_at = 0.0
+        self.aborted: str | None = None
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def saw(self, event: str) -> None:
+        self.last_event = event
+        self.last_event_at = time.monotonic()
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=5)
+
+    def _run(self) -> None:
+        offset = OPENCODE_LOG.stat().st_size if OPENCODE_LOG.exists() else 0
+        next_heartbeat = time.monotonic() + HEARTBEAT_S
+        while not self._stop.wait(2):
+            if OPENCODE_LOG.exists():
+                with OPENCODE_LOG.open(errors="replace") as handle:
+                    handle.seek(offset)
+                    fresh = handle.read()
+                    offset = handle.tell()
+                for raw in fresh.splitlines():
+                    parsed = opencode_log_line(raw)
+                    if parsed is None:
+                        continue
+                    summary, error = parsed
+                    _log(f"{self.label}: opencode {summary}")
+                    if error:
+                        self.provider_error = error
+                        self.provider_error_at = time.monotonic()
+            now = time.monotonic()
+            silent = now - self.last_event_at
+            if (
+                self.provider_error
+                and self.provider_error_at > self.last_event_at
+                and now - self.provider_error_at >= PROVIDER_GRACE_S
+            ):
+                self.aborted = self.provider_error
+                _log(
+                    f"{self.label}: no event for {now - self.provider_error_at:.0f}s after a provider "
+                    f"error, giving up on this session: {self.provider_error}"
+                )
+                self.proc.kill()
+                return
+            if now >= next_heartbeat:
+                if silent >= HEARTBEAT_S:
+                    _log(
+                        f"{self.label}: agent silent for {silent:.0f}s (last: {self.last_event[:120]})"
+                    )
+                next_heartbeat = now + HEARTBEAT_S
+
+
+def _agent_session(cwd: Path, prompt: str, config_path: str, label: str) -> str:
+    started = time.monotonic()
+    stderr = tempfile.NamedTemporaryFile(
+        "w+", suffix=".log", prefix="opencode-", delete=False
+    )
+    proc = subprocess.Popen(
+        [
+            "opencode",
+            "run",
+            "--format",
+            "json",
+            "--model",
+            MODEL,
+            "--dir",
+            str(cwd),
+            prompt,
+        ],
+        cwd=cwd,
+        env={**os.environ, "OPENCODE_CONFIG": config_path},
+        stdout=subprocess.PIPE,
+        stderr=stderr,
+        text=True,
+    )
+    watch = _Watch(label, proc)
+
+    def narrate(event: dict[str, Any]) -> None:
+        line = describe_event(event)
+        if line:
+            _log(f"{label}: agent {line}")
+            watch.saw(line)
+
+    # The answer is complete at the model's final turn; the process is not
+    # trusted to exit after it (opencode 1.18 lingers), so a timer bounds the
+    # whole thing and the reader stops on its own.
+    timed_out = threading.Event()
+
+    def expire() -> None:
+        timed_out.set()
+        proc.kill()
+
+    timer = threading.Timer(AGENT_TIMEOUT_S, expire)
+    timer.start()
+    watch.start()
+    try:
+        assert proc.stdout is not None
+        reply = collect_reply(proc.stdout, narrate)
+    finally:
+        timer.cancel()
+        watch.stop()
+        if proc.poll() is None:
+            proc.kill()
+        proc.wait()
+        stderr.seek(0)
+        errors = stderr.read().strip()
+        stderr.close()
+    elapsed = time.monotonic() - started
+    if errors:
+        _log(f"{label}: opencode stderr: {errors[-1500:]}")
+    if reply.finished:
+        _log(f"{label}: agent finished in {elapsed:.0f}s")
+        return reply.text
+    if watch.aborted:
+        raise ProviderError(f"provider error after {elapsed:.0f}s: {watch.aborted}")
+    if timed_out.is_set():
+        raise RuntimeError(
+            f"opencode gave no final answer within {AGENT_TIMEOUT_S}s (killed)"
+        )
+    raise RuntimeError(f"opencode failed after {elapsed:.0f}s: {reply.error}")
+
+
+class ProviderError(RuntimeError):
+    pass
+
+
 def _run_agent(cwd: Path, prompt: str, permission: dict[str, Any], label: str) -> str:
+    mode = "read-only" if permission is READ_ONLY else "edit"
+    # opencode talks to the re-framing proxy (genai_proxy.py), the proxy to
+    # GenAI Studio.
     with Proxy() as proxy:
         providers = json.loads(json.dumps(PROVIDERS))
         providers["genai"]["options"]["baseURL"] = f"{proxy.url}/api"
@@ -194,69 +348,17 @@ def _run_agent(cwd: Path, prompt: str, permission: dict[str, Any], label: str) -
             "w", suffix=".json", prefix="opencode-", delete=False
         ) as handle:
             json.dump(config, handle)
-        mode = "read-only" if permission is READ_ONLY else "edit"
-        _log(f"{label}: opencode {MODEL} ({mode}) in {cwd}")
-        started = time.monotonic()
-        stderr = tempfile.NamedTemporaryFile(
-            "w+", suffix=".log", prefix="opencode-", delete=False
-        )
-        proc = subprocess.Popen(
-            [
-                "opencode",
-                "run",
-                "--format",
-                "json",
-                "--model",
-                MODEL,
-                "--dir",
-                str(cwd),
-                prompt,
-            ],
-            cwd=cwd,
-            env={**os.environ, "OPENCODE_CONFIG": handle.name},
-            stdout=subprocess.PIPE,
-            stderr=stderr,
-            text=True,
-        )
-
-        def narrate(event: dict[str, Any]) -> None:
-            line = describe_event(event)
-            if line:
-                _log(f"{label}: agent {line}")
-
-        # The answer is complete at the model's final turn; the process is not
-        # trusted to exit after it (opencode 1.18 lingers), so a timer bounds the
-        # whole thing and the reader stops on its own.
-        timed_out = threading.Event()
-
-        def expire() -> None:
-            timed_out.set()
-            proc.kill()
-
-        timer = threading.Timer(AGENT_TIMEOUT_S, expire)
-        timer.start()
-        try:
-            assert proc.stdout is not None
-            reply = collect_reply(proc.stdout, narrate)
-        finally:
-            timer.cancel()
-            if proc.poll() is None:
-                proc.kill()
-            proc.wait()
-            stderr.seek(0)
-            errors = stderr.read().strip()
-            stderr.close()
-        elapsed = time.monotonic() - started
-        if errors:
-            _log(f"{label}: opencode stderr: {errors[-1500:]}")
-        if reply.finished:
-            _log(f"{label}: agent finished in {elapsed:.0f}s")
-            return reply.text
-        if timed_out.is_set():
-            raise RuntimeError(
-                f"opencode gave no final answer within {AGENT_TIMEOUT_S}s (killed)"
-            )
-        raise RuntimeError(f"opencode failed after {elapsed:.0f}s: {reply.error}")
+        for attempt in range(1, RATE_LIMIT_RETRIES + 2):
+            _log(f"{label}: opencode {MODEL} ({mode}) in {cwd}, attempt {attempt}")
+            try:
+                return _agent_session(cwd, prompt, handle.name, label)
+            except ProviderError as exc:
+                if "rate limit" not in str(exc).lower() or attempt > RATE_LIMIT_RETRIES:
+                    raise
+                pause = random.uniform(*RATE_LIMIT_PAUSE_S)
+                _log(f"{label}: rate limited; retrying in {pause:.0f}s")
+                time.sleep(pause)
+    raise AssertionError("unreachable")
 
 
 def _describe(key: IncidentKey, evidence: Evidence) -> str:
