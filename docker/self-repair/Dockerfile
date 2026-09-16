@@ -36,3 +36,5 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 USER 1000
 ENV HOME=/home/app
+# Flyte extracts the code bundle into the cwd; /app is root's.
+WORKDIR /home/app

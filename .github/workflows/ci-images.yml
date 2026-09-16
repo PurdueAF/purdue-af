@@ -247,7 +247,8 @@ jobs:
               AF_NODE_MONITOR_VERBOSE=1 MOUNT_NAME=smoke CHECK_FILE=smoke
               python -c 'import job_runner, node_healthcheck; print(\"ok\")'"
           # The three runtimes a self-repair task pod needs, as the image's
-          # non-root user: the Flyte SDK, git, and the opencode binary.
+          # non-root user: the Flyte SDK, git, and the opencode binary — and a
+          # cwd that user can write, where Flyte extracts the code bundle.
           # Single-quoted: the runner's bash interpolates this string before
           # docker runs, so a double-quoted $(id -u) would test the RUNNER's uid.
           - name: self-repair
@@ -255,7 +256,7 @@ jobs:
             context: .
             smoke: >-
               sh -c 'set -e; test "$(id -u)" = 1000;
-              python -c "import flyte; print(flyte.version())";
+              python -c "import flyte, os, tempfile; tempfile.mkstemp(dir=os.getcwd()); print(flyte.version())";
               git --version; ruff --version; opencode --version; echo ok'
           # Imports the app, asserts the dashboard and its logo assets ship in
           # the image, and that the ASGI routes are wired.
