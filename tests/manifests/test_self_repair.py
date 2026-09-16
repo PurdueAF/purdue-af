@@ -114,9 +114,7 @@ def test_workflow_names_its_runs_and_needs_no_trigger():
     assert 'ignored_inputs=("evidence",)' in workflow, (
         "analyze is cached on the key alone"
     )
-    assert "return_exceptions=True" in workflow, (
-        "one failed analysis must not end the tick"
-    )
+    assert "analyze_within_budget(" in workflow, "the budget counts fresh analyses only"
     assert '"git push*": "deny"' in workflow and '"git commit*": "deny"' in workflow
     assert "CatalogCacheStatus.Name(" in workflow, "cache hits are logged"
 

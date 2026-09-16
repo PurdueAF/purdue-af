@@ -5,7 +5,6 @@ draft pull request when the fix belongs in this repository.
 after the task, so pods read `self-repair-<task>-<tick>[-<fp>]-a0-0`
 and each run shows up by name in the console."""
 
-import asyncio
 import json
 import os
 import subprocess
@@ -25,6 +24,7 @@ from triage import (
     IncidentKey,
     Summary,
     Verdict,
+    analyze_within_budget,
     cluster,
     collect_reply,
     create_pull_request,
@@ -317,8 +317,9 @@ def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict) -> str:
     return url
 
 
-async def _spawn(name: str, task: Any, *args: Any, output_type: Any) -> Any:
-    """Run `task` as its own run called `name`, wait for it, and return its output.
+async def _spawn(name: str, task: Any, *args: Any, output_type: Any) -> tuple[Any, str]:
+    """Run `task` as its own run called `name`, wait for it, and return its
+    output with the cache status.
 
     Its pod is `<name>-a0-0`. A cache hit finishes without a pod and is logged as such."""
     from flyteidl2.common import phase_pb2
@@ -336,7 +337,7 @@ async def _spawn(name: str, task: Any, *args: Any, output_type: Any) -> Any:
     if phase != "SUCCEEDED":
         raise RuntimeError(f"{name} ended in {phase}")
     outputs = await run.typed_outputs.aio({"o0": output_type})
-    return outputs["o0"]
+    return outputs["o0"], cache
 
 
 @env.task(timeout=timedelta(hours=2))
@@ -354,35 +355,36 @@ async def triage(
         f"tick {tick} = {trigger_time:%Y-%m-%d %H:%M} UTC: window {start:%H:%M:%S}..{trigger_time:%H:%M:%S}, up to {max_incidents} analyses and {max_fixes} fixes"
     )
 
-    incidents: list[Incident] = await _spawn(
+    incidents, _ = await _spawn(
         run_name("watch", tick),
         watch,
         start,
         trigger_time,
         output_type=list[Incident],
     )
-    selected = incidents[:max_incidents]
     _log(
-        f"analyzing {len(selected)} of {len(incidents)} incident(s): {', '.join(i.key.fingerprint for i in selected) or '-'}"
+        f"{len(incidents)} incident(s); up to {max_incidents} fresh analyses, cache hits are free: "
+        f"{', '.join(i.key.fingerprint for i in incidents) or '-'}"
     )
-    results = await asyncio.gather(
-        *(
-            _spawn(
-                run_name("analyze", tick, incident.key.fingerprint),
-                analyze,
-                incident.key,
-                incident.evidence,
-                output_type=Verdict,
-            )
-            for incident in selected
-        ),
-        return_exceptions=True,
+
+    async def spawn_analysis(incident: Incident) -> tuple[Verdict, str]:
+        verdict, cache = await _spawn(
+            run_name("analyze", tick, incident.key.fingerprint),
+            analyze,
+            incident.key,
+            incident.evidence,
+            output_type=Verdict,
+        )
+        return verdict, cache
+
+    outcomes = await analyze_within_budget(
+        incidents, max_incidents, spawn_analysis, _log
     )
 
     fixable = 0
     failed = 0
     pull_requests: list[str] = []
-    for incident, result in zip(selected, results):
+    for incident, result in outcomes:
         fingerprint = incident.key.fingerprint
         if isinstance(result, BaseException):
             failed += 1
@@ -398,7 +400,7 @@ async def triage(
         if len(pull_requests) >= max_fixes:
             _log(f"{fingerprint}: fixable, but {max_fixes} fix(es) already this tick")
             continue
-        url = await _spawn(
+        url, _ = await _spawn(
             run_name("fix", tick, fingerprint),
             fix,
             incident.key,
@@ -418,7 +420,7 @@ async def triage(
     )
     _log(
         f"tick {tick} done: {summary.lines} lines, {summary.incidents} incidents, "
-        f"{summary.fixable} fixable, {failed} analysis failure(s), "
+        f"{len(outcomes)} analyzed, {summary.fixable} fixable, {failed} analysis failure(s), "
         f"{len(pull_requests)} PR(s) {' '.join(pull_requests)}"
     )
     return summary

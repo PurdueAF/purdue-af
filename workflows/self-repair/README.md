@@ -29,8 +29,10 @@ cluster side (task pods, secrets, the deploy Job) is
 `self-repair-fix-<tick>-<fp>`, the tick being the launch minute in base36 and
 `fp` four characters of the fingerprint, within Flyte's 30-character cap on
 run names — so runs and pods say what they are,
-and a cache hit on `analyze` is visible as such. A failed analysis is logged
-and skipped; it does not end the tick.
+and a cache hit on `analyze` is visible as such. `max_incidents` caps fresh analyses per tick;
+a cache hit is free and does not count, so known errors at the top of the
+list never starve the ones below. A failed analysis is logged and skipped; it
+does not end the tick.
 
 Only pods that Flux deploys from this repository are read: the prefix
 allowlist `WATCHED_WORKLOADS` in `triage.py`, applied in the Loki selector.

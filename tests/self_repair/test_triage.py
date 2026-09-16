@@ -362,6 +362,73 @@ class TestRunNames:
         )
 
 
+class TestAnalysisBudget:
+    """max_incidents caps fresh analyses; cache hits are free and never starve
+    the incidents further down the list."""
+
+    def incidents(self, n):
+        return [
+            triage.Incident(
+                triage.IncidentKey(f"fp{i:02d}", "c", "w", f"m{i}"),
+                triage.Evidence([], 1, 1, "t", "t"),
+            )
+            for i in range(n)
+        ]
+
+    def run(self, coro):
+        import asyncio
+
+        return asyncio.run(coro)
+
+    def test_hits_do_not_count_and_concurrency_stays_within_budget(self):
+        import asyncio
+
+        cached = {"fp00", "fp01", "fp02"}
+        in_flight = 0
+        peak = 0
+        logs = []
+
+        async def spawn(incident):
+            nonlocal in_flight, peak
+            in_flight += 1
+            peak = max(peak, in_flight)
+            await asyncio.sleep(0.001 if incident.key.fingerprint in cached else 0.02)
+            in_flight -= 1
+            hit = incident.key.fingerprint in cached
+            return triage.Verdict(False, 0.5, reason="r"), (
+                "CACHE_HIT" if hit else "CACHE_POPULATED"
+            )
+
+        outcomes = self.run(
+            triage.analyze_within_budget(self.incidents(8), 2, spawn, logs.append)
+        )
+        attempted = [incident.key.fingerprint for incident, _ in outcomes]
+        assert attempted == ["fp00", "fp01", "fp02", "fp03", "fp04"], (
+            "3 hits then 2 fresh"
+        )
+        assert peak <= 2
+        assert sum("known, from cache" in line for line in logs) == 3
+        assert all(isinstance(result, triage.Verdict) for _, result in outcomes)
+
+    def test_failures_count_as_fresh_and_are_returned(self):
+        async def spawn(incident):
+            if incident.key.fingerprint == "fp00":
+                raise RuntimeError("boom")
+            return triage.Verdict(True, 0.9), "CACHE_POPULATED"
+
+        outcomes = self.run(triage.analyze_within_budget(self.incidents(5), 2, spawn))
+        assert [i.key.fingerprint for i, _ in outcomes] == ["fp00", "fp01"]
+        assert isinstance(outcomes[0][1], RuntimeError)
+        assert isinstance(outcomes[1][1], triage.Verdict)
+
+    def test_empty_list_and_zero_budget(self):
+        async def spawn(incident):
+            raise AssertionError("must not be called")
+
+        assert self.run(triage.analyze_within_budget([], 5, spawn)) == []
+        assert self.run(triage.analyze_within_budget(self.incidents(3), 0, spawn)) == []
+
+
 class TestGitHub:
     def test_pull_request_body_is_draft_evidence_without_usernames(self):
         key = triage.IncidentKey("abc123def456", "notebook", "jupyter-*", "Error <hex>")
