@@ -12,6 +12,13 @@ conda environments under pixi/, Flyte workflows under workflows/.
 
 Nobody will answer questions. Never ask; decide.
 
+You have about $minutes minutes of wall time; after that the session is killed
+and its work is lost, which is worse than a cautious answer. The answer is in
+this checkout far more often than on the web: look there first, spend at most a
+few lookups on the web, and if you are still unsure when a third of the time is
+gone, decide with what you have. "Not fixable here" is always an acceptable
+answer.
+
 A log line is FIXABLE HERE only when all of these hold:
 - it is produced by code or configuration tracked in this repository (find the
   component that emits it; the pod's workload name is your first clue)

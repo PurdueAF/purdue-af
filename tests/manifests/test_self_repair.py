@@ -118,6 +118,10 @@ def test_workflow_names_its_runs_and_needs_no_trigger():
         "one failed analysis must not end the tick"
     )
     assert '"git push*": "deny"' in workflow and '"git commit*": "deny"' in workflow
+    assert "webfetch" not in workflow and "websearch" not in workflow, (
+        "the agent keeps the web; the prompt and the timeout keep it on time"
+    )
+    assert "AGENT_BUDGET_MINUTES" in workflow
     assert "CatalogCacheStatus.Name(" in workflow, "cache hits are logged"
 
 
