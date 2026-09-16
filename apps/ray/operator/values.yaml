@@ -6,8 +6,15 @@
 # workloads outside cms, so there is no reason to grant cluster scope.
 singleNamespaceInstall: true
 
-# The operator is a controller, not a data-plane component: keep it off the
-# GPU nodes' dedicated taint and let it land anywhere in the cluster.
+# Every AF workload runs on the cms-af-prod nodes (alloy tails only those).
+nodeSelector:
+  cms-af-prod: "true"
+tolerations:
+  - key: "hub.jupyter.org/dedicated"
+    operator: "Equal"
+    value: "cms-af"
+    effect: "NoSchedule"
+
 resources:
   limits:
     cpu: 500m

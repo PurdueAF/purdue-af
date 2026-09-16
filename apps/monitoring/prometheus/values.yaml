@@ -861,6 +861,13 @@ serverFiles:
                 are blind while this fires. Check: kubectl -n cms get pod loki-0
 alertmanager:
   enabled: true
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
   config:
     global: {}
   ingress:

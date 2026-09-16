@@ -107,3 +107,11 @@ dashboardsConfigMaps:
 # Datasources come from the shared datasources.yaml (second valuesFrom
 # entry on the HelmRelease). The private dashboards use only core panels
 # and datasource types, so no plugins are installed on this instance.
+
+nodeSelector:
+  cms-af-prod: "true"
+tolerations:
+  - key: "hub.jupyter.org/dedicated"
+    operator: "Equal"
+    value: "cms-af"
+    effect: "NoSchedule"
