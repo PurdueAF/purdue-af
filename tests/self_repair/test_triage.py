@@ -139,10 +139,38 @@ class TestLoki:
     @pytest.mark.parametrize(
         "pod",
         [
-            "purdue-af-182",  # a user session
-            "jupyter-alice",
+            "purdue-af-182",
             "dask-worker-96acb57f0729416b83289485f080ac8c-x7k2p",
             "dask-scheduler-96acb57f0729416b83289485f080ac8c",
+        ],
+    )
+    def test_user_workloads_are_watched_but_ranked_last(self, pod):
+        assert triage.watched(pod), pod
+        assert triage.workload_of(pod) in triage.USER_WORKLOADS
+
+    def test_infrastructure_outranks_user_workloads_regardless_of_count(self):
+        lines = [line(f"purdue-af-{i}", "notebook", "Error user") for i in range(50)]
+        lines += [
+            line(
+                "dask-worker-96acb57f0729416b83289485f080ac8c-x7k2p",
+                "dask-worker",
+                "Error dask",
+            )
+        ] * 20
+        lines += [line("hub-5f6d7c8b9-zz9zz", "hub", "Error hub")] * 2
+        lines += [line("alloy-abcde", "alloy", "Error alloy")] * 5
+        order = [(i.key.workload, i.evidence.count) for i in triage.cluster(lines)]
+        assert order == [
+            ("alloy", 5),
+            ("hub", 2),
+            ("purdue-af", 50),
+            ("dask-worker", 20),
+        ]
+
+    @pytest.mark.parametrize(
+        "pod",
+        [
+            "jupyter-alice",
             "gen3",
             "gen0-abcde",
             "etcd-0",

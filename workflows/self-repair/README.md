@@ -32,11 +32,15 @@ run names — so runs and pods say what they are,
 and a cache hit on `analyze` is visible as such. A failed analysis is logged
 and skipped; it does not end the tick.
 
-Only pods that Flux deploys from this repository are read: the prefix
-allowlist `WATCHED_WORKLOADS` in `triage.py`, applied in the Loki selector.
-User sessions (`purdue-af-<id>`) and user Dask clusters run user code and are
-left out, as is anything in the namespace without a manifest here. A new app
-in `apps/` needs its pod prefix added there.
+Only pods this repository deploys or configures are read, through a prefix
+allowlist in the Loki selector: `WATCHED_WORKLOADS` in `triage.py` for what
+Flux deploys from `apps/`, and `USER_WORKLOADS` for user sessions
+(`purdue-af-<id>`) and user Dask clusters, whose image, start hooks, pixi
+environments and worker configuration come from here even though the code
+inside is the user's. Their incidents rank after the infrastructure's, so they
+only take analysis budget the infrastructure left. Anything in the namespace
+without a manifest here is not read. A new app in `apps/` needs its pod prefix
+added to the list.
 
 An incident is `(container, workload, normalized message)`: timestamps, ids,
 addresses and numbers are replaced before hashing, so the same error from
