@@ -142,7 +142,7 @@ def run_bounded(cmd: list[str], timeout_s: float) -> tuple[bool, str]:
     try:
         out, _ = proc.communicate(timeout=timeout_s)
     except subprocess.TimeoutExpired:
-        log.error("%s did not return in %ss", cmd, timeout_s)
+        log.warning("%s did not return in %ss", cmd, timeout_s)
         try:
             proc.kill()
             proc.communicate(timeout=1)  # a killable child dies at once
