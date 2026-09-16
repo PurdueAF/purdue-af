@@ -22,6 +22,7 @@ dependencies = [
     "cachetools>=5.5", # agentic-interface
     "matplotlib>=3.9", # plot-af-users cron
     "pandas>=2.2",
+    "ruff>=0.16", # self-repair's pyflakes gate runs `python -m ruff`
 ]
 
 [tool.uv]

@@ -747,6 +747,7 @@ class TestGuards:
         start = source.index("def _protected(")
         end = source.index("@env.task(timeout=timedelta(minutes=60))\ndef fix(")
         ns.subprocess = __import__("subprocess")
+        ns.sys = __import__("sys")
         ns.Path = __import__("pathlib").Path
         exec(source[start:end], vars(ns))
         return ns

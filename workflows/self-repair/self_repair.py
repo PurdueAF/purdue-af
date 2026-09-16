@@ -9,6 +9,7 @@ import json
 import os
 import random
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -521,7 +522,17 @@ def _python_defects(repo: Path, changed: list[str]) -> str:
     if not files:
         return ""
     proc = subprocess.run(
-        ["ruff", "check", "--isolated", "--select", "F", "--no-cache", *files],
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            "--isolated",
+            "--select",
+            "F",
+            "--no-cache",
+            *files,
+        ],
         cwd=repo,
         capture_output=True,
         text=True,
