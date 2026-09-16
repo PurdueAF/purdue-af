@@ -1,0 +1,41 @@
+# Pod spec of every self-repair task (TaskEnvironment(pod_template="self-repair")
+# in workflows/self-repair/self_repair.py). Replaces the flyte-task default: no
+# /work, but the GitHub token.
+apiVersion: v1
+kind: PodTemplate
+metadata:
+  name: self-repair
+template:
+  spec:
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: hub.jupyter.org/dedicated
+        operator: Equal
+        value: cms-af
+        effect: NoSchedule
+    # The image's `app` user (docker/self-repair/Dockerfile).
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+    containers:
+      - name: default
+        image: overridden-by-flyte
+        env:
+          # Fine-grained token with contents:write and pull_requests:write on
+          # PurdueAF/purdue-af. Created by hand; nothing in this repository
+          # renders it.
+          - name: GITHUB_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: self-repair-github
+                key: token
+          # OpenCode Zen key. Optional: the default model is a free one.
+          - name: OPENCODE_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: self-repair-opencode
+                key: api-key
+                optional: true

@@ -1,0 +1,53 @@
+# Registers the workflow and its cron trigger with the Flyte control plane.
+# The code is mounted from a ConfigMap whose name carries a content hash
+# (deploy/experimental/kustomization.yaml), so a code change renames the
+# ConfigMap, changes this Job's spec, and the `force` annotation has Flux
+# recreate the Job: every merged change is redeployed within a minute.
+# `flyte deploy` is idempotent for unchanged code.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: self-repair-deploy
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 20
+  template:
+    spec:
+      restartPolicy: OnFailure
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+        - key: hub.jupyter.org/dedicated
+          operator: Equal
+          value: cms-af
+          effect: NoSchedule
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: deploy
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/self-repair:latest
+          imagePullPolicy: Always
+          workingDir: /workflow
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -eu
+              flyte --config config.yaml create project --id self-repair --name self-repair 2>/dev/null || true
+              flyte --config config.yaml deploy -p self-repair -d development self_repair.py env
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: workflow
+              mountPath: /workflow
+              readOnly: true
+      volumes:
+        - name: workflow
+          configMap:
+            name: self-repair-workflow
