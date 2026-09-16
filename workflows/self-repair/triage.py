@@ -11,7 +11,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Iterable
 
 ERROR_PATTERN = r"(?i)\b(error|exception|traceback|fatal|panic)\b"
@@ -158,6 +158,10 @@ class Evidence:
     pods: int
     first_seen: str
     last_seen: str
+    # where the first sample came from, so the analysis can fetch the lines
+    # around it: a traceback's exception is on the lines after its header.
+    first_pod: str = ""
+    first_ts: str = ""
 
 
 @dataclass
@@ -361,6 +365,8 @@ def cluster(lines: list[dict[str, str]]) -> list[Incident]:
                 "count": 0,
                 "first": entry["ts"],
                 "last": entry["ts"],
+                "first_pod": entry["pod"],
+                "first_ts": entry["ts"],
             },
         )
         group["count"] += 1
@@ -374,7 +380,15 @@ def cluster(lines: list[dict[str, str]]) -> list[Incident]:
     incidents = [
         Incident(
             key,
-            Evidence(g["samples"], g["count"], len(g["pods"]), g["first"], g["last"]),
+            Evidence(
+                g["samples"],
+                g["count"],
+                len(g["pods"]),
+                g["first"],
+                g["last"],
+                g["first_pod"],
+                g["first_ts"],
+            ),
         )
         for key, g in groups.items()
     ]
@@ -597,6 +611,83 @@ def report_html(tick: str, window: str, rows: list[Row]) -> str:
         )
     parts.append("</tbody></table>")
     return "\n".join(parts)
+
+
+# ── Context around a sample ────────────────────────────────────────────────────
+
+CONTEXT_SECONDS = 5
+CONTEXT_LINES = 80
+
+
+def context_url(base: str, namespace: str, pod: str, container: str, ts: str) -> str:
+    """Every line of that container within CONTEXT_SECONDS of the sample: a
+    Python traceback arrives as one Loki line per source line, and only the
+    header matches the error pattern."""
+    moment = datetime.fromisoformat(ts)
+    start = moment - timedelta(seconds=CONTEXT_SECONDS)
+    end = moment + timedelta(seconds=CONTEXT_SECONDS)
+    params = {
+        "query": '{namespace="%s", pod="%s", container="%s"}'
+        % (namespace, pod, container),
+        "start": str(int(start.timestamp() * 1e9)),
+        "end": str(int(end.timestamp() * 1e9)),
+        "limit": str(CONTEXT_LINES),
+        "direction": "forward",
+    }
+    return f"{base}/loki/api/v1/query_range?{urllib.parse.urlencode(params)}"
+
+
+def query_context(
+    base: str, namespace: str, pod: str, container: str, ts: str
+) -> list[str]:
+    """The surrounding lines, redacted, oldest first; empty when Loki fails."""
+    try:
+        with urllib.request.urlopen(
+            context_url(base, namespace, pod, container, ts), timeout=60
+        ) as resp:
+            entries = parse_loki(json.load(resp))
+    except (OSError, ValueError):
+        return []
+    return [redact(e["line"][:MAX_LINE]) for e in entries]
+
+
+# ── Changes that are not fixes ─────────────────────────────────────────────────
+
+_LOG_LEVEL = re.compile(
+    r"\b(error|exception|critical|fatal|warning|warn|info|debug)\b", re.I
+)
+
+
+def silences(diff: str) -> bool:
+    """True when every changed line of a unified diff differs from its
+    counterpart only by a log level or wording: the incident is made to go
+    away, not fixed."""
+    removed = [
+        entry[1:]
+        for entry in diff.splitlines()
+        if entry.startswith("-") and not entry.startswith("---")
+    ]
+    added = [
+        entry[1:]
+        for entry in diff.splitlines()
+        if entry.startswith("+") and not entry.startswith("+++")
+    ]
+    if not removed or not added or len(removed) != len(added):
+        return False
+
+    def norm(line: str) -> str:
+        return _LOG_LEVEL.sub("LEVEL", line).strip()
+
+    return all(
+        norm(r) == norm(a) and r.strip() != a.strip() for r, a in zip(removed, added)
+    )
+
+
+def is_rate_limit(error: str) -> bool:
+    text = error.lower()
+    return (
+        "rate limit" in text or '"statuscode": 429' in text or "statuscode=429" in text
+    )
 
 
 # ── opencode's own log ─────────────────────────────────────────────────────────

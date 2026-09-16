@@ -41,6 +41,11 @@ Never propose changes under docker/dask-gateway-server (an upstream fork
 carried verbatim), pixi/, deploy/, or to any *.lock file: those are not
 fixable here by definition.
 
+Changing a log level, silencing or rewording a message, catching and
+ignoring an exception, or retrying without understanding the cause is never
+a fix: it removes the evidence and leaves the fault. If the only change you
+can see is of that kind, the answer is "not fixable here".
+
 When in doubt it is NOT fixable here. A wrong "no" costs nothing; a wrong "yes"
 costs a reviewer's time.
 """
@@ -53,6 +58,10 @@ Do not modify any file.
 ## Incident
 
 $incident
+
+## Lines around the first sample, same container
+
+$context
 
 ## Your job
 
@@ -71,6 +80,10 @@ An earlier analysis concluded this incident is fixable here. Implement the plan.
 ## Incident
 
 $incident
+
+## Lines around the first sample, same container
+
+$context
 
 ## Verdict
 

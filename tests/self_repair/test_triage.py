@@ -477,9 +477,15 @@ class TestPrompts:
         prompts = load_script(
             REPO / "workflows/self-repair/prompts.py", "self_repair_prompts"
         )
-        analyze = prompts.ANALYZE.substitute(incident="i", minutes=25)
+        analyze = prompts.ANALYZE.substitute(incident="i", context="c", minutes=25)
         fix = prompts.FIX.substitute(
-            incident="i", title="t", component="c", reason="r", plan="p", minutes=25
+            incident="i",
+            context="c",
+            title="t",
+            component="c",
+            reason="r",
+            plan="p",
+            minutes=25,
         )
         for text in (analyze, fix):
             assert "about 25 minutes" in text
@@ -776,6 +782,62 @@ class TestGuards:
         (tmp_path / "bad.py").write_text("logger = 1\nl.handlers = []\n")
         assert g._python_defects(tmp_path, ["ok.py"]) == ""
         assert "F821" in g._python_defects(tmp_path, ["ok.py", "bad.py"])
+
+
+class TestContextAndGuards:
+    def test_context_url_covers_five_seconds_around_the_sample_forward(self):
+        url = triage.context_url(
+            "http://loki:3100",
+            "cms",
+            "purdue-af-182",
+            "af-pod-monitor",
+            "2026-09-16T20:03:25.905093+00:00",
+        )
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        assert q["query"] == [
+            '{namespace="cms", pod="purdue-af-182", container="af-pod-monitor"}'
+        ]
+        assert int(q["end"][0]) - int(q["start"][0]) == 10 * 10**9
+        assert q["direction"] == ["forward"] and q["limit"] == [
+            str(triage.CONTEXT_LINES)
+        ]
+
+    def test_cluster_remembers_where_the_first_sample_came_from(self):
+        lines = [
+            line("hub-1-aaaaa", "hub", "Error x", "2026-09-16T10:00:00+00:00"),
+            line("hub-1-bbbbb", "hub", "Error x", "2026-09-16T10:00:05+00:00"),
+        ]
+        (incident,) = triage.cluster(lines)
+        assert incident.evidence.first_pod == "hub-1-aaaaa"
+        assert incident.evidence.first_ts == "2026-09-16T10:00:00+00:00"
+
+    @pytest.mark.parametrize(
+        "diff, expected",
+        [
+            (
+                '-    log.error("%s did not return in %ss", cmd, t)\n+    log.warning("%s did not return in %ss", cmd, t)\n',
+                True,
+            ),
+            ('-    logger.exception("boom")\n+    logger.debug("boom")\n', True),
+            ('-    log.error("x")\n+    log.error("x")\n+    retry()\n', False),
+            (
+                "-    directories = discover_directories()\n+    directories = init_directories()\n",
+                False,
+            ),
+            ("", False),
+        ],
+    )
+    def test_silences_detects_log_level_only_changes(self, diff, expected):
+        assert triage.silences("--- a\n+++ b\n" + diff) is expected
+
+    def test_rate_limit_errors_are_recognised(self):
+        assert triage.is_rate_limit(
+            '{"name": "APIError", "data": {"message": "GenAI Studio rate limit exceeded", "statusCode": 429}}'
+        )
+        assert triage.is_rate_limit(
+            "AI_APICallError: Rate limit exceeded. Please try again later."
+        )
+        assert not triage.is_rate_limit("Bad Request: model not found")
 
 
 class TestGitHub:
