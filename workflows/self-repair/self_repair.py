@@ -40,14 +40,17 @@ from triage import (
     create_pull_request,
     describe_event,
     grouping_prompt,
+    is_rate_limit,
     open_pull_request,
     opencode_log_line,
     parse_groups,
     parse_verdict,
     pull_request_body,
+    query_context,
     query_loki,
     report_html,
     representative,
+    silences,
 )
 
 IMAGE = "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/self-repair:latest"
@@ -208,7 +211,7 @@ HEARTBEAT_S = 60
 # A provider error followed by this much silence means opencode is not
 # retrying: stop waiting for the hard timeout.
 PROVIDER_GRACE_S = 120
-RATE_LIMIT_RETRIES = 1
+RATE_LIMIT_RETRIES = 2
 RATE_LIMIT_PAUSE_S = (60, 120)
 
 
@@ -341,6 +344,8 @@ def _agent_session(cwd: Path, prompt: str, config_path: str, label: str) -> str:
         return reply.text
     if watch.aborted:
         raise ProviderError(f"provider error after {elapsed:.0f}s: {watch.aborted}")
+    if reply.error and is_rate_limit(reply.error):
+        raise ProviderError(f"rate limit after {elapsed:.0f}s: {reply.error[:200]}")
     if timed_out.is_set():
         raise RuntimeError(
             f"opencode gave no final answer within {AGENT_TIMEOUT_S}s (killed)"
@@ -381,6 +386,18 @@ def _run_agent(cwd: Path, prompt: str, permission: dict[str, Any], label: str) -
                 _log(f"{label}: rate limited; retrying in {pause:.0f}s")
                 time.sleep(pause)
     raise AssertionError("unreachable")
+
+
+def _context(evidence: Evidence, container: str) -> str:
+    if not evidence.first_pod:
+        return "(none)"
+    lines = query_context(
+        LOKI_URL, NAMESPACE, evidence.first_pod, container, evidence.first_ts
+    )
+    _log(
+        f"{len(lines)} surrounding line(s) from {evidence.first_pod}/{container} around {evidence.first_ts[11:19]}"
+    )
+    return "\n".join(lines) if lines else "(none)"
 
 
 def _describe(key: IncidentKey, evidence: Evidence) -> str:
@@ -494,7 +511,9 @@ def analyze(key: IncidentKey, evidence: Evidence) -> Verdict:
         repo = Path(tmp) / "repo"
         _clone(repo)
         prompt = prompts.ANALYZE.substitute(
-            incident=_describe(key, evidence), minutes=AGENT_BUDGET_MINUTES
+            incident=_describe(key, evidence),
+            context=_context(evidence, key.container),
+            minutes=AGENT_BUDGET_MINUTES,
         )
         reply = _run_agent(repo, prompt, READ_ONLY, key.fingerprint)
     verdict = parse_verdict(reply)
@@ -555,6 +574,7 @@ def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict) -> str:
         _git("checkout", "-q", "-b", branch, cwd=repo)
         prompt = prompts.FIX.substitute(
             incident=_describe(key, evidence),
+            context=_context(evidence, key.container),
             title=verdict.title,
             component=verdict.component,
             reason=verdict.reason,
@@ -572,6 +592,11 @@ def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict) -> str:
         if blocked:
             _log(
                 f"{key.fingerprint}: touches protected paths, no PR: {', '.join(blocked)}"
+            )
+            return ""
+        if silences(_git("diff", cwd=repo)):
+            _log(
+                f"{key.fingerprint}: the change only lowers or rewords a log message, no PR"
             )
             return ""
         defects = _python_defects(repo, paths)

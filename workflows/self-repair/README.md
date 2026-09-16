@@ -70,14 +70,17 @@ The agent is [opencode](https://opencode.ai) on
 user and about 10 concurrent calls per model, which is what sizes
 `max_incidents`. Analysis runs with edit and bash denied; the fix
 runs with edit allowed and `git push`/`commit`/`checkout`/`reset` denied — the
-task commits and pushes. A PR is opened only when the verdict is fixable at
+task commits and pushes. Both prompts carry the lines
+logged by the same container within five seconds of the first sample, so a
+traceback split over Loki lines is seen whole. A PR is opened only when the verdict is fixable at
 confidence ≥ `MIN_CONFIDENCE`, at most `max_fixes` per tick, and always as a
 draft, titled `[self-repair] …` and labelled `self-repair` so it is never mistaken
 for a human's. The agent may not edit `docker/dask-gateway-server` (an upstream
 fork carried verbatim), `pixi/`, `deploy/` or lock files, a change touching
 them is never proposed, and a Python change must pass a pyflakes check
 (undefined names, unused imports) regardless of the repository's lint
-exclusions.
+exclusions. A change that only lowers a log level or rewords a message is
+not a fix and is never proposed.
 
 Guardrails and the definition of "fixable here" are in `prompts.py`.
 

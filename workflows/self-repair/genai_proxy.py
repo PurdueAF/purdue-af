@@ -25,8 +25,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, Iterator
 
 UPSTREAM = ("genai.rcac.purdue.edu", 443, True)
-# 6 sessions x 8/min = 48/min, under the 60/min per user.
-SESSION_RPM = 8
+# 6 sessions x 6/min = 36/min: headroom under the 60/min per user for the
+# dedupe call, sub-agents' bursts and the account's other use.
+SESSION_RPM = 6
 RETRY_AFTER_S = 8
 RATE_LIMIT_TEXT = b"Rate limit exceeded"
 HOP = {
