@@ -7,8 +7,8 @@ COPY --from=ghcr.io/astral-sh/uv:0.12.15 /uv /uvx /bin/
 
 # opencode is an npm package around a platform binary; node comes from the
 # official image of the same Debian release rather than apt, which lags.
-COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
-COPY --from=node:22-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
+COPY --from=node:24-bookworm-slim /usr/local/bin/node /usr/local/bin/node
+COPY --from=node:24-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
 
 # hadolint ignore=DL3008
 RUN apt-get update \
