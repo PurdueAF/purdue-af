@@ -618,6 +618,35 @@ class TestReport:
         assert "(cache)" in page
 
 
+class TestOpencodeLog:
+    RATE_LIMIT = (
+        'timestamp=2026-09-16T17:45:45.898Z level=ERROR run=dd25936d message="stream error" '
+        "providerID=opencode modelID=big-pickle session.id=ses_f54ae4024ffe7ykdrF7I1WCxYg "
+        'small=false agent=build mode=primary error.error="AI_APICallError: Rate limit exceeded. Please try again later."'
+    )
+
+    def test_a_rate_limit_is_a_provider_error(self):
+        summary, error = triage.opencode_log_line(self.RATE_LIMIT)
+        assert error == "AI_APICallError: Rate limit exceeded. Please try again later."
+        assert summary.startswith("error: message=stream error")
+        assert "dd25936d" not in summary and "ses_" not in summary, "ids are noise"
+        assert "agent=build" in summary
+
+    def test_info_lines_are_ignored_and_warnings_relayed_without_error(self):
+        assert (
+            triage.opencode_log_line(
+                'timestamp=x level=INFO run=1 message="loop" step=5'
+            )
+            is None
+        )
+        summary, error = triage.opencode_log_line(
+            'timestamp=x level=WARN run=1 message="tailer stopped; will retry" n=3'
+        )
+        assert (
+            error is None and summary == "warn: message=tailer stopped; will retry n=3"
+        )
+
+
 class TestGitHub:
     def test_pull_request_body_is_draft_evidence_without_usernames(self):
         key = triage.IncidentKey("abc123def456", "notebook", "jupyter-*", "Error <hex>")
