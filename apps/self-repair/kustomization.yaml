@@ -7,6 +7,8 @@ kind: Kustomization
 resources:
   - podtemplate.yaml
   - deploy-job.yaml
+  # sops-encrypted (age recipient in .sops.yaml); the token value only.
+  - secret-github.yaml
 configMapGenerator:
   - name: self-repair-workflow
     options:
