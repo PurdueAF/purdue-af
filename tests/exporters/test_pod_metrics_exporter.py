@@ -192,6 +192,29 @@ def test_heartbeat_gauge_exists():
     assert exporter.heartbeat is not None
 
 
+def test_init_directories_retries(monkeypatch):
+    """init_directories should retry discover_directories until it succeeds."""
+    # First call raises, second succeeds
+    call_count = {'cnt': 0}
+    def fake_discover():
+        if call_count['cnt'] == 0:
+            call_count['cnt'] += 1
+            raise OSError("mount not ready")
+        return {"home": "/home/alice", "work": "/work/users/alice"}
+    monkeypatch.setattr(exporter, "discover_directories", fake_discover)
+    # Avoid actual sleeping
+    monkeypatch.setattr(exporter.time, "sleep", lambda _: None)
+    dirs = exporter.init_directories(retry_seconds=5)
+    assert dirs["home"] == "/home/alice"
+    assert dirs["work"] == "/work/users/alice"
+
+def test_init_directories_fails_after_deadline(monkeypatch):
+    """When discover_directories keeps failing, init_directories raises after deadline."""
+    monkeypatch.setattr(exporter, "discover_directories", lambda: (_ for _ in ()).throw(OSError("still down")))
+    monkeypatch.setattr(exporter.time, "sleep", lambda _: None)
+    with pytest.raises(OSError):
+        exporter.init_directories(retry_seconds=0)
+
 def test_heartbeat_starts_at_a_real_time():
     """A gauge starts at 0, which reads as 1970 to anything asking how long
     ago the last pass was: a session that had only just started looked stale,

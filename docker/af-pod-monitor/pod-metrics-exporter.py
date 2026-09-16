@@ -193,13 +193,28 @@ def update_directory(dir_label: str, directory: str) -> bool:
     return True
 
 
+def init_directories(retry_seconds: int = 30) -> dict[str, str]:
+    """Retry discover_directories at startup.
+    Returns the directories dict or raises after retry_seconds.
+    """
+    deadline = time.time() + retry_seconds
+    while True:
+        try:
+            return discover_directories()
+        except Exception as e:
+            if time.time() >= deadline:
+                raise
+            log.warning("discover_directories failed at startup: %s; retrying...", e)
+            time.sleep(1)
+
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="[%(name)s] %(asctime)s %(levelname)s %(message)s",
         stream=sys.stderr,
     )
-    directories = discover_directories()
+    directories = init_directories()
     start_heartbeat()
     start_http_server(9090)
     while True:
