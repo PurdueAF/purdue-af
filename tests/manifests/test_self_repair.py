@@ -137,7 +137,7 @@ def test_workflow_names_its_runs_and_needs_no_trigger():
         "the agent keeps the web; the prompt and the timeout keep it on time"
     )
     assert "AGENT_BUDGET_MINUTES" in workflow
-    assert 'os.environ.get("SELF_REPAIR_MODEL", "genai/gemma4:26b-a4b")' in workflow
+    assert 'os.environ.get("SELF_REPAIR_MODEL", "genai/gpt-oss:120b")' in workflow
     assert "from genai_proxy import Proxy" in workflow, (
         "opencode must not talk to GenAI Studio directly"
     )
