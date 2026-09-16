@@ -40,7 +40,9 @@ Flux deploys from `apps/`, and `USER_WORKLOADS` for user sessions
 (`purdue-af-<id>`) and user Dask clusters, whose image, start hooks, pixi
 environments and worker configuration come from here even though the code
 inside is the user's. Their incidents rank after the infrastructure's, so they
-only take analysis budget the infrastructure left. The workflow's own pods are not
+only take analysis budget the infrastructure left. `IGNORED_WORKLOADS` lists what is
+deployed from here but not debugged by this workflow for now: the SONIC stack
+(`supersonic-*`, `sonic-ray`, `kuberay-operator`) and the interLink nodes. The workflow's own pods are not
 read either: their logs quote every error they analyze. Anything in the
 namespace without a manifest here is not read. A new app in `apps/` needs its pod prefix
 added to the list.
