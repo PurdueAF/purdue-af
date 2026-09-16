@@ -349,7 +349,7 @@ async def _spawn(name: str, task: Any, *args: Any, output_type: Any) -> tuple[An
 async def triage(
     trigger_time: datetime,
     window_minutes: int = 20,
-    max_incidents: int = 5,
+    max_incidents: int = 20,
     max_fixes: int = 2,
 ) -> Summary:
     if trigger_time.tzinfo is None:
