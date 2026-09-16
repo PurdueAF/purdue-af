@@ -65,7 +65,7 @@ pod names, paths and `user=` fields before anything reaches a PR.
 
 The agent is [opencode](https://opencode.ai) on
 [Purdue GenAI Studio](https://docs.rcac.purdue.edu/services/genai/), model
-`gpt-oss:120b` (`MODEL` and `PROVIDERS` in `self_repair.py`; the key is the
+`gemma4:26b-a4b` (`MODEL` and `PROVIDERS` in `self_repair.py`; the key is the
 `self-repair-genai` Secret). GenAI Studio allows 60 requests a minute per
 user and about 10 concurrent calls per model, which is what sizes
 `max_incidents`. Analysis runs with edit and bash denied; the fix
