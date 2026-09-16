@@ -19,7 +19,7 @@ SSE = (
 )
 
 
-def fake_upstream(body: bytes, chunked_no_terminator: bool):
+def fake_upstream(body: bytes, chunked_no_terminator: bool, status: bytes = b"200 OK"):
     """One-shot HTTP server that answers like LiteLLM at GenAI Studio."""
     srv = socket.socket()
     srv.bind(("127.0.0.1", 0))
@@ -49,7 +49,9 @@ def fake_upstream(body: bytes, chunked_no_terminator: bool):
             # no 0\r\n\r\n: the socket just closes, as GenAI Studio does
         else:
             conn.sendall(
-                b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                b"HTTP/1.1 "
+                + status
+                + b"\r\nContent-Type: application/json\r\nContent-Length: "
                 + str(len(body)).encode()
                 + b"\r\n\r\n"
                 + body
@@ -62,7 +64,7 @@ def fake_upstream(body: bytes, chunked_no_terminator: bool):
 
 
 def through_proxy(port, path="/api/chat/completions", body=b'{"stream": true}'):
-    with genai_proxy.Proxy(upstream=("127.0.0.1", port, False)) as proxy:
+    with genai_proxy.Proxy(upstream=("127.0.0.1", port, False), rpm=6000) as proxy:
         host, pport = proxy.url.removeprefix("http://").split(":")
         client = http.client.HTTPConnection(host, int(pport), timeout=10)
         client.request(
@@ -101,3 +103,34 @@ def test_ordinary_json_passes_through():
     port, _ = fake_upstream(b'{"choices": []}', chunked_no_terminator=False)
     resp, data = through_proxy(port)
     assert resp.status == 200 and data == b'{"choices": []}'
+
+
+def test_400_rate_limit_becomes_429_with_retry_after():
+    port, _ = fake_upstream(
+        b'{"detail":"Rate limit exceeded. Please try again later."}',
+        False,
+        status=b"400 Bad Request",
+    )
+    resp, data = through_proxy(port, body=b'{"stream": false}')
+    assert resp.status == 429
+    assert resp.getheader("Retry-After") == str(genai_proxy.RETRY_AFTER_S)
+    assert b"rate limit" in data
+
+
+def test_other_upstream_errors_pass_through_with_their_body():
+    port, _ = fake_upstream(
+        b'{"detail":"model not found"}', False, status=b"404 Not Found"
+    )
+    resp, data = through_proxy(port, body=b"{}")
+    assert resp.status == 404 and data == b'{"detail":"model not found"}'
+
+
+def test_pacer_spreads_requests_to_the_budget():
+    now = [100.0]
+    slept = []
+    pacer = genai_proxy.Pacer(rpm=6, clock=lambda: now[0], sleep=slept.append)
+    assert pacer.wait() == 0  # the first goes through at once
+    assert pacer.wait() == 10  # 60/6
+    now[0] += 25  # well past the next slot
+    assert pacer.wait() == 0
+    assert slept == [10]

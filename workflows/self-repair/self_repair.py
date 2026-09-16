@@ -92,9 +92,12 @@ AGENT_TIMEOUT_S = 30 * 60
 AGENT_BUDGET_MINUTES = 25
 LOG_INCIDENTS = 20
 
-READ_ONLY = {"edit": "deny", "bash": "deny"}
+# external_directory: the agent may look at the parent of its checkout; in a
+# non-interactive run a permission prompt is auto-rejected and ends the session.
+READ_ONLY = {"edit": "deny", "bash": "deny", "external_directory": "allow"}
 EDIT = {
     "edit": "allow",
+    "external_directory": "allow",
     "bash": {
         "git push*": "deny",
         "git commit*": "deny",
