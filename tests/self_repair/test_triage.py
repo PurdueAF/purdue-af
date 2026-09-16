@@ -499,6 +499,72 @@ class TestAnalysisBudget:
         assert self.run(triage.analyze_within_budget(self.incidents(3), 0, spawn)) == []
 
 
+class TestReport:
+    def rows(self):
+        R = triage.Row
+        return [
+            R(
+                "aaaa",
+                "hub",
+                "hub",
+                3,
+                "not fixable",
+                0.9,
+                reason="upstream",
+                cache="CACHE_HIT",
+            ),
+            R(
+                "bbbb",
+                "alloy",
+                "alloy",
+                40,
+                "fixable",
+                0.8,
+                "Fix tailer",
+                "apps/monitoring/alloy",
+                "because <x>",
+                "https://github.com/PurdueAF/purdue-af/pull/99",
+            ),
+            R("cccc", "purdue-af", "notebook", 25, "not analyzed"),
+            R(
+                "dddd",
+                "flyte",
+                "flyte",
+                1,
+                "failed",
+                reason="opencode gave no final answer",
+            ),
+            R(
+                "eeee",
+                "hub",
+                "proxy",
+                7,
+                "fixable",
+                0.75,
+                "Raise limit",
+                "apps/jupyterhub",
+            ),
+        ]
+
+    def test_headline_counts_fixable_over_analyzed_and_orders_fixable_first(self):
+        page = triage.report_html("hra3y", "16:26:20..16:46:20", self.rows())
+        assert "<h2>2 of 3 analyzed incidents fixable in this repository</h2>" in page
+        assert (
+            "5 incidents, 3 analyzed (1 from cache), 1 failed, 1 pull request(s)"
+            in page
+        )
+        positions = [
+            page.index(f"<code>{fp}</code>")
+            for fp in ("bbbb", "eeee", "aaaa", "dddd", "cccc")
+        ]
+        assert positions == sorted(positions), (
+            "fixable, not fixable, failed, not analyzed"
+        )
+        assert 'href="https://github.com/PurdueAF/purdue-af/pull/99">99</a>' in page
+        assert "&lt;x&gt;" in page and "<x>" not in page, "reasons are escaped"
+        assert "(cache)" in page
+
+
 class TestGitHub:
     def test_pull_request_body_is_draft_evidence_without_usernames(self):
         key = triage.IncidentKey("abc123def456", "notebook", "jupyter-*", "Error <hex>")

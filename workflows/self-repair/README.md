@@ -61,6 +61,16 @@ draft.
 
 Guardrails and the definition of "fixable here" are in `prompts.py`.
 
+## At a glance
+
+The `triage` run has a report in the console (the Report tab of run
+`self-repair-triage-<tick>`): the headline is how many of the analyzed
+incidents are fixable in this repository, followed by one line per incident
+with verdict, confidence, title, component, PR and reason, fixable ones on
+top. It is updated after `watch`, after the analyses, and after the fixes.
+The same headline is the `VERDICTS:` line of the triage log, and the counts
+are the run's `Summary` output.
+
 ## Logs
 
 Every task narrates what it does: the Loki window and the top incidents, the
