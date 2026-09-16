@@ -232,11 +232,16 @@ def loki_url(
 
 
 def query_loki(
-    base: str, namespace: str, start: datetime, end: datetime, limit: int = 5000
+    base: str,
+    namespace: str,
+    start: datetime,
+    end: datetime,
+    limit: int = 5000,
+    prefixes: tuple[str, ...] = ALL_WORKLOADS,
 ) -> list[dict[str, str]]:
     """Every matching line in the window as {pod, container, ts, line}."""
     with urllib.request.urlopen(
-        loki_url(base, namespace, start, end, limit), timeout=60
+        loki_url(base, namespace, start, end, limit, prefixes), timeout=60
     ) as resp:
         payload = json.load(resp)
     return parse_loki(payload)
@@ -277,7 +282,49 @@ def redact(text: str) -> str:
     return text
 
 
+_LOGFMT_LINE = re.compile(r'^(?:[\w.\-/]+=(?:"(?:[^"\\]|\\.)*"|\S*)\s*){2,}$')
+_LOGFMT_PAIR = re.compile(r'([\w.\-/]+)=("(?:[^"\\]|\\.)*"|\S*)')
+_MESSAGE_KEYS = ("msg", "message", "error", "err", "reason", "event")
+_EXCEPTION = re.compile(
+    r"(?:^|\n)\s*((?:[\w.]+\.)?[A-Z]\w*(?:Error|Exception|Warning|Timeout|Failed)\b[^\n]*)"
+)
+
+
+def structured_message(line: str) -> str | None:
+    """The part of a line that says what happened, for logfmt and JSON lines
+    and Python tracebacks, so field order, extra fields and file paths do not
+    make new incidents out of one condition. None for anything else."""
+    stripped = line.strip()
+    prefix = ""
+    # a timestamp / level prefix before a JSON object, e.g. "2026-... {"
+    brace = stripped.find("{")
+    if brace >= 0 and stripped.endswith("}"):
+        try:
+            data = json.loads(stripped[brace:])
+        except json.JSONDecodeError:
+            data = None
+        if isinstance(data, dict):
+            level = str(data.get("level") or data.get("severity") or "")
+            parts = [str(data[k]) for k in _MESSAGE_KEYS if data.get(k)]
+            if parts:
+                return f"{level} {' | '.join(parts)}".strip()
+    if _LOGFMT_LINE.match(stripped):
+        fields = {k: v.strip('"') for k, v in _LOGFMT_PAIR.findall(stripped)}
+        parts = [fields[k] for k in _MESSAGE_KEYS if fields.get(k)]
+        if parts:
+            prefix = fields.get("level", "")
+            return f"{prefix} {' | '.join(parts)}".strip()
+    if "Traceback" in stripped:
+        found = _EXCEPTION.findall(stripped.replace("\\n", "\n"))
+        if found:
+            return "Traceback: " + str(found[-1])
+    return None
+
+
 def normalize(line: str, pod: str) -> str:
+    structured = structured_message(line)
+    if structured is not None:
+        line = structured
     line = line.replace(pod, "<pod>")
     for pattern, replacement in _POD_NAMES:
         line = pattern.sub(replacement, line)
@@ -340,6 +387,95 @@ def cluster(lines: list[dict[str, str]]) -> list[Incident]:
         )
     )
     return incidents
+
+
+# ── Root-cause groups ──────────────────────────────────────────────────────────
+
+
+@dataclass
+class Group:
+    label: str
+    members: list[str]  # fingerprints, the representative first
+
+
+def grouping_prompt(incidents: list[Incident]) -> str:
+    lines = [
+        "Group these log incidents from one Kubernetes namespace by root cause: "
+        "incidents that would be fixed by the same change, or explained by the same "
+        "event, belong together. Different messages from one component about one "
+        "condition (a service missing, then its endpoints missing, then the route "
+        "failing) are one group. Unrelated incidents stay alone.",
+        "",
+        "Answer with JSON only: "
+        '{"groups": [{"label": "<short cause>", "members": ["<fingerprint>", ...]}, ...]}. '
+        "Every fingerprint exactly once. Put the most representative member first.",
+        "",
+    ]
+    for i in incidents:
+        lines.append(
+            f"- {i.key.fingerprint}: {i.key.workload}/{i.key.container} x{i.evidence.count}: {i.key.message[:200]}"
+        )
+    return "\n".join(lines)
+
+
+def parse_groups(text: str, incidents: list[Incident]) -> list[Group]:
+    """Groups from the model's reply, made safe: unknown fingerprints are
+    dropped, missing ones become groups of their own, an unparsable reply
+    means every incident is its own group."""
+    known = {i.key.fingerprint: i for i in incidents}
+    groups: list[Group] = []
+    seen: set[str] = set()
+    data = extract_json(text) if "fixable" in text else None
+    if data is None:
+        decoder = json.JSONDecoder()
+        for match in re.finditer(r"\{", text):
+            try:
+                value, _ = decoder.raw_decode(text, match.start())
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, dict) and isinstance(value.get("groups"), list):
+                data = value
+                break
+    for raw in (data or {}).get("groups") or []:
+        if not isinstance(raw, dict):
+            continue
+        members = [
+            m
+            for m in raw.get("members") or []
+            if isinstance(m, str) and m in known and m not in seen
+        ]
+        if not members:
+            continue
+        members.sort(key=lambda fp: -known[fp].evidence.count)
+        seen.update(members)
+        groups.append(
+            Group(
+                str(raw.get("label") or known[members[0]].key.message[:80])[:120],
+                members,
+            )
+        )
+    for fp, incident in known.items():
+        if fp not in seen:
+            groups.append(Group(incident.key.message[:80], [fp]))
+    groups.sort(key=lambda g: -sum(known[fp].evidence.count for fp in g.members))
+    return groups
+
+
+def representative(group: Group, incidents: list[Incident]) -> Incident:
+    """The group's first member, carrying the whole group's counts."""
+    by_fp = {i.key.fingerprint: i for i in incidents}
+    head = by_fp[group.members[0]]
+    members = [by_fp[fp] for fp in group.members]
+    return Incident(
+        head.key,
+        Evidence(
+            samples=head.evidence.samples,
+            count=sum(m.evidence.count for m in members),
+            pods=sum(m.evidence.pods for m in members),
+            first_seen=min(m.evidence.first_seen for m in members),
+            last_seen=max(m.evidence.last_seen for m in members),
+        ),
+    )
 
 
 # ── Analysis budget ────────────────────────────────────────────────────────────
@@ -409,6 +545,8 @@ class Row:
     reason: str = ""
     pull_request: str = ""
     cache: str = ""
+    group: str = ""
+    members: int = 1
 
 
 def report_html(tick: str, window: str, rows: list[Row]) -> str:
@@ -447,7 +585,13 @@ def report_html(tick: str, window: str, rows: list[Row]) -> str:
         parts.append(
             f"<tr><td>{marks[r.status]}{cache}</td>"
             f"<td>{r.confidence:.2f}</td>"
-            f"<td><code>{e(r.fingerprint)}</code> {e(r.workload)}/{e(r.container)}</td>"
+            f"<td><code>{e(r.fingerprint)}</code> {e(r.workload)}/{e(r.container)}"
+            + (
+                f"<br><small>{e(r.group)} ({r.members} incidents)</small>"
+                if r.members > 1
+                else ""
+            )
+            + "</td>"
             f"<td>{r.count}</td><td>{e(r.title)}</td><td>{e(r.component)}</td><td>{pr}</td>"
             f"<td>{e(r.reason[:300])}</td></tr>"
         )
@@ -624,14 +768,50 @@ def open_pull_request(repo: str, branch: str, token: str) -> str:
     return pulls[0]["html_url"] if pulls else ""
 
 
+LABEL = "self-repair"
+TITLE_PREFIX = "[self-repair] "
+
+
+def ensure_label(repo: str, token: str) -> None:
+    try:
+        github("GET", f"/repos/{repo}/labels/{LABEL}", token)
+    except urllib.error.HTTPError as exc:
+        if exc.code != 404:
+            raise
+        github(
+            "POST",
+            f"/repos/{repo}/labels",
+            token,
+            {
+                "name": LABEL,
+                "color": "B60205",
+                "description": "Opened by the self-repair workflow; review with care",
+            },
+        )
+
+
 def create_pull_request(
     repo: str, token: str, branch: str, base: str, title: str, body: str
 ) -> str:
+    """A draft PR, titled and labelled so it is never mistaken for a human's."""
     pull = github(
         "POST",
         f"/repos/{repo}/pulls",
         token,
-        {"title": title, "head": branch, "base": base, "body": body, "draft": True},
+        {
+            "title": TITLE_PREFIX + title,
+            "head": branch,
+            "base": base,
+            "body": body,
+            "draft": True,
+        },
+    )
+    ensure_label(repo, token)
+    github(
+        "POST",
+        f"/repos/{repo}/issues/{pull['number']}/labels",
+        token,
+        {"labels": [LABEL]},
     )
     return str(pull["html_url"])
 

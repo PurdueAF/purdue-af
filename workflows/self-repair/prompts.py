@@ -27,11 +27,19 @@ A log line is FIXABLE HERE only when all of these hold:
   user session (pod purdue-af-<id>) or a user Dask pod, this repository owns
   the image (docker/purdue-af), its start hooks and scripts, the pixi
   environments and the Dask Gateway worker configuration, and nothing else.
+- it is not a Kubernetes reconciliation race: a router, endpoint or watcher
+  complaining about an object that is being created or deleted at that moment
+  (a Dask cluster's Service during teardown, a pod a tailer has just lost) is
+  not a bug in this repository.
 - it is not a bug
   in an upstream image or chart this repository merely pins, not a transient
   infrastructure fault (timeouts, connection refused, DNS, OOM kills, evictions,
   node pressure, storage outages), not an expired credential or missing secret,
   and not something that needs an action on the cluster rather than a commit.
+
+Never propose changes under docker/dask-gateway-server (an upstream fork
+carried verbatim), pixi/, deploy/, or to any *.lock file: those are not
+fixable here by definition.
 
 When in doubt it is NOT fixable here. A wrong "no" costs nothing; a wrong "yes"
 costs a reviewer's time.
