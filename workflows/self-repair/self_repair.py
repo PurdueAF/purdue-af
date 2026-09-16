@@ -46,13 +46,15 @@ BRANCH_PREFIX = "self-repair-"
 # A free OpenCode Zen model; OPENCODE_API_KEY (podtemplate.yaml) is optional for these.
 MODEL = "opencode/big-pickle"
 MIN_CONFIDENCE = 0.7
-AGENT_TIMEOUT_S = 20 * 60
+# Hard stop for one opencode session. The prompt tells the agent the soft
+# budget, a few minutes less, so it decides before the clock does.
+AGENT_TIMEOUT_S = 30 * 60
+AGENT_BUDGET_MINUTES = 25
 LOG_INCIDENTS = 20
 
-READ_ONLY = {"edit": "deny", "bash": "deny", "webfetch": "deny"}
+READ_ONLY = {"edit": "deny", "bash": "deny"}
 EDIT = {
     "edit": "allow",
-    "webfetch": "deny",
     "bash": {
         "git push*": "deny",
         "git commit*": "deny",
@@ -252,7 +254,7 @@ def watch(start: datetime, end: datetime) -> list[Incident]:
 # is never re-opened. Bump the salt to re-analyze everything.
 @env.task(
     cache=flyte.Cache(behavior="auto", ignored_inputs=("evidence",)),
-    timeout=timedelta(minutes=30),
+    timeout=timedelta(minutes=40),
 )
 def analyze(key: IncidentKey, evidence: Evidence) -> Verdict:
     _log(
@@ -261,7 +263,9 @@ def analyze(key: IncidentKey, evidence: Evidence) -> Verdict:
     with tempfile.TemporaryDirectory(prefix="self-repair-") as tmp:
         repo = Path(tmp) / "repo"
         _clone(repo)
-        prompt = prompts.ANALYZE.substitute(incident=_describe(key, evidence))
+        prompt = prompts.ANALYZE.substitute(
+            incident=_describe(key, evidence), minutes=AGENT_BUDGET_MINUTES
+        )
         reply = _run_agent(repo, prompt, READ_ONLY, key.fingerprint)
     verdict = parse_verdict(reply)
     _log(
@@ -272,7 +276,7 @@ def analyze(key: IncidentKey, evidence: Evidence) -> Verdict:
     return verdict
 
 
-@env.task(timeout=timedelta(minutes=45))
+@env.task(timeout=timedelta(minutes=60))
 def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict) -> str:
     token = os.environ["GITHUB_TOKEN"]
     branch = BRANCH_PREFIX + key.fingerprint
@@ -291,6 +295,7 @@ def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict) -> str:
             component=verdict.component,
             reason=verdict.reason,
             plan=verdict.plan,
+            minutes=AGENT_BUDGET_MINUTES,
         )
         reply = _run_agent(repo, prompt, EDIT, key.fingerprint)
         changed = _git("status", "--porcelain", cwd=repo).strip()
@@ -340,7 +345,7 @@ async def _spawn(name: str, task: Any, *args: Any, output_type: Any) -> tuple[An
     return outputs["o0"], cache
 
 
-@env.task(timeout=timedelta(hours=2))
+@env.task(timeout=timedelta(hours=4))
 async def triage(
     trigger_time: datetime,
     window_minutes: int = 20,

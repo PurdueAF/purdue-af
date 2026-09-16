@@ -390,6 +390,20 @@ class TestRunNames:
         )
 
 
+class TestPrompts:
+    def test_both_prompts_state_the_time_budget(self):
+        prompts = load_script(
+            REPO / "workflows/self-repair/prompts.py", "self_repair_prompts"
+        )
+        analyze = prompts.ANALYZE.substitute(incident="i", minutes=25)
+        fix = prompts.FIX.substitute(
+            incident="i", title="t", component="c", reason="r", plan="p", minutes=25
+        )
+        for text in (analyze, fix):
+            assert "about 25 minutes" in text
+            assert "$" not in text.replace("$schema", "")
+
+
 class TestAnalysisBudget:
     """max_incidents caps fresh analyses; cache hits are free and never starve
     the incidents further down the list."""
