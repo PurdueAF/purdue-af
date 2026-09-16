@@ -251,6 +251,24 @@ sidecar:
   rules:
     enabled: false
 
+chunksCache:
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+
+resultsCache:
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+
 memcachedExporter:
   image:
     repository: geddes-registry.rcac.purdue.edu/docker-hub-cache/prom/memcached-exporter

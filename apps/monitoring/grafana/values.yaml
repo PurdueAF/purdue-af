@@ -218,3 +218,11 @@ datasources:
 plugins:
   - marcusolsson-dynamictext-panel
   - yesoreyeram-infinity-datasource
+
+nodeSelector:
+  cms-af-prod: "true"
+tolerations:
+  - key: "hub.jupyter.org/dedicated"
+    operator: "Equal"
+    value: "cms-af"
+    effect: "NoSchedule"
