@@ -297,7 +297,7 @@ class TestRunNames:
         exec(source[start:end], vars(self.names))
 
     def test_every_run_name_fits(self):
-        tick = self.names.tick_of(datetime(2085, 1, 1, tzinfo=timezone.utc))
+        tick = self.names.tick_of(datetime(2084, 1, 1, tzinfo=timezone.utc))
         assert len(tick) == 5
         for task, fp in (
             ("triage", ""),

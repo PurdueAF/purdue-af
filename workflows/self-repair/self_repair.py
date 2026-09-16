@@ -77,7 +77,7 @@ def _log(message: str) -> None:
 
 # Run names are capped at 30 characters (the pod is `<run>-a0-0`), and every
 # one starts with the 12 of "self-repair-". A tick is the launch minute in
-# base36: 5 characters until 2085. Four characters of fingerprint tell the
+# base36: 5 characters until late 2084. Four characters of fingerprint tell the
 # analyses of one tick apart; the full fingerprint is in the logs and branch.
 NAME_LIMIT = 30
 DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz"
