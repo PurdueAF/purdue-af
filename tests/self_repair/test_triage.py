@@ -80,6 +80,59 @@ class TestFingerprint:
             incident.key.message == "[E <ts> JupyterHub] Error at <addr> for id <hex>"
         )
 
+    def test_other_pods_named_in_the_message_do_not_split_the_incident(self):
+        """alloy reports one tailer loss per vanished pod; that is one incident."""
+        template = (
+            'ts=2026-09-16T17:28:57.8Z level=warn msg="tailer stopped; will retry" '
+            "component_id=loki.source.kubernetes.pods target=cms/{pod}:triton-server "
+            'err="pods \\"{pod}\\" not found"'
+        )
+        lines = [
+            line(
+                "alloy-vqlcj",
+                "alloy",
+                template.format(pod="supersonic-pr-triton-85866ffc9b-mt7n9"),
+            ),
+            line(
+                "alloy-nxhbw",
+                "alloy",
+                template.format(pod="supersonic-pr-triton-85866ffc9b-vvdxh"),
+            ),
+            line(
+                "alloy-abcde",
+                "alloy",
+                "tailer stopped target=cms/af-node-probe-eos-x7k2p:probe",
+            ),
+            line(
+                "alloy-abcde",
+                "alloy",
+                "tailer stopped target=cms/af-node-probe-eos-m9q4z:probe",
+            ),
+            line(
+                "alloy-abcde",
+                "alloy",
+                "lost dask-worker-96acb57f0729416b83289485f080ac8c-x7k2p",
+            ),
+            line(
+                "alloy-abcde",
+                "alloy",
+                "lost dask-worker-0123456789abcdef0123456789abcdef-zz9zz",
+            ),
+        ]
+        incidents = triage.cluster(lines)
+        messages = sorted(i.key.message for i in incidents)
+        assert len(incidents) == 3, messages
+        assert (
+            "supersonic-pr-triton-<pod>" in messages[2] and "mt7n9" not in messages[2]
+        )
+        assert messages[1].endswith("af-node-probe-eos-<pod>:probe")
+        assert messages[0] == "lost dask-worker-<id>-<pod>"
+
+    def test_ordinary_words_are_not_taken_for_pod_suffixes(self):
+        assert triage.normalize(
+            "mount /work failed; retry proxy-public shell", "hub-zz9zz"
+        ) == ("mount /work failed; retry proxy-public shell")
+
     def test_different_containers_are_different_incidents(self):
         lines = [
             line("hub-1-aaaaa", "hub", "Error x"),
