@@ -18,12 +18,13 @@ cluster side (task pods, secrets, the deploy Job) is
 
 ## Tasks
 
-| Task      | Runs                                                                                                | Cached                                                      |
-| --------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `triage`  | One per tick: `watch`, then `analyze` per incident, then `fix`, each started as a run of its own    | no                                                          |
-| `watch`   | One Loki query for `error\|exception\|traceback\|fatal\|panic` from the watched workloads in `cms`  | no                                                          |
-| `analyze` | opencode, read-only, in a fresh checkout of `main`: is this fixable by a change in this repository? | yes, on the incident key (a recurring error is judged once) |
-| `fix`     | opencode with edit rights on a branch `self-repair-<fingerprint>`; commit, push, draft PR           | no (an open PR for the branch is returned as is)            |
+| Task      | Runs                                                                                                                                                        | Cached                                                      |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `triage`  | One per tick: `watch`, then `analyze` per incident, then `fix`, each started as a run of its own                                                            | no                                                          |
+| `watch`   | Two Loki queries (infrastructure, then user workloads, 5000 lines each) for `error\|exception\|traceback\|fatal\|panic` from the watched workloads in `cms` | no                                                          |
+| `dedupe`  | One model call: the incidents grouped by root cause; a failed call leaves every incident alone                                                              | no                                                          |
+| `analyze` | opencode, read-only, in a fresh checkout of `main`: is this fixable by a change in this repository?                                                         | yes, on the incident key (a recurring error is judged once) |
+| `fix`     | opencode with edit rights on a branch `self-repair-<fingerprint>`; commit, push, draft PR                                                                   | no (an open PR for the branch is returned as is)            |
 
 `triage` starts the others with `flyte.run` under names of its own —
 `self-repair-watch-<tick>`, `self-repair-analyze-<tick>-<fp>`,
@@ -48,6 +49,15 @@ read either: their logs quote every error they analyze. Anything in the
 namespace without a manifest here is not read. A new app in `apps/` needs its pod prefix
 added to the list.
 
+Incidents are deduplicated in two layers. First structurally: logfmt and JSON
+lines are keyed on their level and message fields, so field order and extra
+fields (`ingress=`, `servicePort=`) do not split one condition, and a Python
+traceback is keyed on its exception line rather than its file paths. Then
+`dedupe`, one model call per tick, groups the remaining incidents by root
+cause (a service missing, then its endpoints, then the route failing are one
+group); `analyze` sees one representative per group carrying the group's
+counts, and the report names the group and its size.
+
 An incident is `(container, workload, normalized message)`: timestamps, ids,
 addresses and numbers are replaced before hashing, so the same error from
 every replica over every tick is one incident. Usernames are redacted from
@@ -62,7 +72,12 @@ user and about 10 concurrent calls per model, which is what sizes
 runs with edit allowed and `git push`/`commit`/`checkout`/`reset` denied — the
 task commits and pushes. A PR is opened only when the verdict is fixable at
 confidence ≥ `MIN_CONFIDENCE`, at most `max_fixes` per tick, and always as a
-draft.
+draft, titled `[self-repair] …` and labelled `self-repair` so it is never mistaken
+for a human's. The agent may not edit `docker/dask-gateway-server` (an upstream
+fork carried verbatim), `pixi/`, `deploy/` or lock files, a change touching
+them is never proposed, and a Python change must pass a pyflakes check
+(undefined names, unused imports) regardless of the repository's lint
+exclusions.
 
 Guardrails and the definition of "fixable here" are in `prompts.py`.
 

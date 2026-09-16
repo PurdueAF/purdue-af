@@ -2,6 +2,7 @@
 agent's verdict and the pull request text."""
 
 import json
+import urllib.error
 import urllib.parse
 from datetime import datetime, timezone
 
@@ -647,6 +648,135 @@ class TestOpencodeLog:
         )
 
 
+class TestStructuredMessages:
+    """logfmt, JSON and traceback lines are keyed on what happened, not on
+    field order, extra fields or file paths."""
+
+    TRAEFIK = [
+        'time="2026-09-16T19:14:47Z" level=error msg="Cannot create service: subset not found" providerName=kubernetescrd ingress=dask-abc namespace=cms',
+        'time="2026-09-16T19:14:48Z" level=error msg="Cannot create service: subset not found" serviceName=dask-def servicePort="{0 8786 }" ingress=dask-def',
+        'time="2026-09-16T19:14:49Z" level=error msg="Cannot create service: subset not found" namespace=cms servicePort="{0 8786 }" providerName=kubernetescrd',
+    ]
+
+    def test_logfmt_field_order_and_extra_fields_do_not_matter(self):
+        keys = {triage.structured_message(entry) for entry in self.TRAEFIK}
+        assert keys == {"error Cannot create service: subset not found"}
+
+    def test_logfmt_keeps_the_error_field(self):
+        line = 'ts=2026-09-16T17:28:57Z level=warn msg="tailer stopped; will retry" component_id=loki.source.kubernetes.pods target=cms/x:y err="pods \\"x\\" not found"'
+        assert (
+            triage.structured_message(line)
+            == 'warn tailer stopped; will retry | pods \\"x\\" not found'
+        )
+
+    def test_json_lines(self):
+        line = '2026-09-16T10:00:00Z {"level": "error", "message": "connection refused", "pod": "hub-1", "attempt": 3}'
+        assert triage.structured_message(line) == "error connection refused"
+
+    def test_traceback_is_keyed_on_the_exception(self):
+        line = (
+            'Traceback: \' File "/work/users/alice/envs/my-env/lib/python3.12/site-packages/coffea/processor/executor.py", line 1, in x\\n'
+            '  raise RuntimeError("boom")\\nRuntimeError: Compute Failed while reading file 7\''
+        )
+        assert (
+            triage.structured_message(line)
+            == "Traceback: RuntimeError: Compute Failed while reading file 7'"
+        )
+
+    def test_plain_lines_are_untouched(self):
+        assert (
+            triage.structured_message("[E 10:00:00 JupyterHub] Error at 0x7f") is None
+        )
+
+    def test_three_traefik_variants_are_one_incident(self):
+        lines = [
+            line("traefik-dask-gateway-k8s-1-abcde", "traefik", entry)
+            for entry in self.TRAEFIK
+        ]
+        assert len(triage.cluster(lines)) == 1
+
+
+class TestGroups:
+    def incidents(self):
+        return [
+            triage.Incident(
+                triage.IncidentKey(f"fp{i}", "c", "w", f"m{i}"),
+                triage.Evidence([f"s{i}"], 10 - i, 1, f"t{i}", f"t{i}"),
+            )
+            for i in range(4)
+        ]
+
+    def test_prompt_lists_every_incident(self):
+        prompt = triage.grouping_prompt(self.incidents())
+        assert all(f"- fp{i}:" in prompt for i in range(4)) and '"groups"' in prompt
+
+    def test_parse_validates_and_completes(self):
+        reply = 'Here you go:\n{"groups": [{"label": "traefik stale service", "members": ["fp1", "fp0", "nope"]}, {"label": "x", "members": ["fp0"]}]}'
+        groups = triage.parse_groups(reply, self.incidents())
+        assert [(g.label, g.members) for g in groups] == [
+            (
+                "traefik stale service",
+                ["fp0", "fp1"],
+            ),  # representative first: highest count
+            ("m2", ["fp2"]),
+            ("m3", ["fp3"]),
+        ], "unknown dropped, duplicate ignored, missing ones alone, sorted by count"
+
+    def test_garbage_reply_means_singletons(self):
+        groups = triage.parse_groups("no json here", self.incidents())
+        assert [g.members for g in groups] == [["fp0"], ["fp1"], ["fp2"], ["fp3"]]
+
+    def test_representative_carries_the_group_counts(self):
+        incidents = self.incidents()
+        rep = triage.representative(triage.Group("g", ["fp0", "fp1", "fp2"]), incidents)
+        assert rep.key.fingerprint == "fp0"
+        assert rep.evidence.count == 10 + 9 + 8 and rep.evidence.pods == 3
+        assert rep.evidence.first_seen == "t0" and rep.evidence.last_seen == "t2"
+        assert rep.evidence.samples == ["s0"]
+
+
+class TestGuards:
+    def helpers(self):
+        import types
+
+        source = (REPO / "workflows/self-repair/self_repair.py").read_text()
+        start = source.index("PROTECTED_PATHS = (")
+        end = source.index("EDIT = {")
+        ns = types.ModuleType("guards")
+        exec(source[start:end], vars(ns))
+        start = source.index("def _protected(")
+        end = source.index("@env.task(timeout=timedelta(minutes=60))\ndef fix(")
+        ns.subprocess = __import__("subprocess")
+        ns.Path = __import__("pathlib").Path
+        exec(source[start:end], vars(ns))
+        return ns
+
+    def test_protected_paths_block_the_vendored_fork_envs_deploy_and_locks(self):
+        g = self.helpers()
+        blocked = g._protected(
+            [
+                "docker/dask-gateway-server/x.py",
+                "pixi/global/pixi.toml",
+                "deploy/experimental/kustomization.yaml",
+                "docker/self-repair/uv.lock",
+                "apps/x/values.yaml",
+            ]
+        )
+        assert blocked == [
+            "docker/dask-gateway-server/x.py",
+            "pixi/global/pixi.toml",
+            "deploy/experimental/kustomization.yaml",
+            "docker/self-repair/uv.lock",
+        ]
+
+    def test_pyflakes_gate_catches_an_undefined_name(self, tmp_path):
+        g = self.helpers()
+        (tmp_path / "ok.py").write_text("import os\nprint(os.name)\n")
+        (tmp_path / "bad.py").write_text("logger = 1\nl.handlers = []\n")
+        assert g._python_defects(tmp_path, ["ok.py"]) == ""
+        assert "F821" in g._python_defects(tmp_path, ["ok.py", "bad.py"])
+
+
 class TestGitHub:
     def test_pull_request_body_is_draft_evidence_without_usernames(self):
         key = triage.IncidentKey("abc123def456", "notebook", "jupyter-*", "Error <hex>")
@@ -665,6 +795,63 @@ class TestGitHub:
             and "I changed x." in body
         )
         assert "Draft on purpose" in body and "run-1" in body
+
+    def test_pull_requests_are_titled_and_labelled_as_self_repair(self, monkeypatch):
+        calls = []
+
+        class Response:
+            def __init__(self, status, payload):
+                self.status, self.payload = status, payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def read(self):
+                return json.dumps(self.payload).encode()
+
+        def urlopen(request, timeout):
+            calls.append(
+                (
+                    request.get_method(),
+                    request.full_url.split("api.github.com")[1],
+                    json.loads(request.data) if request.data else None,
+                )
+            )
+            path = calls[-1][1]
+            if path.endswith("/labels/self-repair"):
+                raise urllib.error.HTTPError(
+                    request.full_url, 404, "Not Found", {}, None
+                )
+            if path.endswith("/pulls"):
+                return Response(
+                    201,
+                    {
+                        "html_url": "https://github.com/PurdueAF/purdue-af/pull/7",
+                        "number": 7,
+                    },
+                )
+            return Response(200, {})
+
+        monkeypatch.setattr(triage.urllib.request, "urlopen", urlopen)
+        url = triage.create_pull_request(
+            "PurdueAF/purdue-af", "tok", "self-repair-abc", "main", "Fix it", "B"
+        )
+        assert url.endswith("/pull/7")
+        methods = [(m, p) for m, p, _ in calls]
+        assert methods == [
+            ("POST", "/repos/PurdueAF/purdue-af/pulls"),
+            ("GET", "/repos/PurdueAF/purdue-af/labels/self-repair"),
+            ("POST", "/repos/PurdueAF/purdue-af/labels"),
+            ("POST", "/repos/PurdueAF/purdue-af/issues/7/labels"),
+        ]
+        assert (
+            calls[0][2]["title"] == "[self-repair] Fix it"
+            and calls[0][2]["draft"] is True
+        )
+        assert calls[3][2] == {"labels": ["self-repair"]}
 
     def test_requests_are_authenticated_and_open_prs_are_looked_up_by_head(
         self, monkeypatch
@@ -703,9 +890,13 @@ class TestGitHub:
         )
 
         def urlopen_create(request, timeout):
-            seen["create"] = json.loads(request.data)
+            if request.full_url.endswith("/pulls"):
+                seen["create"] = json.loads(request.data)
             return Response(
-                {"html_url": "https://github.com/PurdueAF/purdue-af/pull/2"}
+                {
+                    "html_url": "https://github.com/PurdueAF/purdue-af/pull/2",
+                    "number": 2,
+                }
             )
 
         monkeypatch.setattr(triage.urllib.request, "urlopen", urlopen_create)
@@ -713,7 +904,7 @@ class TestGitHub:
             "PurdueAF/purdue-af", "tok", "self-repair/abc", "main", "T", "B"
         )
         assert seen["create"] == {
-            "title": "T",
+            "title": "[self-repair] T",
             "head": "self-repair/abc",
             "base": "main",
             "body": "B",

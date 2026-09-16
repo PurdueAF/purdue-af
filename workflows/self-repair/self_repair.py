@@ -12,6 +12,8 @@ import subprocess
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -21,7 +23,11 @@ import prompts
 from genai_proxy import Proxy
 from triage import (
     ALL_WORKLOADS,
+    IGNORED_WORKLOADS,
+    USER_WORKLOADS,
+    WATCHED_WORKLOADS,
     Evidence,
+    Group,
     Incident,
     IncidentKey,
     Row,
@@ -32,12 +38,15 @@ from triage import (
     collect_reply,
     create_pull_request,
     describe_event,
+    grouping_prompt,
     open_pull_request,
     opencode_log_line,
+    parse_groups,
     parse_verdict,
     pull_request_body,
     query_loki,
     report_html,
+    representative,
 )
 
 IMAGE = "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/self-repair:latest"
@@ -95,8 +104,17 @@ LOG_INCIDENTS = 20
 # external_directory: the agent may look at the parent of its checkout; in a
 # non-interactive run a permission prompt is auto-rejected and ends the session.
 READ_ONLY = {"edit": "deny", "bash": "deny", "external_directory": "allow"}
+# Not fixable here by definition; the agent may not edit them and a change
+# touching them never becomes a PR. Patterns are opencode permission globs.
+PROTECTED_PATHS = ("docker/dask-gateway-server/", "pixi/", "deploy/")
 EDIT = {
-    "edit": "allow",
+    "edit": {
+        "*docker/dask-gateway-server/*": "deny",
+        "*/pixi/*": "deny",
+        "*/deploy/*": "deny",
+        "*.lock": "deny",
+        "*": "allow",
+    },
     "external_directory": "allow",
     "bash": {
         "git push*": "deny",
@@ -383,7 +401,14 @@ def watch(start: datetime, end: datetime) -> list[Incident]:
         f"querying {LOKI_URL} for error lines in {NAMESPACE}, {start:%H:%M:%S}..{end:%H:%M:%S} UTC, "
         f"from {len(ALL_WORKLOADS)} watched workloads (triage.WATCHED_WORKLOADS + USER_WORKLOADS - IGNORED_WORKLOADS)"
     )
-    lines = query_loki(LOKI_URL, NAMESPACE, start, end)
+    infrastructure = tuple(p for p in WATCHED_WORKLOADS if p not in IGNORED_WORKLOADS)
+    lines = query_loki(LOKI_URL, NAMESPACE, start, end, prefixes=infrastructure)
+    user_lines = query_loki(LOKI_URL, NAMESPACE, start, end, prefixes=USER_WORKLOADS)
+    _log(
+        f"{len(lines)} infrastructure lines, {len(user_lines)} user-workload lines "
+        "(each query capped at 5000)"
+    )
+    lines += user_lines
     incidents = cluster(lines)
     _log(
         f"{len(lines)} error lines in {len(incidents)} distinct incident(s); top {min(LOG_INCIDENTS, len(incidents))}:"
@@ -395,6 +420,63 @@ def watch(start: datetime, end: datetime) -> list[Incident]:
             f"{key.workload}/{key.container}: {key.message[:100]}"
         )
     return incidents
+
+
+GENAI_CHAT = "https://genai.rcac.purdue.edu/api/chat/completions"
+
+
+def _ask_genai(prompt: str) -> str:
+    """One non-streaming chat completion, JSON answer; retried once on the rate limit."""
+    body = {
+        "model": MODEL.split("/", 1)[-1],
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+        "response_format": {"type": "json_object"},
+        "max_tokens": 4000,
+    }
+    request = urllib.request.Request(
+        GENAI_CHAT,
+        data=json.dumps(body).encode(),
+        headers={
+            "Authorization": f"Bearer {os.environ['GENAI_API_KEY']}",
+            "Content-Type": "application/json",
+        },
+    )
+    for attempt in (1, 2):
+        try:
+            with urllib.request.urlopen(request, timeout=300) as resp:
+                data = json.load(resp)
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode(errors="replace")
+            if "Rate limit" in detail and attempt == 1:
+                _log("dedupe: rate limited, retrying in 15s")
+                time.sleep(15)
+                continue
+            raise RuntimeError(f"GenAI Studio HTTP {exc.code}: {detail[:300]}") from exc
+        if data is None:
+            raise RuntimeError("GenAI Studio answered null (rate limit)")
+        return str(data["choices"][0]["message"].get("content") or "")
+    raise RuntimeError("GenAI Studio rate limited twice")
+
+
+@env.task(retries=1, timeout=timedelta(minutes=15))
+def dedupe(incidents: list[Incident]) -> list[Group]:
+    """One model call: which incidents share a root cause. A failed call
+    degrades to one group per incident, never to a lost tick."""
+    if len(incidents) < 2:
+        return parse_groups("", incidents)
+    _log(f"grouping {len(incidents)} incidents by root cause with {MODEL}")
+    try:
+        reply = _ask_genai(grouping_prompt(incidents))
+    except RuntimeError as exc:
+        _log(f"dedupe: {exc}; every incident is its own group")
+        reply = ""
+    groups = parse_groups(reply, incidents)
+    merged = [g for g in groups if len(g.members) > 1]
+    _log(f"{len(incidents)} incidents -> {len(groups)} groups ({len(merged)} merged)")
+    for group in merged:
+        _log(f"  {group.label}: {', '.join(group.members)}")
+    return groups
 
 
 # Cached on the key alone: a recurring error is analyzed once, and a fixed one
@@ -421,6 +503,30 @@ def analyze(key: IncidentKey, evidence: Evidence) -> Verdict:
     )
     _log(f"{key.fingerprint}: reason: {verdict.reason}")
     return verdict
+
+
+def _protected(changed: list[str]) -> list[str]:
+    return [
+        path
+        for path in changed
+        if path.startswith(PROTECTED_PATHS) or path.endswith(".lock")
+    ]
+
+
+def _python_defects(repo: Path, changed: list[str]) -> str:
+    """pyflakes-level findings (undefined names, unused imports) on the
+    changed Python files, ignoring the repository's exclusions: a file the
+    linters skip is exactly where an undefined name slips through."""
+    files = [f for f in changed if f.endswith(".py") and (repo / f).is_file()]
+    if not files:
+        return ""
+    proc = subprocess.run(
+        ["ruff", "check", "--isolated", "--select", "F", "--no-cache", *files],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    return "" if proc.returncode == 0 else (proc.stdout + proc.stderr).strip()
 
 
 @env.task(timeout=timedelta(minutes=60))
@@ -450,6 +556,19 @@ def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict) -> str:
             _log(f"{key.fingerprint}: the agent changed nothing")
             return ""
         _log(f"{key.fingerprint}: changed files:\n{changed}")
+        paths = [line[3:].split(" -> ")[-1] for line in changed.splitlines()]
+        blocked = _protected(paths)
+        if blocked:
+            _log(
+                f"{key.fingerprint}: touches protected paths, no PR: {', '.join(blocked)}"
+            )
+            return ""
+        defects = _python_defects(repo, paths)
+        if defects:
+            _log(
+                f"{key.fingerprint}: the change does not pass pyflakes, no PR:\n{defects[:1500]}"
+            )
+            return ""
         _git("add", "-A", cwd=repo)
         _git(
             "commit",
@@ -516,9 +635,14 @@ async def triage(
         trigger_time,
         output_type=list[Incident],
     )
+    groups, _ = await _spawn(
+        run_name("dedupe", tick), dedupe, incidents, output_type=list[Group]
+    )
+    raw = incidents
+    incidents = [representative(group, raw) for group in groups]
     _log(
-        f"{len(incidents)} incident(s); up to {max_incidents} fresh analyses, cache hits are free: "
-        f"{', '.join(i.key.fingerprint for i in incidents) or '-'}"
+        f"{len(raw)} incident(s) in {len(incidents)} group(s); up to {max_incidents} fresh "
+        f"analyses, cache hits are free: {', '.join(i.key.fingerprint for i in incidents) or '-'}"
     )
     window = f"{start:%H:%M:%S}..{trigger_time:%H:%M:%S}"
     rows = {
@@ -528,8 +652,10 @@ async def triage(
             i.key.container,
             i.evidence.count,
             "pending",
+            group=group.label,
+            members=len(group.members),
         )
-        for i in incidents
+        for i, group in zip(incidents, groups)
     }
 
     async def publish() -> None:

@@ -146,6 +146,11 @@ def test_workflow_names_its_runs_and_needs_no_trigger():
     assert "CatalogCacheStatus.Name(" in workflow, "cache hits are logged"
     assert "@env.task(report=True" in workflow, "the verdict table is the triage report"
     assert "flyte.report.replace.aio(" in workflow
+    assert '"*docker/dask-gateway-server/*": "deny"' in workflow, (
+        "the vendored fork is off limits"
+    )
+    assert "_python_defects(repo, paths)" in workflow, "no PR without a pyflakes pass"
+    assert 'run_name("dedupe", tick)' in workflow, "one grouping call per tick"
     assert "class _Watch" in workflow and "PROVIDER_GRACE_S" in workflow, (
         "a provider error followed by silence must not wait for the hard timeout"
     )
