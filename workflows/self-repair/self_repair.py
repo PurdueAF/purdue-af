@@ -18,6 +18,7 @@ from typing import Any
 
 import flyte
 import prompts
+from genai_proxy import Proxy
 from triage import (
     ALL_WORKLOADS,
     Evidence,
@@ -47,8 +48,43 @@ BASE_BRANCH = "main"
 # A dash, not a slash: `self-repair/<x>` cannot be created while any branch
 # named `self-repair` exists.
 BRANCH_PREFIX = "self-repair-"
-# A free OpenCode Zen model; OPENCODE_API_KEY (podtemplate.yaml) is optional for these.
-MODEL = "opencode/big-pickle"
+# Purdue GenAI Studio (docs.rcac.purdue.edu/services/genai): OpenAI-compatible,
+# on Purdue's network, keyed to the account whose key is in GENAI_API_KEY
+# (podtemplate.yaml). Documented limits: 60 requests/min per user, about 10
+# concurrent calls per model, and a rate limit answers with a JSON null body.
+# gpt-oss:120b answered a tool-calling probe in 0.4 s; qwen3.6:27b timed out.
+# SELF_REPAIR_MODEL overrides it (the launcher's env, or a test), so a model
+# can be tried without a code change.
+# Through the proxy, gpt-oss:120b and gemma4:26b-a4b each ran the whole tool
+# loop in about 10 s (2026-09-16); qwen3.6:27b was not answering that day.
+MODEL = os.environ.get("SELF_REPAIR_MODEL", "genai/gpt-oss:120b")
+# The vLLM-backed models with native tool calling; deployed context per the docs.
+PROVIDERS = {
+    "genai": {
+        "npm": "@ai-sdk/openai-compatible",
+        "name": "Purdue GenAI Studio",
+        # baseURL is filled in per session: opencode talks to the re-framing
+        # proxy in genai_proxy.py, which talks to GenAI Studio.
+        "options": {"apiKey": "{env:GENAI_API_KEY}"},
+        "models": {
+            model_id: {
+                "name": name,
+                "tool_call": True,
+                "reasoning": False,
+                "temperature": True,
+                "release_date": "2026-06-01",
+                "modalities": {"input": ["text"], "output": ["text"]},
+                "limit": {"context": context, "output": 8192},
+            }
+            for model_id, name, context in (
+                ("gpt-oss:120b", "gpt-oss 120b", 65536),
+                ("qwen3.6:27b", "Qwen 3.6 27B", 65536),
+                ("gemma4:26b-a4b", "Gemma 4 26B", 65536),
+                ("llama4:latest", "Llama 4", 16384),
+            )
+        },
+    }
+}
 MIN_CONFIDENCE = 0.7
 # Hard stop for one opencode session. The prompt tells the agent the soft
 # budget, a few minutes less, so it decides before the clock does.
@@ -295,27 +331,33 @@ class ProviderError(RuntimeError):
 
 
 def _run_agent(cwd: Path, prompt: str, permission: dict[str, Any], label: str) -> str:
-    config = {
-        "$schema": "https://opencode.ai/config.json",
-        "model": MODEL,
-        "permission": permission,
-        "share": "disabled",
-    }
-    with tempfile.NamedTemporaryFile(
-        "w", suffix=".json", prefix="opencode-", delete=False
-    ) as handle:
-        json.dump(config, handle)
     mode = "read-only" if permission is READ_ONLY else "edit"
-    for attempt in range(1, RATE_LIMIT_RETRIES + 2):
-        _log(f"{label}: opencode {MODEL} ({mode}) in {cwd}, attempt {attempt}")
-        try:
-            return _agent_session(cwd, prompt, handle.name, label)
-        except ProviderError as exc:
-            if "rate limit" not in str(exc).lower() or attempt > RATE_LIMIT_RETRIES:
-                raise
-            pause = random.uniform(*RATE_LIMIT_PAUSE_S)
-            _log(f"{label}: rate limited; retrying in {pause:.0f}s")
-            time.sleep(pause)
+    # opencode talks to the re-framing proxy (genai_proxy.py), the proxy to
+    # GenAI Studio.
+    with Proxy() as proxy:
+        providers = json.loads(json.dumps(PROVIDERS))
+        providers["genai"]["options"]["baseURL"] = f"{proxy.url}/api"
+        config = {
+            "$schema": "https://opencode.ai/config.json",
+            "model": MODEL,
+            "provider": providers,
+            "permission": permission,
+            "share": "disabled",
+        }
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".json", prefix="opencode-", delete=False
+        ) as handle:
+            json.dump(config, handle)
+        for attempt in range(1, RATE_LIMIT_RETRIES + 2):
+            _log(f"{label}: opencode {MODEL} ({mode}) in {cwd}, attempt {attempt}")
+            try:
+                return _agent_session(cwd, prompt, handle.name, label)
+            except ProviderError as exc:
+                if "rate limit" not in str(exc).lower() or attempt > RATE_LIMIT_RETRIES:
+                    raise
+                pause = random.uniform(*RATE_LIMIT_PAUSE_S)
+                _log(f"{label}: rate limited; retrying in {pause:.0f}s")
+                time.sleep(pause)
     raise AssertionError("unreachable")
 
 
@@ -451,7 +493,9 @@ async def _spawn(name: str, task: Any, *args: Any, output_type: Any) -> tuple[An
 async def triage(
     trigger_time: datetime,
     window_minutes: int = 20,
-    max_incidents: int = 20,
+    # 60 requests/min per user at GenAI Studio; a session makes several a
+    # minute, so a handful in parallel is the ceiling, not 20.
+    max_incidents: int = 6,
     max_fixes: int = 2,
 ) -> Summary:
     if trigger_time.tzinfo is None:

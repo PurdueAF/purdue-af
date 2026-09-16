@@ -34,6 +34,7 @@ def test_flux_deploys_the_app_as_one_kustomization():
         "podtemplate.yaml",
         "cronjob.yaml",
         "secret-github.yaml",
+        "secret-genai.yaml",
     ]
     (generator,) = app["configMapGenerator"]
     assert generator["name"] == "self-repair-workflow"
@@ -41,7 +42,13 @@ def test_flux_deploys_the_app_as_one_kustomization():
         "kustomize.toolkit.fluxcd.io/substitute": "disabled"
     }
     files = {Path(f).name for f in generator["files"]}
-    assert files == {"self_repair.py", "triage.py", "prompts.py", "config.yaml"}
+    assert files == {
+        "self_repair.py",
+        "triage.py",
+        "prompts.py",
+        "genai_proxy.py",
+        "config.yaml",
+    }
     for f in generator["files"]:
         assert (APP / f).resolve().is_file(), f
 
@@ -55,6 +62,15 @@ def test_github_token_secret_is_encrypted():
     assert secret["metadata"]["name"] == "self-repair-github"
     assert secret["stringData"]["token"].startswith("ENC[AES256_GCM,")
     assert secret["sops"]["encrypted_regex"] == "^(data|stringData)$"
+    assert any(r["recipient"].startswith("age1") for r in secret["sops"]["age"])
+
+
+def test_genai_key_secret_is_encrypted():
+    raw = (APP / "secret-genai.yaml").read_text()
+    assert "sk-" not in raw
+    (secret,) = docs(APP / "secret-genai.yaml")
+    assert secret["metadata"]["name"] == "self-repair-genai"
+    assert secret["stringData"]["api-key"].startswith("ENC[AES256_GCM,")
     assert any(r["recipient"].startswith("age1") for r in secret["sops"]["age"])
 
 
@@ -87,6 +103,7 @@ def test_task_pods_get_the_github_token_from_the_pod_template():
     env = {e["name"]: e["valueFrom"]["secretKeyRef"] for e in container["env"]}
     assert env["GITHUB_TOKEN"] == {"name": "self-repair-github", "key": "token"}
     assert env["OPENCODE_API_KEY"]["optional"] is True
+    assert env["GENAI_API_KEY"] == {"name": "self-repair-genai", "key": "api-key"}
     assert template["template"]["spec"]["securityContext"]["runAsUser"] == 1000
 
     workflow = (WORKFLOW / "self_repair.py").read_text()
@@ -120,6 +137,12 @@ def test_workflow_names_its_runs_and_needs_no_trigger():
         "the agent keeps the web; the prompt and the timeout keep it on time"
     )
     assert "AGENT_BUDGET_MINUTES" in workflow
+    assert 'os.environ.get("SELF_REPAIR_MODEL", "genai/gpt-oss:120b")' in workflow
+    assert "from genai_proxy import Proxy" in workflow, (
+        "opencode must not talk to GenAI Studio directly"
+    )
+    assert 'providers["genai"]["options"]["baseURL"] = f"{proxy.url}/api"' in workflow
+    assert '"apiKey": "{env:GENAI_API_KEY}"' in workflow
     assert "CatalogCacheStatus.Name(" in workflow, "cache hits are logged"
     assert "@env.task(report=True" in workflow, "the verdict table is the triage report"
     assert "flyte.report.replace.aio(" in workflow
