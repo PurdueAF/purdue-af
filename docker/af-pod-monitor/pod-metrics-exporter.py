@@ -166,12 +166,14 @@ def update_metrics(dir_label: str, directory: str) -> None:
     if dir_label == "work":
         ok, du_output = run_bounded(["du", "-s", directory], DU_TIMEOUT_S)
         if not ok:
-            raise OSError(f"could not read {directory}")
+            metrics[f"{dir_label}_dir_ok"].set(0)
+            return
         used, size, util = parse_du_output(du_output)
     else:
         ok, df_output = run_bounded(["df", directory], DF_TIMEOUT_S)
         if not ok:
-            raise OSError(f"could not read {directory}")
+            metrics[f"{dir_label}_dir_ok"].set(0)
+            return
         used, size, util = parse_df_output(df_output)
 
     metrics[f"{dir_label}_dir_used"].set(used)
