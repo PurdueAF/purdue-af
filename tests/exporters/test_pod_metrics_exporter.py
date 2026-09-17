@@ -224,6 +224,21 @@ def test_a_mount_without_the_xattr_is_still_walked(monkeypatch):
     )
 
 
+def test_a_walk_that_fails_is_still_an_unreadable_directory(monkeypatch):
+    """The fallback's failure has to reach update_directory: that is what
+    sets af_work_dir_ok to 0 and keeps a stale reading distinguishable from
+    a fresh one."""
+    monkeypatch.setattr(
+        exporter, "run_bounded", answers(rbytes=(True, ""), du=(False, ""))
+    )
+
+    with pytest.raises(OSError):
+        exporter.read_work_usage("/work/users/alice/")
+
+    assert exporter.update_directory("work", "/work/users/alice/") is False
+    assert gauge_value("af_work_dir_ok") == 0
+
+
 def test_an_unanswered_xattr_is_not_then_handed_to_du(monkeypatch):
     """A mount that did not answer a statfs-speed read in RBYTES_TIMEOUT_S
     will not answer a walk either — it would only hang DU_TIMEOUT_S longer."""
