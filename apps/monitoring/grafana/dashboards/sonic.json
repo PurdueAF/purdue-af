@@ -205,7 +205,7 @@
       },
       "gridPos": {
         "h": 10,
-        "w": 8,
+        "w": 10,
         "x": 4,
         "y": 4
       },
@@ -353,8 +353,8 @@
       },
       "gridPos": {
         "h": 10,
-        "w": 6,
-        "x": 12,
+        "w": 10,
+        "x": 14,
         "y": 4
       },
       "id": 5,
@@ -390,53 +390,6 @@
       ],
       "title": "Inferences per second (all servers, all models)",
       "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "tempo",
-        "uid": "tempo"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 26,
-        "w": 6,
-        "x": 18,
-        "y": 4
-      },
-      "id": 21,
-      "options": {
-        "edges": {},
-        "layoutAlgorithm": "layered",
-        "nodes": {},
-        "zoomMode": "cooperative"
-      },
-      "pluginVersion": "12.0.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "tempo",
-            "uid": "tempo"
-          },
-          "filters": [
-            {
-              "id": "f0a7f7ec",
-              "operator": "=",
-              "scope": "span"
-            }
-          ],
-          "limit": 20,
-          "queryType": "serviceMap",
-          "refId": "A",
-          "serviceMapQuery": "{client!=\"user\"}",
-          "tableType": "traces"
-        }
-      ],
-      "title": "Server Map (all pods in time window)",
-      "transparent": true,
-      "type": "nodeGraph"
     },
     {
       "datasource": {
@@ -611,7 +564,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 6,
+        "w": 8,
         "x": 0,
         "y": 14
       },
@@ -720,8 +673,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 6,
-        "x": 6,
+        "w": 8,
+        "x": 8,
         "y": 14
       },
       "id": 13,
@@ -829,8 +782,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 6,
-        "x": 12,
+        "w": 8,
+        "x": 16,
         "y": 14
       },
       "id": 12,
@@ -926,7 +879,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 9,
+        "w": 12,
         "x": 0,
         "y": 22
       },
@@ -1024,8 +977,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 9,
-        "x": 9,
+        "w": 12,
+        "x": 12,
         "y": 22
       },
       "id": 16,
