@@ -24,6 +24,7 @@ import prompts
 from genai_proxy import Proxy
 from triage import (
     ALL_WORKLOADS,
+    CACHE_HIT,
     IGNORED_WORKLOADS,
     USER_WORKLOADS,
     WATCHED_WORKLOADS,
@@ -33,18 +34,23 @@ from triage import (
     IncidentKey,
     Row,
     Summary,
+    TickMetrics,
     Verdict,
     analyze_within_budget,
     cluster,
     collect_reply,
     create_pull_request,
     describe_event,
+    exposition,
     grouping_prompt,
     is_rate_limit,
     open_pull_request,
     opencode_log_line,
+    parse_counters,
     parse_groups,
     parse_verdict,
+    pick_model,
+    probe_body,
     pull_request_body,
     query_context,
     query_loki,
@@ -66,11 +72,29 @@ BRANCH_PREFIX = "self-repair-"
 # (podtemplate.yaml). Documented limits: 60 requests/min per user, about 10
 # concurrent calls per model, and a rate limit answers with a JSON null body.
 # gpt-oss:120b answered a tool-calling probe in 0.4 s; qwen3.6:27b timed out.
-# SELF_REPAIR_MODEL overrides it (the launcher's env, or a test), so a model
-# can be tried without a code change.
 # Through the proxy, gpt-oss:120b and gemma4:26b-a4b each ran the whole tool
-# loop in about 10 s (2026-09-16); qwen3.6:27b was not answering that day.
-MODEL = os.environ.get("SELF_REPAIR_MODEL", "genai/gemma4:26b-a4b")
+# loop in about 10 s (2026-09-16); qwen3.6:27b was not answering that day, and
+# gemma4 answered nothing for most of the following night. Models hang one at
+# a time, so every tick starts by probing these in order and runs on the first
+# that answers; a tick with no answering model does nothing else. llama4 is on
+# a different serving stack from the others. SELF_REPAIR_MODELS (comma-
+# separated) overrides the list without a code change.
+MODELS = tuple(
+    model.strip()
+    for model in os.environ.get(
+        "SELF_REPAIR_MODELS",
+        "genai/gemma4:26b-a4b,genai/gpt-oss:120b,genai/llama4:latest",
+    ).split(",")
+    if model.strip()
+)
+PROBE_TIMEOUT_S = 30
+PROBE_RATE_LIMIT_RETRIES = 2
+# The AF Prometheus pushgateway (apps/monitoring/prometheus): one push per tick.
+PUSHGATEWAY_URL = os.environ.get(
+    "SELF_REPAIR_PUSHGATEWAY",
+    "http://prometheus-prometheus-pushgateway.cms.svc.cluster.local:9091",
+)
+METRICS_JOB = "self-repair"
 # The vLLM-backed models with native tool calling; deployed context per the docs.
 PROVIDERS = {
     "genai": {
@@ -281,7 +305,9 @@ class _Watch:
                 next_heartbeat = now + HEARTBEAT_S
 
 
-def _agent_session(cwd: Path, prompt: str, config_path: str, label: str) -> str:
+def _agent_session(
+    cwd: Path, prompt: str, config_path: str, label: str, model: str
+) -> str:
     started = time.monotonic()
     stderr = tempfile.NamedTemporaryFile(
         "w+", suffix=".log", prefix="opencode-", delete=False
@@ -293,7 +319,7 @@ def _agent_session(cwd: Path, prompt: str, config_path: str, label: str) -> str:
             "--format",
             "json",
             "--model",
-            MODEL,
+            model,
             "--dir",
             str(cwd),
             prompt,
@@ -364,7 +390,9 @@ class ProviderError(RuntimeError):
 PLATFORM_CONTEXT = Path("/opt/purdue-af/agents/platform-context.md")
 
 
-def _run_agent(cwd: Path, prompt: str, permission: dict[str, Any], label: str) -> str:
+def _run_agent(
+    cwd: Path, prompt: str, permission: dict[str, Any], label: str, model: str
+) -> str:
     mode = "read-only" if permission is READ_ONLY else "edit"
     # opencode talks to the re-framing proxy (genai_proxy.py), the proxy to
     # GenAI Studio.
@@ -373,7 +401,7 @@ def _run_agent(cwd: Path, prompt: str, permission: dict[str, Any], label: str) -
         providers["genai"]["options"]["baseURL"] = f"{proxy.url}/api"
         config = {
             "$schema": "https://opencode.ai/config.json",
-            "model": MODEL,
+            "model": model,
             "provider": providers,
             "permission": permission,
             "share": "disabled",
@@ -389,9 +417,9 @@ def _run_agent(cwd: Path, prompt: str, permission: dict[str, Any], label: str) -
         ) as handle:
             json.dump(config, handle)
         for attempt in range(1, RATE_LIMIT_RETRIES + 2):
-            _log(f"{label}: opencode {MODEL} ({mode}) in {cwd}, attempt {attempt}")
+            _log(f"{label}: opencode {model} ({mode}) in {cwd}, attempt {attempt}")
             try:
-                return _agent_session(cwd, prompt, handle.name, label)
+                return _agent_session(cwd, prompt, handle.name, label, model)
             except ProviderError as exc:
                 if "rate limit" not in str(exc).lower() or attempt > RATE_LIMIT_RETRIES:
                     raise
@@ -457,15 +485,14 @@ def watch(start: datetime, end: datetime) -> list[Incident]:
 GENAI_CHAT = "https://genai.rcac.purdue.edu/api/chat/completions"
 
 
-def _ask_genai(prompt: str) -> str:
-    """One non-streaming chat completion, JSON answer; retried once on the rate limit."""
-    body = {
-        "model": MODEL.split("/", 1)[-1],
-        "messages": [{"role": "user", "content": prompt}],
-        "stream": False,
-        "response_format": {"type": "json_object"},
-        "max_tokens": 4000,
-    }
+class RateLimited(RuntimeError):
+    pass
+
+
+def _genai_chat(body: dict[str, Any], timeout: float) -> Any:
+    """One non-streaming chat completion at GenAI Studio, parsed. RateLimited
+    for its two rate-limit shapes (HTTP 400 with the text, or a null body);
+    RuntimeError for any other HTTP error; OSError for timeouts and the like."""
     request = urllib.request.Request(
         GENAI_CHAT,
         data=json.dumps(body).encode(),
@@ -474,32 +501,106 @@ def _ask_genai(prompt: str) -> str:
             "Content-Type": "application/json",
         },
     )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as resp:
+            data = json.load(resp)
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode(errors="replace")
+        if "Rate limit" in detail:
+            raise RateLimited(f"GenAI Studio rate limited: {detail[:120]}") from exc
+        raise RuntimeError(f"GenAI Studio HTTP {exc.code}: {detail[:300]}") from exc
+    if data is None:
+        raise RateLimited("GenAI Studio answered null (rate limit)")
+    return data
+
+
+def _probe(model: str) -> tuple[bool, float, str]:
+    """Does the model answer at all? A tiny completion with a short deadline,
+    so a hung backend costs seconds, not the five minutes its gateway takes
+    to give up. A rate limit means it is answering. Only genai/* models are
+    probed; anything else is taken on trust."""
+    provider, _, model_id = model.partition("/")
+    if provider != "genai":
+        return True, 0.0, "not probed"
+    started = time.monotonic()
+    for attempt in range(PROBE_RATE_LIMIT_RETRIES + 1):
+        try:
+            data = _genai_chat(probe_body(model_id), timeout=PROBE_TIMEOUT_S)
+        except RateLimited as exc:
+            if attempt < PROBE_RATE_LIMIT_RETRIES:
+                time.sleep(10)
+                continue
+            return True, time.monotonic() - started, str(exc)[:120]
+        except (OSError, RuntimeError, KeyError, TypeError, ValueError) as exc:
+            return (
+                False,
+                time.monotonic() - started,
+                f"{type(exc).__name__}: {exc}"[:160],
+            )
+        answer = str(data["choices"][0]["message"].get("content") or "").strip()
+        return True, time.monotonic() - started, f"answered {answer[:20]!r}"
+    raise AssertionError("unreachable")
+
+
+def _ask_genai(prompt: str, model: str) -> str:
+    """One JSON-answer chat completion; retried once on the rate limit."""
+    body = {
+        "model": model.split("/", 1)[-1],
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+        "response_format": {"type": "json_object"},
+        "max_tokens": 4000,
+    }
     for attempt in (1, 2):
         try:
-            with urllib.request.urlopen(request, timeout=300) as resp:
-                data = json.load(resp)
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode(errors="replace")
-            if "Rate limit" in detail and attempt == 1:
+            data = _genai_chat(body, timeout=300)
+        except RateLimited:
+            if attempt == 1:
                 _log("dedupe: rate limited, retrying in 15s")
                 time.sleep(15)
                 continue
-            raise RuntimeError(f"GenAI Studio HTTP {exc.code}: {detail[:300]}") from exc
-        if data is None:
-            raise RuntimeError("GenAI Studio answered null (rate limit)")
+            raise RuntimeError("GenAI Studio rate limited twice") from None
+        except OSError as exc:
+            raise RuntimeError(f"GenAI Studio unreachable: {exc}") from exc
         return str(data["choices"][0]["message"].get("content") or "")
-    raise RuntimeError("GenAI Studio rate limited twice")
+    raise AssertionError("unreachable")
+
+
+def _push_metrics(metrics: TickMetrics) -> None:
+    """One PUT to the pushgateway; never fatal, a tick is worth more than its
+    metrics. Counters are read back first so they keep counting across ticks."""
+    try:
+        try:
+            with urllib.request.urlopen(
+                f"{PUSHGATEWAY_URL}/metrics", timeout=10
+            ) as resp:
+                previous = parse_counters(resp.read().decode())
+        except OSError as exc:
+            _log(f"metrics: cannot read the pushgateway ({exc}); counters restart")
+            previous = {}
+        text = exposition(metrics, previous)
+        request = urllib.request.Request(
+            f"{PUSHGATEWAY_URL}/metrics/job/{METRICS_JOB}",
+            data=text.encode(),
+            method="PUT",
+            headers={"Content-Type": "text/plain; version=0.0.4"},
+        )
+        with urllib.request.urlopen(request, timeout=10):
+            pass
+        _log(f"metrics: pushed tick outcome={metrics.outcome} to {PUSHGATEWAY_URL}")
+    except OSError as exc:
+        _log(f"metrics: push failed: {exc}")
 
 
 @env.task(retries=1, timeout=timedelta(minutes=15))
-def dedupe(incidents: list[Incident]) -> list[Group]:
+def dedupe(incidents: list[Incident], model: str) -> list[Group]:
     """One model call: which incidents share a root cause. A failed call
     degrades to one group per incident, never to a lost tick."""
     if len(incidents) < 2:
         return parse_groups("", incidents)
-    _log(f"grouping {len(incidents)} incidents by root cause with {MODEL}")
+    _log(f"grouping {len(incidents)} incidents by root cause with {model}")
     try:
-        reply = _ask_genai(grouping_prompt(incidents))
+        reply = _ask_genai(grouping_prompt(incidents), model)
     except RuntimeError as exc:
         _log(f"dedupe: {exc}; every incident is its own group")
         reply = ""
@@ -514,10 +615,12 @@ def dedupe(incidents: list[Incident]) -> list[Group]:
 # Cached on the key alone: a recurring error is analyzed once, and a fixed one
 # is never re-opened. Bump the salt to re-analyze everything.
 @env.task(
-    cache=flyte.Cache(behavior="auto", ignored_inputs=("evidence",)),
+    # The model is ignored too: a verdict is a verdict, whichever model the
+    # tick happened to run on.
+    cache=flyte.Cache(behavior="auto", ignored_inputs=("evidence", "model")),
     timeout=timedelta(minutes=40),
 )
-def analyze(key: IncidentKey, evidence: Evidence) -> Verdict:
+def analyze(key: IncidentKey, evidence: Evidence, model: str) -> Verdict:
     _log(
         f"{key.fingerprint}: {key.workload}/{key.container} x{evidence.count}: {key.message[:120]}"
     )
@@ -533,7 +636,7 @@ def analyze(key: IncidentKey, evidence: Evidence) -> Verdict:
         _log(
             f"{key.fingerprint}: prompt has {len(context.splitlines())} context line(s)"
         )
-        reply = _run_agent(repo, prompt, READ_ONLY, key.fingerprint)
+        reply = _run_agent(repo, prompt, READ_ONLY, key.fingerprint, model)
     verdict = parse_verdict(reply)
     _log(
         f"{key.fingerprint}: verdict fixable={verdict.fixable} confidence={verdict.confidence} "
@@ -578,7 +681,7 @@ def _python_defects(repo: Path, changed: list[str]) -> str:
 
 
 @env.task(timeout=timedelta(minutes=60))
-def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict) -> str:
+def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict, model: str) -> str:
     token = os.environ["GITHUB_TOKEN"]
     branch = BRANCH_PREFIX + key.fingerprint
     _log(f"{key.fingerprint}: {verdict.title} ({verdict.component}); branch {branch}")
@@ -599,7 +702,7 @@ def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict) -> str:
             plan=verdict.plan,
             minutes=AGENT_BUDGET_MINUTES,
         )
-        reply = _run_agent(repo, prompt, EDIT, key.fingerprint)
+        reply = _run_agent(repo, prompt, EDIT, key.fingerprint, model)
         changed = _git("status", "--porcelain", cwd=repo).strip()
         if not changed:
             _log(f"{key.fingerprint}: the agent changed nothing")
@@ -636,7 +739,7 @@ def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict) -> str:
         _log(f"{key.fingerprint}: pushed {branch}")
     ctx = flyte.ctx()
     run_name = (ctx.action.run_name or "") if ctx else ""
-    body = pull_request_body(key, evidence, verdict, reply, run_name, MODEL)
+    body = pull_request_body(key, evidence, verdict, reply, run_name, model)
     url = create_pull_request(REPO, token, branch, BASE_BRANCH, verdict.title, body)
     _log(f"{key.fingerprint}: opened {url}")
     return url
@@ -680,10 +783,70 @@ async def triage(
         trigger_time = trigger_time.replace(tzinfo=timezone.utc)
     tick = tick_of(trigger_time)
     start = trigger_time - timedelta(minutes=window_minutes)
+    window = f"{start:%H:%M:%S}..{trigger_time:%H:%M:%S}"
     _log(
-        f"tick {tick} = {trigger_time:%Y-%m-%d %H:%M} UTC: window {start:%H:%M:%S}..{trigger_time:%H:%M:%S}, up to {max_incidents} analyses and {max_fixes} fixes"
+        f"tick {tick} = {trigger_time:%Y-%m-%d %H:%M} UTC: window {window}, up to {max_incidents} analyses and {max_fixes} fixes"
     )
+    began = time.monotonic()
 
+    # Before anything else: is a model answering? Every later task needs one,
+    # and a hung backend takes five minutes per call to say so.
+    model, probes = pick_model(MODELS, _probe)
+    for probe in probes:
+        _log(
+            f"model {probe.model}: {'answers' if probe.available else 'no answer'} "
+            f"after {probe.seconds:.1f}s ({probe.detail})"
+        )
+    metrics = TickMetrics(
+        started=trigger_time.timestamp(),
+        outcome="ok",
+        model=model or "",
+        models=list(MODELS),
+        probes=probes,
+    )
+    if model is None:
+        note = f"No model answered ({', '.join(MODELS)}); nothing ran this tick."
+        _log(note)
+        await flyte.report.replace.aio(
+            report_html(tick, window, [], note=note), do_flush=True
+        )
+        metrics.outcome = "no_model"
+        metrics.duration = time.monotonic() - began
+        _push_metrics(metrics)
+        return Summary(
+            window_start=start.isoformat(),
+            window_end=trigger_time.isoformat(),
+            lines=0,
+            incidents=0,
+            fixable=0,
+            outcome="no_model",
+        )
+    _log(f"tick {tick} runs on {model}")
+    try:
+        summary = await _tick(
+            tick, start, trigger_time, model, max_incidents, max_fixes, metrics
+        )
+    except BaseException:
+        metrics.outcome = "failed"
+        metrics.duration = time.monotonic() - began
+        _push_metrics(metrics)
+        raise
+    metrics.duration = time.monotonic() - began
+    _push_metrics(metrics)
+    return summary
+
+
+async def _tick(
+    tick: str,
+    start: datetime,
+    trigger_time: datetime,
+    model: str,
+    max_incidents: int,
+    max_fixes: int,
+    metrics: TickMetrics,
+) -> Summary:
+    """The tick proper, once a model is known: watch, dedupe, analyze, fix."""
+    window = f"{start:%H:%M:%S}..{trigger_time:%H:%M:%S}"
     incidents, _ = await _spawn(
         run_name("watch", tick),
         watch,
@@ -692,15 +855,17 @@ async def triage(
         output_type=list[Incident],
     )
     groups, _ = await _spawn(
-        run_name("dedupe", tick), dedupe, incidents, output_type=list[Group]
+        run_name("dedupe", tick), dedupe, incidents, model, output_type=list[Group]
     )
     raw = incidents
     incidents = [representative(group, raw) for group in groups]
+    metrics.error_lines = sum(incident.evidence.count for incident in raw)
+    metrics.incidents = len(raw)
+    metrics.groups = len(incidents)
     _log(
         f"{len(raw)} incident(s) in {len(incidents)} group(s); up to {max_incidents} fresh "
         f"analyses, cache hits are free: {', '.join(i.key.fingerprint for i in incidents) or '-'}"
     )
-    window = f"{start:%H:%M:%S}..{trigger_time:%H:%M:%S}"
     rows = {
         i.key.fingerprint: Row(
             i.key.fingerprint,
@@ -716,7 +881,7 @@ async def triage(
 
     async def publish() -> None:
         await flyte.report.replace.aio(
-            report_html(tick, window, list(rows.values())), do_flush=True
+            report_html(tick, window, list(rows.values()), model=model), do_flush=True
         )
 
     await publish()
@@ -727,6 +892,7 @@ async def triage(
             analyze,
             incident.key,
             incident.evidence,
+            model,
             output_type=Verdict,
         )
         rows[incident.key.fingerprint].cache = cache
@@ -756,6 +922,11 @@ async def triage(
                 result.reason,
             )
     verdicts = [r for r in rows.values() if r.status in ("fixable", "not fixable")]
+    metrics.analyses = {
+        "fresh": sum(r.cache != CACHE_HIT for r in verdicts),
+        "cache_hit": sum(r.cache == CACHE_HIT for r in verdicts),
+        "failed": sum(r.status == "failed" for r in rows.values()),
+    }
     _log(
         f"VERDICTS: {sum(r.status == 'fixable' for r in verdicts)} of {len(verdicts)} analyzed "
         f"incidents fixable here ({sum(r.cache == 'CACHE_HIT' for r in verdicts)} from cache, "
@@ -788,12 +959,17 @@ async def triage(
             incident.key,
             incident.evidence,
             verdict,
+            model,
             output_type=str,
         )
         if url:
             pull_requests.append(url)
             rows[fingerprint].pull_request = url
+        else:
+            metrics.fix_failures += 1
     await publish()
+    metrics.fixable = fixable
+    metrics.pull_requests = len(pull_requests)
     summary = Summary(
         window_start=start.isoformat(),
         window_end=trigger_time.isoformat(),
@@ -801,6 +977,7 @@ async def triage(
         incidents=len(incidents),
         fixable=fixable,
         pull_requests=pull_requests,
+        model=model,
     )
     _log(
         f"tick {tick} done: {summary.lines} lines, {summary.incidents} incidents, "

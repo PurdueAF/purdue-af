@@ -64,10 +64,13 @@ every replica over every tick is one incident. Usernames are redacted from
 pod names, paths and `user=` fields before anything reaches a PR.
 
 The agent is [opencode](https://opencode.ai) on
-[Purdue GenAI Studio](https://docs.rcac.purdue.edu/services/genai/), model
-`gemma4:26b-a4b` (`MODEL` and `PROVIDERS` in `self_repair.py`; the key is the
-`self-repair-genai` Secret). GenAI Studio allows 60 requests a minute per
-user and about 10 concurrent calls per model, which is what sizes
+[Purdue GenAI Studio](https://docs.rcac.purdue.edu/services/genai/)
+(`MODELS` and `PROVIDERS` in `self_repair.py`; the key is the
+`self-repair-genai` Secret). A tick starts by probing the models in order,
+`gemma4:26b-a4b`, `gpt-oss:120b`, `llama4:latest`, with a tiny completion
+and a 30 s deadline, and runs every task on the first that answers; when none
+does, the tick ends there, before `watch`. GenAI Studio allows 60 requests a
+minute per user and about 10 concurrent calls per model, which is what sizes
 `max_incidents`. Analysis runs with edit and bash denied; the fix
 runs with edit allowed and `git push`/`commit`/`checkout`/`reset` denied — the
 task commits and pushes. Both prompts carry the lines
@@ -137,11 +140,23 @@ flyte --config config.yaml get run
 flyte --config config.yaml get logs <run-name>
 ```
 
+## Metrics
+
+`triage` pushes one sample set per tick to the AF Prometheus pushgateway
+(`apps/monitoring/prometheus`, scrape job `self-repair`): `self_repair_*_total`
+counters carried across ticks (ticks by outcome, analyses by result, fixable
+incidents, pull requests, fix failures, probes by model) and
+`self_repair_last_tick_*` / `self_repair_model_*` gauges for the newest tick
+(`METRICS` in `triage.py` lists them). The private Grafana shows them on
+"Purdue AF Self-Repair" (`apps/monitoring/grafana/dashboards/self-repair.json`).
+A tick that cannot reach the gateway logs it and goes on.
+
 ## Tuning
 
-- `MODEL`: `genai/<id>` for any GenAI Studio model listed in `PROVIDERS`, or any
-  `provider/model` opencode knows (an `opencode/*` Zen model needs the
-  `self-repair-opencode` Secret).
+- `MODELS` (env `SELF_REPAIR_MODELS`, comma-separated): `genai/<id>` for any
+  GenAI Studio model listed in `PROVIDERS`, or any `provider/model` opencode
+  knows (an `opencode/*` Zen model needs the `self-repair-opencode` Secret and
+  is not probed), in the order to try them.
 - `triage` inputs (`window_minutes`, `max_incidents`, `max_fixes`) have defaults
   in the task signature; the launcher passes only `trigger_time`.
 - The agents get the same platform context as the agents in an AF session:

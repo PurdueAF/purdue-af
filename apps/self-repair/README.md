@@ -53,5 +53,8 @@ The OpenCode key is created by hand only when a paid model is configured.
 | `self-repair-genai`    | `api-key` | yes     | Purdue GenAI Studio key (Settings → Account → API Keys), acts as its owner                  |
 | `self-repair-opencode` | `api-key` | no      | OpenCode Zen key, only for an `opencode/*` model                                            |
 
+Metrics go to the pushgateway of `apps/monitoring/prometheus` and the private
+Grafana dashboard "Purdue AF Self-Repair"; see the workflow README.
+
 The task image is `ghcr.io/purdueaf/self-repair` (`docker/self-repair`), on the
 continuous `:latest` channel like the monitor images.
