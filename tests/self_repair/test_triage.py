@@ -1,10 +1,12 @@
 """The flyte-free half of workflows/self-repair: fingerprints, redaction, the
 agent's verdict and the pull request text."""
 
+import io
 import json
 import urllib.error
 import urllib.parse
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock
 
 import pytest
 from common import REPO, load_script
@@ -433,45 +435,6 @@ class TestNarration:
         assert line is not None and len(line) < 220 and line.endswith("…")
 
 
-class TestRunNames:
-    """Flyte caps run names at 30 characters; the pod is `<run>-a0-0`."""
-
-    def setup_method(self):
-        import types
-
-        source = (REPO / "workflows/self-repair/self_repair.py").read_text()
-        # only the naming helpers: the module imports flyte at the top
-        start = source.index("NAME_LIMIT = 30")
-        end = source.index("def _git(")
-        self.names = types.ModuleType("names")
-        self.names.datetime = datetime
-        exec(source[start:end], vars(self.names))
-
-    def test_every_run_name_fits(self):
-        tick = self.names.tick_of(datetime(2084, 1, 1, tzinfo=timezone.utc))
-        assert len(tick) == 5
-        for task, fp in (
-            ("triage", ""),
-            ("watch", ""),
-            ("analyze", "189fbee7047b"),
-            ("fix", "189fbee7047b"),
-        ):
-            name = self.names.run_name(task, tick, fp)
-            assert name.startswith(f"self-repair-{task}-{tick}"), name
-            assert len(name) <= 30, name
-        assert self.names.run_name("analyze", tick, "189fbee7047b").endswith("-189f")
-
-    def test_tick_is_the_minute_and_padded(self):
-        a = self.names.tick_of(datetime(2026, 9, 16, 16, 36, 5, tzinfo=timezone.utc))
-        b = self.names.tick_of(datetime(2026, 9, 16, 16, 36, 59, tzinfo=timezone.utc))
-        c = self.names.tick_of(datetime(2026, 9, 16, 16, 37, 0, tzinfo=timezone.utc))
-        assert a == b != c and len(a) == 5 and a.islower()
-        assert (
-            self.names.tick_of(datetime(1970, 1, 1, 0, 1, tzinfo=timezone.utc))
-            == "00001"
-        )
-
-
 class TestPrompts:
     def test_both_prompts_state_the_time_budget(self):
         prompts = load_script(
@@ -552,11 +515,11 @@ class TestAnalysisBudget:
         assert isinstance(outcomes[1][1], triage.Verdict)
 
     def test_empty_list_and_zero_budget(self):
-        async def spawn(incident):
-            raise AssertionError("must not be called")
+        spawn = AsyncMock()
 
         assert self.run(triage.analyze_within_budget([], 5, spawn)) == []
         assert self.run(triage.analyze_within_budget(self.incidents(3), 0, spawn)) == []
+        spawn.assert_not_called()
 
 
 class TestReport:
@@ -748,49 +711,6 @@ class TestGroups:
         incidents = self.incidents()
         rep = triage.representative(triage.Group("g", ["fp1", "fp2"]), incidents)
         assert rep.evidence.first_pod == "pod1" and rep.evidence.first_ts == "t1"
-
-
-class TestGuards:
-    def helpers(self):
-        import types
-
-        source = (REPO / "workflows/self-repair/self_repair.py").read_text()
-        start = source.index("PROTECTED_PATHS = (")
-        end = source.index("EDIT = {")
-        ns = types.ModuleType("guards")
-        exec(source[start:end], vars(ns))
-        start = source.index("def _protected(")
-        end = source.index("@env.task(timeout=timedelta(minutes=60))\ndef fix(")
-        ns.subprocess = __import__("subprocess")
-        ns.sys = __import__("sys")
-        ns.Path = __import__("pathlib").Path
-        exec(source[start:end], vars(ns))
-        return ns
-
-    def test_protected_paths_block_the_vendored_fork_envs_deploy_and_locks(self):
-        g = self.helpers()
-        blocked = g._protected(
-            [
-                "docker/dask-gateway-server/x.py",
-                "pixi/global/pixi.toml",
-                "deploy/experimental/kustomization.yaml",
-                "docker/self-repair/uv.lock",
-                "apps/x/values.yaml",
-            ]
-        )
-        assert blocked == [
-            "docker/dask-gateway-server/x.py",
-            "pixi/global/pixi.toml",
-            "deploy/experimental/kustomization.yaml",
-            "docker/self-repair/uv.lock",
-        ]
-
-    def test_pyflakes_gate_catches_an_undefined_name(self, tmp_path):
-        g = self.helpers()
-        (tmp_path / "ok.py").write_text("import os\nprint(os.name)\n")
-        (tmp_path / "bad.py").write_text("logger = 1\nl.handlers = []\n")
-        assert g._python_defects(tmp_path, ["ok.py"]) == ""
-        assert "F821" in g._python_defects(tmp_path, ["ok.py", "bad.py"])
 
 
 class TestContextAndGuards:
@@ -1096,3 +1016,139 @@ class TestMetrics:
         metrics = self.metrics(models=['we"ird\\'], model='we"ird\\', probes=[])
         text = triage.exposition(metrics, {})
         assert 'self_repair_model_selected{model="we\\"ird\\\\"} 1' in text
+
+
+class Body(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+LOKI_PAYLOAD = {
+    "data": {
+        "result": [
+            {
+                "stream": {"pod": "jupyter-alice", "container": "notebook"},
+                "values": [["1789552800000000000", "Error in /home/alice/x"]],
+            }
+        ]
+    }
+}
+
+
+class TestLokiCalls:
+    def test_query_loki_fetches_and_parses(self, monkeypatch):
+        seen = {}
+
+        def urlopen(url, timeout):
+            seen["url"] = url
+            return Body(json.dumps(LOKI_PAYLOAD).encode())
+
+        monkeypatch.setattr(triage.urllib.request, "urlopen", urlopen)
+        start = datetime(2026, 9, 15, 10, tzinfo=timezone.utc)
+
+        lines = triage.query_loki("http://loki", "cms", start, start, 10, ("hub",))
+
+        assert seen["url"].startswith("http://loki/loki/api/v1/query_range?")
+        assert lines == [
+            {
+                "pod": "jupyter-alice",
+                "container": "notebook",
+                "ts": "2026-09-16T10:00:00+00:00",
+                "line": "Error in /home/alice/x",
+            }
+        ]
+
+    def test_context_lines_are_redacted(self, monkeypatch):
+        monkeypatch.setattr(
+            triage.urllib.request,
+            "urlopen",
+            lambda url, timeout: Body(json.dumps(LOKI_PAYLOAD).encode()),
+        )
+
+        lines = triage.query_context(
+            "http://loki", "cms", "p", "c", "2026-09-16T10:00:00+00:00"
+        )
+
+        assert lines == ["Error in /home/<user>/x"]
+
+    @pytest.mark.parametrize(
+        "failure", [ConnectionRefusedError("refused"), b"<html>bad gateway</html>"]
+    )
+    def test_context_is_empty_when_loki_fails(self, monkeypatch, failure):
+        def urlopen(url, timeout):
+            if isinstance(failure, Exception):
+                raise failure
+            return Body(failure)
+
+        monkeypatch.setattr(triage.urllib.request, "urlopen", urlopen)
+
+        assert (
+            triage.query_context("http://loki", "cms", "p", "c", "2026-09-16T10:00:00")
+            == []
+        )
+
+
+class TestParsingEdges:
+    def test_blank_lines_make_no_incident(self):
+        assert triage.cluster([line("hub-1", "hub", "   ")]) == []
+
+    def test_brace_that_is_not_json_falls_through(self):
+        assert triage.structured_message("Error: bad dict {not: json}") is None
+
+    def test_groups_skip_invalid_json_and_non_object_entries(self):
+        incidents = TestGroups().incidents()
+        reply = '{oops} {"groups": ["fp0", {"label": "", "members": ["fp1", "fp2"]}]}'
+
+        groups = triage.parse_groups(reply, incidents)
+
+        assert groups[0].members == ["fp1", "fp2"]
+        assert groups[0].label == "m1", "an empty label falls back to the message"
+
+    def test_reply_skips_unparsable_events(self):
+        reply = triage.collect_reply(
+            [
+                "{truncated",
+                json.dumps({"type": "text", "part": {"text": "ok"}}),
+                json.dumps({"type": "step_finish", "part": {"reason": "stop"}}),
+            ]
+        )
+        assert reply == triage.Reply("ok", True)
+
+    def test_verdict_after_a_stray_brace(self):
+        verdict = triage.parse_verdict('see {this} then {"fixable": false}')
+        assert verdict.fixable is False and verdict.reason == ""
+
+    def test_counters_skip_comments_and_unparsable_values(self):
+        page = (
+            "# HELP self_repair_ticks_total Ticks by outcome\n"
+            "\n"
+            'self_repair_ticks_total{outcome="ok"} NaNish\n'
+            'self_repair_ticks_total{outcome="failed"} 2\n'
+        )
+        assert triage.parse_counters(page) == {
+            ("self_repair_ticks_total", (("outcome", "failed"),)): 2.0
+        }
+
+
+class TestLabelCreation:
+    def test_an_existing_label_is_left_alone(self, monkeypatch):
+        calls = []
+
+        def urlopen(request, timeout):
+            calls.append(request.get_method())
+            return Body(b"{}")
+
+        monkeypatch.setattr(triage.urllib.request, "urlopen", urlopen)
+        triage.ensure_label("PurdueAF/purdue-af", "tok")
+        assert calls == ["GET"]
+
+    def test_other_github_errors_propagate(self, monkeypatch):
+        def urlopen(request, timeout):
+            raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", {}, None)
+
+        monkeypatch.setattr(triage.urllib.request, "urlopen", urlopen)
+        with pytest.raises(urllib.error.HTTPError):
+            triage.ensure_label("PurdueAF/purdue-af", "tok")

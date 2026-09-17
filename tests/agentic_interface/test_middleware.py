@@ -1,6 +1,7 @@
-"""Tests for the ASGI shims in server.py: _PathStripper and _AuthMiddleware."""
+"""Tests for the ASGI auth shim in server.py (_AuthMiddleware)."""
 
 import json
+from unittest.mock import AsyncMock
 
 import pytest
 import server
@@ -55,9 +56,6 @@ def http_scope(path, headers=None):
 
 def bearer(token):
     return [(b"authorization", f"Bearer {token}".encode()), (b"host", b"hub:9999")]
-
-
-# ── _PathStripper ─────────────────────────────────────────────────────────────
 
 
 # ── _AuthMiddleware ───────────────────────────────────────────────────────────
@@ -243,10 +241,10 @@ def _body(send):
 
 @pytest.fixture
 def never_resolve(monkeypatch):
-    async def fail(token):
-        raise AssertionError(f"verify_token must not be called for {token!r}")
-
-    monkeypatch.setattr(server, "verify_token", fail)
+    verify = AsyncMock()
+    monkeypatch.setattr(server, "verify_token", verify)
+    yield
+    verify.assert_not_awaited()
 
 
 async def test_missing_token_carries_a_hint_and_a_bare_challenge():
@@ -387,3 +385,37 @@ async def test_unknown_path_hint_names_the_endpoint():
         http_scope("/nope"), noop_receive, send
     )
     assert _body(send)["hint"] == f"The MCP endpoint is {PREFIX}/mcp."
+
+
+# ── process entry point ───────────────────────────────────────────────────────
+
+
+def _access_record(message):
+    import logging
+
+    return logging.LogRecord("uvicorn.access", logging.INFO, "", 0, message, (), None)
+
+
+def test_access_log_keeps_only_mcp_requests():
+    """Probes and metrics scrapes would otherwise drown the MCP traffic."""
+    keep = server._McpAccessFilter().filter
+    assert keep(_access_record(f'"POST {PREFIX}/mcp HTTP/1.1" 200'))
+    assert not keep(_access_record(f'"GET {PREFIX}/health HTTP/1.1" 200'))
+
+
+def test_main_serves_the_mcp_app_behind_auth(monkeypatch):
+    import logging
+
+    served = {}
+    monkeypatch.setattr(logging, "basicConfig", lambda **kw: None)
+    monkeypatch.setattr(
+        server.uvicorn, "run", lambda app, **kw: served.update(app=app, **kw)
+    )
+    access = logging.getLogger("uvicorn.access")
+    monkeypatch.setattr(access, "filters", [])
+
+    server.main()
+
+    assert isinstance(served["app"], server._AuthMiddleware)
+    assert (served["host"], served["port"]) == ("0.0.0.0", 8888)
+    assert [type(f) for f in access.filters] == [server._McpAccessFilter]

@@ -66,6 +66,7 @@ class TritonProxy:
         until its Triton is, so Serve never routes to a still-loading pod."""
         deadline = time.monotonic() + READY_TIMEOUT_S
         while True:
+            error = None
             try:
                 if self._sync.ServerReady(
                     service_pb2.ServerReadyRequest(), timeout=5
@@ -73,10 +74,12 @@ class TritonProxy:
                     LOGGER.info("triton at %s is ready", TRITON)
                     return
             except grpc.RpcError as exc:
-                if time.monotonic() > deadline:
-                    raise RuntimeError(
-                        f"triton at {TRITON} not ready after {READY_TIMEOUT_S}s"
-                    ) from exc
+                error = exc
+            # also when Triton answers ready=false, e.g. a model failed to load
+            if time.monotonic() > deadline:
+                raise RuntimeError(
+                    f"triton at {TRITON} not ready after {READY_TIMEOUT_S}s"
+                ) from error
             time.sleep(2)
 
     def check_health(self) -> None:

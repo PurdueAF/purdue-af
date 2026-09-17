@@ -267,6 +267,9 @@ def release_lock() -> None:
 _current_child: dict[str, subprocess.Popen[str] | None] = {
     "proc": None
 }  # terminated by the SIGTERM handler
+# set by the SIGTERM handler: a killed child must not read as a failed
+# install (retry sleep, prefix wipe, reinstall) past the grace period
+STOP = threading.Event()
 
 
 def run_with_heartbeat(
@@ -276,6 +279,8 @@ def run_with_heartbeat(
     fresh (pixi install can take tens of minutes). The child is registered
     so the SIGTERM handler can kill it — otherwise the daemon would block
     past the pod grace period, get SIGKILLed, and leave the lock behind."""
+    if STOP.is_set():
+        raise RuntimeError("stopping")
     log.info("run: %s", " ".join(map(str, cmd)))
     stop = threading.Event()
 
@@ -307,6 +312,8 @@ def run_with_heartbeat(
         _current_child["proc"] = None
         stop.set()
         beater.join(timeout=5)
+    if STOP.is_set():
+        raise RuntimeError("stopping")
     return subprocess.CompletedProcess(cmd, proc.returncode, stdout=stdout)
 
 
@@ -326,8 +333,8 @@ def pixi_install(env_dir: str | Path) -> None:
             attempts,
             proc.stdout[-4000:],
         )
-        if attempt < attempts:
-            time.sleep(60 * attempt)
+        if attempt < attempts and STOP.wait(60 * attempt):
+            raise RuntimeError("stopping")
     raise RuntimeError("pixi install failed after retries")
 
 
@@ -504,11 +511,10 @@ def main() -> int:
     if tmp := os.environ.get("TMPDIR"):
         Path(tmp).mkdir(parents=True, exist_ok=True)
     acquire_lock()
-    stop = threading.Event()
 
     def _terminate(signum: int, frame: Any) -> None:
         log.info("signal %s — stopping (killing any in-flight install)", signum)
-        stop.set()
+        STOP.set()
         child = _current_child["proc"]
         if child is not None:
             child.terminate()
@@ -519,7 +525,7 @@ def main() -> int:
 
     last_verify = 0.0
     try:
-        while not stop.is_set():
+        while not STOP.is_set():
             metric_set("loop_heartbeat_timestamp_seconds", time.time())
             try:
                 write_heartbeat()
@@ -532,7 +538,7 @@ def main() -> int:
                     deep_verify()
             except Exception:
                 log.exception("reconcile cycle failed")
-            stop.wait(POLL_SECONDS)
+            STOP.wait(POLL_SECONDS)
     finally:
         release_lock()
     return 0

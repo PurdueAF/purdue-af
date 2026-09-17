@@ -1,6 +1,9 @@
 """Tests for docker/af-node-monitor pure helpers (no cluster required)."""
 
 import json
+import os
+import subprocess
+import sys
 
 import pytest
 from exporter_helpers import job_runner
@@ -80,17 +83,6 @@ def test_run_subprocess_failure_captures_stderr():
     assert ok is False
     assert timeout is False
     assert "boom" in err
-
-
-def test_run_subprocess_timeout():
-    ok, timeout, err = runner._run_subprocess(["sleep", "5"], timeout_s=0.2)
-    assert (ok, timeout, err) == (False, True, "timeout")
-
-
-def test_run_subprocess_missing_binary():
-    ok, timeout, err = runner._run_subprocess(["definitely-not-a-binary"], timeout_s=5)
-    assert ok is False
-    assert err
 
 
 # ── check functions (subprocess mocked) ───────────────────────────────────────
@@ -253,6 +245,10 @@ def test_check_metadata_failure_paths(monkeypatch):
     ok, timeout, _ = runner._check_metadata()
     assert (ok, timeout) == (False, False)
 
+    stub_run_subprocess(monkeypatch, ok=False, reason="stale file handle")
+    ok, timeout, _ = runner._check_metadata()
+    assert (ok, timeout) == (False, False)
+
 
 # ── main orchestration ────────────────────────────────────────────────────────
 
@@ -359,6 +355,32 @@ def test_run_bounded_timeout_does_not_wait_for_an_unkillable_child():
     assert time.time() - started < 5
 
 
+def test_run_bounded_abandons_a_child_that_ignores_kill(monkeypatch):
+    class Unkillable:
+        def communicate(self, timeout=None):
+            raise subprocess.TimeoutExpired(cmd="cat", timeout=timeout)
+
+        def kill(self):
+            raise ProcessLookupError
+
+    monkeypatch.setattr(runner.subprocess, "Popen", lambda *a, **k: Unkillable())
+    assert runner._run_bounded(["cat", "/depot/x"], 5) == (False, True, "", "timeout")
+
+
+def test_run_bounded_pipe_error_is_not_a_timeout(monkeypatch):
+    class Broken:
+        def communicate(self, timeout=None):
+            raise OSError("pipe went away")
+
+    monkeypatch.setattr(runner.subprocess, "Popen", lambda *a, **k: Broken())
+    assert runner._run_bounded(["cat", "/depot/x"], 5) == (
+        False,
+        False,
+        "",
+        "pipe went away",
+    )
+
+
 def test_run_bounded_missing_binary_is_not_a_timeout():
     ok, timeout, _out, err = runner._run_bounded(["definitely-not-a-binary"], 5)
     assert (ok, timeout) == (False, False)
@@ -380,3 +402,27 @@ def test_default_result_path_without_a_node(monkeypatch, tmp_path):
     monkeypatch.setattr(runner, "MOUNT_NAME", "/depot/")
     monkeypatch.setattr(runner, "NODE_NAME", "")
     assert runner.default_result_path() == tmp_path / "depot.json"
+
+
+# ── quiet mode ────────────────────────────────────────────────────────────────
+
+
+def test_quiet_mode_silences_inherited_stdio(tmp_path):
+    """Replacing sys.stdout alone would still let os.write(2, ...) and child
+    processes reach the Job logs."""
+    env = {
+        **os.environ,
+        "MOUNT_NAME": "/depot/",
+        "CHECK_FILE": "/depot/validate.txt",
+        "PYTHONPATH": os.path.dirname(runner.__file__),
+    }
+    env.pop("AF_NODE_MONITOR_VERBOSE", None)
+    code = (
+        "import os, job_runner; print('out'); os.write(2, b'err'); "
+        "os.system('echo child')"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", code], env=env, capture_output=True, cwd=tmp_path
+    )
+    assert proc.returncode == 0
+    assert (proc.stdout, proc.stderr) == (b"", b"")

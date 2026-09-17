@@ -2,7 +2,9 @@
 without the chunked terminator must reach the client complete and
 well-formed; a JSON null body must become a 429."""
 
+import email.message
 import http.client
+import io
 import socket
 import threading
 
@@ -134,3 +136,70 @@ def test_pacer_spreads_requests_to_the_budget():
     now[0] += 25  # well past the next slot
     assert pacer.wait() == 0
     assert slept == [10]
+
+
+def closed_port():
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
+
+
+def test_unreachable_upstream_is_a_502():
+    resp, data = through_proxy(closed_port())
+    assert resp.status == 502 and b"upstream:" in data
+
+
+def test_a_client_gone_before_the_502_is_ignored():
+    handler = genai_proxy.Handler.__new__(genai_proxy.Handler)
+    handler.upstream = ("127.0.0.1", closed_port(), False)
+    handler.pacer = genai_proxy.Pacer(6000)
+    handler.path = "/api/chat/completions"
+    handler.headers = email.message.Message()
+    handler.rfile = io.BytesIO()
+
+    def send(*args, **kwargs):
+        raise BrokenPipeError("client went away")
+
+    handler._send = send
+    handler.do_POST()
+
+
+def test_long_pacing_is_logged(capsys):
+    port, _ = fake_upstream(b"{}", chunked_no_terminator=False)
+
+    class SlowPacer:
+        def wait(self):
+            return 5.0
+
+    with genai_proxy.Proxy(upstream=("127.0.0.1", port, False)) as proxy:
+        proxy.server.RequestHandlerClass.pacer = SlowPacer()
+        host, pport = proxy.url.removeprefix("http://").split(":")
+        client = http.client.HTTPConnection(host, int(pport), timeout=10)
+        client.request("POST", "/x", body=b"{}")
+        assert client.getresponse().read() == b"{}"
+
+    assert "paced 5s before /x" in capsys.readouterr().out
+
+
+class Cut:
+    """An upstream body that fails after `pieces`."""
+
+    def __init__(self, pieces, error):
+        self.pieces, self.error = list(pieces), error
+
+    def read(self, size):
+        if self.pieces:
+            return self.pieces.pop(0)
+        raise self.error
+
+
+def test_a_reset_connection_ends_the_body():
+    resp = Cut([b"a"], ConnectionResetError())
+    assert list(genai_proxy.read_leniently(resp)) == [b"a"]
+
+
+def test_an_empty_incomplete_read_adds_nothing():
+    resp = Cut([b"a"], http.client.IncompleteRead(b""))
+    assert list(genai_proxy.read_leniently(resp)) == [b"a"]

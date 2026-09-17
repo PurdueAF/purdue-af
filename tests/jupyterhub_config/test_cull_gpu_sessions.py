@@ -138,6 +138,23 @@ async def test_skips_pending_and_vanished_servers():
     assert not any(method == "DELETE" for method, _ in calls)
 
 
+async def test_one_unanswerable_user_does_not_shield_the_rest(caplog):
+    """Regression: a pod whose user the hub no longer knows (404) raised out
+    of the pass, so every GPU server listed after it was never culled."""
+    mod = culler()
+    calls = wire(
+        mod,
+        servers=[("ghost", ""), ("bob", "")],
+        users={"bob": {"servers": {"": {"last_activity": hours_ago(25)}}}},
+    )
+
+    with caplog.at_level("ERROR", logger="gpu-culler"):
+        await mod.cull_once("cms", ONE_DAY)
+
+    assert ("DELETE", "/users/bob/server") in calls
+    assert "could not cull ghost/default" in caplog.text
+
+
 async def test_named_servers_and_special_usernames_are_quoted():
     mod = culler()
     calls = wire(
@@ -329,3 +346,27 @@ async def test_cull_failure_is_logged(monkeypatch, caplog):
 
     assert "cull pass failed" in caplog.text
     assert "Service host/port is not set." in caplog.text
+
+
+# ── command line ──────────────────────────────────────────────────────────────
+
+
+def test_cli_defaults_to_a_day_every_ten_minutes(monkeypatch):
+    import logging
+    import runpy
+    import sys
+
+    started = []
+
+    def fake_run(coro):
+        started.append(coro.cr_frame.f_locals)
+        coro.close()
+
+    monkeypatch.setattr(asyncio, "run", fake_run)
+    monkeypatch.setattr(logging, "basicConfig", lambda **kw: None)
+    monkeypatch.setattr(sys, "argv", ["cull-gpu-sessions.py"])
+    monkeypatch.setenv("POD_NAMESPACE", "cms")
+
+    runpy.run_path(str(SCRIPT), run_name="__main__")
+
+    assert started == [{"namespace": "cms", "timeout": ONE_DAY, "every": 600}]

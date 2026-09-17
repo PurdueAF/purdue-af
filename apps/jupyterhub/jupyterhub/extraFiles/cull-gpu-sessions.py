@@ -117,22 +117,33 @@ def idle_seconds(server: dict[str, Any], now: datetime.datetime) -> float:
 async def cull_once(namespace: str, timeout: float) -> None:
     now = datetime.datetime.now(datetime.timezone.utc)
     for username, servername in await gpu_servers(namespace):
-        user = await hub_api("GET", f"/users/{quote(username, safe='')}")
-        server = (user.get("servers") or {}).get(servername)
-        if server is None or server.get("pending"):
-            continue
-        idle = idle_seconds(server, now)
-        if idle < timeout:
-            continue
-        log.info(
-            "stopping server %s/%s: holds a GPU and idle for %.1fh",
-            username,
-            servername or "default",
-            idle / 3600,
-        )
-        path = f"/users/{quote(username, safe='')}"
-        path += f"/servers/{quote(servername, safe='')}" if servername else "/server"
-        await hub_api("DELETE", path)
+        # One server the hub cannot answer for (e.g. a pod whose user was
+        # deleted) must not shield every server listed after it.
+        try:
+            await cull_server(username, servername, now, timeout)
+        except Exception:
+            log.exception("could not cull %s/%s", username, servername or "default")
+
+
+async def cull_server(
+    username: str, servername: str, now: datetime.datetime, timeout: float
+) -> None:
+    user = await hub_api("GET", f"/users/{quote(username, safe='')}")
+    server = (user.get("servers") or {}).get(servername)
+    if server is None or server.get("pending"):
+        return
+    idle = idle_seconds(server, now)
+    if idle < timeout:
+        return
+    log.info(
+        "stopping server %s/%s: holds a GPU and idle for %.1fh",
+        username,
+        servername or "default",
+        idle / 3600,
+    )
+    path = f"/users/{quote(username, safe='')}"
+    path += f"/servers/{quote(servername, safe='')}" if servername else "/server"
+    await hub_api("DELETE", path)
 
 
 async def main(namespace: str, timeout: float, every: float) -> None:

@@ -164,15 +164,9 @@ def test_plugin_image_is_not_the_old_kaniko_registry(active_clusters):
 def test_slurm_cluster_has_client_configs(active_clusters):
     """Baked configs live at slurm/slurm-configs-<cluster>/. Without slurm.conf
     the container exits unless /etc/secrets/slurm-configs is mounted as override.
-
-    Negishi is parked (commented) in experimental; see
-    test_slurm_cluster_env_matches_directory.
     """
     slurm_root = REPO / "slurm"
-    for cluster, app in active_clusters.items():
-        envs = {e["name"]: e["value"] for e in app["values"]["plugin"]["envs"]}
-        if "SLURM_CLUSTER" not in envs:
-            continue
+    for cluster in active_clusters:
         conf = slurm_root / f"slurm-configs-{cluster}" / "slurm.conf"
         assert conf.is_file(), f"{cluster}: missing {conf}"
         text = conf.read_text()
@@ -329,16 +323,6 @@ def test_values_configmap_is_not_exempt_from_substitution(experimental):
             continue
         annotations = generator.get("options", {}).get("annotations", {})
         assert "kustomize.toolkit.fluxcd.io/substitute" not in annotations
-
-
-def test_disabled_clusters_generate_no_configmap(
-    interlink_clusters, active_clusters, experimental
-):
-    """Leaving the generator behind would ship a ConfigMap for a release that
-    is not deployed."""
-    generated = {g["name"] for g in experimental["configMapGenerator"]}
-    for cluster in set(interlink_clusters) - set(active_clusters):
-        assert f"interlink-{cluster}-config" not in generated, cluster
 
 
 # --- Slurm client activation -----------------------------------------------

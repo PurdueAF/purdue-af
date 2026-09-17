@@ -7,10 +7,12 @@ ctx.elicit() raise at runtime, silently falling back. These tests catch that
 regression, which unit tests using a fake context cannot.
 """
 
+import types
+
 import pytest
 from mcp.server.elicitation import _validate_elicitation_schema
 from tools import dask
-from tools.elicitation import single_choice_model
+from tools.elicitation import elicit, single_choice_model
 
 # Hand-written models used by create_dask_cluster's elicitation flow.
 _DASK_ELICIT_MODELS = [
@@ -72,3 +74,37 @@ def test_single_choice_model_default_falls_back_when_missing():
 def test_single_choice_model_requires_keys():
     with pytest.raises(ValueError):
         single_choice_model("Choice", [])
+
+
+# ── elicit diagnostics ────────────────────────────────────────────────────────
+
+
+def _ctx(client_params, action="decline"):
+    async def respond(message, schema):
+        return types.SimpleNamespace(action=action)
+
+    return types.SimpleNamespace(
+        session=types.SimpleNamespace(client_params=client_params), elicit=respond
+    )
+
+
+async def test_elicit_logs_who_answered(caplog):
+    """An agent client may auto-decline in milliseconds; the log has to say
+    which client it was and whether it claimed to support elicitation."""
+    params = types.SimpleNamespace(
+        clientInfo=types.SimpleNamespace(name="claude-code", version="2.1"),
+        capabilities=types.SimpleNamespace(elicitation=object()),
+    )
+    with caplog.at_level("INFO", logger="tools.elicitation"):
+        assert await elicit(_ctx(params), "pick", dask._BackendChoice) == (
+            "decline",
+            None,
+        )
+    assert "client=claude-code/2.1 elicitation_capability=True" in caplog.text
+
+
+async def test_elicit_before_initialisation_logs_unknown_client(caplog):
+    with caplog.at_level("INFO", logger="tools.elicitation"):
+        await elicit(_ctx(None, action="cancel"), "pick", dask._BackendChoice)
+    assert "action=cancel" in caplog.text
+    assert "client=None/None elicitation_capability=None" in caplog.text

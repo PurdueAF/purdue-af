@@ -1,5 +1,7 @@
 """Test helpers for the agentic-interface suite (sys.path set by conftest)."""
 
+import pytest
+
 USER = {
     "username": "alice",
     "namespace": "cms",
@@ -44,11 +46,9 @@ async def failure(awaitable):
     """
     from errors import Failure
 
-    try:
-        result = await awaitable
-    except Failure as exc:
-        return str(exc)
-    raise AssertionError(f"tool call succeeded instead of failing: {result!r}")
+    with pytest.raises(Failure) as info:
+        await awaitable
+    return str(info.value)
 
 
 async def needs_choices(awaitable):
@@ -60,8 +60,6 @@ async def needs_choices(awaitable):
     """
     from tools.elicitation import NeedsChoices
 
-    try:
-        result = await awaitable
-    except NeedsChoices as exc:
-        return str(exc)
-    raise AssertionError(f"tool call did not ask for choices: {result!r}")
+    with pytest.raises(NeedsChoices) as info:
+        await awaitable
+    return str(info.value)

@@ -38,6 +38,7 @@ def in_cluster(tmp_path, monkeypatch):
         ("", 0),
         (None, 0),
         ("garbage", 0),
+        ("1.2.3Gi", 0),
     ],
 )
 def test_parse_quantity(value, expected):
@@ -93,6 +94,49 @@ def test_api_errors_are_swallowed(in_cluster):
     ).mock(return_value=httpx.Response(403, text="forbidden"))
 
     assert kube.pvc_capacity_bytes() == 0
+
+
+@respx.mock
+def test_api_connection_failures_are_swallowed(in_cluster):
+    respx.get(
+        f"{API}/api/v1/namespaces/cms/persistentvolumeclaims/af-shared-storage"
+    ).mock(side_effect=httpx.ConnectError("refused"))
+
+    assert kube.pvc_capacity_bytes() == 0
+
+
+def test_unreadable_token_means_no_api_call(in_cluster, monkeypatch):
+    class UnreadableToken:
+        def is_file(self):
+            return True
+
+        def read_text(self):
+            raise PermissionError("denied")
+
+    monkeypatch.setattr(kube, "TOKEN_FILE", UnreadableToken())
+
+    with respx.mock(assert_all_called=False) as router:
+        route = router.get(url__startswith=API)
+        assert kube.pvc_capacity_bytes() == 0
+
+    assert not route.called
+
+
+def test_no_pvc_name_means_no_capacity(in_cluster, monkeypatch):
+    monkeypatch.setattr(settings, "pvc_name", "")
+
+    assert kube.pvc_capacity_bytes() == 0
+
+
+@respx.mock
+def test_requests_carry_the_service_account_token(in_cluster):
+    route = respx.get(
+        f"{API}/api/v1/namespaces/cms/persistentvolumeclaims/af-shared-storage"
+    ).mock(return_value=httpx.Response(200, json={}))
+
+    kube.pvc_capacity_bytes()
+
+    assert route.calls.last.request.headers["authorization"] == "Bearer tok"
 
 
 @respx.mock
@@ -272,6 +316,37 @@ def test_ignores_non_grpc_ingresses_and_uses_the_envoy_service(in_cluster):
 
 
 @respx.mock
+def test_grpc_ingress_without_a_host_is_skipped(in_cluster):
+    respx.get(f"{API}/apis/networking.k8s.io/v1/namespaces/cms/ingresses").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "items": [{"metadata": {"name": "supersonic-ingress-grpc"}, "spec": {}}]
+            },
+        )
+    )
+    respx.get(f"{API}/api/v1/namespaces/cms/services").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "items": [
+                    {"metadata": {"name": "noports"}, "spec": {}},
+                    {
+                        "metadata": {"name": "supersonic"},
+                        "spec": {"ports": [{"name": "http", "port": 8000}]},
+                    },
+                ]
+            },
+        )
+    )
+
+    assert kube.find_inference_endpoint() == {
+        "endpoint": "supersonic.cms.svc.cluster.local:8000",
+        "source": "service",
+    }
+
+
+@respx.mock
 def test_no_endpoint_when_nothing_is_found(in_cluster):
     respx.get(f"{API}/apis/networking.k8s.io/v1/namespaces/cms/ingresses").mock(
         return_value=httpx.Response(200, json={"items": []})
@@ -350,5 +425,34 @@ def test_no_grafana_url_without_a_grafana_ingress(in_cluster):
             },
         )
     )
+
+    assert kube.find_grafana_url() == {"url": "", "source": None}
+
+
+@respx.mock
+def test_grafana_ingress_found_by_label_without_tls_or_host(in_cluster):
+    respx.get(f"{API}/apis/networking.k8s.io/v1/namespaces/cms/ingresses").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "items": [
+                    {"metadata": {"name": "supersonic-grafana"}, "spec": {"rules": []}},
+                    {
+                        "metadata": {
+                            "name": "dashboards",
+                            "labels": {"app.kubernetes.io/name": "grafana"},
+                        },
+                        "spec": {"rules": [{"host": "dash.local"}]},
+                    },
+                ]
+            },
+        )
+    )
+
+    assert kube.find_grafana_url() == {"url": "http://dash.local", "source": "ingress"}
+
+
+def test_no_grafana_url_without_a_release_name(in_cluster, monkeypatch):
+    monkeypatch.setattr(settings, "supersonic_release", "")
 
     assert kube.find_grafana_url() == {"url": "", "source": None}

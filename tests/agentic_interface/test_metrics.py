@@ -42,15 +42,12 @@ class SendCollector:
         return b"".join(m.get("body", b"") for m in self.messages[1:])
 
 
-def http_scope(path, headers=None, method=None):
-    scope = {
+def http_scope(path, headers=None):
+    return {
         "type": "http",
         "path": path,
         "headers": headers or [],
     }
-    if method:
-        scope["method"] = method
-    return scope
 
 
 async def test_metrics_endpoint_returns_prometheus_format():
@@ -351,6 +348,8 @@ async def test_invalid_arguments_are_blamed_on_the_call():
     @mcp.tool()
     async def add(n: int) -> str:
         return str(n)
+
+    assert await mcp.call_tool("add", {"n": 2})
 
     with pytest.raises(ToolError) as info:
         await mcp.call_tool("add", {"n": "many"})

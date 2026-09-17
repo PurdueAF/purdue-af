@@ -33,7 +33,7 @@ def test_prompts_reference_existing_tools():
 
 
 def test_prompt_text_never_names_unknown_tools():
-    """Catch typos: any snake_case word that looks like a tool must be one."""
+    """Catch typos: any word with two or more underscores must be a tool."""
     import re
 
     from tools import dask, logs, profiles, session, storage
@@ -44,6 +44,7 @@ def test_prompt_text_never_names_unknown_tools():
 
     recorder = register_tools(prompts)
     for fn in recorder.prompts.values():
-        for word in re.findall(r"\b[a-z]+(?:_[a-z]+){2,}\b", fn()):
-            if word.endswith(("_session", "_profiles", "_status")):
-                assert word in real_tools, f"prompt references unknown tool '{word}'"
+        words = re.findall(r"\b[a-z]+(?:_[a-z]+){2,}\b", fn())
+        assert words
+        for word in words:
+            assert word in real_tools, f"prompt references unknown tool '{word}'"

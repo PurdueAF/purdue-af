@@ -278,6 +278,8 @@ async def upload(
                     relative_paths = json.loads(paths)
                 except json.JSONDecodeError:
                     raise repository.RepositoryError("Malformed 'paths' field.")
+                if not isinstance(relative_paths, list):
+                    raise repository.RepositoryError("Malformed 'paths' field.")
             if len(relative_paths) not in (0, len(files)):
                 raise repository.RepositoryError(
                     "'paths' does not match the uploaded files."

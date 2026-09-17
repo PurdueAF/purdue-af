@@ -30,9 +30,7 @@ class FakeCtx:
 
     async def elicit(self, message, schema):
         self.calls.append((message, schema))
-        if not self._responses:
-            raise AssertionError(f"unexpected elicit call: {message!r}")
-        action, data = self._responses.pop(0)
+        action, data = self._responses.pop(0)  # IndexError: unexpected elicit
         return _Result(action, data)
 
 
@@ -968,6 +966,22 @@ async def test_wait_stops_on_revoked_or_unpermitted_token(user_ctx, monkeypatch)
     respx.get(USER_URL).respond(403)
     out = await failure(tools["wait_for_session"](timeout_seconds=300))
     assert "not permitted to check the session state" in out
+
+    respx.get(USER_URL).respond(404)
+    out = await failure(tools["wait_for_session"](timeout_seconds=300))
+    assert "JupyterHub has no user 'alice' (HTTP 404)" in out
+
+
+@respx.mock
+async def test_wait_polls_through_a_hub_error(user_ctx, monkeypatch):
+    """A 5xx can clear on its own, so it is waited out and reported if it
+    does not."""
+    _fake_clock(monkeypatch)
+    route = respx.get(USER_URL).respond(502)
+    out = await register_tools(session).tools["wait_for_session"](timeout_seconds=30)
+    assert "did not become ready within 30 s" in out
+    assert "JupyterHub API returned HTTP 502" in out
+    assert route.call_count > 1
 
 
 @respx.mock
