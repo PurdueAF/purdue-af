@@ -83,7 +83,10 @@ fork carried verbatim), `pixi/`, `deploy/` or lock files, a change touching
 them is never proposed, and a Python change must pass a pyflakes check
 (undefined names, unused imports) regardless of the repository's lint
 exclusions. A change that only lowers a log level or rewords a message is
-not a fix and is never proposed.
+not a fix and is never proposed, nor is one that deletes more error handling
+— a `raise`, an `except`, an error log — than it puts back. Last, the change
+must pass the test suite `check-unit` runs; an environment that cannot be
+built skips that gate rather than blocking on it.
 
 Guardrails and the definition of "fixable here" are in `prompts.py`.
 

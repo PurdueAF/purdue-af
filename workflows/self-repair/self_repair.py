@@ -54,6 +54,7 @@ from triage import (
     pull_request_body,
     query_context,
     query_loki,
+    removes_error_handling,
     report_html,
     representative,
     silences,
@@ -127,6 +128,22 @@ MIN_CONFIDENCE = 0.7
 # budget, a few minutes less, so it decides before the clock does.
 AGENT_TIMEOUT_S = 30 * 60
 AGENT_BUDGET_MINUTES = 25
+# The suite CI's check-unit job runs: a change that fails it fails CI too, so
+# the pull request would only cost a reviewer the time to find that out. The
+# two bounds have to fit beside AGENT_TIMEOUT_S in this task's 60 minutes;
+# the suite itself takes about a minute and the environment a few.
+UNIT_TEST_PROJECT = ("--project", "tests", "--frozen")
+UNIT_TEST_ARGS = (
+    "pytest",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "-c",
+    "tests/pyproject.toml",
+    "tests",
+)
+BUILD_TIMEOUT_S = 600
+UNIT_TEST_TIMEOUT_S = 600
 LOG_INCIDENTS = 20
 
 # external_directory: the agent may look at the parent of its checkout; in a
@@ -688,6 +705,51 @@ def _python_defects(repo: Path, changed: list[str]) -> str:
     return "" if proc.returncode == 0 else (proc.stdout + proc.stderr).strip()
 
 
+def _unit_tests(repo: Path, venv: Path) -> str:
+    """The repository's own test failures, or "" when it passes.
+
+    Building the environment and running the tests are separate steps so the
+    two outcomes stay distinguishable: a suite that cannot be built is a
+    PyPI or network problem and skips the gate, while a suite that runs and
+    fails is the change being wrong. The environment is placed outside the
+    checkout so nothing it writes can reach the commit.
+    """
+    if not (repo / "tests" / "uv.lock").is_file():
+        return ""
+    env_vars = {**os.environ, "UV_PROJECT_ENVIRONMENT": str(venv)}
+    try:
+        build = subprocess.run(
+            ["uv", "sync", *UNIT_TEST_PROJECT],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            timeout=BUILD_TIMEOUT_S,
+            env=env_vars,
+        )
+        if build.returncode != 0:
+            _log("the test environment could not be built; suite not run")
+            return ""
+        proc = subprocess.run(
+            ["uv", "run", *UNIT_TEST_PROJECT, "--no-sync", *UNIT_TEST_ARGS],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            timeout=UNIT_TEST_TIMEOUT_S,
+            env=env_vars,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        _log(f"the test suite did not run ({type(exc).__name__}); gate skipped")
+        return ""
+    if proc.returncode == 0:
+        return ""
+    # pytest exits 1 for failing tests and 2-5 for its own problems
+    # (collection, usage, nothing collected), which are not this change's.
+    if proc.returncode != 1:
+        _log(f"the test suite did not run (exit {proc.returncode}); gate skipped")
+        return ""
+    return (proc.stdout + proc.stderr).strip()
+
+
 @env.task(timeout=timedelta(minutes=60))
 def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict, model: str) -> str:
     token = os.environ["GITHUB_TOKEN"]
@@ -723,15 +785,27 @@ def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict, model: str) -> s
                 f"{key.fingerprint}: touches protected paths, no PR: {', '.join(blocked)}"
             )
             return ""
-        if silences(_git("diff", cwd=repo)):
+        diff = _git("diff", cwd=repo)
+        if silences(diff):
             _log(
                 f"{key.fingerprint}: the change only lowers or rewords a log message, no PR"
+            )
+            return ""
+        if removes_error_handling(diff):
+            _log(
+                f"{key.fingerprint}: the change removes error handling rather than the fault, no PR"
             )
             return ""
         defects = _python_defects(repo, paths)
         if defects:
             _log(
                 f"{key.fingerprint}: the change does not pass pyflakes, no PR:\n{defects[:1500]}"
+            )
+            return ""
+        failures = _unit_tests(repo, Path(tmp) / "test-venv")
+        if failures:
+            _log(
+                f"{key.fingerprint}: the change fails the test suite, no PR:\n{failures[-1500:]}"
             )
             return ""
         _git("add", "-A", cwd=repo)

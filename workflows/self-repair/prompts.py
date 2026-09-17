@@ -43,8 +43,17 @@ fixable here by definition.
 
 Changing a log level, silencing or rewording a message, catching and
 ignoring an exception, or retrying without understanding the cause is never
-a fix: it removes the evidence and leaves the fault. If the only change you
+a fix: it removes the evidence and leaves the fault. Neither is deleting a
+raise, an error branch or an error log because the message is repetitive —
+that is the same silencing written as a code change. If the only change you
 can see is of that kind, the answer is "not fixable here".
+
+Name the fault before you decide what to do about it. The lines around the
+error usually state it: a traceback is preceded by whatever the code logged
+on its way there, and that line, not the traceback, is normally the
+diagnosis. An error repeating on a fixed cadence is a condition that
+persists, which is a thing to fix, not a message that is too loud. An
+incident you cannot explain is not fixable here.
 
 When in doubt it is NOT fixable here. A wrong "no" costs nothing; a wrong "yes"
 costs a reviewer's time.
@@ -96,6 +105,15 @@ plan: $plan
 
 - Make the smallest change that prevents the error. No refactors, no drive-by
   cleanups, no new dependencies.
+- Before editing a function, read all of it and every caller of it. What a
+  function returns and what it raises is a contract its callers rely on;
+  changing that without reading them is how a fix becomes a bug.
+- Find the tests covering what you change — tests/ mirrors the source tree —
+  and run them:
+  `uv run --project tests --frozen pytest -q -c tests/pyproject.toml tests/<suite>`
+  A test that fails on your change is telling you the plan is wrong: change
+  nothing and say so. Edit a test only when the behaviour it pins is itself
+  the fault, and say why in your summary.
 - Never edit pixi/base, pixi/global, any *.lock file, or anything under deploy/.
 - Keep comments terse. Do not add a "Why" section to any README.
 - If a Python file changed, run `ruff check --fix <file>` and `ruff format <file>`.

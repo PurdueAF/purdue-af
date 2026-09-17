@@ -692,6 +692,35 @@ def silences(diff: str) -> bool:
     )
 
 
+_ERROR_HANDLING = re.compile(
+    r"^\s*(?:raise|except|assert)\b"
+    r"|\bsys\.exit\("
+    r"|\b(?:log|logger|logging)\.(?:error|exception|critical|fatal|warn|warning)\(",
+    re.M,
+)
+
+
+def removes_error_handling(diff: str) -> bool:
+    """True when a unified diff takes away more error handling than it puts
+    back: a dropped raise, except, assert or error log.
+
+    `silences` catches a message edited in place, and only when the diff
+    replaces each line one for one. This catches the same instinct written as
+    a deletion — taking out the error path because it fires too often — which
+    removes the report and leaves the fault, and leaves whatever the callers
+    did with that error unreachable.
+    """
+
+    def weight(prefix: str, header: str) -> int:
+        return sum(
+            len(_ERROR_HANDLING.findall(line[1:]))
+            for line in diff.splitlines()
+            if line.startswith(prefix) and not line.startswith(header)
+        )
+
+    return weight("-", "---") > weight("+", "+++")
+
+
 def is_rate_limit(error: str) -> bool:
     text = error.lower()
     return (
