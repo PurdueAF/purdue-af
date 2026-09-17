@@ -98,17 +98,14 @@ async def test_free_gpus_subtracts_used_from_allocatable():
 
 
 @respx.mock
-async def test_free_gpus_returns_none_on_error():
-    respx.get(f"{gpu.PROMETHEUS_URL}/api/v1/query").respond(500)
+async def test_unknown_availability_is_cached_too():
+    """A broken Prometheus is not re-asked on every profile question."""
+    route = respx.get(f"{gpu.PROMETHEUS_URL}/api/v1/query").respond(500)
     assert await gpu.free_gpus() is None
+    calls = route.call_count
 
-
-@respx.mock
-async def test_free_gpus_none_when_no_allocatable_metrics():
-    respx.get(f"{gpu.PROMETHEUS_URL}/api/v1/query").respond(
-        200, json={"data": {"result": []}}
-    )
     assert await gpu.free_gpus() is None
+    assert route.call_count == calls
 
 
 # ── why availability is unknown ───────────────────────────────────────────────

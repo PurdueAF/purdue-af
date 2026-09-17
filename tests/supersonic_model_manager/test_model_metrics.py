@@ -79,9 +79,10 @@ async def test_drops_nan_from_idle_servers():
 
 
 @respx.mock
-async def test_drops_infinities():
+@pytest.mark.parametrize("value", ["+Inf", "not-a-number", None])
+async def test_drops_unusable_values(value):
     respx.get(f"{PROM}/api/v1/query").mock(
-        return_value=httpx.Response(200, json=vector(("m", "+Inf")))
+        return_value=httpx.Response(200, json=vector(("m", value)))
     )
 
     result = await metrics.collect_metrics()
@@ -97,6 +98,18 @@ async def test_query_failure_is_reported_without_breaking_the_dashboard():
 
     assert result["models"] == {}
     assert "ConnectError" in result["error"]
+
+
+@respx.mock
+async def test_prometheus_error_status_is_reported():
+    respx.get(f"{PROM}/api/v1/query").mock(
+        return_value=httpx.Response(200, json={"status": "error", "error": "bad"})
+    )
+
+    result = await metrics.collect_metrics()
+
+    assert result["models"] == {}
+    assert result["error"].startswith("throughput: RuntimeError")
 
 
 @respx.mock

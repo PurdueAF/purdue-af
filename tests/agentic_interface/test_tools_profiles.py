@@ -130,6 +130,23 @@ def test_parse_profiles_gpu_map():
     assert "gpu" not in profiles._parse_profiles(VALUES_YAML)[0]["options"]["0-cpu"]
 
 
+def test_gpu_resource_skips_unparseable_amounts():
+    """A templated or malformed amount must not hide a valid GPU next to it."""
+    override = {
+        "extra_resource_limits": {
+            "nvidia.com/mig-1g.5gb": "{{ gpus }}",
+            "nvidia.com/mig-7g.40gb": None,
+            "cpu": 4,
+            "nvidia.com/gpu": "1",
+        }
+    }
+    assert profiles._gpu_resource(override) == "nvidia.com/gpu"
+    assert (
+        profiles._gpu_resource({"extra_resource_limits": {"nvidia.com/gpu": "x"}})
+        is None
+    )
+
+
 def test_parse_profiles_invalid_yaml():
     assert profiles._parse_profiles("][ not yaml") == []
 

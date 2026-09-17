@@ -102,8 +102,7 @@ def test_dask_worker_limits_match_each_gateway():
         raw = path.read_text()
         cores = re.search(r'"worker_cores",[^)]*max=(\d+)', raw)
         memory = re.search(r'"worker_memory",[^)]*max=(\d+)', raw)
-        if not cores or not memory:
-            continue
+        assert cores and memory, f"{path.parent.name}: limits not parsed"
         assert f"≤ {cores.group(1)} cores" in text, f"{path.parent.name}: cores"
         assert f"≤ {memory.group(1)} GiB per worker" in text, (
             f"{path.parent.name}: memory"

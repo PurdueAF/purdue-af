@@ -165,7 +165,11 @@ async def test_form_marks_exhausted_flavor(monkeypatch):
 
 async def test_form_keeps_static_labels_when_availability_unknown(monkeypatch):
     ns = load(monkeypatch)
-    set_free(ns, None)
+
+    async def unknown():
+        return None
+
+    ns["get_free_gpus"] = unknown
 
     choices = gpu_choices(await ns["profile_list_with_gpu_counts"](None))
 
@@ -182,6 +186,19 @@ async def test_form_keeps_static_labels_when_availability_unknown(monkeypatch):
     assert (
         choices["4"]["display_name"]
         == "1 NVIDIA T4 GPU (16GB) — idle session timeout 24h"
+    )
+
+
+async def test_flavor_without_a_note_keeps_its_label_when_unknown(monkeypatch):
+    ns = load(monkeypatch)
+    set_free(ns, None)
+    for flavor in ns["GPU_FLAVORS"].values():
+        flavor.pop("note")
+
+    choices = gpu_choices(await ns["profile_list_with_gpu_counts"](None))
+
+    assert choices["3"]["display_name"] == (
+        "1 full A100 GPU (40GB) - subject to availability"
     )
 
 
@@ -228,6 +245,45 @@ async def test_get_free_gpus_clamps_at_zero(monkeypatch):
     ns["_prom_query"] = prom
 
     assert await ns["get_free_gpus"]() == {SLICE: 0, FULL: 0, T4: 0}
+
+
+async def test_prom_query_maps_samples_by_resource(monkeypatch):
+    ns = load(monkeypatch)
+    ns["PROMETHEUS_URL"] = "http://prom:9090"
+    fetched = []
+
+    class FakeClient:
+        async def fetch(self, url, **kwargs):
+            fetched.append((url, kwargs))
+            body = (
+                b'{"data": {"result": ['
+                b'{"metric": {"resource": "nvidia_com_gpu"}, "value": [0, "3"]}]}}'
+            )
+            return types.SimpleNamespace(body=body)
+
+    ns["AsyncHTTPClient"] = FakeClient
+
+    assert await ns["_prom_query"]("up") == {"nvidia_com_gpu": 3.0}
+    url, kwargs = fetched[0]
+    assert url == "http://prom:9090/api/v1/query?query=up"
+    # a hung Prometheus must not hold the form or the spawn
+    assert kwargs == {"connect_timeout": 5, "request_timeout": 5}
+
+
+def test_snippet_finds_gpu_queries_in_its_config_dir(monkeypatch):
+    """z2jh execs the snippet; the shared module is only importable because
+    the snippet puts jupyterhub_config.d on sys.path itself."""
+    import sys
+
+    from hub_helpers import EXTRA_FILES
+
+    monkeypatch.setattr(sys, "path", [p for p in sys.path if p != str(EXTRA_FILES)])
+    monkeypatch.delitem(sys.modules, "gpu_queries", raising=False)
+
+    ns = load(monkeypatch)
+
+    assert sys.path[0] == str(EXTRA_FILES)
+    assert ns["GPU_METRICS"]
 
 
 async def test_get_free_gpus_unknown_on_query_failure(monkeypatch):
@@ -281,11 +337,8 @@ async def test_spawn_allowed_when_available(monkeypatch):
 
 async def test_non_gpu_spawn_skips_availability_check(monkeypatch):
     ns = load(monkeypatch)
-
-    async def boom(use_cache=True):
-        raise AssertionError("availability should not be queried")
-
-    ns["free_gpus"] = boom
+    # calling either would raise TypeError
+    ns["free_gpus"] = ns["observed_free_gpus"] = None
 
     pod = fake_pod({"cpu": "256", "memory": "256G"})
     assert await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner(), pod) is pod
@@ -334,6 +387,16 @@ async def test_hide_gpus_respects_existing_env(monkeypatch):
     assert pod.spec.containers[0].env == [preset]
     env = {e.name: e.value for e in pod.spec.containers[1].env}
     assert env == {"NVIDIA_VISIBLE_DEVICES": "void"}
+
+
+async def test_unmanaged_gpu_flavor_is_left_to_the_scheduler(monkeypatch):
+    # a GPU resource the gate does not know is neither checked nor hidden
+    ns = load(monkeypatch)
+    ns["observed_free_gpus"] = None  # calling it would raise TypeError
+    pod = fake_pod({"nvidia.com/mig-3g.20gb": "1"})
+
+    assert await ns["refuse_gpu_spawn_if_unavailable"](fake_spawner(), pod) is pod
+    assert not getattr(pod.spec.containers[0], "env", None)
 
 
 async def test_spawn_allowed_when_availability_unknown(monkeypatch):

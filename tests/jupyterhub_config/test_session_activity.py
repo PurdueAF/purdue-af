@@ -113,6 +113,32 @@ def test_sessions_skips_rows_the_orm_cannot_resolve(monkeypatch, registry):
     ]
 
 
+def test_running_spawners_are_the_ones_with_a_server(monkeypatch, registry):
+    """Read against the real ORM: a stopped server keeps its Spawner row but
+    loses its Server, and must not be exported as a session."""
+    from jupyterhub import orm
+    from jupyterhub.app import JupyterHub
+
+    db = orm.new_session_factory("sqlite://")()
+    alice = orm.User(name="alice")
+    bob = orm.User(name="bob")
+    db.add_all(
+        [
+            orm.Spawner(user=alice, name="", server=orm.Server(), started=STARTED),
+            orm.Spawner(user=bob, name="", started=STARTED),  # stopped
+        ]
+    )
+    db.commit()
+    monkeypatch.setattr(
+        JupyterHub, "instance", classmethod(lambda cls: types.SimpleNamespace(db=db))
+    )
+    ns = snippet(monkeypatch)
+
+    assert [labels for labels, _, _ in ns["sessions"]()] == [
+        ["alice", "", f"purdue-af-{alice.id}"]
+    ]
+
+
 # ── collector ─────────────────────────────────────────────────────────────────
 
 

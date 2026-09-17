@@ -56,3 +56,58 @@ def test_apply_refuses_ambiguous_layout(bump, deployment_text):
     doubled = deployment_text + deployment_text
     with pytest.raises(SystemExit, match="expected exactly 1"):
         bump.apply(doubled, "9.9.9")
+
+
+# --- CLI ------------------------------------------------------------------
+
+
+@pytest.fixture()
+def manifest(tmp_path):
+    path = tmp_path / "deployment.yaml"
+    path.write_text("          image: reg.example/purdueaf/agentic-interface:0.3.5\n")
+    return path
+
+
+def run_main(bump, monkeypatch, *argv):
+    monkeypatch.setattr("sys.argv", ["bump-agentic-version.py", *map(str, argv)])
+    bump.main()
+
+
+def test_print_current(bump, monkeypatch, capsys, manifest):
+    run_main(bump, monkeypatch, "--print-current", "--file", manifest)
+    assert capsys.readouterr().out == "0.3.5\n"
+
+
+@pytest.mark.parametrize(
+    "args,new", [(["--bump", "minor"], "0.4.0"), (["--set", "2.0.0"], "2.0.0")]
+)
+def test_release_rewrites_and_prints_only_the_version(
+    bump, monkeypatch, capsys, manifest, args, new
+):
+    run_main(bump, monkeypatch, *args, "--file", manifest)
+    captured = capsys.readouterr()
+    assert captured.out == f"{new}\n"  # the workflow captures stdout
+    assert f"0.3.5 -> {new}" in captured.err
+    assert manifest.read_text().endswith(f"agentic-interface:{new}\n")
+
+
+def test_dry_run_leaves_the_file(bump, monkeypatch, capsys, manifest):
+    before = manifest.read_text()
+    run_main(bump, monkeypatch, "--bump", "patch", "--dry-run", "--file", manifest)
+    captured = capsys.readouterr()
+    assert captured.out == "0.3.6\n"
+    assert "dry run" in captured.err
+    assert manifest.read_text() == before
+
+
+@pytest.mark.parametrize("bad", ["1.2", "v1.2.3", "1.2.3-rc1"])
+def test_set_rejects_non_semver(bump, monkeypatch, manifest, bad):
+    before = manifest.read_text()
+    with pytest.raises(SystemExit, match="--set expects X.Y.Z"):
+        run_main(bump, monkeypatch, "--set", bad, "--file", manifest)
+    assert manifest.read_text() == before
+
+
+def test_one_action_is_required(bump, monkeypatch, manifest):
+    with pytest.raises(SystemExit):
+        run_main(bump, monkeypatch, "--file", manifest)

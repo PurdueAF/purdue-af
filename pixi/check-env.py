@@ -126,7 +126,7 @@ def pypi_toplevels(name: str) -> list[str] | None:
             tops = {t.strip() for t in tl.splitlines() if t.strip()}
         else:
             tops = {
-                str(f).split("/", 1)[0].removesuffix(".py")
+                str(f).split("/", 1)[0].split(".", 1)[0]
                 for f in (dist.files or [])
                 if str(f).endswith((".py", ".so"))
                 and "/" not in str(f).rstrip("/")

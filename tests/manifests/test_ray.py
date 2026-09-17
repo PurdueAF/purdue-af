@@ -435,11 +435,7 @@ def test_no_keda_resources():
     """A ScaledObject would be a second controller fighting Ray over the
     group — and could not drive it anyway: RayCluster has no scale subresource."""
     for path in sorted(RAY.rglob("*.yaml")):
-        text = path.read_text()
-        if "templates" in path.parts:  # Go templates, not YAML until rendered
-            assert "ScaledObject" not in text and "keda.sh" not in text, path
-            continue
-        for doc in yaml.safe_load_all(text):
+        for doc in yaml.safe_load_all(path.read_text()):
             if isinstance(doc, dict):
                 assert doc.get("kind") != "ScaledObject", path
                 assert "keda.sh" not in str(doc.get("apiVersion", "")), path

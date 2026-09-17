@@ -52,9 +52,7 @@ class FakeCtx:
 
     async def elicit(self, message, schema):
         self.calls.append((message, schema))
-        if not self._responses:
-            raise AssertionError(f"unexpected elicit call: {message!r}")
-        action, data = self._responses.pop(0)
+        action, data = self._responses.pop(0)  # IndexError: unexpected elicit
         return _FakeResult(action, data)
 
 
@@ -326,6 +324,31 @@ async def test_create_reports_a_scheduler_that_never_came_up(user_ctx, monkeypat
     assert "Created with 0 workers" in out
     assert "still PENDING" in out
     assert "scale_dask_cluster('cms.stuck', 2, gateway='k8s')" in out
+
+
+@respx.mock
+async def test_create_reports_a_scheduler_that_failed(user_ctx):
+    """The cluster exists even though its scheduler died, so the caller still
+    gets its name rather than a bare failure."""
+    respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.dead"})
+    respx.get(f"{K8S}/api/v1/clusters/cms.dead").respond(
+        200, json={"name": "cms.dead", "status": "FAILED"}
+    )
+    scale = respx.post(f"{K8S}/api/v1/clusters/cms.dead/scale").respond(204)
+
+    out = await register_tools(dask).tools["create_dask_cluster"](
+        FakeCtx(),
+        gateway="k8s",
+        env_source="global",
+        worker_cores=1,
+        worker_memory=4,
+        n_workers=2,
+    )
+
+    assert not scale.called
+    assert "cms.dead" in out
+    assert "Created with 0 workers — waiting for the scheduler failed" in out
+    assert "is FAILED" in out
 
 
 @respx.mock
@@ -848,17 +871,17 @@ async def test_list_clusters_auth_and_http_errors(user_ctx):
         _, data = await dask._fetch_clusters(client, "k8s", K8S, "alice")
         assert data == "HTTP 503"
 
-    def responder(request):
-        if "k8s-slurm" in str(request.url):
-            return httpx.Response(503)
-        return httpx.Response(403)
+        respx.get(clusters_url(K8S)).respond(200, text="<html>proxy</html>")
+        _, data = await dask._fetch_clusters(client, "k8s", K8S, "alice")
+        assert data == "returned a malformed cluster list"
 
-    respx.get(url__regex=r".*/api/v1/clusters/").mock(side_effect=responder)
+    respx.get(clusters_url(K8S)).respond(403)
+    respx.get(clusters_url(SLURM)).respond(503)
     tools = register_tools(dask).tools
     out = await tools["list_dask_clusters"]()
     # auth errors suppressed; HTTP 503 from slurm is shown
     assert "not authorised" not in out
-    assert "HTTP 503" in out
+    assert "slurm" in out and "HTTP 503" in out
 
 
 @respx.mock
@@ -879,6 +902,15 @@ async def test_require_owned_cluster_error_shapes(user_ctx):
 
     respx.get(f"{K8S}/api/v1/clusters/c1").respond(200, json={"name": "c1"})
     assert await dask._require_owned_cluster(K8S, "alice", "c1", "k8s") is None
+
+
+@respx.mock
+async def test_cluster_status_rejects_a_malformed_record(user_ctx):
+    from errors import UpstreamError
+
+    respx.get(f"{K8S}/api/v1/clusters/c1").respond(200, json=["c1"])
+    with pytest.raises(UpstreamError, match="was not a cluster record"):
+        await dask._cluster_status("k8s", K8S, "c1", "alice")
 
 
 @respx.mock

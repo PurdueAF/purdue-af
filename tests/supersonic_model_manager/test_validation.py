@@ -1,5 +1,6 @@
 """Triton model repository layout rules applied to uploads."""
 
+from model_manager import validation
 from model_manager.validation import parse_config, validate_model_dir
 
 
@@ -185,6 +186,39 @@ def test_rejects_unidentifiable_model(staged):
     assert any("could not be inferred" in e for e in result.errors)
 
 
+def test_rejects_torchscript_model_as_directory(staged):
+    model = staged / "pt_dir"
+    write(model / "config.pbtxt", 'name: "pt_dir"\nplatform: "pytorch_libtorch"\n')
+    write(model / "1" / "model.pt" / "data.pkl", "x")
+
+    result = validate_model_dir(model, "pt_dir")
+
+    assert not result.ok
+    assert any("must be a file" in e for e in result.errors)
+
+
+def test_unreadable_config_is_an_error(staged, make_model, monkeypatch):
+    model = make_model("locked", parent=staged)
+    monkeypatch.setattr(validation, "parse_config", lambda _: {"_error": "denied"})
+
+    result = validate_model_dir(model, "locked")
+
+    assert not result.ok
+    assert any("could not be read: denied" in e for e in result.errors)
+
+
+def test_unicode_digit_directory_is_not_a_version(staged, make_model):
+    """'²'.isdigit() is True but int('²') raises."""
+    model = make_model("sup", parent=staged)
+    (model / "²").mkdir()
+
+    result = validate_model_dir(model, "sup")
+
+    assert result.ok, result.errors
+    assert result.versions == ["1"]
+    assert any("'²/'" in w for w in result.warnings)
+
+
 # --------------------------------------------------------------------------
 # Warnings (accepted, but surfaced)
 # --------------------------------------------------------------------------
@@ -211,6 +245,28 @@ def test_warns_about_ignored_files_and_directories(staged, make_model):
     joined = " ".join(result.warnings)
     assert "notes.md" in joined
     assert "scratch" in joined
+
+
+def test_multi_layout_backend_is_left_to_triton(staged):
+    model = staged / "tf"
+    write(model / "config.pbtxt", 'name: "tf"\nbackend: "tensorflow"\n')
+    write(model / "1" / "anything.bin", "x")
+
+    result = validate_model_dir(model, "tf")
+
+    assert result.ok, result.errors
+    assert result.platform == "tensorflow"
+
+
+def test_warns_when_config_names_no_backend(staged):
+    model = staged / "bare"
+    write(model / "config.pbtxt", 'name: "bare"\n')
+    write(model / "1" / "model.onnx", "x")
+
+    result = validate_model_dir(model, "bare")
+
+    assert result.ok, result.errors
+    assert any("neither 'platform' nor 'backend'" in w for w in result.warnings)
 
 
 def test_warns_when_openvino_bin_missing(staged):
@@ -259,6 +315,10 @@ def test_parse_config_ignores_comments(tmp_path):
 
     assert parsed["name"] == "real"
     assert parsed["backend"] == "python"
+
+
+def test_parse_config_reports_read_errors(tmp_path):
+    assert "_error" in parse_config(tmp_path / "absent.pbtxt")
 
 
 def test_missing_directory_is_an_error(tmp_path):

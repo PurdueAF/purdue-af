@@ -50,25 +50,12 @@ jobs:
           enable-cache: true
           cache-dependency-glob: tests/uv.lock
       # One project, one lock, every suite — run from the repo root so
-      # coverage records repo-rooted paths (see .coveragerc).
-      # bump_af_version is a load_script module name (file paths don't
-      # work with --cov for non-package scripts).
+      # coverage records repo-rooted paths; scope lives in .coveragerc.
       - name: Run tests with coverage
         run: >-
           uv run --project tests --frozen
           pytest -q -c tests/pyproject.toml tests
-          --cov=docker/agentic-interface
-          --cov=apps/jupyterhub/jupyterhub/extraFiles
-          --cov=docker/af-pod-monitor
-          --cov=docker/af-node-monitor
-          --cov=apps/af-utils/af-users-graph
-          --cov=docker/purdue-af/jupyter
-          --cov=bump_af_version
-          --cov-report=xml
-      # Codecov reads filename attributes as-is (it ignores <source>), so
-      # rewrite them to repo-rooted paths.
-      - name: Normalise coverage paths
-        run: python3 .github/workflows/fix-coverage-paths.py coverage.xml
+          --cov --cov-report=xml
       # Coverage reporting is informational: a Codecov outage (CLI download,
       # GPG keyserver, upload) must not fail the test job. Genuinely silent
       # processing rejections exit 0 regardless, so fail_ci_if_error would

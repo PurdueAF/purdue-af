@@ -29,9 +29,8 @@ def test_purdue_user_in_list_logs_in(login):
 
 def test_purdue_user_not_in_list_is_rejected(login):
     _, response = login("mallory@purdue.edu")
-    # The deployed (pre-incident) spawner raises 500 for unlisted users; the
-    # reverted-and-pending rewrite returns 403. Both mean "kept out".
-    assert response.status_code in (403, 500)
+    # custom-spawner.py denies unlisted users with HTTPError(500)
+    assert response.status_code == 500
 
 
 def test_cern_user_gets_suffixed_username(login, admin):

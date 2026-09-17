@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config import settings
-from .validation import validate_model_dir
+from .validation import is_version_name, validate_model_dir
 
 STAGING_DIRNAME = ".uploads"
 MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,255}$")
@@ -146,7 +146,7 @@ def scan_models() -> list:
             (
                 sub.name
                 for sub in child.iterdir()
-                if sub.is_dir() and sub.name.isdigit()
+                if sub.is_dir() and is_version_name(sub.name)
             ),
             key=int,
         )
@@ -323,7 +323,7 @@ def is_archive(filename: str) -> bool:
 def _looks_like_model_dir(path: Path) -> bool:
     if (path / "config.pbtxt").is_file():
         return True
-    return any(sub.is_dir() and sub.name.isdigit() for sub in path.iterdir())
+    return any(sub.is_dir() and is_version_name(sub.name) for sub in path.iterdir())
 
 
 def _resolve_model_root(staging: Path, max_depth: int = 5) -> Path:

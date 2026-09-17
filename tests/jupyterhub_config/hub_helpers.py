@@ -32,12 +32,4 @@ class FakeSpawner:
     def __init__(self, user_id=1):
         self.environment = {}
         self.userdata = None
-        self._auth_state = None
-
-        async def get_auth_state():  # hub API: spawner.user.get_auth_state()
-            return self._auth_state
-
-        self.user = types.SimpleNamespace(id=user_id, get_auth_state=get_auth_state)
-
-    def set_auth_state(self, auth_state):
-        self._auth_state = auth_state
+        self.user = types.SimpleNamespace(id=user_id)

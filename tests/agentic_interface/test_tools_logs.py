@@ -3,6 +3,7 @@
 import time
 from urllib.parse import parse_qs, urlparse
 
+import pytest
 import respx
 from agentic_helpers import failure, register_tools
 from context import current_user
@@ -68,6 +69,15 @@ def test_dedup_collapses_consecutive_identical():
     ]
 
 
+def test_dedup_marks_a_run_where_it_ends():
+    lines = [line("t1", "boom"), line("t2", "boom"), line("t3", "ok")]
+    assert logs._dedup(lines) == [
+        line("t1", "boom"),
+        "  ↑ × 2 identical lines omitted",
+        line("t3", "ok"),
+    ]
+
+
 def test_dedup_trailing_run_is_flushed():
     lines = [line("t1", "a"), line("t2", "b"), line("t3", "b")]
     out = logs._dedup(lines)
@@ -119,12 +129,13 @@ async def test_notebook_logs_selector_and_output(user_ctx):
     assert "# 1 line(s)" in out
 
 
+@pytest.mark.parametrize("tool", ["query_notebook_logs", "query_dask_logs"])
 @respx.mock
-async def test_notebook_logs_applies_filter(user_ctx):
+async def test_logs_apply_filter(user_ctx, tool):
     route = respx.get(LOKI_RANGE_URL).respond(200, json=loki_response([]))
 
     tools = register_tools(logs).tools
-    await tools["query_notebook_logs"](filter='|= "ERROR"')
+    await tools[tool](filter='|= "ERROR"')
 
     assert query_of(route)["query"][0].endswith('|= "ERROR"')
 
