@@ -112,6 +112,7 @@ configMapGenerator:
       - ../../apps/monitoring/grafana/dashboards/agentic-interface.json
       - ../../apps/monitoring/grafana/dashboards/users-overview.json
       - ../../apps/monitoring/grafana/dashboards/pyroscope.json
+      - ../../apps/monitoring/grafana/dashboards/self-repair.json
 
   - name: prometheus-config
     files:

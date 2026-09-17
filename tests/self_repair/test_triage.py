@@ -982,3 +982,117 @@ class TestGitHub:
             "body": "B",
             "draft": True,
         }
+
+
+class TestModelChoice:
+    def test_first_answering_model_wins_and_nothing_after_it_is_probed(self):
+        asked = []
+
+        def probe(model):
+            asked.append(model)
+            return (model == "genai/b", 1.5, "x")
+
+        model, probes = triage.pick_model(["genai/a", "genai/b", "genai/c"], probe)
+        assert model == "genai/b"
+        assert asked == ["genai/a", "genai/b"]
+        assert [(p.model, p.available) for p in probes] == [
+            ("genai/a", False),
+            ("genai/b", True),
+        ]
+
+    def test_no_answer_means_no_model_and_every_probe_reported(self):
+        model, probes = triage.pick_model(
+            ["a", "b"], lambda m: (False, 30.0, "timeout")
+        )
+        assert model is None and [p.model for p in probes] == ["a", "b"]
+
+    def test_probe_is_tiny_and_not_streamed(self):
+        body = triage.probe_body("gemma4:26b-a4b")
+        assert body["model"] == "gemma4:26b-a4b"
+        assert body["stream"] is False and body["max_tokens"] <= 16
+
+
+class TestMetrics:
+    def metrics(self, **overrides):
+        base = dict(
+            started=1789651043.0,
+            outcome="ok",
+            model="genai/b",
+            models=["genai/a", "genai/b"],
+            probes=[
+                triage.Probe("genai/a", False, 30.0, "timeout"),
+                triage.Probe("genai/b", True, 0.4, "answered"),
+            ],
+            duration=61.5,
+            error_lines=47,
+            incidents=9,
+            groups=4,
+            analyses={"fresh": 2, "cache_hit": 1, "failed": 1},
+            fixable=1,
+            pull_requests=1,
+        )
+        base.update(overrides)
+        return triage.TickMetrics(**base)
+
+    def test_counters_carry_on_from_what_the_gateway_holds(self):
+        page = (
+            'push_time_seconds{instance="",job="self-repair"} 1.7e+09\n'
+            'self_repair_ticks_total{instance="",job="self-repair",outcome="ok"} 4\n'
+            'self_repair_ticks_total{instance="",job="self-repair",outcome="failed"} 2\n'
+            'self_repair_analyses_total{instance="",job="self-repair",result="fresh"} 10\n'
+            'self_repair_last_tick_incidents{instance="",job="self-repair"} 3\n'
+        )
+        previous = triage.parse_counters(page)
+        assert previous == {
+            ("self_repair_ticks_total", (("outcome", "ok"),)): 4.0,
+            ("self_repair_ticks_total", (("outcome", "failed"),)): 2.0,
+            ("self_repair_analyses_total", (("result", "fresh"),)): 10.0,
+        }, "gauges and the gateway's own series are not counters"
+        text = triage.exposition(self.metrics(), previous)
+        assert 'self_repair_ticks_total{outcome="ok"} 5' in text
+        assert 'self_repair_ticks_total{outcome="failed"} 2' in text, "untouched, kept"
+        assert 'self_repair_analyses_total{result="fresh"} 12' in text
+        assert 'self_repair_analyses_total{result="failed"} 1' in text
+
+    def test_gauges_describe_the_newest_tick(self):
+        text = triage.exposition(self.metrics(), {})
+        assert "self_repair_last_tick_timestamp_seconds 1789651043\n" in text
+        assert "self_repair_last_tick_duration_seconds 61.5\n" in text
+        assert 'self_repair_last_tick_outcome{outcome="ok"} 1' in text
+        assert 'self_repair_last_tick_outcome{outcome="no_model"} 0' in text
+        assert 'self_repair_model_available{model="genai/a"} 0' in text
+        assert 'self_repair_model_available{model="genai/b"} 1' in text
+        assert 'self_repair_model_probe_seconds{model="genai/a"} 30' in text
+        assert 'self_repair_model_selected{model="genai/a"} 0' in text
+        assert 'self_repair_model_selected{model="genai/b"} 1' in text
+        assert (
+            'self_repair_model_probes_total{available="false",model="genai/a"} 1'
+            in text
+        )
+        assert "self_repair_last_tick_error_lines 47\n" in text
+
+    def test_every_series_has_help_and_type_and_a_known_name(self):
+        text = triage.exposition(self.metrics(), {})
+        names = {
+            line.split("{")[0].split(" ")[0]
+            for line in text.splitlines()
+            if not line.startswith("#")
+        }
+        assert names <= set(triage.METRICS)
+        for name in names:
+            kind = triage.METRICS[name][0]
+            assert f"# TYPE {name} {kind}" in text and f"# HELP {name} " in text
+
+    def test_a_tick_without_a_model_still_counts(self):
+        metrics = self.metrics(
+            outcome="no_model", model="", analyses={}, fixable=0, pull_requests=0
+        )
+        text = triage.exposition(metrics, {})
+        assert 'self_repair_ticks_total{outcome="no_model"} 1' in text
+        assert 'self_repair_last_tick_outcome{outcome="ok"} 0' in text
+        assert 'self_repair_model_selected{model="genai/b"} 0' in text
+
+    def test_label_values_are_escaped(self):
+        metrics = self.metrics(models=['we"ird\\'], model='we"ird\\', probes=[])
+        text = triage.exposition(metrics, {})
+        assert 'self_repair_model_selected{model="we\\"ird\\\\"} 1' in text
