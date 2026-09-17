@@ -759,6 +759,45 @@ class TestContextAndGuards:
     def test_silences_detects_log_level_only_changes(self, diff, expected):
         assert triage.silences("--- a\n+++ b\n" + diff) is expected
 
+    # The diff of PR #344: a `raise` deleted because it logged too often,
+    # which left the caller setting the directory's health gauge back to 1.
+    DROPPED_RAISE = """\
+--- a/pod-metrics-exporter.py
++++ b/pod-metrics-exporter.py
+         if not ok:
+-            raise OSError(f"could not read {directory}")
++            metrics[f"{dir_label}_dir_ok"].set(0)
++            return
+"""
+
+    @pytest.mark.parametrize(
+        "diff, expected",
+        [
+            (DROPPED_RAISE, True),
+            # an error log deleted outright
+            ('-    log.error("could not read %s", path)\n', True),
+            ("-    except OSError:\n-        raise\n", True),
+            # the raise moved, not removed
+            (
+                "-        raise OSError(msg)\n+    if not ok:\n+        raise OSError(msg)\n",
+                False,
+            ),
+            # error handling added
+            ('+    raise OSError("unreadable")\n', False),
+            # untouched error handling around a real edit
+            ("-    timeout = 600\n+    timeout = 30\n", False),
+            ("", False),
+        ],
+    )
+    def test_removes_error_handling_catches_a_deleted_error_path(self, diff, expected):
+        assert triage.removes_error_handling("--- a\n+++ b\n" + diff) is expected
+
+    def test_a_dropped_raise_is_not_caught_by_silences(self):
+        """Why the second gate exists: `silences` compares a diff line for
+        line and bails when the counts differ, as they do here."""
+        assert triage.silences(self.DROPPED_RAISE) is False
+        assert triage.removes_error_handling(self.DROPPED_RAISE) is True
+
     def test_rate_limit_errors_are_recognised(self):
         assert triage.is_rate_limit(
             '{"name": "APIError", "data": {"message": "GenAI Studio rate limit exceeded", "statusCode": 429}}'

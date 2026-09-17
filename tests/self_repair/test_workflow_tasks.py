@@ -486,6 +486,8 @@ class TestFix:
             status=" M apps/x/values.yaml\n",
             diff="-a: 1\n+a: 2\n",
             defects="",
+            failures="",
+            tested=None,
             git=[],
             created=[],
             prompt=None,
@@ -509,6 +511,12 @@ class TestFix:
         monkeypatch.setattr(sr, "_context", lambda evidence, container: "ctx")
         monkeypatch.setattr(sr, "_run_agent", run_agent)
         monkeypatch.setattr(sr, "_python_defects", lambda repo, paths: state.defects)
+
+        def unit_tests(repo, venv):
+            state.tested = (repo, venv)
+            return state.failures
+
+        monkeypatch.setattr(sr, "_unit_tests", unit_tests)
         monkeypatch.setattr(sr, "create_pull_request", create)
         monkeypatch.setattr(
             sr.flyte,
@@ -550,6 +558,10 @@ class TestFix:
             "Fix x",
         )
         assert "run-1" in body and "I changed x." in body and "genai/m" in body
+        # the test environment is built beside the clone, never inside it:
+        # anything uv wrote in there would be swept up by `git add -A`
+        repo_path, venv = env.tested
+        assert not venv.is_relative_to(repo_path)
 
     def test_the_run_name_is_optional(self, env, monkeypatch):
         monkeypatch.setattr(sr.flyte, "ctx", lambda: None)
@@ -562,7 +574,9 @@ class TestFix:
             {"status": ""},
             {"status": "R  apps/a.py -> pixi/global/pixi.toml\n"},
             {"diff": '-log.error("x")\n+log.warning("x")\n'},
+            {"diff": '-            raise OSError("unreadable")\n+            return\n'},
             {"defects": "bad.py:1:1: F821 undefined name"},
+            {"failures": "3 failed, 1552 passed"},
         ],
     )
     def test_changes_that_are_not_fixes_open_nothing(self, env, change):
@@ -571,6 +585,102 @@ class TestFix:
         assert self.fix() == ""
         assert env.created == []
         assert "push" not in [args[0] for args in env.git]
+
+
+class TestUnitTestGate:
+    """The suite CI runs, run before the pull request exists. PR #344 removed
+    a raise its callers depended on; three tests already asserted otherwise."""
+
+    @pytest.fixture
+    def repo(self, tmp_path):
+        """As fix() lays it out: the clone and the environment are siblings."""
+        checkout = tmp_path / "repo"
+        (checkout / "tests").mkdir(parents=True)
+        (checkout / "tests" / "uv.lock").write_text("")
+        return checkout
+
+    @pytest.fixture
+    def venv(self, tmp_path):
+        return tmp_path / "test-venv"
+
+    def runs(self, monkeypatch, *results):
+        calls = []
+
+        def run(cmd, **kwargs):
+            calls.append((cmd, kwargs))
+            return results[len(calls) - 1]
+
+        monkeypatch.setattr(sr.subprocess, "run", run)
+        return calls
+
+    def test_a_passing_suite_is_no_failure(self, monkeypatch, repo, venv):
+        self.runs(
+            monkeypatch,
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+            SimpleNamespace(returncode=0, stdout="1552 passed", stderr=""),
+        )
+        assert sr._unit_tests(repo, venv) == ""
+
+    def test_a_failing_suite_is_reported(self, monkeypatch, repo, venv):
+        self.runs(
+            monkeypatch,
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+            SimpleNamespace(returncode=1, stdout="3 failed, 1552 passed", stderr=""),
+        )
+        assert "3 failed" in sr._unit_tests(repo, venv)
+
+    def test_an_environment_that_cannot_be_built_skips_the_gate(
+        self, monkeypatch, repo, venv, capsys
+    ):
+        """A PyPI hiccup is not the change being wrong."""
+        calls = self.runs(
+            monkeypatch, SimpleNamespace(returncode=1, stdout="", stderr="no network")
+        )
+        assert sr._unit_tests(repo, venv) == ""
+        assert len(calls) == 1
+        assert "could not be built" in capsys.readouterr().out
+
+    @pytest.mark.parametrize("code", [2, 4, 5])
+    def test_pytests_own_problems_skip_the_gate(self, monkeypatch, repo, venv, code):
+        """Exit 1 is a failing test; 2-5 are collection, usage or nothing
+        collected, none of which say the change is wrong."""
+        self.runs(
+            monkeypatch,
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+            SimpleNamespace(returncode=code, stdout="", stderr=""),
+        )
+        assert sr._unit_tests(repo, venv) == ""
+
+    def test_a_timeout_skips_the_gate(self, monkeypatch, repo, venv):
+        def run(cmd, **kwargs):
+            raise sr.subprocess.TimeoutExpired(cmd="uv", timeout=900)
+
+        monkeypatch.setattr(sr.subprocess, "run", run)
+        assert sr._unit_tests(repo, venv) == ""
+
+    def test_a_checkout_without_the_suite_is_skipped(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(
+            sr.subprocess, "run", lambda *a, **k: pytest.fail("should not run")
+        )
+        assert sr._unit_tests(tmp_path, tmp_path / "test-venv") == ""
+
+    def test_the_environment_is_built_outside_the_checkout(
+        self, monkeypatch, repo, venv
+    ):
+        """Anything uv writes inside the clone would land in `git add -A`."""
+        calls = self.runs(
+            monkeypatch,
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+        )
+        sr._unit_tests(repo, venv)
+
+        for cmd, kwargs in calls:
+            assert kwargs["env"]["UV_PROJECT_ENVIRONMENT"] == str(venv)
+            assert kwargs["cwd"] == repo
+        assert not venv.resolve().is_relative_to(repo.resolve())
+        # the run must not re-sync into the default in-project .venv
+        assert "--no-sync" in calls[1][0]
 
 
 class FakeProc:
