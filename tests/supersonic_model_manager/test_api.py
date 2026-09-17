@@ -2,11 +2,15 @@
 
 import base64
 import io
+import json
+import logging
 import zipfile
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
-from model_manager import kube, metrics, triton
+from asgi_lifespan import LifespanManager
+from model_manager import kube, metrics, repository, triton
 from model_manager.config import settings
 from model_manager.main import app
 
@@ -82,6 +86,29 @@ async def test_healthz_stays_open_for_kubelet_probes(secured):
 async def test_bad_credentials_are_rejected(secured, user, password):
     async with secured as client:
         response = await client.get("/api/state", headers=basic(user, password))
+
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        "Basic !!!not-base64!!!",
+        "Basic " + base64.b64encode(b"\xff\xfe").decode(),
+        "Bearer abc",
+    ],
+)
+async def test_malformed_authorization_is_rejected(secured, header):
+    async with secured as client:
+        response = await client.get("/api/state", headers={"Authorization": header})
+
+    assert response.status_code == 401
+
+
+async def test_non_ascii_credentials_are_rejected_not_crashed(secured):
+    """compare_digest raises TypeError on non-ASCII str."""
+    async with secured as client:
+        response = await client.get("/api/state", headers=basic("admin", "pässwörd"))
 
     assert response.status_code == 401
 
@@ -323,14 +350,9 @@ async def test_upload_survives_a_server_with_no_room(client, repo, monkeypatch):
 
 
 async def test_auto_load_can_be_disabled(client, repo, monkeypatch):
-    calls = []
-
-    async def fake_control(name, action, servers=None):
-        calls.append(name)
-        return load_result(True, [])
-
+    control = AsyncMock()
     monkeypatch.setattr(settings, "auto_load_on_upload", False)
-    monkeypatch.setattr(triton, "control_model", fake_control)
+    monkeypatch.setattr(triton, "control_model", control)
 
     async with client as c:
         response = await c.post(
@@ -340,7 +362,7 @@ async def test_auto_load_can_be_disabled(client, repo, monkeypatch):
         )
 
     assert response.status_code == 200
-    assert calls == []
+    control.assert_not_awaited()
     assert response.json()["autoLoad"] is None
 
 
@@ -360,3 +382,306 @@ async def test_staging_directory_is_not_listed_as_a_model(client, repo, monkeypa
         payload = (await c.get("/api/state")).json()
 
     assert [m["name"] for m in payload["models"]] == []
+
+
+async def test_index_serves_the_dashboard(client):
+    async with client as c:
+        response = await c.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+
+
+async def test_state_merges_servers_metrics_and_versions(client, monkeypatch):
+    async def with_servers():
+        return {
+            "servers": [
+                {"name": "t-0", "live": True, "models": [], "error": None},
+                {"name": "t-1", "live": False, "models": [], "error": "down"},
+            ],
+            "models": {
+                "ext": {
+                    "t-0": {"state": "READY", "version": "2", "reason": ""},
+                    "t-1": {"state": "UNAVAILABLE", "version": "1", "reason": ""},
+                }
+            },
+        }
+
+    async def with_metrics():
+        return {
+            "models": {"ext": {"throughput": 4.0}},
+            "error": "batchRatio: HTTPStatusError",
+            "configured": True,
+            "window": "5m",
+        }
+
+    monkeypatch.setattr(triton, "collect_state", with_servers)
+    monkeypatch.setattr(metrics, "collect_metrics", with_metrics)
+
+    async with client as c:
+        payload = (await c.get("/api/state")).json()
+
+    assert payload["serverNames"] == ["t-0", "t-1"]
+    assert payload["liveServerCount"] == 1
+    model = payload["models"][0]
+    assert model["versions"] == ["1", "2"]
+    assert model["loadedOn"] == ["t-0"]
+    assert model["knownToServers"] == ["t-0", "t-1"]
+    assert model["metrics"] == {"throughput": 4.0}
+    assert payload["prometheus"]["error"] == "batchRatio: HTTPStatusError"
+    assert payload["prometheus"]["window"] == "5m"
+
+
+async def test_state_survives_a_stray_unicode_digit_directory(client, make_model):
+    """'²'.isdigit() is True but int('²') raises."""
+    model = make_model("m")
+    (model / "²").mkdir()
+
+    async with client as c:
+        response = await c.get("/api/state")
+
+    assert response.status_code == 200
+    assert response.json()["models"][0]["versions"] == ["1"]
+
+
+async def test_lifespan_creates_the_repository_and_drops_stale_staging(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "fresh" / "models"
+    monkeypatch.setattr(settings, "repository_path", str(root))
+    cleaned = []
+    monkeypatch.setattr(repository, "cleanup_staging", lambda: cleaned.append(True))
+
+    async with LifespanManager(app):
+        assert root.is_dir()
+
+    assert cleaned == [True]
+
+
+async def test_lifespan_tolerates_an_unwritable_repository(
+    tmp_path, monkeypatch, caplog
+):
+    blocker = tmp_path / "file"
+    blocker.write_text("")
+    monkeypatch.setattr(settings, "repository_path", str(blocker / "models"))
+
+    with caplog.at_level(logging.WARNING, logger="model_manager"):
+        async with LifespanManager(app):
+            pass
+
+    assert "not writable" in caplog.text
+
+
+# --------------------------------------------------------------------------
+# Load / unload
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("action", ["load", "unload"])
+async def test_control_passes_the_requested_servers(client, monkeypatch, action):
+    control = AsyncMock(return_value=load_result(True, []))
+    monkeypatch.setattr(triton, "control_model", control)
+
+    async with client as c:
+        response = await c.post(f"/api/models/m/{action}", json={"servers": ["t-1"]})
+
+    assert response.status_code == 200
+    control.assert_awaited_once_with("m", action, ["t-1"])
+
+
+@pytest.mark.parametrize("body", [b"not json", b'["t-1"]'])
+async def test_control_without_a_usable_body_targets_every_server(
+    client, monkeypatch, body
+):
+    control = AsyncMock(return_value=load_result(True, []))
+    monkeypatch.setattr(triton, "control_model", control)
+
+    async with client as c:
+        await c.post("/api/models/m/load", content=body)
+
+    control.assert_awaited_once_with("m", "load", None)
+
+
+async def test_failed_control_is_a_bad_gateway(client, monkeypatch):
+    monkeypatch.setattr(
+        triton,
+        "control_model",
+        AsyncMock(return_value=load_result(False, [], error="boom")),
+    )
+
+    async with client as c:
+        response = await c.post("/api/models/m/load")
+
+    assert response.status_code == 502
+    assert response.json()["error"] == "boom"
+
+
+async def test_delete_of_a_missing_model_is_a_bad_request(client):
+    async with client as c:
+        response = await c.delete("/api/models/ghost")
+
+    assert response.status_code == 400
+    assert "not present" in response.json()["detail"]
+
+
+# --------------------------------------------------------------------------
+# Upload errors
+# --------------------------------------------------------------------------
+
+
+async def test_upload_larger_than_the_limit_is_refused(client, repo, monkeypatch):
+    monkeypatch.setattr(settings, "max_upload_bytes", 16)
+
+    async with client as c:
+        response = await c.post(
+            "/api/upload",
+            files={"files": ("m.zip", model_zip(), "application/zip")},
+            data={"name": "mymodel"},
+        )
+
+    assert response.status_code == 400
+    assert "size limit" in response.json()["detail"]
+    assert list((repo / repository.STAGING_DIRNAME).iterdir()) == []
+
+
+async def test_upload_over_an_existing_model_needs_overwrite(client, repo, make_model):
+    make_model("mymodel")
+
+    async with client as c:
+        response = await c.post(
+            "/api/upload",
+            files={"files": ("m.zip", model_zip(), "application/zip")},
+            data={"name": "mymodel"},
+        )
+
+    assert response.status_code == 400
+    assert "already exists" in response.json()["detail"]
+
+
+async def test_unexpected_upload_failure_is_a_server_error(client, monkeypatch):
+    def explode(*args):
+        raise ValueError("disk on fire")
+
+    monkeypatch.setattr(repository, "install_archive", explode)
+
+    async with client as c:
+        response = await c.post(
+            "/api/upload",
+            files={"files": ("m.zip", model_zip(), "application/zip")},
+            data={"name": "mymodel"},
+        )
+
+    assert response.status_code == 500
+    assert "disk on fire" in response.json()["detail"]
+
+
+async def test_upload_to_an_unwritable_repository_is_a_server_error(
+    client, tmp_path, monkeypatch
+):
+    blocker = tmp_path / "file"
+    blocker.write_text("")
+    monkeypatch.setattr(settings, "repository_path", str(blocker))
+
+    async with client as c:
+        response = await c.post(
+            "/api/upload",
+            files={"files": ("m.zip", model_zip(), "application/zip")},
+        )
+
+    assert response.status_code == 500
+    assert "not writable" in response.json()["detail"]
+
+
+# --------------------------------------------------------------------------
+# Directory upload (browser directory picker)
+# --------------------------------------------------------------------------
+
+CONFIG = b'name: "dirmodel"\nplatform: "onnxruntime_onnx"\n'
+
+
+def directory_files(*entries):
+    return [("files", (name.rsplit("/", 1)[-1], data)) for name, data in entries]
+
+
+async def test_directory_upload_takes_the_name_from_the_folder(client, repo):
+    entries = [("dirmodel/config.pbtxt", CONFIG), ("dirmodel/1/model.onnx", b"w")]
+
+    async with client as c:
+        response = await c.post(
+            "/api/upload",
+            files=directory_files(*entries),
+            data={"paths": json.dumps([name for name, _ in entries])},
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["uploaded"]["name"] == "dirmodel"
+    assert (repo / "dirmodel" / "1" / "model.onnx").read_bytes() == b"w"
+    assert not (repo / "dirmodel" / "dirmodel").exists()
+
+
+async def test_directory_upload_under_an_explicit_name(client, repo):
+    async with client as c:
+        response = await c.post(
+            "/api/upload",
+            files=directory_files(
+                ("x", CONFIG.replace(b"dirmodel", b"renamed")), ("y", b"w")
+            ),
+            data={
+                "name": "renamed",
+                "paths": json.dumps(["./config.pbtxt", "\\1\\model.onnx"]),
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    assert (repo / "renamed" / "1" / "model.onnx").is_file()
+
+
+async def test_invalid_directory_upload_is_structured_and_cleaned_up(client, repo):
+    entries = [("dirmodel/config.pbtxt", CONFIG), ("dirmodel/model.onnx", b"w")]
+
+    async with client as c:
+        response = await c.post(
+            "/api/upload",
+            files=directory_files(*entries),
+            data={"paths": json.dumps([name for name, _ in entries])},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["validation"]["errors"]
+    assert not (repo / "dirmodel").exists()
+    assert list((repo / repository.STAGING_DIRNAME).iterdir()) == []
+
+
+async def test_failed_directory_write_cleans_up_staging(client, repo):
+    async with client as c:
+        response = await c.post(
+            "/api/upload",
+            files=directory_files(("a", CONFIG), ("b", b"w")),
+            data={"name": "dirmodel", "paths": json.dumps(["ok", "../escape"])},
+        )
+
+    assert response.status_code == 400
+    assert "Unsafe path" in response.json()["detail"]
+    assert list((repo / repository.STAGING_DIRNAME).iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "data,detail",
+    [
+        ({"paths": "{not json"}, "Malformed"),
+        ({"paths": "7"}, "Malformed"),
+        ({"paths": json.dumps(["only-one"])}, "does not match"),
+        ({"paths": json.dumps(["config.pbtxt", "model.onnx"])}, "Provide a model name"),
+        ({}, "Provide a model name"),
+    ],
+)
+async def test_directory_upload_rejects_unusable_form_fields(client, data, detail):
+    async with client as c:
+        response = await c.post(
+            "/api/upload",
+            files=directory_files(("config.pbtxt", CONFIG), ("model.onnx", b"w")),
+            data=data,
+        )
+
+    assert response.status_code == 400
+    assert detail in response.json()["detail"]

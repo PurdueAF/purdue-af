@@ -1,9 +1,18 @@
-# Shared coverage config for all test suites (each runs from the repo root
-# via `uv run --project <suite>`). relative_files makes coverage record
+# Shared coverage config for the test project (run from the repo root via
+# `uv run --project tests`). relative_files makes coverage record
 # repo-rooted paths, which Codecov needs to map files to the repository tree.
+# source + include_namespace_packages also report files no test imports.
 [run]
 relative_files = true
+source = .
+omit =
+    tests/*
+    **/.venv/*
+    **/.pixi/*
+    docs/*
+    docker/dask-gateway-server/*
+    # Exercised by the container HEALTHCHECK at runtime, not by the test suite.
+    docker/purdue-af/jupyter/docker_healthcheck.py
 
 [report]
-# Exercised by the container HEALTHCHECK at runtime, not by the test suite.
-omit = docker/purdue-af/jupyter/docker_healthcheck.py
+include_namespace_packages = true

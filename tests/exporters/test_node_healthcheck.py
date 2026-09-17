@@ -73,7 +73,7 @@ class FakeBatchV1:
     def list_namespaced_job(self, namespace, label_selector=None):
         return types.SimpleNamespace(items=self.jobs)
 
-    def delete_namespaced_job(self, name, namespace, propagation_policy, body=None):
+    def delete_namespaced_job(self, name, namespace, propagation_policy):
         self.deleted.append(name)
 
 
@@ -104,9 +104,6 @@ def k8s(monkeypatch):
     # _core_v1/_batch_v1 are annotation-only declarations until _init_k8s runs
     monkeypatch.setattr(nh, "_core_v1", core, raising=False)
     monkeypatch.setattr(nh, "_batch_v1", batch, raising=False)
-    monkeypatch.setattr(
-        nh, "client", types.SimpleNamespace(V1DeleteOptions=lambda **kw: kw)
-    )
     monkeypatch.setattr(nh, "_af_nodes_cache", [])
     monkeypatch.setattr(nh, "_last_node_refresh", 0.0)
     nh._node_pools.clear()
@@ -235,6 +232,27 @@ def test_refresh_clears_gauges_for_departed_nodes(k8s):
         sample("af_node_mount_metadata_latency_ms", node="node-gone", node_pool="dev")
         is None
     )
+
+
+def test_refresh_skips_nodes_without_a_name(k8s):
+    unnamed = fake_node("x")
+    unnamed.metadata.name = None
+    k8s.core.nodes = [unnamed, fake_node("node-a")]
+    assert nh._list_af_nodes() == [("node-a", "prod", True)]
+
+
+def test_refresh_keeps_the_last_node_list_when_the_api_fails(k8s):
+    """A refused list must not empty the node set: that would drop every
+    node back to the legacy unlabelled fallback."""
+    nh._list_af_nodes()
+    nh._last_node_refresh = 0.0  # force a refresh
+
+    def boom(label_selector):
+        raise nh.ApiException("denied")
+
+    k8s.core.list_node = boom
+    assert nh._list_af_nodes() == [("node-a", "prod", True)]
+    assert nh._node_pools == {"node-a": "prod"}
 
 
 def test_pool_flip_dev_to_prod_drops_dev_series(k8s):
@@ -383,6 +401,17 @@ def test_completed_failure_on_ready_node_is_fresh_invalid(metrics_env):
     nh.update_metrics()
     assert sample("af_node_mount_valid") == 0
     assert sample("af_node_mount_result_fresh") == 1
+
+
+def test_failure_without_latencies_publishes_sentinels(metrics_env):
+    """A check that failed before it could time anything must not leave a
+    previous healthy latency on the chart."""
+    metrics_env("/depot/", "node-a", ok=False, timestamp=time.time())
+    nh.update_metrics()
+    assert sample("af_node_mount_valid") == 0
+    assert sample("af_node_mount_ping_ms") == nh._timeout_ping_ms()
+    assert sample("af_node_mount_metadata_latency_ms") == nh._timeout_metadata_ms()
+    assert sample("af_node_mount_data_rate_gbps") == 0.0
 
 
 def test_timeout_result_uses_worst_case_latencies(metrics_env):
@@ -601,6 +630,12 @@ def test_cleanup_legacy_jobs_deletes_everything_it_finds(k8s):
     assert k8s.batch.deleted == ["af-node-monitor-depot-a337-1", "x"]
 
 
+def test_cleanup_legacy_jobs_skips_unnamed_jobs(k8s):
+    k8s.batch.jobs = [fake_job(None), fake_job("x")]
+    nh._cleanup_legacy_jobs()
+    assert k8s.batch.deleted == ["x"]
+
+
 def test_cleanup_legacy_jobs_survives_api_errors(monkeypatch, k8s):
     monkeypatch.setattr(nh, "_k8s_ready", False)
     nh._cleanup_legacy_jobs()
@@ -761,6 +796,25 @@ def test_healthy_iteration_reports_results_available(metrics_env):
 
 
 # ── gauge clearing ────────────────────────────────────────────────────────────
+
+
+def test_clear_gauges_tolerates_a_never_published_label_set():
+    """Older prometheus_client raises KeyError from remove() for an unknown
+    label set; one of those must not stop the rest being cleared."""
+    labels = {
+        "mount_name": "/depot/",
+        "mount_path": "/depot/",
+        "node": "node-a",
+        "node_pool": "prod",
+    }
+    nh.mount_valid.labels(**labels).set(1)
+
+    class Strict:
+        def remove(self, *labelvalues):
+            raise KeyError(labelvalues)
+
+    nh._clear_gauges(labels, (Strict(), nh.mount_valid))
+    assert sample("af_node_mount_valid") is None
 
 
 def test_clear_gauges_holds_objects_not_names():

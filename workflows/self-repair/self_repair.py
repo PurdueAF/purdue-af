@@ -526,18 +526,26 @@ def _probe(model: str) -> tuple[bool, float, str]:
     for attempt in range(PROBE_RATE_LIMIT_RETRIES + 1):
         try:
             data = _genai_chat(probe_body(model_id), timeout=PROBE_TIMEOUT_S)
+            answer = str(data["choices"][0]["message"].get("content") or "").strip()
         except RateLimited as exc:
             if attempt < PROBE_RATE_LIMIT_RETRIES:
                 time.sleep(10)
                 continue
             return True, time.monotonic() - started, str(exc)[:120]
-        except (OSError, RuntimeError, KeyError, TypeError, ValueError) as exc:
+        except (
+            OSError,
+            RuntimeError,
+            KeyError,
+            IndexError,
+            AttributeError,
+            TypeError,
+            ValueError,
+        ) as exc:
             return (
                 False,
                 time.monotonic() - started,
                 f"{type(exc).__name__}: {exc}"[:160],
             )
-        answer = str(data["choices"][0]["message"].get("content") or "").strip()
         return True, time.monotonic() - started, f"answered {answer[:20]!r}"
     raise AssertionError("unreachable")
 
@@ -588,7 +596,7 @@ def _push_metrics(metrics: TickMetrics) -> None:
         with urllib.request.urlopen(request, timeout=10):
             pass
         _log(f"metrics: pushed tick outcome={metrics.outcome} to {PUSHGATEWAY_URL}")
-    except OSError as exc:
+    except Exception as exc:
         _log(f"metrics: push failed: {exc}")
 
 
@@ -601,7 +609,7 @@ def dedupe(incidents: list[Incident], model: str) -> list[Group]:
     _log(f"grouping {len(incidents)} incidents by root cause with {model}")
     try:
         reply = _ask_genai(grouping_prompt(incidents), model)
-    except RuntimeError as exc:
+    except Exception as exc:
         _log(f"dedupe: {exc}; every incident is its own group")
         reply = ""
     groups = parse_groups(reply, incidents)

@@ -186,6 +186,17 @@ def test_missing_child_script_is_a_failure(env, monkeypatch):
     assert pa.run_attempt(0) == "failed"
 
 
+def test_child_that_cannot_start_is_a_failure(env, monkeypatch):
+    def boom(*a, **kw):
+        raise OSError("exec format error")
+
+    monkeypatch.setattr(pa.subprocess, "Popen", boom)
+    pa.result_path().write_text(json.dumps({"ok": True}))
+
+    assert pa.run_attempt(0) == "failed"
+    assert json.loads(pa.result_path().read_text()) == {"ok": True}
+
+
 def test_cycle_survives_an_exploding_attempt(env, monkeypatch):
     """A crashed probe must stop advertising itself as Ready. Leaving that to
     main()'s handler would make the invariant depend on the caller."""
@@ -260,22 +271,33 @@ def test_reap_orphans_is_a_no_op_without_children(env):
     pa.reap_orphans()
 
 
-def test_reap_orphans_collects_an_abandoned_grandchild(env, monkeypatch):
-    """A child killed at its deadline reparents its own children here — this
-    process is PID 1 in the container and nothing else will reap them."""
-    monkeypatch.setattr(pa, "PROBE_DEADLINE_S", 0.3)
-    child(
-        monkeypatch,
-        env,
-        """
-        import subprocess
-        subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.5)"])
-        time.sleep(30)
-        """,
-    )
-    assert pa.run_attempt(0) == "timeout"
-    time.sleep(1.5)
-    pa.reap_orphans()  # must not raise, whatever the platform reparents
+def test_reap_orphans_collects_an_abandoned_child(env):
+    """Children abandoned at their deadline, and grandchildren reparented to
+    this process (PID 1 in the container), are reaped nowhere else. A child
+    still running is left alone rather than waited on."""
+    live = pa.subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    dead = pa.subprocess.Popen([sys.executable, "-c", "pass"])
+    deadline = time.time() + 10
+    while not _is_zombie(dead.pid) and time.time() < deadline:
+        time.sleep(0.05)
+
+    try:
+        pa.reap_orphans()
+
+        with pytest.raises(ChildProcessError):
+            os.waitpid(dead.pid, os.WNOHANG)
+        dead.returncode = 0  # already reaped; keep Popen.__del__ quiet
+        assert live.poll() is None
+    finally:
+        live.kill()
+        live.wait()
+
+
+def _is_zombie(pid):
+    state = pa.subprocess.run(
+        ["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True
+    ).stdout
+    return state.startswith("Z")
 
 
 def test_healthy_marker_is_idempotent(env):
@@ -317,15 +339,11 @@ def test_unkillable_child_does_not_block_the_verdict(env, monkeypatch):
         def __init__(self, *a, **kw):
             self._proc = real_popen(*a, **kw)
             self.pid = self._proc.pid
-            self._killed = False
 
         def communicate(self, timeout=None):
-            if self._killed:
-                raise pa.subprocess.TimeoutExpired(cmd="child", timeout=timeout)
             raise pa.subprocess.TimeoutExpired(cmd="child", timeout=timeout)
 
         def kill(self):
-            self._killed = True
             self._proc.kill()
 
     monkeypatch.setattr(pa.subprocess, "Popen", Unreapable)
@@ -389,3 +407,32 @@ def test_sweep_survives_an_unremovable_attempt(env, monkeypatch):
 
     monkeypatch.setattr(pa.Path, "unlink", boom)
     pa.sweep_attempts(keep=None)  # logs, does not raise
+
+
+def test_sweep_tolerates_an_attempt_that_vanished(env, monkeypatch, capsys):
+    pa.ATTEMPTS_DIR.mkdir(parents=True)
+    (pa.ATTEMPTS_DIR / "1-1.json").write_text("{}")
+
+    def gone(self):
+        raise FileNotFoundError(self)
+
+    monkeypatch.setattr(pa.Path, "unlink", gone)
+    pa.sweep_attempts(keep=None)
+    assert capsys.readouterr().err == ""
+
+
+def test_readiness_clear_survives_an_unwritable_runtime_dir(env, monkeypatch, capsys):
+    pa.HEALTHY.touch()
+
+    def boom(self):
+        raise PermissionError("read-only file system")
+
+    monkeypatch.setattr(pa.Path, "unlink", boom)
+    pa.set_healthy(False)  # logs, does not raise
+    assert "cannot clear" in capsys.readouterr().err
+
+
+def test_mount_name_is_required(monkeypatch):
+    monkeypatch.delenv("MOUNT_NAME", raising=False)
+    with pytest.raises(RuntimeError, match="MOUNT_NAME"):
+        pa._get_env("MOUNT_NAME", required=True)

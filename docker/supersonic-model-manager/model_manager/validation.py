@@ -85,6 +85,11 @@ class ValidationResult:
         }
 
 
+def is_version_name(name: str) -> bool:
+    # isdigit() alone accepts '²', which int() rejects
+    return name.isascii() and name.isdigit()
+
+
 def _strip_comments(text: str) -> str:
     return re.sub(r"#[^\n]*", "", text)
 
@@ -168,14 +173,12 @@ def validate_model_dir(model_dir: Path, model_name: str) -> ValidationResult:
                 "config.pbtxt sets neither 'platform' nor 'backend'; Triton will have "
                 "to infer the backend from the model file."
             )
-        if platform == "ensemble" and not (model_dir / "config.pbtxt").is_file():
-            result.errors.append("Ensemble models require a config.pbtxt.")
 
     # -- version directories ------------------------------------------------
     version_dirs = []
     for entry in entries:
         if entry.is_dir():
-            if entry.name.isdigit():
+            if is_version_name(entry.name):
                 version_dirs.append(entry)
             elif entry.name != "warmup":
                 result.warnings.append(

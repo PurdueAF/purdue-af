@@ -16,6 +16,8 @@ def fake_ldap(monkeypatch):
         "bases": [],
         "scopes": [],
         "hosts": [],
+        # (use_ssl, "start_tls" | "bind") per connection
+        "sessions": [],
         # DNs the directory does not hold at their own entry, so a base-scope
         # read of them comes back empty
         "missing_dns": set(),
@@ -23,10 +25,14 @@ def fake_ldap(monkeypatch):
 
     class FakeConnection:
         def __init__(self, server, version, authentication):
+            self.use_ssl = server
             self.found = False
 
         def start_tls(self):
-            pass
+            state["sessions"].append((self.use_ssl, "start_tls"))
+
+        def bind(self):
+            state["sessions"].append((self.use_ssl, "bind"))
 
         def search(self, search_base, search_filter, search_scope, attributes):
             state["searches"].append(search_filter)
@@ -53,7 +59,7 @@ def fake_ldap(monkeypatch):
 
     def fake_server(host, use_ssl, get_info):
         state["hosts"].append(host)
-        return None
+        return use_ssl
 
     ldap3 = types.ModuleType("ldap3")
     ldap3.BASE = "BASE"

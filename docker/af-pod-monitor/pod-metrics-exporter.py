@@ -22,7 +22,6 @@ here runs bounded, because subprocess's own timeout kills the child and then
 waits for it — which never returns on a dead mount.
 """
 
-import glob
 import logging
 import os
 import subprocess
@@ -100,7 +99,7 @@ def discover_username(home_entries: list[str]) -> str:
 
 def discover_directories() -> dict[str, str]:
     username = discover_username(os.listdir("/home/"))
-    return {"home": glob.glob("/home/*")[0], "work": f"/work/users/{username}/"}
+    return {"home": f"/home/{username}", "work": f"/work/users/{username}/"}
 
 
 def parse_df_output(df_output: str) -> tuple[int, int, float]:

@@ -24,8 +24,9 @@ def _check(header: str) -> bool:
         return False
     username, _, password = decoded.partition(":")
     # compare_digest on both fields so timing does not leak either one
-    user_ok = secrets.compare_digest(username, settings.auth_username)
-    pass_ok = secrets.compare_digest(password, settings.auth_password)
+    # bytes: compare_digest raises TypeError on non-ASCII str
+    user_ok = secrets.compare_digest(username.encode(), settings.auth_username.encode())
+    pass_ok = secrets.compare_digest(password.encode(), settings.auth_password.encode())
     return user_ok and pass_ok
 
 

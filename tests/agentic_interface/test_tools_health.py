@@ -51,10 +51,9 @@ def mock_prometheus(firing=(), recent=(), home_util=0.41, home_kb=25 * 1024 * 10
             result = list(recent)
         elif "af_home_dir_util" in query:
             result = [{"value": [NOW, str(home_util)]}] if home_util is not None else []
-        elif "af_home_dir_size_kb" in query:
-            result = [{"value": [NOW, str(home_kb)]}]
         else:
-            result = []
+            assert "af_home_dir_size_kb" in query
+            result = [{"value": [NOW, str(home_kb)]}]
         return Response(200, json={"data": {"result": result}})
 
     respx.get(PROM_URL).mock(side_effect=responder)
@@ -224,6 +223,19 @@ async def test_times_are_eastern_and_labelled(user_ctx):
     )
     assert " ET, " in out
     assert "(2h 00m ago)" in out  # the earliest instance dates the problem
+
+
+@pytest.mark.asyncio
+async def test_an_undatable_alert_is_still_reported(user_ctx):
+    missing = alert("AFMountInvalid", "warning", "data", summary="Depot is broken")
+    del missing["activeAt"]
+    garbled = alert("AFMountInvalid", "warning", "data")
+    garbled["activeAt"] = "yesterday"
+
+    out = await run(firing=[missing, garbled])
+
+    assert "Depot is broken (and 1 more)." in out
+    assert "Since" not in out
 
 
 @pytest.mark.asyncio

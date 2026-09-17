@@ -86,6 +86,11 @@ def test_response_detail_handles_empty_and_non_json_bodies():
     assert errors.json_body(_resp(200, json={"a": 1})) == {"a": 1}
 
 
+def test_response_detail_never_raises_on_an_unread_body():
+    resp = httpx.Response(502, stream=httpx.ByteStream(b"gateway down"))
+    assert errors.response_detail(resp) == ""
+
+
 # ── message builders ──────────────────────────────────────────────────────────
 
 

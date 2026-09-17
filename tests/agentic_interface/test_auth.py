@@ -303,3 +303,10 @@ async def test_verifier_returns_none_for_rejected_token_and_raises_for_hub_outag
     respx.get(HUB_USER_URL).mock(side_effect=httpx.ConnectError("boom"))
     with pytest.raises(auth.HubUnavailable):
         await auth.HubTokenVerifier().verify_token("tok-2")
+
+
+def test_require_user_outside_the_authenticated_path_is_a_named_failure():
+    from context import require_user
+
+    with pytest.raises(RuntimeError, match="outside the authenticated request path"):
+        require_user()

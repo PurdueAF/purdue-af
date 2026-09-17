@@ -5,7 +5,7 @@ component that no longer exists — fails here instead of quietly rendering
 `resource not found` in the README."""
 
 import json
-import re
+import subprocess
 
 import pytest
 import yaml
@@ -228,15 +228,26 @@ def test_af_image_version_is_read_from_values_yaml(cs):
 
 
 def test_agentic_version_is_read_from_the_deployment(cs):
-    """The regex must track the real manifest: a `latest` pin (pre-release)
-    reads as None; a released pin reads back exactly."""
+    """Both release scripts must read the same pin off the real manifest."""
+    bump = load_script(
+        REPO / ".github" / "workflows" / "bump-agentic-version.py",
+        "bump_agentic_version",
+    )
     text = (REPO / cs.AGENTIC_DEPLOYMENT).read_text()
-    version = cs.agentic_interface_version()
-    if re.search(r"/agentic-interface:latest\s*$", text, re.MULTILINE):
-        assert version is None
-    else:
-        assert version is not None, "image pin no longer matches the regex"
-        assert f"/agentic-interface:{version}" in text
+    assert (cs.agentic_interface_version() or "0.0.0") == bump.current_version(text)
+
+
+@pytest.mark.parametrize(
+    "tag,expected", [("latest", None), ("1.4.2", "1.4.2"), ("1.4.2-rc1", None)]
+)
+def test_agentic_version_parsing(cs, monkeypatch, tmp_path, tag, expected):
+    manifest = tmp_path / cs.AGENTIC_DEPLOYMENT
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(
+        f"        image: reg.example/purdueaf/agentic-interface:{tag}\n"
+    )
+    monkeypatch.setattr(cs, "REPO", tmp_path)
+    assert cs.agentic_interface_version() == expected
 
 
 def test_versioned_badge_leads_with_the_version(cs):
@@ -248,9 +259,163 @@ def test_versioned_badge_leads_with_the_version(cs):
     assert cs.badge("x", "deployed", 0)["message"] == "deployed"
 
 
-def test_latest_platform_tag_is_calver(cs):
-    tag = cs.latest_platform_tag()
-    if tag is None:
-        pytest.skip("no platform tags in this checkout")
-    year, month, seq = (int(p) for p in tag.split("."))
-    assert year >= 2024 and 1 <= month <= 12 and seq >= 0
+def test_latest_platform_tag_orders_numerically(cs, monkeypatch):
+    """2026.10.1 is newer than 2026.9.5; non-CalVer tags are ignored."""
+    tags = "2026.9.5\n2026.10.1\n2026.2.30\n2x-not-calver\n2026.11\n"
+    monkeypatch.setattr(cs, "git", lambda *a: tags)
+    assert cs.latest_platform_tag() == "2026.10.1"
+    monkeypatch.setattr(cs, "git", lambda *a: "")
+    assert cs.latest_platform_tag() is None
+
+
+def test_ref_exists_maps_git_failure_to_false(cs, monkeypatch):
+    def fail(*args):
+        raise subprocess.CalledProcessError(1, "git")
+
+    monkeypatch.setattr(cs, "git", fail)
+    assert cs.ref_exists("nope") is False
+    monkeypatch.setattr(cs, "git", lambda *a: "abc123")
+    assert cs.ref_exists("main") is True
+
+
+def test_commits_touching_counts_nonblank_lines(cs, monkeypatch):
+    calls = []
+
+    def fake_git(*args):
+        calls.append(args)
+        return "abc one\n\ndef two\n"
+
+    monkeypatch.setattr(cs, "git", fake_git)
+    assert cs.commits_touching("base", "head", ["apps/x", "docker/y"]) == 2
+    assert calls == [("log", "--oneline", "base..head", "--", "apps/x", "docker/y")]
+
+
+def test_git_runs_against_the_repo(cs):
+    assert cs.git("rev-parse", "--show-toplevel") == str(REPO)
+
+
+def test_paths_outside_the_repo_are_dropped(cs, monkeypatch, tmp_path):
+    repo = tmp_path / "repo"
+    (repo / "deploy").mkdir(parents=True)
+    (repo / "deploy" / "k.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "resources": ["../apps/a/hr.yaml", "../../elsewhere.yaml"],
+                "configMapGenerator": [
+                    {"name": "only-outside", "files": ["x=../../outside.py"]},
+                    {"name": "a-config", "files": ["v.yaml=../apps/a/values.yaml"]},
+                ],
+            }
+        )
+    )
+    monkeypatch.setattr(cs, "REPO", repo)
+    resources, generators = cs._read_kustomization(cs.Path("deploy/k.yaml"))
+    assert resources == ["apps/a/hr.yaml"]
+    assert generators == [("a-config", ["apps/a/values.yaml"])]
+
+
+# --- main -----------------------------------------------------------------
+
+
+@pytest.fixture()
+def fake_repo(cs, monkeypatch):
+    """Refs, components and commit counts for main(), no git involved."""
+    refs = {"origin/main", "origin/main-validated", "v0.13.7"}
+    components = {
+        "core": {"apps/storage": ["apps/storage/pvc.yaml"]},
+        "experimental": {
+            "apps/storage": ["apps/storage/pvc.yaml"],
+            "apps/interlink/hammer": ["apps/interlink/hammer/values.yaml"],
+        },
+    }
+    # (deployed ref, first path) -> commits; unlisted pairs are 0
+    drift = {
+        ("2026.9.1", "apps/storage/pvc.yaml"): 2,
+        ("origin/main-validated", "apps/interlink/hammer/values.yaml"): 1,
+        ("v0.13.7", "docker/purdue-af"): 3,
+        ("origin/main-validated", "docker/af-pod-monitor"): 1,
+    }
+    monkeypatch.setattr(cs, "ref_exists", lambda ref: ref in refs)
+    monkeypatch.setattr(cs, "latest_platform_tag", lambda: "2026.9.1")
+    monkeypatch.setattr(cs, "discover_components", lambda ch: components[ch])
+    monkeypatch.setattr(cs, "image_paths", lambda name: [f"docker/{name}"])
+    monkeypatch.setattr(cs, "af_image_version", lambda: "0.13.7")
+    monkeypatch.setattr(cs, "agentic_interface_version", lambda: "0.2.7")
+    monkeypatch.setattr(
+        cs, "commits_touching", lambda base, head, paths: drift.get((base, paths[0]), 0)
+    )
+    monkeypatch.setattr(cs, "git", lambda *a: "abc1234")
+    return refs
+
+
+def run_main(cs, monkeypatch, *argv):
+    monkeypatch.setattr("sys.argv", ["component-status.py", *map(str, argv)])
+    return cs.main()
+
+
+def read_badges(out):
+    return {p.stem: json.loads(p.read_text()) for p in out.glob("*.json")}
+
+
+def test_main_writes_a_badge_per_row(cs, fake_repo, monkeypatch, tmp_path, capsys):
+    out = tmp_path / "badges"
+    assert run_main(cs, monkeypatch, "--out", out, "--ci-state", "failure") == 0
+    badges = read_badges(out)
+
+    assert badges["core-storage"]["message"] == "awaiting release · 2"
+    assert badges["experimental-storage"]["message"] == "deployed"
+    hammer = badges["experimental-interlink-hammer"]
+    assert (hammer["label"], hammer["message"]) == ("interlink-hammer", "failed CI · 1")
+    assert badges["image-purdue-af"]["message"] == "awaiting release · 3"
+    # the agentic release tag is missing: measured against main-validated,
+    # and no version is claimed for it
+    assert badges["image-agentic-interface"]["message"] == "deployed"
+    assert badges["image-af-pod-monitor"]["message"] == "failed CI · 1"
+    assert set(badges) >= {f"image-{name}" for name in cs.CI_IMAGES}
+    assert badges["_pending"]["message"] == "4 components"
+    assert badges["_pending"]["color"] == "blue"
+
+    table = capsys.readouterr().out
+    assert "platform tag: 2026.9.1 · main: abc1234" in table
+    assert "| image | `purdue-af` | awaiting release | 3 |" in table
+    assert "| experimental | `apps/storage` | deployed |  |" in table
+
+
+def test_main_leads_the_agentic_badge_with_its_release(
+    cs, fake_repo, monkeypatch, tmp_path
+):
+    fake_repo.add("agentic-interface-v0.2.7")
+    out = tmp_path / "badges"
+    run_main(cs, monkeypatch, "--out", out)
+    assert read_badges(out)["image-agentic-interface"]["message"] == "0.2.7 · deployed"
+
+
+def test_main_skips_an_unreleased_af_image(cs, fake_repo, monkeypatch, tmp_path):
+    fake_repo.discard("v0.13.7")
+    out = tmp_path / "badges"
+    run_main(cs, monkeypatch, "--out", out)
+    assert "image-purdue-af" not in read_badges(out)
+
+
+def test_main_all_deployed_before_the_first_publish(
+    cs, fake_repo, monkeypatch, tmp_path, capsys
+):
+    """No main-validated and no platform tag yet: main is the boundary, core
+    has no rows, and nothing is pending."""
+    fake_repo.clear()
+    fake_repo.add("main")
+    monkeypatch.setattr(cs, "latest_platform_tag", lambda: None)
+    out = tmp_path / "badges"
+    run_main(cs, monkeypatch, "--out", out)
+    badges = read_badges(out)
+    assert not any(slug.startswith("core-") for slug in badges)
+    assert badges["_pending"]["message"] == "none"
+    assert badges["_pending"]["color"] == "brightgreen"
+    assert "| core |" not in capsys.readouterr().out
+
+
+def test_main_without_out_only_prints(cs, fake_repo, monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    run_main(cs, monkeypatch)
+    assert not list(tmp_path.iterdir())
+    assert "| channel | component | status | commits ahead |" in capsys.readouterr().out

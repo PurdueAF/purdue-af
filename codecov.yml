@@ -26,12 +26,20 @@ component_management:
       paths:
         - "docker/af-pod-monitor/**"
         - "docker/af-node-monitor/**"
+    - component_id: supersonic-model-manager
+      name: SuperSONIC model manager
+      paths: ["docker/supersonic-model-manager/**"]
+    - component_id: workflows
+      name: Flyte workflows
+      paths: ["workflows/**"]
     - component_id: scripts
       name: Standalone scripts
       paths:
-        - "apps/af-utils/af-users-graph/**"
-        - "docker/purdue-af/jupyter/**"
-        - ".github/workflows/bump-af-version.py"
+        - "apps/af-utils/**"
+        - "docker/purdue-af/**"
+        - "helm/sonic-ray/files/**"
+        - "pixi/**"
+        - ".github/workflows/**"
 
 # One concise PR comment, updated in place.
 comment:

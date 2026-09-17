@@ -35,7 +35,7 @@ def apply_block(existing: str, section: str) -> str:
     """Replace the managed block in `existing`, or append it."""
     block = render(section)
     start = existing.find(BEGIN)
-    end = existing.find(END)
+    end = existing.find(END, start)
 
     if start == -1 or end == -1 or end < start:
         if not existing.strip():
@@ -56,7 +56,7 @@ def strip_block(existing: str) -> str | None:
     from "the block was all it held", which comes back as an empty string.
     """
     start = existing.find(BEGIN)
-    end = existing.find(END)
+    end = existing.find(END, start)
     if start == -1 or end == -1 or end < start:
         return None
     head = existing[:start].rstrip("\n")

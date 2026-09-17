@@ -584,6 +584,86 @@ def test_markers_warn_that_edits_are_overwritten(managed_block):
     assert "overwrit" in managed_block.BEGIN.lower()
 
 
+def test_stray_end_marker_before_the_block_does_not_duplicate_it(managed_block):
+    """Regression: END was searched from the file start, so an END above the
+    block read as `end < start` and every session appended another copy."""
+    existing = f"# Mine\n{managed_block.END}\n"
+    once = managed_block.apply_block(existing, SECTION)
+    twice = managed_block.apply_block(once, SECTION)
+    assert once == twice
+    assert twice.count(managed_block.BEGIN) == 1
+    assert managed_block.strip_block(twice) == existing
+
+
+def test_strip_block_leaves_an_unmanaged_file_alone(managed_block):
+    assert managed_block.strip_block("# Mine\n") is None
+    assert (
+        managed_block.strip_block(f"{managed_block.END}\n{managed_block.BEGIN}") is None
+    )
+
+
+def test_strip_block_keeps_content_on_both_sides(managed_block):
+    text = managed_block.apply_block("head\n", SECTION) + "\ntail\n"
+    assert managed_block.strip_block(text) == "head\n\ntail\n"
+    assert managed_block.strip_block(managed_block.apply_block("", SECTION)) == ""
+
+
+def run_managed_block(managed_block, monkeypatch, *argv):
+    monkeypatch.setattr("sys.argv", ["managed-block.py", *map(str, argv)])
+    return managed_block.main()
+
+
+def test_cli_writes_then_reports_current(managed_block, monkeypatch, tmp_path, capsys):
+    section = tmp_path / "section.md"
+    section.write_text(SECTION)
+    target = tmp_path / "new" / "dir" / "AGENTS.md"
+    assert run_managed_block(managed_block, monkeypatch, section, target) == 0
+    assert "AF content." in target.read_text()
+    assert "updated" in capsys.readouterr().out
+    run_managed_block(managed_block, monkeypatch, section, target)
+    assert "already current" in capsys.readouterr().out
+
+
+def test_cli_rejects_bad_arguments(managed_block, monkeypatch):
+    with pytest.raises(SystemExit):
+        run_managed_block(managed_block, monkeypatch, "only-one")
+
+
+def test_cli_remove(managed_block, monkeypatch, tmp_path, capsys):
+    target = tmp_path / "AGENTS.md"
+    run_managed_block(managed_block, monkeypatch, "--remove", target)
+    assert "nothing to remove" in capsys.readouterr().out
+
+    target.write_text("# Mine\n")
+    run_managed_block(managed_block, monkeypatch, "--remove", target)
+    assert target.read_text() == "# Mine\n"
+    assert "left alone" in capsys.readouterr().out
+
+    target.write_text(managed_block.apply_block("# Mine\n", SECTION))
+    run_managed_block(managed_block, monkeypatch, "--remove", target)
+    assert target.read_text() == "# Mine\n"
+
+    target.write_text(managed_block.apply_block("", SECTION))
+    run_managed_block(managed_block, monkeypatch, "--remove", target)
+    assert not target.exists()
+
+
+def test_prepare_skill_cli_writes_the_destination(prepare_skill, monkeypatch, tmp_path):
+    dest = tmp_path / "out" / "SKILL.md"
+    monkeypatch.setattr(
+        "sys.argv", ["prepare-skill.py", str(REPO / SKILL_SOURCE), str(dest)]
+    )
+    assert prepare_skill.main() == 0
+    text = dest.read_text()
+    assert "Already set up" in text and text.endswith("\n")
+
+
+def test_prepare_skill_cli_rejects_bad_arguments(prepare_skill, monkeypatch):
+    monkeypatch.setattr("sys.argv", ["prepare-skill.py"])
+    with pytest.raises(SystemExit):
+        prepare_skill.main()
+
+
 def test_startup_hook_targets_every_harness_context_file():
     """One file per harness, each the path that harness reads automatically at
     user scope — no skill, no prompt, no per-project setup."""
@@ -799,7 +879,6 @@ def test_hooks_have_no_top_level_exit(hook):
     including on error paths, where it turns a recoverable problem into a
     session that never starts."""
     path = HOOK_DIR / hook
-    if not path.is_file():
-        pytest.skip(f"{hook} not present")
+    assert path.is_file(), f"{hook} is gone; drop it from STARTUP_HOOKS"
     offenders = _top_level_exits(path.read_text())
     assert not offenders, f"{hook} exits the sourcing shell at {offenders}"
