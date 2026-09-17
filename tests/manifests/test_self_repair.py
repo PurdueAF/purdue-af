@@ -198,7 +198,11 @@ def test_workflow_names_its_runs_and_needs_no_trigger():
         "the vendored fork is off limits"
     )
     assert "_python_defects(repo, paths)" in workflow, "no PR without a pyflakes pass"
-    assert "silences(_git(" in workflow, "a log-level change is not a fix"
+    assert "silences(diff)" in workflow, "a log-level change is not a fix"
+    assert "removes_error_handling(diff)" in workflow, (
+        "deleting the error path is not a fix either"
+    )
+    assert "_unit_tests(repo, " in workflow, "no PR without the suite CI runs"
     assert "context=_context(evidence, key.container)" in workflow, (
         "the agent sees the surrounding lines"
     )
