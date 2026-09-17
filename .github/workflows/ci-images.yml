@@ -121,7 +121,7 @@ jobs:
       # space isn't needed: android/dotnet/haskell/tool-cache free enough.
       - name: Free runner disk space
         if: env.AF_EXISTS != 'true'
-        uses: jlumbroso/free-disk-space@3f13feab2962a87273d379ebc36ea159527e6cc9 # v1.3.2 # Renovate pins to digest
+        uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0 # Renovate pins to digest
         with:
           tool-cache: true
           docker-images: false
@@ -327,7 +327,7 @@ jobs:
         run: echo "reusing ${{ steps.meta.outputs.image }}" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Free runner disk space
         if: steps.meta.outputs.exists != 'true' && matrix.free_disk
-        uses: jlumbroso/free-disk-space@3f13feab2962a87273d379ebc36ea159527e6cc9 # v1.3.2 # Renovate pins to digest
+        uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0 # Renovate pins to digest
         with:
           tool-cache: true
           docker-images: false
