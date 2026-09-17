@@ -74,7 +74,7 @@ jobs:
       # processing rejections exit 0 regardless, so fail_ci_if_error would
       # not catch them anyway — staleness shows up on the badge/dashboard.
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@0b35c9ecc4f0529d0eb674914510c22f85b196b4 # v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
         with:
           files: coverage.xml
           use_oidc: true
