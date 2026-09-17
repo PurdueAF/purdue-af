@@ -1,10 +1,11 @@
 """Wiring of apps/self-repair, workflows/self-repair and docker/self-repair."""
 
+import json
 import re
 from pathlib import Path
 
 import yaml
-from common import REPO
+from common import REPO, load_script
 
 APP = REPO / "apps" / "self-repair"
 WORKFLOW = REPO / "workflows" / "self-repair"
@@ -170,7 +171,7 @@ def test_workflow_names_its_runs_and_needs_no_trigger():
     ):
         assert call in workflow, call
     assert "flyte.with_runcontext(name=" in workflow
-    assert 'ignored_inputs=("evidence",)' in workflow, (
+    assert 'ignored_inputs=("evidence", "model")' in workflow, (
         "analyze is cached on the key alone"
     )
     assert "analyze_within_budget(" in workflow, "the budget counts fresh analyses only"
@@ -179,7 +180,12 @@ def test_workflow_names_its_runs_and_needs_no_trigger():
         "the agent keeps the web; the prompt and the timeout keep it on time"
     )
     assert "AGENT_BUDGET_MINUTES" in workflow
-    assert 'os.environ.get("SELF_REPAIR_MODEL", "genai/gemma4:26b-a4b")' in workflow
+    defaults = re.search(r'"SELF_REPAIR_MODELS",\s*"([^"]+)"', workflow).group(1)
+    assert defaults.split(",") == [
+        "genai/gemma4:26b-a4b",
+        "genai/gpt-oss:120b",
+        "genai/llama4:latest",
+    ]
     assert "from genai_proxy import Proxy" in workflow, (
         "opencode must not talk to GenAI Studio directly"
     )
@@ -223,3 +229,70 @@ def test_image_is_built_published_and_pinned_consistently():
         "Renovate matches this exact form"
     )
     assert (REPO / "docker/self-repair/uv.lock").is_file()
+
+
+PROMETHEUS = REPO / "apps/monitoring/prometheus/values.yaml"
+DASHBOARD = REPO / "apps/monitoring/grafana/dashboards/self-repair.json"
+DASHBOARDS = REPO / "apps/monitoring/grafana/dashboards"
+
+
+def test_metrics_reach_the_af_prometheus_through_its_pushgateway():
+    values = yaml.safe_load(PROMETHEUS.read_text())
+    gateway = values["prometheus-pushgateway"]
+    assert gateway["enabled"] is True
+    assert gateway["nodeSelector"] == {"cms-af-prod": "true"}, "every AF workload"
+    jobs = {
+        j["job_name"]: j
+        for j in values["serverFiles"]["prometheus.yml"]["scrape_configs"]
+    }
+    job = jobs["self-repair"]
+    assert job["honor_labels"] is True, "the pushed job label must survive"
+    (target,) = job["static_configs"][0]["targets"]
+    workflow = (WORKFLOW / "self_repair.py").read_text()
+    host, port = target.split(":")
+    assert f"http://{host}.cms.svc.cluster.local:{port}" in workflow, (
+        "the workflow must push where Prometheus scrapes"
+    )
+    assert 'METRICS_JOB = "self-repair"' in workflow
+    assert values["scrapeConfigs"]["prometheus-pushgateway"]["enabled"] is False, (
+        "the chart's discovery-based job needs cluster RBAC this server lacks"
+    )
+
+
+def test_private_grafana_shows_the_workflow():
+    dashboard = json.loads(DASHBOARD.read_text())
+    assert dashboard["uid"] == "purdue-af-self-repair"
+    uids = [json.loads(p.read_text())["uid"] for p in DASHBOARDS.glob("*.json")]
+    assert uids.count(dashboard["uid"]) == 1
+    for overlay in ("core-production", "core-geddes2"):
+        kustomization = yaml.safe_load(
+            (REPO / "deploy" / overlay / "kustomization.yaml").read_text()
+        )
+        (private,) = [
+            g
+            for g in kustomization["configMapGenerator"]
+            if g["name"] == "grafana-private-dashboards"
+        ]
+        assert (
+            "../../apps/monitoring/grafana/dashboards/self-repair.json"
+            in private["files"]
+        )
+        assert not any(
+            "self-repair.json" in f
+            for g in kustomization["configMapGenerator"]
+            if g["name"] != "grafana-private-dashboards"
+            for f in g.get("files", [])
+        ), "private dashboard only"
+
+    triage = load_script(WORKFLOW / "triage.py", "self_repair_triage_for_dashboard")
+    panels = [p for p in dashboard["panels"] if p["type"] != "row"]
+    assert panels
+    for panel in panels:
+        assert panel["datasource"] == {"type": "prometheus", "uid": "prometheus"}
+        for target in panel["targets"]:
+            used = set(re.findall(r"self_repair_[a-z_]+", target["expr"]))
+            assert used and used <= set(triage.METRICS), (panel["title"], used)
+        stacking = (
+            panel["fieldConfig"]["defaults"].get("custom", {}).get("stacking", {})
+        )
+        assert stacking.get("mode", "none") == "none", panel["title"]

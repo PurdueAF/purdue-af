@@ -188,6 +188,8 @@ class Summary:
     incidents: int
     fixable: int
     pull_requests: list[str] = field(default_factory=list)
+    model: str = ""
+    outcome: str = "ok"  # one of OUTCOMES
 
 
 # ── Loki ───────────────────────────────────────────────────────────────────────
@@ -565,7 +567,9 @@ class Row:
     members: int = 1
 
 
-def report_html(tick: str, window: str, rows: list[Row]) -> str:
+def report_html(
+    tick: str, window: str, rows: list[Row], model: str = "", note: str = ""
+) -> str:
     """The triage run's report tab: the verdict count first, then one line per
     incident, fixable ones on top. Plain HTML, inserted into the console's div."""
     analyzed = [r for r in rows if r.status in ("fixable", "not fixable")]
@@ -580,7 +584,10 @@ def report_html(tick: str, window: str, rows: list[Row]) -> str:
         f"<h2>{len(fixable)} of {len(analyzed)} analyzed incidents fixable in this repository</h2>",
         f"<p>tick <code>{e(tick)}</code>, window {e(window)} UTC: {len(rows)} incidents, "
         f"{len(analyzed)} analyzed ({hits} from cache), {failed} failed, "
-        f"{sum(bool(r.pull_request) for r in rows)} pull request(s)</p>",
+        f"{sum(bool(r.pull_request) for r in rows)} pull request(s)"
+        + (f", model <code>{e(model)}</code>" if model else "")
+        + "</p>",
+        *([f"<p><b>{e(note)}</b></p>"] if note else []),
         "<table><thead><tr><th>verdict</th><th>conf.</th><th>incident</th><th>x</th>"
         "<th>title</th><th>component</th><th>PR</th><th>reason</th></tr></thead><tbody>",
     ]
@@ -943,3 +950,240 @@ def pull_request_body(
 ---
 Opened by the [self-repair](workflows/self-repair) workflow, Flyte run `{run_name}`, model `{model}`. Draft on purpose: a human reviews before this merges.
 """
+
+
+# ── Model choice ───────────────────────────────────────────────────────────────
+
+
+@dataclass
+class Probe:
+    model: str
+    available: bool
+    seconds: float
+    detail: str = ""
+
+
+def probe_body(model_id: str) -> dict[str, Any]:
+    """The smallest completion that proves a model is answering."""
+    return {
+        "model": model_id,
+        "messages": [{"role": "user", "content": "Reply with OK."}],
+        "stream": False,
+        "max_tokens": 8,
+    }
+
+
+def pick_model(
+    models: Iterable[str], probe: Callable[[str], tuple[bool, float, str]]
+) -> tuple[str | None, list[Probe]]:
+    """The first model that answers its probe, in the given order, and what
+    every probe up to it said. Nothing after it is probed: the tick has its
+    model. None when no model answers."""
+    probes: list[Probe] = []
+    for model in models:
+        available, seconds, detail = probe(model)
+        probes.append(Probe(model, available, seconds, detail))
+        if available:
+            return model, probes
+    return None, probes
+
+
+# ── Metrics ────────────────────────────────────────────────────────────────────
+# One push per tick to the AF Prometheus pushgateway (job `self-repair`). The
+# `_total` series are counters carried across ticks: the previous values are
+# read back from the gateway and re-pushed incremented, so `increase()` works
+# in Grafana. The `last_tick_*` and `model_*` gauges describe the newest tick.
+
+OUTCOMES = ("ok", "no_model", "failed")
+RESULTS = ("fresh", "cache_hit", "failed")
+
+METRICS: dict[str, tuple[str, str]] = {
+    "self_repair_ticks_total": ("counter", "Ticks by outcome"),
+    "self_repair_analyses_total": ("counter", "Analyses by result"),
+    "self_repair_fixable_total": (
+        "counter",
+        "Incidents judged fixable in this repository",
+    ),
+    "self_repair_pull_requests_total": ("counter", "Draft pull requests opened"),
+    "self_repair_fix_failures_total": (
+        "counter",
+        "Fix attempts that ended without a pull request",
+    ),
+    "self_repair_model_probes_total": ("counter", "Model probes by model and answer"),
+    "self_repair_last_tick_timestamp_seconds": (
+        "gauge",
+        "When the newest tick started",
+    ),
+    "self_repair_last_tick_duration_seconds": (
+        "gauge",
+        "How long the newest tick took",
+    ),
+    "self_repair_last_tick_outcome": ("gauge", "1 for the newest tick's outcome"),
+    "self_repair_last_tick_error_lines": (
+        "gauge",
+        "Error lines read by the newest tick",
+    ),
+    "self_repair_last_tick_incidents": (
+        "gauge",
+        "Distinct incidents in the newest tick",
+    ),
+    "self_repair_last_tick_groups": ("gauge", "Root-cause groups in the newest tick"),
+    "self_repair_last_tick_analyses": (
+        "gauge",
+        "Analyses in the newest tick by result",
+    ),
+    "self_repair_last_tick_fixable": ("gauge", "Fixable incidents in the newest tick"),
+    "self_repair_last_tick_pull_requests": (
+        "gauge",
+        "Pull requests opened by the newest tick",
+    ),
+    "self_repair_model_available": ("gauge", "1 when the model answered its probe"),
+    "self_repair_model_probe_seconds": ("gauge", "Probe latency in the newest tick"),
+    "self_repair_model_selected": ("gauge", "1 for the model the newest tick ran on"),
+}
+
+
+@dataclass
+class TickMetrics:
+    started: float  # unix seconds
+    outcome: str
+    model: str
+    models: list[str]
+    probes: list[Probe] = field(default_factory=list)
+    duration: float = 0.0
+    error_lines: int = 0
+    incidents: int = 0
+    groups: int = 0
+    analyses: dict[str, int] = field(default_factory=dict)  # result -> count
+    fixable: int = 0
+    pull_requests: int = 0
+    fix_failures: int = 0
+
+
+Labels = tuple[tuple[str, str], ...]
+Series = tuple[str, Labels]
+
+_SAMPLE = re.compile(r"^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*\})?\s+(\S+)")
+_LABEL = re.compile(r'([a-zA-Z_][a-zA-Z0-9_]*)="((?:[^"\\]|\\.)*)"')
+_GATEWAY_LABELS = ("job", "instance")
+
+
+def parse_counters(text: str) -> dict[Series, float]:
+    """Our counters in a pushgateway /metrics page; the labels the gateway
+    adds (job, instance) are dropped so the series match what we push."""
+    counters: dict[Series, float] = {}
+    for line in text.splitlines():
+        match = _SAMPLE.match(line)
+        if not match:
+            continue
+        name, raw_labels, value = match.groups()
+        if name not in METRICS or METRICS[name][0] != "counter":
+            continue
+        labels = tuple(
+            (k, v.encode().decode("unicode_escape"))
+            for k, v in _LABEL.findall(raw_labels or "")
+            if k not in _GATEWAY_LABELS
+        )
+        try:
+            counters[(name, tuple(sorted(labels)))] = float(value)
+        except ValueError:
+            continue
+    return counters
+
+
+def _labels(labels: Labels) -> str:
+    if not labels:
+        return ""
+    escaped = ",".join(
+        f'{k}="{v.replace(chr(92), chr(92) * 2).replace(chr(34), chr(92) + chr(34))}"'
+        for k, v in labels
+    )
+    return "{" + escaped + "}"
+
+
+def exposition(metrics: TickMetrics, previous: dict[Series, float]) -> str:
+    """The text to PUT to the gateway: every counter it already had, plus this
+    tick's increments, plus this tick's gauges. Only names in METRICS."""
+    counters = dict(previous)
+
+    def add(name: str, labels: Labels, amount: float) -> None:
+        key = (name, tuple(sorted(labels)))
+        counters[key] = counters.get(key, 0.0) + amount
+
+    add("self_repair_ticks_total", (("outcome", metrics.outcome),), 1)
+    for result, count in metrics.analyses.items():
+        add("self_repair_analyses_total", (("result", result),), count)
+    add("self_repair_fixable_total", (), metrics.fixable)
+    add("self_repair_pull_requests_total", (), metrics.pull_requests)
+    add("self_repair_fix_failures_total", (), metrics.fix_failures)
+    for probe in metrics.probes:
+        add(
+            "self_repair_model_probes_total",
+            (("model", probe.model), ("available", str(probe.available).lower())),
+            1,
+        )
+
+    gauges: list[tuple[str, Labels, float]] = [
+        ("self_repair_last_tick_timestamp_seconds", (), metrics.started),
+        ("self_repair_last_tick_duration_seconds", (), metrics.duration),
+        ("self_repair_last_tick_error_lines", (), metrics.error_lines),
+        ("self_repair_last_tick_incidents", (), metrics.incidents),
+        ("self_repair_last_tick_groups", (), metrics.groups),
+        ("self_repair_last_tick_fixable", (), metrics.fixable),
+        ("self_repair_last_tick_pull_requests", (), metrics.pull_requests),
+    ]
+    for outcome in OUTCOMES:
+        gauges.append(
+            (
+                "self_repair_last_tick_outcome",
+                (("outcome", outcome),),
+                float(outcome == metrics.outcome),
+            )
+        )
+    for result in RESULTS:
+        gauges.append(
+            (
+                "self_repair_last_tick_analyses",
+                (("result", result),),
+                metrics.analyses.get(result, 0),
+            )
+        )
+    for probe in metrics.probes:
+        gauges.append(
+            (
+                "self_repair_model_available",
+                (("model", probe.model),),
+                float(probe.available),
+            )
+        )
+        gauges.append(
+            (
+                "self_repair_model_probe_seconds",
+                (("model", probe.model),),
+                probe.seconds,
+            )
+        )
+    for model in metrics.models:
+        gauges.append(
+            (
+                "self_repair_model_selected",
+                (("model", model),),
+                float(model == metrics.model),
+            )
+        )
+
+    samples: dict[str, list[tuple[Labels, float]]] = {name: [] for name in METRICS}
+    for (name, labels), value in sorted(counters.items()):
+        samples[name].append((labels, value))
+    for name, labels, value in gauges:
+        samples[name].append((labels, value))
+    lines: list[str] = []
+    for name, (kind, help_text) in METRICS.items():
+        if not samples[name]:
+            continue
+        lines.append(f"# HELP {name} {help_text}")
+        lines.append(f"# TYPE {name} {kind}")
+        for labels, value in samples[name]:
+            number = str(int(value)) if value == int(value) else repr(float(value))
+            lines.append(f"{name}{_labels(labels)} {number}")
+    return "\n".join(lines) + "\n"
