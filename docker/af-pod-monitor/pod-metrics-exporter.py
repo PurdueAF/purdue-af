@@ -20,6 +20,12 @@ directory, which is where a shell or notebook sits, and the heartbeat makes a
 wedged pass visible even when every gauge holds its last value. Every command
 here runs bounded, because subprocess's own timeout kills the child and then
 waits for it — which never returns on a dead mount.
+
+/work is read from CephFS's own recursive directory stats rather than walked:
+`du -s` over a two-million-file tree ran past its timeout on every single pass,
+so those users had no /work metrics at all and the failure was logged every 15
+minutes forever. A fault that persists is now logged once and on recovery —
+af_*_dir_ok carries it continuously, which is what the alerting reads.
 """
 
 import logging
@@ -36,10 +42,25 @@ INTERVAL = 300  # seconds between passes
 # ten is generous enough that load alone never trips it.
 PROBE_TIMEOUT_S = 10
 # `df` is a statfs call and returns as fast as the mount allows. `du -s` walks
-# every file under /work and is legitimately slow on a large tree, so it gets
-# far more room — the probe above, not this, is the responsiveness signal.
+# every file and is legitimately slow on a large tree, so it gets far more
+# room — the probe above, not this, is the responsiveness signal. It is only
+# the fallback for a /work that is not CephFS.
 DF_TIMEOUT_S = 30
 DU_TIMEOUT_S = 600
+# The recursive-stat read below is a single xattr: as fast as the mount, like df.
+RBYTES_TIMEOUT_S = 30
+
+# CephFS totals every directory's subtree into ceph.dir.rbytes. Read in a child
+# so it is bounded like everything else here: an xattr on a dead mount hangs
+# exactly as a walk does. Prints nothing when the mount is not CephFS.
+_RBYTES = """\
+import os, sys
+try:
+    value = os.getxattr(sys.argv[1], "ceph.dir.rbytes").decode()
+except OSError:
+    value = ""
+sys.stdout.write(value)
+"""
 
 _DIRS = ("home", "work")
 metrics = {}
@@ -118,12 +139,18 @@ def parse_df_output(df_output: str) -> tuple[int, int, float]:
     return used, size, util
 
 
+def against_quota(
+    used_kb: int, quota_kb: int = WORK_QUOTA_KB
+) -> tuple[int, int, float]:
+    """(used_kb, size_kb, utilisation) for a directory with no statfs of its own."""
+    return used_kb, quota_kb, used_kb / quota_kb
+
+
 def parse_du_output(
     du_output: str, quota_kb: int = WORK_QUOTA_KB
 ) -> tuple[int, int, float]:
     """Parse `du -s <dir>` output into (used_kb, size_kb, utilisation)."""
-    used = int(du_output.split()[0])
-    return used, quota_kb, used / quota_kb
+    return against_quota(int(du_output.split()[0]), quota_kb)
 
 
 def run_bounded(cmd: list[str], timeout_s: float) -> tuple[bool, str]:
@@ -162,12 +189,30 @@ def probe_session(home_dir: str) -> bool:
     return ok
 
 
+def read_work_usage(directory: str) -> tuple[int, int, float]:
+    """(used_kb, size_kb, utilisation) for /work, without walking it.
+
+    ceph.dir.rbytes is apparent size where `du -s` counts allocated blocks, so
+    the two disagree slightly on a sparse tree. A mount that does not answer
+    the xattr in time is not then handed to `du`, which would only hang longer.
+    """
+    ok, rbytes = run_bounded(
+        [sys.executable, "-c", _RBYTES, directory], RBYTES_TIMEOUT_S
+    )
+    if not ok:
+        raise OSError(f"could not read {directory}")
+    if rbytes.strip():
+        return against_quota(int(rbytes) // 1024)
+    # Not CephFS: walk it.
+    ok, du_output = run_bounded(["du", "-s", directory], DU_TIMEOUT_S)
+    if not ok:
+        raise OSError(f"could not read {directory}")
+    return parse_du_output(du_output)
+
+
 def update_metrics(dir_label: str, directory: str) -> None:
     if dir_label == "work":
-        ok, du_output = run_bounded(["du", "-s", directory], DU_TIMEOUT_S)
-        if not ok:
-            raise OSError(f"could not read {directory}")
-        used, size, util = parse_du_output(du_output)
+        used, size, util = read_work_usage(directory)
     else:
         ok, df_output = run_bounded(["df", directory], DF_TIMEOUT_S)
         if not ok:
@@ -179,15 +224,28 @@ def update_metrics(dir_label: str, directory: str) -> None:
     metrics[f"{dir_label}_dir_util"].set(util)
 
 
+_failing: set[str] = set()
+
+
 def update_directory(dir_label: str, directory: str) -> bool:
     """One directory's pass. Never raises: a mount the pod cannot read is a
-    gap in that directory's metrics, not a reason to stop exporting."""
+    gap in that directory's metrics, not a reason to stop exporting.
+
+    The fault is logged when it starts and when it clears, not on every pass.
+    A mount stays broken for hours, and repeating its traceback every INTERVAL
+    buried everything else the container had to say while telling a reader
+    nothing af_*_dir_ok was not already reporting continuously."""
     try:
         update_metrics(dir_label, directory)
     except Exception:
-        log.exception("could not read %s directory (%s)", dir_label, directory)
+        if dir_label not in _failing:
+            _failing.add(dir_label)
+            log.exception("could not read %s directory (%s)", dir_label, directory)
         metrics[f"{dir_label}_dir_ok"].set(0)
         return False
+    if dir_label in _failing:
+        _failing.discard(dir_label)
+        log.info("%s directory (%s) is readable again", dir_label, directory)
     metrics[f"{dir_label}_dir_ok"].set(1)
     return True
 
