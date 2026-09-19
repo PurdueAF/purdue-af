@@ -172,7 +172,7 @@ RUN chmod +x /usr/local/bin/pixi && \
 # directly, so its persona appears from the install above. All three reuse the
 # credentials the user established with `claude /login`, `codex login` or
 # `opencode /connect`; the facility ships no model credentials for any surface.
-ARG CLAUDE_CODE_VERSION="2.1.274"
+ARG CLAUDE_CODE_VERSION="2.1.278"
 ARG CODEX_VERSION="0.155.1"
 ARG OPENCODE_VERSION="1.18.31"
 ARG CLAUDE_AGENT_ACP_VERSION="0.79.0"
