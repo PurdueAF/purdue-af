@@ -52,11 +52,14 @@ jobs:
       - name: Verified reuse — identical input state already passed
         if: steps.memo.outputs.cache-hit == 'true'
         run: echo "skipping — ${{ steps.key.outputs.key }} already green" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Read the pixi CLI version the AF image uses
+        id: pixi
+        if: steps.memo.outputs.cache-hit != 'true'
+        run: echo "version=$(sed -n 's/^ARG PIXI_VERSION="\([^"]*\)".*/\1/p' docker/purdue-af/Dockerfile)" | tee -a "$GITHUB_OUTPUT"
       - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2 # Renovate pins to digest
         if: steps.memo.outputs.cache-hit != 'true'
         with:
-          # Frozen at 0.62.2 (lock format v6) — do not bump; see renovate.json5.
-          pixi-version: v0.62.2
+          pixi-version: v${{ steps.pixi.outputs.version }}
           manifest-path: pixi/base/pixi.toml
           # environments requires run-install; we install in the next step so
           # we can regenerate the lock when toml/lock disagree.

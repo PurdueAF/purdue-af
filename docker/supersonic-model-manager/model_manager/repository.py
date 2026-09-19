@@ -309,8 +309,7 @@ def _extract_tar(archive: Path, dest: Path, budget: int) -> None:
                 )
             target.parent.mkdir(parents=True, exist_ok=True)
             src = tf.extractfile(member)
-            if src is None:
-                continue
+            assert src is not None  # a regular file always extracts
             with src, open(target, "wb") as out:
                 shutil.copyfileobj(src, out, 1024 * 1024)
 

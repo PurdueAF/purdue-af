@@ -419,3 +419,23 @@ def test_main_without_out_only_prints(cs, fake_repo, monkeypatch, tmp_path, caps
     run_main(cs, monkeypatch)
     assert not list(tmp_path.iterdir())
     assert "| channel | component | status | commits ahead |" in capsys.readouterr().out
+
+
+def test_generator_owner_is_the_component_mounting_it_by_name(cs):
+    """self-repair's ConfigMaps are built from workflows/ and docker/ only;
+    the CronJob under apps/self-repair names them, so they belong to it."""
+    owner = cs._generator_owner(
+        "self-repair-workflow",
+        ["workflows/self-repair/self_repair.py"],
+        {"apps/self-repair": ["apps/self-repair/cronjob.yaml"]},
+    )
+    assert owner == "apps/self-repair"
+
+
+def test_generator_owner_falls_back_to_a_manifest_named_after_it(cs):
+    owner = cs._generator_owner(
+        "widget-config",
+        ["docker/widget/main.py"],
+        {"apps/widget": ["apps/widget/widget.yaml"]},  # not on disk: no mount scan
+    )
+    assert owner == "apps/widget"

@@ -5,7 +5,7 @@ ci.yml (stage 1: content-addressed builds)
   build → smoke test → push :in-<input-hash>           ← source of truth
 ci.yml (stage 3 publish: main only, behind the ci-ok gate)
   retag → ghcr.io/purdueaf/<name>:sha-<commit> (provenance)
-        → :latest (aux continuous channel) / :pre-release (purdue-af)
+        → the image's channel tag (RELEASING.md)
                           │
 cluster pulls ◀── geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/<name>
                   (Harbor proxy-cache, same mechanism as docker-hub-cache)
@@ -14,20 +14,16 @@ cluster pulls ◀── geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purduea
 - **ghcr.io** is the publication registry: built by CI, authenticated with the
   built-in `GITHUB_TOKEN` (no separate account or secret), only smoke-tested
   images are pushed, every image carries `org.opencontainers.image.revision`.
-- **geddes-registry** stays the cluster-facing registry: manifests reference
-  the `ghcr-proxy-cache` project so pulls are LAN-local and survive ghcr
-  outages (cache serves last-known images).
-- **Tag taxonomy**: `in-<hash>` (immutable, names the exact input-tree state;
-  what CI builds and tests), `sha-<commit>` (immutable provenance, added at
-  publish), `:latest` / `:pre-release` (moving channel tags, moved ONLY by the
-  ci.yml publish stage after the full pipeline is green), semver (immutable,
-  added only by release-image.yml, promote-by-digest).
-- **CI-built images**: purdue-af, agentic-interface, af-pod-monitor,
-  af-node-monitor, supersonic-model-manager, interlink-slurm-plugin. Two
-  larger images (dask-gateway-server, servicex-science-coffea) still exceed
-  GitHub-hosted runner limits and are built in-cluster with kaniko instead —
-  see [kaniko-build-jobs/README.md](kaniko-build-jobs/README.md). Pixi
-  environments are validated by the ci-pixi-global.yml stage instead.
+- **geddes-registry** is the cluster-facing registry: manifests reference the
+  `ghcr-proxy-cache` project so pulls are LAN-local and survive ghcr outages.
+  The cache revalidates moving tags upstream on each pull and serves the
+  last-known image when ghcr is unreachable.
+- Two images exceed GitHub-hosted runner limits — `dask-gateway-server` and
+  `servicex-science-coffea` — and are built in-cluster with kaniko:
+  [kaniko-build-jobs/README.md](kaniko-build-jobs/README.md).
+
+Which tag each image publishes to, what pins it in the cluster, and how a
+version is minted: [RELEASING.md](../RELEASING.md).
 
 ## Registry configuration
 
@@ -43,14 +39,3 @@ Verify from a cluster node:
 ```
 crictl pull geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-interface:latest
 ```
-
-## What pulls what
-
-Most aux images (agentic-interface, af-pod-monitor, af-node-monitor,
-supersonic-model-manager) pull `:latest` through the `ghcr-proxy-cache`
-project — the continuous channel, moved only by the ci.yml publish stage
-after a fully green pipeline. `interlink-slurm-plugin` is pinned to its
-upstream plugin ref (`PLUGIN_REF`, e.g. `0.6.2-pre3`) instead of
-`:latest`. The purdue-af image is pinned by semver in
-`apps/jupyterhub/jupyterhub/values.yaml` and promoted via
-release-image.yml (see RELEASING.md at the repo root).

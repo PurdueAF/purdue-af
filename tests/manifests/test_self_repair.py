@@ -18,33 +18,31 @@ def docs(path: Path):
     return [d for d in yaml.safe_load_all(path.read_text()) if d]
 
 
-def test_flux_deploys_the_app_as_one_kustomization():
+def test_flux_lists_the_app_file_by_file_like_every_component():
     experimental = yaml.safe_load(EXPERIMENTAL.read_text())
-    assert "../../apps/self-repair" in experimental["resources"]
-    assert not any(
-        "self-repair" in r
-        for r in experimental["resources"]
-        if r != "../../apps/self-repair"
-    )
-    assert not any(
-        "self-repair" in g["name"] for g in experimental["configMapGenerator"]
-    )
-
-    app = yaml.safe_load((APP / "kustomization.yaml").read_text())
-    assert app["resources"] == [
-        "podtemplate.yaml",
-        "cronjob.yaml",
-        "secret-github.yaml",
-        "secret-genai.yaml",
-    ]
-    generators = {g["name"]: g for g in app["configMapGenerator"]}
+    assert not (APP / "kustomization.yaml").exists()
+    listed = {r for r in experimental["resources"] if "self-repair" in r}
+    assert listed == {
+        f"../../apps/self-repair/{f}"
+        for f in (
+            "podtemplate.yaml",
+            "cronjob.yaml",
+            "secret-github.yaml",
+            "secret-genai.yaml",
+        )
+    }
+    generators = {
+        g["name"]: g
+        for g in experimental["configMapGenerator"]
+        if g["name"].startswith("self-repair-")
+    }
     assert set(generators) == {"self-repair-workflow", "self-repair-platform-context"}
     for generator in generators.values():
         assert generator["options"]["annotations"] == {
             "kustomize.toolkit.fluxcd.io/substitute": "disabled"
         }
         for f in generator["files"]:
-            assert (APP / f).resolve().is_file(), f
+            assert (EXPERIMENTAL.parent / f).resolve().is_file(), f
     generator = generators["self-repair-workflow"]
     files = {Path(f).name for f in generator["files"]}
     assert files == {
@@ -132,7 +130,7 @@ def test_agents_read_the_platform_context_the_sessions_read():
     assert f'AGENT_SECTION="{path}"' in hook
     assert 'instructions\\": [\\"${AGENT_SECTION}' in hook
 
-    kustomization = yaml.safe_load((APP / "kustomization.yaml").read_text())
+    kustomization = yaml.safe_load(EXPERIMENTAL.read_text())
     (generator,) = [
         g
         for g in kustomization["configMapGenerator"]

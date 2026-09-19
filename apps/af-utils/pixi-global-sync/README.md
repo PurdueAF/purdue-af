@@ -11,14 +11,10 @@ the share is the persistent package cache at `/work/pixi/.cache`.
 
 ## How a change arrives
 
-- **Validation is upstream, and the delivery channel is the gate.**
-  `ci-pixi-global.yml` solves and import-smokes every lock change inside
-  the AF image. The manifests then reach the daemon via the Flux
-  `experimental` channel, which tracks the `main-validated` branch —
-  advanced only by the ci.yml publish stage behind `ci-ok` — so content
-  that did not pass the full pipeline cannot arrive here. The daemon
-  re-verifies after each install and every 6 h: a broken-on-disk env
-  alerts and self-heals.
+- **The manifests arrive through the Flux `experimental` root** after the
+  full pipeline validated the lock ([RELEASING.md](../../../RELEASING.md)).
+  The daemon re-verifies after each install and every 6 h: a broken-on-disk
+  env alerts and self-heals.
 - **Updates are in place.** With the cache on the same filesystem,
   `pixi install --locked` is mostly hardlink swaps. Running kernels keep
   already-imported modules; as with any env update (manual ones
@@ -56,4 +52,3 @@ eventually surfaces as AFGlobalEnvOutOfSync.
 - **Force a re-sync now:** `rm /work/pixi/global/pixi.lock` (instant
   drift) or wait ≤60 s after Flux applies a change.
 
-Deployed from `deploy/experimental/`.

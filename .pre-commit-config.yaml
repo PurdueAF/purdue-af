@@ -38,6 +38,12 @@ repos:
         # Chart values.yaml (real YAML) is still formatted.
         exclude: ^(apps/.*/chart|helm/[^/]+)/templates/
 
+      - id: markdown-links
+        name: markdown links resolve
+        language: python
+        entry: python .github/workflows/check-markdown-links.py
+        types: [markdown]
+
       - id: shfmt
         name: shfmt
         language: golang

@@ -131,10 +131,8 @@ interpreter on import in this image.
 
 ## CI
 
-Built like the other aux images (see [`docker/REGISTRY.md`](../../../docker/REGISTRY.md)):
-`image-inputs.sh` declares its input set, `ci-images.yml` builds from the repo root and smoke-tests
-the image, `ci.yml` publishes `:sha-<commit>` and `:latest` (which the cluster pulls), and
-`ci-checks.yml` runs the test suite.
+Built and published like every other image ([`docker/REGISTRY.md`](../../../docker/REGISTRY.md)),
+tested by the unit suite:
 
 ```bash
 docker build -f docker/supersonic-model-manager/Dockerfile -t supersonic-model-manager:dev .
