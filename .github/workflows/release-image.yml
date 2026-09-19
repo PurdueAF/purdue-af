@@ -1,7 +1,7 @@
 name: Release image
 
 # Releases the purdue-af image: promotes the exact-state digest to a semver tag
-# and rewrites values.yaml (bump-af-version.py). Gates, rollback and
+# and rewrites the version pins (bump-af-version.py). Gates, rollback and
 # AF_RELEASE_TOKEN: RELEASING.md.
 
 on:
@@ -92,7 +92,7 @@ jobs:
             fi
           fi
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-      - name: Bump version in values.yaml
+      - name: Bump the AF version
         id: ver
         run: |
           if [ -n "${{ inputs.version }}" ]; then
@@ -116,7 +116,7 @@ jobs:
         run: |
           git config user.name "af-release-bot"
           git config user.email "af-release-bot@users.noreply.github.com"
-          git add apps/jupyterhub/jupyterhub/values.yaml
+          git add apps/jupyterhub/jupyterhub/values.yaml apps/af-utils/pixi-global-sync/deployment.yaml
           git commit -m "release purdue-af image $VERSION"
           # the v prefix keeps image tags distinct from bare platform CalVer tags
           git tag -a "v$VERSION" -m "purdue-af image $VERSION

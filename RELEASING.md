@@ -91,15 +91,14 @@ the current repo state. Complete the manual checklist in
 
 1. **Actions → Release image → Run workflow** — choose the bump (or an
    explicit `version`). It adds the semver tag to the **same digest** that
-   passed CI (never a rebuild), rewrites every version spot in values.yaml
-   (`bump-af-version.py`, count-verified), commits to `main`, tags
-   `v<version>`, and publishes a Release.
+   passed CI (never a rebuild), rewrites every version spot in the hub's
+   values.yaml and the pixi-global-sync image (`bump-af-version.py`,
+   count-verified), commits to `main`, tags `v<version>`, and publishes a
+   Release.
 2. **Actions → Release platform → Run workflow** — always the second step:
-   the bump commit reaches the cluster only once a platform tag covers it.
-3. By hand, in a normal commit: set the `purdue-af` tag in
-   [apps/af-utils/pixi-global-sync/deployment.yaml](apps/af-utils/pixi-global-sync/deployment.yaml)
-   to the new version. `bump-af-version.py` does not rewrite it; it deploys
-   through `main-validated`.
+   the bump commit reaches the hub only once a platform tag covers it.
+   pixi-global-sync is experimental and takes it at the next `main-validated`
+   advance.
 
 **Rollback**: `git revert` the release commit on `main`, then mint a new
 platform tag. Never delete a `v*` tag — the pin lives in a values.yaml

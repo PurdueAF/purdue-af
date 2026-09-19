@@ -17,10 +17,10 @@ spec:
       labels:
         app: pixi-global-sync
     spec:
-      # The tag follows AF image releases: RELEASING.md.
       containers:
         - name: sync
-          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af:0.13.0
+          # Rewritten with each AF image release by bump-af-version.py.
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af:0.13.8
           command: ["python3", "/config/sync-global-env.py"]
           env:
             # pixi/global requires __cuda and this pod has no GPU; match pixi/global/pixi.toml.

@@ -14,6 +14,8 @@ Spots rewritten (each must match exactly once):
   3. extraLabels.docker_image_tag → the new version (feeds dashboards)
   4. the production profile display_name ("Purdue AF <version> – ...")
   5. the production profile kubespawner image ref
+and, in apps/af-utils/pixi-global-sync/deployment.yaml:
+  6. the pixi-global-sync container image
 
 Usage:
   bump-af-version.py --print-current
@@ -27,6 +29,7 @@ import sys
 from pathlib import Path
 
 DEFAULT_FILE = Path("apps/jupyterhub/jupyterhub/values.yaml")
+DEFAULT_SYNC_FILE = Path("apps/af-utils/pixi-global-sync/deployment.yaml")
 # Same pull path as the pre-release profile (geddes Harbor proxy of ghcr;
 # the CI-promoted semver tags live on ghcr.io/purdueaf/purdue-af).
 DEFAULT_REGISTRY = "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af"
@@ -89,6 +92,21 @@ def apply(text: str, new_version: str, registry: str) -> str:
     return text
 
 
+def apply_sync(text: str, new_version: str, registry: str) -> str:
+    """→ new pixi-global-sync deployment text; the image must match exactly once."""
+    text, n = re.subn(
+        rf"(image: )[^\s\"]*/purdue-af:{VERSION_RE}",
+        rf"\g<1>{registry}:{new_version}",
+        text,
+    )
+    if n != 1:
+        sys.exit(
+            f"expected exactly 1 purdue-af image in the pixi-global-sync deployment, "
+            f"found {n} — update bump-af-version.py"
+        )
+    return text
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     group = parser.add_mutually_exclusive_group(required=True)
@@ -96,6 +114,7 @@ def main() -> None:
     group.add_argument("--bump", choices=["patch", "minor", "major"])
     group.add_argument("--set", dest="explicit", metavar="X.Y.Z")
     parser.add_argument("--file", type=Path, default=DEFAULT_FILE)
+    parser.add_argument("--sync-file", type=Path, default=DEFAULT_SYNC_FILE)
     parser.add_argument("--registry", default=DEFAULT_REGISTRY)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -114,8 +133,10 @@ def main() -> None:
         new = bump_version(cur, args.bump)
 
     updated = apply(text, new, args.registry)
+    sync_updated = apply_sync(args.sync_file.read_text(), new, args.registry)
     if not args.dry_run:
         args.file.write_text(updated)
+        args.sync_file.write_text(sync_updated)
     # stdout carries ONLY the new version (workflow captures it); log to stderr
     print(
         f"{cur} -> {new} ({args.file}{' — dry run' if args.dry_run else ''})",
