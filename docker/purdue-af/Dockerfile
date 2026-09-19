@@ -173,7 +173,7 @@ RUN chmod +x /usr/local/bin/pixi && \
 # credentials the user established with `claude /login`, `codex login` or
 # `opencode /connect`; the facility ships no model credentials for any surface.
 ARG CLAUDE_CODE_VERSION="2.1.274"
-ARG CODEX_VERSION="0.154.0"
+ARG CODEX_VERSION="0.155.1"
 ARG OPENCODE_VERSION="1.18.31"
 ARG CLAUDE_AGENT_ACP_VERSION="0.78.0"
 ARG CODEX_ACP_VERSION="0.16.0"
