@@ -55,9 +55,7 @@ Whether each component on the cluster is running what is on `main`
 ![dask-gateway-k8s-interlink][experimental-dask-gateway-dask-gateway-k8s-interlink]
 ![dask-gateway-k8s-slurm][experimental-dask-gateway-dask-gateway-k8s-slurm]
 ![flyte][experimental-flyte]
-![interlink-gautschi][experimental-interlink-gautschi]
 ![interlink-hammer][experimental-interlink-hammer]
-![interlink-negishi][experimental-interlink-negishi]
 ![self-repair][experimental-self-repair]
 ![af-monitoring][experimental-monitoring-af-monitoring]
 ![alloy][experimental-monitoring-alloy]
@@ -123,9 +121,7 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-dask-gateway-dask-gateway-k8s-interlink]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-dask-gateway-dask-gateway-k8s-interlink.json
 [experimental-dask-gateway-dask-gateway-k8s-slurm]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-dask-gateway-dask-gateway-k8s-slurm.json
 [experimental-flyte]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-flyte.json
-[experimental-interlink-gautschi]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-gautschi.json
 [experimental-interlink-hammer]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-hammer.json
-[experimental-interlink-negishi]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-negishi.json
 [experimental-self-repair]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-self-repair.json
 [experimental-monitoring-af-monitoring]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-af-monitoring.json
 [experimental-monitoring-alloy]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-alloy.json

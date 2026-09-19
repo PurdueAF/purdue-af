@@ -31,7 +31,7 @@ def test_cluster_option_defaults_to_geddes():
         or '"cluster"' in text
     )
     assert 'default="geddes"' in text
-    assert '"hammer"' in text and '"gautschi"' in text
+    assert '"hammer"' in text
 
 
 def test_interlink_rejects_non_purdue_and_requires_depot_or_cvmfs():
@@ -85,18 +85,9 @@ def _interlink_clusters():
 
 def test_interlink_sbatch_targets():
     clusters = _interlink_clusters()
-    assert set(clusters) == {"hammer", "gautschi", "negishi"}
+    assert set(clusters) == {"hammer"}
     assert (
         clusters["hammer"]["sbatch_flags"] == "--account=cms --partition=hammer-nodes"
-    )
-    assert (
-        clusters["gautschi"]["sbatch_flags"]
-        == "--account=cms --partition=cpu --qos=standby"
-    )
-    # Negishi mirrors Gautschi apart from the account it charges against
-    assert (
-        clusters["negishi"]["sbatch_flags"]
-        == "--account=cms-a --partition=cpu --qos=standby"
     )
 
 
@@ -118,5 +109,5 @@ def test_cluster_choices_are_derived_not_hardcoded():
     INTERLINK_CLUSTERS, or adding a cluster leaves them silently stale."""
     text = _extra_config()
     assert '["geddes"] + list(INTERLINK_CLUSTERS)' in text
-    for stale in ("hammer, or gautschi", "(hammer/gautschi)", "hammer or gautschi"):
-        assert stale not in text, f"hardcoded cluster list: {stale!r}"
+    assert '("geddes",) + tuple(INTERLINK_CLUSTERS)' in text
+    assert text.count('"/".join(INTERLINK_CLUSTERS)') >= 3

@@ -18,9 +18,6 @@ cluster pulls ◀── geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purduea
   `ghcr-proxy-cache` project so pulls are LAN-local and survive ghcr outages.
   The cache revalidates moving tags upstream on each pull and serves the
   last-known image when ghcr is unreachable.
-- Two images exceed GitHub-hosted runner limits — `dask-gateway-server` and
-  `servicex-science-coffea` — and are built in-cluster with kaniko:
-  [kaniko-build-jobs/README.md](kaniko-build-jobs/README.md).
 
 Which tag each image publishes to, what pins it in the cluster, and how a
 version is minted: [RELEASING.md](../RELEASING.md).

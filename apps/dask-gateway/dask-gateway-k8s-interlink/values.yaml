@@ -150,14 +150,6 @@ gateway:
               "node": "interlink-hammer",
               "sbatch_flags": "--account=cms --partition=hammer-nodes",
           },
-          "gautschi": {
-              "node": "interlink-gautschi",
-              "sbatch_flags": "--account=cms --partition=cpu --qos=standby",
-          },
-          "negishi": {
-              "node": "interlink-negishi",
-              "sbatch_flags": "--account=cms-a --partition=cpu --qos=standby",
-          },
       }
       # Bind the exported dask-credentials onto the controller's hardcoded TLS path in Singularity.
       # Bare $workingPath: Flux postBuild blanks braced variables it does not know.

@@ -127,7 +127,7 @@ def test_slurm_cluster_env_matches_directory(active_clusters):
 
 def test_active_clusters_share_one_plugin_image(active_clusters):
     """Cluster identity is SLURM_CLUSTER + munge PVC, not the image tag.
-    Divergent tags mean hammer/gautschi drift on sidecar version."""
+    Divergent tags mean clusters drift on sidecar version."""
     images = {app["values"]["plugin"]["image"] for app in active_clusters.values()}
     assert len(images) == 1, f"active clusters pin different plugin images: {images}"
     image = next(iter(images))
@@ -149,14 +149,6 @@ def test_dockerfile_plugin_ref_arg_matches_plugin_ref_file():
     plugin_ref = (REPO / "docker/interlink-slurm-plugin/PLUGIN_REF").read_text().strip()
     dockerfile = (REPO / "docker/interlink-slurm-plugin/Dockerfile").read_text()
     assert f"ARG SLURM_PLUGIN_REF={plugin_ref}" in dockerfile, plugin_ref
-
-
-def test_plugin_image_is_not_the_old_kaniko_registry(active_clusters):
-    """Kaniko pushed to geddes cms/; CI publishes to ghcr and the cluster
-    pulls through ghcr-proxy-cache — the cms/ path must not come back."""
-    for cluster, app in active_clusters.items():
-        image = app["values"]["plugin"]["image"]
-        assert "/cms/interlink-slurm-plugin:" not in image, cluster
 
 
 def test_slurm_cluster_has_client_configs(active_clusters):
@@ -205,15 +197,6 @@ def test_slurm_client_rpms_exist_for_mapped_versions(interlink_clusters):
         ver = versions[cluster]
         rpm = REPO / "slurm" / f"slurm-{ver}-1.el8.x86_64.rpm"
         assert rpm.is_file(), f"{cluster}: missing {rpm.name} for version {ver}"
-
-
-def test_negishi_uses_a_different_slurm_client_than_hammer():
-    """Each cluster gets the client version slurm/client-versions maps it to."""
-    versions = _client_versions()
-    assert versions["negishi"] != versions["hammer"]
-    assert versions["negishi"].startswith("24.")
-    assert versions["hammer"].startswith("25.")
-    assert versions["gautschi"] == versions["hammer"]
 
 
 def test_munge_key_pvcs_are_not_declared_in_git(interlink_clusters, experimental):

@@ -18,8 +18,8 @@ ERROR_PATTERN = r"(?i)\b(error|exception|traceback|fatal|panic)\b"
 
 # Pod-name prefixes of what Flux deploys from this repository (deploy/*/
 # kustomization.yaml), i.e. what a change here can fix. Whatever else lives
-# in the namespace without a manifest here (gen*, etcd, eos-fuse, the one-off
-# kaniko builds) is not read at all.
+# in the namespace without a manifest here (gen*, etcd, eos-fuse) is not
+# read at all.
 WATCHED_WORKLOADS = (
     # apps/jupyterhub
     "hub",

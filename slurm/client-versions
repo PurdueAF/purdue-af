@@ -1,5 +1,3 @@
 # <cluster> <client RPM version>. It must match the controller's release, or
 # Slurm fails with "Protocol authentication error" despite a valid munge key.
-hammer   25.11.4
-gautschi 25.11.4
-negishi  24.11.5
+hammer 25.11.4

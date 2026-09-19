@@ -67,8 +67,6 @@ resources:
 
   - ../../apps/interlink/helmrepo.yaml
   - ../../apps/interlink/hammer/helmrelease.yaml
-  - ../../apps/interlink/gautschi/helmrelease.yaml
-  - ../../apps/interlink/negishi/helmrelease.yaml
 
   - ../../apps/af-utils/pixi-global-sync/deployment.yaml
 
@@ -191,14 +189,6 @@ configMapGenerator:
   - name: interlink-hammer-config
     files:
       - values.yaml=../../apps/interlink/hammer/values.yaml
-
-  - name: interlink-gautschi-config
-    files:
-      - values.yaml=../../apps/interlink/gautschi/values.yaml
-
-  - name: interlink-negishi-config
-    files:
-      - values.yaml=../../apps/interlink/negishi/values.yaml
 
   - name: af-node-monitor-config
     files:
