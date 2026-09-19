@@ -11,14 +11,11 @@ to Kubernetes it still looks like an ordinary pod.
 | `interlink-gautschi` | Gautschi | `cpu`           | `/depot/cms/purdue-af/interlink/gautschi` | `munge-key-gautschi` | `gautschi`      | yes      |
 | `interlink-negishi`  | Negishi  | `cpu`           | `/depot/itap/interlink/negishi`           | `munge-key-negishi`  | `negishi`       | yes      |
 
-All three nodes share one plugin image tagged with the upstream plugin
-ref (`PLUGIN_REF`, e.g. `…/interlink-slurm-plugin:0.6.2-pre3`). Cluster
-identity comes from `SLURM_CLUSTER` plus the per-cluster munge PVC — never
-from a floating `:latest`. Client binaries are selected at start from
-`slurm/client-versions` (Negishi is still on Slurm 24.11; Hammer and
-Gautschi are on 25.11). CI builds on ghcr; see
-[`docker/interlink-slurm-plugin/README.md`](../../docker/interlink-slurm-plugin/README.md)
-and [`slurm/README.md`](../../slurm/README.md).
+All three nodes run one plugin image, tagged with the upstream plugin ref
+(`PLUGIN_REF`); cluster identity comes from `SLURM_CLUSTER` plus the
+per-cluster munge PVC. The image and the per-cluster client versions:
+[`docker/interlink-slurm-plugin/README.md`](../../docker/interlink-slurm-plugin/README.md),
+[`slurm/README.md`](../../slurm/README.md).
 
 A node is deployed only once its munge key PVC exists — without the key the
 node pod never gets past Pending, so a new cluster stays commented out in

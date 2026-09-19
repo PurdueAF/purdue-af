@@ -1,9 +1,8 @@
 # Out-of-band image builds
 
-Two images are still too awkward to build on a GitHub-hosted runner, so they
-are built in-cluster with kaniko instead of by `ci.yml`. Everything else —
-including `interlink-slurm-plugin` — is built and published by CI to ghcr;
-see [../REGISTRY.md](../REGISTRY.md).
+Two images exceed GitHub-hosted runner limits and are built in-cluster with
+kaniko instead of by `ci.yml`. Every other image is built and published by CI
+([../REGISTRY.md](../REGISTRY.md)).
 
 | Job | Image | Consumed by |
 | --- | --- | --- |

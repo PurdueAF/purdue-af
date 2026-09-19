@@ -1,68 +1,27 @@
-# Purdue AF Agentic Interface
+# Agentic interface
 
-A remote [MCP](https://modelcontextprotocol.io) server for the Purdue Analysis Facility.
-Connect any MCP-capable agent (Claude Code, Codex, Cursor, …) and manage your AF session
-in natural language — start/stop it, and inspect Dask clusters, storage, and logs.
+A remote [MCP](https://modelcontextprotocol.io) server through which any
+MCP-capable agent manages a user's AF session: start and stop it, inspect Dask
+clusters, storage and logs. Connecting, what it can do, troubleshooting:
+[the user guide](../../docs/docs/guide-agentic-interface.md). The agent-facing
+playbook is [the skill](../../.claude/skills/purdue-af-agentic-interface/SKILL.md).
 
-## Connect
+| Path                                          | Holds                                                  |
+| --------------------------------------------- | ------------------------------------------------------ |
+| `apps/agentic-interface/`                     | Deployment, Service, RBAC, NetworkPolicy               |
+| `docker/agentic-interface/`                   | Server source and Dockerfile                           |
+| `.claude/skills/purdue-af-agentic-interface/` | The skill; an input of the image hash                  |
+| `tests/agentic_interface/`                    | Unit tests                                             |
 
-| | |
-|---|---|
-| **URL** | `https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp` |
-| **Transport** | HTTP (streamable) |
-| **Auth** | header `Authorization: Bearer <token>` |
-
-Get your token at <https://cms.geddes.rcac.purdue.edu/hub/token>, then add the server in
-your agent's MCP settings. Most agents accept this configuration:
-
-```json
-{
-  "mcpServers": {
-    "purdue-af": {
-      "type": "http",
-      "url": "https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp",
-      "headers": { "Authorization": "Bearer YOUR_TOKEN" }
-    }
-  }
-}
-```
-
-Where this goes depends on your agent — a config file, a settings panel, or a CLI
-(`claude mcp add`, `codex mcp add`, …) — but the URL and header are always the same. If
-your agent expands environment variables in its config, use `Bearer ${JUPYTERHUB_TOKEN}`
-instead of pasting the token.
-
-For best results also install the companion skill,
-[`.claude/skills/purdue-af-agentic-interface/SKILL.md`](../../.claude/skills/purdue-af-agentic-interface/SKILL.md)
-— a portable Markdown playbook of the AF workflows. In Claude Code, save it as
-`~/.claude/skills/purdue-af-agentic-interface/SKILL.md`; for other agents, paste it into
-your persistent instructions (`AGENTS.md`, rules file, …).
-
-## Use
-
-Ask in plain language, for example:
-
-- "Start my AF session" (optionally: "…with 32 CPUs and the VS Code interface")
-- "How much home and work storage am I using?"
-- "List my Dask clusters" / "scale `<name>` to 10 workers"
-- "Show the last 30 minutes of error logs from my notebook"
-
-## Troubleshooting
-
-Failures are self-describing. A tool result that fails says what was
-attempted, why it failed as the backend reported it, and what to do next; if
-the connection itself is refused, the HTTP response body carries the same in
-`{"error": …, "hint": …}`. Read the message — it is the diagnosis.
-
-Treat the token like a password — don't share or commit it.
+Versioning and rollout: [RELEASING.md](../../RELEASING.md).
 
 ## Calling the endpoint by hand
 
-The deployed service runs with **stateful** streamable-HTTP sessions
+The service runs with **stateful** streamable-HTTP sessions
 (`MCP_STATELESS_HTTP=false`) so tools can use elicitation. A one-shot
-`tools/call` therefore needs a prior `initialize` + `Mcp-Session-Id` handshake —
+`tools/call` therefore needs a prior `initialize` + `Mcp-Session-Id` handshake:
 use a real MCP client for interactive testing, or set `MCP_STATELESS_HTTP=true`
-on the deployment for stateless one-shot calls.
+on the Deployment for stateless one-shot calls.
 
 ```bash
 curl -s \
@@ -77,14 +36,9 @@ curl -s \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['content'][0]['text'])"
 ```
 
-Tool names, arguments and limits are not documented here: the server is
-self-describing, so `tools/list` (or any MCP client's tool inspector) is the
-source of truth. Agent-facing guidance lives in
-[the skill](../../.claude/skills/purdue-af-agentic-interface/SKILL.md).
+Tool names, arguments and limits are not documented anywhere: the server is
+self-describing, and `tools/list` is the source of truth.
 
-From inside an AF session the service is reachable in-cluster and the session's
-own token authenticates it — `config-agents.sh` registers it automatically:
-
-```
-http://agentic-interface.${NAMESPACE}.svc.cluster.local:8888/services/agentic-interface/mcp
-```
+Inside a session the service is reached at its in-cluster address with the
+session's own token; `config-agents.sh` in the session image registers it
+([docker/purdue-af/README.md](../../docker/purdue-af/README.md)).

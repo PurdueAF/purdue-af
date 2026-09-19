@@ -4,6 +4,7 @@
 monitoring/grafonnet
 .claude/*
 !.claude/skills/
+!.claude/rules/
 **/.venv/
 **/.pytest_cache/
 coverage.xml

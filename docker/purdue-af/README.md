@@ -57,18 +57,10 @@ content tracks the image; everything outside is never touched, so users keep
 their own instructions. The block is appended if the markers are absent, and
 re-running is a no-op.
 
-The section is the platform context every agent in a session sees: session
-limits, storage volumes and their visibility from Slurm and Dask workers, path
-aliases, data access, software environments, scale-out limits, and GPUs. It
-separates **Rules** (enforced by the platform, fail if broken) from **Guidance**
-(preferences an agent may deviate from), so advice is never mistaken for a wall.
-
-Every number in it is re-derived from its source by
-`tests/manifests/test_platform_context.py`: spawn-form choices and the home
-quota from the hub values, worker caps and Slurm partitions from the
-dask-gateway values, session and worker ceilings from the user docs, and the
-storage inventory from `docs/docs/storage.md`. A stale guardrail is worse than
-none, because an agent acts on it.
+The block is [`platform-context.md`](agents/platform-context.md): the
+facility's rules and guidance for an agent inside a session. Its numbers are
+asserted against the hub and gateway values and the user docs by
+`tests/manifests/test_platform_context.py`.
 
 Notable constraints baked into the Dockerfile:
 
@@ -91,44 +83,28 @@ Notable constraints baked into the Dockerfile:
 
 ## Build and publication
 
-`ci.yml` owns this image end to end; there is no other build path.
+`ci.yml` owns this image end to end; there is no other build path. Its input
+tree is this directory, `pixi/base/` and the Slurm inputs
+(`.github/workflows/image-inputs.sh`). Two things are specific to this image:
 
-1. **build-af-image** (`ci-images.yml`) — the image is content-addressed:
-   tagged `in-<hash>` of its input tree (this directory, `pixi/base/`, the
-   Slurm inputs; see `.github/workflows/image-inputs.sh`). An existing tag is
-   verified reuse. Otherwise buildx builds it with the geddes `FROM` remapped
-   to docker.io via a named context, the smoke stage runs during the build
-   (nvcc, ps, klist, xz, jupyterlab), and a single zstd upload pushes image
-   and `mode=max` buildcache as deduplicated blobs.
-2. **e2e-pre-release** (`ci-e2e.yml`) — pulls the `in-` image once, runs the
-   CVMFS check (host CVMFS mounted in, `cmsset_default.sh` sourced), `kind
-load`s the same copy, then the hub-in-kind e2e spawns it through the hub's
-   `pre-release` profile and asserts JupyterLab answers.
-3. **publish** (`ci.yml`, main only, behind `ci-ok`) — adds `:sha-<commit>`
-   and moves `:pre-release` to the tested digest.
+- **Build** (`ci-images.yml`): buildx with the geddes `FROM` remapped to
+  docker.io via a named context, a smoke stage that runs during the build
+  (nvcc, ps, klist, xz, jupyterlab), and a single zstd upload of image and
+  `mode=max` buildcache as deduplicated blobs.
+- **e2e-pre-release** (`ci-e2e.yml`): pulls the `in-` image once, runs the
+  CVMFS check (host CVMFS mounted in, `cmsset_default.sh` sourced), `kind
+  load`s the same copy, and the hub-in-kind e2e spawns it through the hub's
+  `pre-release` profile.
 
 The hub's pre-release profile pulls `:pre-release` with `image_pull_policy:
-Always`, so validated builds reach sessions on the next spawn. The default
-profile stays pinned to a semver tag.
+Always`, so validated builds reach sessions on the next spawn; the default
+profile is pinned to a semver tag. Channels, tags, the two-step release and
+rollback: [RELEASING.md](../../RELEASING.md); registries:
+[REGISTRY.md](../REGISTRY.md).
 
-Images are public on ghcr; manifests pull them through the geddes
-`ghcr-proxy-cache` Harbor project, which revalidates moving tags upstream on
-each pull. See [REGISTRY.md](../REGISTRY.md).
+## Release checklist
 
-## Releasing a new version
-
-**Release image** (`workflow_dispatch`) promotes the soaking `:pre-release`
-digest to a semver tag. Two gates: the release commit's `ci-ok` must be
-green, and the digest must be both the `in-<hash>` image of the current repo
-state and the current `:pre-release` — the exact bytes that were tested. It
-then adds the semver tag to that same digest (never a rebuild), rewrites
-every version spot in `values.yaml` (`bump-af-version.py`, count-verified),
-commits, tags `v<version>`, and publishes a GitHub Release.
-
-The bump commit reaches the cluster with the next platform tag. Bump rules and
-rollback: [RELEASING.md](../../RELEASING.md).
-
-Before releasing, verify on a test session: GPU visibility (`nvidia-smi`,
-torch/TF), that a 0-GPU session sees no GPUs, `eos-connect.sh` (kinit against
-CERN.CH), grid workflows (`voms-proxy-init`, gfal2, xrootd), and Slurm
-(`sbatch`/`squeue`).
+Before running **Release image**, verify on a test session: GPU visibility
+(`nvidia-smi`, torch/TF), that a 0-GPU session sees no GPUs, `eos-connect.sh`
+(kinit against CERN.CH), grid workflows (`voms-proxy-init`, gfal2, xrootd), and
+Slurm (`sbatch`/`squeue`).

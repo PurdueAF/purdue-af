@@ -1,0 +1,109 @@
+# Purdue Analysis Facility — repository guide
+
+GitOps source of truth for the Purdue Analysis Facility: what the Geddes
+clusters run is declared here, validated by one CI pipeline, and reconciled by
+Flux.
+
+Read before asking: [README.md](README.md) (what runs, and its live status),
+[RELEASING.md](RELEASING.md) (how a change reaches a cluster, how to roll it
+back), [deploy/README.md](deploy/README.md) (the Flux roots),
+[REVIEW.md](REVIEW.md) (what a review checks). This file holds only what those
+do not say.
+
+## Hard rules
+
+- Namespace `cms`, always. Never create or inspect objects in another namespace.
+- Never change what Flux manages. `kubectl edit|patch|scale|apply|rollout restart`
+  and `flux suspend` are reverted on the next reconcile; fix the manifest. The
+  one sanctioned live write is deleting a component's pod to restart it.
+- Never restart, delete or evict a user's session pod (`purdue-af-<id>`) or
+  their Dask cluster. They hold long-running kernels — someone's work.
+- Never move a tag or a branch by hand. `main-validated`, `:latest`,
+  `:pre-release`, `in-`/`sha-` tags and every version tag are minted by CI or a
+  release workflow.
+- Never commit a plaintext secret. A Secret under `apps/` is SOPS-encrypted per
+  `.sops.yaml` and carries a `sops:` block.
+- No real usernames in commits, PRs or test fixtures. Aggregate or redact first.
+- Branch from `origin/main`, never from another PR's branch: when the base
+  squash-merges, the PR retargets and its content never reaches `main`.
+- Carried verbatim, never edited: `docker/dask-gateway-server/` (upstream fork),
+  and the Slurm RPMs and `slurm-configs-<cluster>/` trees copied from the
+  clusters ([slurm/README.md](slurm/README.md)). The `pixi.lock` files under
+  `pixi/` are CI-owned.
+
+## Commands
+
+```bash
+uvx pre-commit run --all-files
+uv run --project tests --frozen pytest -q -c tests/pyproject.toml tests
+./.github/workflows/validate-manifests.sh
+```
+
+Lint, format and types (the hooks CI runs); the unit tests, from the repo root;
+every Flux root rendered and validated. A change is done when the first two
+pass — the third as well whenever `apps/` or `deploy/` changed. First-party
+Python that is not listed in `files =` in `mypy.ini` is never type-checked. The
+hub e2e needs a kind cluster: [tests/README.md](tests/README.md).
+
+## What a merge deploys
+
+Merging to `main` deploys, with no human step: every experimental component to
+production (the publish stage advances `main-validated`; Flux applies it within
+about a minute), and every core component to the geddes2 cluster, whose root
+tracks `main` itself. Core components on production wait for a platform
+release. Flux roots list manifests file by file — a new file beside an
+existing component is inert until it is listed in `deploy/`.
+
+## Live cluster
+
+- Diagnose with reads: `kubectl -n cms get|describe|logs`; Loki for anything
+  older than the pod (user streams carry a `username` label); the MCP server in
+  [`.mcp.json`](.mcp.json) for session, storage, Dask and log state.
+- Two Prometheus instances. The AF's own (`apps/monitoring/prometheus`) has the
+  facility's metrics but no cAdvisor; `container_*` and node/pod resource series
+  live in Rancher's Prometheus, reachable only from inside the cluster.
+
+## Changes
+
+- Commit subject: `<component>: <what changed>`, lowercase, no type prefixes —
+  `af-node-monitor: set the stale-result window to 30 minutes`. A change with
+  no single component takes a plain sentence. The body carries the reason.
+- Version pins are Renovate's: chart versions, image `FROM` tags, GitHub Actions
+  SHAs, pre-commit hooks, `pixi.toml` packages, `upstream.pin`. Do not bump one
+  inside an unrelated change; Renovate's PR runs the full pipeline for it.
+- Renaming or moving a component directory renames its badge slug, which is
+  derived from the path. Update the badge list in `README.md` and any
+  `LABEL_OVERRIDES` entry in `.github/workflows/component-status.py` naming the
+  old path; the unit tests fail until both are right.
+- The PR says what moves for users when it lands: a rolled pod, a new default
+  environment, a changed quota or profile option.
+
+## Writing
+
+- One fact, one place. User-facing facts belong in `docs/` (how the site is
+  written and built: `docs/docs/contributing.md`); how a change ships in
+  `RELEASING.md`; conventions here. A README says what the component is, what
+  its files are, how to run and tune it — never a "Why" section — and links
+  out for everything else. Before writing a paragraph, check whether it
+  already exists; if it does, link, don't copy.
+- Present state, declaratively. Prose — READMEs, docs, comments — describes
+  what is, never how it got there, what it replaced, or which alternative was
+  rejected: git holds that. A sentence that reads like a changelog ("now",
+  "no longer", "used to", "instead of the old …") is deleted or restated as
+  the current fact.
+- Inline comments are one line and rare: only where the code cannot say it —
+  a non-obvious constraint, a workaround and what it works around. No comment
+  restates the next line; no paragraph explains a function that its name and
+  its test already explain. Rationale goes in the commit message.
+- Hard numbers (quotas, session limits, worker caps) in
+  `docker/purdue-af/agents/platform-context.md` are asserted against their
+  sources by `tests/manifests/test_platform_context.py`. Change the source
+  first, then every place that quotes it.
+- `platform-context.md` is not this file: it tells an agent **inside a user's
+  session** how the facility behaves. Repository conventions live here.
+
+## Keeping this file
+
+The same correction twice → one verifiable sentence here, or in a path-scoped
+rule under `.claude/rules/` when it matters for one part of the tree only. What
+an agent can read from the code does not belong here.

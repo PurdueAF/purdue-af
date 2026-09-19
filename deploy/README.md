@@ -1,30 +1,19 @@
-## Continuous Deployment
+# Flux roots
 
-The components of the Analysis Facility are divided into **core** and **experimental**:
+Each directory is one Flux Kustomization: a `kustomization.yaml` listing, file
+by file, the manifests under `apps/` it applies; a `git-repository.yaml` naming
+the git ref it applies them from; and a `flux-kustomization.yaml` carrying the
+`postBuild` substitutions for that environment and the SOPS decryption secret.
 
-- **Core**: stable and reliable services
-- **Experimental**: subject to rapid prototyping
+| Root               | Applies from                                | Namespace | Holds                                                             |
+| ------------------ | ------------------------------------------- | --------- | ----------------------------------------------------------------- |
+| `core-production/` | newest platform tag (`semver: 2026.x`)      | `cms`     | the core components on the production cluster                     |
+| `core-geddes2/`    | branch `main`                               | `cms`     | the core components on the `geddes2` cluster (`cmsdev.` hostname) |
+| `experimental/`    | branch `main-validated`, advanced by CI     | `cms`     | the experimental components on the production cluster             |
 
-### Deployment strategy
+`enable-sops.sh` creates the `sops-age` Secret each root decrypts with;
+`flux-secret.yaml` is the GitHub token template the GitRepository sources
+read with. Both are applied out of band, once.
 
-- Core components are deployed into the production namespace `cms` from
-  the newest platform CalVer tag (`YYYY.M.SEQ`).
-- Experimental components are deployed from the CI-owned branch
-  `main-validated` (near tip of `main`, only advanced after the full
-  pipeline is green) into the production namespace. Inspect the tip in
-  the GitHub UI: https://github.com/PurdueAF/purdue-af/tree/main-validated
-
-### Update process
-
-- To update a core component, push to `main` — the CI pipeline validates
-  the full state (the `ci-ok` gate). It reaches the cluster when the next
-  platform tag is minted — see [RELEASING.md](../RELEASING.md) for when
-  and how versions are incremented (platform tags and image versions are
-  minted by the release workflows, never by hand).
-- To update an experimental component, push to `main` — after `ci-ok`
-  succeeds, the publish stage force-pushes `main-validated` to that
-  commit and Flux deploys it (experimental components are purposely
-  brittle for faster prototyping, but still behind the same CI gate as
-  image channels). Do not push to `main-validated` by hand — only the
-  publish job should move it (`protect-main-validated` blocks deleting
-  the branch; updates are left open so `GITHUB_TOKEN` can force-push).
+A manifest reaches a cluster only once it is listed in a root here. What each
+ref means for a change, and how to roll one back: [RELEASING.md](../RELEASING.md).
