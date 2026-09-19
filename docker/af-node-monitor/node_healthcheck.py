@@ -171,7 +171,6 @@ def _sanitized_node_name(name: str) -> str:
 
 
 _core_v1: client.CoreV1Api | None  # type: ignore[type-arg]
-_batch_v1: client.BatchV1Api | None  # type: ignore[type-arg]
 _k8s_ready: bool = False
 
 # All AF-labelled nodes as (name, pool, ready). Metrics must cover NotReady
@@ -182,7 +181,7 @@ _last_node_refresh: float = 0.0
 
 
 def _init_k8s() -> None:
-    global _core_v1, _batch_v1, _k8s_ready
+    global _core_v1, _k8s_ready
     if _k8s_ready or client is None or config is None:
         return
     try:
@@ -192,7 +191,6 @@ def _init_k8s() -> None:
         except Exception:
             config.load_kube_config()
         _core_v1 = client.CoreV1Api()
-        _batch_v1 = client.BatchV1Api()
         _k8s_ready = True
         _vlog("[node_healthcheck] Kubernetes client initialized")
     except Exception as e:  # pragma: no cover - defensive
@@ -203,9 +201,7 @@ def _init_k8s() -> None:
 def _result_path(mount_name: str, node_name: str) -> Path:
     mount_key = _sanitized_mount_name(mount_name)
     node_key = _sanitized_node_name(node_name)
-    if node_key:
-        return RESULTS_DIR / f"{mount_key}__{node_key}.json"
-    return RESULTS_DIR / f"{mount_key}.json"
+    return RESULTS_DIR / f"{mount_key}__{node_key}.json"
 
 
 def _call_bounded(fn: Any, timeout_s: float) -> tuple[bool, Any]:
@@ -478,41 +474,10 @@ def _probe_pod_states() -> Dict[tuple[str, str], bool] | None:
     return states
 
 
-def _cleanup_legacy_jobs() -> None:
-    """Delete every af-node-monitor Job in the namespace."""
-    _init_k8s()
-    if not _k8s_ready or _batch_v1 is None:
-        return
-    try:
-        jobs = _batch_v1.list_namespaced_job(
-            namespace=POD_NAMESPACE, label_selector="app=af-node-monitor"
-        )
-    except Exception as e:
-        _elog(f"[node_healthcheck] Could not list legacy Jobs: {e}")
-        return
-
-    for job in jobs.items:
-        name = getattr(job.metadata, "name", None)
-        if not name:
-            continue
-        try:
-            _batch_v1.delete_namespaced_job(
-                name=name,
-                namespace=POD_NAMESPACE,
-                propagation_policy="Background",
-            )
-            print(f"[node_healthcheck] Deleted legacy Job {name}")
-        except Exception as e:
-            _elog(f"[node_healthcheck] Could not delete legacy Job {name}: {e}")
-
-
 def update_metrics() -> None:
     now = time.time()
 
     af_nodes = _list_af_nodes()
-    if not af_nodes:
-        # No node list: read the per-mount (node-less) result files.
-        af_nodes = [("", "prod", True)]
     probe_states = _probe_pod_states()
 
     # Set once a read of the results PVC fails to return. Every further read
@@ -527,7 +492,7 @@ def update_metrics() -> None:
             labels = {
                 "mount_name": m_name,
                 "mount_path": mount_path,
-                "node": node_name or "unknown",
+                "node": node_name,
                 "node_pool": pool,
             }
 
@@ -535,8 +500,7 @@ def update_metrics() -> None:
             # see null (gap), not last-known-good green and not a false red. Red
             # is reserved for a completed failing check on a Ready node
             # (fresh=1).
-            if node_name and not ready:
-                labels["node"] = node_name
+            if not ready:
                 _clear_mount_gauges(labels)
                 continue
 
@@ -558,9 +522,9 @@ def update_metrics() -> None:
             data = _load_result(m_name, node_name)
             # Use node from result JSON (the probe pod's node); fallback to
             # discovery so the metric always reflects the node that produced it.
-            node_for_label = ((data.get("node") or "").strip() if data else "") or (
-                node_name or "unknown"
-            )
+            node_for_label = (
+                (data.get("node") or "").strip() if data else ""
+            ) or node_name
 
             labels = {
                 "mount_name": m_name,
@@ -664,7 +628,6 @@ def update_metrics() -> None:
 
 if __name__ == "__main__":  # pragma: no cover - process entrypoint
     start_http_server(8000)
-    _cleanup_legacy_jobs()
     while True:
         try:
             update_metrics()

@@ -10,10 +10,6 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch"]
-  # Only for deleting leftover Jobs of the pre-DaemonSet exporter.
-  - apiGroups: ["batch"]
-    resources: ["jobs"]
-    verbs: ["list", "delete"]
 
 ---
 apiVersion: v1

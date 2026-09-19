@@ -43,10 +43,6 @@ def fake_pod(mount="depot", node="node-a", ready=True, phase="Running", deleting
     )
 
 
-def fake_job(name="job-1"):
-    return types.SimpleNamespace(metadata=types.SimpleNamespace(name=name))
-
-
 class FakeCoreV1:
     def __init__(self, nodes, pods=None):
         self.nodes = nodes
@@ -59,20 +55,6 @@ class FakeCoreV1:
 
     def list_namespaced_pod(self, namespace, label_selector=None):
         return types.SimpleNamespace(items=self.pods)
-
-
-class FakeBatchV1:
-    """Only what the one-shot legacy-Job sweep needs."""
-
-    def __init__(self, jobs=None):
-        self.jobs = jobs or []
-        self.deleted = []
-
-    def list_namespaced_job(self, namespace, label_selector=None):
-        return types.SimpleNamespace(items=self.jobs)
-
-    def delete_namespaced_job(self, name, namespace, propagation_policy):
-        self.deleted.append(name)
 
 
 @pytest.fixture(autouse=True)
@@ -96,16 +78,14 @@ def clear_metrics():
 def k8s(monkeypatch):
     """Wire fake k8s clients into the module and reset its mutable state."""
     core = FakeCoreV1(nodes=[fake_node("node-a")])
-    batch = FakeBatchV1()
     monkeypatch.setattr(nh, "_init_k8s", lambda: None)
     monkeypatch.setattr(nh, "_k8s_ready", True)
-    # _core_v1/_batch_v1 are annotation-only declarations until _init_k8s runs
+    # _core_v1 is an annotation-only declaration until _init_k8s runs
     monkeypatch.setattr(nh, "_core_v1", core, raising=False)
-    monkeypatch.setattr(nh, "_batch_v1", batch, raising=False)
     monkeypatch.setattr(nh, "_af_nodes_cache", [])
     monkeypatch.setattr(nh, "_last_node_refresh", 0.0)
     nh._node_pools.clear()
-    return types.SimpleNamespace(core=core, batch=batch)
+    return types.SimpleNamespace(core=core)
 
 
 def sample(name, mount="/depot/", node="node-a", node_pool="prod", **extra):
@@ -125,7 +105,6 @@ def sample(name, mount="/depot/", node="node-a", node_pool="prod", **extra):
 def test_result_path_naming(monkeypatch, tmp_path):
     monkeypatch.setattr(nh, "RESULTS_DIR", tmp_path)
     assert nh._result_path("/depot/", "node-a") == tmp_path / "depot__node-a.json"
-    assert nh._result_path("/depot/", "") == tmp_path / "depot.json"
 
 
 def test_load_result_roundtrip(monkeypatch, tmp_path):
@@ -240,8 +219,8 @@ def test_refresh_skips_nodes_without_a_name(k8s):
 
 
 def test_refresh_keeps_the_last_node_list_when_the_api_fails(k8s):
-    """A refused list must not empty the node set: that would drop every
-    node back to the legacy unlabelled fallback."""
+    """A refused list must not empty the node set: every mount on every node
+    would stop reporting."""
     nh._list_af_nodes()
     nh._last_node_refresh = 0.0  # force a refresh
 
@@ -481,7 +460,6 @@ def test_vlog_and_elog(monkeypatch, capsys):
 def test_init_k8s_loads_config(monkeypatch):
     monkeypatch.setattr(nh, "_k8s_ready", False)
     monkeypatch.setattr(nh, "_core_v1", None, raising=False)
-    monkeypatch.setattr(nh, "_batch_v1", None, raising=False)
 
     class FakeConfig:
         @staticmethod
@@ -495,12 +473,8 @@ def test_init_k8s_loads_config(monkeypatch):
     class FakeCore:
         pass
 
-    class FakeBatch:
-        pass
-
     class FakeClient:
         CoreV1Api = FakeCore
-        BatchV1Api = FakeBatch
 
     monkeypatch.setattr(nh, "config", FakeConfig)
     monkeypatch.setattr(nh, "client", FakeClient)
@@ -509,23 +483,18 @@ def test_init_k8s_loads_config(monkeypatch):
     nh._init_k8s()
     assert nh._k8s_ready is True
     assert isinstance(nh._core_v1, FakeCore)
-    assert isinstance(nh._batch_v1, FakeBatch)
 
     # second call is a no-op once ready
     nh._init_k8s()
 
 
-def test_update_metrics_fallback_empty_nodes(metrics_env, monkeypatch):
+def test_update_metrics_without_nodes_publishes_no_mount_series(
+    metrics_env, monkeypatch
+):
+    metrics_env("/depot/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
     monkeypatch.setattr(nh, "_list_af_nodes", lambda: [])
-    metrics_env(
-        "/depot/",
-        "",
-        ok=True,
-        timestamp=time.time(),
-        ping_ms=1.0,
-    )
     nh.update_metrics()
-    assert sample("af_node_mount_valid", node="unknown") == 1
+    assert sample("af_node_mount_valid") is None
 
 
 def test_timeout_result_without_partial_ping(metrics_env):
@@ -616,40 +585,6 @@ def test_probe_pod_without_ready_condition_is_not_ready(k8s):
     pod.status.conditions = []
     k8s.core.pods = [pod]
     assert nh._probe_pod_states() == {("depot", "node-a"): False}
-
-
-# ── legacy Job sweep ──────────────────────────────────────────────────────────
-
-
-def test_cleanup_legacy_jobs_deletes_everything_it_finds(k8s):
-    k8s.batch.jobs = [fake_job("af-node-monitor-depot-a337-1"), fake_job("x")]
-    nh._cleanup_legacy_jobs()
-    assert k8s.batch.deleted == ["af-node-monitor-depot-a337-1", "x"]
-
-
-def test_cleanup_legacy_jobs_skips_unnamed_jobs(k8s):
-    k8s.batch.jobs = [fake_job(None), fake_job("x")]
-    nh._cleanup_legacy_jobs()
-    assert k8s.batch.deleted == ["x"]
-
-
-def test_cleanup_legacy_jobs_survives_api_errors(monkeypatch, k8s):
-    monkeypatch.setattr(nh, "_k8s_ready", False)
-    nh._cleanup_legacy_jobs()
-    assert k8s.batch.deleted == []
-
-    monkeypatch.setattr(nh, "_k8s_ready", True)
-
-    def boom(**kwargs):
-        raise nh.ApiException("denied")
-
-    k8s.batch.list_namespaced_job = boom
-    nh._cleanup_legacy_jobs()
-
-    k8s.batch = FakeBatchV1(jobs=[fake_job("stuck")])
-    monkeypatch.setattr(nh, "_batch_v1", k8s.batch, raising=False)
-    k8s.batch.delete_namespaced_job = boom
-    nh._cleanup_legacy_jobs()  # does not raise
 
 
 # ── probe_up: broken mount vs broken probe ────────────────────────────────────
