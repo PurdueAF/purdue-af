@@ -117,8 +117,7 @@ def idle_seconds(server: dict[str, Any], now: datetime.datetime) -> float:
 async def cull_once(namespace: str, timeout: float) -> None:
     now = datetime.datetime.now(datetime.timezone.utc)
     for username, servername in await gpu_servers(namespace):
-        # One server the hub cannot answer for (e.g. a pod whose user was
-        # deleted) must not shield every server listed after it.
+        # One server the hub cannot answer for must not shield the servers after it.
         try:
             await cull_server(username, servername, now, timeout)
         except Exception:

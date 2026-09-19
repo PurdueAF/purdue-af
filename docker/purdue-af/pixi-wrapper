@@ -3,11 +3,8 @@ set -euo pipefail
 
 REAL_PIXI="/opt/pixi/bin/pixi"
 HOME_PREFIX="/home/"
-# Environments the platform owns, not the user. The base env is baked into the
-# session image and is not writable from a session; the shared global env is
-# generated from the platform repository and reconciled by pixi-global-sync, so
-# a package added to it is reverted without warning. Both fail confusingly
-# rather than usefully, so say what is going on and where to go instead.
+# Platform-owned envs: the image's base env, and the shared global env that
+# pixi-global-sync reconciles (so local additions are reverted).
 BASE_ENV_PROJECT="/opt/pixi"
 GLOBAL_ENV_PROJECT="/work/pixi/global"
 

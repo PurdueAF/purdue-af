@@ -33,11 +33,6 @@ postgresql:
     registry: geddes-registry.rcac.purdue.edu
     repository: docker-hub-cache/bitnamilegacy/postgresql
     tag: 14.5.0-debian-11-r35
-  # global:
-  #   postgresql:
-  #     auth:
-  #       database: servicex
-  #       postgresPassword: leftfoot1
   primary:
     resources:
       requests:
@@ -114,10 +109,6 @@ transformer:
   memoryRequest: 4Gi
   cpuLimit: 2
   memoryLimit: 8Gi
-  # persistence:
-  #   existingClaim: "claim-dkondra"
-  #   subdir: /servicex/
-  # cachePrefix: "'xcache.cms.rcac.purdue.edu'"
   nodeSelector:
     cms-af-prod: "true"
   tolerations:

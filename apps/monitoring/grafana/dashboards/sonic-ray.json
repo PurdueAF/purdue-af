@@ -800,7 +800,7 @@
       "id": 14,
       "type": "timeseries",
       "title": "Pending requests per server",
-      "description": "Triton's own queue depth. KEDA scales the SuperSONIC releases on this; here it is an observation, not an input.",
+      "description": "Triton's own queue depth. An observation here, not a scaling input.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

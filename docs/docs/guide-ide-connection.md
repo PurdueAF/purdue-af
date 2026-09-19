@@ -79,13 +79,10 @@ obtain in the next step.
 
 ## 4. Start a Purdue AF session and obtain a JupyterHub token
 
-1. In your web browser, open [Purdue AF](https://cms.geddes.rcac.purdue.edu) and log in.
-2. Select CPU, RAM, and GPU resources and start the session.
-3. Once the session is started, in the JupyterLab menu go to
-   `File → Hub Control Panel`.
-4. Click the `Token` tab.
-5. Click `Request new API token`.
-6. Copy the token string and use it to replace `TOKEN` in the `~/.ssh/config` file.
+1. In your web browser, open [Purdue AF](https://cms.geddes.rcac.purdue.edu) and
+   start a session.
+2. Obtain a [JupyterHub API token](guide-ssh-access.md#jupyterhub-api-token) and
+   use it to replace `TOKEN` in the `~/.ssh/config` file.
 
 ## 5. Configure SSH access on the Purdue AF side
 
@@ -159,9 +156,9 @@ the IDE window connected to the AF.
 
 !!! warning
 
-    The Jupyter extension, which allows running remote notebooks from your local
-    IDE, is not going to work yet, as it cannot properly discover the AF kernels.
-    We are working on this functionality and will announce it when it is available.
+    The Jupyter extension, which runs remote notebooks from your local IDE,
+    cannot discover the AF kernels, so running notebooks this way is not
+    supported.
 
 ## Troubleshooting
 

@@ -1,4 +1,4 @@
-# Lock file must be generated with the pixi pinned by ARG PIXI_VERSION in docker/purdue-af/Dockerfile.
+# Lock with the pixi version pinned by ARG PIXI_VERSION in docker/purdue-af/Dockerfile.
 [workspace]
 name = "base-env"
 channels = ["conda-forge"]
@@ -23,11 +23,7 @@ jupyterlab    = "==4.6.3"
 ipyparallel   = "==9.2.0"
 nodejs        = "22.*"
 
-# AI in JupyterLab: the chat panel, and the ACP personas that reach the same
-# claude/codex/opencode agents the terminal has. Pulls in
-# jupyter_server_documents, which replaces the notebook document and execution
-# engine with the RTC-backed one -- that is what lets a persona edit the
-# notebook you have open, and it applies to every notebook in the session.
+# AI in JupyterLab; pulls in jupyter_server_documents, the RTC-backed engine for every notebook.
 jupyter-ai    = "==3.2.0"
 
 # Kernel discovery / misc
@@ -36,9 +32,7 @@ metakernel            = "==1.0.7"
 importlib-metadata    = "<8.8"   # opentelemetry-api requires <8.8.0
 
 # Other tools
-# xrootd puts xrdcp/xrdfs on the session PATH: the grid clients in /usr/bin
-# (gfal, voms-proxy-init) are useless for XRootD reads without it, and users
-# should not need the global pixi env just to copy a file.
+# xrootd puts xrdcp/xrdfs on the session PATH.
 xrootd        = "==5.9.2"  # matches the global env
 rucio-clients = "==41.2.2"
 pytest        = "==9.1.1"

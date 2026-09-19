@@ -2,10 +2,8 @@
 {{- $name := include "sonic-ray.name" . -}}
 # The cluster, its Tritons, and the Serve application that fronts them.
 #
-# A RayService rather than a RayCluster because the forwarder is a Ray Serve
-# application, and RayService is what runs one declaratively — with a health
-# check on the application, and with NewCluster upgrades that only cut over
-# once it answers.
+# The RayService health-checks the Serve application and cuts upgrades over
+# only once it answers.
 #
 # One custom Ray resource does the placement:
 #   triton — one per worker pod. A forwarding replica claims it, so exactly

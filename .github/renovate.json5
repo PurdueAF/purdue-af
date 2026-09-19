@@ -13,6 +13,8 @@
 //   - Python deps (docker/agentic-interface/pyproject.toml + uv.lock) via the uv manager
 //   - pixi manifests (pixi/{base,global}/pixi.toml) — NOT lockfiles
 //   - pre-commit hook versions
+//   - regex managers: Dockerfile ARG pins (pixi CLI, coding-agent CLIs, ACP
+//     adapters) and the integration-challenge revision
 //
 // Pixi lockfiles: Renovate only bumps pixi.toml. CI (ci-pixi-base.yml /
 // ci-pixi-global.yml) regenerates pixi.lock when out of sync, runs check-env,
@@ -22,8 +24,8 @@
 //
 // ── tensorflow is the anchor of pixi/global ──────────────────────────────
 // conda-forge tensorflow is the slowest-moving package in the science stack,
-// and several pins below exist ONLY to keep it solvable. Today (2026-07) it
-// is pinned to ==2.19.1 (cuda*) in pixi/global/pixi.toml and it dictates:
+// and several pins below exist ONLY to keep it solvable. It is pinned to
+// ==2.19.1 (cuda*) in pixi/global/pixi.toml and it dictates:
 //   - python  <3.13  — no conda-forge tensorflow builds for 3.13/3.14 exist
 //   - pytorch <2.13  — libtorch 2.13 wants libprotobuf 7; tensorflow 2.19.1
 //                      is built against libprotobuf 6 (see rule below)
@@ -125,10 +127,7 @@
       depNameTemplate: '@zed-industries/codex-acp',
     },
     {
-      // The IRIS-HEP integration challenge revision the stage-1c analysis
-      // smoke test runs against. Pinned to a commit so upstream movement
-      // arrives as a PR that runs the full chain: a breaking upstream change
-      // reddens that PR instead of an unrelated one.
+      // The IRIS-HEP integration challenge revision (tests/integration_challenge/upstream.pin).
       customType: 'regex',
       managerFilePatterns: ['/(^|/)upstream\\.pin$/', '/(^|/)workflows/integration-challenge/workflow\\.py$/'],
       matchStrings: ['ref=(?<currentDigest>[0-9a-f]{40})', 'IC_REF = "(?<currentDigest>[0-9a-f]{40})"'],
@@ -177,10 +176,9 @@
     {
       // Hold Triton at 26.04 for Geddes GPU nodes on NVIDIA driver R580.
       // 26.06+ is CUDA 13.3.x, whose paired Linux driver is >=610.43.02
-      // (CUDA Toolkit release notes Table 3). 26.07 was merged (#118) then
-      // rolled back (af19f790). CUDA 13.x MVC lists >=580 as the floor, but
-      // 26.07 failed in practice on R580 — pin the image here. The host
-      // NVIDIA driver is not a Renovate-tracked dep in this repo.
+      // (CUDA Toolkit release notes Table 3). CUDA 13.x MVC lists >=580 as
+      // the floor, but 26.07 fails on R580. The host NVIDIA driver is not a
+      // Renovate-tracked dep in this repo.
       // docker versioning has no range support — use a regex pin.
       // fastml/triton-torchgeo is the same Triton with extra backends
       // (apps/ray/sonic-ray), tagged <triton version>-py3-geometric, so the
@@ -242,7 +240,7 @@
     {
       // code-server has never supported nodejs >=23 (every conda-forge build
       // pins nodejs >=22,<23) — a nodejs major bump can never solve together
-      // with code-server. Blocks the doomed proposal (seen in PR #90).
+      // with code-server. Blocks the doomed proposal.
       // Relax if code-server upstream ever moves off the 22.x pin.
       matchPackageNames: ['nodejs'],
       matchFileNames: ['pixi/base/pixi.toml'],
@@ -251,7 +249,7 @@
     {
       // opentelemetry-api ==1.41.1 (pixi/base pypi deps) requires
       // importlib-metadata <8.8 — Renovate widening the conda range past it
-      // makes the env unsolvable (seen in PR #90). Bump together with the
+      // makes the env unsolvable. Bump together with the
       // opentelemetry pins, then relax.
       matchPackageNames: ['importlib-metadata'],
       matchFileNames: ['pixi/base/pixi.toml'],
@@ -271,7 +269,7 @@
     },
     {
       // pytorch 2.13 -> libtorch 2.13 requires libprotobuf >=7.35.1, which
-      // nothing else in pixi/global can accept (seen in PR #96):
+      // nothing else in pixi/global can accept:
       //   - tensorflow 2.19.1 is built against libprotobuf ==6.31.1 on every
       //     linux-64 build except _205/_255, and 2.19.1 is the newest version
       //     conda-forge has — no protobuf-7 tensorflow exists at any version.
@@ -286,7 +284,7 @@
       allowedVersions: '<2.13',
     },
     {
-      // xrootd is capped below 6.x in BOTH pixi manifests (2026-07). The 6.0
+      // xrootd is capped below 6.x in BOTH pixi manifests. The 6.0
       // packaging split moved the Python bindings out of the `xrootd` package
       // into `python-xrootd`: conda-forge ships no py312 build of `xrootd` 6.x
       // at all, so an automated bump would silently drop the `XRootD` module
@@ -304,7 +302,7 @@
       allowedVersions: '<6',
     },
     {
-      // Python is deliberately frozen at 3.12 platform-wide (2026-07): the
+      // Python is deliberately frozen at 3.12 platform-wide: the
       // science stack is capped by conda-forge tensorflow (no 3.13/3.14
       // builds exist), and the infra images/tests follow so there is ONE
       // python everywhere. Covers the docker manager (FROM python:3.12-slim)

@@ -2,9 +2,7 @@ singleuser:
   podNameTemplate: "purdue-af-{userid}"
   uid: 0
   cmd: "start-singleuser.sh"
-  # Also scopes the continuous-image-puller DaemonSet (z2jh copies this
-  # nodeSelector onto prePuller pods). Without it the puller runs on every
-  # node, including non-AF workers.
+  # Also scopes the continuous image puller: z2jh copies it onto prePuller pods.
   nodeSelector: { "cms-af-prod": "true" }
   image:
     name: "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af"
@@ -21,10 +19,6 @@ singleuser:
       kubespawner_override:
         image: "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af:0.13.8"
         node_selector: { "cms-af-prod": "true" }
-        # lifecycle_hooks:
-        # preStop:
-        #   exec:
-        #     command: ["bash", "-c", "rm -f eos-cern"]
       profile_options:
         3-interface:
           display_name: "Interface"
@@ -130,7 +124,6 @@ singleuser:
       description: "Contains the latest features but may be unstable - use at your own risk."
       kubespawner_override:
         image: "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af:pre-release"
-        # image: "ghcr.io/purdueaf/purdue-af:pre-release"
         image_pull_policy: Always
         node_selector:
           cms-af-prod: "true"
@@ -139,7 +132,6 @@ singleuser:
         mem_guarantee: 32G
         mem_limit: 64G
         extra_resource_limits:
-          # nvidia.com/mig-7g.40gb: 1
           nvidia.com/mig-1g.5gb: 1
         extra_containers:
           - name: af-pod-monitor
@@ -171,7 +163,6 @@ singleuser:
               kubespawner_override:
                 extra_resource_limits:
                   nvidia.com/mig-1g.5gb: 0
-                  # nvidia.com/mig-7g.40gb: 0
             2:
               display_name: "1 A100 GPU slice (5GB)"
               kubespawner_override:
@@ -199,16 +190,11 @@ singleuser:
   defaultUrl: "/lab"
   extraFiles:
     monitoring-setup:
-      # Must match the image's env name AND python minor version — the old
-      # path (envs/default/lib/python3.10) matched neither in the current
-      # image, so this sitecustomize (pyroscope + otel for jupyter-server)
-      # was silently inactive. base-env python is pinned 3.12 in
-      # pixi/base/pixi.toml; bump this path together with it.
+      # Must match the base-env name and python minor pinned in pixi/base/pixi.toml.
       mountPath: /opt/pixi/.pixi/envs/base-env/lib/python3.12/site-packages/sitecustomize.py
       stringData: |
         import os
 
-        # ── Pyroscope (continuous profiling) ─────────────────────────────────
         try:
             import pyroscope
             srv = os.getenv("PYROSCOPE_SERVER")
@@ -228,7 +214,6 @@ singleuser:
         except Exception:
             pass
 
-        # ── OpenTelemetry (distributed tracing) ──────────────────────────────
         try:
             endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
             if endpoint:
@@ -309,14 +294,11 @@ prePuller:
   hook:
     enabled: false
   continuous:
-    # Schedules via singleuser.nodeSelector (cms-af-prod) + scheduling.userPods.tolerations.
     enabled: true
   pullProfileListImages: false
 hub:
   image:
-    # Pull-through cache of docker.io/jupyterhub/k8s-hub-slim. Tag is
-    # deliberately unset: the chart default equals the chart version, so the
-    # image follows the version in helmrelease.yaml automatically.
+    # Tag unset: the chart default follows the chart version in helmrelease.yaml.
     name: geddes-registry.rcac.purdue.edu/docker-hub-cache/jupyterhub/k8s-hub-slim
   nodeSelector: { "cms-af-prod": "true" }
   db:
@@ -358,8 +340,7 @@ hub:
     - name: hub-extra-config
       mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d
       readOnly: true
-    # deliberately outside jupyterhub_config.d — this is a service script,
-    # not a config snippet to be exec'd at hub startup
+    # Outside jupyterhub_config.d: a service script, not a config snippet.
     - name: gpu-culler-script
       mountPath: /usr/local/etc/jupyterhub-gpu-culler
       readOnly: true
@@ -408,9 +389,7 @@ hub:
     agentic-interface:
       url: "http://agentic-interface.${namespace}.svc.cluster.local:8888"
       oauth_no_confirm: true
-    # GPU sessions of every flavor are scarce relative to demand: cull them
-    # after 24h of inactivity (the global `cull` service allows 14 days); keep
-    # the timeout in sync with the form notes in gpu-availability.py
+    # Keep --timeout in sync with the form notes in gpu-availability.py.
     gpu-culler:
       command:
         - python3
@@ -418,26 +397,12 @@ hub:
         - /usr/local/etc/jupyterhub-gpu-culler/cull-gpu-sessions.py
         - --timeout=86400
         - --every=600
-      # A managed service gets a fresh environment (JUPYTERHUB_*, PATH, LANG),
-      # not the hub's, so load_incluster_config() has to be told where the
-      # apiserver is; without these the culler fails every pass.
+      # Managed services get a fresh env without KUBERNETES_*; the kube client needs these.
       environment:
         KUBERNETES_SERVICE_HOST: kubernetes.default.svc
         KUBERNETES_SERVICE_PORT: "443"
   loadRoles:
-    # Singleuser server tokens ship with `users:activity!user` and
-    # `access:servers!server` only, so `GET /users/<name>` comes back WITHOUT a
-    # `servers` key — an agent running inside a session could not see the very
-    # session it runs in. `read:servers!user` scopes that to the token's own
-    # user; it grants no visibility of anyone else.
-    #
-    # `delete:servers!server` lets a session stop itself, which is what the
-    # Shut Down button needs. Stopping the Jupyter server instead leaves the
-    # Hub believing the session is healthy: the pod keeps running with nothing
-    # listening on it. The browser cannot ask the Hub directly — the `_xsrf`
-    # cookie is scoped to `/hub/`, so a page at `/user/<name>/` cannot read
-    # the token it would have to send — so the session's own token does it.
-    # `!server` is the tightest form: this token, this session, nobody else's.
+    # read:servers!user lets a session see itself; delete:servers!server lets it shut itself down.
     server:
       description: "Singleuser server token: report activity, read own session, stop itself"
       scopes:

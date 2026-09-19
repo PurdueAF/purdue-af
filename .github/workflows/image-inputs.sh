@@ -44,10 +44,7 @@ paths_for() {
 		EOF
 		;;
 	agentic-interface)
-		# The skill is the user-facing contract of the MCP server, versioned
-		# WITH it: a skill change alters this hash, so the publish stage's
-		# auto-release mints a new version (minor for skill changes — see
-		# ci.yml) even when the server code is untouched.
+		# The skill versions with the server (RELEASING.md).
 		cat <<-EOF
 			docker/agentic-interface
 			apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py

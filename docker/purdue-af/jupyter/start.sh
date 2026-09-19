@@ -15,7 +15,8 @@ _log() {
 _log "Entered start.sh with args:" "$@"
 
 # The run-hooks function looks for .sh scripts to source and executable files to
-# run within a passed directory.
+# run within a passed directory. A sourced hook runs in this shell under
+# `set -e`: a top-level exit or failing command kills the container.
 run-hooks() {
 	if [[ ! -d "${1}" ]]; then
 		return

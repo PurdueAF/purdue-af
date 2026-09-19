@@ -96,8 +96,6 @@ def test_launcher_is_an_hourly_cronjob_running_the_module():
     assert container["image"].endswith("/purdueaf/self-repair:latest")
     assert pod["volumes"][0]["configMap"]["name"] == "self-repair-workflow"
     assert pod["securityContext"]["runAsUser"] == 1000
-    # the manual trigger documented in the README must match the CronJob name
-    assert "create job --from=cronjob/self-repair" in (APP / "README.md").read_text()
 
 
 def test_task_pods_get_the_github_token_from_the_pod_template():

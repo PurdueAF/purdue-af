@@ -82,7 +82,6 @@ gateway:
             mountPropagation: HostToContainer
     worker:
       extraPodConfig:
-        # schedulerName: yunikorn
         nodeSelector:
           cms-af-prod: "true"
         tolerations:
@@ -108,10 +107,7 @@ gateway:
         env:
           - name: DASK_LOGGING__DISTRIBUTED
             value: warning
-          # Suppress FutureWarnings from coffea (e.g. nanoevents vector migration)
-          # that fire on every worker import. Targeted to coffea only; user-code
-          # warnings from other modules are unaffected.
-          # Format: ignore::category:module (module is a substring/regex match)
+          # Silence coffea FutureWarnings on every worker import; other modules are unaffected.
           - name: PYTHONWARNINGS
             value: "ignore::FutureWarning:coffea"
           - name: DASK_DISTRIBUTED__WORKER__PRELOAD
@@ -157,10 +153,7 @@ gateway:
           except pkg_resources.DistributionNotFound:
               subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "ldap3"])
 
-          # geddes-auth has no index on uid: a filtered search under ou=AllPeople
-          # scans 69k entries for 15-25s, and options_handler runs synchronously
-          # on the gateway's event loop. Accounts sit at uid=<name>,<baseDN>, so
-          # read that DN (~0ms) and keep the search only as a fallback.
+          # geddes-auth has no uid index: read the account DN directly; search only as a fallback.
           from ldap3 import BASE, SUBTREE, Server, Connection
           url = "geddes-auth.rcac.purdue.edu"
           baseDN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
@@ -208,37 +201,28 @@ gateway:
           else:
               uid,gid = ldap_lookup(user.name)
 
-          # Remove NVIDIA_VISIBLE_DEVICES from the environment
           if "NVIDIA_VISIBLE_DEVICES" in options.env:
               del options.env["NVIDIA_VISIBLE_DEVICES"]
           
-          # Determine which conda environment to use
           conda_env = None
           
-          # Check if pixi_project is provided (and not empty string)
           pixi_project = getattr(options, 'pixi_project', None)
           if pixi_project and pixi_project.strip():
-              # If pixi_project is provided, conda_env should not be explicitly set
-              # Check if user explicitly provided a conda_env
               user_conda_env = getattr(options, 'conda_env', None)
               if user_conda_env and user_conda_env.strip():
                   raise ValueError("pixi-env and conda-env are mutually exclusive. Please specify only one.")
               
-              # Validate pixi project directory
               pixi_project_dir = pixi_project.strip()
               pixi_project_name = getattr(options, 'pixi_env', 'default')
               
-              # Check if pixi.toml exists
               pixi_toml_path = os.path.join(pixi_project_dir, 'pixi.toml')
               if not os.path.exists(pixi_toml_path):
                   raise ValueError(f"pixi.toml not found in {pixi_project_dir}. Please provide a valid pixi project directory.")
               
-              # Check if environment exists
               env_path = os.path.join(pixi_project_dir, '.pixi', 'envs', pixi_project_name)
               if not os.path.exists(env_path):
                   raise ValueError(f"Pixi environment 'default' not found at {env_path}. Please build the environment first by running 'pixi install' in {pixi_project_dir}.")
               
-              # Verify it's a conda environment (check for bin/python or bin/python3)
               bin_python = os.path.join(env_path, 'bin', 'python')
               bin_python3 = os.path.join(env_path, 'bin', 'python3')
               if not (os.path.exists(bin_python) or os.path.exists(bin_python3)):
@@ -246,13 +230,11 @@ gateway:
               
               conda_env = env_path
           else:
-              # Use conda_env (must be specified if pixi_project is not provided)
               user_conda_env = getattr(options, 'conda_env', None)
               if not user_conda_env or not user_conda_env.strip():
                   raise ValueError("Either conda_env or pixi_project must be specified")
               conda_env = user_conda_env.strip()
 
-          # Set up environment variables and commands using the conda_env path
           options.env["PATH"]=f"{conda_env}/bin/:"+options.env.pop("PATH")
           options.env["CPLUS_INCLUDE_PATH"]=f"{conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
           options.env["XRD_REQUESTTIMEOUT"]="300"
@@ -270,25 +252,8 @@ gateway:
           c.KubeClusterConfig.scheduler_extra_pod_labels = {"user": user.name}
           c.KubeClusterConfig.worker_extra_pod_labels = {
             "user": user.name,
-            #"queue": "root.community.cms"
           }
 
-          # c.KubeClusterConfig.scheduler_extra_pod_annotations = {
-          #     "profiles.grafana.com/memory.scrape": "true",
-          #     "profiles.grafana.com/memory.port": "8080",
-          #     "profiles.grafana.com/cpu.scrape": "true",
-          #     "profiles.grafana.com/cpu.port": "8080",
-          #     "profiles.grafana.com/goroutine.scrape": "true",
-          #     "profiles.grafana.com/goroutine.port": "8080",
-          # }
-          # c.KubeClusterConfig.worker_extra_pod_annotations = {
-          #     "profiles.grafana.com/memory.scrape": "true",
-          #     "profiles.grafana.com/memory.port": "8080",
-          #     "profiles.grafana.com/cpu.scrape": "true",
-          #     "profiles.grafana.com/cpu.port": "8080",
-          #     "profiles.grafana.com/goroutine.scrape": "true",
-          #     "profiles.grafana.com/goroutine.port": "8080",
-          # }
 
           setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; export DASK_DISTRIBUTED__WORKER__PROFILE__INTERVAL=1000000000; export DASK_DISTRIBUTED__SCHEDULER__PROFILE__INTERVAL=1000000000; "
           desired_cores = options.worker_cores
@@ -315,7 +280,7 @@ gateway:
           handler=options_handler,
       )
 
-      # Per-user cap (not in upstream Dask Gateway): at most one cluster while pending, running, or stopping.
+      # Per-user cluster cap, not in upstream Dask Gateway.
       from dask_gateway_server.backends.kubernetes import KubeBackend
       from dask_gateway_server.backends.base import PublicException
       from dask_gateway_server import models

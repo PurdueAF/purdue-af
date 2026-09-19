@@ -109,9 +109,8 @@ def single_choice_model(
     Emits the standards-compliant, inline single-select enum shape:
       • with ``labels`` → a titled enum: ``oneOf: [{const, title}, …]``
       • without labels → a plain ``enum: [...]``
-    We deliberately avoid the deprecated ``enumNames`` (which newer clients no
-    longer render) and any ``$ref``/``$defs`` (which break dropdown rendering) —
-    the field is a flat ``str`` so the whole schema stays inline.
+    No deprecated ``enumNames`` and no ``$ref``/``$defs`` (which break dropdown
+    rendering): the field is a flat ``str`` so the whole schema stays inline.
 
     A ``str`` annotation (rather than ``Literal``) is also required: the MCP SDK's
     elicitation validator only accepts raw primitive annotations and rejects

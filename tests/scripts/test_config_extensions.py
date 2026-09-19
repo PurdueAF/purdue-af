@@ -1,12 +1,6 @@
 """Tests for the extension installer in docker/purdue-af/scripts/config-extensions.sh.
 
-The interesting property is version reconciliation. The installer used to strip
-the `@version` suffix before checking what was present, so a pinned spec was
-only ever honoured on a cold home directory — once any build of an extension
-was installed, the pin could never move it. That is how a session ended up on
-openai.chatgpt 26.901.22334, which emits `using` declarations that the Node 22
-bundled with code-server cannot parse, leaving the Codex view stuck loading.
-
+A pinned `id@version` must move an already-installed build of that extension.
 code-server is stubbed: it reports a fixed extension list and records the argv
 of every install, so the tests assert the exact commands a session would run.
 """
@@ -121,7 +115,7 @@ def test_skips_when_pinned_version_matches(run_install):
 
 
 def test_reinstalls_when_pinned_version_differs(run_install):
-    """The regression: a pinned spec must move an already-installed build."""
+    """A pinned spec moves an already-installed build."""
     installs = run_install(
         "openai.chatgpt@26.820.71523", ["openai.chatgpt@26.901.22334"]
     )
@@ -154,15 +148,12 @@ def _user_settings_section():
     """The block that writes ~/.jupyter/lab/user-settings, before code-server."""
     text = SCRIPT.read_text()
     start = text.index("TOPBAR_CONFIG_PATH=")
-    end = text.index("# Pre-install code-server extensions")
+    end = text.index("CODE_SERVER_BIN=")
     return text[start:end]
 
 
 def test_root_owned_user_settings_are_repaired_before_the_first_write(tmp_path):
-    """Images before 0.13.5 wrote user-settings as root and never chowned the
-    grafana-iframe dir, so a home from that window has a root-owned
-    plugin.jupyterlab-settings. Writing it as the user then fails, and the
-    sourced hook takes the container down with it."""
+    """A root-owned user-settings file is chowned back before the user writes it."""
     home = tmp_path / "home" / "jovyan"
     home.mkdir(parents=True)
     log = tmp_path / "calls.log"

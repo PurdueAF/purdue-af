@@ -34,8 +34,8 @@ def register(mcp: Any) -> None:
     async def query_storage_usage() -> str:
         """Report storage quota and usage for the authenticated user's home and work directories.
 
-        Data is sourced from Prometheus (scraped from af-pod-monitor, refreshed every
-        5 minutes). Returns used / total space and utilisation percentage for
+        Data comes from af-pod-monitor via Prometheus, refreshed every few
+        minutes. Returns used / total space and utilisation percentage for
         each directory.
         """
         user = require_user()

@@ -15,26 +15,18 @@ server:
   automountServiceAccountToken: true
   image:
     repository: geddes-registry.rcac.purdue.edu/docker-hub-cache/prom/prometheus
-  # securityContext:
-  #   runAsUser: 0
-  #   runAsNonRoot: false
-  #   fsGroup: 0
   useExistingClusterRoleName: prometheus-sa-role
   releaseNamespace: true
   configPath: /etc/config/prometheus.yml
   storagePath: /prometheus
 
   global:
-    # scrape_timeout must be < scrape_interval or scrapes pile up and starve
-    # the HTTP server (health probes) on Ceph-backed TSDB stalls.
+    # Must stay below scrape_interval, or scrapes pile up and starve the health probes.
     scrape_interval: 15s
     evaluation_interval: 15s
     scrape_timeout: 10s
 
-  # TSDB lives on RWO block storage (see pvc.yaml), but keep soft probes and
-  # query caps: WAL replay / compaction can still stall the HTTP server long
-  # enough for the chart defaults (~75s liveness) to SIGKILL mid-start
-  # (exit 137, reason=Error — not OOMKilled).
+  # WAL replay and compaction can outlast the chart default probes (~75 s).
   startupProbe:
     enabled: true
     periodSeconds: 10
@@ -54,9 +46,7 @@ server:
     - query.timeout=2m
     - query.max-concurrency=20
     - storage.tsdb.wal-compression
-  # Non-recursive only: chmod -R walks every TSDB inode and can hang Init
-  # for minutes on a large volume. Dir mode is enough for nobody (65534)
-  # to create new files on a fresh RBD mount.
+  # Non-recursive: chmod -R walks every TSDB inode and can hang Init for minutes.
   extraInitContainers:
     - name: prometheus-data-permission-fix
       image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.36
@@ -75,9 +65,7 @@ server:
       - hosts: [prometheus-af.geddes.rcac.purdue.edu]
     ingressClassName: public
 
-  # Keep Recreate: RWO PVC + TSDB file lock — RollingUpdate would schedule a
-  # second pod that cannot mount (or would corrupt) the same data. True
-  # zero-downtime needs HA Prometheus or remote-write-only + Thanos receive.
+  # Recreate: the RWO PVC and TSDB lock rule out a second pod.
   strategy:
     type: Recreate
 
@@ -119,11 +107,7 @@ server:
   retention: 30d
   retentionSize: 30GB
 
-# The chart's scrapeConfigs is a MAP, so it merges with (rather than being
-# replaced by) the scrape_configs list below. Its k8s defaults need cluster-scoped
-# node/pod/service/endpointslice list+watch, but prometheus-sa only has a
-# namespaced Role — they discover nothing and spam RBAC errors. Keep only the
-# self-scrape.
+# The chart default k8s jobs need cluster-scoped RBAC prometheus-sa lacks; keep only self-scrape.
 scrapeConfigs:
   kubernetes-api-servers:
     enabled: false
@@ -146,19 +130,13 @@ scrapeConfigs:
 
 serverFiles:
   prometheus.yml:
-    # No remote_write: thanos-receive-router was never deployed, and writing to a
-    # nonexistent endpoint pins the queue at capacity retrying forever.
     scrape_configs:
-      # The scrape-metrics ServiceMonitor label feeds RANCHER's Prometheus,
-      # not this server — scrape the sync Service directly so the
-      # AFGlobalEnv* alerts below can actually evaluate here.
+      # The scrape-metrics ServiceMonitor feeds Rancher Prometheus, not this server.
       - job_name: "pixi-global-sync"
         static_configs:
           - targets:
               - "pixi-global-sync:9099"
-      # The pushgateway (prometheus-pushgateway above): the self-repair
-      # workflow pushes its per-tick metrics there. honor_labels keeps the
-      # job label the workflow pushed instead of this scrape job's name.
+      # honor_labels keeps the job label the workflow pushed.
       - job_name: "self-repair"
         honor_labels: true
         static_configs:
@@ -174,11 +152,7 @@ serverFiles:
         static_configs:
           - targets:
               - "rancher-monitoring-kube-state-metrics.cattle-monitoring-system.svc.cluster.local:8080"
-        # Rancher's KSM is cluster-scoped (~244k of ~314k head series here).
-        # AF alerts/dashboards only need cms namespaced series plus
-        # cluster-scoped ones with no namespace label (nodes, PVs, …). Dropping
-        # rook-ceph/kube-system/… cuts TSDB size and Ceph compaction I/O that
-        # has been freezing this server long enough to fail liveness probes.
+        # Rancher KSM is cluster-scoped; keep cms and namespace-less series only.
         metric_relabel_configs:
           - source_labels: [namespace]
             regex: "(|cms)"
@@ -214,10 +188,7 @@ serverFiles:
               - "vm-hammer-f003.rcac.purdue.edu:9796"
               - "vm-hammer-f004.rcac.purdue.edu:9796"
               - "vm-hammer-f005.rcac.purdue.edu:9796"
-      # Mount metrics export node=<AF worker>. Scraping them through
-      # af-pod-monitor also attaches pod_node=<Deployment host> (e.g.
-      # geddes-b001), which is not cms-af-prod/dev and confuses every panel.
-      # Scrape the Service directly, like pixi-global-sync.
+      # Scraped directly: via af-pod-monitor, pod_node would carry the Deployment host.
       - job_name: "af-node-monitor"
         static_configs:
           - targets:
@@ -229,8 +200,6 @@ serverFiles:
               names:
                 - ${namespace}
         relabel_configs:
-          # - source_labels: [__meta_kubernetes_service_label_app]
-          #   target_label: 'app'
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: "pod"
           - source_labels: [__meta_kubernetes_endpoint_address_target_ip]
@@ -242,8 +211,7 @@ serverFiles:
           - source_labels: [__meta_kubernetes_namespace]
             target_label: "namespace"
             replacement: "$1"
-          # Session / aux pod host. Must not be "node" — that label is reserved
-          # for af-node-monitor's AF-worker label (see dedicated job above).
+          # Not "node": af-node-monitor owns that label.
           - source_labels: [__meta_kubernetes_pod_node_name]
             target_label: "pod_node"
           - source_labels:
@@ -258,7 +226,7 @@ serverFiles:
           - source_labels: [__meta_kubernetes_service_label_scrape_metrics]
             action: keep
             regex: "true"
-          # Dedicated static jobs own these Services (see above / pixi job).
+          # Dedicated static jobs own these Services.
           - source_labels: [__meta_kubernetes_service_name]
             regex: "pixi-global-sync|af-node-monitor-service"
             action: drop
@@ -268,14 +236,7 @@ serverFiles:
           - source_labels: [__address__]
             regex: ".*:(8888|8889)$"
             action: drop
-      # Loki was not scraped at all until storage-loki-0 filled up, so a log
-      # store that could neither ingest nor answer a single query showed up
-      # only as "the Grafana log panels are empty". Two ports on the one pod:
-      # 3100 is Loki's own /metrics, 9101 is the fs-exporter sidecar that
-      # reports PVC free space (see apps/monitoring/loki/values.yaml).
-      # Pod SD rather than the Service on purpose — a full disk makes Loki
-      # unready, which would drop it out of Endpoints exactly when the
-      # AFLokiStorage* alerts need the data.
+      # Pod SD, not the Service: a full disk makes Loki unready and drops it from Endpoints.
       - job_name: "loki"
         kubernetes_sd_configs:
           - role: pod
@@ -283,8 +244,7 @@ serverFiles:
               names:
                 - ${namespace}
         relabel_configs:
-          # component=single-binary excludes the memcached chunks/results-cache
-          # pods, which carry app.kubernetes.io/name=loki from the same release.
+          # Excludes the memcached cache pods, which share app.kubernetes.io/name=loki.
           - source_labels:
               [
                 __meta_kubernetes_pod_label_app_kubernetes_io_component,
@@ -510,8 +470,6 @@ serverFiles:
                 The immediate solution is to increase quota for this user (PVC size) by 1 GB,
                 and then ask them to clean up files immediately.
           - alert: AFGlobalEnvOutOfSync
-            # build ~20-40 min + retry cooldowns; 3h of drift means builds
-            # keep failing (see pixi-global-sync pod logs / check-env output)
             expr: pixi_global_sync_in_sync == 0
             for: 3h
             labels:
@@ -538,8 +496,6 @@ serverFiles:
                 User sessions relying on the global env are likely broken.
                 Check: kubectl logs deploy/pixi-global-sync
           - alert: AFGlobalEnvSyncDown
-            # also fires if scraping of the sync service is broken — silence
-            # is never mistaken for health
             expr: absent(pixi_global_sync_in_sync)
             for: 1h
             labels:
@@ -552,8 +508,7 @@ serverFiles:
                 down or its Service/scrape wiring is broken. The global env is
                 not being kept in sync while this persists.
           - alert: AFGlobalEnvDaemonStale
-            # Metrics can still scrape while the loop is wedged; heartbeat age
-            # catches that case (absent metrics are AFGlobalEnvSyncDown).
+            # Metrics can still scrape while the loop is wedged.
             expr: time() - pixi_global_sync_loop_heartbeat_timestamp_seconds > 900
             for: 10m
             labels:
@@ -570,9 +525,7 @@ serverFiles:
       # Can users get in? ---------------------------------------------------
       - name: af-access
         rules:
-          # Scoped to this environment's own hub on purpose. The jupyterhub
-          # job is a static target list, so an unscoped `up == 0` would fire
-          # for any other hub added to it and drown the health signal.
+          # Scoped to this hub: the jupyterhub job is a static list shared with other hubs.
           - alert: AFHubDown
             expr: up{job="jupyterhub", instance="${jupyterhub_host}"} == 0
             for: 5m
@@ -585,13 +538,7 @@ serverFiles:
                 The hub has been unreachable for 5 minutes. Nobody can start,
                 stop or reach a session while this is true.
                 Check: kubectl -n cms get pods -l component=hub
-          # Observed spawn statuses: success, failure, already-pending,
-          # throttled, too-many-users. Only `failure` is a real fault — the
-          # others are the hub deliberately refusing, and alerting on them
-          # would fire every time the facility is simply busy.
-          # The GPU gate refuses from modify_pod_hook, after the spawn has
-          # started, so its refusals land in `failure` too — subtract them to
-          # keep this alert about faults. They get their own alert below.
+          # Only `failure` is a fault; the GPU gate files its refusals there too, so subtract them.
           - alert: AFSpawnFailures
             expr: >
               clamp_min(
@@ -609,12 +556,7 @@ serverFiles:
                 {{ printf "%.0f" $value }} spawn failures in 30 minutes — users are
                 being turned away at login. Check the hub logs, and whether the
                 singleuser image still pulls.
-          # A refusal is expected when the GPUs really are taken
-          # (reason="exhausted"). reason="reserved" means the gate refused a
-          # user while Prometheus still saw a free GPU: a reservation from an
-          # admitted spawn outlived the pod it was made for. A short burst is
-          # a genuine race between two spawns; a sustained one is a bug in the
-          # gate, and it turns users away from GPUs that are sitting idle.
+          # Sustained reason="reserved" means a reservation outlived its pod and blocks an idle GPU.
           - alert: AFGpuSpawnRefusedWithGpuFree
             expr: sum(increase(purdue_af_hub_gpu_spawn_refused_total{reason="reserved"}[30m])) > 3
             for: 10m
@@ -643,9 +585,7 @@ serverFiles:
       # Do users have worker capacity? -------------------------------------
       - name: af-compute
         rules:
-          # AF session/Dask nodes carry hub.jupyter.org/dedicated=cms-af.
-          # Mount metrics are deliberately null on NotReady nodes, so without
-          # this alert a power loss / drain looks like "storage is fine".
+          # Mount metrics are null on NotReady nodes, so a drain would otherwise look healthy.
           - alert: AFProdNodesNotReady
             expr: >
               (kube_node_status_condition{condition="Ready", status="true"} == 0)
@@ -667,15 +607,7 @@ serverFiles:
       # Can users read data? ------------------------------------------------
       - name: af-data
         rules:
-          # `valid == 0` alone is ambiguous: it also means the check never ran.
-          # af_node_mount_result_fresh separates the two so a scheduling gap in
-          # the monitor is never reported as a storage outage.
-          #
-          # NotReady / drained nodes publish no mount gauges at all (null) —
-          # they must not appear here (see AFProdNodesNotReady). A completed
-          # failing check on a Ready node (valid=0, fresh=1) is a warning —
-          # EOS/NFS/CVMFS blips are common and must not flip facility health
-          # to Degraded the way hub-down or NotReady workers do.
+          # fresh separates a failed check from one that never ran; mount blips stay warnings.
           - alert: AFMountInvalid
             expr: af_node_mount_valid{node_pool="prod"} == 0 and af_node_mount_result_fresh{node_pool="prod"} == 1
             for: 10m
@@ -707,15 +639,7 @@ serverFiles:
                 probe pod is missing or not Ready, 1 means it runs and the
                 mount is what is not answering.
                 Check: kubectl -n cms get pods -l app=af-node-monitor,component=probe -o wide
-          # Healthy metadata latency across all 17 nodes sits at p50 ~60 ms,
-          # p90 ~350 ms, worst ~906 ms. The probe reports its timeout value
-          # (10000 ms) when it gives up, and AFMountInvalid already covers that,
-          # so the upper bound keeps this alert to real degradation.
-          #
-          # Checks only refresh every ~10 minutes (PROBE_INTERVAL_S), and
-          # individual samples often dip below 2s even while the mount is
-          # chronically slow — so an instant `> 2000` with `for:` never holds.
-          # avg_over_time across ~2 check cycles detects sustained elevation.
+          # The upper bound leaves timeouts to AFMountInvalid; avg_over_time spans about two checks.
           - alert: AFMountSlow
             expr: avg_over_time(af_node_mount_metadata_latency_ms{node_pool="prod"}[20m]) > 2000 and avg_over_time(af_node_mount_metadata_latency_ms{node_pool="prod"}[20m]) < 10000
             for: 5m
@@ -745,9 +669,7 @@ serverFiles:
                 the comparison has no series to match and the alert that exists
                 to catch a dead exporter goes quiet when one dies.
                 Check: kubectl -n cms logs -l name=af-node-monitor
-          # A results PVC the exporter cannot read drops every af_node_mount_*
-          # series to null. Null is not a value any mount alert can match, so
-          # without this rule the whole storage signal disappears silently.
+          # An unreadable results PVC nulls every af_node_mount_* series, which no mount alert matches.
           - alert: AFNodeMonitorResultsUnavailable
             expr: af_node_monitor_results_available == 0
             for: 10m
@@ -762,9 +684,7 @@ serverFiles:
                 blind rather than green. The mounts themselves may be fine.
                 Check: kubectl -n cms logs -l name=af-node-monitor
 
-          # Dev nodes are monitored too, but they are not part of the facility
-          # users see — a warning keeps them off the facility health verdict
-          # while still showing up for operators.
+          # Dev nodes stay warnings, off the facility health verdict.
           - alert: AFMountInvalidDev
             expr: af_node_mount_valid{node_pool="dev"} == 0 and af_node_mount_result_fresh{node_pool="dev"} == 1
             for: 30m
@@ -794,18 +714,11 @@ serverFiles:
                 Check: kubectl -n cms get deploy {{ $labels.deployment }}
 
       # Can we still see what the facility is doing? -------------------------
-      # storage-loki-0 ran to 100% because limits_config.retention_period was
-      # left at its 0s default ("keep forever"), and nothing watched the volume:
-      # node-exporter skips kubelet pod mounts, kubelet_volume_stats_* needs
-      # cluster-scoped scrape access prometheus-sa does not have, and Loki
-      # exports no filesystem gauge. node_filesystem_*{job="loki"} below comes
-      # from the fs-exporter sidecar added in apps/monitoring/loki/values.yaml.
+      # node_filesystem_*{job="loki"} comes from the fs-exporter sidecar in loki/values.yaml.
       - name: af-observability
         rules:
           - alert: AFLokiStorageWillFill
-            # The alert that would have caught this one months early: fires when
-            # the trend says the PVC runs out within a week, whatever the cause
-            # (retention unset, retention window raised, log volume grown).
+            # Fires when the trend says the PVC fills within a week.
             expr: |
               predict_linear(
                 node_filesystem_avail_bytes{job="loki",mountpoint="/var/loki"}[6h],
@@ -843,8 +756,7 @@ serverFiles:
                 kubectl -n cms patch pvc storage-loki-0 -p
                 '{"spec":{"resources":{"requests":{"storage":"<bigger>Gi"}}}}'
           - alert: AFLokiStorageFull
-            # Loki's own "I could not write" counter, as a backstop for the case
-            # where the sidecar or its scrape is the thing that broke.
+            # Backstop for when the sidecar or its scrape is what broke.
             expr: increase(loki_ingester_wal_disk_full_failures_total{job="loki"}[15m]) > 0
             for: 5m
             labels:
@@ -895,8 +807,7 @@ kube-state-metrics:
   enabled: false
 prometheus-node-exporter:
   enabled: false
-# Batch metrics: the self-repair workflow (workflows/self-repair) PUTs one
-# sample set per tick; the `self-repair` scrape job below reads them here.
+# The self-repair workflow pushes per-tick metrics here; the self-repair scrape job reads them.
 prometheus-pushgateway:
   enabled: true
   nodeSelector:

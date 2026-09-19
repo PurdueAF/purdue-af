@@ -1,10 +1,7 @@
 """Tests for the publish stage of .github/workflows/ci.yml.
 
-Publish is the last gate before images reach the cluster, and it talks to GHCR
-on every call. Both failure modes seen in practice — secondary rate limits on
-back-to-back retags, and DNS/network blips fetching blobs — are transient, so
-an unguarded call turns a fully green pipeline red. These tests assert every
-GHCR call stays wrapped in the retry helper."""
+Every GHCR call is wrapped in the retry helper: rate limits and network blips
+are transient."""
 
 import re
 

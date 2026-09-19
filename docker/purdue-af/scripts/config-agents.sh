@@ -1,40 +1,24 @@
 #!/bin/bash
-# Set up the coding agents for this session: register the Purdue AF MCP server
-# with each CLI (which also covers their code-server extensions, since each
-# extension reads the config its CLI writes), install the bundled skill, and
-# write the platform context into the file every harness reads automatically.
+# Register the AF MCP server with each agent CLI (their code-server extensions
+# read the same configs), install the bundled skill, and write the platform
+# context where each harness reads it. Never fatal; everything lives in a
+# function that returns, since start.sh sources this file.
 #
-# No config stores the token. Claude Code expands ${VAR} in MCP headers at read
-# time, Codex reads `bearer_token_env_var` at connect time, and opencode expands
-# `{env:...}`, so all three pick up the session's own JUPYTERHUB_API_TOKEN —
-# which rotates on every spawn and would otherwise go stale in the persistent
-# home directory.
-#
-# Never fatal: a session must start even if an agent CLI is broken or the MCP
-# service is mid-redeploy.
-#
-# start.sh SOURCES every *.sh in before-notebook.d, so this file runs in the
-# startup shell itself: a top-level `exit` would terminate the container
-# before JupyterLab ever launches, and `set -u`/`set -e` would leak into the
-# rest of start.sh. Everything therefore lives in a function that returns.
+# No config stores the token: JUPYTERHUB_API_TOKEN rotates on every spawn and
+# the home is persistent, so each CLI expands the variable at connect time.
 
 _config_agents() {
-	# Must match the skill's references and the repo .mcp.json — the skill names
-	# this server explicitly, so a mismatch makes its instructions wrong.
+	# Same name as the repo .mcp.json and jupyter_server_config.py.
 	local MCP_NAME MCP_URL AUTH_HEADER SKILL_SRC AGENT_SECTION PYTHON NEW_HOME
 	local OPENCODE_CFG OPENCODE_INSTRUCTIONS target
 	MCP_NAME="purdue-af-agentic-interface"
-	# In-cluster address of the hub-registered service. The public URL is not
-	# usable from inside a session (JUPYTERHUB_PUBLIC_HUB_URL is empty there), and
-	# the service strips this prefix itself.
+	# In-cluster address: JUPYTERHUB_PUBLIC_HUB_URL is empty inside a session.
 	MCP_URL="http://agentic-interface.${NAMESPACE:-cms}.svc.cluster.local:8888/services/agentic-interface/mcp"
-	# Single-quoted so the placeholder reaches the config file verbatim — the
-	# agent expands it per run, which is the whole point.
+	# Single-quoted: the placeholder reaches the config verbatim.
 	AUTH_HEADER='Authorization: Bearer ${JUPYTERHUB_API_TOKEN}'
 	SKILL_SRC="/opt/purdue-af/skills"
 	AGENT_SECTION="/opt/purdue-af/agents/platform-context.md"
-	# Absolute path on purpose: `su` resets PATH, and the system python3 on
-	# Rocky 8 is 3.6 — too old for the platform's scripts.
+	# `su` resets PATH, and Rocky 8's system python3 is 3.6.
 	PYTHON="/opt/pixi/.pixi/envs/base-env/bin/python3"
 	[[ -x "${PYTHON}" ]] || PYTHON="python3"
 
@@ -80,45 +64,17 @@ _config_agents() {
 		"codex mcp remove '${MCP_NAME}'" \
 		"codex mcp add '${MCP_NAME}' --url '${MCP_URL}' --bearer-token-env-var JUPYTERHUB_API_TOKEN"
 
-	# opencode has no `mcp add`, and it does not need one: OPENCODE_CONFIG names a
-	# config layer that opencode merges BETWEEN the user's global config and their
-	# project config, so the facility gets a file of its own and never edits
-	# theirs. Written even when the CLI is absent — a user who installs opencode
-	# into their own home afterwards finds it already wired up.
-	#
-	# `instructions` is the ONLY channel that hands opencode the platform context,
-	# and deliberately so. The schema calls it "additional instruction files", i.e.
-	# it is ADDITIVE to opencode's own AGENTS.md lookup — so also writing
-	# ~/.config/opencode/AGENTS.md would load the same file twice on every turn.
-	# `instructions` is the half to keep: opencode's AGENTS.md lookup is
-	# first-match-wins, so a project AGENTS.md, which an analysis repo may well
-	# have, would suppress the global file exactly where the guardrails matter.
-	#
-	# Guarded like every other use of AGENT_SECTION: a config naming a file that
-	# is not there is worse than one that omits it.
+	# opencode: OPENCODE_CONFIG is a layer merged between the user's global and
+	# project configs. `instructions` is its only platform-context channel: a
+	# project AGENTS.md would shadow a global one.
 	OPENCODE_INSTRUCTIONS=""
 	if [[ -f "${AGENT_SECTION}" ]]; then
 		OPENCODE_INSTRUCTIONS="\"instructions\": [\"${AGENT_SECTION}\"],"
 	fi
 	OPENCODE_CFG="${NEW_HOME}/.config/opencode/purdue-af.json"
-	# Written AS THE USER. This path runs through ~/.config, which lives in a
-	# persistent home the user can replace with a symlink between sessions: a
-	# root mkdir and redirect would follow it, and a root `chown` on it would
-	# dereference it and hand them ownership of whatever it points at (/etc,
-	# say). Dropping privileges first makes the question moot and removes the
-	# need to chown anything back afterwards.
-	#
-	# `permission` is here because of jupyter-ai, not opencode. jupyter-ai ships
-	# its OpenCode persona with edit/bash set to "ask" and injects that as
-	# OPENCODE_CONFIG — but only when OPENCODE_CONFIG is unset, which it never is
-	# in a session, because the export below sets it. Without restating the two
-	# settings, wiring the facility layer in would quietly take the approval
-	# prompts away from the JupyterLab chat. Stating them also makes the terminal
-	# behaviour explicit rather than whatever opencode defaults to; a user who
-	# wants neither prompt can override in their own opencode.json, which is
-	# merged on top of this layer.
-	#
-	# The heredoc is unquoted so ${MCP_URL} expands; \$schema must not.
+	# As the user: ~/.config may be a user-planted symlink.
+	# `permission` restates jupyter-ai's persona defaults, which it only applies
+	# when OPENCODE_CONFIG is unset. Unquoted heredoc: ${MCP_URL} expands, \$schema not.
 	if _as_user "mkdir -p '${NEW_HOME}/.config/opencode' && cat >'${OPENCODE_CFG}'" <<-JSON
 		{
 		  "\$schema": "https://opencode.ai/config.json",
@@ -140,19 +96,14 @@ _config_agents() {
 		}
 	JSON
 	then
-		# Exported, not baked into the image: NAMESPACE is templated per
-		# deployment and the path depends on the session user. start.sh sources
-		# this hook and then execs `sudo --preserve-env`, so the export reaches
-		# the notebook server and every terminal under it.
+		# Reaches the server via start.sh's `sudo --preserve-env`.
 		export OPENCODE_CONFIG="${OPENCODE_CFG}"
 		echo "config-agents: registered '${MCP_NAME}' with opencode"
 	else
 		echo "config-agents: WARNING could not write ${OPENCODE_CFG}" >&2
 	fi
 
-	# Claude Code skills, prepared at build time (prepare-skill.py). Refreshed on
-	# every start so an image upgrade ships an updated skill, the same way the
-	# Continue config is refreshed. Codex has no equivalent on-demand mechanism.
+	# Claude Code skills bundled in the image.
 	if [[ -d "${SKILL_SRC}" ]]; then
 		if cp -r "${SKILL_SRC}/." "${NEW_HOME}/.claude/skills/" 2>/dev/null ||
 			{ mkdir -p "${NEW_HOME}/.claude/skills" &&
@@ -166,20 +117,8 @@ _config_agents() {
 		echo "config-agents: no bundled skills at ${SKILL_SRC}, skipping" >&2
 	fi
 
-	# One file per harness: the path it reads automatically at user scope, with no
-	# skill and no prompting. These files belong to the user — only the AF block
-	# between the markers is ours. Codex has no skill mechanism, so this is the
-	# only place it learns about the facility; for Claude Code it is a short
-	# pointer alongside the skill. opencode is absent here on purpose: it is
-	# served by `instructions` above, and a file here would duplicate that.
-	#
-	# Written whether or not the matching CLI is installed: the files are a few
-	# kB, and a user who installs a harness into their own home does so long
-	# after this hook has run.
-	#
-	# Cursor is deliberately absent too. It has no user-scope instruction file at
-	# all — its rules are project-scoped, and cross-project rules live in the
-	# Cursor UI, not on disk. See docs/docs/guide-agentic-interface.md.
+	# Each harness's user-scope instruction file; opencode uses `instructions`
+	# above. Written even when the CLI is absent.
 	if [[ -f "${AGENT_SECTION}" ]]; then
 		for target in "${NEW_HOME}/.claude/CLAUDE.md" "${NEW_HOME}/.codex/AGENTS.md"; do
 			if _as_user "'${PYTHON}' /usr/local/bin/managed-block.py '${AGENT_SECTION}' '${target}'"; then
@@ -188,27 +127,14 @@ _config_agents() {
 				echo "config-agents: WARNING could not update ${target}" >&2
 			fi
 		done
-		# ~/.claude needs this: the skill `cp -r` above runs as root. ~/.codex is
-		# kept defensively for homes where an older image created it as root —
-		# managed-block.py runs as the user and makes its own parent directories,
-		# so neither would need it in a home created by this version.
+		# The skill copy above runs as root; ~/.codex may be root-owned too.
 		chown -R "${NB_USER}:users" "${NEW_HOME}/.claude" "${NEW_HOME}/.codex" \
 			2>/dev/null || true
 	else
 		echo "config-agents: no bundled agent section, skipping" >&2
 	fi
 
-	# Migration, not cleanup-for-tidiness. An earlier image wrote the platform
-	# context into ~/.config/opencode/AGENTS.md, and homes are persistent, so
-	# dropping that target from the loop above does not remove what is already
-	# there. Left in place it is loaded alongside `instructions` — the exact
-	# doubling that target was removed to stop, and it would persist for every
-	# existing user while only new homes saw the fix.
-	#
-	# Runs unconditionally: it is undoing our own past writes, so it must not
-	# depend on the current context being present. The file survives with the
-	# user's own content if they added any, and is deleted only when our block
-	# was all it held. Removable once no live home predates this change.
+	# The AF block must not also sit in opencode's AGENTS.md: it would load twice.
 	_as_user "'${PYTHON}' /usr/local/bin/managed-block.py --remove '${NEW_HOME}/.config/opencode/AGENTS.md'" ||
 		echo "config-agents: WARNING could not retire ${NEW_HOME}/.config/opencode/AGENTS.md" >&2
 

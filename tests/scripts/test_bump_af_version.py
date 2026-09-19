@@ -12,6 +12,7 @@ from common import REPO, load_script
 
 BUMP_PATH = REPO / ".github" / "workflows" / "bump-af-version.py"
 VALUES_PATH = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
+SYNC_PATH = REPO / "apps" / "af-utils" / "pixi-global-sync" / "deployment.yaml"
 
 
 @pytest.fixture(scope="session")
@@ -22,6 +23,13 @@ def bump():
 @pytest.fixture()
 def values_text():
     return VALUES_PATH.read_text()
+
+
+@pytest.fixture()
+def sync_file(tmp_path):
+    path = tmp_path / "deployment.yaml"
+    path.write_text(SYNC_PATH.read_text())
+    return path
 
 
 def _run_main(bump, monkeypatch, *argv):
@@ -81,6 +89,21 @@ def test_apply_fails_loudly_on_layout_drift(bump):
         bump.apply("nothing that matches here\n", "9.9.9", bump.DEFAULT_REGISTRY)
 
 
+def test_pixi_global_sync_runs_the_production_af_version(bump, values_text):
+    cur = bump.current_version(values_text)
+    assert f"{bump.DEFAULT_REGISTRY}:{cur}\n" in SYNC_PATH.read_text()
+
+
+def test_apply_sync_rewrites_the_real_deployment(bump):
+    new = bump.apply_sync(SYNC_PATH.read_text(), "9.9.9", bump.DEFAULT_REGISTRY)
+    assert f"image: {bump.DEFAULT_REGISTRY}:9.9.9\n" in new
+
+
+def test_apply_sync_fails_loudly_on_layout_drift(bump):
+    with pytest.raises(SystemExit, match="pixi-global-sync"):
+        bump.apply_sync("image: busybox\n", "9.9.9", bump.DEFAULT_REGISTRY)
+
+
 # ── main() CLI ────────────────────────────────────────────────────────────────
 
 
@@ -95,30 +118,54 @@ def test_main_print_current(bump, tmp_path, capsys, values_text, monkeypatch):
     assert path.read_text() == values_text  # unchanged
 
 
-def test_main_bump_dry_run(bump, tmp_path, capsys, values_text, monkeypatch):
+def test_main_bump_dry_run(bump, tmp_path, capsys, values_text, sync_file, monkeypatch):
     path = tmp_path / "values.yaml"
     path.write_text(values_text)
+    sync_before = sync_file.read_text()
     cur = bump.current_version(values_text)
     expected = bump.bump_version(cur, "patch")
 
-    _run_main(bump, monkeypatch, "--bump", "patch", "--file", str(path), "--dry-run")
+    _run_main(
+        bump,
+        monkeypatch,
+        "--bump",
+        "patch",
+        "--file",
+        str(path),
+        "--sync-file",
+        str(sync_file),
+        "--dry-run",
+    )
 
     out = capsys.readouterr()
     assert out.out.strip() == expected
     assert f"{cur} -> {expected}" in out.err
     assert "dry run" in out.err
     assert path.read_text() == values_text
+    assert sync_file.read_text() == sync_before
 
 
-def test_main_set_writes_file(bump, tmp_path, capsys, values_text, monkeypatch):
+def test_main_set_writes_both_files(
+    bump, tmp_path, capsys, values_text, sync_file, monkeypatch
+):
     path = tmp_path / "values.yaml"
     path.write_text(values_text)
 
-    _run_main(bump, monkeypatch, "--set", "9.9.9", "--file", str(path))
+    _run_main(
+        bump,
+        monkeypatch,
+        "--set",
+        "9.9.9",
+        "--file",
+        str(path),
+        "--sync-file",
+        str(sync_file),
+    )
 
     out = capsys.readouterr()
     assert out.out.strip() == "9.9.9"
     assert 'docker_image_tag: "9.9.9"' in path.read_text()
+    assert "/purdue-af:9.9.9\n" in sync_file.read_text()
 
 
 def test_main_set_rejects_bad_version(bump, tmp_path, values_text, monkeypatch):

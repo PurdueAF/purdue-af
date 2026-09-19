@@ -1,31 +1,9 @@
 """af-pod-monitor: exports storage usage metrics for a user's AF pod.
 
-Sidecar in every user pod; Prometheus scrapes :9090 every 5 minutes.
-
-One unreadable directory must not take the others down with it. An
-inaccessible /work used to raise out of the loop and kill the process, and
-with it the /home utilisation the quota alerts fire on — one pod restarted 275
-times that way. Each directory is now read independently and its af_*_dir_ok
-gauge says whether the last pass succeeded, so a stale reading is visible
-rather than indistinguishable from a fresh one.
-
-Failing is not the same as hanging, though: a read on a wedged CephFS/NFS
-mount blocks forever in uninterruptible sleep, and an unbounded df would park
-the whole loop there while the HTTP server kept serving the last good values —
-a session nobody can work in, reported as healthy.
-
-So every pass opens by asking the one question a user would: does this session
-still answer? af_session_responsive times a bounded listing of the user's home
-directory, which is where a shell or notebook sits, and the heartbeat makes a
-wedged pass visible even when every gauge holds its last value. Every command
-here runs bounded, because subprocess's own timeout kills the child and then
-waits for it — which never returns on a dead mount.
-
-/work is read from CephFS's own recursive directory stats rather than walked:
-`du -s` over a two-million-file tree ran past its timeout on every single pass,
-so those users had no /work metrics at all and the failure was logged every 15
-minutes forever. A fault that persists is now logged once and on recovery —
-af_*_dir_ok carries it continuously, which is what the alerting reads.
+Sidecar in every user pod, serving :9090; every INTERVAL it probes that the
+session answers (af_session_responsive), then reads each directory
+independently, recording success in af_*_dir_ok. Every command is bounded
+(run_bounded): a read on a wedged CephFS/NFS mount never returns.
 """
 
 import logging
@@ -36,23 +14,16 @@ import time
 
 from prometheus_client import Counter, Gauge, start_http_server
 
-WORK_QUOTA_KB = 104857600  # 100 GB
+WORK_QUOTA_KB = 104857600  # 100 GiB; monitoring threshold, not an enforced quota
 INTERVAL = 300  # seconds between passes
-# A session a user would call responsive answers `ls` in well under a second;
-# ten is generous enough that load alone never trips it.
+# Generous enough that load alone never trips it.
 PROBE_TIMEOUT_S = 10
-# `df` is a statfs call and returns as fast as the mount allows. `du -s` walks
-# every file and is legitimately slow on a large tree, so it gets far more
-# room — the probe above, not this, is the responsiveness signal. It is only
-# the fallback for a /work that is not CephFS.
+# `du -s` walks every file; the probe, not this, is the responsiveness signal.
 DF_TIMEOUT_S = 30
 DU_TIMEOUT_S = 600
-# The recursive-stat read below is a single xattr: as fast as the mount, like df.
 RBYTES_TIMEOUT_S = 30
 
-# CephFS totals every directory's subtree into ceph.dir.rbytes. Read in a child
-# so it is bounded like everything else here: an xattr on a dead mount hangs
-# exactly as a walk does. Prints nothing when the mount is not CephFS.
+# Run in a child so it is bounded; prints nothing when the mount is not CephFS.
 _RBYTES = """\
 import os, sys
 try:
@@ -102,10 +73,7 @@ heartbeat = Gauge(
 
 
 def start_heartbeat() -> None:
-    """Give the heartbeat a real time before the first scrape. A gauge starts
-    at 0, which reads as 1970 to anything asking how long ago the last pass
-    was — so a session that had only just started looked stale, and the
-    dashboard called it unresponsive until its first pass finished."""
+    """Set the heartbeat before the first scrape: a gauge at 0 reads as 1970."""
     heartbeat.set(time.time())
 
 
@@ -231,10 +199,8 @@ def update_directory(dir_label: str, directory: str) -> bool:
     """One directory's pass. Never raises: a mount the pod cannot read is a
     gap in that directory's metrics, not a reason to stop exporting.
 
-    The fault is logged when it starts and when it clears, not on every pass.
-    A mount stays broken for hours, and repeating its traceback every INTERVAL
-    buried everything else the container had to say while telling a reader
-    nothing af_*_dir_ok was not already reporting continuously."""
+    The fault is logged when it starts and when it clears; af_*_dir_ok carries
+    it in between."""
     try:
         update_metrics(dir_label, directory)
     except Exception:

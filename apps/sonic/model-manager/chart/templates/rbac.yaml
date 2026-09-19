@@ -26,8 +26,7 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list"]
-  # Read the model repository PVC to report its true capacity, and the Envoy
-  # Service to show the in-cluster inference endpoint
+  # The PVC for its true capacity, the Envoy Service for the in-cluster endpoint
   - apiGroups: [""]
     resources: ["persistentvolumeclaims", "services"]
     verbs: ["get", "list"]

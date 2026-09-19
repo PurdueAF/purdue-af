@@ -3,7 +3,7 @@ kind: CronJob
 metadata:
   name: af-x509-secrets
 spec:
-  schedule: "0 * * * *" # Run every hour at minute 0
+  schedule: "0 * * * *"
   concurrencyPolicy: Forbid
   suspend: false
   successfulJobsHistoryLimit: 1
@@ -68,14 +68,10 @@ spec:
                 - name: grid-secret
                   mountPath: /etc/grid-certs-ro/
           volumes:
-            # Mount the usercert, userkey, and passphrase file. These will have the
-            # wrong permissions to be used for generating the voms proxy
             - name: grid-secret
               secret:
                 secretName: grid-certs-secret # Installed via servicex command line
 
-            # Create an empty dir to share between the init container and the main
-            # container. The init container will copy the certs from grid-secret
-            # to this dir and set the correct permissions
+            # The init container copies the certs here with the permissions voms-proxy-init needs.
             - name: grid-certs-rw-copy
               emptyDir: {}

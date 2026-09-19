@@ -5,14 +5,10 @@ from typing import Any
 
 from ldap3 import BASE, SUBTREE, Connection, Server
 
-# `c` is the traitlets config object JupyterHub injects into this file's
-# globals at exec time. A bare annotation declares its type for static
-# checkers without creating (or shadowing) the runtime binding.
+# JupyterHub injects `c` at exec time; the annotation is for type checkers only.
 c: Any
 
-# AF_LDAP_* are only set by the e2e harness (tests/e2e_hub), which points
-# at a plaintext mock; unset (production) keeps the geddes-auth TLS
-# path byte-for-byte.
+# AF_LDAP_* are set only by the e2e harness (tests/e2e_hub).
 LDAP_HOST = os.environ.get("AF_LDAP_HOST", "geddes-auth.rcac.purdue.edu")
 LDAP_TLS = os.environ.get("AF_LDAP_TLS", "true").lower() != "false"
 BASE_DN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
@@ -77,10 +73,7 @@ async def passthrough_auth_state_hook(spawner: Any, auth_state: Any) -> None:
     spawner.environment["NB_USER"] = username
 
     if domain != "purdue.edu":
-        # External users map onto a pooled paf#### account via hub user id.
-        # paf0000–paf0399 are provisioned in LDAP; beyond that there is no
-        # account to map onto — refuse the spawn rather than falling back to
-        # a shared UID or looking up a nonexistent paf04xx entry.
+        # External users map onto pooled paf#### accounts; LDAP has paf0000-paf0399.
         af_id = int(spawner.user.id)
         if af_id > 399:
             raise RuntimeError(
@@ -88,14 +81,12 @@ async def passthrough_auth_state_hook(spawner: Any, auth_state: Any) -> None:
             )
         username = "paf{:04d}".format(af_id)
 
-    # ldap3 is synchronous; off-loading keeps a slow directory from stalling
-    # the Hub for every other user, as the pre-DN-read lookups did.
+    # ldap3 is synchronous; off-load it so a slow directory does not stall the Hub.
     uid, gid = await asyncio.to_thread(ldap_lookup, username)
     spawner.environment["NB_UID"] = str(uid)
     spawner.environment["NB_GID"] = str(gid)
 
-    # Pixi CLI and pixi-kernel run `pixi info`, which may create $PIXI_HOME/envs and
-    # other layout. Keep /opt/pixi read-only; store per-user Pixi state on /work.
+    # pixi may create layout under $PIXI_HOME; /opt/pixi stays read-only.
     spawner.environment["PIXI_HOME"] = (
         f"/work/users/{spawner.environment['NB_USER']}/.pixi-home"
     )

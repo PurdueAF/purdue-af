@@ -20,9 +20,8 @@ component's own paths:
                                                 decides: running vs failed)
 
 Components and their input paths are read from the deploy kustomizations, so
-a component added there appears here automatically. The purdue-af image gets
-its own row: it ships on a separate semver stream (pinned in values.yaml),
-and its input paths come from image-inputs.sh — the same list that
+a component added there appears here automatically. Each CI image gets its
+own row, with input paths from image-inputs.sh — the same list that
 content-addresses the image in CI.
 
 Writes shields.io endpoint JSON per component (see --out) plus a markdown
@@ -47,12 +46,7 @@ CHANNELS = {
     "experimental": Path("deploy/experimental/kustomization.yaml"),
 }
 IMAGE_INPUTS = Path(".github/workflows/image-inputs.sh")
-# Images ci-images.yml builds. purdue-af ships on a hand-minted semver stream;
-# agentic-interface on an auto-minted one (its Deployment pins the version and
-# its badge shows it). The remaining aux images ride :latest (publish moves it
-# with main-validated). interlink-slurm-plugin is pinned to PLUGIN_REF but
-# still rebuilt whenever its input tree changes, so main-validated remains a
-# useful deployed ref.
+# Images ci-images.yml builds; which tag each ships on: RELEASING.md.
 CI_IMAGES = [
     "purdue-af",
     "agentic-interface",

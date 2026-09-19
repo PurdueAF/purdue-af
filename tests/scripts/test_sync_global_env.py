@@ -568,9 +568,8 @@ class TestReconcile:
         assert "install" in pipeline["events"]
 
     def test_sigterm_mid_install_does_not_retry_or_wipe(self, sync, monkeypatch):
-        """Regression: a child killed by the SIGTERM handler used to read as a
-        failed install — 60 s backoff, retries, then a prefix wipe — so the
-        daemon outlived its grace period and was SIGKILLed holding the lock."""
+        """A child killed by the SIGTERM handler is a shutdown, not a failed
+        install: no backoff, no retry, no prefix wipe."""
         sync.CONFIG_DIR.mkdir()
         for name, data in DESIRED.items():
             (sync.CONFIG_DIR / name).write_bytes(data)

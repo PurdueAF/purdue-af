@@ -6,6 +6,7 @@ import json
 import urllib.error
 import urllib.parse
 from datetime import datetime, timezone
+from string import Template
 from unittest.mock import AsyncMock
 
 import pytest
@@ -436,23 +437,21 @@ class TestNarration:
 
 
 class TestPrompts:
-    def test_both_prompts_state_the_time_budget(self):
+    def test_the_workflow_fills_every_placeholder(self):
         prompts = load_script(
             REPO / "workflows/self-repair/prompts.py", "self_repair_prompts"
         )
-        analyze = prompts.ANALYZE.substitute(incident="i", context="c", minutes=25)
-        fix = prompts.FIX.substitute(
-            incident="i",
-            context="c",
-            title="t",
-            component="c",
-            reason="r",
-            plan="p",
-            minutes=25,
-        )
-        for text in (analyze, fix):
-            assert "about 25 minutes" in text
-            assert "$" not in text.replace("$schema", "")
+        common = {"incident", "context", "minutes", "protected"}
+        for template, expected in (
+            (prompts.ANALYZE, common),
+            (prompts.FIX, common | {"title", "component", "reason", "plan"}),
+        ):
+            names = {
+                m.group("named") or m.group("braced")
+                for m in Template.pattern.finditer(template.template)
+                if m.group("named") or m.group("braced")
+            }
+            assert names == expected
 
 
 class TestAnalysisBudget:

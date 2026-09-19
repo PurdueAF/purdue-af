@@ -11,23 +11,30 @@ volume (scroll sideways for details).
 | Purdue Depot storage | `/depot/cms/` | up to 1 TB | Read/write for Purdue users, read-only for others | ✅ | ✅ | ❌ |
 | AF work storage | `/work/users/<username>/` | 100 GB | Read/write | ❌ | ✅ | ✅ |
 | AF shared project storage | `/work/projects/` | up to 1 TB | Read/write | ❌ | ✅ | ✅ |
-| Purdue EOS | `/eos/purdue/` | up to 100 TB | Read-only (writable via `gfal`/`xrdcp`) | ✅ | ✅ | ❌ |
+| Purdue EOS | `/eos/purdue/` | up to 100 TB | Read-only (writable via `gfal`/`xrdcp`) | ❌ | ✅ | ❌ |
 | CVMFS | `/cvmfs/` | N/A | Read-only | ✅ | ✅ | ❌ |
 | CERNBox (CERN EOS) | `/eos/cern/` | N/A | Read/write | ❌ | ❌ | ✅ |
 
-!!! warning "Keep your home directory small"
+In the JupyterLab file browser, your home directory contains shortcuts to the
+other volumes: `work` (`/work/`), `depot` (group directories under
+`/depot/cms/`), and `eos-purdue` (`/eos/purdue/`).
 
-    Your `/home/<username>/` directory (the root directory of the JupyterLab file
-    browser) has a strict quota of **25 GB**. If you go over this limit, **you will
-    not be able to start a session on Purdue AF**.
+## Quotas
 
-    Rather than storing your data, Pixi or Conda environments, etc. in your home
-    directory, use the other storage volumes listed below. You can check your current
-    home directory usage with:
+* **Home directory** — your `/home/<username>/` directory (the root directory
+  of the JupyterLab file browser) has a strict quota of **25 GB**. If you go
+  over this limit, **you will not be able to start a session on Purdue AF**.
+  Rather than storing your data, Pixi or Conda environments, etc. in your home
+  directory, use the other storage volumes. You can check your current home
+  directory usage with:
 
     ```shell
     du -sh $HOME
     ```
+
+* **Work directory** — the **100 GB** quota of `/work/users/<username>/` is not
+  enforced by the filesystem, but please stay within it: the facility admins
+  contact users whose usage exceeds it.
 
 ## Which storage volume should I use?
 
@@ -39,37 +46,29 @@ Below are common storage use cases with recommendations on which volume to use.
   the writable volumes.
 * **Purdue users:** use either Depot or /work/ storage:
 
-  * private directories: `/depot/cms/users/<username>/` or `/work/users/<username>/`
-  * group directories for shared work: `/depot/cms/<group-name>/` or `/work/projects/<project-name>/`.
-
-  Any code that uses Slurm or Dask Gateway with the
-  Slurm backend **must** be stored on Depot, since the other volumes are not
-  mounted in Slurm jobs.
+    * private directories: `/depot/cms/users/<username>/` or `/work/users/<username>/`
+    * group directories for shared work: `/depot/cms/<group-name>/` or `/work/projects/<project-name>/`.
 
 * **CERN / FNAL users:** use private `/work/users/<username>/` directory or a shared project directory `/work/projects/<project-name>/`.
 
+Code and environments used by Slurm jobs or Dask Gateway workers must be on a
+volume those workers mount (see the table above) — for the Slurm backend, that
+means Depot.
+
 ### Storing custom Pixi or Conda environments
 
-* In order for Pixi or Conda environments to appear as JupyterLab kernels, they must
-  be stored in publicly readable directories, so `/depot/cms/private/` directories
-  will NOT work. Possible locations:
+In order for Pixi or Conda environments to appear as JupyterLab kernels, they must
+be stored in publicly readable directories, so `/depot/cms/private/` directories
+will NOT work. Possible locations:
 
-    * group directories on Depot (for example, `/depot/cms/top/`);
-    * personal directories on work storage: `/work/users/<username>/`;
-    * shared project directories on work storage: `/work/projects/<project-name>/`.
-
-* If you use Slurm jobs or Dask Gateway workers, make sure that the directory where
-  the environment is stored is visible from the workers (see the table above).
-  In particular, **Slurm workers cannot see `/work/` storage** — environments used
-  with the Slurm backend must live on Depot.
+* group directories on Depot (for example, `/depot/cms/top/`);
+* personal directories on work storage: `/work/users/<username>/`;
+* shared project directories on work storage: `/work/projects/<project-name>/`.
 
 ### Transferring official CMS datasets to Purdue
 
 1. Locate the dataset using [DAS (CMS Data Aggregation System)](https://cmsweb.cern.ch/das/).
-2. Use [Rucio](guide-rucio.md) to "subscribe" the dataset to Purdue for a *limited*
-   amount of time.
-3. The dataset will be copied to **Purdue EOS** and appear under
-   `/eos/purdue/store/mc/` or `/eos/purdue/store/data/`.
+2. Use [Rucio](guide-rucio.md) to "subscribe" the dataset to Purdue.
 
 See [Data access](data-access.md) for the full picture.
 
@@ -88,7 +87,7 @@ The best storage volume depends on the size of the output:
 
 * **Large outputs (over 100 GB):** save to **Purdue EOS**. Since Purdue EOS is not
   directly writable, save outputs into `/tmp/<username>/` first and then copy them
-  to EOS using `gfal` or `xrdcp` commands — see [Writing to EOS](guide-eos-write.md).
+  to EOS — see [Writing to EOS](guide-eos-write.md).
 * **Small outputs (under 100 GB):**
 
     * Purdue users should use **work storage** or **Depot**.
@@ -99,8 +98,7 @@ The best storage volume depends on the size of the output:
     Avoid writing many files to Depot at the same time, as it may slow Depot down
     for everyone. If your jobs produce large outputs, first save them into
     `/tmp/<username>/` on the individual Slurm jobs / Dask workers, and then copy
-    them over to EOS using `gfal` or `xrdcp` commands — see
-    [Data access](data-access.md).
+    them over to EOS — see [Writing to EOS](guide-eos-write.md).
 
 ## Shared project directories
 

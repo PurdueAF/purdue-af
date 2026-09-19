@@ -68,18 +68,8 @@ BASE_BRANCH = "main"
 # A dash, not a slash: `self-repair/<x>` cannot be created while any branch
 # named `self-repair` exists.
 BRANCH_PREFIX = "self-repair-"
-# Purdue GenAI Studio (docs.rcac.purdue.edu/services/genai): OpenAI-compatible,
-# on Purdue's network, keyed to the account whose key is in GENAI_API_KEY
-# (podtemplate.yaml). Documented limits: 60 requests/min per user, about 10
-# concurrent calls per model, and a rate limit answers with a JSON null body.
-# gpt-oss:120b answered a tool-calling probe in 0.4 s; qwen3.6:27b timed out.
-# Through the proxy, gpt-oss:120b and gemma4:26b-a4b each ran the whole tool
-# loop in about 10 s (2026-09-16); qwen3.6:27b was not answering that day, and
-# gemma4 answered nothing for most of the following night. Models hang one at
-# a time, so every tick starts by probing these in order and runs on the first
-# that answers; a tick with no answering model does nothing else. llama4 is on
-# a different serving stack from the others. SELF_REPAIR_MODELS (comma-
-# separated) overrides the list without a code change.
+# Purdue GenAI Studio, keyed by GENAI_API_KEY; its limits: genai_proxy.py.
+# Probed in this order every tick; the first that answers runs the tick.
 MODELS = tuple(
     model.strip()
     for model in os.environ.get(
@@ -658,6 +648,7 @@ def analyze(key: IncidentKey, evidence: Evidence, model: str) -> Verdict:
             incident=_describe(key, evidence),
             context=context,
             minutes=AGENT_BUDGET_MINUTES,
+            protected=", ".join(PROTECTED_PATHS),
         )
         _log(
             f"{key.fingerprint}: prompt has {len(context.splitlines())} context line(s)"
@@ -772,6 +763,7 @@ def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict, model: str) -> s
             reason=verdict.reason,
             plan=verdict.plan,
             minutes=AGENT_BUDGET_MINUTES,
+            protected=", ".join(PROTECTED_PATHS),
         )
         reply = _run_agent(repo, prompt, EDIT, key.fingerprint, model)
         changed = _git("status", "--porcelain", cwd=repo).strip()
@@ -857,8 +849,7 @@ async def triage(
     # One hourly tick, plus slack for a late start (startingDeadlineSeconds)
     # and for lines Loki ingests late; repeats cost nothing, the cache has them.
     window_minutes: int = 75,
-    # 60 requests/min per user at GenAI Studio; a session makes several a
-    # minute, so a handful in parallel is the ceiling, not 20.
+    # Sized to GenAI Studio's rate limit (genai_proxy.SESSION_RPM).
     max_incidents: int = 6,
     max_fixes: int = 2,
 ) -> Summary:

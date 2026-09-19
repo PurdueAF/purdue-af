@@ -8192,7 +8192,7 @@
           "instant": false
         }
       ],
-      "description": "Active series in the AF Prometheus. Growth here is what has frozen the server before; see the kube-state-metrics relabeling in prometheus/values.yaml.",
+      "description": "Active series in the AF Prometheus. Too many freeze the server; the kube-state-metrics relabeling in prometheus/values.yaml bounds them.",
       "fieldConfig": {
         "defaults": {
           "color": {

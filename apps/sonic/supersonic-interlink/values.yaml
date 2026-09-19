@@ -1,16 +1,8 @@
-# SuperSONIC whose Triton runs off-cluster: the pod is offloaded to Slurm on
-# Hammer through interLink, while Envoy stays on the AF nodes. Moved here
-# from PurdueAF/sonic (namespace `sonic`, release `sonic-interlink`); it
-# now uses this repo's own interLink node (apps/interlink/hammer) and the
-# cms Prometheus, and holds no Slurm allocation while idle.
+# Triton offloaded to Slurm on Hammer through interLink; Envoy stays on AF nodes.
 
 serverLoadThreshold: 20
 
-# Waking means queueing a Slurm job on Hammer and waiting for it to start, not
-# scheduling a pod, so the window is minutes rather than seconds. 900s is a
-# guess at Hammer's queue for one GPU; if RepositoryIndex starts timing out,
-# this and idle_timeout in envoy-config.yaml are the two numbers to raise
-# (the chart wants idle_timeout >= readyTimeoutSeconds + 120).
+# Waking queues a Slurm job; raise this together with idle_timeout in envoy-config.yaml.
 scaleFromZero:
   enabled: true
   readyTimeoutSeconds: 900
@@ -19,17 +11,11 @@ scaleFromZero:
 serverLoadMetric: 'sum (rate(nv_inference_queue_duration_us{app=~"supersonic", release=~"supersonic-interlink", namespace=~"cms"}[30s])) / sum ((rate(nv_inference_exec_count{app=~"supersonic", release=~"supersonic-interlink", namespace=~"cms"}[30s]) * 1000))'
 
 triton:
-  # Singularity on Hammer runs the image straight off CVMFS, so the tag has to
-  # be one unpacked.cern.ch actually carries — today that is only 24.11-py3:
-  #   ls /cvmfs/unpacked.cern.ch/nvcr.io/nvidia/
-  # A tag that is not there fails the job at startup, not at pull time.
+  # The tag must exist under /cvmfs/unpacked.cern.ch/nvcr.io/nvidia/, or the job fails at startup.
   image: /cvmfs/unpacked.cern.ch/nvcr.io/nvidia/tritonserver:24.11-py3
   command: ["/bin/sh", "-c"]
   args:
     - |
-      # Optional extra repos (previously enabled; add as extra --model-repository=... lines before --allow-gpu-metrics):
-      # --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_16_0_0_pre4/external/el9_amd64_gcc13/data/RecoTauTag/TrainingFiles/data/DeepTauIdSONIC/
-      # --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_16_0_0_pre4/external/el9_amd64_gcc13/data/RecoMET/METPUSubtraction/data/models/
       /opt/tritonserver/bin/tritonserver \
       --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_16_0_0_pre4/external/el9_amd64_gcc13/data/RecoBTag/Combined/data/models/ \
       --allow-gpu-metrics=true \
@@ -47,7 +33,6 @@ triton:
       operator: Exists
   annotations:
     slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs --no-home --compat"
-    # slurm-job.vk.io/flags: "--uid=616617 -A cms -p hammer-nodes --time=1-00:00:00" # no GPUs
     slurm-job.vk.io/flags: "--uid=616617 -A cms --gres=gpu:1 --time=0-04:00:00"
     interlink.virtual-kubelet.io/wstunnel-timeout: "5m"
     interlink.eu/wstunnel-extra-ports: "8000:http:TCP,8001:grpc:TCP,8002:metrics:TCP"
@@ -83,14 +68,10 @@ envoy:
   loadBalancerPolicy: "ROUND_ROBIN"
   service:
     type: LoadBalancer
-  # Clients reach Envoy through the LoadBalancer service on the private pool,
-  # or in-cluster at supersonic-interlink.cms.svc.cluster.local:8001. No public
-  # inference ingress on any SuperSONIC release here.
+  # No public inference ingress; clients use the private-pool LoadBalancer or the in-cluster Service.
   ingress:
     enabled: false
-  # Hand-written Envoy config (retries, outlier ejection and a 32 MB request
-  # buffer for a Triton behind a Slurm-side wstunnel, plus everything
-  # scaleFromZero needs), from envoy-config.yaml.
+  # Hand-written Envoy config: retries, outlier ejection and a 32 MB buffer the chart cannot express.
   external_config:
     load_from_configmap: true
     configmap_name: "supersonic-interlink-envoy-config-custom"
@@ -98,9 +79,7 @@ envoy:
 
 keda:
   enabled: true
-  # No Slurm allocation held while idle. RepositoryIndex raises this to 1
-  # through the Envoy admission sidecar; the wake path lives in
-  # envoy-config.yaml, since a custom config replaces the generated one.
+  # RepositoryIndex raises this to 1; the wake path lives in envoy-config.yaml.
   minReplicaCount: 0
   maxReplicaCount: 10
   scaleUp:
@@ -113,20 +92,13 @@ keda:
     stepsize: 1
 
 prometheus:
-  # Was the bundled Prometheus of the `sonic` namespace's cms-run3-miniaod
-  # release, reached over its LoadBalancer hostname. In cms the shared AF
-  # Prometheus scrapes this Triton too, via the scrape_metrics service label.
+  # The AF Prometheus scrapes this Triton via the scrape_metrics service label.
   external:
     enabled: true
     url: prometheus-server.cms.svc.cluster.local
     port: 9090
     scheme: http
 
-# Nothing to disable for tracing: the Tempo and OpenTelemetry Collector
-# dependencies were removed from the chart after 0.3.1, so this branch has no
-# way to reach either.
-
-# Grafana stays off: this release is read through the shared SuperSONIC
-# dashboard in the AF Grafana, which is scoped by release.
+# Read through the shared SuperSONIC dashboard in the AF Grafana.
 grafana:
   enabled: false

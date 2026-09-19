@@ -1,16 +1,4 @@
 # Default values for sonic-ray.
-#
-# A RayService whose worker pods each carry a Triton Inference Server beside
-# the Ray container, and whose Serve application forwards every Triton gRPC
-# call to the Triton in its own pod. Ray Serve's gRPC proxy speaks Triton's
-# protocol (it is handed Triton's generated servicer), counts every request,
-# and sizes the deployment from that; the Ray autoscaler adds a GPU pod for
-# each replica with nowhere to go. Triton does all of the inference.
-#
-# No custom image: the Ray containers run the official Ray image, the Triton
-# container the official Triton image, the forwarder reaches the pods as a
-# ConfigMap on PYTHONPATH, and Triton's Python stubs are pip-installed into an
-# emptyDir by an init container.
 
 # -- Instance name (release name by default). Names every resource and is the
 # app.kubernetes.io/instance label the Services select pods by.

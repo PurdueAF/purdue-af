@@ -23,36 +23,25 @@ resources:
     memory: 1Gi
 
 # -- Model repository PVC.
-# The PVC is annotated with helm.sh/resource-policy=keep, so uninstalling this
-# chart never deletes the models.
 modelRepository:
   # -- Claim name. Reused as-is if the PVC already exists.
   claimName: supersonic-model-repository
   # -- Create the PVC if it is not already present in the namespace.
   create: true
   size: 1Gi
-  # -- ReadWriteMany is required when Triton pods mount the same claim while
-  # this app writes to it. ReadWriteOnce works only for single-node setups.
+  # -- ReadWriteMany when Triton pods mount the same claim.
   accessModes:
     - ReadWriteMany
   storageClassName: ""
   # -- Where the PVC is mounted inside the manager pod
   mountPath: /models
-  # -- Subdirectory of the claim holding the model repository. Set this when
-  # the models live inside a larger shared claim (e.g. "triton_models" on
-  # af-shared-storage); the app still sees the repository root at mountPath.
+  # -- Subdirectory of the claim holding the model repository.
   subPath: ""
-  # -- Chown the mounted repository to the app's uid in an init container.
-  # Needed because CSI drivers that declare fsGroupPolicy=ReadWriteOnceWithFSType
-  # (CephFS among them) ignore podSecurityContext.fsGroup on ReadWriteMany
-  # volumes, so the mount arrives owned by root:root 0755 and the unprivileged
-  # app cannot write to it. Set false if the volume is already writable.
+  # -- Chown the mount in an init container; CephFS ignores fsGroup on RWX volumes.
   fixOwnership: true
   # -- Refuse all writes (uploads, deletes, load/unload) when true
   readOnly: false
-  # -- Load a model on every Triton server as soon as it is uploaded. A failed
-  # load (no room on the servers, a server down) is reported but never fails
-  # the upload — the model stays on the PVC and can be served later.
+  # -- Load a model on every Triton server on upload; a failed load never fails the upload.
   autoLoadOnUpload: true
   # -- Largest single upload accepted, in bytes (default 8 GiB)
   maxUploadBytes: 8589934592
@@ -63,8 +52,7 @@ triton:
   discovery: kubernetes
   # -- Namespace holding the Triton pods (defaults to the release namespace)
   namespace: ""
-  # -- Label selector for Triton pods. When empty, it is derived from
-  # supersonicRelease as: app.kubernetes.io/component=triton,app.kubernetes.io/instance=<release>
+  # -- Label selector for Triton pods; derived from supersonicRelease when empty.
   labelSelector: ""
   # -- Triton HTTP port (the KServe v2 REST API)
   httpPort: 8000
@@ -75,9 +63,7 @@ triton:
 prometheus:
   # -- Base URL of the Prometheus that scrapes Triton, e.g. http://sonic-prometheus-server:9090
   url: ""
-  # -- Extra PromQL label matchers applied to every nv_* query,
-  # e.g. 'release="sonic-interlink",namespace="sonic"'.
-  # When empty, it is derived from supersonicRelease.
+  # -- Extra PromQL matchers for every nv_* query; derived from supersonicRelease when empty.
   selector: ""
   # -- Rate window for throughput and latency
   window: 5m
@@ -116,13 +102,10 @@ rbac:
   # -- Role allowing the app to read Triton pods and the PVC in this namespace
   create: true
 
-# -- Inference endpoint shown at the top of the dashboard. Leave empty to
-# discover it from the release's Envoy Ingress, falling back to the Envoy
-# Service's in-cluster address.
+# -- Inference endpoint on the dashboard; discovered from the Envoy Ingress or Service when empty.
 inferenceEndpoint: ""
 
-# -- Grafana dashboard URL shown next to the inference endpoint. Leave empty
-# to discover it from the release's Grafana Ingress.
+# -- Grafana URL next to it; discovered from the Grafana Ingress when empty.
 grafanaUrl: ""
 
 # -- Dashboard auto-refresh interval, seconds
@@ -134,9 +117,7 @@ podLabels: {}
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 10001
-  # Makes the mounted PVC writable by the unprivileged app user.
-  # On a large shared claim, set fsGroup: null instead (and rely on the
-  # directory's own permissions) so the kubelet does not walk the whole tree.
+  # On a large shared claim set fsGroup: null so the kubelet does not walk the tree.
   fsGroup: 10001
   fsGroupChangePolicy: OnRootMismatch
 

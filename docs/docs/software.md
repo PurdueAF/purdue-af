@@ -3,8 +3,8 @@
 Analysis software at Purdue AF can come from several sources, listed here from most
 to least recommended:
 
-1. **Pixi environments** — the main way to manage analysis software since 2026.
-2. **Conda environments** — still supported, but being phased out in favor of Pixi.
+1. **Pixi environments** — the recommended way to manage analysis software.
+2. **Conda environments** — supported; use Pixi for new projects.
 3. **LCG stacks** distributed via CVMFS — useful for special cases such as
    CUDA-enabled ROOT.
 4. **Apptainer/Singularity images** via CVMFS — a last resort for software that
@@ -49,21 +49,23 @@ We provide multiple types of Jupyter kernels to execute analysis code in noteboo
 There is no one-to-one mapping between Pixi environments and Jupyter kernels.
 Instead, we provide two special Pixi kernels:
 
-- **"global" kernel** — always uses the global environment at `/work/pixi/global/`.
-- **"project-aware" kernel** — automatically discovers the environment local to the
+- **Python (pixi global)** — always uses the global environment at `/work/pixi/global/`.
+- **Python (pixi project-aware)** — automatically discovers the environment local to the
   directory where the notebook is located. If no local environment is found, the
   kernel falls back to the global environment.
 
 !!! note
 
-    In order for a Pixi environment to be discoverable by the "project-aware"
-    kernel, it must have the `ipykernel` package installed, and be stored in a readable directory.
+    In order for a Pixi environment to be discoverable by the project-aware
+    kernel, it must have the `ipykernel` package installed, and be stored in a
+    [publicly readable directory](storage.md#storing-custom-pixi-or-conda-environments).
 
 ### Conda kernels
 
-Conda environments are automatically discovered by Jupyter if they have the
-`ipykernel` package installed — see
-[Creating Conda environments and Jupyter kernels](guide-conda.md).
+Conda environments are discovered automatically and appear as kernels if they
+have the `ipykernel` package installed and are stored in a
+[publicly readable directory](storage.md#storing-custom-pixi-or-conda-environments) —
+see [Creating Conda environments and Jupyter kernels](guide-conda.md).
 
 ### ROOT C++ kernel
 
@@ -84,16 +86,9 @@ These kernels are based on LCG "views" loaded via CVMFS:
 
 ## Combine
 
-[Combine](https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit/v10.3.3/) is
-a RooStats / RooFit based software framework widely used in LHC experiments for
-statistical analysis of experimental data.
-
-At Purdue AF, Combine can be used either in a CMSSW environment or in standalone
-mode in Pixi or Conda environments. We recommend the standalone mode — the
-`cms-combine` package is already available in the global Pixi environment, and can
-be added to your own environment with a single command.
-
-See [Using Combine at Purdue AF](guide-combine.md) for details.
+[Combine](https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit/) is
+included in the global Pixi environment (package `cms-combine`) — see
+[Using Combine at Purdue AF](guide-combine.md).
 
 ## CMSSW
 

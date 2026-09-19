@@ -1,45 +1,9 @@
-# Purdue AF interLink Slurm sidecar — one image, many RCAC clusters.
-#
-# Cluster identity is NOT baked into /etc/slurm at build time. Every
-# slurm/slurm-configs-<cluster>/ tree in the repo is installed under
-# /opt/purdue-af/slurm-configs/<cluster>/; startup.sh copies the tree named
-# by $SLURM_CLUSTER into /etc/slurm before starting munged + the sidecar.
-#
-# Client binaries are also per-cluster: RCAC clusters do not share one Slurm
-# version (Negishi is 24.11.x; Hammer/Gautschi are 25.11.x). Every
-# slurm/slurm-*-1.el8.x86_64.rpm is extracted under
-# /opt/purdue-af/slurm-clients/<version>/; startup.sh activates the version
-# named in slurm/client-versions into /opt/purdue-af/slurm-active/ (first on
-# PATH) so the sidecar and probes pick it up without sourcing env files.
-# Activation also links that version's usr/lib64/slurm onto /usr/lib64/slurm:
-# the relocated binaries still carry RPATH=/usr/lib64/slurm and resolve
-# PluginDir to the same compiled-in path, so no system RPM is installed here
-# and that link is what makes sbatch runnable at all. Each extracted client is
-# smoke-tested below (`sbatch --version` against a throwaway SLURM_CONF, since
-# sbatch otherwise hunts for a controller via DNS SRV and dies) so a relocation
-# that breaks it fails the build instead of a running pod.
-#
-# Version tag == upstream plugin checkout == PLUGIN_REF (single source of
-# truth). CI publishes ghcr.io/purdueaf/interlink-slurm-plugin:$PLUGIN_REF;
-# values pin that same tag via ghcr-proxy-cache. Bumping the plugin means
-# editing PLUGIN_REF only — the Dockerfile ARG default, the image tag, and
-# the values pins are asserted equal in tests.
-#
-# Base is plain Rocky 8 (not the AF CUDA devel image): the sidecar is a thin
-# Slurm client and does not need CUDA. The CUDA base made the image ~4 GiB and
-# GHCR pushes failed intermittently with "blob upload unknown".
-#
-# Adding a cluster:
-#   1. Drop client configs at slurm/slurm-configs-<name>/ (must include slurm.conf)
-#   2. Add "<name> <version>" to slurm/client-versions (+ the matching RPM if new)
-#   3. Set plugin.envs SLURM_CLUSTER=<name> in apps/interlink/<name>/values.yaml
-#   4. Mount munge-key-<name> (already the HelmRelease postRenderer convention)
-#   5. Merge to main — CI rebuilds (image-inputs covers slurm/) and retags $PLUGIN_REF
+# Purdue AF interLink Slurm sidecar: one image for every RCAC cluster (README.md).
 
 # Keep the default in sync with PLUGIN_REF; CI passes --build-arg explicitly.
 ARG SLURM_PLUGIN_REF=0.6.2-pre3
 ARG GOLANG_IMAGE=golang:1.27
-# EL8 for the site Slurm RPMs; no CUDA — this is not a session image.
+# EL8 for the site Slurm RPMs.
 ARG BASE_IMAGE=docker.io/rockylinux/rockylinux:8
 
 FROM ${GOLANG_IMAGE} AS build-stage
@@ -57,17 +21,13 @@ FROM ${BASE_IMAGE}
 # Fix: https://github.com/hadolint/hadolint/wiki/DL4006 (SC3040)
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# munge at runtime; cpio/rpm only needed to extract the site client RPMs below
-# (removed again in the next layer so they do not inflate the final image).
+# cpio/rpm only extract the client RPMs below, which then removes them.
 RUN dnf install -y \
         https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm \
         sudo findutils cpio rpm munge && \
     dnf clean all && rm -rf /var/cache/dnf
 
-# Site Slurm client RPMs (one or more versions) + every per-cluster config tree.
-# RPMs are extracted to versioned prefixes — dnf cannot install two Slurm
-# versions side by side. A missing SLURM_CLUSTER cannot silently talk to the
-# wrong controller: /etc/slurm starts empty and slurm-active/bin starts empty.
+# /etc/slurm and slurm-active/bin start empty, so an unset SLURM_CLUSTER reaches no controller.
 COPY slurm/ /tmp/slurm-build/
 RUN set -euo pipefail \
  && groupadd -g 1033 slurm || true \

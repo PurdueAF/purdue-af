@@ -1,15 +1,8 @@
-"""Tests for the parts of docker/purdue-af/scripts/run-as-root.sh that write
-into the user's home.
+"""Tests for the home-directory setup in docker/purdue-af/scripts/run-as-root.sh:
+every write below the home goes through af_as_user, and none is fatal.
 
-run-as-root.sh is the LAST hook start.sh sources, so it is the last chance to
-kill the container before JupyterLab binds. It writes under ~/.local, ~/.jupyter
-and ~/.config as root, which fails when the user has symlinked one of those onto
-/depot — NFS with root_squash, where root is the one identity that cannot write.
-Fixing config-extensions.sh alone only moved that failure later in the sequence.
-
-Only the home-directory setup is exercised here: the rest of the script installs
-munge keys and Slurm binaries, which need a real image. The script is trimmed to
-the section under test, with the image paths pointed at a sandbox."""
+The script is trimmed to that section (munge and Slurm setup need a real
+image), with the image paths pointed at a sandbox."""
 
 import os
 import re
@@ -45,7 +38,7 @@ def home_setup(tmp_path):
     home.mkdir(parents=True)
 
     body = SCRIPT.read_text()
-    cut = body.index("# Setup work directory")
+    cut = body.index('mkdir -p "/work/users/$NB_USER"')
     section = body[:cut].replace(
         "source /usr/local/bin/af-as-user.sh", f"source {HELPER}"
     )
@@ -109,8 +102,7 @@ def test_home_directories_are_created(run_hook):
 
 
 def test_as_root_the_home_writes_are_delegated_to_the_user(run_hook):
-    """This hook runs last, so writing here as root undoes the fix in
-    config-extensions.sh: the session would still crash-loop, just later."""
+    """Writes below the home go through af_as_user, never as root."""
     run, _ = run_hook
     result = run(as_root=True)
     assert result.returncode == 0, result.stderr

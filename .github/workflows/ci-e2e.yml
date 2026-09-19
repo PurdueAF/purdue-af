@@ -26,8 +26,7 @@ name: CI e2e
 # recorded green run skips as verified reuse. The shared machinery
 # (memo restore/save, image fallback, kind stack, diagnostics) lives in
 # .github/actions/ composites — one definition, three consumers.
-# Renovate chart bumps change helmrelease.yaml → the hash changes → e2e
-# runs on the Renovate PR itself (this replaced the old weekly cron).
+# A Renovate chart bump changes helmrelease.yaml, so e2e runs on its PR.
 
 on:
   workflow_call:
@@ -129,10 +128,7 @@ jobs:
         uses: ./.github/actions/e2e-memo-restore
         with:
           key: ${{ steps.key.outputs.key }}
-      # setup-kind.sh crictl-pulls the image straight into the kind node —
-      # measured ~3x faster than docker pull + kind load (which streams the
-      # ~13 GB image uncompressed through a docker-save pipe). The CVMFS
-      # check runs in the parallel cvmfs-smoke job below.
+      # setup-kind.sh crictl-pulls the image straight into the kind node.
       - name: Bring up the hub stack (AF image preloaded)
         if: steps.memo.outputs.cache-hit != 'true'
         uses: ./.github/actions/kind-hub-stack

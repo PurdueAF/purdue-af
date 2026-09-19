@@ -1,10 +1,8 @@
 """Tests for the Prometheus alert rules and the health dashboard they feed.
 
-Alerts are the platform's definition of "unhealthy" — the Grafana health table
-and (next) the MCP health tool both read `ALERTS`, so a rule that loses its
-`component` label silently drops out of both. These tests hold that contract.
-Expression correctness is checked by promtool in validate-manifests.sh; what
-cannot be checked there is whether the labels line up with the consumers."""
+The Grafana health table and the MCP health tool both read `ALERTS`, so every
+rule carries the labels they group by. Expression correctness is promtool's
+job (validate-manifests.sh)."""
 
 import json
 import re
@@ -91,7 +89,7 @@ def test_prod_nodes_not_ready_uses_cms_af_taint():
 
 
 def test_mount_health_unknown_waits_ten_minutes():
-    """Unknown used to wait 30m while EOS timeouts sat pending; keep it short."""
+    """Unknown mount health fires within ten minutes."""
     unknown = next(r for r in rules() if r["alert"] == "AFMountHealthUnknown")
     assert unknown["for"] == "10m"
 

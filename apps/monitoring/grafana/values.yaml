@@ -1,13 +1,6 @@
-# Grafana Helm Chart Values — public instance (grafana)
-# https://github.com/grafana/helm-charts/tree/main/charts/grafana
-#
-# Anonymous-viewer instance serving the public dashboards; private
-# dashboards live in the admin-only grafana-private instance
-# (values-private.yaml).
+# Anonymous-viewer instance; admin-only dashboards live in values-private.yaml.
 
-# Persistence: RWO block storage for SQLite. CephFS/RWX cannot reliably
-# provide the file locks SQLite needs and caused recurring CrashLoopBackOff
-# (database is locked / hung /api/health probes).
+# RWO block storage: SQLite needs file locks CephFS cannot provide.
 persistence:
   enabled: true
   type: pvc
@@ -16,7 +9,6 @@ persistence:
   accessModes:
     - ReadWriteOnce
 
-# Ingress configuration
 ingress:
   enabled: ${enable_ingresses}
   ingressClassName: public
@@ -24,18 +16,12 @@ ingress:
   pathType: Prefix
   hosts:
     - cms.geddes.rcac.purdue.edu
-  # tls:
-  #   - secretName: grafana-tls
-  #     hosts:
-  #       - cms.geddes.rcac.purdue.edu
 
-# Service configuration
 service:
   type: ClusterIP
   port: 80
   targetPort: 3000
 
-# Security context
 securityContext:
   runAsNonRoot: true
   runAsUser: 472
@@ -46,8 +32,7 @@ securityContext:
 initChownData:
   enabled: false
 
-# Temp dirs stay on emptyDir. Plugins live on the RWO PVC so they are not
-# reinstalled (and rewritten into SQLite) on every restart.
+# Plugins live on the PVC so they are not reinstalled into SQLite on every restart.
 extraVolumes:
   - name: grafana-png-tmp
     emptyDir: {}
@@ -55,8 +40,7 @@ extraVolumes:
     emptyDir: {}
   - name: grafana-csv-tmp
     emptyDir: {}
-  # TRANSITIONAL — empty dir backing the private-dashboards cleanup
-  # provider (see dashboardProviders); remove together with it.
+  # TRANSITIONAL: backs the private-dashboards cleanup provider.
   - name: private-dashboards-cleanup
     emptyDir: {}
   - name: work
@@ -82,10 +66,7 @@ extraVolumeMounts:
     mountPropagation: HostToContainer
     readOnly: true
 
-# TRANSITIONAL — remove together with the private-dashboards cleanup
-# provider above. GF_INSTALL_PLUGINS only installs plugins; the llm-app
-# and pyroscope-app removed from the plugins list stay installed on the
-# PVC (and keep loading) until deleted from it.
+# TRANSITIONAL: removes plugins dropped from the list, which stay installed on the PVC.
 extraInitContainers:
   - name: remove-unused-plugins
     image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.36
@@ -134,7 +115,6 @@ extraContainers: |
         cpu: 1000m
         memory: 2Gi
 
-# Resources
 resources:
   requests:
     cpu: 4000m
@@ -147,7 +127,6 @@ resources:
 deploymentStrategy:
   type: Recreate
 
-# Grafana configuration
 grafana.ini:
   server:
     root_url: https://cms.geddes.rcac.purdue.edu/grafana/
@@ -163,7 +142,6 @@ grafana.ini:
     org_role: Viewer
     hide_version: true
 
-# Dashboard and datasource provisioning
 dashboardProviders:
   dashboardproviders.yaml:
     apiVersion: 1
@@ -177,14 +155,7 @@ dashboardProviders:
         allowUiUpdates: true
         options:
           path: /var/lib/grafana/dashboards/public
-      # TRANSITIONAL — remove after this has deployed once. The private
-      # dashboards moved to the grafana-private instance, but dashboards
-      # already provisioned into this instance's database are not removed
-      # by simply dropping their provider. Keeping the provider pointed at
-      # an empty directory (emptyDir below) makes Grafana's sync delete
-      # them (disableDeletion: false). Afterwards this provider and the
-      # private-dashboards-cleanup volume can be deleted; the leftover
-      # empty "Private Dashboards" folder can be removed in the UI.
+      # TRANSITIONAL: an empty dir makes Grafana delete the private dashboards it provisioned here.
       - name: "private"
         orgId: 1
         folder: "Private Dashboards"
@@ -195,13 +166,10 @@ dashboardProviders:
         options:
           path: /var/lib/grafana/dashboards/private
 
-# Use ConfigMap for dashboards
 dashboardsConfigMaps:
   public: grafana-public-dashboards
 
-# Shared datasources come from datasources.yaml (second valuesFrom entry
-# on the HelmRelease); only public-instance-specific ones live here, under
-# a distinct provisioning filename so the values merge keeps both.
+# Shared datasources are in datasources.yaml; this distinct filename survives the values merge.
 datasources:
   infinity-datasources.yaml:
     apiVersion: 1

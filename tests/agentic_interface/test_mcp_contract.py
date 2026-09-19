@@ -201,13 +201,8 @@ async def test_every_tool_declares_a_wrapped_string_output_schema():
 
 
 async def test_declined_elicitation_returns_help_text_not_a_validation_error():
-    """Regression: the NeedsChoices result used to fail output validation.
-
-    An agent client may decline elicitation without ever showing a form. The
-    tool must then hand back the instructions for asking in chat — not
-    "Output validation error: outputSchema defined but no structured output
-    returned".
-    """
+    """A declined elicitation returns the ask-in-chat instructions as a
+    normal result that passes output validation."""
     from mcp.shared.memory import create_connected_server_and_client_session
     from mcp.types import ElicitResult
 

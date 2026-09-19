@@ -1,8 +1,6 @@
 """Mount heatmap queries must join on node_pool.
 
-Without node_pool in the join, a ghost timeout series under the inactive pool
-(fresh=0, latency=10000) is pulled into the sum whenever any pool for that
-node is fresh — which is what painted paf-b00 red until cms-af-prod was added.
+Otherwise a timeout series left under a node's inactive pool is summed in.
 """
 
 import json

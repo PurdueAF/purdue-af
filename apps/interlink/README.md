@@ -51,10 +51,11 @@ The munge key each plugin authenticates to Slurm with. Munge keys live in
 per-cluster RWX PVCs created and populated out of band — never as Secrets, and
 never in this repo.
 
-All three PVCs exist. `munge-key-hammer` and `munge-key-gautschi` are the same
-ones the AF sessions (`apps/jupyterhub/jupyterhub/values.yaml`) and the
-dask-gateway Slurm gateways mount. To add a further cluster: create its PVC,
-copy that cluster's key in, then uncomment its entry in the kustomization.
+All three PVCs exist. `munge-key-hammer` is also mounted by the AF sessions
+(`apps/jupyterhub/jupyterhub/values.yaml`) and the dask-gateway Slurm gateway;
+`munge-key-gautschi` and `munge-key-negishi` only by their interLink node. To
+add a further cluster: create its PVC, copy that cluster's key in, then
+uncomment its entry in the kustomization.
 
 ## Verifying a node
 
