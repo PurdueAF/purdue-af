@@ -40,13 +40,8 @@ both; the versioned prefixes above are why one image still works.
 
 ## Build & publish
 
-Built by `ci-images.yml` like the other aux images:
-
-- content-addressed `…:in-<hash>` (smoke-tested; what publish retags)
-- on green `main`, publish moves `:sha-<commit>` and `:$PLUGIN_REF`
-- cluster pulls via the geddes `ghcr-proxy-cache`
-
-Input paths are in `.github/workflows/image-inputs.sh` under
-`interlink-slurm-plugin` (this directory + the whole `slurm/` tree).
+Built like every other image ([../REGISTRY.md](../REGISTRY.md)). Input paths are in
+`.github/workflows/image-inputs.sh` under `interlink-slurm-plugin` (this
+directory + the whole `slurm/` tree).
 
 See [../../slurm/README.md](../../slurm/README.md) for adding a cluster.

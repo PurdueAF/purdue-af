@@ -1,8 +1,8 @@
 """Tests for docker/af-node-monitor/node_healthcheck.py.
 
-The kubernetes client is faked at module-global level (the real package is
-not installed in this suite), so the discovery logic — node and probe-pod
-listing, the metric decision matrix — is tested without a cluster.
+The API clients are faked at module-global level, so the discovery logic —
+node and probe-pod listing, the metric decision matrix — is tested without a
+cluster.
 
 The exporter no longer creates anything: probes run as DaemonSets
 (apps/monitoring/af-monitoring/daemonset-af-node-probe.yaml). What is tested

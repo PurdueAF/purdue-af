@@ -124,7 +124,7 @@ RUN sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashr
 # ------------------------------------------------------------
 FROM system AS stack
 
-ARG PIXI_VERSION="0.62.2" # keep in sync with ci-pixi-*.yml (pixi-version) + renovate.json5 (constraints.pixi)
+ARG PIXI_VERSION="0.62.2" # the one pin; ci-pixi-*.yml read it, renovate.json5 constraints.pixi is asserted equal
 
 ENV PIXI_HOME="/opt/pixi" \
     BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env"

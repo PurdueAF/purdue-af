@@ -426,3 +426,27 @@ def test_quiet_mode_silences_inherited_stdio(tmp_path):
     )
     assert proc.returncode == 0
     assert (proc.stdout, proc.stderr) == (b"", b"")
+
+
+# ── quiet mode ────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("verbose", [False, True])
+def test_import_silences_os_level_stdio_unless_verbose(verbose):
+    """Job logs must stay empty when quiet: the module redirects fds 1 and 2
+    at import, so even a later os.write(2, ...) goes to /dev/null. A
+    subprocess, because the redirect would swallow pytest's own output."""
+    env = {k: v for k, v in os.environ.items() if k != "AF_NODE_MONITOR_VERBOSE"}
+    env.update({"MOUNT_NAME": "/depot/", "CHECK_FILE": "/depot/validate.txt"})
+    if verbose:
+        env["AF_NODE_MONITOR_VERBOSE"] = "1"
+    probe = (
+        "import os, runpy, sys;"
+        f"runpy.run_path({str(runner.__file__)!r}, run_name='imported');"
+        "print('out'); sys.stderr.write('err'); sys.stderr.flush(); os.write(2, b'raw')"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", probe], env=env, capture_output=True, text=True
+    )
+    assert proc.returncode == 0
+    assert (proc.stdout, proc.stderr) == (("out\n", "errraw") if verbose else ("", ""))

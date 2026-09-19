@@ -11,16 +11,23 @@ CI-owned. Never create a version tag or move a channel tag by hand.
 | Continuous (`:latest`, `:pre-release`, `in-`, `sha-`) | moving tags                       | `ci.yml` publish stage, behind `ci-ok` | on pod restart / session spawn                         |
 | Experimental Flux source (`main-validated`)           | moving branch                     | `ci.yml` publish stage, behind `ci-ok` | experimental Flux reconcile (~1 min)                   |
 
-The monitor images (af-pod-monitor, af-node-monitor) and self-repair have no
-release step at all: every green pipeline on `main` moves `:latest`. The agentic-interface
+The monitor images (af-pod-monitor, af-node-monitor), supersonic-model-manager
+and self-repair have no release step at all: every green pipeline on `main`
+moves `:latest`. interlink-slurm-plugin publishes under its upstream plugin
+ref, `:$PLUGIN_REF`, which the interLink values pin; bumping `PLUGIN_REF` is its
+release ([its README](docker/interlink-slurm-plugin/README.md)). The agentic-interface
 image also publishes to `:latest` continuously, but its Deployment pins a
 released semver tag — the pod moves only when an auto-release rewrites the pin.
+The hub's pre-release profile pulls `:pre-release` on every spawn, so a merged
+`docker/purdue-af` change reaches those sessions without a release; the default
+profile is pinned to the released semver tag.
 
 ## How changes reach the cluster
 
 | Change                                            | Path to the cluster                                                                                                         |
 | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Core component (hub config, monitoring, cronjobs) | push to `main` → CI green → mint new platform tag (manual) → core Flux reconciles (~1 min)                                  |
+| Core component on the geddes2 cluster             | push to `main` → geddes2 Flux reconciles (~1 min) — its root tracks `main` itself, with no CI gate                          |
 | AF image content (Dockerfile, `pixi/base`)        | push to `main` → CI builds + e2e → `:pre-release` moves → mint new image version (manual), then a new platform tag (manual) |
 | Experimental component                            | push to `main` → CI green → publish advances `main-validated` → experimental Flux reconciles (~1 min)                       |
 | Global env (`pixi/global`)                        | push to `main` → CI validates the lock → `pixi-global-sync` applies it to `/work/pixi/global`                               |
@@ -140,11 +147,9 @@ Never delete an `agentic-interface-v*` tag.
 
 - Channel tags (`:latest`, `:pre-release`), build tags (`in-`, `sha-`) and
   `main-validated` move only in the `ci.yml` publish stage, after every stage
-  of the same commit is green. Hand-moving them defeats the gates.
+  of the same commit is green. The `protect-main-validated` ruleset blocks
+  deleting the branch and leaves updates open, so `GITHUB_TOKEN` can
+  force-push it.
 - The `AF_RELEASE_TOKEN` secret (fine-grained PAT, `contents: write`) must
   exist: commits and tags pushed with the default `GITHUB_TOKEN` do not
   trigger CI, so a release commit would go unvalidated.
-- README version badges update themselves. The per-component status badges do
-  too (`component-status.yml`), but their README list is static — adding or
-  removing a component means editing that list, and the unit tests fail until
-  you do.

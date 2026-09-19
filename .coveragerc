@@ -5,6 +5,13 @@
 [run]
 relative_files = true
 source = .
+# Measure the Python interpreters tests start, such as the stdio-silencing
+# probe; their data is combined into the report.
+patch = subprocess
+
+[report]
+include_namespace_packages = true
+# Filtered here rather than at measurement so the combined data is filtered too.
 omit =
     tests/*
     **/.venv/*
@@ -13,6 +20,8 @@ omit =
     docker/dask-gateway-server/*
     # Exercised by the container HEALTHCHECK at runtime, not by the test suite.
     docker/purdue-af/jupyter/docker_healthcheck.py
-
-[report]
-include_namespace_packages = true
+# Entry points run by the container or the launcher, and the sentinels after
+# an exhaustive loop, are not reachable from the suite.
+exclude_also =
+    if __name__ == .__main__.:
+    raise AssertionError\("unreachable"\)

@@ -37,9 +37,9 @@ A log line is FIXABLE HERE only when all of these hold:
   node pressure, storage outages), not an expired credential or missing secret,
   and not something that needs an action on the cluster rather than a commit.
 
-Never propose changes under docker/dask-gateway-server (an upstream fork
-carried verbatim), pixi/, deploy/, or to any *.lock file: those are not
-fixable here by definition.
+AGENTS.md at the root of the checkout holds the repository's conventions and
+hard rules; they apply here. On top of them, never propose changes under
+pixi/, deploy/, or to any *.lock file: those are not fixable here by definition.
 
 Changing a log level, silencing or rewording a message, catching and
 ignoring an exception, or retrying without understanding the cause is never
@@ -109,13 +109,11 @@ plan: $plan
   function returns and what it raises is a contract its callers rely on;
   changing that without reading them is how a fix becomes a bug.
 - Find the tests covering what you change — tests/ mirrors the source tree —
-  and run them:
-  `uv run --project tests --frozen pytest -q -c tests/pyproject.toml tests/<suite>`
+  and run them with the pytest command in AGENTS.md, narrowed to that suite.
   A test that fails on your change is telling you the plan is wrong: change
   nothing and say so. Edit a test only when the behaviour it pins is itself
   the fault, and say why in your summary.
 - Never edit pixi/base, pixi/global, any *.lock file, or anything under deploy/.
-- Keep comments terse. Do not add a "Why" section to any README.
 - If a Python file changed, run `ruff check --fix <file>` and `ruff format <file>`.
 - Do not run git commit, git push, git checkout or git reset; the workflow
   commits for you.

@@ -685,3 +685,37 @@ async def test_directory_upload_rejects_unusable_form_fields(client, data, detai
 
     assert response.status_code == 400
     assert detail in response.json()["detail"]
+
+
+async def test_upload_with_no_files_is_a_400(client):
+    """FastAPI rejects a body with no file field before the handler; the
+    handler still guards an empty list for a client that sends the field
+    empty."""
+    from fastapi import HTTPException
+    from model_manager import main
+
+    async with client:
+        with pytest.raises(HTTPException) as exc:
+            await main.upload(
+                request=None, files=[], name="", paths="", overwrite=False
+            )
+    assert exc.value.status_code == 400
+    assert "No files" in exc.value.detail
+
+
+async def test_http_errors_raised_while_spooling_keep_their_status(client, monkeypatch):
+    from fastapi import HTTPException
+    from model_manager import main
+
+    async def too_big(*args):
+        raise HTTPException(status_code=413, detail="over the limit")
+
+    monkeypatch.setattr(main, "_spool_to_disk", too_big)
+    async with client as c:
+        response = await c.post(
+            "/api/upload",
+            files={"files": ("m.zip", model_zip(), "application/zip")},
+            data={"name": "mymodel"},
+        )
+    assert response.status_code == 413
+    assert response.json()["detail"] == "over the limit"
