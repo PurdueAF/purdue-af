@@ -1,7 +1,6 @@
 """Tests for docker/af-node-monitor/probe_agent.py.
 
-The supervisor's whole job is keeping three failures apart, because every one
-of them used to arrive as "unknown":
+The supervisor keeps three failures apart:
 
   the mount did not answer   -> publish a timeout verdict (goes red)
   the probe itself broke     -> publish nothing, drop out of Ready (goes stale)
@@ -101,8 +100,7 @@ def test_child_is_told_where_to_read_and_write(env, monkeypatch):
 
 
 def test_deadline_publishes_a_timeout_verdict(env, monkeypatch):
-    """This is the case the old Jobs could only report as unknown: the pod was
-    killed by activeDeadlineSeconds and nothing was ever written."""
+    """A check that outlives its deadline still yields a timeout verdict."""
     monkeypatch.setattr(pa, "PROBE_DEADLINE_S", 0.3)
     child(monkeypatch, env, "time.sleep(30)")
     assert pa.run_attempt(0) == "timeout"

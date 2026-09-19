@@ -1,14 +1,4 @@
-# Envoy configuration for the supersonic-interlink release, loaded through
-# envoy.external_config. It is the configuration the chart would generate,
-# plus three things a Triton reached over a Slurm-side wstunnel needs and the
-# chart cannot express: a 32 MB request buffer, outlier ejection, and a retry
-# policy on the inference route.
-#
-# Because it replaces the generated file wholesale, it also has to carry
-# everything scaleFromZero relies on: the Lua filter, the triton_admission
-# and envoy_admin clusters, the RepositoryIndex route, and the cluster's
-# dns_refresh_rate. Keep those in step with helm/supersonic/templates/envoy
-# on the SuperSONIC branch this release tracks.
+# Replaces the generated Envoy config; keep its scaleFromZero parts in step with helm/supersonic/templates/envoy.
 admin:
   access_log:
     - name: envoy.access_loggers.file
@@ -40,11 +30,7 @@ static_resources:
                     - name: backend_grpc
                       domains: ["*"]
                       routes:
-                        # Woken by the Lua filter, which holds the stream until
-                        # Envoy has a healthy Triton upstream. idle_timeout must
-                        # stay above scaleFromZero.readyTimeoutSeconds in
-                        # values.yaml; the chart uses that value + 120s and this
-                        # file cannot read it, so the two move together by hand.
+                        # Must stay >= scaleFromZero.readyTimeoutSeconds + 120 (values.yaml).
                         - match:
                             path: "/inference.GRPCInferenceService/RepositoryIndex"
                           route:
@@ -80,8 +66,7 @@ static_resources:
                                 base_interval: 0.2s
                                 max_interval: 5s
                 http_filters:
-                  # Ahead of the buffer, so a RepositoryIndex wake starts on the
-                  # headers rather than after a body has been buffered.
+                  # Ahead of the buffer, so a RepositoryIndex wake starts on the headers.
                   - name: envoy.filters.http.lua
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
@@ -96,9 +81,7 @@ static_resources:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
                 http2_protocol_options: {}
   clusters:
-    # The admission sidecar on this pod: the Lua filter posts /wake to it to
-    # raise the ScaledObject's minReplicaCount, and polls Envoy's own admin
-    # endpoint to learn when a Triton upstream is healthy.
+    # The admission sidecar: the Lua filter posts /wake to it.
     - name: triton_admission
       type: STATIC
       connect_timeout: 1s
@@ -125,18 +108,12 @@ static_resources:
                       port_value: 9901
 
     - name: triton_grpc_service
-      # 2s, not the chart's usual 0.25s: from zero the first connection races
-      # a pod that is still coming up on the far side of the tunnel.
+      # 2s: from zero the first connection races a pod still starting across the tunnel.
       connect_timeout: 2s
       type: STRICT_DNS
-      # NOTE: dns_refresh_rate is deprecated in Envoy in favor of the
-      # envoy.extensions.clusters.dns.v3.DnsCluster custom cluster type.
-      # Kept for now (warn-only) because migrating to DnsCluster is a larger change.
+      # Deprecated in favour of the DnsCluster type (warn-only).
       dns_refresh_rate: 1s
       lb_policy: ROUND_ROBIN
-      # Resolve the absolute in-cluster FQDN (trailing dot) so c-ares never walks the pod's
-      # search domains: a single refresh tick falling through to NXDOMAIN would empty the
-      # host set for ~1s and surface as "no healthy upstream".
       dns_lookup_family: V4_ONLY
       # Eject a Triton whose Slurm job has gone away rather than keep routing to it.
       outlier_detection:
@@ -158,5 +135,6 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
+                      # Trailing dot: search domains could return NXDOMAIN and empty the host set.
                       address: supersonic-interlink-triton.cms.svc.cluster.local.
                       port_value: 8001

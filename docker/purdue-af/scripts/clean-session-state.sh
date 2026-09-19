@@ -1,22 +1,8 @@
 #!/bin/bash
 
-# Clear the runtime state the previous session left in the user's home.
-#
-# Remote-SSH servers, code-server, Claude Code, Codex and Copilot all drop
-# lock files, unix sockets, pid-named logs and half-written temp files into
-# $HOME. Every one of them describes a process that died with the pod, so on
-# the next start they are not just wasted space — they actively mislead: a
-# stale ~/.claude/ide/<pid>.lock advertises an IDE port nothing is listening
-# on, and a leftover ~/.codex/ipc/ipc.sock is a socket with no peer.
-#
-# The list below is deliberately narrow. Only paths whose entire contents are
-# recreated by the tool that owns them are named here — no caches, no history,
-# no session transcripts, and nothing that holds user work. In particular
-# ~/.claude/jobs is NOT touched: it looks like scratch space, but the `tmp`
-# directory inside each job holds scripts the user wrote and may still want.
-#
-# start.sh SOURCES this file under `set -e`, so nothing here may exit non-zero:
-# a failed rm must cost the user some disk space, never their session.
+# Clear the per-process runtime state (locks, sockets, pid logs) the previous
+# session left in the user's home. Only paths the owning tool fully recreates;
+# never ~/.claude/jobs, whose tmp/ holds user-written scripts.
 
 _CSS_HOME="/home/${NB_USER}"
 
@@ -50,10 +36,7 @@ _css_globs=(
 
 _css_removed=0
 
-# Never follow a symlink out of the home: remove the link, not what it points
-# at. Failures are counted as skipped — /depot is NFS with root_squash and this
-# hook runs as root, so a home whose dotfiles live on depot simply cannot be
-# cleaned from here.
+# Removes a link, never its target; a failed rm (e.g. depot-backed dotfiles) is skipped.
 _css_rm() {
 	local path="$1"
 	[ -e "$path" ] || [ -L "$path" ] || return 0

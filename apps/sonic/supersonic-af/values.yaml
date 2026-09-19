@@ -1,10 +1,4 @@
-# AF-facing SuperSONIC: PVC model repository curated through the model
-# manager (apps/sonic/model-manager). The `supersonic` release next to it
-# serves the CMS Run 3 MiniAOD models straight off CVMFS.
-#
-# Scales from zero, so an idle model repository costs no GPU. Waking reloads
-# every model in the claim (--load-model=*), which has to finish inside
-# scaleFromZero.readyTimeoutSeconds.
+# PVC model repository curated by the model manager; waking reloads every model within readyTimeoutSeconds.
 
 serverLoadThreshold: 100
 
@@ -15,9 +9,6 @@ scaleFromZero:
 
 triton:
   image: nvcr.io/nvidia/tritonserver:26.04-py3
-  # image: nvcr.io/nvidia/tritonserver:24.11-py3
-  # image: fastml/triton-torchgeo:22.07-py3-geometric
-  # image: fastml/triton-torchgeo:25.08-py3-geometric
   command: ["/bin/sh", "-c"]
   args:
     - |
@@ -50,9 +41,7 @@ triton:
       scrape_metrics: "true"
     annotations:
       metallb.universe.tf/address-pool: geddes-private-pool
-  # Dedicated model repository claim, created and written by the model manager
-  # (apps/sonic/model-manager). Models previously served from
-  # /work/triton_models on af-shared-storage need copying across.
+  # Created and written by the model manager (apps/sonic/model-manager).
   modelRepository:
     enabled: true
     storageType: pvc
@@ -61,7 +50,6 @@ triton:
     mountPath: /models
   readinessProbe:
     successThreshold: 3
-  #   reset: true
 
 envoy:
   enabled: true
@@ -74,14 +62,11 @@ envoy:
   loadBalancerPolicy: "ROUND_ROBIN"
   service:
     type: LoadBalancer
-  # Clients reach Envoy through the LoadBalancer service on the private pool,
-  # or in-cluster at supersonic-af.cms.svc.cluster.local:8001. No public
-  # inference ingress on any SuperSONIC release here.
+  # No public inference ingress; clients use the private-pool LoadBalancer or the in-cluster Service.
   ingress:
     enabled: false
   rate_limiter:
-    # Rejects RepositoryIndex (and thus new client sessions) when
-    # serverLoadMetric exceeds serverLoadThreshold, via Lua → Prometheus.
+    # Rejects RepositoryIndex while serverLoadMetric exceeds serverLoadThreshold.
     prometheus_based:
       enabled: true
     listener_level:
@@ -89,8 +74,7 @@ envoy:
 
 keda:
   enabled: true
-  # No GPU held while idle: RepositoryIndex raises this to 1 through the
-  # Envoy admission sidecar, which holds it there for holdMinReplicasSeconds.
+  # RepositoryIndex raises this to 1 through the Envoy admission sidecar.
   minReplicaCount: 0
   maxReplicaCount: 10
   # Poll often enough that the wake is not sitting behind a 30s KEDA tick.
@@ -109,20 +93,12 @@ ingress:
   enabled: false
 
 prometheus:
-  # Use the AF Prometheus already running in cms (HelmRelease `prometheus`).
-  # It scrapes Triton via af-pod-monitor and attaches app/release labels the
-  # SuperSONIC dashboard expects — rancher-monitoring does not.
-  # FQDN required: KEDA operator runs in the keda namespace and cannot
-  # resolve the short name prometheus-server.
+  # The AF Prometheus attaches the app/release labels the dashboard expects; FQDN for KEDA.
   external:
     enabled: true
     url: prometheus-server.cms.svc.cluster.local
     port: 9090
     scheme: http
-
-# Nothing to disable for tracing: the Tempo and OpenTelemetry Collector
-# dependencies were removed from the chart after 0.3.1, so this branch has no
-# way to reach either.
 
 grafana:
   enabled: true
@@ -143,9 +119,7 @@ grafana:
           type: prometheus
           access: proxy
           isDefault: true
-          # Chart validation requires scheme://host with no port (must match
-          # prometheus.external.scheme + .url). Port 9090 is injected by the
-          # HelmRelease postRenderer in helmrelease.yaml.
+          # No port, per chart validation; the HelmRelease postRenderer adds :9090.
           url: http://prometheus-server.cms.svc.cluster.local
           jsonData:
             timeInterval: "5s"

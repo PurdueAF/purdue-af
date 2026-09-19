@@ -117,9 +117,7 @@ def test_munge_key_comes_from_a_per_cluster_pvc(interlink_clusters):
 def test_slurm_cluster_env_matches_directory(active_clusters):
     """The sidecar installs /etc/slurm from /opt/purdue-af/slurm-configs/$SLURM_CLUSTER.
     A typo here points the node at the wrong RCAC controller (or refuses to start).
-
-    Negishi stays commented out in experimental until its munge PVC exists; its
-    values still use the old sidecar shape and are not part of this contract.
+    Clusters commented out in experimental are not part of this contract.
     """
     for cluster, app in active_clusters.items():
         envs = {e["name"]: e["value"] for e in app["values"]["plugin"]["envs"]}
@@ -210,8 +208,7 @@ def test_slurm_client_rpms_exist_for_mapped_versions(interlink_clusters):
 
 
 def test_negishi_uses_a_different_slurm_client_than_hammer():
-    """Regression: Negishi's controller is still on 24.11; Hammer/Gautschi are
-    on 25.11. Sharing Hammer's RPM yields Protocol authentication error."""
+    """Each cluster gets the client version slurm/client-versions maps it to."""
     versions = _client_versions()
     assert versions["negishi"] != versions["hammer"]
     assert versions["negishi"].startswith("24.")
@@ -349,7 +346,7 @@ def test_activation_points_the_compiled_in_plugin_dir_at_the_chosen_version():
 
 def test_activation_refuses_to_shadow_a_real_system_plugin_dir():
     """`ln -sfn` onto an existing directory silently creates the link *inside*
-    it, which would leave a 24.11 client loading 25.11 plugins."""
+    it, which would leave one client version loading another's plugins."""
     startup = STARTUP.read_text()
     assert '[ -e "${sys_plugin_dir}" ] && [ ! -L "${sys_plugin_dir}" ]' in startup
 
@@ -366,9 +363,7 @@ def test_image_build_proves_each_extracted_client_can_run():
     assert "rm -f /usr/lib64/slurm" in dockerfile, (
         "build-time link must be removed, or startup.sh refuses to activate"
     )
-    # Regression: without SLURM_CONF, sbatch --version hunts for a controller
-    # via DNS SRV and exits fatal, so the smoke test failed the build on a
-    # perfectly good image.
+    # Without SLURM_CONF, sbatch --version hunts for a controller via DNS SRV.
     assert "SLURM_CONF=/tmp/smoke.conf" in dockerfile, (
         "smoke test needs a throwaway config or it fails for the wrong reason"
     )

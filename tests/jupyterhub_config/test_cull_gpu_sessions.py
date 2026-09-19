@@ -139,8 +139,7 @@ async def test_skips_pending_and_vanished_servers():
 
 
 async def test_one_unanswerable_user_does_not_shield_the_rest(caplog):
-    """Regression: a pod whose user the hub no longer knows (404) raised out
-    of the pass, so every GPU server listed after it was never culled."""
+    """A pod whose user the hub does not know (404) does not stop the pass."""
     mod = culler()
     calls = wire(
         mod,
@@ -323,8 +322,7 @@ def test_default_namespace_reads_service_account(tmp_path, monkeypatch):
 
 
 async def test_cull_failure_is_logged(monkeypatch, caplog):
-    """A failing pass must leave a trace: this one ran silently for two months
-    because print() went to a block-buffered stdout that never flushed."""
+    """A failing pass is logged, unbuffered."""
     mod = culler()
     passes = {"n": 0}
 

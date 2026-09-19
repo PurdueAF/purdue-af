@@ -28,15 +28,12 @@ spec:
           effect: NoSchedule
       containers:
         - name: af-node-monitor
-          # continuous channel: ci.yml moves :latest after every fully green
-          # main pipeline; k8s pulls :latest with policy Always by default
           image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
           command: ["python", "/scripts/node_healthcheck.py"]
           env:
             - name: RESULTS_DIR
               value: "/af-node-monitor/results"
-            # Timeout sentinels: must match the probe DaemonSets' real
-            # timeouts (daemonset-af-node-probe.yaml), not bound anything here.
+            # Timeout sentinels: must match the probe DaemonSets timeouts.
             - name: PING_TIMEOUT_S
               value: "3"
             - name: METADATA_TIMEOUT_S

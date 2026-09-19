@@ -11,18 +11,18 @@ the CUDA backend, which allows you to speed up the fitting process by up to an o
 of magnitude.
 
 The Purdue Analysis Facility supports this feature, allowing users to leverage
-available GPU resources to speed up their RooFit code. The feature is supported in
-both Jupyter Notebooks and Terminals, and for both the C++ ROOT interface and PyROOT.
+available GPU resources to speed up their RooFit code, with both the C++ ROOT
+interface and PyROOT.
 
 ## Prerequisites
 
 1. [Start your AF session with a GPU](gpus.md).
-2. Load the LCG view with the CUDA-enabled ROOT build.
+2. Load an LCG view with a CUDA-enabled ROOT build.
    [LCG "releases" and "views"](https://lcgdocs.web.cern.ch/lcgdocs/lcgreleases/introduction/)
-   are software stacks distributed by CERN.
+   are software stacks distributed by CERN via CVMFS.
 
-    * If using a Jupyter Notebook: simply select the `LCG_106b_cuda` kernel.
-    * If using a Terminal, run the following command:
+    * In a Jupyter Notebook, select the `LCG_106b_cuda` kernel.
+    * In a terminal, run:
 
         ```shell
         source /cvmfs/sft.cern.ch/lcg/views/LCG_106b_cuda/x86_64-el8-gcc11-opt/setup.sh
@@ -30,11 +30,9 @@ both Jupyter Notebooks and Terminals, and for both the C++ ROOT interface and Py
 
 !!! warning
 
-    The CUDA-enabled ROOT build is currently available only via the LCG software
-    stack. It is not available in other kernels, including the global Pixi
-    environment.
-
-    The only supported ROOT version at the moment is `6.32.08`.
+    The CUDA-enabled ROOT build (`6.32.08`) is available only via the LCG
+    software stack; the ROOT in the global Pixi environment and in other kernels
+    does not include the CUDA backend.
 
 ## Enabling the CUDA backend in RooFit
 

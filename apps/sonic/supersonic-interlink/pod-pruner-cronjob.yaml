@@ -1,10 +1,4 @@
-# Triton for this release runs on Slurm through interLink. When the Slurm job
-# exits, the virtual kubelet marks the pod Failed rather than restarting the
-# container in place, so the ReplicaSet creates a replacement and the corpse
-# stays: one new Failed pod every couple of minutes for as long as the job
-# keeps failing. Nothing in Kubernetes sweeps them — PodGC only fires at the
-# cluster-wide terminated-pod threshold, and ttlSecondsAfterFinished is a Job
-# field. This deletes all of them.
+# The virtual kubelet marks exited Slurm-backed pods Failed and nothing else sweeps them.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -37,8 +31,6 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                # An empty list means xargs -r runs nothing, so no failed
-                # pods is a no-op rather than an error.
                 - |
                   set -eu
                   kubectl get pods \

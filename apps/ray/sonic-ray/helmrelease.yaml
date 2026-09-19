@@ -5,26 +5,12 @@ metadata:
 spec:
   suspend: false
   interval: 1m
-  # The chart renders a RayService, so the ray.io CRDs — and the operator that
-  # reconciles them — have to exist first. A raw RayService in the Flux
-  # Kustomization could not wait for that: kustomize-controller aborts an
-  # apply on the first kind the API server does not know, which on a fresh
-  # cluster is this one, before the HelmRelease that would install it.
+  # The ray.io CRDs must exist before the chart's RayService applies.
   dependsOn:
     - name: kuberay-operator
   chart:
     spec:
-      # The chart is in this repository but not under apps/ (see
-      # helm/README.md), so it is sourced from the same GitRepository Flux
-      # already syncs for the experimental environment. Moving it out is a
-      # change to chart + sourceRef here, and nothing else in this file.
       chart: ./helm/sonic-ray
-      # Charts in this repository keep a static version (0.1.0), and Flux's
-      # default reconcileStrategy is ChartVersion: source-controller only
-      # re-packages when that string changes, so template edits are ignored
-      # while values edits still trigger an upgrade — the release then runs
-      # NEW values against the OLD chart. Revision re-packages on every Git
-      # revision, which is what a chart versioned by nothing but Git needs.
       reconcileStrategy: Revision
       sourceRef:
         kind: GitRepository

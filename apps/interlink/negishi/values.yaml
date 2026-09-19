@@ -1,6 +1,4 @@
-# interLink virtual node offloading AF pods to Slurm on Negishi.
-# Every chart resource is named after nodeName, including the Deployment the
-# HelmRelease postRenderer patches (<nodeName>-node).
+# interLink virtual node for Slurm on Negishi; see ../README.md.
 nodeName: interlink-negishi
 
 interlink:
@@ -15,8 +13,6 @@ interlink:
 
 plugin:
   enabled: true
-  # One multi-cluster image from ghcr. Tag == upstream plugin checkout
-  # (docker/interlink-slurm-plugin/PLUGIN_REF); SLURM_CLUSTER selects configs.
   image: "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:0.6.2-pre3"
   address: "http://0.0.0.0"
   port: 4000
@@ -68,15 +64,10 @@ virtualNode:
   disableCSR: true
 
   network:
-    # creates the wstunnel template ConfigMap
     enableTunnel: true
     tunnelImage: "ghcr.io/erebe/wstunnel:v10.7.1"
-    # each pod gets its own tunnel at "<podname>.<wildcardDNS>"
     wildcardDNS: "geddes.rcac.purdue.edu"
     wstunnelTemplatePath: "/etc/templates/wstunnel.yaml"
-    # Unlike Hammer, Negishi overrides the built-in template: this one adds an
-    # ingress rule per exposed port, so services like Jupyter running inside an
-    # offloaded pod are reachable by hostname.
     customTemplate: |
       apiVersion: apps/v1
       kind: Deployment
@@ -177,8 +168,7 @@ virtualNode:
                   port:
                     number: {{.Port}}
         {{- end}}
-    # $DOWNLOAD_DIR survives Flux postBuild substitution: only the braced
-    # form is substituted, bare $VAR is passed through untouched
+    # Bare $DOWNLOAD_DIR: Flux postBuild substitutes only the braced form.
     wstunnelCommand: |
       export DOWNLOAD_DIR="/depot/itap/interlink/negishi" && \
       curl -L https://github.com/erebe/wstunnel/releases/download/v10.4.4/wstunnel_10.4.4_linux_amd64.tar.gz -o "$DOWNLOAD_DIR/wstunnel.tar.gz" && \

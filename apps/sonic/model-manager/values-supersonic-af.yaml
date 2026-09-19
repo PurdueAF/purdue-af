@@ -1,31 +1,13 @@
-# Values for the `supersonic-af` SuperSONIC release
-# (apps/sonic/supersonic-af), which runs in the cms namespace on Geddes.
-# That is the one release with a PVC model repository, so it is the only one
-# a model manager has anything to manage.
-#
-#   helm install model-manager ./chart -n cms -f values-supersonic-af.yaml \
-#     --set auth.password='...'
-#
-# Checked against the live release:
-#   - Triton pods carry app.kubernetes.io/instance=supersonic-af in namespace cms
-#   - metrics are scraped by cms prometheus-server (af-pod-monitor job), which
-#     sets app/release labels from the Service's app.kubernetes.io/* labels
-#
-# The release mounts the same claim at /models and runs with
-# --model-control-mode=explicit (apps/sonic/supersonic-af/values.yaml), so
-# uploads here are servable and the load/unload switches work.
+# Values of the supersonic-af model manager, deployed by Flux; see README.md.
 
 supersonicRelease: supersonic-af
 
 image:
-  # Aux images are published by ci.yml as :latest (and :sha-<commit>); semver
-  # tags only come from release-image.yml, so :latest is the channel to track.
   repository: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/supersonic-model-manager
   tag: "latest"
 
 modelRepository:
-  # Dedicated claim, created here and mounted read-only by the Triton pods.
-  # RWX because the manager writes while Triton reads, from different pods.
+  # RWX: the manager writes while the Triton pods read.
   claimName: supersonic-model-repository
   create: true
   size: 1Gi
@@ -35,29 +17,20 @@ modelRepository:
   mountPath: /models
 
 triton:
-  discovery: labels
-  # Derived from supersonicRelease as:
-  #   app.kubernetes.io/component=triton,app.kubernetes.io/instance=supersonic-af
+  discovery: kubernetes
   labelSelector: ""
   httpPort: 8000
 
-# Envoy's LoadBalancer address, which is what clients actually dial. Set
-# explicitly because discovery would otherwise report the in-cluster Service
-# name — the gRPC Ingress is disabled for this release.
+# The Envoy LoadBalancer clients dial; discovery would report the in-cluster Service.
 inferenceEndpoint: supersonic-af.cms.geddes.rcac.purdue.edu:8001
 
 prometheus:
   url: http://prometheus-server.cms.svc.cluster.local:9090
-  # Default selector release="supersonic-af" (from supersonicRelease) matches the
-  # labels af-pod-monitor attaches on cms prometheus-server.
   window: 5m
 
 auth:
   enabled: true
-  # No password in git: the Secret is created out of band with
-  #   kubectl -n cms create secret generic supersonic-model-manager-auth \
-  #     --from-literal=username=admin --from-literal=password='...'
-  # The HelmRelease stays in a retrying state until it exists.
+  # Secret created out of band (README.md); the HelmRelease retries until it exists.
   existingSecret: supersonic-model-manager-auth
 
 ingress:

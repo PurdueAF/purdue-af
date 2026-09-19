@@ -84,35 +84,16 @@ c.KernelSpecManager.ensure_native_kernel = False
 # --------------------------------------------------------------------------
 # AI in JupyterLab (jupyter-ai)
 # --------------------------------------------------------------------------
-# The chat panel and its personas come from the installed stack; what needs
-# config is which persona answers by default and which MCP servers they reach.
-#
-# jupyter-ai's own default names JupyternautPersona, which lives in the
-# `jupyternaut` extra we do not install -- so out of the box nothing answers a
-# message until the user picks someone from the composer. OpenCode is the one
-# persona that works with no account of any kind (its Zen free tier serves
-# unauthenticated), so it is the only sensible thing to land on: Claude and
-# Codex would greet a new user with a login prompt.
-#
-# The format is fixed by BasePersona.id --
-# `jupyter-ai-personas::<package>::<class>` -- and a name that resolves to
-# nothing degrades to no default rather than an error (`default_persona`
-# is a plain `.get()` on the loaded personas), so a session without the
-# opencode binary behaves exactly as it does today.
+# Default persona: OpenCode, the only one usable without an account (its Zen
+# free models need no key). An id that resolves to nothing means no default.
 _DEFAULT_PERSONA_ID = "jupyter-ai-personas::jupyter_ai_acp_client::OpenCodeAcpPersona"
 
-# jupyter_server_mcp's own defaults, restated because setting the AF server
-# below replaces PersonaManager's default `builtin_mcp_servers` wholesale --
-# including the entry that gives personas the notebook toolkit, without which
-# they cannot touch the notebook they are sitting in. Pinning both sides here
-# is what keeps that entry pointing at the port the extension actually binds.
+# jupyter_server_mcp's defaults, restated: setting builtin_mcp_servers
+# replaces the notebook-toolkit entry too.
 _JUPYTER_MCP_NAME = "Jupyter MCP Server"
 _JUPYTER_MCP_PORT = 3001
 
-# Must match config-agents.sh: same in-cluster address, same server name. The
-# skill and the platform context name this server, so an agent reaching it
-# under a different name in JupyterLab than in the terminal gets instructions
-# that do not match what it sees.
+# Must match config-agents.sh: same name, same in-cluster address.
 _AF_MCP_NAME = "purdue-af-agentic-interface"
 _AF_MCP_URL = (
     "http://agentic-interface.{namespace}.svc.cluster.local:8888"
@@ -131,11 +112,7 @@ def _builtin_mcp_servers():
             "headers": [],
         }
     ]
-    # The token rotates on every spawn. Reading it here, at server start, is the
-    # reason this registration lives in the server config and not in the
-    # `.jupyter/mcp_settings.json` jupyter-ai also reads: that file takes
-    # literal strings, expands nothing, and sits in a persistent home, so a
-    # token written into it is stale the moment the session restarts.
+    # Read at server start, not written to the persistent mcp_settings.json.
     token = os.environ.get("JUPYTERHUB_API_TOKEN")
     if token:
         servers.append(

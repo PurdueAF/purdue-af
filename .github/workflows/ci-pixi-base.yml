@@ -11,11 +11,8 @@ name: CI pixi-base
 #      userland (rockylinux:8) — catches libstdc++ issues Ubuntu would miss.
 #
 # Memoized when the lock was already in sync (image-inputs.sh key). Lock
-# commits prefer AF_RELEASE_TOKEN (PAT push re-triggers PR/push CI); without
-# it we push with GITHUB_TOKEN and auto-approve the resulting action_required
-# pull_request run (see retrigger-after-lock-push.sh) so no human click.
-# Pixi pin: keep in sync with PIXI_VERSION in docker/purdue-af/Dockerfile
-# and constraints.pixi in renovate.json5.
+# commits and AF_RELEASE_TOKEN: RELEASING.md. The pixi CLI version is read
+# from ARG PIXI_VERSION in docker/purdue-af/Dockerfile.
 
 on:
   workflow_call:

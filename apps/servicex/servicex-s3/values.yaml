@@ -34,11 +34,6 @@ postgresql:
     registry: geddes-registry.rcac.purdue.edu
     repository: docker-hub-cache/bitnamilegacy/postgresql
     tag: 14.5.0-debian-11-r35
-  # global:
-  #   postgresql:
-  #     auth:
-  #       database: servicex
-  #       postgresPassword: leftfoot1
   primary:
     resources:
       requests:
@@ -85,7 +80,7 @@ codeGen:
   python:
     enabled: true
     image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_code_gen_python
-    tag: python-codegen-compression #"v1.8.3"
+    tag: python-codegen-compression
     defaultScienceContainerImage: docker.io/sslhep/servicex_science_image_combined_root
     defaultScienceContainerTag: 5.7.4-6.38.04-coffea
     compressionAlgorithm: ZSTD
@@ -117,10 +112,6 @@ transformer:
   memoryRequest: 2Gi
   cpuLimit: 1
   memoryLimit: 4Gi
-  # persistence:
-  #   existingClaim: "claim-dkondra"
-  #   subdir: /servicex/
-  # cachePrefix: "'xcache.cms.rcac.purdue.edu'"
   nodeSelector:
     cms-af-prod: "true"
   tolerations:

@@ -1,5 +1,4 @@
 #!/bin/bash
-# earlier: /opt/conda
 base_env_dir=/opt/pixi/.pixi/envs/base-env/
 
 # Configure JupyterLab overrides (single-click unfold, disable PyPI extension manager)
@@ -18,8 +17,7 @@ OVERRIDES_EOF
 # Configure topbar extension
 NEW_HOME=/home/$NB_USER
 
-# Every write below lands under $NEW_HOME, which belongs to the user, so it is
-# done as the user. See the helper for why that matters.
+# Every write below lands under $NEW_HOME, so it is done as the user.
 source /usr/local/bin/af-as-user.sh
 
 TOPBAR_CONFIG_PATH=$NEW_HOME/.jupyter/lab/user-settings/@jupyterlab/application-extension/
@@ -83,11 +81,8 @@ echo "{
     \"rank\": 0
 }" | af_as_user tee $JIL_PATH/plugin.jupyterlab-settings >/dev/null
 
-# Pre-install code-server extensions into the notebook user's dirs; fail if CLI is unavailable
 CODE_SERVER_BIN="${base_env_dir%/}/bin/code-server"
-# start.sh SOURCES this file, so `exit` here would kill the container before
-# JupyterLab launches. A broken code-server must not cost the user their whole
-# session — skip the editor setup and let the session come up without it.
+# A broken code-server skips the editor setup, never the session.
 code_server_ok=1
 if [ ! -x "$CODE_SERVER_BIN" ]; then
 	echo "ERROR: code-server CLI not found or not executable at $CODE_SERVER_BIN" >&2
@@ -101,9 +96,7 @@ if [ "$code_server_ok" = 1 ]; then
 	export CODE_USERDATADIR="$NEW_HOME/.local/share/code-server"
 	CODE_SERVER_USER_SETTINGS="$CODE_USERDATADIR/User"
 
-	# Backstop only: as the user this succeeds wherever ~/.local actually lives.
-	# If it still fails — a full quota, a dangling symlink — the session must
-	# survive it, so skip the editor rather than exiting the hook.
+	# Fails only on a full quota or dangling symlink: skip the editor then.
 	if ! af_as_user mkdir -p \
 		"$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR" "$CODE_SERVER_USER_SETTINGS"; then
 		echo "ERROR: cannot create code-server directories under $NEW_HOME/.local" >&2
@@ -122,9 +115,7 @@ if [ "$code_server_ok" = 1 ]; then
 	if [[ "${JUPYTERHUB_BASE_URL:-}" == http* ]]; then
 		HUB_ORIGIN="${JUPYTERHUB_BASE_URL%/}"
 	fi
-	# `af_as_user tee` rather than a plain redirect: the redirect is opened by
-	# this shell, which is root, so it would fail on a depot-backed ~/.local
-	# exactly as the mkdir did.
+	# `af_as_user tee`, not a redirect: root opens redirects.
 	af_as_user tee "$CODE_SERVER_USER_SETTINGS/settings.json" >/dev/null <<EOF
 {
   "chat.disableAIFeatures": true,
@@ -174,13 +165,9 @@ EOF
 	_cs_install_if_missing ms-toolsai.jupyter
 	_cs_install_if_missing continue.continue@1.3.30
 	_cs_install_if_missing renan-r-santos.pixi-code
-	# Coding agents. Both extensions drive the CLIs installed in the image and
-	# read the same config files, so config-agents.sh registers the AF MCP server
-	# for the editor and the terminal in one go. Open VSX is code-server's
-	# marketplace — these IDs are the Open VSX ones, not the MS Marketplace ones.
+	# Open VSX IDs (code-server's marketplace).
 	_cs_install_if_missing anthropic.claude-code
-	# Pinned: 26.901.22334 emits `using` declarations, which the Node 22 bundled
-	# with code-server cannot parse, so the extension never activates.
+	# Pinned: newer builds emit `using` declarations code-server's Node cannot parse.
 	_cs_install_if_missing openai.chatgpt@26.820.71523
 
 	# Install Purdue AF code-server UI controls via VSIX (proper extensions.json registration)
@@ -246,9 +233,7 @@ PY
 		echo "WARNING: bundled Purdue AF code-server VSIX not found at ${PAF_CS_EXT_VSIX}" >&2
 	fi
 
-	# Everything above was created as the user, so this only repairs homes an
-	# earlier image left root-owned. It cannot work on a depot-backed ~/.local
-	# (root_squash again) and must not be fatal there.
+	# Repairs root-owned homes; never fatal (a depot-backed ~/.local is out of root's reach).
 	chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR" || true
 
 fi
@@ -276,5 +261,5 @@ if [[ -s "$CONTINUE_DIR/api-key.txt" ]]; then
 		rm -f "$tmp"
 	fi
 fi
-# Only repairs homes an earlier image left root-owned; must not be fatal.
+# Repairs root-owned homes; never fatal.
 chown -R $NB_USER:users "$CONTINUE_DIR" || true

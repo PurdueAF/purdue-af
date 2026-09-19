@@ -1,6 +1,6 @@
 # Task image of the self-repair workflow (workflows/self-repair): the Flyte 2
 # runtime, git, and opencode as the coding agent. The workflow code itself is
-# not baked in — Flyte ships it as a code bundle from the deploy Job.
+# not baked in — Flyte ships it as a code bundle from the launcher.
 FROM python:3.12-slim
 
 COPY --from=ghcr.io/astral-sh/uv:0.12.17 /uv /uvx /bin/

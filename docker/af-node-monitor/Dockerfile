@@ -10,9 +10,7 @@ RUN pip install --no-cache-dir prometheus_client==0.22.1 requests==2.32.5 kubern
 
 WORKDIR /opt/af-node-monitor
 
-# Keep copies of the scripts in the image so the same image
-# can be used for both orchestrator and Jobs. The cluster
-# may still mount updated versions via ConfigMap.
+# Fallback copies: the Deployment and DaemonSets run the scripts from a ConfigMap.
 COPY docker/af-node-monitor/node_healthcheck.py ./node_healthcheck.py
 COPY docker/af-node-monitor/job_runner.py ./job_runner.py
 COPY docker/af-node-monitor/probe_agent.py ./probe_agent.py

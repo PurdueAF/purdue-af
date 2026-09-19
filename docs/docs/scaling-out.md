@@ -1,16 +1,31 @@
 # Scaling out
 
-A single Purdue AF session is limited to **128 CPU cores and 128 GB RAM**.
-When your analysis outgrows these resources, several options are available.
-This page gives an overview; detailed instructions are linked from each section.
+## Session resources
+
+When you start a session, the number of CPU cores (up to 128) and the amount of
+memory (up to 128 GB) that you select are **reserved** for your session. A
+session can use more — up to 256 cores and 256 GB — while the node it runs on
+has spare capacity, but only the reserved amount is guaranteed. If your work
+needs more memory than you reserved, restart the session with a larger
+selection.
+
+### Idle sessions
+
+Sessions that stay **inactive for 14 days** are shut down automatically.
+Sessions holding **any GPU** (A100 slice, full A100, or T4) are shut down after
+**24 hours** of inactivity. Your storage volumes are unaffected — simply start a
+new session.
 
 ## Which method should I use?
 
-| Method | Best for | Available to | Typical scale |
+When your analysis outgrows a single session, several options are available.
+This page gives an overview; detailed instructions are linked from each section.
+
+| Method | Best for | Available to | Scale |
 | --- | --- | --- | --- |
-| [Dask (local cluster)](guide-dask.md) | Parallelizing Python code within a session | All users | up to 128 cores |
-| [Dask Gateway, Kubernetes backend](guide-dask-gateway.md) | Distributed Python / Coffea analyses | All users | up to 200 workers (200 cores, 1.2 TB RAM) |
-| [Dask Gateway, Slurm backend](guide-dask-gateway.md) | Distributed Python / Coffea analyses | Purdue users | hundreds of workers (Hammer) |
+| [Dask (local cluster)](guide-dask.md) | Parallelizing Python code within a session | All users | the cores of your session |
+| [Dask Gateway, Kubernetes backend](guide-dask-gateway.md) | Distributed Python / Coffea analyses | All users | [hundreds of cores](guide-dask-gateway.md#dask-gateway-at-purdue-af) |
+| [Dask Gateway, Slurm backend](guide-dask-gateway.md) | Distributed Python / Coffea analyses | Purdue users | Hammer cluster |
 | Slurm batch jobs | Independent batch workloads, GPU jobs | Purdue users | Hammer cluster (`cms` account) or other Purdue Community Clusters |
 | CRAB | CMSSW (`cmsRun`) jobs, MC generation, skimming | All CMS users | the entire WLCG |
 
@@ -25,8 +40,7 @@ frameworks such as Coffea and RDataFrame.
   session — no extra setup required.
 * **[Dask Gateway](guide-dask-gateway.md)** scales beyond the session, submitting
   workers either as Kubernetes pods on the Geddes cluster (all users), or as Slurm
-  jobs on the Hammer cluster (Purdue users only). Note that each user
-  can have **at most one active Dask Gateway cluster** per gateway at a time.
+  jobs on the Hammer cluster (Purdue users only).
 
 ## Slurm (Purdue users only)
 
@@ -36,11 +50,9 @@ At Purdue AF, **users with local Purdue accounts** can submit jobs from the AF
 terminal to the Hammer cluster, using the `cms` Slurm account. Users can also submit Slurm jobs at other Community Clusters after logging into them via `ssh`.
 
 * [Instructions for submitting Slurm jobs](https://www.rcac.purdue.edu/knowledge/hammer/run)
-* Code and data used by Slurm jobs must be stored on **Depot** (`/depot/cms/`) —
-  `/home/` and `/work/` are not mounted in Slurm jobs
-  (see [Storage volumes](storage.md)).
-* To request a GPU for a Slurm job, add `--gpus-per-node=1` to the `sbatch`
-  command — see [GPU access](gpus.md).
+* Code and data used by Slurm jobs must be stored on a volume that Slurm jobs
+  can see — see [Storage volumes](storage.md).
+* To request a GPU for a Slurm job, see [GPU access](gpus.md#2-slurm-jobs-purdue-users-only).
 
 ## CRAB
 
@@ -57,8 +69,8 @@ CRAB is suitable for running most CMSSW framework jobs (i.e. jobs launched via t
 as [Monte Carlo generation](guide-mc-gen.md) or "skimming" AOD / MiniAOD datasets.
 
 * [Instructions for submitting CRAB jobs](https://www.physics.purdue.edu/Tier2/user-info/tutorials/crab3.php)
-* CRAB outputs are written to your Grid directory at Purdue EOS:
-  `/eos/purdue/store/user/<cern-username>` — see [Storage volumes](storage.md).
+* CRAB outputs are written to your Grid directory at Purdue EOS — see
+  [Saving outputs of CRAB jobs](storage.md#saving-outputs-of-crab-jobs).
 
 ## Monitoring your jobs
 

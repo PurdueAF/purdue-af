@@ -5,10 +5,10 @@ CI-owned. Never create a version tag or move a channel tag by hand.
 
 | Stream                                                | Scheme                            | Minted by                              | Reaches the cluster                                    |
 | ----------------------------------------------------- | --------------------------------- | -------------------------------------- | ------------------------------------------------------ |
-| **Platform** (everything Flux deploys)                | CalVer `YYYY.M.SEQ` (`2026.7.8`)  | **Release platform** workflow          | immediately — core Flux tracks the newest `2026.x` tag |
+| **Platform** (the core Flux root)                     | CalVer `YYYY.M.SEQ` (`2026.7.8`)  | **Release platform** workflow          | next core Flux reconcile (~1 min)                      |
 | **purdue-af image**                                   | semver `v0.X.Y` (`v0.13.0`)       | **Release image** workflow             | at the next platform release                           |
 | **agentic-interface image**                           | semver `agentic-interface-vX.Y.Z` | `ci.yml` publish stage — **automatic** | same pipeline — experimental Flux reconcile (~1 min)   |
-| Continuous (`:latest`, `:pre-release`, `in-`, `sha-`) | moving tags                       | `ci.yml` publish stage, behind `ci-ok` | on pod restart / session spawn                         |
+| Continuous (`:latest`, `:pre-release`, `sha-`)        | moving tags                       | `ci.yml` publish stage, behind `ci-ok` | on pod restart / session spawn                         |
 | Experimental Flux source (`main-validated`)           | moving branch                     | `ci.yml` publish stage, behind `ci-ok` | experimental Flux reconcile (~1 min)                   |
 
 The monitor images (af-pod-monitor, af-node-monitor), supersonic-model-manager
@@ -91,11 +91,14 @@ the current repo state. Complete the manual checklist in
 
 1. **Actions → Release image → Run workflow** — choose the bump (or an
    explicit `version`). It adds the semver tag to the **same digest** that
-   passed CI (never a rebuild), rewrites every version spot in values.yaml
-   (`bump-af-version.py`, count-verified), commits to `main`, tags
-   `v<version>`, and publishes a Release.
+   passed CI (never a rebuild), rewrites every version spot in the hub's
+   values.yaml and the pixi-global-sync image (`bump-af-version.py`,
+   count-verified), commits to `main`, tags `v<version>`, and publishes a
+   Release.
 2. **Actions → Release platform → Run workflow** — always the second step:
-   the bump commit reaches the cluster only once a platform tag covers it.
+   the bump commit reaches the hub only once a platform tag covers it.
+   pixi-global-sync is experimental and takes it at the next `main-validated`
+   advance.
 
 **Rollback**: `git revert` the release commit on `main`, then mint a new
 platform tag. Never delete a `v*` tag — the pin lives in a values.yaml
@@ -125,7 +128,7 @@ ever wanted, `--set` it by hand in a normal commit and let CI validate it.
 
 The bump commit is the ONE deliberate exception to "everything on
 `main-validated` ran its own pipeline": it is pushed with `GITHUB_TOKEN`
-(which triggers no workflows — no PAT exists in this repo), so instead it is
+(which triggers no workflows), so instead it is
 validated in-run — the step proves the commit differs from the tree this
 pipeline just validated by exactly the one rewritten image-tag line, refuses
 to release if `main` moved during the run, and stamps a `ci-ok` check run on
@@ -145,11 +148,23 @@ Never delete an `agentic-interface-v*` tag.
 
 ## Rules of the road
 
-- Channel tags (`:latest`, `:pre-release`), build tags (`in-`, `sha-`) and
+- Channel tags (`:latest`, `:pre-release`), `sha-` provenance tags and
   `main-validated` move only in the `ci.yml` publish stage, after every stage
-  of the same commit is green. The `protect-main-validated` ruleset blocks
-  deleting the branch and leaves updates open, so `GITHUB_TOKEN` can
-  force-push it.
-- The `AF_RELEASE_TOKEN` secret (fine-grained PAT, `contents: write`) must
-  exist: commits and tags pushed with the default `GITHUB_TOKEN` do not
-  trigger CI, so a release commit would go unvalidated.
+  of the same commit is green. `in-<hash>` tags name build content, not a
+  validated state: the images stage pushes them as soon as an image builds,
+  on same-repo PRs too ([docker/REGISTRY.md](docker/REGISTRY.md)). The
+  `protect-main-validated` ruleset blocks deleting the branch and leaves
+  updates open, so `GITHUB_TOKEN` can force-push it.
+- The `AF_RELEASE_TOKEN` secret (fine-grained PAT, `contents: write`) is
+  optional. Every workflow that reads it falls back to `GITHUB_TOKEN`, whose
+  pushes trigger no workflow. Without it:
+  - the **Release image** commit gets no CI run and no `ci-ok` (the workflow
+    warns). Gate 1 of the next image release fails until another commit
+    lands on `main` and passes CI, or `force` is used. The platform tag of
+    step 2 points at that commit, which CI has not run on.
+  - a lock commit from `ci-pixi-base.yml` / `ci-pixi-global.yml` gets its
+    follow-up run from `retrigger-after-lock-push.sh`: an approved
+    `pull_request` run, or else a `workflow_dispatch` run, which never
+    publishes.
+  - **Release platform** is unaffected: it pushes only a tag, and no
+    workflow triggers on tags.

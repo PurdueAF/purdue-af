@@ -1,10 +1,8 @@
 """Tests for tools/elicitation.py + a guard that every elicitation schema is
 accepted by the real MCP SDK validator.
 
-The SDK's _validate_elicitation_schema only allows raw primitive field
-annotations (str/int/float/bool) — a Literal annotation is rejected and makes
-ctx.elicit() raise at runtime, silently falling back. These tests catch that
-regression, which unit tests using a fake context cannot.
+The SDK's _validate_elicitation_schema accepts only raw primitive field
+annotations (str/int/float/bool); a fake context cannot check that.
 """
 
 import types

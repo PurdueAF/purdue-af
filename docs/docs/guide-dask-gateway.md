@@ -3,35 +3,27 @@
 Dask Gateway is a service that allows users to manage Dask clusters in a
 multi-tenant environment such as the Purdue Analysis Facility.
 
-There are two types of Dask Gateway clusters that can be created:
+There are two gateways, one per backend:
 
-* **Dask Gateway cluster with Slurm backend** — workers are submitted as Slurm jobs
-  to the Purdue **Hammer** community cluster.
-  This is available to **Purdue users only**, due to Purdue data access policies.
+* **Kubernetes backend** — workers are submitted to the Purdue Geddes cluster
+  and are scheduled almost instantly. Available to **all users**.
+* **Slurm backend** — workers are submitted as Slurm jobs to the Purdue
+  **Hammer** community cluster, where they may wait in the queue behind other
+  jobs. Available to **Purdue users only**, due to Purdue data access policies.
 
-    With this method, users can create **hundreds of workers**, although requesting
-    more than 200–300 workers is usually associated with some wait time due to
-    competition with CMS production jobs and other users.
+## Limits
 
-* **Dask Gateway cluster with Kubernetes backend** — workers are submitted to the
-  Purdue Geddes cluster. This is available to **all users**.
+| | Kubernetes backend | Slurm backend |
+| --- | --- | --- |
+| Active clusters per user | 1 | 1 |
+| Workers per cluster | 200 (201 cores and 1200 GB of memory in total) | limited by Hammer availability |
+| Cores per worker | up to 64 | up to 16 |
+| Memory per worker | up to 64 GiB | up to 64 GiB |
 
-    With this method, the workers are scheduled almost instantly, but for now we
-    restrict each cluster to **200 workers, 200 cores, and 1.2 TB RAM** due
-    to limited resources in the Analysis Facility.
-
-!!! important "One cluster at a time"
-
-    Each user can have **at most one active Dask Gateway cluster** per gateway at
-    a time. If cluster creation fails with a message about an existing cluster,
-    shut the old cluster down (or wait for it to finish stopping) first.
-
-The pros and cons of the two backends are summarized in the following table:
-
-|          | Dask Gateway + Slurm | Dask Gateway + Kubernetes |
-| -------- | -------------------- | ------------------------- |
-| **Pros** | • Slurm is familiar to current users<br>• Easy to access logs and worker info via `squeue` | • Fast scheduling of resources<br>• Detailed monitoring<br>• Available to CERN/FNAL users |
-| **Cons** | • Unavailable to CERN/FNAL users<br>• Scheduling workers can be slow due to competition with CMS production jobs | • Limited total amount of resources<br>• Retrieving detailed worker info can be non-trivial for users (but easy for admins) |
+The one-cluster limit applies per gateway: if cluster creation fails with a
+message about an existing cluster, [shut the old cluster down](#5-shutting-down-clusters)
+(or wait for it to finish stopping) first. For most analyses, many small
+workers (1–4 cores each) work better than a few large ones.
 
 ## 1. Creating Dask Gateway clusters
 
@@ -60,16 +52,16 @@ gateway = Gateway()
 #     proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000",
 # )
 
-# You may need to update some environment variables before creating a cluster.
-# For example:
-os.environ["X509_USER_PROXY"] = "/path-to-voms-proxy/"
+# Path to your VOMS proxy file, on storage the workers can read
+# (see "Environment variables" below):
+os.environ["X509_USER_PROXY"] = "/depot/cms/users/<username>/x509up_u<uid>"
 
 # Create the cluster
 cluster = gateway.new_cluster(
     pixi_project="/path/to/pixi/project",  # path to pixi project (directory containing pixi.toml file)
     # conda_env = "/path/to/conda/environment", # path to conda environment - can be used instead of pixi_project
     worker_cores=1,  # cores per worker
-    worker_memory=4,  # memory per worker in GB
+    worker_memory=4,  # memory per worker in GiB
     env=dict(os.environ),  # pass environment as a dictionary
 )
 
@@ -78,113 +70,93 @@ cluster = gateway.new_cluster(
 cluster
 ```
 
-!!! note "Worker size limits"
-
-    A single worker can request at most **64 GB of memory**, and at most
-    **64 cores** (Kubernetes backend) or **16 cores** (Slurm backend).
-    For most analyses, many small workers (1–4 cores each) work better than a
-    few large ones.
-
 ## 2. Shared environments and storage volumes
 
-There are multiple ways to ensure that the workers have access to specific storage
-volumes, Pixi or Conda environments, Python packages, C++ libraries, etc.
+Dask workers have the same permissions as the user that creates them, and see
+only some of the storage volumes of your session — see which volumes each type
+of worker can read in [Storage volumes](storage.md#overview). Any environment,
+code, or data the workers use must live on one of those volumes.
 
-* **Shared storage**
+### Pixi or Conda environments
 
-    Dask workers have the same permissions as the user that creates them. You can
-    use this to your advantage if your workers read/write data to/from storage
-    locations.
+A cluster runs the environment you name — it does not inherit the notebook's.
+The environment must be built before the cluster is created, and stored where
+the workers can read it: Slurm workers, for example, will not be able to see
+environments located in `/work/` storage.
 
-    Refer to the following table to decide which Dask Gateway setup works best in
-    your case:
+The path to a Pixi project is specified in the `pixi_project` argument of
+`new_cluster()`:
 
-    |            | Slurm workers (Purdue users) | Kubernetes workers (Purdue users) | Kubernetes workers (CERN/FNAL users) |
-    | ---------- | ---------------------------- | --------------------------------- | ------------------------------------ |
-    | **/home/** | no access                    | no access                         | no access                            |
-    | **/work/** | no access                    | read / write                      | read / write                         |
-    | **Depot**  | read / write                 | read / write                      | read-only                            |
-    | **CVMFS**  | read-only                    | read-only                         | read-only                            |
-    | **EOS**    | read-only                    | read-only                         | read-only                            |
+```python
+cluster = gateway.new_cluster(
+    pixi_project="/path/to/pixi/project",  # path to pixi project (directory containing pixi.toml file)
+    # ...
+)
+```
 
-* **Pixi or Conda environments / Jupyter kernels**
+If you are using a
+[multi-environment Pixi project](https://pixi.sh/dev/workspace/multi_environment/),
+specify the environment name in the `pixi_env` argument (`default` if not
+specified):
 
-    Any Pixi or Conda environment used in your analysis can be propagated to the
-    Dask workers. The only caveat is that the workers must have read access to the
-    storage volume where the environment is stored (see table above). For example,
-    Slurm workers will not be able to see Pixi or Conda environments located in
-    `/work/` storage.
+```python
+cluster = gateway.new_cluster(
+    pixi_project="/path/to/pixi/project",
+    pixi_env="my-env",  # pixi environment name
+    # ...
+)
+```
 
-    The path to the Pixi project is specified in the `pixi_project` argument of
-    `new_cluster()`:
+If using a Conda environment, specify its location in the `conda_env` argument
+(mutually exclusive with `pixi_project` and `pixi_env`):
+
+```python
+cluster = gateway.new_cluster(
+    conda_env="/path/to/conda/environment",  # path to conda environment
+    # ...
+)
+```
+
+### Environment variables
+
+Workers inherit none of your session's environment variables; they receive
+only what you pass in the `env` argument of `new_cluster()`. The most
+straightforward way is to pass the entire session environment,
+`env=dict(os.environ)`. This is also how you can, for example:
+
+* enable imports from local Python (sub)modules by amending the `PYTHONPATH` variable;
+* enable imports from C++ libraries by amending the `LD_LIBRARY_PATH` variable.
+
+**Reading data via XRootD.** The environment passed to the workers must contain
+`X509_USER_PROXY`, pointing to your VOMS proxy file on storage the workers
+mount: `/depot/` for either backend, or `/work/users/<username>/` for the
+Kubernetes backend only. By default `voms-proxy-init` writes the proxy to
+`/tmp`, which workers cannot see, so set `X509_USER_PROXY` before
+[creating the proxy](getting-started.md#6-set-up-a-voms-proxy):
+
+```shell
+export X509_USER_PROXY=/depot/cms/users/$USER/x509up_u$NB_UID
+```
+
+Passing `env=dict(os.environ)` then carries `X509_USER_PROXY` to the workers,
+together with the session's `X509_CERT_DIR`, which is a `/cvmfs/` path.
+
+!!! important
+
+    For CERN and FNAL users, the dictionary passed to the `env` argument must
+    contain the elements `"NB_UID"` and `"NB_GID"`. **This is already satisfied
+    when you pass** `env = dict(os.environ)`, **so no further action is needed.**
+
+    However, if you want to pass a custom environment to the workers, you can
+    add the required elements as follows:
 
     ```python
-    cluster = gateway.new_cluster(
-        pixi_project="/path/to/pixi/project",  # path to pixi project (directory containing pixi.toml file)
-        # ...
-    )
+    env = {
+        "NB_UID": os.environ["NB_UID"],
+        "NB_GID": os.environ["NB_GID"],
+        # other environment variables...
+    }
     ```
-
-    If you are using a multi-environment Pixi project, you can specify the
-    environment name in the `pixi_env` argument (`default` if not specified):
-
-    ```python
-    cluster = gateway.new_cluster(
-        pixi_project="/path/to/pixi/project",
-        pixi_env="my-env",  # pixi environment name
-        # ...
-    )
-    ```
-
-    If using a Conda environment, specify its location in the `conda_env` argument
-    (mutually exclusive with `pixi_project` and `pixi_env`):
-
-    ```python
-    cluster = gateway.new_cluster(
-        conda_env="/path/to/conda/environment",  # path to conda environment
-        # ...
-    )
-    ```
-
-* **Environment variables**
-
-    Passing environment variables to workers can be beneficial in various ways,
-    for example:
-
-    * enable imports from local Python (sub)modules by amending the `PYTHONPATH` variable;
-    * enable imports from C++ libraries by amending the `LD_LIBRARY_PATH` variable;
-    * allow workers to read data via XRootD by specifying the path to a VOMS proxy
-      via the `X509_USER_PROXY` variable.
-
-    The `gateway.new_cluster()` command takes an `env` argument which can be used
-    to pass any set of environment variables to the workers. The most
-    straightforward way to use this is to pass the entire local environment:
-
-    ```python
-    os.environ["X509_USER_PROXY"] = "/path-to-proxy"
-
-    cluster = gateway.new_cluster(
-        # ...
-        env=dict(os.environ)
-    )
-    ```
-
-    !!! important
-
-        For CERN and FNAL users, the dictionary passed to the `env` argument must
-        contain the elements `"NB_UID"` and `"NB_GID"`. **This is already satisfied
-        when you pass** `env = dict(os.environ)`, **so no further action is needed.**
-
-        However, if you want to pass a custom environment to the workers, you can
-        add the required elements as follows:
-
-        ```python
-        env = {
-            "NB_UID": os.environ["NB_UID"],
-            "NB_GID": os.environ["NB_GID"],
-            # other environment variables...
-        }
-        ```
 
 ## 3. Monitoring
 
@@ -242,16 +214,9 @@ Below are the different ways to connect a client to a cluster created elsewhere:
     client = gateway.connect(cluster_name).get_client()
     ```
 
-    !!! caution
-
-        If you have more than one Dask Gateway cluster running, automatic detection
-        may be ambiguous.
-
 === "Manual connection"
 
     This is the most straightforward method of connecting to a specific cluster.
-    It is useful if you have more than one cluster running and need to ensure that
-    you are connecting to the correct one.
 
     ```python
     from dask_gateway import Gateway
@@ -290,7 +255,7 @@ for cluster_info in gateway.list_clusters():
 
 ## 6. Cluster lifetime and timeouts
 
-* Cluster creation will fail if the scheduler doesn't start within **3 minutes**
+* Cluster creation fails if the scheduler doesn't start within **3 minutes**
   (Kubernetes backend) or **10 minutes** (Slurm backend). If this happens, try to
   resubmit the cluster.
 * An idle cluster (no connected clients — for example, after the notebook that
@@ -302,5 +267,4 @@ for cluster_info in gateway.list_clusters():
 !!! note "See also"
 
     * [Dask Gateway cluster setup (demo notebook)](https://github.com/PurdueAF/purdue-af-demos/blob/master/gateway-cluster.ipynb)
-    * [Pixi environments in Dask Gateway](guide-pixi.md#pixi-environments-in-dask-gateway)
-    * [Troubleshooting](troubleshooting.md)
+    * [Troubleshooting](troubleshooting.md#dask-gateway)

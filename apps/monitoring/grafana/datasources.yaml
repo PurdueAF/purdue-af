@@ -1,26 +1,12 @@
-# Shared Grafana datasource provisioning, merged into both instances
-# (grafana and grafana-private) via a second valuesFrom entry on each
-# HelmRelease — single source of truth so the instances cannot drift.
-# Instance-specific datasources (e.g. Infinity on the public instance)
-# live in that instance's values file under a different provisioning
-# filename, which the values merge keeps alongside this one.
+# Merged into both instances by a second valuesFrom entry on each HelmRelease.
 datasources:
   datasources.yaml:
     apiVersion: 1
-    # Grafana cannot CHANGE an existing datasource's uid via provisioning:
-    # the update looks the row up by id AND the uid from this file, gets
-    # "data source not found", and the failed provisioning module crash-
-    # loops the whole instance (took the public instance down 2026-09-07
-    # when uid: pyroscope was pinned over the old auto-generated uid).
-    # Deleting the row first makes provisioning re-create it with the
-    # pinned uid — Grafana skips the delete event when the datasource is
-    # re-created in the same pass, and skips rows that don't exist.
+    # Delete-then-re-add is how a uid changes: .claude/rules/dashboards.md.
     deleteDatasources:
       - name: pyroscope
         orgId: 1
-      # thanos was never reconciled from this repo again after the release
-      # was dropped; delete the provisioned row so the instance stops
-      # offering a datasource that points at nothing.
+      # thanos is not deployed; remove its provisioned row.
       - name: thanos
         orgId: 1
     datasources:
@@ -61,8 +47,7 @@ datasources:
             datasourceUid: prometheus
           tracesToLogs:
             datasourceUid: loki
-      # uid pinned so dashboards can reference it stably across instances
-      # (a fresh database would otherwise generate a random uid)
+      # uid pinned so dashboards reference it the same way on both instances.
       - name: pyroscope
         uid: pyroscope
         type: grafana-pyroscope-datasource

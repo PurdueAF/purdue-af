@@ -1,11 +1,6 @@
-# Default SuperSONIC: the CMS Run 3 MiniAOD model set, served straight off
-# CVMFS. Moved here from PurdueAF/sonic, where it ran in the `sonic`
-# namespace as release `cms-run3-miniaod`. Three things changed in the move:
-# it uses the cms Prometheus instead of bundling its own, its Grafana host
-# follows the release name, and it scales from zero.
+# Default SuperSONIC: the CMS Run 3 MiniAOD model set, served off CVMFS.
 
-# A/B against supersonic-pr: same chart, same window, same bounds. The old
-# metric is intensive, so it needs metricType Value.
+# A/B against supersonic-pr: same chart, window and bounds; this metric is intensive, so metricType Value.
 serverLoadMetric: |-
   sum by (release) (
       rate(nv_inference_queue_duration_us{release=~"supersonic"}[30s])
@@ -24,8 +19,7 @@ scaleFromZero:
   holdMinReplicasSeconds: 300
 
 triton:
-  # Geometric build: ParticleNet and the unified particle transformer need the
-  # torch-geometric ops, which the stock tritonserver image does not carry.
+  # Geometric build: ParticleNet and UParT need torch-geometric ops the stock image lacks.
   image: fastml/triton-torchgeo:26.04-py3-geometric
   command: ["/bin/sh", "-c"]
   args:
@@ -54,12 +48,10 @@ triton:
   resources:
     limits:
       nvidia.com/gpu: 1
-      # nvidia.com/mig-1g.5gb: 1
       cpu: 4
       memory: 16G
     requests:
       nvidia.com/gpu: 1
-      # nvidia.com/mig-1g.5gb: 1
       cpu: 4
       memory: 16G
   nodeSelector: { "cms-af-prod": "true" }
@@ -101,9 +93,7 @@ envoy:
   loadBalancerPolicy: "ROUND_ROBIN"
   service:
     type: LoadBalancer
-  # Clients reach Envoy through the LoadBalancer service on the private pool,
-  # or in-cluster at supersonic.cms.svc.cluster.local:8001. No public
-  # inference ingress on any SuperSONIC release here.
+  # No public inference ingress; clients use the private-pool LoadBalancer or the in-cluster Service.
   ingress:
     enabled: false
   rate_limiter:
@@ -114,8 +104,7 @@ envoy:
 
 keda:
   enabled: true
-  # No GPU held while idle: RepositoryIndex raises this to 1 through the
-  # Envoy admission sidecar, which holds it there for holdMinReplicasSeconds.
+  # RepositoryIndex raises this to 1 through the Envoy admission sidecar.
   metricType: Value
   minReplicaCount: 0
   # Below the free GPU count, so neither arm is ever starved.
@@ -136,21 +125,12 @@ ingress:
   enabled: false
 
 prometheus:
-  # In PurdueAF/sonic this release bundled its own Prometheus (LoadBalancer
-  # service, hand-made SA and ConfigMap override in the `sonic` namespace).
-  # In cms the shared AF Prometheus already scrapes Triton via af-pod-monitor
-  # with the app/release labels the dashboard expects, so use it.
-  # FQDN required: KEDA operator runs in the keda namespace and cannot
-  # resolve the short name prometheus-server.
+  # FQDN: the KEDA operator runs in the keda namespace.
   external:
     enabled: true
     url: prometheus-server.cms.svc.cluster.local
     port: 9090
     scheme: http
-
-# Nothing to disable for tracing: the Tempo and OpenTelemetry Collector
-# dependencies were removed from the chart after 0.3.1, so this branch has no
-# way to reach either.
 
 grafana:
   enabled: true
@@ -171,9 +151,7 @@ grafana:
           type: prometheus
           access: proxy
           isDefault: true
-          # Chart validation requires scheme://host with no port (must match
-          # prometheus.external.scheme + .url). Port 9090 is injected by the
-          # HelmRelease postRenderer in helmrelease.yaml.
+          # No port, per chart validation; the HelmRelease postRenderer adds :9090.
           url: http://prometheus-server.cms.svc.cluster.local
           jsonData:
             timeInterval: "5s"

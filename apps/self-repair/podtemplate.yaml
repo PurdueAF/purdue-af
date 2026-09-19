@@ -1,6 +1,4 @@
-# Pod spec of every self-repair task (TaskEnvironment(pod_template="self-repair")
-# in workflows/self-repair/self_repair.py). Replaces the flyte-task default: no
-# /work, but the GitHub token.
+# Pod spec of every self-repair task; replaces the flyte-task default.
 apiVersion: v1
 kind: PodTemplate
 metadata:
@@ -24,20 +22,16 @@ template:
       - name: default
         image: overridden-by-flyte
         env:
-          # Fine-grained token with contents:write and pull_requests:write on
-          # PurdueAF/purdue-af, from the sops-encrypted secret-github.yaml.
           - name: GITHUB_TOKEN
             valueFrom:
               secretKeyRef:
                 name: self-repair-github
                 key: token
-          # Purdue GenAI Studio key, from the sops-encrypted secret-genai.yaml.
           - name: GENAI_API_KEY
             valueFrom:
               secretKeyRef:
                 name: self-repair-genai
                 key: api-key
-          # OpenCode Zen key. Optional: only for an opencode/* model.
           - name: OPENCODE_API_KEY
             valueFrom:
               secretKeyRef:
@@ -45,8 +39,7 @@ template:
                 key: api-key
                 optional: true
         volumeMounts:
-          # Same path as in the purdue-af image; opencode is pointed at it
-          # through `instructions`, exactly as config-agents.sh does.
+          # Same path as in the purdue-af image.
           - name: platform-context
             mountPath: /opt/purdue-af/agents
             readOnly: true

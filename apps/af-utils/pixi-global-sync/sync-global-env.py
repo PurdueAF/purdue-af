@@ -50,7 +50,6 @@ from typing import Any
 
 log = logging.getLogger("pixi-global-sync")
 
-# ── configuration (env-overridable) ──────────────────────────────────────
 WORK_ROOT = Path(os.environ.get("WORK_ROOT", "/work/pixi"))
 CONFIG_DIR = Path(os.environ.get("CONFIG_DIR", "/config"))
 PIXI_BIN = os.environ.get("PIXI_BIN", "/opt/pixi/bin/pixi")
@@ -61,17 +60,15 @@ BUILD_TIMEOUT = int(os.environ.get("BUILD_TIMEOUT", "5400"))  # 90 min
 VALIDATE_TIMEOUT = int(os.environ.get("VALIDATE_TIMEOUT", "1800"))
 FAIL_COOLDOWN = int(os.environ.get("FAIL_COOLDOWN", "1800"))
 LOCK_STALE_SECONDS = int(os.environ.get("LOCK_STALE_SECONDS", "600"))
-# a holder whose heartbeat value stops CHANGING is dead (live ones refresh
-# every 30 s) — take over after this many seconds of a frozen heartbeat
+# A heartbeat that stops changing (live ones refresh every 30 s) is dead.
 LOCK_FROZEN_SECONDS = int(os.environ.get("LOCK_FROZEN_SECONDS", "90"))
 METRICS_PORT = int(os.environ.get("METRICS_PORT", "9099"))
 
-LIVE_DIR = WORK_ROOT / "global"  # plain pixi project dir, as it always was
+LIVE_DIR = WORK_ROOT / "global"
 CACHE_DIR = WORK_ROOT / ".cache"
 LOCK_DIR = CACHE_DIR / ".sync-lock"
 PAUSE_FILE_NAME = ".sync-pause"
 
-# ── metrics (hand-rolled exposition; stdlib only) ────────────────────────
 METRICS: dict[str, float] = {
     "in_sync": 0.0,  # 1 = live pixi.lock matches the repo's
     "paused": 0.0,  # 1 = .sync-pause present, daemon hands-off
@@ -137,7 +134,6 @@ def start_metrics_server() -> http.server.ThreadingHTTPServer:
     return server
 
 
-# ── desired state & drift ────────────────────────────────────────────────
 def read_desired(config_dir: str | Path | None = None) -> dict[str, bytes]:
     """→ {filename: bytes}. Reads through the kubelet ..data indirection so
     toml+lock always come from the SAME atomic ConfigMap revision."""
@@ -176,7 +172,7 @@ def stage_manifests(target_dir: str | Path, files: dict[str, bytes]) -> None:
         tmp.replace(target_dir / name)
 
 
-# ── singleton lock (NFS-safe: mkdir is atomic; heartbeat allows takeover) ─
+# NFS-safe lock: mkdir is atomic; a frozen heartbeat allows takeover.
 def heartbeat_path() -> Path:
     return LOCK_DIR / "heartbeat.json"
 
@@ -263,12 +259,10 @@ def release_lock() -> None:
     shutil.rmtree(LOCK_DIR, ignore_errors=True)
 
 
-# ── the actual work: what an admin would type, automated ─────────────────
 _current_child: dict[str, subprocess.Popen[str] | None] = {
     "proc": None
 }  # terminated by the SIGTERM handler
-# set by the SIGTERM handler: a killed child must not read as a failed
-# install (retry sleep, prefix wipe, reinstall) past the grace period
+# A child killed by SIGTERM must not read as a failed install.
 STOP = threading.Event()
 
 
@@ -395,7 +389,6 @@ def validate_env(env_dir: str | Path) -> bool:
     return proc.returncode == 0
 
 
-# ── reconcile ────────────────────────────────────────────────────────────
 _last_failure: dict[str, float] = {"ts": 0.0}
 _was_paused: dict[str, bool] = {"value": False}
 
@@ -425,10 +418,7 @@ def reconcile(force: bool = False) -> bool:
 
     in_sync = is_in_sync(LIVE_DIR, desired)
     metric_set("in_sync", 1.0 if in_sync else 0.0)
-    # Manifests are staged BEFORE pixi install, so a failed install leaves
-    # in_sync=1 with a broken env. Keep forcing until env_healthy recovers
-    # (bounded by FAIL_COOLDOWN below) — otherwise we'd sit unhealthy until
-    # the next 6 h deep_verify.
+    # Manifests are staged before install, so keep forcing until env_healthy recovers.
     if in_sync and not force and METRICS["env_healthy"] >= 0.5:
         return True
     if not force and time.time() - _last_failure["ts"] < FAIL_COOLDOWN:
@@ -445,9 +435,7 @@ def reconcile(force: bool = False) -> bool:
     started = time.time()
     try:
         stage_manifests(LIVE_DIR, desired)
-        # Healing a previously-broken live env: incremental install can leave
-        # hollow dist-info / half-linked trees. Wipe once so cache hardlinks
-        # rebuild a coherent prefix.
+        # Wipe a broken prefix once so cache hardlinks rebuild it coherently.
         if METRICS["env_healthy"] < 0.5:
             wipe_env_prefix(LIVE_DIR)
         pixi_install(LIVE_DIR)
@@ -492,7 +480,6 @@ def deep_verify() -> None:
         reconcile(force=True)
 
 
-# ── main ─────────────────────────────────────────────────────────────────
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
@@ -506,8 +493,7 @@ def main() -> int:
         PIXI_BIN,
     )
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    # /cache is an emptyDir that starts empty; pixi's PyPI phase creates
-    # tempfile locks under TMPDIR and fails hard if the parent is missing.
+    # pixi PyPI tempfile locks fail hard if the TMPDIR parent is missing.
     if tmp := os.environ.get("TMPDIR"):
         Path(tmp).mkdir(parents=True, exist_ok=True)
     acquire_lock()

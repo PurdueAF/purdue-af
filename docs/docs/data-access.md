@@ -5,10 +5,10 @@
     * To access remote datasets, use the `XRootD` protocol (requires a
       [VOMS proxy](getting-started.md#6-set-up-a-voms-proxy)).
     * Repeated reading of the same remote dataset is faster if you use `XCache` via 
-      the following prefix: `root://xcache.cms.rcac.purdue.edu`.
+      the following prefix: `root://xcache.cms.rcac.purdue.edu/`.
     * If a dataset is only available on tape, it needs to first be replicated
       (aka copied, "subscribed") to disk.
-    * To subscribe a dataset to Purdue, create a `Rucio rule` with a limited lifetime.
+    * To subscribe a dataset to Purdue, create a [Rucio rule](guide-rucio.md).
 
 ## General principles
 
@@ -33,17 +33,14 @@
   (e.g. when running over the same dataset many times) should you request a local
   copy by creating a [Rucio replication rule](guide-rucio.md).
 
-* Files transferred to Purdue via Rucio rules end up in the large **EOS** storage
-  system, **not** in users' directories(!), and become accessible via the same
-  AAA/XRootD methods as all other replicas of those datasets worldwide.
+* Files transferred to Purdue via [Rucio rules](guide-rucio.md) end up in the
+  large **EOS** storage system, **not** in users' directories(!), and become
+  accessible via the same AAA/XRootD methods as all other replicas of those
+  datasets worldwide.
 
-* Rucio rules are created with a **finite lifetime** (weeks, months) and need to be
-  **approved** by the site admins (otherwise the site's storage system would
-  overfill).
-
-* Output files from your CRAB jobs also end up in EOS, in the "user" section
-  (`/store/user/<username>`), and are likewise accessible from anywhere via
-  AAA/XRootD.
+* Output files from your CRAB jobs also end up in EOS, in your
+  [Grid directory](storage.md#saving-outputs-of-crab-jobs), and are likewise
+  accessible from anywhere via AAA/XRootD.
 
 * No CMS data file or dataset needs to reside in your `/home/` or `/work/`
   directories in order to be used in an analysis — except perhaps single, small
@@ -86,8 +83,7 @@ the local **XCache** server.
 * Analysis code should be written with the general goal of accessing data files via
   XRootD, potentially sped up via XCache.
 * Datasets which *absolutely* need to be present at Purdue can be "subscribed"
-  (i.e. temporarily copied) to our storage by creating a Rucio rule.
-* There are limits on how much data a user can keep at the site, and for how long.
+  (i.e. temporarily copied) to our storage by creating a [Rucio rule](guide-rucio.md).
 * Individual ROOT files can be copied to/from other sites using the `xrdcp` and
   `gfal-copy` commands. Files transferred in this way end up in your `/home/` or
   `/work/` directory, not in EOS.
@@ -96,24 +92,10 @@ the local **XCache** server.
 
 ### Copy a single ROOT file from CERN / Fermilab
 
-1. Make sure you have a valid **VOMS proxy**:
+1. Make sure you have a valid **VOMS proxy** (check with `voms-proxy-info`); if
+   not, [create a fresh one](getting-started.md#6-set-up-a-voms-proxy).
 
-    ```shell
-    $ voms-proxy-info
-    ...
-    type      : RFC3820 compliant impersonation proxy
-    strength  : 2048
-    timeleft  : 191:59:52
-    ```
-
-2. If not, create a fresh one:
-
-    ```shell
-    $ voms-proxy-init -voms cms -rfc -valid 192:00
-    Enter GRID pass phrase for this identity:
-    ```
-
-3. Use **gfal commands** to copy a single file:
+2. Use **gfal commands** to copy a single file:
 
     ```shell
     gfal-copy root://eoscms.cern.ch//store/group/phys_higgs/common_plots/March_2023/high_mass_MSSM/MSSM_limits_hMSSM.pdf ./
@@ -125,7 +107,7 @@ the local **XCache** server.
     gfal-copy -r root://eoscms.cern.ch//store/group/phys_higgs/common_plots/March_2023/ ./
     ```
 
-4. Alternatively, use **XRootD commands** to copy a file:
+3. Alternatively, use **XRootD commands** to copy a file:
 
     ```shell
     xrdcp root://cms-xrd-global.cern.ch//store/group/phys_higgs/common_plots/March_2023/high_mass_MSSM/MSSM_limits_hMSSM.pdf ./
@@ -135,40 +117,6 @@ the local **XCache** server.
 
     ```shell
     xrdcp -r root://eos.cms.rcac.purdue.edu//store/user/piperov/SingleMuon ./
-    ```
-
-### Create a Rucio replication rule for a dataset or block
-
-1. Make sure your Rucio environment is
-   [set up](guide-rucio.md):
-
-    ```shell
-    $ rucio whoami
-    ...
-    status     : ACTIVE
-    account_type : USER
-    ```
-
-2. Create a replication rule for the dataset you want to have at `T2_US_Purdue`
-   for the next 3 months (7776000 seconds):
-
-    ```shell
-    rucio add-rule --lifetime 7776000 --ask-approval cms:/DYJetsToLL_M-105To160_VBFFilter_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8/RunIIFall18wmLHEGS-VBFPostMGFilter_102X_upgrade2018_realistic_v11_ext1-v1/GEN-SIM 1 T2_US_Purdue
-    ```
-
-    Take note of the hash printed as a result — that is the ID by which you can
-    identify your new rule.
-
-3. Or, if you don't need the whole dataset but just one block of files:
-
-    ```shell
-    rucio add-rule --lifetime 7776000 --ask-approval cms:/TTJets_TuneCP5_13TeV-amcatnloFXFX-pythia8/RunIISummer20UL17RECO-106X_mc2017_realistic_v6-v2/AODSIM#28298d51-0804-40b1-b49b-54482450c221 1 T2_US_Purdue
-    ```
-
-4. List your Rucio replication rules:
-
-    ```shell
-    rucio list-rules --account <your_username>
     ```
 
 !!! note "See also"

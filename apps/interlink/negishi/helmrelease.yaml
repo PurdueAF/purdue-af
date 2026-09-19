@@ -22,11 +22,7 @@ spec:
     - kind: ConfigMap
       name: interlink-negishi-config
       valuesKey: values.yaml
-  # The chart has no hook for the munge key or for sizing the node container,
-  # so both are patched in. munge-key-negishi is created out of band, never in
-  # git. Cluster Slurm client configs come from the shared plugin image via
-  # SLURM_CLUSTER=negishi (slurm/slurm-configs-negishi/). The target name
-  # follows nodeName: every chart resource is <nodeName>-*.
+  # Munge key and node sizing are patched in; the target is <nodeName>-node (README.md).
   postRenderers:
     - kustomize:
         patches:

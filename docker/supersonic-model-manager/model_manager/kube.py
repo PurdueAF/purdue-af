@@ -1,11 +1,7 @@
 """Minimal in-cluster Kubernetes API access.
 
-Only two things are needed: discovering Triton pods and reading the model
-repository PVC's capacity. That is two GETs against the API server, so this
-talks to it directly with httpx instead of pulling in the official client —
-which drags in google-auth and cryptography, a large dependency tree whose
-Rust extension can abort the interpreter on import (SIGILL), something no
-try/except can recover from.
+Two GETs against the API server with httpx: Triton pod discovery and the
+model repository PVC's capacity.
 
 Everything degrades to ``None``/empty when the app runs outside a cluster or
 lacks RBAC, so the dashboard still works.

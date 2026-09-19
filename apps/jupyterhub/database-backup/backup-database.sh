@@ -1,6 +1,5 @@
 #!/bin/sh
-# Back up the JupyterHub sqlite database from the hub pod to depot storage,
-# keeping the 5 most recent backups. Runs at midnight and noon (see cronjob).
+# Back up the hub sqlite DB to depot storage, keeping the 5 most recent.
 set -eu
 
 BACKUP_DIR=/depot/cms/purdue-af/backups

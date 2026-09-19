@@ -1,16 +1,8 @@
 """Charts that live in this repository must be reconciled by Git revision.
 
-Flux packages a chart sourced from a GitRepository under the version string in
-its `Chart.yaml`, and the default `reconcileStrategy: ChartVersion` re-packages
-only when that string changes. Our in-repo charts keep a static version, so
-template edits never reached the cluster — while values edits, which land
-through a kustomize-generated ConfigMap, triggered an upgrade regardless.
-
-That combination is worse than either failure alone: the release runs NEW
-values against the OLD chart. It cost a day on 2026-09-07, when Triton's
-`--http-port=8100` (values) met a `containerPort: 8000` (chart) and the
-kubelet's probe hit Ray's proxy instead of Triton, killing the container every
-four minutes.
+The default `reconcileStrategy: ChartVersion` re-packages only when the
+`Chart.yaml` version changes, which in-repo charts never bump, while values
+edits still upgrade the release: new values would run against a stale chart.
 """
 
 import yaml

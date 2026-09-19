@@ -41,9 +41,8 @@ def test_ldap_lookup_binds_in_plaintext_for_the_e2e_mock(monkeypatch, fake_ldap)
 
 
 def test_ldap_lookup_reads_the_dn_instead_of_searching(monkeypatch, fake_ldap):
-    """Regression: geddes-auth has no uid index, so a filtered search under
-    AllPeople scans the tree for 15-25s and blocks the Hub. A base-scope read
-    of the account's own DN returns the same attributes immediately."""
+    """A base-scope read of the account's DN, never a filtered search: the
+    directory has no uid index, and a search blocks the Hub's event loop."""
     ns = load(monkeypatch)
     ns["ldap_lookup"]("alice")
     assert fake_ldap["scopes"] == ["BASE"]

@@ -124,16 +124,13 @@ def env_of(container_spec):
 
 
 def test_flux_deploys_operator_and_release():
-    text = EXPERIMENTAL.read_text()
+    resources = load(EXPERIMENTAL)["resources"]
     for resource in (
         "../../apps/ray/helmrepo.yaml",
         "../../apps/ray/operator/helmrelease.yaml",
         "../../apps/ray/sonic-ray/helmrelease.yaml",
     ):
-        assert resource in text
-        for line in text.splitlines():
-            if resource in line:
-                assert not line.strip().startswith("#"), line
+        assert resource in resources
 
 
 def test_values_reach_both_releases():
@@ -151,9 +148,7 @@ def test_values_reach_both_releases():
 
 
 def test_release_waits_for_the_crds():
-    """The chart renders a RayService. Until the operator's chart has installed
-    the ray.io CRDs that is an unknown kind, and a raw manifest in the same
-    Kustomization would have blocked the apply that installs them."""
+    """The chart's RayService needs the operator's ray.io CRDs first."""
     release = load(RAY / "sonic-ray" / "helmrelease.yaml")
     assert release["spec"]["dependsOn"] == [{"name": "kuberay-operator"}]
     assert release["spec"]["chart"]["spec"]["chart"] == "./helm/sonic-ray"
@@ -169,9 +164,13 @@ def test_release_waits_for_the_crds():
 def test_validator_renders_this_chart():
     """Nothing else validates a chart sourced from this repository: kubeconform
     never sees what helm renders, and ray.io has no schema anyway."""
-    text = VALIDATOR.read_text()
-    assert "from this repository" in text
-    assert "RayService" not in text, "the kubeconform skip is gone; keep it gone"
+    code = [
+        line
+        for line in VALIDATOR.read_text().splitlines()
+        if not line.lstrip().startswith("#")
+    ]
+    assert any('helm template "$name" "$local_chart"' in line for line in code)
+    assert not any("RayService" in line for line in code), "no kubeconform skip"
 
 
 # -- no custom image -----------------------------------------------------------
@@ -328,9 +327,7 @@ def test_the_forwarder_is_told_where_its_triton_is(head_pod, worker_group, value
 
 
 def test_triton_image_is_pinned_to_the_line_the_driver_supports():
-    """26.06+ is CUDA 13, whose driver floor is above the R580 on the GPU
-    nodes. The values pick the image; Renovate has to be holding whichever one
-    they pick, or a bump walks past the driver."""
+    """Renovate holds whichever Triton image the values pick at 26.04."""
     image = values_doc()["triton"]["image"]
     assert image["tag"].startswith("26.04"), image["tag"]
     renovate = (REPO / ".github" / "renovate.json5").read_text()

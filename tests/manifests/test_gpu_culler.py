@@ -1,11 +1,8 @@
 """Tests for the gpu-culler managed service — apps/jupyterhub/jupyterhub.
 
-The cull logic itself is covered in tests/jupyterhub_config; what is checked
-here is the wiring around it, which is where it actually broke. JupyterHub
-does not hand a managed service the hub's environment — it builds a fresh one
-holding JUPYTERHUB_*, PATH and LANG — so the culler ran for two months with no
-KUBERNETES_SERVICE_HOST, raising `ConfigException: Service host/port is not
-set.` on every pass and culling nothing."""
+The cull logic is covered in tests/jupyterhub_config; this checks the wiring.
+A managed service gets a fresh environment (JUPYTERHUB_*, PATH, LANG), not the
+hub's, so everything the culler needs must be passed explicitly."""
 
 import re
 

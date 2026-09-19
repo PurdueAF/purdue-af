@@ -193,10 +193,8 @@ def test_requires_source_argument(shims):
 
 
 def test_ensure_tools_is_silent_on_stdout(shims):
-    """Regression: ensure_tools runs inside the captured fetch functions, so
-    installer chatter on stdout ends up in the userlist (caused real
-    'invalid data format' failures in production). Whatever it installs,
-    stdout must stay empty."""
+    """ensure_tools runs inside the captured fetch functions, so it must keep
+    stdout empty or its output lands in the userlist."""
     dnf = shims["bin"] / "dnf"
     dnf.write_text('#!/bin/bash\necho "Installing: packages, with spaces"\n')
     dnf.chmod(0o755)
@@ -224,9 +222,7 @@ def test_ensure_tools_is_silent_on_stdout(shims):
 
 
 def test_purdue_tolerates_ldap_sizelimit_exit(shims):
-    """Regression: ldapsearch exits 4 ('Size limit exceeded') against large
-    directories while still printing entries — under pipefail that killed the
-    job silently in production. Data + nonzero exit must still sync."""
+    """ldapsearch exit 4 ('Size limit exceeded') with entries printed still syncs."""
     ldap = shims["bin"] / "ldapsearch"
     ldap.write_text('#!/bin/bash\nseq -f "uid: user%g" 1 250\nexit 4\n')
     ldap.chmod(0o755)

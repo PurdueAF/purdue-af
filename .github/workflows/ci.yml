@@ -1,38 +1,15 @@
 name: CI
 
-# THE pipeline — the whole automatic CI/CD strategy as one dependency graph.
-# Stages live in reusable workflows (ci-*.yml, this directory); publication
-# is impossible without every stage of the SAME commit succeeding.
+# The one pipeline. Stages live in the reusable ci-*.yml workflows; nothing
+# publishes unless every stage of the same commit succeeded. What publish moves
+# and how releases work: RELEASING.md.
 #
-#   stage 0   checks      ci-checks.yml   lint · unit tests · manifest validation
-#   stage 1a  pixi-base   ci-pixi-base.yml    sync/commit pixi/base lock +
-#                                             import-smoke (before AF image —
-#                                             Dockerfile uses `pixi install --locked`)
-#   stage 1b  images      ci-images.yml       content-addressed builds: every image
-#                                             is tagged in-<hash of its input tree>;
-#                                             an existing tag is VERIFIED reuse
-#   stage 1c  pixi-global ci-pixi-global.yml  sync/commit pixi/global lock +
-#                                             import-smoke INSIDE the stage-1 AF image
-#                                             + the IRIS-HEP integration challenge
-#                                             over CMS OpenData in that same env
-#                                             (the env is already installed and the
-#                                             image already pulled here)
-#   stage 2   e2e         ci-e2e.yml      hub stack in kind, one job per channel:
-#                                         e2e-production (spawns the image pinned
-#                                         in values.yaml — the "e2e = production"
-#                                         gate) and e2e-pre-release (spawns the
-#                                         stage-1 AF image — always the current
-#                                         repo state, never "whatever :pre-release
-#                                         is")
-#   stage 3   publish     (below)         main only, strictly behind the ci-ok gate:
-#                                         :sha- provenance tags for every image,
-#                                         aux continuous channel moves :latest,
-#                                         AF image moves :pre-release,
-#                                         main-validated (Flux experimental)
-#
-# ci-ok is the single branch-protection check: it fails if ANY stage did not
-# succeed — a skipped-but-required job can never masquerade as a pass.
-# Renovate PRs trigger this pipeline like any other PR (no weekly cron).
+#   stage 0   checks       ci-checks.yml       lint · unit tests · manifest validation
+#   stage 1a  pixi-base    ci-pixi-base.yml    pixi/base lock sync + import smoke, before the AF image build
+#   stage 1b  images       ci-images.yml       content-addressed builds, tagged in-<input hash>
+#   stage 1c  pixi-global  ci-pixi-global.yml  pixi/global lock sync + import smoke + integration challenge, inside the AF image
+#   stage 2   e2e          ci-e2e.yml          hub stack in kind: production pin and pre-release image
+#   stage 3   publish      (below)             push to main only, behind ci-ok
 
 on:
   push:
@@ -55,8 +32,6 @@ jobs:
       contents: read
       id-token: write # Codecov OIDC upload
 
-  # Lock sync + smoke for pixi/base BEFORE the AF image build so
-  # `pixi install --locked` in the Dockerfile sees a matching lock.
   pixi-base:
     needs: checks
     uses: ./.github/workflows/ci-pixi-base.yml
@@ -97,9 +72,7 @@ jobs:
       packages: read
 
   ci-ok:
-    # The one required status check. `if: always()` + explicit result
-    # inspection: a failed OR skipped stage fails the gate — success is
-    # never assumed for work that did not run.
+    # `if: always()` + explicit result inspection: a skipped stage fails the gate.
     needs: [checks, pixi-base, images, pixi-global, e2e]
     if: always()
     runs-on: ubuntu-latest
@@ -116,42 +89,7 @@ jobs:
           }
 
   publish:
-    # Stage 3 — promote consumable channels. ONLY on push to main.
-    # Never on pull_request, never on workflow_dispatch (including the
-    # post-lock-commit dispatches on Renovate branches — those may build
-    # and push content-addressed in-<hash> tags, but must not move
-    # :latest / :pre-release / :sha- / main-validated).
-    #
-    # Pure retags of digests that just passed the full pipeline
-    # (promote-by-digest, no rebuild):
-    #   every image        → :sha-<commit>   (immutable provenance)
-    #   aux images         → channel tag      (:latest for most;
-    #                                          $PLUGIN_REF for interlink-slurm-plugin;
-    #                                          manifests pull via geddes
-    #                                          ghcr-proxy-cache on restart)
-    #   purdue-af          → :pre-release    (the hub's pre-release profile,
-    #                                          image_pull_policy Always)
-    #   git                → main-validated  (Flux experimental source;
-    #                                          moving branch — visible in the
-    #                                          GH UI, not pushed by --tags;
-    #                                          no workflow listens to this
-    #                                          branch)
-    #   agentic-interface  → AUTO-RELEASE:    when the validated digest is not
-    #                                          what the Deployment pins, mint
-    #                                          the next version — MINOR if the
-    #                                          skill (the user-facing contract,
-    #                                          an image input) changed since
-    #                                          the last release, PATCH
-    #                                          otherwise (promote the digest,
-    #                                          rewrite the pin, commit + tag).
-    #                                          Token-free: the GITHUB_TOKEN
-    #                                          push triggers no CI, so the
-    #                                          bump commit is validated
-    #                                          in-run (one-line-retag check),
-    #                                          stamped ci-ok via the API, and
-    #                                          main-validated advances to it
-    #                                          directly.
-    # purdue-af promotion to production stays human: release-image.yml.
+    # Stage 3: retag-by-digest promotion and the agentic-interface auto-release (RELEASING.md).
     needs: [ci-ok, images]
     if: >-
       github.event_name == 'push'
@@ -179,20 +117,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # Retags are BY DIGEST: what the pipeline tested is what ships, even
-      # if a moving tag were overwritten between test and publish; and both
-      # channel tags of an image always land on the same digest.
+      # Retag by digest: what the pipeline tested is what ships.
       - name: Publish aux images (:sha- + channel tag)
         env:
           AUX_TAGS: ${{ needs.images.outputs.aux-tags }}
         run: |
           set -euo pipefail
-          # Every GHCR call here can fail transiently: secondary rate limits on
-          # rapid back-to-back retags (run 31008040707) and DNS/network blips
-          # pulling blobs (run 31053841647). Both are retryable, so wrap the
-          # digest lookup as well as the retag — an unguarded `inspect` under
-          # `set -e` kills the step before any retry can happen.
-          # Progress goes to stderr: stdout is captured for the digest.
+          # GHCR calls fail transiently; retry every one. Progress goes to stderr: stdout carries the digest.
           ghcr_retry() {
             local what="$1"; shift
             local attempt=1 max=5 delay=15
@@ -210,8 +141,7 @@ jobs:
           retag() { ghcr_retry "imagetools create" docker buildx imagetools create "$@"; }
           first=1
           for pair in $AUX_TAGS; do
-            # name=in-<hash>=<channel>  (channel is :latest for most aux images,
-            # PLUGIN_REF for interlink-slurm-plugin)
+            # name=in-<hash>=<channel>
             if [ "$first" -eq 0 ]; then sleep 5; else first=0; fi
             name="${pair%%=*}"; rest="${pair#*=}"
             tag="${rest%%=*}"; channel="${rest#*=}"
@@ -252,8 +182,7 @@ jobs:
           echo "published $repo@$AF_DIGEST -> :sha-${GITHUB_SHA::12} + :pre-release" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          # Full history + tags: the auto-release step commits on main and
-          # compares the skill tree against the last release tag.
+          # Full history + tags: the auto-release compares against the last release tag.
           fetch-depth: 0
       - name: Auto-release agentic-interface (version bump when the image changed)
         id: autorelease
@@ -261,8 +190,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Same transient-GHCR-failure guard as the aux publish step; progress
-          # goes to stderr because stdout is captured for digests.
+          # Same GHCR retry as the aux publish step.
           ghcr_retry() {
             local what="$1"; shift
             local attempt=1 max=5 delay=15
@@ -284,11 +212,7 @@ jobs:
             docker buildx imagetools inspect "$repo:$want" --format '{{json .Manifest}}' | jq -r .digest)
           [ -n "$want_digest" ] && [ "$want_digest" != "null" ] \
             || { echo "::error::cannot resolve $repo:$want"; exit 1; }
-          # The bump commit is pushed with GITHUB_TOKEN (no PAT in this repo),
-          # so it will never trigger its own CI run. That is safe ONLY when it
-          # sits directly on the tree THIS run validated — if main moved on
-          # while we ran, defer to the newer commit's own publish run, which
-          # will redo this comparison and release on validated state.
+          # The GITHUB_TOKEN bump commit gets no CI run, so release only on the tree this run validated.
           git fetch --tags origin main
           if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
             echo "main moved past ${GITHUB_SHA::12} — deferring auto-release" \
@@ -297,12 +221,7 @@ jobs:
           fi
           git checkout -B autorelease "$GITHUB_SHA"
           cur=$(python3 .github/workflows/bump-agentic-version.py --print-current)
-          # Has the image changed since the last release? Compare the digest of
-          # the tree we validated (:in-<hash>) against the SAME kind of digest
-          # recorded in the previous release's tag annotation. Do NOT inspect
-          # the version tag on ghcr: `imagetools create` rewraps the manifest,
-          # so a version tag's digest never equals the :in- digest it was cut
-          # from — comparing against it would re-release on every commit.
+          # Compare with the :in- digest in the last release tag's annotation; imagetools create rewraps, so the version tag's own digest never matches.
           if [ "$cur" = "0.0.0" ]; then
             prev_digest="" # pin is still `latest` — nothing released yet
           else
@@ -314,10 +233,7 @@ jobs:
               | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          # Bump kind: MINOR when the skill — the user-facing contract of the
-          # MCP server — changed since the last release; PATCH otherwise.
-          # Compared as git tree ids at the validated commit vs the release
-          # tag of the currently pinned version.
+          # MINOR when the skill tree differs from the pinned release's, else PATCH.
           skill=".claude/skills/purdue-af-agentic-interface"
           kind=patch
           if [ "$cur" != "0.0.0" ]; then
@@ -328,43 +244,30 @@ jobs:
             fi
           fi
           new=$(python3 .github/workflows/bump-agentic-version.py --bump "$kind" | tail -1)
-          # Promote-by-digest: the version tag lands on the exact bytes this
-          # pipeline tested, never a rebuild.
           ghcr_retry "imagetools create" \
             docker buildx imagetools create -t "$repo:$new" "$repo@$want_digest"
           git config user.name "af-release-bot"
           git config user.email "af-release-bot@users.noreply.github.com"
           git add apps/agentic-interface/deployment.yaml
-          # [skip ci] is belt-and-braces: GITHUB_TOKEN pushes trigger nothing
-          # anyway, and this commit is validated in-run (below) instead.
           git commit -m "auto-release agentic-interface image $new [skip ci]"
-          # In-run validation, replacing the CI run this commit will never
-          # get: it must differ from the tree THIS pipeline validated by
-          # exactly the one rewritten image-tag line.
+          # In-run validation: exactly the one rewritten image-tag line differs from the validated tree.
           if [ "$(git diff --numstat "$GITHUB_SHA" HEAD)" != \
                "$(printf '1\t1\tapps/agentic-interface/deployment.yaml')" ]; then
             echo "::error::auto-release commit is not the expected one-line manifest retag:"
             git diff --stat "$GITHUB_SHA" HEAD
             exit 1
           fi
-          # A racing push loses here (non-fast-forward) — fail rather than
-          # rebase onto a tree this run did not validate; the orphaned ghcr
-          # version tag is harmless and the next run releases past it.
+          # Never rebase onto an unvalidated tree; the next run releases past an orphaned ghcr tag.
           git push origin HEAD:refs/heads/main \
             || { echo "::error::pushing the auto-release commit failed (main moved?)"; exit 1; }
           bump_sha=$(git rev-parse HEAD)
-          # The 'digest:' line is load-bearing: the next run reads it back to
-          # decide whether the image changed (see the no-release check above).
-          # It is the :in-<hash> digest, NOT the version tag's rewrapped digest.
+          # The 'digest:' line is read back by the next run's no-release check.
           git tag -a "agentic-interface-v$new" -m "agentic-interface image $new
           image: $repo:$new
           inputs: $want
           digest: $want_digest"
           git push origin "agentic-interface-v$new"
-          # Stamp ci-ok on the bump commit so consumers of that check (the
-          # purdue-af release gate) keep working: no pipeline will ever run
-          # for this commit, and its content — validated tree + the one-line
-          # retag checked above — has passed this run's gates by construction.
+          # Stamp ci-ok on the bump commit for the purdue-af release gate.
           gh api "repos/${GITHUB_REPOSITORY}/check-runs" \
             -f name=ci-ok -f head_sha="$bump_sha" \
             -f status=completed -f conclusion=success \
@@ -376,10 +279,7 @@ jobs:
             "(main-validated advances to the bump commit below)" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Advance main-validated
         env:
-          # When this run minted an auto-release, advance to the bump commit —
-          # it IS this run's validated tree plus the one-line retag checked
-          # above, and no pipeline of its own will ever run for it. Otherwise
-          # advance to the commit this run validated, as always.
+          # The bump commit when this run auto-released, else the validated commit.
           AUTORELEASE_SHA: ${{ steps.autorelease.outputs.sha }}
         run: |
           set -euo pipefail

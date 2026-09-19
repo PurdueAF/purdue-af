@@ -9,18 +9,28 @@ Purdue AF, it is also possible to connect to your session from a terminal via SS
     you must start the session in a web browser first. If you would rather work in
     a full local IDE, see [Access via VSCode-based IDEs](guide-ide-connection.md).
 
+## JupyterHub API token
+
+SSH, [local IDEs](guide-ide-connection.md), and
+[AI agents on your own machine](guide-agentic-interface.md#connecting-from-your-own-machine)
+authenticate to Purdue AF with a JupyterHub API token. To obtain one, open
+[https://cms.geddes.rcac.purdue.edu/hub/token](https://cms.geddes.rcac.purdue.edu/hub/token)
+(or, in JupyterLab, go to `File → Hub Control Panel` and click the `Token` tab),
+then click `Request new API token` and copy the token string.
+
+!!! warning "Treat the token like a password"
+
+    The token gives full control over your AF session — do not share it or
+    commit it to a Git repository.
+
 ## Instructions
 
 1. **Start an AF session in the normal way**
 
     In a web browser, [log in to Purdue AF and start a session](https://cms.geddes.rcac.purdue.edu).
 
-2. **Obtain an authentication token**
-
-    1. Go to `File → Hub Control Panel`.
-    2. Click the `Token` tab in the top left of the page.
-    3. Click `Request new API token` to obtain the token string — you will need it
-       in the next step.
+2. **Obtain a [JupyterHub API token](#jupyterhub-api-token)** — you will need
+   it in the next step.
 
 3. **Log in to your session from an external terminal**
 
@@ -56,15 +66,5 @@ Purdue AF, it is also possible to connect to your session from a terminal via SS
 
 !!! warning "No SFTP / scp support"
 
-    At the moment, the SSH server at Purdue AF does not support the SFTP protocol,
-    which means that you cannot use `scp` commands to download and upload files
-    from your local machine.
-
-    Use the web interface to transfer files instead — see
-    [Uploading and downloading files](guide-file-transfer.md):
-
-    * upload files by drag-and-dropping them into the Jupyter file browser, or via
-      the "Upload" button at the top of the file browser window;
-    * download single files via the right-click menu;
-    * download a directory by right-clicking on it and selecting
-      "Download as an Archive".
+    `scp` to and from this SSH server does not work — see
+    [Uploading and downloading files](guide-file-transfer.md) for alternatives.

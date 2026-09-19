@@ -38,8 +38,8 @@ A log line is FIXABLE HERE only when all of these hold:
   and not something that needs an action on the cluster rather than a commit.
 
 AGENTS.md at the root of the checkout holds the repository's conventions and
-hard rules; they apply here. On top of them, never propose changes under
-pixi/, deploy/, or to any *.lock file: those are not fixable here by definition.
+hard rules; they apply here. A change under $protected or to any *.lock file is
+not fixable here by definition: never propose or make one.
 
 Changing a log level, silencing or rewording a message, catching and
 ignoring an exception, or retrying without understanding the cause is never
@@ -113,7 +113,6 @@ plan: $plan
   A test that fails on your change is telling you the plan is wrong: change
   nothing and say so. Edit a test only when the behaviour it pins is itself
   the fault, and say why in your summary.
-- Never edit pixi/base, pixi/global, any *.lock file, or anything under deploy/.
 - If a Python file changed, run `ruff check --fix <file>` and `ruff format <file>`.
 - Do not run git commit, git push, git checkout or git reset; the workflow
   commits for you.

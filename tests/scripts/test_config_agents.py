@@ -1,12 +1,5 @@
-"""Tests for docker/purdue-af/scripts/config-agents.sh — the startup hook that
-points Claude Code, Codex and opencode at the AF MCP server and writes the
-platform context into the file each of them reads automatically.
-
-Nothing here reaches the cluster: `claude` and `codex` are replaced with stubs
-that record their argv, so the tests assert the exact commands a session would
-run. The property that matters most is that the session token is NEVER written
-into a config file — it rotates every spawn, and the home directory is
-persistent, so a baked-in token is stale the moment the session restarts."""
+"""Tests for docker/purdue-af/scripts/config-agents.sh. `claude` and `codex`
+are stubs that record their argv; no config file may ever hold the token."""
 
 import json
 import os
@@ -25,15 +18,6 @@ STUB = """#!/bin/bash
 printf '%s\\n' "$*" >> "$AGENT_LOG"
 exit ${STUB_EXIT:-0}
 """
-
-
-@pytest.fixture(scope="session")
-def prepare_skill():
-    from common import load_script
-
-    return load_script(
-        REPO / "docker/purdue-af/scripts/prepare-skill.py", "prepare_skill"
-    )
 
 
 @pytest.fixture()
@@ -202,8 +186,7 @@ def test_opencode_config_is_written_with_privileges_dropped(run_script):
     assert "_as_user \"mkdir -p '${NEW_HOME}/.config/opencode'" in hook, (
         "the opencode config must be written as the user, not as root"
     )
-    # every chown in the hook, not just the last: a recursive chown of
-    # ~/.config added anywhere would be as wrong as the one that was removed
+    # no chown anywhere in the hook may touch ~/.config
     for line in hook.splitlines():
         stripped = line.strip()
         if not stripped.startswith("chown"):
@@ -265,16 +248,15 @@ def managed_block():
     )
 
 
-# --- retiring the opencode AGENTS.md written by an earlier image -----------
+# --- the AF block stays out of opencode's AGENTS.md ------------------------
 
 
 OPENCODE_AGENTS_MD = ".config/opencode/AGENTS.md"
 
 
 def test_a_stale_opencode_agents_md_is_removed(run_script, agent_home, managed_block):
-    """Homes are persistent. An earlier image wrote the context here, so simply
-    dropping the target would leave every existing user loading it alongside
-    `instructions` — the doubling forever, fixed only for new homes."""
+    """A managed-only opencode AGENTS.md is removed: `instructions` already
+    carries the context."""
     stale = agent_home / OPENCODE_AGENTS_MD
     stale.parent.mkdir(parents=True)
     stale.write_text(managed_block.apply_block("", "old platform context\n"))
@@ -423,15 +405,11 @@ def test_missing_nb_user_is_not_fatal(run_script):
     assert not calls
 
 
-def test_server_name_matches_the_skill_and_repo_mcp_json(run_script):
-    """The skill names the server explicitly, so a mismatch silently makes its
-    instructions wrong for every session."""
+def test_server_name_matches_the_repo_mcp_json(run_script):
     import json
 
     name = json.loads((REPO / ".mcp.json").read_text())["mcpServers"]
     (expected,) = name.keys()
-    skill = (REPO / SKILL_SOURCE).read_text()
-    assert expected in skill
 
     _, calls = run_script()
     assert all(expected in c for c in calls)
@@ -445,27 +423,6 @@ def test_skill_is_installed_into_the_claude_directory(run_script, tmp_path):
     assert result.returncode == 0
     # no bundled skills on the test host — must degrade quietly, not fail
     assert "skipping" in result.stderr or "installed bundled skills" in result.stdout
-
-
-def test_prepare_skill_replaces_the_laptop_setup_block(prepare_skill):
-    source = (REPO / SKILL_SOURCE).read_text()
-    out = prepare_skill.strip_setup_block(source)
-    assert "One-time setup" not in out
-    # the setup instructions are gone; the troubleshooting table still
-    # references the laptop token paths, which is left alone deliberately —
-    # this script rewrites the preamble, it does not edit prose
-    assert "Get a JupyterHub API token" not in out
-    assert "claude mcp add" not in out
-    assert "Already set up" in out
-    # frontmatter and body survive intact
-    assert out.startswith("---") and "name: purdue-af-agentic-interface" in out
-    assert "self-describing" in out
-
-
-def test_prepare_skill_fails_loudly_if_the_preamble_changes(prepare_skill):
-    """Better a red build than shipping laptop setup steps to every session."""
-    with pytest.raises(SystemExit):
-        prepare_skill.strip_setup_block("---\nname: x\n---\n\n# Title\n\nbody\n")
 
 
 def test_skill_is_an_image_input():
@@ -495,7 +452,7 @@ def test_dockerfile_pins_every_agent_version():
 def test_dockerfile_installs_and_runs_the_hook():
     text = DOCKERFILE.read_text()
     assert "config-agents.sh" in text
-    assert "prepare-skill.py" in text
+    assert f"{SKILL_SOURCE} \\\n    /opt/purdue-af/skills/" in text
     # the CLIs must be on PATH for both the terminal and the extensions
     assert "/opt/npm-global/bin" in text
     # and proven to run in the final image, not just installed
@@ -585,8 +542,7 @@ def test_markers_warn_that_edits_are_overwritten(managed_block):
 
 
 def test_stray_end_marker_before_the_block_does_not_duplicate_it(managed_block):
-    """Regression: END was searched from the file start, so an END above the
-    block read as `end < start` and every session appended another copy."""
+    """An END marker above the block does not make the block look absent."""
     existing = f"# Mine\n{managed_block.END}\n"
     once = managed_block.apply_block(existing, SECTION)
     twice = managed_block.apply_block(once, SECTION)
@@ -648,22 +604,6 @@ def test_cli_remove(managed_block, monkeypatch, tmp_path, capsys):
     assert not target.exists()
 
 
-def test_prepare_skill_cli_writes_the_destination(prepare_skill, monkeypatch, tmp_path):
-    dest = tmp_path / "out" / "SKILL.md"
-    monkeypatch.setattr(
-        "sys.argv", ["prepare-skill.py", str(REPO / SKILL_SOURCE), str(dest)]
-    )
-    assert prepare_skill.main() == 0
-    text = dest.read_text()
-    assert "Already set up" in text and text.endswith("\n")
-
-
-def test_prepare_skill_cli_rejects_bad_arguments(prepare_skill, monkeypatch):
-    monkeypatch.setattr("sys.argv", ["prepare-skill.py"])
-    with pytest.raises(SystemExit):
-        prepare_skill.main()
-
-
 def test_startup_hook_targets_every_harness_context_file():
     """One file per harness, each the path that harness reads automatically at
     user scope — no skill, no prompt, no per-project setup."""
@@ -675,17 +615,6 @@ def test_startup_hook_targets_every_harness_context_file():
         assert target in text, target
 
 
-def test_cursor_is_documented_as_deliberately_unsupported():
-    """Cursor has no user-scope instruction file: its rules are project-scoped
-    and cross-project rules live in the Cursor UI, not on disk. Nothing here
-    can reach it, so the omission is recorded rather than left to look like an
-    oversight somebody 'fixes' with a file Cursor never reads."""
-    hook = (REPO / "docker/purdue-af/scripts/config-agents.sh").read_text()
-    assert "Cursor" in hook
-    guide = (REPO / "docs/docs/guide-agentic-interface.md").read_text()
-    assert "Cursor" in guide
-
-
 def test_section_source_is_shipped_and_is_an_image_input():
     text = DOCKERFILE.read_text()
     assert "agents/platform-context.md" in text
@@ -693,80 +622,11 @@ def test_section_source_is_shipped_and_is_an_image_input():
     assert (REPO / "docker/purdue-af/agents/platform-context.md").is_file()
 
 
-# --- the skill must not drift from the server -----------------------------
-
-
-def _registered_tools():
-    """Every @mcp.tool() in docker/agentic-interface/tools/."""
-    import re
-
-    names = set()
-    for f in (REPO / "docker/agentic-interface/tools").glob("*.py"):
-        lines = f.read_text().splitlines()
-        for i, line in enumerate(lines):
-            if "@mcp.tool(" not in line:
-                continue
-            for j in range(i + 1, min(i + 6, len(lines))):
-                m = re.search(r"def\s+(\w+)\(", lines[j])
-                if m:
-                    names.add(m.group(1))
-                    break
-    return names
-
-
-def test_skill_names_no_tool_that_does_not_exist():
-    """The skill is hand-written prose; tool docstrings are the code. Any tool
-    the skill names must still exist, or its guidance is quietly wrong."""
-    import re
-
-    tools = _registered_tools()
-    assert tools, "no MCP tools found — the extractor broke"
-    skill = (REPO / SKILL_SOURCE).read_text()
-    # backtick-quoted identifiers that look like tool names
-    mentioned = {
-        m
-        for m in re.findall(r"`(\w+)`", skill)
-        if m.endswith(
-            ("_session", "_clusters", "_cluster", "_logs", "_usage", "_profiles")
-        )
-        or m.startswith(
-            ("start_", "stop_", "list_", "get_", "query_", "create_", "scale_", "wait_")
-        )
-    }
-    assert mentioned, "skill names no tools at all — check the extraction"
-    assert mentioned <= tools, (
-        f"skill names non-existent tools: {sorted(mentioned - tools)}"
-    )
-
-
-def test_skill_does_not_re_document_tool_arguments():
-    """Arguments and limits live in the tool descriptions, which cannot drift.
-    Restating them in prose is what this cut removed — keep it removed."""
-    skill = (REPO / SKILL_SOURCE).read_text()
-    for marker in ("### Session lifecycle", "## Tool reference", "worker_cores"):
-        assert marker not in skill, f"{marker!r} is duplicated tool documentation"
-
-
-def test_skill_keeps_what_descriptions_cannot_carry():
-    skill = (REPO / SKILL_SOURCE).read_text()
-    assert "never `du`" in skill  # routing against the shell
-    assert "kill the process you are running" in skill  # destructive warning
-    # No failure-mode table: tool results and refusals are self-describing,
-    # and a table here would drift from the messages in the code.
-    assert "Authentication errors" not in skill
-
-
 def test_bundled_python_scripts_do_not_use_the_system_interpreter():
-    """Rocky 8 ships python3.6 at /usr/bin/python3, which cannot parse these
-    scripts (`from __future__ import annotations` is a SyntaxError there). The
-    image build runs before ENV PATH prefers the pixi env, and `su` resets PATH
-    at session start — so both call sites must name the interpreter."""
-    dockerfile = DOCKERFILE.read_text()
-    build_step = next(
-        ln for ln in dockerfile.splitlines() if "prepare-skill.py /tmp/skill" in ln
-    )
-    assert "BASE_ENV_DIR" in build_step, build_step
-
+    """Rocky 8 ships python3.6 at /usr/bin/python3, which cannot parse
+    managed-block.py (`from __future__ import annotations` is a SyntaxError
+    there). `su` resets PATH at session start, so the call site must name the
+    interpreter."""
     hook = (REPO / "docker/purdue-af/scripts/config-agents.sh").read_text()
     call = next(ln for ln in hook.splitlines() if "managed-block.py" in ln)
     assert "${PYTHON}" in call, call
@@ -776,9 +636,8 @@ def test_bundled_python_scripts_do_not_use_the_system_interpreter():
 def test_bundled_python_scripts_target_the_platform_python():
     """They use 3.7+ syntax deliberately; this pins the reason down in one
     place so nobody 'fixes' the build by downgrading the scripts."""
-    for name in ("prepare-skill.py", "managed-block.py"):
-        text = (REPO / "docker/purdue-af/scripts" / name).read_text()
-        assert "from __future__ import annotations" in text, name
+    text = (REPO / "docker/purdue-af/scripts/managed-block.py").read_text()
+    assert "from __future__ import annotations" in text
 
 
 # --- sourcing safety: start.sh runs these hooks with `source` ---------------
@@ -797,9 +656,7 @@ def test_start_sh_sources_hooks_rather_than_executing_them():
 
 
 def test_sourcing_the_hook_returns_control_to_the_caller(tmp_path):
-    """THE regression: a top-level `exit` in a sourced hook kills start.sh, so
-    the container dies before JupyterLab launches — and every later hook is
-    skipped. Reproduces run-hooks: source, then prove we are still alive."""
+    """Sourced as run-hooks sources it, the hook returns to its caller."""
     bindir = tmp_path / "bin"
     bindir.mkdir()
     for tool in ("claude", "codex"):

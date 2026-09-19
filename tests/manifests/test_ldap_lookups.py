@@ -1,10 +1,7 @@
 """Every LDAP uid/gid lookup must read the account's DN, not search for it.
 
-geddes-auth carries no index on uid, so a filtered search under ou=AllPeople
-scans ~69k entries and takes 15-25s. Both gateways call ldap_lookup from a
-synchronous options_handler on their event loop, so one such search stalls the
-whole gateway — the same way it stalled the Hub (see
-tests/jupyterhub_config/test_set_user_info.py).
+The directory has no uid index, and both gateways call ldap_lookup on their
+event loop, where a filtered search would stall the whole gateway.
 """
 
 from pathlib import Path

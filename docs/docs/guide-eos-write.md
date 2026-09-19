@@ -11,13 +11,8 @@ many jobs at once.
 
 ## Using xrdcp and xrdfs
 
-This is the more straightforward option and only requires a valid VOMS proxy:
-
-```shell
-voms-proxy-init -verify --rfc --voms cms -valid 192:00
-```
-
-Then, for example:
+This option only requires a valid
+[VOMS proxy](getting-started.md#6-set-up-a-voms-proxy). For example:
 
 ```shell
 # copy a local file to your Grid directory on Purdue EOS
@@ -34,14 +29,8 @@ Documentation on `xrdcp` is available at the
 
 The `gfal` commands are documented at the
 [Purdue Tier-2 CMS site](https://www.physics.purdue.edu/Tier2/user-info/tutorials/dfs_commands.php).
-In order to use `gfal` at the facility, first run these commands in your terminal:
-
-```shell
-voms-proxy-init -verify --rfc --voms cms -valid 192:00
-source /cvmfs/oasis.opensciencegrid.org/osg-software/osg-wn-client/current/el8-x86_64/setup.sh
-```
-
-After these commands, `gfal` should work, e.g.:
+They are available in every terminal and also require a valid
+[VOMS proxy](getting-started.md#6-set-up-a-voms-proxy). For example:
 
 ```shell
 gfal-copy /tmp/$USER/output.root root://eos.cms.rcac.purdue.edu//store/user/<cern-username>/output.root

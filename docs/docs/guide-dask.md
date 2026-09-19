@@ -56,8 +56,8 @@ In the code above:
 ### 1. Local cluster
 
 A local cluster can be used to parallelize the analysis code over local CPU cores.
-The number of workers that you can create is limited by the amount of resources
-selected during session creation (**up to 128 cores** and **up to 128 GB RAM**).
+The number of workers that you can create is limited by the
+[resources of your session](scaling-out.md#session-resources).
 
 ??? note "LocalCluster setup"
 
@@ -72,10 +72,8 @@ selected during session creation (**up to 128 cores** and **up to 128 GB RAM**).
 ### 2. Dask Gateway cluster
 
 Dask Gateway provides a way to scale out to multiple compute nodes, using either
-the Slurm batch scheduler or Kubernetes in the backend. With Dask Gateway, you
-should be able to quickly scale **up to 200 workers (200 cores, 1.2 TB RAM)** with
-the Kubernetes backend, and to hundreds of workers with the Slurm backend,
-depending on the availability of resources.
+the Slurm batch scheduler or Kubernetes in the backend, within the
+[limits of each gateway](guide-dask-gateway.md#limits).
 
 Please refer to the following page for detailed documentation about Dask Gateway
 at the Purdue Analysis Facility: [Dask Gateway at Purdue AF](guide-dask-gateway.md).

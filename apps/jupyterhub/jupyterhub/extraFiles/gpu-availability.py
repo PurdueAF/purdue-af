@@ -31,9 +31,7 @@ from urllib.parse import urlencode
 from prometheus_client import REGISTRY, Counter
 from tornado.httpclient import AsyncHTTPClient
 
-# `c` is the traitlets config object JupyterHub injects into this file's
-# globals at exec time. A bare annotation declares its type for static
-# checkers without creating (or shadowing) the runtime binding.
+# JupyterHub injects `c` at exec time; the annotation is for type checkers only.
 c: Any
 
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
@@ -41,10 +39,7 @@ PROMETHEUS_TIMEOUT = 5  # seconds
 CACHE_TTL = 30  # seconds; form renders reuse the last Prometheus answer this long
 GRANT_TTL = 120  # seconds; admitted spawns count as used until Prometheus sees them
 
-# The PromQL and the resource→metric mapping are shared with the agentic
-# interface (gpu_queries.py, mounted alongside this snippet) so both report
-# the same numbers. z2jh execs snippets rather than importing them, hence the
-# explicit path; JUPYTERHUB_CONFIG_D lets tests point at the source tree.
+# Shared with the agentic interface; z2jh execs snippets, hence the path.
 _CONFIG_D = os.environ.get(
     "JUPYTERHUB_CONFIG_D", "/usr/local/etc/jupyterhub/jupyterhub_config.d"
 )
@@ -54,8 +49,7 @@ from gpu_queries import ALLOC_QUERY as _ALLOC_QUERY  # noqa: E402
 from gpu_queries import GPU_METRICS  # noqa: E402
 from gpu_queries import USED_QUERY as _USED_QUERY  # noqa: E402
 
-# k8s extended resource -> human-readable name for the profile form; an
-# optional "note" is always appended to the choice.
+# An optional "note" is appended to the form choice.
 GPU_FLAVORS = {
     "nvidia.com/mig-1g.5gb": {
         "label": "A100 GPU slices (5GB)",
@@ -82,9 +76,7 @@ def _counter(name: str, documentation: str, labelnames: list[str]) -> Any:
         return REGISTRY._names_to_collectors[name]
 
 
-# reason="exhausted": Prometheus saw no free GPU of that flavor.
-# reason="reserved": it saw one, but an admission within GRANT_TTL claimed it
-# first. Sustained "reserved" means a reservation is outliving its pod.
+# reason="reserved": a GPU looked free but an admission within GRANT_TTL took it.
 GPU_SPAWN_REFUSED = _counter(
     "purdue_af_hub_gpu_spawn_refused_total",
     "GPU spawns refused by the availability gate",
@@ -127,11 +119,7 @@ async def get_free_gpus() -> dict[str, int] | None:
     }
 
 
-# kube-state-metrics only sees a newly admitted pod after the next scrape, so
-# remember our own recent admissions and subtract them from the availability.
-# Keyed by spawner so a reservation can be released when the pod it was made
-# for goes away; TTL alone would hold it for GRANT_TTL after a cancelled spawn
-# and refuse that same user their own GPU on the retry.
+# Admissions count as used until scraped; keyed by spawner so a cancel frees them.
 # [(monotonic timestamp, k8s resource name, spawner key)]
 _recent_grants: list[tuple[float, str, str]] = []
 _cache_expires: float = 0.0
@@ -279,9 +267,7 @@ async def refuse_gpu_spawn_if_unavailable(spawner: Any, pod: Any) -> Any:
     if not requested:
         return pod
 
-    # This spawn supersedes any earlier one by the same spawner, so its
-    # reservation cannot still be backing a live pod. Release it before
-    # measuring, or a cancel-and-retry refuses the user their own GPU.
+    # Release this spawner's earlier reservation, or a cancel-and-retry is refused.
     owner = _spawner_key(spawner)
     _release_grants(owner)
 

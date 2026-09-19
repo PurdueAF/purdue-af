@@ -32,9 +32,7 @@ spec:
       {{- $uid := .Values.podSecurityContext.runAsUser | default 10001 }}
       {{- if and .Values.modelRepository.fixOwnership (not .Values.modelRepository.readOnly) }}
       initContainers:
-        # fsGroup is ignored by CSI drivers with fsGroupPolicy other than File
-        # (CephFS uses ReadWriteOnceWithFSType), so a ReadWriteMany volume is
-        # mounted root-owned and the app cannot write. Take ownership once.
+        # CephFS ignores fsGroup on RWX volumes; take ownership once.
         - name: fix-ownership
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}

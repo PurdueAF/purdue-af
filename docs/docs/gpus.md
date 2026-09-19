@@ -20,11 +20,13 @@ below). For A100s you can choose either a 5 GB "slice" or a full 40 GB GPU.
   ![](images/gpu-selection.png){ width="500" }
 </figure>
 
-| Configuration        | Memory | Number of instances | Availability |
-| -------------------- | ------ | ------------------- | ------------ |
-| 5 GB "slice" of A100 | 5 GB   | 14                  | Usually immediate |
-| Full A100 GPU        | 40 GB  | 4                   | Subject to availability |
-| NVIDIA T4            | 16 GB  | 8                   | Usually immediate |
+| Configuration        | Memory | Availability |
+| -------------------- | ------ | ------------ |
+| 5 GB "slice" of A100 | 5 GB   | Usually immediate |
+| Full A100 GPU        | 40 GB  | Subject to availability |
+| NVIDIA T4            | 16 GB  | Usually immediate |
+
+The GPUs installed at the facility are listed in [Hardware](hardware.md).
 
 !!! tip
 
@@ -42,9 +44,8 @@ below). For A100s you can choose either a 5 GB "slice" or a full 40 GB GPU.
 !!! important
 
     Please terminate your session after using a GPU in order to release it for
-    other users. GPU sessions of every flavor (A100 slices, full A100s, and T4s)
-    are **automatically shut down after 24 hours of inactivity** (regular
-    sessions are only shut down after 14 days).
+    other users. Idle GPU sessions are shut down sooner than regular ones — see
+    [Idle sessions](scaling-out.md#idle-sessions).
 
 ### 2. Slurm jobs (Purdue users only)
 
@@ -52,7 +53,7 @@ You can use Slurm to submit multiple GPU jobs to run in parallel. To request a G
 for a Slurm job, simply add the `--gpus-per-node=1` argument to the `sbatch` command.
 
 * Slurm jobs submitted directly from the Purdue AF interface are executed on the
-  Hammer cluster, which features 22 nodes with **Nvidia T4** GPUs.
+  Hammer cluster, which has **Nvidia T4** GPUs.
 * If you need more GPUs, or different GPU models, consider submitting Slurm jobs
   on the [Gilbreth cluster](https://www.rcac.purdue.edu/compute/gilbreth).
   To log in to Gilbreth directly from the Purdue AF interface, simply run

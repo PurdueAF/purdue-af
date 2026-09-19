@@ -9,7 +9,7 @@
 
 GitOps source of truth for the **Purdue Analysis Facility** — a Kubernetes-based interactive analysis platform for high energy physics research at CMS experiment.
 
-Everything the cluster runs is declared here and reconciled by Flux; images and manifests are published only after the full CI/CD pipeline passes on the same commit.
+Everything the cluster runs is declared here and reconciled by Flux.
 
 User documentation:
 [analysis-facility.physics.purdue.edu](https://analysis-facility.physics.purdue.edu)
@@ -19,21 +19,22 @@ Admin documentation: [https://purdue-cms-tier2.gitlab.io/documentation](https://
 
 |                  |                                                                                                                                                                                                                                                                                                                       |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Orchestration    | [Kubernetes](https://github.com/kubernetes/kubernetes) on the [Geddes](https://www.rcac.purdue.edu/compute/geddes) cluster; [Flux](https://github.com/fluxcd/flux2) CD from three roots                                                                                                                              |
-| Sessions         | [JupyterHub](https://github.com/jupyterhub/zero-to-jupyterhub-k8s) — [JupyterLab](https://github.com/jupyterlab/jupyterlab) and [code-server](https://github.com/coder/code-server) interfaces, [CILogon](https://www.cilogon.org) auth (Purdue / CERN / FNAL identities)                                             |
+| Orchestration    | [Kubernetes](https://github.com/kubernetes/kubernetes) on the [Geddes](https://www.rcac.purdue.edu/compute/geddes) cluster; [Flux](https://github.com/fluxcd/flux2) CD ([roots](deploy/README.md))                                                                                                                    |
+| Sessions         | [JupyterHub](https://github.com/jupyterhub/zero-to-jupyterhub-k8s) — [JupyterLab](https://github.com/jupyterlab/jupyterlab) and [code-server](https://github.com/coder/code-server) interfaces, [CILogon](https://www.cilogon.org) auth                                                                               |
 | Scale-out        | [Dask Gateway](https://github.com/dask/dask-gateway) — Kubernetes and Slurm backends                                                                                                                                                                                                                                  |
-| User environment | [nvidia/cuda:12.4.1-devel-rockylinux8](https://hub.docker.com/r/nvidia/cuda) base image, [pixi](https://github.com/prefix-dev/pixi) environments                                                                                                                                                                      |
+| User environment | the [`purdue-af` image](docker/purdue-af/README.md), [pixi](https://github.com/prefix-dev/pixi) environments                                                                                                                                                                                                          |
 | Data             | [CVMFS](https://github.com/cvmfs/cvmfs), [XRootD](https://github.com/xrootd/xrootd), [XCache](https://github.com/opensciencegrid/xcache), [EOS](https://github.com/cern-eos/eos), [Depot](https://www.rcac.purdue.edu/storage/depot) NFS; [ServiceX](https://github.com/ssl-hep/ServiceX) for columnar delivery       |
 | Inference        | [SuperSONIC](https://github.com/fastmachinelearning/SuperSONIC)                                                                                                                                                                                                                                                       |
-| Observability    | [Prometheus](https://github.com/prometheus/prometheus), [Grafana](https://github.com/grafana/grafana), [Loki](https://github.com/grafana/loki), [Tempo](https://github.com/grafana/tempo), [Pyroscope](https://github.com/grafana/pyroscope), [Alloy](https://github.com/grafana/alloy) + two purpose-built exporters |
+| Observability    | [Prometheus](https://github.com/prometheus/prometheus), [Grafana](https://github.com/grafana/grafana), [Loki](https://github.com/grafana/loki), [Tempo](https://github.com/grafana/tempo), [Pyroscope](https://github.com/grafana/pyroscope), [Alloy](https://github.com/grafana/alloy) + purpose-built exporters     |
 | Agents           | MCP server exposing AF-specific tools to any MCP client                                                                                                                                                                                                                                                               |
 
 ## Component status
 
 Whether each component on the cluster is running what is on `main`
-([![awaiting deployment][status-pending]](https://github.com/PurdueAF/purdue-af/releases)).
+([which ref each root deploys](deploy/README.md);
+[![awaiting deployment][status-pending]](https://github.com/PurdueAF/purdue-af/releases)).
 
-**Core** — the newest platform tag, currently ![platform][platform-version]
+**Core** — ![platform][platform-version]
 
 ![af-users-graph][core-af-utils-af-users-graph]
 ![af-x509-secrets][core-jupyterhub-af-x509-secrets]
@@ -46,7 +47,7 @@ Whether each component on the cluster is running what is on `main`
 ![prometheus][core-monitoring-prometheus]
 ![storage][core-storage]
 
-**Experimental** — `main-validated`
+**Experimental**
 
 ![pixi-global-sync][experimental-af-utils-pixi-global-sync]
 ![agentic-interface][experimental-agentic-interface]
@@ -78,11 +79,7 @@ Whether each component on the cluster is running what is on `main`
 ![sonic-ray][experimental-ray-sonic-ray]
 ![storage][experimental-storage]
 
-**Images** — `purdue-af` is released on its own semver stream and pinned at
-![AF image][af-image-version]. `agentic-interface` is auto-versioned (every
-change mints the next version — see [RELEASING.md](RELEASING.md)); its badge
-leads with the deployed version. The other aux images ride `:latest`.
-`interlink-slurm-plugin` is pinned to its upstream plugin ref (`PLUGIN_REF`).
+**Images** — which tag each one ships on: [RELEASING.md](RELEASING.md).
 
 ![purdue-af][image-purdue-af]
 ![agentic-interface][image-agentic-interface]
@@ -102,7 +99,7 @@ Reading the badges:
 - the trailing number is how many commits it has moved since it was deployed
 - a leading `X.Y.Z` is the deployed version, for images on a version stream
 
-Recomputed hourly and after every CI run by
+Recomputed hourly and after every CI run on `main` by
 [`component-status.yml`](.github/workflows/component-status.yml); the badge
 data lives on the [`status`](https://github.com/PurdueAF/purdue-af/tree/status)
 branch, so keeping it current never touches `main`.

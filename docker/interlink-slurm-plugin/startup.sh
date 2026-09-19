@@ -1,16 +1,7 @@
 #!/bin/bash
-# Install the Slurm client config for $SLURM_CLUSTER, activate the matching
-# client binary version, load the site munge key, and start munged. The sidecar
-# binary is started by the image ENTRYPOINT after this script returns.
-#
-# Config resolution order:
-#   1. /etc/secrets/slurm-configs/  (optional runtime override / out-of-band PVC)
-#   2. /opt/purdue-af/slurm-configs/$SLURM_CLUSTER/  (baked from slurm/slurm-configs-*)
-#
-# Client binaries: slurm/client-versions maps cluster -> version; startup links
-# that version's usr/bin into /opt/purdue-af/slurm-active/bin (first on PATH)
-# and registers its lib64 with ldconfig. Needed because Negishi is still on
-# 24.11 while Hammer/Gautschi are on 25.11 — one system RPM cannot serve both.
+# Install the Slurm client config for $SLURM_CLUSTER, activate its client
+# version, load the munge key, and start munged (README.md). The image
+# ENTRYPOINT starts the sidecar after this returns.
 
 set -euo pipefail
 
@@ -81,14 +72,8 @@ if [ -d "${client_root}/usr/lib64" ]; then
 	echo "${client_root}/usr/lib64" | ${sudo_cmd} tee /etc/ld.so.conf.d/00-slurm-client.conf >/dev/null
 	${sudo_cmd} ldconfig
 fi
-# The client RPMs are relocated under ${clients_root} so two versions can
-# coexist, but their binaries still carry the absolute paths the RPM was built
-# with: sbatch has RPATH=/usr/lib64/slurm, and Slurm resolves PluginDir to that
-# same compiled-in path (our slurm.conf leaves PluginDir commented out). Neither
-# follows ld.so.conf or LD_LIBRARY_PATH — without this link sbatch dies with
-# "libslurmfull.so: cannot open shared object file", and merely putting the dir
-# on LD_LIBRARY_PATH just moves the failure to "Bad value for PluginDir".
-# This is the lib64 half of the slurm-active/bin symlink farm above.
+# Relocated binaries keep RPATH and PluginDir at /usr/lib64/slurm, which neither
+# ld.so.conf nor LD_LIBRARY_PATH overrides; only this link does.
 sys_plugin_dir="/usr/lib64/slurm"
 if [ -e "${sys_plugin_dir}" ] && [ ! -L "${sys_plugin_dir}" ]; then
 	echo "${sys_plugin_dir} is a real directory (system Slurm RPM?) — refusing to" >&2

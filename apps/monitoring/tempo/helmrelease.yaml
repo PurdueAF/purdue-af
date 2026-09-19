@@ -22,8 +22,7 @@ spec:
     - kind: ConfigMap
       name: tempo-config
       valuesKey: values.yaml
-  # grafana/tempo chart has no init container support; inject one via postRenderer
-  # to fix PVC root ownership before Tempo starts (CephFS ignores fsGroup on new PVCs)
+  # The chart has no init container hook; this one chowns the PVC (CephFS ignores fsGroup).
   postRenderers:
     - kustomize:
         patches:

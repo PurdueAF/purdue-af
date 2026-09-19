@@ -1,11 +1,4 @@
-# Build the Zensical documentation and deploy it to GitHub Pages.
-##
-# One-time setup required in the repository settings:
-#   Settings -> Pages -> Build and deployment -> Source: "GitHub Actions"
-#
-# After that, every push to `main` that touches docs/ rebuilds
-# and publishes the site automatically. Remove the `paths:` filter below if you
-# want the docs to rebuild on *every* push to main.
+# Builds the Zensical site and deploys it to GitHub Pages (Pages source: GitHub Actions).
 name: Docs deploy
 
 on:

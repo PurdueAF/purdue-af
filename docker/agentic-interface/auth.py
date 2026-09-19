@@ -1,9 +1,5 @@
 """Token validation and user-context resolution.
 
-Extracted into its own module so that tool modules (e.g. session.py) can
-call clear_user_cache() after session state changes — without creating a
-circular import with server.py.
-
 ``HubTokenVerifier`` is the MCP SDK's ``TokenVerifier`` protocol backed by
 the Hub: the middleware validates through it, and it is the seam the SDK's
 own auth stack (``FastMCP(token_verifier=…)``) would plug into.

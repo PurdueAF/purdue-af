@@ -33,11 +33,6 @@ postgresql:
     registry: geddes-registry.rcac.purdue.edu
     repository: docker-hub-cache/bitnamilegacy/postgresql
     tag: 14.5.0-debian-11-r35
-  # global:
-  #   postgresql:
-  #     auth:
-  #       database: servicex
-  #       postgresPassword: leftfoot1
   primary:
     resources:
       requests:
@@ -115,10 +110,6 @@ transformer:
   memoryRequest: 4Gi
   cpuLimit: 2
   memoryLimit: 8Gi
-  # persistence:
-  #   existingClaim: "claim-dkondra"
-  #   subdir: /servicex/
-  # cachePrefix: "'xcache.cms.rcac.purdue.edu'"
   nodeSelector:
     kubernetes.io/hostname: interlink-hammer-purdueaf
   tolerations:
@@ -128,13 +119,6 @@ transformer:
     slurm-job.vk.io/singularity-options: "--unsquash --bind /cvmfs --bind /tmp:/tmp --no-home --compat"
     slurm-job.vk.io/flags: "--uid=616617 -A cms  --time=0-01:00:00"
     interlink.virtual-kubelet.io/wstunnel-timeout: "5m"
-    # interlink.eu/wstunnel-extra-ports: "8000:http:TCP,8001:grpc:TCP,8002:metrics:TCP"
-
-  # tolerations:
-  #   - key: "hub.jupyter.org/dedicated"
-  #     operator: "Equal"
-  #     value: "cms-af"
-  #     effect: "NoSchedule"
 
 rabbitmq:
   image:

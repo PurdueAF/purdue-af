@@ -99,8 +99,7 @@ async def test_unknown_storage_is_not_reported_as_healthy(user_ctx):
 
 @pytest.mark.asyncio
 async def test_mount_slow_is_impaired_not_healthy(user_ctx):
-    """Elevated metadata latency is felt by users; reporting Healthy with a
-    buried warning is how the MCP used to miss EOS slowdowns."""
+    """Elevated metadata latency is felt by users, so it is never Healthy."""
     many = [
         alert(
             "AFMountSlow",
