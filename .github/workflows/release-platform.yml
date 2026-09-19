@@ -1,23 +1,7 @@
 name: Release platform
 
-# Mints the next whole-platform CalVer tag (YYYY.M.SEQ — the repo's
-# long-standing scheme: 2026.7.7 = 7th release of July 2026) and publishes
-# a GitHub Release with generated notes. Nothing else: no file edits, no
-# image tags — the platform release marks the repo state and is on a
-# SEPARATE cadence from the image releases.
-#
-# This is the gate for core components: the core-production Flux GitRepository
-# tracks `semver: 2026.x`, so minting a tag is what rolls the cms
-# namespace forward to the tagged commit.
-#
-# Version streams (each minted by exactly one trigger — never cross them):
-#   - platform:        YYYY.M.SEQ  → THIS workflow only
-#   - purdue-af image: semver 0.X.Y (repo tag v0.X.Y) → release-image.yml
-#   - everything else (aux images + pre-release): :latest / :pre-release /
-#     :sha- / :in- moving tags → ci.yml only, never versioned by humans
-#
-# ⚠ Uses AF_RELEASE_TOKEN (fine-grained PAT, contents:write) if present —
-# tags pushed with the default GITHUB_TOKEN do not trigger CI workflows.
+# Mints the next platform CalVer tag (YYYY.M.SEQ) and its GitHub Release; no
+# file edits, no image tags. What it deploys and how to roll back: RELEASING.md.
 
 on:
   workflow_dispatch:

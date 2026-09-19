@@ -276,7 +276,7 @@ async def test_scale_refuses_a_cluster_that_will_never_run(user_ctx, status):
 
 @respx.mock
 async def test_create_waits_for_the_scheduler_before_scaling(user_ctx, monkeypatch):
-    """The regression: create used to race the scheduler and scale 0 workers."""
+    """create scales only once the scheduler is RUNNING."""
     monkeypatch.setattr(dask, "SCHEDULER_POLL_INTERVAL", 0)
     respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.slow"})
     polls = pending_then_running(K8S, "cms.slow", pending=3)

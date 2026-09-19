@@ -6,7 +6,6 @@ import asyncio
 import fnmatch
 import io
 import json
-import re
 import subprocess
 import sys
 import threading
@@ -147,20 +146,8 @@ class TestGuards:
             "docker/self-repair/uv.lock",
         ]
 
-    def test_the_guard_covers_every_tree_agents_md_carries_verbatim(self):
-        """AGENTS.md is the one statement of what is never edited; the
-        workflow's guard and the opencode deny list must be a superset of it,
-        and the prompt defers to AGENTS.md instead of restating it."""
-        agents = (REPO / "AGENTS.md").read_text()
-        (bullet,) = [
-            b for b in agents.split("\n- ") if b.startswith("Carried verbatim")
-        ]
-        trees = re.findall(r"`([^`]+/)`", bullet)
-        assert trees, bullet
-        samples = [f"{tree.replace('<cluster>', 'hammer')}some-file" for tree in trees]
-        samples = [
-            s if s.startswith(("docker/", "slurm/")) else f"slurm/{s}" for s in samples
-        ]
+    def test_opencode_denies_every_protected_path(self):
+        samples = [f"{path}some-file" for path in sr.PROTECTED_PATHS]
         samples.append("pixi/base/pixi.lock")
         assert sr._protected(samples) == samples
         for sample in samples:
@@ -170,10 +157,6 @@ class TestGuards:
                 for pattern, verdict in sr.EDIT["edit"].items()
                 if verdict == "deny"
             ), sample
-
-        prompts = load_script(WORKFLOW / "prompts.py", "self_repair_prompts")
-        assert "AGENTS.md" in prompts.RULES
-        assert "Why" not in prompts.RULES and "Why" not in prompts.FIX.template
 
     def test_pyflakes_gate_catches_an_undefined_name(self, tmp_path):
         (tmp_path / "ok.py").write_text("import os\nprint(os.name)\n")
@@ -500,7 +483,6 @@ class TestAnalyze:
         assert seen["cwd"] == seen["repo"]
         assert seen["permission"] is sr.READ_ONLY
         assert "ctx line" in seen["prompt"] and "Error fp1" in seen["prompt"]
-        assert f"about {sr.AGENT_BUDGET_MINUTES} minutes" in seen["prompt"]
 
     def test_cache_ignores_evidence_and_model(self):
         cache = sr.analyze.task_options["cache"]

@@ -12,7 +12,8 @@ back as HTTP 400 with the same message; that becomes a 429 too, with a
 Retry-After, so the adapter backs off instead of failing the step.
 
 GenAI Studio allows 60 requests a minute per user across every session
-that shares the key, so the proxy paces its own requests to SESSION_RPM:
+that shares the key, and about 10 concurrent calls per model, so the proxy
+paces its own requests to SESSION_RPM:
 with max_incidents sessions in flight, the sum stays under the limit."""
 
 import http.client

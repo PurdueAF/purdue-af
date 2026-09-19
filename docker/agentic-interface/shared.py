@@ -1,9 +1,8 @@
 """Cross-tool helpers: pooled HTTP clients and query-label escaping.
 
-Every tool used to build a fresh ``httpx.AsyncClient`` per call, paying a TCP
-handshake each time; ``shared_client`` keeps one pooled client per backend
-target instead (auth.py predates this and keeps its own). Clients live for the
-process — never ``async with`` them closed at a call site.
+``shared_client`` keeps one pooled client per backend target (auth.py keeps
+its own). Clients live for the process — never ``async with`` them closed at a
+call site.
 
 ``quote_label`` escapes a value for interpolation inside a PromQL/LogQL label
 matcher (``{label="<value>"}``). Usernames come from the Hub and are the only

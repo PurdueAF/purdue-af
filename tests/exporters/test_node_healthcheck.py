@@ -4,10 +4,8 @@ The API clients are faked at module-global level, so the discovery logic —
 node and probe-pod listing, the metric decision matrix — is tested without a
 cluster.
 
-The exporter no longer creates anything: probes run as DaemonSets
-(apps/monitoring/af-monitoring/daemonset-af-node-probe.yaml). What is tested
-here is that it never confuses the three states those probes can be in — mount
-broken, probe broken, results unreadable.
+The exporter must never confuse the three states of the probe DaemonSets:
+mount broken, probe broken, results unreadable.
 """
 
 import json
@@ -358,9 +356,8 @@ def test_stale_failure_stays_red(metrics_env, monkeypatch):
 
 
 def test_not_ready_node_clears_gauges_to_null(metrics_env, monkeypatch):
-    """Power outage / NotReady: Jobs cannot start. Drop gauges so Prometheus
-    scrapes null — not last-known-good green, and not a false red that would
-    fire AFMountInvalid (that requires fresh=1 after a completed check)."""
+    """A NotReady node's gauges are dropped, so Prometheus scrapes null — not
+    last-known-good green, and not a red that fires AFMountInvalid."""
     metrics_env(
         "/depot/",
         "node-a",

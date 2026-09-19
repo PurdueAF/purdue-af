@@ -1,6 +1,6 @@
 # Using Combine at Purdue AF
 
-[Combine](https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit/v10.3.3/) is
+[Combine](https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit/) is
 a RooStats / RooFit based software framework widely used in LHC experiments for
 statistical analysis of experimental data.
 
@@ -9,8 +9,9 @@ Conda environments. At Purdue AF, we recommend using **standalone mode**, becaus
 some CMSSW releases are not compatible with the operating system, and loading other
 operating systems — while possible via Apptainer — can cause unexpected issues.
 
-The fastest way to try Combine is the [global Pixi environment](software.md), which
-already includes the `cms-combine` package:
+The fastest way to try Combine is the [global Pixi environment](software.md#the-global-pixi-environment),
+which includes the `cms-combine` package (its version is listed in the environment's
+`pixi.toml`):
 
 ```shell
 $ pixi shell --manifest-path /work/pixi/global/pixi.toml
@@ -26,14 +27,15 @@ Pixi environment by adding the `cms-combine` package to your Pixi project. Run t
 following command in the project directory (which contains the `pixi.toml` file):
 
 ```shell
-pixi add cms-combine==10.4.2
+pixi add cms-combine
 ```
 
-OR add the package explicitly to the `[dependencies]` section of the `pixi.toml` file:
+OR add the package explicitly to the `[dependencies]` section of the `pixi.toml` file,
+optionally pinning a version:
 
 ```toml
 [dependencies]
-cms-combine = "==10.4.2"
+cms-combine = "*"
 ```
 
 ### Install from source
@@ -89,23 +91,10 @@ pixi run install_combine
     For this to work, your environment must have the following packages installed:
     `root=6.34`, `gsl`, `boost-cpp`, `vdt`, `eigen`, `tbb`, `cmake`, `ninja`.
 
-## Combine in pre-installed Conda environments
-
-Standalone Combine is pre-installed in the two centrally managed Conda environments —
-`/depot/cms/kernels/python3` and `/depot/cms/kernels/coffea_latest`. It is enough
-to activate either of these environments to use Combine:
-
-```shell
-$ conda activate /depot/cms/kernels/python3
-(/depot/cms/kernels/python3) $ combine -M Significance -d datacard.txt
-<<< Combine >>>
-<<< v10.3.3 >>>
-```
-
 ## Combine in custom Conda environments
 
 If you want to use Combine in your own Conda environment, you can similarly install
-it from conda-forge by adding the `combine` package to the `environment.yaml` file.
+it from conda-forge by adding the `cms-combine` package to the `environment.yaml` file.
 
 To install Combine from source into a Conda environment, follow the instructions
 below:

@@ -1,28 +1,12 @@
 name: Registry GC
 
-# Weekly ghcr hygiene: deletes package versions older than 14 days whose
-# tags are ALL moving build tags (in-<hash> / sha-<commit>). Every rebuild
-# pushes a few GB of new blobs under those tags; without cleanup they
-# accumulate forever.
-#
-# NEVER deleted:
-#   - any version carrying a non-build tag (semver releases, :latest,
-#     :pre-release, :buildcache) — "tagged images" in the release sense;
-#   - the in- tags of the CURRENT repo state (deleting them would force a
-#     full rebuild on the next CI run — computed via image-inputs.sh);
-#   - untagged versions: buildx pushes provenance/attestation manifests as
-#     untagged children of tagged indexes, and old cache manifests linger
-#     untagged — deleting blindly can break tagged images, and public-repo
-#     storage is free, so they are left alone.
-#
-# Deleting a version whose digest is ALSO reachable via a kept tag cannot
-# happen: ghcr versions are digests, so a digest carrying both `in-x` and
-# `pre-release` is one version — protected by the non-build tag.
-#
-# Uses GITHUB_TOKEN (packages: write; the packages are linked to this repo
-# with admin). If deletion ever 403s, grant the repo admin on the package
-# (package settings → Manage Actions access) or switch to a PAT with
-# delete:packages.
+# Weekly ghcr hygiene for every image ci-images.yml builds. Deletes a package
+# version only when it is older than MAX_AGE_DAYS and every tag it carries is
+# an in-<hash> or sha-<commit> build tag, other than the current repo state's
+# in- tag. Never deleted: untagged versions (attestation children, old cache)
+# and any version with another tag (semver releases, :latest, :pre-release,
+# :buildcache, the interlink-slurm-plugin PLUGIN_REF tag).
+# Needs admin Actions access for this repo on every package.
 
 on:
   schedule:
@@ -51,7 +35,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cutoff=$(date -u -d "${MAX_AGE_DAYS} days ago" +%s)
-          for name in purdue-af agentic-interface af-pod-monitor af-node-monitor; do
+          aux=$(yq '.jobs["build-aux-images"].strategy.matrix.include[].name' .github/workflows/ci-images.yml)
+          for name in purdue-af $aux; do
             keep_tag=$(./.github/workflows/image-inputs.sh "$name")
             echo "== ${name} (protecting current ${keep_tag})"
             gh api --paginate "orgs/PurdueAF/packages/container/${name}/versions?per_page=100" \

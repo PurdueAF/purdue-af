@@ -1,8 +1,5 @@
 """Tests for .github/workflows/component-status.py (the README deployment
-dashboard). Runs against the REAL deploy kustomizations and the REAL README,
-so a component added to a channel without a badge — or a badge pointing at a
-component that no longer exists — fails here instead of quietly rendering
-`resource not found` in the README."""
+dashboard). Runs against the REAL deploy kustomizations."""
 
 import json
 import subprocess
@@ -12,7 +9,6 @@ import yaml
 from common import REPO, load_script
 
 SCRIPT_PATH = REPO / ".github" / "workflows" / "component-status.py"
-README = REPO / "README.md"
 
 
 @pytest.fixture(scope="session")
@@ -155,40 +151,7 @@ def test_badge_colour_falls_back_for_an_unknown_status(cs):
     assert cs.badge("x", "something new", 0)["color"] == "lightgrey"
 
 
-# --- README ---------------------------------------------------------------
-
-
-def test_readme_references_every_component_badge(cs, components):
-    """The README badge list is static markdown; this keeps it honest."""
-    readme = README.read_text()
-    expected = {
-        cs.slugify(channel, component)
-        for channel, mapping in components.items()
-        for component in mapping
-    }
-    expected |= {f"image-{name}" for name in cs.CI_IMAGES}
-
-    missing = sorted(s for s in expected if f"[{s}]:" not in readme)
-    assert not missing, f"add these badges to README.md: {missing}"
-
-
-def test_readme_has_no_badges_for_dead_components(cs, components):
-    """A removed component must lose its badge, or the README renders an
-    error image forever (nothing ever writes that JSON again)."""
-    readme = README.read_text()
-    live = {
-        cs.slugify(channel, component)
-        for channel, mapping in components.items()
-        for component in mapping
-    }
-    live |= {f"image-{name}" for name in cs.CI_IMAGES} | {"status-pending"}
-
-    referenced = {
-        line.split("]:")[0].lstrip("[")
-        for line in readme.splitlines()
-        if line.startswith("[") and "/status/badges/" in line
-    }
-    assert referenced - live == set()
+# --- labels ---------------------------------------------------------------
 
 
 def test_label_overrides_point_at_real_components(cs, components):

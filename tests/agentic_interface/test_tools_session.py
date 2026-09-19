@@ -817,9 +817,8 @@ def test_missing_servers_key_is_unknown_not_absent():
 
 @pytest.mark.asyncio
 async def test_status_never_claims_no_session_when_it_cannot_see(user_ctx):
-    """The exact regression: an agent inside a running session carries a
-    singleuser server token, whose user model has no `servers` key. Saying
-    "no active session" there contradicts the session the agent runs in."""
+    """A singleuser server token's user model has no `servers` key; that is
+    unknown, not "no active session"."""
     from httpx import Response
 
     tools = register_tools(session)

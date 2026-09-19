@@ -1,14 +1,8 @@
 #!/usr/bin/env python3
 """Adapt the repo's agentic-interface skill for shipping inside the AF image.
 
-The committed skill (`.claude/skills/`) targets a laptop: it opens with a
-one-time setup blockquote telling the reader to mint a JupyterHub token and
-register the MCP server by hand. Inside a session both are already done —
-`config-agents.sh` registers the server and the token comes from the pod's
-environment — so that block is not just noise, it is wrong.
-
-Everything else is identical, so the skill stays a single source of truth and
-this script rewrites only the preamble at build time.
+Replaces the skill's laptop setup blockquote, which does not apply inside a
+session, with an in-session note; the rest is copied unchanged.
 
     prepare-skill.py <source SKILL.md> <destination SKILL.md>
 """

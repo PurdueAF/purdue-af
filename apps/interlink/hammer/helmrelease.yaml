@@ -22,13 +22,7 @@ spec:
     - kind: ConfigMap
       name: interlink-hammer-config
       valuesKey: values.yaml
-  # The chart has no hook for the munge key or for sizing the node container,
-  # so both are patched in. munge-key-hammer is the same PVC the AF sessions
-  # and the dask-gateway Slurm gateways mount — created out of band, never in
-  # git. Cluster Slurm client configs come from the shared plugin image via
-  # SLURM_CLUSTER=hammer (slurm/slurm-configs-hammer/). The target name
-  # follows nodeName: every chart resource is <nodeName>-*, so renaming the
-  # node renames this target too.
+  # Munge key and node sizing are patched in; the target is <nodeName>-node (README.md).
   postRenderers:
     - kustomize:
         patches:

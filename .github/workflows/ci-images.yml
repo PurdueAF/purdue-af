@@ -10,13 +10,8 @@ name: CI images
 # and smoke-tested. There is no diff-based path filtering anywhere — a
 # skip can never mean "we assumed this was fine".
 #
-# in- tags are pushed from same-repo PRs too (that is what makes reuse
-# work across a merge); the consumable channels (:latest, :pre-release,
-# :sha-) move only in the publish stage of ci.yml, on main, behind the
-# ci-ok gate.
-#
-# Remaining out-of-band (kaniko) images: dask-gateway variants and
-# servicex-science — still too large / awkward for GitHub-hosted runners.
+# in- tags are pushed from same-repo PRs too, so reuse works across a merge.
+# Promotion: RELEASING.md; images built outside CI: docker/REGISTRY.md.
 
 on:
   workflow_call:
@@ -80,9 +75,6 @@ jobs:
           aux_tags=""
           for name in agentic-interface af-pod-monitor af-node-monitor self-repair supersonic-model-manager interlink-slurm-plugin; do
             tag=$(./.github/workflows/image-inputs.sh "$name")
-            # Most aux images ride :latest. interlink-slurm-plugin is pinned to
-            # the upstream plugin checkout (PLUGIN_REF) so values and the
-            # published tag stay aligned with SLURM_PLUGIN_REF.
             channel=latest
             if [ "$name" = interlink-slurm-plugin ]; then
               channel=$(tr -d '[:space:]' < docker/interlink-slurm-plugin/PLUGIN_REF)
@@ -139,10 +131,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # The image is never loaded into the docker daemon: the basic smoke
-      # test is the Dockerfile's `smoke` stage (runs DURING this build),
-      # and the CVMFS check lives in e2e-pre-release, which pulls the image
-      # anyway. This kills the ~13 GB `load:` copy and the second upload.
+      # Never loaded into the docker daemon: the smoke test is the Dockerfile's `smoke` stage.
       - name: Build + in-build smoke test
         if: env.AF_EXISTS != 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7

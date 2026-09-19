@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """Maintain a Purdue AF managed section inside a user-owned agent file.
 
-Agent instruction files (`~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`) belong to
-the user, but the AF part of them has to track the platform as the agentic
-interface evolves. So the AF content lives between markers: everything inside
-is replaced on every session start, everything outside is never touched.
+The AF content lives between markers: everything inside is replaced on every
+run, everything outside is never touched.
 
     managed-block.py <section.md> <target.md>
     managed-block.py --remove <target.md>

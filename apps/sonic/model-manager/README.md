@@ -2,8 +2,7 @@
 
 Web UI for the Triton model repository of a [SuperSONIC](https://fastmachinelearning.org/SuperSONIC/)
 release: PVC usage, model upload, per-model metrics, and a switch to load/unload each model on
-every Triton replica. Self-contained (one chart, one image, no database) so it can later be merged
-into the SuperSONIC chart.
+every Triton replica. Self-contained: one chart, one image, no database.
 
 | Path | Contents |
 | --- | --- |
@@ -25,17 +24,17 @@ can be loaded and unloaded, but not deleted.
 ## Deployment
 
 Flux deploys it from [`deploy/experimental/`](../../../deploy/experimental/kustomization.yaml) into
-the `cms` namespace, alongside the [`supersonic-af`](../supersonic-af/) release it manages — the
-one SuperSONIC release with a PVC model repository, so the only one there is anything to manage.
-Credentials
-are not in git — create the Secret once, or the HelmRelease keeps retrying:
+the `cms` namespace, alongside the [`supersonic-af`](../supersonic-af/) release it manages, the
+one SuperSONIC release with a PVC model repository. Credentials are not in git — create the
+Secret once, or the HelmRelease keeps retrying:
 
 ```bash
 kubectl -n cms create secret generic supersonic-model-manager-auth \
   --from-literal=username=admin --from-literal=password='CHOOSE-A-PASSWORD'
 ```
 
-There is no ingress — reach the dashboard with:
+The dashboard is served at `supersonic-models.geddes.rcac.purdue.edu` (`ingress` in
+`values-supersonic-af.yaml`). Without an ingress, port-forward:
 
 ```bash
 kubectl -n cms port-forward svc/supersonic-model-manager 8080:80
@@ -50,7 +49,7 @@ helm install model-manager ./chart -n cms -f values-supersonic-af.yaml --set aut
 `supersonicRelease` is the value worth setting: it derives the Triton pod selector
 (`app.kubernetes.io/component=triton,app.kubernetes.io/instance=<release>`) and the Prometheus
 matcher (`release="<release>"`). The latter must be overridden when a ServiceMonitor-based
-Prometheus scrapes Triton without adding a `release` label — as in `values-supersonic-af.yaml`.
+Prometheus scrapes Triton without adding a `release` label.
 
 To let Triton serve what you upload, point it at the same claim — this is how
 [`apps/sonic/supersonic-af/values.yaml`](../supersonic-af/values.yaml) is wired:
@@ -125,9 +124,8 @@ MODEL_REPOSITORY_PATH=/tmp/models TRITON_ENDPOINTS=127.0.0.1:8000 AUTH_ENABLED=f
 ```
 
 Outside a cluster there is no Kubernetes API access: use `TRITON_ENDPOINTS` for discovery, and PVC
-capacity falls back to `statvfs`. The app calls the API server directly over `httpx` rather than
-using the official client, which pulls in `cryptography` — whose Rust extension aborts the
-interpreter on import in this image.
+capacity falls back to `statvfs`. The app calls the API server over `httpx`: the official client
+pulls in `cryptography`, whose Rust extension aborts the interpreter on import in this image.
 
 ## CI
 

@@ -1,11 +1,8 @@
 """refresh_user contract: login-time auth_state must stay authoritative.
 
-oauthenticator >= 17.2 (hub images of chart >= 4.1.0) implements
-refresh_user by rebuilding auth_state from the raw CILogon data, dropping
-the name/domain keys that authenticate()/post_auth_hook inject at login;
-set-user-info.py's auth_state_hook then KeyErrors and every spawn 500s.
-This broke the 2025-09 (4.2.0) and 2026-06 (4.3.5) chart upgrades.
-custom-spawner.py pins refresh_user to "no change" — this test pins the pin.
+oauthenticator's refresh_user rebuilds auth_state from the raw CILogon data,
+dropping the name/domain keys injected at login that set-user-info.py's
+auth_state_hook needs. custom-spawner.py pins refresh_user to "no change".
 """
 
 import asyncio

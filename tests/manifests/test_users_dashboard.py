@@ -1,11 +1,7 @@
 """The "Last active" column on the Users Statistics dashboard.
 
-It used to read `time() - af_home_dir_last_accessed` — the st_atime of the
-user's home directory, which measures the mount rather than the session. On
-this NFS that column was years stale for most rows, and identical for every
-row at once whenever a sweep touched /home, so genuinely idle sessions looked
-freshly active. It has to come from the hub's own last_activity, the signal
-the cullers act on."""
+It comes from the hub's last_activity, the signal the cullers act on, never
+from the home directory's atime, which measures the mount."""
 
 import json
 
@@ -52,7 +48,7 @@ def test_last_active_joins_the_table_on_pod():
 
 def test_thresholds_track_the_cull_timeouts():
     """A row turns yellow once the GPU culler would take it (24h) and red once
-    the global culler would (14d); anything older should no longer exist."""
+    the global culler would (14d)."""
     _, override = column_named("Last active")
     steps = next(
         p["value"]["steps"] for p in override["properties"] if p["id"] == "thresholds"

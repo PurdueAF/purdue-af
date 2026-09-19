@@ -8,8 +8,7 @@ kind: Role
 metadata:
   name: agentic-interface
 rules:
-  # Read the JupyterHub Helm values to discover current profiles.
-  # Restricted to this one named ConfigMap — no other ConfigMaps are readable.
+  # Only this ConfigMap: the hub values, for the current profiles.
   - apiGroups: [""]
     resources: ["configmaps"]
     resourceNames: ["jupyterhub-config"]

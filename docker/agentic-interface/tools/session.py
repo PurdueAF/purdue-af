@@ -133,11 +133,7 @@ def _cannot_see_servers(username: str) -> AuthError:
 
 # ── profile / option selection helpers ────────────────────────────────────────
 
-# Returned whenever an interactive choice couldn't be collected — either the
-# client can't render elicitation, or the prompt was dismissed/cancelled (which
-# also happens when the server→client stream is flaky). Rather than dead-ending,
-# hand the agent everything it needs to ask the user in chat and retry, so the
-# session can always be started.
+# Returned when a choice cannot be elicited, so the agent can ask in chat.
 _ELICIT_FALLBACK = (
     "Couldn't collect the choices interactively. Ask the user which profile and "
     "options they want — call list_af_profiles for the exact slugs, option keys, "
@@ -231,10 +227,7 @@ def register(mcp: Any) -> None:
             "running" if ready else f"pending ({pending})" if pending else "not ready"
         )
 
-        # Determine the active interface from user_options. The option key is
-        # numbered per profile ("3-interface" today, but renumbering happens),
-        # so scan for the first key that is "interface" or ends with
-        # "-interface". Choice "2" means VS Code, "1" (or absent) JupyterLab.
+        # Option keys are numbered per profile: match "interface" or "*-interface".
         interface_choice = next(
             (
                 v
@@ -291,7 +284,7 @@ def register(mcp: Any) -> None:
             profile_name: Profile slug or display name from list_af_profiles.
                           Elicited from the user if omitted.
             user_options: Dict of option_key → choice_value as listed by
-                          list_af_profiles.  Example for the stable profile:
+                          list_af_profiles, e.g.
                           {"3-interface": "2", "0-cpu": "3", "2-memory": "2"}.
                           Any option not supplied is elicited.
             use_defaults: Skip elicitation and start the default profile/options.
@@ -438,7 +431,7 @@ def register(mcp: Any) -> None:
         """Stop the user's running Analysis Facility session (JupyterHub pod).
 
         Any unsaved notebook state and running kernels will be lost.
-        Storage (home directory, /work) is preserved.
+        Stored files are preserved.
         """
         user = require_user()
         token = user["token"]

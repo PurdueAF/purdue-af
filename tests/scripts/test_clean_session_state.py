@@ -1,13 +1,8 @@
 """Tests for docker/purdue-af/scripts/clean-session-state.sh — the startup hook
 that clears the previous session's runtime leftovers out of the user's home.
 
-Two properties matter, and they pull against each other. The hook deletes, so
-the tests that say what it must NOT touch are the important half: caches,
-history, session transcripts, and above all ~/.claude/jobs, whose `tmp`
-directory holds scripts the user wrote. And because start.sh sources it under
-`set -e` as root, it must survive homes it cannot fully clean rather than
-taking the session down — the same failure mode that made a symlinked
-~/.local a 600-second spawn timeout."""
+It must not touch caches, history, session transcripts or ~/.claude/jobs, and
+it must survive a home it cannot fully clean."""
 
 import os
 import subprocess
@@ -213,4 +208,4 @@ def test_the_hook_is_installed_and_runs_before_the_others(run_hook):
         "config-extensions.sh",
         "run-as-root.sh",
     ]
-    assert hooks == sorted(hooks), "the hook no longer sorts first"
+    assert hooks == sorted(hooks), "the hook must sort first"

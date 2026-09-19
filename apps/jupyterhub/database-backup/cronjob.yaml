@@ -3,7 +3,7 @@ kind: CronJob
 metadata:
   name: jupyterhub-database-backup
 spec:
-  schedule: "0 0,12 * * *" # Run at midnight and noon every day
+  schedule: "0 0,12 * * *"
   concurrencyPolicy: Forbid
   suspend: false
   successfulJobsHistoryLimit: 1

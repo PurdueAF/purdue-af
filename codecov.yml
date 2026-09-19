@@ -1,7 +1,3 @@
-# Codecov configuration.
-# Statuses start informational: they report coverage without failing PRs.
-# Tighten (informational: false + targets) once the baseline is established.
-
 coverage:
   status:
     project:
@@ -11,8 +7,6 @@ coverage:
       default:
         informational: true
 
-# Per-component coverage in the UI and PR comments (one upload covers all
-# suites; components split it by path — no flags needed).
 component_management:
   individual_components:
     - component_id: agentic-interface

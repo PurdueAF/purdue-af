@@ -1,10 +1,8 @@
 """Tests for .github/workflows/validate-manifests.sh.
 
 Only the retry wrapper is unit-tested here: the rest of the script needs
-kustomize/flux/kubeconform/helm and runs in CI. `helm template` fetches every
-chart over the network, so a reset connection to a chart host used to fail the
-whole run for reasons unrelated to the manifests — while a genuinely broken
-chart must still fail."""
+kustomize/flux/kubeconform/helm and runs in CI. A transient chart-host failure
+is retried; a genuinely broken chart still fails."""
 
 import shutil
 import subprocess
@@ -76,7 +74,7 @@ def test_succeeds_without_retrying_when_helm_works(call_retry):
 
 
 def test_recovers_from_transient_chart_host_failures(call_retry):
-    """The regression: two dropped connections used to fail the whole run."""
+    """Two dropped connections do not fail the run."""
     result, calls = call_retry(2)
     assert result.returncode == 0
     assert calls == 3

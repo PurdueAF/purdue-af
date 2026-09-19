@@ -1,10 +1,4 @@
-# Reconciler for the shared global pixi env on /work (af-shared-storage).
-# Design + runbook: README.md in this directory.
-#
-# Desired state (pixi.toml/pixi.lock/check-env.py/sync script) arrives via
-# the pixi-global-sync ConfigMap generated in deploy/*/kustomization.yaml;
-# kubelet refreshes the mount in place, so the daemon picks up changes
-# WITHOUT a pod restart (name-suffix hashing is disabled repo-wide).
+# Reconciler for /work/pixi/global; see README.md.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,28 +17,19 @@ spec:
       labels:
         app: pixi-global-sync
     spec:
-      # Builds must run in the exact userland user sessions get (same EL8,
-      # same pinned pixi that understands the lock format). Bump this tag
-      # together with AF image releases.
+      # The tag follows AF image releases: RELEASING.md.
       containers:
         - name: sync
           image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af:0.13.0
           command: ["python3", "/config/sync-global-env.py"]
           env:
-            # pixi/global declares [system-requirements] cuda; this pod has
-            # no GPU/driver injected (none requested + NVIDIA_VISIBLE_DEVICES
-            # =void), so mock the __cuda virtual package exactly like
-            # ci-pixi-global.yml does on CPU-only runners. Keep in sync with the
-            # cuda version in pixi/global/pixi.toml.
+            # pixi/global requires __cuda and this pod has no GPU; match pixi/global/pixi.toml.
             - name: CONDA_OVERRIDE_CUDA
               value: "12.4"
-            # cache lives on the SAME filesystem as the env: installs become
-            # mostly hardlink swaps (short update window) and survive pod
-            # restarts. Node-local emptyDir is only scratch space.
+            # Same filesystem as the env, so installs are mostly hardlink swaps.
             - name: PIXI_CACHE_DIR
               value: /work/pixi/.cache/pixi
-            # emptyDir /cache starts empty; sync-global-env.py mkdir's this
-            # at startup (pixi needs it for PyPI tempfile locks).
+            # Starts empty; sync-global-env.py creates it (pixi needs it for PyPI locks).
             - name: TMPDIR
               value: /cache/tmp
           ports:
@@ -54,8 +39,7 @@ spec:
             httpGet: { path: /healthz, port: metrics }
             initialDelaySeconds: 60
             periodSeconds: 60
-            # generous: /healthz only fails after the loop has been silent
-            # >5 poll intervals (builds keep the heartbeat fresh)
+            # /healthz fails only after the loop is silent for >5 poll intervals.
             failureThreshold: 5
           resources:
             requests:
@@ -65,9 +49,7 @@ spec:
               cpu: "8"
               memory: 24Gi
           securityContext:
-            # must be able to write /work/pixi — the share does not squash
-            # root for cluster clients (user-pod startup already chowns as
-            # root). If that ever changes, switch to the owning uid.
+            # Writes /work/pixi: the share does not squash root.
             runAsUser: 0
           volumeMounts:
             - name: work
@@ -95,10 +77,7 @@ spec:
           value: "cms-af"
           effect: "NoSchedule"
 ---
-# Scraped by AF Prometheus via the dedicated `pixi-global-sync` static job
-# (apps/monitoring/prometheus/values.yaml). scrape-metrics keeps Rancher
-# Prometheus in the loop too; AF's af-pod-monitor job drops this Service so
-# metrics are not duplicated there.
+# af-pod-monitor drops this Service; the pixi-global-sync static job scrapes it.
 apiVersion: v1
 kind: Service
 metadata:

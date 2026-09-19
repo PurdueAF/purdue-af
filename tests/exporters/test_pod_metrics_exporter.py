@@ -81,8 +81,7 @@ def test_discover_username_no_user_raises():
 
 
 def test_discover_directories_uses_the_users_home(monkeypatch):
-    """Regression: home was the first /home glob hit, which could be jovyan
-    while /work was already resolved to the real user."""
+    """home is the session user's own directory, not the first /home entry."""
     monkeypatch.setattr(exporter.os, "listdir", lambda path: ["jovyan", "alice"])
     assert exporter.discover_directories() == {
         "home": "/home/alice",
@@ -104,7 +103,7 @@ def test_update_metrics_home(monkeypatch, tmp_path):
 
 
 def test_update_metrics_work_does_not_touch_home(monkeypatch, tmp_path):
-    """Regression: the old code wrote every reading into the same gauges."""
+    """Each directory writes only its own gauges."""
     monkeypatch.setattr(exporter, "run_bounded", lambda cmd, timeout: (True, DF_OUTPUT))
     exporter.update_metrics("home", str(tmp_path))
 
@@ -132,8 +131,7 @@ def test_update_directory_reports_success(monkeypatch):
 
 
 def test_update_directory_swallows_an_unreadable_mount(monkeypatch):
-    """`du: cannot access '/work/users/<user>/': Permission denied` used to
-    raise out of the loop and kill the sidecar — 275 restarts on one pod."""
+    """An unreadable mount is reported, never raised out of the loop."""
     monkeypatch.setattr(exporter, "run_bounded", fail)
 
     assert exporter.update_directory("work", "/work/users/alice/") is False
@@ -163,8 +161,8 @@ def test_an_unreadable_home_is_flagged(monkeypatch):
 
 
 def test_a_persistent_fault_is_logged_once_and_on_recovery(monkeypatch, caplog):
-    """`du` timing out every pass logged the same traceback every 15 minutes
-    on 11 pods; af_work_dir_ok already carried the state continuously."""
+    """A fault is logged when it starts and when it clears; af_*_dir_ok carries
+    it in between."""
     monkeypatch.setattr(exporter, "run_bounded", fail)
 
     with caplog.at_level("INFO", logger="af-pod-monitor"):

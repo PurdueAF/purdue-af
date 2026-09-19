@@ -65,12 +65,8 @@ def _prom_client(target: str) -> httpx.AsyncClient:
     return shared_client(target)
 
 
-# Limits mirrored from the gateway configs — keep in sync with
-# apps/dask-gateway/dask-gateway-k8s/values.yaml (cluster_max_workers = 200,
-# Float worker_cores/worker_memory 0.1–64) and
-# apps/dask-gateway/dask-gateway-k8s-slurm/values.yaml (Integer worker_cores
-# 1–16, Float worker_memory 1–64; it sets no cluster_max_workers, so the k8s
-# ceiling doubles as the sanity bound there).
+# Mirrors the options in apps/dask-gateway/*/values.yaml; the k8s
+# cluster_max_workers also bounds slurm, which sets none.
 MAX_WORKERS = 200
 _WORKER_LIMITS: dict[str, dict] = {
     "k8s": {"cores": (0.1, 64.0), "memory": (0.1, 64.0), "integer_cores": False},
@@ -101,11 +97,8 @@ def _check_worker_size(gateway: str, worker_cores: float, worker_memory: float) 
         )
 
 
-# A freshly created cluster is PENDING while its scheduler pod is scheduled and
-# pulled; the gateway refuses to scale a cluster that is not yet RUNNING. So the
-# create and scale paths wait for the scheduler instead of handing back a
-# cluster with no workers. These bound that wait — a scheduler that is not up
-# within the timeout is reported, never waited on forever.
+# Bounds the create/scale wait for a PENDING scheduler; the gateway refuses to
+# scale a cluster that is not RUNNING.
 SCHEDULER_READY_TIMEOUT = 120.0
 SCHEDULER_POLL_INTERVAL = 3.0
 
@@ -532,12 +525,8 @@ class _CustomCount(BaseModel):
     n_workers: int = Field(ge=0, description="Number of workers to start with.")
 
 
-# Returned whenever an interactive choice couldn't be collected — the client
-# can't render elicitation, or the prompt came back declined/cancelled. Agent
-# clients (Claude Code among them) may auto-decline elicitation without ever
-# showing the user a form, so a non-accept never proves the user said no;
-# rather than dead-ending, hand the agent everything it needs to ask in chat
-# and retry. Doubles as guidance for the create_cluster prompt.
+# Returned when a choice cannot be elicited; agent clients may auto-decline,
+# so a non-accept never proves the user said no.
 _CREATE_CHOICES_HELP = (
     "create_dask_cluster needs two choices from the user. Ask them (use the "
     "client's multiple-choice UI if available), then call create_dask_cluster "
@@ -555,12 +544,7 @@ _CREATE_CHOICES_HELP = (
 )
 
 
-# Appended after a successful scale. Scaling is asynchronous — pods are
-# scheduled, then register with the scheduler — and get_dask_worker_count reads
-# a Prometheus scrape, so a check made straight afterwards legitimately reports
-# fewer workers than requested. Saying so up front stops a caller concluding the
-# scale failed and re-scaling (or hunting through logs) while it is still
-# working.
+# Workers register asynchronously and the count comes from a scrape.
 _WORKERS_PENDING_NEXT = [
     "",
     "Workers start asynchronously: the pods are scheduled first, then register "
@@ -1149,7 +1133,7 @@ def register(mcp: Any) -> None:
         """Scale a Dask cluster to the requested number of workers.
 
         A cluster that is still starting cannot take workers, so this waits for
-        its scheduler to reach RUNNING (up to 120 s) before scaling —
+        its scheduler to reach RUNNING (bounded) before scaling —
         call it straight after create_dask_cluster without polling first. The
         scale itself is asynchronous: workers appear over the following seconds.
 
@@ -1166,9 +1150,7 @@ def register(mcp: Any) -> None:
         username = require_user()["username"]
         gateway, url = _resolve_gateway(gateway)
 
-        # A cluster that is still starting rejects the scale request, which used
-        # to surface as a flat failure right after create_dask_cluster. Wait for
-        # the scheduler instead; an already-RUNNING cluster costs one extra GET.
+        # A starting cluster rejects scaling; a RUNNING one costs one extra GET here.
         status, waited = await _await_scheduler(gateway, url, cluster_name, username)
         if status != "RUNNING":
             return (

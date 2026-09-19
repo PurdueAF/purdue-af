@@ -1,9 +1,7 @@
 """Contracts for the Global pixi env panels on the default dashboard.
 
-These panels have burned operators before: a sticky last-duration gauge that
-looks like continuous work, a state-timeline that rendered "-∞+", and a status
-stat that said OK while the daemon had not rebuilt for days. Hold the queries
-that fix those."""
+A duration panel must not hold its last value, the state timeline must render
+finite values, and the status stat must go stale when rebuilds stop."""
 
 import json
 

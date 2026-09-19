@@ -1,12 +1,7 @@
 """Per-node mount probe supervisor — one DaemonSet pod per (mount, node).
 
-Replaces the Job-per-mount-per-node factory that node_healthcheck.py used to
-run. Every cycle still executes job_runner.py as a *fresh* child under a hard
-deadline, so the check semantics are unchanged; what goes away is 68 Pods per
-10 minutes and their scheduling, image pulls and API churn.
-
-Three states have to stay distinguishable, because collapsing any two of them
-turns a real outage into "unknown" or an unknown into a false alarm:
+Every cycle runs job_runner.py as a fresh child under a hard deadline. Three
+states stay distinguishable:
 
   mount is broken      -> the child reports it, or blows its deadline; the
                           supervisor publishes a timeout result (valid=0).
@@ -40,8 +35,7 @@ RUNTIME_DIR = Path(_get_env("PROBE_RUNTIME_DIR", "/run/af-node-monitor"))
 JOB_RUNNER = _get_env("JOB_RUNNER_PATH", "/scripts/job_runner.py")
 
 PROBE_INTERVAL_S = float(_get_env("PROBE_INTERVAL_S", "600"))
-# Ceiling on one attempt: ping 3s + metadata 10s + fio 120s, with headroom.
-# Matches the activeDeadlineSeconds the Jobs used to carry.
+# Ceiling on one attempt: ping + metadata + fio timeouts, with headroom.
 PROBE_DEADLINE_S = float(_get_env("PROBE_DEADLINE_S", "180"))
 # De-synchronise the fleet: without it every node reads 1 GiB off the same
 # server in the same second on every fio cycle.

@@ -1,11 +1,9 @@
-# Chart: grafana/alloy
-
 controller:
   type: daemonset
   replicas: 1
   service:
     enabled: false
-  # Roll up to 3 nodes at a time; default maxUnavailable=1 is too slow for 12 nodes.
+  # Roll up to 3 nodes at a time; the default of 1 is too slow.
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:
@@ -46,7 +44,6 @@ alloy:
       memory: 512Mi
   configMap:
     create: true
-    # River configuration: collect Kubernetes pod logs and send to Loki
     content: |
       logging {
         level = "warn"

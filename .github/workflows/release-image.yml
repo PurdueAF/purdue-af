@@ -1,40 +1,8 @@
 name: Release image
 
-# The manual greenlight for the ONE hand-versioned image, purdue-af —
-# semver 0.X.Y, repo tag v0.X.Y, GitHub Release; rewrites values.yaml
-# (bump-af-version.py, count-verified). agentic-interface is versioned
-# AUTOMATICALLY (patch bumps in the ci.yml publish stage — see the
-# auto-release step there); the monitor images (af-pod-monitor,
-# af-node-monitor) are on the continuous :latest channel.
-#
-# Two gates make "assumed success" impossible:
-#
-#   1. CI-green gate — the ci-ok check of the release commit (HEAD of
-#      main) must have succeeded; commits whose CI never ran (e.g. pushed
-#      with the default GITHUB_TOKEN) fail loudly instead of releasing
-#      untested state.
-#   2. Exact-state gate — the digest being promoted must be the digest of
-#      ghcr :in-<hash(HEAD)> (image-inputs.sh, same definition CI builds
-#      from), AND the :pre-release digest must match it too — the release
-#      ships the exact bytes users have been soaking, built from THIS
-#      repo state.
-#
-# Promotion is by digest: the semver tag is added to the SAME digest that
-# passed the pipeline, never a rebuild. ROLLBACK: `git revert` the release
-# commit (old tags stay on ghcr forever; registry-gc never deletes them).
-#
-# Version streams (each minted by exactly one trigger — never cross them):
-#   - platform:        YYYY.M.SEQ  → release-platform.yml
-#   - purdue-af image: semver 0.X.Y (repo tag v0.X.Y) → THIS workflow
-#   - agentic-interface image: semver X.Y.Z (repo tag
-#     agentic-interface-vX.Y.Z) → ci.yml publish auto-release, never by hand
-#   - everything else: :latest / :pre-release / :sha- / :in- moving tags
-#     → ci.yml only, never versioned by humans
-#
-# ⚠ Uses AF_RELEASE_TOKEN (fine-grained PAT, contents:write on this repo)
-# if present — pushes made with the default GITHUB_TOKEN do NOT trigger
-# other workflows, so CI would silently skip the release commit. Falls
-# back to GITHUB_TOKEN with a loud warning.
+# Releases the purdue-af image: promotes the exact-state digest to a semver tag
+# and rewrites values.yaml (bump-af-version.py). Gates, rollback and
+# AF_RELEASE_TOKEN: RELEASING.md.
 
 on:
   workflow_dispatch:

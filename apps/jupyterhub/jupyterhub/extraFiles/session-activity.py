@@ -18,9 +18,7 @@ from typing import Any
 from prometheus_client import REGISTRY
 from prometheus_client.core import GaugeMetricFamily
 
-# `c` is the traitlets config object JupyterHub injects into this file's
-# globals at exec time. A bare annotation declares its type for static
-# checkers without creating (or shadowing) the runtime binding.
+# JupyterHub injects `c` at exec time; the annotation is for type checkers only.
 c: Any
 
 # kubespawner renders pod names from this; the Grafana table joins on `pod`.
@@ -89,8 +87,7 @@ class SessionActivityCollector:
         try:
             rows = sessions()
         except Exception:
-            # /hub/metrics serves every JupyterHub metric from this registry;
-            # raising here would take all of them down with it.
+            # Raising here would take down every metric /hub/metrics serves.
             log.exception("session activity collection failed")
             rows = []
         for labels, last, start in rows:

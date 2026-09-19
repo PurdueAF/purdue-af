@@ -43,22 +43,20 @@ JupyterLab is especially well suited for developing analysis workflows in Python
 [ROOT](https://root.cern) is a software package developed by CERN and widely used in
 high energy physics for histogramming, fitting, and statistical analysis.
 
-* The ROOT console can be launched from a terminal by typing `root -l`.
-  Note that it is not possible to display canvases or open `TBrowser`, since the
-  JupyterLab interface does not support X11 forwarding.
+* ROOT is installed in the [global Pixi environment](software.md#the-global-pixi-environment),
+  not in the bare session. In a terminal, activate an environment that contains
+  ROOT (for example, `pixi shell` in `/work/pixi/global/`) and launch the ROOT
+  console with `root -l`. Note that it is not possible to display canvases or
+  open `TBrowser`, since the JupyterLab interface does not support X11 forwarding.
 * Alternatively, you can turn a Jupyter Notebook into a ROOT console by selecting
-  the **ROOT C++ kernel**. Similarly to Python notebooks, you can add text cells and
-  execute cells in arbitrary order.
-
-    When working from a Jupyter Notebook, you can display ROOT plots using the
-    `TCanvas::Draw` method. [See an example of a ROOT C++ notebook here](https://github.com/PurdueAF/purdue-af-demos/blob/master/root-cpp.ipynb).
-
-* The pre-installed ROOT C++ kernel supports the **CUDA backend** for RooFit. To use
-  it, pass the `RooFit::EvalBackend("cuda")` argument to `model.fitTo()` —
-  see [Accelerating RooFit with GPUs](guide-roofit-cuda.md).
+  the [ROOT C++ kernel](software.md#root-c-kernel). Similarly to Python notebooks,
+  you can add text cells and execute cells in arbitrary order, and display ROOT
+  plots with the `TCanvas::Draw` method.
 * In Python, ROOT functionality is accessible via the
   [PyROOT](https://root.cern/manual/python/) package, available in the global
-  environment.
+  environment. In a Jupyter Notebook, you can display ROOT plots using the
+  `TCanvas::Draw` method.
+* To run RooFit fits on a GPU, see [Accelerating RooFit with GPUs](guide-roofit-cuda.md).
 
 ## HEP analysis frameworks
 
@@ -69,8 +67,7 @@ examples of frameworks which have been shown to perform well at Purdue AF:
   for efficient columnar particle physics analyses. Coffea implements all common
   tools used in modern HEP analyses, and has a large and active support community.
 
-    The latest version of Coffea is pre-installed in the global Pixi environment
-    at `/work/pixi/global/`.
+    Coffea is included in the global Pixi environment at `/work/pixi/global/`.
 
 * [PocketCoffea](https://pocketcoffea.readthedocs.io/en/stable/) is a slim declarative
   framework built on top of Coffea. It allows you to define an analysis with a few
@@ -90,21 +87,11 @@ When your analysis outgrows the resources of a single session, several options a
 available — see [Scaling out](scaling-out.md) for a detailed comparison:
 
 * **[Dask](guide-dask.md)** — parallelize any Python code over local cores, or
-  scale out to hundreds of cores via [Dask Gateway](guide-dask-gateway.md)
-  (available to all users).
+  scale out via [Dask Gateway](guide-dask-gateway.md).
 * **Slurm** — batch submission to Purdue computing clusters (Purdue users only).
 * **CRAB** — submission of CMSSW jobs to the Worldwide LHC Computing Grid.
 
 ## GPUs
 
 At Purdue AF, you can start a session with a GPU by selecting it at the resource
-selection step. We have a limited number of Nvidia GPUs, available in three
-configurations:
-
-| Configuration        | Memory | Number of instances |
-| -------------------- | ------ | ------------------- |
-| 5 GB "slice" of A100 | 5 GB   | 14                  |
-| Full A100 GPU        | 40 GB  | 4                   |
-| Nvidia T4 GPU        | 16 GB  | 8                   |
-
-See [GPU access at Purdue AF](gpus.md) for more details.
+selection step — see [GPU access at Purdue AF](gpus.md).

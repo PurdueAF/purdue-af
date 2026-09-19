@@ -13,7 +13,6 @@ import pandas as pd
 BACKUP_DIR = "/depot/cms/purdue-af/backups"
 OUTPUT_PATH = "/data/purdue-af-registered-users.png"
 
-# Modern, minimalistic style
 PLOT_STYLE = {
     "font.family": "sans-serif",
     "font.size": 12,
@@ -31,7 +30,6 @@ PLOT_STYLE = {
     "axes.titlecolor": "#333333",
 }
 
-# Query to get daily registered users based on the 'created' timestamp
 REGISTRATIONS_QUERY = """
 SELECT DATE(created) AS reg_date, COUNT(*) AS num_users
 FROM users
@@ -56,7 +54,6 @@ def load_registration_stats(db_path: str) -> Any:
     finally:
         conn.close()
 
-    # Convert registration dates to datetime and compute cumulative registered users
     df["reg_date"] = pd.to_datetime(df["reg_date"])
     df["cumulative_users"] = df["num_users"].cumsum()
     return df
@@ -67,10 +64,8 @@ def plot_registered_users(df: Any, output_path: str) -> None:
     plt.style.use("default")
     plt.rcParams.update(PLOT_STYLE)
 
-    # Create a wide, horizontal figure
     fig, ax = plt.subplots(figsize=(16, 4))
 
-    # A smooth gradient-like background wash
     ax.fill_between(
         [df["reg_date"].min(), df["reg_date"].max()],
         [0, 0],
@@ -79,7 +74,6 @@ def plot_registered_users(df: Any, output_path: str) -> None:
         color="#007ACC",
     )
 
-    # Plot the line with modern styling
     ax.plot(
         df["reg_date"],
         df["cumulative_users"],
@@ -89,35 +83,28 @@ def plot_registered_users(df: Any, output_path: str) -> None:
         solid_capstyle="round",
     )
 
-    # Add a subtle area fill under the line
     ax.fill_between(df["reg_date"], df["cumulative_users"], alpha=0.1, color="#007ACC")
 
-    # Customize the grid
     ax.grid(True, alpha=0.3, linestyle="-", linewidth=0.5)
 
-    # Remove spines except bottom
     for spine in ax.spines.values():
         spine.set_visible(False)
     ax.spines["bottom"].set_visible(True)
     ax.spines["bottom"].set_color("#E0E0E0")
     ax.spines["bottom"].set_linewidth(0.8)
 
-    # Customize ticks
     ax.tick_params(axis="both", colors="#666666", labelsize=10)
     ax.tick_params(axis="x", rotation=0)
 
-    # Set axis limits with some padding
     ax.set_ylim(0, df["cumulative_users"].max() * 1.05)
     ax.set_xlim(
         df["reg_date"].min() - pd.Timedelta(days=5),
         df["reg_date"].max() + pd.Timedelta(days=5),
     )
 
-    # Remove axis labels for minimalistic look
     ax.set_xlabel("")
     ax.set_ylabel("")
 
-    # Add current user count as a prominent number
     current_users = df["cumulative_users"].iloc[-1]
     ax.text(
         0.98,
@@ -131,7 +118,6 @@ def plot_registered_users(df: Any, output_path: str) -> None:
         verticalalignment="center",
     )
 
-    # Add "users" label
     ax.text(
         0.98,
         0.33,
@@ -144,10 +130,8 @@ def plot_registered_users(df: Any, output_path: str) -> None:
         verticalalignment="center",
     )
 
-    # Tight layout
     plt.tight_layout()
 
-    # Save the figure with high quality
     plt.savefig(
         output_path, dpi=300, bbox_inches="tight", facecolor="white", edgecolor="none"
     )

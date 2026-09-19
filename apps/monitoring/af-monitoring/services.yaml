@@ -1,7 +1,4 @@
-# Scraped by AF Prometheus via the dedicated `af-node-monitor` static job
-# (apps/monitoring/prometheus/values.yaml). scrape-metrics keeps Rancher
-# Prometheus in the loop; AF's af-pod-monitor job drops this Service so mount
-# metrics are not tagged with the Deployment host (pod_node).
+# af-pod-monitor drops this Service so mount metrics carry no pod_node; a static job scrapes it.
 apiVersion: v1
 kind: Service
 metadata:

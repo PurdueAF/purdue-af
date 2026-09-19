@@ -11,12 +11,12 @@ temporary local copy of a dataset at the `T2_US_Purdue` site — see
 
 ## Initial setup
 
-Execute the following commands in a Terminal:
+Make sure you have a valid [VOMS proxy](getting-started.md#6-set-up-a-voms-proxy),
+then execute the following commands in a Terminal:
 
 ```shell
 source /cvmfs/cms.cern.ch/cmsset_default.sh
 source /cvmfs/cms.cern.ch/rucio/setup-py3.sh
-voms-proxy-init -voms cms -rfc -valid 192:00
 export RUCIO_ACCOUNT=<your-CERN-account>
 ```
 

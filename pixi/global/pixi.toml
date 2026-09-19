@@ -14,8 +14,6 @@ cabinetry = "*"
 ca-certificates = "*"
 certifi = "*"
 click = "*"
-# 10.4.2 builds pin root_base to exactly 6.36.04, whose conda-forge build
-# segfaults on `import ROOT` on EL8; 10.6.0 builds allow root 6.36.10 (ok)
 cms-combine = "==11.0.0"
 coffea = "2026.9.0.*"
 correctionlib="*"
@@ -53,9 +51,7 @@ lmfit = "*"
 mamba = "*"
 matplotlib = "*"
 mimesis = "*"
-# floor: "*" let the solver satisfy other pins with mlflow 1.2.0 (2019),
-# whose generated protos can't load under protobuf >= 4 (import error
-# caught by check-env.py in CI)
+# floor: an unconstrained solve can pick mlflow 1.x, whose protos fail under protobuf >= 4
 mlflow = ">=3"
 mplhep = ">=1.1.2"
 numba = "*"
@@ -80,9 +76,6 @@ python = "3.12.*"
 python-graphviz = "*"
 pytorch = "2.12.*"
 rucio-clients = "*"
-# floor at 6.36.10: the 6.36.04 np2py312 conda-forge build segfaults on
-# bare `import ROOT` on EL8 (reproduced in a minimal env; caught by
-# check-env.py in CI — cmsstyle/hepdata-lib crashed for the same reason)
 root = ">=6.40.2,<6.41"
 scikit-learn = "*"
 scikit-optimize = "*"
@@ -91,9 +84,9 @@ seaborn = "*"
 setuptools = "*"
 sysroot_linux-64 = "*"
 tbb = "*"
-tensorflow = {version = "==2.19.1", build = "cuda*"} #
-tensorflow-probability = "*" #
-tf-keras = "*" #
+tensorflow = {version = "==2.19.1", build = "cuda*"}
+tensorflow-probability = "*"
+tf-keras = "*"
 torch-geometric = "*"
 tqdm = "*"
 uncertainties = "*"

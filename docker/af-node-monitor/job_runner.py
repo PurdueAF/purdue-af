@@ -11,8 +11,8 @@ def _af_node_monitor_verbose() -> bool:
     return os.getenv("AF_NODE_MONITOR_VERBOSE", "").lower() in ("1", "true", "yes")
 
 
-# When quiet, redirect OS fds 1/2 so inherited stdio and os.write(2, ...)
-# don't pollute Job logs (kubectl / Loki). Replacing sys.stdout alone is not enough.
+# When quiet, redirect OS fds 1/2 too: replacing sys.stdout alone misses
+# inherited stdio and os.write(2, ...).
 if not _af_node_monitor_verbose():
     _dn = os.open(os.devnull, os.O_WRONLY)
     os.dup2(_dn, 1)
@@ -224,7 +224,7 @@ def default_result_path() -> Path:
     node_key = _sanitized_node_name(NODE_NAME)
     if node_key:
         return RESULTS_DIR / f"{mount_key}__{node_key}.json"
-    # Backwards-compatible path for legacy CronJobs without NODE_NAME.
+    # Without NODE_NAME the result is per mount only.
     return RESULTS_DIR / f"{mount_key}.json"
 
 

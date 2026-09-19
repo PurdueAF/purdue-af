@@ -4,28 +4,19 @@
 #   sync-userlist.sh cern    — CMS members via CERN CRIC (x509-authenticated)
 #   sync-userlist.sh purdue  — Purdue accounts via Hammer LDAP
 #
-# The resulting Secret (af-auth-<source>) is what the JupyterHub spawner's
-# auth gate reads, so this script refuses to write anything that looks wrong:
-# empty lists, suspiciously small lists, or malformed usernames all fail the
-# job and leave the existing Secret untouched.
+# Empty, short or malformed lists fail the job and leave the existing Secret untouched.
 set -euo pipefail
 
 SOURCE=${1:?usage: sync-userlist.sh cern|purdue}
 SECRET_NAME="af-auth-${SOURCE}"
 MIN_USERS=${MIN_USERS:-200}
-# Retry INSIDE the pod rather than letting the job fail and be recreated:
-# one pod per run instead of a pile of Error pods, and the gaps are long
-# enough to outlive a brief upstream outage. Note a retry only helps a
-# transient fault — anything tied to the pod (its node, its identity) is
-# fixed for the pod's lifetime and every attempt will hit it again.
+# Retry in-pod: only transient faults are helped; a pod-bound fault repeats every attempt.
 FETCH_ATTEMPTS=${FETCH_ATTEMPTS:-5}
 FETCH_RETRY_DELAY=${FETCH_RETRY_DELAY:-60}
 TMP_FILE=$(mktemp)
 
 ensure_tools() {
-	# Install only what is missing — a no-op in tests and prebaked images.
-	# Runs inside the captured fetch functions, so every line of installer
-	# output MUST go to stderr or it would end up in the userlist.
+	# Installer output MUST go to stderr: this runs inside the captured fetch functions.
 	{
 		local missing=()
 		for tool in "$@"; do
@@ -42,10 +33,7 @@ ensure_tools() {
 	} 1>&2
 }
 
-# Fetch pipelines end in `|| true`: under pipefail a tool's exit code would
-# kill the script even when it returned usable data (ldapsearch exits 4 on
-# server-side size limits while still printing entries). Fetch problems are
-# caught by the validation gates below — an empty or short list fails loudly.
+# Pipelines end in `|| true` (ldapsearch exits 4 on size limits); the gates below catch bad data.
 fetch_cern() {
 	ensure_tools curl jq
 	curl -k \
@@ -65,9 +53,7 @@ fetch_purdue() {
 		grep '^uid:' | cut -d ' ' -f2 | sort -u || true
 }
 
-# A retry is worth it only while the result is unusable; the definitive
-# verdict (and the operator-facing error message) stays with the validation
-# gates below, so this loop never decides to fail on its own.
+# Retry only while the result is unusable; the validation gates give the verdict.
 fetch_with_retry() {
 	local attempt count
 	for attempt in $(seq 1 "$FETCH_ATTEMPTS"); do

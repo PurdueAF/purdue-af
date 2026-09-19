@@ -86,8 +86,7 @@ console:
       value: cms-af
       effect: NoSchedule
 
-# Needs a DNS record for the host (RCAC, like loki-cms); the manifests are
-# ready for it. The auth Secret is secret-console-auth.yaml.
+# The auth Secret is secret-console-auth.yaml.
 ingress:
   create: ${enable_ingresses}
   host: flyte-cms.geddes.rcac.purdue.edu

@@ -19,9 +19,8 @@ only what those do not say.
   deleting a component's pod to restart it.
 - Never restart, delete or evict a user's session pod (`purdue-af-<id>`) or
   their Dask cluster. They hold long-running kernels — someone's work.
-- Never move a tag or a branch by hand. `main-validated`, `:latest`,
-  `:pre-release`, `in-`/`sha-` tags and every version tag are minted by CI or a
-  release workflow.
+- Never move a tag or a branch by hand; [RELEASING.md](RELEASING.md) names the
+  workflow that mints each one.
 - Never commit a plaintext secret. A Secret under `apps/` is SOPS-encrypted per
   `.sops.yaml` and carries a `sops:` block.
 - No real usernames in commits, PRs or test fixtures. Aggregate or redact first.
@@ -73,8 +72,7 @@ hub e2e needs a kind cluster: [tests/README.md](tests/README.md).
 - The component status badges in `README.md` are a static list, and each
   slug is derived from the component's directory. Adding, removing, renaming or
   moving a component means updating that list and any `LABEL_OVERRIDES` entry
-  in `.github/workflows/component-status.py` naming the old path; the unit
-  tests fail until both are right.
+  in `.github/workflows/component-status.py` naming the old path.
 - The PR says what moves for users when it lands: a rolled pod, a new default
   environment, a changed quota or profile option.
 
@@ -86,6 +84,11 @@ hub e2e needs a kind cluster: [tests/README.md](tests/README.md).
   its files are, how to run and tune it — never a "Why" section — and links
   out for everything else. Before writing a paragraph, check whether it
   already exists; if it does, link, don't copy.
+- Sibling releases of one component (`apps/sonic/supersonic*`,
+  `apps/interlink/*`) state a fact they share once — in the family README
+  where there is one — not in every manifest. Workflow and script comments link to
+  `RELEASING.md` rather than restate it.
+- No prose counts nodes or GPUs; `docs/docs/hardware.md` is the one inventory.
 - Present state, declaratively. Prose — READMEs, docs, comments — describes
   what is, never how it got there, what it replaced, or which alternative was
   rejected: git holds that. A sentence that reads like a changelog ("now",
@@ -95,10 +98,9 @@ hub e2e needs a kind cluster: [tests/README.md](tests/README.md).
   a non-obvious constraint, a workaround and what it works around. No comment
   restates the next line; no paragraph explains a function that its name and
   its test already explain. Rationale goes in the commit message.
-- Hard numbers (quotas, session limits, worker caps) in
-  `docker/purdue-af/agents/platform-context.md` are asserted against their
-  sources by `tests/manifests/test_platform_context.py`. Change the source
-  first, then every place that quotes it.
+- No test or hook asserts what prose says — Markdown, comments, docstrings,
+  descriptions. A number quoted in prose is a copy nothing checks: quote it in
+  its owner only, and grep for it when the source changes.
 - `platform-context.md` is not this file: it tells an agent **inside a user's
   session** how the facility behaves. Repository conventions live here.
 

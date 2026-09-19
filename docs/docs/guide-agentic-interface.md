@@ -18,7 +18,7 @@ token, re-registered on every session start.
 
 A short **platform context** is installed too: the facility's rules and
 recommendations (storage volumes and quotas, where environments may live,
-scale-out limits, GPU options) written into the file each agent reads
+scale-out rules) written into the file each agent reads
 automatically at startup. You do not need to invoke anything — an agent in a
 session already knows, for example, that `pixi install` will be refused under
 `/home` and that `/work` is invisible to Slurm workers.
@@ -78,13 +78,13 @@ They are the same agents as in the terminal, using the same login and the same
 platform context and MCP server, so you can ask about your session, Dask
 clusters, storage and logs without leaving the notebook.
 
-!!! note "Notebooks are now collaborative"
+!!! note "Notebooks are collaborative"
 
     Jupyter AI brings JupyterLab's real-time-collaboration engine with it, which
     is what lets an agent edit the notebook you have open while you watch. It
     also means notebooks save themselves as you work and keep executing when
     your browser disconnects. If you see a notebook behave in a way you do not
-    expect, [tell us](support.md) — this is new.
+    expect, [tell us](support.md).
 
 ## Connecting from your own machine
 
@@ -94,8 +94,7 @@ clusters, storage and logs without leaving the notebook.
 | **Transport** | HTTP (streamable)                                                  |
 | **Auth**      | header `Authorization: Bearer <token>`                             |
 
-1. Obtain a JupyterHub API token at
-   [https://cms.geddes.rcac.purdue.edu/hub/token](https://cms.geddes.rcac.purdue.edu/hub/token).
+1. Obtain a [JupyterHub API token](guide-ssh-access.md#jupyterhub-api-token).
 2. Add the server in your agent's MCP settings. Most agents accept this
    configuration:
 
@@ -116,25 +115,9 @@ clusters, storage and logs without leaving the notebook.
     always the same. If your agent expands environment variables in its config,
     use `Bearer ${JUPYTERHUB_TOKEN}` instead of pasting the token.
 
-!!! warning "Treat the token like a password"
-
-    The token gives full control over your AF session — do not share it or commit
-    it to a Git repository.
-
-??? example "Example: connecting Claude Code"
-
-    Store the token in a file (instead of pasting it into a config), then
-    register the server at user scope so it is available in every project:
-
-    ```bash
-    mkdir -p ~/.config/purdue-af && chmod 700 ~/.config/purdue-af
-    printf '%s' '<your-api-token>' > ~/.config/purdue-af/token
-    chmod 600 ~/.config/purdue-af/token
-
-    claude mcp add --scope user --transport http purdue-af-agentic-interface \
-      https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp \
-      --header "Authorization: Bearer $(cat ~/.config/purdue-af/token)"
-    ```
+For **Claude Code**, the one-time setup at the top of the
+[skill](#installing-the-skill-recommended) stores the token in a file and
+registers the server at user scope.
 
 ## Installing the skill (recommended)
 

@@ -15,10 +15,6 @@ Spots rewritten (each must match exactly once):
   4. the production profile display_name ("Purdue AF <version> – ...")
   5. the production profile kubespawner image ref
 
-The purdue-af IMAGE is versioned with its own semver (0.12.x), on a
-separate cadence from the platform's CalVer tags (2026.M.SEQ) — see
-release-image.yml vs release-platform.yml.
-
 Usage:
   bump-af-version.py --print-current
   bump-af-version.py --bump patch|minor|major   [--dry-run]

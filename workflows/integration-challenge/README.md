@@ -3,21 +3,23 @@
 The [IRIS-HEP integration challenge](https://github.com/iris-hep/integration-challenge)
 (CMS Z' → tt̄ over NanoAOD) as a [Flyte 2](https://www.union.ai/docs/v2/flyte/)
 workflow on the AF: the control plane is [`apps/flyte`](../../apps/flyte), the
-compute is the Geddes Dask Gateway, the data is read from Purdue XCache.
+compute is the Geddes Dask Gateway, the data is read from Purdue XCache. The
+CI run of the same challenge is
+[`tests/integration_challenge`](../../tests/integration_challenge/README.md).
 
-| File           | What it is                                                                 |
-| -------------- | -------------------------------------------------------------------------- |
-| `workflow.py`  | The tasks, their inputs and the typed result                               |
-| `config.yaml`  | Where `flyte` finds the control plane                                      |
-| `pixi.toml`    | The environment shared by the task pods and the Dask workers (`pixi.lock`) |
+| File          | What it is                                                                 |
+| ------------- | -------------------------------------------------------------------------- |
+| `workflow.py` | The tasks, their inputs and the typed result                               |
+| `config.yaml` | Where `flyte` finds the control plane                                      |
+| `pixi.toml`   | The environment shared by the task pods and the Dask workers (`pixi.lock`) |
 
 ## Tasks
 
-| Task         | Runs                                                        | Cached                                    |
-| ------------ | ----------------------------------------------------------- | ----------------------------------------- |
-| `preprocess` | coffea preprocessing: file listing, event counts, chunks    | yes, keyed on `Dataset` (`Cluster` is ignored) |
-| `measure`    | skim + analysis + histogramming with roastcoffea metrics    | no: a benchmark number is never reused    |
-| `benchmark`  | `measure(preprocess())`                                      |                                           |
+| Task         | Runs                                                     | Cached                                         |
+| ------------ | -------------------------------------------------------- | ---------------------------------------------- |
+| `preprocess` | coffea preprocessing: file listing, event counts, chunks | yes, keyed on `Dataset` (`Cluster` is ignored) |
+| `measure`    | skim + analysis + histogramming with roastcoffea metrics | no: a benchmark number is never reused         |
+| `benchmark`  | `measure(preprocess())`                                  |                                                |
 
 `Result` records what actually ran: the coffea version reported by a worker,
 the challenge commit, the environment path and the Flyte run name.

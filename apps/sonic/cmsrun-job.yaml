@@ -1,6 +1,4 @@
-# MiniAOD cmsrun client against SuperSONIC. Not Flux-managed — apply by hand:
-#   kubectl -n cms apply -f apps/sonic/cmsrun-job.yaml
-# Source: https://github.com/PurdueAF/sonic/blob/main/resources/cmsrun-job.yaml
+# Not Flux-managed; apply by hand with kubectl -n cms apply -f.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -15,16 +13,12 @@ spec:
         - name: cmsrun-job
           image: geddes-registry.rcac.purdue.edu/docker-hub-cache/kondratyevd/sonic-client-cms-miniaod:cmssw_17
           args:
-            # Any SuperSONIC release in cms; all serve gRPC on 8001.
+            # Any SuperSONIC release in cms serves gRPC on 8001.
             - "--address=supersonic.cms.svc.cluster.local"
-            # - "--address=supersonic-pr.cms.svc.cluster.local"
-            # - "--address=supersonic-interlink.cms.svc.cluster.local"
             - "--port=8001"
-            # - "--redir=root://cmsxrootd.fnal.gov/"
             - "--redir=root://eos.cms.rcac.purdue.edu/"
             - "--verboseDiscovery"
             - "--maxEvents=1000"
-            # - "--tries=30"
           env:
             - name: X509_USER_PROXY
               value: /etc/grid-security-ro/x509up

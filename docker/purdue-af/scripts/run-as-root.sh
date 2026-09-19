@@ -1,13 +1,7 @@
 #!/bin/bash
 
-# Configuration
 NEW_HOME="/home/$NB_USER"
 
-# Anything this script writes *below* $NEW_HOME is written as the user: parts
-# of a home can be symlinked onto /depot, where root_squash makes root the one
-# identity that cannot write. Files directly in $NEW_HOME stay as they are —
-# they are always on the CephFS home volume, and .bashrc_af is deliberately
-# root-owned.
 source /usr/local/bin/af-as-user.sh
 BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env"
 PIXI_GLOBAL="/work/pixi/global"
@@ -35,8 +29,7 @@ if [ ! -f "$_HOME_SETUP_SENTINEL" ]; then
 	af_as_user mkdir -p "$NEW_HOME/.jupyter/lab/workspaces" || true
 	af_as_user mkdir -p "$NEW_HOME/.local/share/jupyter/runtime" || true
 	af_as_user mkdir -p "$NEW_HOME/.config/dask" || true
-	# Created as the user above, so this only repairs homes an older image left
-	# root-owned — and it cannot work through a depot symlink, so never fatal.
+	# Repairs root-owned homes; cannot work through a depot symlink, so never fatal.
 	chown -h "$NB_USER:users" \
 		"$NEW_HOME/.jupyter" \
 		"$NEW_HOME/.jupyter/lab" \
@@ -125,16 +118,11 @@ if [ -d "${PIXI_GLOBAL}" ] && [ -f "${PIXI_GLOBAL}/pixi.toml" ] && [ -f "${PIXI_
 	fi
 fi
 
-# Everything under ~/.local is now created as the user, so this is only a repair
-# for homes an older image left root-owned. It runs as root and therefore cannot
-# touch a depot-backed ~/.local at all — which is exactly the case it must not
-# abort on, since start.sh sources this file under `set -e`.
+# Repairs a root-owned ~/.local; a depot-backed one is out of root's reach, so never fatal.
 _JUPYTER_USER_DATA="$NEW_HOME/.local/share/jupyter"
 af_as_user mkdir -p "$_JUPYTER_USER_DATA/runtime" || true
 for _d in "$NEW_HOME/.local" "$NEW_HOME/.local/share" "$_JUPYTER_USER_DATA" "$_JUPYTER_USER_DATA/runtime"; do
-	# -h, and skip symlinks for chmod: both follow links by default, and these
-	# paths are user-controlled. Root dereferencing a symlink the user planted
-	# is how a chown of ~/.local turns into a chown of something else entirely.
+	# User-controlled paths: never let chown/chmod follow a symlink.
 	[ -L "$_d" ] && continue
 	chown -h "$NB_USER:users" "$_d" || true
 	chmod u+rwx "$_d" || true

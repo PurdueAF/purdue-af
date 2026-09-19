@@ -1,11 +1,7 @@
 """The probe DaemonSets and the exporter that reads them must agree.
 
-Splitting the probe spec out of node_healthcheck.py removed one source of
-drift (the Job template) and created another: the exporter still names the
-mounts it publishes, while the DaemonSets decide which mounts are actually
-probed. A mount in one and not the other reports "never reported" forever,
-which is the failure this suite exists to catch — nothing else notices, because
-a mount nobody probes looks exactly like a mount nobody can reach.
+The exporter names the mounts it publishes; the DaemonSets decide which are
+probed. A mount in one and not the other would read "never reported" forever.
 """
 
 import ast
@@ -172,8 +168,7 @@ def test_readiness_tracks_the_probe_not_the_mount():
 
 
 def test_image_is_not_repulled_on_every_restart():
-    """Every Job used to pull :latest, so a registry outage took mount
-    monitoring down with it within one interval."""
+    """A registry outage must not take mount monitoring down with it."""
     for name, ds in daemonsets().items():
         assert container(ds)["imagePullPolicy"] == "IfNotPresent", name
 
@@ -255,8 +250,8 @@ def exporter_env():
 
 
 def test_probes_carry_their_own_timeouts():
-    """The Jobs used to inherit these from the exporter. Nothing inherits now,
-    so an unset value silently falls back to job_runner's own default."""
+    """Every probe sets its own timeouts; an unset one falls back to
+    job_runner's default silently."""
     for name, ds in daemonsets().items():
         env = env_of(ds)
         assert env.get("PING_TIMEOUT_S"), name
@@ -279,7 +274,5 @@ def test_exporter_sentinels_match_the_probe_timeouts():
 
 
 def test_exporter_does_not_keep_a_timeout_it_cannot_enforce():
-    """FIO_TIMEOUT_S bounded the Jobs' fio runs. The exporter no longer runs
-    anything, and a knob that reads as configuration but changes nothing is
-    worse than no knob."""
+    """The exporter runs no fio, so it carries no fio timeout."""
     assert "FIO_TIMEOUT_S" not in EXPORTER.read_text()

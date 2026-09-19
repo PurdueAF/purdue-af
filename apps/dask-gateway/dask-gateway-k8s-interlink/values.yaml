@@ -1,7 +1,4 @@
-# Dask Gateway (KubeBackend) with a `cluster` option:
-#   - geddes (default): scheduler + workers on AF nodes (same as dask-gateway-k8s)
-#   - hammer / gautschi: scheduler + workers on the interLink virtual node
-#     (Slurm via VK). Purdue LDAP UID only; conda/pixi under /depot or /cvmfs.
+# KubeBackend with a cluster option: geddes (AF nodes, the default) or an interLink Slurm cluster.
 gateway:
   replicas: 1
   prefix: /
@@ -44,8 +41,7 @@ gateway:
     imagePullSecrets: []
     namespace: ${namespace}
     environment: {}
-    # Defaults = geddes. options_handler overrides nodeSelector / volumes /
-    # annotations when cluster is one of the interLink clusters.
+    # Defaults are geddes; options_handler overrides them for interLink clusters.
     scheduler:
       cores:
         request: 2
@@ -158,22 +154,13 @@ gateway:
               "node": "interlink-gautschi",
               "sbatch_flags": "--account=cms --partition=cpu --qos=standby",
           },
-          # Negishi has a CMS-owned partition (AllowAccounts=cms), so jobs land
-          # on dedicated nodes rather than borrowing idle capacity. It sets
-          # DenyQOS=standby, so no --qos here.
           "negishi": {
               "node": "interlink-negishi",
               "sbatch_flags": "--account=cms-a --partition=cpu --qos=standby",
           },
       }
-      # ExportPodData materializes the dask-credentials Secret under
-      # $workingPath/secrets/dask-credentials/ on the shared NFS. Bind that
-      # directory onto /etc/dask-credentials so the controller's hardcoded TLS
-      # paths work inside Singularity. Use bare $workingPath (Flux postBuild
-      # empties braced vars it does not know, which would drop the prefix;
-      # same pattern as interlink wstunnel $DOWNLOAD_DIR).
-      # Do not write dollar-brace placeholders in this comment — envsubst
-      # treats invalid names as a hard parse error.
+      # Bind the exported dask-credentials onto the controller's hardcoded TLS path in Singularity.
+      # Bare $workingPath: Flux postBuild blanks braced variables it does not know.
       INTERLINK_SINGULARITY_MOUNTS = (
           "--bind $workingPath/secrets/dask-credentials:/etc/dask-credentials"
       )
@@ -209,10 +196,7 @@ gateway:
               "mountPropagation": "HostToContainer",
           },
       ]
-      # Default Dask Gateway readiness is HTTP :8788/api/health with
-      # failureThreshold=3 (~15s) — too aggressive for Singularity+Slurm start.
-      # Startup probe blocks readiness until health passes; then keep a relaxed
-      # readiness for ongoing checks.
+      # Singularity plus Slurm start outlasts the default readiness; the startup probe gates it.
       INTERLINK_SCHEDULER_STARTUP_PROBE = {
           "httpGet": {"port": 8788, "path": "/api/health"},
           "initialDelaySeconds": 60,
@@ -309,10 +293,7 @@ gateway:
           except pkg_resources.DistributionNotFound:
               subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "ldap3"])
 
-          # geddes-auth has no index on uid: a filtered search under ou=AllPeople
-          # scans 69k entries for 15-25s, and options_handler runs synchronously
-          # on the gateway's event loop. Accounts sit at uid=<name>,<baseDN>, so
-          # read that DN (~0ms) and keep the search only as a fallback.
+          # geddes-auth has no uid index: read the account DN directly; search only as a fallback.
           from ldap3 import BASE, SUBTREE, Server, Connection
           url = "geddes-auth.rcac.purdue.edu"
           baseDN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
@@ -470,7 +451,6 @@ gateway:
               annotations = {
                   "slurm-job.vk.io/singularity-mounts": INTERLINK_SINGULARITY_MOUNTS,
                   "slurm-job.vk.io/singularity-options": "--unsquash --bind /cvmfs",
-                  # Walltime matches dask-gateway-k8s-slurm (Hammer): 4 hours.
                   "slurm-job.vk.io/flags": (
                       f"--uid={uid} {meta['sbatch_flags']} -t 0-04:00:00"
                   ),

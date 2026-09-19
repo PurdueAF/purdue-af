@@ -36,8 +36,9 @@ what the tool descriptions cannot tell you.
 Inside an AF session a terminal is right there, and it will give you the wrong
 answer for anything the platform tracks centrally:
 
-- **Storage and quotas** — `query_storage_usage`, never `du`/`df`. Quotas are
-  per-user and enforced outside the filesystem; `du` reports neither.
+- **Storage and quotas** — `query_storage_usage`, never `du`/`df`. It reports
+  usage against each per-user quota, which neither command knows about. Treat
+  every quota as a hard limit.
 - **Logs** — `query_notebook_logs` / `query_dask_logs`, never tailing files.
   Logs come from Loki and outlive the pod that produced them.
 - **Session and cluster state** — the tools, never `kubectl` or `ps`. A session
@@ -65,8 +66,8 @@ answer for anything the platform tracks centrally:
   in** when you are inside the AF session itself. Say so and get agreement
   first; you will lose the conversation. Storage (home, `/work`) is preserved.
 - **`stop_dask_cluster` is irreversible** — running work is lost.
-- Only **one active Dask cluster per user** is allowed, so creating one may
-  require stopping another.
+- Only **one active Dask cluster per user per gateway** is allowed, so creating
+  one may require stopping the existing one on that gateway.
 
 ## Reporting back
 

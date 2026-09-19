@@ -321,9 +321,7 @@ def _refresh_node_caches() -> None:
         print(f"[node_healthcheck] Unexpected error listing nodes: {e}")
         return
 
-    # Drop gauges for the inactive pool (and for nodes that left the AF set).
-    # A leftover node_pool series with the 10s timeout sentinel is what made
-    # paf-b00 look red on heatmaps while its live checks were fine.
+    # Drop gauges for the inactive pool and for nodes that left the AF set.
     other_pool = {"prod": "dev", "dev": "prod"}
     prev_pools = dict(_node_pools)
     for name, (pool, _ready) in by_name.items():
@@ -444,9 +442,8 @@ def _probe_pod_ready(pod: Any) -> bool:
 def _probe_pod_states() -> Dict[tuple[str, str], bool] | None:
     """{(mount_key, node_key): ready} for every probe DaemonSet pod.
 
-    The node comes from spec.nodeName rather than a label: one DaemonSet
-    template covers every node, so it cannot carry a per-node label the way
-    the old per-node Jobs did.
+    The node comes from spec.nodeName: one DaemonSet template covers every
+    node, so no label can carry it.
 
     None on an API failure — distinct from an empty map. Reporting every node
     as having no probe because one list call was refused would paint the whole
@@ -482,12 +479,7 @@ def _probe_pod_states() -> Dict[tuple[str, str], bool] | None:
 
 
 def _cleanup_legacy_jobs() -> None:
-    """Delete Jobs left behind by the pre-DaemonSet exporter.
-
-    Their TTL would clear them within minutes anyway, but a Job wedged on a
-    node that cannot mount the results PVC only finishes when its deadline
-    expires, and until then it keeps a doomed Pod on that node.
-    """
+    """Delete every af-node-monitor Job in the namespace."""
     _init_k8s()
     if not _k8s_ready or _batch_v1 is None:
         return
@@ -519,7 +511,7 @@ def update_metrics() -> None:
 
     af_nodes = _list_af_nodes()
     if not af_nodes:
-        # Fallback: still try to read legacy per-mount results.
+        # No node list: read the per-mount (node-less) result files.
         af_nodes = [("", "prod", True)]
     probe_states = _probe_pod_states()
 

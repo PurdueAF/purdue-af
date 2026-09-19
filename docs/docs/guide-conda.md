@@ -1,11 +1,10 @@
 # Creating Conda environments and Jupyter kernels
 
-!!! warning "Conda is being phased out"
+!!! warning "Use Pixi for new projects"
 
-    The recommended way to manage analysis software at Purdue AF is now
-    [Pixi](guide-pixi.md). Conda environments are still fully supported, but
-    automatic Conda kernel discovery will be removed in the future. For new
-    projects, please use Pixi.
+    The recommended way to manage analysis software at Purdue AF is
+    [Pixi](guide-pixi.md). Conda environments are supported for existing
+    projects.
 
 In the Purdue Analysis Facility, Python-based Jupyter kernels can be created from
 Conda environments.
@@ -53,9 +52,8 @@ conda activate $conda_envs_path/$conda_env_name
 !!! warning
 
     Since Jupyter kernel names are based on the Conda environment names, avoid
-    creating multiple Conda environments with the same name. Also, avoid using the
-    names `python3` and `coffea_latest`, as these names are reserved for
-    pre-installed kernels.
+    creating multiple Conda environments with the same name, or with the name of
+    a kernel that already exists (see `jupyter kernelspec list`).
 
 ## Creating custom Conda environments
 
@@ -108,13 +106,9 @@ resulting environment — it can be easily rebuilt anywhere from the same YAML f
 
     !!! warning
 
-        Keep in mind that Conda environments can take up a lot of space (up to
-        several dozen GB), so the `/home/<username>/` storage space may be
-        insufficient for storing more than 1–2 custom environments.
-
-        A better location for your environments is either `/work/` or `/depot/`
-        storage (Depot is only writable by Purdue users) —
-        see [Storage volumes](storage.md).
+        Conda environments can take up a lot of space (up to several dozen GB),
+        so do not store them in your home directory — see
+        [Storing custom Pixi or Conda environments](storage.md#storing-custom-pixi-or-conda-environments).
 
 4. To install more packages into the environment or change package versions, the
    recommended method is to add the package name and/or version into the same YAML

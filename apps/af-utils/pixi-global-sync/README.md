@@ -5,8 +5,7 @@ exactly what an admin does by hand whenever
 [`pixi/global/pixi.toml`](../../../pixi/global/pixi.toml) /
 [`pixi.lock`](../../../pixi/global/pixi.lock) change on `main`: update the
 two manifest files, run `pixi install --locked`, confirm the env imports.
-Nothing else. `/work/pixi/global` stays a **plain pixi project directory**
-— no symlinks, no build copies, no versioned dirs. The only addition on
+`/work/pixi/global` is a plain pixi project directory; the only addition on
 the share is the persistent package cache at `/work/pixi/.cache`.
 
 ## How a change arrives
@@ -38,10 +37,9 @@ validates the lock and the daemon applies it everywhere.
 
 ## Observability
 
-`/metrics` on :9099 (Service labeled `scrape-metrics`, plus a direct
-prometheus-server scrape job — the ServiceMonitor path feeds Rancher's
-Prometheus, not the one holding our alerts). Alerts: out-of-sync too
-long, env unhealthy, metrics absent. Note: a forgotten `.sync-pause`
+`/metrics` on :9099, scraped by the `pixi-global-sync` job in
+[`apps/monitoring/prometheus/values.yaml`](../../monitoring/prometheus/values.yaml),
+which holds the alerts: out-of-sync too long, env unhealthy, metrics absent. Note: a forgotten `.sync-pause`
 eventually surfaces as AFGlobalEnvOutOfSync.
 
 ## Runbook

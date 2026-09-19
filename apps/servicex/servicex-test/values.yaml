@@ -34,11 +34,6 @@ postgresql:
     registry: geddes-registry.rcac.purdue.edu
     repository: docker-hub-cache/bitnamilegacy/postgresql
     tag: 14.5.0-debian-11-r35
-  # global:
-  #   postgresql:
-  #     auth:
-  #       database: servicex-test
-  #       postgresPassword: leftfoot1
   primary:
     resources:
       requests:
@@ -55,12 +50,6 @@ postgresql:
         operator: "Equal"
         value: "cms-af"
         effect: "NoSchedule"
-
-# objectStore:
-#   enabled: true
-#   internal: false
-#   publicURL: s3.rcac.purdue.edu:443
-#   useTLS: true
 
 codeGen:
   uproot-raw:
@@ -116,10 +105,6 @@ transformer:
   memoryRequest: 2Gi
   cpuLimit: 1
   memoryLimit: 4Gi
-  # persistence:
-  #   existingClaim: "claim-dkondra"
-  #   subdir: /servicex/
-  # cachePrefix: "'xcache.cms.rcac.purdue.edu'"
   nodeSelector:
     cms-af-prod: "true"
   tolerations:
@@ -235,5 +220,3 @@ scheduledTasks:
       operator: "Equal"
       value: "cms-af"
       effect: "NoSchedule"
-
-# secrets: servicex-secrets

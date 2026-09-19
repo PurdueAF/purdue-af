@@ -139,24 +139,7 @@ def build_config(args: argparse.Namespace) -> object:
     general["run_statistics"] = False
     general["run_plots_only"] = False
     general["run_mva_training"] = False
-    # Corrections and systematics wait on an upstream migration. As of
-    # 2026-07-27 `example_opendata` still carries the previous schema in two
-    # places, each fatal at a different stage:
-    #
-    #   corrections  spelled `use`/`transform`; CorrectionConfig now wants an
-    #                explicit `args` list (ObjVar/Sys/literals)
-    #                → pydantic ValidationError at Config(**...)
-    #   systematics  SystematicConfig entries; cms.py now demands
-    #                uncertainty_sources on CorrectionConfig
-    #                → NotImplementedError inside the processor
-    #
-    # `example_cms` stays clear of both by building them from a CMS-internal
-    # directory absent from the repo and falling back to empty. Emptying the
-    # blocks is what it takes here: Config validates `corrections` whatever
-    # the run_* flags say, and the processor inspects `config.systematics`
-    # the same way. Re-enable by deleting these four lines once upstream
-    # ports example_opendata forward — that restores correctionlib (pileup +
-    # muon SF) and the systematic-variation machinery to this run.
+    # Off until upstream's example_opendata passes its framework's schema (README).
     general["run_corrections"] = False
     general["run_systematics"] = False
     config["corrections"] = []

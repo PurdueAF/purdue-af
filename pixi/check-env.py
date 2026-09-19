@@ -2,23 +2,11 @@
 """Post-install smoke test for a pixi environment: import every direct
 dependency, each in its OWN fresh interpreter.
 
-Run right after `pixi install` (no GPU needed, no computations — imports
-only). Purpose: catch broken installs early, e.g. the pip-installed
-tensorflow whose import died with `GLIBCXX_3.4.29 not found` because the
-system libstdc++ shadowed the env's.
-
-Design notes:
-- pixi.toml is the single source of truth: [dependencies] +
-  [pypi-dependencies] decide WHAT is checked; nothing is hard-coded, so env
-  composition can change freely.
-- Import names are derived mechanically (package name != module name, e.g.
-  pytorch -> torch, root -> ROOT): conda packages from the env's
-  conda-meta/*.json file lists, pypi packages from importlib.metadata.
-  Packages that install no python modules (gsl, cmake, ...) are reported
-  as "nopy" and don't fail the check.
-- One fresh subprocess per package, because import failures can be
-  LOAD-ORDER dependent: the GLIBCXX bug only triggered when tensorflow was
-  imported first — a single-process import-all would mask it.
+Imports only, no GPU. What is checked comes from the manifest's
+[dependencies] + [pypi-dependencies]; import names are derived from the env's
+conda-meta/*.json and importlib.metadata, and packages with no Python modules
+report "nopy" without failing. One subprocess per package, because import
+failures can depend on load order.
 
 Usage (with the ENV's python, so metadata resolves against it):
 

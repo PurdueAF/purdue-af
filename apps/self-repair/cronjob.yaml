@@ -1,10 +1,4 @@
-# Starts one `triage` run per tick, named self-repair-triage-<stamp>; the
-# launcher exits as soon as the run is accepted. Registering the tasks
-# happens on the run itself, so there is no separate deploy step.
-#
-# Hourly; each tick reads a little more than an hour of logs (triage's
-# window_minutes), so nothing falls between ticks. An extra tick by hand:
-#   kubectl -n cms create job --from=cronjob/self-repair self-repair-manual-$(date +%s)
+# Starts one `triage` run per tick and exits once the run is accepted.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -38,9 +32,7 @@ spec:
             - name: launch
               image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/self-repair:latest
               imagePullPolicy: Always
-              # Copied out of the mount first: kustomize serves ConfigMap files
-              # as symlinks, and Flyte's bundler skips symlinks that resolve
-              # outside the source root.
+              # ConfigMap files are symlinks, which Flyte's bundler skips: copy them out.
               command: ["sh", "-c"]
               args:
                 - mkdir /tmp/workflow && cp -L /workflow/*.py /workflow/config.yaml /tmp/workflow/ && cd /tmp/workflow && exec python self_repair.py
