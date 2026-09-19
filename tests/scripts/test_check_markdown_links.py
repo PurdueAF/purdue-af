@@ -37,7 +37,7 @@ def test_external_anchor_and_absolute_links_are_ignored(tmp_path):
     doc = write(
         tmp_path,
         "doc.md",
-        "[h](https://x.invalid/y.md) [m](mailto:a@b) [a](#top) [r](/root.md)\n",
+        "[h](https://x.invalid/y.md) [m](mailto:a@b) [a](#top) [r](/root.md) [q](?v=1)\n",
     )
     assert check.broken(doc) == []
 
