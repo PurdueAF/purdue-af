@@ -36,7 +36,7 @@ runs:
         enable-cache: true
         cache-dependency-glob: tests/uv.lock
     - name: Install flux CLI
-      uses: fluxcd/flux2/action@dede56a8fdcd1e0edca28630a979a51415bb56f8 # main
+      uses: fluxcd/flux2/action@b51b7ce78883e123441305281a600e276ed06c23 # main
       with:
         version: ${{ inputs.flux-version }}
     - name: Create kind cluster
