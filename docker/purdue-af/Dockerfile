@@ -204,16 +204,11 @@ COPY --chown=root:root \
     docker/purdue-af/code-server/purdue-af-interface-controls \
     /opt/purdue-af/code-server/purdue-af-interface-controls/
 COPY --chown=root:root .claude/skills/purdue-af-agentic-interface/SKILL.md \
-    /tmp/skill/SKILL.md
+    /opt/purdue-af/skills/purdue-af-agentic-interface/SKILL.md
 COPY --chown=root:root docker/purdue-af/agents/platform-context.md \
     /opt/purdue-af/agents/platform-context.md
 COPY --chown=root:root docker/purdue-af/scripts/managed-block.py \
     /usr/local/bin/managed-block.py
-COPY --chown=root:root docker/purdue-af/scripts/prepare-skill.py /tmp/prepare-skill.py
-# Rocky 8's /usr/bin/python3 is 3.6, too old for these scripts.
-RUN "${BASE_ENV_DIR}/bin/python3" /tmp/prepare-skill.py /tmp/skill/SKILL.md \
-        /opt/purdue-af/skills/purdue-af-agentic-interface/SKILL.md && \
-    rm -rf /tmp/skill /tmp/prepare-skill.py
 
 COPY --chown=root:root docker/purdue-af/code-server/build-vsix.sh /usr/local/bin/build-paf-cs-vsix
 RUN chmod +x /usr/local/bin/build-paf-cs-vsix && \

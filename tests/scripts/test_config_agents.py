@@ -20,15 +20,6 @@ exit ${STUB_EXIT:-0}
 """
 
 
-@pytest.fixture(scope="session")
-def prepare_skill():
-    from common import load_script
-
-    return load_script(
-        REPO / "docker/purdue-af/scripts/prepare-skill.py", "prepare_skill"
-    )
-
-
 @pytest.fixture()
 def agent_home(tmp_path):
     """The session home the hook writes into."""
@@ -434,26 +425,6 @@ def test_skill_is_installed_into_the_claude_directory(run_script, tmp_path):
     assert "skipping" in result.stderr or "installed bundled skills" in result.stdout
 
 
-SKILL_FIXTURE = (
-    "---\nname: x\n---\n\n# Title\n\n"
-    "> **One-time setup** - laptop steps\n> more steps\n\nbody\n"
-)
-
-
-def test_prepare_skill_replaces_the_laptop_setup_block(prepare_skill):
-    out = prepare_skill.strip_setup_block(SKILL_FIXTURE)
-    assert prepare_skill.MARKER not in out
-    assert "laptop steps" not in out
-    assert prepare_skill.IN_SESSION_NOTE in out
-    assert out.startswith("---\nname: x\n---") and out.endswith("body")
-
-
-def test_prepare_skill_fails_loudly_if_the_preamble_changes(prepare_skill):
-    """Better a red build than shipping laptop setup steps to every session."""
-    with pytest.raises(SystemExit):
-        prepare_skill.strip_setup_block("---\nname: x\n---\n\n# Title\n\nbody\n")
-
-
 def test_skill_is_an_image_input():
     """It lives outside docker/purdue-af, so it needs an explicit entry or the
     content-addressed build would reuse a stale image after a skill edit."""
@@ -481,7 +452,7 @@ def test_dockerfile_pins_every_agent_version():
 def test_dockerfile_installs_and_runs_the_hook():
     text = DOCKERFILE.read_text()
     assert "config-agents.sh" in text
-    assert "prepare-skill.py" in text
+    assert f"{SKILL_SOURCE} \\\n    /opt/purdue-af/skills/" in text
     # the CLIs must be on PATH for both the terminal and the extensions
     assert "/opt/npm-global/bin" in text
     # and proven to run in the final image, not just installed
@@ -633,22 +604,6 @@ def test_cli_remove(managed_block, monkeypatch, tmp_path, capsys):
     assert not target.exists()
 
 
-def test_prepare_skill_cli_writes_the_destination(prepare_skill, monkeypatch, tmp_path):
-    source = tmp_path / "SKILL.md"
-    source.write_text(SKILL_FIXTURE)
-    dest = tmp_path / "out" / "SKILL.md"
-    monkeypatch.setattr("sys.argv", ["prepare-skill.py", str(source), str(dest)])
-    assert prepare_skill.main() == 0
-    text = dest.read_text()
-    assert prepare_skill.IN_SESSION_NOTE in text and text.endswith("\n")
-
-
-def test_prepare_skill_cli_rejects_bad_arguments(prepare_skill, monkeypatch):
-    monkeypatch.setattr("sys.argv", ["prepare-skill.py"])
-    with pytest.raises(SystemExit):
-        prepare_skill.main()
-
-
 def test_startup_hook_targets_every_harness_context_file():
     """One file per harness, each the path that harness reads automatically at
     user scope — no skill, no prompt, no per-project setup."""
@@ -668,16 +623,10 @@ def test_section_source_is_shipped_and_is_an_image_input():
 
 
 def test_bundled_python_scripts_do_not_use_the_system_interpreter():
-    """Rocky 8 ships python3.6 at /usr/bin/python3, which cannot parse these
-    scripts (`from __future__ import annotations` is a SyntaxError there). The
-    image build runs before ENV PATH prefers the pixi env, and `su` resets PATH
-    at session start — so both call sites must name the interpreter."""
-    dockerfile = DOCKERFILE.read_text()
-    build_step = next(
-        ln for ln in dockerfile.splitlines() if "prepare-skill.py /tmp/skill" in ln
-    )
-    assert "BASE_ENV_DIR" in build_step, build_step
-
+    """Rocky 8 ships python3.6 at /usr/bin/python3, which cannot parse
+    managed-block.py (`from __future__ import annotations` is a SyntaxError
+    there). `su` resets PATH at session start, so the call site must name the
+    interpreter."""
     hook = (REPO / "docker/purdue-af/scripts/config-agents.sh").read_text()
     call = next(ln for ln in hook.splitlines() if "managed-block.py" in ln)
     assert "${PYTHON}" in call, call
@@ -687,9 +636,8 @@ def test_bundled_python_scripts_do_not_use_the_system_interpreter():
 def test_bundled_python_scripts_target_the_platform_python():
     """They use 3.7+ syntax deliberately; this pins the reason down in one
     place so nobody 'fixes' the build by downgrading the scripts."""
-    for name in ("prepare-skill.py", "managed-block.py"):
-        text = (REPO / "docker/purdue-af/scripts" / name).read_text()
-        assert "from __future__ import annotations" in text, name
+    text = (REPO / "docker/purdue-af/scripts/managed-block.py").read_text()
+    assert "from __future__ import annotations" in text
 
 
 # --- sourcing safety: start.sh runs these hooks with `source` ---------------

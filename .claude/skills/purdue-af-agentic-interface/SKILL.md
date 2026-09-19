@@ -5,8 +5,10 @@ description: Manage a Purdue Analysis Facility session — start/stop/restart th
 
 # Purdue Analysis Facility — Agentic Interface
 
-> **One-time setup** — this skill drives the `purdue-af-agentic-interface` MCP
-> server. If its tools are not available, set it up:
+> **Setup** — this skill drives the `purdue-af-agentic-interface` MCP server.
+> Inside a Purdue AF session it is registered at startup with the session's own
+> credentials: there is nothing to configure, and missing tools mean the service
+> is down. Anywhere else, set it up once:
 >
 > 1. Get a JupyterHub API token at https://cms.geddes.rcac.purdue.edu/hub/token
 >    and store it locally:
@@ -24,7 +26,7 @@ description: Manage a Purdue Analysis Facility session — start/stop/restart th
 >      --header "Authorization: Bearer $(cat ~/.config/purdue-af/token)"
 >    ```
 >
-> Username and active pod are resolved automatically from the token.
+> Username and active pod are resolved automatically.
 
 The server is **self-describing**: every tool carries its own arguments and
 limits, and every result names the next step. Call a tool and follow what it

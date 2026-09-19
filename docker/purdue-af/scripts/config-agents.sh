@@ -103,7 +103,7 @@ _config_agents() {
 		echo "config-agents: WARNING could not write ${OPENCODE_CFG}" >&2
 	fi
 
-	# Claude Code skills, prepared at build time by prepare-skill.py.
+	# Claude Code skills bundled in the image.
 	if [[ -d "${SKILL_SRC}" ]]; then
 		if cp -r "${SKILL_SRC}/." "${NEW_HOME}/.claude/skills/" 2>/dev/null ||
 			{ mkdir -p "${NEW_HOME}/.claude/skills" &&

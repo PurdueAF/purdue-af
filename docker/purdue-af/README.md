@@ -14,7 +14,7 @@ agents.
 | --- | --- |
 | `Dockerfile` | the build; the `smoke` stage holds the build-time checks |
 | `jupyter/` | `start.sh` and the hook runner, server config, healthcheck |
-| `scripts/` | the `before-notebook.d` hooks, `af-as-user.sh`, `managed-block.py`, `prepare-skill.py` |
+| `scripts/` | the `before-notebook.d` hooks, `af-as-user.sh`, `managed-block.py` |
 | `agents/platform-context.md` | the facility context every in-session agent reads |
 | `pixi-wrapper` | the `pixi` on a session's PATH |
 | `configs/`, `osg/`, `xml/` | CERN krb5/CA defaults, OSG RPMs, CMS site config |
@@ -31,9 +31,8 @@ code-server extensions are installed at startup by `config-extensions.sh`.
 server as `purdue-af-agentic-interface` (the name `.mcp.json` uses) at its
 in-cluster address, installs the bundled skill into `~/.claude/skills/`, and
 has `managed-block.py` write [`platform-context.md`](agents/platform-context.md)
-into `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`. The skill's source is
-`.claude/skills/purdue-af-agentic-interface/SKILL.md`; `prepare-skill.py`
-replaces its laptop-setup preamble at build time. The image ships no model
+into `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`. The skill is
+`.claude/skills/purdue-af-agentic-interface/SKILL.md`, shipped as is. The image ships no model
 credentials; users sign the agents in themselves.
 
 ## Build and publication
