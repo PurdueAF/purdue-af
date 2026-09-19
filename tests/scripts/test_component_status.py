@@ -1,5 +1,7 @@
 """Tests for .github/workflows/component-status.py (the README deployment
-dashboard). Runs against the REAL deploy kustomizations."""
+dashboard). Runs against the REAL deploy kustomizations and the README badge
+list, whose `[slug]:` link definitions must match the components the script
+publishes badges for."""
 
 import json
 import subprocess
@@ -9,6 +11,7 @@ import yaml
 from common import REPO, load_script
 
 SCRIPT_PATH = REPO / ".github" / "workflows" / "component-status.py"
+README = REPO / "README.md"
 
 
 @pytest.fixture(scope="session")
@@ -152,6 +155,35 @@ def test_badge_colour_falls_back_for_an_unknown_status(cs):
 
 
 # --- labels ---------------------------------------------------------------
+
+
+def _readme_badge_slugs():
+    """Slugs named by the README's `[slug]: .../status/badges/...` link definitions."""
+    return {
+        line.split("]:")[0].lstrip("[")
+        for line in README.read_text().splitlines()
+        if line.startswith("[") and "/status/badges/" in line
+    }
+
+
+def _live_slugs(cs, components):
+    live = {
+        cs.slugify(channel, component)
+        for channel, mapping in components.items()
+        for component in mapping
+    }
+    return live | {f"image-{name}" for name in cs.CI_IMAGES}
+
+
+def test_readme_links_a_badge_for_every_component(cs, components):
+    missing = sorted(_live_slugs(cs, components) - _readme_badge_slugs())
+    assert not missing, f"add these badges to README.md: {missing}"
+
+
+def test_readme_links_no_badge_for_a_dead_component(cs, components):
+    """Nothing writes a dead slug's JSON again, so its badge renders an error forever."""
+    dead = _readme_badge_slugs() - _live_slugs(cs, components) - {"status-pending"}
+    assert dead == set(), f"remove these badges from README.md: {sorted(dead)}"
 
 
 def test_label_overrides_point_at_real_components(cs, components):

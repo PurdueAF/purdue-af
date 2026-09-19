@@ -72,7 +72,8 @@ hub e2e needs a kind cluster: [tests/README.md](tests/README.md).
 - The component status badges in `README.md` are a static list, and each
   slug is derived from the component's directory. Adding, removing, renaming or
   moving a component means updating that list and any `LABEL_OVERRIDES` entry
-  in `.github/workflows/component-status.py` naming the old path.
+  in `.github/workflows/component-status.py` naming the old path; the unit
+  tests fail until both are right.
 - The PR says what moves for users when it lands: a rolled pod, a new default
   environment, a changed quota or profile option.
 
@@ -100,7 +101,8 @@ hub e2e needs a kind cluster: [tests/README.md](tests/README.md).
   its test already explain. Rationale goes in the commit message.
 - No test or hook asserts what prose says — Markdown, comments, docstrings,
   descriptions. A number quoted in prose is a copy nothing checks: quote it in
-  its owner only, and grep for it when the source changes.
+  its owner only, and grep for it when the source changes. Structure is
+  checked: links resolve, nav entries exist, badge slugs name live components.
 - `platform-context.md` is not this file: it tells an agent **inside a user's
   session** how the facility behaves. Repository conventions live here.
 

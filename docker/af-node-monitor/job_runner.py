@@ -224,7 +224,7 @@ def default_result_path() -> Path:
     node_key = _sanitized_node_name(NODE_NAME)
     if node_key:
         return RESULTS_DIR / f"{mount_key}__{node_key}.json"
-    # Without NODE_NAME the result is per mount only.
+    # Manual runs without NODE_NAME: a per-mount file the exporter never reads.
     return RESULTS_DIR / f"{mount_key}.json"
 
 
