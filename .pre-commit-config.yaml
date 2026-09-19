@@ -30,7 +30,7 @@ repos:
       - id: prettier
         name: prettier (JSON/YAML)
         language: node
-        additional_dependencies: ["prettier@3.9.7"]
+        additional_dependencies: ["prettier@3.9.8"]
         entry: prettier --write
         types_or: [json, yaml]
         # Helm templates are Go templates, not YAML — prettier cannot parse
