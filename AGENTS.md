@@ -6,16 +6,17 @@ Flux.
 
 Read before asking: [README.md](README.md) (what runs, and its live status),
 [RELEASING.md](RELEASING.md) (how a change reaches a cluster, how to roll it
-back), [deploy/README.md](deploy/README.md) (the Flux roots),
-[REVIEW.md](REVIEW.md) (what a review checks). This file holds only what those
-do not say.
+back), [deploy/README.md](deploy/README.md) (the Flux roots). This file holds
+only what those do not say.
 
 ## Hard rules
 
 - Namespace `cms`, always. Never create or inspect objects in another namespace.
 - Never change what Flux manages. `kubectl edit|patch|scale|apply|rollout restart`
-  and `flux suspend` are reverted on the next reconcile; fix the manifest. The
-  one sanctioned live write is deleting a component's pod to restart it.
+  and `flux suspend` of a HelmRelease are reverted on the next reconcile; fix
+  the manifest. Never suspend a root Kustomization: that is not reverted, and
+  every later merge silently stops deploying. The one sanctioned live write is
+  deleting a component's pod to restart it.
 - Never restart, delete or evict a user's session pod (`purdue-af-<id>`) or
   their Dask cluster. They hold long-running kernels — someone's work.
 - Never move a tag or a branch by hand. `main-validated`, `:latest`,
@@ -26,6 +27,9 @@ do not say.
 - No real usernames in commits, PRs or test fixtures. Aggregate or redact first.
 - Branch from `origin/main`, never from another PR's branch: when the base
   squash-merges, the PR retargets and its content never reaches `main`.
+- The `[self-repair]` pull requests are the workflow's output for a person to
+  judge. Never close, merge or comment on one; read them to improve the
+  workflow.
 - Carried verbatim, never edited: `docker/dask-gateway-server/` (upstream fork),
   and the Slurm RPMs and `slurm-configs-<cluster>/` trees copied from the
   clusters ([slurm/README.md](slurm/README.md)). The `pixi.lock` files under
@@ -45,36 +49,32 @@ pass — the third as well whenever `apps/` or `deploy/` changed. First-party
 Python that is not listed in `files =` in `mypy.ini` is never type-checked. The
 hub e2e needs a kind cluster: [tests/README.md](tests/README.md).
 
-## What a merge deploys
-
-Merging to `main` deploys, with no human step: every experimental component to
-production (the publish stage advances `main-validated`; Flux applies it within
-about a minute), and every core component to the geddes2 cluster, whose root
-tracks `main` itself. Core components on production wait for a platform
-release. Flux roots list manifests file by file — a new file beside an
-existing component is inert until it is listed in `deploy/`.
-
 ## Live cluster
 
+- A merge to `main` deploys with no human step wherever a root tracks `main`
+  or `main-validated` ([RELEASING.md](RELEASING.md)).
 - Diagnose with reads: `kubectl -n cms get|describe|logs`; Loki for anything
   older than the pod (user streams carry a `username` label); the MCP server in
   [`.mcp.json`](.mcp.json) for session, storage, Dask and log state.
-- Two Prometheus instances. The AF's own (`apps/monitoring/prometheus`) has the
-  facility's metrics but no cAdvisor; `container_*` and node/pod resource series
-  live in Rancher's Prometheus, reachable only from inside the cluster.
+- Two Prometheus instances. The AF's own (`apps/monitoring/prometheus`) scrapes
+  only its own `scrape_configs` and has no cAdvisor. Rancher's Prometheus holds
+  `container_*`, node/pod resource series and every target behind the
+  `scrape-metrics` ServiceMonitor, `purdue_af_mcp_*` included; it is reachable
+  only from inside the cluster.
 
 ## Changes
 
 - Commit subject: `<component>: <what changed>`, lowercase, no type prefixes —
   `af-node-monitor: set the stale-result window to 30 minutes`. A change with
   no single component takes a plain sentence. The body carries the reason.
-- Version pins are Renovate's: chart versions, image `FROM` tags, GitHub Actions
-  SHAs, pre-commit hooks, `pixi.toml` packages, `upstream.pin`. Do not bump one
-  inside an unrelated change; Renovate's PR runs the full pipeline for it.
-- Renaming or moving a component directory renames its badge slug, which is
-  derived from the path. Update the badge list in `README.md` and any
-  `LABEL_OVERRIDES` entry in `.github/workflows/component-status.py` naming the
-  old path; the unit tests fail until both are right.
+- Version pins are Renovate's (`.github/renovate.json5` lists what it covers).
+  Do not bump one inside an unrelated change; Renovate's PR runs the full
+  pipeline for it.
+- The component status badges in `README.md` are a static list, and each
+  slug is derived from the component's directory. Adding, removing, renaming or
+  moving a component means updating that list and any `LABEL_OVERRIDES` entry
+  in `.github/workflows/component-status.py` naming the old path; the unit
+  tests fail until both are right.
 - The PR says what moves for users when it lands: a rolled pod, a new default
   environment, a changed quota or profile option.
 

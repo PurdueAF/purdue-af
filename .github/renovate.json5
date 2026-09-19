@@ -47,12 +47,9 @@
   prConcurrentLimit: 2,
   branchConcurrentLimit: 2,
 
-  // Pixi CLI is frozen at 0.62.2 (lock format v6). Newer pixi writes v7,
-  // which 0.62.2 cannot read — keep in sync across:
-  //   - constraints.pixi (here)
-  //   - pixi-version in .github/workflows/ci-pixi-{base,global}.yml
-  //   - ARG PIXI_VERSION in docker/purdue-af/Dockerfile
-  // packageRules below disable bumps; customManagers track the Docker ARG.
+  // Pixi CLI is frozen (lock format v6; newer pixi writes v7). The pin is
+  // ARG PIXI_VERSION in docker/purdue-af/Dockerfile; this copy is asserted
+  // equal by tests/manifests/test_pixi_cli_version.py.
   constraints: {
     pixi: '0.62.2',
   },
@@ -150,8 +147,7 @@
       enabled: false,
     },
     {
-      // Freeze pixi CLI at 0.62.2: constraints.pixi, setup-pixi pixi-version,
-      // and Dockerfile ARG PIXI_VERSION. Lock format v6 only.
+      // Freeze the pixi CLI (lock format v6 only).
       matchPackageNames: ['pixi', 'prefix-dev/pixi'],
       enabled: false,
     },

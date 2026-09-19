@@ -18,6 +18,9 @@ ref, `:$PLUGIN_REF`, which the interLink values pin; bumping `PLUGIN_REF` is its
 release ([its README](docker/interlink-slurm-plugin/README.md)). The agentic-interface
 image also publishes to `:latest` continuously, but its Deployment pins a
 released semver tag — the pod moves only when an auto-release rewrites the pin.
+The hub's pre-release profile pulls `:pre-release` on every spawn, so a merged
+`docker/purdue-af` change reaches those sessions without a release; the default
+profile is pinned to the released semver tag.
 
 ## How changes reach the cluster
 

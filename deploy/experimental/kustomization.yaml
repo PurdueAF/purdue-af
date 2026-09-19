@@ -52,9 +52,11 @@ resources:
   - ../../apps/flyte/secret-console-auth.yaml
 
   # Watches Loki for errors and opens draft PRs here when the fix is a code
-  # change (workflows/self-repair). Needs the self-repair-github Secret to exist
-  # in the namespace; see apps/self-repair/README.md.
-  - ../../apps/self-repair
+  # change (workflows/self-repair).
+  - ../../apps/self-repair/podtemplate.yaml
+  - ../../apps/self-repair/cronjob.yaml
+  - ../../apps/self-repair/secret-github.yaml
+  - ../../apps/self-repair/secret-genai.yaml
 
   # Triton on Ray: Ray Serve's gRPC proxy in front of a Triton per GPU pod,
   # plus the KubeRay operator that reconciles it. Models come from a CMSSW
@@ -203,3 +205,26 @@ configMapGenerator:
       - ../../docker/af-node-monitor/node_healthcheck.py
       - ../../docker/af-node-monitor/probe_agent.py
       - ../../docker/af-node-monitor/job_runner.py
+
+  # Read by the self-repair launcher at every tick, so a merged code change is
+  # picked up by the next run with no redeploy.
+  - name: self-repair-workflow
+    options:
+      annotations:
+        # python uses ${...}-like strings — keep Flux substitution away
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../workflows/self-repair/self_repair.py
+      - ../../workflows/self-repair/triage.py
+      - ../../workflows/self-repair/prompts.py
+      - ../../workflows/self-repair/genai_proxy.py
+      - ../../workflows/self-repair/config.yaml
+
+  # The platform context every agent in an AF session reads, mounted into the
+  # self-repair task pods at the path the purdue-af image bakes it into.
+  - name: self-repair-platform-context
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../docker/purdue-af/agents/platform-context.md

@@ -13,7 +13,7 @@ CI runs the first line, plus coverage, in stage 0
 ([`ci-checks.yml`](../.github/workflows/ci-checks.yml)). That run is
 cluster-free and offline: HTTP is mocked with `respx`, Kubernetes objects are
 parsed as YAML, and nothing reaches Geddes. Each directory is one suite, named
-after what it tests. Two have their own README:
+after what it tests (`docs/` asserts the site's navigation against its pages). Two have their own README:
 [`e2e_hub/`](e2e_hub/README.md) (the real hub in kind, skipped unless
 `E2E_HUB=1`) and [`integration_challenge/`](integration_challenge/README.md).
 

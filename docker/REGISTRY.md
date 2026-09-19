@@ -15,8 +15,9 @@ cluster pulls ◀── geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purduea
   built-in `GITHUB_TOKEN` (no separate account or secret), only smoke-tested
   images are pushed, every image carries `org.opencontainers.image.revision`.
 - **geddes-registry** is the cluster-facing registry: manifests reference the
-  `ghcr-proxy-cache` project so pulls are LAN-local and survive ghcr outages
-  (the cache serves last-known images).
+  `ghcr-proxy-cache` project so pulls are LAN-local and survive ghcr outages.
+  The cache revalidates moving tags upstream on each pull and serves the
+  last-known image when ghcr is unreachable.
 - Two images exceed GitHub-hosted runner limits — `dask-gateway-server` and
   `servicex-science-coffea` — and are built in-cluster with kaniko:
   [kaniko-build-jobs/README.md](kaniko-build-jobs/README.md).

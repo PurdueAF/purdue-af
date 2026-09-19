@@ -8,7 +8,7 @@ the git ref it applies them from; and a `flux-kustomization.yaml` carrying the
 | Root               | Applies from                                | Namespace | Holds                                                             |
 | ------------------ | ------------------------------------------- | --------- | ----------------------------------------------------------------- |
 | `core-production/` | newest platform tag (`semver: 2026.x`)      | `cms`     | the core components on the production cluster                     |
-| `core-geddes2/`    | branch `main`                               | `cms`     | the core components on the `geddes2` cluster (`cmsdev.` hostname) |
+| `core-geddes2/`    | branch `main`                               | `cms`     | its own list of core components for the `geddes2` cluster (`cmsdev.` hostname), not production's |
 | `experimental/`    | branch `main-validated`, advanced by CI     | `cms`     | the experimental components on the production cluster             |
 
 `enable-sops.sh` creates the `sops-age` Secret each root decrypts with;

@@ -13,10 +13,10 @@ paths:
   against the old chart. `tests/manifests/test_inrepo_charts.py` asserts it.
 - Do not add a `timeout:` to a HelmRelease. A release that hangs is waiting
   for something real; find what.
-- Generated ConfigMaps carry no name hash: `disableNameSuffixHash` is set in
-  every `deploy/*/kustomization.yaml` and a component cannot override it — a
-  component that needs a hash nests its own kustomization. A HelmRelease still
-  upgrades when its `valuesFrom` ConfigMap changes, because Flux watches it; a
-  Deployment mounting a generated ConfigMap does not roll.
+- Every manifest and ConfigMap generator is listed in a `deploy/*/kustomization.yaml`
+  directly; no component carries a kustomization of its own. Generated
+  ConfigMaps carry no name hash (`disableNameSuffixHash` in every root). A
+  HelmRelease still upgrades when its `valuesFrom` ConfigMap changes, because
+  Flux watches it; a Deployment mounting a generated ConfigMap does not roll.
 - To change a Secret: decrypt, edit, `sops -e -i` it again. The encrypted diff
   says nothing, so the commit message describes the change.

@@ -36,7 +36,7 @@ curl -s \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['content'][0]['text'])"
 ```
 
-Tool names, arguments and limits are not documented anywhere: the server is
+Tool names, arguments and limits are not documented here: the server is
 self-describing, and `tools/list` is the source of truth.
 
 Inside a session the service is reached at its in-cluster address with the

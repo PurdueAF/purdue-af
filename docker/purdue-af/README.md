@@ -96,11 +96,8 @@ tree is this directory, `pixi/base/` and the Slurm inputs
   load`s the same copy, and the hub-in-kind e2e spawns it through the hub's
   `pre-release` profile.
 
-The hub's pre-release profile pulls `:pre-release` with `image_pull_policy:
-Always`, so validated builds reach sessions on the next spawn; the default
-profile is pinned to a semver tag. Channels, tags, the two-step release and
-rollback: [RELEASING.md](../../RELEASING.md); registries:
-[REGISTRY.md](../REGISTRY.md).
+Which sessions pull which tag, the two-step release and rollback:
+[RELEASING.md](../../RELEASING.md); registries: [REGISTRY.md](../REGISTRY.md).
 
 ## Release checklist
 

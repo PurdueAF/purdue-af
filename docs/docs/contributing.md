@@ -12,8 +12,8 @@ click the "edit" icon at the top of any page to edit it directly on GitHub.
   [Zensical](https://zensical.org/), a static site generator from the authors of
   Material for MkDocs.
 * The site configuration (navigation, theme, Markdown extensions) lives in a
-  single file: `zensical.toml`. A new page is reachable only once it is added
-  to `nav` there.
+  single file: `zensical.toml`. A new page appears in the site navigation only
+  once it is added to `nav` there.
 * On every push to the `main` branch that touches `docs/` or `pixi/` (the
   software page embeds the environment manifest), a GitHub Actions workflow
   rebuilds the site and deploys it to **GitHub Pages**.

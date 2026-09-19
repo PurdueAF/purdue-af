@@ -3,8 +3,10 @@
 cluster, git, GitHub and GenAI call is replaced per test."""
 
 import asyncio
+import fnmatch
 import io
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -126,10 +128,11 @@ class TestRunNames:
 
 
 class TestGuards:
-    def test_protected_paths_block_the_vendored_fork_envs_deploy_and_locks(self):
+    def test_protected_paths_block_the_vendored_trees_envs_deploy_and_locks(self):
         blocked = sr._protected(
             [
                 "docker/dask-gateway-server/x.py",
+                "slurm/slurm-configs-hammer/slurm.conf",
                 "pixi/global/pixi.toml",
                 "deploy/experimental/kustomization.yaml",
                 "docker/self-repair/uv.lock",
@@ -138,10 +141,39 @@ class TestGuards:
         )
         assert blocked == [
             "docker/dask-gateway-server/x.py",
+            "slurm/slurm-configs-hammer/slurm.conf",
             "pixi/global/pixi.toml",
             "deploy/experimental/kustomization.yaml",
             "docker/self-repair/uv.lock",
         ]
+
+    def test_the_guard_covers_every_tree_agents_md_carries_verbatim(self):
+        """AGENTS.md is the one statement of what is never edited; the
+        workflow's guard and the opencode deny list must be a superset of it,
+        and the prompt defers to AGENTS.md instead of restating it."""
+        agents = (REPO / "AGENTS.md").read_text()
+        (bullet,) = [
+            b for b in agents.split("\n- ") if b.startswith("Carried verbatim")
+        ]
+        trees = re.findall(r"`([^`]+/)`", bullet)
+        assert trees, bullet
+        samples = [f"{tree.replace('<cluster>', 'hammer')}some-file" for tree in trees]
+        samples = [
+            s if s.startswith(("docker/", "slurm/")) else f"slurm/{s}" for s in samples
+        ]
+        samples.append("pixi/base/pixi.lock")
+        assert sr._protected(samples) == samples
+        for sample in samples:
+            assert any(
+                fnmatch.fnmatch(sample, pattern.lstrip("*"))
+                or fnmatch.fnmatch("/" + sample, pattern)
+                for pattern, verdict in sr.EDIT["edit"].items()
+                if verdict == "deny"
+            ), sample
+
+        prompts = load_script(WORKFLOW / "prompts.py", "self_repair_prompts")
+        assert "AGENTS.md" in prompts.RULES
+        assert "Why" not in prompts.RULES and "Why" not in prompts.FIX.template
 
     def test_pyflakes_gate_catches_an_undefined_name(self, tmp_path):
         (tmp_path / "ok.py").write_text("import os\nprint(os.name)\n")
