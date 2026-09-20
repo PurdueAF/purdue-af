@@ -56,9 +56,10 @@
     pixi: '0.62.2',
   },
 
-  ignorePaths: [
-    'docker/dask-gateway-server/**', // vendored fork — tracked upstream, do not churn
-  ],
+  // Empty, not absent: `config:recommended` pulls in `:ignoreModulesAndTests`,
+  // which skips `**/tests/**` — where the integration-challenge pin and the
+  // test suite's own dependencies live.
+  ignorePaths: [],
 
   // Flux manager is opt-in by path: parse everything Flux reconciles.
   flux: {

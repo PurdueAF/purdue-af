@@ -1,5 +1,3 @@
-exclude: ^docker/dask-gateway-server/ # verbatim upstream fork
-
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0

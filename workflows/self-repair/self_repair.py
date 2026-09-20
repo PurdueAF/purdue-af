@@ -141,10 +141,9 @@ LOG_INCIDENTS = 20
 READ_ONLY = {"edit": "deny", "bash": "deny", "external_directory": "allow"}
 # Not fixable here by definition; the agent may not edit them and a change
 # touching them never becomes a PR. Patterns are opencode permission globs.
-PROTECTED_PATHS = ("docker/dask-gateway-server/", "slurm/", "pixi/", "deploy/")
+PROTECTED_PATHS = ("slurm/", "pixi/", "deploy/")
 EDIT = {
     "edit": {
-        "*docker/dask-gateway-server/*": "deny",
         "*/slurm/*": "deny",
         "*/pixi/*": "deny",
         "*/deploy/*": "deny",
