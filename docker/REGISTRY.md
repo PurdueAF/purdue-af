@@ -22,6 +22,19 @@ cluster pulls ◀── geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purduea
 Which tag each image publishes to, what pins it in the cluster, and how a
 version is minted: [RELEASING.md](../RELEASING.md).
 
+## Images built outside CI
+
+Two images are too large for GitHub-hosted runners, so `ci.yml` does not build
+them. They are pushed to the `cms/` project on geddes-registry, which the
+manifests pin directly rather than through `ghcr-proxy-cache`. The repository
+carries their sources and no build job: a new tag is built and pushed by hand,
+and a change to these directories reaches the cluster only once someone does.
+
+| Source | Image in `cms/` | Pinned by |
+| --- | --- | --- |
+| `dask-gateway-server/Dockerfile.hammer` | `dask-gateway-server` | `apps/dask-gateway/dask-gateway-k8s-slurm` |
+| `servicex-science-coffea/Dockerfile` | `servicex-science-combined-root-coffea` | `apps/servicex/servicex`, `-test` |
+
 ## Registry configuration
 
 - The ghcr packages are **public**, so nothing in the cluster needs pull
