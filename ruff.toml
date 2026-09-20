@@ -1,7 +1,5 @@
 target-version = "py312"
 
-extend-exclude = ["docker/dask-gateway-server"]
-
 [lint]
 # Explicit `select`, not `extend-select`: ruff's default rule set changes between versions.
 select = ["E4", "E7", "E9", "F", "I"]

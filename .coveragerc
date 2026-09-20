@@ -17,7 +17,6 @@ omit =
     **/.venv/*
     **/.pixi/*
     docs/*
-    docker/dask-gateway-server/*
     # Exercised by the container HEALTHCHECK at runtime, not by the test suite.
     docker/purdue-af/jupyter/docker_healthcheck.py
 # Entry points run by the container or the launcher, and the sentinels after

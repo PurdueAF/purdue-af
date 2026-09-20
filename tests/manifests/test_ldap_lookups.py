@@ -1,7 +1,11 @@
-"""Every LDAP uid/gid lookup must read the account's DN, not search for it.
+"""Every LDAP uid/gid lookup in this repository must read the account's DN,
+not search for it.
 
 The directory has no uid index, and a gateway calls ldap_lookup on its event
 loop, where a filtered search would stall the whole gateway.
+
+The Slurm gateway looks up accounts in its own image, whose sources are
+outside this repository (`docker/REGISTRY.md`), so nothing here covers it.
 """
 
 from pathlib import Path
@@ -15,15 +19,6 @@ BASE_DN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
 GATEWAY_VALUES = {
     "k8s": REPO / "apps" / "dask-gateway" / "dask-gateway-k8s" / "values.yaml",
 }
-SLURM_BACKEND = (
-    REPO
-    / "docker"
-    / "dask-gateway-server"
-    / "dask_gateway_server"
-    / "backends"
-    / "jobqueue"
-    / "slurm.py"
-)
 
 
 def gateway_config(path: Path) -> str:
@@ -33,7 +28,7 @@ def gateway_config(path: Path) -> str:
 
 ALL_SOURCES = [
     pytest.param(gateway_config, path, id=name) for name, path in GATEWAY_VALUES.items()
-] + [pytest.param(Path.read_text, SLURM_BACKEND, id="slurm-backend")]
+]
 
 
 @pytest.mark.parametrize("read,path", ALL_SOURCES)

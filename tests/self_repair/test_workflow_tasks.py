@@ -130,7 +130,6 @@ class TestGuards:
     def test_protected_paths_block_the_vendored_trees_envs_deploy_and_locks(self):
         blocked = sr._protected(
             [
-                "docker/dask-gateway-server/x.py",
                 "slurm/slurm-configs-hammer/slurm.conf",
                 "pixi/global/pixi.toml",
                 "deploy/experimental/kustomization.yaml",
@@ -139,7 +138,6 @@ class TestGuards:
             ]
         )
         assert blocked == [
-            "docker/dask-gateway-server/x.py",
             "slurm/slurm-configs-hammer/slurm.conf",
             "pixi/global/pixi.toml",
             "deploy/experimental/kustomization.yaml",

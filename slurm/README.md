@@ -4,7 +4,6 @@ Per-cluster Slurm *client* trees consumed by:
 
 - the AF Jupyter image (`docker/purdue-af`) — Hammer
 - the interLink Slurm sidecar (`docker/interlink-slurm-plugin`) — every tree
-- dask-gateway Slurm images (`docker/dask-gateway-server`) — Hammer
 
 ## Layout
 
