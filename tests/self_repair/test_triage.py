@@ -209,7 +209,6 @@ class TestLoki:
             "sonic-ray-hvfln-head",
             "kuberay-operator-abcde",
             "interlink-hammer-node-0",
-            "interlink-negishi-node-0",
         ],
     )
     def test_ignored_workloads_are_not_read(self, pod):
@@ -260,7 +259,6 @@ class TestLoki:
             "gen0-abcde",
             "etcd-0",
             "eos-fuse-nopriv-65dcf5689-vpbf9",
-            "kaniko-build-dask-hg5pd",
             "hubris-abcde",  # a prefix without its dash is not a match
         ],
     )

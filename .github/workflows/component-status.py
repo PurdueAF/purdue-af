@@ -214,9 +214,7 @@ def write_badge(out: Path, slug: str, payload: dict[str, Any]) -> None:
 # cluster — is what a reader is looking for. The ServiceX group root holds
 # the sources its releases share, not a release of its own.
 LABEL_OVERRIDES = {
-    "apps/interlink/gautschi": "interlink-gautschi",
     "apps/interlink/hammer": "interlink-hammer",
-    "apps/interlink/negishi": "interlink-negishi",
     "apps/servicex": "servicex-shared",
 }
 

@@ -1,7 +1,7 @@
 """Every LDAP uid/gid lookup must read the account's DN, not search for it.
 
-The directory has no uid index, and both gateways call ldap_lookup on their
-event loop, where a filtered search would stall the whole gateway.
+The directory has no uid index, and a gateway calls ldap_lookup on its event
+loop, where a filtered search would stall the whole gateway.
 """
 
 from pathlib import Path
@@ -14,11 +14,6 @@ BASE_DN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
 
 GATEWAY_VALUES = {
     "k8s": REPO / "apps" / "dask-gateway" / "dask-gateway-k8s" / "values.yaml",
-    "interlink": REPO
-    / "apps"
-    / "dask-gateway"
-    / "dask-gateway-k8s-interlink"
-    / "values.yaml",
 }
 SLURM_BACKEND = (
     REPO

@@ -84,7 +84,7 @@ WORKDIR /root
 COPY --from=build-stage /app/bin/slurm-sidecar /sidecar/slurm-sidecar
 
 ENV SLURMCONFIGPATH=/root/SlurmConfig.yaml
-# Must be overridden per Deployment (hammer, gautschi, …).
+# Must be overridden per Deployment (e.g. hammer).
 ENV SLURM_CLUSTER=
 # Active client binaries (symlinks filled by startup.sh) come first on PATH.
 ENV PATH="/opt/purdue-af/slurm-active/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
