@@ -24,7 +24,7 @@ version is minted: [RELEASING.md](../RELEASING.md).
 
 ## Images built outside CI
 
-These images are pulled straight from the `cms/` project on geddes-registry
+Two images are pulled straight from the `cms/` project on geddes-registry
 rather than through `ghcr-proxy-cache`. `ci.yml` does not build them, and this
 repository holds neither their sources nor a build job for them: a new tag
 comes from outside it.

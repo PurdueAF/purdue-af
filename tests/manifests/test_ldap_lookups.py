@@ -1,7 +1,11 @@
-"""Every LDAP uid/gid lookup must read the account's DN, not search for it.
+"""Every LDAP uid/gid lookup in this repository must read the account's DN,
+not search for it.
 
 The directory has no uid index, and a gateway calls ldap_lookup on its event
 loop, where a filtered search would stall the whole gateway.
+
+The Slurm gateway looks up accounts in its own image, whose sources are
+outside this repository (`docker/REGISTRY.md`), so nothing here covers it.
 """
 
 from pathlib import Path
