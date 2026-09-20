@@ -56,10 +56,6 @@
     pixi: '0.62.2',
   },
 
-  ignorePaths: [
-    'docker/dask-gateway-server/**', // vendored fork — tracked upstream, do not churn
-  ],
-
   // Flux manager is opt-in by path: parse everything Flux reconciles.
   flux: {
     managerFilePatterns: ['/(^|/)apps/.*\\.ya?ml$/', '/(^|/)deploy/.*\\.ya?ml$/'],

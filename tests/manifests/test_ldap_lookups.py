@@ -15,15 +15,6 @@ BASE_DN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
 GATEWAY_VALUES = {
     "k8s": REPO / "apps" / "dask-gateway" / "dask-gateway-k8s" / "values.yaml",
 }
-SLURM_BACKEND = (
-    REPO
-    / "docker"
-    / "dask-gateway-server"
-    / "dask_gateway_server"
-    / "backends"
-    / "jobqueue"
-    / "slurm.py"
-)
 
 
 def gateway_config(path: Path) -> str:
@@ -33,7 +24,7 @@ def gateway_config(path: Path) -> str:
 
 ALL_SOURCES = [
     pytest.param(gateway_config, path, id=name) for name, path in GATEWAY_VALUES.items()
-] + [pytest.param(Path.read_text, SLURM_BACKEND, id="slurm-backend")]
+]
 
 
 @pytest.mark.parametrize("read,path", ALL_SOURCES)

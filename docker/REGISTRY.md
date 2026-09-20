@@ -24,16 +24,15 @@ version is minted: [RELEASING.md](../RELEASING.md).
 
 ## Images built outside CI
 
-Two images are too large for GitHub-hosted runners, so `ci.yml` does not build
-them. They are pushed to the `cms/` project on geddes-registry, which the
-manifests pin directly rather than through `ghcr-proxy-cache`. The repository
-carries their sources and no build job: a new tag is built and pushed by hand,
-and a change to these directories reaches the cluster only once someone does.
+These images are pulled straight from the `cms/` project on geddes-registry
+rather than through `ghcr-proxy-cache`. `ci.yml` does not build them, and this
+repository holds neither their sources nor a build job for them: a new tag
+comes from outside it.
 
-| Source | Image in `cms/` | Pinned by |
-| --- | --- | --- |
-| `dask-gateway-server/Dockerfile.hammer` | `dask-gateway-server` | `apps/dask-gateway/dask-gateway-k8s-slurm` |
-| `servicex-science-coffea/Dockerfile` | `servicex-science-combined-root-coffea` | `apps/servicex/servicex`, `-test` |
+| Image in `cms/` | Pinned by |
+| --- | --- |
+| `dask-gateway-server` | `apps/dask-gateway/dask-gateway-k8s-slurm` |
+| `servicex-science-combined-root-coffea` | `apps/servicex/servicex`, `-test` |
 
 ## Registry configuration
 

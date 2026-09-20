@@ -29,10 +29,10 @@ only what those do not say.
 - The `[self-repair]` pull requests are the workflow's output for a person to
   judge. Never close, merge or comment on one; read them to improve the
   workflow.
-- Carried verbatim, never edited: `docker/dask-gateway-server/` (upstream fork),
-  and the Slurm RPMs and `slurm-configs-<cluster>/` trees copied from the
-  clusters ([slurm/README.md](slurm/README.md)). The `pixi.lock` files under
-  `pixi/` are CI-owned.
+- Carried verbatim, never edited: the Slurm RPMs and
+  `slurm-configs-<cluster>/` trees copied from the clusters
+  ([slurm/README.md](slurm/README.md)). The `pixi.lock` files under `pixi/`
+  are CI-owned.
 
 ## Commands
 
