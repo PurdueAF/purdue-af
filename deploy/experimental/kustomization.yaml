@@ -1,9 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../apps/dask-gateway/dask-gateway-k8s-interlink/helmrelease.yaml
-  - ../../apps/dask-gateway/dask-gateway-k8s-interlink/ingress.yaml
-
   - ../../apps/dask-gateway/helmrepo.yaml
   - ../../apps/dask-gateway/dask-gateway-k8s/helmrelease.yaml
   - ../../apps/dask-gateway/dask-gateway-k8s/ingress.yaml
@@ -67,8 +64,6 @@ resources:
 
   - ../../apps/interlink/helmrepo.yaml
   - ../../apps/interlink/hammer/helmrelease.yaml
-  - ../../apps/interlink/gautschi/helmrelease.yaml
-  - ../../apps/interlink/negishi/helmrelease.yaml
 
   - ../../apps/af-utils/pixi-global-sync/deployment.yaml
 
@@ -105,10 +100,6 @@ configMapGenerator:
   - name: dask-gateway-k8s-slurm-config
     files:
       - values.yaml=../../apps/dask-gateway/dask-gateway-k8s-slurm/values.yaml
-
-  - name: dask-gateway-k8s-interlink-config
-    files:
-      - values.yaml=../../apps/dask-gateway/dask-gateway-k8s-interlink/values.yaml
 
   - name: pyroscope-config
     files:
@@ -191,14 +182,6 @@ configMapGenerator:
   - name: interlink-hammer-config
     files:
       - values.yaml=../../apps/interlink/hammer/values.yaml
-
-  - name: interlink-gautschi-config
-    files:
-      - values.yaml=../../apps/interlink/gautschi/values.yaml
-
-  - name: interlink-negishi-config
-    files:
-      - values.yaml=../../apps/interlink/negishi/values.yaml
 
   - name: af-node-monitor-config
     files:

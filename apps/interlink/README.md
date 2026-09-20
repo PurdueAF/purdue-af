@@ -5,13 +5,11 @@ virtual node in the `cms` namespace. A pod scheduled onto such a node is
 translated into a Slurm job on the named cluster and run under Singularity;
 to Kubernetes it still looks like an ordinary pod.
 
-| Node                 | Cluster  | Slurm partition | Depot path                                | Munge key PVC        | `SLURM_CLUSTER` | Deployed |
-| -------------------- | -------- | --------------- | ----------------------------------------- | -------------------- | --------------- | -------- |
-| `interlink-hammer`   | Hammer   | `hammer-nodes`  | `/depot/cms/purdue-af/interlink`          | `munge-key-hammer`   | `hammer`        | yes      |
-| `interlink-gautschi` | Gautschi | `cpu`           | `/depot/cms/purdue-af/interlink/gautschi` | `munge-key-gautschi` | `gautschi`      | yes      |
-| `interlink-negishi`  | Negishi  | `cpu`           | `/depot/itap/interlink/negishi`           | `munge-key-negishi`  | `negishi`       | yes      |
+| Node               | Cluster | Slurm partition | Depot path                       | Munge key PVC      | `SLURM_CLUSTER` | Deployed |
+| ------------------ | ------- | --------------- | -------------------------------- | ------------------ | --------------- | -------- |
+| `interlink-hammer` | Hammer  | `hammer-nodes`  | `/depot/cms/purdue-af/interlink` | `munge-key-hammer` | `hammer`        | yes      |
 
-All three nodes run one plugin image, tagged with the upstream plugin ref
+Every node runs one plugin image, tagged with the upstream plugin ref
 (`PLUGIN_REF`); cluster identity comes from `SLURM_CLUSTER` plus the
 per-cluster munge PVC. The image and the per-cluster client versions:
 [`docker/interlink-slurm-plugin/README.md`](../../docker/interlink-slurm-plugin/README.md),
@@ -20,10 +18,6 @@ per-cluster munge PVC. The image and the per-cluster client versions:
 A node is deployed only once its munge key PVC exists — without the key the
 node pod never gets past Pending, so a new cluster stays commented out in
 `deploy/experimental/kustomization.yaml` until its PVC is populated.
-
-Negishi keeps its own Depot tree (`/depot/itap`) and its custom wstunnel
-template, which adds an ingress rule per exposed port; Hammer and Gautschi use
-the chart's built-in template.
 
 Each node is three containers in one Deployment (`<nodeName>-node`): the
 interLink API, the Slurm sidecar plugin that shells out to `sbatch`, and the
@@ -51,10 +45,9 @@ The munge key each plugin authenticates to Slurm with. Munge keys live in
 per-cluster RWX PVCs created and populated out of band — never as Secrets, and
 never in this repo.
 
-All three PVCs exist. `munge-key-hammer` is also mounted by the AF sessions
-(`apps/jupyterhub/jupyterhub/values.yaml`) and the dask-gateway Slurm gateway;
-`munge-key-gautschi` and `munge-key-negishi` only by their interLink node. To
-add a further cluster: create its PVC, copy that cluster's key in, then
+`munge-key-hammer` is also mounted by the AF sessions
+(`apps/jupyterhub/jupyterhub/values.yaml`) and the dask-gateway Slurm gateway.
+To add a further cluster: create its PVC, copy that cluster's key in, then
 uncomment its entry in the kustomization.
 
 ## Verifying a node
