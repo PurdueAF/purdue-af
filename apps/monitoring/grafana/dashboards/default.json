@@ -450,7 +450,7 @@
         },
         {
           "refId": "N",
-          "expr": "1 - 0.5 * ((sum(increase(csi_operations_seconds_count{driver_name=~\"rook-ceph.*\",method_name=~\".*Node(Stage|Publish)Volume\",grpc_status_code=~\"DeadlineExceeded|Unavailable|Internal|ResourceExhausted\"}[30m]) and on(node) group by (node)(kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) or vector(0)) > bool 0)",
+          "expr": "1 - (sum(increase(csi_operations_seconds_count{driver_name=~\"rook-ceph.*\",method_name=~\".*Node(Stage|Publish)Volume\",grpc_status_code=~\"DeadlineExceeded|Unavailable|Internal|ResourceExhausted\"}[30m]) and on(node) group by (node)(kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) or vector(0)) / clamp_min((sum(increase(csi_operations_seconds_count{driver_name=~\"rook-ceph.*\",method_name=~\".*Node(Stage|Publish)Volume\",grpc_status_code=~\"OK|DeadlineExceeded|Unavailable|Internal|ResourceExhausted\"}[30m]) and on(node) group by (node)(kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) or vector(0)), 1)",
           "legendFormat": "Geddes storage",
           "datasource": {
             "type": "prometheus",
@@ -471,7 +471,7 @@
           "instant": false
         }
       ],
-      "description": "Green: OK. Orange: partial, some prod nodes affected. Red: down. Evaluated on cms-af-prod nodes only; each row shows history over the selected time range. AF nodes and the four mounts are fractions of prod nodes passing. Session responsiveness is the fraction of running sessions that answered a bounded listing of their home directory in time, measured from inside each pod; it is blank for sessions started before that probe shipped. Geddes storage turns orange when a session volume failed to mount on an AF node in the last 30 minutes, which is how a Ceph problem reaches a user who is trying to start work.",
+      "description": "Green: OK. Orange: partial, some prod nodes affected. Red: down. Evaluated on cms-af-prod nodes only; each row shows history over the selected time range. AF nodes and the four mounts are fractions of prod nodes passing. Session responsiveness is the fraction of running sessions that answered a bounded listing of their home directory in time, measured from inside each pod; it is blank for sessions started before that probe shipped. Geddes storage is the fraction of CephFS mount attempts on prod nodes that succeeded in the last 30 minutes, which is how a Ceph problem reaches a user who is trying to start work: green while every attempt succeeds, red while every attempt fails and nobody can start a session.",
       "fieldConfig": {
         "defaults": {
           "color": {
