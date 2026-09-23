@@ -27,6 +27,8 @@ A log line is FIXABLE HERE only when all of these hold:
   user session (pod purdue-af-<id>) or a user Dask pod, this repository owns
   the image (docker/purdue-af), its start hooks and scripts, the pixi
   environments and the Dask Gateway worker configuration, and nothing else.
+  A package missing from an environment the user chose for their own kernel
+  or Dask cluster is the user's.
 - it is not a Kubernetes reconciliation race: a router, endpoint or watcher
   complaining about an object that is being created or deleted at that moment
   (a Dask cluster's Service during teardown, a pod a tailer has just lost) is
@@ -54,6 +56,13 @@ on its way there, and that line, not the traceback, is normally the
 diagnosis. An error repeating on a fixed cadence is a condition that
 persists, which is a thing to fix, not a message that is too loud. An
 incident you cannot explain is not fixable here.
+
+A line printed next to the error is not its cause for being next to it.
+Name what connects the two; a component reporting that something optional
+did not load, and then carrying on, has not failed. An error that every pod
+of one workload logs within the same few seconds usually marks the workload
+being stopped or scaled down: find out how its processes are signalled
+before blaming the code they run.
 
 When in doubt it is NOT fixable here. A wrong "no" costs nothing; a wrong "yes"
 costs a reviewer's time.

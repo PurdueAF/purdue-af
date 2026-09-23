@@ -18,13 +18,13 @@ which also covers running a tick by hand; the task image is
 
 ## Tasks
 
-| Task      | Runs                                                                                                | Cached                                                      |
-| --------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `triage`  | One per tick: `watch`, then `analyze` per incident, then `fix`, each started as a run of its own    | no                                                          |
-| `watch`   | Two Loki queries, infrastructure then user workloads, for error lines from the watched workloads    | no                                                          |
-| `dedupe`  | One model call: the incidents grouped by root cause; a failed call leaves every incident alone      | no                                                          |
-| `analyze` | opencode, read-only, in a fresh checkout of `main`: is this fixable by a change in this repository? | yes, on the incident key (a recurring error is judged once) |
-| `fix`     | opencode with edit rights on a branch `self-repair-<fingerprint>`; commit, push, draft PR           | no (an open PR for the branch is returned as is)            |
+| Task      | Runs                                                                                                | Cached                                                                              |
+| --------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `triage`  | One per tick: `watch`, then `analyze` per incident, then `fix`, each started as a run of its own    | no                                                                                  |
+| `watch`   | Two Loki queries, infrastructure then user workloads, for error lines from the watched workloads    | no                                                                                  |
+| `dedupe`  | One model call: the incidents grouped by root cause; a failed call leaves every incident alone      | no                                                                                  |
+| `analyze` | opencode, read-only, in a fresh checkout of `main`: is this fixable by a change in this repository? | yes, on the incident key and the analysis prompt (a recurring error is judged once) |
+| `fix`     | opencode with edit rights on a branch `self-repair-<fingerprint>`; commit, push, draft PR           | yes, on the incident key and its verdict (one attempt; a failed run is retried)     |
 
 `triage` starts the others with `flyte.run` under names of their own
 (`run_name` in `self_repair.py`), so runs and pods say what they are and a

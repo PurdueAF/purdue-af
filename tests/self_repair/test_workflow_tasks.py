@@ -3,9 +3,9 @@
 cluster, git, GitHub and GenAI call is replaced per test."""
 
 import asyncio
-import fnmatch
 import io
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -144,17 +144,25 @@ class TestGuards:
             "docker/self-repair/uv.lock",
         ]
 
+    @staticmethod
+    def opencode_permission(path, rules):
+        """opencode's Wildcard.all: `*` is `.*`, anchored; the longest
+        matching pattern wins. The path is relative to the checkout."""
+        verdict = None
+        for pattern, value in sorted(rules.items(), key=lambda kv: (len(kv[0]), kv[0])):
+            regex = re.escape(pattern).replace(r"\*", ".*").replace(r"\?", ".")
+            if re.fullmatch(regex, path, re.S):
+                verdict = value
+        return verdict
+
     def test_opencode_denies_every_protected_path(self):
         samples = [f"{path}some-file" for path in sr.PROTECTED_PATHS]
-        samples.append("pixi/base/pixi.lock")
+        samples += ["pixi/global/pixi.toml", "pixi/base/pixi.lock"]
         assert sr._protected(samples) == samples
         for sample in samples:
-            assert any(
-                fnmatch.fnmatch(sample, pattern.lstrip("*"))
-                or fnmatch.fnmatch("/" + sample, pattern)
-                for pattern, verdict in sr.EDIT["edit"].items()
-                if verdict == "deny"
-            ), sample
+            assert self.opencode_permission(sample, sr.EDIT["edit"]) == "deny", sample
+        for allowed in ("apps/x/values.yaml", "docker/purdue-af/pixi-hooks.sh"):
+            assert self.opencode_permission(allowed, sr.EDIT["edit"]) == "allow"
 
     def test_pyflakes_gate_catches_an_undefined_name(self, tmp_path):
         (tmp_path / "ok.py").write_text("import os\nprint(os.name)\n")
@@ -252,6 +260,54 @@ class TestWatch:
         assert "hub" in infrastructure
         assert user == sr.USER_WORKLOADS
         assert [i.key.workload for i in incidents] == ["hub", "purdue-af"]
+
+    LINE = {
+        "pod": "hub-1-abcde",
+        "container": "c",
+        "ts": "2026-09-16T10:00:00+00:00",
+        "line": "Error boom",
+    }
+
+    def test_a_dropped_connection_is_retried(self, monkeypatch, no_sleep):
+        calls = []
+
+        def query_loki(base, namespace, start, end, prefixes):
+            calls.append(prefixes)
+            if len(calls) == 1:
+                raise ConnectionResetError("Remote end closed connection")
+            return [self.LINE] if prefixes != sr.USER_WORKLOADS else []
+
+        monkeypatch.setattr(sr, "query_loki", query_loki)
+        start = datetime(2026, 9, 16, 9, tzinfo=timezone.utc)
+        incidents = sr.watch(start, datetime(2026, 9, 16, 10, tzinfo=timezone.utc))
+
+        assert len(calls) == 3 and no_sleep == [sr.LOKI_RETRY_PAUSE_S]
+        assert [i.key.workload for i in incidents] == ["hub"]
+
+    def test_a_failing_user_query_leaves_the_infrastructure(
+        self, monkeypatch, no_sleep, capsys
+    ):
+        def query_loki(base, namespace, start, end, prefixes):
+            if prefixes == sr.USER_WORKLOADS:
+                raise ConnectionResetError("Remote end closed connection")
+            return [self.LINE]
+
+        monkeypatch.setattr(sr, "query_loki", query_loki)
+        start = datetime(2026, 9, 16, 9, tzinfo=timezone.utc)
+        incidents = sr.watch(start, datetime(2026, 9, 16, 10, tzinfo=timezone.utc))
+
+        assert [i.key.workload for i in incidents] == ["hub"]
+        assert len(no_sleep) == sr.LOKI_ATTEMPTS - 1
+        assert "infrastructure only this tick" in capsys.readouterr().out
+
+    def test_a_failing_infrastructure_query_fails_the_task(self, monkeypatch, no_sleep):
+        def query_loki(base, namespace, start, end, prefixes):
+            raise ConnectionResetError("Remote end closed connection")
+
+        monkeypatch.setattr(sr, "query_loki", query_loki)
+        start = datetime(2026, 9, 16, 9, tzinfo=timezone.utc)
+        with pytest.raises(ConnectionResetError):
+            sr.watch(start, datetime(2026, 9, 16, 10, tzinfo=timezone.utc))
 
 
 class TestGenAI:
@@ -486,6 +542,13 @@ class TestAnalyze:
         cache = sr.analyze.task_options["cache"]
         assert set(cache["ignored_inputs"]) == {"evidence", "model"}
 
+    def test_a_changed_prompt_is_a_new_cache(self):
+        salt = sr.analyze.task_options["cache"]["salt"]
+        assert (
+            salt
+            == sr.hashlib.sha256(sr.prompts.ANALYZE.template.encode()).hexdigest()[:12]
+        )
+
 
 class TestFix:
     VERDICT = sr.Verdict(True, 0.9, "apps/x", "Fix x", "Because.", "Edit x.")
@@ -574,6 +637,26 @@ class TestFix:
         # anything uv wrote in there would be swept up by `git add -A`
         repo_path, venv = env.tested
         assert not venv.is_relative_to(repo_path)
+
+    def test_one_attempt_per_verdict_is_cached(self):
+        cache = sr.fix.task_options["cache"]
+        assert set(cache["ignored_inputs"]) == {"evidence", "model"}
+
+    def test_an_agent_out_of_time_is_an_outcome_not_a_failure(self, env, monkeypatch):
+        def run_agent(cwd, prompt, permission, label, model):
+            raise sr.AgentTimeout("opencode gave no final answer within 1800s")
+
+        monkeypatch.setattr(sr, "_run_agent", run_agent)
+        assert self.fix() == ""
+        assert env.created == [] and "push" not in [a[0] for a in env.git]
+
+    def test_other_agent_failures_fail_the_run(self, env, monkeypatch):
+        def run_agent(cwd, prompt, permission, label, model):
+            raise sr.ProviderError("rate limit")
+
+        monkeypatch.setattr(sr, "_run_agent", run_agent)
+        with pytest.raises(sr.ProviderError):
+            self.fix()
 
     def test_the_run_name_is_optional(self, env, monkeypatch):
         monkeypatch.setattr(sr.flyte, "ctx", lambda: None)
@@ -772,7 +855,7 @@ class TestAgentSession:
     def test_no_final_answer_in_time_is_killed(self, monkeypatch, tmp_path):
         monkeypatch.setattr(sr, "AGENT_TIMEOUT_S", 0.05)
         proc = FakeProc([event("text", text="thinking")], hang=True)
-        with pytest.raises(RuntimeError, match="no final answer within"):
+        with pytest.raises(sr.AgentTimeout, match="no final answer within"):
             self.session(monkeypatch, proc, tmp_path)
 
     def test_a_watched_provider_error_ends_the_session(self, monkeypatch, tmp_path):
@@ -1069,7 +1152,12 @@ class TestTick:
                     raise outcome
                 return outcome
             if task is sr.fix:
-                return pr_urls.pop(0), "CACHE_DISABLED"
+                outcome = pr_urls.pop(0)
+                if isinstance(outcome, BaseException):
+                    raise outcome
+                return (
+                    outcome if isinstance(outcome, tuple) else (outcome, "CACHE_MISS")
+                )
             raise AssertionError(task)
 
         monkeypatch.setattr(sr, "_spawn", spawn)
@@ -1134,6 +1222,52 @@ class TestTick:
         assert "3 of 4 analyzed incidents fixable" in final
         assert "(2 incidents)" in final and 'href="https://gh/pull/1"' in final
         assert "opencode gave no final answer" in final
+
+    def test_a_failed_fix_run_does_not_end_the_tick(self, monkeypatch, reports):
+        incidents = [incident("aaaa01"), incident("bbbb01")]
+        groups = [sr.Group("a", ["aaaa01"]), sr.Group("b", ["bbbb01"])]
+        fixable = sr.Verdict(True, 0.9, "apps/x", "Fix", "r")
+        verdicts = {
+            "aaaa01": (fixable, "CACHE_HIT"),
+            "bbbb01": (fixable, "CACHE_HIT"),
+        }
+        self.spawner(
+            monkeypatch,
+            incidents,
+            groups,
+            verdicts,
+            [
+                RuntimeError("self-repair-fix-tick1-aaaa ended in FAILED"),
+                "https://gh/pull/2",
+            ],
+        )
+
+        summary, metrics = self.tick()
+
+        assert summary.pull_requests == ["https://gh/pull/2"]
+        assert metrics.fix_failures == 1 and metrics.pull_requests == 1
+
+    def test_an_earlier_fix_attempt_is_not_counted_again(self, monkeypatch, reports):
+        incidents = [incident("aaaa01"), incident("bbbb01")]
+        groups = [sr.Group("a", ["aaaa01"]), sr.Group("b", ["bbbb01"])]
+        fixable = sr.Verdict(True, 0.9, "apps/x", "Fix", "r")
+        verdicts = {
+            "aaaa01": (fixable, "CACHE_HIT"),
+            "bbbb01": (fixable, "CACHE_HIT"),
+        }
+        self.spawner(
+            monkeypatch,
+            incidents,
+            groups,
+            verdicts,
+            [("", "CACHE_HIT"), ("https://gh/pull/1", "CACHE_HIT")],
+        )
+
+        summary, metrics = self.tick()
+
+        assert summary.pull_requests == []
+        assert metrics.pull_requests == 0 and metrics.fix_failures == 0
+        assert 'href="https://gh/pull/1"' in reports[-1]
 
     def test_incidents_over_the_analysis_budget_are_not_analyzed(
         self, monkeypatch, reports
