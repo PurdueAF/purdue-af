@@ -70,7 +70,7 @@ to produce one yourself.
 If you do need a custom gridpack (e.g. for a new physics process), follow the
 official instructions in the
 [CMS genproductions repository](https://github.com/cms-sw/genproductions) and the
-[MadGraph quick guide](https://twiki.cern.ch/twiki/bin/cmsplugin/view/CMS/QuickGuideMadGraph5aMCatNLO),
+[MadGraph quick guide](https://twiki.cern.ch/twiki/bin/view/CMS/QuickGuideMadGraph5aMCatNLO),
 then point the generator fragment to your gridpack location.
 
 ## Step 1: LHE → GEN-SIM

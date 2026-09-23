@@ -49,7 +49,7 @@ workload manager that enables batch submission on Purdue computing clusters.
 At Purdue AF, **users with local Purdue accounts** can submit jobs from the AF
 terminal to the Hammer cluster, using the `cms` Slurm account. Users can also submit Slurm jobs at other Community Clusters after logging into them via `ssh`.
 
-* [Instructions for submitting Slurm jobs](https://www.rcac.purdue.edu/knowledge/hammer/run)
+* [Instructions for submitting Slurm jobs](https://docs.rcac.purdue.edu/userguides/hammer/run_jobs/)
 * Code and data used by Slurm jobs must be stored on a volume that Slurm jobs
   can see — see [Storage volumes](storage.md).
 * To request a GPU for a Slurm job, see [GPU access](gpus.md#2-slurm-jobs-purdue-users-only).
