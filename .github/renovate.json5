@@ -49,6 +49,13 @@
   prConcurrentLimit: 2,
   branchConcurrentLimit: 2,
 
+  // Renovate merges once every check on the branch is green; main has no
+  // branch protection, so GitHub's native auto-merge cannot wait for CI.
+  platformAutomerge: false,
+  // ci-pixi-*.yml pushes the regenerated pixi.lock as this bot; without this
+  // Renovate treats the branch as hand-edited and never merges it.
+  gitIgnoredAuthors: ['41898282+github-actions[bot]@users.noreply.github.com'],
+
   // Pixi CLI is frozen (lock format v6; newer pixi writes v7). The pin is
   // ARG PIXI_VERSION in docker/purdue-af/Dockerfile; this copy is asserted
   // equal by tests/manifests/test_pixi_cli_version.py.
@@ -152,13 +159,16 @@
       enabled: false,
     },
     {
+      matchUpdateTypes: ['minor', 'patch', 'digest', 'pin', 'pinDigest'],
+      automerge: true,
+    },
+    {
       // Group all GitHub Actions bumps into one PR.
       matchManagers: ['github-actions'],
       groupName: 'github-actions',
     },
     {
-      // Helm chart bumps stay individual PRs (each needs real review),
-      // but label them for triage.
+      // Helm chart bumps stay individual PRs, labelled for triage.
       matchManagers: ['flux'],
       addLabels: ['helm'],
     },
