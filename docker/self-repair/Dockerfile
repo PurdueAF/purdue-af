@@ -3,7 +3,7 @@
 # not baked in — Flyte ships it as a code bundle from the launcher.
 FROM python:3.12-slim
 
-COPY --from=ghcr.io/astral-sh/uv:0.12.17 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.18 /uv /uvx /bin/
 
 # opencode is an npm package around a platform binary; node comes from the
 # official image of the same Debian release rather than apt, which lags.
