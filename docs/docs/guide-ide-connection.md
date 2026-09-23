@@ -41,7 +41,7 @@ as long as you have an AF session running.
     On Windows:
 
     * Download the pre-built binary from
-      <https://github.com/vi/websocat/releases/latest/download/websocat.x86_64-pc-windows-msvc.exe>
+      <https://github.com/vi/websocat/releases/latest/download/websocat.x86_64-pc-windows-gnu.exe>
     * Move the binary to any directory you can access from the command line:
       `C:\path\to\websocat.exe`
 
