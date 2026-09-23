@@ -104,6 +104,8 @@ gateway:
             persistentVolumeClaim:
               claimName: af-shared-storage
       extraContainerConfig:
+        # The image's `tini -g` sends SIGTERM to the worker process as well as the nanny, so a stopped cluster logs "Worker process died unexpectedly" per worker.
+        command: ["tini", "--"]
         env:
           - name: DASK_LOGGING__DISTRIBUTED
             value: warning
