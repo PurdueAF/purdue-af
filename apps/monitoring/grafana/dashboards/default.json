@@ -609,8 +609,8 @@
         },
         {
           "refId": "D",
-          "expr": "sum(increase(af_session_probe_failures_total[$__range])) or vector(0)",
-          "legendFormat": "unresponsive",
+          "expr": "count((time() - kube_pod_deletion_timestamp{namespace=\"cms\",pod=~\"purdue-af-.*\"}) > 300) or vector(0)",
+          "legendFormat": "stuck terminating",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -619,7 +619,7 @@
           "instant": true
         }
       ],
-      "description": "Interactive JupyterLab sessions. Running: right now. Pending: waiting for a node right now, non-zero for long means no node has the requested CPU, RAM or GPU. Failed starts: sessions the hub could not start within the selected time range. Unresponsive: times a running session failed to answer in time, over the same range.",
+      "description": "Interactive JupyterLab sessions. Running: right now. Pending: waiting for a node right now, non-zero for long means no node has the requested CPU, RAM or GPU. Failed starts: sessions the hub could not start within the selected time range. Stuck terminating: sessions deleted more than 5 minutes ago whose pod still exists, right now.",
       "fieldConfig": {
         "defaults": {
           "mappings": [],
@@ -693,7 +693,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "unresponsive"
+              "options": "stuck terminating"
             },
             "properties": [
               {
