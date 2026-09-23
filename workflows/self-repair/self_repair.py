@@ -5,6 +5,7 @@ draft pull request when the fix belongs in this repository.
 after the task, so pods read `self-repair-<task>-<tick>[-<fp>]-a0-0`
 and each run shows up by name in the console."""
 
+import hashlib
 import json
 import os
 import random
@@ -135,18 +136,21 @@ UNIT_TEST_ARGS = (
 BUILD_TIMEOUT_S = 600
 UNIT_TEST_TIMEOUT_S = 600
 LOG_INCIDENTS = 20
+LOKI_ATTEMPTS = 3
+LOKI_RETRY_PAUSE_S = 20
 
 # external_directory: the agent may look at the parent of its checkout; in a
 # non-interactive run a permission prompt is auto-rejected and ends the session.
 READ_ONLY = {"edit": "deny", "bash": "deny", "external_directory": "allow"}
 # Not fixable here by definition; the agent may not edit them and a change
-# touching them never becomes a PR. Patterns are opencode permission globs.
+# touching them never becomes a PR. opencode matches edit patterns against the
+# path relative to the checkout, `*` spanning directories.
 PROTECTED_PATHS = ("slurm/", "pixi/", "deploy/")
 EDIT = {
     "edit": {
-        "*/slurm/*": "deny",
-        "*/pixi/*": "deny",
-        "*/deploy/*": "deny",
+        "slurm/*": "deny",
+        "pixi/*": "deny",
+        "deploy/*": "deny",
         "*.lock": "deny",
         "*": "allow",
     },
@@ -380,13 +384,17 @@ def _agent_session(
     if reply.error and is_rate_limit(reply.error):
         raise ProviderError(f"rate limit after {elapsed:.0f}s: {reply.error[:200]}")
     if timed_out.is_set():
-        raise RuntimeError(
+        raise AgentTimeout(
             f"opencode gave no final answer within {AGENT_TIMEOUT_S}s (killed)"
         )
     raise RuntimeError(f"opencode failed after {elapsed:.0f}s: {reply.error}")
 
 
 class ProviderError(RuntimeError):
+    pass
+
+
+class AgentTimeout(RuntimeError):
     pass
 
 
@@ -462,6 +470,22 @@ def _describe(key: IncidentKey, evidence: Evidence) -> str:
     )
 
 
+def _read_loki(
+    start: datetime, end: datetime, prefixes: tuple[str, ...]
+) -> list[dict[str, str]]:
+    for attempt in range(1, LOKI_ATTEMPTS + 1):
+        try:
+            return query_loki(LOKI_URL, NAMESPACE, start, end, prefixes=prefixes)
+        except OSError as exc:
+            if attempt == LOKI_ATTEMPTS:
+                raise
+            _log(
+                f"Loki query failed ({exc}); attempt {attempt + 1} in {LOKI_RETRY_PAUSE_S}s"
+            )
+            time.sleep(LOKI_RETRY_PAUSE_S)
+    raise AssertionError("unreachable")
+
+
 @env.task(retries=2, timeout=timedelta(minutes=5))
 def watch(start: datetime, end: datetime) -> list[Incident]:
     _log(
@@ -469,8 +493,14 @@ def watch(start: datetime, end: datetime) -> list[Incident]:
         f"from {len(ALL_WORKLOADS)} watched workloads (triage.WATCHED_WORKLOADS + USER_WORKLOADS - IGNORED_WORKLOADS)"
     )
     infrastructure = tuple(p for p in WATCHED_WORKLOADS if p not in IGNORED_WORKLOADS)
-    lines = query_loki(LOKI_URL, NAMESPACE, start, end, prefixes=infrastructure)
-    user_lines = query_loki(LOKI_URL, NAMESPACE, start, end, prefixes=USER_WORKLOADS)
+    lines = _read_loki(start, end, infrastructure)
+    try:
+        user_lines = _read_loki(start, end, USER_WORKLOADS)
+    except OSError as exc:
+        _log(
+            f"user-workload query failed {LOKI_ATTEMPTS} times ({exc}); infrastructure only this tick"
+        )
+        user_lines = []
     _log(
         f"{len(lines)} infrastructure lines, {len(user_lines)} user-workload lines "
         "(each query capped at 5000)"
@@ -628,11 +658,16 @@ def dedupe(incidents: list[Incident], model: str) -> list[Group]:
 
 
 # Cached on the key alone: a recurring error is analyzed once, and a fixed one
-# is never re-opened. Bump the salt to re-analyze everything.
+# is never re-opened. The salt is the prompt: a changed prompt re-analyzes everything.
+ANALYZE_SALT = hashlib.sha256(prompts.ANALYZE.template.encode()).hexdigest()[:12]
+
+
 @env.task(
     # The model is ignored too: a verdict is a verdict, whichever model the
     # tick happened to run on.
-    cache=flyte.Cache(behavior="auto", ignored_inputs=("evidence", "model")),
+    cache=flyte.Cache(
+        behavior="auto", ignored_inputs=("evidence", "model"), salt=ANALYZE_SALT
+    ),
     timeout=timedelta(minutes=40),
 )
 def analyze(key: IncidentKey, evidence: Evidence, model: str) -> Verdict:
@@ -741,7 +776,12 @@ def _unit_tests(repo: Path, venv: Path) -> str:
     return (proc.stdout + proc.stderr).strip()
 
 
-@env.task(timeout=timedelta(minutes=60))
+# One attempt per verdict: an outcome, pull request or none, is cached; only
+# a failed run (clone, provider, GitHub) is tried again next tick.
+@env.task(
+    cache=flyte.Cache(behavior="auto", ignored_inputs=("evidence", "model")),
+    timeout=timedelta(minutes=60),
+)
 def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict, model: str) -> str:
     token = os.environ["GITHUB_TOKEN"]
     branch = BRANCH_PREFIX + key.fingerprint
@@ -764,7 +804,11 @@ def fix(key: IncidentKey, evidence: Evidence, verdict: Verdict, model: str) -> s
             minutes=AGENT_BUDGET_MINUTES,
             protected=", ".join(PROTECTED_PATHS),
         )
-        reply = _run_agent(repo, prompt, EDIT, key.fingerprint, model)
+        try:
+            reply = _run_agent(repo, prompt, EDIT, key.fingerprint, model)
+        except AgentTimeout as exc:
+            _log(f"{key.fingerprint}: {exc}; a fix that takes this long is not small")
+            return ""
         changed = _git("status", "--porcelain", cwd=repo).strip()
         if not changed:
             _log(f"{key.fingerprint}: the agent changed nothing")
@@ -1026,15 +1070,26 @@ async def _tick(
         if len(pull_requests) >= max_fixes:
             _log(f"{fingerprint}: fixable, but {max_fixes} fix(es) already this tick")
             continue
-        url, _ = await _spawn(
-            run_name("fix", tick, fingerprint),
-            fix,
-            incident.key,
-            incident.evidence,
-            verdict,
-            model,
-            output_type=str,
-        )
+        try:
+            url, cache = await _spawn(
+                run_name("fix", tick, fingerprint),
+                fix,
+                incident.key,
+                incident.evidence,
+                verdict,
+                model,
+                output_type=str,
+            )
+        except Exception as exc:
+            _log(f"{fingerprint}: fix failed, retried next tick: {exc}")
+            metrics.fix_failures += 1
+            continue
+        if cache == CACHE_HIT:
+            _log(
+                f"{fingerprint}: fix attempted before ({url or 'no pull request'}); not repeated"
+            )
+            rows[fingerprint].pull_request = url
+            continue
         if url:
             pull_requests.append(url)
             rows[fingerprint].pull_request = url
