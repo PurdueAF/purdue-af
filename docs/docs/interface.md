@@ -63,7 +63,7 @@ high energy physics for histogramming, fitting, and statistical analysis.
 We aim to support a wide range of modern HEP analysis tools. Below are a few
 examples of frameworks which have been shown to perform well at Purdue AF:
 
-* [Coffea](https://coffeateam.github.io/coffea/) is a popular Python package
+* [Coffea](https://coffea-hep.readthedocs.io/) is a popular Python package
   for efficient columnar particle physics analyses. Coffea implements all common
   tools used in modern HEP analyses, and has a large and active support community.
 
