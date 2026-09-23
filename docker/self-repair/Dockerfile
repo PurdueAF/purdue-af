@@ -17,7 +17,7 @@ RUN apt-get update \
     && ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
-ARG OPENCODE_VERSION="1.18.31"
+ARG OPENCODE_VERSION="1.18.32"
 # hadolint ignore=DL3016  # pinned via the ARG above
 RUN npm install -g --no-fund --no-audit "opencode-ai@${OPENCODE_VERSION}" \
     && opencode --version \

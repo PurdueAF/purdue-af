@@ -128,7 +128,7 @@ RUN chmod +x /usr/local/bin/pixi && \
 # Claude/Codex personas appear only when the *-acp adapters are on PATH.
 ARG CLAUDE_CODE_VERSION="2.1.278"
 ARG CODEX_VERSION="0.155.1"
-ARG OPENCODE_VERSION="1.18.31"
+ARG OPENCODE_VERSION="1.18.32"
 ARG CLAUDE_AGENT_ACP_VERSION="0.79.0"
 ARG CODEX_ACP_VERSION="0.16.0"
 ENV NPM_GLOBAL="/opt/npm-global"
