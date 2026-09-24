@@ -182,3 +182,10 @@ async def test_saved_options_are_not_mutated(monkeypatch):
     spawner = make_spawner(monkeypatch, saved)
     await spawner._run_apply_user_options(saved)
     assert saved == STALE_SAVED_OPTIONS[0]
+
+
+async def test_no_profile_list_leaves_options_alone(monkeypatch):
+    saved = {"profile": "anything", "cpu": "2"}
+    spawner = make_spawner(monkeypatch, saved, profile_list=[])
+    await spawner._run_apply_user_options(spawner.user_options)
+    assert spawner.user_options == saved
