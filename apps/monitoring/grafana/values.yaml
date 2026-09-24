@@ -171,8 +171,18 @@ dashboardsConfigMaps:
 
 # Shared datasources are in datasources.yaml; this distinct filename survives the values merge.
 datasources:
-  infinity-datasources.yaml:
+  public-datasources.yaml:
     apiVersion: 1
+    # Anonymous viewers can run any query against any datasource here; these are on grafana-private only.
+    deleteDatasources:
+      - name: loki
+        orgId: 1
+      - name: tempo
+        orgId: 1
+      - name: pyroscope
+        orgId: 1
+      - name: prometheus-hammer
+        orgId: 1
     datasources:
       - name: Infinity
         type: yesoreyeram-infinity-datasource
