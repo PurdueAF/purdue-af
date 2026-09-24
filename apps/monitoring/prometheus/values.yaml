@@ -163,9 +163,13 @@ serverFiles:
         static_configs:
           - targets:
               - "hammer-osg.rcac.purdue.edu:9100"
+      # Rancher's node-exporter on every node tainted hub.jupyter.org/dedicated=cms-af.
       - job_name: "node-exporter"
         static_configs:
           - targets:
+              - "a337.gautschi.rcac.purdue.edu:9796"
+              - "geddes-b004.rcac.purdue.edu:9796"
+              - "geddes-b011.rcac.purdue.edu:9796"
               - "geddes-b013.rcac.purdue.edu:9796"
               - "geddes-b014.rcac.purdue.edu:9796"
               - "geddes-b015.rcac.purdue.edu:9796"
@@ -176,20 +180,11 @@ serverFiles:
               - "paf-a01.cms.rcac.purdue.edu:9796"
               - "paf-a02.cms.rcac.purdue.edu:9796"
               - "paf-b00.cms.rcac.purdue.edu:9796"
-              - "cms-fe01.rcac.purdue.edu:9796"
-              - "cms-fe00.rcac.purdue.edu:9796"
-              - "vm-hammer-g000.rcac.purdue.edu:9796"
-              - "vm-hammer-g001.rcac.purdue.edu:9796"
-              - "vm-hammer-g002.rcac.purdue.edu:9796"
-              - "vm-hammer-g003.rcac.purdue.edu:9796"
-              - "vm-hammer-g004.rcac.purdue.edu:9796"
-              - "vm-hammer-g005.rcac.purdue.edu:9796"
-              - "vm-hammer-f000.rcac.purdue.edu:9796"
-              - "vm-hammer-f001.rcac.purdue.edu:9796"
-              - "vm-hammer-f002.rcac.purdue.edu:9796"
-              - "vm-hammer-f003.rcac.purdue.edu:9796"
-              - "vm-hammer-f004.rcac.purdue.edu:9796"
-              - "vm-hammer-f005.rcac.purdue.edu:9796"
+              - "paf-b01.cms.rcac.purdue.edu:9796"
+              - "paf-d00.cms.rcac.purdue.edu:9796"
+              - "paf-d01.cms.rcac.purdue.edu:9796"
+              - "paf-e00.cms.rcac.purdue.edu:9796"
+              - "paf-e01.cms.rcac.purdue.edu:9796"
       # Scraped directly: via af-pod-monitor, pod_node would carry the Deployment host.
       - job_name: "af-node-monitor"
         static_configs:
