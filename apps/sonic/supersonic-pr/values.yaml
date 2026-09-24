@@ -153,5 +153,9 @@ grafana:
           - supersonic-pr-grafana.geddes.rcac.purdue.edu
     ingressClassName: public
   grafana.ini:
+    # The chart default is Admin, and the ingress is public.
+    auth.anonymous:
+      enabled: true
+      org_role: Viewer
     server:
       root_url: https://supersonic-pr-grafana.geddes.rcac.purdue.edu
