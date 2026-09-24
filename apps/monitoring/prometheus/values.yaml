@@ -781,6 +781,20 @@ serverFiles:
               description: >
                 No log search for the facility, and the AFLokiStorage* alerts above
                 are blind while this fires. Check: kubectl -n cms get pod loki-0
+          - alert: AFPrometheusConfigReloadFailed
+            expr: prometheus_config_last_reload_successful{job="prometheus"} == 0
+            for: 10m
+            labels:
+              severity: warning
+              component: observability
+            annotations:
+              summary: Prometheus failed to load its latest configuration
+              description: >
+                This server still runs its previous scrape jobs and rules, not
+                the ones serverFiles declares; a broken rule file alone applies
+                the new scrape jobs and keeps the old rules. The pod cannot
+                start on this config, so fix it before the next restart.
+                Check: kubectl -n cms logs deploy/prometheus-server | grep "Error reloading config"
 alertmanager:
   enabled: true
   nodeSelector:
