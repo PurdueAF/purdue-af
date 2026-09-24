@@ -2,10 +2,7 @@
 datasources:
   datasources.yaml:
     apiVersion: 1
-    # Delete-then-re-add is how a uid changes: .claude/rules/dashboards.md.
     deleteDatasources:
-      - name: pyroscope
-        orgId: 1
       # thanos is not deployed; remove its provisioned row.
       - name: thanos
         orgId: 1
@@ -22,43 +19,3 @@ datasources:
         url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
         access: proxy
         isDefault: false
-      - name: prometheus-hammer
-        uid: prometheus-hammer
-        type: prometheus
-        url: http://grafana.cms.rcac.purdue.edu:9090
-        access: proxy
-        isDefault: false
-      - name: tempo
-        uid: tempo
-        type: tempo
-        url: http://tempo.cms.svc.cluster.local:3100
-        access: proxy
-        isDefault: false
-        basicAuth: false
-        jsonData:
-          httpMethod: GET
-          timeInterval: 5s
-          tlsSkipVerify: true
-          nodeGraph:
-            enabled: true
-          serviceMap:
-            datasourceUid: prometheus
-          tracesToMetrics:
-            datasourceUid: prometheus
-          tracesToLogs:
-            datasourceUid: loki
-      # uid pinned so dashboards reference it the same way on both instances.
-      - name: pyroscope
-        uid: pyroscope
-        type: grafana-pyroscope-datasource
-        url: http://pyroscope.cms.svc.cluster.local:4040
-        jsonData:
-          minStep: 15s
-      - name: loki
-        uid: loki
-        type: loki
-        url: http://loki.cms.svc.cluster.local:3100
-        access: proxy
-        isDefault: false
-        jsonData:
-          maxLines: 1000

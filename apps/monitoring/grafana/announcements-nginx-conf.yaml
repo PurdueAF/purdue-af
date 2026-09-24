@@ -7,9 +7,12 @@ data:
   default.conf: |
     server {
       listen 8080;
-      location / {
+      # Anonymous viewers can point the Infinity datasource at any path here.
+      location = /announcements.json {
         root /work/projects/purdue-af;
-        autoindex off;
         add_header Cache-Control "no-cache, no-store, must-revalidate";
+      }
+      location / {
+        return 404;
       }
     }
