@@ -13,6 +13,7 @@ _run_apply_user_options, in the order User.spawn uses before start().
 from types import SimpleNamespace
 from typing import Any
 
+import kubespawner.spawner
 import pytest
 import yaml
 from common import REPO
@@ -59,6 +60,9 @@ DEFAULT_IMAGE = DEFAULT_PROFILE["kubespawner_override"]["image"]
 
 
 def make_spawner(monkeypatch, user_options, profile_list=None, hook=True):
+    # the constructor loads a kube config and builds an API client; none is used
+    monkeypatch.setattr(kubespawner.spawner, "load_config", lambda **kwargs: None)
+    monkeypatch.setattr(kubespawner.spawner, "shared_client", lambda name: None)
     config = Config()
     config.KubeSpawner.profile_list = (
         PROFILE_LIST if profile_list is None else profile_list
