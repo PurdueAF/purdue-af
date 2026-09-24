@@ -163,18 +163,9 @@ loki:
 gateway:
   enabled: false
 
+# Every Loki route is unauthenticated (auth_enabled: false), so Loki has no ingress; clients use the Service.
 ingress:
-  enabled: ${enable_ingresses}
-  ingressClassName: public
-  annotations:
-    nginx.ingress.kubernetes.io/app-root: /ui
-  path: /
-  pathType: Prefix
-  hosts:
-    - loki-cms.geddes.rcac.purdue.edu
-  tls:
-    - hosts:
-        - loki-cms.geddes.rcac.purdue.edu
+  enabled: false
 
 # Turn off the ruler so those placeholder buckets are never used
 ruler:
