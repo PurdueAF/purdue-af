@@ -46,6 +46,8 @@ server:
     - query.timeout=2m
     - query.max-concurrency=20
     - storage.tsdb.wal-compression
+    # serverFiles changes do not roll the pod; the server polls its config files for them.
+    - config.auto-reload
   # Non-recursive: chmod -R walks every TSDB inode and can hang Init for minutes.
   extraInitContainers:
     - name: prometheus-data-permission-fix
