@@ -203,16 +203,6 @@ alloy:
     clustering:
       enabled: true
 
+# Every Pyroscope route is unauthenticated, so Pyroscope has no ingress; clients use the Service.
 ingress:
-  enabled: ${enable_ingresses}
-  className: public
-  pathType: ImplementationSpecific
-  # Additional labels to add to the ingress resource
-  labels: {}
-  # Additional annotations to add to the ingress resource
-  annotations: {}
-  hosts:
-    - pyroscope-cms.geddes.rcac.purdue.edu
-  tls:
-    - hosts:
-        - pyroscope-cms.geddes.rcac.purdue.edu
+  enabled: false
