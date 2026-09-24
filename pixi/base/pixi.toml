@@ -34,7 +34,7 @@ importlib-metadata    = "<8.8"   # opentelemetry-api requires <8.8.0
 # Other tools
 # xrootd puts xrdcp/xrdfs on the session PATH.
 xrootd        = "==5.9.2"  # matches the global env
-rucio-clients = "==41.2.2"
+rucio-clients = "==41.3.0"
 pytest        = "==9.1.1"
 lz4           = "==4.4.5"
 ipywidgets    = "==8.1.9"
