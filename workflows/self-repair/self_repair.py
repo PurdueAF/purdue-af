@@ -236,7 +236,8 @@ def _clone(dest: Path) -> None:
         cwd=dest,
     )
     _git("config", "user.name", "self-repair", cwd=dest)
-    _git("config", "user.email", "self-repair@users.noreply.github.com", cwd=dest)
+    # .invalid can never be verified, so GitHub links these commits to no account.
+    _git("config", "user.email", "self-repair@purdue-af.invalid", cwd=dest)
     head = _git("rev-parse", "--short", "HEAD", cwd=dest).strip()
     _log(f"cloned {REPO}@{head} ({BASE_BRANCH}) in {time.monotonic() - started:.0f}s")
 
