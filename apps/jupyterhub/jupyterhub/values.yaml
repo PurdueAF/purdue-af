@@ -401,6 +401,8 @@ hub:
       environment:
         KUBERNETES_SERVICE_HOST: kubernetes.default.svc
         KUBERNETES_SERVICE_PORT: "443"
+    # Token only: the chart keeps it in the `hub` Secret, which the AF Prometheus mounts.
+    prometheus: {}
   loadRoles:
     # read:servers!user lets a session see itself; delete:servers!server lets it shut itself down.
     server:
@@ -414,6 +416,10 @@ hub:
       description: "Stop idle sessions that hold a GPU"
       scopes: ["read:users:activity", "read:servers", "delete:servers"]
       services: ["gpu-culler"]
+    prometheus:
+      description: "Scrape /hub/metrics"
+      scopes: ["read:metrics"]
+      services: ["prometheus"]
 scheduling:
   userScheduler:
     enabled: false

@@ -174,4 +174,3 @@ def test_config_registers_hook_and_spawner_settings(monkeypatch, fake_ldap):
     c = ns["c"]
     assert c["KubeSpawner"]["auth_state_hook"] is ns["passthrough_auth_state_hook"]
     assert c["KubeSpawner"]["disable_user_config"] is True
-    assert c["JupyterHub"]["authenticate_prometheus"] is False

@@ -58,6 +58,20 @@ server:
         - name: storage-volume
           mountPath: /prometheus
 
+  # One key of the z2jh `hub` Secret; optional so this pod never waits on the hub.
+  extraVolumes:
+    - name: hub-metrics-token
+      secret:
+        secretName: hub
+        optional: true
+        items:
+          - key: hub.services.prometheus.apiToken
+            path: token
+  extraVolumeMounts:
+    - name: hub-metrics-token
+      mountPath: /etc/hub-metrics
+      readOnly: true
+
   ingress:
     enabled: false
     hosts: [prometheus-af.geddes.rcac.purdue.edu]
@@ -144,6 +158,9 @@ serverFiles:
               - "prometheus-prometheus-pushgateway:9091"
       - job_name: "jupyterhub"
         metrics_path: "/hub/metrics"
+        scheme: https
+        authorization:
+          credentials_file: /etc/hub-metrics/token
         static_configs:
           - targets:
               - "cms.geddes.rcac.purdue.edu"
