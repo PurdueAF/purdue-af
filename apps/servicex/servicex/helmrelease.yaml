@@ -23,6 +23,10 @@ spec:
     - kind: ConfigMap
       name: servicex-config
       valuesKey: values.yaml
+    - kind: Secret
+      name: servicex-rabbitmq-password
+      valuesKey: rabbitmq-password
+      targetPath: rabbitmq.auth.password
   postRenderers:
     - kustomize:
         patches:

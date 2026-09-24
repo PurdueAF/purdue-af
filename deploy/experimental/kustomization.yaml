@@ -13,6 +13,7 @@ resources:
   - ../../apps/monitoring/tempo/helmrelease.yaml
 
   - ../../apps/servicex/servicex/helmrelease.yaml
+  - ../../apps/servicex/servicex/secret-rabbitmq.yaml
   - ../../apps/servicex/gitrepo.yaml
   - ../../apps/servicex/helmrepo.yaml
   - ../../apps/servicex/secrets-objectStore.yaml

@@ -10,8 +10,10 @@
 #      Kubernetes schemas + the CRDs-catalog (Flux CRDs, monitoring CRDs, ...)
 #   4. `helm template` every HelmRelease found in the rendered stream, with
 #      the chart version, HelmRepository URL and valuesFrom-ConfigMap values
-#      resolved from that same stream — this is what catches breaking chart
-#      schema changes when a chart version is bumped (e.g. by Renovate).
+#      resolved from that same stream (a SOPS-encrypted valuesFrom Secret
+#      renders as a placeholder at its targetPath) — this is what catches
+#      breaking chart schema changes when a chart version is bumped (e.g. by
+#      Renovate).
 #      Charts that live in this repository (sourced from its GitRepository
 #      under a relative path — helm/ or apps/) are rendered from the working
 #      tree with the same values, so a broken template or a values/template
@@ -143,7 +145,7 @@ validate_helmreleases() {
 	# may be created by a sibling Flux Kustomization on the same cluster
 	local git_repos_file=$3 # "name|url|ref" lines, same reasoning
 	local name chart version src_name src_kind repo_line repo_url repo_type
-	local values_files values_args vhash cm key i local_chart out git_ref git_dir
+	local values_files values_file values_args vhash kind src key path i local_chart out git_ref git_dir
 	while IFS= read -r name; do
 		releases_seen=$((releases_seen + 1))
 		chart=$(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec.chart.spec.chart" "$rendered")
@@ -206,18 +208,27 @@ validate_helmreleases() {
 		# files) into temp files, in order.
 		values_files=()
 		i=0
-		while IFS='|' read -r cm key; do
-			[[ -z "$cm" ]] && continue
-			yq "select(.kind==\"ConfigMap\" and .metadata.name==\"$cm\") | .data[\"$key\"]" \
-				"$rendered" >"$workdir/${name}-values-${i}.yaml"
-			if [[ ! -s "$workdir/${name}-values-${i}.yaml" ]]; then
-				echo "✗ ${name}: valuesFrom ConfigMap '${cm}' (key ${key}) not found" >&2
+		while IFS='|' read -r kind src key path; do
+			[[ -z "$src" ]] && continue
+			values_file="$workdir/${name}-values-${i}.yaml"
+			: >"$values_file"
+			if [[ "$kind" == "Secret" && -n "$path" ]]; then
+				if yq "select(.kind==\"Secret\" and .metadata.name==\"$src\") | (.data // .stringData) | has(\"$key\")" \
+					"$rendered" | grep -qx true; then
+					yq -n ".${path} = \"placeholder\"" >"$values_file"
+				fi
+			else
+				yq "select(.kind==\"ConfigMap\" and .metadata.name==\"$src\") | .data[\"$key\"]" \
+					"$rendered" >"$values_file"
+			fi
+			if [[ ! -s "$values_file" ]]; then
+				echo "✗ ${name}: valuesFrom ${kind} '${src}' (key ${key}) not found" >&2
 				failed=1
 				continue 2
 			fi
-			values_files+=("$workdir/${name}-values-${i}.yaml")
+			values_files+=("$values_file")
 			i=$((i + 1))
-		done < <(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec.valuesFrom[]? | .name + \"|\" + (.valuesKey // \"values.yaml\")" "$rendered")
+		done < <(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec.valuesFrom[]? | (.kind // \"ConfigMap\") + \"|\" + .name + \"|\" + (.valuesKey // \"values.yaml\") + \"|\" + (.targetPath // \"\")" "$rendered")
 
 		# Inline .spec.values, if any.
 		if [[ $(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec | has(\"values\")" "$rendered") == "true" ]]; then
