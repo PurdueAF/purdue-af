@@ -67,6 +67,23 @@ jobs:
           use_oidc: true
           fail_ci_if_error: false
 
+  check-history:
+    # 4bb52757 is #333's squash as it was before main's history was rewritten.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Branch is built on the current main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          rel=$(gh api "repos/${GITHUB_REPOSITORY}/compare/4bb5275770f2101dd748e51b2790d6d3c474d7fa...${HEAD_SHA}" \
+            --jq .status 2>/dev/null) || rel=unrelated
+          if [ "$rel" = ahead ] || [ "$rel" = identical ]; then
+            echo "::error::This branch is built on the pre-rewrite main. Fix: git fetch origin && git rebase origin/main && git push --force-with-lease"
+            exit 1
+          fi
+
   check-manifests:
     # Builds every Flux-consumed kustomize root, applies each environment's
     # postBuild substitutions, and validates the rendered manifests with
