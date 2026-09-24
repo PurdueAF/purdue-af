@@ -24,6 +24,7 @@ dependencies = [
     "matplotlib>=3.9", # plot-af-users cron
     "pandas>=2.2",
     "ruff>=0.16", # self-repair's pyflakes gate runs `python -m ruff`
+    "jupyterhub-kubespawner>=7.1",
 ]
 
 [tool.uv]

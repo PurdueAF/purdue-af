@@ -1,6 +1,7 @@
 import os
 from typing import Any
 
+from jupyterhub.utils import maybe_future
 from oauthenticator.cilogon import CILogonOAuthenticator
 from tornado import web
 
@@ -57,8 +58,55 @@ def passthrough_post_auth_hook(
     return authentication
 
 
+async def drop_stale_user_options(spawner: Any, user_options: dict[str, Any]) -> None:
+    """Map a profile slug or choice missing from profile_list onto its default.
+
+    A spawn request without a body reuses the user's saved user_options, which
+    can name a profile or choice that no longer exists.
+    """
+    profile_list = spawner.profile_list
+    if callable(profile_list):
+        profile_list = await maybe_future(profile_list(spawner))
+    profiles = spawner._get_initialized_profile_list(profile_list)
+    if not profiles:
+        return
+
+    options = dict(user_options)
+    slug = options.get("profile")
+    default = next(p for p in profiles if p.get("default"))
+    profile = (
+        next((p for p in profiles if p["slug"] == slug), None) if slug else default
+    )
+    if profile is None:
+        spawner.log.warning(
+            "Spawning %s on profile %s: profile %s no longer exists",
+            spawner._log_name,
+            default["slug"],
+            slug,
+        )
+        profile = default
+        options["profile"] = default["slug"]
+
+    for name, option in profile.get("profile_options", {}).items():
+        if not options.get(name):
+            continue
+        choices = {str(key): key for key in option.get("choices", {})}
+        if str(options[name]) in choices:
+            options[name] = choices[str(options[name])]
+        else:
+            spawner.log.warning(
+                "Spawning %s with the default %s: choice %s no longer exists",
+                spawner._log_name,
+                name,
+                options.pop(name),
+            )
+
+    spawner.user_options = options
+
+
 c.JupyterHub.authenticator_class = PurdueCILogonOAuthenticator
 c.PurdueCILogonOAuthenticator.post_auth_hook = passthrough_post_auth_hook
+c.KubeSpawner.apply_user_options = drop_stale_user_options
 
 if os.environ["POD_NAMESPACE"] == "cms":
     c.KubeSpawner.environment.setdefault(

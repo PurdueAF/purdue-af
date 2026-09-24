@@ -178,6 +178,34 @@ def test_profile_selection_lands_in_pod(admin):
     assert env.get("E2E_PROFILE_MARKER") == "alt"
 
 
+def test_bodiless_spawn_with_stale_saved_profile_starts(admin):
+    """A spawn request without a body reuses the saved user_options; a saved
+    profile slug that no longer exists must spawn the default profile."""
+    require_production()
+    stale = {
+        "profile": "purdue-af-0-12-3-pixi-based-environment-management",
+        "cpu": "2",
+    }
+    for body in ({"json": stale}, {}):
+        admin.delete("/hub/api/users/alice/server")
+        wait_cleared(admin, "alice")
+        spawn = admin.post("/hub/api/users/alice/server", **body)
+        assert spawn.status_code in (201, 202), spawn.text
+        wait_ready(admin, "alice", timeout=600)
+
+        # the bodiless spawn carries the saved options, remapped by the hook
+        server = admin.get("/hub/api/users/alice").json()["servers"][""]
+        assert server["user_options"] == {**stale, "profile": "production"}
+        pod = next(
+            p
+            for p in singleuser_pods()
+            if p["metadata"]["labels"].get("username_unescaped") == "alice"
+            and not p["metadata"].get("deletionTimestamp")
+        )
+        env = {e["name"]: e.get("value") for e in pod["spec"]["containers"][0]["env"]}
+        assert env.get("E2E_PROFILE_MARKER") == "production"
+
+
 def test_stop_server_cleans_up(admin):
     """Stopping must remove the pod and clear hub state (carol's untouched)."""
     require_production()
