@@ -49,9 +49,9 @@
   prConcurrentLimit: 2,
   branchConcurrentLimit: 2,
 
-  // Renovate merges once every check on the branch is green; main has no
-  // branch protection, so GitHub's native auto-merge cannot wait for CI.
-  platformAutomerge: false,
+  // Automerge uses GitHub's native auto-merge, which waits on the ci-ok check
+  // the main ruleset requires; without that ruleset Renovate merges itself.
+
   // ci-pixi-*.yml pushes the regenerated pixi.lock as this bot; without this
   // Renovate treats the branch as hand-edited and never merges it.
   gitIgnoredAuthors: ['41898282+github-actions[bot]@users.noreply.github.com'],
