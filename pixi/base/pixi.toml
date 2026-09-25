@@ -29,7 +29,6 @@ jupyter-ai    = "==3.2.0"
 # Kernel discovery / misc
 nb_conda_kernels      = "==2.5.1"
 metakernel            = "==1.0.7"
-importlib-metadata    = "<8.8"   # opentelemetry-api requires <8.8.0
 
 # Other tools
 # xrootd puts xrdcp/xrdfs on the session PATH.
@@ -58,9 +57,6 @@ jupyterlab-topbar-text    = "==1.1.0"
 jupyterlab-theme-toggler  = "==1.1.0"
 dask-gateway              = "==2026.3.0"
 pyroscope-io              = "==1.2.4"
-opentelemetry-api                      = "==1.44.0"
-opentelemetry-sdk                      = "==1.44.0"
-opentelemetry-exporter-otlp-proto-http = "==1.44.0"
 jupyter-sshd-proxy        = "==0.3.0"
 pixi-kernel               = "==0.7.1"
 

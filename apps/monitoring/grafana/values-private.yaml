@@ -106,25 +106,6 @@ datasources:
         url: http://grafana.cms.rcac.purdue.edu:9090
         access: proxy
         isDefault: false
-      - name: tempo
-        uid: tempo
-        type: tempo
-        url: http://tempo.cms.svc.cluster.local:3100
-        access: proxy
-        isDefault: false
-        basicAuth: false
-        jsonData:
-          httpMethod: GET
-          timeInterval: 5s
-          tlsSkipVerify: true
-          nodeGraph:
-            enabled: true
-          serviceMap:
-            datasourceUid: prometheus
-          tracesToMetrics:
-            datasourceUid: prometheus
-          tracesToLogs:
-            datasourceUid: loki
       # uid pinned: pyroscope.json references it by uid.
       - name: pyroscope
         uid: pyroscope

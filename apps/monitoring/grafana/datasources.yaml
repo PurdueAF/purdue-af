@@ -3,8 +3,10 @@ datasources:
   datasources.yaml:
     apiVersion: 1
     deleteDatasources:
-      # thanos is not deployed; remove its provisioned row.
+      # thanos and tempo are not deployed; remove their provisioned rows.
       - name: thanos
+        orgId: 1
+      - name: tempo
         orgId: 1
     datasources:
       - name: prometheus

@@ -10,7 +10,6 @@ resources:
   - ../../apps/monitoring/pyroscope/helmrelease.yaml
   - ../../apps/monitoring/loki/helmrelease.yaml
   - ../../apps/monitoring/alloy/helmrelease.yaml
-  - ../../apps/monitoring/tempo/helmrelease.yaml
 
   - ../../apps/servicex/servicex/helmrelease.yaml
   - ../../apps/servicex/servicex/secret-rabbitmq.yaml
@@ -113,10 +112,6 @@ configMapGenerator:
   - name: alloy-config
     files:
       - values.yaml=../../apps/monitoring/alloy/values.yaml
-
-  - name: tempo-config
-    files:
-      - values.yaml=../../apps/monitoring/tempo/values.yaml
 
   - name: servicex-config
     files:
