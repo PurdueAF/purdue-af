@@ -8,7 +8,7 @@ repos:
         exclude: \.rpm$ # site Slurm clients + OSG certs, vendored on purpose
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.8
+    rev: v0.16.9
     hooks:
       - id: ruff-check # lint (+ import sorting), config in ruff.toml
         args: ["--fix"]
