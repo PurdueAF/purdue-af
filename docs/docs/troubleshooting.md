@@ -107,12 +107,17 @@ solutions. If your problem is not listed here, please
 
 ## Dask Gateway
 
-??? failure "Cluster creation times out"
+??? failure "Cluster creation times out or never finishes"
 
-    The scheduler did not start within the
+    With the Slurm backend, the scheduler did not start within the
     [creation timeout](guide-dask-gateway.md#6-cluster-lifetime-and-timeouts).
     This sometimes happens due to resource contention — simply try resubmitting
     the cluster.
+
+    With the Kubernetes backend, `new_cluster()` has no time limit. If it has
+    waited for more than a few minutes, interrupt it,
+    [stop the pending cluster](guide-dask-gateway.md#5-shutting-down-clusters),
+    and [contact us](support.md) if it happens again.
 
 ??? failure "I can't create a cluster: \"You may only have 1 active Dask Gateway cluster(s)\""
 

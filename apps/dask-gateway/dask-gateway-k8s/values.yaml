@@ -141,9 +141,6 @@ gateway:
       c.ClusterConfig.cluster_max_workers = 200
       c.ClusterConfig.adaptive_period = 15
       c.ClusterConfig.idle_timeout = 3600
-      c.Backend.cluster_start_timeout = 180
-      c.Backend.worker_start_timeout = 180
-      c.Backend.worker_start_failure_limit = 8
 
       def ldap_lookup(username):
           import subprocess
@@ -188,6 +185,7 @@ gateway:
 
       from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
       import os.path
+      import re
 
       def options_handler(options, user):
           if user.name=="jovyan":
@@ -205,6 +203,9 @@ gateway:
 
           if "NVIDIA_VISIBLE_DEVICES" in options.env:
               del options.env["NVIDIA_VISIBLE_DEVICES"]
+          # Kubernetes rejects a pod with an invalid env var name, such as the BASH_FUNC_which%% a terminal exports.
+          for name in [k for k in options.env if not re.fullmatch(r"[-._a-zA-Z][-._a-zA-Z0-9]*", k)]:
+              del options.env[name]
           
           conda_env = None
           
@@ -353,7 +354,7 @@ controller:
       cpu: 2
       memory: 4Gi
   imagePullSecrets: []
-  loglevel: ERROR
+  loglevel: WARN
   completedClusterMaxAge: 86400
   completedClusterCleanupPeriod: 600
   backoffBaseDelay: 0.1
