@@ -245,19 +245,19 @@ When you are done, shut the cluster down to release the resources for other user
 ```python
 cluster.shutdown()
 
-# Or shut down a specific cluster by name:
-# gateway.connect("17dfaa3c10dc48719f5dd8371893f3e5").shutdown()
+# Or shut down a specific cluster by name, even one that is still pending:
+# gateway.stop_cluster("17dfaa3c10dc48719f5dd8371893f3e5")
 
 # Or shut down all your clusters:
 for cluster_info in gateway.list_clusters():
-    gateway.connect(cluster_info.name).shutdown()
+    gateway.stop_cluster(cluster_info.name)
 ```
 
 ## 6. Cluster lifetime and timeouts
 
-* Cluster creation fails if the scheduler doesn't start within **3 minutes**
-  (Kubernetes backend) or **10 minutes** (Slurm backend). If this happens, try to
-  resubmit the cluster.
+* With the Slurm backend, cluster creation fails if the scheduler doesn't start
+  within **10 minutes**. If this happens, try to resubmit the cluster. With the
+  Kubernetes backend, `new_cluster()` waits for the scheduler with no time limit.
 * An idle cluster (no connected clients — for example, after the notebook that
   created it is terminated) is automatically shut down after **1 hour** with the
   Kubernetes backend, or after **24 hours** with the Slurm backend.
