@@ -75,11 +75,6 @@ render_env() {
 	)
 }
 
-# `helm template` pulls the chart over the network on every call, so a reset
-# connection to the chart host fails the whole run for reasons that have
-# nothing to do with the manifests (seen: grafana.github.io and GitHub release
-# assets both dropping connections mid-run). Retry a few times before
-# believing it; a genuinely broken chart or values file fails all attempts.
 # Shallow-clone a GitRepository source once per (url, ref) and echo the path.
 # A chart in git has no packaged dependencies, so fetch them on first use:
 # `dependency update`, not `build`, because build wants every repository in
@@ -109,20 +104,22 @@ git_chart_dir() {
 	printf '%s' "$clone_dir/$chart_path"
 }
 
+# `helm template` pulls the chart over the network on every call, so a reset
+# connection to the chart host fails the whole run for reasons that have
+# nothing to do with the manifests (seen: grafana.github.io and GitHub release
+# assets both dropping connections mid-run). Retry a few times before
+# believing it; a genuinely broken chart or values file fails all attempts.
 HELM_ATTEMPTS="${HELM_ATTEMPTS:-3}"
 HELM_RETRY_DELAY="${HELM_RETRY_DELAY:-5}"
 helm_template_retry() {
-	local name=$1 version=$2 args_ref=$3
-	shift 3
-	local -a src=("$@")
-	local -n vals="$args_ref"
+	local name=$1 version=$2
+	shift 2
 	local attempt=1 out
 	while :; do
-		if out=$(helm template "$name" "${src[@]}" \
+		if out=$(helm template "$name" "$@" \
 			${version:+--version "$version"} \
 			--kube-version "$KUBE_VERSION" \
-			--namespace cms \
-			${vals[@]+"${vals[@]}"} 2>&1); then
+			--namespace cms 2>&1); then
 			return 0
 		fi
 		if ((attempt >= HELM_ATTEMPTS)); then
@@ -291,7 +288,8 @@ validate_helmreleases() {
 		else
 			helm_src=("$chart" --repo "$repo_url")
 		fi
-		if ! helm_template_retry "$name" "$version" values_args "${helm_src[@]}"; then
+		if ! helm_template_retry "$name" "$version" "${helm_src[@]}" \
+			${values_args[@]+"${values_args[@]}"}; then
 			echo "✗ ${name}: helm template failed" >&2
 			failed=1
 		fi
