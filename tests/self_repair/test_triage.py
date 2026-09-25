@@ -29,7 +29,7 @@ class TestWorkload:
             ("dask-scheduler-96acb57f0729416b83289485f080ac8c", "dask-scheduler"),
             ("agentic-interface-7d9f8c6b5-abcde", "agentic-interface"),
             ("hub-5f6d7c8b9-zz9zz", "hub"),
-            ("tempo-0", "tempo"),
+            ("pyroscope-0", "pyroscope"),
             ("af-x509-secrets-29312345-abcde", "af-x509-secrets"),
             ("alloy-abcde", "alloy"),
         ],

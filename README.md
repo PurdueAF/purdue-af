@@ -25,7 +25,7 @@ Admin documentation: [https://purdue-cms-tier2.gitlab.io/documentation](https://
 | User environment | the [`purdue-af` image](docker/purdue-af/README.md), [pixi](https://github.com/prefix-dev/pixi) environments                                                                                                                                                                                                          |
 | Data             | [CVMFS](https://github.com/cvmfs/cvmfs), [XRootD](https://github.com/xrootd/xrootd), [XCache](https://github.com/opensciencegrid/xcache), [EOS](https://github.com/cern-eos/eos), [Depot](https://www.rcac.purdue.edu/storage/depot) NFS; [ServiceX](https://github.com/ssl-hep/ServiceX) for columnar delivery       |
 | Inference        | [SuperSONIC](https://github.com/fastmachinelearning/SuperSONIC)                                                                                                                                                                                                                                                       |
-| Observability    | [Prometheus](https://github.com/prometheus/prometheus), [Grafana](https://github.com/grafana/grafana), [Loki](https://github.com/grafana/loki), [Tempo](https://github.com/grafana/tempo), [Pyroscope](https://github.com/grafana/pyroscope), [Alloy](https://github.com/grafana/alloy) + purpose-built exporters     |
+| Observability    | [Prometheus](https://github.com/prometheus/prometheus), [Grafana](https://github.com/grafana/grafana), [Loki](https://github.com/grafana/loki), [Pyroscope](https://github.com/grafana/pyroscope), [Alloy](https://github.com/grafana/alloy) + purpose-built exporters                                                |
 | Agents           | MCP server exposing AF-specific tools to any MCP client                                                                                                                                                                                                                                                               |
 
 ## Component status
@@ -60,7 +60,6 @@ Whether each component on the cluster is running what is on `main`
 ![alloy][experimental-monitoring-alloy]
 ![loki][experimental-monitoring-loki]
 ![pyroscope][experimental-monitoring-pyroscope]
-![tempo][experimental-monitoring-tempo]
 ![servicex-shared][experimental-servicex]
 ![servicex][experimental-servicex-servicex]
 ![servicex-anvil][experimental-servicex-servicex-anvil]
@@ -125,7 +124,6 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-monitoring-alloy]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-alloy.json
 [experimental-monitoring-loki]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-loki.json
 [experimental-monitoring-pyroscope]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-pyroscope.json
-[experimental-monitoring-tempo]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-tempo.json
 [experimental-servicex]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex.json
 [experimental-servicex-servicex]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex-servicex.json
 [experimental-servicex-servicex-anvil]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex-servicex-anvil.json

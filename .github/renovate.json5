@@ -258,15 +258,6 @@
       allowedVersions: '<23',
     },
     {
-      // opentelemetry-api ==1.41.1 (pixi/base pypi deps) requires
-      // importlib-metadata <8.8 — Renovate widening the conda range past it
-      // makes the env unsolvable. Bump together with the
-      // opentelemetry pins, then relax.
-      matchPackageNames: ['importlib-metadata'],
-      matchFileNames: ['pixi/base/pixi.toml'],
-      allowedVersions: '<8.8',
-    },
-    {
       // Hold tensorflow at ==2.19.1 (cuda*) — the pixi/global pin. 2.19.1 is
       // the newest conda-forge version; every linux-64 cuda build is against
       // libprotobuf ==6.31.1, and no protobuf-7 tensorflow exists at any

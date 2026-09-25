@@ -83,8 +83,6 @@ loki:
 
   pattern_ingester:
     enabled: false
-  tracing:
-    enabled: false
   ui:
     enabled: true
 

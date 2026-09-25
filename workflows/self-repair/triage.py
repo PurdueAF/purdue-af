@@ -42,7 +42,6 @@ WATCHED_WORKLOADS = (
     # apps/monitoring
     "alloy",
     "loki",
-    "tempo",
     "pyroscope",
     "prometheus",
     "grafana",

@@ -173,7 +173,7 @@ dashboardsConfigMaps:
 datasources:
   public-datasources.yaml:
     apiVersion: 1
-    # Anonymous viewers can run any query against any datasource here; these are on grafana-private only.
+    # Anonymous viewers can run any query against any datasource here; these must not exist on this instance.
     deleteDatasources:
       - name: loki
         orgId: 1

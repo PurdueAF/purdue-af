@@ -42,7 +42,6 @@ server:
   readinessProbeFailureThreshold: 6
 
   extraFlags:
-    - web.enable-remote-write-receiver
     - query.timeout=2m
     - query.max-concurrency=20
     - storage.tsdb.wal-compression

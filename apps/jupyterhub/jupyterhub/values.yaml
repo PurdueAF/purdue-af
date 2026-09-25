@@ -213,37 +213,12 @@ singleuser:
                 )
         except Exception:
             pass
-
-        try:
-            endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-            if endpoint:
-                from opentelemetry import trace
-                from opentelemetry.sdk.resources import Resource
-                from opentelemetry.sdk.trace import TracerProvider
-                from opentelemetry.sdk.trace.export import BatchSpanProcessor
-                from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-
-                resource = Resource.create({
-                    "service.name": os.getenv("OTEL_SERVICE_NAME", "jupyter-server"),
-                    "user": os.getenv("NB_USER", "unknown"),
-                })
-                provider = TracerProvider(resource=resource)
-                provider.add_span_processor(
-                    BatchSpanProcessor(
-                        OTLPSpanExporter(endpoint=f"{endpoint}/v1/traces")
-                    )
-                )
-                trace.set_global_tracer_provider(provider)
-        except Exception:
-            pass
   extraEnv:
     JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
     CHOWN_HOME: "yes"
     NAMESPACE: ${namespace}
     PYROSCOPE_SERVER: "http://pyroscope.cms.svc.cluster.local:4040"
     PYROSCOPE_APP: "purdue-af"
-    OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo.cms.svc.cluster.local:4318"
-    OTEL_SERVICE_NAME: "jupyter-server"
   networkPolicy:
     enabled: false
   storage:
