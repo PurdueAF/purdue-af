@@ -472,11 +472,16 @@ def _describe(key: IncidentKey, evidence: Evidence) -> str:
 
 
 def _read_loki(
-    start: datetime, end: datetime, prefixes: tuple[str, ...]
+    start: datetime,
+    end: datetime,
+    prefixes: tuple[str, ...],
+    sidecars: bool | None = None,
 ) -> list[dict[str, str]]:
     for attempt in range(1, LOKI_ATTEMPTS + 1):
         try:
-            return query_loki(LOKI_URL, NAMESPACE, start, end, prefixes=prefixes)
+            return query_loki(
+                LOKI_URL, NAMESPACE, start, end, prefixes=prefixes, sidecars=sidecars
+            )
         except OSError as exc:
             if attempt == LOKI_ATTEMPTS:
                 raise
@@ -495,8 +500,9 @@ def watch(start: datetime, end: datetime) -> list[Incident]:
     )
     infrastructure = tuple(p for p in WATCHED_WORKLOADS if p not in IGNORED_WORKLOADS)
     lines = _read_loki(start, end, infrastructure)
+    lines += _read_loki(start, end, USER_WORKLOADS, sidecars=True)
     try:
-        user_lines = _read_loki(start, end, USER_WORKLOADS)
+        user_lines = _read_loki(start, end, USER_WORKLOADS, sidecars=False)
     except OSError as exc:
         _log(
             f"user-workload query failed {LOKI_ATTEMPTS} times ({exc}); infrastructure only this tick"

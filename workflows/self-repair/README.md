@@ -21,7 +21,7 @@ which also covers running a tick by hand; the task image is
 | Task      | Runs                                                                                                | Cached                                                                              |
 | --------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | `triage`  | One per tick: `watch`, then `analyze` per incident, then `fix`, each started as a run of its own    | no                                                                                  |
-| `watch`   | Two Loki queries, infrastructure then user workloads, for error lines from the watched workloads    | no                                                                                  |
+| `watch`   | Three Loki queries for error lines: infrastructure, the sidecars built here, then user workloads    | no                                                                                  |
 | `dedupe`  | One model call: the incidents grouped by root cause; a failed call leaves every incident alone      | no                                                                                  |
 | `analyze` | opencode, read-only, in a fresh checkout of `main`: is this fixable by a change in this repository? | yes, on the incident key and the analysis prompt (a recurring error is judged once) |
 | `fix`     | opencode with edit rights on a branch `self-repair-<fingerprint>`; commit, push, draft PR           | yes, on the incident key and its verdict (one attempt; a failed run is retried)     |
@@ -39,9 +39,12 @@ Flux deploys from `apps/`, and `USER_WORKLOADS` for user sessions and user Dask
 clusters, whose image, start hooks, pixi environments and worker configuration
 come from here even though the code inside is the user's. Their incidents rank
 after the infrastructure's, so they only take analysis budget the
-infrastructure left. `IGNORED_WORKLOADS` lists what is deployed from here but
-not debugged by this workflow. The workflow's own pods are not read. A new app
-in `apps/` needs its pod prefix added to `WATCHED_WORKLOADS`.
+infrastructure left. `SIDECARS`, the containers built here that run in those
+pods (every session's af-pod-monitor), are read by a query of their own and
+rank as infrastructure. `IGNORED_WORKLOADS` lists what is deployed from here
+but not debugged by this workflow. The workflow's own pods are not read. A new
+app in `apps/` needs its pod prefixes added to `WATCHED_WORKLOADS`, each with
+the directory that deploys it.
 
 Incidents are deduplicated in two layers. First structurally: logfmt and JSON
 lines are keyed on their level and message fields, so field order and extra

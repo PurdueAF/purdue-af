@@ -236,42 +236,43 @@ class TestIncidentText:
 
 
 class TestWatch:
-    def test_reads_infrastructure_then_user_workloads(self, monkeypatch):
-        queried = []
-
-        def query_loki(base, namespace, start, end, prefixes):
-            queried.append(prefixes)
-            pod = "purdue-af-1" if prefixes == sr.USER_WORKLOADS else "hub-1-abcde"
-            return [
-                {
-                    "pod": pod,
-                    "container": "c",
-                    "ts": "2026-09-16T10:00:00+00:00",
-                    "line": "Error boom",
-                }
-            ]
-
-        monkeypatch.setattr(sr, "query_loki", query_loki)
-        start = datetime(2026, 9, 16, 9, tzinfo=timezone.utc)
-        incidents = sr.watch(start, datetime(2026, 9, 16, 10, tzinfo=timezone.utc))
-
-        infrastructure, user = queried
-        assert not set(infrastructure) & set(sr.IGNORED_WORKLOADS)
-        assert "hub" in infrastructure
-        assert user == sr.USER_WORKLOADS
-        assert [i.key.workload for i in incidents] == ["hub", "purdue-af"]
-
     LINE = {
         "pod": "hub-1-abcde",
         "container": "c",
         "ts": "2026-09-16T10:00:00+00:00",
         "line": "Error boom",
     }
+    SIDECAR_LINE = {**LINE, "pod": "purdue-af-1", "container": "af-pod-monitor"}
+    USER_LINE = {**LINE, "pod": "purdue-af-1", "container": "notebook"}
+
+    def test_reads_infrastructure_and_sidecars_then_user_workloads(self, monkeypatch):
+        queried = []
+
+        def query_loki(base, namespace, start, end, prefixes, sidecars=None):
+            queried.append((prefixes, sidecars))
+            if prefixes != sr.USER_WORKLOADS:
+                return [self.LINE, self.LINE]
+            return [self.SIDECAR_LINE if sidecars else self.USER_LINE]
+
+        monkeypatch.setattr(sr, "query_loki", query_loki)
+        start = datetime(2026, 9, 16, 9, tzinfo=timezone.utc)
+        incidents = sr.watch(start, datetime(2026, 9, 16, 10, tzinfo=timezone.utc))
+
+        (infrastructure, _), sidecars, user = queried
+        assert not set(infrastructure) & set(sr.IGNORED_WORKLOADS)
+        assert "hub" in infrastructure
+        assert sidecars == (sr.USER_WORKLOADS, True)
+        assert user == (sr.USER_WORKLOADS, False)
+        assert [(i.key.workload, i.key.container) for i in incidents] == [
+            ("hub", "c"),
+            ("purdue-af", "af-pod-monitor"),
+            ("purdue-af", "notebook"),
+        ]
 
     def test_a_dropped_connection_is_retried(self, monkeypatch, no_sleep):
         calls = []
 
-        def query_loki(base, namespace, start, end, prefixes):
+        def query_loki(base, namespace, start, end, prefixes, sidecars=None):
             calls.append(prefixes)
             if len(calls) == 1:
                 raise ConnectionResetError("Remote end closed connection")
@@ -281,27 +282,27 @@ class TestWatch:
         start = datetime(2026, 9, 16, 9, tzinfo=timezone.utc)
         incidents = sr.watch(start, datetime(2026, 9, 16, 10, tzinfo=timezone.utc))
 
-        assert len(calls) == 3 and no_sleep == [sr.LOKI_RETRY_PAUSE_S]
+        assert len(calls) == 4 and no_sleep == [sr.LOKI_RETRY_PAUSE_S]
         assert [i.key.workload for i in incidents] == ["hub"]
 
-    def test_a_failing_user_query_leaves_the_infrastructure(
+    def test_a_failing_user_query_leaves_the_infrastructure_and_sidecars(
         self, monkeypatch, no_sleep, capsys
     ):
-        def query_loki(base, namespace, start, end, prefixes):
-            if prefixes == sr.USER_WORKLOADS:
+        def query_loki(base, namespace, start, end, prefixes, sidecars=None):
+            if sidecars is False:
                 raise ConnectionResetError("Remote end closed connection")
-            return [self.LINE]
+            return [self.SIDECAR_LINE if sidecars else self.LINE]
 
         monkeypatch.setattr(sr, "query_loki", query_loki)
         start = datetime(2026, 9, 16, 9, tzinfo=timezone.utc)
         incidents = sr.watch(start, datetime(2026, 9, 16, 10, tzinfo=timezone.utc))
 
-        assert [i.key.workload for i in incidents] == ["hub"]
+        assert sorted(i.key.container for i in incidents) == ["af-pod-monitor", "c"]
         assert len(no_sleep) == sr.LOKI_ATTEMPTS - 1
         assert "infrastructure only this tick" in capsys.readouterr().out
 
     def test_a_failing_infrastructure_query_fails_the_task(self, monkeypatch, no_sleep):
-        def query_loki(base, namespace, start, end, prefixes):
+        def query_loki(base, namespace, start, end, prefixes, sidecars=None):
             raise ConnectionResetError("Remote end closed connection")
 
         monkeypatch.setattr(sr, "query_loki", query_loki)

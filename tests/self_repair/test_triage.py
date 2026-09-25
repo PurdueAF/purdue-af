@@ -219,6 +219,56 @@ class TestLoki:
         for prefix in triage.IGNORED_WORKLOADS:
             assert prefix in triage.WATCHED_WORKLOADS, prefix
 
+    def test_watched_workloads_are_what_the_production_roots_deploy(self):
+        """Against component-status.py's channels, the roots of the cluster
+        whose Loki this reads. A component missing here is never read; one no
+        longer deployed leaves prefixes that match nothing."""
+        status = load_script(
+            REPO / ".github/workflows/component-status.py", "self_repair_status"
+        )
+        deployed = {
+            component
+            for channel in status.CHANNELS
+            for component in status.discover_components(channel)
+        }
+        # apps/storage runs no pod; apps/self-repair is this workflow's own
+        unread = {"apps/storage", "apps/self-repair"}
+        listed = set(triage.WATCHED_WORKLOADS.values()) | unread
+
+        def within(component, directory):
+            return component == directory or component.startswith(directory + "/")
+
+        missing = {c for c in deployed if not any(within(c, d) for d in listed)}
+        gone = {d for d in listed if not any(within(c, d) for c in deployed)}
+        assert missing == set(), "add their pod prefixes to WATCHED_WORKLOADS"
+        assert gone == set(), "no longer deployed: drop them from WATCHED_WORKLOADS"
+
+    def test_sidecars_are_split_from_the_user_code_by_container(self):
+        start = datetime(2026, 9, 15, 10, 0, tzinfo=timezone.utc)
+
+        def selector(sidecars):
+            url = triage.loki_url(
+                "http://loki:3100", "cms", start, start, 10, ("purdue-af",), sidecars
+            )
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["query"]
+            return query[0].split(" |~")[0]
+
+        pods = 'namespace="cms", pod=~"(purdue-af)(-.*)?"'
+        assert selector(None) == "{" + pods + "}"
+        assert selector(True) == "{" + pods + ', container=~"af-pod-monitor"}'
+        assert selector(False) == "{" + pods + ', container!~"af-pod-monitor"}'
+
+    def test_sidecars_in_user_pods_rank_with_the_infrastructure(self):
+        lines = [line(f"purdue-af-{i}", "notebook", "Error user") for i in range(50)]
+        lines += [line("purdue-af-7", "af-pod-monitor", "Error sidecar")]
+        lines += [line("hub-5f6d7c8b9-zz9zz", "hub", "Error hub")] * 2
+        order = [(i.key.workload, i.key.container) for i in triage.cluster(lines)]
+        assert order == [
+            ("hub", "hub"),
+            ("purdue-af", "af-pod-monitor"),
+            ("purdue-af", "notebook"),
+        ]
+
     @pytest.mark.parametrize(
         "pod",
         [
