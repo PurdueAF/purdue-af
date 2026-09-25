@@ -1,7 +1,7 @@
 """Export the hub's own idea of session activity to /hub/metrics.
 
 Prometheus already scrapes /hub/metrics (the `jupyterhub` job), so a collector
-on the default registry is all this needs — no service, token or scrape config.
+on the default registry is all this needs.
 
 The dashboard's "Last active" column used to come from af_home_dir_last_accessed,
 the st_atime of the user's home directory. That measures the mount, not the
