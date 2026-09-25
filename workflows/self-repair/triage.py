@@ -16,51 +16,44 @@ from typing import Any, Awaitable, Callable, Iterable
 
 ERROR_PATTERN = r"(?i)\b(error|exception|traceback|fatal|panic)\b"
 
-# Pod-name prefixes of what Flux deploys from this repository (deploy/*/
-# kustomization.yaml), i.e. what a change here can fix. Whatever else lives
-# in the namespace without a manifest here (gen*, etcd, eos-fuse) is not
-# read at all.
-WATCHED_WORKLOADS = (
-    # apps/jupyterhub
-    "hub",
-    "proxy",
-    "user-scheduler",
-    "continuous-image-puller",
-    "hook-image",
-    "jupyterhub-ssh",
-    "jupyterhub-sftp",
-    "jupyterhub-database-backup",
-    "af-x509-secrets",
-    "af-userlist-sync",
-    # apps/af-utils
-    "af-users-graph",
-    "pixi-global-sync",
-    # apps/dask-gateway
-    "api-dask-gateway",
-    "controller-dask-gateway",
-    "traefik-dask-gateway",
-    # apps/monitoring
-    "alloy",
-    "loki",
-    "pyroscope",
-    "prometheus",
-    "grafana",
-    "af-node-monitor",
-    "af-node-probe",
-    "af-pod-monitor",
-    # apps/agentic-interface, apps/flyte. Not this workflow's own pods: their
-    # logs quote every error they analyze, and would feed it back next tick.
-    "agentic-interface",
-    "flyte",
-    # apps/sonic, apps/ray
-    "supersonic",
-    "sonic-ray",
-    "kuberay-operator",
-    # apps/servicex
-    "servicex",
-    # apps/interlink
-    "interlink",
-)
+# Pod-name prefixes of what Flux deploys from this repository, i.e. what a
+# change here can fix, each with the directory that deploys it: a component of
+# the deploy roots (deploy/*/kustomization.yaml), or the group of components
+# that share the prefix. Whatever else lives in the namespace (gen*, etcd,
+# eos-fuse) is not read at all, nor are this workflow's own pods
+# (apps/self-repair): their logs quote every error they analyze, and would
+# feed it back next tick.
+WATCHED_WORKLOADS = {
+    "hub": "apps/jupyterhub/jupyterhub",
+    "proxy": "apps/jupyterhub/jupyterhub",
+    "user-scheduler": "apps/jupyterhub/jupyterhub",
+    "continuous-image-puller": "apps/jupyterhub/jupyterhub",
+    "hook-image": "apps/jupyterhub/jupyterhub",
+    "jupyterhub-ssh": "apps/jupyterhub/jupyterhub-ssh",
+    "jupyterhub-sftp": "apps/jupyterhub/jupyterhub-ssh",
+    "jupyterhub-database-backup": "apps/jupyterhub/database-backup",
+    "af-x509-secrets": "apps/jupyterhub/af-x509-secrets",
+    "af-userlist-sync": "apps/jupyterhub/userlist-sync",
+    "af-users-graph": "apps/af-utils/af-users-graph",
+    "pixi-global-sync": "apps/af-utils/pixi-global-sync",
+    "api-dask-gateway": "apps/dask-gateway",
+    "controller-dask-gateway": "apps/dask-gateway",
+    "traefik-dask-gateway": "apps/dask-gateway",
+    "alloy": "apps/monitoring/alloy",
+    "loki": "apps/monitoring/loki",
+    "pyroscope": "apps/monitoring/pyroscope",
+    "prometheus": "apps/monitoring/prometheus",
+    "grafana": "apps/monitoring/grafana",
+    "af-node-monitor": "apps/monitoring/af-monitoring",
+    "af-node-probe": "apps/monitoring/af-monitoring",
+    "agentic-interface": "apps/agentic-interface",
+    "flyte": "apps/flyte",
+    "supersonic": "apps/sonic",
+    "sonic-ray": "apps/ray/sonic-ray",
+    "kuberay-operator": "apps/ray/operator",
+    "servicex": "apps/servicex",
+    "interlink": "apps/interlink",
+}
 
 # Pods this repository configures but which run user code: sessions
 # (purdue-af-<id>) and user Dask clusters. The image, its start hooks, the
@@ -68,6 +61,11 @@ WATCHED_WORKLOADS = (
 # notebook cell is not. Read, but ranked after everything above so they only
 # use analysis budget the infrastructure did not.
 USER_WORKLOADS = ("purdue-af", "dask-scheduler", "dask-worker")
+
+# Containers built from this repository that run inside those pods: the
+# af-pod-monitor sidecar of every session (docker/af-pod-monitor). Read and
+# ranked with the infrastructure, not with the user code beside them.
+SIDECARS = ("af-pod-monitor",)
 
 # Deployed from here, but not to be debugged by this workflow for now. Kept
 # as a separate list so WATCHED_WORKLOADS stays the inventory of what the
@@ -82,7 +80,7 @@ IGNORED_WORKLOADS = (
 )
 ALL_WORKLOADS = tuple(
     prefix
-    for prefix in WATCHED_WORKLOADS + USER_WORKLOADS
+    for prefix in (*WATCHED_WORKLOADS, *USER_WORKLOADS)
     if prefix not in IGNORED_WORKLOADS
 )
 MAX_SAMPLES = 8
@@ -220,10 +218,20 @@ def loki_url(
     end: datetime,
     limit: int,
     prefixes: tuple[str, ...] = ALL_WORKLOADS,
+    sidecars: bool | None = None,
 ) -> str:
-    query = '{namespace="%s", pod=~"%s"} |~ "%s"' % (
+    """`sidecars` keeps only the pods' SIDECARS containers (True) or every
+    other container (False); None keeps them all."""
+    containers = ""
+    if sidecars is not None:
+        containers = ', container%s"%s"' % (
+            "=~" if sidecars else "!~",
+            "|".join(SIDECARS),
+        )
+    query = '{namespace="%s", pod=~"%s"%s} |~ "%s"' % (
         namespace,
         pod_regex(prefixes),
+        containers,
         ERROR_PATTERN.replace("\\", "\\\\"),
     )
     params = {
@@ -243,10 +251,11 @@ def query_loki(
     end: datetime,
     limit: int = 5000,
     prefixes: tuple[str, ...] = ALL_WORKLOADS,
+    sidecars: bool | None = None,
 ) -> list[dict[str, str]]:
     """Every matching line in the window as {pod, container, ts, line}."""
     with urllib.request.urlopen(
-        loki_url(base, namespace, start, end, limit, prefixes), timeout=60
+        loki_url(base, namespace, start, end, limit, prefixes, sidecars), timeout=60
     ) as resp:
         payload = json.load(resp)
     return parse_loki(payload)
@@ -393,10 +402,11 @@ def cluster(lines: list[dict[str, str]]) -> list[Incident]:
         )
         for key, g in groups.items()
     ]
-    # Infrastructure first, user workloads after, most frequent first within each.
+    # Infrastructure first, user code after, most frequent first within each.
     incidents.sort(
         key=lambda incident: (
-            incident.key.workload in USER_WORKLOADS,
+            incident.key.workload in USER_WORKLOADS
+            and incident.key.container not in SIDECARS,
             -incident.evidence.count,
             incident.key.fingerprint,
         )

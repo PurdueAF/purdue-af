@@ -26,7 +26,8 @@ A log line is FIXABLE HERE only when all of these hold:
 - it is not user code (notebook cells, user Dask tasks, user scripts). In a
   user session (pod purdue-af-<id>) or a user Dask pod, this repository owns
   the image (docker/purdue-af), its start hooks and scripts, the pixi
-  environments and the Dask Gateway worker configuration, and nothing else.
+  environments, the Dask Gateway worker configuration and the session's
+  af-pod-monitor sidecar container (docker/af-pod-monitor), and nothing else.
   A package missing from an environment the user chose for their own kernel
   or Dask cluster is the user's.
 - it is not a Kubernetes reconciliation race: a router, endpoint or watcher
