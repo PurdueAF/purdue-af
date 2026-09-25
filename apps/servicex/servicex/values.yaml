@@ -114,6 +114,8 @@ transformer:
       effect: "NoSchedule"
 
 rabbitmq:
+  auth:
+    existingPasswordSecret: servicex-rabbitmq-password
   image:
     registry: geddes-registry.rcac.purdue.edu
     repository: docker-hub-cache/bitnamilegacy/rabbitmq
