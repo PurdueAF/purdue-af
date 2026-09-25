@@ -2,7 +2,7 @@
 
 Only the retry wrapper is unit-tested here: the rest of the script needs
 kustomize/flux/kubeconform/helm and runs in CI. A transient chart-host failure
-is retried; a genuinely broken chart still fails."""
+is retried; a genuinely broken chart still fails; the values reach helm."""
 
 import shutil
 import subprocess
@@ -15,6 +15,7 @@ SCRIPT = REPO / ".github" / "workflows" / "validate-manifests.sh"
 
 STUB_HELM = """#!/bin/bash
 n=$(cat "$STUB_STATE" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$STUB_STATE"
+printf '%s\\n' "$@" > "$STUB_ARGV"
 if [ "$n" -le "${STUB_FAIL_TIMES:-0}" ]; then
     echo "Error: read: connection reset by peer" >&2
     exit 1
@@ -42,14 +43,14 @@ def call_retry(tmp_path):
     def _run(fail_times):
         state = tmp_path / "state"
         state.write_text("0")
+        argv = tmp_path / "argv"
         result = subprocess.run(
             [
                 "bash",
                 "-c",
                 textwrap.dedent(f"""
                     source '{tmp_path}/fn.sh'
-                    vals=()
-                    helm_template_retry demo 1.0.0 vals chart --repo http://x
+                    helm_template_retry demo 1.0.0 chart --repo http://x -f a.yaml -f 'b c.yaml'
                 """),
             ],
             capture_output=True,
@@ -57,32 +58,41 @@ def call_retry(tmp_path):
             env={
                 "PATH": f"{bindir}:/usr/bin:/bin",
                 "STUB_STATE": str(state),
+                "STUB_ARGV": str(argv),
                 "STUB_FAIL_TIMES": str(fail_times),
                 "KUBE_VERSION": "1.29.0",
                 "HELM_RETRY_DELAY": "0",
             },
         )
-        return result, int(state.read_text())
+        return result, int(state.read_text()), argv.read_text().splitlines()
 
     return _run
 
 
 def test_succeeds_without_retrying_when_helm_works(call_retry):
-    result, calls = call_retry(0)
+    result, calls, _ = call_retry(0)
     assert result.returncode == 0
     assert calls == 1, "a working chart must not be fetched repeatedly"
 
 
+def test_hands_every_values_file_to_helm(call_retry):
+    """A chart rendered without its values validates only its defaults."""
+    result, _, argv = call_retry(0)
+    assert result.returncode == 0, result.stderr
+    values = [argv[i + 1] for i, arg in enumerate(argv) if arg == "-f"]
+    assert values == ["a.yaml", "b c.yaml"], argv
+
+
 def test_recovers_from_transient_chart_host_failures(call_retry):
     """Two dropped connections do not fail the run."""
-    result, calls = call_retry(2)
+    result, calls, _ = call_retry(2)
     assert result.returncode == 0
     assert calls == 3
 
 
 def test_still_fails_when_every_attempt_fails(call_retry):
     """Retrying must not mask a genuinely broken chart or values file."""
-    result, calls = call_retry(99)
+    result, calls, _ = call_retry(99)
     assert result.returncode != 0
     assert calls == 3, "attempts should be bounded"
     assert "connection reset by peer" in result.stderr, (
