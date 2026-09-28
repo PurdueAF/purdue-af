@@ -246,15 +246,6 @@
       allowedVersions: '<23',
     },
     {
-      // pytorch 2.13 -> libtorch 2.13 requires libprotobuf >=7.35.1, and
-      // every conda-forge databricks-sdk since 0.74 (pulled in by mlflow)
-      // caps protobuf <7, so the bump pulls databricks-sdk back to 0.73.
-      // Relax when databricks-sdk allows protobuf 7.
-      matchPackageNames: ['pytorch'],
-      matchFileNames: ['pixi/global/pixi.toml'],
-      allowedVersions: '<2.13',
-    },
-    {
       // xrootd is capped below 6.x in BOTH pixi manifests. The 6.0
       // packaging split moved the Python bindings out of the `xrootd` package
       // into `python-xrootd`: conda-forge ships no py312 build of `xrootd` 6.x
