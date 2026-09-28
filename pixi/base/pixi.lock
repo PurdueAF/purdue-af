@@ -56,7 +56,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cffi-2.1.0-py312h460c074_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/charset-normalizer-3.4.7-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/click-8.4.1-pyhc90fa1f_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/code-server-4.138.0-h65c4c7d_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/code-server-4.139.1-h65c4c7d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/comm-0.2.3-pyhe01879c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/conda-26.7.2-py312h20c3967_0.conda
@@ -495,7 +495,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cffi-2.1.0-py312h460c074_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/charset-normalizer-3.4.7-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/click-8.4.1-pyhc90fa1f_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/code-server-4.138.0-h65c4c7d_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/code-server-4.139.1-h65c4c7d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/comm-0.2.3-pyhe01879c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/conda-26.7.2-py312h20c3967_0.conda
@@ -1513,20 +1513,20 @@ packages:
   version: 3.1.2
   sha256: 9acb47f6afd73f60dc1df93bb801b472f05ff42fa6c84167d25cb206be1fbf4a
   requires_python: '>=3.8'
-- conda: https://conda.anaconda.org/conda-forge/linux-64/code-server-4.138.0-h65c4c7d_0.conda
-  sha256: 4a9e14e60ddaa8de2f6d010d538562c5e284e126f31402742fb761bd36a29945
-  md5: e4384cd154ec6881c9cfeb05501b53f4
+- conda: https://conda.anaconda.org/conda-forge/linux-64/code-server-4.139.1-h65c4c7d_0.conda
+  sha256: f17b529cc99327b063154ad33ef5c5bb0b7725194b067fe335af95f36f54fcea
+  md5: 43fffcf988015d9b7e3ab340a0afa5e3
   depends:
   - nodejs 22.*
-  - __glibc >=2.28,<3.0.a0
   - libstdcxx >=15
   - libgcc >=15
+  - __glibc >=2.28,<3.0.a0
   - nodejs >=22.23.2,<23.0a0
   license: MIT
   license_family: MIT
   purls: []
-  size: 149263469
-  timestamp: 1789901692552
+  size: 142261200
+  timestamp: 1790416064754
 - conda: https://conda.anaconda.org/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
   sha256: ab29d57dc70786c1269633ba3dff20288b81664d3ff8d21af995742e2bb03287
   md5: 962b9857ee8e7018c22f2776ffa0b2d7
