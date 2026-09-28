@@ -53,8 +53,7 @@ Purdue data access policies:
 | Capability                                  | Purdue account | CERN / FNAL account |
 | ------------------------------------------- | -------------- | ------------------- |
 | JupyterLab session (CPU / RAM / GPU)        | ✅             | ✅                  |
-| Dask Gateway with Kubernetes backend        | ✅             | ✅                  |
-| Dask Gateway with Slurm backend             | ✅             | ❌                  |
+| Dask Gateway                                | ✅             | ✅                  |
 | Slurm batch submission (Hammer cluster)     | ✅             | ❌                  |
 | Write access to Depot (`/depot/cms/`)       | ✅             | ❌ (read-only)      |
 | Write access to `/work/` storage            | ✅             | ✅                  |

@@ -714,17 +714,17 @@ serverFiles:
       - name: af-scale-out
         rules:
           - alert: AFDaskGatewayDown
-            expr: kube_deployment_status_replicas_available{namespace="cms",deployment=~"api-dask-gateway.*"} == 0
+            expr: kube_deployment_status_replicas_available{namespace="cms",deployment="api-dask-gateway-k8s"} == 0
             for: 10m
             labels:
               severity: error
               component: scale-out
             annotations:
-              summary: Dask Gateway {{ $labels.deployment }} has no available replicas
+              summary: Dask Gateway has no available replicas
               description: >
-                Users cannot create or reach clusters on this gateway; already
-                running clusters may survive.
-                Check: kubectl -n cms get deploy {{ $labels.deployment }}
+                Users cannot create or reach Dask clusters; already running
+                clusters may survive.
+                Check: kubectl -n cms get deploy api-dask-gateway-k8s
 
       # Can we still see what the facility is doing? -------------------------
       # node_filesystem_*{job="loki"} comes from the fs-exporter sidecar in loki/values.yaml.

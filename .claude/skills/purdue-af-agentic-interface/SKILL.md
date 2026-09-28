@@ -34,8 +34,8 @@ answer for anything the platform tracks centrally:
 - `list_af_profiles` before `start_af_session` when the user wants anything
   other than defaults — it carries the exact option keys, valid values, and
   live GPU availability.
-- `list_dask_cluster_options` before `create_dask_cluster` — limits differ per
-  gateway.
+- `list_dask_cluster_options` before `create_dask_cluster` — it carries the
+  option keys and their limits.
 - `wait_for_session` after starting a session, rather than polling
   `get_session_status` in a loop.
 - `scale_dask_cluster` waits for the cluster's scheduler to come up on its own,
@@ -51,8 +51,8 @@ answer for anything the platform tracks centrally:
   in** when you are inside the AF session itself. Say so and get agreement
   first; you will lose the conversation. Storage (home, `/work`) is preserved.
 - **`stop_dask_cluster` is irreversible** — running work is lost.
-- Only **one active Dask cluster per user per gateway** is allowed, so creating
-  one may require stopping the existing one on that gateway.
+- Only **one active Dask cluster per user** is allowed, so creating one may
+  require stopping the existing one.
 
 ## Reporting back
 

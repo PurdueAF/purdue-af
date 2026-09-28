@@ -21,7 +21,7 @@ Admin documentation: [https://purdue-cms-tier2.gitlab.io/documentation](https://
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Orchestration    | [Kubernetes](https://github.com/kubernetes/kubernetes) on the [Geddes](https://www.rcac.purdue.edu/compute/geddes) cluster; [Flux](https://github.com/fluxcd/flux2) CD ([roots](deploy/README.md))                                                                                                                    |
 | Sessions         | [JupyterHub](https://github.com/jupyterhub/zero-to-jupyterhub-k8s) — [JupyterLab](https://github.com/jupyterlab/jupyterlab) and [code-server](https://github.com/coder/code-server) interfaces, [CILogon](https://www.cilogon.org) auth                                                                               |
-| Scale-out        | [Dask Gateway](https://github.com/dask/dask-gateway) — Kubernetes and Slurm backends                                                                                                                                                                                                                                  |
+| Scale-out        | [Dask Gateway](https://github.com/dask/dask-gateway)                                                                                                                                                                                                                                                                  |
 | User environment | the [`purdue-af` image](docker/purdue-af/README.md), [pixi](https://github.com/prefix-dev/pixi) environments                                                                                                                                                                                                          |
 | Data             | [CVMFS](https://github.com/cvmfs/cvmfs), [XRootD](https://github.com/xrootd/xrootd), [XCache](https://github.com/opensciencegrid/xcache), [EOS](https://github.com/cern-eos/eos), [Depot](https://www.rcac.purdue.edu/storage/depot) NFS; [ServiceX](https://github.com/ssl-hep/ServiceX) for columnar delivery       |
 | Inference        | [SuperSONIC](https://github.com/fastmachinelearning/SuperSONIC)                                                                                                                                                                                                                                                       |
@@ -52,7 +52,6 @@ Whether each component on the cluster is running what is on `main`
 ![pixi-global-sync][experimental-af-utils-pixi-global-sync]
 ![agentic-interface][experimental-agentic-interface]
 ![dask-gateway-k8s][experimental-dask-gateway-dask-gateway-k8s]
-![dask-gateway-k8s-slurm][experimental-dask-gateway-dask-gateway-k8s-slurm]
 ![flyte][experimental-flyte]
 ![interlink-hammer][experimental-interlink-hammer]
 ![self-repair][experimental-self-repair]
@@ -116,7 +115,6 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-af-utils-pixi-global-sync]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-af-utils-pixi-global-sync.json
 [experimental-agentic-interface]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-agentic-interface.json
 [experimental-dask-gateway-dask-gateway-k8s]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-dask-gateway-dask-gateway-k8s.json
-[experimental-dask-gateway-dask-gateway-k8s-slurm]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-dask-gateway-dask-gateway-k8s-slurm.json
 [experimental-flyte]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-flyte.json
 [experimental-interlink-hammer]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-hammer.json
 [experimental-self-repair]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-self-repair.json

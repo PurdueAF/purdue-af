@@ -32,19 +32,10 @@ CLUSTER_PROMETHEUS_URL = os.environ.get(
 )
 LOKI_URL = os.environ.get("LOKI_URL", "http://loki.cms.svc.cluster.local:3100")
 
-# Dask Gateway backends: name → internal API URL.
-DASK_GATEWAYS: dict[str, str] = {
-    "k8s": os.environ.get(
-        "DASK_GATEWAY_K8S_URL",
-        "http://api-dask-gateway-k8s.cms.svc.cluster.local:8000",
-    ),
-    "slurm": os.environ.get(
-        "DASK_GATEWAY_SLURM_URL",
-        "http://api-dask-gateway-k8s-slurm.cms.svc.cluster.local:8000",
-    ),
-}
-# Shared pixi env pre-built for everyone. Lives on /work, so it is only usable
-# by Kubernetes workers — Slurm (Hammer) workers can see /depot but not /work.
+DASK_GATEWAY_URL = os.environ.get(
+    "DASK_GATEWAY_URL", "http://api-dask-gateway-k8s.cms.svc.cluster.local:8000"
+)
+# Shared pixi env pre-built for everyone.
 GLOBAL_PIXI_PROJECT = os.environ.get("DASK_GLOBAL_PIXI_PROJECT", "/work/pixi/global")
 
 # Stateful streamable-HTTP sessions are required for server→client requests

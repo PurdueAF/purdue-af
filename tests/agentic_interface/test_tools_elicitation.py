@@ -14,7 +14,6 @@ from tools.elicitation import elicit, single_choice_model
 
 # Hand-written models used by create_dask_cluster's elicitation flow.
 _DASK_ELICIT_MODELS = [
-    dask._BackendChoice,
     dask._EnvChoice,
     dask._PixiChoice,
     dask._CondaChoice,
@@ -57,10 +56,10 @@ def test_single_choice_model_passes_sdk_validator_and_uses_titled_oneof():
 
 
 def test_single_choice_model_without_labels_uses_plain_enum():
-    model = single_choice_model("Choice", ["k8s", "slurm"])
+    model = single_choice_model("Choice", ["red", "blue"])
     _validate_elicitation_schema(model)
     prop = model.model_json_schema()["properties"]["value"]
-    assert prop["enum"] == ["k8s", "slurm"]
+    assert prop["enum"] == ["red", "blue"]
     assert "oneOf" not in prop
 
 
@@ -94,7 +93,7 @@ async def test_elicit_logs_who_answered(caplog):
         capabilities=types.SimpleNamespace(elicitation=object()),
     )
     with caplog.at_level("INFO", logger="tools.elicitation"):
-        assert await elicit(_ctx(params), "pick", dask._BackendChoice) == (
+        assert await elicit(_ctx(params), "pick", dask._EnvChoice) == (
             "decline",
             None,
         )
@@ -103,6 +102,6 @@ async def test_elicit_logs_who_answered(caplog):
 
 async def test_elicit_before_initialisation_logs_unknown_client(caplog):
     with caplog.at_level("INFO", logger="tools.elicitation"):
-        await elicit(_ctx(None, action="cancel"), "pick", dask._BackendChoice)
+        await elicit(_ctx(None, action="cancel"), "pick", dask._EnvChoice)
     assert "action=cancel" in caplog.text
     assert "client=None/None elicitation_capability=None" in caplog.text

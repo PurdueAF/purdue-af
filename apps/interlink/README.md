@@ -46,7 +46,7 @@ per-cluster RWX PVCs created and populated out of band — never as Secrets, and
 never in this repo.
 
 `munge-key-hammer` is also mounted by the AF sessions
-(`apps/jupyterhub/jupyterhub/values.yaml`) and the dask-gateway Slurm gateway.
+(`apps/jupyterhub/jupyterhub/values.yaml`).
 To add a further cluster: create its PVC, copy that cluster's key in, then
 uncomment its entry in the kustomization.
 

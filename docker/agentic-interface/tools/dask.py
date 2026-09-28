@@ -1,10 +1,6 @@
 """Dask cluster tools — create, list, inspect, scale, stop via Gateway API.
 
-Two gateway backends are supported: ``k8s`` (Geddes Kubernetes) and ``slurm``
-(Hammer Slurm). list_dask_clusters queries both; other tools take a `gateway`
-argument so the correct backend is targeted.
-
-Gateways here use SimpleAuthenticator (password ignored). Calls authenticate as
+The gateway uses SimpleAuthenticator (password ignored). Calls authenticate as
 the Hub username via HTTP Basic so each user only sees their own clusters.
 
 Worker counts come from the AF Prometheus (dask_scheduler_workers). Live CPU /
@@ -21,7 +17,7 @@ from typing import Any, Optional
 import httpx
 from config import (
     CLUSTER_PROMETHEUS_URL,
-    DASK_GATEWAYS,
+    DASK_GATEWAY_URL,
     GLOBAL_PIXI_PROJECT,
     PROMETHEUS_URL,
 )
@@ -31,7 +27,6 @@ from errors import (
     Failure,
     UpstreamError,
     UserError,
-    describe_exception,
     http_error,
     json_body,
     malformed_response,
@@ -44,57 +39,34 @@ from shared import prom_query, prom_scalar, prom_vector, quote_label, shared_cli
 
 from tools.elicitation import ask
 
-_GATEWAYS = DASK_GATEWAYS
-_GATEWAY_LIST = ", ".join(_GATEWAYS)
-
-# Upstream-metrics target labels, derived per request so one client can talk
-# to several gateway backends and still be broken down by backend.
-_HOST_TO_GATEWAY = {httpx.URL(url).host: gw for gw, url in _GATEWAYS.items()}
-
-
-def _gateway_target(request: httpx.Request) -> str:
-    return f"dask-gateway-{_HOST_TO_GATEWAY.get(request.url.host, 'unknown')}"
+_SERVICE = "Dask Gateway"
 
 
 # Pooled process-wide clients (see shared.py) — never close these at call sites.
 def _client() -> httpx.AsyncClient:
-    return shared_client("dask-gateway", target=_gateway_target)
+    return shared_client("dask-gateway")
 
 
 def _prom_client(target: str) -> httpx.AsyncClient:
     return shared_client(target)
 
 
-# Mirrors the options in apps/dask-gateway/*/values.yaml; the k8s
-# cluster_max_workers also bounds slurm, which sets none.
+# Mirror apps/dask-gateway/dask-gateway-k8s/values.yaml.
 MAX_WORKERS = 200
-_WORKER_LIMITS: dict[str, dict] = {
-    "k8s": {"cores": (0.1, 64.0), "memory": (0.1, 64.0), "integer_cores": False},
-    "slurm": {"cores": (1.0, 16.0), "memory": (1.0, 64.0), "integer_cores": True},
-}
+_WORKER_CORES = (0.1, 64.0)
+_WORKER_MEMORY = (0.1, 64.0)
 
 
-def _check_worker_size(gateway: str, worker_cores: float, worker_memory: float) -> None:
+def _check_worker_size(worker_cores: float, worker_memory: float) -> None:
     """Raise UserError if the per-worker size exceeds the gateway's configured
     option limits. The gateway enforces these too; checking here turns a 422
     round-trip into an immediate, precise message."""
-    lim = _WORKER_LIMITS[gateway]
-    lo, hi = lim["cores"]
+    lo, hi = _WORKER_CORES
     if not lo <= worker_cores <= hi:
-        raise UserError(
-            f"Error: worker_cores must be between {lo:g} and {hi:g} "
-            f"on gateway '{gateway}'."
-        )
-    if lim["integer_cores"] and worker_cores != int(worker_cores):
-        raise UserError(
-            f"Error: gateway '{gateway}' requires a whole number of worker_cores."
-        )
-    lo, hi = lim["memory"]
+        raise UserError(f"Error: worker_cores must be between {lo:g} and {hi:g}.")
+    lo, hi = _WORKER_MEMORY
     if not lo <= worker_memory <= hi:
-        raise UserError(
-            f"Error: worker_memory must be between {lo:g} and {hi:g} GiB "
-            f"on gateway '{gateway}'."
-        )
+        raise UserError(f"Error: worker_memory must be between {lo:g} and {hi:g} GiB.")
 
 
 # Bounds the create/scale wait for a PENDING scheduler; the gateway refuses to
@@ -107,7 +79,7 @@ _TERMINAL_STATUSES = frozenset({"STOPPING", "STOPPED", "FAILED"})
 
 
 # Cluster names land in gateway URL paths and (via _cluster_id) in PromQL
-# regexes, so only accept the character set gateways actually emit.
+# regexes, so only accept the character set the gateway emits.
 _CLUSTER_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
@@ -120,14 +92,6 @@ def _validate_cluster_name(cluster_name: str) -> None:
         )
 
 
-def _resolve_gateway(name: str) -> tuple[str, str]:
-    """Return (canonical_name, url) or raise UserError."""
-    key = name.lower()
-    if key not in _GATEWAYS:
-        raise UserError(f"Unknown gateway '{name}'. Valid options: {_GATEWAY_LIST}")
-    return key, _GATEWAYS[key]
-
-
 def _auth(username: str) -> dict:
     """HTTP Basic for SimpleAuthenticator (password field ignored when unset)."""
     cred = base64.b64encode(f"{username}:".encode()).decode()
@@ -137,45 +101,33 @@ def _auth(username: str) -> dict:
 # ── failure reporting ─────────────────────────────────────────────────────────
 
 
-def _gateway_unreachable(gateway: str, exc: BaseException) -> UpstreamError:
-    return unreachable(f"gateway '{gateway}'", exc)
-
-
 def _gateway_http_error(
-    gateway: str,
     resp: httpx.Response,
     action: str,
     cluster_name: Optional[str] = None,
 ) -> Failure:
     """What a non-2xx gateway answer means for this user.
 
-    Gateways authenticate by Hub username, so a refusal is about access to
-    that backend, not about the token; a 404 is about the cluster name.
+    The gateway authenticates by Hub username, so a refusal is about the
+    user's access, not about the token; a 404 is about the cluster name.
     """
     code = resp.status_code
     if code in (401, 403):
-        access = (
-            "Slurm (Hammer) clusters need an account on Hammer; "
-            if gateway == "slurm"
-            else ""
-        )
         return AuthError(
-            f"Error: not authorised on gateway '{gateway}' to {action} "
-            f"(HTTP {code}). {access}if you believe you should have access, "
-            "contact AF support."
+            f"Error: not authorised on {_SERVICE} to {action} (HTTP {code}). "
+            "If you believe you should have access, contact AF support."
         )
     if code == 404 and cluster_name:
         return UserError(
-            f"Cluster '{cluster_name}' not found on gateway '{gateway}'. Call "
-            "list_dask_clusters for the current names — and check the gateway "
-            "argument, as names are per backend."
+            f"Cluster '{cluster_name}' not found. Call list_dask_clusters for "
+            "the current names."
         )
     if code in (409, 422):
         return UserError(
-            f"Error: gateway '{gateway}' rejected the request to {action} — "
+            f"Error: {_SERVICE} rejected the request to {action} — "
             f"{response_detail(resp, limit=400) or 'no reason given'}."
         )
-    return http_error(f"gateway '{gateway}'", resp, action=action)
+    return http_error(_SERVICE, resp, action=action)
 
 
 def _cluster_id(cluster_name: str) -> str:
@@ -198,7 +150,7 @@ def _parse_clusters(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
-def _fmt_cluster(c: dict, gateway: str) -> str:
+def _fmt_cluster(c: dict) -> str:
     name = c.get("name", "?")
     status = c.get("status", "?")
     workers = c.get("workers") or {}
@@ -210,41 +162,16 @@ def _fmt_cluster(c: dict, gateway: str) -> str:
         else f"  workers={n_workers}"
     )
     scheduler = c.get("scheduler_address", "")
-    lines = [f"**{name}**  gateway={gateway}  status={status}{scale_info}"]
+    lines = [f"**{name}**  status={status}{scale_info}"]
     if scheduler:
         lines.append(f"  scheduler: {scheduler}")
     return "\n".join(lines)
 
 
-async def _fetch_clusters(
-    client: httpx.AsyncClient, gateway: str, url: str, username: str
-) -> tuple[str, list[dict] | str]:
-    """Return (gateway_name, clusters_or_error_string)."""
-    try:
-        resp = await client.get(
-            f"{url}/api/v1/clusters/", headers=_auth(username), timeout=10.0
-        )
-    except httpx.RequestError as exc:
-        return gateway, f"unreachable ({describe_exception(exc)})"
-    if resp.status_code in (401, 403):
-        return gateway, "not authorised (no access to this backend)"
-    if resp.status_code != 200:
-        detail = response_detail(resp, limit=120)
-        return gateway, f"HTTP {resp.status_code}" + (f" — {detail}" if detail else "")
-    payload = json_body(resp)
-    if payload is None:
-        return gateway, "returned a malformed cluster list"
-    return gateway, _parse_clusters(payload)
-
-
-async def _cluster_status(
-    gateway: str, url: str, cluster_name: str, username: str
-) -> str:
+async def _cluster_status(cluster_name: str, username: str) -> str:
     """The gateway's current status word for ``cluster_name`` (upper-case)."""
     resp = await _gateway(
         "GET",
-        gateway,
-        url,
         f"/api/v1/clusters/{cluster_name}",
         username=username,
         action=f"check the state of cluster '{cluster_name}'",
@@ -252,16 +179,12 @@ async def _cluster_status(
     )
     record = json_body(resp)
     if not isinstance(record, dict):
-        raise malformed_response(f"gateway '{gateway}'", resp, "a cluster record")
+        raise malformed_response(_SERVICE, resp, "a cluster record")
     return str(record.get("status") or "UNKNOWN").upper()
 
 
 async def _await_scheduler(
-    gateway: str,
-    url: str,
-    cluster_name: str,
-    username: str,
-    timeout: Optional[float] = None,
+    cluster_name: str, username: str, timeout: Optional[float] = None
 ) -> tuple[str, float]:
     """Poll until ``cluster_name`` is RUNNING, or the wait runs out.
 
@@ -280,15 +203,15 @@ async def _await_scheduler(
     )
     start = time.monotonic()
     while True:
-        status = await _cluster_status(gateway, url, cluster_name, username)
+        status = await _cluster_status(cluster_name, username)
         if status == "RUNNING":
             return status, time.monotonic() - start
         if status in _TERMINAL_STATUSES:
             raise UserError(
-                f"Error: cluster '{cluster_name}' on gateway '{gateway}' is "
-                f"{status} — it will not accept workers. Call list_dask_clusters "
-                "to confirm, then create_dask_cluster for a fresh one; "
-                "query_dask_logs shows why the scheduler stopped."
+                f"Error: cluster '{cluster_name}' is {status} — it will not "
+                "accept workers. Call list_dask_clusters to confirm, then "
+                "create_dask_cluster for a fresh one; query_dask_logs shows why "
+                "the scheduler stopped."
             )
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -298,8 +221,6 @@ async def _await_scheduler(
 
 async def _gateway(
     method: str,
-    gateway: str,
-    url: str,
     path: str,
     *,
     username: str,
@@ -314,26 +235,22 @@ async def _gateway(
     try:
         resp = await _client().request(
             method,
-            f"{url}{path}",
+            f"{DASK_GATEWAY_URL}{path}",
             headers=_auth(username),
             json=json,
             timeout=timeout,
         )
     except httpx.RequestError as exc:
-        raise _gateway_unreachable(gateway, exc)
+        raise unreachable(_SERVICE, exc)
     if resp.status_code not in ok:
-        raise _gateway_http_error(gateway, resp, action, cluster_name)
+        raise _gateway_http_error(resp, action, cluster_name)
     return resp
 
 
-async def _require_owned_cluster(
-    url: str, username: str, cluster_name: str, gateway: str
-) -> None:
+async def _require_owned_cluster(username: str, cluster_name: str) -> None:
     """Raise a Failure if the user cannot access ``cluster_name``."""
     await _gateway(
         "GET",
-        gateway,
-        url,
         f"/api/v1/clusters/{cluster_name}",
         username=username,
         action=f"access cluster '{cluster_name}'",
@@ -364,10 +281,10 @@ def _stats(values: list[float]) -> Optional[tuple[float, float, float]]:
 
 
 def _base_worker_env(username: str, extra: Optional[dict] = None) -> dict:
-    """Build the env mapping required by gateway options handlers.
+    """Build the env mapping the gateway's options handler requires.
 
-    Handlers always ``pop("PATH")`` and prepend the conda/pixi bin dir, so PATH
-    must be present. Callers can override/extend via ``extra``.
+    The handler always pops ``PATH`` and prepends the conda/pixi bin dir, so
+    PATH must be present. Callers can override/extend via ``extra``.
     """
     env = {
         "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
@@ -431,19 +348,6 @@ def _build_cluster_options(
 # ── Elicitation schemas (rendered as multiple-choice forms by capable clients) ─
 
 
-class _BackendChoice(BaseModel):
-    """Which compute backend to run the Dask workers on."""
-
-    gateway: str = Field(
-        default="k8s",
-        json_schema_extra={"enum": ["k8s", "slurm"]},
-        description=(
-            "k8s = Geddes Kubernetes (workers see /work and /depot); "
-            "slurm = Hammer Slurm (workers see /depot only)."
-        ),
-    )
-
-
 class _EnvChoice(BaseModel):
     """Which worker environment to use."""
 
@@ -451,7 +355,7 @@ class _EnvChoice(BaseModel):
         default="global",
         json_schema_extra={"enum": ["global", "pixi", "conda"]},
         description=(
-            "global = shared pixi env at /work/pixi/global (k8s only); "
+            "global = shared pixi env at /work/pixi/global; "
             "pixi = your own pixi project; conda = your own conda env."
         ),
     )
@@ -499,10 +403,14 @@ class _CustomSize(BaseModel):
     """Custom per-worker resources."""
 
     worker_cores: float = Field(
-        gt=0, description="Cores per worker (k8s: 0.1–64; Slurm: whole numbers 1–16)."
+        gt=0,
+        description=f"Cores per worker ({_WORKER_CORES[0]:g}–{_WORKER_CORES[1]:g}).",
     )
     worker_memory: float = Field(
-        gt=0, description="Memory per worker in GiB (k8s: 0.1–64; Slurm: 1–64)."
+        gt=0,
+        description=(
+            f"Memory per worker in GiB ({_WORKER_MEMORY[0]:g}–{_WORKER_MEMORY[1]:g})."
+        ),
     )
 
 
@@ -528,18 +436,17 @@ class _CustomCount(BaseModel):
 # Returned when a choice cannot be elicited; agent clients may auto-decline,
 # so a non-accept never proves the user said no.
 _CREATE_CHOICES_HELP = (
-    "create_dask_cluster needs two choices from the user. Ask them (use the "
+    "create_dask_cluster needs these choices from the user. Ask them (use the "
     "client's multiple-choice UI if available), then call create_dask_cluster "
     "again with explicit arguments:\n"
-    "1) gateway: 'k8s' (Geddes Kubernetes) or 'slurm' (Hammer).\n"
-    "2) worker environment — one of:\n"
+    "1) worker environment — one of:\n"
     "   • global (default): shared pixi env at /work/pixi/global — pass "
-    "env_source='global' (k8s only; Slurm cannot see /work).\n"
+    "env_source='global'.\n"
     "   • your pixi project: pass pixi_project='/path' (+ optional pixi_env).\n"
-    "   • your conda env: pass conda_env='/path' (use /depot for Slurm).\n"
-    "3) worker size: default (1 core / 4 GiB) or custom (pass worker_cores + "
+    "   • your conda env: pass conda_env='/path'.\n"
+    "2) worker size: default (1 core / 4 GiB) or custom (pass worker_cores + "
     "worker_memory in GiB).\n"
-    "4) worker count to start with: 0, 10, 50, or a custom number (pass "
+    "3) worker count to start with: 0, 10, 50, or a custom number (pass "
     "n_workers)."
 )
 
@@ -560,91 +467,42 @@ _WORKERS_PENDING_NEXT = [
 def register(mcp: Any) -> None:
     @mcp.tool()
     async def list_dask_clusters() -> str:
-        """List all running Dask clusters across every gateway backend.
-
-        Queries the Kubernetes (k8s) and Slurm (Hammer) gateways concurrently and
-        labels each cluster with its source backend. Results are scoped to the
-        calling user only.
-        """
-        user = require_user()
-        username = user["username"]
-
-        client = _client()
-        results = await asyncio.gather(
-            *[
-                _fetch_clusters(client, gw, url, username)
-                for gw, url in _GATEWAYS.items()
-            ]
-        )
-
-        sections: list[str] = []
-        refused: list[str] = []
-        total = 0
-        for gateway, data in results:
-            if isinstance(data, str):
-                # A backend the user has no access to is not an error for
-                # most users (few have Hammer accounts) — but if nothing at
-                # all can be listed it must not read as "no clusters".
-                if "not authorised" in data:
-                    refused.append(gateway)
-                else:
-                    sections.append(f"[{gateway}] error: {data}")
-                continue
-            if not data:
-                continue
-            total += len(data)
-            sections.append(
-                f"### {gateway} ({len(data)} cluster(s))\n"
-                + "\n\n".join(_fmt_cluster(c, gateway) for c in data)
-            )
-
-        if not sections:
-            if refused and len(refused) == len(results):
-                raise AuthError(
-                    f"Error: not authorised on any gateway ({', '.join(refused)}) "
-                    f"for user '{username}', so no clusters can be listed. "
-                    "Contact AF support if you expect access."
-                )
-            note = (
-                f" (gateway {', '.join(refused)}: not authorised — clusters "
-                "there, if any, are not visible to you)"
-                if refused
-                else ""
-            )
-            return f"No running Dask clusters on any gateway{note}."
-
-        header = f"# {total} Dask cluster(s) across all gateways\n"
-        return header + "\n\n".join(sections)
-
-    @mcp.tool()
-    async def list_dask_cluster_options(gateway: str = "k8s") -> str:
-        """List the create-time options accepted by a Dask Gateway backend.
-
-        Call this before create_dask_cluster to see field names, defaults, and
-        limits for the chosen gateway (Kubernetes vs Slurm differ slightly).
-
-        Args:
-            gateway: 'k8s' (Geddes Kubernetes) or 'slurm' (Hammer Slurm).
-        """
-        user = require_user()
-        gateway, url = _resolve_gateway(gateway)
+        """List the calling user's running Dask clusters."""
         resp = await _gateway(
             "GET",
-            gateway,
-            url,
+            "/api/v1/clusters/",
+            username=require_user()["username"],
+            action="list clusters",
+        )
+        payload = json_body(resp)
+        if not isinstance(payload, (dict, list)):
+            raise malformed_response(_SERVICE, resp, "a cluster list")
+        clusters = _parse_clusters(payload)
+        if not clusters:
+            return "No running Dask clusters."
+        return f"# {len(clusters)} Dask cluster(s)\n" + "\n\n".join(
+            _fmt_cluster(c) for c in clusters
+        )
+
+    @mcp.tool()
+    async def list_dask_cluster_options() -> str:
+        """List the create-time options accepted by Dask Gateway.
+
+        Call this before create_dask_cluster to see field names, defaults, and
+        limits.
+        """
+        resp = await _gateway(
+            "GET",
             "/api/v1/options",
-            username=user["username"],
+            username=require_user()["username"],
             action="list cluster options",
         )
         payload = json_body(resp)
         if not isinstance(payload, dict):
-            raise malformed_response(
-                f"gateway '{gateway}'", resp, "a cluster-options document"
-            )
+            raise malformed_response(_SERVICE, resp, "a cluster-options document")
         fields = payload.get("cluster_options") or []
-        backend = "Kubernetes (Geddes)" if gateway == "k8s" else "Slurm (Hammer)"
         lines = [
-            f"# Cluster options for gateway={gateway} — {backend}",
+            "# Dask cluster options",
             "Pass these as arguments to create_dask_cluster.",
             "",
         ]
@@ -660,8 +518,6 @@ def register(mcp: Any) -> None:
             "Notes:",
             "  • Provide exactly one of pixi_project or conda_env.",
             "  • worker_memory is in GiB.",
-            "  • k8s workers see /work; Slurm (Hammer) workers do not — "
-            "put pixi/conda envs on /depot for Slurm.",
             "  • Only one active cluster per user is allowed.",
         ]
         return "\n".join(lines)
@@ -669,7 +525,6 @@ def register(mcp: Any) -> None:
     @mcp.tool()
     async def create_dask_cluster(
         ctx: Context,
-        gateway: Optional[str] = None,
         env_source: Optional[str] = None,
         pixi_project: Optional[str] = None,
         pixi_env: str = "default",
@@ -679,22 +534,18 @@ def register(mcp: Any) -> None:
         n_workers: Optional[int] = None,
         env: Optional[dict] = None,
     ) -> str:
-        """Create a new Dask Gateway cluster on Kubernetes or Slurm.
+        """Create a new Dask Gateway cluster.
 
         Any choice not supplied is asked interactively via the client's
-        multiple-choice UI (MCP elicitation), one question at a time: backend →
+        multiple-choice UI (MCP elicitation), one question at a time:
         environment → worker size → worker count. If a choice can't be
         collected (the client doesn't support elicitation, or the prompt is
         declined or dismissed), a short instruction listing the choices is
         returned instead — collect them from the user and call again with
         explicit args.
 
-        Backend (``gateway``):
-          • 'k8s' — Geddes Kubernetes workers (can use /work and /depot)
-          • 'slurm' — Hammer Slurm workers (use /depot for envs; no /work)
-
         Worker environment (``env_source``):
-          • 'global' — shared pixi env at /work/pixi/global (k8s only)
+          • 'global' — shared pixi env at /work/pixi/global
           • 'pixi' — your own pixi project (set ``pixi_project`` + ``pixi_env``)
           • 'conda' — your own conda env (set ``conda_env``)
 
@@ -703,18 +554,16 @@ def register(mcp: Any) -> None:
         question; passing ``n_workers`` skips the count question.
 
         Args:
-            gateway: 'k8s' or 'slurm'. Elicited from the user if omitted.
             env_source: 'global', 'pixi', or 'conda'. Elicited if omitted and no
                         pixi_project/conda_env is given.
             pixi_project: Path to a pixi project directory.
             pixi_env: Pixi environment name within the project (default 'default').
             conda_env: Path to a conda/mamba env prefix (mutually exclusive with
                        pixi_project).
-            worker_cores: Cores per worker (k8s: 0.1–64; Slurm: whole numbers
-                          1–16). Defaults to 1 if the user picks the default
-                          size.
-            worker_memory: Memory per worker in GiB (k8s: 0.1–64; Slurm: 1–64).
-                           Defaults to 4 if the user picks the default size.
+            worker_cores: Cores per worker (0.1–64). Defaults to 1 if the user
+                          picks the default size.
+            worker_memory: Memory per worker in GiB (0.1–64). Defaults to 4 if
+                           the user picks the default size.
             n_workers: Workers to start with (0–200). 0 (or omitted with a
                        non-eliciting client) starts the cluster empty. A
                        non-zero count waits for the scheduler to come up
@@ -734,20 +583,6 @@ def register(mcp: Any) -> None:
 
         help_text = _CREATE_CHOICES_HELP
 
-        # ── Backend: ask the user if not supplied ──
-        if gateway is None:
-            choice = await ask(
-                ctx,
-                "Choose the compute backend for your Dask cluster.",
-                _BackendChoice,
-                help_text,
-            )
-            gateway = choice.gateway
-        gateway, url = _resolve_gateway(gateway)
-
-        user = require_user()
-        username = user["username"]
-
         # ── Worker environment: infer from explicit paths, else ask the user ──
         if pixi_project:
             env_source = "pixi"
@@ -760,12 +595,6 @@ def register(mcp: Any) -> None:
             env_source = choice.env_source
 
         if env_source == "global":
-            if gateway == "slurm":
-                raise UserError(
-                    "Error: the global pixi env lives on /work, which Slurm "
-                    "(Hammer) workers cannot access. Choose a pixi project or "
-                    "conda env on /depot instead."
-                )
             pixi_project = GLOBAL_PIXI_PROJECT
             pixi_env = "default"
         elif env_source == "pixi":
@@ -804,7 +633,7 @@ def register(mcp: Any) -> None:
             worker_cores = DEFAULT_WORKER_CORES
         if worker_memory is None:
             worker_memory = DEFAULT_WORKER_MEMORY
-        _check_worker_size(gateway, worker_cores, worker_memory)
+        _check_worker_size(worker_cores, worker_memory)
 
         # ── Worker count: ask only if n_workers was not supplied ──
         if n_workers is None:
@@ -827,6 +656,7 @@ def register(mcp: Any) -> None:
             else:
                 n_workers = int(choice.count)
 
+        username = require_user()["username"]
         options = _build_cluster_options(
             username=username,
             pixi_project=pixi_project,
@@ -839,8 +669,6 @@ def register(mcp: Any) -> None:
 
         resp = await _gateway(
             "POST",
-            gateway,
-            url,
             "/api/v1/clusters/",
             username=username,
             action="create the cluster",
@@ -852,7 +680,7 @@ def register(mcp: Any) -> None:
         cluster_name = payload.get("name", "") if isinstance(payload, dict) else ""
         if not cluster_name:
             malformed = malformed_response(
-                f"gateway '{gateway}'", resp, "a cluster record with a name"
+                _SERVICE, resp, "a cluster record with a name"
             )
             raise UpstreamError(
                 f"{malformed} The cluster may have been created anyway — check "
@@ -860,7 +688,7 @@ def register(mcp: Any) -> None:
             )
 
         lines = [
-            f"Cluster '{cluster_name}' created on gateway '{gateway}'.",
+            f"Cluster '{cluster_name}' created.",
             f"workers: cores={worker_cores} memory={worker_memory} GiB each",
         ]
         if options.get("pixi_project"):
@@ -882,9 +710,7 @@ def register(mcp: Any) -> None:
         # from here is reported inside the result rather than as a failure of
         # the call — the caller still needs the name.
         try:
-            status, waited = await _await_scheduler(
-                gateway, url, cluster_name, username
-            )
+            status, waited = await _await_scheduler(cluster_name, username)
         except Failure as exc:
             lines += [
                 "",
@@ -898,17 +724,15 @@ def register(mcp: Any) -> None:
                 f"Created with 0 workers: the scheduler was still {status} after "
                 f"{waited:.0f} s, and the gateway only accepts workers once the "
                 "cluster is RUNNING.",
-                f"Next: scale_dask_cluster('{cluster_name}', {n_workers}, "
-                f"gateway='{gateway}') — it waits for the scheduler too, so "
-                "calling it again is usually all that is needed.",
+                f"Next: scale_dask_cluster('{cluster_name}', {n_workers}) — it "
+                "waits for the scheduler too, so calling it again is usually all "
+                "that is needed.",
             ]
             return "\n".join(lines)
 
         try:
             await _gateway(
                 "POST",
-                gateway,
-                url,
                 f"/api/v1/clusters/{cluster_name}/scale",
                 username=username,
                 action=f"scale to {n_workers} worker(s)",
@@ -921,8 +745,7 @@ def register(mcp: Any) -> None:
             lines += [
                 "",
                 f"Created with 0 workers — the scale request failed: {exc}",
-                f"Retry with scale_dask_cluster('{cluster_name}', {n_workers}, "
-                f"gateway='{gateway}').",
+                f"Retry with scale_dask_cluster('{cluster_name}', {n_workers}).",
             ]
             return "\n".join(lines)
 
@@ -933,20 +756,16 @@ def register(mcp: Any) -> None:
         return "\n".join(lines)
 
     @mcp.tool()
-    async def get_dask_cluster_info(cluster_name: str, gateway: str = "k8s") -> str:
+    async def get_dask_cluster_info(cluster_name: str) -> str:
         """Get detailed information about a specific Dask cluster.
 
         Args:
             cluster_name: Cluster identifier returned by list_dask_clusters.
-            gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
         _validate_cluster_name(cluster_name)
         user = require_user()
-        gateway, url = _resolve_gateway(gateway)
         resp = await _gateway(
             "GET",
-            gateway,
-            url,
             f"/api/v1/clusters/{cluster_name}",
             username=user["username"],
             action=f"inspect cluster '{cluster_name}'",
@@ -954,7 +773,7 @@ def register(mcp: Any) -> None:
         )
         c = json_body(resp)
         if not isinstance(c, dict):
-            raise malformed_response(f"gateway '{gateway}'", resp, "a cluster record")
+            raise malformed_response(_SERVICE, resp, "a cluster record")
         workers = c.get("workers") or {}
         worker_lines: list[str] = []
         if isinstance(workers, dict):
@@ -965,7 +784,7 @@ def register(mcp: Any) -> None:
                 worker_lines.append(f"  … {len(workers) - 20} more")
 
         opts = c.get("options", {})
-        sections = [_fmt_cluster(c, gateway)]
+        sections = [_fmt_cluster(c)]
         if opts:
             sections.append(
                 "Options:\n" + "\n".join(f"  {k}: {v}" for k, v in opts.items())
@@ -975,7 +794,7 @@ def register(mcp: Any) -> None:
         return "\n\n".join(sections)
 
     @mcp.tool()
-    async def get_dask_worker_count(cluster_name: str, gateway: str = "k8s") -> str:
+    async def get_dask_worker_count(cluster_name: str) -> str:
         """Return the current number of workers for a Dask cluster (by state).
 
         Uses the scheduler's Prometheus metrics. Prefer this over guessing from
@@ -983,12 +802,10 @@ def register(mcp: Any) -> None:
 
         Args:
             cluster_name: Cluster identifier returned by list_dask_clusters.
-            gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
         _validate_cluster_name(cluster_name)
         username = require_user()["username"]
-        gateway, url = _resolve_gateway(gateway)
-        await _require_owned_cluster(url, username, cluster_name, gateway)
+        await _require_owned_cluster(username, cluster_name)
 
         cid = _cluster_id(cluster_name)
         quser = quote_label(username)
@@ -1023,7 +840,7 @@ def register(mcp: Any) -> None:
             )
 
         lines = [
-            f"# Workers for {cluster_name} (gateway={gateway})",
+            f"# Workers for {cluster_name}",
             f"total: {int(total)}",
         ]
         if desired is not None:
@@ -1038,7 +855,7 @@ def register(mcp: Any) -> None:
         return "\n".join(lines)
 
     @mcp.tool()
-    async def get_dask_cluster_usage(cluster_name: str, gateway: str = "k8s") -> str:
+    async def get_dask_cluster_usage(cluster_name: str) -> str:
         """CPU and memory usage across Running workers of a Dask cluster.
 
         Reports per-worker min / max / average for CPU (cores) and memory (GiB),
@@ -1046,12 +863,10 @@ def register(mcp: Any) -> None:
 
         Args:
             cluster_name: Cluster identifier returned by list_dask_clusters.
-            gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
         _validate_cluster_name(cluster_name)
         username = require_user()["username"]
-        gateway, url = _resolve_gateway(gateway)
-        await _require_owned_cluster(url, username, cluster_name, gateway)
+        await _require_owned_cluster(username, cluster_name)
 
         cid = _cluster_id(cluster_name)
         # re.escape: '.' is a regex metachar and legitimately appears in names.
@@ -1098,7 +913,7 @@ def register(mcp: Any) -> None:
             )
 
         lines = [
-            f"# Resource usage for {cluster_name} (gateway={gateway})",
+            f"# Resource usage for {cluster_name}",
             f"running workers sampled: {n}",
         ]
         cpu_stats = _stats(cpu_vals)
@@ -1127,9 +942,7 @@ def register(mcp: Any) -> None:
         return "\n".join(lines)
 
     @mcp.tool()
-    async def scale_dask_cluster(
-        cluster_name: str, n_workers: int, gateway: str = "k8s"
-    ) -> str:
+    async def scale_dask_cluster(cluster_name: str, n_workers: int) -> str:
         """Scale a Dask cluster to the requested number of workers.
 
         A cluster that is still starting cannot take workers, so this waits for
@@ -1140,7 +953,6 @@ def register(mcp: Any) -> None:
         Args:
             cluster_name: Cluster identifier returned by list_dask_clusters.
             n_workers: Target worker count (0–200).
-            gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
         _validate_cluster_name(cluster_name)
         if n_workers < 0:
@@ -1148,15 +960,14 @@ def register(mcp: Any) -> None:
         if n_workers > MAX_WORKERS:
             raise UserError(f"Error: n_workers must be ≤ {MAX_WORKERS}.")
         username = require_user()["username"]
-        gateway, url = _resolve_gateway(gateway)
 
         # A starting cluster rejects scaling; a RUNNING one costs one extra GET here.
-        status, waited = await _await_scheduler(gateway, url, cluster_name, username)
+        status, waited = await _await_scheduler(cluster_name, username)
         if status != "RUNNING":
             return (
-                f"No scale request was sent: cluster '{cluster_name}' on "
-                f"'{gateway}' was still {status} after {waited:.0f} s, and the "
-                "gateway only accepts workers once the cluster is RUNNING.\n"
+                f"No scale request was sent: cluster '{cluster_name}' was still "
+                f"{status} after {waited:.0f} s, and the gateway only accepts "
+                "workers once the cluster is RUNNING.\n"
                 "Next: get_dask_cluster_info for the current status, or "
                 "query_dask_logs if it stays pending — the scheduler pod may "
                 "be waiting for capacity. Calling scale_dask_cluster again "
@@ -1165,8 +976,6 @@ def register(mcp: Any) -> None:
 
         await _gateway(
             "POST",
-            gateway,
-            url,
             f"/api/v1/clusters/{cluster_name}/scale",
             username=username,
             action=f"scale to {n_workers} worker(s)",
@@ -1174,9 +983,7 @@ def register(mcp: Any) -> None:
             ok=(200, 204),
             json={"count": n_workers},
         )
-        lines = [
-            f"Cluster '{cluster_name}' on '{gateway}' scaling to {n_workers} worker(s)."
-        ]
+        lines = [f"Cluster '{cluster_name}' scaling to {n_workers} worker(s)."]
         if waited >= SCHEDULER_POLL_INTERVAL:
             lines.insert(0, f"Scheduler became RUNNING after {waited:.0f} s.")
         if n_workers:
@@ -1184,22 +991,18 @@ def register(mcp: Any) -> None:
         return "\n".join(lines)
 
     @mcp.tool()
-    async def stop_dask_cluster(cluster_name: str, gateway: str = "k8s") -> str:
+    async def stop_dask_cluster(cluster_name: str) -> str:
         """Stop and delete a Dask cluster, releasing all its resources.
 
         This is irreversible — running computations will be lost.
 
         Args:
             cluster_name: Cluster identifier returned by list_dask_clusters.
-            gateway: Gateway backend — 'k8s' (default) or 'slurm'.
         """
         _validate_cluster_name(cluster_name)
         username = require_user()["username"]
-        gateway, url = _resolve_gateway(gateway)
         resp = await _gateway(
             "DELETE",
-            gateway,
-            url,
             f"/api/v1/clusters/{cluster_name}",
             username=username,
             action=f"stop cluster '{cluster_name}'",
@@ -1207,5 +1010,5 @@ def register(mcp: Any) -> None:
             ok=(200, 204, 404),
         )
         if resp.status_code == 404:
-            return f"Cluster '{cluster_name}' not found on gateway '{gateway}' (may have already stopped)."
-        return f"Cluster '{cluster_name}' on '{gateway}' stopped."
+            return f"Cluster '{cluster_name}' not found (may have already stopped)."
+        return f"Cluster '{cluster_name}' stopped."

@@ -1,4 +1,4 @@
-"""Tests for tools/dask.py — gateway resolution and cluster operations."""
+"""Tests for tools/dask.py — cluster operations against Dask Gateway."""
 
 import base64
 import json
@@ -12,12 +12,11 @@ from agentic_helpers import failure, needs_choices, register_tools
 from httpx import ConnectError
 from tools import dask
 
-K8S = dask._GATEWAYS["k8s"]
-SLURM = dask._GATEWAYS["slurm"]
+GATEWAY = dask.DASK_GATEWAY_URL
 
 
-def clusters_url(base):
-    return f"{base}/api/v1/clusters/"
+def clusters_url():
+    return f"{GATEWAY}/api/v1/clusters/"
 
 
 def clusters_payload(*clusters):
@@ -29,9 +28,9 @@ def basic_alice():
     return "Basic " + base64.b64encode(b"alice:").decode()
 
 
-def scheduler_running(base, name):
+def scheduler_running(name):
     """Mock the status GET that create/scale use to wait for the scheduler."""
-    return respx.get(f"{base}/api/v1/clusters/{name}").respond(
+    return respx.get(f"{GATEWAY}/api/v1/clusters/{name}").respond(
         200, json={"name": name, "status": "RUNNING"}
     )
 
@@ -60,52 +59,26 @@ def accept(data):
     return ("accept", data)
 
 
-# ── _resolve_gateway ──────────────────────────────────────────────────────────
-
-
-def test_resolve_canonical_names():
-    for name in ("k8s", "slurm"):
-        canonical, url = dask._resolve_gateway(name)
-        assert canonical == name
-        assert url == dask._GATEWAYS[name]
-
-
-def test_resolve_is_case_insensitive():
-    assert dask._resolve_gateway("K8S")[0] == "k8s"
-    assert dask._resolve_gateway("Slurm")[0] == "slurm"
-
-
-def test_resolve_unknown_raises():
-    from errors import UserError
-
-    with pytest.raises(UserError, match="Unknown gateway"):
-        dask._resolve_gateway("nope")
-    with pytest.raises(UserError, match="Unknown gateway"):
-        dask._resolve_gateway("slurm-nonexistent")
-
-
 # ── _fmt_cluster / _parse_clusters ────────────────────────────────────────────
 
 
 def test_fmt_cluster_fixed_workers():
     out = dask._fmt_cluster(
-        {"name": "c1", "status": "RUNNING", "workers": {"w1": {}, "w2": {}}}, "k8s"
+        {"name": "c1", "status": "RUNNING", "workers": {"w1": {}, "w2": {}}}
     )
     assert "workers=2" in out
-    assert "gateway=k8s" in out
 
 
 def test_fmt_cluster_adaptive():
     out = dask._fmt_cluster(
-        {"name": "c1", "status": "RUNNING", "adaptive": {"minimum": 1, "maximum": 10}},
-        "k8s",
+        {"name": "c1", "status": "RUNNING", "adaptive": {"minimum": 1, "maximum": 10}}
     )
     assert "adaptive(1–10)" in out
 
 
 def test_fmt_cluster_scheduler_address():
     out = dask._fmt_cluster(
-        {"name": "c1", "status": "RUNNING", "scheduler_address": "tls://x:8786"}, "k8s"
+        {"name": "c1", "status": "RUNNING", "scheduler_address": "tls://x:8786"}
     )
     assert "scheduler: tls://x:8786" in out
 
@@ -127,43 +100,38 @@ def test_parse_clusters_empty():
 
 
 @respx.mock
-async def test_list_clusters_aggregates_gateways(user_ctx):
-    respx.get(clusters_url(K8S)).respond(
+async def test_list_clusters_renders_each_cluster(user_ctx):
+    respx.get(clusters_url()).respond(
         200,
-        json=clusters_payload({"name": "c-k8s", "status": "RUNNING", "workers": {}}),
+        json=clusters_payload(
+            {"name": "cms.a", "status": "RUNNING", "workers": {}},
+            {"name": "cms.b", "status": "PENDING", "workers": {}},
+        ),
     )
-    respx.get(clusters_url(SLURM)).mock(side_effect=ConnectError("down"))
 
     tools = register_tools(dask).tools
     out = await tools["list_dask_clusters"]()
 
-    assert "# 1 Dask cluster(s)" in out
-    assert "c-k8s" in out
-    assert "[slurm] error: unreachable" in out
+    assert "# 2 Dask cluster(s)" in out
+    assert "cms.a" in out and "cms.b" in out
 
 
 @respx.mock
-async def test_list_clusters_all_empty(user_ctx):
-    for base in (K8S, SLURM):
-        respx.get(clusters_url(base)).respond(200, json={})
+async def test_list_clusters_empty(user_ctx):
+    respx.get(clusters_url()).respond(200, json={})
 
     tools = register_tools(dask).tools
-    assert await tools["list_dask_clusters"]() == (
-        "No running Dask clusters on any gateway."
-    )
+    assert await tools["list_dask_clusters"]() == "No running Dask clusters."
 
 
 @respx.mock
 async def test_list_clusters_sends_basic_username(user_ctx):
-    routes = [
-        respx.get(clusters_url(base)).respond(200, json={}) for base in (K8S, SLURM)
-    ]
+    route = respx.get(clusters_url()).respond(200, json={})
 
     tools = register_tools(dask).tools
     await tools["list_dask_clusters"]()
 
-    for route in routes:
-        assert route.calls.last.request.headers["Authorization"] == basic_alice()
+    assert route.calls.last.request.headers["Authorization"] == basic_alice()
 
 
 # ── get_dask_cluster_info ─────────────────────────────────────────────────────
@@ -172,7 +140,7 @@ async def test_list_clusters_sends_basic_username(user_ctx):
 @respx.mock
 async def test_cluster_info_renders_details(user_ctx):
     workers = {f"w{i}": {"status": "running"} for i in range(25)}
-    respx.get(f"{K8S}/api/v1/clusters/c1").respond(
+    respx.get(f"{GATEWAY}/api/v1/clusters/c1").respond(
         200,
         json={
             "name": "c1",
@@ -195,8 +163,8 @@ async def test_cluster_info_renders_details(user_ctx):
 
 @respx.mock
 async def test_scale_posts_count(user_ctx):
-    scheduler_running(K8S, "c1")
-    route = respx.post(f"{K8S}/api/v1/clusters/c1/scale").respond(200)
+    scheduler_running("c1")
+    route = respx.post(f"{GATEWAY}/api/v1/clusters/c1/scale").respond(200)
 
     tools = register_tools(dask).tools
     out = await tools["scale_dask_cluster"]("c1", 8)
@@ -213,7 +181,7 @@ async def test_scale_posts_count(user_ctx):
 # poll the cluster record first; these tests pin that they wait rather than fail.
 
 
-def pending_then_running(base, name, pending=2):
+def pending_then_running(name, pending=2):
     """Status GET that reports PENDING `pending` times, then RUNNING."""
     seen = {"n": 0}
 
@@ -222,15 +190,15 @@ def pending_then_running(base, name, pending=2):
         status = "PENDING" if seen["n"] <= pending else "RUNNING"
         return httpx.Response(200, json={"name": name, "status": status})
 
-    respx.get(f"{base}/api/v1/clusters/{name}").mock(side_effect=responder)
+    respx.get(f"{GATEWAY}/api/v1/clusters/{name}").mock(side_effect=responder)
     return seen
 
 
 @respx.mock
 async def test_scale_waits_for_a_pending_scheduler(user_ctx, monkeypatch):
     monkeypatch.setattr(dask, "SCHEDULER_POLL_INTERVAL", 0)
-    polls = pending_then_running(K8S, "c1", pending=2)
-    scale = respx.post(f"{K8S}/api/v1/clusters/c1/scale").respond(204)
+    polls = pending_then_running("c1", pending=2)
+    scale = respx.post(f"{GATEWAY}/api/v1/clusters/c1/scale").respond(204)
 
     out = await register_tools(dask).tools["scale_dask_cluster"]("c1", 4)
 
@@ -246,10 +214,10 @@ async def test_scale_does_not_post_when_the_scheduler_never_comes_up(
 ):
     monkeypatch.setattr(dask, "SCHEDULER_POLL_INTERVAL", 0)
     monkeypatch.setattr(dask, "SCHEDULER_READY_TIMEOUT", 0.01)
-    respx.get(f"{K8S}/api/v1/clusters/c1").respond(
+    respx.get(f"{GATEWAY}/api/v1/clusters/c1").respond(
         200, json={"name": "c1", "status": "PENDING"}
     )
-    scale = respx.post(f"{K8S}/api/v1/clusters/c1/scale").respond(204)
+    scale = respx.post(f"{GATEWAY}/api/v1/clusters/c1/scale").respond(204)
 
     out = await register_tools(dask).tools["scale_dask_cluster"]("c1", 4)
 
@@ -262,10 +230,10 @@ async def test_scale_does_not_post_when_the_scheduler_never_comes_up(
 @pytest.mark.parametrize("status", ["STOPPED", "FAILED", "STOPPING"])
 @respx.mock
 async def test_scale_refuses_a_cluster_that_will_never_run(user_ctx, status):
-    respx.get(f"{K8S}/api/v1/clusters/c1").respond(
+    respx.get(f"{GATEWAY}/api/v1/clusters/c1").respond(
         200, json={"name": "c1", "status": status}
     )
-    scale = respx.post(f"{K8S}/api/v1/clusters/c1/scale").respond(204)
+    scale = respx.post(f"{GATEWAY}/api/v1/clusters/c1/scale").respond(204)
 
     message = await failure(register_tools(dask).tools["scale_dask_cluster"]("c1", 4))
 
@@ -278,13 +246,12 @@ async def test_scale_refuses_a_cluster_that_will_never_run(user_ctx, status):
 async def test_create_waits_for_the_scheduler_before_scaling(user_ctx, monkeypatch):
     """create scales only once the scheduler is RUNNING."""
     monkeypatch.setattr(dask, "SCHEDULER_POLL_INTERVAL", 0)
-    respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.slow"})
-    polls = pending_then_running(K8S, "cms.slow", pending=3)
-    scale = respx.post(f"{K8S}/api/v1/clusters/cms.slow/scale").respond(204)
+    respx.post(clusters_url()).respond(201, json={"name": "cms.slow"})
+    polls = pending_then_running("cms.slow", pending=3)
+    scale = respx.post(f"{GATEWAY}/api/v1/clusters/cms.slow/scale").respond(204)
 
     out = await register_tools(dask).tools["create_dask_cluster"](
         FakeCtx(),
-        gateway="k8s",
         env_source="global",
         worker_cores=1,
         worker_memory=4,
@@ -303,15 +270,14 @@ async def test_create_waits_for_the_scheduler_before_scaling(user_ctx, monkeypat
 async def test_create_reports_a_scheduler_that_never_came_up(user_ctx, monkeypatch):
     monkeypatch.setattr(dask, "SCHEDULER_POLL_INTERVAL", 0)
     monkeypatch.setattr(dask, "SCHEDULER_READY_TIMEOUT", 0.01)
-    respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.stuck"})
-    respx.get(f"{K8S}/api/v1/clusters/cms.stuck").respond(
+    respx.post(clusters_url()).respond(201, json={"name": "cms.stuck"})
+    respx.get(f"{GATEWAY}/api/v1/clusters/cms.stuck").respond(
         200, json={"name": "cms.stuck", "status": "PENDING"}
     )
-    scale = respx.post(f"{K8S}/api/v1/clusters/cms.stuck/scale").respond(204)
+    scale = respx.post(f"{GATEWAY}/api/v1/clusters/cms.stuck/scale").respond(204)
 
     out = await register_tools(dask).tools["create_dask_cluster"](
         FakeCtx(),
-        gateway="k8s",
         env_source="global",
         worker_cores=1,
         worker_memory=4,
@@ -323,22 +289,21 @@ async def test_create_reports_a_scheduler_that_never_came_up(user_ctx, monkeypat
     assert "cms.stuck" in out
     assert "Created with 0 workers" in out
     assert "still PENDING" in out
-    assert "scale_dask_cluster('cms.stuck', 2, gateway='k8s')" in out
+    assert "scale_dask_cluster('cms.stuck', 2)" in out
 
 
 @respx.mock
 async def test_create_reports_a_scheduler_that_failed(user_ctx):
     """The cluster exists even though its scheduler died, so the caller still
     gets its name rather than a bare failure."""
-    respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.dead"})
-    respx.get(f"{K8S}/api/v1/clusters/cms.dead").respond(
+    respx.post(clusters_url()).respond(201, json={"name": "cms.dead"})
+    respx.get(f"{GATEWAY}/api/v1/clusters/cms.dead").respond(
         200, json={"name": "cms.dead", "status": "FAILED"}
     )
-    scale = respx.post(f"{K8S}/api/v1/clusters/cms.dead/scale").respond(204)
+    scale = respx.post(f"{GATEWAY}/api/v1/clusters/cms.dead/scale").respond(204)
 
     out = await register_tools(dask).tools["create_dask_cluster"](
         FakeCtx(),
-        gateway="k8s",
         env_source="global",
         worker_cores=1,
         worker_memory=4,
@@ -354,12 +319,11 @@ async def test_create_reports_a_scheduler_that_failed(user_ctx):
 @respx.mock
 async def test_create_with_zero_workers_never_waits(user_ctx):
     """No scale to make, so nothing should poll the cluster record."""
-    respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.empty"})
-    status = respx.get(f"{K8S}/api/v1/clusters/cms.empty")
+    respx.post(clusters_url()).respond(201, json={"name": "cms.empty"})
+    status = respx.get(f"{GATEWAY}/api/v1/clusters/cms.empty")
 
     out = await register_tools(dask).tools["create_dask_cluster"](
         FakeCtx(),
-        gateway="k8s",
         env_source="global",
         worker_cores=1,
         worker_memory=4,
@@ -373,8 +337,8 @@ async def test_create_with_zero_workers_never_waits(user_ctx):
 @respx.mock
 async def test_running_cluster_costs_one_status_check(user_ctx):
     """The normal path must not add polling latency."""
-    status = scheduler_running(K8S, "c1")
-    respx.post(f"{K8S}/api/v1/clusters/c1/scale").respond(204)
+    status = scheduler_running("c1")
+    respx.post(f"{GATEWAY}/api/v1/clusters/c1/scale").respond(204)
 
     await register_tools(dask).tools["scale_dask_cluster"]("c1", 1)
 
@@ -446,7 +410,7 @@ def test_build_options_rejects_both_or_neither():
 
 @respx.mock
 async def test_list_cluster_options(user_ctx):
-    respx.get(f"{K8S}/api/v1/options").respond(
+    respx.get(f"{GATEWAY}/api/v1/options").respond(
         200,
         json={
             "cluster_options": [
@@ -468,22 +432,19 @@ async def test_list_cluster_options(user_ctx):
 
     tools = register_tools(dask).tools
     out = await tools["list_dask_cluster_options"]()
-    assert "gateway=k8s" in out
-    assert "Kubernetes (Geddes)" in out
     assert "worker_cores" in out
     assert "pixi_project" in out
 
 
 @respx.mock
 async def test_create_cluster_explicit_args_pixi_then_scale(user_ctx):
-    create = respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.abc"})
-    scheduler_running(K8S, "cms.abc")
-    scale = respx.post(f"{K8S}/api/v1/clusters/cms.abc/scale").respond(204)
+    create = respx.post(clusters_url()).respond(201, json={"name": "cms.abc"})
+    scheduler_running("cms.abc")
+    scale = respx.post(f"{GATEWAY}/api/v1/clusters/cms.abc/scale").respond(204)
 
     tools = register_tools(dask).tools
     out = await tools["create_dask_cluster"](
         FakeCtx(),  # explicit args → no elicitation
-        gateway="k8s",
         pixi_project="/work/alice/proj",
         worker_cores=2,
         worker_memory=8,
@@ -502,19 +463,18 @@ async def test_create_cluster_explicit_args_pixi_then_scale(user_ctx):
 
 
 @respx.mock
-async def test_create_cluster_explicit_slurm_conda_no_scale(user_ctx):
-    create = respx.post(clusters_url(SLURM)).respond(201, json={"name": "cms.slurm1"})
+async def test_create_cluster_explicit_conda_no_scale(user_ctx):
+    create = respx.post(clusters_url()).respond(201, json={"name": "cms.c1"})
 
     tools = register_tools(dask).tools
     out = await tools["create_dask_cluster"](
         FakeCtx(),
-        gateway="slurm",
         conda_env="/depot/cms/alice/envs/ana",
         worker_cores=1,
         worker_memory=4,
         n_workers=0,
     )
-    assert "slurm" in out
+    assert "cms.c1" in out
     assert "0 workers" in out
     assert create.called
     opts = json.loads(create.calls[0].request.content)["cluster_options"]
@@ -534,11 +494,10 @@ def count(value):
 
 
 @respx.mock
-async def test_create_elicits_backend_and_global_env(user_ctx):
-    create = respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.g"})
+async def test_create_elicits_global_env(user_ctx):
+    create = respx.post(clusters_url()).respond(201, json={"name": "cms.g"})
 
     ctx = FakeCtx(
-        accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="global")),
         default_size(),
         count("0"),
@@ -553,28 +512,14 @@ async def test_create_elicits_backend_and_global_env(user_ctx):
     assert opts["pixi_project"] == dask.GLOBAL_PIXI_PROJECT
     assert opts["worker_cores"] == dask.DEFAULT_WORKER_CORES
     assert opts["worker_memory"] == dask.DEFAULT_WORKER_MEMORY
-    assert len(ctx.calls) == 4
-
-
-@respx.mock
-async def test_create_global_on_slurm_rejected(user_ctx):
-    ctx = FakeCtx(
-        accept(dask._BackendChoice(gateway="slurm")),
-        accept(dask._EnvChoice(env_source="global")),
-    )
-    tools = register_tools(dask).tools
-    out = await failure(tools["create_dask_cluster"](ctx))
-
-    assert "/work" in out
-    assert "Slurm" in out
+    assert len(ctx.calls) == 3
 
 
 @respx.mock
 async def test_create_elicits_pixi_path(user_ctx):
-    create = respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.p"})
+    create = respx.post(clusters_url()).respond(201, json={"name": "cms.p"})
 
     ctx = FakeCtx(
-        accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="pixi")),
         accept(dask._PixiChoice(pixi_project="/depot/cms/alice/proj", pixi_env="ml")),
         default_size(),
@@ -587,15 +532,14 @@ async def test_create_elicits_pixi_path(user_ctx):
     opts = json.loads(create.calls[0].request.content)["cluster_options"]
     assert opts["pixi_project"] == "/depot/cms/alice/proj"
     assert opts["pixi_env"] == "ml"
-    assert len(ctx.calls) == 5
+    assert len(ctx.calls) == 4
 
 
 @respx.mock
-async def test_create_elicits_conda_path_on_slurm(user_ctx):
-    create = respx.post(clusters_url(SLURM)).respond(201, json={"name": "cms.c"})
+async def test_create_elicits_conda_path(user_ctx):
+    create = respx.post(clusters_url()).respond(201, json={"name": "cms.c"})
 
     ctx = FakeCtx(
-        accept(dask._BackendChoice(gateway="slurm")),
         accept(dask._EnvChoice(env_source="conda")),
         accept(dask._CondaChoice(conda_env="/depot/cms/alice/envs/ana")),
         default_size(),
@@ -611,12 +555,11 @@ async def test_create_elicits_conda_path_on_slurm(user_ctx):
 
 @respx.mock
 async def test_create_elicits_preset_count_scales(user_ctx):
-    respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.n"})
-    scheduler_running(K8S, "cms.n")
-    scale = respx.post(f"{K8S}/api/v1/clusters/cms.n/scale").respond(204)
+    respx.post(clusters_url()).respond(201, json={"name": "cms.n"})
+    scheduler_running("cms.n")
+    scale = respx.post(f"{GATEWAY}/api/v1/clusters/cms.n/scale").respond(204)
 
     ctx = FakeCtx(
-        accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="global")),
         default_size(),
         count("50"),
@@ -631,12 +574,11 @@ async def test_create_elicits_preset_count_scales(user_ctx):
 
 @respx.mock
 async def test_create_elicits_custom_size_and_count(user_ctx):
-    create = respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.x"})
-    scheduler_running(K8S, "cms.x")
-    scale = respx.post(f"{K8S}/api/v1/clusters/cms.x/scale").respond(204)
+    create = respx.post(clusters_url()).respond(201, json={"name": "cms.x"})
+    scheduler_running("cms.x")
+    scale = respx.post(f"{GATEWAY}/api/v1/clusters/cms.x/scale").respond(204)
 
     ctx = FakeCtx(
-        accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="global")),
         accept(dask._SizeChoice(size="custom")),
         accept(dask._CustomSize(worker_cores=8, worker_memory=16)),
@@ -652,13 +594,13 @@ async def test_create_elicits_custom_size_and_count(user_ctx):
     assert opts["worker_memory"] == 16
     assert scale.called
     assert json.loads(scale.calls[0].request.content) == {"count": 25}
-    assert len(ctx.calls) == 6
+    assert len(ctx.calls) == 5
 
 
 async def test_create_unsupported_client_returns_help(user_ctx):
     tools = register_tools(dask).tools
     out = await needs_choices(tools["create_dask_cluster"](None))
-    assert "needs two choices" in out
+    assert "create_dask_cluster needs" in out
 
 
 async def test_create_declined_falls_back(user_ctx):
@@ -667,18 +609,17 @@ async def test_create_declined_falls_back(user_ctx):
     ctx = FakeCtx(("decline", None))
     tools = register_tools(dask).tools
     out = await needs_choices(tools["create_dask_cluster"](ctx))
-    assert "needs two choices" in out
+    assert "create_dask_cluster needs" in out
 
 
 async def test_create_declined_size_falls_back(user_ctx):
     ctx = FakeCtx(
-        accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="global")),
         ("cancel", None),
     )
     tools = register_tools(dask).tools
     out = await needs_choices(tools["create_dask_cluster"](ctx))
-    assert "needs two choices" in out
+    assert "create_dask_cluster needs" in out
 
 
 # ── stop_dask_cluster ─────────────────────────────────────────────────────────
@@ -686,7 +627,7 @@ async def test_create_declined_size_falls_back(user_ctx):
 
 @respx.mock
 async def test_stop_cluster(user_ctx):
-    respx.delete(f"{K8S}/api/v1/clusters/c1").respond(204)
+    respx.delete(f"{GATEWAY}/api/v1/clusters/c1").respond(204)
 
     tools = register_tools(dask).tools
     out = await tools["stop_dask_cluster"]("c1")
@@ -695,7 +636,7 @@ async def test_stop_cluster(user_ctx):
 
 @respx.mock
 async def test_stop_cluster_already_gone(user_ctx):
-    respx.delete(f"{K8S}/api/v1/clusters/c1").respond(404)
+    respx.delete(f"{GATEWAY}/api/v1/clusters/c1").respond(404)
 
     tools = register_tools(dask).tools
     out = await tools["stop_dask_cluster"]("c1")
@@ -729,7 +670,7 @@ def prom_vector(samples):
 
 @respx.mock
 async def test_worker_count_reports_total_and_states(user_ctx):
-    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+    respx.get(f"{GATEWAY}/api/v1/clusters/cms.abc").respond(
         200, json={"name": "cms.abc", "status": "RUNNING"}
     )
 
@@ -759,7 +700,7 @@ async def test_worker_count_reports_total_and_states(user_ctx):
 
 @respx.mock
 async def test_cluster_usage_min_max_avg(user_ctx):
-    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+    respx.get(f"{GATEWAY}/api/v1/clusters/cms.abc").respond(
         200, json={"name": "cms.abc", "status": "RUNNING"}
     )
 
@@ -800,7 +741,7 @@ async def test_cluster_usage_min_max_avg(user_ctx):
 
 @respx.mock
 async def test_cluster_usage_no_workers(user_ctx):
-    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+    respx.get(f"{GATEWAY}/api/v1/clusters/cms.abc").respond(
         200, json={"name": "cms.abc", "status": "RUNNING"}
     )
     respx.get(f"{dask.CLUSTER_PROMETHEUS_URL}/api/v1/query").respond(
@@ -853,64 +794,32 @@ def test_build_options_rejects_nonpositive_resources():
 
 
 @respx.mock
-async def test_list_clusters_auth_and_http_errors(user_ctx):
-    """401/403 are fetched but intentionally omitted from the list output;
-    other HTTP errors are surfaced. Cover both via _fetch_clusters + list."""
-    import httpx
-
-    async with httpx.AsyncClient() as client:
-        respx.get(clusters_url(K8S)).respond(403)
-        gw, data = await dask._fetch_clusters(client, "k8s", K8S, "alice")
-        assert data == "not authorised (no access to this backend)"
-
-        respx.get(clusters_url(K8S)).respond(401)
-        _, data = await dask._fetch_clusters(client, "k8s", K8S, "alice")
-        assert "not authorised" in data
-
-        respx.get(clusters_url(K8S)).respond(503)
-        _, data = await dask._fetch_clusters(client, "k8s", K8S, "alice")
-        assert data == "HTTP 503"
-
-        respx.get(clusters_url(K8S)).respond(200, text="<html>proxy</html>")
-        _, data = await dask._fetch_clusters(client, "k8s", K8S, "alice")
-        assert data == "returned a malformed cluster list"
-
-    respx.get(clusters_url(K8S)).respond(403)
-    respx.get(clusters_url(SLURM)).respond(503)
-    tools = register_tools(dask).tools
-    out = await tools["list_dask_clusters"]()
-    # auth errors suppressed; HTTP 503 from slurm is shown
-    assert "not authorised" not in out
-    assert "slurm" in out and "HTTP 503" in out
-
-
-@respx.mock
 async def test_require_owned_cluster_error_shapes(user_ctx):
     from errors import AuthError, UpstreamError
 
-    respx.get(f"{K8S}/api/v1/clusters/c1").mock(side_effect=ConnectError("down"))
+    respx.get(f"{GATEWAY}/api/v1/clusters/c1").mock(side_effect=ConnectError("down"))
     with pytest.raises(UpstreamError, match="unreachable"):
-        await dask._require_owned_cluster(K8S, "alice", "c1", "k8s")
+        await dask._require_owned_cluster("alice", "c1")
 
-    respx.get(f"{K8S}/api/v1/clusters/c1").respond(403)
+    respx.get(f"{GATEWAY}/api/v1/clusters/c1").respond(403)
     with pytest.raises(AuthError, match="not authorised"):
-        await dask._require_owned_cluster(K8S, "alice", "c1", "k8s")
+        await dask._require_owned_cluster("alice", "c1")
 
-    respx.get(f"{K8S}/api/v1/clusters/c1").respond(500, text="boom")
+    respx.get(f"{GATEWAY}/api/v1/clusters/c1").respond(500, text="boom")
     with pytest.raises(UpstreamError, match="HTTP 500"):
-        await dask._require_owned_cluster(K8S, "alice", "c1", "k8s")
+        await dask._require_owned_cluster("alice", "c1")
 
-    respx.get(f"{K8S}/api/v1/clusters/c1").respond(200, json={"name": "c1"})
-    assert await dask._require_owned_cluster(K8S, "alice", "c1", "k8s") is None
+    respx.get(f"{GATEWAY}/api/v1/clusters/c1").respond(200, json={"name": "c1"})
+    assert await dask._require_owned_cluster("alice", "c1") is None
 
 
 @respx.mock
 async def test_cluster_status_rejects_a_malformed_record(user_ctx):
     from errors import UpstreamError
 
-    respx.get(f"{K8S}/api/v1/clusters/c1").respond(200, json=["c1"])
+    respx.get(f"{GATEWAY}/api/v1/clusters/c1").respond(200, json=["c1"])
     with pytest.raises(UpstreamError, match="was not a cluster record"):
-        await dask._cluster_status("k8s", K8S, "c1", "alice")
+        await dask._cluster_status("c1", "alice")
 
 
 @respx.mock
@@ -967,11 +876,10 @@ async def test_prom_helpers_report_problems_separately_from_no_data():
 async def test_create_cancel_and_unsupported_mid_flow(user_ctx):
     tools = register_tools(dask).tools
 
-    ctx = FakeCtx(
-        accept(dask._BackendChoice(gateway="k8s")),
-        ("cancel", None),
+    ctx = FakeCtx(("cancel", None))
+    assert "create_dask_cluster needs" in await needs_choices(
+        tools["create_dask_cluster"](ctx)
     )
-    assert "needs two choices" in await needs_choices(tools["create_dask_cluster"](ctx))
 
     class BoomCtx(FakeCtx):
         async def elicit(self, message, schema):
@@ -979,63 +887,58 @@ async def test_create_cancel_and_unsupported_mid_flow(user_ctx):
                 raise RuntimeError("elicit broken")
             return await super().elicit(message, schema)
 
-    # backend accepted, then env elicit fails → help text
-    ctx = BoomCtx(accept(dask._BackendChoice(gateway="k8s")))
+    # the env elicit itself fails → help text
+    ctx = BoomCtx()
     out = await needs_choices(tools["create_dask_cluster"](ctx))
-    assert "needs two choices" in out
+    assert "create_dask_cluster needs" in out
 
 
 @respx.mock
 async def test_create_gateway_errors_and_scale_failures(user_ctx):
     tools = register_tools(dask).tools
     kwargs = dict(
-        gateway="k8s",
         pixi_project="/work/alice/p",
         worker_cores=1,
         worker_memory=4,
         n_workers=2,
     )
 
-    respx.post(clusters_url(K8S)).mock(side_effect=ConnectError("down"))
+    respx.post(clusters_url()).mock(side_effect=ConnectError("down"))
     assert "unreachable" in await failure(
         tools["create_dask_cluster"](FakeCtx(), **kwargs)
     )
 
-    respx.post(clusters_url(K8S)).respond(500, text="boom")
+    respx.post(clusters_url()).respond(500, text="boom")
     assert "HTTP 500" in await failure(
         tools["create_dask_cluster"](FakeCtx(), **kwargs)
     )
 
-    respx.post(clusters_url(K8S)).respond(201, json={})
+    respx.post(clusters_url()).respond(201, json={})
     assert "not a cluster record with a name" in await failure(
         tools["create_dask_cluster"](FakeCtx(), **{**kwargs, "n_workers": 0})
     )
 
-    respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.s"})
-    scheduler_running(K8S, "cms.s")
-    respx.post(f"{K8S}/api/v1/clusters/cms.s/scale").mock(
+    respx.post(clusters_url()).respond(201, json={"name": "cms.s"})
+    scheduler_running("cms.s")
+    respx.post(f"{GATEWAY}/api/v1/clusters/cms.s/scale").mock(
         side_effect=ConnectError("down")
     )
     out = await tools["create_dask_cluster"](FakeCtx(), **kwargs)
     assert "Created with 0 workers — the scale request failed" in out
     assert "unreachable" in out
-    assert "scale_dask_cluster('cms.s', 2, gateway='k8s')" in out
+    assert "scale_dask_cluster('cms.s', 2)" in out
 
-    respx.post(clusters_url(K8S)).respond(201, json={"name": "cms.s2"})
-    scheduler_running(K8S, "cms.s2")
-    respx.post(f"{K8S}/api/v1/clusters/cms.s2/scale").respond(500, text="no")
+    respx.post(clusters_url()).respond(201, json={"name": "cms.s2"})
+    scheduler_running("cms.s2")
+    respx.post(f"{GATEWAY}/api/v1/clusters/cms.s2/scale").respond(500, text="no")
     out = await tools["create_dask_cluster"](FakeCtx(), **kwargs)
     assert "returned HTTP 500 while trying to scale to 2 worker(s)" in out
 
 
 @respx.mock
-async def test_worker_count_no_metrics_and_bad_gateway(user_ctx):
+async def test_worker_count_no_metrics(user_ctx):
     tools = register_tools(dask).tools
-    assert "Unknown gateway" in await failure(
-        tools["get_dask_worker_count"]("c1", gateway="x")
-    )
-
-    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+    respx.get(f"{GATEWAY}/api/v1/clusters/cms.abc").respond(
         200, json={"name": "cms.abc", "status": "RUNNING"}
     )
     respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").respond(
@@ -1048,14 +951,10 @@ async def test_worker_count_no_metrics_and_bad_gateway(user_ctx):
 @respx.mock
 async def test_usage_partial_metrics_and_errors(user_ctx):
     tools = register_tools(dask).tools
-    assert "Unknown gateway" in await failure(
-        tools["get_dask_cluster_usage"]("c1", gateway="x")
-    )
-
-    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(403)
+    respx.get(f"{GATEWAY}/api/v1/clusters/cms.abc").respond(403)
     assert "not authorised" in await failure(tools["get_dask_cluster_usage"]("cms.abc"))
 
-    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+    respx.get(f"{GATEWAY}/api/v1/clusters/cms.abc").respond(
         200, json={"name": "cms.abc", "status": "RUNNING"}
     )
 
@@ -1085,10 +984,11 @@ async def test_create_elicits_unsupported_on_size_and_count(user_ctx):
             return await super().elicit(message, schema)
 
     ctx = BoomAfter(
-        accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="global")),
     )
-    assert "needs two choices" in await needs_choices(tools["create_dask_cluster"](ctx))
+    assert "create_dask_cluster needs" in await needs_choices(
+        tools["create_dask_cluster"](ctx)
+    )
 
     class BoomCustom(FakeCtx):
         async def elicit(self, message, schema):
@@ -1097,54 +997,60 @@ async def test_create_elicits_unsupported_on_size_and_count(user_ctx):
             return await super().elicit(message, schema)
 
     ctx = BoomCustom(
-        accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="global")),
         accept(dask._SizeChoice(size="custom")),
     )
-    assert "needs two choices" in await needs_choices(tools["create_dask_cluster"](ctx))
+    assert "create_dask_cluster needs" in await needs_choices(
+        tools["create_dask_cluster"](ctx)
+    )
 
     ctx = BoomCustom(
-        accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="global")),
         accept(dask._SizeChoice(size="default")),
         count("custom"),
     )
-    assert "needs two choices" in await needs_choices(tools["create_dask_cluster"](ctx))
+    assert "create_dask_cluster needs" in await needs_choices(
+        tools["create_dask_cluster"](ctx)
+    )
 
 
 async def test_create_cancel_on_pixi_conda_custom(user_ctx):
     tools = register_tools(dask).tools
 
     ctx = FakeCtx(
-        accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="pixi")),
         ("cancel", None),
     )
-    assert "needs two choices" in await needs_choices(tools["create_dask_cluster"](ctx))
+    assert "create_dask_cluster needs" in await needs_choices(
+        tools["create_dask_cluster"](ctx)
+    )
 
     ctx = FakeCtx(
-        accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="conda")),
         ("cancel", None),
     )
-    assert "needs two choices" in await needs_choices(tools["create_dask_cluster"](ctx))
+    assert "create_dask_cluster needs" in await needs_choices(
+        tools["create_dask_cluster"](ctx)
+    )
 
     ctx = FakeCtx(
-        accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="global")),
         accept(dask._SizeChoice(size="custom")),
         ("cancel", None),
     )
-    assert "needs two choices" in await needs_choices(tools["create_dask_cluster"](ctx))
+    assert "create_dask_cluster needs" in await needs_choices(
+        tools["create_dask_cluster"](ctx)
+    )
 
     ctx = FakeCtx(
-        accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="global")),
         accept(dask._SizeChoice(size="default")),
         count("custom"),
         ("cancel", None),
     )
-    assert "needs two choices" in await needs_choices(tools["create_dask_cluster"](ctx))
+    assert "create_dask_cluster needs" in await needs_choices(
+        tools["create_dask_cluster"](ctx)
+    )
 
 
 async def test_create_unsupported_on_pixi_conda_and_count(user_ctx):
@@ -1158,26 +1064,23 @@ async def test_create_unsupported_on_pixi_conda_and_count(user_ctx):
                 raise RuntimeError("boom")
             return await super().elicit(message, schema)
 
-    assert "needs two choices" in await needs_choices(
+    assert "create_dask_cluster needs" in await needs_choices(
         tools["create_dask_cluster"](
             BoomPath(
-                accept(dask._BackendChoice(gateway="k8s")),
                 accept(dask._EnvChoice(env_source="pixi")),
             )
         )
     )
-    assert "needs two choices" in await needs_choices(
+    assert "create_dask_cluster needs" in await needs_choices(
         tools["create_dask_cluster"](
             BoomPath(
-                accept(dask._BackendChoice(gateway="k8s")),
                 accept(dask._EnvChoice(env_source="conda")),
             )
         )
     )
-    assert "needs two choices" in await needs_choices(
+    assert "create_dask_cluster needs" in await needs_choices(
         tools["create_dask_cluster"](
             BoomPath(
-                accept(dask._BackendChoice(gateway="k8s")),
                 accept(dask._EnvChoice(env_source="global")),
                 accept(dask._SizeChoice(size="default")),
             )
@@ -1188,12 +1091,13 @@ async def test_create_unsupported_on_pixi_conda_and_count(user_ctx):
 async def test_create_cancel_on_worker_count_prompt(user_ctx):
     tools = register_tools(dask).tools
     ctx = FakeCtx(
-        accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="global")),
         accept(dask._SizeChoice(size="default")),
         ("cancel", None),
     )
-    assert "needs two choices" in await needs_choices(tools["create_dask_cluster"](ctx))
+    assert "create_dask_cluster needs" in await needs_choices(
+        tools["create_dask_cluster"](ctx)
+    )
 
 
 @respx.mock
@@ -1208,7 +1112,6 @@ async def test_create_returns_build_options_error(user_ctx, monkeypatch):
 
     monkeypatch.setattr(dask, "_build_cluster_options", reject)
     ctx = FakeCtx(
-        accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="global")),
         accept(dask._SizeChoice(size="default")),
         count("0"),
@@ -1219,7 +1122,7 @@ async def test_create_returns_build_options_error(user_ctx, monkeypatch):
 
 @respx.mock
 async def test_usage_cpu_missing_memory_present(user_ctx):
-    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+    respx.get(f"{GATEWAY}/api/v1/clusters/cms.abc").respond(
         200, json={"name": "cms.abc", "status": "RUNNING"}
     )
 
@@ -1278,7 +1181,6 @@ async def test_create_rejects_over_cap_explicit_and_elicited(user_ctx):
 
     # elicited custom-count path is capped too
     ctx = FakeCtx(
-        accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="global")),
         default_size(),
         count("custom"),
@@ -1291,25 +1193,22 @@ async def test_create_rejects_over_cap_explicit_and_elicited(user_ctx):
 
 @respx.mock
 @pytest.mark.parametrize(
-    ("gateway", "cores", "memory", "fragment"),
+    ("cores", "memory", "fragment"),
     [
-        ("k8s", 65, 4, "worker_cores must be between 0.1 and 64"),
-        ("k8s", 0.05, 4, "worker_cores must be between 0.1 and 64"),
-        ("k8s", 1, 65, "worker_memory must be between 0.1 and 64"),
-        ("slurm", 17, 4, "worker_cores must be between 1 and 16"),
-        ("slurm", 1.5, 4, "whole number of worker_cores"),
-        ("slurm", 1, 0.5, "worker_memory must be between 1 and 64"),
+        (65, 4, "worker_cores must be between 0.1 and 64"),
+        (0.05, 4, "worker_cores must be between 0.1 and 64"),
+        (1, 65, "worker_memory must be between 0.1 and 64"),
+        (1, 0.05, "worker_memory must be between 0.1 and 64"),
     ],
 )
 async def test_create_rejects_size_beyond_gateway_limits(
-    user_ctx, gateway, cores, memory, fragment
+    user_ctx, cores, memory, fragment
 ):
-    """Per-worker size caps mirror the gateway configs (see _WORKER_LIMITS)."""
+    """Per-worker size caps mirror the gateway config (see _WORKER_CORES)."""
     tools = register_tools(dask).tools
     out = await failure(
         tools["create_dask_cluster"](
             FakeCtx(),
-            gateway=gateway,
             conda_env="/depot/cms/alice/env",
             worker_cores=cores,
             worker_memory=memory,
@@ -1325,7 +1224,6 @@ async def test_create_rejects_elicited_size_beyond_limits(user_ctx):
     """The elicited custom-size path goes through the same gateway limits."""
     tools = register_tools(dask).tools
     ctx = FakeCtx(
-        accept(dask._BackendChoice(gateway="k8s")),
         accept(dask._EnvChoice(env_source="global")),
         accept(dask._SizeChoice(size="custom")),
         accept(dask._CustomSize(worker_cores=128, worker_memory=4)),
@@ -1336,8 +1234,8 @@ async def test_create_rejects_elicited_size_beyond_limits(user_ctx):
     assert not respx.calls
 
 
-def test_max_workers_matches_gateway_config():
-    """MAX_WORKERS mirrors cluster_max_workers in the k8s gateway values."""
+def test_limits_match_gateway_config():
+    """MAX_WORKERS and the per-worker bounds mirror the gateway values."""
     values = (
         pathlib.Path(__file__).resolve().parents[2]
         / "apps/dask-gateway/dask-gateway-k8s/values.yaml"
@@ -1345,6 +1243,13 @@ def test_max_workers_matches_gateway_config():
     m = re.search(r"cluster_max_workers\s*=\s*(\d+)", values)
     assert m, "cluster_max_workers not found in gateway values"
     assert dask.MAX_WORKERS == int(m.group(1))
+    for option, bounds in (
+        ("worker_cores", dask._WORKER_CORES),
+        ("worker_memory", dask._WORKER_MEMORY),
+    ):
+        m = re.search(rf'Float\("{option}",[^)]*\bmin=([\d.]+),\s*max=([\d.]+)', values)
+        assert m, f"{option} option not found in gateway values"
+        assert bounds == (float(m.group(1)), float(m.group(2)))
 
 
 @respx.mock
@@ -1356,7 +1261,7 @@ async def test_worker_count_escapes_username_in_promql():
     hostile = 'ali"} or {job!="'
     token = current_user.set({"username": hostile, "namespace": "cms", "token": "t"})
     try:
-        respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+        respx.get(f"{GATEWAY}/api/v1/clusters/cms.abc").respond(
             200, json={"name": "cms.abc", "status": "RUNNING"}
         )
         seen = []
@@ -1383,7 +1288,7 @@ async def test_worker_count_escapes_username_in_promql():
 @respx.mock
 async def test_usage_regex_escapes_cluster_id(user_ctx):
     """The pod regex uses re.escape on the cluster id (defense in depth)."""
-    respx.get(f"{K8S}/api/v1/clusters/abc-1").respond(
+    respx.get(f"{GATEWAY}/api/v1/clusters/abc-1").respond(
         200, json={"name": "abc-1", "status": "RUNNING"}
     )
     seen = []
@@ -1407,46 +1312,16 @@ async def test_usage_regex_escapes_cluster_id(user_ctx):
 
 
 @respx.mock
-async def test_list_clusters_all_gateways_refused_is_an_error(user_ctx):
-    respx.get(url__regex=r".*/api/v1/clusters/").respond(403)
+async def test_list_clusters_refused_is_an_error_not_an_empty_list(user_ctx):
+    respx.get(clusters_url()).respond(403)
     out = await failure(register_tools(dask).tools["list_dask_clusters"]())
-    assert out.startswith("Error: not authorised on any gateway")
+    assert out.startswith("Error: not authorised on Dask Gateway to list clusters")
     assert "No running Dask clusters" not in out
 
 
 @respx.mock
-async def test_list_clusters_notes_a_refused_gateway_when_nothing_is_listed(user_ctx):
-    import httpx
-
-    def responder(request):
-        if "k8s-slurm" in str(request.url):
-            return httpx.Response(403)
-        return httpx.Response(200, json={})
-
-    respx.get(url__regex=r".*/api/v1/clusters/").mock(side_effect=responder)
-    out = await register_tools(dask).tools["list_dask_clusters"]()
-    assert out.startswith(
-        "No running Dask clusters on any gateway (gateway slurm: not authorised"
-    )
-
-
-@respx.mock
-async def test_list_clusters_reports_the_gateways_reason(user_ctx):
-    import httpx
-
-    def responder(request):
-        if "k8s-slurm" in str(request.url):
-            return httpx.Response(503, json={"message": "scheduler restarting"})
-        return httpx.Response(200, json={})
-
-    respx.get(url__regex=r".*/api/v1/clusters/").mock(side_effect=responder)
-    out = await register_tools(dask).tools["list_dask_clusters"]()
-    assert "[slurm] error: HTTP 503 — scheduler restarting" in out
-
-
-@respx.mock
 async def test_worker_count_prometheus_down_is_not_no_metrics(user_ctx):
-    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+    respx.get(f"{GATEWAY}/api/v1/clusters/cms.abc").respond(
         200, json={"name": "cms.abc", "status": "RUNNING"}
     )
     respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").mock(
@@ -1462,7 +1337,7 @@ async def test_worker_count_prometheus_down_is_not_no_metrics(user_ctx):
 
 @respx.mock
 async def test_usage_monitoring_down_is_reported(user_ctx):
-    respx.get(f"{K8S}/api/v1/clusters/cms.abc").respond(
+    respx.get(f"{GATEWAY}/api/v1/clusters/cms.abc").respond(
         200, json={"name": "cms.abc", "status": "RUNNING"}
     )
     respx.get(f"{dask.CLUSTER_PROMETHEUS_URL}/api/v1/query").respond(500, text="boom")
@@ -1479,14 +1354,12 @@ async def test_usage_monitoring_down_is_reported(user_ctx):
 # the shapes that matter: what the gateway answered, which Failure class the
 # user gets, and the fragments of the message that carry the diagnosis.
 
-CREATE = dict(
-    gateway="k8s", pixi_project="/p", worker_cores=1, worker_memory=1, n_workers=0
-)
-INFO, SCALE, OPTIONS, CREATE_URL = (
-    f"{K8S}/api/v1/clusters/c1",
-    f"{K8S}/api/v1/clusters/c1/scale",
-    f"{K8S}/api/v1/options",
-    clusters_url(K8S),
+CREATE = dict(pixi_project="/p", worker_cores=1, worker_memory=1, n_workers=0)
+INFO, SCALE, OPTIONS, CLUSTERS = (
+    f"{GATEWAY}/api/v1/clusters/c1",
+    f"{GATEWAY}/api/v1/clusters/c1/scale",
+    f"{GATEWAY}/api/v1/options",
+    clusters_url(),
 )
 DOWN = ConnectError("down")
 
@@ -1498,44 +1371,43 @@ def _resp(status, **kwargs):
 # fmt: off
 GATEWAY_FAILURES = [
     # tool, arguments, method, url, gateway answer, Failure class, message fragments
-    ("get_dask_cluster_info", {"cluster_name": "c1"}, "GET", INFO, DOWN, "UpstreamError", ["gateway 'k8s' unreachable — connection failed (down)"]),
+    ("list_dask_clusters", {}, "GET", CLUSTERS, DOWN, "UpstreamError", ["Error: Dask Gateway unreachable — connection failed (down)"]),
+    ("list_dask_clusters", {}, "GET", CLUSTERS, _resp(401), "AuthError", ["not authorised on Dask Gateway to list clusters (HTTP 401)"]),
+    ("list_dask_clusters", {}, "GET", CLUSTERS, _resp(503, json={"message": "scheduler restarting"}), "UpstreamError", ["HTTP 503", "scheduler restarting"]),
+    ("list_dask_clusters", {}, "GET", CLUSTERS, _resp(200, text="<html>proxy</html>"), "UpstreamError", ["not a cluster list"]),
+    ("get_dask_cluster_info", {"cluster_name": "c1"}, "GET", INFO, DOWN, "UpstreamError", ["Error: Dask Gateway unreachable — connection failed (down)"]),
     ("get_dask_cluster_info", {"cluster_name": "c1"}, "GET", INFO, _resp(500, text="err"), "UpstreamError", ["HTTP 500"]),
     ("get_dask_cluster_info", {"cluster_name": "c1"}, "GET", INFO, _resp(502, text="<h1>Bad Gateway</h1>"), "UpstreamError", ["returned HTTP 502 while trying to inspect cluster 'c1' (it is down or restarting behind its proxy) — Bad Gateway"]),
-    ("get_dask_cluster_info", {"cluster_name": "c1"}, "GET", INFO, _resp(404), "UserError", ["Cluster 'c1' not found on gateway 'k8s'.", "list_dask_clusters"]),
-    ("get_dask_cluster_info", {"cluster_name": "c1", "gateway": "slurm"}, "GET", f"{SLURM}/api/v1/clusters/c1", _resp(403), "AuthError", ["Error: not authorised on gateway 'slurm' to inspect cluster 'c1' (HTTP 403).", "Hammer"]),
+    ("get_dask_cluster_info", {"cluster_name": "c1"}, "GET", INFO, _resp(404), "UserError", ["Cluster 'c1' not found.", "list_dask_clusters"]),
+    ("get_dask_cluster_info", {"cluster_name": "c1"}, "GET", INFO, _resp(403), "AuthError", ["Error: not authorised on Dask Gateway to inspect cluster 'c1' (HTTP 403).", "AF support"]),
     ("get_dask_cluster_info", {"cluster_name": "c1"}, "GET", INFO, _resp(200, text="nope"), "UpstreamError", ["not a cluster record"]),
-    ("get_dask_worker_count", {"cluster_name": "c1"}, "GET", INFO, _resp(404), "UserError", ["Cluster 'c1' not found on gateway 'k8s'"]),
+    ("get_dask_worker_count", {"cluster_name": "c1"}, "GET", INFO, _resp(404), "UserError", ["Cluster 'c1' not found."]),
     ("scale_dask_cluster", {"cluster_name": "c1", "n_workers": 3}, "POST", SCALE, DOWN, "UpstreamError", ["unreachable"]),
     ("scale_dask_cluster", {"cluster_name": "c1", "n_workers": 3}, "POST", SCALE, _resp(500, text="no"), "UpstreamError", ["HTTP 500"]),
-    ("scale_dask_cluster", {"cluster_name": "c1", "n_workers": 3, "gateway": "slurm"}, "POST", f"{SLURM}/api/v1/clusters/c1/scale", _resp(404), "UserError", ["Cluster 'c1' not found on gateway 'slurm'.", "list_dask_clusters"]),
-    ("scale_dask_cluster", {"cluster_name": "c1", "n_workers": 3}, "POST", SCALE, _resp(409, json={"message": "cluster is stopping"}), "UserError", ["Error: gateway 'k8s' rejected the request to scale to 3 worker(s) — cluster is stopping."]),
+    ("scale_dask_cluster", {"cluster_name": "c1", "n_workers": 3}, "POST", SCALE, _resp(404), "UserError", ["Cluster 'c1' not found.", "list_dask_clusters"]),
+    ("scale_dask_cluster", {"cluster_name": "c1", "n_workers": 3}, "POST", SCALE, _resp(409, json={"message": "cluster is stopping"}), "UserError", ["Error: Dask Gateway rejected the request to scale to 3 worker(s) — cluster is stopping."]),
     ("stop_dask_cluster", {"cluster_name": "c1"}, "DELETE", INFO, DOWN, "UpstreamError", ["unreachable"]),
     ("stop_dask_cluster", {"cluster_name": "c1"}, "DELETE", INFO, _resp(500, text="boom"), "UpstreamError", ["HTTP 500", "boom"]),
     ("list_dask_cluster_options", {}, "GET", OPTIONS, DOWN, "UpstreamError", ["unreachable"]),
-    ("list_dask_cluster_options", {}, "GET", OPTIONS, _resp(401), "AuthError", ["not authorised on gateway 'k8s' to list cluster options (HTTP 401)"]),
+    ("list_dask_cluster_options", {}, "GET", OPTIONS, _resp(401), "AuthError", ["not authorised on Dask Gateway to list cluster options (HTTP 401)"]),
     ("list_dask_cluster_options", {}, "GET", OPTIONS, _resp(500, text="nope"), "UpstreamError", ["HTTP 500"]),
     ("list_dask_cluster_options", {}, "GET", OPTIONS, _resp(200, text="nope"), "UpstreamError", ["not a cluster-options document"]),
-    ("create_dask_cluster", CREATE, "POST", CREATE_URL, DOWN, "UpstreamError", ["gateway 'k8s' unreachable"]),
-    ("create_dask_cluster", CREATE, "POST", CREATE_URL, _resp(500, text="boom"), "UpstreamError", ["HTTP 500"]),
-    ("create_dask_cluster", CREATE, "POST", CREATE_URL, _resp(422, json={"message": "User already has 1 active clusters"}), "UserError", ["rejected", "active clusters"]),
-    ("create_dask_cluster", CREATE, "POST", CREATE_URL, _resp(422, text="plain reject"), "UserError", ["rejected", "plain reject"]),
-    ("create_dask_cluster", CREATE, "POST", CREATE_URL, _resp(201, text="<html>proxy</html>"), "UpstreamError", ["not a cluster record with a name", "list_dask_clusters before creating another"]),
-    ("create_dask_cluster", CREATE, "POST", CREATE_URL, _resp(201, json={}), "UpstreamError", ["not a cluster record with a name"]),
+    ("create_dask_cluster", CREATE, "POST", CLUSTERS, DOWN, "UpstreamError", ["Dask Gateway unreachable"]),
+    ("create_dask_cluster", CREATE, "POST", CLUSTERS, _resp(500, text="boom"), "UpstreamError", ["HTTP 500"]),
+    ("create_dask_cluster", CREATE, "POST", CLUSTERS, _resp(422, json={"message": "User already has 1 active clusters"}), "UserError", ["rejected", "active clusters"]),
+    ("create_dask_cluster", CREATE, "POST", CLUSTERS, _resp(422, text="plain reject"), "UserError", ["rejected", "plain reject"]),
+    ("create_dask_cluster", CREATE, "POST", CLUSTERS, _resp(201, text="<html>proxy</html>"), "UpstreamError", ["not a cluster record with a name", "list_dask_clusters before creating another"]),
+    ("create_dask_cluster", CREATE, "POST", CLUSTERS, _resp(201, json={}), "UpstreamError", ["not a cluster record with a name"]),
 ]
 
 REJECTED_ARGUMENTS = [
     # tool, arguments, message fragment — refused before anything leaves the process
-    ("get_dask_cluster_info", {"cluster_name": "c1", "gateway": "bogus"}, "Unknown gateway"),
-    ("list_dask_cluster_options", {"gateway": "bogus"}, "Unknown gateway"),
-    ("scale_dask_cluster", {"cluster_name": "c1", "n_workers": 1, "gateway": "x"}, "Unknown gateway"),
-    ("stop_dask_cluster", {"cluster_name": "c1", "gateway": "x"}, "Unknown gateway"),
     ("scale_dask_cluster", {"cluster_name": "c1", "n_workers": -1}, "must be ≥ 0"),
     ("scale_dask_cluster", {"cluster_name": "c1", "n_workers": dask.MAX_WORKERS + 1}, f"≤ {dask.MAX_WORKERS}"),
     ("create_dask_cluster", {"n_workers": -1}, "n_workers"),
     ("create_dask_cluster", {"n_workers": dask.MAX_WORKERS + 1}, f"≤ {dask.MAX_WORKERS}"),
-    ("create_dask_cluster", {"worker_cores": 0, "pixi_project": "/p", "gateway": "k8s"}, "worker_cores"),
-    ("create_dask_cluster", {"worker_memory": -1, "pixi_project": "/p", "gateway": "k8s"}, "worker_memory"),
-    ("create_dask_cluster", {**CREATE, "gateway": "bogus"}, "Unknown gateway"),
+    ("create_dask_cluster", {"worker_cores": 0, "pixi_project": "/p"}, "worker_cores"),
+    ("create_dask_cluster", {"worker_memory": -1, "pixi_project": "/p"}, "worker_memory"),
     ("create_dask_cluster", {**CREATE, "pixi_project": None, "env_source": "weird"}, "unknown env_source"),
 ]
 # fmt: on
@@ -1561,9 +1433,7 @@ async def test_gateway_answers_are_translated(
     # scale_dask_cluster waits for the scheduler before scaling; these cases
     # are about how the scale POST itself is translated, so let that check pass.
     if tool == "scale_dask_cluster":
-        scheduler_running(
-            dask._GATEWAYS[arguments.get("gateway", "k8s")], arguments["cluster_name"]
-        )
+        scheduler_running(arguments["cluster_name"])
 
     route = respx.request(method, url)
     if isinstance(answer, Exception):

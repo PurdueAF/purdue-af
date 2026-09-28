@@ -1,4 +1,4 @@
-"""The options handler the Kubernetes Dask Gateway execs (gateway.extraConfig.config)."""
+"""The options handler the Dask Gateway execs (gateway.extraConfig.config)."""
 
 import sys
 import types

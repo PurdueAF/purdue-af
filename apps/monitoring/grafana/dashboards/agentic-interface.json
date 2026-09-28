@@ -1511,7 +1511,7 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "The MCP server's own calls to the Hub, Prometheus, Loki and the Dask gateways.",
+      "description": "The MCP server's own calls to the Hub, Prometheus, Loki and Dask Gateway.",
       "fieldConfig": {
         "defaults": {
           "color": {

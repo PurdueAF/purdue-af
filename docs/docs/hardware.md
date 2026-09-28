@@ -2,8 +2,8 @@
 
 Purdue AF runs on dedicated nodes of the Purdue Geddes composable cluster,
 supplemented by additional CPU and GPU nodes. User sessions and Dask Gateway
-workers with the Kubernetes backend are scheduled on these nodes; Slurm jobs and
-Dask Gateway workers with the Slurm backend run on the Purdue Hammer cluster.
+workers are scheduled on these nodes; Slurm jobs run on the Purdue Hammer
+cluster.
 
 | Node name          | Node type      | Quantity | Cores    | RAM (GB) | GPU (on each node)  | Storage (TB) |
 | ------------------ | -------------- | -------- | -------- | -------- | ------------------- | ------------ |
