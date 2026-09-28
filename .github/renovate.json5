@@ -264,16 +264,26 @@
       allowedVersions: '<6',
     },
     {
-      // Python is deliberately frozen at 3.12 platform-wide so there is ONE
-      // python everywhere: the docker manager (FROM python:3.12-slim) and the
-      // pixi manager (python = "3.12.*" in pixi/{base,global}). 3.12.x patch
-      // releases stay allowed. Raise all of them in one change (check:
-      // pixi/check-env.py gates the pixi envs).
+      // Python stays at 3.12 everywhere but pixi/global (next rule): the
+      // docker manager (FROM python:3.12-slim) and the other pixi manifests.
+      // pixi/base's minor is also baked into the AF Dockerfile's
+      // site-packages path and the hub's sitecustomize.py mountPath, which
+      // Renovate cannot update, so raise them by hand in one change.
+      // 3.12.x patch releases stay allowed.
       // Regex (not '<3.13'): docker versioning has no range support, and this
       // rule also matches the docker datasource (FROM python:3.12-slim).
       matchPackageNames: ['python'],
       matchDatasources: ['docker', 'conda'],
       allowedVersions: '/^3\\.12([.-]|$)/',
+    },
+    {
+      // pixi/global takes Python 3.13; 3.14 does not solve yet. cms-combine's
+      // py3.14 builds need root_base 6.40.4 and with it giflib 6, imagemagick
+      // (via hepdata-lib) has only giflib-5 builds, and roastcoffea requires
+      // python <3.14. Overrides the rule above, so it stays after it.
+      matchPackageNames: ['python'],
+      matchFileNames: ['pixi/global/pixi.toml'],
+      allowedVersions: '<3.14',
     },
   ],
 }
