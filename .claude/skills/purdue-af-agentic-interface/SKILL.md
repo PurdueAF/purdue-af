@@ -34,8 +34,6 @@ answer for anything the platform tracks centrally:
 - `list_af_profiles` before `start_af_session` when the user wants anything
   other than defaults — it carries the exact option keys, valid values, and
   live GPU availability.
-- `list_dask_cluster_options` before `create_dask_cluster` — it carries the
-  option keys and their limits.
 - `wait_for_session` after starting a session, rather than polling
   `get_session_status` in a loop.
 - `scale_dask_cluster` waits for the cluster's scheduler to come up on its own,

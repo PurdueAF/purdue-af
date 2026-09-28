@@ -71,8 +71,8 @@ The number of workers that you can create is limited by the
 
 ### 2. Dask Gateway cluster
 
-Dask Gateway provides a way to scale out to multiple compute nodes, within the
-[limits](guide-dask-gateway.md#limits).
+Dask Gateway provides a way to scale out to multiple compute nodes, within
+[its limits](guide-dask-gateway.md#limits).
 
 Please refer to the following page for detailed documentation about Dask Gateway
 at the Purdue Analysis Facility: [Dask Gateway at Purdue AF](guide-dask-gateway.md).

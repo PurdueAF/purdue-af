@@ -13,10 +13,7 @@ from httpx import ConnectError
 from tools import dask
 
 GATEWAY = dask.DASK_GATEWAY_URL
-
-
-def clusters_url():
-    return f"{GATEWAY}/api/v1/clusters/"
+CLUSTERS = f"{GATEWAY}/api/v1/clusters/"
 
 
 def clusters_payload(*clusters):
@@ -101,7 +98,7 @@ def test_parse_clusters_empty():
 
 @respx.mock
 async def test_list_clusters_renders_each_cluster(user_ctx):
-    respx.get(clusters_url()).respond(
+    respx.get(CLUSTERS).respond(
         200,
         json=clusters_payload(
             {"name": "cms.a", "status": "RUNNING", "workers": {}},
@@ -118,7 +115,7 @@ async def test_list_clusters_renders_each_cluster(user_ctx):
 
 @respx.mock
 async def test_list_clusters_empty(user_ctx):
-    respx.get(clusters_url()).respond(200, json={})
+    respx.get(CLUSTERS).respond(200, json={})
 
     tools = register_tools(dask).tools
     assert await tools["list_dask_clusters"]() == "No running Dask clusters."
@@ -126,7 +123,7 @@ async def test_list_clusters_empty(user_ctx):
 
 @respx.mock
 async def test_list_clusters_sends_basic_username(user_ctx):
-    route = respx.get(clusters_url()).respond(200, json={})
+    route = respx.get(CLUSTERS).respond(200, json={})
 
     tools = register_tools(dask).tools
     await tools["list_dask_clusters"]()
@@ -246,7 +243,7 @@ async def test_scale_refuses_a_cluster_that_will_never_run(user_ctx, status):
 async def test_create_waits_for_the_scheduler_before_scaling(user_ctx, monkeypatch):
     """create scales only once the scheduler is RUNNING."""
     monkeypatch.setattr(dask, "SCHEDULER_POLL_INTERVAL", 0)
-    respx.post(clusters_url()).respond(201, json={"name": "cms.slow"})
+    respx.post(CLUSTERS).respond(201, json={"name": "cms.slow"})
     polls = pending_then_running("cms.slow", pending=3)
     scale = respx.post(f"{GATEWAY}/api/v1/clusters/cms.slow/scale").respond(204)
 
@@ -270,7 +267,7 @@ async def test_create_waits_for_the_scheduler_before_scaling(user_ctx, monkeypat
 async def test_create_reports_a_scheduler_that_never_came_up(user_ctx, monkeypatch):
     monkeypatch.setattr(dask, "SCHEDULER_POLL_INTERVAL", 0)
     monkeypatch.setattr(dask, "SCHEDULER_READY_TIMEOUT", 0.01)
-    respx.post(clusters_url()).respond(201, json={"name": "cms.stuck"})
+    respx.post(CLUSTERS).respond(201, json={"name": "cms.stuck"})
     respx.get(f"{GATEWAY}/api/v1/clusters/cms.stuck").respond(
         200, json={"name": "cms.stuck", "status": "PENDING"}
     )
@@ -296,7 +293,7 @@ async def test_create_reports_a_scheduler_that_never_came_up(user_ctx, monkeypat
 async def test_create_reports_a_scheduler_that_failed(user_ctx):
     """The cluster exists even though its scheduler died, so the caller still
     gets its name rather than a bare failure."""
-    respx.post(clusters_url()).respond(201, json={"name": "cms.dead"})
+    respx.post(CLUSTERS).respond(201, json={"name": "cms.dead"})
     respx.get(f"{GATEWAY}/api/v1/clusters/cms.dead").respond(
         200, json={"name": "cms.dead", "status": "FAILED"}
     )
@@ -319,7 +316,7 @@ async def test_create_reports_a_scheduler_that_failed(user_ctx):
 @respx.mock
 async def test_create_with_zero_workers_never_waits(user_ctx):
     """No scale to make, so nothing should poll the cluster record."""
-    respx.post(clusters_url()).respond(201, json={"name": "cms.empty"})
+    respx.post(CLUSTERS).respond(201, json={"name": "cms.empty"})
     status = respx.get(f"{GATEWAY}/api/v1/clusters/cms.empty")
 
     out = await register_tools(dask).tools["create_dask_cluster"](
@@ -438,7 +435,7 @@ async def test_list_cluster_options(user_ctx):
 
 @respx.mock
 async def test_create_cluster_explicit_args_pixi_then_scale(user_ctx):
-    create = respx.post(clusters_url()).respond(201, json={"name": "cms.abc"})
+    create = respx.post(CLUSTERS).respond(201, json={"name": "cms.abc"})
     scheduler_running("cms.abc")
     scale = respx.post(f"{GATEWAY}/api/v1/clusters/cms.abc/scale").respond(204)
 
@@ -464,7 +461,7 @@ async def test_create_cluster_explicit_args_pixi_then_scale(user_ctx):
 
 @respx.mock
 async def test_create_cluster_explicit_conda_no_scale(user_ctx):
-    create = respx.post(clusters_url()).respond(201, json={"name": "cms.c1"})
+    create = respx.post(CLUSTERS).respond(201, json={"name": "cms.c1"})
 
     tools = register_tools(dask).tools
     out = await tools["create_dask_cluster"](
@@ -495,7 +492,7 @@ def count(value):
 
 @respx.mock
 async def test_create_elicits_global_env(user_ctx):
-    create = respx.post(clusters_url()).respond(201, json={"name": "cms.g"})
+    create = respx.post(CLUSTERS).respond(201, json={"name": "cms.g"})
 
     ctx = FakeCtx(
         accept(dask._EnvChoice(env_source="global")),
@@ -517,7 +514,7 @@ async def test_create_elicits_global_env(user_ctx):
 
 @respx.mock
 async def test_create_elicits_pixi_path(user_ctx):
-    create = respx.post(clusters_url()).respond(201, json={"name": "cms.p"})
+    create = respx.post(CLUSTERS).respond(201, json={"name": "cms.p"})
 
     ctx = FakeCtx(
         accept(dask._EnvChoice(env_source="pixi")),
@@ -537,7 +534,7 @@ async def test_create_elicits_pixi_path(user_ctx):
 
 @respx.mock
 async def test_create_elicits_conda_path(user_ctx):
-    create = respx.post(clusters_url()).respond(201, json={"name": "cms.c"})
+    create = respx.post(CLUSTERS).respond(201, json={"name": "cms.c"})
 
     ctx = FakeCtx(
         accept(dask._EnvChoice(env_source="conda")),
@@ -555,7 +552,7 @@ async def test_create_elicits_conda_path(user_ctx):
 
 @respx.mock
 async def test_create_elicits_preset_count_scales(user_ctx):
-    respx.post(clusters_url()).respond(201, json={"name": "cms.n"})
+    respx.post(CLUSTERS).respond(201, json={"name": "cms.n"})
     scheduler_running("cms.n")
     scale = respx.post(f"{GATEWAY}/api/v1/clusters/cms.n/scale").respond(204)
 
@@ -574,7 +571,7 @@ async def test_create_elicits_preset_count_scales(user_ctx):
 
 @respx.mock
 async def test_create_elicits_custom_size_and_count(user_ctx):
-    create = respx.post(clusters_url()).respond(201, json={"name": "cms.x"})
+    create = respx.post(CLUSTERS).respond(201, json={"name": "cms.x"})
     scheduler_running("cms.x")
     scale = respx.post(f"{GATEWAY}/api/v1/clusters/cms.x/scale").respond(204)
 
@@ -903,22 +900,22 @@ async def test_create_gateway_errors_and_scale_failures(user_ctx):
         n_workers=2,
     )
 
-    respx.post(clusters_url()).mock(side_effect=ConnectError("down"))
+    respx.post(CLUSTERS).mock(side_effect=ConnectError("down"))
     assert "unreachable" in await failure(
         tools["create_dask_cluster"](FakeCtx(), **kwargs)
     )
 
-    respx.post(clusters_url()).respond(500, text="boom")
+    respx.post(CLUSTERS).respond(500, text="boom")
     assert "HTTP 500" in await failure(
         tools["create_dask_cluster"](FakeCtx(), **kwargs)
     )
 
-    respx.post(clusters_url()).respond(201, json={})
+    respx.post(CLUSTERS).respond(201, json={})
     assert "not a cluster record with a name" in await failure(
         tools["create_dask_cluster"](FakeCtx(), **{**kwargs, "n_workers": 0})
     )
 
-    respx.post(clusters_url()).respond(201, json={"name": "cms.s"})
+    respx.post(CLUSTERS).respond(201, json={"name": "cms.s"})
     scheduler_running("cms.s")
     respx.post(f"{GATEWAY}/api/v1/clusters/cms.s/scale").mock(
         side_effect=ConnectError("down")
@@ -928,7 +925,7 @@ async def test_create_gateway_errors_and_scale_failures(user_ctx):
     assert "unreachable" in out
     assert "scale_dask_cluster('cms.s', 2)" in out
 
-    respx.post(clusters_url()).respond(201, json={"name": "cms.s2"})
+    respx.post(CLUSTERS).respond(201, json={"name": "cms.s2"})
     scheduler_running("cms.s2")
     respx.post(f"{GATEWAY}/api/v1/clusters/cms.s2/scale").respond(500, text="no")
     out = await tools["create_dask_cluster"](FakeCtx(), **kwargs)
@@ -1237,8 +1234,7 @@ async def test_create_rejects_elicited_size_beyond_limits(user_ctx):
 def test_limits_match_gateway_config():
     """MAX_WORKERS and the per-worker bounds mirror the gateway values."""
     values = (
-        pathlib.Path(__file__).resolve().parents[2]
-        / "apps/dask-gateway/dask-gateway-k8s/values.yaml"
+        pathlib.Path(__file__).resolve().parents[2] / "apps/dask-gateway/values.yaml"
     ).read_text()
     m = re.search(r"cluster_max_workers\s*=\s*(\d+)", values)
     assert m, "cluster_max_workers not found in gateway values"
@@ -1312,14 +1308,6 @@ async def test_usage_regex_escapes_cluster_id(user_ctx):
 
 
 @respx.mock
-async def test_list_clusters_refused_is_an_error_not_an_empty_list(user_ctx):
-    respx.get(clusters_url()).respond(403)
-    out = await failure(register_tools(dask).tools["list_dask_clusters"]())
-    assert out.startswith("Error: not authorised on Dask Gateway to list clusters")
-    assert "No running Dask clusters" not in out
-
-
-@respx.mock
 async def test_worker_count_prometheus_down_is_not_no_metrics(user_ctx):
     respx.get(f"{GATEWAY}/api/v1/clusters/cms.abc").respond(
         200, json={"name": "cms.abc", "status": "RUNNING"}
@@ -1355,11 +1343,10 @@ async def test_usage_monitoring_down_is_reported(user_ctx):
 # user gets, and the fragments of the message that carry the diagnosis.
 
 CREATE = dict(pixi_project="/p", worker_cores=1, worker_memory=1, n_workers=0)
-INFO, SCALE, OPTIONS, CLUSTERS = (
+INFO, SCALE, OPTIONS = (
     f"{GATEWAY}/api/v1/clusters/c1",
     f"{GATEWAY}/api/v1/clusters/c1/scale",
     f"{GATEWAY}/api/v1/options",
-    clusters_url(),
 )
 DOWN = ConnectError("down")
 

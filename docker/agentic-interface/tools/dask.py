@@ -42,16 +42,7 @@ from tools.elicitation import ask
 _SERVICE = "Dask Gateway"
 
 
-# Pooled process-wide clients (see shared.py) — never close these at call sites.
-def _client() -> httpx.AsyncClient:
-    return shared_client("dask-gateway")
-
-
-def _prom_client(target: str) -> httpx.AsyncClient:
-    return shared_client(target)
-
-
-# Mirror apps/dask-gateway/dask-gateway-k8s/values.yaml.
+# Mirror apps/dask-gateway/values.yaml.
 MAX_WORKERS = 200
 _WORKER_CORES = (0.1, 64.0)
 _WORKER_MEMORY = (0.1, 64.0)
@@ -233,7 +224,7 @@ async def _gateway(
     """One gateway API call — or the Failure that explains why it could not
     be made. ``ok`` lists the statuses the caller handles itself."""
     try:
-        resp = await _client().request(
+        resp = await shared_client("dask-gateway").request(
             method,
             f"{DASK_GATEWAY_URL}{path}",
             headers=_auth(username),
@@ -819,7 +810,7 @@ def register(mcp: Any) -> None:
             f'sum(dask_scheduler_desired_workers{{user="{quser}",pod="{sched_pod}"}})'
         )
 
-        prom = _prom_client("prometheus")
+        prom = shared_client("prometheus")
         (total, p1), (by_state, p2), (desired, p3) = await asyncio.gather(
             _prom_scalar(prom, PROMETHEUS_URL, total_q),
             _prom_vector(prom, PROMETHEUS_URL, by_state_q),
@@ -889,7 +880,7 @@ def register(mcp: Any) -> None:
             f" * on(namespace,pod) group_left {running})"
         )
 
-        prom = _prom_client("cluster-prometheus")
+        prom = shared_client("cluster-prometheus")
         (cpu_rows, p1), (mem_rows, p2) = await asyncio.gather(
             _prom_vector(prom, CLUSTER_PROMETHEUS_URL, cpu_q),
             _prom_vector(prom, CLUSTER_PROMETHEUS_URL, mem_q),

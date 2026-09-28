@@ -38,7 +38,7 @@ frameworks such as Coffea and RDataFrame.
 * A **local Dask cluster** parallelizes your code over the cores of your own
   session — no extra setup required.
 * **[Dask Gateway](guide-dask-gateway.md)** scales beyond the session, running
-  workers as pods on the Geddes cluster (all users).
+  workers as pods on the Geddes cluster.
 
 ## Slurm (Purdue users only)
 

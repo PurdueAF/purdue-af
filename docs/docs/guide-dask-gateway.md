@@ -2,8 +2,7 @@
 
 Dask Gateway is a service that allows users to manage Dask clusters in a
 multi-tenant environment such as the Purdue Analysis Facility. Its workers run
-as pods on the Purdue Geddes cluster and are scheduled almost instantly.
-Available to **all users**.
+as pods on the Purdue Geddes cluster.
 
 ## Limits
 
