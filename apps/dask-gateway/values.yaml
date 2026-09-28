@@ -129,7 +129,7 @@ gateway:
   extraConfig:
     config: |
       c.DaskGateway.address = ':8000'
-      c.KubeBackend.api_url = 'http://dask-gateway-k8s.geddes.rcac.purdue.edu:80/api'
+      c.KubeBackend.api_url = 'http://dask-gateway.geddes.rcac.purdue.edu:80/api'
 
       c.ClusterConfig.cluster_max_cores = 201
       c.ClusterConfig.cluster_max_memory = '1200 G'

@@ -1,0 +1,38 @@
+# Addresses for sessions whose DASK_GATEWAY__* variables name dask-gateway-k8s.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: traefik-dask-gateway-k8s-ingress
+spec:
+  ingressClassName: public
+  rules:
+    - host: dask-gateway-k8s.geddes.rcac.purdue.edu
+      http:
+        paths:
+          - backend:
+              service:
+                name: traefik-dask-gateway
+                port:
+                  number: 80
+            path: /
+            pathType: ImplementationSpecific
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik-dask-gateway-k8s
+  annotations:
+    metallb.universe.tf/address-pool: geddes-private-pool
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: dask-gateway
+    app.kubernetes.io/instance: dask-gateway
+    app.kubernetes.io/component: traefik
+  ports:
+    - name: web
+      targetPort: 8000
+      port: 80
+    - name: tcp
+      targetPort: 8786
+      port: 8786

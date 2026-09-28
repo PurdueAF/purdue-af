@@ -329,7 +329,7 @@
         },
         {
           "refId": "C",
-          "expr": "(sum(kube_deployment_status_replicas_available{namespace=\"cms\",deployment=\"api-dask-gateway-k8s\"}) > bool 0) or vector(0)",
+          "expr": "(sum(kube_deployment_status_replicas_available{namespace=\"cms\",deployment=\"api-dask-gateway\"}) > bool 0) or vector(0)",
           "legendFormat": "Dask Gateway",
           "datasource": {
             "type": "prometheus",

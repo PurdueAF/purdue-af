@@ -53,7 +53,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: DASK_GATEWAY_URL
-              value: "http://api-dask-gateway-k8s.cms.svc.cluster.local:8000"
+              value: "http://api-dask-gateway.cms.svc.cluster.local:8000"
           resources:
             requests:
               cpu: "100m"

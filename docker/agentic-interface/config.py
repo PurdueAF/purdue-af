@@ -33,7 +33,7 @@ CLUSTER_PROMETHEUS_URL = os.environ.get(
 LOKI_URL = os.environ.get("LOKI_URL", "http://loki.cms.svc.cluster.local:3100")
 
 DASK_GATEWAY_URL = os.environ.get(
-    "DASK_GATEWAY_URL", "http://api-dask-gateway-k8s.cms.svc.cluster.local:8000"
+    "DASK_GATEWAY_URL", "http://api-dask-gateway.cms.svc.cluster.local:8000"
 )
 # Shared pixi env pre-built for everyone.
 GLOBAL_PIXI_PROJECT = os.environ.get("DASK_GLOBAL_PIXI_PROJECT", "/work/pixi/global")
