@@ -191,6 +191,7 @@ class TestLoki:
             "loki-0",
             "loki-chunks-cache-0",
             "flyte-console-d78d4dc8f-gp26v",
+            "ray-train-gpu-worker-abcde",
             "af-node-probe-cvmfs-abcde",
             "af-userlist-sync-purdue-29312345-abcde",
             "servicex-eos-did-finder-xrootd-abcde",

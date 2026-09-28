@@ -62,6 +62,11 @@ resources:
   - ../../apps/ray/operator/helmrelease.yaml
   - ../../apps/ray/sonic-ray/helmrelease.yaml
 
+  # Ray Train: a shared Ray cluster whose GPU workers start for submitted
+  # training jobs, reconciled by the same operator. See apps/ray-train/README.md.
+  - ../../apps/ray-train/helmrelease.yaml
+  - ../../apps/ray-train/networkpolicy.yaml
+
   - ../../apps/interlink/helmrepo.yaml
   - ../../apps/interlink/hammer/helmrelease.yaml
 
@@ -170,6 +175,10 @@ configMapGenerator:
   - name: sonic-ray-config
     files:
       - values.yaml=../../apps/ray/sonic-ray/values.yaml
+
+  - name: ray-train-config
+    files:
+      - values.yaml=../../apps/ray-train/values.yaml
 
   - name: flyte-config
     files:

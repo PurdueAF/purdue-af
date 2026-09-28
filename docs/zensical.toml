@@ -57,6 +57,7 @@ nav = [
             "guide-dask-gateway.md",
         ] },
         { "GPUs" = [
+            "guide-ray-train.md",
             "guide-roofit-cuda.md",
         ] },
         { "Remote access" = [
