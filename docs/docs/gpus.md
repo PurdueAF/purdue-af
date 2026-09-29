@@ -38,8 +38,8 @@ The GPUs installed at the facility are listed in [Hardware](hardware.md).
 
     If you selected a GPU, your session will have `CUDA 12.4` and `cudnn 8.9.7.29`
     libraries loaded. Take this into account if you need to install particular
-    versions of ML libraries such as `tensorflow` — these libraries are notoriously
-    sensitive to the CUDA version.
+    versions of ML libraries — these libraries are notoriously sensitive to the
+    CUDA version.
 
 !!! important
 
@@ -77,13 +77,6 @@ need it, so your session needs no GPU of its own — see
   supports `CUDA 12.4` and `cudnn 8.9.x` (this is already true for the
   [global Pixi environment](software.md)).
   See the [PyTorch CUDA semantics documentation](https://pytorch.org/docs/stable/notes/cuda.html).
-
-* **TensorFlow**:
-
-    1. Install `tensorflow[and-cuda]` using `pip` (already done in the
-       [global Pixi environment](software.md)).
-    2. Learn how to use TensorFlow with GPUs:
-       [TensorFlow GPU guide](https://www.tensorflow.org/guide/gpu).
 
 * **XGBoost** — enable GPU support by setting the `device` parameter to `cuda`.
   Refer to the

@@ -31,7 +31,7 @@ root = "*"
 gsl = "*"
 
 [pypi-dependencies]
-tf-keras = ">=2"
+dbs3-client = ">=4"
 """
 
 
@@ -41,7 +41,7 @@ class TestParseManifest:
         path.write_text(MANIFEST)
         assert check_env.parse_manifest(path) == (
             ["python", "root", "gsl"],
-            ["tf-keras"],
+            ["dbs3-client"],
         )
 
     def test_line_parser_fallback(self, check_env, tmp_path, monkeypatch):
@@ -50,7 +50,7 @@ class TestParseManifest:
         path.write_text(MANIFEST)
         assert check_env.parse_manifest(path) == (
             ["python", "root", "gsl"],
-            ["tf-keras"],
+            ["dbs3-client"],
         )
 
 
@@ -123,9 +123,9 @@ class TestPypiToplevels:
     def test_top_level_txt_with_normalised_name(self, check_env, dists):
         dists += [
             _Dist("other", "other\n"),
-            _Dist("TF_Keras", "tf_keras\n_private\ntests\n\n"),
+            _Dist("DBS3_Client", "dbs\n_private\ntests\n\n"),
         ]
-        assert check_env.pypi_toplevels("tf.keras") == ["tf_keras"]
+        assert check_env.pypi_toplevels("dbs3.client") == ["dbs"]
 
     def test_record_files_fallback(self, check_env, dists):
         dists.append(
@@ -186,7 +186,7 @@ class TestImportCheck:
         monkeypatch.setattr(
             check_env.subprocess, "run", lambda *a, **k: _completed(1, out, err)
         )
-        ok, _, detail = check_env.import_check("py", ["tensorflow"], 5)
+        ok, _, detail = check_env.import_check("py", ["ROOT"], 5)
         assert not ok
         assert "line10" not in detail and "line11" in detail
         assert detail.endswith("see check-gpu.py]")
@@ -226,7 +226,7 @@ def _run_main(check_env, monkeypatch, env_dir, pypi, failing=()):
 
     def fake_resolver(cmd, **kwargs):
         assert cmd[0] == str(env_dir / ".pixi/envs/default/bin/python")
-        assert cmd[2:] == ["--_resolve-pypi", "tf-keras"]
+        assert cmd[2:] == ["--_resolve-pypi", "dbs3-client"]
         return _completed(0, json.dumps(pypi))
 
     def fake_import(python, modules, timeout):
@@ -243,13 +243,11 @@ def _run_main(check_env, monkeypatch, env_dir, pypi, failing=()):
 
 class TestMain:
     def test_all_ok(self, check_env, monkeypatch, env_dir, capsys):
-        rc, calls = _run_main(
-            check_env, monkeypatch, env_dir, {"tf-keras": ["tf_keras"]}
-        )
+        rc, calls = _run_main(check_env, monkeypatch, env_dir, {"dbs3-client": ["dbs"]})
         out = capsys.readouterr().out
         assert rc == 0
         # python's stdlib is not under site-packages -> no-python, like gsl
-        assert sorted(calls) == [["ROOT"], ["tf_keras"]]
+        assert sorted(calls) == [["ROOT"], ["dbs"]]
         assert "4 declared | 2 importable | 2 no-python | 0 NOT INSTALLED" in out
         assert "no python modules (skipped): gsl, python" in out
         assert out.rstrip().endswith("all imports OK")
@@ -259,7 +257,7 @@ class TestMain:
             check_env,
             monkeypatch,
             env_dir,
-            {"tf-keras": ["tf_keras"]},
+            {"dbs3-client": ["dbs"]},
             failing={"ROOT"},
         )
         out = capsys.readouterr().out
@@ -268,16 +266,16 @@ class TestMain:
         assert "FAILURES: root" in out
 
     def test_uninstalled_pypi_dep_fails(self, check_env, monkeypatch, env_dir, capsys):
-        rc, _ = _run_main(check_env, monkeypatch, env_dir, {"tf-keras": None})
+        rc, _ = _run_main(check_env, monkeypatch, env_dir, {"dbs3-client": None})
         out = capsys.readouterr().out
         assert rc == 1
         assert "not installed in the env" in out
-        assert "FAILURES: tf-keras" in out
+        assert "FAILURES: dbs3-client" in out
 
     def test_conda_dep_absent_from_env_fails(self, check_env, monkeypatch, env_dir):
         for meta in (env_dir / ".pixi/envs/default/conda-meta").glob("root-*"):
             meta.unlink()
-        rc, _ = _run_main(check_env, monkeypatch, env_dir, {"tf-keras": ["tf_keras"]})
+        rc, _ = _run_main(check_env, monkeypatch, env_dir, {"dbs3-client": ["dbs"]})
         assert rc == 1
 
     def test_missing_manifest(self, check_env, monkeypatch, tmp_path):
