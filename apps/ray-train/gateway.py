@@ -4,8 +4,8 @@ A session's RAY_AUTH_TOKEN is its JupyterHub token, which the Ray CLI sends as
 a bearer token. The Hub says whose it is, and the call goes on to that user's
 RayCluster: created from raycluster.yaml when they first send code or a job,
 running as them, and deleted once idle. Only the gateway holds a cluster's
-own Ray token. A cluster runs the image's Python and Ray, or the environment
-the session's `ray` command names in the X-AF-Ray-Env header.
+own Ray token. A cluster runs the global Pixi environment, or the one the
+session's `ray` command names in the X-AF-Ray-Env header.
 """
 
 from __future__ import annotations
@@ -60,6 +60,8 @@ MANAGED_BY = "ray-train-gateway"
 # Set by the session's `ray` command (docker/purdue-af/ray-wrapper).
 ENV_HEADER = "X-AF-Ray-Env"
 ENV_ANNOTATION = "purdue-af/ray-env"
+# The environment pixi-global-sync keeps (apps/af-utils/pixi-global-sync).
+DEFAULT_ENV = "/work/pixi/global/.pixi/envs/default"
 # singleuser.podNameTemplate in the Hub values
 SESSION_POD = re.compile(r"purdue-af-(\d+)")
 # custom-spawner.py names the accounts from outside Purdue <login>-cern and <login>-fnal
@@ -139,9 +141,7 @@ def head_url(cluster: str) -> str:
     return f"http://{cluster}-head-svc.{NAMESPACE}.svc.cluster.local:8265"
 
 
-def build_cluster(
-    template: dict[str, Any], user: User, env: str = ""
-) -> dict[str, Any]:
+def build_cluster(template: dict[str, Any], user: User, env: str) -> dict[str, Any]:
     cluster = copy.deepcopy(template)
     metadata = cluster["metadata"]
     metadata["name"] = user.cluster
@@ -154,13 +154,12 @@ def build_cluster(
     )
     for container in pod["containers"]:
         variables = container.setdefault("env", [])
+        # `ray start`, and with it every Ray process, then come from the environment.
+        for variable in variables:
+            if variable["name"] == "PATH":
+                variable["value"] = f"{env}/bin:{variable['value']}"
+        variables.append({"name": "CONDA_PREFIX", "value": env})
         variables.append({"name": "USER", "value": user.account})
-        if env:
-            # `ray start`, and with it every Ray process, then come from the environment.
-            for variable in variables:
-                if variable["name"] == "PATH":
-                    variable["value"] = f"{env}/bin:{variable['value']}"
-            variables.append({"name": "CONDA_PREFIX", "value": env})
     return cluster
 
 
@@ -220,9 +219,9 @@ def env_roots(template: dict[str, Any]) -> list[str]:
 
 
 def requested_env(header: str, template: dict[str, Any]) -> str:
-    """The environment a call asks for, or '' for the image's own."""
+    """The environment a call asks for, or the global one."""
     if not header:
-        return ""
+        return DEFAULT_ENV
     path = posixpath.normpath(header)
     roots = env_roots(template)
     if not header.startswith("/") or not any(

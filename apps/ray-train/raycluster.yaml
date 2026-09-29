@@ -31,13 +31,13 @@ spec:
             effect: NoSchedule
         containers:
           - name: ray-head
-            # CPU flavor: PyPI torch brings its own CUDA, and the CUDA flavors cost a 6.3 GB pull.
+            # CPU flavor: the environments bring their own CUDA, and the CUDA flavors cost a 6.3 GB pull.
             image: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray:2.58.0-py312-cpu
             env:
               # The user has no home directory in the image.
               - name: HOME
                 value: /tmp
-              # The image's own PATH; the gateway puts a user's environment in front of it.
+              # The image's own PATH; the gateway puts the cluster's environment in front of it.
               - name: PATH
                 value: /home/ray/anaconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/nvidia/bin
             resources:

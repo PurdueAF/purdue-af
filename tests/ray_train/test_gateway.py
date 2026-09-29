@@ -429,7 +429,7 @@ async def test_a_call_the_head_cannot_take_is_reported(env, monkeypatch):
 
 @pytest.mark.parametrize(
     "other_env, status",
-    [("", 200), ("/work/users/user-a/other", 409), (None, 409)],
+    [(gw.DEFAULT_ENV, 200), ("/work/users/user-a/other", 409), (None, 409)],
     ids=["same-environment", "other-environment", "deleted-again"],
 )
 async def test_a_concurrent_creation_is_joined_only_if_it_runs_the_same_environment(
@@ -484,13 +484,11 @@ async def test_a_named_environment_runs_the_whole_cluster(env):
     assert variables["CONDA_PREFIX"] == ENV_A
 
 
-async def test_without_an_environment_the_image_runs(env):
+async def test_without_an_environment_the_global_one_runs(env):
     await submit(env)
-    template = yaml.safe_load(TEMPLATE.read_text())
-    (container,) = template["spec"]["headGroupSpec"]["template"]["spec"]["containers"]
-    image_path = {v["name"]: v["value"] for v in container["env"]}["PATH"]
-    assert head_env(env)["PATH"] == image_path
-    assert "CONDA_PREFIX" not in head_env(env)
+    cluster = env.kube.clusters["ray-train-7"]
+    assert cluster["metadata"]["annotations"][gw.ENV_ANNOTATION] == gw.DEFAULT_ENV
+    assert head_env(env)["PATH"].startswith(f"{gw.DEFAULT_ENV}/bin:")
 
 
 @pytest.mark.parametrize(
@@ -550,7 +548,7 @@ async def test_a_ray_without_token_authentication_is_refused(env):
 def test_environments_live_on_the_storage_the_cluster_mounts():
     template = yaml.safe_load(TEMPLATE.read_text())
     assert gw.env_roots(template) == ["/work", "/depot/cms", "/eos", "/cvmfs"]
-    assert gw.requested_env("", template) == ""
+    assert gw.requested_env("", template) == gw.DEFAULT_ENV
     assert gw.requested_env(ENV_A + "/", template) == ENV_A
 
 

@@ -36,12 +36,15 @@ Secret. The `ray.io` CRDs and their controller are the KubeRay operator in
   the gateway's Hub token; only the gateway sends it. Users' pods mount no
   ServiceAccount token, and have no autoscaler, whose Role would let user code
   read every pod in `cms` and patch every RayCluster.
-- **Environment**: a call that starts a cluster may name an environment on
-  storage the cluster mounts, in the `X-AF-Ray-Env` header that the session's
-  `ray` command, [`ray-wrapper`](../../docker/purdue-af/ray-wrapper), sets from
-  `AF_RAY_ENV`. Its `bin/` then comes first on the cluster's `PATH`, so Ray and
-  the job's Python are the environment's. A call naming another environment
-  replaces a cluster that has no pending or running job.
+- **Environment**: a cluster runs the global Pixi environment that
+  [`pixi-global-sync`](../af-utils/pixi-global-sync) keeps, whose
+  [`pixi.toml`](../../pixi/global/pixi.toml) has `ray-default` and `ray-train`
+  for it, or the environment a call names in the `X-AF-Ray-Env` header. The
+  session's `ray` command, [`ray-wrapper`](../../docker/purdue-af/ray-wrapper),
+  sets that header from `AF_RAY_ENV`, and the gateway accepts only storage the
+  cluster mounts. The environment's `bin/` comes first on the cluster's `PATH`,
+  so Ray and the job's Python are the environment's. A call naming another
+  environment replaces a cluster that has no pending or running job.
 - **Lifetime**: a cluster with no pending or running job for `IDLE_TIMEOUT_S`
   is deleted, with its job history; its token Secret goes with it.
 - **Before the Hub registers the service** the gateway answers every call with

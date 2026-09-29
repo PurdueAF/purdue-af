@@ -7,6 +7,8 @@ gateway and only the gateway reaches the clusters, and the Hub hands the
 gateway exactly the token and scopes it uses.
 """
 
+import re
+import tomllib
 from pathlib import Path
 
 import yaml
@@ -16,6 +18,8 @@ APP = REPO / "apps" / "ray-train"
 HUB_VALUES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
 EXPERIMENTAL = REPO / "deploy" / "experimental" / "kustomization.yaml"
 CORE = REPO / "deploy" / "core-production" / "kustomization.yaml"
+GLOBAL_ENV = REPO / "pixi" / "global" / "pixi.toml"
+RAY_WRAPPER = REPO / "docker" / "purdue-af" / "ray-wrapper"
 
 
 def load(path):
@@ -182,3 +186,20 @@ def test_only_sessions_reach_the_gateway_and_only_the_gateway_reaches_clusters()
     assert rule["from"] == [
         {"podSelector": {"matchLabels": gateway["podSelector"]["matchLabels"]}}
     ]
+
+
+def test_clusters_default_to_the_environment_pixi_global_sync_keeps():
+    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+    sync = load_script(
+        REPO / "apps" / "af-utils" / "pixi-global-sync" / "sync-global-env.py",
+        "sync_global_env_for_ray_train",
+    )
+    assert gateway.DEFAULT_ENV == str(sync.LIVE_DIR / ".pixi" / "envs" / sync.ENV_NAME)
+
+
+def test_the_global_environment_has_a_ray_a_cluster_can_run():
+    """The same floor the session's `ray` holds a named environment to."""
+    dependencies = tomllib.loads(GLOBAL_ENV.read_text())["dependencies"]
+    floor = re.search(r'^MIN_ENV_RAY="(.+)"$', RAY_WRAPPER.read_text(), re.M)[1]
+    assert dependencies["ray-default"] == f">={floor}"
+    assert "ray-train" in dependencies

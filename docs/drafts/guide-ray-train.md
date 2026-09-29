@@ -88,16 +88,16 @@ and its `ray` command runs the Ray command line from an environment of its
 own. In a terminal, in the directory that holds `train.py`:
 
 ```shell
-ray job submit --working-dir . --runtime-env-json '{"pip": ["torch"]}' -- python train.py
+ray job submit --working-dir . -- python train.py
 ```
 
+* The job runs in the
+  [global Pixi environment](../docs/software.md#the-global-pixi-environment),
+  which has PyTorch and Ray. For packages it lacks, run the job in an
+  environment of yours: see [Your own environment](#your-own-environment).
 * `--working-dir .` uploads the directory to your cluster. Keep it to code: the
   upload has a size limit, and the job reads its data from storage (see
   [Data and results](#data-and-results)).
-* `"pip"` lists the packages your code imports; add the ones beyond `torch`,
-  with versions where they matter. Your cluster installs them the first time
-  a job asks for them, which takes a minute or two. To run the job in an
-  environment of yours instead, see [Your own environment](#your-own-environment).
 * The first submission starts your cluster, which takes a minute or two when
   a T4 is free. When none is, the submission waits for one and gives up with a
   message after a while.
@@ -118,10 +118,9 @@ ray job stop <job-id>
 
 ## Your own environment
 
-A job runs in the Python of the Ray image, with the packages that `"pip"`
-lists. It can run in one of your [Pixi environments](../docs/guide-pixi.md)
-instead, with the packages installed there: name the Pixi project in
-`AF_RAY_ENV`.
+A job can run in one of your [Pixi environments](../docs/guide-pixi.md)
+instead of the global one, with the packages installed there: name the Pixi
+project in `AF_RAY_ENV`.
 
 ```shell
 AF_RAY_ENV=/work/users/<username>/my-training ray job submit --working-dir . -- python train.py
@@ -135,12 +134,13 @@ AF_RAY_ENV=/work/users/<username>/my-training ray job submit --working-dir . -- 
   `my-training/.pixi/envs/gpu`, or a Conda environment.
 * The environment must be on storage your cluster sees (see
   [Data and results](#data-and-results)); `~/work/...` paths work.
-* Your cluster runs one environment at a time. A job in another environment,
-  or in none, replaces the cluster once its jobs have ended, and is refused
-  until then.
+* Your cluster runs one environment at a time. A job in another one, the
+  global one included, replaces the cluster once its jobs have ended, and is
+  refused until then.
 * `AF_RAY_ENV` is read by the session's `ray` command. Inside `pixi shell`,
   `pixi run` or a notebook whose environment has Ray, `ray` is that
-  environment's own command, which ignores it: use `/usr/local/bin/ray` there.
+  environment's own command, which ignores it, so the job runs in the global
+  environment: use `/usr/local/bin/ray` there.
 
 ## Data and results
 
