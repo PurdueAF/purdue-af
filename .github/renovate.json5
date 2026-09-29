@@ -277,15 +277,31 @@
       allowedVersions: '/^3\\.12([.-]|$)/',
     },
     {
-      // pixi/global takes Python 3.13; 3.14 does not solve yet. cms-combine's
-      // py3.14 builds need root_base 6.40.4 and with it giflib 6, imagemagick
-      // (via hepdata-lib) has only giflib-5 builds, and roastcoffea requires
-      // python <3.14. Overrides the rule above, so it stays after it.
+      // pixi/global takes Python 3.13; 3.14 does not solve yet: cms-combine's
+      // py3.14 builds hit the giflib conflict (next rule), and roastcoffea
+      // requires python <3.14. Overrides the rule above, so it stays after it.
       // Regex, not '<3.14': this allowedVersions replaces the stable-only one
       // above, and a range admits 3.14 release candidates.
       matchPackageNames: ['python'],
       matchFileNames: ['pixi/global/pixi.toml'],
       allowedVersions: '/^3\\.1[23]\\.\\d+$/',
+    },
+    {
+      // cms-combine 11.1.0 needs root_base >=6.36.14, whose every build links
+      // giflib 6; imagemagick (via hepdata-lib) has only giflib-5 builds.
+      // Relax once conda-forge publishes an imagemagick built against giflib 6.
+      // Regex: this allowedVersions replaces the stable-only one above.
+      matchPackageNames: ['cms-combine'],
+      matchFileNames: ['pixi/global/pixi.toml'],
+      allowedVersions: '/^11\\.0\\.\\d+$/',
+    },
+    {
+      // servicex needs aioboto3, whose every release pins an aiobotocore 2.x
+      // that requires wrapt <2. Relax once aioboto3 moves to aiobotocore 3.
+      // Regex: this allowedVersions replaces the stable-only one above.
+      matchPackageNames: ['wrapt'],
+      matchFileNames: ['pixi/global/pixi.toml'],
+      allowedVersions: '/^1\\./',
     },
   ],
 }
