@@ -1,27 +1,40 @@
-# The Jobs API runs whatever it is sent, unauthenticated: only AF sessions may reach it.
+# Sessions reach only the gateway, and users' Ray clusters only hear from the gateway.
 # Kubelet probes come from the node host IP, which NetworkPolicy does not block under Calico.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: ray-train
+  name: ray-train-gateway
 spec:
   podSelector:
     matchLabels:
-      ray.io/cluster: ray-train
+      app: ray-train-gateway
   policyTypes:
     - Ingress
   ingress:
-    # Head and workers among themselves: GCS, raylets, object transfers, NCCL.
-    - from:
-        - podSelector:
-            matchLabels:
-              ray.io/cluster: ray-train
-    # AF user sessions: job submission, logs and status on the dashboard port.
     - from:
         - podSelector:
             matchLabels:
               app: jupyterhub
               component: singleuser-server
+      ports:
+        - protocol: TCP
+          port: 8265
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ray-train-clusters
+spec:
+  podSelector:
+    matchLabels:
+      app: ray-train-cluster
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ray-train-gateway
       ports:
         - protocol: TCP
           port: 8265

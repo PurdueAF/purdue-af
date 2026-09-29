@@ -1,145 +1,171 @@
-"""Tests for apps/ray-train — the shared Ray cluster that Ray Train jobs run on.
+"""Tests for apps/ray-train — the gateway to each user's own Ray cluster.
 
-The properties the deployment depends on and no schema checks: GPU pods exist
-only while jobs need them, the head takes no work, every pod sees the same
-storage and can write only the results directory the head creates, nothing
-outside the cluster reaches more than the Jobs API, and a spec change reaches
-the running pods.
+The wiring that only fails at deploy time, and what the isolation rests on:
+a user's cluster carries no Kubernetes credentials and demands its token,
+the gateway can create Secrets but never read them, only sessions reach the
+gateway and only the gateway reaches the clusters, and the Hub hands the
+gateway exactly the token and scopes it uses.
 """
 
-import pytest
+from pathlib import Path
+
 import yaml
-from common import REPO
+from common import REPO, load_script
 
 APP = REPO / "apps" / "ray-train"
+HUB_VALUES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
 EXPERIMENTAL = REPO / "deploy" / "experimental" / "kustomization.yaml"
-JOBS_API = [{"protocol": "TCP", "port": 8265}]
+CORE = REPO / "deploy" / "core-production" / "kustomization.yaml"
 
 
 def load(path):
     return yaml.safe_load(path.read_text())
 
 
-@pytest.fixture(scope="module")
-def values():
-    return load(APP / "values.yaml")
+def load_all(path):
+    return [doc for doc in yaml.safe_load_all(path.read_text()) if doc]
 
 
-@pytest.fixture(scope="module")
-def release():
-    return load(APP / "helmrelease.yaml")
+def by_kind(path, kind):
+    (doc,) = [d for d in load_all(path) if d["kind"] == kind]
+    return doc
 
 
-def test_flux_deploys_the_cluster():
+def gateway_pod():
+    return load(APP / "deployment.yaml")["spec"]["template"]
+
+
+def cluster_pod():
+    return load(APP / "raycluster.yaml")["spec"]["headGroupSpec"]["template"]
+
+
+def test_flux_deploys_the_gateway():
     kustomization = load(EXPERIMENTAL)
-    for name in ("helmrelease", "networkpolicy"):
+    for name in ("rbac", "deployment", "service", "networkpolicy"):
         assert f"../../apps/ray-train/{name}.yaml" in kustomization["resources"]
     generators = {g["name"]: g for g in kustomization["configMapGenerator"]}
-    assert generators["ray-train-config"]["files"] == [
-        "values.yaml=../../apps/ray-train/values.yaml"
+    generator = generators["ray-train-gateway"]
+    assert generator["files"] == [
+        "../../apps/ray-train/gateway.py",
+        "../../apps/ray-train/raycluster.yaml",
     ]
+    annotations = generator["options"]["annotations"]
+    assert annotations["kustomize.toolkit.fluxcd.io/substitute"] == "disabled"
 
 
-def test_release_waits_for_the_crds(release):
-    """The chart's RayCluster needs the operator's ray.io CRDs first, from an
-    operator release the same root deploys."""
-    (dependency,) = release["spec"]["dependsOn"]
-    operator = REPO / "apps" / "ray" / "operator" / "helmrelease.yaml"
-    assert load(operator)["metadata"]["name"] == dependency["name"]
-    assert "../../apps/ray/operator/helmrelease.yaml" in load(EXPERIMENTAL)["resources"]
-
-
-def test_spec_changes_recreate_the_pods(release, values):
-    """KubeRay applies a changed spec only to pods created afterwards unless
-    upgradeStrategy is Recreate: new workers would join a head on the old
-    spec. The chart has no value for it, so a post-renderer adds it."""
-    (renderer,) = release["spec"]["postRenderers"]
-    (patch,) = renderer["kustomize"]["patches"]
-    assert patch["target"] == {
-        "kind": "RayCluster",
-        "name": values["fullnameOverride"],
-    }
-    assert yaml.safe_load(patch["patch"]) == [
-        {"op": "add", "path": "/spec/upgradeStrategy", "value": {"type": "Recreate"}}
-    ]
-
-
-def test_gpu_pods_exist_only_while_jobs_need_them(values):
-    worker = values["worker"]
-    assert values["head"]["enableInTreeAutoscaling"] is True
-    assert worker["replicas"] == 0
-    assert worker["minReplicas"] == 0
-    assert worker["maxReplicas"] >= 1
-
-
-def test_the_autoscaler_sees_the_workers_gpu(values):
-    """The autoscaler counts only limits named *gpu; any other GPU resource,
-    a MIG device for one, must be declared as num-gpus or no pod is ever
-    added for a GPU request."""
-    worker = values["worker"]
-    gpus = {
-        name: count
-        for name, count in worker["resources"]["limits"].items()
-        if name.startswith("nvidia.com/")
-    }
-    assert sum(gpus.values()) == 1
-    for name, count in gpus.items():
-        if not name.endswith("gpu"):
-            assert int(worker["rayStartParams"]["num-gpus"]) == count
-
-
-def test_the_head_takes_no_work(values):
-    head = values["head"]
-    assert head["rayStartParams"]["num-cpus"] == "0"
-    assert not any(
-        name.startswith("nvidia.com/") for name in head["resources"]["limits"]
+def test_the_gateway_runs_the_files_it_is_given():
+    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+    pod = gateway_pod()["spec"]
+    (container,) = pod["containers"]
+    volumes = {v["name"]: v for v in pod["volumes"]}
+    (app,) = [m for m in container["volumeMounts"] if m["name"] == "app"]
+    assert volumes["app"]["configMap"]["name"] == "ray-train-gateway"
+    assert container["command"] == ["python", f"{app['mountPath']}/gateway.py"]
+    assert gateway.TEMPLATE == Path(app["mountPath"]) / "raycluster.yaml"
+    service = load(APP / "service.yaml")
+    assert (
+        service["spec"]["selector"].items()
+        <= gateway_pod()["metadata"]["labels"].items()
     )
 
 
-def test_every_pod_mounts_the_same_storage(values):
-    """Checkpoints from every worker meet at one path, and a job's driver on
-    the head reads its data where the workers do."""
-    assert values["head"]["volumes"] == values["worker"]["volumes"]
-    assert values["head"]["volumeMounts"] == values["worker"]["volumeMounts"]
-
-
-def test_only_the_results_directory_is_writable(values):
-    volumes = {v["name"]: v for v in values["worker"]["volumes"]}
-    writable = [
-        m
-        for m in values["worker"]["volumeMounts"]
-        if not m.get("readOnly") and "emptyDir" not in volumes[m["name"]]
-    ]
-    (results,) = writable
-    (work,) = [
-        m
-        for m in values["worker"]["volumeMounts"]
-        if m["name"] == results["name"] and "subPath" not in m
-    ]
-    assert work["readOnly"] is True
-    assert results["mountPath"] == f"{work['mountPath']}/{results['subPath']}"
-
-
-def test_the_head_creates_the_results_directory(values):
-    """The results directory is a subPath of the shared claim: it must exist,
-    owned by the Ray user, before a pod mounts it."""
-    (results,) = [m for m in values["worker"]["volumeMounts"] if "subPath" in m]
-    (init,) = values["head"]["initContainers"]
-    (mount,) = init["volumeMounts"]
-    assert mount["name"] == results["name"]
-    assert init["command"][0] == "install"
-    assert init["command"][-1] == f"{mount['mountPath']}/{results['subPath']}"
-
-
-def test_only_the_jobs_api_is_reachable_from_outside_the_cluster(values):
-    """The Jobs API runs whatever it is sent, unauthenticated."""
-    policy = load(APP / "networkpolicy.yaml")
-    own_pods = {
-        "podSelector": {"matchLabels": {"ray.io/cluster": values["fullnameOverride"]}}
+def test_the_hub_gives_the_gateway_its_token_and_scopes():
+    """z2jh keeps a token-only service's token in the `hub` Secret."""
+    hub = load(HUB_VALUES)["hub"]
+    assert "ray-train-gateway" in hub["services"]
+    role = hub["loadRoles"]["ray-train-gateway"]
+    assert role["services"] == ["ray-train-gateway"]
+    assert set(role["scopes"]) == {"read:servers", "admin:server_state"}
+    (container,) = gateway_pod()["spec"]["containers"]
+    env = {e["name"]: e for e in container["env"]}
+    assert env["JUPYTERHUB_API_TOKEN"]["valueFrom"]["secretKeyRef"] == {
+        "name": "hub",
+        "key": "hub.services.ray-train-gateway.apiToken",
+        "optional": True,
     }
-    assert policy["spec"]["podSelector"] == own_pods["podSelector"]
-    assert policy["spec"]["policyTypes"] == ["Ingress"]
-    for rule in policy["spec"]["ingress"]:
-        if rule["from"] != [own_pods]:
-            assert rule.get("ports") == JOBS_API
-    assert values["service"]["type"] == "ClusterIP"
+    assert (
+        gateway_pod()["metadata"]["labels"]["hub.jupyter.org/network-access-hub"]
+        == "true"
+    )
+
+
+def test_the_gateway_reads_the_hubs_session_pod_names():
+    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+    template = load(HUB_VALUES)["singleuser"]["podNameTemplate"]
+    match = gateway.SESSION_POD.fullmatch(template.format(userid=42))
+    assert match and match[1] == "42"
+
+
+def test_the_hub_points_sessions_at_the_gateway():
+    generators = {g["name"]: g for g in load(CORE)["configMapGenerator"]}
+    assert (
+        "04-ray-train.py=../../apps/jupyterhub/jupyterhub/extraFiles/ray-train.py"
+        in generators["jupyterhub-extra-config"]["files"]
+    )
+
+
+def test_user_clusters_hold_no_kubernetes_credentials():
+    """User code runs in the head pod. KubeRay's autoscaler Role would let it
+    read every pod in the namespace and patch every RayCluster."""
+    spec = load(APP / "raycluster.yaml")["spec"]
+    assert not spec.get("enableInTreeAutoscaling")
+    assert not spec.get("workerGroupSpecs")
+    pod = cluster_pod()["spec"]
+    assert pod["automountServiceAccountToken"] is False
+    assert "serviceAccountName" not in pod
+
+
+def test_user_clusters_demand_their_token():
+    spec = load(APP / "raycluster.yaml")["spec"]
+    assert spec["authOptions"]["mode"] == "token"
+    # KubeRay refuses token authentication below Ray 2.52.
+    major, minor = (int(p) for p in spec["rayVersion"].split(".")[:2])
+    assert (major, minor) >= (2, 52)
+    (container,) = cluster_pod()["spec"]["containers"]
+    assert container["image"].rsplit(":", 1)[1].startswith(spec["rayVersion"] + "-")
+
+
+def test_user_clusters_have_one_gpu():
+    (container,) = cluster_pod()["spec"]["containers"]
+    for amounts in (
+        container["resources"]["limits"],
+        container["resources"]["requests"],
+    ):
+        assert amounts["nvidia.com/gpu"] == 1
+
+
+def test_the_gateway_never_reads_a_secret():
+    role = by_kind(APP / "rbac.yaml", "Role")
+    (secrets,) = [rule for rule in role["rules"] if "secrets" in rule["resources"]]
+    assert secrets["verbs"] == ["create"]
+    binding = by_kind(APP / "rbac.yaml", "RoleBinding")
+    assert binding["subjects"][0]["name"] == gateway_pod()["spec"]["serviceAccountName"]
+
+
+def test_only_sessions_reach_the_gateway_and_only_the_gateway_reaches_clusters():
+    policies = {
+        p["metadata"]["name"]: p["spec"] for p in load_all(APP / "networkpolicy.yaml")
+    }
+    port = load(APP / "service.yaml")["spec"]["ports"][0]["port"]
+    gateway_labels = gateway_pod()["metadata"]["labels"]
+    cluster_labels = cluster_pod()["metadata"]["labels"]
+
+    gateway = policies["ray-train-gateway"]
+    assert gateway["podSelector"]["matchLabels"].items() <= gateway_labels.items()
+    (rule,) = gateway["ingress"]
+    assert rule["ports"] == [{"protocol": "TCP", "port": port}]
+    assert rule["from"] == [
+        {
+            "podSelector": {
+                "matchLabels": {"app": "jupyterhub", "component": "singleuser-server"}
+            }
+        }
+    ]
+
+    clusters = policies["ray-train-clusters"]
+    assert clusters["podSelector"]["matchLabels"].items() <= cluster_labels.items()
+    (rule,) = clusters["ingress"]
+    assert rule["ports"] == [{"protocol": "TCP", "port": 8265}]
+    assert rule["from"] == [
+        {"podSelector": {"matchLabels": gateway["podSelector"]["matchLabels"]}}
+    ]

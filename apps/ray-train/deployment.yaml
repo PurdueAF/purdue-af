@@ -1,0 +1,100 @@
+# A change to gateway.py reaches the pod when it restarts; raycluster.yaml is read at every cluster creation.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ray-train-gateway
+  labels:
+    app: ray-train-gateway
+spec:
+  replicas: 1
+  # The idle clocks live in memory: one replica, never two.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ray-train-gateway
+  template:
+    metadata:
+      labels:
+        app: ray-train-gateway
+        # The Hub's NetworkPolicy admits API calls only from pods with this label.
+        hub.jupyter.org/network-access-hub: "true"
+    spec:
+      serviceAccountName: ray-train-gateway
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 100
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+        - key: hub.jupyter.org/dedicated
+          operator: Equal
+          value: cms-af
+          effect: NoSchedule
+      initContainers:
+        # The Ray image has aiohttp and PyYAML, not ldap3.
+        - name: pip-install
+          image: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray:2.58.0-py312-cpu
+          command:
+            - pip
+            - install
+            - --no-cache-dir
+            - --target
+            - /deps
+            - ldap3==2.9.1
+          volumeMounts:
+            - name: deps
+              mountPath: /deps
+      containers:
+        - name: gateway
+          image: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray:2.58.0-py312-cpu
+          command: ["python", "/app/gateway.py"]
+          env:
+            - name: PYTHONPATH
+              value: /deps
+            - name: JUPYTERHUB_API_URL
+              value: "http://hub:8081/hub/api"
+            # This service's own Hub token; optional, so the pod starts before the Hub has made one.
+            - name: JUPYTERHUB_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hub
+                  key: hub.services.ray-train-gateway.apiToken
+                  optional: true
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          ports:
+            - name: jobs-api
+              containerPort: 8265
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: jobs-api
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: app
+              mountPath: /app
+              readOnly: true
+            - name: deps
+              mountPath: /deps
+              readOnly: true
+      volumes:
+        - name: app
+          configMap:
+            name: ray-train-gateway
+        - name: deps
+          emptyDir: {}

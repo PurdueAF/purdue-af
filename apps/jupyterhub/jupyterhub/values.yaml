@@ -378,6 +378,8 @@ hub:
         KUBERNETES_SERVICE_PORT: "443"
     # Token only: the chart keeps it in the `hub` Secret, which the AF Prometheus mounts.
     prometheus: {}
+    # Token only, in the same Secret: read by the Ray Train gateway (apps/ray-train).
+    ray-train-gateway: {}
   loadRoles:
     # read:servers!user lets a session see itself; delete:servers!server lets it shut itself down.
     server:
@@ -395,6 +397,11 @@ hub:
       description: "Scrape /hub/metrics"
       scopes: ["read:metrics"]
       services: ["prometheus"]
+    # The session pod name gives the AF id, which picks the pooled account of a non-Purdue user.
+    ray-train-gateway:
+      description: "Read session pod names, to run each user's Ray cluster as them"
+      scopes: ["read:servers", "admin:server_state"]
+      services: ["ray-train-gateway"]
 scheduling:
   userScheduler:
     enabled: false

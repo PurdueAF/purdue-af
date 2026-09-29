@@ -2042,6 +2042,7 @@ name = "purdue-af-tests"
 version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "asgi-lifespan" },
     { name = "cachetools" },
     { name = "fastapi" },
@@ -2070,6 +2071,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.9" },
     { name = "asgi-lifespan", specifier = ">=2.1" },
     { name = "cachetools", specifier = ">=5.5" },
     { name = "fastapi", specifier = ">=0.115" },
