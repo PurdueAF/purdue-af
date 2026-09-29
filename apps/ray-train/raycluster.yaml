@@ -37,6 +37,9 @@ spec:
               # The user has no home directory in the image.
               - name: HOME
                 value: /tmp
+              # The image's own PATH; the gateway puts a user's environment in front of it.
+              - name: PATH
+                value: /home/ray/anaconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/nvidia/bin
             resources:
               limits:
                 cpu: "8"

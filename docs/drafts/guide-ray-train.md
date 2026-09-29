@@ -83,15 +83,9 @@ print(result.checkpoint.path)
 
 ## 2. Submit the job
 
-Your session already knows where your Ray cluster is and how to sign in to it.
-In a terminal, set up the Ray command line once (`uvx` runs Ray from an
-environment of its own, so none of your environments change):
-
-```shell
-alias ray='uvx --from "ray[default]" ray'
-```
-
-Then, in the directory that holds `train.py`:
+Your session already knows where your Ray cluster is and how to sign in to it,
+and its `ray` command runs the Ray command line from an environment of its
+own. In a terminal, in the directory that holds `train.py`:
 
 ```shell
 ray job submit --working-dir . --runtime-env-json '{"pip": ["torch"]}' -- python train.py
@@ -102,15 +96,15 @@ ray job submit --working-dir . --runtime-env-json '{"pip": ["torch"]}' -- python
   [Data and results](#data-and-results)).
 * `"pip"` lists the packages your code imports; add the ones beyond `torch`,
   with versions where they matter. Your cluster installs them the first time
-  a job asks for them, which takes a minute or two.
+  a job asks for them, which takes a minute or two. To run the job in an
+  environment of yours instead, see [Your own environment](#your-own-environment).
 * The first submission starts your cluster, which takes a minute or two when
   a T4 is free. When none is, the submission waits for one and gives up with a
   message after a while.
 * The command prints the job's output until the job ends. `Ctrl+C` stops the
   printing, not the job.
 
-In a notebook, run the same command in a `!` cell, with the alias written out:
-`!uvx --from "ray[default]" ray job submit ...`.
+In a notebook, run the same command in a `!` cell: `!ray job submit ...`.
 
 ## 3. Follow and stop jobs
 
@@ -121,6 +115,32 @@ ray job stop <job-id>
 ```
 
 `<job-id>` is the `raysubmit_...` identifier that `ray job submit` prints.
+
+## Your own environment
+
+A job runs in the Python of the Ray image, with the packages that `"pip"`
+lists. It can run in one of your [Pixi environments](../docs/guide-pixi.md)
+instead, with the packages installed there: name the Pixi project in
+`AF_RAY_ENV`.
+
+```shell
+AF_RAY_ENV=/work/users/<username>/my-training ray job submit --working-dir . -- python train.py
+```
+
+* The environment needs Ray, with its dashboard and Ray Train, and PyTorch:
+  `pixi add --pypi "ray[default,train]" torch`. The `ray` command says so if
+  its Ray is too old to run a cluster.
+* `AF_RAY_ENV` names a Pixi project, whose `default` environment then runs, or
+  an environment directory: another environment of a project, such as
+  `my-training/.pixi/envs/gpu`, or a Conda environment.
+* The environment must be on storage your cluster sees (see
+  [Data and results](#data-and-results)); `~/work/...` paths work.
+* Your cluster runs one environment at a time. A job in another environment,
+  or in none, replaces the cluster once its jobs have ended, and is refused
+  until then.
+* `AF_RAY_ENV` is read by the session's `ray` command. Inside `pixi shell`,
+  `pixi run` or a notebook whose environment has Ray, `ray` is that
+  environment's own command, which ignores it: use `/usr/local/bin/ray` there.
 
 ## Data and results
 

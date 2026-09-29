@@ -17,6 +17,7 @@ agents.
 | `scripts/` | the `before-notebook.d` hooks, `af-as-user.sh`, `managed-block.py` |
 | `agents/platform-context.md` | the facility context every in-session agent reads |
 | `pixi-wrapper` | the `pixi` on a session's PATH |
+| `ray-wrapper` | the `ray` on a session's PATH, for the Ray Train gateway ([`apps/ray-train`](../../apps/ray-train)) |
 | `configs/`, `osg/`, `xml/` | CERN krb5/CA defaults, OSG RPMs, CMS site config |
 | `code-server/` | the interface-controls extension |
 

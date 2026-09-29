@@ -4,7 +4,8 @@ A session's RAY_AUTH_TOKEN is its JupyterHub token, which the Ray CLI sends as
 a bearer token. The Hub says whose it is, and the call goes on to that user's
 RayCluster: created from raycluster.yaml when they first send code or a job,
 running as them, and deleted once idle. Only the gateway holds a cluster's
-own Ray token.
+own Ray token. A cluster runs the image's Python and Ray, or the environment
+the session's `ray` command names in the X-AF-Ray-Env header.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import hmac
 import json
 import logging
 import os
+import posixpath
 import re
 import ssl
 import time
@@ -55,6 +57,9 @@ SERVICE_ACCOUNT = Path("/var/run/secrets/kubernetes.io/serviceaccount")
 RAYCLUSTERS = f"/apis/ray.io/v1/namespaces/{NAMESPACE}/rayclusters"
 SECRETS = f"/api/v1/namespaces/{NAMESPACE}/secrets"
 MANAGED_BY = "ray-train-gateway"
+# Set by the session's `ray` command (docker/purdue-af/ray-wrapper).
+ENV_HEADER = "X-AF-Ray-Env"
+ENV_ANNOTATION = "purdue-af/ray-env"
 # singleuser.podNameTemplate in the Hub values
 SESSION_POD = re.compile(r"purdue-af-(\d+)")
 # custom-spawner.py names the accounts from outside Purdue <login>-cern and <login>-fnal
@@ -134,18 +139,28 @@ def head_url(cluster: str) -> str:
     return f"http://{cluster}-head-svc.{NAMESPACE}.svc.cluster.local:8265"
 
 
-def build_cluster(template: dict[str, Any], user: User) -> dict[str, Any]:
+def build_cluster(
+    template: dict[str, Any], user: User, env: str = ""
+) -> dict[str, Any]:
     cluster = copy.deepcopy(template)
     metadata = cluster["metadata"]
     metadata["name"] = user.cluster
     metadata.setdefault("labels", {})["app.kubernetes.io/managed-by"] = MANAGED_BY
+    metadata.setdefault("annotations", {})[ENV_ANNOTATION] = env
     cluster["spec"]["authOptions"]["secretName"] = user.cluster
     pod = cluster["spec"]["headGroupSpec"]["template"]["spec"]
     pod.setdefault("securityContext", {}).update(
         {"runAsUser": user.uid, "runAsGroup": user.gid}
     )
     for container in pod["containers"]:
-        container.setdefault("env", []).append({"name": "USER", "value": user.account})
+        variables = container.setdefault("env", [])
+        variables.append({"name": "USER", "value": user.account})
+        if env:
+            # `ray start`, and with it every Ray process, then come from the environment.
+            for variable in variables:
+                if variable["name"] == "PATH":
+                    variable["value"] = f"{env}/bin:{variable['value']}"
+            variables.append({"name": "CONDA_PREFIX", "value": env})
     return cluster
 
 
@@ -185,9 +200,49 @@ def head_ready(cluster: dict[str, Any]) -> bool:
     )
 
 
-def ray_version() -> str:
+def load_template() -> dict[str, Any]:
     template: dict[str, Any] = yaml.safe_load(TEMPLATE.read_text())
-    return str(template["spec"]["rayVersion"])
+    return template
+
+
+def ray_version() -> str:
+    return str(load_template()["spec"]["rayVersion"])
+
+
+def env_roots(template: dict[str, Any]) -> list[str]:
+    """Where an environment may live: the storage a cluster mounts."""
+    pod = template["spec"]["headGroupSpec"]["template"]["spec"]
+    scratch = {v["name"] for v in pod["volumes"] if "emptyDir" in v}
+    (container,) = pod["containers"]
+    return [
+        m["mountPath"] for m in container["volumeMounts"] if m["name"] not in scratch
+    ]
+
+
+def requested_env(header: str, template: dict[str, Any]) -> str:
+    """The environment a call asks for, or '' for the image's own."""
+    if not header:
+        return ""
+    path = posixpath.normpath(header)
+    roots = env_roots(template)
+    if not header.startswith("/") or not any(
+        path == root or path.startswith(root.rstrip("/") + "/") for root in roots
+    ):
+        raise web.HTTPBadRequest(
+            text=f"{header} is not on storage your Ray cluster mounts: {', '.join(roots)}."
+        )
+    return path
+
+
+def cluster_env(cluster: dict[str, Any]) -> str:
+    return str((cluster["metadata"].get("annotations") or {}).get(ENV_ANNOTATION, ""))
+
+
+def runs(cluster: dict[str, Any], env: str) -> bool:
+    """Whether the cluster stays up and runs `env`."""
+    return (
+        not cluster["metadata"].get("deletionTimestamp") and cluster_env(cluster) == env
+    )
 
 
 class Gateway:
@@ -278,26 +333,35 @@ class Gateway:
             )
         return body
 
-    async def start_cluster(self, user: User) -> None:
-        """Create the user's cluster if absent; return once its head answers."""
+    async def start_cluster(self, user: User, env: str) -> None:
+        """Create the user's cluster for `env` unless it runs it; return once its head answers."""
         cluster = await self.cluster(user.cluster)
+        if cluster is not None and not runs(cluster, env):
+            if not cluster["metadata"].get("deletionTimestamp"):
+                if await self.busy(cluster):
+                    raise web.HTTPConflict(
+                        text="Your Ray cluster runs another environment and has a job pending or running: wait for it, or stop it."
+                    )
+                await self.delete(user.cluster)
+            await self.wait_until_gone(user.cluster)
+            cluster = None
         if cluster is None:
-            template: dict[str, Any] = yaml.safe_load(TEMPLATE.read_text())
             status, created = await self.kube(
-                "POST", RAYCLUSTERS, build_cluster(template, user)
+                "POST", RAYCLUSTERS, build_cluster(load_template(), user, env)
             )
             if status == 201:
                 log.info("created %s", user.cluster)
                 cluster = created
             elif status == 409:
+                # Another call created it first.
                 cluster = await self.cluster(user.cluster)
             else:
                 raise web.HTTPBadGateway(
                     text=f"Could not create your Ray cluster: {created.get('message', status)}"
                 )
-        if cluster is None or cluster["metadata"].get("deletionTimestamp"):
-            raise web.HTTPServiceUnavailable(
-                text="Your previous Ray cluster is shutting down; submit again in a minute."
+        if cluster is None or not runs(cluster, env):
+            raise web.HTTPConflict(
+                text="Another call is replacing your Ray cluster; submit again in a minute."
             )
         secret = token_secret(
             user,
@@ -312,24 +376,44 @@ class Gateway:
                 raise web.HTTPBadGateway(
                     text=f"Could not create your Ray cluster's token: {body.get('message', status)}"
                 )
-            if await self.head_answers(user.cluster):
-                return
+            if await self.head_status(user.cluster) == 200:
+                break
             if time.monotonic() > deadline:
                 raise web.HTTPServiceUnavailable(
                     text="Your Ray cluster did not start in time: no T4 may be free. Try again later."
                 )
             await asyncio.sleep(START_POLL_S)
+        # A Ray that ignores RAY_AUTH_MODE would serve anyone who reaches it.
+        if await self.head_status(user.cluster, authorized=False) == 200:
+            await self.delete(user.cluster)
+            raise web.HTTPBadRequest(
+                text="The Ray in that environment does not enforce the cluster's token."
+            )
 
-    async def head_answers(self, cluster: str) -> bool:
+    async def delete(self, name: str) -> None:
+        await self.kube(
+            "DELETE", f"{RAYCLUSTERS}/{name}", {"propagationPolicy": "Background"}
+        )
+
+    async def wait_until_gone(self, name: str) -> None:
+        deadline = time.monotonic() + START_TIMEOUT_S
+        while await self.cluster(name) is not None:
+            if time.monotonic() > deadline:
+                raise web.HTTPServiceUnavailable(
+                    text="Your previous Ray cluster is still shutting down; submit again in a minute."
+                )
+            await asyncio.sleep(START_POLL_S)
+
+    async def head_status(self, cluster: str, authorized: bool = True) -> int | None:
         try:
             async with self.http.get(
                 head_url(cluster) + "/api/version",
-                headers=self.cluster_auth(cluster),
+                headers=self.cluster_auth(cluster) if authorized else {},
                 timeout=ClientTimeout(total=5),
             ) as r:
-                return r.status == 200
+                return r.status
         except (ClientError, asyncio.TimeoutError):
-            return False
+            return None
 
     async def forward(self, request: web.Request, cluster: str) -> web.StreamResponse:
         url = head_url(cluster) + request.rel_url.path_qs
@@ -397,9 +481,7 @@ class Gateway:
             if await self.busy(cluster):
                 self.last_used[name] = now
                 continue
-            await self.kube(
-                "DELETE", f"{RAYCLUSTERS}/{name}", {"propagationPolicy": "Background"}
-            )
+            await self.delete(name)
             self.last_used.pop(name, None)
             log.info("deleted idle %s", name)
 
@@ -453,7 +535,8 @@ async def handle(request: web.Request) -> web.StreamResponse:
         )
     gateway.last_used[user.cluster] = time.monotonic()
     if starts_cluster(request.method, request.path):
-        await gateway.start_cluster(user)
+        env = requested_env(request.headers.get(ENV_HEADER, ""), load_template())
+        await gateway.start_cluster(user, env)
     elif await gateway.cluster(user.cluster) is None:
         if request.method == "GET" and request.path == "/api/jobs/":
             return web.json_response([])

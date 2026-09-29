@@ -169,6 +169,7 @@ COPY --from=stack /opt/pixi /opt/pixi
 COPY --from=stack /opt/npm-global /opt/npm-global
 
 COPY --chown=root:root docker/purdue-af/pixi-wrapper /usr/local/bin/pixi
+COPY --chown=root:root docker/purdue-af/ray-wrapper /usr/local/bin/ray
 
 RUN mkdir -p /etc/cvmfs /etc/cvmfs/SITECONF/JobConfig/ /etc/cvmfs/SITECONF/PhEDEx
 COPY docker/purdue-af/xml/site-local-config.xml /etc/cvmfs/SITECONF/JobConfig/
@@ -265,6 +266,8 @@ RUN nvcc --version >/dev/null && \
     opencode --version >/dev/null && \
     command -v claude-agent-acp >/dev/null && \
     command -v codex-acp >/dev/null && \
+    [ "$(command -v ray)" = /usr/local/bin/ray ] && \
+    command -v uvx >/dev/null && \
     python3 -c "import jupyterlab; print('smoke ok:', jupyterlab.__version__)" && \
     python3 -c "import jupyter_ai; print('smoke ok: jupyter-ai present')"
 

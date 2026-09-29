@@ -79,8 +79,11 @@ class FakeKube:
         self.fail_list = False
         self.reject_create = False
         self.reject_secret = False
-        # Clusters another request is creating: absent to a GET, present to a POST.
-        self.racing = set()
+        # Clusters another call is creating, absent to a GET and present to a POST:
+        # name -> the environment that call asks for, or None if it deletes the cluster again.
+        self.racing = {}
+        # Clusters being deleted: name -> the GETs that still find them.
+        self.linger = {}
 
     def app(self):
         clusters = "/apis/ray.io/v1/namespaces/cms/rayclusters"
@@ -95,8 +98,10 @@ class FakeKube:
             if self.reject_create:
                 return web.json_response({"message": "invalid spec"}, status=422)
             if name in self.racing:
-                self.racing.discard(name)
-                stored(body)
+                other_env = self.racing.pop(name)
+                if other_env is not None:
+                    body["metadata"]["annotations"][gw.ENV_ANNOTATION] = other_env
+                    stored(body)
                 return web.json_response({"message": "exists"}, status=409)
             if name in self.clusters:
                 return web.json_response({"message": "exists"}, status=409)
@@ -112,6 +117,10 @@ class FakeKube:
             name = request.match_info["name"]
             if self.fail_get:
                 return web.json_response({}, status=500)
+            if self.linger.get(name) == 0:
+                del self.linger[name], self.clusters[name]
+            elif name in self.linger:
+                self.linger[name] -= 1
             if name in self.racing or name not in self.clusters:
                 return web.json_response({"message": "not found"}, status=404)
             return web.json_response(self.clusters[name])
@@ -144,6 +153,8 @@ class FakeHeads:
 
     def __init__(self):
         self.up = True
+        # A head whose Ray predates token authentication serves anyone.
+        self.open = False
         self.down_checks = 0
         self.jobs = {}
         self.seen_tokens = []
@@ -157,7 +168,10 @@ class FakeHeads:
             cluster = request.match_info.get("cluster", "")
             token = request.headers.get("Authorization", "")
             self.seen_tokens.append(token)
-            if token != f"Bearer {gw.cluster_token(SERVICE_TOKEN, cluster)}":
+            if (
+                not self.open
+                and token != f"Bearer {gw.cluster_token(SERVICE_TOKEN, cluster)}"
+            ):
                 raise web.HTTPForbidden()
             return await handler(request)
 
@@ -413,18 +427,131 @@ async def test_a_call_the_head_cannot_take_is_reported(env, monkeypatch):
     assert r.status == 502
 
 
-async def test_a_concurrent_creation_is_joined(env):
-    env.kube.racing.add("ray-train-7")
+@pytest.mark.parametrize(
+    "other_env, status",
+    [("", 200), ("/work/users/user-a/other", 409), (None, 409)],
+    ids=["same-environment", "other-environment", "deleted-again"],
+)
+async def test_a_concurrent_creation_is_joined_only_if_it_runs_the_same_environment(
+    env, other_env, status
+):
+    env.kube.racing["ray-train-7"] = other_env
     r = await submit(env)
-    assert r.status == 200
-    assert "ray-train-7" in env.kube.clusters
+    assert r.status == status
 
 
-async def test_a_cluster_being_deleted_is_not_reused(env):
+async def test_a_cluster_being_deleted_is_waited_out(env):
     await submit(env)
     env.kube.clusters["ray-train-7"]["metadata"]["deletionTimestamp"] = "now"
+    env.kube.linger["ray-train-7"] = 2
+    r = await submit(env)
+    assert r.status == 200
+    assert "deletionTimestamp" not in env.kube.clusters["ray-train-7"]["metadata"]
+
+
+async def test_a_cluster_that_stays_in_deletion_is_reported(env, monkeypatch):
+    await submit(env)
+    env.kube.clusters["ray-train-7"]["metadata"]["deletionTimestamp"] = "now"
+    monkeypatch.setattr(gw, "START_TIMEOUT_S", 0)
     r = await submit(env)
     assert r.status == 503
+
+
+ENV_A = "/work/users/user-a/proj/.pixi/envs/default"
+ENV_B = "/depot/cms/users/user-a/other"
+
+
+def with_env(env_path, token="session-a"):
+    return {**auth(token), "X-AF-Ray-Env": env_path}
+
+
+def head_env(env, name="ray-train-7"):
+    (container,) = env.kube.clusters[name]["spec"]["headGroupSpec"]["template"]["spec"][
+        "containers"
+    ]
+    return {v["name"]: v["value"] for v in container["env"]}
+
+
+async def test_a_named_environment_runs_the_whole_cluster(env):
+    r = await env.client.post(
+        "/api/jobs/", json={"entrypoint": "true"}, headers=with_env(ENV_A)
+    )
+    assert r.status == 200
+    cluster = env.kube.clusters["ray-train-7"]
+    assert cluster["metadata"]["annotations"][gw.ENV_ANNOTATION] == ENV_A
+    variables = head_env(env)
+    assert variables["PATH"].startswith(f"{ENV_A}/bin:")
+    assert variables["CONDA_PREFIX"] == ENV_A
+
+
+async def test_without_an_environment_the_image_runs(env):
+    await submit(env)
+    template = yaml.safe_load(TEMPLATE.read_text())
+    (container,) = template["spec"]["headGroupSpec"]["template"]["spec"]["containers"]
+    image_path = {v["name"]: v["value"] for v in container["env"]}["PATH"]
+    assert head_env(env)["PATH"] == image_path
+    assert "CONDA_PREFIX" not in head_env(env)
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/home/user-a/env", "work/users/user-a/env", "/work/../etc", "/workshop/env"],
+)
+async def test_an_environment_off_the_clusters_storage_is_refused(env, path):
+    r = await env.client.post(
+        "/api/jobs/", json={"entrypoint": "true"}, headers=with_env(path)
+    )
+    assert r.status == 400
+    assert env.kube.clusters == {}
+
+
+async def test_switching_environments_replaces_an_idle_cluster(env):
+    await env.client.post(
+        "/api/jobs/", json={"entrypoint": "a"}, headers=with_env(ENV_A)
+    )
+    env.heads.jobs["ray-train-7"][0]["status"] = "SUCCEEDED"
+    r = await env.client.post(
+        "/api/jobs/", json={"entrypoint": "b"}, headers=with_env(ENV_B)
+    )
+    assert r.status == 200
+    annotations = env.kube.clusters["ray-train-7"]["metadata"]["annotations"]
+    assert annotations[gw.ENV_ANNOTATION] == ENV_B
+
+
+async def test_switching_environments_leaves_a_busy_cluster_alone(env):
+    await env.client.post(
+        "/api/jobs/", json={"entrypoint": "a"}, headers=with_env(ENV_A)
+    )
+    r = await env.client.post(
+        "/api/jobs/", json={"entrypoint": "b"}, headers=with_env(ENV_B)
+    )
+    assert r.status == 409
+    annotations = env.kube.clusters["ray-train-7"]["metadata"]["annotations"]
+    assert annotations[gw.ENV_ANNOTATION] == ENV_A
+
+
+async def test_reading_a_cluster_does_not_switch_its_environment(env):
+    await env.client.post(
+        "/api/jobs/", json={"entrypoint": "a"}, headers=with_env(ENV_A)
+    )
+    r = await env.client.get("/api/jobs/", headers=with_env(ENV_B))
+    assert [job["entrypoint"] for job in await r.json()] == ["a"]
+
+
+async def test_a_ray_without_token_authentication_is_refused(env):
+    env.heads.open = True
+    r = await env.client.post(
+        "/api/jobs/", json={"entrypoint": "true"}, headers=with_env(ENV_A)
+    )
+    assert r.status == 400
+    assert env.kube.clusters == {}
+
+
+def test_environments_live_on_the_storage_the_cluster_mounts():
+    template = yaml.safe_load(TEMPLATE.read_text())
+    assert gw.env_roots(template) == ["/work", "/depot/cms", "/eos", "/cvmfs"]
+    assert gw.requested_env("", template) == ""
+    assert gw.requested_env(ENV_A + "/", template) == ENV_A
 
 
 @pytest.mark.parametrize(
@@ -613,7 +740,7 @@ def test_building_a_cluster_leaves_the_template_alone():
     template = yaml.safe_load(TEMPLATE.read_text())
     before = copy.deepcopy(template)
     user = gw.User(name="user-a", af_id=7, account="user-a", uid=5001, gid=500)
-    gw.build_cluster(template, user)
+    gw.build_cluster(template, user, ENV_A)
     assert template == before
 
 

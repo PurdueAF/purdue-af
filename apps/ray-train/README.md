@@ -12,7 +12,7 @@ not yet on the documentation site:
 | File                 | What it is                                                                                                   |
 | -------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `gateway.py`         | The gateway: forwards the Ray Jobs API, creates and deletes users' RayClusters                               |
-| `raycluster.yaml`    | The template of a user's cluster; the gateway fills in its name, the user's UID/GID and its token Secret     |
+| `raycluster.yaml`    | The template of a user's cluster; the gateway fills in its name, the user's UID/GID, its environment and its token Secret |
 | `deployment.yaml`    | The gateway pod: the stock Ray image, with both files above from the `ray-train-gateway` ConfigMap           |
 | `service.yaml`       | `ray-train-gateway:8265`, the address the sessions' Ray CLI is given                                         |
 | `rbac.yaml`          | Create, read and delete RayClusters; create their token Secrets                                              |
@@ -36,6 +36,12 @@ Secret. The `ray.io` CRDs and their controller are the KubeRay operator in
   the gateway's Hub token; only the gateway sends it. Users' pods mount no
   ServiceAccount token, and have no autoscaler, whose Role would let user code
   read every pod in `cms` and patch every RayCluster.
+- **Environment**: a call that starts a cluster may name an environment on
+  storage the cluster mounts, in the `X-AF-Ray-Env` header that the session's
+  `ray` command, [`ray-wrapper`](../../docker/purdue-af/ray-wrapper), sets from
+  `AF_RAY_ENV`. Its `bin/` then comes first on the cluster's `PATH`, so Ray and
+  the job's Python are the environment's. A call naming another environment
+  replaces a cluster that has no pending or running job.
 - **Lifetime**: a cluster with no pending or running job for `IDLE_TIMEOUT_S`
   is deleted, with its job history; its token Secret goes with it.
 - **Before the Hub registers the service** the gateway answers every call with
