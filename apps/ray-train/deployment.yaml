@@ -56,13 +56,6 @@ spec:
               value: /deps
             - name: JUPYTERHUB_API_URL
               value: "http://hub:8081/hub/api"
-            # This service's own Hub token; optional, so the pod starts before the Hub has made one.
-            - name: JUPYTERHUB_API_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: hub
-                  key: hub.services.ray-train-gateway.apiToken
-                  optional: true
             - name: NAMESPACE
               valueFrom:
                 fieldRef:
@@ -92,9 +85,20 @@ spec:
             - name: deps
               mountPath: /deps
               readOnly: true
+            - name: hub-token
+              mountPath: /etc/hub-token
+              readOnly: true
       volumes:
         - name: app
           configMap:
             name: ray-train-gateway
         - name: deps
           emptyDir: {}
+        # One key of the z2jh `hub` Secret, updated in place once the Hub registers the service.
+        - name: hub-token
+          secret:
+            secretName: hub
+            optional: true
+            items:
+              - key: hub.services.ray-train-gateway.apiToken
+                path: token

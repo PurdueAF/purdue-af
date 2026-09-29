@@ -18,9 +18,8 @@ Log in with a Purdue, CERN, or FNAL account — see
 * **A modern HEP software stack** managed via [Pixi environments](software.md),
   including `coffea`, `ROOT`, `RDataFrame`, and popular machine learning libraries
   such as `pytorch` and `xgboost`.
-* **Scalable computing** via [Dask Gateway](guide-dask-gateway.md),
-  [GPU training jobs with Ray Train](guide-ray-train.md) and, for Purdue users,
-  [Slurm batch jobs](scaling-out.md).
+* **Scalable computing** via [Dask Gateway](guide-dask-gateway.md) and, for
+  Purdue users, [Slurm batch jobs](scaling-out.md).
 * **Multiple data access methods** — [XRootD, XCache, Rucio](data-access.md) —
   and a variety of [private and shared storage volumes](storage.md).
 * **Flexible access options**: web browser (JupyterLab or VS Code),

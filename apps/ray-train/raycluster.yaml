@@ -19,6 +19,9 @@ spec:
       spec:
         # No autoscaler, so no ServiceAccount: user code runs in this pod.
         automountServiceAccountToken: false
+        # The image's Python is under /home/ray, which only group 100 may enter; the gateway adds the user's UID/GID.
+        securityContext:
+          supplementalGroups: [100]
         nodeSelector:
           cms-af-prod: "true"
         tolerations:

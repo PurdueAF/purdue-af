@@ -70,19 +70,26 @@ def test_the_gateway_runs_the_files_it_is_given():
 
 
 def test_the_hub_gives_the_gateway_its_token_and_scopes():
-    """z2jh keeps a token-only service's token in the `hub` Secret."""
+    """z2jh keeps a token-only service's token in the `hub` Secret. The key is
+    mounted rather than put in the environment, so the gateway sees it appear
+    once the Hub registers the service, without a restart."""
+    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
     hub = load(HUB_VALUES)["hub"]
     assert "ray-train-gateway" in hub["services"]
     role = hub["loadRoles"]["ray-train-gateway"]
     assert role["services"] == ["ray-train-gateway"]
     assert set(role["scopes"]) == {"read:servers", "admin:server_state"}
-    (container,) = gateway_pod()["spec"]["containers"]
-    env = {e["name"]: e for e in container["env"]}
-    assert env["JUPYTERHUB_API_TOKEN"]["valueFrom"]["secretKeyRef"] == {
-        "name": "hub",
-        "key": "hub.services.ray-train-gateway.apiToken",
+    pod = gateway_pod()["spec"]
+    volumes = {v["name"]: v for v in pod["volumes"]}
+    assert volumes["hub-token"]["secret"] == {
+        "secretName": "hub",
         "optional": True,
+        "items": [{"key": "hub.services.ray-train-gateway.apiToken", "path": "token"}],
     }
+    (container,) = pod["containers"]
+    (mount,) = [m for m in container["volumeMounts"] if m["name"] == "hub-token"]
+    assert gateway.SERVICE_TOKEN_FILE == Path(mount["mountPath"]) / "token"
+    assert "JUPYTERHUB_API_TOKEN" not in {e["name"] for e in container["env"]}
     assert (
         gateway_pod()["metadata"]["labels"]["hub.jupyter.org/network-access-hub"]
         == "true"
@@ -123,6 +130,12 @@ def test_user_clusters_demand_their_token():
     assert (major, minor) >= (2, 52)
     (container,) = cluster_pod()["spec"]["containers"]
     assert container["image"].rsplit(":", 1)[1].startswith(spec["rayVersion"] + "-")
+
+
+def test_user_clusters_can_run_the_images_python():
+    """The Ray image keeps its Python under /home/ray, mode 750 for group 100;
+    a user's UID and GID alone cannot enter it."""
+    assert 100 in cluster_pod()["spec"]["securityContext"]["supplementalGroups"]
 
 
 def test_user_clusters_have_one_gpu():

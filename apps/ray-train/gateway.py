@@ -10,6 +10,7 @@ own Ray token.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import copy
 import hashlib
 import hmac
@@ -42,6 +43,10 @@ HUB_API = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
 TEMPLATE = Path(os.environ.get("RAY_CLUSTER_TEMPLATE", "/app/raycluster.yaml"))
 IDLE_TIMEOUT_S = float(os.environ.get("IDLE_TIMEOUT_S", "900"))
 START_TIMEOUT_S = float(os.environ.get("START_TIMEOUT_S", "600"))
+START_POLL_S = 5.0
+REAP_EVERY_S = 60.0
+# This service's own Hub token, from the `hub` Secret: the file appears once the Hub registers the service.
+SERVICE_TOKEN_FILE = Path("/etc/hub-token/token")
 USER_CACHE_S = 300.0
 LDAP_HOST = "geddes-auth.rcac.purdue.edu"
 LDAP_BASE = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
@@ -136,7 +141,9 @@ def build_cluster(template: dict[str, Any], user: User) -> dict[str, Any]:
     metadata.setdefault("labels", {})["app.kubernetes.io/managed-by"] = MANAGED_BY
     cluster["spec"]["authOptions"]["secretName"] = user.cluster
     pod = cluster["spec"]["headGroupSpec"]["template"]["spec"]
-    pod["securityContext"] = {"runAsUser": user.uid, "runAsGroup": user.gid}
+    pod.setdefault("securityContext", {}).update(
+        {"runAsUser": user.uid, "runAsGroup": user.gid}
+    )
     for container in pod["containers"]:
         container.setdefault("env", []).append({"name": "USER", "value": user.account})
     return cluster
@@ -185,14 +192,21 @@ def ray_version() -> str:
 
 class Gateway:
     def __init__(
-        self, http: ClientSession, kube: ClientSession, service_token: str
+        self, http: ClientSession, kube: ClientSession, token_file: Path
     ) -> None:
         self.http = http
         self.kube_http = kube
-        # This service's own Hub token: reads session pod names, and keys the cluster tokens.
-        self.service_token = service_token
+        self.token_file = token_file
         self.last_used: dict[str, float] = {}
         self._users: dict[str, tuple[float, User]] = {}
+
+    @property
+    def service_token(self) -> str:
+        """Reads session pod names, and keys the cluster tokens; empty until the Hub makes it."""
+        try:
+            return self.token_file.read_text().strip()
+        except FileNotFoundError:
+            return ""
 
     def cluster_auth(self, cluster: str) -> dict[str, str]:
         return {"Authorization": f"Bearer {cluster_token(self.service_token, cluster)}"}
@@ -304,7 +318,7 @@ class Gateway:
                 raise web.HTTPServiceUnavailable(
                     text="Your Ray cluster did not start in time: no T4 may be free. Try again later."
                 )
-            await asyncio.sleep(5)
+            await asyncio.sleep(START_POLL_S)
 
     async def head_answers(self, cluster: str) -> bool:
         try:
@@ -361,8 +375,6 @@ class Gateway:
                         await client.send_str(message.data)
                     elif message.type == WSMsgType.BINARY:
                         await client.send_bytes(message.data)
-                    else:
-                        break
         except (ClientError, ConnectionResetError):
             pass
         await client.close()
@@ -453,7 +465,7 @@ async def handle(request: web.Request) -> web.StreamResponse:
 
 async def reap_forever(gateway: Gateway) -> None:
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(REAP_EVERY_S)
         try:
             await gateway.reap_idle()
         except Exception:
@@ -466,11 +478,13 @@ async def lifecycle(app: web.Application) -> AsyncIterator[None]:
         ClientSession() as http,
         ClientSession(connector=TCPConnector(ssl=kube_tls)) as kube,
     ):
-        gateway = Gateway(http, kube, os.environ.get("JUPYTERHUB_API_TOKEN", ""))
+        gateway = Gateway(http, kube, SERVICE_TOKEN_FILE)
         app[GATEWAY] = gateway
         reaper = asyncio.create_task(reap_forever(gateway))
         yield
         reaper.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await reaper
 
 
 def make_app() -> web.Application:

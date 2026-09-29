@@ -26,6 +26,9 @@ component_management:
     - component_id: workflows
       name: Flyte workflows
       paths: ["workflows/**"]
+    - component_id: ray-train
+      name: Ray Train gateway
+      paths: ["apps/ray-train/**"]
     - component_id: scripts
       name: Standalone scripts
       paths:

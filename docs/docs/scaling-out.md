@@ -26,7 +26,6 @@ This page gives an overview; detailed instructions are linked from each section.
 | [Dask (local cluster)](guide-dask.md) | Parallelizing Python code within a session | All users | the cores of your session |
 | [Dask Gateway, Kubernetes backend](guide-dask-gateway.md) | Distributed Python / Coffea analyses | All users | [hundreds of cores](guide-dask-gateway.md#dask-gateway-at-purdue-af) |
 | [Dask Gateway, Slurm backend](guide-dask-gateway.md) | Distributed Python / Coffea analyses | Purdue users | Hammer cluster |
-| [Ray Train](guide-ray-train.md) | PyTorch training on GPUs | All users | a T4 GPU of your own, started on demand |
 | Slurm batch jobs | Independent batch workloads, GPU jobs | Purdue users | Hammer cluster (`cms` account) or other Purdue Community Clusters |
 | CRAB | CMSSW (`cmsRun`) jobs, MC generation, skimming | All CMS users | the entire WLCG |
 

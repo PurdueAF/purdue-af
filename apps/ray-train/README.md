@@ -5,8 +5,9 @@ A gateway that gives every AF user a Ray cluster of their own for
 Jobs CLI in a session talks to the gateway with the session's JupyterHub
 token; the gateway asks the Hub whose token it is, and forwards the call to
 that user's cluster: one pod with one T4, created when they first send code or
-a job, running as them, and deleted once idle. How users run a job:
-[Training on GPUs with Ray Train](../../docs/docs/guide-ray-train.md).
+a job, running as them, and deleted once idle. How users run a job,
+not yet on the documentation site:
+[Training on GPUs with Ray Train](../../docs/drafts/guide-ray-train.md).
 
 | File                 | What it is                                                                                                   |
 | -------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -38,7 +39,8 @@ Secret. The `ray.io` CRDs and their controller are the KubeRay operator in
 - **Lifetime**: a cluster with no pending or running job for `IDLE_TIMEOUT_S`
   is deleted, with its job history; its token Secret goes with it.
 - **Before the Hub registers the service** the gateway answers every call with
-  503.
+  503. Its token then appears in the mounted `hub` Secret, which the gateway
+  reads on every call, so no restart is needed.
 
 ## Checking on it
 

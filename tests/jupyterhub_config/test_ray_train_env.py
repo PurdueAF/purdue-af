@@ -17,9 +17,10 @@ def session_env(monkeypatch):
 def test_sessions_address_the_gateway_service(monkeypatch):
     service = yaml.safe_load(SERVICE.read_text())
     port = service["spec"]["ports"][0]["port"]
+    name = service["metadata"]["name"]
     env = session_env(monkeypatch)
     assert (
-        env["RAY_API_SERVER_ADDRESS"] == f"http://{service['metadata']['name']}:{port}"
+        env["RAY_API_SERVER_ADDRESS"] == f"http://{name}.cms.svc.cluster.local:{port}"
     )
 
 
