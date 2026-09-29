@@ -7,7 +7,6 @@ gateway and only the gateway reaches the clusters, and the Hub hands the
 gateway exactly the token and scopes it uses.
 """
 
-import re
 import tomllib
 from pathlib import Path
 
@@ -19,7 +18,6 @@ HUB_VALUES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
 EXPERIMENTAL = REPO / "deploy" / "experimental" / "kustomization.yaml"
 CORE = REPO / "deploy" / "core-production" / "kustomization.yaml"
 GLOBAL_ENV = REPO / "pixi" / "global" / "pixi.toml"
-RAY_WRAPPER = REPO / "docker" / "purdue-af" / "ray-wrapper"
 
 
 def load(path):
@@ -71,6 +69,10 @@ def test_the_gateway_runs_the_files_it_is_given():
         service["spec"]["selector"].items()
         <= gateway_pod()["metadata"]["labels"].items()
     )
+    (port,) = service["spec"]["ports"]
+    (container_port,) = container["ports"]
+    assert port["port"] == container_port["containerPort"] == gateway.CLIENT_PORT
+    assert port["targetPort"] == container_port["name"]
 
 
 def test_the_hub_gives_the_gateway_its_token_and_scopes():
@@ -132,8 +134,6 @@ def test_user_clusters_demand_their_token():
     # KubeRay refuses token authentication below Ray 2.52.
     major, minor = (int(p) for p in spec["rayVersion"].split(".")[:2])
     assert (major, minor) >= (2, 52)
-    (container,) = cluster_pod()["spec"]["containers"]
-    assert container["image"].rsplit(":", 1)[1].startswith(spec["rayVersion"] + "-")
 
 
 def test_user_clusters_can_run_the_images_python():
@@ -160,6 +160,7 @@ def test_the_gateway_never_reads_a_secret():
 
 
 def test_only_sessions_reach_the_gateway_and_only_the_gateway_reaches_clusters():
+    gw = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
     policies = {
         p["metadata"]["name"]: p["spec"] for p in load_all(APP / "networkpolicy.yaml")
     }
@@ -182,7 +183,11 @@ def test_only_sessions_reach_the_gateway_and_only_the_gateway_reaches_clusters()
     clusters = policies["ray-train-clusters"]
     assert clusters["podSelector"]["matchLabels"].items() <= cluster_labels.items()
     (rule,) = clusters["ingress"]
-    assert rule["ports"] == [{"protocol": "TCP", "port": 8265}]
+    dashboard = int(gw.head_url("c").rsplit(":", 1)[1])
+    assert rule["ports"] == [
+        {"protocol": "TCP", "port": gw.CLIENT_PORT},
+        {"protocol": "TCP", "port": dashboard},
+    ]
     assert rule["from"] == [
         {"podSelector": {"matchLabels": gateway["podSelector"]["matchLabels"]}}
     ]
@@ -198,8 +203,8 @@ def test_clusters_default_to_the_environment_pixi_global_sync_keeps():
 
 
 def test_the_global_environment_has_a_ray_a_cluster_can_run():
-    """The same floor the session's `ray` holds a named environment to."""
+    """The oldest Ray the cluster template declares, which KubeRay probes for."""
     dependencies = tomllib.loads(GLOBAL_ENV.read_text())["dependencies"]
-    floor = re.search(r'^MIN_ENV_RAY="(.+)"$', RAY_WRAPPER.read_text(), re.M)[1]
-    assert dependencies["ray-default"] == f">={floor}"
+    declared = load(APP / "raycluster.yaml")["spec"]["rayVersion"]
+    assert dependencies["ray-default"] == ">=" + ".".join(declared.split(".")[:2])
     assert "ray-train" in dependencies

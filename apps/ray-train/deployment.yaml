@@ -34,7 +34,7 @@ spec:
           value: cms-af
           effect: NoSchedule
       initContainers:
-        # The Ray image has aiohttp and PyYAML, not ldap3.
+        # The Ray image has aiohttp, grpcio and PyYAML, not ldap3.
         - name: pip-install
           image: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray:2.58.0-py312-cpu
           command:
@@ -61,12 +61,11 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
           ports:
-            - name: jobs-api
-              containerPort: 8265
+            - name: ray-client
+              containerPort: 10001
           readinessProbe:
-            httpGet:
-              path: /healthz
-              port: jobs-api
+            tcpSocket:
+              port: ray-client
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

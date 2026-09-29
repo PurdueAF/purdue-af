@@ -18,7 +18,7 @@ spec:
               component: singleuser-server
       ports:
         - protocol: TCP
-          port: 8265
+          port: 10001
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -36,5 +36,8 @@ spec:
             matchLabels:
               app: ray-train-gateway
       ports:
+        # Ray Client, and the dashboard the gateway asks about the head and its tasks
+        - protocol: TCP
+          port: 10001
         - protocol: TCP
           port: 8265

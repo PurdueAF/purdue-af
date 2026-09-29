@@ -5,8 +5,8 @@ kind: RayCluster
 metadata:
   name: ray-train-template
 spec:
-  # Token authentication requires it.
-  rayVersion: "2.58.0"
+  # The oldest Ray an environment may have: token authentication needs 2.52, and a 2.53+ here makes KubeRay probe /api/healthz, which 2.52 lacks.
+  rayVersion: "2.52.0"
   authOptions:
     mode: token
     secretName: ray-train-template

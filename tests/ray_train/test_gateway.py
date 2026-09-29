@@ -15,10 +15,11 @@ import time
 import types
 from types import SimpleNamespace
 
+import grpc
 import pytest
 import yaml
-from aiohttp import ClientSession, WSMsgType, web
-from aiohttp.test_utils import TestClient, TestServer
+from aiohttp import ClientSession, web
+from aiohttp.test_utils import TestServer
 from common import REPO, load_script
 
 gw = load_script(REPO / "apps" / "ray-train" / "gateway.py", "ray_train_gateway")
@@ -32,18 +33,20 @@ SESSIONS = {
     "session-idle": ("user-idle", None),
 }
 LDAP = {"user-a": (5001, 500), "paf0042": (6042, 600)}
+ENV_A = "/work/users/user-a/proj/.pixi/envs/default"
+ENV_B = "/depot/cms/users/user-a/other"
+# Ray Client methods: a unary call, a stream, and one the fake head refuses.
+PING = "/ray.rpc.RayletDriver/ClusterInfo"
+DATAPATH = "/ray.rpc.RayletDataStreamer/Datapath"
+FAILING = "/ray.rpc.RayletDriver/GetObject"
+LOGS = "/ray.rpc.RayletLogStreamer/Logstream"
 
 
-def auth(token):
-    return {"Authorization": f"Bearer {token}"}
-
-
-def closed_port_url():
+def free_port():
     """An address nothing listens on."""
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
-    return f"http://127.0.0.1:{port}"
+        return s.getsockname()[1]
 
 
 def hub_app():
@@ -149,30 +152,31 @@ class FakeKube:
 
 
 class FakeHeads:
-    """Every user's Ray head, at /<cluster>/...; each accepts only its own token."""
+    """Every user's Ray head: a dashboard at /<cluster>/... that accepts only its
+    own token, and one Ray Client server standing in for all of them."""
 
     def __init__(self):
         self.up = True
         # A head whose Ray predates token authentication serves anyone.
         self.open = False
         self.down_checks = 0
-        self.jobs = {}
-        self.seen_tokens = []
-        self.uploads = {}
+        # cluster -> its running tasks
+        self.running = {}
+        # (method, metadata) of every call a head's Ray Client server took
+        self.calls = []
+        # Holds back a log stream's second line.
+        self.more_logs = asyncio.Event()
 
-    def app(self):
+    def dashboards(self):
         @web.middleware
         async def check(request, handler):
             if not self.up:
                 raise web.HTTPServiceUnavailable()
             cluster = request.match_info.get("cluster", "")
             token = request.headers.get("Authorization", "")
-            self.seen_tokens.append(token)
-            if (
-                not self.open
-                and token != f"Bearer {gw.cluster_token(SERVICE_TOKEN, cluster)}"
-            ):
-                raise web.HTTPForbidden()
+            expected = f"Bearer {gw.cluster_token(SERVICE_TOKEN, cluster)}"
+            if not self.open and token != expected:
+                raise web.HTTPUnauthorized()
             return await handler(request)
 
         async def version(request):
@@ -181,47 +185,61 @@ class FakeHeads:
                 raise web.HTTPServiceUnavailable()
             return web.json_response({"version": "4", "ray_version": "2.58.0"})
 
-        async def list_jobs(request):
-            return web.json_response(self.jobs.get(request.match_info["cluster"], []))
-
-        async def submit(request):
-            cluster = request.match_info["cluster"]
-            body = await request.json()
-            job = {"submission_id": f"raysubmit_{cluster}", "status": "RUNNING", **body}
-            self.jobs.setdefault(cluster, []).append(job)
-            return web.json_response({"job_id": job["submission_id"]})
-
-        async def package(request):
-            key = (request.match_info["cluster"], request.match_info["name"])
-            if request.method == "PUT":
-                self.uploads[key] = await request.read()
-                return web.Response()
-            return web.Response(status=200 if key in self.uploads else 404)
-
-        async def tail(request):
-            ws = web.WebSocketResponse()
-            await ws.prepare(request)
-            await ws.send_str("epoch 0\n")
-            await ws.send_bytes(b"epoch 1\n")
-            await ws.close()
-            return ws
+        async def tasks(request):
+            assert (request.query["filter_keys"], request.query["filter_values"]) == (
+                "state",
+                "RUNNING",
+            )
+            running = self.running.get(request.match_info["cluster"], [])
+            limit = int(request.query["limit"])
+            listing = {"total": len(running), "result": running[:limit]}
+            return web.json_response({"result": True, "data": {"result": listing}})
 
         app = web.Application(middlewares=[check])
         app.router.add_get("/{cluster}/api/version", version)
-        app.router.add_get("/{cluster}/api/jobs/", list_jobs)
-        app.router.add_post("/{cluster}/api/jobs/", submit)
-        app.router.add_route("*", "/{cluster}/api/packages/{protocol}/{name}", package)
-        app.router.add_get("/{cluster}/api/jobs/{job}/logs/tail", tail)
+        app.router.add_get("/{cluster}/api/v0/tasks", tasks)
         return app
+
+    def client_server(self):
+        calls, more_logs = self.calls, self.more_logs
+
+        class Handler(grpc.GenericRpcHandler):
+            def service(self, details):
+                method = details.method
+
+                async def answer(requests, context):
+                    calls.append((method, dict(context.invocation_metadata())))
+                    if method == FAILING:
+                        await context.abort(grpc.StatusCode.NOT_FOUND, "no such object")
+                    if method == LOGS:
+                        yield b"log 1"
+                        await more_logs.wait()
+                        yield b"log 2"
+                        return
+                    async for request in requests:
+                        yield b"echo:" + request
+
+                return grpc.stream_stream_rpc_method_handler(answer)
+
+        server = grpc.aio.server()
+        server.add_generic_rpc_handlers((Handler(),))
+        return server
 
 
 @pytest.fixture
 async def env(monkeypatch, tmp_path):
     kube, heads = FakeKube(), FakeHeads()
-    servers = [TestServer(hub_app()), TestServer(kube.app()), TestServer(heads.app())]
+    servers = [
+        TestServer(hub_app()),
+        TestServer(kube.app()),
+        TestServer(heads.dashboards()),
+    ]
     for server in servers:
         await server.start_server()
-    hub, kube_server, head_server = servers
+    hub, kube_server, dashboards = servers
+    client_server = heads.client_server()
+    client_port = client_server.add_insecure_port("127.0.0.1:0")
+    await client_server.start()
     (tmp_path / "token").write_text("sa-token")
     token_file = tmp_path / "hub-token"
     token_file.write_text(SERVICE_TOKEN + "\n")
@@ -232,106 +250,110 @@ async def env(monkeypatch, tmp_path):
     monkeypatch.setattr(gw, "START_TIMEOUT_S", 5)
     monkeypatch.setattr(gw, "START_POLL_S", 0)
     monkeypatch.setattr(gw, "ldap_ids", lambda account: LDAP[account])
-    heads_url = str(head_server.make_url("")).rstrip("/")
-    monkeypatch.setattr(gw, "head_url", lambda cluster: f"{heads_url}/{cluster}")
+    dashboards_url = str(dashboards.make_url("")).rstrip("/")
+    monkeypatch.setattr(gw, "head_url", lambda cluster: f"{dashboards_url}/{cluster}")
+    monkeypatch.setattr(
+        gw, "client_address", lambda cluster: f"127.0.0.1:{client_port}"
+    )
 
     async with ClientSession() as http, ClientSession() as kube_http:
         gateway = gw.Gateway(http, kube_http, token_file)
-        app = web.Application()
-        app[gw.GATEWAY] = gateway
-        app.router.add_route("*", "/{path:.*}", gw.handle)
-        client = TestClient(TestServer(app))
-        await client.start_server()
+        server = grpc.aio.server(options=gw.GRPC_OPTIONS)
+        server.add_generic_rpc_handlers((gw.Relay(gateway),))
+        port = server.add_insecure_port("127.0.0.1:0")
+        await server.start()
+        channel = grpc.aio.insecure_channel(f"127.0.0.1:{port}")
         yield SimpleNamespace(
-            client=client,
+            channel=channel,
             gateway=gateway,
             kube=kube,
             heads=heads,
             token_file=token_file,
         )
-        await client.close()
+        await channel.close()
+        await server.stop(None)
+        await gateway.close()
+    await client_server.stop(None)
     for server in servers:
         await server.close()
 
 
-def unreachable_heads(monkeypatch):
-    url = closed_port_url()
-    monkeypatch.setattr(gw, "head_url", lambda cluster: url)
+async def call(
+    env,
+    token="session-a",
+    method=PING,
+    messages=(b"ping",),
+    env_path=None,
+    client="client-1",
+):
+    """A Ray Client call from a session, as the stream of raw messages the gateway sees."""
+    metadata = [("client_id", client)]
+    if token is not None:
+        metadata.append(("authorization", f"Bearer {token}"))
+    if env_path is not None:
+        metadata.append((gw.ENV_METADATA, env_path))
+    responses = env.channel.stream_stream(method)(iter(messages), metadata=metadata)
+    return [response async for response in responses]
 
 
-async def submit(env, token="session-a"):
-    return await env.client.post(
-        "/api/jobs/", json={"entrypoint": "python train.py"}, headers=auth(token)
-    )
+async def refused(env, **kwargs):
+    with pytest.raises(grpc.aio.AioRpcError) as e:
+        await call(env, **kwargs)
+    return e.value.code()
 
 
-async def test_health_needs_no_token(env):
-    r = await env.client.get("/healthz")
-    assert r.status == 200
+def head_pod(env, name="ray-train-7"):
+    return env.kube.clusters[name]["spec"]["headGroupSpec"]["template"]["spec"]
+
+
+def head_env(env, name="ray-train-7"):
+    (container,) = head_pod(env, name)["containers"]
+    return {v["name"]: v["value"] for v in container["env"]}
+
+
+def cluster_env(env, name="ray-train-7"):
+    return env.kube.clusters[name]["metadata"]["annotations"][gw.ENV_ANNOTATION]
+
+
+def idle(env, *clusters):
+    long_ago = time.monotonic() - gw.IDLE_TIMEOUT_S - 1
+    env.gateway.last_used.update(dict.fromkeys(clusters, long_ago))
 
 
 async def test_a_call_without_a_token_is_refused(env):
-    r = await env.client.get("/api/jobs/")
-    assert r.status == 401
-
-
-async def test_a_token_the_hub_does_not_know_is_refused(env):
-    r = await env.client.get("/api/jobs/", headers=auth("forged"))
-    assert r.status == 401
+    assert await refused(env, token=None) == grpc.StatusCode.UNAUTHENTICATED
     assert env.kube.clusters == {}
 
 
-async def test_only_the_jobs_api_is_forwarded(env):
-    r = await env.client.get("/api/cluster_status", headers=auth("session-a"))
-    assert r.status == 404
+async def test_a_token_the_hub_does_not_know_is_refused(env):
+    assert await refused(env, token="stolen") == grpc.StatusCode.UNAUTHENTICATED
+    assert env.kube.clusters == {}
 
 
-async def test_nothing_is_served_before_the_hub_registers_the_service(env):
+async def test_nothing_is_relayed_before_the_hub_registers_the_service(env):
     env.token_file.unlink()
-    r = await env.client.get("/api/version", headers=auth("session-a"))
-    assert r.status == 503
+    assert await refused(env) == grpc.StatusCode.UNAVAILABLE
+    assert env.kube.clusters == {}
 
 
 async def test_the_service_token_is_read_when_it_appears(env):
     env.token_file.unlink()
-    assert (
-        await env.client.get("/api/version", headers=auth("session-a"))
-    ).status == 503
+    await refused(env)
     env.token_file.write_text(SERVICE_TOKEN)
-    assert (
-        await env.client.get("/api/version", headers=auth("session-a"))
-    ).status == 200
+    assert await call(env) == [b"echo:ping"]
 
 
-async def test_version_and_listing_start_no_cluster(env):
-    r = await env.client.get("/api/version", headers=auth("session-a"))
-    rayversion = yaml.safe_load(TEMPLATE.read_text())["spec"]["rayVersion"]
-    assert (await r.json())["ray_version"] == rayversion
-    r = await env.client.get("/api/jobs/", headers=auth("session-a"))
-    assert await r.json() == []
-    assert env.kube.clusters == {}
-
-
-async def test_a_job_without_a_cluster_is_not_found(env):
-    r = await env.client.get("/api/jobs/raysubmit_x", headers=auth("session-a"))
-    assert r.status == 404
-
-
-async def test_submitting_starts_the_users_cluster_as_them(env):
-    r = await submit(env)
-    assert r.status == 200
-    assert (await r.json())["job_id"] == "raysubmit_ray-train-7"
-
+async def test_connecting_starts_the_users_cluster_as_them(env):
+    assert await call(env) == [b"echo:ping"]
     cluster = env.kube.clusters["ray-train-7"]
-    pod = cluster["spec"]["headGroupSpec"]["template"]["spec"]
-    assert pod["securityContext"] == {
-        "supplementalGroups": [100],
-        "runAsUser": 5001,
-        "runAsGroup": 500,
-    }
-    assert {"name": "USER", "value": "user-a"} in pod["containers"][0]["env"]
+    assert (
+        cluster["metadata"]["labels"]["app.kubernetes.io/managed-by"] == gw.MANAGED_BY
+    )
     assert cluster["spec"]["authOptions"]["secretName"] == "ray-train-7"
-
+    context = head_pod(env)["securityContext"]
+    assert (context["runAsUser"], context["runAsGroup"]) == (5001, 500)
+    assert 100 in context["supplementalGroups"]
+    assert head_env(env)["USER"] == "user-a"
     secret = env.kube.secrets["ray-train-7"]
     assert secret["stringData"]["auth_token"] == gw.cluster_token(
         SERVICE_TOKEN, "ray-train-7"
@@ -339,155 +361,150 @@ async def test_submitting_starts_the_users_cluster_as_them(env):
     assert secret["metadata"]["ownerReferences"][0]["uid"] == "uid-ray-train-7"
 
 
-async def test_a_head_never_sees_a_session_token(env):
-    await submit(env)
-    await env.client.get("/api/jobs/", headers=auth("session-a"))
-    assert env.heads.seen_tokens
-    assert not any("session-a" in token for token in env.heads.seen_tokens)
+async def test_a_head_sees_its_own_token_and_the_clients_own_metadata(env):
+    await call(env, env_path=ENV_A)
+    ((method, metadata),) = env.heads.calls
+    assert method == PING
+    assert metadata["authorization"] == (
+        f"Bearer {gw.cluster_token(SERVICE_TOKEN, 'ray-train-7')}"
+    )
+    assert metadata["client_id"] == "client-1"
+    assert gw.ENV_METADATA not in metadata
+    assert "session-a" not in json.dumps(metadata)
 
 
 async def test_an_external_user_runs_as_their_pooled_account(env):
-    await submit(env, "session-b")
-    pod = env.kube.clusters["ray-train-42"]["spec"]["headGroupSpec"]["template"]["spec"]
-    assert pod["securityContext"]["runAsUser"] == 6042
-    assert pod["securityContext"]["runAsGroup"] == 600
+    await call(env, token="session-b")
+    assert head_pod(env, "ray-train-42")["securityContext"]["runAsUser"] == 6042
+    assert head_env(env, "ray-train-42")["USER"] == "paf0042"
 
 
 async def test_a_user_without_a_running_session_is_told_to_start_one(env):
-    r = await submit(env, "session-idle")
-    assert r.status == 409
+    assert (
+        await refused(env, token="session-idle") == grpc.StatusCode.FAILED_PRECONDITION
+    )
     assert env.kube.clusters == {}
 
 
 async def test_users_reach_only_their_own_cluster(env):
-    await env.client.post(
-        "/api/jobs/", json={"entrypoint": "a"}, headers=auth("session-a")
+    await call(env, token="session-a")
+    await call(env, token="session-b")
+    assert [metadata["authorization"] for _, metadata in env.heads.calls] == [
+        f"Bearer {gw.cluster_token(SERVICE_TOKEN, name)}"
+        for name in ("ray-train-7", "ray-train-42")
+    ]
+
+
+async def test_streams_are_relayed_both_ways(env):
+    replies = await call(env, method=DATAPATH, messages=(b"a", b"b", b"c"))
+    assert replies == [b"echo:a", b"echo:b", b"echo:c"]
+
+
+async def test_a_heads_error_comes_back_as_it_is(env):
+    with pytest.raises(grpc.aio.AioRpcError) as e:
+        await call(env, method=FAILING)
+    assert (e.value.code(), e.value.details()) == (
+        grpc.StatusCode.NOT_FOUND,
+        "no such object",
     )
-    r = await env.client.get("/api/jobs/", headers=auth("session-b"))
-    assert await r.json() == []
-    await env.client.post(
-        "/api/jobs/", json={"entrypoint": "b"}, headers=auth("session-b")
-    )
-    r = await env.client.get("/api/jobs/", headers=auth("session-b"))
-    assert [job["entrypoint"] for job in await r.json()] == ["b"]
-    assert set(env.kube.clusters) == {"ray-train-7", "ray-train-42"}
 
 
-async def test_code_is_uploaded_to_the_users_cluster(env):
-    path = "/api/packages/gcs/_ray_pkg_abc.zip"
-    r = await env.client.get(path, headers=auth("session-a"))
-    assert r.status == 404
-    r = await env.client.put(path, data=b"zip bytes" * 1000, headers=auth("session-a"))
-    assert r.status == 200
-    assert env.heads.uploads[("ray-train-7", "_ray_pkg_abc.zip")] == b"zip bytes" * 1000
+async def test_calls_to_a_started_cluster_skip_the_checks(env):
+    await call(env)
+    env.kube.fail_get = True
+    assert await call(env) == [b"echo:ping"]
 
 
-async def test_job_logs_stream_through(env):
-    await submit(env)
-    ws = await env.client.ws_connect(
-        "/api/jobs/raysubmit_ray-train-7/logs/tail", headers=auth("session-a")
-    )
-    frames = [message.data async for message in ws if message.type != WSMsgType.CLOSE]
-    assert frames == ["epoch 0\n", b"epoch 1\n"]
+async def test_an_unreachable_head_is_checked_again_on_the_next_call(env, monkeypatch):
+    port = free_port()
+    monkeypatch.setattr(gw, "client_address", lambda cluster: f"127.0.0.1:{port}")
+    assert await refused(env) == grpc.StatusCode.UNAVAILABLE
+    assert "ray-train-7" not in env.gateway.started
 
 
-async def test_logs_from_an_unreachable_head_end_the_stream(env, monkeypatch):
-    await submit(env)
-    unreachable_heads(monkeypatch)
-    ws = await env.client.ws_connect(
-        "/api/jobs/raysubmit_ray-train-7/logs/tail", headers=auth("session-a")
-    )
-    assert [message async for message in ws] == []
+async def test_a_client_of_a_removed_cluster_is_told_so_and_starts_nothing(env):
+    await call(env)
+    idle(env, "ray-train-7")
+    await env.gateway.reap_idle()
+    assert await refused(env) == grpc.StatusCode.NOT_FOUND
+    assert env.kube.clusters == {}
+    assert await call(env, client="client-2") == [b"echo:ping"]
+    assert "ray-train-7" in env.kube.clusters
+
+
+async def test_a_removed_clusters_clients_are_forgotten_in_time(env, monkeypatch):
+    monkeypatch.setattr(gw, "GONE_S", 0)
+    await call(env)
+    idle(env, "ray-train-7")
+    await env.gateway.reap_idle()
+    assert await call(env) == [b"echo:ping"]
+
+
+async def test_a_client_switching_environments_keeps_its_session(env):
+    await call(env, env_path=ENV_A)
+    await call(env, env_path=ENV_B)
+    assert await call(env, env_path=ENV_B) == [b"echo:ping"]
 
 
 async def test_a_head_that_comes_up_late_is_waited_for(env):
     env.heads.down_checks = 2
-    r = await submit(env)
-    assert r.status == 200
+    assert await call(env) == [b"echo:ping"]
 
 
-async def test_a_cluster_that_does_not_start_is_reported(env, monkeypatch):
-    env.heads.up = False
+@pytest.mark.parametrize("head", ["not ready", "unreachable"])
+async def test_a_cluster_that_does_not_start_is_reported(env, monkeypatch, head):
+    if head == "not ready":
+        env.heads.up = False
+    else:
+        port = free_port()
+        monkeypatch.setattr(gw, "head_url", lambda cluster: f"http://127.0.0.1:{port}")
     monkeypatch.setattr(gw, "START_TIMEOUT_S", 0)
-    r = await submit(env)
-    assert r.status == 503
-
-
-async def test_an_unreachable_head_is_reported(env, monkeypatch):
-    unreachable_heads(monkeypatch)
-    monkeypatch.setattr(gw, "START_TIMEOUT_S", 0)
-    r = await submit(env)
-    assert r.status == 503
-
-
-async def test_a_call_the_head_cannot_take_is_reported(env, monkeypatch):
-    await submit(env)
-    unreachable_heads(monkeypatch)
-    r = await env.client.get("/api/jobs/", headers=auth("session-a"))
-    assert r.status == 502
+    assert await refused(env) == grpc.StatusCode.UNAVAILABLE
 
 
 @pytest.mark.parametrize(
-    "other_env, status",
-    [(gw.DEFAULT_ENV, 200), ("/work/users/user-a/other", 409), (None, 409)],
+    "other_env, joined",
+    [(gw.DEFAULT_ENV, True), (ENV_A, False), (None, False)],
     ids=["same-environment", "other-environment", "deleted-again"],
 )
 async def test_a_concurrent_creation_is_joined_only_if_it_runs_the_same_environment(
-    env, other_env, status
+    env, other_env, joined
 ):
     env.kube.racing["ray-train-7"] = other_env
-    r = await submit(env)
-    assert r.status == status
+    if joined:
+        assert await call(env) == [b"echo:ping"]
+    else:
+        assert await refused(env) == grpc.StatusCode.ABORTED
 
 
 async def test_a_cluster_being_deleted_is_waited_out(env):
-    await submit(env)
+    await call(env)
+    env.gateway.started.clear()
     env.kube.clusters["ray-train-7"]["metadata"]["deletionTimestamp"] = "now"
     env.kube.linger["ray-train-7"] = 2
-    r = await submit(env)
-    assert r.status == 200
+    assert await call(env) == [b"echo:ping"]
     assert "deletionTimestamp" not in env.kube.clusters["ray-train-7"]["metadata"]
 
 
 async def test_a_cluster_that_stays_in_deletion_is_reported(env, monkeypatch):
-    await submit(env)
+    await call(env)
+    env.gateway.started.clear()
     env.kube.clusters["ray-train-7"]["metadata"]["deletionTimestamp"] = "now"
     monkeypatch.setattr(gw, "START_TIMEOUT_S", 0)
-    r = await submit(env)
-    assert r.status == 503
-
-
-ENV_A = "/work/users/user-a/proj/.pixi/envs/default"
-ENV_B = "/depot/cms/users/user-a/other"
-
-
-def with_env(env_path, token="session-a"):
-    return {**auth(token), "X-AF-Ray-Env": env_path}
-
-
-def head_env(env, name="ray-train-7"):
-    (container,) = env.kube.clusters[name]["spec"]["headGroupSpec"]["template"]["spec"][
-        "containers"
-    ]
-    return {v["name"]: v["value"] for v in container["env"]}
+    assert await refused(env) == grpc.StatusCode.UNAVAILABLE
 
 
 async def test_a_named_environment_runs_the_whole_cluster(env):
-    r = await env.client.post(
-        "/api/jobs/", json={"entrypoint": "true"}, headers=with_env(ENV_A)
-    )
-    assert r.status == 200
-    cluster = env.kube.clusters["ray-train-7"]
-    assert cluster["metadata"]["annotations"][gw.ENV_ANNOTATION] == ENV_A
+    await call(env, env_path=ENV_A)
+    assert cluster_env(env) == ENV_A
     variables = head_env(env)
     assert variables["PATH"].startswith(f"{ENV_A}/bin:")
     assert variables["CONDA_PREFIX"] == ENV_A
 
 
 async def test_without_an_environment_the_global_one_runs(env):
-    await submit(env)
-    cluster = env.kube.clusters["ray-train-7"]
-    assert cluster["metadata"]["annotations"][gw.ENV_ANNOTATION] == gw.DEFAULT_ENV
+    await call(env)
+    assert cluster_env(env) == gw.DEFAULT_ENV
     assert head_env(env)["PATH"].startswith(f"{gw.DEFAULT_ENV}/bin:")
 
 
@@ -496,52 +513,26 @@ async def test_without_an_environment_the_global_one_runs(env):
     ["/home/user-a/env", "work/users/user-a/env", "/work/../etc", "/workshop/env"],
 )
 async def test_an_environment_off_the_clusters_storage_is_refused(env, path):
-    r = await env.client.post(
-        "/api/jobs/", json={"entrypoint": "true"}, headers=with_env(path)
-    )
-    assert r.status == 400
+    assert await refused(env, env_path=path) == grpc.StatusCode.INVALID_ARGUMENT
     assert env.kube.clusters == {}
 
 
 async def test_switching_environments_replaces_an_idle_cluster(env):
-    await env.client.post(
-        "/api/jobs/", json={"entrypoint": "a"}, headers=with_env(ENV_A)
-    )
-    env.heads.jobs["ray-train-7"][0]["status"] = "SUCCEEDED"
-    r = await env.client.post(
-        "/api/jobs/", json={"entrypoint": "b"}, headers=with_env(ENV_B)
-    )
-    assert r.status == 200
-    annotations = env.kube.clusters["ray-train-7"]["metadata"]["annotations"]
-    assert annotations[gw.ENV_ANNOTATION] == ENV_B
+    await call(env, env_path=ENV_A)
+    assert await call(env, env_path=ENV_B) == [b"echo:ping"]
+    assert cluster_env(env) == ENV_B
 
 
 async def test_switching_environments_leaves_a_busy_cluster_alone(env):
-    await env.client.post(
-        "/api/jobs/", json={"entrypoint": "a"}, headers=with_env(ENV_A)
-    )
-    r = await env.client.post(
-        "/api/jobs/", json={"entrypoint": "b"}, headers=with_env(ENV_B)
-    )
-    assert r.status == 409
-    annotations = env.kube.clusters["ray-train-7"]["metadata"]["annotations"]
-    assert annotations[gw.ENV_ANNOTATION] == ENV_A
-
-
-async def test_reading_a_cluster_does_not_switch_its_environment(env):
-    await env.client.post(
-        "/api/jobs/", json={"entrypoint": "a"}, headers=with_env(ENV_A)
-    )
-    r = await env.client.get("/api/jobs/", headers=with_env(ENV_B))
-    assert [job["entrypoint"] for job in await r.json()] == ["a"]
+    await call(env, env_path=ENV_A)
+    env.heads.running["ray-train-7"] = [{"task_id": "t", "state": "RUNNING"}]
+    assert await refused(env, env_path=ENV_B) == grpc.StatusCode.FAILED_PRECONDITION
+    assert cluster_env(env) == ENV_A
 
 
 async def test_a_ray_without_token_authentication_is_refused(env):
     env.heads.open = True
-    r = await env.client.post(
-        "/api/jobs/", json={"entrypoint": "true"}, headers=with_env(ENV_A)
-    )
-    assert r.status == 400
+    assert await refused(env, env_path=ENV_A) == grpc.StatusCode.INVALID_ARGUMENT
     assert env.kube.clusters == {}
 
 
@@ -555,55 +546,65 @@ def test_environments_live_on_the_storage_the_cluster_mounts():
 @pytest.mark.parametrize(
     "failure, token",
     [
+        ("fail_get", "session-a"),
         ("reject_create", "session-a"),
         ("reject_secret", "session-a"),
-        ("fail_get", "session-a"),
         (None, "hub-down"),
     ],
 )
-async def test_upstream_failures_are_reported_as_bad_gateway(env, failure, token):
+async def test_upstream_failures_are_reported_as_unavailable(env, failure, token):
     if failure:
         setattr(env.kube, failure, True)
-    r = await submit(env, token)
-    assert r.status == 502
+    assert await refused(env, token=token) == grpc.StatusCode.UNAVAILABLE
 
 
 async def test_a_service_token_the_hub_refuses_is_reported(env):
-    env.token_file.write_text("stale-service-token")
-    r = await submit(env)
-    assert r.status == 502
+    env.token_file.write_text("not-the-service-token")
+    assert await refused(env) == grpc.StatusCode.UNAVAILABLE
 
 
 async def test_idle_clusters_are_deleted_and_busy_ones_kept(env):
-    await env.client.post(
-        "/api/jobs/", json={"entrypoint": "a"}, headers=auth("session-a")
-    )
-    await env.client.post(
-        "/api/jobs/", json={"entrypoint": "b"}, headers=auth("session-b")
-    )
-    env.heads.jobs["ray-train-42"][0]["status"] = "SUCCEEDED"
-    long_ago = time.monotonic() - gw.IDLE_TIMEOUT_S - 1
-    env.gateway.last_used.update({"ray-train-7": long_ago, "ray-train-42": long_ago})
+    await call(env, token="session-a")
+    await call(env, token="session-b")
+    env.heads.running["ray-train-7"] = [{"task_id": "t", "state": "RUNNING"}]
+    idle(env, "ray-train-7", "ray-train-42")
 
     await env.gateway.reap_idle()
 
     assert set(env.kube.clusters) == {"ray-train-7"}
+    assert set(env.gateway.channels) == {"ray-train-7"}
 
 
-async def test_a_recently_used_cluster_is_kept(env):
-    await submit(env)
-    env.heads.jobs["ray-train-7"][0]["status"] = "SUCCEEDED"
+async def test_relayed_traffic_keeps_a_cluster(env):
+    await call(env)
+    idle(env, "ray-train-7")
+    await call(env, method=DATAPATH, messages=(b"x",))
     await env.gateway.reap_idle()
     assert "ray-train-7" in env.kube.clusters
 
 
+async def test_logs_from_a_cluster_do_not_keep_it(env):
+    await call(env)
+    lines = []
+    stream = env.channel.stream_stream(LOGS)(
+        iter([b"subscribe"]), metadata=[("authorization", "Bearer session-a")]
+    )
+    async for line in stream:
+        lines.append(line)
+        idle(env, "ray-train-7")
+        env.heads.more_logs.set()
+    assert lines == [b"log 1", b"log 2"]
+    await env.gateway.reap_idle()
+    assert env.kube.clusters == {}
+
+
 async def test_a_ready_head_that_does_not_answer_is_kept(env):
-    await submit(env)
+    await call(env)
     env.kube.clusters["ray-train-7"]["status"] = {
         "conditions": [{"type": "HeadPodReady", "status": "True"}]
     }
     env.heads.up = False
-    env.gateway.last_used["ray-train-7"] = time.monotonic() - gw.IDLE_TIMEOUT_S - 1
+    idle(env, "ray-train-7")
 
     await env.gateway.reap_idle()
 
@@ -611,25 +612,26 @@ async def test_a_ready_head_that_does_not_answer_is_kept(env):
 
 
 async def test_an_unreachable_head_that_never_came_up_is_deleted(env, monkeypatch):
-    await submit(env)
-    unreachable_heads(monkeypatch)
-    env.gateway.last_used["ray-train-7"] = time.monotonic() - gw.IDLE_TIMEOUT_S - 1
+    await call(env)
+    port = free_port()
+    monkeypatch.setattr(gw, "head_url", lambda cluster: f"http://127.0.0.1:{port}")
+    idle(env, "ray-train-7")
     await env.gateway.reap_idle()
     assert env.kube.clusters == {}
 
 
 async def test_a_cluster_made_under_another_service_token_is_deleted(env):
-    await submit(env)
+    await call(env)
     env.token_file.write_text("rotated-service-token")
-    env.gateway.last_used["ray-train-7"] = time.monotonic() - gw.IDLE_TIMEOUT_S - 1
+    idle(env, "ray-train-7")
     await env.gateway.reap_idle()
     assert env.kube.clusters == {}
 
 
 async def test_reaping_waits_out_a_failed_listing(env):
-    await submit(env)
+    await call(env)
     env.kube.fail_list = True
-    env.gateway.last_used["ray-train-7"] = time.monotonic() - gw.IDLE_TIMEOUT_S - 1
+    idle(env, "ray-train-7")
     await env.gateway.reap_idle()
     assert "ray-train-7" in env.kube.clusters
 
@@ -652,7 +654,7 @@ async def test_the_reaper_outlives_its_errors(monkeypatch):
         await reaper
 
 
-async def test_the_app_starts_and_stops(monkeypatch, tmp_path):
+async def test_the_gateway_serves_ray_client_until_stopped(monkeypatch, tmp_path):
     monkeypatch.setattr(gw, "SERVICE_ACCOUNT", tmp_path)
     monkeypatch.setattr(
         gw,
@@ -661,11 +663,19 @@ async def test_the_app_starts_and_stops(monkeypatch, tmp_path):
             create_default_context=lambda cafile: ssl.create_default_context()
         ),
     )
-    client = TestClient(TestServer(gw.make_app()))
-    await client.start_server()
-    assert (await client.get("/healthz")).status == 200
-    assert isinstance(client.server.app[gw.GATEWAY], gw.Gateway)
-    await client.close()
+    monkeypatch.setattr(gw, "SERVICE_TOKEN_FILE", tmp_path / "hub-token")
+    port = free_port()
+    monkeypatch.setattr(gw, "CLIENT_PORT", port)
+    serving = asyncio.create_task(gw.serve())
+    async with grpc.aio.insecure_channel(f"127.0.0.1:{port}") as channel:
+        await channel.channel_ready()
+        with pytest.raises(grpc.aio.AioRpcError) as e:
+            async for _ in channel.stream_stream(PING)(iter([b"ping"])):
+                pass
+    assert e.value.code() == grpc.StatusCode.UNAVAILABLE
+    serving.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await serving
 
 
 def test_ldap_ids_reads_the_account_at_its_dn(monkeypatch):
@@ -695,8 +705,9 @@ def test_ldap_ids_reads_the_account_at_its_dn(monkeypatch):
 
     assert gw.ldap_ids("user-a") == (5001, 500)
     assert searched == [(f"uid=user-a,{gw.LDAP_BASE}", "BASE")]
-    with pytest.raises(web.HTTPForbidden):
+    with pytest.raises(gw.Refused) as e:
         gw.ldap_ids("nobody")
+    assert e.value.code == grpc.StatusCode.PERMISSION_DENIED
 
 
 def test_a_clusters_head_is_its_kuberay_service():
@@ -704,14 +715,19 @@ def test_a_clusters_head_is_its_kuberay_service():
         gw.head_url("ray-train-7")
         == "http://ray-train-7-head-svc.cms.svc.cluster.local:8265"
     )
+    assert (
+        gw.client_address("ray-train-7")
+        == f"ray-train-7-head-svc.cms.svc.cluster.local:{gw.CLIENT_PORT}"
+    )
 
 
 def test_non_purdue_accounts_map_onto_the_pool():
     assert gw.ldap_account("user-a", 7) == "user-a"
     assert gw.ldap_account("user-b-cern", 42) == "paf0042"
     assert gw.ldap_account("user-c-fnal", 3) == "paf0003"
-    with pytest.raises(web.HTTPForbidden):
+    with pytest.raises(gw.Refused) as e:
         gw.ldap_account("user-d-cern", 400)
+    assert e.value.code == grpc.StatusCode.PERMISSION_DENIED
 
 
 def test_a_user_without_a_running_session_has_no_af_id():

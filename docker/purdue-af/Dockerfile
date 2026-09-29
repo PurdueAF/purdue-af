@@ -127,7 +127,7 @@ RUN chmod +x /usr/local/bin/pixi && \
 # Coding-agent CLIs in their own prefix, out of reach of a pixi rebuild. jupyter-ai's
 # Claude/Codex personas appear only when the *-acp adapters are on PATH.
 ARG CLAUDE_CODE_VERSION="2.1.284"
-ARG CODEX_VERSION="0.158.0"
+ARG CODEX_VERSION="0.159.0"
 ARG OPENCODE_VERSION="1.18.33"
 ARG CLAUDE_AGENT_ACP_VERSION="0.84.0"
 ARG CODEX_ACP_VERSION="0.16.0"
@@ -169,7 +169,6 @@ COPY --from=stack /opt/pixi /opt/pixi
 COPY --from=stack /opt/npm-global /opt/npm-global
 
 COPY --chown=root:root docker/purdue-af/pixi-wrapper /usr/local/bin/pixi
-COPY --chown=root:root docker/purdue-af/ray-wrapper /usr/local/bin/ray
 
 RUN mkdir -p /etc/cvmfs /etc/cvmfs/SITECONF/JobConfig/ /etc/cvmfs/SITECONF/PhEDEx
 COPY docker/purdue-af/xml/site-local-config.xml /etc/cvmfs/SITECONF/JobConfig/
@@ -266,8 +265,6 @@ RUN nvcc --version >/dev/null && \
     opencode --version >/dev/null && \
     command -v claude-agent-acp >/dev/null && \
     command -v codex-acp >/dev/null && \
-    [ "$(command -v ray)" = /usr/local/bin/ray ] && \
-    command -v uvx >/dev/null && \
     python3 -c "import jupyterlab; print('smoke ok:', jupyterlab.__version__)" && \
     python3 -c "import jupyter_ai; print('smoke ok: jupyter-ai present')"
 

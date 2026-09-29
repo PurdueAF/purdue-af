@@ -26,6 +26,7 @@ dependencies = [
     "ruff>=0.16", # self-repair's pyflakes gate runs `python -m ruff`
     "jupyterhub-kubespawner>=7.1",
     "aiohttp>=3.9", # ray-train gateway
+    "grpcio>=1.60", # ray-train gateway
 ]
 
 [tool.uv]

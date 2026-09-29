@@ -57,6 +57,7 @@ repos:
           - prometheus_client>=0.22
           - types-PyYAML
           - types-cachetools
+          - types-grpcio
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.11.0.1

@@ -1,166 +1,110 @@
-# Training on GPUs with Ray Train
+# Training on GPUs with Ray
 
-[Ray Train](https://docs.ray.io/en/latest/train/train.html) runs a PyTorch
-training loop on a GPU that is yours only while your jobs need it. Your
-session does not need a GPU of its own: you submit the training script from a
-terminal and follow its output there.
+[Ray](https://docs.ray.io/en/latest/ray-core/walkthrough.html) runs a
+function of your notebook on a GPU that is yours only while your code needs
+it. Your session does not need a GPU of its own: you add a decorator to your
+PyTorch training function, and calling it runs it on the GPU.
 
-Your jobs run in a Ray cluster of your own, with one **NVIDIA T4** GPU (16 GB).
-It starts when you first submit, runs as you, sees your storage at the same
-paths as your session, and is removed after some minutes without jobs. No
-other user can see, stop or reach it.
+The function runs in a Ray cluster of your own, with one **NVIDIA T4** GPU
+(16 GB). It starts when your notebook first connects, runs as you, sees your
+storage at the same paths as your session, and is removed after some minutes
+without work. No other user can see, stop or reach it.
 
-## 1. Adapt the training script
+## 1. Connect
 
-Four changes turn a PyTorch training script into a Ray Train job:
-
-1. Move the training loop into a function that takes a `config` dictionary.
-2. Pass the model through `ray.train.torch.prepare_model()` and the
-   `DataLoader` through `ray.train.torch.prepare_data_loader()`, and drop your
-   own `.to("cuda")` calls: these put the model and every batch on the GPU.
-3. Call `ray.train.report()` once per epoch, with the metrics and, optionally,
-   a checkpoint.
-4. Run the function with a `TorchTrainer` that trains on one GPU and stores
-   its results in a directory of yours.
-
-A complete `train.py`, with random numbers standing in for your data:
+In a notebook on the **Python (pixi global)** kernel:
 
 ```python
-import os
-import tempfile
+import ray
 
+ray.init("ray://ray-train-gateway:10001")
+```
+
+The first connection starts your cluster, which takes a minute or two when a
+T4 is free; when none is, `ray.init` waits for one.
+
+## 2. Send the training to the GPU
+
+Put the training in a function, decorate it with `@ray.remote(num_gpus=1)`,
+and call it with `.remote()`. `ray.get` waits for the result:
+
+```python
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-import ray.train
-import ray.train.torch
-from ray.train import Checkpoint, RunConfig, ScalingConfig
-from ray.train.torch import TorchTrainer
 
-
-def train_func(config):
+@ray.remote(num_gpus=1)
+def train(epochs, lr):
     # Everything in this function runs on the GPU.
     X = torch.randn(100_000, 20)
     y = (X.sum(dim=1, keepdim=True) > 0).float()
-    loader = DataLoader(
-        TensorDataset(X, y), batch_size=config["batch_size"], shuffle=True
-    )
-    loader = ray.train.torch.prepare_data_loader(loader)
+    loader = DataLoader(TensorDataset(X, y), batch_size=512, shuffle=True)
 
-    model = nn.Sequential(nn.Linear(20, 64), nn.ReLU(), nn.Linear(64, 1))
-    model = ray.train.torch.prepare_model(model)
-    optimizer = torch.optim.Adam(model.parameters(), lr=config["lr"])
+    model = nn.Sequential(nn.Linear(20, 64), nn.ReLU(), nn.Linear(64, 1)).to("cuda")
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.BCEWithLogitsLoss()
-
-    for epoch in range(config["epochs"]):
-        for X_batch, y_batch in loader:  # batches arrive on the GPU
-            loss = loss_fn(model(X_batch), y_batch)
+    for epoch in range(epochs):
+        for X_batch, y_batch in loader:
+            loss = loss_fn(model(X_batch.to("cuda")), y_batch.to("cuda"))
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
-        with tempfile.TemporaryDirectory() as tmp:
-            torch.save(model.state_dict(), os.path.join(tmp, "model.pt"))
-            ray.train.report(
-                {"epoch": epoch, "loss": loss.item()},
-                checkpoint=Checkpoint.from_directory(tmp),
-            )
+        print(f"epoch {epoch}: loss {loss.item():.4f}")
+    # Your session has no GPU: send the weights back on the CPU.
+    return {name: tensor.cpu() for name, tensor in model.state_dict().items()}
 
 
-trainer = TorchTrainer(
-    train_func,
-    train_loop_config={"lr": 1e-3, "batch_size": 512, "epochs": 5},
-    scaling_config=ScalingConfig(num_workers=1, use_gpu=True),
-    run_config=RunConfig(
-        storage_path="/work/users/<username>/ray-results", name="example"
-    ),
-)
-result = trainer.fit()
-print(result.metrics)
-print(result.checkpoint.path)
+weights = ray.get(train.remote(epochs=5, lr=1e-3))
 ```
 
-## 2. Submit the job
-
-Your session already knows where your Ray cluster is and how to sign in to it,
-and its `ray` command runs the Ray command line from an environment of its
-own. In a terminal, in the directory that holds `train.py`:
-
-```shell
-ray job submit --working-dir . -- python train.py
-```
-
-* The job runs in the
-  [global Pixi environment](../docs/software.md#the-global-pixi-environment),
-  which has PyTorch and Ray. For packages it lacks, run the job in an
-  environment of yours: see [Your own environment](#your-own-environment).
-* `--working-dir .` uploads the directory to your cluster. Keep it to code: the
-  upload has a size limit, and the job reads its data from storage (see
-  [Data and results](#data-and-results)).
-* The first submission starts your cluster, which takes a minute or two when
-  a T4 is free. When none is, the submission waits for one and gives up with a
-  message after a while.
-* The command prints the job's output until the job ends. `Ctrl+C` stops the
-  printing, not the job.
-
-In a notebook, run the same command in a `!` cell: `!ray job submit ...`.
-
-## 3. Follow and stop jobs
-
-```shell
-ray job list                     # your jobs
-ray job logs --follow <job-id>   # the output of one job
-ray job stop <job-id>
-```
-
-`<job-id>` is the `raysubmit_...` identifier that `ray job submit` prints.
+* What the function prints appears in the notebook.
+* The function is sent with the call. Modules of your own that it imports must
+  be where your cluster can import them: keep them on `/work`, or connect with
+  `ray.init("ray://ray-train-gateway:10001", runtime_env={"working_dir": "."})`
+  to send the notebook's directory along.
+* `ray.cancel(ref)` stops a call; `ray.shutdown()` disconnects the notebook.
 
 ## Your own environment
 
-A job can run in one of your [Pixi environments](../docs/guide-pixi.md)
-instead of the global one, with the packages installed there: name the Pixi
-project in `AF_RAY_ENV`.
+Your cluster needs the same Python and Ray as your notebook. It runs the
+[global Pixi environment](../docs/software.md#the-global-pixi-environment),
+the one of the **Python (pixi global)** kernel, which has PyTorch and Ray. In a
+notebook on the **Python (pixi project-aware)** kernel, name its environment
+when you connect, and your cluster runs that one instead:
 
-```shell
-AF_RAY_ENV=/work/users/<username>/my-training ray job submit --working-dir . -- python train.py
+```python
+import os
+import sys
+
+import ray
+
+ray.init(
+    "ray://ray-train-gateway:10001",
+    _metadata=[("af-ray-env", os.path.realpath(sys.prefix))],
+)
 ```
 
-* The environment needs Ray, with its dashboard and Ray Train, and PyTorch:
-  `pixi add --pypi "ray[default,train]" torch`. The `ray` command says so if
-  its Ray is too old to run a cluster.
-* `AF_RAY_ENV` names a Pixi project, whose `default` environment then runs, or
-  an environment directory: another environment of a project, such as
-  `my-training/.pixi/envs/gpu`, or a Conda environment.
-* The environment must be on storage your cluster sees (see
-  [Data and results](#data-and-results)); `~/work/...` paths work.
-* Your cluster runs one environment at a time. A job in another one, the
-  global one included, replaces the cluster once its jobs have ended, and is
-  refused until then.
-* `AF_RAY_ENV` is read by the session's `ray` command. Inside `pixi shell`,
-  `pixi run` or a notebook whose environment has Ray, `ray` is that
-  environment's own command, which ignores it, so the job runs in the global
-  environment: use `/usr/local/bin/ray` there.
+* The environment needs Ray 2.52 or later, with its dashboard, and PyTorch:
+  `pixi add --pypi "ray[default]" torch`.
+* It must be on storage your cluster sees (see
+  [Data and results](#data-and-results)).
+* Your cluster runs one environment at a time. Connecting with another one,
+  the global one included, replaces the cluster when nothing runs on it; while
+  something does, `ray.init` fails with a connection timeout.
 
 ## Data and results
 
 Your cluster sees `/work`, `/depot/cms`, `/eos` and `/cvmfs` at the same paths
 as your session, with your permissions, so your data paths work unchanged.
-Your home directory is not there: code travels with `--working-dir`.
+Your home directory is not there.
 
-Checkpoints go to `<storage_path>/<name>/`, and the example prints the path of
-the last one. Load it from your session like any file:
-
-```python
-import torch
-
-weights = torch.load("/work/users/<username>/ray-results/example/<checkpoint>/model.pt")
-```
+A function can return its results, as above, or write them to `/work`, where
+your session reads them like any file.
 
 ## Good to know
 
-* Your cluster has one GPU, so `num_workers` stays at 1: a job that asks for
-  more waits indefinitely.
-* A cluster left without jobs for some minutes is removed, and its job history
-  with it: `ray job list` then shows nothing, while everything your jobs wrote
-  stays where they wrote it.
+* Your cluster has one GPU, so calls that ask for one run one at a time.
+* A cluster with nothing running for some minutes is removed. A notebook still
+  connected to it then fails its next call with a disconnection error: run
+  `ray.shutdown()` and `ray.init(...)` again, which starts a new cluster.

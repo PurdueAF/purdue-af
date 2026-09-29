@@ -1,17 +1,17 @@
-"""Ray Jobs gateway: each AF user's `ray job` calls reach a Ray cluster of their own.
+"""Ray Client gateway: each AF user's `ray.init("ray://ray-train-gateway:10001")`
+reaches a Ray cluster of their own.
 
-A session's RAY_AUTH_TOKEN is its JupyterHub token, which the Ray CLI sends as
-a bearer token. The Hub says whose it is, and the call goes on to that user's
-RayCluster: created from raycluster.yaml when they first send code or a job,
-running as them, and deleted once idle. Only the gateway holds a cluster's
-own Ray token. A cluster runs the global Pixi environment, or the one the
-session's `ray` command names in the X-AF-Ray-Env header.
+A session's RAY_AUTH_TOKEN is its JupyterHub token, which Ray Client sends
+with every call. The Hub says whose it is, and the call goes on, unread, to
+that user's RayCluster: created from raycluster.yaml when they first connect,
+running as them, and deleted once idle. Only the gateway holds a cluster's own
+Ray token. A cluster runs the global Pixi environment, or the one a notebook
+names in the af-ray-env metadata.
 """
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import copy
 import hashlib
 import hmac
@@ -23,20 +23,14 @@ import re
 import ssl
 import time
 import urllib.parse
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import grpc
 import yaml
-from aiohttp import (
-    ClientError,
-    ClientSession,
-    ClientTimeout,
-    TCPConnector,
-    WSMsgType,
-    web,
-)
+from aiohttp import ClientError, ClientSession, ClientTimeout, TCPConnector
 
 log = logging.getLogger("ray-train-gateway")
 
@@ -50,6 +44,8 @@ REAP_EVERY_S = 60.0
 # This service's own Hub token, from the `hub` Secret: the file appears once the Hub registers the service.
 SERVICE_TOKEN_FILE = Path("/etc/hub-token/token")
 USER_CACHE_S = 300.0
+# How long the clients of a removed cluster hear so, instead of starting another: Ray Client retries for 30 s.
+GONE_S = 300.0
 LDAP_HOST = "geddes-auth.rcac.purdue.edu"
 LDAP_BASE = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
 KUBE_API = "https://kubernetes.default.svc"
@@ -57,8 +53,10 @@ SERVICE_ACCOUNT = Path("/var/run/secrets/kubernetes.io/serviceaccount")
 RAYCLUSTERS = f"/apis/ray.io/v1/namespaces/{NAMESPACE}/rayclusters"
 SECRETS = f"/api/v1/namespaces/{NAMESPACE}/secrets"
 MANAGED_BY = "ray-train-gateway"
-# Set by the session's `ray` command (docker/purdue-af/ray-wrapper).
-ENV_HEADER = "X-AF-Ray-Env"
+# Ray Client's port, on the gateway as on every head.
+CLIENT_PORT = 10001
+# Set by a notebook: ray.init(..., _metadata=[(ENV_METADATA, <environment>)]).
+ENV_METADATA = "af-ray-env"
 ENV_ANNOTATION = "purdue-af/ray-env"
 # The environment pixi-global-sync keeps (apps/af-utils/pixi-global-sync).
 DEFAULT_ENV = "/work/pixi/global/.pixi/envs/default"
@@ -66,11 +64,28 @@ DEFAULT_ENV = "/work/pixi/global/.pixi/envs/default"
 SESSION_POD = re.compile(r"purdue-af-(\d+)")
 # custom-spawner.py names the accounts from outside Purdue <login>-cern and <login>-fnal
 EXTERNAL_SUFFIXES = ("-cern", "-fnal")
-# The calls `ray job` makes; nothing else is forwarded.
-JOBS_API = re.compile(r"/api/(version|jobs/.*|packages/[^/]+/[^/]+)")
-# CURRENT_VERSION in ray/dashboard/modules/version.py
-JOBS_API_VERSION = "4"
-LIVE_STATUSES = {"PENDING", "RUNNING"}
+# GRPC_OPTIONS in ray/util/client/common.py: Ray Client's message sizes and keepalives.
+GRPC_OPTIONS = [
+    ("grpc.max_send_message_length", 2**31 - 1),
+    ("grpc.max_receive_message_length", 2**31 - 1),
+    ("grpc.keepalive_time_ms", 30_000),
+    ("grpc.keepalive_timeout_ms", 600_000),
+    ("grpc.keepalive_permit_without_calls", 1),
+    ("grpc.http2.max_pings_without_data", 0),
+    ("grpc.http2.min_ping_interval_without_data_ms", 29_950),
+    ("grpc.http2.max_ping_strikes", 0),
+]
+# Metadata a relayed call does not carry on: the gateway's own, and what gRPC sets itself.
+NOT_RELAYED = {"authorization", ENV_METADATA, "user-agent"}
+
+
+class Refused(Exception):
+    """A call the gateway answers itself."""
+
+    def __init__(self, code: grpc.StatusCode, text: str) -> None:
+        super().__init__(text)
+        self.code = code
+        self.text = text
 
 
 @dataclass(frozen=True)
@@ -105,7 +120,10 @@ def ldap_account(username: str, af_id: int) -> str:
     if not username.endswith(EXTERNAL_SUFFIXES):
         return username
     if af_id > 399:
-        raise web.HTTPForbidden(text=f"There is no pooled account for AF user {af_id}.")
+        raise Refused(
+            grpc.StatusCode.PERMISSION_DENIED,
+            f"There is no pooled account for AF user {af_id}.",
+        )
     return f"paf{af_id:04d}"
 
 
@@ -127,7 +145,9 @@ def ldap_ids(account: str) -> tuple[int, int]:
     )
     entries = json.loads(conn.response_to_json())["entries"]
     if not entries:
-        raise web.HTTPForbidden(text=f"There is no LDAP account {account}.")
+        raise Refused(
+            grpc.StatusCode.PERMISSION_DENIED, f"There is no LDAP account {account}."
+        )
     found = entries[0]["attributes"]
     return int(found["uidNumber"]), int(found["gidNumber"])
 
@@ -139,6 +159,10 @@ def cluster_token(key: str, cluster: str) -> str:
 
 def head_url(cluster: str) -> str:
     return f"http://{cluster}-head-svc.{NAMESPACE}.svc.cluster.local:8265"
+
+
+def client_address(cluster: str) -> str:
+    return f"{cluster}-head-svc.{NAMESPACE}.svc.cluster.local:{CLIENT_PORT}"
 
 
 def build_cluster(template: dict[str, Any], user: User, env: str) -> dict[str, Any]:
@@ -184,13 +208,6 @@ def token_secret(user: User, owner_uid: str, token: str) -> dict[str, Any]:
     }
 
 
-def starts_cluster(method: str, path: str) -> bool:
-    """Sending code or a job starts the user's cluster; every other call only reads it."""
-    return path.startswith("/api/packages/") or (
-        method == "POST" and path == "/api/jobs/"
-    )
-
-
 def head_ready(cluster: dict[str, Any]) -> bool:
     conditions = (cluster.get("status") or {}).get("conditions") or []
     return any(
@@ -204,10 +221,6 @@ def load_template() -> dict[str, Any]:
     return template
 
 
-def ray_version() -> str:
-    return str(load_template()["spec"]["rayVersion"])
-
-
 def env_roots(template: dict[str, Any]) -> list[str]:
     """Where an environment may live: the storage a cluster mounts."""
     pod = template["spec"]["headGroupSpec"]["template"]["spec"]
@@ -218,17 +231,18 @@ def env_roots(template: dict[str, Any]) -> list[str]:
     ]
 
 
-def requested_env(header: str, template: dict[str, Any]) -> str:
+def requested_env(value: str, template: dict[str, Any]) -> str:
     """The environment a call asks for, or the global one."""
-    if not header:
+    if not value:
         return DEFAULT_ENV
-    path = posixpath.normpath(header)
+    path = posixpath.normpath(value)
     roots = env_roots(template)
-    if not header.startswith("/") or not any(
+    if not value.startswith("/") or not any(
         path == root or path.startswith(root.rstrip("/") + "/") for root in roots
     ):
-        raise web.HTTPBadRequest(
-            text=f"{header} is not on storage your Ray cluster mounts: {', '.join(roots)}."
+        raise Refused(
+            grpc.StatusCode.INVALID_ARGUMENT,
+            f"{value} is not on storage your Ray cluster mounts: {', '.join(roots)}.",
         )
     return path
 
@@ -252,6 +266,12 @@ class Gateway:
         self.kube_http = kube
         self.token_file = token_file
         self.last_used: dict[str, float] = {}
+        # The environment each cluster was last found running, so that a call skips the checks.
+        self.started: dict[str, str] = {}
+        self.channels: dict[str, grpc.aio.Channel] = {}
+        # cluster -> the Ray Client ids it serves; client id -> until when its cluster is known removed
+        self.clients: dict[str, set[str]] = {}
+        self.gone: dict[str, float] = {}
         self._users: dict[str, tuple[float, User]] = {}
 
     @property
@@ -265,6 +285,79 @@ class Gateway:
     def cluster_auth(self, cluster: str) -> dict[str, str]:
         return {"Authorization": f"Bearer {cluster_token(self.service_token, cluster)}"}
 
+    async def relay(
+        self,
+        method: str,
+        requests: AsyncIterator[bytes],
+        context: grpc.aio.ServicerContext[bytes, bytes],
+    ) -> AsyncIterator[bytes]:
+        metadata = tuple(context.invocation_metadata() or ())
+        try:
+            cluster = await self.cluster_for(metadata)
+        except Refused as e:
+            await context.abort(e.code, e.text)
+        forwarded = [(k, v) for k, v in metadata if k not in NOT_RELAYED]
+        forwarded.append(("authorization", self.cluster_auth(cluster)["Authorization"]))
+        relayed: grpc.aio.StreamStreamMultiCallable[bytes, bytes] = self.channel(
+            cluster
+        ).stream_stream(method)
+        call = relayed(self.tracked(cluster, requests), metadata=forwarded)
+        try:
+            async for response in call:
+                yield response
+        except grpc.aio.AioRpcError as e:
+            if e.code() == grpc.StatusCode.UNAVAILABLE:
+                self.started.pop(cluster, None)
+            await context.abort(e.code(), e.details() or "")
+
+    async def tracked(
+        self, cluster: str, requests: AsyncIterator[bytes]
+    ) -> AsyncIterator[bytes]:
+        """What the notebook sends keeps its cluster; what the cluster sends, its logs among it, does not."""
+        async for request in requests:
+            self.last_used[cluster] = time.monotonic()
+            yield request
+
+    async def cluster_for(self, metadata: Sequence[tuple[str, str | bytes]]) -> str:
+        """The caller's cluster, started for the environment the call asks for."""
+        if not self.service_token:
+            raise Refused(
+                grpc.StatusCode.UNAVAILABLE,
+                "Ray is not enabled: JupyterHub has not registered the ray-train-gateway service.",
+            )
+        values = {key: str(value) for key, value in metadata}
+        token = bearer_token(values.get("authorization", ""))
+        if token is None:
+            raise Refused(
+                grpc.StatusCode.UNAUTHENTICATED,
+                "No token: RAY_AUTH_MODE=token and RAY_AUTH_TOKEN=$JUPYTERHUB_API_TOKEN must be set.",
+            )
+        user = await self.user_for(token)
+        env = requested_env(values.get(ENV_METADATA, ""), load_template())
+        now = time.monotonic()
+        self.gone = {c: until for c, until in self.gone.items() if until > now}
+        client = values.get("client_id", "")
+        # Ray Client reconnecting: its session went with the cluster.
+        if client in self.gone:
+            raise Refused(
+                grpc.StatusCode.NOT_FOUND,
+                "Your Ray cluster was removed after it went idle: run ray.shutdown(), then ray.init() again.",
+            )
+        self.last_used[user.cluster] = now
+        if self.started.get(user.cluster) != env:
+            await self.start_cluster(user, env)
+            self.started[user.cluster] = env
+        self.clients.setdefault(user.cluster, set()).add(client)
+        self.gone.pop(client, None)
+        return user.cluster
+
+    def channel(self, cluster: str) -> grpc.aio.Channel:
+        if cluster not in self.channels:
+            self.channels[cluster] = grpc.aio.insecure_channel(
+                client_address(cluster), options=GRPC_OPTIONS
+            )
+        return self.channels[cluster]
+
     async def user_for(self, token: str) -> User:
         key = hashlib.sha256(token.encode()).hexdigest()
         now = time.monotonic()
@@ -274,8 +367,9 @@ class Gateway:
         name = await self.whoami(token)
         af_id = session_af_id(await self.hub_user(name))
         if af_id is None:
-            raise web.HTTPConflict(
-                text="Start your AF session first: Ray jobs run as the user of a running session."
+            raise Refused(
+                grpc.StatusCode.FAILED_PRECONDITION,
+                "Start your AF session first: a Ray cluster runs as the user of a running session.",
             )
         account = ldap_account(name, af_id)
         uid, gid = await asyncio.to_thread(ldap_ids, account)
@@ -289,11 +383,14 @@ class Gateway:
             f"{HUB_API}/user", headers={"Authorization": f"token {token}"}
         ) as r:
             if r.status in (401, 403):
-                raise web.HTTPUnauthorized(
-                    text="JupyterHub did not accept RAY_AUTH_TOKEN: it must be this session's JUPYTERHUB_API_TOKEN."
+                raise Refused(
+                    grpc.StatusCode.UNAUTHENTICATED,
+                    "JupyterHub did not accept RAY_AUTH_TOKEN: it must be this session's JUPYTERHUB_API_TOKEN.",
                 )
             if r.status != 200:
-                raise web.HTTPBadGateway(text=f"JupyterHub answered HTTP {r.status}.")
+                raise Refused(
+                    grpc.StatusCode.UNAVAILABLE, f"JupyterHub answered HTTP {r.status}."
+                )
             model: dict[str, Any] = await r.json()
         return str(model["name"])
 
@@ -303,8 +400,9 @@ class Gateway:
             headers={"Authorization": f"token {self.service_token}"},
         ) as r:
             if r.status != 200:
-                raise web.HTTPBadGateway(
-                    text=f"JupyterHub answered HTTP {r.status} for the user's session."
+                raise Refused(
+                    grpc.StatusCode.UNAVAILABLE,
+                    f"JupyterHub answered HTTP {r.status} for the user's session.",
                 )
             model: dict[str, Any] = await r.json()
         return model
@@ -327,8 +425,9 @@ class Gateway:
         if status == 404:
             return None
         if status != 200:
-            raise web.HTTPBadGateway(
-                text=f"Kubernetes answered HTTP {status} for the Ray cluster."
+            raise Refused(
+                grpc.StatusCode.UNAVAILABLE,
+                f"Kubernetes answered HTTP {status} for the Ray cluster.",
             )
         return body
 
@@ -338,8 +437,9 @@ class Gateway:
         if cluster is not None and not runs(cluster, env):
             if not cluster["metadata"].get("deletionTimestamp"):
                 if await self.busy(cluster):
-                    raise web.HTTPConflict(
-                        text="Your Ray cluster runs another environment and has a job pending or running: wait for it, or stop it."
+                    raise Refused(
+                        grpc.StatusCode.FAILED_PRECONDITION,
+                        "Your Ray cluster runs another environment and is running tasks: wait for them, or stop them.",
                     )
                 await self.delete(user.cluster)
             await self.wait_until_gone(user.cluster)
@@ -355,12 +455,14 @@ class Gateway:
                 # Another call created it first.
                 cluster = await self.cluster(user.cluster)
             else:
-                raise web.HTTPBadGateway(
-                    text=f"Could not create your Ray cluster: {created.get('message', status)}"
+                raise Refused(
+                    grpc.StatusCode.UNAVAILABLE,
+                    f"Could not create your Ray cluster: {created.get('message', status)}",
                 )
         if cluster is None or not runs(cluster, env):
-            raise web.HTTPConflict(
-                text="Another call is replacing your Ray cluster; submit again in a minute."
+            raise Refused(
+                grpc.StatusCode.ABORTED,
+                "Another call is replacing your Ray cluster; connect again in a minute.",
             )
         secret = token_secret(
             user,
@@ -372,34 +474,45 @@ class Gateway:
             # Again on every pass: a Secret left by a deleted namesake is collected with it.
             status, body = await self.kube("POST", SECRETS, secret)
             if status not in (201, 409):
-                raise web.HTTPBadGateway(
-                    text=f"Could not create your Ray cluster's token: {body.get('message', status)}"
+                raise Refused(
+                    grpc.StatusCode.UNAVAILABLE,
+                    f"Could not create your Ray cluster's token: {body.get('message', status)}",
                 )
             if await self.head_status(user.cluster) == 200:
                 break
             if time.monotonic() > deadline:
-                raise web.HTTPServiceUnavailable(
-                    text="Your Ray cluster did not start in time: no T4 may be free. Try again later."
+                raise Refused(
+                    grpc.StatusCode.UNAVAILABLE,
+                    "Your Ray cluster did not start in time: no T4 may be free. Try again later.",
                 )
             await asyncio.sleep(START_POLL_S)
         # A Ray that ignores RAY_AUTH_MODE would serve anyone who reaches it.
         if await self.head_status(user.cluster, authorized=False) == 200:
             await self.delete(user.cluster)
-            raise web.HTTPBadRequest(
-                text="The Ray in that environment does not enforce the cluster's token."
+            raise Refused(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                "The Ray in that environment does not enforce the cluster's token.",
             )
 
     async def delete(self, name: str) -> None:
         await self.kube(
             "DELETE", f"{RAYCLUSTERS}/{name}", {"propagationPolicy": "Background"}
         )
+        self.started.pop(name, None)
+        until = time.monotonic() + GONE_S
+        for client in self.clients.pop(name, set()):
+            self.gone[client] = until
+        channel = self.channels.pop(name, None)
+        if channel is not None:
+            await channel.close()
 
     async def wait_until_gone(self, name: str) -> None:
         deadline = time.monotonic() + START_TIMEOUT_S
         while await self.cluster(name) is not None:
             if time.monotonic() > deadline:
-                raise web.HTTPServiceUnavailable(
-                    text="Your previous Ray cluster is still shutting down; submit again in a minute."
+                raise Refused(
+                    grpc.StatusCode.UNAVAILABLE,
+                    "Your previous Ray cluster is still shutting down; connect again in a minute.",
                 )
             await asyncio.sleep(START_POLL_S)
 
@@ -413,55 +526,6 @@ class Gateway:
                 return r.status
         except (ClientError, asyncio.TimeoutError):
             return None
-
-    async def forward(self, request: web.Request, cluster: str) -> web.StreamResponse:
-        url = head_url(cluster) + request.rel_url.path_qs
-        headers = self.cluster_auth(cluster)
-        if "Content-Type" in request.headers:
-            headers["Content-Type"] = request.headers["Content-Type"]
-        if request.headers.get("Upgrade", "").lower() == "websocket":
-            return await self.forward_websocket(request, url, headers)
-        body = request.content.iter_any() if request.body_exists else None
-        try:
-            upstream = await self.http.request(
-                request.method,
-                url,
-                headers=headers,
-                data=body,
-                timeout=ClientTimeout(total=None, sock_connect=10),
-            )
-        except ClientError as e:
-            raise web.HTTPBadGateway(
-                text=f"Your Ray cluster did not answer: {e}"
-            ) from e
-        async with upstream:
-            response = web.StreamResponse(status=upstream.status)
-            if "Content-Type" in upstream.headers:
-                response.headers["Content-Type"] = upstream.headers["Content-Type"]
-            await response.prepare(request)
-            async for chunk in upstream.content.iter_any():
-                await response.write(chunk)
-            await response.write_eof()
-        return response
-
-    async def forward_websocket(
-        self, request: web.Request, url: str, headers: dict[str, str]
-    ) -> web.WebSocketResponse:
-        client = web.WebSocketResponse()
-        await client.prepare(request)
-        try:
-            async with self.http.ws_connect(
-                "ws" + url.removeprefix("http"), headers=headers
-            ) as upstream:
-                async for message in upstream:
-                    if message.type == WSMsgType.TEXT:
-                        await client.send_str(message.data)
-                    elif message.type == WSMsgType.BINARY:
-                        await client.send_bytes(message.data)
-        except (ClientError, ConnectionResetError):
-            pass
-        await client.close()
-        return client
 
     async def reap_idle(self) -> None:
         status, listing = await self.kube(
@@ -485,17 +549,23 @@ class Gateway:
             log.info("deleted idle %s", name)
 
     async def busy(self, cluster: dict[str, Any]) -> bool:
-        """A pending or running job keeps a cluster; so does a ready head that did not answer."""
+        """A running task keeps a cluster; so does a ready head that did not answer."""
         name = cluster["metadata"]["name"]
         try:
             async with self.http.get(
-                head_url(name) + "/api/jobs/",
+                head_url(name) + "/api/v0/tasks",
+                params={
+                    "filter_keys": "state",
+                    "filter_predicates": "=",
+                    "filter_values": "RUNNING",
+                    "limit": "1",
+                },
                 headers=self.cluster_auth(name),
                 timeout=ClientTimeout(total=10),
             ) as r:
                 if r.status == 200:
-                    jobs: list[dict[str, Any]] = await r.json()
-                    return any(job.get("status") in LIVE_STATUSES for job in jobs)
+                    listing: dict[str, Any] = await r.json()
+                    return bool(listing["data"]["result"]["result"])
                 if r.status in (401, 403):
                     # Made under another service token: nothing can reach it any more.
                     return False
@@ -503,46 +573,30 @@ class Gateway:
             pass
         return head_ready(cluster)
 
+    async def close(self) -> None:
+        for channel in self.channels.values():
+            await channel.close()
 
-GATEWAY = web.AppKey("gateway", Gateway)
 
+class Relay(grpc.GenericRpcHandler):
+    """Every call, whatever its method, relayed as a stream of raw messages."""
 
-async def handle(request: web.Request) -> web.StreamResponse:
-    if request.path == "/healthz":
-        return web.Response(text="ok")
-    if not JOBS_API.fullmatch(request.path):
-        raise web.HTTPNotFound(text="This address serves the Ray Jobs API only.")
-    gateway = request.app[GATEWAY]
-    if not gateway.service_token:
-        raise web.HTTPServiceUnavailable(
-            text="Ray Train is not enabled: JupyterHub has not registered the ray-train-gateway service."
-        )
-    token = bearer_token(request.headers.get("Authorization", ""))
-    if token is None:
-        raise web.HTTPUnauthorized(
-            text="No token: RAY_AUTH_MODE=token and RAY_AUTH_TOKEN=$JUPYTERHUB_API_TOKEN must be set."
-        )
-    user = await gateway.user_for(token)
-    if request.path == "/api/version":
-        return web.json_response(
-            {
-                "version": JOBS_API_VERSION,
-                "ray_version": ray_version(),
-                "ray_commit": "",
-                "session_name": user.cluster,
-            }
-        )
-    gateway.last_used[user.cluster] = time.monotonic()
-    if starts_cluster(request.method, request.path):
-        env = requested_env(request.headers.get(ENV_HEADER, ""), load_template())
-        await gateway.start_cluster(user, env)
-    elif await gateway.cluster(user.cluster) is None:
-        if request.method == "GET" and request.path == "/api/jobs/":
-            return web.json_response([])
-        raise web.HTTPNotFound(
-            text="You have no Ray cluster now: an idle one is removed, with its job history."
-        )
-    return await gateway.forward(request, user.cluster)
+    def __init__(self, gateway: Gateway) -> None:
+        self.gateway = gateway
+
+    def service(
+        self, handler_call_details: grpc.HandlerCallDetails
+    ) -> grpc.RpcMethodHandler[bytes, bytes]:
+        method = handler_call_details.method
+
+        async def relay(
+            requests: AsyncIterator[bytes],
+            context: grpc.aio.ServicerContext[bytes, bytes],
+        ) -> AsyncIterator[bytes]:
+            async for response in self.gateway.relay(method, requests, context):
+                yield response
+
+        return grpc.stream_stream_rpc_method_handler(relay)
 
 
 async def reap_forever(gateway: Gateway) -> None:
@@ -554,30 +608,26 @@ async def reap_forever(gateway: Gateway) -> None:
             log.exception("reaping idle Ray clusters")
 
 
-async def lifecycle(app: web.Application) -> AsyncIterator[None]:
+async def serve() -> None:
     kube_tls = ssl.create_default_context(cafile=str(SERVICE_ACCOUNT / "ca.crt"))
     async with (
         ClientSession() as http,
         ClientSession(connector=TCPConnector(ssl=kube_tls)) as kube,
     ):
         gateway = Gateway(http, kube, SERVICE_TOKEN_FILE)
-        app[GATEWAY] = gateway
-        reaper = asyncio.create_task(reap_forever(gateway))
-        yield
-        reaper.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await reaper
-
-
-def make_app() -> web.Application:
-    app = web.Application()
-    app.cleanup_ctx.append(lifecycle)
-    app.router.add_route("*", "/{path:.*}", handle)
-    return app
+        server = grpc.aio.server(options=GRPC_OPTIONS)
+        server.add_generic_rpc_handlers((Relay(gateway),))
+        server.add_insecure_port(f"0.0.0.0:{CLIENT_PORT}")
+        await server.start()
+        try:
+            await reap_forever(gateway)
+        finally:
+            await server.stop(None)
+            await gateway.close()
 
 
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
-    web.run_app(make_app(), port=8265, access_log=None)
+    asyncio.run(serve())
