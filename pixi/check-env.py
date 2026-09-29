@@ -143,7 +143,6 @@ def import_check(
         env = dict(
             os.environ,
             MPLBACKEND="Agg",
-            TF_CPP_MIN_LOG_LEVEL="2",
             HOME=scratch,
             TMPDIR=scratch,
         )
