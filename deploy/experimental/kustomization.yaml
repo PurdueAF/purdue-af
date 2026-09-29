@@ -62,6 +62,13 @@ resources:
   - ../../apps/ray/operator/helmrelease.yaml
   - ../../apps/ray/sonic-ray/helmrelease.yaml
 
+  # Ray Train: each user's Ray jobs run in a Ray cluster of their own, reached
+  # through the gateway and reconciled by the same operator. See apps/ray-train/README.md.
+  - ../../apps/ray-train/rbac.yaml
+  - ../../apps/ray-train/deployment.yaml
+  - ../../apps/ray-train/service.yaml
+  - ../../apps/ray-train/networkpolicy.yaml
+
   - ../../apps/interlink/helmrepo.yaml
   - ../../apps/interlink/hammer/helmrelease.yaml
 
@@ -170,6 +177,15 @@ configMapGenerator:
   - name: sonic-ray-config
     files:
       - values.yaml=../../apps/ray/sonic-ray/values.yaml
+
+  - name: ray-train-gateway
+    options:
+      annotations:
+        # code and a template, not manifests — keep Flux substitution away
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../apps/ray-train/gateway.py
+      - ../../apps/ray-train/raycluster.yaml
 
   - name: flyte-config
     files:

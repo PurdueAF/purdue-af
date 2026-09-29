@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ray-train-gateway
+  labels:
+    app: ray-train-gateway
+spec:
+  selector:
+    app: ray-train-gateway
+  ports:
+    - name: ray-client
+      port: 10001
+      targetPort: ray-client
