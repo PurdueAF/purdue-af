@@ -295,5 +295,13 @@
       matchFileNames: ['pixi/global/pixi.toml'],
       allowedVersions: '/^11\\.0\\.\\d+$/',
     },
+    {
+      // servicex needs aioboto3, whose every release pins an aiobotocore 2.x
+      // that requires wrapt <2. Relax once aioboto3 moves to aiobotocore 3.
+      // Regex: this allowedVersions replaces the stable-only one above.
+      matchPackageNames: ['wrapt'],
+      matchFileNames: ['pixi/global/pixi.toml'],
+      allowedVersions: '/^1\\./',
+    },
   ],
 }
