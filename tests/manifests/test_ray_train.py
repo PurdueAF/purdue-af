@@ -142,7 +142,9 @@ def test_user_clusters_can_run_the_images_python():
     assert 100 in cluster_pod()["spec"]["securityContext"]["supplementalGroups"]
 
 
-def test_user_clusters_have_one_gpu():
+def test_a_users_cluster_holds_one_gpu():
+    """With one cluster per user, each user's limit: a head alone, with one GPU."""
+    assert not load(APP / "raycluster.yaml")["spec"].get("workerGroupSpecs")
     (container,) = cluster_pod()["spec"]["containers"]
     for amounts in (
         container["resources"]["limits"],

@@ -495,8 +495,9 @@ class Gateway:
             )
 
     async def delete(self, name: str) -> None:
+        # Foreground: the RayCluster outlasts its pod, so waiting it out frees the user's one GPU.
         await self.kube(
-            "DELETE", f"{RAYCLUSTERS}/{name}", {"propagationPolicy": "Background"}
+            "DELETE", f"{RAYCLUSTERS}/{name}", {"propagationPolicy": "Foreground"}
         )
         self.started.pop(name, None)
         until = time.monotonic() + GONE_S

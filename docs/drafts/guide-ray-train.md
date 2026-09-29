@@ -104,7 +104,8 @@ your session reads them like any file.
 
 ## Good to know
 
-* Your cluster has one GPU, so calls that ask for one run one at a time.
+* You have one cluster, with one GPU: calls that ask for a GPU run one at a
+  time, and a call that asks for more than one never starts.
 * A cluster with nothing running for some minutes is removed. A notebook still
   connected to it then fails its next call with a disconnection error: run
   `ray.shutdown()` and `ray.init(...)` again, which starts a new cluster.

@@ -87,13 +87,24 @@ class FakeKube:
         self.racing = {}
         # Clusters being deleted: name -> the GETs that still find them.
         self.linger = {}
+        # uid -> name of each cluster whose head pod is up, and the most there ever were.
+        self.pods = {}
+        self.most_pods = 0
+        self.created = 0
 
     def app(self):
         clusters = "/apis/ray.io/v1/namespaces/cms/rayclusters"
 
         def stored(body):
-            body["metadata"]["uid"] = f"uid-{body['metadata']['name']}"
-            self.clusters[body["metadata"]["name"]] = body
+            self.created += 1
+            name = body["metadata"]["name"]
+            body["metadata"]["uid"] = f"uid-{name}-{self.created}"
+            self.clusters[name] = body
+            self.pods[body["metadata"]["uid"]] = name
+            self.most_pods = max(self.most_pods, len(self.pods))
+
+        def removed(name):
+            self.pods.pop(self.clusters.pop(name)["metadata"]["uid"])
 
         async def create(request):
             body = await request.json()
@@ -121,7 +132,8 @@ class FakeKube:
             if self.fail_get:
                 return web.json_response({}, status=500)
             if self.linger.get(name) == 0:
-                del self.linger[name], self.clusters[name]
+                del self.linger[name]
+                removed(name)
             elif name in self.linger:
                 self.linger[name] -= 1
             if name in self.racing or name not in self.clusters:
@@ -129,7 +141,16 @@ class FakeKube:
             return web.json_response(self.clusters[name])
 
         async def delete(request):
-            self.clusters.pop(request.match_info["name"], None)
+            name = request.match_info["name"]
+            if name not in self.clusters:
+                return web.json_response({}, status=404)
+            if (await request.json()).get("propagationPolicy") == "Foreground":
+                # The cluster stays, marked, until its pod is gone.
+                self.clusters[name]["metadata"]["deletionTimestamp"] = "now"
+                self.linger.setdefault(name, 1)
+            else:
+                # The cluster goes at once, its pod some time later.
+                del self.clusters[name]
             return web.json_response({})
 
         async def secret(request):
@@ -315,6 +336,15 @@ def cluster_env(env, name="ray-train-7"):
     return env.kube.clusters[name]["metadata"]["annotations"][gw.ENV_ANNOTATION]
 
 
+def live(env):
+    """The clusters not being deleted."""
+    return {
+        name
+        for name, cluster in env.kube.clusters.items()
+        if not cluster["metadata"].get("deletionTimestamp")
+    }
+
+
 def idle(env, *clusters):
     long_ago = time.monotonic() - gw.IDLE_TIMEOUT_S - 1
     env.gateway.last_used.update(dict.fromkeys(clusters, long_ago))
@@ -358,7 +388,7 @@ async def test_connecting_starts_the_users_cluster_as_them(env):
     assert secret["stringData"]["auth_token"] == gw.cluster_token(
         SERVICE_TOKEN, "ray-train-7"
     )
-    assert secret["metadata"]["ownerReferences"][0]["uid"] == "uid-ray-train-7"
+    assert secret["metadata"]["ownerReferences"][0]["uid"] == cluster["metadata"]["uid"]
 
 
 async def test_a_head_sees_its_own_token_and_the_clients_own_metadata(env):
@@ -427,7 +457,7 @@ async def test_a_client_of_a_removed_cluster_is_told_so_and_starts_nothing(env):
     idle(env, "ray-train-7")
     await env.gateway.reap_idle()
     assert await refused(env) == grpc.StatusCode.NOT_FOUND
-    assert env.kube.clusters == {}
+    assert live(env) == set()
     assert await call(env, client="client-2") == [b"echo:ping"]
     assert "ray-train-7" in env.kube.clusters
 
@@ -438,6 +468,17 @@ async def test_a_removed_clusters_clients_are_forgotten_in_time(env, monkeypatch
     idle(env, "ray-train-7")
     await env.gateway.reap_idle()
     assert await call(env) == [b"echo:ping"]
+
+
+async def test_a_user_never_holds_two_gpu_pods(env):
+    """A replaced or removed cluster's pod is gone before its successor's starts."""
+    await call(env, env_path=ENV_A)
+    await call(env, env_path=ENV_B)
+    idle(env, "ray-train-7")
+    await env.gateway.reap_idle()
+    await call(env, env_path=ENV_A, client="client-2")
+    assert env.kube.created == 3
+    assert env.kube.most_pods == 1
 
 
 async def test_a_client_switching_environments_keeps_its_session(env):
@@ -533,7 +574,7 @@ async def test_switching_environments_leaves_a_busy_cluster_alone(env):
 async def test_a_ray_without_token_authentication_is_refused(env):
     env.heads.open = True
     assert await refused(env, env_path=ENV_A) == grpc.StatusCode.INVALID_ARGUMENT
-    assert env.kube.clusters == {}
+    assert live(env) == set()
 
 
 def test_environments_live_on_the_storage_the_cluster_mounts():
@@ -571,7 +612,7 @@ async def test_idle_clusters_are_deleted_and_busy_ones_kept(env):
 
     await env.gateway.reap_idle()
 
-    assert set(env.kube.clusters) == {"ray-train-7"}
+    assert live(env) == {"ray-train-7"}
     assert set(env.gateway.channels) == {"ray-train-7"}
 
 
@@ -595,7 +636,7 @@ async def test_logs_from_a_cluster_do_not_keep_it(env):
         env.heads.more_logs.set()
     assert lines == [b"log 1", b"log 2"]
     await env.gateway.reap_idle()
-    assert env.kube.clusters == {}
+    assert live(env) == set()
 
 
 async def test_a_ready_head_that_does_not_answer_is_kept(env):
@@ -617,7 +658,7 @@ async def test_an_unreachable_head_that_never_came_up_is_deleted(env, monkeypatc
     monkeypatch.setattr(gw, "head_url", lambda cluster: f"http://127.0.0.1:{port}")
     idle(env, "ray-train-7")
     await env.gateway.reap_idle()
-    assert env.kube.clusters == {}
+    assert live(env) == set()
 
 
 async def test_a_cluster_made_under_another_service_token_is_deleted(env):
@@ -625,7 +666,7 @@ async def test_a_cluster_made_under_another_service_token_is_deleted(env):
     env.token_file.write_text("rotated-service-token")
     idle(env, "ray-train-7")
     await env.gateway.reap_idle()
-    assert env.kube.clusters == {}
+    assert live(env) == set()
 
 
 async def test_reaping_waits_out_a_failed_listing(env):

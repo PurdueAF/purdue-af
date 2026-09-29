@@ -37,6 +37,10 @@ Secret. The `ray.io` CRDs and their controller are the KubeRay operator in
   place of the session's. Users' pods mount no ServiceAccount token, and have
   no autoscaler, whose Role would let user code read every pod in `cms` and
   patch every RayCluster.
+- **One GPU per user**: a user's cluster is their only one, named after their
+  AF id, and is one pod with one T4, with no worker groups and no autoscaler.
+  The gateway deletes a replaced or idle cluster in the foreground and waits
+  until it is gone, pod included, before creating the next.
 - **Environment**: Ray Client needs the same Python and Ray on both sides, so
   a cluster runs its notebook's environment: the global Pixi environment that
   [`pixi-global-sync`](../af-utils/pixi-global-sync) keeps, whose
