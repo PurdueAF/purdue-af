@@ -281,9 +281,11 @@
       // py3.14 builds need root_base 6.40.4 and with it giflib 6, imagemagick
       // (via hepdata-lib) has only giflib-5 builds, and roastcoffea requires
       // python <3.14. Overrides the rule above, so it stays after it.
+      // Regex, not '<3.14': this allowedVersions replaces the stable-only one
+      // above, and a range admits 3.14 release candidates.
       matchPackageNames: ['python'],
       matchFileNames: ['pixi/global/pixi.toml'],
-      allowedVersions: '<3.14',
+      allowedVersions: '/^3\\.1[23]\\.\\d+$/',
     },
   ],
 }
