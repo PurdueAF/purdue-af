@@ -195,7 +195,7 @@ class TestLoki:
             "af-node-probe-cvmfs-abcde",
             "af-userlist-sync-purdue-29312345-abcde",
             "servicex-eos-did-finder-xrootd-abcde",
-            "api-dask-gateway-k8s-slurm-abcde",
+            "controller-dask-gateway-8bd85db68-abcde",
         ],
     )
     def test_repo_workloads_are_watched(self, pod):
@@ -707,7 +707,7 @@ class TestStructuredMessages:
 
     def test_three_traefik_variants_are_one_incident(self):
         lines = [
-            line("traefik-dask-gateway-k8s-1-abcde", "traefik", entry)
+            line("traefik-dask-gateway-1-abcde", "traefik", entry)
             for entry in self.TRAEFIK
         ]
         assert len(triage.cluster(lines)) == 1

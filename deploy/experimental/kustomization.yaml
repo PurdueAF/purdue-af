@@ -2,10 +2,9 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../apps/dask-gateway/helmrepo.yaml
-  - ../../apps/dask-gateway/dask-gateway-k8s/helmrelease.yaml
-  - ../../apps/dask-gateway/dask-gateway-k8s/ingress.yaml
-  - ../../apps/dask-gateway/dask-gateway-k8s-slurm/helmrelease.yaml
-  - ../../apps/dask-gateway/dask-gateway-k8s-slurm/ingress.yaml
+  - ../../apps/dask-gateway/helmrelease.yaml
+  - ../../apps/dask-gateway/ingress.yaml
+  - ../../apps/dask-gateway/aliases.yaml
 
   - ../../apps/monitoring/pyroscope/helmrelease.yaml
   - ../../apps/monitoring/loki/helmrelease.yaml
@@ -100,13 +99,9 @@ configMapGenerator:
       - ../../pixi/global/pixi.toml
       - ../../pixi/global/pixi.lock
 
-  - name: dask-gateway-k8s-config
+  - name: dask-gateway-config
     files:
-      - values.yaml=../../apps/dask-gateway/dask-gateway-k8s/values.yaml
-
-  - name: dask-gateway-k8s-slurm-config
-    files:
-      - values.yaml=../../apps/dask-gateway/dask-gateway-k8s-slurm/values.yaml
+      - values.yaml=../../apps/dask-gateway/values.yaml
 
   - name: pyroscope-config
     files:

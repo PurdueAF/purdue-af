@@ -5,7 +5,7 @@
 The following table summarizes size, access modes, and accessibility of each storage
 volume (scroll sideways for details).
 
-| Storage volume | Path | Size per user | Access mode | Mounted in Slurm jobs and Dask/Slurm workers | Mounted in Dask/k8s workers | Writable by users w/o Purdue account |
+| Storage volume | Path | Size per user | Access mode | Mounted in Slurm jobs | Mounted in Dask Gateway workers | Writable by users w/o Purdue account |
 | --- | --- | --- | --- | --- | --- | --- |
 | AF home storage | `/home/<username>/` | 25 GB | Read/write | ❌ | ❌ | ✅ |
 | Purdue Depot storage | `/depot/cms/` | up to 1 TB | Read/write for Purdue users, read-only for others | ✅ | ✅ | ❌ |
@@ -52,8 +52,7 @@ Below are common storage use cases with recommendations on which volume to use.
 * **CERN / FNAL users:** use private `/work/users/<username>/` directory or a shared project directory `/work/projects/<project-name>/`.
 
 Code and environments used by Slurm jobs or Dask Gateway workers must be on a
-volume those workers mount (see the table above) — for the Slurm backend, that
-means Depot.
+volume they mount (see the table above) — for Slurm jobs, that means Depot.
 
 ### Storing custom Pixi or Conda environments
 

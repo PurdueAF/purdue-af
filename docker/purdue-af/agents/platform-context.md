@@ -38,7 +38,7 @@ agent running inside it — while `/home`, `/work` and `/depot` survive untouche
 Which volumes a worker can see is what most often breaks an otherwise correct
 job — a path that works in the notebook may not exist on the worker.
 
-| Path | Access | Visible to Slurm jobs and Dask/Slurm workers | Visible to Dask/k8s workers |
+| Path | Access | Visible to Slurm jobs | Visible to Dask Gateway workers |
 | --- | --- | --- | --- |
 | `/home/<username>/` | read/write | no | no |
 | `/work/users/<username>/` | read/write | no | yes |
@@ -48,11 +48,11 @@ job — a path that works in the notebook may not exist on the worker.
 | `/cvmfs/` | read-only | yes | yes |
 | `/eos/cern/` (CERNBox) | read/write, mounted on request | no | no |
 
-A Dask workload must never depend on the EOS mount. Slurm workers have no
-`/eos` at all, and where a mount does exist it is not something to build on:
-worker code reads EOS data over XRootD — better still through XCache — rather
-than as a file path. The POSIX mount in the session is read-only and useful
-mainly for looking around.
+Worker code must never depend on the EOS mount. Slurm jobs have no `/eos`
+at all, and the mount on Dask Gateway workers is not something to build on:
+read EOS data over XRootD — better still through XCache — rather than as a
+file path. The POSIX mount in the session is read-only and useful mainly for
+looking around.
 
 The session's own username is `whoami` (also `$NB_USER`) and `$HOME` is
 `/home/<username>`; build paths from those rather than guessing the name.
@@ -66,8 +66,7 @@ starting at all — the next spawn fails, not merely the write.
 `/work/users/<username>/` has a 100 GB quota; administrators follow up with users
 above it rather than the filesystem refusing writes, so treat it as a hard limit
 too. `/eos/purdue/` cannot be written through the POSIX mount; write there with
-`gfal-copy` or `xrdcp`. `/home` and `/work` do not exist inside Slurm jobs or
-Dask/Slurm workers.
+`gfal-copy` or `xrdcp`. `/home` and `/work` do not exist inside Slurm jobs.
 
 **Scope.** The user's own directories — `/work/users/<username>/` and
 `/depot/cms/users/<username>/` — and the project directories they actually work
@@ -91,11 +90,11 @@ your own initiative.
 
 **Guidance.** Keep code, environments and outputs off `/home` — it is small and
 invisible to every worker. `/work/users/<username>/` is the usual home for a
-project; use `/depot` when Slurm or Dask/Slurm workers have to read it. Writing
-many files to `/depot` at once degrades it for everyone, so stage to `/tmp` on
-the worker and copy once. None of `/home`, `/work` or `/depot` is unlimited and
-the last two are shared, so check `query_storage_usage` before writing a large
-output rather than after filling a volume.
+project; use `/depot` when Slurm jobs have to read it. Writing many files to
+`/depot` at once degrades it for everyone, so stage to `/tmp` on the worker and
+copy once. None of `/home`, `/work` or `/depot` is unlimited and the last two
+are shared, so check `query_storage_usage` before writing a large output rather
+than after filling a volume.
 
 ### Software environments
 
@@ -133,13 +132,12 @@ outside the session and a package added to either is lost. Activating them
 (`pixi shell`) is fine; changing them is not. A pixi or conda environment becomes a
 Jupyter kernel only if it has `ipykernel` installed and sits in a world-readable
 directory, which `/depot/cms/private/` directories are not. Environments used
-from Slurm jobs or Dask/Slurm workers must live on `/depot`, the only writable
-volume those workers see.
+from Slurm jobs must live on `/depot`, the only writable volume those jobs see.
 
 **Guidance.** Create the project under `/work/users/<username>/` and run `pixi
-init` / `pixi add` there; put it on `/depot` instead when Slurm or Dask/Slurm
-workers must import it. To build on the shared environment, copy its manifest
-into a project of your own; to change it for everyone, it is generated from
+init` / `pixi add` there; put it on `/depot` instead when Slurm jobs must
+import it. To build on the shared environment, copy its manifest into a project
+of your own; to change it for everyone, it is generated from
 `pixi/global/pixi.toml` in the platform repository.
 
 **On PATH in a terminal:** `pixi`, `conda`, `rucio`, `kinit`, `gfal-*`,
@@ -178,12 +176,11 @@ holds the file. A dataset does not need to be at Purdue to be read.
 | Method | Available to | Workers see |
 | --- | --- | --- |
 | Local Dask cluster | all users | the session itself; bounded by its reserved cores |
-| Dask Gateway, Kubernetes | all users | `/work`, `/depot`, `/cvmfs` |
-| Dask Gateway, Slurm (Hammer) | Purdue accounts | `/depot`, `/cvmfs` |
+| Dask Gateway | all users | `/work`, `/depot`, `/cvmfs` |
 | Slurm batch (`sbatch`) | Purdue accounts, account `cms` | `/depot`, `/cvmfs` |
 | CRAB | all CMS users | WLCG |
 
-`list_dask_cluster_options` carries each gateway's option keys and limits.
+`list_dask_cluster_options` carries the gateway's option keys and limits.
 
 **Rules.** A Dask Gateway cluster runs the environment you name, and does not
 inherit the notebook's: pass either `conda_env` (a path) or `pixi_project` (a
@@ -191,31 +188,22 @@ project directory, with `pixi_env` defaulting to `default`) — one is required
 and the two are mutually exclusive. The gateway checks that the environment
 exists and is already built before the cluster starts, so run `pixi install`
 first. That environment has to sit where the workers can read it — `/work` or
-`/depot` for Kubernetes, `/depot` only for Slurm — and to contain every package
-the analysis imports.
+`/depot` — and to contain every package the analysis imports.
 
 Workers inherit none of the session's environment variables either; pass them
 with `env=dict(os.environ)` at creation. For XRootD reads that env must carry
-`X509_USER_PROXY` pointing at a proxy file the workers can read — `/depot` for
-either backend, `/work/users/<username>/` for Kubernetes only — so export it
-before `voms-proxy-init`, whose default `/tmp` no worker sees.
+`X509_USER_PROXY` pointing at a proxy file the workers can read — under
+`/work/users/<username>/` or `/depot` — so export it before `voms-proxy-init`,
+whose default `/tmp` no worker sees.
 
-At most one active Dask Gateway cluster per user per gateway; creating another
-requires stopping the existing one. `Gateway()` with no arguments
-connects to the **Kubernetes** backend (`DASK_GATEWAY__ADDRESS` is preset), so a
-Slurm cluster is never what you get by default — it requires the address
-explicitly:
-
-    Gateway("http://dask-gateway-k8s-slurm.geddes.rcac.purdue.edu/",
-            proxy_address="api-dask-gateway-k8s-slurm.cms.geddes.rcac.purdue.edu:8000")
+At most one active Dask Gateway cluster per user; creating another requires
+stopping the existing one. `Gateway()` needs no arguments:
+`DASK_GATEWAY__ADDRESS` and `DASK_GATEWAY__PROXY_ADDRESS` are preset.
 
 Slurm GPU jobs need `--gpus-per-node=1`. `/depot` is the only volume shared
 between the AF and the Gilbreth cluster (`ssh gilbreth`).
 
-**Guidance.** Match the backend to the data: Dask/k8s workers see `/work` and
-`/depot`, Dask/Slurm workers see only `/depot`, so a job reading `/work` has to
-run on Kubernetes — start there unless the work needs Slurm-only resources. A
-local cluster is bounded by the session's own cores, so sizing one past the CPUs
-the session was started with only adds contention.
+**Guidance.** A local cluster is bounded by the session's own cores, so sizing
+one past the CPUs the session was started with only adds contention.
 
 Full user documentation: https://analysis-facility.physics.purdue.edu

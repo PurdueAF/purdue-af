@@ -18,7 +18,7 @@ dashboards aggregate over it.
 
 import logging
 import time
-from typing import Any, Callable, Union
+from typing import Any
 
 import httpx
 from context import current_user
@@ -190,36 +190,30 @@ class InstrumentedFastMCP(FastMCP):
 class _InstrumentedTransport(httpx.AsyncBaseTransport):
     """httpx transport wrapper that times outbound requests per backend target."""
 
-    def __init__(
-        self, target: Union[str, Callable[[httpx.Request], str]], **kwargs: Any
-    ) -> None:
-        self._target = target if callable(target) else (lambda request: target)
+    def __init__(self, target: str, **kwargs: Any) -> None:
+        self._target = target
         self._inner = httpx.AsyncHTTPTransport(**kwargs)
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        target = self._target(request)
         start = time.monotonic()
         try:
             response = await self._inner.handle_async_request(request)
         except Exception:
-            record_upstream(target, "connection_error", time.monotonic() - start)
+            record_upstream(self._target, "connection_error", time.monotonic() - start)
             raise
         outcome = "success" if response.status_code < 500 else "http_error"
-        record_upstream(target, outcome, time.monotonic() - start)
+        record_upstream(self._target, outcome, time.monotonic() - start)
         return response
 
     async def aclose(self) -> None:
         await self._inner.aclose()
 
 
-def instrumented_transport(
-    target: Union[str, Callable[[httpx.Request], str]], **kwargs: Any
-) -> httpx.AsyncBaseTransport:
+def instrumented_transport(target: str, **kwargs: Any) -> httpx.AsyncBaseTransport:
     """Build an httpx transport that records upstream metrics for `target`.
 
-    `target` is either a fixed label or a callable deriving the label from the
-    request (used when one client talks to several backends).  Extra kwargs
-    (e.g. verify=) are passed to the underlying httpx.AsyncHTTPTransport.
+    Extra kwargs (e.g. verify=) are passed to the underlying
+    httpx.AsyncHTTPTransport.
     """
     return _InstrumentedTransport(target, **kwargs)
 

@@ -1,7 +1,7 @@
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: dask-gateway-k8s
+  name: dask-gateway
 spec:
   interval: 1m
   chart:
@@ -20,7 +20,7 @@ spec:
       retries: -1
   valuesFrom:
     - kind: ConfigMap
-      name: dask-gateway-k8s-config
+      name: dask-gateway-config
       valuesKey: values.yaml
   postRenderers:
     - kustomize:

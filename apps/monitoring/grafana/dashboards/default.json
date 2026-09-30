@@ -329,19 +329,8 @@
         },
         {
           "refId": "C",
-          "expr": "(sum(kube_deployment_status_replicas_available{namespace=\"cms\",deployment=\"api-dask-gateway-k8s\"}) > bool 0) or vector(0)",
-          "legendFormat": "Dask Gateway, k8s",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": true,
-          "instant": false
-        },
-        {
-          "refId": "D",
-          "expr": "(sum(kube_deployment_status_replicas_available{namespace=\"cms\",deployment=\"api-dask-gateway-k8s-slurm\"}) > bool 0) or vector(0)",
-          "legendFormat": "Dask Gateway, Slurm",
+          "expr": "(sum(kube_deployment_status_replicas_available{namespace=\"cms\",deployment=\"api-dask-gateway\"}) > bool 0) or vector(0)",
+          "legendFormat": "Dask Gateway",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1035,7 +1024,7 @@
           "instant": true
         }
       ],
-      "description": "Dask Gateway clusters on Kubernetes right now. Idle workers are reserved cores doing nothing.",
+      "description": "Dask Gateway clusters right now. Idle workers are reserved cores doing nothing.",
       "fieldConfig": {
         "defaults": {
           "mappings": [],
@@ -2807,7 +2796,7 @@
           "instant": false
         }
       ],
-      "description": "Cores on AF nodes. Solid: reserved by requests. Dashed: actually used. Other: everything in the cms namespace that is not a session or a Dask worker (hub, gateways, inference servers, monitoring).",
+      "description": "Cores on AF nodes. Solid: reserved by requests. Dashed: actually used. Other: everything in the cms namespace that is not a session or a Dask worker (hub, Dask Gateway, inference servers, monitoring).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4544,7 +4533,7 @@
           "instant": true
         }
       ],
-      "description": "All Dask Gateway clusters on Kubernetes. Idle workers hold reserved cores while doing nothing.",
+      "description": "All Dask Gateway clusters. Idle workers hold reserved cores while doing nothing.",
       "fieldConfig": {
         "defaults": {
           "mappings": [],
@@ -4941,7 +4930,7 @@
           "format": "table"
         }
       ],
-      "description": "One row per Dask Gateway cluster on Kubernetes. IDLE: workers allocated, no client connected, nothing running; those cores block everyone else until the cluster is shut down or adaptive scaling releases them.",
+      "description": "One row per Dask Gateway cluster. IDLE: workers allocated, no client connected, nothing running; those cores block everyone else until the cluster is shut down or adaptive scaling releases them.",
       "transformations": [
         {
           "id": "joinByField",
@@ -5311,7 +5300,7 @@
           "instant": true
         }
       ],
-      "description": "Cores requested by each user's Dask workers on Kubernetes. Compare with the activity timeline above: a large bar for a grey row is capacity nobody can use.",
+      "description": "Cores requested by each user's Dask workers. Compare with the activity timeline above: a large bar for a grey row is capacity nobody can use.",
       "fieldConfig": {
         "defaults": {
           "mappings": [],
@@ -6131,7 +6120,7 @@
           "instant": false
         }
       ],
-      "description": "production: Tier-2 grid pilots. user: interactive AF users and Dask-on-Slurm. opportunistic: borrowed from other partitions.",
+      "description": "production: Tier-2 grid pilots. user: jobs AF users submit. opportunistic: borrowed from other partitions.",
       "fieldConfig": {
         "defaults": {
           "color": {

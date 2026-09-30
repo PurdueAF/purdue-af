@@ -24,8 +24,7 @@ This page gives an overview; detailed instructions are linked from each section.
 | Method | Best for | Available to | Scale |
 | --- | --- | --- | --- |
 | [Dask (local cluster)](guide-dask.md) | Parallelizing Python code within a session | All users | the cores of your session |
-| [Dask Gateway, Kubernetes backend](guide-dask-gateway.md) | Distributed Python / Coffea analyses | All users | [hundreds of cores](guide-dask-gateway.md#dask-gateway-at-purdue-af) |
-| [Dask Gateway, Slurm backend](guide-dask-gateway.md) | Distributed Python / Coffea analyses | Purdue users | Hammer cluster |
+| [Dask Gateway](guide-dask-gateway.md) | Distributed Python / Coffea analyses | All users | [hundreds of cores](guide-dask-gateway.md#limits) |
 | Slurm batch jobs | Independent batch workloads, GPU jobs | Purdue users | Hammer cluster (`cms` account) or other Purdue Community Clusters |
 | CRAB | CMSSW (`cmsRun`) jobs, MC generation, skimming | All CMS users | the entire WLCG |
 
@@ -38,9 +37,8 @@ frameworks such as Coffea and RDataFrame.
 
 * A **local Dask cluster** parallelizes your code over the cores of your own
   session — no extra setup required.
-* **[Dask Gateway](guide-dask-gateway.md)** scales beyond the session, submitting
-  workers either as Kubernetes pods on the Geddes cluster (all users), or as Slurm
-  jobs on the Hammer cluster (Purdue users only).
+* **[Dask Gateway](guide-dask-gateway.md)** scales beyond the session, running
+  workers as pods on the Geddes cluster.
 
 ## Slurm (Purdue users only)
 

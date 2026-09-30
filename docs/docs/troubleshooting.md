@@ -107,15 +107,11 @@ solutions. If your problem is not listed here, please
 
 ## Dask Gateway
 
-??? failure "Cluster creation times out or never finishes"
+??? failure "Cluster creation never finishes"
 
-    With the Slurm backend, the scheduler did not start within the
-    [creation timeout](guide-dask-gateway.md#6-cluster-lifetime-and-timeouts).
-    This sometimes happens due to resource contention — simply try resubmitting
-    the cluster.
-
-    With the Kubernetes backend, `new_cluster()` has no time limit. If it has
-    waited for more than a few minutes, interrupt it,
+    `new_cluster()`
+    [has no time limit](guide-dask-gateway.md#6-cluster-lifetime-and-timeouts).
+    If it has waited for more than a few minutes, interrupt it,
     [stop the pending cluster](guide-dask-gateway.md#5-shutting-down-clusters),
     and [contact us](support.md) if it happens again.
 
@@ -135,8 +131,7 @@ solutions. If your problem is not listed here, please
 
 ??? failure "My cluster disappeared"
 
-    Idle clusters are shut down automatically, and Slurm workers are limited by
-    the Slurm job walltime — see
+    Idle clusters are shut down automatically — see
     [Cluster lifetime and timeouts](guide-dask-gateway.md#6-cluster-lifetime-and-timeouts).
 
 ??? failure "Workers can't read my data via XRootD"

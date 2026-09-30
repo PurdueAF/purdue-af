@@ -1,4 +1,4 @@
-"""The options handler the Kubernetes Dask Gateway execs (gateway.extraConfig.config)."""
+"""The Python the Dask Gateway execs (gateway.extraConfig.config)."""
 
 import sys
 import types
@@ -7,11 +7,17 @@ import pytest
 import yaml
 from common import REPO, ConfigSink
 
-VALUES = REPO / "apps" / "dask-gateway" / "dask-gateway-k8s" / "values.yaml"
+VALUES = REPO / "apps" / "dask-gateway" / "values.yaml"
+BASE_DN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
+
+
+@pytest.fixture(scope="module")
+def code() -> str:
+    return yaml.safe_load(VALUES.read_text())["gateway"]["extraConfig"]["config"]
 
 
 @pytest.fixture
-def options_handler(monkeypatch):
+def options_handler(monkeypatch, code):
     """Exec the embedded config against stub dask_gateway_server modules."""
     options = types.ModuleType("dask_gateway_server.options")
     for name in ("Options", "Integer", "Float", "Mapping", "String", "Select"):
@@ -25,7 +31,6 @@ def options_handler(monkeypatch):
     for module in (options, kubernetes, base, package):
         monkeypatch.setitem(sys.modules, module.__name__, module)
 
-    code = yaml.safe_load(VALUES.read_text())["gateway"]["extraConfig"]["config"]
     ns = {"c": ConfigSink()}
     exec(compile(code, f"{VALUES}:gateway.extraConfig.config", "exec"), ns)
     return ns["options_handler"]
@@ -52,3 +57,22 @@ def test_env_names_kubernetes_rejects_are_dropped(options_handler):
     assert "1_LEADING_DIGIT" not in environment
     assert environment["X509_USER_PROXY"] == "/work/users/someone/x509up"
     assert environment["my.env-name"] == "kept"
+
+
+def test_lookup_reads_the_dn_at_base_scope(code):
+    assert 'search_base = "uid={0},{1}".format(username, baseDN)' in code
+    assert "search_scope = BASE" in code
+
+
+def test_lookup_falls_back_to_a_search_and_reports_a_miss(code):
+    """An account not at its own DN is still resolved, and a genuine miss
+    raises instead of IndexError-ing on entries[0]."""
+    assert '"(uid={0}*)".format(username)' in code
+    assert "search_scope = SUBTREE" in code
+    assert 'raise ValueError("no LDAP entry for " + username)' in code
+    assert "[u'entries'][0]" not in code
+
+
+def test_lookup_targets_geddes_auth(code):
+    assert 'url = "geddes-auth.rcac.purdue.edu"' in code
+    assert f'baseDN = "{BASE_DN}"' in code

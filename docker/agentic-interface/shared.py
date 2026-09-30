@@ -13,7 +13,7 @@ class outright.
 down" and "there is no such series" can never be confused (see errors.py).
 """
 
-from typing import Any, Callable, Optional, Union
+from typing import Any, Optional
 
 import httpx
 from errors import describe_exception, json_body, response_detail
@@ -22,22 +22,16 @@ from metrics import instrumented_transport
 _clients: dict[str, httpx.AsyncClient] = {}
 
 
-def shared_client(
-    name: str,
-    *,
-    target: Union[str, Callable[[httpx.Request], str], None] = None,
-    **transport_kwargs: Any,
-) -> httpx.AsyncClient:
+def shared_client(name: str, **transport_kwargs: Any) -> httpx.AsyncClient:
     """Return the process-wide pooled client for ``name``, creating it once.
 
-    ``target`` is the upstream-metrics label (defaults to ``name``); it may be
-    a callable when one client talks to several backends (see dask.py).
-    ``transport_kwargs`` (e.g. ``verify=``) apply only on first creation.
+    ``name`` is also the upstream-metrics target label. ``transport_kwargs``
+    (e.g. ``verify=``) apply only on first creation.
     """
     client = _clients.get(name)
     if client is None or client.is_closed:
         client = httpx.AsyncClient(
-            transport=instrumented_transport(target or name, **transport_kwargs)
+            transport=instrumented_transport(name, **transport_kwargs)
         )
         _clients[name] = client
     return client

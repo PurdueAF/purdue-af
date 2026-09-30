@@ -16,7 +16,7 @@ says whose fault it was, which is also the metrics label for the call.
 Conventions the messages keep:
 
 * they start with ``Error:`` and name the backend in the user's terms
-  ("JupyterHub", "gateway 'k8s'", "the monitoring system"), never an
+  ("JupyterHub", "Dask Gateway", "the monitoring system"), never an
   internal hostname;
 * transport failures say ``unreachable``, HTTP failures ``returned HTTP``.
 """

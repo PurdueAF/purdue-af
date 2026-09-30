@@ -89,7 +89,8 @@ A VOMS proxy is required to access CMS data via XRootD, submit CRAB jobs, and us
 
 2. (Optional) Specify the path where your VOMS proxy will be stored. Dask
    Gateway workers and Slurm jobs can only read a proxy stored on a volume they
-   mount — see [Reading data via XRootD](guide-dask-gateway.md#environment-variables).
+   [mount](storage.md#overview). For Dask Gateway, see
+   [Reading data via XRootD](guide-dask-gateway.md#environment-variables).
 
 3. Activate the VOMS proxy:
 

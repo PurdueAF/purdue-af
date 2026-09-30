@@ -21,7 +21,7 @@ recommendations (storage volumes and quotas, where environments may live,
 scale-out rules) written into the file each agent reads
 automatically at startup. You do not need to invoke anything — an agent in a
 session already knows, for example, that `pixi install` will be refused under
-`/home` and that `/work` is invisible to Slurm workers.
+`/home` and that `/work` is invisible to Slurm jobs.
 
 | Agent       | Where the context is installed            | MCP server                      |
 | ----------- | ----------------------------------------- | ------------------------------- |
@@ -158,8 +158,8 @@ plain language, for example:
 * "How much home and work storage am I using?"
 * "List my Dask clusters" / "scale `<name>` to 10 workers"
 * "Create a Dask cluster" — the agent walks you through multiple-choice
-  questions (backend, worker environment, worker size, and worker count) before
-  creating it
+  questions (worker environment, worker size, and worker count) before creating
+  it
 * "Show the last 30 minutes of error logs from my notebook"
 * "Is the AF healthy?" — what is affecting the facility, if anything, and for
   how long
@@ -173,15 +173,14 @@ The available tools cover:
   the agent asks you (as multiple-choice questions) which profile and resource
   options — interface, CPU, memory — to use, unless you ask for the defaults.
 * **Storage** — home and work directory quota usage.
-* **Dask clusters** — list, create (Kubernetes or Slurm/Hammer), inspect, check worker
-  counts and CPU/memory usage, scale, and shut down your
-  [Dask Gateway](guide-dask-gateway.md) clusters on either gateway
-  (`k8s` or `slurm`).
+* **Dask clusters** — list, create, inspect, check worker counts and CPU/memory
+  usage, scale, and shut down your [Dask Gateway](guide-dask-gateway.md)
+  clusters.
 * **Logs** — query your JupyterLab / VS Code server logs and Dask worker and
   scheduler logs, with time ranges and filters.
 
 The server also exposes one invocable **workflow prompt**, `create_cluster`,
-which walks the agent through the four cluster questions when its client
+which walks the agent through the cluster questions when its client
 cannot ask them itself. In Claude Code it appears as
 `/mcp__purdue-af-agentic-interface__create_cluster`.
 

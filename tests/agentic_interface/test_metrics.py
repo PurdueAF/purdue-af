@@ -296,21 +296,6 @@ async def test_instrumented_transport_records_connection_error():
     assert _upstream_counter_value("t-down", "connection_error") == before + 1
 
 
-@respx.mock
-async def test_instrumented_transport_callable_target():
-    respx.get("http://a/x").respond(200)
-    before = _upstream_counter_value("host-a", "success")
-
-    async with httpx.AsyncClient(
-        transport=metrics.instrumented_transport(
-            lambda request: f"host-{request.url.host}"
-        )
-    ) as client:
-        await client.get("http://a/x")
-
-    assert _upstream_counter_value("host-a", "success") == before + 1
-
-
 # ── exception safety net ──────────────────────────────────────────────────────
 #
 # A tool that raises must still leave the user with a message that says whose

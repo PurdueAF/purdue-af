@@ -27,11 +27,6 @@ gateway:
   service:
     annotations:
       metallb.universe.tf/address-pool: geddes-public-pool
-  env:
-    - name: NAMESPACE
-      value: ${namespace}
-    - name: RELEASE_NAME
-      value: dask-gateway-k8s
   backend:
     image:
       name: ghcr.io/dask/dask-gateway
@@ -134,7 +129,7 @@ gateway:
   extraConfig:
     config: |
       c.DaskGateway.address = ':8000'
-      c.KubeBackend.api_url = 'http://dask-gateway-k8s.geddes.rcac.purdue.edu:80/api'
+      c.KubeBackend.api_url = 'http://dask-gateway.geddes.rcac.purdue.edu:80/api'
 
       c.ClusterConfig.cluster_max_cores = 201
       c.ClusterConfig.cluster_max_memory = '1200 G'
@@ -257,8 +252,6 @@ gateway:
             "user": user.name,
           }
 
-
-          setup_cmd = "export DASK_TEMPORARY_DIRECTORY=/tmp/dask-$USER; export DASK_DISTRIBUTED__WORKER__PROFILE__INTERVAL=1000000000; export DASK_DISTRIBUTED__SCHEDULER__PROFILE__INTERVAL=1000000000; "
           desired_cores = options.worker_cores
           desired_memory = int(options.worker_memory * 2 ** 30)
           return {
@@ -269,9 +262,6 @@ gateway:
               "environment": options.env,
               "scheduler_cmd": scheduler_cmd,
               "worker_cmd": worker_cmd,
-              "time": "1-00:00:00",
-              "scheduler_setup": setup_cmd,
-              "worker_setup": setup_cmd,
           }
       c.Backend.cluster_options = Options(
           String("conda_env", default="", label="Conda environment"),

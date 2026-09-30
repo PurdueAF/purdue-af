@@ -95,12 +95,10 @@ def test_response_detail_never_raises_on_an_unread_body():
 
 
 def test_unreachable_names_service_reason_and_next_step():
-    exc = errors.unreachable("gateway 'k8s'", httpx.ConnectError("down"))
+    exc = errors.unreachable("Dask Gateway", httpx.ConnectError("down"))
     assert isinstance(exc, errors.UpstreamError)
     out = str(exc)
-    assert out.startswith(
-        "Error: gateway 'k8s' unreachable — connection failed (down)."
-    )
+    assert out.startswith("Error: Dask Gateway unreachable — connection failed (down).")
     assert out.endswith(errors.RETRY_LATER)
 
     custom = str(
@@ -131,14 +129,14 @@ def test_http_error_explains_5xx_and_includes_the_body():
 
 
 def test_http_error_4xx_has_no_retry_advice_by_default():
-    out = errors.http_error("gateway 'k8s'", _resp(418, json={"message": "teapot"}))
+    out = errors.http_error("Dask Gateway", _resp(418, json={"message": "teapot"}))
     assert isinstance(out, errors.UpstreamError)
-    assert str(out) == "Error: gateway 'k8s' returned HTTP 418 — teapot."
+    assert str(out) == "Error: Dask Gateway returned HTTP 418 — teapot."
 
 
 def test_malformed_response_and_argument_and_bug_messages():
     out = errors.malformed_response(
-        "gateway 'k8s'", _resp(201, text="<html>oops</html>"), "a cluster record"
+        "Dask Gateway", _resp(201, text="<html>oops</html>"), "a cluster record"
     )
     assert isinstance(out, errors.UpstreamError)
     assert "returned HTTP 201 but the response was not a cluster record — oops" in str(
