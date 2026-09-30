@@ -207,7 +207,6 @@ class TestLoki:
             "supersonic-pr-triton-7d9f8c6b5-abcde",
             "supersonic-af-envoy-abcde",
             "supersonic-model-manager-abcde",
-            "sonic-ray-hvfln-head",
             "kuberay-operator-abcde",
             "interlink-hammer-node-0",
         ],

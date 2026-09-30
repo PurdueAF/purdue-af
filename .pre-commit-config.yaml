@@ -23,7 +23,7 @@ repos:
         entry: prettier --write
         types_or: [json, yaml]
         # Helm templates are Go templates, not YAML.
-        exclude: ^(apps/.*/chart|helm/[^/]+)/templates/
+        exclude: ^apps/.*/chart/templates/
 
       - id: markdown-links
         name: markdown links resolve

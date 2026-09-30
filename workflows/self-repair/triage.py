@@ -50,7 +50,6 @@ WATCHED_WORKLOADS = {
     "flyte": "apps/flyte",
     "ray-train": "apps/ray-train",
     "supersonic": "apps/sonic",
-    "sonic-ray": "apps/ray/sonic-ray",
     "kuberay-operator": "apps/ray/operator",
     "servicex": "apps/servicex",
     "interlink": "apps/interlink",
@@ -72,9 +71,9 @@ SIDECARS = ("af-pod-monitor",)
 # as a separate list so WATCHED_WORKLOADS stays the inventory of what the
 # repository deploys; every entry must appear there.
 IGNORED_WORKLOADS = (
-    # apps/sonic and apps/ray: the whole SONIC stack
+    # apps/sonic: the SONIC stack
     "supersonic",
-    "sonic-ray",
+    # apps/ray
     "kuberay-operator",
     # apps/interlink
     "interlink",
