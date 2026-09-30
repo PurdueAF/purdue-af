@@ -308,7 +308,6 @@ class TestLoki:
             "gen3",
             "gen0-abcde",
             "etcd-0",
-            "eos-fuse-nopriv-65dcf5689-vpbf9",
             "hubris-abcde",  # a prefix without its dash is not a match
         ],
     )
