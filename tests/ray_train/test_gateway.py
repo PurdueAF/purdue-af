@@ -32,7 +32,7 @@ SESSIONS = {
     "session-b": ("user-b-cern", 42),
     "session-idle": ("user-idle", None),
 }
-LDAP = {"user-a": (5001, 500), "paf0042": (6042, 600)}
+LDAP = {"user-a": (5001, 500), "paf0042": (6042, 600), "paf0099": (6099, 600)}
 ENV_A = "/work/users/user-a/proj/.pixi/envs/default"
 ENV_B = "/depot/cms/users/user-a/other"
 # Ray Client methods: a unary call, a stream, and one the fake head refuses.
@@ -91,6 +91,9 @@ class FakeKube:
         self.pods = {}
         self.most_pods = 0
         self.created = 0
+        # The Hub's pooled-account ledger; None while the Hub has not created it.
+        # Not the account of the user's AF id, so a test tells the two apart.
+        self.ledger = {"user-b-cern": "paf0099"}
 
     def app(self):
         clusters = "/apis/ray.io/v1/namespaces/cms/rayclusters"
@@ -163,12 +166,20 @@ class FakeKube:
             self.secrets[name] = body
             return web.json_response(body, status=201)
 
+        async def ledger(request):
+            if self.ledger is None:
+                return web.json_response({"message": "not found"}, status=404)
+            return web.json_response({"data": self.ledger} if self.ledger else {})
+
         app = web.Application()
         app.router.add_post(clusters, create)
         app.router.add_get(clusters, listing)
         app.router.add_get(clusters + "/{name}", get)
         app.router.add_delete(clusters + "/{name}", delete)
         app.router.add_post("/api/v1/namespaces/cms/secrets", secret)
+        app.router.add_get(
+            "/api/v1/namespaces/cms/configmaps/af-pooled-accounts", ledger
+        )
         return app
 
 
@@ -403,7 +414,21 @@ async def test_a_head_sees_its_own_token_and_the_clients_own_metadata(env):
     assert "session-a" not in json.dumps(metadata)
 
 
-async def test_an_external_user_runs_as_their_pooled_account(env):
+async def test_an_external_user_runs_as_the_account_the_ledger_records(env):
+    await call(env, token="session-b")
+    assert head_pod(env, "ray-train-42")["securityContext"]["runAsUser"] == 6099
+    assert head_env(env, "ray-train-42")["USER"] == "paf0099"
+
+
+async def test_an_external_user_the_ledger_does_not_record_is_refused(env):
+    del env.kube.ledger["user-b-cern"]
+    assert await refused(env, token="session-b") == grpc.StatusCode.FAILED_PRECONDITION
+    assert env.kube.clusters == {}
+
+
+async def test_without_a_ledger_the_account_is_the_hubs_own_default(env):
+    """A Hub older than the ledger runs an external user as paf<hub id>."""
+    env.kube.ledger = None
     await call(env, token="session-b")
     assert head_pod(env, "ray-train-42")["securityContext"]["runAsUser"] == 6042
     assert head_env(env, "ray-train-42")["USER"] == "paf0042"
@@ -762,12 +787,21 @@ def test_a_clusters_head_is_its_kuberay_service():
     )
 
 
-def test_non_purdue_accounts_map_onto_the_pool():
-    assert gw.ldap_account("user-a", 7) == "user-a"
-    assert gw.ldap_account("user-b-cern", 42) == "paf0042"
-    assert gw.ldap_account("user-c-fnal", 3) == "paf0003"
+def test_non_purdue_accounts_come_from_the_ledger():
+    ledger = {"user-b-cern": "paf0042", "user-c-fnal": "paf0003"}
+    assert gw.ldap_account("user-a", 7, ledger) == "user-a"
+    assert gw.ldap_account("user-b-cern", 9, ledger) == "paf0042"
+    assert gw.ldap_account("user-c-fnal", 9, ledger) == "paf0003"
     with pytest.raises(gw.Refused) as e:
-        gw.ldap_account("user-d-cern", 400)
+        gw.ldap_account("user-d-cern", 9, ledger)
+    assert e.value.code == grpc.StatusCode.FAILED_PRECONDITION
+
+
+def test_without_a_ledger_non_purdue_accounts_follow_the_hub_id():
+    assert gw.ldap_account("user-a", 7, None) == "user-a"
+    assert gw.ldap_account("user-b-cern", 42, None) == "paf0042"
+    with pytest.raises(gw.Refused) as e:
+        gw.ldap_account("user-d-cern", 400, None)
     assert e.value.code == grpc.StatusCode.PERMISSION_DENIED
 
 

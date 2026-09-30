@@ -14,7 +14,7 @@ users send their training to it, not yet on the documentation site:
 | `raycluster.yaml`    | The template of a user's cluster; the gateway fills in its name, the user's UID/GID, its environment and its token Secret |
 | `deployment.yaml`    | The gateway pod: the stock Ray image, with both files above from the `ray-train-gateway` ConfigMap                        |
 | `service.yaml`       | `ray-train-gateway:10001`, the address notebooks connect to                                                               |
-| `rbac.yaml`          | Create, read and delete RayClusters; create their token Secrets                                                           |
+| `rbac.yaml`          | Create, read and delete RayClusters; create their token Secrets; read the pooled-account ledger                           |
 | `networkpolicy.yaml` | Only sessions reach the gateway, and only the gateway reaches users' clusters                                             |
 
 The session side is in the Hub config:
@@ -29,9 +29,9 @@ Secret. The `ray.io` CRDs and their controller are the KubeRay operator in
 - **Identity**: the Hub resolves the token to a user and the gateway's own
   token (`read:servers`, `admin:server_state`) reads the pod name of their
   session, `purdue-af-<id>`. The cluster is `ray-train-<id>` and runs as the
-  user's LDAP account: their Purdue login, or the pooled `paf<id>` account of
-  a CERN or FNAL user, as in
-  [`set-user-info.py`](../jupyterhub/jupyterhub/extraFiles/set-user-info.py).
+  user's LDAP account: their Purdue login, or the pooled account the Hub
+  recorded for a CERN or FNAL user
+  ([apps/jupyterhub/jupyterhub](../jupyterhub/jupyterhub/README.md)).
 - **Isolation**: each cluster has its own Ray token, an HMAC of its name under
   the gateway's Hub token, which the gateway puts on every call it relays in
   place of the session's. Users' pods mount no ServiceAccount token, and have

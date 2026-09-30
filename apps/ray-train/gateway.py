@@ -64,6 +64,8 @@ DEFAULT_ENV = "/work/pixi/global/.pixi/envs/default"
 SESSION_POD = re.compile(r"purdue-af-(\d+)")
 # custom-spawner.py names the accounts from outside Purdue <login>-cern and <login>-fnal
 EXTERNAL_SUFFIXES = ("-cern", "-fnal")
+# The pooled account each of them runs as, kept by the Hub (apps/jupyterhub/jupyterhub/README.md)
+LEDGER = f"/api/v1/namespaces/{NAMESPACE}/configmaps/af-pooled-accounts"
 # GRPC_OPTIONS in ray/util/client/common.py: Ray Client's message sizes and keepalives.
 GRPC_OPTIONS = [
     ("grpc.max_send_message_length", 2**31 - 1),
@@ -115,16 +117,25 @@ def session_af_id(user_model: dict[str, Any]) -> int | None:
     return int(match[1]) if match else None
 
 
-def ldap_account(username: str, af_id: int) -> str:
-    """The account a session runs as (set-user-info.py): pooled paf#### outside Purdue."""
+def ldap_account(username: str, af_id: int, ledger: dict[str, str] | None) -> str:
+    """The account a session runs as: outside Purdue, the pooled one the Hub recorded."""
     if not username.endswith(EXTERNAL_SUFFIXES):
         return username
-    if af_id > 399:
+    if ledger is None:
+        # A Hub with no ledger runs its external sessions as paf<hub id>.
+        if af_id > 399:
+            raise Refused(
+                grpc.StatusCode.PERMISSION_DENIED,
+                f"There is no pooled account for AF user {af_id}.",
+            )
+        return f"paf{af_id:04d}"
+    account = ledger.get(username)
+    if account is None:
         raise Refused(
-            grpc.StatusCode.PERMISSION_DENIED,
-            f"There is no pooled account for AF user {af_id}.",
+            grpc.StatusCode.FAILED_PRECONDITION,
+            f"No pooled account is recorded for {username}.",
         )
-    return f"paf{af_id:04d}"
+    return account
 
 
 def ldap_ids(account: str) -> tuple[int, int]:
@@ -371,7 +382,8 @@ class Gateway:
                 grpc.StatusCode.FAILED_PRECONDITION,
                 "Start your AF session first: a Ray cluster runs as the user of a running session.",
             )
-        account = ldap_account(name, af_id)
+        ledger = await self.ledger() if name.endswith(EXTERNAL_SUFFIXES) else None
+        account = ldap_account(name, af_id, ledger)
         uid, gid = await asyncio.to_thread(ldap_ids, account)
         user = User(name=name, af_id=af_id, account=account, uid=uid, gid=gid)
         self._users = {k: v for k, v in self._users.items() if v[0] > now}
@@ -406,6 +418,19 @@ class Gateway:
                 )
             model: dict[str, Any] = await r.json()
         return model
+
+    async def ledger(self) -> dict[str, str] | None:
+        """Username to pooled account as the Hub recorded them; None before the Hub has a ledger."""
+        status, body = await self.kube("GET", LEDGER)
+        if status == 404:
+            return None
+        if status != 200:
+            raise Refused(
+                grpc.StatusCode.UNAVAILABLE,
+                f"Kubernetes answered HTTP {status} for the pooled-account ledger.",
+            )
+        data: dict[str, str] = body.get("data") or {}
+        return data
 
     async def kube(
         self, method: str, path: str, body: dict[str, Any] | None = None
