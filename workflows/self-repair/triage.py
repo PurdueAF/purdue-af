@@ -19,10 +19,9 @@ ERROR_PATTERN = r"(?i)\b(error|exception|traceback|fatal|panic)\b"
 # Pod-name prefixes of what Flux deploys from this repository, i.e. what a
 # change here can fix, each with the directory that deploys it: a component of
 # the deploy roots (deploy/*/kustomization.yaml), or the group of components
-# that share the prefix. Whatever else lives in the namespace (gen*, etcd,
-# eos-fuse) is not read at all, nor are this workflow's own pods
-# (apps/self-repair): their logs quote every error they analyze, and would
-# feed it back next tick.
+# that share the prefix. Whatever else lives in the namespace (gen*, etcd) is
+# not read at all, nor are this workflow's own pods (apps/self-repair): their
+# logs quote every error they analyze, and would feed it back next tick.
 WATCHED_WORKLOADS = {
     "hub": "apps/jupyterhub/jupyterhub",
     "proxy": "apps/jupyterhub/jupyterhub",
