@@ -10,8 +10,7 @@ spec:
       chart: helm/supersonic
       sourceRef:
         kind: GitRepository
-        # Shared with supersonic-pr for the scaling-metric A/B.
-        name: supersonic-pr
+        name: supersonic
       reconcileStrategy: Revision
       interval: 1m
   install:

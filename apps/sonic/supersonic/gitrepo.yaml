@@ -1,4 +1,4 @@
-# Chart source for supersonic-af and supersonic-interlink; supersonic uses the supersonic-pr source.
+# Chart source for supersonic, supersonic-af and supersonic-interlink.
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
 metadata:

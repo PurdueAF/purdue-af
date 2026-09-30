@@ -14,16 +14,12 @@ resources:
   - ../../apps/servicex/servicex-anvil/helmrelease.yaml
   - ../../apps/servicex/servicex-anvil/secrets.yaml
 
-  # Chart source shared by the three releases below, on SuperSONIC main.
+  # Chart source for the SuperSONIC releases below, on SuperSONIC main.
   - ../../apps/sonic/supersonic/gitrepo.yaml
   # Default SuperSONIC: CMS Run 3 MiniAOD models off CVMFS.
   - ../../apps/sonic/supersonic/helmrelease.yaml
   # AF-facing SuperSONIC with a PVC model repository.
   - ../../apps/sonic/supersonic-af/helmrelease.yaml
-  # Same models as `supersonic`, from the occupancy-ratio-metric branch ahead
-  # of main, which replaces the scaling metric.
-  - ../../apps/sonic/supersonic-pr/helmrelease.yaml
-  - ../../apps/sonic/supersonic-pr/gitrepo.yaml
   # Triton offloaded to Slurm on Hammer through the interlink-hammer node.
   - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
   # Sweeps the Failed Triton pods interLink leaves behind, keeping the newest.
@@ -119,10 +115,6 @@ configMapGenerator:
   - name: supersonic-af-config
     files:
       - values.yaml=../../apps/sonic/supersonic-af/values.yaml
-
-  - name: supersonic-pr-config
-    files:
-      - values.yaml=../../apps/sonic/supersonic-pr/values.yaml
 
   - name: supersonic-interlink-config
     files:

@@ -378,7 +378,7 @@ serverFiles:
               [__meta_kubernetes_service_label_app_kubernetes_io_name]
             action: keep
             regex: seldon-envoy
-  # Figures of merit for the supersonic / supersonic-pr scaling-metric A/B.
+  # Figures of merit for the SuperSONIC releases' scaling.
   recording_rules.yml:
     groups:
       - name: sonic-scaling-fom
