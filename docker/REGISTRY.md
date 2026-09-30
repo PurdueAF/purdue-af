@@ -32,7 +32,6 @@ comes from outside it.
 | Image in `cms/` | Pinned by |
 | --- | --- |
 | `cmsaf-base-notebook` | `apps/jupyterhub/jupyterhub` |
-| `servicex-science-combined-root-coffea` | `apps/servicex/servicex`, `-test` |
 
 ## Registry configuration
 
