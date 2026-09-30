@@ -43,15 +43,12 @@ resources:
   - ../../apps/self-repair/secret-github.yaml
   - ../../apps/self-repair/secret-genai.yaml
 
-  # Triton on Ray: Ray Serve's gRPC proxy in front of a Triton per GPU pod,
-  # plus the KubeRay operator that reconciles it. Models come from a CMSSW
-  # release on CVMFS (the cvmfs claim). See apps/ray/README.md.
+  # The KubeRay operator: the ray.io CRDs and their controller. See apps/ray/README.md.
   - ../../apps/ray/helmrepo.yaml
   - ../../apps/ray/operator/helmrelease.yaml
-  - ../../apps/ray/sonic-ray/helmrelease.yaml
 
   # Ray Train: each user's Ray jobs run in a Ray cluster of their own, reached
-  # through the gateway and reconciled by the same operator. See apps/ray-train/README.md.
+  # through the gateway and reconciled by the operator. See apps/ray-train/README.md.
   - ../../apps/ray-train/rbac.yaml
   - ../../apps/ray-train/deployment.yaml
   - ../../apps/ray-train/service.yaml
@@ -133,10 +130,6 @@ configMapGenerator:
   - name: kuberay-operator-config
     files:
       - values.yaml=../../apps/ray/operator/values.yaml
-
-  - name: sonic-ray-config
-    files:
-      - values.yaml=../../apps/ray/sonic-ray/values.yaml
 
   - name: ray-train-gateway
     options:

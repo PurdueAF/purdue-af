@@ -26,7 +26,7 @@ def in_repo_chart_releases():
 
 def test_there_are_in_repo_charts_to_check():
     """A rename that empties this list must not silently pass the test below."""
-    assert len(in_repo_chart_releases()) >= 2
+    assert in_repo_chart_releases()
 
 
 def test_in_repo_charts_reconcile_on_revision():

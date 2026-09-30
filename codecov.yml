@@ -34,7 +34,6 @@ component_management:
       paths:
         - "apps/af-utils/**"
         - "docker/purdue-af/**"
-        - "helm/sonic-ray/files/**"
         - "pixi/**"
         - ".github/workflows/**"
 

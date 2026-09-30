@@ -15,7 +15,7 @@
 #      breaking chart schema changes when a chart version is bumped (e.g. by
 #      Renovate).
 #      Charts that live in this repository (sourced from its GitRepository
-#      under a relative path — helm/ or apps/) are rendered from the working
+#      under a relative path in apps/) are rendered from the working
 #      tree with the same values, so a broken template or a values/template
 #      mismatch fails here rather than in the cluster. A chart in someone
 #      else's repository is rendered from a shallow clone of the ref its
