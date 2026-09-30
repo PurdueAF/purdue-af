@@ -22,6 +22,7 @@ Admin documentation: [https://purdue-cms-tier2.gitlab.io/documentation](https://
 | Orchestration    | [Kubernetes](https://github.com/kubernetes/kubernetes) on the [Geddes](https://www.rcac.purdue.edu/compute/geddes) cluster; [Flux](https://github.com/fluxcd/flux2) CD ([roots](deploy/README.md))                                                                                                                    |
 | Sessions         | [JupyterHub](https://github.com/jupyterhub/zero-to-jupyterhub-k8s) — [JupyterLab](https://github.com/jupyterlab/jupyterlab) and [code-server](https://github.com/coder/code-server) interfaces, [CILogon](https://www.cilogon.org) auth                                                                               |
 | Scale-out        | [Dask Gateway](https://github.com/dask/dask-gateway)                                                                                                                                                                                                                                                                  |
+| Training         | [Ray](https://docs.ray.io/en/latest/ray-core/walkthrough.html) on [KubeRay](https://github.com/ray-project/kuberay) — GPU training sent from notebooks, one cluster per user ([gateway](apps/ray-train/README.md))                                                                                                                    |
 | User environment | the [`purdue-af` image](docker/purdue-af/README.md), [pixi](https://github.com/prefix-dev/pixi) environments                                                                                                                                                                                                          |
 | Data             | [CVMFS](https://github.com/cvmfs/cvmfs), [XRootD](https://github.com/xrootd/xrootd), [XCache](https://github.com/opensciencegrid/xcache), [EOS](https://github.com/cern-eos/eos), [Depot](https://www.rcac.purdue.edu/storage/depot) NFS; [ServiceX](https://github.com/ssl-hep/ServiceX) for columnar delivery       |
 | Inference        | [SuperSONIC](https://github.com/fastmachinelearning/SuperSONIC)                                                                                                                                                                                                                                                       |
@@ -72,6 +73,7 @@ Whether each component on the cluster is running what is on `main`
 ![model-manager][experimental-sonic-model-manager]
 ![kuberay-operator][experimental-ray-operator]
 ![sonic-ray][experimental-ray-sonic-ray]
+![ray-train][experimental-ray-train]
 ![storage][experimental-storage]
 
 **Images** — which tag each one ships on: [RELEASING.md](RELEASING.md).
@@ -135,6 +137,7 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-sonic-supersonic-pr]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic-pr.json
 [experimental-ray-operator]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-ray-operator.json
 [experimental-ray-sonic-ray]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-ray-sonic-ray.json
+[experimental-ray-train]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-ray-train.json
 [experimental-storage]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-storage.json
 [image-purdue-af]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-purdue-af.json
 [image-agentic-interface]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-agentic-interface.json

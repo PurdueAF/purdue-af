@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 """Quick CUDA sanity check for every GPU-enabled framework in the global
-pixi env (pixi/global/pixi.toml): torch (+torch-geometric), tensorflow,
-tf-keras, tensorflow-probability, xgboost, numba.cuda, and ROOT's RooFit
-CUDA backend.
+pixi env (pixi/global/pixi.toml): torch (+torch-geometric), xgboost,
+numba.cuda, and ROOT's RooFit CUDA backend.
 
 Each framework runs a REAL small GPU computation (not just is_available())
 in its own subprocess, so a segfault, driver hang, or CUDA-context problem
 in one framework cannot take down the others — and a hang is cut off by the
-per-check timeout. The TF-family checks assert actual GPU placement (soft
-placement can silently fall back to CPU). Frameworks that ride on these
-(zuko, dask-xgboost) are covered transitively.
+per-check timeout. Frameworks that ride on these (zuko, dask-xgboost) are
+covered transitively.
 
 Run inside a GPU session, with the global env's python on PATH:
 
-    python3 check-gpu.py              # all checks, ~3 min total
-    python3 check-gpu.py --only torch,tensorflow
+    python3 check-gpu.py              # all checks
+    python3 check-gpu.py --only torch,xgboost
     python3 check-gpu.py --timeout 300
 
 Exit code: 0 if nothing failed (SKIP is not a failure), 1 otherwise.
@@ -54,69 +52,6 @@ index = torch.tensor([0, 1, 0, 1, 2, 1], device=dev)
 out = scatter(src, index, dim=0, reduce="sum")
 assert out.is_cuda and out.shape == (3, 4)
 print(f"torch_geometric {torch_geometric.__version__} | scatter on cuda ok")
-""",
-    "tensorflow": """
-import os
-os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
-import tensorflow as tf
-gpus = tf.config.list_physical_devices("GPU")
-assert gpus, "no GPU visible to TensorFlow"
-for gpu in gpus:  # don't grab the whole MIG slice just for a smoke test
-    tf.config.experimental.set_memory_growth(gpu, True)
-with tf.device("/GPU:0"):
-    a = tf.random.normal([512, 512])
-    s = float(tf.reduce_sum(tf.matmul(a, a)))          # cuBLAS
-    x = tf.random.normal([1, 32, 32, 3])
-    k = tf.random.normal([3, 3, 3, 8])
-    c = float(tf.reduce_sum(tf.nn.conv2d(x, k, 1, "SAME")))  # cuDNN
-print(f"tensorflow {tf.__version__} | {len(gpus)} GPU(s) | matmul+conv2d ok")
-""",
-    "tf-keras": """
-import os
-os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
-os.environ.setdefault("TF_USE_LEGACY_KERAS", "1")
-import numpy as np
-import tensorflow as tf
-import tf_keras
-gpus = tf.config.list_physical_devices("GPU")
-assert gpus, "no GPU visible to TensorFlow"
-for gpu in gpus:
-    tf.config.experimental.set_memory_growth(gpu, True)
-rng = np.random.default_rng(0)
-X = rng.random((128, 16)).astype("float32")
-y = (X[:, 0] > 0.5).astype("float32")
-with tf.device("/GPU:0"):
-    model = tf_keras.Sequential(
-        [tf_keras.layers.Dense(8, activation="relu"),
-         tf_keras.layers.Dense(1, activation="sigmoid")]
-    )
-    model.compile(optimizer="adam", loss="binary_crossentropy")
-    loss = model.train_on_batch(X, y)
-# soft placement can silently fall back to CPU — assert real placement
-device = model.weights[0].device
-assert "GPU" in device, f"model variables landed on {device or 'unknown device'}"
-print(f"tf_keras {tf_keras.__version__} | train_on_batch on"
-      f" {device.split('/')[-1]} ok (loss {float(loss):.3f})")
-""",
-    "tensorflow-probability": """
-import os
-os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
-os.environ.setdefault("TF_USE_LEGACY_KERAS", "1")  # tfp 0.25 needs Keras 2 (tf-keras)
-import tensorflow as tf
-import tensorflow_probability as tfp
-gpus = tf.config.list_physical_devices("GPU")
-assert gpus, "no GPU visible to TensorFlow"
-for gpu in gpus:
-    tf.config.experimental.set_memory_growth(gpu, True)
-tfd = tfp.distributions
-with tf.device("/GPU:0"):
-    mvn = tfd.MultivariateNormalDiag(loc=tf.zeros(8), scale_diag=tf.ones(8))
-    samples = mvn.sample(1024, seed=1)
-    logp = float(tf.reduce_sum(mvn.log_prob(samples)))
-# soft placement can silently fall back to CPU — assert real placement
-assert "GPU" in samples.device, f"samples landed on {samples.device}"
-print(f"tensorflow_probability {tfp.__version__} | MVN sample+log_prob on"
-      f" {samples.device.split('/')[-1]} ok")
 """,
     "xgboost": """
 import numpy as np

@@ -48,6 +48,7 @@ WATCHED_WORKLOADS = {
     "af-node-probe": "apps/monitoring/af-monitoring",
     "agentic-interface": "apps/agentic-interface",
     "flyte": "apps/flyte",
+    "ray-train": "apps/ray-train",
     "supersonic": "apps/sonic",
     "sonic-ray": "apps/ray/sonic-ray",
     "kuberay-operator": "apps/ray/operator",

@@ -1,0 +1,85 @@
+# One AF user's Ray cluster: a single pod with one T4, running as that user.
+# The gateway fills in the name, the user's identity and the token Secret.
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: ray-train-template
+spec:
+  # The oldest Ray an environment may have: token authentication needs 2.52, and a 2.53+ here makes KubeRay probe /api/healthz, which 2.52 lacks.
+  rayVersion: "2.52.0"
+  authOptions:
+    mode: token
+    secretName: ray-train-template
+  headGroupSpec:
+    rayStartParams: {}
+    template:
+      metadata:
+        labels:
+          app: ray-train-cluster
+      spec:
+        # No autoscaler, so no ServiceAccount: user code runs in this pod.
+        automountServiceAccountToken: false
+        # The image's Python is under /home/ray, which only group 100 may enter; the gateway adds the user's UID/GID.
+        securityContext:
+          supplementalGroups: [100]
+        nodeSelector:
+          cms-af-prod: "true"
+        tolerations:
+          - key: hub.jupyter.org/dedicated
+            operator: Equal
+            value: cms-af
+            effect: NoSchedule
+        containers:
+          - name: ray-head
+            # CPU flavor: the environments bring their own CUDA, and the CUDA flavors cost a 6.3 GB pull.
+            image: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray:2.58.0-py312-cpu
+            env:
+              # The user has no home directory in the image.
+              - name: HOME
+                value: /tmp
+              # The image's own PATH; the gateway puts the cluster's environment in front of it.
+              - name: PATH
+                value: /home/ray/anaconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/nvidia/bin
+            resources:
+              limits:
+                cpu: "8"
+                memory: 32Gi
+                # The T4s; the A100s are split into MIG devices with their own resource names.
+                nvidia.com/gpu: 1
+              requests:
+                cpu: "8"
+                memory: 32Gi
+                nvidia.com/gpu: 1
+            volumeMounts:
+              - name: log-volume
+                mountPath: /tmp/ray
+              - name: work
+                mountPath: /work
+                mountPropagation: HostToContainer
+              - name: depot
+                mountPath: /depot/cms
+                mountPropagation: HostToContainer
+              - name: eos
+                mountPath: /eos
+                readOnly: true
+                mountPropagation: HostToContainer
+              - name: cvmfs
+                mountPath: /cvmfs
+                readOnly: true
+                mountPropagation: HostToContainer
+        volumes:
+          - name: log-volume
+            emptyDir: {}
+          - name: work
+            persistentVolumeClaim:
+              claimName: af-shared-storage
+          - name: depot
+            nfs:
+              server: datadepot.rcac.purdue.edu
+              path: /depot/cms
+          - name: eos
+            hostPath:
+              path: /eos
+          - name: cvmfs
+            persistentVolumeClaim:
+              claimName: cvmfs

@@ -1,0 +1,43 @@
+# Sessions reach only the gateway, and users' Ray clusters only hear from the gateway.
+# Kubelet probes come from the node host IP, which NetworkPolicy does not block under Calico.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ray-train-gateway
+spec:
+  podSelector:
+    matchLabels:
+      app: ray-train-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: jupyterhub
+              component: singleuser-server
+      ports:
+        - protocol: TCP
+          port: 10001
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ray-train-clusters
+spec:
+  podSelector:
+    matchLabels:
+      app: ray-train-cluster
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ray-train-gateway
+      ports:
+        # Ray Client, and the dashboard the gateway asks about the head and its tasks
+        - protocol: TCP
+          port: 10001
+        - protocol: TCP
+          port: 8265

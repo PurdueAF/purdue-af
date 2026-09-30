@@ -42,10 +42,10 @@ class TestRunCheck:
         assert self.run(check_gpu, "raise SystemExit(42)")[:2] == ("SKIP", "skipped")
 
     def test_fail_reports_last_error_line(self, check_gpu):
-        code = "assert False, 'no GPU visible to TensorFlow'"
+        code = "assert False, 'torch.cuda.is_available() is False'"
         status, detail, _ = self.run(check_gpu, code)
         assert status == "FAIL"
-        assert detail == "AssertionError: no GPU visible to TensorFlow"
+        assert detail == "AssertionError: torch.cuda.is_available() is False"
 
     def test_silent_fail(self, check_gpu):
         assert self.run(check_gpu, "raise SystemExit(3)")[:2] == ("FAIL", "")

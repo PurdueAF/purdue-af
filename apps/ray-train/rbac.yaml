@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ray-train-gateway
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ray-train-gateway
+rules:
+  # Users' clusters: created on first use, deleted once idle.
+  - apiGroups: ["ray.io"]
+    resources: ["rayclusters"]
+    verbs: ["get", "list", "create", "delete"]
+  # Their token Secrets, never read back: the gateway derives the tokens.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ray-train-gateway
+subjects:
+  - kind: ServiceAccount
+    name: ray-train-gateway
+    namespace: cms
+roleRef:
+  kind: Role
+  name: ray-train-gateway
+  apiGroup: rbac.authorization.k8s.io
