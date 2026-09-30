@@ -60,12 +60,7 @@ Whether each component on the cluster is running what is on `main`
 ![alloy][experimental-monitoring-alloy]
 ![loki][experimental-monitoring-loki]
 ![pyroscope][experimental-monitoring-pyroscope]
-![servicex-shared][experimental-servicex]
-![servicex][experimental-servicex-servicex]
 ![servicex-anvil][experimental-servicex-servicex-anvil]
-![servicex-eos][experimental-servicex-servicex-eos]
-![servicex-s3][experimental-servicex-servicex-s3]
-![servicex-test][experimental-servicex-servicex-test]
 ![supersonic][experimental-sonic-supersonic]
 ![supersonic-af][experimental-sonic-supersonic-af]
 ![supersonic-interlink][experimental-sonic-supersonic-interlink]
@@ -124,12 +119,7 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-monitoring-alloy]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-alloy.json
 [experimental-monitoring-loki]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-loki.json
 [experimental-monitoring-pyroscope]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-pyroscope.json
-[experimental-servicex]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex.json
-[experimental-servicex-servicex]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex-servicex.json
 [experimental-servicex-servicex-anvil]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex-servicex-anvil.json
-[experimental-servicex-servicex-eos]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex-servicex-eos.json
-[experimental-servicex-servicex-s3]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex-servicex-s3.json
-[experimental-servicex-servicex-test]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex-servicex-test.json
 [experimental-sonic-model-manager]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-model-manager.json
 [experimental-sonic-supersonic]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic.json
 [experimental-sonic-supersonic-af]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic-af.json

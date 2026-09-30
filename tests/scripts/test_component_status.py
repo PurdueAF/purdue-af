@@ -5,6 +5,7 @@ publishes badges for."""
 
 import json
 import subprocess
+from pathlib import Path
 
 import pytest
 import yaml
@@ -85,12 +86,18 @@ def test_components_are_not_too_deep(cs, components):
             assert len(component.split("/")) <= 3, component
 
 
-def test_commented_out_resources_are_excluded(cs):
-    """The experimental kustomization keeps servicex-interlink commented out; a
-    text-based parser would report it as a live component."""
-    experimental = cs.discover_components("experimental")
-    assert "apps/servicex/servicex-interlink" not in experimental
-    assert (REPO / "apps/servicex/servicex-interlink").is_dir()  # still on disk
+def test_commented_out_resources_are_excluded(cs, tmp_path, monkeypatch):
+    """A text-based parser would report a commented-out resource as live."""
+    root = tmp_path.resolve()
+    (root / "deploy").mkdir()
+    (root / "deploy/kustomization.yaml").write_text(
+        "resources:\n"
+        "  - ../apps/live/helmrelease.yaml\n"
+        "  # - ../apps/parked/helmrelease.yaml\n"
+    )
+    monkeypatch.setattr(cs, "REPO", root)
+    resources, _ = cs._read_kustomization(Path("deploy/kustomization.yaml"))
+    assert resources == ["apps/live/helmrelease.yaml"]
 
 
 def test_helm_repositories_are_not_components(components):

@@ -194,7 +194,7 @@ class TestLoki:
             "ray-train-gateway-7d9f8c6b5-abcde",
             "af-node-probe-cvmfs-abcde",
             "af-userlist-sync-purdue-29312345-abcde",
-            "servicex-eos-did-finder-xrootd-abcde",
+            "servicex-anvil-did-finder-xrootd-abcde",
             "controller-dask-gateway-8bd85db68-abcde",
         ],
     )
