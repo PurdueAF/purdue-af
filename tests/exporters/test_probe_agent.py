@@ -4,7 +4,7 @@ The supervisor keeps three failures apart:
 
   the mount did not answer   -> publish a timeout verdict (goes red)
   the probe itself broke     -> publish nothing, drop out of Ready (goes stale)
-  the results volume is gone -> publish nothing, and do not blame the mount
+  the probe loop stopped     -> the heartbeat stops (the kubelet's checks)
 
 A child is a real subprocess here rather than a mock: the deadline path exists
 because a check can be unkillable, and that only shows up across a fork.
@@ -12,9 +12,13 @@ because a check can be unkillable, and that only shows up across a fork.
 
 import json
 import os
+import socket
 import sys
 import textwrap
+import threading
 import time
+import urllib.error
+import urllib.request
 
 os.environ.setdefault("MOUNT_NAME", "/depot/")
 os.environ.setdefault("NODE_NAME", "node-a")
@@ -27,16 +31,16 @@ import pytest  # noqa: E402
 @pytest.fixture
 def env(monkeypatch, tmp_path):
     """Point every module-level path at tmp_path; they are import-time derived."""
-    results = tmp_path / "results"
     runtime = tmp_path / "runtime"
-    results.mkdir()
-    runtime.mkdir()
-    monkeypatch.setattr(pa, "RESULTS_DIR", results)
-    monkeypatch.setattr(pa, "ATTEMPTS_DIR", results / ".attempts" / pa.STEM)
+    results = runtime / "results"
+    results.mkdir(parents=True)
     monkeypatch.setattr(pa, "RUNTIME_DIR", runtime)
+    monkeypatch.setattr(pa, "RESULTS_DIR", results)
+    monkeypatch.setattr(pa, "ATTEMPTS_DIR", results / ".attempts")
     monkeypatch.setattr(pa, "HEARTBEAT", runtime / "heartbeat")
-    monkeypatch.setattr(pa, "HEALTHY", runtime / "healthy")
+    monkeypatch.setattr(pa, "READY", runtime / "ready")
     monkeypatch.setattr(pa, "PROBE_DEADLINE_S", 5.0)
+    monkeypatch.setattr(pa, "PUBLISHED", pa.Published())
     return tmp_path
 
 
@@ -63,19 +67,25 @@ WRITES_OK = """
 """
 
 
+def served():
+    body = pa.PUBLISHED.get()
+    return None if body is None else json.loads(body)
+
+
 # ── the happy path ────────────────────────────────────────────────────────────
 
 
-def test_successful_attempt_is_promoted(env, monkeypatch):
+def test_successful_attempt_is_published(env, monkeypatch):
     child(monkeypatch, env, WRITES_OK)
     assert pa.run_attempt(0) == "published"
     assert json.loads(pa.result_path().read_text())["ok"] is True
+    assert served()["ok"] is True
 
 
 def test_cycle_marks_ready_and_beats(env, monkeypatch):
     child(monkeypatch, env, WRITES_OK)
     assert pa.cycle(0) == "published"
-    assert pa.HEALTHY.exists()
+    assert pa.READY.exists()
     assert pa.HEARTBEAT.exists()
 
 
@@ -93,7 +103,7 @@ def test_child_is_told_where_to_read_and_write(env, monkeypatch):
         """,
     )
     assert pa.run_attempt(0) == "published"
-    assert json.loads(pa.result_path().read_text())["seen"] == 1234.0
+    assert served()["seen"] == 1234.0
 
 
 # ── the mount did not answer ──────────────────────────────────────────────────
@@ -105,10 +115,11 @@ def test_deadline_publishes_a_timeout_verdict(env, monkeypatch):
     child(monkeypatch, env, "time.sleep(30)")
     assert pa.run_attempt(0) == "timeout"
 
-    published = json.loads(pa.result_path().read_text())
+    published = served()
+    assert published == json.loads(pa.result_path().read_text())
     assert published["ok"] is False
     assert published["timeout"] is True
-    assert published["throughput_gbps"] == 0.0
+    assert published["throughput_gbps"] is None
     assert published["node"] == "node-a"
     # Null, not a partial reading off a wedged mount — the exporter substitutes
     # its own timeout sentinels.
@@ -116,12 +127,17 @@ def test_deadline_publishes_a_timeout_verdict(env, monkeypatch):
     assert published["metadata_ms"] is None
 
 
-def test_timeout_carries_last_fio_ts_forward(env, monkeypatch):
-    pa.result_path().write_text(json.dumps({"last_fio_ts": 999.0}))
+def test_timeout_carries_the_fio_history_forward(env, monkeypatch):
+    """A recovering mount must neither run fio on every cycle nor report a
+    zero rate it never measured."""
+    pa.result_path().write_text(
+        json.dumps({"last_fio_ts": 999.0, "throughput_gbps": 6.4})
+    )
     monkeypatch.setattr(pa, "PROBE_DEADLINE_S", 0.3)
     child(monkeypatch, env, "time.sleep(30)")
     pa.run_attempt(0)
-    assert json.loads(pa.result_path().read_text())["last_fio_ts"] == 999.0
+    assert served()["last_fio_ts"] == 999.0
+    assert served()["throughput_gbps"] == 6.4
 
 
 def test_a_timed_out_probe_stays_ready(env, monkeypatch):
@@ -130,7 +146,7 @@ def test_a_timed_out_probe_stays_ready(env, monkeypatch):
     monkeypatch.setattr(pa, "PROBE_DEADLINE_S", 0.3)
     child(monkeypatch, env, "time.sleep(30)")
     assert pa.cycle(0) == "timeout"
-    assert pa.HEALTHY.exists()
+    assert pa.READY.exists()
 
 
 def test_late_child_cannot_overwrite_the_published_verdict(env, monkeypatch):
@@ -152,6 +168,33 @@ def test_late_child_cannot_overwrite_the_published_verdict(env, monkeypatch):
     published = json.loads(pa.result_path().read_text())
     assert published["timeout"] is True
     assert "stale" not in published
+    assert "stale" not in served()
+
+
+def test_unkillable_child_does_not_block_the_verdict(env, monkeypatch):
+    """SIGKILL to a process in uninterruptible sleep is recorded, not
+    delivered. Waiting for it is what would freeze the loop; the timeout is
+    published and the child abandoned to reap_orphans."""
+    monkeypatch.setattr(pa, "PROBE_DEADLINE_S", 0.3)
+    monkeypatch.setattr(pa, "CHILD_KILL_GRACE_S", 0.2)
+    child(monkeypatch, env, "time.sleep(30)")
+
+    real_popen = pa.subprocess.Popen
+
+    class Unreapable:
+        def __init__(self, *a, **kw):
+            self._proc = real_popen(*a, **kw)
+            self.pid = self._proc.pid
+
+        def communicate(self, timeout=None):
+            raise pa.subprocess.TimeoutExpired(cmd="child", timeout=timeout)
+
+        def kill(self):
+            self._proc.kill()
+
+    monkeypatch.setattr(pa.subprocess, "Popen", Unreapable)
+    assert pa.run_attempt(0) == "timeout"
+    assert served()["timeout"] is True
 
 
 # ── the probe itself broke ────────────────────────────────────────────────────
@@ -160,23 +203,27 @@ def test_late_child_cannot_overwrite_the_published_verdict(env, monkeypatch):
 def test_crashed_child_publishes_nothing(env, monkeypatch):
     """Writing a timeout here would report a healthy mount as failing over a
     bug in the checker. Let the last result go stale instead."""
-    pa.result_path().write_text(json.dumps({"ok": True, "timestamp": 1.0}))
+    pa.PUBLISHED.set({"ok": True, "timestamp": 1.0})
     child(monkeypatch, env, "sys.exit(3)")
     assert pa.run_attempt(0) == "failed"
-    assert json.loads(pa.result_path().read_text())["ok"] is True
+    assert served() == {"ok": True, "timestamp": 1.0}
 
 
 def test_crashed_child_drops_out_of_ready(env, monkeypatch):
+    child(monkeypatch, env, WRITES_OK)
+    pa.cycle(0)
+    assert pa.READY.exists()
+
     child(monkeypatch, env, "sys.exit(3)")
-    pa.HEALTHY.touch()
-    assert pa.cycle(0) == "failed"
-    assert not pa.HEALTHY.exists()
+    assert pa.cycle(1) == "failed"
+    assert not pa.READY.exists()
 
 
 def test_child_that_writes_nothing_is_a_failure(env, monkeypatch):
     child(monkeypatch, env, "pass")
     assert pa.run_attempt(0) == "failed"
     assert not pa.result_path().exists()
+    assert served() is None
 
 
 def test_missing_child_script_is_a_failure(env, monkeypatch):
@@ -189,43 +236,193 @@ def test_child_that_cannot_start_is_a_failure(env, monkeypatch):
         raise OSError("exec format error")
 
     monkeypatch.setattr(pa.subprocess, "Popen", boom)
-    pa.result_path().write_text(json.dumps({"ok": True}))
-
     assert pa.run_attempt(0) == "failed"
-    assert json.loads(pa.result_path().read_text()) == {"ok": True}
 
 
 def test_cycle_survives_an_exploding_attempt(env, monkeypatch):
     """A crashed probe must stop advertising itself as Ready. Leaving that to
-    main()'s handler would make the invariant depend on the caller."""
+    main() would make the invariant depend on the caller."""
 
     def boom(seq):
         raise RuntimeError("nope")
 
     monkeypatch.setattr(pa, "run_attempt", boom)
-    pa.HEALTHY.touch()
-
+    pa.touch(pa.READY)
     assert pa.cycle(0) == "failed"
-    assert not pa.HEALTHY.exists()
+    assert not pa.READY.exists()
     assert pa.HEARTBEAT.exists()
 
 
-# ── the results volume is gone ────────────────────────────────────────────────
+def test_child_communicate_error_is_a_failure_not_a_timeout(env, monkeypatch):
+    child(monkeypatch, env, "pass")
+    real_popen = pa.subprocess.Popen
 
+    class Broken:
+        def __init__(self, *a, **kw):
+            self._proc = real_popen(*a, **kw)
+            self.pid = self._proc.pid
 
-def test_unwritable_results_volume_is_a_failure_not_a_timeout(env, monkeypatch):
-    """An unreachable results PVC must not be published as a broken mount."""
-    monkeypatch.setattr(pa, "ATTEMPTS_DIR", env / "results" / "file" / "attempts")
-    (env / "results" / "file").write_text("not a directory")
+        def communicate(self, timeout=None):
+            self._proc.wait()
+            raise OSError("pipe went away")
+
+    monkeypatch.setattr(pa.subprocess, "Popen", Broken)
     assert pa.run_attempt(0) == "failed"
+
+
+def test_unrecordable_timeout_verdict_is_a_failure(env, monkeypatch):
+    """If the timeout verdict cannot be kept, the probe has produced nothing —
+    it must not claim it did and stay Ready."""
+    monkeypatch.setattr(pa, "PROBE_DEADLINE_S", 0.3)
+    child(monkeypatch, env, "time.sleep(30)")
+
+    def boom(path, data):
+        raise OSError("read-only file system")
+
+    monkeypatch.setattr(pa, "write_atomic", boom)
+    assert pa.cycle(0) == "failed"
+    assert not pa.READY.exists()
+    assert served() is None
+
+
+def test_unpromotable_result_is_a_failure(env, monkeypatch):
+    child(monkeypatch, env, WRITES_OK)
+
+    def boom(src, dst):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(pa.os, "replace", boom)
+    assert pa.run_attempt(0) == "failed"
+    assert served() is None
+
+
+def test_unwritable_results_dir_is_a_failure_not_a_timeout(env, monkeypatch):
+    monkeypatch.setattr(pa, "ATTEMPTS_DIR", pa.RESULTS_DIR / "file" / "attempts")
+    (pa.RESULTS_DIR / "file").write_text("not a directory")
+    assert pa.run_attempt(0) == "failed"
+
+
+# ── a restarted container ─────────────────────────────────────────────────────
+
+
+def test_a_restarted_container_serves_its_last_verdict_but_is_not_ready(env):
+    """The emptyDir outlives a container restart, so the verdict survives it;
+    the Ready marker does not carry over, since this container has not yet
+    produced a verdict of its own."""
+    pa.result_path().write_text(json.dumps({"ok": False, "timeout": True}))
+    pa.touch(pa.READY)
+    pa.start()
+    assert served() == {"ok": False, "timeout": True}
+    assert not pa.READY.exists()
+    assert pa.HEARTBEAT.exists()
+
+
+def test_start_without_a_previous_result_serves_nothing(env):
+    pa.start()
+    assert served() is None
+
+
+# ── the HTTP endpoint the exporter reads ──────────────────────────────────────
+
+
+@pytest.fixture
+def server(env):
+    srv = pa.serve(port=0)
+    yield f"http://127.0.0.1:{srv.server_address[1]}"
+    srv.shutdown()
+    srv.server_close()
+
+
+def get(url, timeout=5):
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            return resp.status, resp.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+
+
+def test_http_serves_the_published_result(server):
+    assert get(f"{server}/result")[0] == 404
+    pa.PUBLISHED.set({"ok": True, "timestamp": 5.0})
+    status, body = get(f"{server}/result")
+    assert status == 200
+    assert json.loads(body) == {"ok": True, "timestamp": 5.0}
+
+
+def test_http_serves_nothing_else(server):
+    pa.PUBLISHED.set({"ok": True})
+    assert get(f"{server}/metrics")[0] == 404
+
+
+@pytest.mark.parametrize("trickle", [False, True])
+def test_a_slow_client_cannot_hold_the_server(server, monkeypatch, trickle):
+    """One serving thread: a client that never finishes its request, whether it
+    sends nothing or a byte at a time, is cut off at the deadline."""
+    monkeypatch.setattr(pa, "HTTP_TIMEOUT_S", 0.5)
+    pa.PUBLISHED.set({"ok": True})
+    host, port = server.removeprefix("http://").split(":")
+    slow = socket.create_connection((host, int(port)))
+    stop = threading.Event()
+
+    def drip():
+        for byte in b"GET /result HTTP/1.1\r\nX-Slow: " + b"a" * 1000:
+            if stop.is_set():
+                return
+            try:
+                slow.send(bytes([byte]))
+            except OSError:
+                return
+            time.sleep(0.1)
+
+    if trickle:
+        threading.Thread(target=drip, daemon=True).start()
+    try:
+        started = time.time()
+        assert get(f"{server}/result", timeout=5)[0] == 200
+        assert time.time() - started < 3
+    finally:
+        stop.set()
+        slow.close()
+
+
+def test_the_exporter_reads_what_the_probe_serves(server):
+    """probe_agent and node_healthcheck meet only over HTTP; if they disagree on
+    the path or the encoding, every mount reads as unknown."""
+    sys.path.insert(0, os.path.dirname(pa.__file__))
+    import node_healthcheck as nh
+
+    pa.PUBLISHED.set({"ok": True, "timestamp": 7.0, "node": "node-a"})
+    port = int(server.rsplit(":", 1)[1])
+    assert nh._fetch_result("127.0.0.1", port) == {
+        "ok": True,
+        "timestamp": 7.0,
+        "node": "node-a",
+    }
 
 
 # ── housekeeping ──────────────────────────────────────────────────────────────
 
 
-def test_sweep_drops_attempts_from_earlier_pods(env, monkeypatch):
+def test_readiness_clear_survives_an_unwritable_runtime_dir(env, monkeypatch, capsys):
+    pa.touch(pa.READY)
+
+    def boom(self):
+        raise PermissionError("read-only file system")
+
+    monkeypatch.setattr(pa.Path, "unlink", boom)
+    pa.set_ready(False)  # logs, does not raise
+    assert "cannot clear" in capsys.readouterr().err
+
+
+def test_touch_survives_an_unwritable_runtime_dir(env):
+    blocker = env / "runtime" / "file"
+    blocker.write_text("not a directory")
+    pa.touch(blocker / "heartbeat")  # logs, does not raise
+
+
+def test_sweep_drops_attempts_from_earlier_containers(env, monkeypatch):
     """Different pid: a crashlooping probe would otherwise leave one file per
-    restart on the shared PVC forever."""
+    restart on the emptyDir."""
     pa.ATTEMPTS_DIR.mkdir(parents=True)
     dead = pa.ATTEMPTS_DIR / "999999-4.json"
     dead.write_text("{}")
@@ -238,22 +435,6 @@ def test_sweep_drops_attempts_from_earlier_pods(env, monkeypatch):
     assert keep.exists()
 
 
-def test_attempts_are_scoped_to_one_mount_and_node(env):
-    """Sweeping by filename prefix would let the probe on paf-a0 delete the
-    in-flight attempt of the probe on paf-a0-gpu; a per-stem directory cannot."""
-    assert pa.ATTEMPTS_DIR.name == pa.STEM
-    assert pa.attempt_path(0).parent == pa.ATTEMPTS_DIR
-    # A neighbouring stem that shares a prefix keeps its own directory.
-    sibling = pa.ATTEMPTS_DIR.parent / f"{pa.STEM}-gpu"
-    sibling.mkdir(parents=True)
-    victim = sibling / "1-1.json"
-    victim.write_text("{}")
-
-    pa.sweep_attempts(keep=None)
-
-    assert victim.exists()
-
-
 def test_sweep_is_quiet_when_there_is_nothing_to_sweep(env):
     pa.sweep_attempts(keep=None)  # ATTEMPTS_DIR does not exist yet
 
@@ -263,6 +444,29 @@ def test_attempts_do_not_accumulate_across_cycles(env, monkeypatch):
     for seq in range(4):
         pa.cycle(seq)
     assert list(pa.ATTEMPTS_DIR.iterdir()) == []
+
+
+def test_sweep_survives_an_unremovable_attempt(env, monkeypatch):
+    pa.ATTEMPTS_DIR.mkdir(parents=True)
+    (pa.ATTEMPTS_DIR / "1-1.json").write_text("{}")
+
+    def boom(self):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(pa.Path, "unlink", boom)
+    pa.sweep_attempts(keep=None)  # logs, does not raise
+
+
+def test_sweep_tolerates_an_attempt_that_vanished(env, monkeypatch, capsys):
+    pa.ATTEMPTS_DIR.mkdir(parents=True)
+    (pa.ATTEMPTS_DIR / "1-1.json").write_text("{}")
+
+    def gone(self):
+        raise FileNotFoundError(self)
+
+    monkeypatch.setattr(pa.Path, "unlink", gone)
+    pa.sweep_attempts(keep=None)
+    assert capsys.readouterr().err == ""
 
 
 def test_reap_orphans_is_a_no_op_without_children(env):
@@ -298,136 +502,11 @@ def _is_zombie(pid):
     return state.startswith("Z")
 
 
-def test_healthy_marker_is_idempotent(env):
-    pa.set_healthy(False)  # nothing to remove
-    pa.set_healthy(True)
-    pa.set_healthy(True)
-    assert pa.HEALTHY.exists()
-    pa.set_healthy(False)
-    assert not pa.HEALTHY.exists()
-
-
 def test_load_json_tolerates_missing_and_corrupt(env):
     assert pa.load_json(env / "nope.json") == {}
     bad = env / "bad.json"
     bad.write_text("{ nope")
     assert pa.load_json(bad) == {}
-
-
-def test_stem_matches_what_the_exporter_reads(env):
-    """probe_agent and node_healthcheck derive the same filename independently;
-    if they disagree every mount reads as "never reported"."""
-    sys.path.insert(0, os.path.dirname(pa.__file__))
-    import node_healthcheck as nh
-
-    assert pa.result_path().name == nh._result_path("/depot/", "node-a").name
-
-
-def test_unkillable_child_does_not_block_the_verdict(env, monkeypatch):
-    """SIGKILL to a process in uninterruptible sleep is recorded, not
-    delivered. Waiting for it is what would freeze the loop; the timeout is
-    published and the child abandoned to reap_orphans."""
-    monkeypatch.setattr(pa, "PROBE_DEADLINE_S", 0.3)
-    monkeypatch.setattr(pa, "CHILD_KILL_GRACE_S", 0.2)
-    child(monkeypatch, env, "time.sleep(30)")
-
-    real_popen = pa.subprocess.Popen
-
-    class Unreapable:
-        def __init__(self, *a, **kw):
-            self._proc = real_popen(*a, **kw)
-            self.pid = self._proc.pid
-
-        def communicate(self, timeout=None):
-            raise pa.subprocess.TimeoutExpired(cmd="child", timeout=timeout)
-
-        def kill(self):
-            self._proc.kill()
-
-    monkeypatch.setattr(pa.subprocess, "Popen", Unreapable)
-    assert pa.run_attempt(0) == "timeout"
-    assert json.loads(pa.result_path().read_text())["timeout"] is True
-
-
-def test_child_communicate_error_is_a_failure_not_a_timeout(env, monkeypatch):
-    child(monkeypatch, env, "pass")
-    real_popen = pa.subprocess.Popen
-
-    class Broken:
-        def __init__(self, *a, **kw):
-            self._proc = real_popen(*a, **kw)
-            self.pid = self._proc.pid
-
-        def communicate(self, timeout=None):
-            self._proc.wait()
-            raise OSError("pipe went away")
-
-    monkeypatch.setattr(pa.subprocess, "Popen", Broken)
-    assert pa.run_attempt(0) == "failed"
-
-
-def test_unpublishable_timeout_verdict_is_a_failure(env, monkeypatch):
-    """If the timeout verdict cannot be written, the probe has produced
-    nothing — it must not claim it did and stay Ready."""
-    monkeypatch.setattr(pa, "PROBE_DEADLINE_S", 0.3)
-    child(monkeypatch, env, "time.sleep(30)")
-
-    def boom(path, data):
-        raise OSError("read-only file system")
-
-    monkeypatch.setattr(pa, "write_atomic", boom)
-    assert pa.cycle(0) == "failed"
-    assert not pa.HEALTHY.exists()
-
-
-def test_unpromotable_result_is_a_failure(env, monkeypatch):
-    child(monkeypatch, env, WRITES_OK)
-
-    def boom(src, dst):
-        raise OSError("stale file handle")
-
-    monkeypatch.setattr(pa.os, "replace", boom)
-    assert pa.run_attempt(0) == "failed"
-
-
-def test_touch_survives_an_unwritable_runtime_dir(env, monkeypatch):
-    monkeypatch.setattr(pa, "HEARTBEAT", env / "runtime" / "file" / "heartbeat")
-    (env / "runtime" / "file").write_text("not a directory")
-    pa.touch(pa.HEARTBEAT)  # logs, does not raise
-
-
-def test_sweep_survives_an_unremovable_attempt(env, monkeypatch):
-    pa.ATTEMPTS_DIR.mkdir(parents=True)
-    (pa.ATTEMPTS_DIR / f"{pa.STEM}-1-1.json").write_text("{}")
-
-    def boom(self):
-        raise OSError("permission denied")
-
-    monkeypatch.setattr(pa.Path, "unlink", boom)
-    pa.sweep_attempts(keep=None)  # logs, does not raise
-
-
-def test_sweep_tolerates_an_attempt_that_vanished(env, monkeypatch, capsys):
-    pa.ATTEMPTS_DIR.mkdir(parents=True)
-    (pa.ATTEMPTS_DIR / "1-1.json").write_text("{}")
-
-    def gone(self):
-        raise FileNotFoundError(self)
-
-    monkeypatch.setattr(pa.Path, "unlink", gone)
-    pa.sweep_attempts(keep=None)
-    assert capsys.readouterr().err == ""
-
-
-def test_readiness_clear_survives_an_unwritable_runtime_dir(env, monkeypatch, capsys):
-    pa.HEALTHY.touch()
-
-    def boom(self):
-        raise PermissionError("read-only file system")
-
-    monkeypatch.setattr(pa.Path, "unlink", boom)
-    pa.set_healthy(False)  # logs, does not raise
-    assert "cannot clear" in capsys.readouterr().err
 
 
 def test_mount_name_is_required(monkeypatch):

@@ -43,7 +43,6 @@ Whether each component on the cluster is running what is on `main`
 ![jupyterhub][core-jupyterhub-jupyterhub]
 ![jupyterhub-ssh][core-jupyterhub-jupyterhub-ssh]
 ![userlist-sync][core-jupyterhub-userlist-sync]
-![af-monitoring][core-monitoring-af-monitoring]
 ![grafana][core-monitoring-grafana]
 ![prometheus][core-monitoring-prometheus]
 ![storage][core-storage]
@@ -67,7 +66,6 @@ Whether each component on the cluster is running what is on `main`
 ![model-manager][experimental-sonic-model-manager]
 ![kuberay-operator][experimental-ray-operator]
 ![ray-train][experimental-ray-train]
-![storage][experimental-storage]
 
 **Images** — which tag each one ships on: [RELEASING.md](RELEASING.md).
 
@@ -103,7 +101,6 @@ How a change reaches the cluster, version rules and rollback:
 [core-jupyterhub-jupyterhub]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-jupyterhub-jupyterhub.json
 [core-jupyterhub-jupyterhub-ssh]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-jupyterhub-jupyterhub-ssh.json
 [core-jupyterhub-userlist-sync]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-jupyterhub-userlist-sync.json
-[core-monitoring-af-monitoring]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-monitoring-af-monitoring.json
 [core-monitoring-grafana]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-monitoring-grafana.json
 [core-monitoring-prometheus]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-monitoring-prometheus.json
 [core-storage]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-storage.json
@@ -124,7 +121,6 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-sonic-supersonic-interlink]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic-interlink.json
 [experimental-ray-operator]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-ray-operator.json
 [experimental-ray-train]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-ray-train.json
-[experimental-storage]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-storage.json
 [image-purdue-af]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-purdue-af.json
 [image-agentic-interface]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-agentic-interface.json
 [image-af-pod-monitor]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-af-pod-monitor.json

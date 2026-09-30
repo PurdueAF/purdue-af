@@ -631,8 +631,10 @@ serverFiles:
               summary: "{{ $labels.mount_name }} is failing on node {{ $labels.node }}"
               description: >
                 Data access check for {{ $labels.mount_name }} completed and
-                failed for 10 minutes (includes timeouts). Sessions and Dask
-                workers on this node may be unable to use that path. Storage
+                failed for 10 minutes (includes timeouts, and a probe pod that
+                cannot mount the volume while the node's other probes run).
+                Sessions and Dask workers on this node may be unable to use
+                that path. Storage
                 outages are often transient; treat a widespread firing as a
                 storage-system or network problem rather than a node problem.
                 Check: kubectl -n cms logs -l app=af-node-monitor
@@ -649,12 +651,17 @@ serverFiles:
                 (never reported, or last success went stale). Offline /
                 NotReady nodes publish no series — they will not appear here.
                 af_node_mount_probe_up says which side is broken: 0 means the
-                probe pod is missing or not Ready, 1 means it runs and the
-                mount is what is not answering.
+                probe pod is missing, not Ready or not answering af-node-monitor;
+                1 means the probe answered but its result timestamp was rejected,
+                which is clock skew on that node. A mount that fails or times out
+                fires AFMountInvalid instead.
                 Check: kubectl -n cms get pods -l app=af-node-monitor,component=probe -o wide
-          # The upper bound leaves timeouts to AFMountInvalid; avg_over_time spans about two checks.
+          # Completed checks only (unknown publishes the timeout sentinel); the upper bound leaves timeouts to AFMountInvalid.
           - alert: AFMountSlow
-            expr: avg_over_time(af_node_mount_metadata_latency_ms{node_pool="prod"}[20m]) > 2000 and avg_over_time(af_node_mount_metadata_latency_ms{node_pool="prod"}[20m]) < 10000
+            expr: >
+              avg_over_time((af_node_mount_metadata_latency_ms{node_pool="prod"}
+              and on(node, mount_name, node_pool) af_node_mount_result_fresh{node_pool="prod"} == 1)[20m:])
+              > 2000 < 10000
             for: 5m
             labels:
               severity: warning
@@ -682,19 +689,21 @@ serverFiles:
                 the comparison has no series to match and the alert that exists
                 to catch a dead exporter goes quiet when one dies.
                 Check: kubectl -n cms logs -l name=af-node-monitor
-          # An unreadable results PVC nulls every af_node_mount_* series, which no mount alert matches.
+          # Probes the exporter cannot reach read as unknown, one series at a time, only after their stale window.
           - alert: AFNodeMonitorResultsUnavailable
-            expr: af_node_monitor_results_available == 0
+            expr: af_node_monitor_results_available < 0.5
             for: 10m
             labels:
               severity: warning
               component: data
             annotations:
-              summary: af-node-monitor cannot read the probe results volume
+              summary: af-node-monitor cannot reach most mount probes
               description: >
-                The af-node-monitor-storage PVC is unreadable or wedged, so no
-                mount health is being published at all and every mount alert is
-                blind rather than green. The mounts themselves may be fine.
+                Fewer than half of the Ready probe pods answered af-node-monitor
+                for 10 minutes, so most mount checks are not being read and the
+                mount alerts are blind rather than green. The mounts themselves
+                may be fine: this is the exporter's path to the probes (pod
+                network, pod list) or the probes themselves.
                 Check: kubectl -n cms logs -l name=af-node-monitor
 
           # Dev nodes stay warnings, off the facility health verdict.

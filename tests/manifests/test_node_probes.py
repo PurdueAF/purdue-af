@@ -5,12 +5,14 @@ probed. A mount in one and not the other would read "never reported" forever.
 """
 
 import ast
+import re
 
 import yaml
 from common import REPO
 
 PROBES = REPO / "apps/monitoring/af-monitoring/daemonset-af-node-probe.yaml"
 EXPORTER = REPO / "docker/af-node-monitor/node_healthcheck.py"
+AGENT = REPO / "docker/af-node-monitor/probe_agent.py"
 DEPLOYMENT = REPO / "apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml"
 DEPLOYMENTS = (
     REPO / "deploy/experimental/kustomization.yaml",
@@ -86,20 +88,34 @@ def test_selector_matches_pod_labels():
 def test_each_daemonset_carries_exactly_one_monitored_mount():
     """One pod holding all four volumes goes to ContainerCreating when any one
     of them will not mount, taking three healthy mounts to unknown with it."""
-    infra = {"scripts", "runtime", "results"}
+    infra = {"scripts", "runtime"}
     for name, ds in daemonsets().items():
         volumes = {v["name"] for v in ds["spec"]["template"]["spec"]["volumes"]}
         assert volumes & infra == infra, name
         assert len(volumes - infra) == 1, name
 
 
-def test_results_volume_is_the_shared_claim_every_probe_writes_to():
+def test_the_monitored_mount_is_the_only_volume_that_can_fail():
+    """A shared network volume in every probe pod makes one storage fault
+    blind every mount on every node; the rest stay node-local."""
     for name, ds in daemonsets().items():
         volumes = {v["name"]: v for v in ds["spec"]["template"]["spec"]["volumes"]}
-        claim = volumes["results"]["persistentVolumeClaim"]["claimName"]
-        assert claim == "af-node-monitor-storage", name
         assert volumes["runtime"]["emptyDir"] == {}, name
         assert volumes["scripts"]["configMap"]["name"] == "af-node-monitor-config", name
+
+
+def test_probes_and_the_exporter_mount_no_claim_of_their_own():
+    monitored = {"work": "af-shared-storage", "cvmfs": "cvmfs"}
+    for name, ds in daemonsets().items():
+        mount = ds["metadata"]["labels"]["mount"]
+        claims = {
+            v["persistentVolumeClaim"]["claimName"]
+            for v in ds["spec"]["template"]["spec"]["volumes"]
+            if "persistentVolumeClaim" in v
+        }
+        assert claims <= {monitored.get(mount)}, name
+    exporter = yaml.safe_load(DEPLOYMENT.read_text())["spec"]["template"]["spec"]
+    assert not any("persistentVolumeClaim" in v for v in exporter["volumes"])
 
 
 # ── the four specs stay identical where they must ─────────────────────────────
@@ -114,7 +130,13 @@ def test_scheduling_is_identical_across_probes():
 
 def test_probes_and_resources_are_identical():
     containers = [container(ds) for ds in daemonsets().values()]
-    for field in ("resources", "livenessProbe", "readinessProbe", "imagePullPolicy"):
+    for field in (
+        "resources",
+        "livenessProbe",
+        "readinessProbe",
+        "imagePullPolicy",
+        "ports",
+    ):
         values = [c[field] for c in containers]
         assert all(v == values[0] for v in values), field
 
@@ -142,29 +164,68 @@ def test_probes_tolerate_the_cms_af_taint():
 # ── the failure modes the container spec is responsible for ───────────────────
 
 
-def test_liveness_reads_the_emptydir_heartbeat_not_the_results_pvc():
-    """A liveness probe that touches the wedged filesystem hangs instead of
-    failing, and kubelet never restarts the container it exists to catch."""
+def http_port():
+    ports = {
+        p["name"]: p["containerPort"]
+        for p in container(next(iter(daemonsets().values())))["ports"]
+    }
+    return ports["http"]
+
+
+def test_the_http_port_is_the_one_the_agent_serves():
+    """The exporter finds the port by its name; the agent binds its default."""
+    default = re.search(r'_get_env\("PROBE_HTTP_PORT", "(\d+)"\)', AGENT.read_text())
+    assert default, "PROBE_HTTP_PORT default not found in probe_agent.py"
+    assert http_port() == int(default.group(1))
+
+
+def probe_cmd(ds, which):
+    return " ".join(container(ds)[which]["exec"]["command"])
+
+
+def agent_default(name):
+    found = re.search(rf'_get_env\("{name}", "([^"]+)"\)', AGENT.read_text())
+    assert found, f"{name} default not found in probe_agent.py"
+    return found.group(1)
+
+
+def test_liveness_and_readiness_read_the_emptydir():
+    """A check that touches the wedged mount hangs instead of failing, and one
+    over the network can be held by any client that reaches the pod."""
+    runtime = agent_default("PROBE_RUNTIME_DIR")
     for name, ds in daemonsets().items():
-        cmd = " ".join(container(ds)["livenessProbe"]["exec"]["command"])
-        assert "/run/af-node-monitor/heartbeat" in cmd, name
-        assert "/af-node-monitor/results" not in cmd, name
-        assert container(ds)["livenessProbe"]["timeoutSeconds"] > 0, name
+        mounts = {m["name"]: m["mountPath"] for m in container(ds)["volumeMounts"]}
+        assert mounts["runtime"] == runtime, name
+        for which in ("livenessProbe", "readinessProbe"):
+            assert f"{runtime}/heartbeat" in probe_cmd(ds, which), (name, which)
+        assert f"{runtime}/ready" in probe_cmd(ds, "readinessProbe"), name
+        assert "$READY_WINDOW_S" in probe_cmd(ds, "readinessProbe"), name
+        assert "$LIVENESS_WINDOW_S" in probe_cmd(ds, "livenessProbe"), name
 
 
-def test_liveness_allows_more_than_one_probe_interval():
-    """PROBE_INTERVAL_S is 600s and one attempt may burn 180s of it; a tighter
-    window would restart healthy probes mid-check."""
+def test_health_windows_cover_a_full_cycle():
+    """A healthy loop sleeps a full interval, plus the first cycle's jitter,
+    and an attempt may burn its whole deadline; a tighter window fails a
+    working probe."""
+    one_cycle = sum(
+        float(agent_default(key))
+        for key in (
+            "PROBE_INTERVAL_S",
+            "PROBE_STARTUP_JITTER_S",
+            "PROBE_DEADLINE_S",
+            "CHILD_KILL_GRACE_S",
+        )
+    )
     for name, ds in daemonsets().items():
-        cmd = " ".join(container(ds)["livenessProbe"]["exec"]["command"])
-        threshold = int(cmd.rsplit("-lt", 1)[1].strip())
-        assert threshold >= 600 + 180, name
+        env = env_of(ds)
+        assert float(env["READY_WINDOW_S"]) > one_cycle, name
+        assert float(env["LIVENESS_WINDOW_S"]) > float(env["READY_WINDOW_S"]), name
 
 
-def test_readiness_tracks_the_probe_not_the_mount():
+def test_probes_get_no_api_token():
+    """The probes never call the API; only the exporter does."""
     for name, ds in daemonsets().items():
-        cmd = " ".join(container(ds)["readinessProbe"]["exec"]["command"])
-        assert "/run/af-node-monitor/healthy" in cmd, name
+        assert ds["spec"]["template"]["spec"]["automountServiceAccountToken"] is False
 
 
 def test_image_is_not_repulled_on_every_restart():
@@ -229,9 +290,9 @@ def test_both_overlays_ship_every_script_the_probes_run():
 
 def test_rollouts_tolerate_a_permanently_unavailable_node():
     """maxUnavailable defaults to 1, and a probe pod that can never become
-    available holds that budget forever — a337 has no rook-ceph CSI driver, so
-    the results PVC never mounts there. At the default, no other node would
-    ever be updated again."""
+    available — a node whose CSI driver is missing, so its volume never mounts
+    — holds that budget forever. At the default, no other node would ever be
+    updated again."""
     for name, ds in daemonsets().items():
         strategy = ds["spec"]["updateStrategy"]
         assert strategy["type"] == "RollingUpdate", name

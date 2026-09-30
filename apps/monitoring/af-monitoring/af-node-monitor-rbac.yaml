@@ -6,7 +6,15 @@ rules:
   - apiGroups: [""]
     resources: ["nodes"]
     verbs: ["get", "list", "watch"]
-  # Lets the exporter tell "no probe running" from "mount never answered".
+
+---
+# Finds each probe pod's IP to pull its result, and tells "no probe running"
+# from "mount never answered".
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: af-node-monitor-pods
+rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch"]
@@ -30,4 +38,17 @@ subjects:
 roleRef:
   kind: ClusterRole
   name: af-node-monitor-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: af-node-monitor-pods
+subjects:
+  - kind: ServiceAccount
+    name: af-node-monitor
+roleRef:
+  kind: Role
+  name: af-node-monitor-pods
   apiGroup: rbac.authorization.k8s.io
