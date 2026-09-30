@@ -1,6 +1,6 @@
 # Default SuperSONIC: the CMS Run 3 MiniAOD model set, served off CVMFS.
 
-# A/B against supersonic-pr: same chart, window and bounds; this metric is intensive, so metricType Value.
+# Queue time per execution is intensive, so metricType Value.
 serverLoadMetric: |-
   sum by (release) (
       rate(nv_inference_queue_duration_us{release=~"supersonic"}[30s])
