@@ -86,33 +86,251 @@ async def test_purdue_user_resolved_via_ldap(monkeypatch, fake_ldap):
     assert fake_ldap["bases"] == [f"uid=alice,{ALL_PEOPLE}"]
 
 
-async def test_external_user_mapped_to_paf_account(monkeypatch, fake_ldap):
-    ns = load(monkeypatch)
-    spawner = FakeSpawner(user_id=7)
+# ── pooled accounts ───────────────────────────────────────────────────────────
 
+
+async def spawn_external(ns, spawner, name="carol-cern"):
     await ns["passthrough_auth_state_hook"](
-        spawner, {"name": "carol-cern", "domain": "cern.ch"}
+        spawner, {"name": name, "domain": "cern.ch"}
     )
 
-    # external users keep their hub username but get a mapped paf account uid
-    assert spawner.environment["NB_USER"] == "carol-cern"
-    assert fake_ldap["bases"] == [f"uid=paf0007,{ALL_PEOPLE}"]
-    assert spawner.environment["NB_UID"] == "12345"
 
-
-async def test_external_user_beyond_account_pool_refuses_spawn(monkeypatch, fake_ldap):
+async def test_purdue_user_never_touches_the_ledger(monkeypatch, fake_ldap):
     ns = load(monkeypatch)
-    spawner = FakeSpawner(user_id=400)
+    spawner = FakeSpawner()
 
-    with pytest.raises(RuntimeError, match="ran out of accounts"):
-        await ns["passthrough_auth_state_hook"](
-            spawner, {"name": "dave-cern", "domain": "cern.ch"}
-        )
+    await ns["passthrough_auth_state_hook"](
+        spawner, {"name": "alice", "domain": "purdue.edu"}
+    )
 
-    # no LDAP lookup for a nonexistent paf account, no UID/GID assigned
+    assert spawner.api.calls == []
+
+
+async def test_external_user_keeps_the_account_the_ledger_records(
+    monkeypatch, fake_ldap
+):
+    """The hub id plays no part: the entry is what the user runs as."""
+    ns = load(monkeypatch)
+    spawner = FakeSpawner(user_id=7, ledger={"carol-cern": "paf0042"})
+
+    await spawn_external(ns, spawner)
+
+    assert spawner.environment["NB_USER"] == "carol-cern"
+    assert fake_ldap["bases"] == [f"uid=paf0042,{ALL_PEOPLE}"]
+    assert spawner.environment["NB_UID"] == "12345"
+    assert [call[0] for call in spawner.api.calls] == ["read"]
+    assert spawner.api.data == {"carol-cern": "paf0042"}
+
+
+async def test_a_new_external_user_gets_the_account_of_their_hub_id(
+    monkeypatch, fake_ldap
+):
+    ns = load(monkeypatch)
+    ledger = {"ann-cern": "paf0000", "deleted-1": "paf0001"}
+    spawner = FakeSpawner(user_id=250, ledger=ledger)
+
+    await spawn_external(ns, spawner)
+
+    assert fake_ldap["bases"] == [f"uid=paf0250,{ALL_PEOPLE}"]
+    assert spawner.api.data == {**ledger, "carol-cern": "paf0250"}
+    assert [call[0] for call in spawner.api.calls] == ["read", "replace"]
+
+    # the entry outlives the spawn: the next one reads it back
+    again = FakeSpawner(user_id=250, api=spawner.api)
+    await spawn_external(ns, again)
+    assert fake_ldap["bases"][-1] == f"uid=paf0250,{ALL_PEOPLE}"
+    assert spawner.api.data == {**ledger, "carol-cern": "paf0250"}
+
+
+async def test_a_held_hub_id_account_falls_back_to_the_highest_free(
+    monkeypatch, fake_ldap
+):
+    """A reused hub id never inherits: the deleted user's entry still holds it.
+    The fallback starts at the top of the pool, which no hub id has reached."""
+    ns = load(monkeypatch)
+    ledger = {
+        "ann-cern": "paf0000",
+        "deleted-1": "paf0001",
+        "bob-fnal": "paf0003",
+        "gone-cern": "paf0250",
+    }
+    spawner = FakeSpawner(user_id=250, ledger=ledger)
+
+    await spawn_external(ns, spawner)
+
+    assert fake_ldap["bases"] == [f"uid=paf0399,{ALL_PEOPLE}"]
+    assert spawner.api.data == {**ledger, "carol-cern": "paf0399"}
+
+
+async def test_a_hub_id_beyond_the_pool_gets_the_highest_free(monkeypatch, fake_ldap):
+    ns = load(monkeypatch)
+    spawner = FakeSpawner(user_id=400, ledger={"ann-cern": "paf0399"})
+
+    await spawn_external(ns, spawner)
+
+    assert fake_ldap["bases"] == [f"uid=paf0398,{ALL_PEOPLE}"]
+
+
+async def test_a_missing_ledger_is_seeded_from_the_hubs_users(monkeypatch, fake_ldap):
+    """Every external user keeps the account of their hub id; a hub id with
+    no user reserves its account, which may still own files."""
+    ns = load(monkeypatch)
+    users = [
+        (1, "alice"),
+        (2, "bob-cern"),
+        (3, "carol-fnal"),
+        (5, "dave"),
+        (6, "eve-cern"),
+    ]
+    spawner = FakeSpawner(user_id=6, users=users)
+
+    await spawn_external(ns, spawner, "eve-cern")
+
+    assert fake_ldap["bases"] == [f"uid=paf0006,{ALL_PEOPLE}"]
+    assert spawner.api.data == {
+        "bob-cern": "paf0002",
+        "carol-fnal": "paf0003",
+        "deleted-4": "paf0004",
+        "eve-cern": "paf0006",
+    }
+    assert [call[0] for call in spawner.api.calls] == ["read", "create"]
+
+
+def test_seed_ledger_leaves_out_a_name_that_is_no_configmap_key(monkeypatch, fake_ldap):
+    """One such row must not fail the seed, and with it every external spawn."""
+    ns = load(monkeypatch)
+
+    seed = ns["seed_ledger"](
+        [(1, "alice"), (2, "bob-cern"), (3, "bad+name-cern"), (4, "eve-fnal")]
+    )
+
+    assert seed == {"bob-cern": "paf0002", "eve-fnal": "paf0004"}
+
+
+async def test_a_name_that_is_no_configmap_key_fails_its_own_spawn_only(
+    monkeypatch, fake_ldap
+):
+    ns = load(monkeypatch)
+    spawner = FakeSpawner(user_id=3, ledger={"bob-cern": "paf0002"})
+
+    with pytest.raises(RuntimeError, match="cannot be a key"):
+        await spawn_external(ns, spawner, "bad+name-cern")
+
+    assert spawner.api.calls == []
+    assert "NB_UID" not in spawner.environment
+
+
+def test_seed_ledger_skips_hub_ids_beyond_the_pool(monkeypatch, fake_ldap):
+    ns = load(monkeypatch)
+    users = [(1, "alice"), (2, "bob-cern"), (400, "eve-cern"), (401, "fay-fnal")]
+
+    seed = ns["seed_ledger"](users)
+
+    assert seed["bob-cern"] == "paf0002"
+    assert "eve-cern" not in seed and "fay-fnal" not in seed
+    reserved = {key for key in seed if key.startswith("deleted-")}
+    assert reserved == {f"deleted-{n}" for n in range(3, 400)}
+    assert ns["seed_ledger"]([]) == {}
+    # the reservation runs up to the highest hub id of any user
+    assert ns["seed_ledger"]([(1, "a-cern"), (3, "p")]) == {
+        "a-cern": "paf0001",
+        "deleted-2": "paf0002",
+    }
+
+
+async def test_a_user_outside_the_seed_is_allocated_after_it(monkeypatch, fake_ldap):
+    ns = load(monkeypatch)
+    users = [(1, "alice"), (2, "bob-cern"), (3, "carol-cern")]
+    spawner = FakeSpawner(user_id=3, users=users)
+    # another hub created the ledger first, without carol
+    spawner.api.race_create = {"bob-cern": "paf0002"}
+
+    await spawn_external(ns, spawner)
+
+    assert spawner.api.data == {"bob-cern": "paf0002", "carol-cern": "paf0003"}
+    assert [call[0] for call in spawner.api.calls] == [
+        "read",
+        "create",
+        "read",
+        "replace",
+    ]
+
+
+async def test_a_concurrent_allocation_is_redone_against_the_new_ledger(
+    monkeypatch, fake_ldap
+):
+    ns = load(monkeypatch)
+    spawner = FakeSpawner(user_id=1, ledger={"ann-cern": "paf0000"})
+    spawner.api.on_conflict = lambda data: data.update({"bob-cern": "paf0001"})
+
+    await spawn_external(ns, spawner)
+
+    assert spawner.api.data == {
+        "ann-cern": "paf0000",
+        "bob-cern": "paf0001",
+        "carol-cern": "paf0399",
+    }
+    assert [call[0] for call in spawner.api.calls] == [
+        "read",
+        "replace",
+        "read",
+        "replace",
+    ]
+
+
+async def test_a_ledger_that_keeps_changing_fails_the_spawn(monkeypatch, fake_ldap):
+    ns = load(monkeypatch)
+    spawner = FakeSpawner(ledger={})
+    spawner.api.always_conflict = True
+
+    with pytest.raises(RuntimeError, match="kept changing"):
+        await spawn_external(ns, spawner)
+
+    assert fake_ldap["searches"] == []
+    assert "NB_UID" not in spawner.environment
+
+
+async def test_an_exhausted_pool_refuses_the_spawn(monkeypatch, fake_ldap):
+    ns = load(monkeypatch)
+    full = {f"user{n}-cern": f"paf{n:04d}" for n in range(400)}
+    spawner = FakeSpawner(ledger=full)
+
+    with pytest.raises(RuntimeError, match="ran out of pooled accounts"):
+        await spawn_external(ns, spawner)
+
+    # no LDAP lookup for a nonexistent account, no UID/GID assigned
     assert fake_ldap["searches"] == []
     assert "NB_UID" not in spawner.environment
     assert "NB_GID" not in spawner.environment
+    assert spawner.api.data == full
+
+
+async def test_a_ledger_the_hub_cannot_read_fails_the_spawn(monkeypatch, fake_ldap):
+    from kubernetes_asyncio.client.rest import ApiException
+
+    ns = load(monkeypatch)
+    spawner = FakeSpawner(ledger={})
+    spawner.api.fail_read = 403
+
+    with pytest.raises(ApiException):
+        await spawn_external(ns, spawner)
+
+    assert "NB_UID" not in spawner.environment
+
+
+async def test_every_ledger_call_is_bounded_like_kubespawners_own(
+    monkeypatch, fake_ldap
+):
+    """The hook runs before start_timeout is armed: an unbounded call would
+    leave the spawn pending for good."""
+    ns = load(monkeypatch)
+    spawner = FakeSpawner(user_id=2, users=[(1, "alice"), (2, "carol-cern")])
+    spawner.api.race_create = {}
+
+    await spawn_external(ns, spawner)
+
+    assert len(spawner.api.timeouts) == 4
+    assert set(spawner.api.timeouts) == {spawner.k8s_api_request_timeout}
 
 
 async def test_lookup_does_not_block_the_event_loop(monkeypatch, fake_ldap):
