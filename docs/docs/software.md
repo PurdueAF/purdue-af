@@ -50,15 +50,24 @@ There is no one-to-one mapping between Pixi environments and Jupyter kernels.
 Instead, we provide two special Pixi kernels:
 
 - **Python (pixi global)** — always uses the global environment at `/work/pixi/global/`.
-- **Python (pixi project-aware)** — automatically discovers the environment local to the
-  directory where the notebook is located. If no local environment is found, the
-  kernel falls back to the global environment.
+- **Python (pixi project-aware)** — uses the Pixi project that contains the
+  notebook: the nearest `pixi.toml`, or `pyproject.toml` with a `[tool.pixi]`
+  table, in the notebook's directory or one of its parents. It never uses the
+  global environment: for a notebook outside any Pixi project, choose
+  **Python (pixi global)**.
 
-!!! note
+Before starting, the project-aware kernel runs `pixi install` for the project's
+environment. When it finds no project, or cannot use the one it finds, the
+kernel still starts, but every cell fails with the error that stopped it. To be
+usable, the project must:
 
-    In order for a Pixi environment to be discoverable by the project-aware
-    kernel, it must have the `ipykernel` package installed, and be stored in a
-    [publicly readable directory](storage.md#storing-custom-pixi-or-conda-environments).
+- have the `ipykernel` package in its environment;
+- be writable by you — a shared project on `/depot/` owned by someone else, or
+  `/work/pixi/global/` itself, is not; copy its `pixi.toml` into a project of
+  your own ([Pixi guide](guide-pixi.md)), or use **Python (pixi global)**;
+- not be under `/home/` ([Pixi storage locations](guide-pixi.md#storage-locations));
+- be stored in a
+  [publicly readable directory](storage.md#storing-custom-pixi-or-conda-environments).
 
 ### Conda kernels
 
