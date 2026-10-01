@@ -44,13 +44,6 @@
   // Renovate treats the branch as hand-edited and never merges it.
   gitIgnoredAuthors: ['41898282+github-actions[bot]@users.noreply.github.com'],
 
-  // Pixi CLI is frozen (lock format v6; newer pixi writes v7). The pin is
-  // ARG PIXI_VERSION in docker/purdue-af/Dockerfile; this copy is asserted
-  // equal by tests/manifests/test_pixi_cli_version.py.
-  constraints: {
-    pixi: '0.62.2',
-  },
-
   // Empty, not absent: `config:recommended` pulls in `:ignoreModulesAndTests`,
   // which skips `**/tests/**` — where the integration-challenge pin and the
   // test suite's own dependencies live.
@@ -65,8 +58,7 @@
     enabled: true,
   },
 
-  // Track Dockerfile PIXI_VERSION pins (github-actions already sees
-  // pixi-version: in ci-pixi-*.yml; constraints.pixi is a tool-constraint).
+  // The pixi CLI pin; ci-pixi-*.yml read it from the Dockerfile at run time.
   customManagers: [
     {
       customType: 'regex',
@@ -142,13 +134,14 @@
       enabled: false,
     },
     {
-      // Freeze the pixi CLI (lock format v6 only).
-      matchPackageNames: ['pixi', 'prefix-dev/pixi'],
-      enabled: false,
-    },
-    {
       matchUpdateTypes: ['minor', 'patch', 'digest', 'pin', 'pinDigest'],
       automerge: true,
+    },
+    {
+      // Merged by hand: pixi-global-sync installs with the released image's
+      // pixi, which cannot read a lock in a format a newer pixi writes.
+      matchPackageNames: ['prefix-dev/pixi'],
+      automerge: false,
     },
     {
       // Group all GitHub Actions bumps into one PR.

@@ -95,7 +95,7 @@ RUN sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashr
 # ------------------------------------------------------------
 FROM system AS stack
 
-ARG PIXI_VERSION="0.62.2" # read by ci-pixi-*.yml
+ARG PIXI_VERSION="0.81.0" # read by ci-pixi-*.yml
 
 ENV PIXI_HOME="/opt/pixi" \
     BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env"

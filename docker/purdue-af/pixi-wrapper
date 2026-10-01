@@ -12,7 +12,7 @@ SUBCMD="${1:-}"
 
 is_project_env_command() {
   case "$SUBCMD" in
-    add|build|init|install|import|reinstall|remove|shell|shell-hook|update|upgrade|upload)
+    add|init|install|import|publish|reinstall|remove|shell|shell-hook|update|upgrade|upload)
       return 0 ;;
     *) return 1 ;;
   esac
@@ -23,7 +23,7 @@ is_project_env_command() {
 # normal thing to do — changing one is not.
 is_env_mutating_command() {
   case "$SUBCMD" in
-    add|build|import|init|install|reinstall|remove|update|upgrade|upload)
+    add|import|init|install|publish|reinstall|remove|update|upgrade|upload)
       return 0 ;;
     *) return 1 ;;
   esac
