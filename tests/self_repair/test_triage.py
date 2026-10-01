@@ -32,6 +32,8 @@ class TestWorkload:
             ("pyroscope-0", "pyroscope"),
             ("af-x509-secrets-29312345-abcde", "af-x509-secrets"),
             ("alloy-abcde", "alloy"),
+            ("ray-train-alice-head-x7k2p", "ray-train-*"),
+            ("ray-train-gateway-7d9f8c6b5-abcde", "ray-train-gateway"),
         ],
     )
     def test_strips_generated_suffixes(self, pod, workload):
@@ -48,6 +50,32 @@ class TestRedaction:
         assert "alice" not in out and "bob" not in out
         assert "jupyter-<user>" in out and "/home/<user>/.bashrc" in out
         assert "username=<user>" in out and "user=<user>" in out
+
+    def test_ray_cluster_names_carry_no_username(self):
+        text = (
+            "created ray-train-alice; ray-train-alice-head-svc.cms.svc:10001 refused; "
+            "ray-train-gateway-7d9f8c6b5-abcde ready; app=ray-train-cluster; "
+            "networkpolicy ray-train-clusters"
+        )
+        out = triage.redact(text)
+        assert "alice" not in out
+        assert "created ray-train-<user>;" in out
+        assert "ray-train-gateway-7d9f8c6b5-abcde" in out
+        assert "app=ray-train-cluster;" in out and "ray-train-clusters" in out
+
+    def test_ray_cluster_samples_are_redacted(self):
+        incidents = triage.cluster(
+            [
+                line(
+                    "ray-train-alice-head-x7k2p",
+                    "ray-head",
+                    "Error: ray-train-alice down",
+                )
+            ]
+        )
+        assert incidents[0].key.workload == "ray-train-*"
+        assert "alice" not in incidents[0].key.message
+        assert all("alice" not in sample for sample in incidents[0].evidence.samples)
 
     def test_samples_are_redacted(self):
         incidents = triage.cluster(

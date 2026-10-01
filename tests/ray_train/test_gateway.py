@@ -30,8 +30,10 @@ SERVICE_TOKEN = "service-token"
 SESSIONS = {
     "session-a": ("user-a", 7),
     "session-b": ("user-b-cern", 42),
-    "session-idle": ("user-idle", None),
+    "session-idle": ("user-c-fnal", None),
 }
+# Users the fake Hub was asked about
+LOOKUPS = []
 LDAP = {"user-a": (5001, 500), "paf0042": (6042, 600)}
 ENV_A = "/work/users/user-a/proj/.pixi/envs/default"
 ENV_B = "/depot/cms/users/user-a/other"
@@ -62,6 +64,7 @@ def hub_app():
         if request.headers.get("Authorization") != f"token {SERVICE_TOKEN}":
             return web.json_response({}, status=403)
         name = request.match_info["name"]
+        LOOKUPS.append(name)
         (af_id,) = [i for n, i in SESSIONS.values() if n == name]
         servers = (
             {} if af_id is None else {"": {"state": {"pod_name": f"purdue-af-{af_id}"}}}
@@ -249,6 +252,7 @@ class FakeHeads:
 
 @pytest.fixture
 async def env(monkeypatch, tmp_path):
+    LOOKUPS.clear()
     kube, heads = FakeKube(), FakeHeads()
     servers = [
         TestServer(hub_app()),
@@ -323,16 +327,16 @@ async def refused(env, **kwargs):
     return e.value.code()
 
 
-def head_pod(env, name="ray-train-7"):
+def head_pod(env, name="ray-train-user-a"):
     return env.kube.clusters[name]["spec"]["headGroupSpec"]["template"]["spec"]
 
 
-def head_env(env, name="ray-train-7"):
+def head_env(env, name="ray-train-user-a"):
     (container,) = head_pod(env, name)["containers"]
     return {v["name"]: v["value"] for v in container["env"]}
 
 
-def cluster_env(env, name="ray-train-7"):
+def cluster_env(env, name="ray-train-user-a"):
     return env.kube.clusters[name]["metadata"]["annotations"][gw.ENV_ANNOTATION]
 
 
@@ -375,18 +379,18 @@ async def test_the_service_token_is_read_when_it_appears(env):
 
 async def test_connecting_starts_the_users_cluster_as_them(env):
     assert await call(env) == [b"echo:ping"]
-    cluster = env.kube.clusters["ray-train-7"]
+    cluster = env.kube.clusters["ray-train-user-a"]
     assert (
         cluster["metadata"]["labels"]["app.kubernetes.io/managed-by"] == gw.MANAGED_BY
     )
-    assert cluster["spec"]["authOptions"]["secretName"] == "ray-train-7"
+    assert cluster["spec"]["authOptions"]["secretName"] == "ray-train-user-a"
     context = head_pod(env)["securityContext"]
     assert (context["runAsUser"], context["runAsGroup"]) == (5001, 500)
     assert 100 in context["supplementalGroups"]
     assert head_env(env)["USER"] == "user-a"
-    secret = env.kube.secrets["ray-train-7"]
+    secret = env.kube.secrets["ray-train-user-a"]
     assert secret["stringData"]["auth_token"] == gw.cluster_token(
-        SERVICE_TOKEN, "ray-train-7"
+        SERVICE_TOKEN, "ray-train-user-a"
     )
     assert secret["metadata"]["ownerReferences"][0]["uid"] == cluster["metadata"]["uid"]
 
@@ -396,7 +400,7 @@ async def test_a_head_sees_its_own_token_and_the_clients_own_metadata(env):
     ((method, metadata),) = env.heads.calls
     assert method == PING
     assert metadata["authorization"] == (
-        f"Bearer {gw.cluster_token(SERVICE_TOKEN, 'ray-train-7')}"
+        f"Bearer {gw.cluster_token(SERVICE_TOKEN, 'ray-train-user-a')}"
     )
     assert metadata["client_id"] == "client-1"
     assert gw.ENV_METADATA not in metadata
@@ -405,11 +409,22 @@ async def test_a_head_sees_its_own_token_and_the_clients_own_metadata(env):
 
 async def test_an_external_user_runs_as_their_pooled_account(env):
     await call(env, token="session-b")
-    assert head_pod(env, "ray-train-42")["securityContext"]["runAsUser"] == 6042
-    assert head_env(env, "ray-train-42")["USER"] == "paf0042"
+    assert (
+        head_pod(env, "ray-train-user-b-cern")["securityContext"]["runAsUser"] == 6042
+    )
+    assert head_env(env, "ray-train-user-b-cern")["USER"] == "paf0042"
 
 
-async def test_a_user_without_a_running_session_is_told_to_start_one(env):
+async def test_a_purdue_user_is_not_looked_up_in_the_hub(env):
+    await call(env)
+    assert LOOKUPS == []
+    await call(env, token="session-b")
+    assert LOOKUPS == ["user-b-cern"]
+
+
+async def test_a_user_from_outside_purdue_without_a_running_session_is_told_to_start_one(
+    env,
+):
     assert (
         await refused(env, token="session-idle") == grpc.StatusCode.FAILED_PRECONDITION
     )
@@ -421,7 +436,7 @@ async def test_users_reach_only_their_own_cluster(env):
     await call(env, token="session-b")
     assert [metadata["authorization"] for _, metadata in env.heads.calls] == [
         f"Bearer {gw.cluster_token(SERVICE_TOKEN, name)}"
-        for name in ("ray-train-7", "ray-train-42")
+        for name in ("ray-train-user-a", "ray-train-user-b-cern")
     ]
 
 
@@ -449,23 +464,23 @@ async def test_an_unreachable_head_is_checked_again_on_the_next_call(env, monkey
     port = free_port()
     monkeypatch.setattr(gw, "client_address", lambda cluster: f"127.0.0.1:{port}")
     assert await refused(env) == grpc.StatusCode.UNAVAILABLE
-    assert "ray-train-7" not in env.gateway.started
+    assert "ray-train-user-a" not in env.gateway.started
 
 
 async def test_a_client_of_a_removed_cluster_is_told_so_and_starts_nothing(env):
     await call(env)
-    idle(env, "ray-train-7")
+    idle(env, "ray-train-user-a")
     await env.gateway.reap_idle()
     assert await refused(env) == grpc.StatusCode.NOT_FOUND
     assert live(env) == set()
     assert await call(env, client="client-2") == [b"echo:ping"]
-    assert "ray-train-7" in env.kube.clusters
+    assert "ray-train-user-a" in env.kube.clusters
 
 
 async def test_a_removed_clusters_clients_are_forgotten_in_time(env, monkeypatch):
     monkeypatch.setattr(gw, "GONE_S", 0)
     await call(env)
-    idle(env, "ray-train-7")
+    idle(env, "ray-train-user-a")
     await env.gateway.reap_idle()
     assert await call(env) == [b"echo:ping"]
 
@@ -474,7 +489,7 @@ async def test_a_user_never_holds_two_gpu_pods(env):
     """A replaced or removed cluster's pod is gone before its successor's starts."""
     await call(env, env_path=ENV_A)
     await call(env, env_path=ENV_B)
-    idle(env, "ray-train-7")
+    idle(env, "ray-train-user-a")
     await env.gateway.reap_idle()
     await call(env, env_path=ENV_A, client="client-2")
     assert env.kube.created == 3
@@ -511,7 +526,7 @@ async def test_a_cluster_that_does_not_start_is_reported(env, monkeypatch, head)
 async def test_a_concurrent_creation_is_joined_only_if_it_runs_the_same_environment(
     env, other_env, joined
 ):
-    env.kube.racing["ray-train-7"] = other_env
+    env.kube.racing["ray-train-user-a"] = other_env
     if joined:
         assert await call(env) == [b"echo:ping"]
     else:
@@ -521,16 +536,16 @@ async def test_a_concurrent_creation_is_joined_only_if_it_runs_the_same_environm
 async def test_a_cluster_being_deleted_is_waited_out(env):
     await call(env)
     env.gateway.started.clear()
-    env.kube.clusters["ray-train-7"]["metadata"]["deletionTimestamp"] = "now"
-    env.kube.linger["ray-train-7"] = 2
+    env.kube.clusters["ray-train-user-a"]["metadata"]["deletionTimestamp"] = "now"
+    env.kube.linger["ray-train-user-a"] = 2
     assert await call(env) == [b"echo:ping"]
-    assert "deletionTimestamp" not in env.kube.clusters["ray-train-7"]["metadata"]
+    assert "deletionTimestamp" not in env.kube.clusters["ray-train-user-a"]["metadata"]
 
 
 async def test_a_cluster_that_stays_in_deletion_is_reported(env, monkeypatch):
     await call(env)
     env.gateway.started.clear()
-    env.kube.clusters["ray-train-7"]["metadata"]["deletionTimestamp"] = "now"
+    env.kube.clusters["ray-train-user-a"]["metadata"]["deletionTimestamp"] = "now"
     monkeypatch.setattr(gw, "START_TIMEOUT_S", 0)
     assert await refused(env) == grpc.StatusCode.UNAVAILABLE
 
@@ -566,7 +581,7 @@ async def test_switching_environments_replaces_an_idle_cluster(env):
 
 async def test_switching_environments_leaves_a_busy_cluster_alone(env):
     await call(env, env_path=ENV_A)
-    env.heads.running["ray-train-7"] = [{"task_id": "t", "state": "RUNNING"}]
+    env.heads.running["ray-train-user-a"] = [{"task_id": "t", "state": "RUNNING"}]
     assert await refused(env, env_path=ENV_B) == grpc.StatusCode.FAILED_PRECONDITION
     assert cluster_env(env) == ENV_A
 
@@ -601,27 +616,27 @@ async def test_upstream_failures_are_reported_as_unavailable(env, failure, token
 
 async def test_a_service_token_the_hub_refuses_is_reported(env):
     env.token_file.write_text("not-the-service-token")
-    assert await refused(env) == grpc.StatusCode.UNAVAILABLE
+    assert await refused(env, token="session-b") == grpc.StatusCode.UNAVAILABLE
 
 
 async def test_idle_clusters_are_deleted_and_busy_ones_kept(env):
     await call(env, token="session-a")
     await call(env, token="session-b")
-    env.heads.running["ray-train-7"] = [{"task_id": "t", "state": "RUNNING"}]
-    idle(env, "ray-train-7", "ray-train-42")
+    env.heads.running["ray-train-user-a"] = [{"task_id": "t", "state": "RUNNING"}]
+    idle(env, "ray-train-user-a", "ray-train-user-b-cern")
 
     await env.gateway.reap_idle()
 
-    assert live(env) == {"ray-train-7"}
-    assert set(env.gateway.channels) == {"ray-train-7"}
+    assert live(env) == {"ray-train-user-a"}
+    assert set(env.gateway.channels) == {"ray-train-user-a"}
 
 
 async def test_relayed_traffic_keeps_a_cluster(env):
     await call(env)
-    idle(env, "ray-train-7")
+    idle(env, "ray-train-user-a")
     await call(env, method=DATAPATH, messages=(b"x",))
     await env.gateway.reap_idle()
-    assert "ray-train-7" in env.kube.clusters
+    assert "ray-train-user-a" in env.kube.clusters
 
 
 async def test_logs_from_a_cluster_do_not_keep_it(env):
@@ -632,7 +647,7 @@ async def test_logs_from_a_cluster_do_not_keep_it(env):
     )
     async for line in stream:
         lines.append(line)
-        idle(env, "ray-train-7")
+        idle(env, "ray-train-user-a")
         env.heads.more_logs.set()
     assert lines == [b"log 1", b"log 2"]
     await env.gateway.reap_idle()
@@ -641,22 +656,22 @@ async def test_logs_from_a_cluster_do_not_keep_it(env):
 
 async def test_a_ready_head_that_does_not_answer_is_kept(env):
     await call(env)
-    env.kube.clusters["ray-train-7"]["status"] = {
+    env.kube.clusters["ray-train-user-a"]["status"] = {
         "conditions": [{"type": "HeadPodReady", "status": "True"}]
     }
     env.heads.up = False
-    idle(env, "ray-train-7")
+    idle(env, "ray-train-user-a")
 
     await env.gateway.reap_idle()
 
-    assert "ray-train-7" in env.kube.clusters
+    assert "ray-train-user-a" in env.kube.clusters
 
 
 async def test_an_unreachable_head_that_never_came_up_is_deleted(env, monkeypatch):
     await call(env)
     port = free_port()
     monkeypatch.setattr(gw, "head_url", lambda cluster: f"http://127.0.0.1:{port}")
-    idle(env, "ray-train-7")
+    idle(env, "ray-train-user-a")
     await env.gateway.reap_idle()
     assert live(env) == set()
 
@@ -664,7 +679,7 @@ async def test_an_unreachable_head_that_never_came_up_is_deleted(env, monkeypatc
 async def test_a_cluster_made_under_another_service_token_is_deleted(env):
     await call(env)
     env.token_file.write_text("rotated-service-token")
-    idle(env, "ray-train-7")
+    idle(env, "ray-train-user-a")
     await env.gateway.reap_idle()
     assert live(env) == set()
 
@@ -672,9 +687,9 @@ async def test_a_cluster_made_under_another_service_token_is_deleted(env):
 async def test_reaping_waits_out_a_failed_listing(env):
     await call(env)
     env.kube.fail_list = True
-    idle(env, "ray-train-7")
+    idle(env, "ray-train-user-a")
     await env.gateway.reap_idle()
-    assert "ray-train-7" in env.kube.clusters
+    assert "ray-train-user-a" in env.kube.clusters
 
 
 async def test_the_reaper_outlives_its_errors(monkeypatch):
@@ -753,21 +768,20 @@ def test_ldap_ids_reads_the_account_at_its_dn(monkeypatch):
 
 def test_a_clusters_head_is_its_kuberay_service():
     assert (
-        gw.head_url("ray-train-7")
-        == "http://ray-train-7-head-svc.cms.svc.cluster.local:8265"
+        gw.head_url("ray-train-user-a")
+        == "http://ray-train-user-a-head-svc.cms.svc.cluster.local:8265"
     )
     assert (
-        gw.client_address("ray-train-7")
-        == f"ray-train-7-head-svc.cms.svc.cluster.local:{gw.CLIENT_PORT}"
+        gw.client_address("ray-train-user-a")
+        == f"ray-train-user-a-head-svc.cms.svc.cluster.local:{gw.CLIENT_PORT}"
     )
 
 
-def test_non_purdue_accounts_map_onto_the_pool():
-    assert gw.ldap_account("user-a", 7) == "user-a"
-    assert gw.ldap_account("user-b-cern", 42) == "paf0042"
-    assert gw.ldap_account("user-c-fnal", 3) == "paf0003"
+def test_accounts_from_outside_purdue_map_onto_the_pool():
+    assert gw.pooled_account(42) == "paf0042"
+    assert gw.pooled_account(3) == "paf0003"
     with pytest.raises(gw.Refused) as e:
-        gw.ldap_account("user-d-cern", 400)
+        gw.pooled_account(400)
     assert e.value.code == grpc.StatusCode.PERMISSION_DENIED
 
 
@@ -794,13 +808,32 @@ def test_bearer_token(header, token):
 def test_building_a_cluster_leaves_the_template_alone():
     template = yaml.safe_load(TEMPLATE.read_text())
     before = copy.deepcopy(template)
-    user = gw.User(name="user-a", af_id=7, account="user-a", uid=5001, gid=500)
+    user = gw.User(name="user-a", account="user-a", uid=5001, gid=500)
     gw.build_cluster(template, user, ENV_A)
     assert template == before
 
 
 def test_each_cluster_has_its_own_token():
-    assert gw.cluster_token("k", "ray-train-7") != gw.cluster_token("k", "ray-train-42")
-    assert gw.cluster_token("k", "ray-train-7") != gw.cluster_token(
-        "other", "ray-train-7"
+    assert gw.cluster_token("k", "ray-train-user-a") != gw.cluster_token(
+        "k", "ray-train-user-b-cern"
     )
+    assert gw.cluster_token("k", "ray-train-user-a") != gw.cluster_token(
+        "other", "ray-train-user-a"
+    )
+
+
+@pytest.mark.parametrize("username", ["user-a", "user-b-cern", "a1", "x" * 43])
+def test_a_cluster_is_named_after_its_user(username):
+    assert gw.cluster_name(username) == f"ray-train-{username}"
+
+
+@pytest.mark.parametrize("username", ["john.doe", "a_b", "trail-", "x" * 44, "日本"])
+def test_a_username_that_cannot_be_a_name_is_hashed_into_one(username):
+    name = gw.cluster_name(username)
+    assert len(name) <= gw.MAX_CLUSTER_NAME
+    assert gw.DNS_LABEL.fullmatch(name)
+    assert name != gw.cluster_name(username + "x")
+
+
+def test_usernames_that_slug_alike_keep_their_own_clusters():
+    assert gw.cluster_name("a_b") != gw.cluster_name("a.b")

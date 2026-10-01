@@ -64,6 +64,9 @@ DEFAULT_ENV = "/work/pixi/global/.pixi/envs/default"
 SESSION_POD = re.compile(r"purdue-af-(\d+)")
 # custom-spawner.py names the accounts from outside Purdue <login>-cern and <login>-fnal
 EXTERNAL_SUFFIXES = ("-cern", "-fnal")
+# KubeRay's longest RayCluster name: the Services it names after one must fit in 63 characters.
+MAX_CLUSTER_NAME = 53
+DNS_LABEL = re.compile(r"[a-z]([-a-z0-9]*[a-z0-9])?")
 # GRPC_OPTIONS in ray/util/client/common.py: Ray Client's message sizes and keepalives.
 GRPC_OPTIONS = [
     ("grpc.max_send_message_length", 2**31 - 1),
@@ -91,14 +94,24 @@ class Refused(Exception):
 @dataclass(frozen=True)
 class User:
     name: str
-    af_id: int
     account: str
     uid: int
     gid: int
 
     @property
     def cluster(self) -> str:
-        return f"ray-train-{self.af_id}"
+        return cluster_name(self.name)
+
+
+def cluster_name(username: str) -> str:
+    """ray-train-<username>, or for a username that cannot be part of a
+    Kubernetes name, what can stay of it and a hash that keeps it apart."""
+    name = f"ray-train-{username}"
+    if len(name) <= MAX_CLUSTER_NAME and DNS_LABEL.fullmatch(name):
+        return name
+    stem = re.sub(r"[^a-z0-9]+", "-", username.lower()).strip("-")
+    suffix = "---" + hashlib.sha256(username.encode()).hexdigest()[:8]
+    return f"ray-train-{stem}"[: MAX_CLUSTER_NAME - len(suffix)] + suffix
 
 
 def bearer_token(header: str) -> str | None:
@@ -115,10 +128,8 @@ def session_af_id(user_model: dict[str, Any]) -> int | None:
     return int(match[1]) if match else None
 
 
-def ldap_account(username: str, af_id: int) -> str:
-    """The account a session runs as (set-user-info.py): pooled paf#### outside Purdue."""
-    if not username.endswith(EXTERNAL_SUFFIXES):
-        return username
+def pooled_account(af_id: int) -> str:
+    """The account a session from outside Purdue runs as (set-user-info.py)."""
     if af_id > 399:
         raise Refused(
             grpc.StatusCode.PERMISSION_DENIED,
@@ -365,15 +376,18 @@ class Gateway:
         if cached and cached[0] > now:
             return cached[1]
         name = await self.whoami(token)
-        af_id = session_af_id(await self.hub_user(name))
-        if af_id is None:
-            raise Refused(
-                grpc.StatusCode.FAILED_PRECONDITION,
-                "Start your AF session first: a Ray cluster runs as the user of a running session.",
-            )
-        account = ldap_account(name, af_id)
+        account = name
+        if name.endswith(EXTERNAL_SUFFIXES):
+            # Numbered after the hub id, which the pod name of the user's session carries.
+            af_id = session_af_id(await self.hub_user(name))
+            if af_id is None:
+                raise Refused(
+                    grpc.StatusCode.FAILED_PRECONDITION,
+                    "Start your AF session first: a Ray cluster runs as the user of a running session.",
+                )
+            account = pooled_account(af_id)
         uid, gid = await asyncio.to_thread(ldap_ids, account)
-        user = User(name=name, af_id=af_id, account=account, uid=uid, gid=gid)
+        user = User(name=name, account=account, uid=uid, gid=gid)
         self._users = {k: v for k, v in self._users.items() if v[0] > now}
         self._users[key] = (now + USER_CACHE_S, user)
         return user
