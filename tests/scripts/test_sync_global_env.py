@@ -488,9 +488,18 @@ def pipeline(sync, monkeypatch):
 
 class TestReconcile:
     def test_in_sync_and_healthy_is_a_no_op(self, sync, pipeline):
-        sync.stage_manifests(sync.LIVE_DIR, DESIRED)
+        assert sync.reconcile() is True
+        pipeline["events"].clear()
         assert sync.reconcile() is True
         assert pipeline["events"] == []
+        assert sync.METRICS["in_sync"] == 1.0
+
+    def test_first_cycle_installs_manifests_already_staged(self, sync, pipeline):
+        """A new process cannot tell whether the staged manifests were ever
+        installed, so it installs once."""
+        sync.stage_manifests(sync.LIVE_DIR, DESIRED)
+        assert sync.reconcile() is True
+        assert pipeline["events"] == ["install", "purge", "validate"]
         assert sync.METRICS["in_sync"] == 1.0
 
     def test_drift_is_synced(self, sync, pipeline):
@@ -533,7 +542,8 @@ class TestReconcile:
         assert "install" in pipeline["events"]
 
     def test_unhealthy_env_in_sync_is_healed_with_a_wipe(self, sync, pipeline):
-        sync.stage_manifests(sync.LIVE_DIR, DESIRED)
+        assert sync.reconcile() is True
+        pipeline["events"].clear()
         sync.metric_set("env_healthy", 0.0)
         assert sync.reconcile() is True
         assert pipeline["events"][0] == "wipe"
@@ -547,6 +557,64 @@ class TestReconcile:
         assert sync.reconcile() is False
         assert sync.METRICS["sync_failures_total"] == 1.0
         assert sync.METRICS["last_sync_duration_seconds"] >= 0
+
+    def test_failed_install_stays_out_of_sync_until_retried(
+        self, sync, pipeline, monkeypatch
+    ):
+        """The manifests are staged before the install, so after a failed
+        install the live bytes match; that is still drift, and a deep verify
+        of the previous env must not hide it."""
+        install = sync.pixi_install
+
+        def broken(d):
+            pipeline["events"].append("install")
+            raise RuntimeError("pixi install failed after retries")
+
+        monkeypatch.setattr(sync, "pixi_install", broken)
+        assert sync.reconcile() is False
+        assert sync.is_in_sync(sync.LIVE_DIR, DESIRED)
+        sync.deep_verify()
+        assert sync.METRICS["env_healthy"] == 1.0
+        assert sync.reconcile() is False  # inside the cooldown
+        assert pipeline["events"] == ["install", "validate"]
+        assert sync.METRICS["in_sync"] == 0.0
+
+        sync._last_failure["ts"] = 0.0
+        assert sync.reconcile() is False
+        assert pipeline["events"] == ["install", "validate", "install"]
+        assert sync.METRICS["in_sync"] == 0.0
+        assert sync.METRICS["sync_failures_total"] == 2.0
+
+        monkeypatch.setattr(sync, "pixi_install", install)
+        sync._last_failure["ts"] = 0.0
+        assert sync.reconcile() is True
+        assert sync.METRICS["in_sync"] == 1.0
+
+    def test_failed_forced_resync_is_retried(self, sync, pipeline, monkeypatch):
+        assert sync.reconcile() is True
+        install = sync.pixi_install
+
+        def broken(d):
+            raise RuntimeError("pixi install failed after retries")
+
+        monkeypatch.setattr(sync, "pixi_install", broken)
+        assert sync.reconcile(force=True) is False
+        monkeypatch.setattr(sync, "pixi_install", install)
+        sync._last_failure["ts"] = 0.0
+        pipeline["events"].clear()
+        assert sync.reconcile() is True
+        assert "install" in pipeline["events"]
+
+    def test_resume_from_pause_reinstalls(self, sync, pipeline):
+        """Hands-on work while paused can change the env without touching
+        the manifests."""
+        assert sync.reconcile() is True
+        (sync.LIVE_DIR / sync.PAUSE_FILE_NAME).touch()
+        assert sync.reconcile() is True
+        (sync.LIVE_DIR / sync.PAUSE_FILE_NAME).unlink()
+        pipeline["events"].clear()
+        assert sync.reconcile() is True
+        assert pipeline["events"] == ["install", "purge", "validate"]
 
     def test_paused_env_is_left_alone(self, sync, pipeline, caplog):
         (sync.LIVE_DIR / sync.PAUSE_FILE_NAME).touch()
