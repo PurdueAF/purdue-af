@@ -20,8 +20,11 @@ the share is the persistent package cache at `/work/pixi/.cache`.
   included), lazily-imported packages can mix until the kernel restarts.
 - **No state files.** Drift is a byte-difference between the mounted
   desired manifests (ConfigMap, kubelet-refreshed ~1 min after Flux
-  applies) and the live ones. Change latency merge→live ≈ Flux interval
-  + 1 min + install time.
+  applies) and the live ones, or desired manifests the running daemon has
+  not installed yet: a failed install holds `in_sync` at 0 and is retried
+  after `FAIL_COOLDOWN`, and each start runs `pixi install --locked` once,
+  a fast no-op on a current env. Change latency merge→live ≈ Flux
+  interval + 1 min + install time.
 
 ## Manual work / escape hatch
 
@@ -47,6 +50,7 @@ eventually surfaces as AFGlobalEnvOutOfSync.
 - **Roll back an env change:** revert the lock commit on `main`; the
   daemon reconciles back (warm cache ⇒ minutes).
 - **Watch a sync:** `kubectl logs deploy/pixi-global-sync -f`
-- **Force a re-sync now:** `rm /work/pixi/global/pixi.lock` (instant
-  drift) or wait ≤60 s after Flux applies a change.
+- **Force a re-sync now:** delete the pod (each start installs),
+  `rm /work/pixi/global/pixi.lock` (instant drift), or wait ≤60 s after
+  Flux applies a change.
 

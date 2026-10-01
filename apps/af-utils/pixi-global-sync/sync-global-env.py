@@ -20,11 +20,15 @@ Safety model:
     with backoff; a failed attempt leaves pixi to converge on retry).
   - After every install (and periodically), check-env.py import-smokes the
     live env; failure ⇒ env_healthy=0 (alerts) + forced re-sync.
-  - Drift detection is byte-comparison of pixi.lock (mounted desired vs
-    live) — no extra state files. Manual edits in the live dir therefore
-    count as drift and are reverted within POLL_SECONDS; for hands-on
-    work, `touch /work/pixi/global/.sync-pause` stops the daemon touching
-    the env until the file is removed (surfaced in metrics).
+  - Drift = the live manifests differ from the mounted desired ones (byte
+    comparison), or this process has not installed the desired ones yet.
+    That record is in memory — no state files — so a failed install stays
+    drift (in_sync=0, retried after FAIL_COOLDOWN) and every start runs
+    `pixi install --locked` once, a fast no-op on a current env. Manual
+    edits in the live dir count as drift and are reverted within
+    POLL_SECONDS; for hands-on work, `touch /work/pixi/global/.sync-pause`
+    stops the daemon touching the env until the file is removed (surfaced
+    in metrics), and resuming re-installs.
 
 Desired state arrives via a ConfigMap mounted at CONFIG_DIR — kubelet
 refreshes the mount in place (~1 min after Flux applies), so the daemon
@@ -70,7 +74,7 @@ LOCK_DIR = CACHE_DIR / ".sync-lock"
 PAUSE_FILE_NAME = ".sync-pause"
 
 METRICS: dict[str, float] = {
-    "in_sync": 0.0,  # 1 = live pixi.lock matches the repo's
+    "in_sync": 0.0,  # 1 = the repo's manifests are live and installed
     "paused": 0.0,  # 1 = .sync-pause present, daemon hands-off
     "env_healthy": 1.0,  # 0 after a failed verify, until healed
     "last_success_timestamp_seconds": 0.0,
@@ -391,6 +395,8 @@ def validate_env(env_dir: str | Path) -> bool:
 
 _last_failure: dict[str, float] = {"ts": 0.0}
 _was_paused: dict[str, bool] = {"value": False}
+# manifests whose install + validation last succeeded, unless the env was touched since
+_installed: dict[str, dict[str, bytes] | None] = {"manifests": None}
 
 
 def short_hash(data: bytes | None) -> str:
@@ -411,27 +417,30 @@ def reconcile(force: bool = False) -> bool:
         log.info("paused" if paused else "resumed (.sync-pause removed)")
         _was_paused["value"] = paused
     if paused:
+        _installed["manifests"] = None
         metric_set("paused", 1.0)
         metric_set("in_sync", 1.0 if is_in_sync(LIVE_DIR, desired) else 0.0)
         return True
     metric_set("paused", 0.0)
 
-    in_sync = is_in_sync(LIVE_DIR, desired)
+    installed = _installed["manifests"]
+    in_sync = is_in_sync(LIVE_DIR, desired) and installed == desired
     metric_set("in_sync", 1.0 if in_sync else 0.0)
-    # Manifests are staged before install, so keep forcing until env_healthy recovers.
     if in_sync and not force and METRICS["env_healthy"] >= 0.5:
         return True
     if not force and time.time() - _last_failure["ts"] < FAIL_COOLDOWN:
         return False
 
     log.info(
-        "%s: live lock %s -> desired %s; syncing",
+        "%s: live lock %s, installed %s -> desired %s; syncing",
         "forced re-sync" if force else "drift detected",
         short_hash(_live_lock_bytes()),
+        short_hash(installed["pixi.lock"] if installed else None),
         short_hash(desired["pixi.lock"]),
     )
     metric_set("last_attempt_timestamp_seconds", time.time())
     metric_inc("syncs_total")
+    _installed["manifests"] = None
     started = time.time()
     try:
         stage_manifests(LIVE_DIR, desired)
@@ -461,6 +470,7 @@ def reconcile(force: bool = False) -> bool:
     finally:
         metric_set("last_sync_duration_seconds", time.time() - started)
 
+    _installed["manifests"] = desired
     metric_set("in_sync", 1.0)
     metric_set("env_healthy", 1.0)
     metric_set("last_success_timestamp_seconds", time.time())
