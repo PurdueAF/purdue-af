@@ -100,6 +100,8 @@ for cm in jupyterhub-extra-config jupyterhub-gpu-culler; do
 	kubectl -n "$NS" create configmap "$cm" "${from_file_args[@]}" \
 		--dry-run=client -o yaml | kubectl apply -f -
 done
+# The Role for the pooled-account ledger set-user-info.py keeps.
+kubectl -n "$NS" apply -f "$HUB_DIR/rbac.yaml"
 
 echo "==> mock CILogon"
 kubectl -n "$NS" create configmap mock-cilogon \

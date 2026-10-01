@@ -46,9 +46,9 @@ uidNumber: 20004
 gidNumber: 21004
 homeDirectory: /home/dave
 
-# Pooled paf#### accounts for external (non-purdue.edu) hub users —
-# set-user-info.py maps hub user id N → uid=paf00NN. Seed enough for
-# the handful of identities the e2e suite creates.
+# Pooled paf#### accounts for external (non-purdue.edu) hub users, as
+# set-user-info.py allocates them: paf<hub id> while nothing holds it. Seed
+# enough for the handful of identities the e2e suite creates.
 dn: uid=paf0001,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson
 objectClass: posixAccount

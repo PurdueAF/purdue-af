@@ -157,6 +157,9 @@ def test_the_gateway_never_reads_a_secret():
     role = by_kind(APP / "rbac.yaml", "Role")
     (secrets,) = [rule for rule in role["rules"] if "secrets" in rule["resources"]]
     assert secrets["verbs"] == ["create"]
+    (ledger,) = [rule for rule in role["rules"] if "configmaps" in rule["resources"]]
+    assert ledger["verbs"] == ["get"]
+    assert ledger["resourceNames"] == ["af-pooled-accounts"]
     binding = by_kind(APP / "rbac.yaml", "RoleBinding")
     assert binding["subjects"][0]["name"] == gateway_pod()["spec"]["serviceAccountName"]
 
