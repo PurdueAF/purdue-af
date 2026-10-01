@@ -126,6 +126,11 @@ _REDACT = [
     (re.compile(r"/depot/cms/users/[^/\s'\"]+"), "/depot/cms/users/<user>"),
     (re.compile(r"/work/users/[^/\s'\"]+"), "/work/users/<user>"),
     (re.compile(r"\b(user(?:name)?)=\S+"), r"\1=<user>"),
+    # users' Ray clusters (apps/ray-train), all but the platform's own names
+    (
+        re.compile(r"\bray-train-(?!(?:gateway|clusters?)\b)[a-z0-9][a-z0-9-]*"),
+        "ray-train-<user>",
+    ),
 ]
 
 _POD_SUFFIXES = [
@@ -134,6 +139,8 @@ _POD_SUFFIXES = [
     re.compile(r"-[a-z0-9]{5}$"),  # pod hash
     re.compile(r"-\d+$"),  # StatefulSet ordinal, CronJob timestamp
 ]
+# KubeRay names the head pod of a user's Ray cluster after it: ray-train-<user>-head-<suffix>.
+_RAY_HEAD_POD = re.compile(rf"ray-train-.+-head-{_K8S_SUFFIX}")
 
 
 @dataclass(frozen=True)
@@ -281,6 +288,8 @@ def parse_loki(payload: dict[str, Any]) -> list[dict[str, str]]:
 def workload_of(pod: str) -> str:
     if pod.startswith("jupyter-"):
         return "jupyter-*"
+    if _RAY_HEAD_POD.fullmatch(pod):
+        return "ray-train-*"
     previous = None
     while previous != pod:
         previous = pod

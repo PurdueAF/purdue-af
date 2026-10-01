@@ -26,19 +26,20 @@ gives every session `RAY_AUTH_MODE=token` and its own token as
 Secret. The `ray.io` CRDs and their controller are the KubeRay operator in
 [`apps/ray/operator`](../ray/operator).
 
-- **Identity**: the Hub resolves the token to a user and the gateway's own
-  token (`read:servers`, `admin:server_state`) reads the pod name of their
-  session, `purdue-af-<id>`. The cluster is `ray-train-<id>` and runs as the
-  user's LDAP account: their Purdue login, or the pooled `paf<id>` account of
-  a CERN or FNAL user, as in
-  [`set-user-info.py`](../jupyterhub/jupyterhub/extraFiles/set-user-info.py).
+- **Identity**: the Hub resolves the token to a user, whose cluster is
+  `ray-train-<username>` (a hashed form for a username that cannot be part of
+  a Kubernetes name) and runs as their LDAP account: their Purdue login, or
+  for a CERN or FNAL user the pooled `paf<id>` account of
+  [`set-user-info.py`](../jupyterhub/jupyterhub/extraFiles/set-user-info.py),
+  whose `<id>` the gateway's own token (`read:servers`, `admin:server_state`)
+  reads from the pod name of their session, `purdue-af-<id>`.
 - **Isolation**: each cluster has its own Ray token, an HMAC of its name under
   the gateway's Hub token, which the gateway puts on every call it relays in
   place of the session's. Users' pods mount no ServiceAccount token, and have
   no autoscaler, whose Role would let user code read every pod in `cms` and
   patch every RayCluster.
-- **One GPU per user**: a user's cluster is their only one, named after their
-  AF id, and is one pod with one T4, with no worker groups and no autoscaler.
+- **One GPU per user**: a user's cluster is their only one, named after them,
+  and is one pod with one T4, with no worker groups and no autoscaler.
   The gateway deletes a replaced or idle cluster in the foreground and waits
   until it is gone, pod included, before creating the next.
 - **Environment**: Ray Client needs the same Python and Ray on both sides, so
