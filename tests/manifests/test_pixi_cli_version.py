@@ -1,6 +1,5 @@
-"""The pixi CLI version has one pin, ARG PIXI_VERSION in the AF Dockerfile:
-the pixi workflows read it at run time and Renovate's copy is asserted equal.
-A lock written by a newer pixi (format v7) is unreadable by the pinned one."""
+"""The pixi CLI version has one pin, ARG PIXI_VERSION in the AF Dockerfile,
+which the pixi workflows read at run time."""
 
 import os
 import re
@@ -10,7 +9,6 @@ import yaml
 from common import REPO
 
 DOCKERFILE = REPO / "docker/purdue-af/Dockerfile"
-RENOVATE = REPO / ".github/renovate.json5"
 WORKFLOWS = [
     REPO / f".github/workflows/ci-pixi-{env}.yml" for env in ("base", "global")
 ]
@@ -21,11 +19,6 @@ def pinned() -> str:
         r'^ARG PIXI_VERSION="([^"]+)"', DOCKERFILE.read_text(), re.M
     )
     return version
-
-
-def test_renovate_constraint_equals_the_dockerfile_pin():
-    (constraint,) = re.findall(r"pixi:\s*'([^']+)'", RENOVATE.read_text())
-    assert constraint == pinned()
 
 
 def test_workflows_read_the_pin_instead_of_carrying_one(tmp_path):

@@ -20,10 +20,10 @@ GLOBAL_ENV = "/work/pixi/global"
 # every project command the wrapper treats as writing to an environment
 MUTATING = (
     "add",
-    "build",
     "import",
     "init",
     "install",
+    "publish",
     "reinstall",
     "remove",
     "update",
