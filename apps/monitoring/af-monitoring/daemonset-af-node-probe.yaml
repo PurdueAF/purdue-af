@@ -1,8 +1,11 @@
-# One DaemonSet per mount, so one volume that will not mount cannot blank the others on a node.
+# One DaemonSet per mount, and the monitored volume is the only one in each pod that can fail to
+# mount, so one volume that will not mount cannot blank the others on a node.
 # The four specs are held identical by tests/manifests/test_node_probes.py; these notes apply to each:
-# - maxUnavailable is a percentage: a node where the results PVC never mounts would hold a budget of 1.
+# - Results stay on the pod's emptyDir and are served on the http port; af-node-monitor pulls them.
+# - maxUnavailable is a percentage: a node where a volume never mounts would hold a budget of 1.
 # - IfNotPresent: the scripts come from the ConfigMap, and a registry outage must not stop the probes.
-# - Liveness reads the heartbeat off an emptyDir; probing a wedged mount would hang, not fail.
+# - Liveness and readiness read the supervisor's heartbeat and ready marker off the emptyDir: probing a
+#   wedged mount would hang, and a network endpoint could be held by any client in the namespace.
 # - Ready means the probe works, not that the mount is good (af_node_mount_probe_up).
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
@@ -41,6 +44,7 @@ spec:
     spec:
       priorityClassName: af-node-probe
       enableServiceLinks: false
+      automountServiceAccountToken: false
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -63,6 +67,9 @@ spec:
           image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
           imagePullPolicy: IfNotPresent
           command: ["python", "/scripts/probe_agent.py"]
+          ports:
+            - name: http
+              containerPort: 8080
           env:
             - name: MOUNT_NAME
               value: "/depot/"
@@ -84,10 +91,12 @@ spec:
               value: "120"
             - name: FIO_INTERVAL_S
               value: "1800"
-            - name: RESULTS_DIR
-              value: /af-node-monitor/results
             - name: AF_NODE_MONITOR_VERBOSE
               value: "false"
+            - name: READY_WINDOW_S
+              value: "905"
+            - name: LIVENESS_WINDOW_S
+              value: "1500"
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
@@ -104,15 +113,18 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - test $(( $(date +%s) - $(stat -c %Y /run/af-node-monitor/heartbeat) )) -lt 1500
-            initialDelaySeconds: 120
+                - test $(( $(date +%s) - $(stat -c %Y /run/af-node-monitor/heartbeat) )) -lt "$LIVENESS_WINDOW_S"
+            initialDelaySeconds: 30
             periodSeconds: 60
             timeoutSeconds: 10
             failureThreshold: 3
           readinessProbe:
             exec:
-              command: ["test", "-f", "/run/af-node-monitor/healthy"]
-            initialDelaySeconds: 10
+              command:
+                - /bin/sh
+                - -c
+                - test -f /run/af-node-monitor/ready && test $(( $(date +%s) - $(stat -c %Y /run/af-node-monitor/heartbeat) )) -lt "$READY_WINDOW_S"
+            initialDelaySeconds: 5
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 2
@@ -121,8 +133,6 @@ spec:
               mountPath: /scripts
             - name: runtime
               mountPath: /run/af-node-monitor
-            - name: results
-              mountPath: /af-node-monitor
             - name: depot
               mountPath: /depot/cms
               mountPropagation: HostToContainer
@@ -132,9 +142,6 @@ spec:
             name: af-node-monitor-config
         - name: runtime
           emptyDir: {}
-        - name: results
-          persistentVolumeClaim:
-            claimName: af-node-monitor-storage
         - name: depot
           nfs:
             server: datadepot.rcac.purdue.edu
@@ -168,6 +175,7 @@ spec:
     spec:
       priorityClassName: af-node-probe
       enableServiceLinks: false
+      automountServiceAccountToken: false
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -190,6 +198,9 @@ spec:
           image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
           imagePullPolicy: IfNotPresent
           command: ["python", "/scripts/probe_agent.py"]
+          ports:
+            - name: http
+              containerPort: 8080
           env:
             - name: MOUNT_NAME
               value: "/work/"
@@ -211,10 +222,12 @@ spec:
               value: "120"
             - name: FIO_INTERVAL_S
               value: "1800"
-            - name: RESULTS_DIR
-              value: /af-node-monitor/results
             - name: AF_NODE_MONITOR_VERBOSE
               value: "false"
+            - name: READY_WINDOW_S
+              value: "905"
+            - name: LIVENESS_WINDOW_S
+              value: "1500"
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
@@ -231,15 +244,18 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - test $(( $(date +%s) - $(stat -c %Y /run/af-node-monitor/heartbeat) )) -lt 1500
-            initialDelaySeconds: 120
+                - test $(( $(date +%s) - $(stat -c %Y /run/af-node-monitor/heartbeat) )) -lt "$LIVENESS_WINDOW_S"
+            initialDelaySeconds: 30
             periodSeconds: 60
             timeoutSeconds: 10
             failureThreshold: 3
           readinessProbe:
             exec:
-              command: ["test", "-f", "/run/af-node-monitor/healthy"]
-            initialDelaySeconds: 10
+              command:
+                - /bin/sh
+                - -c
+                - test -f /run/af-node-monitor/ready && test $(( $(date +%s) - $(stat -c %Y /run/af-node-monitor/heartbeat) )) -lt "$READY_WINDOW_S"
+            initialDelaySeconds: 5
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 2
@@ -248,8 +264,6 @@ spec:
               mountPath: /scripts
             - name: runtime
               mountPath: /run/af-node-monitor
-            - name: results
-              mountPath: /af-node-monitor
             - name: work
               mountPath: /work
       volumes:
@@ -258,9 +272,6 @@ spec:
             name: af-node-monitor-config
         - name: runtime
           emptyDir: {}
-        - name: results
-          persistentVolumeClaim:
-            claimName: af-node-monitor-storage
         - name: work
           persistentVolumeClaim:
             claimName: af-shared-storage
@@ -293,6 +304,7 @@ spec:
     spec:
       priorityClassName: af-node-probe
       enableServiceLinks: false
+      automountServiceAccountToken: false
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -315,6 +327,9 @@ spec:
           image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
           imagePullPolicy: IfNotPresent
           command: ["python", "/scripts/probe_agent.py"]
+          ports:
+            - name: http
+              containerPort: 8080
           env:
             - name: MOUNT_NAME
               value: "eos"
@@ -336,10 +351,12 @@ spec:
               value: "120"
             - name: FIO_INTERVAL_S
               value: "1800"
-            - name: RESULTS_DIR
-              value: /af-node-monitor/results
             - name: AF_NODE_MONITOR_VERBOSE
               value: "false"
+            - name: READY_WINDOW_S
+              value: "905"
+            - name: LIVENESS_WINDOW_S
+              value: "1500"
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
@@ -356,15 +373,18 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - test $(( $(date +%s) - $(stat -c %Y /run/af-node-monitor/heartbeat) )) -lt 1500
-            initialDelaySeconds: 120
+                - test $(( $(date +%s) - $(stat -c %Y /run/af-node-monitor/heartbeat) )) -lt "$LIVENESS_WINDOW_S"
+            initialDelaySeconds: 30
             periodSeconds: 60
             timeoutSeconds: 10
             failureThreshold: 3
           readinessProbe:
             exec:
-              command: ["test", "-f", "/run/af-node-monitor/healthy"]
-            initialDelaySeconds: 10
+              command:
+                - /bin/sh
+                - -c
+                - test -f /run/af-node-monitor/ready && test $(( $(date +%s) - $(stat -c %Y /run/af-node-monitor/heartbeat) )) -lt "$READY_WINDOW_S"
+            initialDelaySeconds: 5
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 2
@@ -373,8 +393,6 @@ spec:
               mountPath: /scripts
             - name: runtime
               mountPath: /run/af-node-monitor
-            - name: results
-              mountPath: /af-node-monitor
             - name: eos
               mountPath: /eos
               mountPropagation: HostToContainer
@@ -384,9 +402,6 @@ spec:
             name: af-node-monitor-config
         - name: runtime
           emptyDir: {}
-        - name: results
-          persistentVolumeClaim:
-            claimName: af-node-monitor-storage
         - name: eos
           hostPath:
             path: /eos
@@ -419,6 +434,7 @@ spec:
     spec:
       priorityClassName: af-node-probe
       enableServiceLinks: false
+      automountServiceAccountToken: false
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -441,6 +457,9 @@ spec:
           image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
           imagePullPolicy: IfNotPresent
           command: ["python", "/scripts/probe_agent.py"]
+          ports:
+            - name: http
+              containerPort: 8080
           env:
             - name: MOUNT_NAME
               value: "cvmfs"
@@ -456,10 +475,12 @@ spec:
               value: "3"
             - name: METADATA_TIMEOUT_S
               value: "10"
-            - name: RESULTS_DIR
-              value: /af-node-monitor/results
             - name: AF_NODE_MONITOR_VERBOSE
               value: "false"
+            - name: READY_WINDOW_S
+              value: "905"
+            - name: LIVENESS_WINDOW_S
+              value: "1500"
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
@@ -476,15 +497,18 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - test $(( $(date +%s) - $(stat -c %Y /run/af-node-monitor/heartbeat) )) -lt 1500
-            initialDelaySeconds: 120
+                - test $(( $(date +%s) - $(stat -c %Y /run/af-node-monitor/heartbeat) )) -lt "$LIVENESS_WINDOW_S"
+            initialDelaySeconds: 30
             periodSeconds: 60
             timeoutSeconds: 10
             failureThreshold: 3
           readinessProbe:
             exec:
-              command: ["test", "-f", "/run/af-node-monitor/healthy"]
-            initialDelaySeconds: 10
+              command:
+                - /bin/sh
+                - -c
+                - test -f /run/af-node-monitor/ready && test $(( $(date +%s) - $(stat -c %Y /run/af-node-monitor/heartbeat) )) -lt "$READY_WINDOW_S"
+            initialDelaySeconds: 5
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 2
@@ -493,8 +517,6 @@ spec:
               mountPath: /scripts
             - name: runtime
               mountPath: /run/af-node-monitor
-            - name: results
-              mountPath: /af-node-monitor
             - name: cvmfs
               mountPath: /cvmfs
               mountPropagation: HostToContainer
@@ -504,9 +526,6 @@ spec:
             name: af-node-monitor-config
         - name: runtime
           emptyDir: {}
-        - name: results
-          persistentVolumeClaim:
-            claimName: af-node-monitor-storage
         - name: cvmfs
           persistentVolumeClaim:
             claimName: cvmfs

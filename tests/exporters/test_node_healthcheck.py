@@ -5,10 +5,13 @@ node and probe-pod listing, the metric decision matrix — is tested without a
 cluster.
 
 The exporter must never confuse the three states of the probe DaemonSets:
-mount broken, probe broken, results unreadable.
+mount broken, probe broken, probes unreachable.
 """
 
+import datetime
+import http.server
 import json
+import threading
 import time
 import types
 
@@ -30,16 +33,61 @@ def fake_node(name, ready=True):
     )
 
 
-def fake_pod(mount="depot", node="node-a", ready=True, phase="Running", deleting=False):
+def fake_container_status(
+    running=True, waiting=None, last_terminated=None, restart_count=0
+):
+    return types.SimpleNamespace(
+        state=types.SimpleNamespace(
+            running=types.SimpleNamespace() if running else None,
+            waiting=types.SimpleNamespace(reason=waiting) if waiting else None,
+        ),
+        last_state=types.SimpleNamespace(
+            terminated=(
+                types.SimpleNamespace(reason=last_terminated)
+                if last_terminated
+                else None
+            )
+        ),
+        restart_count=restart_count,
+    )
+
+
+def fake_pod(
+    mount="depot",
+    node="node-a",
+    ready=True,
+    phase="Running",
+    deleting=False,
+    ip="10.0.0.1",
+    age_s=3600.0,
+    conditions=None,
+    containers=None,
+    port=8080,
+):
     conds = [types.SimpleNamespace(type="Ready", status="True" if ready else "False")]
+    for ctype, cstatus in (conditions or {}).items():
+        conds.append(types.SimpleNamespace(type=ctype, status=cstatus))
+    ports = [types.SimpleNamespace(name="http", container_port=port)] if port else []
     return types.SimpleNamespace(
         metadata=types.SimpleNamespace(
             name=f"af-node-probe-{mount}-xyz",
             labels={"app": "af-node-monitor", "component": "probe", "mount": mount},
             deletion_timestamp=NOW if deleting else None,
+            creation_timestamp=datetime.datetime.fromtimestamp(
+                time.time() - age_s, tz=datetime.timezone.utc
+            ),
         ),
-        spec=types.SimpleNamespace(node_name=node),
-        status=types.SimpleNamespace(phase=phase, conditions=conds),
+        spec=types.SimpleNamespace(
+            node_name=node, containers=[types.SimpleNamespace(ports=ports)]
+        ),
+        status=types.SimpleNamespace(
+            phase=phase,
+            conditions=conds,
+            pod_ip=ip if phase == "Running" else None,
+            container_statuses=containers
+            if containers is not None
+            else [fake_container_status(running=phase == "Running")],
+        ),
     )
 
 
@@ -71,6 +119,7 @@ def clear_metrics():
     ):
         metric.clear()
     nh.monitor_results_available.set(1)
+    nh._result_cache.clear()
     yield
 
 
@@ -84,6 +133,8 @@ def k8s(monkeypatch):
     monkeypatch.setattr(nh, "_core_v1", core, raising=False)
     monkeypatch.setattr(nh, "_af_nodes_cache", [])
     monkeypatch.setattr(nh, "_last_node_refresh", 0.0)
+    monkeypatch.setattr(nh, "_probe_cache", None)
+    monkeypatch.setattr(nh, "_probe_cache_ts", 0.0)
     nh._node_pools.clear()
     return types.SimpleNamespace(core=core)
 
@@ -97,38 +148,6 @@ def sample(name, mount="/depot/", node="node-a", node_pool="prod", **extra):
         **extra,
     }
     return REGISTRY.get_sample_value(name, labels)
-
-
-# ── pure helpers ──────────────────────────────────────────────────────────────
-
-
-def test_result_path_naming(monkeypatch, tmp_path):
-    monkeypatch.setattr(nh, "RESULTS_DIR", tmp_path)
-    assert nh._result_path("/depot/", "node-a") == tmp_path / "depot__node-a.json"
-
-
-def test_load_result_roundtrip(monkeypatch, tmp_path):
-    monkeypatch.setattr(nh, "RESULTS_DIR", tmp_path)
-    (tmp_path / "depot__node-a.json").write_text('{"ok": true}')
-    assert nh._load_result("/depot/", "node-a") == {"ok": True}
-
-
-def test_load_result_missing_is_none(monkeypatch, tmp_path):
-    monkeypatch.setattr(nh, "RESULTS_DIR", tmp_path)
-    assert nh._load_result("/depot/", "node-a") is None
-
-
-def test_load_result_corrupt_is_none(monkeypatch, tmp_path):
-    monkeypatch.setattr(nh, "RESULTS_DIR", tmp_path)
-    (tmp_path / "depot__node-a.json").write_text("{ nope")
-    assert nh._load_result("/depot/", "node-a") is None
-
-
-def test_load_result_storage_error_flagged(monkeypatch, tmp_path):
-    monkeypatch.setattr(nh, "RESULTS_DIR", tmp_path)
-    # a directory at the result path raises IsADirectoryError (an OSError)
-    (tmp_path / "depot__node-a.json").mkdir()
-    assert nh._load_result("/depot/", "node-a") == {"_storage_error": True}
 
 
 # ── node discovery ────────────────────────────────────────────────────────────
@@ -250,18 +269,39 @@ def test_pool_flip_dev_to_prod_drops_dev_series(k8s):
 # ── update_metrics decision matrix ────────────────────────────────────────────
 
 
+class Probes:
+    """What update_metrics sees: probe pods on the node and what each serves."""
+
+    def __init__(self):
+        self.pods = {}
+        self.served = {}
+        self.listed = True
+
+    def __call__(self, mount, node, /, **result):
+        """A Ready probe for (mount, node) serving `result`."""
+        key = (nh._sanitized_mount_name(mount), node)
+        self.pods.setdefault(key, nh.Probe(ready=True, ip="10.0.0.1"))
+        self.served[key] = result
+
+    def pod(self, mount, node="node-a", **probe):
+        self.pods[(nh._sanitized_mount_name(mount), node)] = nh.Probe(**probe)
+
+
 @pytest.fixture
-def metrics_env(monkeypatch, tmp_path):
-    """update_metrics with discovery stubbed and results in tmp_path."""
-    monkeypatch.setattr(nh, "RESULTS_DIR", tmp_path)
+def metrics_env(monkeypatch):
+    """update_metrics with discovery and the HTTP pulls stubbed."""
+    probes = Probes()
     monkeypatch.setattr(nh, "_list_af_nodes", lambda: [("node-a", "prod", True)])
-    monkeypatch.setattr(nh, "_probe_pod_states", lambda: {})
+    monkeypatch.setattr(
+        nh, "_probe_pods", lambda now: probes.pods if probes.listed else None
+    )
+    monkeypatch.setattr(
+        nh,
+        "_fetch_all",
+        lambda targets: {k: v for k, v in probes.served.items() if k in targets},
+    )
     nh._node_pools["node-a"] = "prod"
-
-    def write(_mount, _node, **data):
-        nh._result_path(_mount, _node).write_text(json.dumps(data))
-
-    return write
+    return probes
 
 
 def test_fresh_ok_result(metrics_env):
@@ -294,12 +334,25 @@ def test_missing_result_reports_timeout_semantics(metrics_env):
     assert sample("af_node_mount_timeout_total", check_type="no_recent_result") == 1
 
 
-def test_missing_result_with_a_probe_pod_is_never_started(metrics_env, monkeypatch):
-    monkeypatch.setattr(nh, "_probe_pod_states", lambda: {("depot", "node-a"): False})
+def test_missing_result_with_a_probe_pod_is_never_started(metrics_env):
+    metrics_env.pod("/depot/", ready=False)
 
     nh.update_metrics()
 
     assert sample("af_node_mount_timeout_total", check_type="job_never_started") == 1
+
+
+def test_ready_probe_that_does_not_answer_is_unreachable(metrics_env):
+    """Ready by the kubelet's own check but silent to the exporter: the path
+    between them is broken, and probe_up must say so rather than blame the
+    mount."""
+    metrics_env.pod("/depot/", ready=True, ip="10.0.0.9")
+
+    nh.update_metrics()
+
+    assert sample("af_node_mount_result_fresh") == 0
+    assert sample("af_node_mount_probe_up") == 0
+    assert sample("af_node_mount_timeout_total", check_type="unreachable") == 1
 
 
 def test_stale_success_is_unknown(metrics_env, monkeypatch):
@@ -363,6 +416,20 @@ def test_not_ready_node_clears_gauges_to_null(metrics_env, monkeypatch):
     assert sample("af_node_mount_last_success_timestamp_seconds") is None
 
 
+def test_an_unmeasured_rate_is_absent_not_zero(metrics_env):
+    """A new probe reports no rate until its first fio run; the 0.0 an unknown
+    pass wrote before it must not read as a measured zero on a healthy mount."""
+    metrics_env.pod("/depot/", ready=True, ip="10.0.0.1")
+    nh.update_metrics()
+    assert sample("af_node_mount_data_rate_gbps") == 0.0
+
+    metrics_env("/depot/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
+    nh.update_metrics()
+
+    assert sample("af_node_mount_valid") == 1
+    assert sample("af_node_mount_data_rate_gbps") is None
+
+
 def test_completed_failure_on_ready_node_is_fresh_invalid(metrics_env):
     """A finished check that failed is red: valid=0 with fresh=1 — the only
     combination AFMountInvalid matches."""
@@ -405,24 +472,30 @@ def test_timeout_result_uses_worst_case_latencies(metrics_env):
     assert sample("af_node_mount_timeout_total", check_type="job_result") == 1
 
 
-def test_storage_error_clears_gauges_to_null(metrics_env):
-    # Seed a green series, then a storage error must wipe it (not leave green).
-    metrics_env(
-        "/depot/",
-        "node-a",
-        ok=True,
-        timestamp=time.time(),
-        ping_ms=1.0,
-    )
+def test_a_missed_pull_keeps_the_last_verdict(metrics_env):
+    """One pull that fails must not turn a failing mount unknown: the cached
+    verdict stands under the same staleness rules, and probe_up says the probe
+    did not answer."""
+    metrics_env("/depot/", "node-a", ok=False, timeout=True, timestamp=time.time())
     nh.update_metrics()
-    assert sample("af_node_mount_valid") == 1
+    assert sample("af_node_mount_valid") == 0
+    assert sample("af_node_mount_result_fresh") == 1
 
-    nh._result_path("/depot/", "node-a").unlink()
-    nh._result_path("/depot/", "node-a").mkdir()  # triggers _storage_error
+    metrics_env.served.clear()
     nh.update_metrics()
 
-    assert sample("af_node_mount_valid") is None
-    assert sample("af_node_mount_result_fresh") is None
+    assert sample("af_node_mount_valid") == 0
+    assert sample("af_node_mount_result_fresh") == 1
+    assert sample("af_node_mount_probe_up") == 0
+
+
+def test_a_cached_success_goes_unknown_once_stale(metrics_env, monkeypatch):
+    monkeypatch.setattr(nh, "RESULT_STALE_WINDOW_S", 100.0)
+    metrics_env("/depot/", "node-a", ok=True, timestamp=time.time() - 1000)
+    nh.update_metrics()
+    metrics_env.served.clear()
+    nh.update_metrics()
+    assert sample("af_node_mount_result_fresh") == 0
 
 
 def test_node_label_prefers_result_json(metrics_env):
@@ -506,57 +579,69 @@ def test_timeout_result_without_partial_ping(metrics_env):
 # ── probe discovery ───────────────────────────────────────────────────────────
 
 
-def test_probe_pod_states_keys_on_spec_node_name(k8s):
+def test_probe_pods_key_on_spec_node_name(k8s):
     """One DaemonSet template covers every node, so the node cannot come from
-    a pod label the way it did from the per-node Jobs."""
+    a pod label."""
     k8s.core.pods = [
-        fake_pod(mount="depot", node="node-a", ready=True),
-        fake_pod(mount="work", node="node-b", ready=False),
+        fake_pod(mount="depot", node="node-a", ready=True, ip="10.0.0.1"),
+        fake_pod(mount="work", node="node-b", ready=False, ip="10.0.0.2"),
     ]
-    assert nh._probe_pod_states() == {
-        ("depot", "node-a"): True,
-        ("work", "node-b"): False,
-    }
+    probes = nh._list_probe_pods(time.time())
+    assert probes[("depot", "node-a")] == nh.Probe(ready=True, ip="10.0.0.1")
+    assert probes[("work", "node-b")] == nh.Probe(ready=False, ip="10.0.0.2")
 
 
 def test_probe_pod_not_running_is_not_ready(k8s):
     """Pending or ContainerCreating — a volume that will not mount looks
     exactly like this, and it must not read as coverage."""
     k8s.core.pods = [fake_pod(phase="Pending", ready=False)]
-    assert nh._probe_pod_states() == {("depot", "node-a"): False}
+    probe = nh._list_probe_pods(time.time())[("depot", "node-a")]
+    assert (probe.ready, probe.ip) == (False, "")
 
 
-def test_terminating_probe_pod_is_not_ready(k8s):
+def test_terminating_probe_pod_is_not_ready_or_asked(k8s):
     k8s.core.pods = [fake_pod(ready=True, deleting=True)]
-    assert nh._probe_pod_states() == {("depot", "node-a"): False}
+    probe = nh._list_probe_pods(time.time())[("depot", "node-a")]
+    assert (probe.ready, probe.ip) == (False, "")
 
 
 def test_probe_pod_rollout_overlap_takes_ready(k8s):
-    """Both pods exist for a moment during a rollout; the Ready one wins."""
+    """Both pods exist for a moment during a rollout; the Ready one wins and is
+    the one asked."""
     k8s.core.pods = [
-        fake_pod(ready=False, deleting=True),
-        fake_pod(ready=True),
+        fake_pod(ready=False, ip="10.0.0.1"),
+        fake_pod(ready=True, ip="10.0.0.2"),
     ]
-    assert nh._probe_pod_states() == {("depot", "node-a"): True}
+    probe = nh._list_probe_pods(time.time())[("depot", "node-a")]
+    assert (probe.ready, probe.ip) == (True, "10.0.0.2")
 
 
-def test_probe_pod_states_ignores_unplaced_and_unlabelled(k8s):
-    k8s.core.pods = [
-        fake_pod(node=""),  # not scheduled yet
-        types.SimpleNamespace(
-            metadata=types.SimpleNamespace(labels={}, deletion_timestamp=None),
-            spec=types.SimpleNamespace(node_name="node-a"),
-            status=types.SimpleNamespace(phase="Running", conditions=[]),
-        ),
-    ]
-    assert nh._probe_pod_states() == {}
+def test_probe_pods_ignore_unplaced_and_unlabelled(k8s):
+    unlabelled = fake_pod()
+    unlabelled.metadata.labels = {}
+    k8s.core.pods = [fake_pod(node=""), unlabelled]
+    assert nh._list_probe_pods(time.time()) == {}
 
 
-def test_probe_pod_states_is_none_when_the_api_cannot_answer(monkeypatch, k8s):
+def test_probe_port_comes_from_the_pod_spec(k8s):
+    k8s.core.pods = [fake_pod(port=9090), fake_pod(mount="work", port=None)]
+    probes = nh._list_probe_pods(time.time())
+    assert probes[("depot", "node-a")].port == 9090
+    assert probes[("work", "node-a")].port == nh.DEFAULT_PROBE_PORT
+
+
+def test_probe_pod_without_ready_condition_is_not_ready(k8s):
+    pod = fake_pod()
+    pod.status.conditions = []
+    k8s.core.pods = [pod]
+    assert nh._list_probe_pods(time.time())[("depot", "node-a")].ready is False
+
+
+def test_probe_pods_are_none_when_the_api_cannot_answer(monkeypatch, k8s):
     """None, not {} — an empty map would say "no probe on any node", which is
     a fleet-wide monitoring outage reported over one refused list call."""
     monkeypatch.setattr(nh, "_k8s_ready", False)
-    assert nh._probe_pod_states() is None
+    assert nh._list_probe_pods(time.time()) is None
 
     monkeypatch.setattr(nh, "_k8s_ready", True)
 
@@ -564,51 +649,209 @@ def test_probe_pod_states_is_none_when_the_api_cannot_answer(monkeypatch, k8s):
         raise nh.ApiException("denied")
 
     k8s.core.list_namespaced_pod = boom
-    assert nh._probe_pod_states() is None
+    assert nh._list_probe_pods(time.time()) is None
 
 
-def test_probe_up_is_absent_when_the_pod_list_is_unavailable(metrics_env, monkeypatch):
-    monkeypatch.setattr(nh, "_probe_pod_states", lambda: {("depot", "node-a"): True})
+def test_a_refused_pod_list_reuses_the_last_one_for_a_while(monkeypatch, k8s):
+    """Pod IPs are what the exporter pulls from; one refused list call must not
+    cut it off from every probe at once."""
+    k8s.core.pods = [fake_pod()]
+    now = time.time()
+    first = nh._probe_pods(now)
+
+    def boom(**kwargs):
+        raise nh.ApiException("denied")
+
+    k8s.core.list_namespaced_pod = boom
+    assert nh._probe_pods(now + 10) == first
+    assert nh._probe_pods(now + nh.POD_CACHE_TTL_S + 1) is None
+
+
+# ── a probe pod that cannot mount its volume ──────────────────────────────────
+
+
+def setup_failed(pod):
+    return nh._mount_setup_failed(pod, time.time())
+
+
+def test_waiting_on_a_volume_past_the_grace_is_a_mount_failure():
+    pod = fake_pod(
+        phase="Pending",
+        ready=False,
+        age_s=nh.MOUNT_SETUP_GRACE_S + 60,
+        conditions={"PodReadyToStartContainers": "False"},
+    )
+    assert setup_failed(pod)
+
+
+def test_a_slow_start_is_not_a_mount_failure():
+    pod = fake_pod(
+        phase="Pending",
+        ready=False,
+        age_s=30,
+        conditions={"PodReadyToStartContainers": "False"},
+    )
+    assert not setup_failed(pod)
+
+
+def test_pulling_an_image_is_not_a_mount_failure():
+    """The sandbox exists once volumes are mounted; a pod stuck after that is
+    waiting on something else."""
+    pod = fake_pod(
+        phase="Pending",
+        ready=False,
+        age_s=nh.MOUNT_SETUP_GRACE_S + 60,
+        conditions={"PodReadyToStartContainers": "True"},
+        containers=[fake_container_status(running=False, waiting="ImagePullBackOff")],
+    )
+    assert not setup_failed(pod)
+
+
+def test_pending_without_the_sandbox_condition_is_not_classified():
+    pod = fake_pod(phase="Pending", ready=False, age_s=nh.MOUNT_SETUP_GRACE_S + 60)
+    assert not setup_failed(pod)
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        fake_container_status(
+            running=False, waiting="RunContainerError", restart_count=3
+        ),
+        fake_container_status(
+            running=False,
+            waiting="CrashLoopBackOff",
+            last_terminated="ContainerCannotRun",
+            restart_count=140,
+        ),
+    ],
+)
+def test_a_runtime_that_cannot_bind_the_volume_is_a_mount_failure(status):
+    pod = fake_pod(ready=False, containers=[status])
+    assert setup_failed(pod)
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        fake_container_status(
+            running=False, waiting="RunContainerError", restart_count=1
+        ),
+        fake_container_status(
+            running=False,
+            waiting="CrashLoopBackOff",
+            last_terminated="Error",
+            restart_count=9,
+        ),
+        fake_container_status(
+            running=True, last_terminated="ContainerCannotRun", restart_count=9
+        ),
+    ],
+)
+def test_other_container_trouble_is_not_a_mount_failure(status):
+    pod = fake_pod(ready=False, containers=[status])
+    assert not setup_failed(pod)
+
+
+def test_a_terminating_pod_is_not_a_mount_failure():
+    pod = fake_pod(
+        phase="Pending",
+        ready=False,
+        deleting=True,
+        age_s=nh.MOUNT_SETUP_GRACE_S + 60,
+        conditions={"PodReadyToStartContainers": "False"},
+    )
+    assert not setup_failed(pod)
+
+
+def test_a_ready_replacement_clears_a_stuck_pod(k8s):
+    stuck = fake_pod(
+        phase="Pending",
+        ready=False,
+        age_s=nh.MOUNT_SETUP_GRACE_S + 60,
+        conditions={"PodReadyToStartContainers": "False"},
+    )
+    k8s.core.pods = [stuck]
+    assert nh._list_probe_pods(time.time())[("depot", "node-a")].setup_failed
+    k8s.core.pods = [stuck, fake_pod(ready=True)]
+    assert not nh._list_probe_pods(time.time())[("depot", "node-a")].setup_failed
+
+
+def test_setup_failure_beside_a_working_sibling_is_red(metrics_env):
+    """The sibling proves the node, network, image and scripts work, so what
+    stops this pod is its volume — and a session landing here would hang the
+    same way."""
+    metrics_env("/work/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
+    metrics_env.pod("/depot/", ready=False, setup_failed=True)
+
+    nh.update_metrics()
+
+    assert sample("af_node_mount_valid") == 0
+    assert sample("af_node_mount_result_fresh") == 1
+    assert sample("af_node_mount_probe_up") == 0
+    assert sample("af_node_mount_timeout_total", check_type="mount_setup_failed") == 1
+
+
+def test_setup_failure_with_no_working_sibling_is_unknown(metrics_env):
+    """Nothing on the node answers, so the node itself may be the fault."""
+    metrics_env.pod("/depot/", ready=False, setup_failed=True)
+
+    nh.update_metrics()
+
+    assert sample("af_node_mount_result_fresh") == 0
+
+
+def test_setup_failure_overrides_a_cached_success(metrics_env):
+    """A verdict from the pod that ran before says nothing about the one that
+    cannot start now."""
+    metrics_env("/work/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
     metrics_env("/depot/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
     nh.update_metrics()
-    assert sample("af_node_mount_probe_up") == 1
-
-    monkeypatch.setattr(nh, "_probe_pod_states", lambda: None)
-    nh.update_metrics()
-    assert sample("af_node_mount_probe_up") is None
-    # The mount verdict is unaffected: it comes from the result file.
     assert sample("af_node_mount_valid") == 1
 
+    del metrics_env.served[("depot", "node-a")]
+    metrics_env.pod("/depot/", ready=False, setup_failed=True)
+    nh.update_metrics()
 
-def test_probe_pod_without_ready_condition_is_not_ready(k8s):
-    pod = fake_pod()
-    pod.status.conditions = []
-    k8s.core.pods = [pod]
-    assert nh._probe_pod_states() == {("depot", "node-a"): False}
+    assert sample("af_node_mount_valid") == 0
+    assert sample("af_node_mount_result_fresh") == 1
 
 
 # ── probe_up: broken mount vs broken probe ────────────────────────────────────
 
 
-def test_probe_up_reports_a_ready_probe(metrics_env, monkeypatch):
-    monkeypatch.setattr(nh, "_probe_pod_states", lambda: {("depot", "node-a"): True})
+def test_probe_up_reports_a_ready_probe_that_answers(metrics_env):
     metrics_env("/depot/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
     nh.update_metrics()
     assert sample("af_node_mount_probe_up") == 1
     assert sample("af_node_mount_valid") == 1
 
 
-def test_probe_up_zero_when_no_probe_pod_exists(metrics_env):
+def test_probe_up_zero_when_the_probe_pod_is_gone(metrics_env):
     metrics_env("/depot/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
     nh.update_metrics()
+
+    metrics_env.pods.clear()
+    nh.update_metrics()
+
     assert sample("af_node_mount_probe_up") == 0
     # The mount verdict still stands on the last result it did produce.
     assert sample("af_node_mount_valid") == 1
 
 
+def test_probe_up_is_absent_when_the_pod_list_is_unavailable(metrics_env):
+    metrics_env("/depot/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
+    nh.update_metrics()
+    assert sample("af_node_mount_probe_up") == 1
+
+    metrics_env.listed = False
+    nh.update_metrics()
+    assert sample("af_node_mount_probe_up") is None
+    assert sample("af_node_mount_valid") == 1
+
+
 def test_probe_up_cleared_for_not_ready_nodes(metrics_env, monkeypatch):
     """NotReady nodes publish nothing at all, probe state included."""
-    monkeypatch.setattr(nh, "_probe_pod_states", lambda: {("depot", "node-a"): True})
     metrics_env("/depot/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
     nh.update_metrics()
     assert sample("af_node_mount_probe_up") == 1
@@ -616,6 +859,15 @@ def test_probe_up_cleared_for_not_ready_nodes(metrics_env, monkeypatch):
     monkeypatch.setattr(nh, "_list_af_nodes", lambda: [("node-a", "prod", False)])
     nh.update_metrics()
     assert sample("af_node_mount_probe_up") is None
+
+
+def test_probes_on_not_ready_nodes_are_not_asked(metrics_env, monkeypatch):
+    asked = []
+    monkeypatch.setattr(nh, "_fetch_all", lambda targets: asked.extend(targets) or {})
+    monkeypatch.setattr(nh, "_list_af_nodes", lambda: [("node-a", "prod", False)])
+    metrics_env("/depot/", "node-a", ok=True, timestamp=time.time())
+    nh.update_metrics()
+    assert asked == []
 
 
 # ── clock skew ────────────────────────────────────────────────────────────────
@@ -661,70 +913,122 @@ def test_small_skew_is_still_accepted(metrics_env):
     assert sample("af_node_mount_valid") == 1
 
 
-# ── unreadable results volume ─────────────────────────────────────────────────
+# ── the exporter's path to the probes ─────────────────────────────────────────
 
 
-def test_read_timeout_is_reported_as_unavailable_not_as_a_failing_mount(
-    metrics_env, monkeypatch
-):
-    """A wedged CephFS read must not be published as a broken mount, and must
-    not be silent either: the series go null and results_available goes 0."""
-    monkeypatch.setattr(nh, "RESULTS_READ_TIMEOUT_S", 0.05)
-    monkeypatch.setattr(
-        nh, "_read_result_file", lambda path: time.sleep(5) or {"ok": True}
-    )
+def results_available():
+    return REGISTRY.get_sample_value("af_node_monitor_results_available")
+
+
+def test_every_ready_probe_answering_is_full_availability(metrics_env):
     metrics_env("/depot/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
+    metrics_env("/work/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
     nh.update_metrics()
-
-    assert sample("af_node_mount_valid") is None
-    assert sample("af_node_mount_result_fresh") is None
-    assert REGISTRY.get_sample_value("af_node_monitor_results_available") == 0
+    assert results_available() == 1
 
 
-def test_one_wedged_read_stops_the_iteration_reading_more(metrics_env, monkeypatch):
-    """Every further read would hang the same way; each one costs a leaked
-    thread and 15s of the loop."""
-    monkeypatch.setattr(nh, "RESULTS_READ_TIMEOUT_S", 0.05)
-    reads = []
-
-    def slow(path):
-        reads.append(path)
-        time.sleep(5)
-
-    monkeypatch.setattr(nh, "_read_result_file", slow)
-    nh.update_metrics()
-    assert len(reads) == 1
-
-
-def test_probe_state_survives_an_unreadable_results_volume(metrics_env, monkeypatch):
-    """The one gauge that says whether monitoring itself is alive must not be
-    cleared by the fault it is there to explain."""
-    monkeypatch.setattr(nh, "RESULTS_READ_TIMEOUT_S", 0.05)
-    monkeypatch.setattr(nh, "_read_result_file", lambda path: time.sleep(5))
-    monkeypatch.setattr(
-        nh,
-        "_probe_pod_states",
-        lambda: {(m, "node-a"): True for m in ("depot", "work", "eos", "cvmfs")},
-    )
-    nh.update_metrics()
-    assert sample("af_node_mount_probe_up") == 1
-    assert sample("af_node_mount_valid") is None
-
-
-def test_storage_error_sets_results_unavailable(metrics_env, monkeypatch):
-    monkeypatch.setattr(
-        nh,
-        "_read_result_file",
-        lambda path: (_ for _ in ()).throw(OSError("stale file handle")),
-    )
-    nh.update_metrics()
-    assert REGISTRY.get_sample_value("af_node_monitor_results_available") == 0
-
-
-def test_healthy_iteration_reports_results_available(metrics_env):
+def test_availability_is_the_fraction_of_ready_probes_answering(metrics_env):
     metrics_env("/depot/", "node-a", ok=True, timestamp=time.time(), ping_ms=1.0)
+    metrics_env.pod("/work/", ready=True, ip="10.0.0.2")
+    metrics_env.pod("/eos/", ready=False, ip="10.0.0.3")  # not counted
     nh.update_metrics()
-    assert REGISTRY.get_sample_value("af_node_monitor_results_available") == 1
+    assert results_available() == 0.5
+
+
+def test_no_ready_probe_on_a_ready_node_is_no_availability(metrics_env):
+    metrics_env.pod("/depot/", ready=False)
+    nh.update_metrics()
+    assert results_available() == 0
+
+
+def test_an_unlisted_fleet_is_no_availability(metrics_env):
+    metrics_env.listed = False
+    nh.update_metrics()
+    assert results_available() == 0
+
+
+def test_no_ready_node_leaves_nothing_to_miss(metrics_env, monkeypatch):
+    monkeypatch.setattr(nh, "_list_af_nodes", lambda: [("node-a", "prod", False)])
+    nh.update_metrics()
+    assert results_available() == 1
+
+
+# ── pulling results ───────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def http_probe():
+    """A local HTTP server standing in for a probe pod."""
+    responses = {}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            code, body = responses.get(self.path, (404, b""))
+            self.send_response(code)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield server.server_address[1], responses
+    server.shutdown()
+    server.server_close()
+
+
+def test_fetch_result_reads_the_probe_json(http_probe):
+    port, responses = http_probe
+    responses["/result"] = (200, json.dumps({"ok": True}).encode())
+    assert nh._fetch_result("127.0.0.1", port) == {"ok": True}
+
+
+@pytest.mark.parametrize(
+    "response", [(404, b"no result yet"), (200, b"{ nope"), (200, b"[1, 2]")]
+)
+def test_fetch_result_without_a_usable_answer_is_none(http_probe, response):
+    port, responses = http_probe
+    responses["/result"] = response
+    assert nh._fetch_result("127.0.0.1", port) is None
+
+
+def test_fetch_result_from_nothing_listening_is_none(http_probe):
+    port, _ = http_probe
+    assert nh._fetch_result("127.0.0.1", 1) is None
+
+
+def test_fetch_result_brackets_an_ipv6_address(monkeypatch):
+    urls = []
+
+    def fake_open(url, timeout):
+        urls.append(url)
+        raise OSError("unreachable")
+
+    monkeypatch.setattr(nh._opener, "open", fake_open)
+    nh._fetch_result("fd00::5", 8080)
+    assert urls == ["http://[fd00::5]:8080/result"]
+
+
+def test_one_slow_probe_cannot_stall_the_pass(monkeypatch):
+    monkeypatch.setattr(nh, "FETCH_PASS_TIMEOUT_S", 0.2)
+
+    def fetch(ip, port):
+        if ip == "slow":
+            time.sleep(2)
+        return {"ip": ip}
+
+    monkeypatch.setattr(nh, "_fetch_result", fetch)
+    started = time.time()
+    got = nh._fetch_all(
+        {
+            ("depot", "a"): nh.Probe(ready=True, ip="fast"),
+            ("depot", "b"): nh.Probe(ready=True, ip="slow"),
+        }
+    )
+    assert time.time() - started < 1.5
+    assert got == {("depot", "a"): {"ip": "fast"}}
 
 
 # ── gauge clearing ────────────────────────────────────────────────────────────

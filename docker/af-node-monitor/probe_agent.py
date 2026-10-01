@@ -1,22 +1,31 @@
 """Per-node mount probe supervisor — one DaemonSet pod per (mount, node).
 
-Every cycle runs job_runner.py as a fresh child under a hard deadline. Three
-states stay distinguishable:
+Every cycle runs job_runner.py as a fresh child under a hard deadline and
+serves the latest verdict over HTTP, where the exporter pulls it. Three states
+stay distinguishable:
 
   mount is broken      -> the child reports it, or blows its deadline; the
                           supervisor publishes a timeout result (valid=0).
-  probe is broken      -> nothing is published, the last result goes stale,
-                          and the pod drops out of Ready (`healthy` marker).
-  supervisor is wedged -> the heartbeat stops and the liveness probe restarts
-                          the container.
+  probe is broken      -> nothing new is published, the last result goes
+                          stale, and the pod drops out of Ready (`ready`).
+  supervisor is wedged -> the heartbeat stops; the pod drops out of Ready and
+                          the liveness probe restarts the container.
+
+Every file this process touches is on the pod's emptyDir: node-local disk, so
+nothing here can hang on the storage it probes or on a volume shared with other
+probes. The kubelet's probes read the same files, so no network client can fail
+them.
 """
 
 import json
 import os
 import random
+import socket
 import subprocess
 import sys
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any, Dict
 
@@ -30,23 +39,26 @@ def _get_env(name: str, default: str | None = None, required: bool = False) -> s
 
 MOUNT_NAME = _get_env("MOUNT_NAME", required=True)
 NODE_NAME = os.getenv("NODE_NAME") or ""
-RESULTS_DIR = Path(_get_env("RESULTS_DIR", "/af-node-monitor/results"))
 RUNTIME_DIR = Path(_get_env("PROBE_RUNTIME_DIR", "/run/af-node-monitor"))
+RESULTS_DIR = Path(_get_env("RESULTS_DIR", str(RUNTIME_DIR / "results")))
 JOB_RUNNER = _get_env("JOB_RUNNER_PATH", "/scripts/job_runner.py")
+HTTP_PORT = int(_get_env("PROBE_HTTP_PORT", "8080"))
 
 PROBE_INTERVAL_S = float(_get_env("PROBE_INTERVAL_S", "600"))
 # Ceiling on one attempt: ping + metadata + fio timeouts, with headroom.
 PROBE_DEADLINE_S = float(_get_env("PROBE_DEADLINE_S", "180"))
-# De-synchronise the fleet: without it every node reads 1 GiB off the same
-# server in the same second on every fio cycle.
+# De-synchronise the fleet so every node does not probe the same server at once.
 PROBE_STARTUP_JITTER_S = float(_get_env("PROBE_STARTUP_JITTER_S", "60"))
 # How long to wait for a killed child before abandoning it. A child wedged in
 # an uninterruptible read cannot be reaped at all; waiting for it is what
 # would freeze this loop.
 CHILD_KILL_GRACE_S = float(_get_env("CHILD_KILL_GRACE_S", "5"))
+# Longest one HTTP connection may take in total, however slowly it sends.
+HTTP_TIMEOUT_S = float(_get_env("PROBE_HTTP_TIMEOUT_S", "5"))
 
 HEARTBEAT = RUNTIME_DIR / "heartbeat"
-HEALTHY = RUNTIME_DIR / "healthy"
+READY = RUNTIME_DIR / "ready"
+ATTEMPTS_DIR = RESULTS_DIR / ".attempts"
 
 
 def _vlog(msg: str) -> None:
@@ -58,31 +70,28 @@ def _elog(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
 
 
-def _sanitized_mount_name(name: str) -> str:
-    return name.strip("/").replace("/", "_") or "root"
+class Published:
+    """The verdict the HTTP thread serves and the probe loop replaces."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.body: bytes | None = None
+
+    def set(self, data: Dict[str, Any]) -> None:
+        body = json.dumps(data).encode()
+        with self.lock:
+            self.body = body
+
+    def get(self) -> bytes | None:
+        with self.lock:
+            return self.body
 
 
-def _sanitized_node_name(name: str) -> str:
-    return name.strip().replace("/", "_") if name else ""
-
-
-MOUNT_KEY = _sanitized_mount_name(MOUNT_NAME)
-NODE_KEY = _sanitized_node_name(NODE_NAME)
-STEM = f"{MOUNT_KEY}__{NODE_KEY}" if NODE_KEY else MOUNT_KEY
-
-# Attempts land in their own directory on the same filesystem, so promoting one
-# is an atomic rename and a late-waking child can never land on the published
-# path. os.replace() across .attempts/ and results/ stays atomic because both
-# sit under RESULTS_DIR.
-#
-# Scoped per stem rather than swept by filename prefix: two nodes whose names
-# differ by a hyphenated suffix (paf-a0 and paf-a0-gpu) share a prefix, and one
-# probe would delete the other's in-flight attempt.
-ATTEMPTS_DIR = RESULTS_DIR / ".attempts" / STEM
+PUBLISHED = Published()
 
 
 def result_path() -> Path:
-    return RESULTS_DIR / f"{STEM}.json"
+    return RESULTS_DIR / "result.json"
 
 
 def attempt_path(seq: int) -> Path:
@@ -110,12 +119,8 @@ def reap_orphans() -> None:
 
 
 def sweep_attempts(keep: Path | None) -> None:
-    """Drop attempt files this pod is no longer waiting on.
-
-    ATTEMPTS_DIR belongs to this (mount, node) alone, so everything in it is
-    ours — including leftovers from earlier pod incarnations, which is what
-    keeps a crashlooping probe from filling the results PVC.
-    """
+    """Drop attempt files this pod is no longer waiting on, including leftovers
+    from earlier container incarnations, which share the emptyDir."""
     try:
         entries = list(ATTEMPTS_DIR.iterdir())
     except FileNotFoundError:
@@ -163,23 +168,23 @@ def touch(path: Path) -> None:
         _elog(f"[probe_agent] cannot touch {path}: {e}")
 
 
-def set_healthy(healthy: bool) -> None:
+def set_ready(ready: bool) -> None:
     """Ready means the probe machinery works, not that the mount is good.
 
     A mount that times out is a *successful* probe: it published a verdict.
-    Only a probe that cannot produce one at all drops out of Ready, which is
-    what separates "storage is down" from "monitoring is down" on the
-    af_node_mount_probe_up gauge.
+    Only a probe that cannot produce one drops out of Ready, which is what
+    separates "storage is down" from "monitoring is down" on
+    af_node_mount_probe_up.
     """
-    if healthy:
-        touch(HEALTHY)
+    if ready:
+        touch(READY)
         return
     try:
-        HEALTHY.unlink()
+        READY.unlink()
     except FileNotFoundError:
         pass
     except OSError as e:
-        _elog(f"[probe_agent] cannot clear {HEALTHY}: {e}")
+        _elog(f"[probe_agent] cannot clear {READY}: {e}")
 
 
 def child_env(attempt: Path) -> Dict[str, str]:
@@ -195,8 +200,9 @@ def timeout_result(prev: Dict[str, Any]) -> Dict[str, Any]:
 
     ping_ms/metadata_ms are left null on purpose: the exporter substitutes its
     own timeout sentinels, and a partial measurement from a wedged read is not
-    a latency anyone should chart. last_fio_ts carries over so a recovering
-    mount does not get an fio run on every cycle.
+    a latency anyone should chart. last_fio_ts and the last measured rate carry
+    over, so a recovering mount neither runs fio on every cycle nor reports a
+    rate of zero it never measured.
     """
     return {
         "timestamp": time.time(),
@@ -204,7 +210,7 @@ def timeout_result(prev: Dict[str, Any]) -> Dict[str, Any]:
         "timeout": True,
         "ping_ms": None,
         "metadata_ms": None,
-        "throughput_gbps": 0.0,
+        "throughput_gbps": prev.get("throughput_gbps"),
         "last_fio_ts": prev.get("last_fio_ts"),
         "node": NODE_NAME or "",
     }
@@ -218,8 +224,6 @@ def run_attempt(seq: int) -> str:
     try:
         ATTEMPTS_DIR.mkdir(parents=True, exist_ok=True)
     except OSError as e:
-        # Results storage is unreachable. Publishing a timeout here would blame
-        # the monitored mount for a fault in the results PVC.
         _elog(f"[probe_agent] cannot create {ATTEMPTS_DIR}: {e}")
         return "failed"
 
@@ -252,34 +256,37 @@ def run_attempt(seq: int) -> str:
         return "failed"
 
     if timed_out:
-        prev = load_json(result_path())
+        result = timeout_result(load_json(result_path()))
         try:
-            write_atomic(result_path(), timeout_result(prev))
+            write_atomic(result_path(), result)
         except OSError as e:
-            _elog(f"[probe_agent] cannot publish timeout result: {e}")
+            _elog(f"[probe_agent] cannot record timeout result: {e}")
             return "failed"
+        PUBLISHED.set(result)
         _vlog(f"[probe_agent] {MOUNT_NAME}: deadline exceeded, published timeout")
         return "timeout"
 
     if proc.returncode != 0:
-        # The check itself broke (bad config, crash, unwritable results PVC).
-        # Publishing anything here would be a guess; let the last result go
-        # stale instead and drop out of Ready.
+        # The check itself broke (bad config, crash). Publishing anything here
+        # would be a guess; let the last result go stale and drop out of Ready.
         _elog(
             f"[probe_agent] {MOUNT_NAME}: check exited {proc.returncode}: "
             f"{(err or '').strip()[:500]}"
         )
         return "failed"
 
-    if not attempt.exists():
-        _elog(f"[probe_agent] {MOUNT_NAME}: check produced no result file")
+    result = load_json(attempt)
+    if not result:
+        _elog(f"[probe_agent] {MOUNT_NAME}: check produced no result")
         return "failed"
 
     try:
+        # Promoted from this attempt's own file, which no abandoned child writes.
         os.replace(attempt, result_path())
     except OSError as e:
-        _elog(f"[probe_agent] cannot publish result: {e}")
+        _elog(f"[probe_agent] cannot record result: {e}")
         return "failed"
+    PUBLISHED.set(result)
     return "published"
 
 
@@ -291,15 +298,81 @@ def cycle(seq: int) -> str:
     except Exception as e:
         # Handled here, not in main(): a probe that crashed must stop
         # advertising itself as Ready, and that invariant should not depend on
-        # the caller remembering to clear the marker.
+        # the caller remembering it.
         _elog(f"[probe_agent] {MOUNT_NAME}: attempt raised: {e}")
         outcome = "failed"
-    set_healthy(outcome in ("published", "timeout"))
+    set_ready(outcome in ("published", "timeout"))
     touch(HEARTBEAT)
     return outcome
 
 
+def start() -> None:
+    """Take over from an earlier container of this pod.
+
+    Its verdict is served until the first cycle replaces it, but its Ready
+    marker is not inherited: this container is Ready once it has produced a
+    verdict of its own.
+    """
+    set_ready(False)
+    touch(HEARTBEAT)
+    prev = load_json(result_path())
+    if prev:
+        PUBLISHED.set(prev)
+
+
+class Handler(BaseHTTPRequestHandler):
+    def setup(self) -> None:
+        super().setup()
+        self._deadline = threading.Timer(HTTP_TIMEOUT_S, self._cut)
+        self._deadline.daemon = True
+        self._deadline.start()
+
+    def _cut(self) -> None:
+        try:
+            self.connection.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+
+    def finish(self) -> None:
+        self._deadline.cancel()
+        try:
+            super().finish()
+        except OSError:
+            pass
+
+    def do_GET(self) -> None:  # noqa: N802 - http.server naming
+        body = PUBLISHED.get() if self.path == "/result" else None
+        if body is None:
+            self._send(404, b"not found\n", "text/plain")
+        else:
+            self._send(200, body, "application/json")
+
+    def _send(self, code: int, body: bytes, ctype: str) -> None:
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format: str, *args: Any) -> None:
+        _vlog(f"[probe_agent] http {self.address_string()} {format % args}")
+
+
+class Server(HTTPServer):
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        _vlog(f"[probe_agent] http {client_address}: connection dropped")
+
+
+def serve(port: int = HTTP_PORT) -> HTTPServer:
+    # One thread, each connection cut at HTTP_TIMEOUT_S: memory stays bounded.
+    server = Server(("", port), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+
 def main() -> None:  # pragma: no cover - process entrypoint
+    start()
+    serve()
     # The jitter goes after the first cycle, not before it: a pod that has to
     # wait to report is a pod that stays NotReady, and a DaemonSet rollout
     # advances one wave at a time on readiness.
@@ -307,11 +380,7 @@ def main() -> None:  # pragma: no cover - process entrypoint
     seq = 0
     while True:
         started = time.time()
-        try:
-            cycle(seq)
-        except Exception as e:  # pragma: no cover - cycle() handles its own
-            _elog(f"[probe_agent] cycle failed: {e}")
-            set_healthy(False)
+        cycle(seq)
         delay = PROBE_INTERVAL_S + (jitter if seq == 0 else 0.0)
         seq += 1
         # Pace on cycle starts, not on cycle ends, so a slow check does not

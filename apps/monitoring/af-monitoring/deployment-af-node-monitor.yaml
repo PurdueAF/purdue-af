@@ -31,8 +31,6 @@ spec:
           image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
           command: ["python", "/scripts/node_healthcheck.py"]
           env:
-            - name: RESULTS_DIR
-              value: "/af-node-monitor/results"
             # Timeout sentinels: must match the probe DaemonSets timeouts.
             - name: PING_TIMEOUT_S
               value: "3"
@@ -52,12 +50,7 @@ spec:
           volumeMounts:
             - name: scripts
               mountPath: /scripts
-            - name: af-node-monitor-storage
-              mountPath: /af-node-monitor
       volumes:
         - name: scripts
           configMap:
             name: af-node-monitor-config
-        - name: af-node-monitor-storage
-          persistentVolumeClaim:
-            claimName: af-node-monitor-storage

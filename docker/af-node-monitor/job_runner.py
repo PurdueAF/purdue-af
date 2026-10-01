@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import subprocess
 import sys
 import time
@@ -40,10 +41,12 @@ PING_TIMEOUT_S = float(_get_env("PING_TIMEOUT_S", "3"))
 METADATA_TIMEOUT_S = float(_get_env("METADATA_TIMEOUT_S", "10"))
 FIO_TIMEOUT_S = float(_get_env("FIO_TIMEOUT_S", "120"))
 FIO_INTERVAL_S = float(_get_env("FIO_INTERVAL_S", "1800"))  # 30 minutes default
+# fio's timestamp is taken a moment into a cycle; exact equality would skip a cycle.
+FIO_INTERVAL_TOLERANCE_S = float(_get_env("FIO_INTERVAL_TOLERANCE_S", "60"))
 
 ENABLE_FIO = _get_env("ENABLE_FIO", "false").lower() in {"1", "true", "yes"}
 
-RESULTS_DIR = Path(_get_env("RESULTS_DIR", "/af-node-monitor/results"))
+RESULTS_DIR = Path(_get_env("RESULTS_DIR", "/run/af-node-monitor/results"))
 NODE_NAME = os.getenv("NODE_NAME") or ""
 
 # Set by probe_agent: where this attempt writes, and which file carries the
@@ -181,16 +184,21 @@ def _check_metadata() -> Tuple[bool, bool, float | None]:
     return ok, timeout, elapsed_ms
 
 
+def _fio_due(last_fio_ts: float | None, now: float) -> bool:
+    if not ENABLE_FIO or not FIO_FILE:
+        return False
+    if last_fio_ts is None:
+        return True
+    return now - last_fio_ts >= FIO_INTERVAL_S - FIO_INTERVAL_TOLERANCE_S
+
+
 def _check_throughput(
     last_fio_ts: float | None,
 ) -> Tuple[bool, bool, float | None, float | None]:
     """Return (ok, timeout, gbps, new_last_fio_ts)."""
     now = time.time()
 
-    if not ENABLE_FIO or not FIO_FILE:
-        return True, False, None, last_fio_ts
-
-    if last_fio_ts is not None and (now - last_fio_ts) < FIO_INTERVAL_S:
+    if not _fio_due(last_fio_ts, now):
         # Too soon to run fio again; reuse previous throughput if any.
         return True, False, None, last_fio_ts
 
@@ -202,6 +210,8 @@ def _check_throughput(
         "--bs=1M",
         "--size=1G",
         "--numjobs=1",
+        # Buffered, the read measures page-cache reclaim under the memory limit.
+        "--direct=1",
         "--readonly",
         "--output-format=json",
     ]
@@ -213,7 +223,7 @@ def _check_throughput(
     try:
         data = json.loads(out)
         bw_bytes = data["jobs"][0]["read"]["bw_bytes"]
-        gbps = bw_bytes / 1e9
+        gbps = bw_bytes * 8 / 1e9
     except Exception:
         return False, False, 0.0, last_fio_ts
     return True, False, gbps, now
@@ -248,6 +258,10 @@ def main() -> None:
     except Exception:
         last_fio_ts = None
 
+    if last_fio_ts is None and ENABLE_FIO and FIO_FILE:
+        # Spreads a rollout's first fio runs across the interval.
+        last_fio_ts = time.time() - random.uniform(0, FIO_INTERVAL_S)
+
     if prev:
         _vlog(
             f"[job_runner] Previous result: ok={prev.get('ok')}, timeout={prev.get('timeout')}, "
@@ -272,18 +286,16 @@ def main() -> None:
     throughput_gbps: float | None = prev.get("throughput_gbps")
 
     if not ok:
-        # Responsiveness failed or timed out; report timeout with speed 0.
+        # Reported as a timeout; the last measured rate rides along unused.
         timeout = True
-        _vlog(
-            "[job_runner] Responsiveness failed or timed out; reporting timeout with throughput 0.0"
-        )
+        _vlog("[job_runner] Responsiveness failed or timed out; reporting timeout")
         result = {
             "timestamp": now,
             "ok": False,
             "timeout": True,
             "ping_ms": ping_ms,
             "metadata_ms": meta_ms,
-            "throughput_gbps": 0.0,
+            "throughput_gbps": throughput_gbps,
             "last_fio_ts": last_fio_ts,
             "node": NODE_NAME or "",
         }
@@ -291,11 +303,7 @@ def main() -> None:
         return
 
     # Responsiveness ok; decide whether to run fio.
-    will_run_fio = (
-        ENABLE_FIO
-        and FIO_FILE
-        and (last_fio_ts is None or (now - last_fio_ts) >= FIO_INTERVAL_S)
-    )
+    will_run_fio = _fio_due(last_fio_ts, now)
     _vlog(
         f"[job_runner] FIO decision: ENABLE_FIO={ENABLE_FIO}, FIO_FILE={FIO_FILE}, "
         f"last_fio_ts={last_fio_ts}, will_run_fio={bool(will_run_fio)}"
@@ -322,8 +330,9 @@ def main() -> None:
         "timeout": timeout,
         "ping_ms": ping_ms,
         "metadata_ms": meta_ms,
+        # Null until the first fio run: no measurement is not a zero rate.
         "throughput_gbps": (
-            float(throughput_gbps) if throughput_gbps is not None else 0.0
+            float(throughput_gbps) if throughput_gbps is not None else None
         ),
         "last_fio_ts": last_fio_ts,
         "node": NODE_NAME or "",

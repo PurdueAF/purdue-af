@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import json
 import os
-import threading
 import time
-from pathlib import Path
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor, wait
+from dataclasses import dataclass
 from typing import Any, Dict, List
 
 from prometheus_client import Counter, Gauge, start_http_server
@@ -42,8 +43,7 @@ MOUNTS: Dict[str, str] = {
 PING_TIMEOUT_S = float(os.getenv("PING_TIMEOUT_S", "3"))
 METADATA_TIMEOUT_S = float(os.getenv("METADATA_TIMEOUT_S", "10"))
 
-CHECK_INTERVAL_S = float(os.getenv("CHECK_INTERVAL_S", "600"))
-RESULTS_DIR = Path(os.getenv("RESULTS_DIR", "/af-node-monitor/results"))
+CHECK_INTERVAL_S = float(os.getenv("CHECK_INTERVAL_S", "60"))
 
 POD_NAMESPACE = os.getenv("POD_NAMESPACE", "default")
 
@@ -71,12 +71,22 @@ RESULT_STALE_WINDOW_S = float(
 # stay green forever.
 CLOCK_SKEW_TOLERANCE_S = float(os.getenv("CLOCK_SKEW_TOLERANCE_S", "300"))
 
-# Reads of the results PVC are bounded: it is CephFS, and a read against a
-# wedged mount is uninterruptible. An unbounded one would freeze this loop and
-# take every mount on every node down to "unknown" at once.
-RESULTS_READ_TIMEOUT_S = float(os.getenv("RESULTS_READ_TIMEOUT_S", "15"))
-
 NODE_CACHE_TTL_S = float(os.getenv("NODE_CACHE_TTL_S", "300"))
+
+# Pulls are bounded per socket operation and per pass, so no probe can stall one.
+FETCH_TIMEOUT_S = float(os.getenv("FETCH_TIMEOUT_S", "5"))
+FETCH_PASS_TIMEOUT_S = float(os.getenv("FETCH_PASS_TIMEOUT_S", "30"))
+FETCH_WORKERS = int(os.getenv("FETCH_WORKERS", "16"))
+MAX_RESULT_BYTES = 64 * 1024
+# Used when a probe pod declares no port named "http".
+DEFAULT_PROBE_PORT = 8080
+
+# How long a refused pod list falls back to the last good one.
+POD_CACHE_TTL_S = float(os.getenv("POD_CACHE_TTL_S", "300"))
+
+# Past these, a probe pod stuck on its volume is a mount failure, not a slow start.
+MOUNT_SETUP_GRACE_S = float(os.getenv("MOUNT_SETUP_GRACE_S", "600"))
+MOUNT_SETUP_RESTARTS = int(os.getenv("MOUNT_SETUP_RESTARTS", "3"))
 
 
 try:
@@ -92,7 +102,7 @@ try:
     )
     mount_data_rate_gbps = Gauge(
         "af_node_mount_data_rate_gbps",
-        "Storage mount sequential read throughput in Gbps",
+        "Storage mount single-stream sequential direct read throughput in Gbps",
         ["mount_name", "mount_path", "node", "node_pool"],
     )
     mount_metadata_latency_ms = Gauge(
@@ -121,9 +131,10 @@ try:
     )
     mount_probe_up = Gauge(
         "af_node_mount_probe_up",
-        "1 when the probe DaemonSet pod for this mount/node is Ready, 0 when "
-        "it is missing or not Ready. Separates a broken mount (valid=0) from "
-        "a broken probe — both otherwise surface only as unknown",
+        "1 when the probe pod for this mount/node is Ready and answered this "
+        "pass, 0 when it is missing, not Ready or unreachable. Separates a "
+        "broken mount (valid=0) from a broken probe — both otherwise surface "
+        "only as unknown",
         ["mount_name", "mount_path", "node", "node_pool"],
     )
 
@@ -133,8 +144,9 @@ try:
     )
     monitor_results_available = Gauge(
         "af_node_monitor_results_available",
-        "1 when the results PVC could be read this iteration. On 0 every "
-        "af_node_mount_* series goes absent, which no mount alert can see",
+        "Fraction of Ready probe pods that answered the exporter this pass. "
+        "At 0 no mount is being checked at all, which reads as unknown, not "
+        "as failing",
     )
 
     # Held as objects, not names: a name resolved through globals() turns a
@@ -196,73 +208,6 @@ def _init_k8s() -> None:
     except Exception as e:  # pragma: no cover - defensive
         print(f"[node_healthcheck] Failed to initialize Kubernetes client: {e}")
         _k8s_ready = False
-
-
-def _result_path(mount_name: str, node_name: str) -> Path:
-    mount_key = _sanitized_mount_name(mount_name)
-    node_key = _sanitized_node_name(node_name)
-    return RESULTS_DIR / f"{mount_key}__{node_key}.json"
-
-
-def _call_bounded(fn: Any, timeout_s: float) -> tuple[bool, Any]:
-    """Run fn in a throwaway thread; return (completed, value).
-
-    A read against a wedged CephFS mount sits in uninterruptible sleep, so the
-    thread is abandoned rather than joined — it is a daemon and unblocks when
-    the filesystem does. Callers must stop reading after the first timeout so
-    at most one thread leaks per iteration.
-    """
-    box: Dict[str, Any] = {}
-
-    def run() -> None:
-        try:
-            box["value"] = fn()
-        except BaseException as e:  # re-raised on the calling thread
-            box["error"] = e
-
-    t = threading.Thread(target=run, daemon=True)
-    t.start()
-    t.join(timeout_s)
-    if t.is_alive():
-        return False, None
-    if "error" in box:
-        raise box["error"]
-    return True, box.get("value")
-
-
-def _read_result_file(path: Path) -> Dict[str, Any] | None:
-    with path.open("r", encoding="utf-8") as f:
-        loaded: Dict[str, Any] = json.load(f)
-        return loaded
-
-
-def _load_result(mount_name: str, node_name: str) -> Dict[str, Any] | None:
-    path = _result_path(mount_name, node_name)
-    try:
-        done, value = _call_bounded(
-            lambda: _read_result_file(path), RESULTS_READ_TIMEOUT_S
-        )
-    except FileNotFoundError:
-        # Per-node result file not present yet.
-        return None
-    except OSError as e:
-        # Underlying storage (PVC) likely unavailable; signal caller to skip metrics.
-        print(
-            f"[node_healthcheck] Storage error reading result for {mount_name} "
-            f"from {path}: {e}"
-        )
-        return {"_storage_error": True}
-    except Exception as e:
-        print(f"Error reading result for {mount_name} from {path}: {e}")
-        return None
-
-    if not done:
-        _elog(
-            f"[node_healthcheck] Read of {path} did not return in "
-            f"{RESULTS_READ_TIMEOUT_S}s; results storage is wedged"
-        )
-        return {"_storage_error": True, "_timed_out": True}
-    return value  # type: ignore[no-any-return]
 
 
 # node name -> "prod" | "dev", filled by _refresh_node_caches()
@@ -363,16 +308,6 @@ def _clear_gauges(labels: dict[str, str], gauges: tuple[Any, ...]) -> None:
             pass
 
 
-def _clear_result_gauges(labels: dict[str, str]) -> None:
-    """Drop the result-derived gauges, keeping af_node_mount_probe_up.
-
-    Used when the results PVC cannot be read: what the check found is unknown,
-    but whether a probe is running is still known and is the only thing that
-    tells the two apart.
-    """
-    _clear_gauges(labels, RESULT_GAUGES)
-
-
 def _clear_mount_gauges(labels: dict[str, str]) -> None:
     """Drop every status gauge for a mount/node so scrapes show null.
 
@@ -422,6 +357,29 @@ def _publish_unusable(labels: dict[str, str], check_type: str) -> None:
     mount_timeout_total.labels(check_type=check_type, **labels).inc()
 
 
+def _publish_setup_failed(labels: dict[str, str]) -> None:
+    """The probe cannot mount its volume while a sibling on the node runs.
+
+    Only the volume differs between the two pods, and a session landing here
+    carries the same volume spec, so this is a completed failing check
+    (fresh=1), not an unknown.
+    """
+    mount_valid.labels(**labels).set(0)
+    mount_ping_ms.labels(**labels).set(_timeout_ping_ms())
+    mount_metadata_latency_ms.labels(**labels).set(_timeout_metadata_ms())
+    mount_data_rate_gbps.labels(**labels).set(0.0)
+    mount_result_fresh.labels(**labels).set(1)
+    mount_timeout_total.labels(check_type="mount_setup_failed", **labels).inc()
+
+
+@dataclass
+class Probe:
+    ready: bool = False
+    ip: str = ""
+    port: int = DEFAULT_PROBE_PORT
+    setup_failed: bool = False
+
+
 def _probe_pod_ready(pod: Any) -> bool:
     if getattr(pod.metadata, "deletion_timestamp", None):
         # Terminating during a rolling update — do not count it as coverage.
@@ -435,8 +393,57 @@ def _probe_pod_ready(pod: Any) -> bool:
     return False
 
 
-def _probe_pod_states() -> Dict[tuple[str, str], bool] | None:
-    """{(mount_key, node_key): ready} for every probe DaemonSet pod.
+def _probe_port(pod: Any) -> int:
+    for container in getattr(pod.spec, "containers", None) or []:
+        for port in getattr(container, "ports", None) or []:
+            if getattr(port, "name", "") == "http":
+                return int(port.container_port)
+    return DEFAULT_PROBE_PORT
+
+
+def _mount_setup_failed(pod: Any, now: float) -> bool:
+    """True when the pod cannot start because its volume will not mount.
+
+    Pending with PodReadyToStartContainers=False is the kubelet still waiting
+    on a volume, before any sandbox or image pull. RunContainerError and
+    ContainerCannotRun are the runtime failing to bind a volume in. Both could
+    also be a broken node; the caller only trusts them while a sibling probe on
+    the same node answers.
+    """
+    if getattr(pod.metadata, "deletion_timestamp", None):
+        return False
+    status = getattr(pod, "status", None)
+    if status is None:
+        return False
+    if getattr(status, "phase", "") == "Pending":
+        created = getattr(pod.metadata, "creation_timestamp", None)
+        waited = now - created.timestamp() if created else 0.0
+        for cond in getattr(status, "conditions", None) or []:
+            if (
+                getattr(cond, "type", "") == "PodReadyToStartContainers"
+                and getattr(cond, "status", "") == "False"
+                and waited > MOUNT_SETUP_GRACE_S
+            ):
+                return True
+    for cs in getattr(status, "container_statuses", None) or []:
+        state = getattr(cs, "state", None)
+        if state is not None and getattr(state, "running", None):
+            continue
+        waiting = getattr(state, "waiting", None) if state is not None else None
+        last = getattr(cs, "last_state", None)
+        terminated = getattr(last, "terminated", None) if last is not None else None
+        bind_failed = getattr(waiting, "reason", "") == "RunContainerError" or (
+            getattr(terminated, "reason", "") == "ContainerCannotRun"
+        )
+        if bind_failed and (getattr(cs, "restart_count", 0) or 0) >= (
+            MOUNT_SETUP_RESTARTS
+        ):
+            return True
+    return False
+
+
+def _list_probe_pods(now: float) -> Dict[tuple[str, str], Probe] | None:
+    """{(mount_key, node_key): Probe} for every probe DaemonSet pod.
 
     The node comes from spec.nodeName: one DaemonSet template covers every
     node, so no label can carry it.
@@ -461,7 +468,8 @@ def _probe_pod_states() -> Dict[tuple[str, str], bool] | None:
         _elog(f"[node_healthcheck] Unexpected error listing probe pods: {e}")
         return None
 
-    states: Dict[tuple[str, str], bool] = {}
+    probes: Dict[tuple[str, str], Probe] = {}
+    failed: Dict[tuple[str, str], bool] = {}
     for pod in pods.items:
         labels = getattr(pod.metadata, "labels", None) or {}
         mount_key = labels.get("mount", "")
@@ -469,22 +477,94 @@ def _probe_pod_states() -> Dict[tuple[str, str], bool] | None:
         if not mount_key or not node_key:
             continue
         key = (mount_key, node_key)
+        probe = probes.setdefault(key, Probe())
+        ready = _probe_pod_ready(pod)
+        status = getattr(pod, "status", None)
+        ip = getattr(status, "pod_ip", None) or ""
+        terminating = bool(getattr(pod.metadata, "deletion_timestamp", None))
         # Two pods for one node exist briefly during a rollout; Ready wins.
-        states[key] = states.get(key, False) or _probe_pod_ready(pod)
-    return states
+        if ip and not terminating and (ready or not probe.ip):
+            probe.ip = ip
+            probe.port = _probe_port(pod)
+        probe.ready = probe.ready or ready
+        failed[key] = failed.get(key, False) or _mount_setup_failed(pod, now)
+    for key, probe in probes.items():
+        probe.setup_failed = failed[key] and not probe.ready
+    return probes
+
+
+_probe_cache: Dict[tuple[str, str], Probe] | None = None
+_probe_cache_ts: float = 0.0
+
+
+def _probe_pods(now: float) -> Dict[tuple[str, str], Probe] | None:
+    global _probe_cache, _probe_cache_ts
+    probes = _list_probe_pods(now)
+    if probes is not None:
+        _probe_cache, _probe_cache_ts = probes, now
+        return probes
+    if _probe_cache is not None and now - _probe_cache_ts < POD_CACHE_TTL_S:
+        return _probe_cache
+    return None
+
+
+# No proxy: a pod IP is never reached through one.
+_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+_executor = ThreadPoolExecutor(max_workers=FETCH_WORKERS)
+
+
+def _fetch_result(ip: str, port: int) -> Dict[str, Any] | None:
+    host = f"[{ip}]" if ":" in ip else ip
+    try:
+        with _opener.open(
+            f"http://{host}:{port}/result", timeout=FETCH_TIMEOUT_S
+        ) as resp:
+            data = json.loads(resp.read(MAX_RESULT_BYTES))
+    except Exception as e:
+        _vlog(f"[node_healthcheck] No result from {host}:{port}: {e}")
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _fetch_all(
+    targets: Dict[tuple[str, str], Probe],
+) -> Dict[tuple[str, str], Dict[str, Any]]:
+    futures = {
+        _executor.submit(_fetch_result, probe.ip, probe.port): key
+        for key, probe in targets.items()
+    }
+    done, _pending = wait(futures, timeout=FETCH_PASS_TIMEOUT_S)
+    results: Dict[tuple[str, str], Dict[str, Any]] = {}
+    for future in done:
+        value = future.result()
+        if value is not None:
+            results[futures[future]] = value
+    return results
+
+
+# Last result per probe: a missed pull keeps its verdict, under the staleness rules.
+_result_cache: Dict[tuple[str, str], Dict[str, Any]] = {}
 
 
 def update_metrics() -> None:
     now = time.time()
 
     af_nodes = _list_af_nodes()
-    probe_states = _probe_pod_states()
+    probes = _probe_pods(now)
 
-    # Set once a read of the results PVC fails to return. Every further read
-    # this iteration would wedge the same way, so they are skipped and the
-    # mounts reported as unreadable rather than as failing.
-    storage_wedged = False
-    storage_ok = True
+    ready_nodes = {_sanitized_node_name(name) for name, _pool, ok in af_nodes if ok}
+    targets = {
+        key: probe
+        for key, probe in (probes or {}).items()
+        if probe.ip and key[1] in ready_nodes
+    }
+    fetched = _fetch_all(targets)
+    _result_cache.update(fetched)
+
+    expected = [key for key, probe in targets.items() if probe.ready]
+    answered = [key for key in expected if key in fetched]
+    # A probe answering proves the node; a stuck sibling there is down to its volume.
+    working_nodes = {node for _mount, node in answered}
 
     for m_name, mount_path in MOUNTS.items():
         mount_key = _sanitized_mount_name(m_name)
@@ -505,21 +585,20 @@ def update_metrics() -> None:
                 continue
 
             node_key = _sanitized_node_name(node_name)
-            probe_ready = (
-                probe_states.get((mount_key, node_key), False)
-                if probe_states is not None
+            key = (mount_key, node_key)
+            probe = probes.get(key) if probes is not None else None
+            probe_up = (
+                bool(probe and probe.ready and key in fetched)
+                if probes is not None
                 else None
             )
-            has_probe = (
-                probe_states is not None and (mount_key, node_key) in probe_states
-            )
 
-            if storage_wedged:
-                _publish_probe_up(labels, probe_ready)
-                _clear_result_gauges(labels)
+            if probe is not None and probe.setup_failed and node_key in working_nodes:
+                _publish_probe_up(labels, probe_up)
+                _publish_setup_failed(labels)
                 continue
 
-            data = _load_result(m_name, node_name)
+            data = _result_cache.get(key)
             # Use node from result JSON (the probe pod's node); fallback to
             # discovery so the metric always reflects the node that produced it.
             node_for_label = (
@@ -532,26 +611,18 @@ def update_metrics() -> None:
                 "node": node_for_label,
                 "node_pool": _node_pools.get(node_for_label, pool),
             }
-            _publish_probe_up(labels, probe_ready)
-
-            if data and data.get("_storage_error"):
-                # Results PVC is unavailable; drop the result series so they
-                # appear empty. af_node_mount_probe_up stays, and
-                # af_node_monitor_results_available says why.
-                storage_ok = False
-                if data.get("_timed_out"):
-                    storage_wedged = True
-                _clear_result_gauges(labels)
-                continue
+            _publish_probe_up(labels, probe_up)
 
             if not data:
                 # No result yet: expose timeout semantics for latency/throughput
                 # gauges so alerts/dashboards see an explicit failure signal.
-                check_type = "no_recent_result"
-                if node_key and has_probe:
-                    # Distinguish the case where a probe exists but has not
-                    # produced output yet (for example stuck Pending or
-                    # ContainerCreating because a volume will not mount).
+                if probe is None:
+                    check_type = "no_recent_result"
+                elif probe.ready:
+                    # Ready by the kubelet's check, but not reachable from here.
+                    check_type = "unreachable"
+                else:
+                    # Pending, or crashing before its first result.
                     check_type = "job_never_started"
                 _publish_unusable(labels, check_type)
                 continue
@@ -609,6 +680,9 @@ def update_metrics() -> None:
 
                 if gbps is not None:
                     mount_data_rate_gbps.labels(**labels).set(float(gbps))
+                elif ok:
+                    # Not measured yet: absent, not a zero rate left by an earlier sentinel.
+                    _clear_gauges(labels, (mount_data_rate_gbps,))
 
                 if ok:
                     mount_last_success_ts.labels(**labels).set(timestamp)
@@ -623,7 +697,11 @@ def update_metrics() -> None:
                             _timeout_metadata_ms()
                         )
 
-    monitor_results_available.set(1 if storage_ok else 0)
+    if expected:
+        monitor_results_available.set(len(answered) / len(expected))
+    else:
+        # No Ready probe to ask: nothing is being checked on any Ready node.
+        monitor_results_available.set(0 if ready_nodes else 1)
 
 
 if __name__ == "__main__":  # pragma: no cover - process entrypoint

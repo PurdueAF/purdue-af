@@ -185,7 +185,8 @@ def test_check_throughput_respects_interval(monkeypatch):
     assert (ok, timeout, gbps, ts) == (True, False, None, recent)  # skipped
 
 
-def test_check_throughput_parses_fio_json(monkeypatch):
+def test_check_throughput_parses_fio_json_into_gigabits(monkeypatch):
+    """fio reports bytes per second; the gauge and the dashboards are Gbps."""
     import json as _json
 
     monkeypatch.setattr(runner, "ENABLE_FIO", True)
@@ -196,8 +197,31 @@ def test_check_throughput_parses_fio_json(monkeypatch):
     ok, timeout, gbps, ts = runner._check_throughput(None)
 
     assert (ok, timeout) == (True, False)
-    assert gbps == 2.5
+    assert gbps == 20.0
     assert ts is not None
+
+
+def test_check_throughput_reads_past_the_page_cache(monkeypatch):
+    """A buffered read charges the file to the container's memory limit and
+    measures the reclaim, not the storage."""
+    monkeypatch.setattr(runner, "ENABLE_FIO", True)
+    monkeypatch.setattr(runner, "FIO_FILE", "/probe")
+    calls = stub_run_subprocess(monkeypatch, stdout="{}")
+    runner._check_throughput(None)
+    assert "--direct=1" in calls[0]
+    assert "--readonly" in calls[0]
+
+
+def test_fio_runs_on_the_cycle_its_interval_ends(monkeypatch):
+    """Cycles start every PROBE_INTERVAL_S but fio's timestamp is taken a
+    moment into one; an exact comparison skips a 30-minute run to 40."""
+    monkeypatch.setattr(runner, "ENABLE_FIO", True)
+    monkeypatch.setattr(runner, "FIO_FILE", "/probe")
+    monkeypatch.setattr(runner, "FIO_INTERVAL_S", 1800.0)
+    now = 10_000.0
+    assert runner._fio_due(now - 1799.5, now)
+    assert not runner._fio_due(now - 1200.0, now)
+    assert runner._fio_due(None, now)
 
 
 def test_check_throughput_fio_failure(monkeypatch):
@@ -267,8 +291,52 @@ def test_main_writes_timeout_when_ping_fails(monkeypatch, tmp_path):
     result = json.loads((tmp_path / "depot__node-a.json").read_text())
     assert result["ok"] is False
     assert result["timeout"] is True
-    assert result["throughput_gbps"] == 0.0
+    assert result["throughput_gbps"] is None
     assert result["node"] == "node-a"
+
+
+def test_a_failed_check_keeps_the_last_measured_rate(monkeypatch, tmp_path):
+    """The exporter shows no rate for a timeout; once the mount answers again
+    the rate is the one fio last measured, not a zero it never measured."""
+    monkeypatch.setattr(runner, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(runner, "MOUNT_NAME", "/depot/")
+    monkeypatch.setattr(runner, "NODE_NAME", "node-a")
+    monkeypatch.setattr(runner, "ENABLE_FIO", True)
+    monkeypatch.setattr(runner, "FIO_FILE", "/probe")
+    path = tmp_path / "depot__node-a.json"
+    path.write_text(json.dumps({"throughput_gbps": 6.4, "last_fio_ts": 1.0}))
+    monkeypatch.setattr(runner, "_check_ping", lambda: (False, True, 3000.0))
+    monkeypatch.setattr(runner, "_check_metadata", lambda: (True, False, 1.0))
+
+    runner.main()
+
+    result = json.loads(path.read_text())
+    assert (result["timeout"], result["throughput_gbps"]) == (True, 6.4)
+
+
+def test_a_new_pod_places_its_first_fio_run_at_random(monkeypatch, tmp_path):
+    """Without history every pod of a rollout would read the same 1 GiB file
+    in the same minute."""
+    monkeypatch.setattr(runner, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(runner, "MOUNT_NAME", "/depot/")
+    monkeypatch.setattr(runner, "NODE_NAME", "n1")
+    monkeypatch.setattr(runner, "ENABLE_FIO", True)
+    monkeypatch.setattr(runner, "FIO_FILE", "/probe")
+    monkeypatch.setattr(runner, "FIO_INTERVAL_S", 1800.0)
+    monkeypatch.setattr(runner, "_check_ping", lambda: (True, False, 1.0))
+    monkeypatch.setattr(runner, "_check_metadata", lambda: (True, False, 1.0))
+    monkeypatch.setattr(runner.random, "uniform", lambda a, b: 600.0)
+    ran = []
+    monkeypatch.setattr(runner, "_run_bounded", lambda cmd, t: ran.append(cmd))
+
+    runner.main()
+
+    result = json.loads((tmp_path / "depot__n1.json").read_text())
+    assert ran == []
+    assert result["ok"] is True
+    # No measurement yet is not a zero rate.
+    assert result["throughput_gbps"] is None
+    assert result["timestamp"] - result["last_fio_ts"] == pytest.approx(600.0, abs=5)
 
 
 def test_main_success_without_node_name(monkeypatch, tmp_path):
@@ -290,6 +358,7 @@ def test_main_success_without_node_name(monkeypatch, tmp_path):
     assert result["timeout"] is False
     assert result["ping_ms"] == 5.0
     assert result["node"] == ""
+    assert result["throughput_gbps"] is None
 
 
 def test_main_runs_fio_and_records_throughput(monkeypatch, tmp_path):
