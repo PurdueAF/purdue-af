@@ -76,11 +76,12 @@ solutions. If your problem is not listed here, please
 
     This is intentional — see [Pixi storage locations](guide-pixi.md#storage-locations).
 
-??? failure "My Pixi environment doesn't show up in the project-aware kernel"
+??? failure "Every cell fails with a Pixi error in the project-aware kernel"
 
-    See the requirements in [Pixi kernels](software.md#pixi-kernels). Also make
-    sure that the notebook is located in (a subdirectory of) the Pixi project
-    directory.
+    The kernel found no Pixi project around the notebook, or cannot use the one
+    it found; the error names the cause. See what the kernel needs in
+    [Pixi kernels](software.md#pixi-kernels). For a notebook outside any Pixi
+    project, choose **Python (pixi global)**.
 
 ??? failure "My Conda environment doesn't show up as a Jupyter kernel"
 

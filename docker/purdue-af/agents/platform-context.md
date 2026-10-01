@@ -102,10 +102,9 @@ Pixi is the platform's package manager, and `pixi` here is a wrapper, not
 upstream pixi — it enforces the rules below rather than reporting them.
 
 Analysis work goes in the shared global environment at `/work/pixi/global/`
-unless the user asks for something else: it is maintained for exactly that, and
-the project-aware kernel already falls back to it. The base environment at
-`/opt/pixi` is the image's own plumbing — it is what puts the tools below on
-PATH — and analysis code should not be run in it.
+unless the user asks for something else: it is maintained for exactly that. The
+base environment at `/opt/pixi` is the image's own plumbing — it is what puts
+the tools below on PATH — and analysis code should not be run in it.
 
 Running Python follows from that. Inside a project that has a built pixi
 environment, use that project's own — `pixi run python …` from the project
@@ -145,9 +144,10 @@ of your own; to change it for everyone, it is generated from
 in the base environment — it belongs to an analysis environment, so expect it
 from the global env or a project env, never from the bare session.
 
-Besides `python3`, the image ships a "Python (pixi project-aware)" kernel that
-discovers the environment beside the notebook and falls back to the global one;
-conda and user-created kernels appear as they are installed.
+Besides `python3` ("Python (pixi global)"), the image ships a "Python (pixi
+project-aware)" kernel that runs the Pixi project containing the notebook, and
+fails every cell when there is none; conda and user-created kernels appear as
+they are installed.
 
 CERNBox is mounted with `eos-connect`, a shell alias for
 `source /etc/jupyter/eos-connect.sh`; aliases exist only in interactive shells,
