@@ -109,15 +109,13 @@ jobs:
         if: env.AF_EXISTS == 'true'
         run: echo "reusing $AF_IMAGE (already built + smoke-tested for this input state)" | tee -a "$GITHUB_STEP_SUMMARY"
       # First build step on purpose: it must never wipe tools other steps
-      # install. apt-based removal is the slowest part (~3 min) and the
-      # space isn't needed: android/dotnet/haskell/tool-cache free enough.
+      # install. The build and its export peak at ~20 GiB.
       - name: Free runner disk space
         if: env.AF_EXISTS != 'true'
-        uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0 # Renovate pins to digest
+        uses: ./.github/actions/ensure-disk
         with:
+          min-free-gb: 50
           tool-cache: true
-          docker-images: false
-          large-packages: false
       - name: Disk before build
         if: env.AF_EXISTS != 'true'
         run: df -h / | tee -a "$GITHUB_STEP_SUMMARY"

@@ -31,7 +31,8 @@ def test_workflows_read_the_pin_instead_of_carrying_one(tmp_path):
         assert "docker/purdue-af/Dockerfile" in reader["run"]
         (setup,) = [s for s in steps if "setup-pixi" in s.get("uses", "")]
         assert setup["with"]["pixi-version"] == "v${{ steps.pixi.outputs.version }}"
-        assert setup["if"] == reader["if"]
+        # the reader runs whenever setup-pixi does
+        assert reader.get("if") in (None, setup["if"])
         # the step's own shell yields the pin, byte for byte
         output = tmp_path / workflow.name
         subprocess.run(

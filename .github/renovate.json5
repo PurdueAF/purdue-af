@@ -149,6 +149,18 @@
       groupName: 'github-actions',
     },
     {
+      // One PR for the coding-agent CLIs and ACP adapters: each changes the
+      // AF image's input hash, so separate PRs rebuild the image after every merge.
+      matchPackageNames: [
+        '@anthropic-ai/claude-code',
+        '@openai/codex',
+        'opencode-ai',
+        '@agentclientprotocol/claude-agent-acp',
+        '@zed-industries/codex-acp',
+      ],
+      groupName: 'coding agents',
+    },
+    {
       // Helm chart bumps stay individual PRs, labelled for triage.
       matchManagers: ['flux'],
       addLabels: ['helm'],

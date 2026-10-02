@@ -23,14 +23,12 @@ runs:
   steps:
     # First on purpose: must never wipe tools other steps install.
     # tool-cache stays FALSE — helm/kind-action hard-fails when
-    # /opt/hostedtoolcache is deleted; android/dotnet/ghc free enough for
-    # the ~13 GB uncompressed AF image in kind.
+    # /opt/hostedtoolcache is deleted. Room for the ~13 GB uncompressed
+    # AF image in kind.
     - name: Free runner disk space
-      uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0 # Renovate pins to digest
+      uses: ./.github/actions/ensure-disk
       with:
-        tool-cache: false
-        docker-images: false
-        large-packages: false # slow apt removal; space not needed here
+        min-free-gb: 50
     - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       with:
         enable-cache: true

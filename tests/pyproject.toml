@@ -27,6 +27,7 @@ dependencies = [
     "jupyterhub-kubespawner>=7.1",
     "aiohttp>=3.9", # ray-train gateway
     "grpcio>=1.60", # ray-train gateway
+    "pytest-xdist>=3.8",
 ]
 
 [tool.uv]

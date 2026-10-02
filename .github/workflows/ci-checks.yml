@@ -54,7 +54,7 @@ jobs:
       - name: Run tests with coverage
         run: >-
           uv run --project tests --frozen
-          pytest -q -c tests/pyproject.toml tests
+          pytest -q -c tests/pyproject.toml tests -n auto
           --cov --cov-report=xml
       # Coverage reporting is informational: a Codecov outage (CLI download,
       # GPG keyserver, upload) must not fail the test job. Genuinely silent

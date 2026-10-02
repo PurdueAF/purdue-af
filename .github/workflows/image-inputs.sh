@@ -125,6 +125,8 @@ paths_for() {
 			tests/e2e_hub
 			tests/pyproject.toml
 			tests/uv.lock
+			.github/actions/kind-hub-stack
+			.github/actions/pick-af-image
 			.github/workflows/ci-e2e.yml
 			.github/workflows/image-inputs.sh
 		EOF

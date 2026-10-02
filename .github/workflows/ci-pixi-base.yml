@@ -37,24 +37,20 @@ jobs:
           # PR head branch so a lock commit can be pushed back; main on push.
           ref: ${{ github.head_ref || github.ref_name }}
           token: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
-      - name: Compute memo key
-        id: key
-        run: echo "key=pixi-base-ok-$(./.github/workflows/image-inputs.sh pixi-base)" | tee -a "$GITHUB_OUTPUT"
-      - name: Look up recorded green run
-        id: memo
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: .ci-memo
-          key: ${{ steps.key.outputs.key }}
-      - name: Verified reuse — identical input state already passed
-        if: steps.memo.outputs.cache-hit == 'true'
-        run: echo "skipping — ${{ steps.key.outputs.key }} already green" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Read the pixi CLI version the AF image uses
         id: pixi
-        if: steps.memo.outputs.cache-hit != 'true'
         run: echo "version=$(sed -n 's/^ARG PIXI_VERSION="\([^"]*\)".*/\1/p' docker/purdue-af/Dockerfile)" | tee -a "$GITHUB_OUTPUT"
+      # The pixi CLI is an input too: a pixi bump re-runs the install.
+      - name: Compute memo key
+        id: key
+        run: echo "key=pixi-base-ok-$(./.github/workflows/image-inputs.sh pixi-base)-pixi${{ steps.pixi.outputs.version }}" | tee -a "$GITHUB_OUTPUT"
+      - name: Look up recorded green run
+        id: memo
+        uses: ./.github/actions/memo-restore
+        with:
+          key: ${{ steps.key.outputs.key }}
       - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2 # Renovate pins to digest
-        if: steps.memo.outputs.cache-hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         with:
           pixi-version: v${{ steps.pixi.outputs.version }}
           manifest-path: pixi/base/pixi.toml
@@ -64,7 +60,7 @@ jobs:
           cache: false
       - name: Install base env (regenerate lock if out of sync)
         id: lock
-        if: steps.memo.outputs.cache-hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         run: |
           set -euo pipefail
           MANIFEST=pixi/base/pixi.toml
@@ -77,13 +73,13 @@ jobs:
             echo "updated=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Import-smoke the base env (EL8 container, like production)
-        if: steps.memo.outputs.cache-hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         run: |
           docker run --rm -v "$PWD:$PWD" -w "$PWD" rockylinux:8 \
             pixi/base/.pixi/envs/base-env/bin/python pixi/check-env.py \
               --manifest pixi/base/pixi.toml --env base-env
       - name: Commit regenerated lockfile
-        if: success() && steps.memo.outputs.cache-hit != 'true' && steps.lock.outputs.updated == 'true'
+        if: success() && steps.memo.outputs.hit != 'true' && steps.lock.outputs.updated == 'true'
         env:
           HAVE_PAT: ${{ secrets.AF_RELEASE_TOKEN != '' }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
@@ -121,10 +117,7 @@ jobs:
           exit 1
       - name: Record green run
         # Only memoize in-sync trees; a lock push triggers a new commit/CI.
-        if: success() && steps.memo.outputs.cache-hit != 'true' && steps.lock.outputs.updated != 'true'
-        run: mkdir -p .ci-memo && echo ok > .ci-memo/marker
-      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        if: success() && steps.memo.outputs.cache-hit != 'true' && steps.lock.outputs.updated != 'true'
+        if: success() && steps.memo.outputs.hit != 'true' && steps.lock.outputs.updated != 'true'
+        uses: ./.github/actions/memo-save
         with:
-          path: .ci-memo
           key: ${{ steps.key.outputs.key }}

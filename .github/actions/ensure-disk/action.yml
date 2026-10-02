@@ -1,0 +1,30 @@
+name: ensure disk
+description: >-
+  Free runner disk space only when / has less than `min-free-gb` available.
+  Must be a job's first build step: it can delete tools other steps install.
+inputs:
+  min-free-gb:
+    description: Free space (GiB) below which disk is freed
+    required: true
+  tool-cache:
+    description: "'true' to also delete /opt/hostedtoolcache (helm/kind-action needs it)"
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - id: df
+      shell: bash
+      env:
+        MIN_FREE_GB: ${{ inputs.min-free-gb }}
+      run: |
+        avail=$(df --output=avail -BG / | tail -1 | tr -dc '0-9')
+        echo "${avail} GiB free on / (minimum ${MIN_FREE_GB})" | tee -a "$GITHUB_STEP_SUMMARY"
+        if [ "$avail" -lt "$MIN_FREE_GB" ]; then echo "free=true"; else echo "free=false"; fi >> "$GITHUB_OUTPUT"
+    # android/dotnet/haskell (+ tool-cache) free ~25 GiB; apt removal is slow and not needed.
+    - if: steps.df.outputs.free == 'true'
+      uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0 # Renovate pins to digest
+      with:
+        tool-cache: ${{ inputs.tool-cache }}
+        docker-images: false
+        large-packages: false

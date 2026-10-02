@@ -16,16 +16,13 @@ name: CI e2e
 #                    CURRENT input state — never a previously promoted
 #                    tag — through the hub's pre-release profile. The
 #                    :pre-release promotion in ci.yml rides on this job.
-#   cvmfs-smoke      image-level CVMFS check of the same AF image, in a
-#                    parallel job so it stays off the critical path (it
-#                    needs the host's /cvmfs, which the kind stack lacks).
 #
-# All jobs are memoized on the hash of their full input state
-# (image-inputs.sh e2e-hub plus the AF image ref where it applies; the
-# cvmfs-smoke key is the image ref alone): identical state with a
-# recorded green run skips as verified reuse. The shared machinery
+# Both jobs are memoized on the hash of their full input state
+# (image-inputs.sh e2e-hub plus the image they spawn): identical state with
+# a recorded green run skips as verified reuse. The shared machinery
 # (memo restore/save, image fallback, kind stack, diagnostics) lives in
-# .github/actions/ composites — one definition, three consumers.
+# .github/actions/ composites. The image-level CVMFS check runs in
+# ci-pixi-global.yml, which already holds the AF image locally.
 # A Renovate chart bump changes helmrelease.yaml, so e2e runs on its PR.
 
 on:
@@ -54,6 +51,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+      actions: read # memo lookup
       packages: read # pull the production AF image into kind
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -74,11 +72,11 @@ jobs:
         run: echo "key=e2e-production-ok-$(./.github/workflows/image-inputs.sh e2e-hub)-${{ steps.image.outputs.tag }}" | tee -a "$GITHUB_OUTPUT"
       - name: Look up recorded green run
         id: memo
-        uses: ./.github/actions/e2e-memo-restore
+        uses: ./.github/actions/memo-restore
         with:
           key: ${{ steps.key.outputs.key }}
       - name: Bring up the hub stack (production image preloaded)
-        if: steps.memo.outputs.cache-hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         uses: ./.github/actions/kind-hub-stack
         env:
           PRELOAD_PRODUCTION: "1"
@@ -89,7 +87,7 @@ jobs:
           ghcr-login: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
           ghcr-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run e2e tests (hub config + production image)
-        if: steps.memo.outputs.cache-hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         env:
           E2E_HUB: "1"
           E2E_PRODUCTION: "1"
@@ -99,8 +97,8 @@ jobs:
         if: failure()
         uses: ./.github/actions/hub-diagnostics
       - name: Record green run
-        if: success() && steps.memo.outputs.cache-hit != 'true'
-        uses: ./.github/actions/e2e-memo-save
+        if: success() && steps.memo.outputs.hit != 'true'
+        uses: ./.github/actions/memo-save
         with:
           key: ${{ steps.key.outputs.key }}
 
@@ -109,6 +107,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+      actions: read # memo lookup
       packages: read # pull the (possibly private) image into kind
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -122,22 +121,26 @@ jobs:
         id: key
         run: |
           img="${{ steps.image.outputs.image }}"
-          echo "key=e2e-pre-release-ok-$(./.github/workflows/image-inputs.sh e2e-hub)-${img##*:}" | tee -a "$GITHUB_OUTPUT"
+          # The :pre-release fallback is a moving tag: never memoized.
+          case "$img" in
+          *@sha256:*) echo "key=e2e-pre-release-ok-$(./.github/workflows/image-inputs.sh e2e-hub)-${img##*:}" ;;
+          *) echo "key=" ;;
+          esac | tee -a "$GITHUB_OUTPUT"
       - name: Look up recorded green run
         id: memo
-        uses: ./.github/actions/e2e-memo-restore
+        uses: ./.github/actions/memo-restore
         with:
           key: ${{ steps.key.outputs.key }}
       # setup-kind.sh crictl-pulls the image straight into the kind node.
       - name: Bring up the hub stack (AF image preloaded)
-        if: steps.memo.outputs.cache-hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         uses: ./.github/actions/kind-hub-stack
         env:
           PRERELEASE_IMAGE: ${{ steps.image.outputs.image }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Run pre-release e2e test
-        if: steps.memo.outputs.cache-hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         env:
           E2E_HUB: "1"
           E2E_PRERELEASE: "1"
@@ -150,60 +153,7 @@ jobs:
         if: failure()
         uses: ./.github/actions/hub-diagnostics
       - name: Record green run
-        if: success() && steps.memo.outputs.cache-hit != 'true'
-        uses: ./.github/actions/e2e-memo-save
-        with:
-          key: ${{ steps.key.outputs.key }}
-
-  cvmfs-smoke:
-    # Mount the host CVMFS client into the AF image and source the CMS
-    # environment — catches missing base utilities the CMS tooling needs
-    # (image-level test; pod-level CVMFS CSI wiring is a cluster concern).
-    # A separate parallel job: the check pulls its own copy of the image,
-    # which is cheaper than putting the pull + check on the e2e critical
-    # path, and feeds ci-ok like every other job here.
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      packages: read # pull the (possibly private) AF image
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Pick the AF image to test
-        id: image
-        uses: ./.github/actions/pick-af-image
-        with:
-          af-image: ${{ inputs.af-image }}
-          af-image-available: ${{ inputs.af-image-available }}
-      - name: Compute memo key
-        id: key
-        run: |
-          img="${{ steps.image.outputs.image }}"
-          echo "key=cvmfs-smoke-ok-${img##*:}" | tee -a "$GITHUB_OUTPUT"
-      - name: Look up recorded green run
-        id: memo
-        uses: ./.github/actions/e2e-memo-restore
-        with:
-          key: ${{ steps.key.outputs.key }}
-      - name: Login to ghcr.io
-        if: steps.memo.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4 # Renovate pins to digest
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install CVMFS on the runner
-        if: steps.memo.outputs.cache-hit != 'true'
-        uses: cvmfs-contrib/github-action-cvmfs@72f2a8d366043978d6aebee154bc9ed321c2f2a8 # v5.6
-      - name: CVMFS smoke test (cmsset_default.sh)
-        if: steps.memo.outputs.cache-hit != 'true'
-        run: |
-          docker run --rm -v /cvmfs:/cvmfs:shared "${{ steps.image.outputs.image }}" bash -c '
-            source /cvmfs/cms.cern.ch/cmsset_default.sh &&
-            command -v scramv1 >/dev/null &&
-            echo "cmsset ok: $(command -v scramv1)"'
-      - name: Record green run
-        if: success() && steps.memo.outputs.cache-hit != 'true'
-        uses: ./.github/actions/e2e-memo-save
+        if: success() && steps.memo.outputs.hit != 'true'
+        uses: ./.github/actions/memo-save
         with:
           key: ${{ steps.key.outputs.key }}
