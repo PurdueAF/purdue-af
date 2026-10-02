@@ -33,6 +33,7 @@ class TestWorkload:
             ("af-x509-secrets-29312345-abcde", "af-x509-secrets"),
             ("alloy-abcde", "alloy"),
             ("ray-train-alice-head-x7k2p", "ray-train-*"),
+            ("ray-train-alice-gpu-worker-x7k2p", "ray-train-*"),
             ("ray-train-gateway-7d9f8c6b5-abcde", "ray-train-gateway"),
         ],
     )

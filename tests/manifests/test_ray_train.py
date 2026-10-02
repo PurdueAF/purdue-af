@@ -10,11 +10,13 @@ gateway exactly the token and scopes it uses.
 import tomllib
 from pathlib import Path
 
+import pytest
 import yaml
 from common import REPO, load_script
 
 APP = REPO / "apps" / "ray-train"
 HUB_VALUES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
+OPERATOR_VALUES = REPO / "apps" / "ray" / "operator" / "values.yaml"
 EXPERIMENTAL = REPO / "deploy" / "experimental" / "kustomization.yaml"
 CORE = REPO / "deploy" / "core-production" / "kustomization.yaml"
 GLOBAL_ENV = REPO / "pixi" / "global" / "pixi.toml"
@@ -117,15 +119,30 @@ def test_the_hub_points_sessions_at_the_gateway():
     )
 
 
-def test_user_clusters_hold_no_kubernetes_credentials():
-    """User code runs in the head pod. KubeRay's autoscaler Role would let it
-    read every pod in the namespace and patch every RayCluster."""
+def test_user_code_never_holds_kubernetes_credentials():
+    """User code runs in the head and worker pods. KubeRay's autoscaler Role
+    reads every pod in the namespace and patches every RayCluster: its token
+    is mounted in the autoscaler's container alone, which runs as the image's
+    user rather than the cluster's."""
     spec = load(APP / "raycluster.yaml")["spec"]
-    assert not spec.get("enableInTreeAutoscaling")
-    assert not spec.get("workerGroupSpecs")
+    assert spec["enableInTreeAutoscaling"] is False
     pod = cluster_pod()["spec"]
     assert pod["automountServiceAccountToken"] is False
     assert "serviceAccountName" not in pod
+    for container in pod["containers"]:
+        assert all(m["name"] != "autoscaler-token" for m in container["volumeMounts"])
+    autoscaler = spec["autoscalerOptions"]
+    assert [m["name"] for m in autoscaler["volumeMounts"]] == ["autoscaler-token"]
+    assert autoscaler["securityContext"]["runAsUser"] == 1000
+
+
+def test_a_clusters_pods_reach_each_other_and_no_one_elses():
+    """KubeRay writes each cluster a NetworkPolicy admitting its own pods;
+    the operator does so only with the feature gate on."""
+    spec = load(APP / "raycluster.yaml")["spec"]
+    assert spec["networkPolicy"] == {"mode": "DenyAllIngress"}
+    gates = {g["name"]: g["enabled"] for g in load(OPERATOR_VALUES)["featureGates"]}
+    assert gates["RayClusterNetworkPolicy"] is True
 
 
 def test_user_clusters_demand_their_token():
@@ -142,15 +159,28 @@ def test_user_clusters_can_run_the_images_python():
     assert 100 in cluster_pod()["spec"]["securityContext"]["supplementalGroups"]
 
 
-def test_a_users_cluster_holds_one_gpu():
-    """With one cluster per user, each user's limit: a head alone, with one GPU."""
-    assert not load(APP / "raycluster.yaml")["spec"].get("workerGroupSpecs")
-    (container,) = cluster_pod()["spec"]["containers"]
-    for amounts in (
-        container["resources"]["limits"],
-        container["resources"]["requests"],
-    ):
-        assert amounts["nvidia.com/gpu"] == 1
+@pytest.mark.parametrize("gpus", ["1", "4", "auto"])
+def test_a_user_holds_four_gpus_at_most(gpus):
+    """One cluster per user: a head and its workers, one GPU in each pod."""
+    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+    user = gateway.User(name="user-a", account="user-a", uid=5001, gid=500)
+    shape = gateway.Shape(gateway.DEFAULT_ENV, gpus)
+    spec = gateway.build_cluster(load(APP / "raycluster.yaml"), user, shape)["spec"]
+    (group,) = spec["workerGroupSpecs"]
+    pods = [
+        (spec["headGroupSpec"]["template"], 1),
+        (group["template"], group["maxReplicas"]),
+    ]
+    most = 0
+    for template, replicas in pods:
+        (container,) = template["spec"]["containers"]
+        resources = container["resources"]
+        assert (
+            resources["limits"]["nvidia.com/gpu"]
+            == resources["requests"]["nvidia.com/gpu"]
+        )
+        most += replicas * resources["limits"]["nvidia.com/gpu"]
+    assert most == (gateway.MAX_GPUS if gpus == "auto" else int(gpus)) <= 4
 
 
 def test_the_gateway_never_reads_a_secret():

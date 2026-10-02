@@ -139,8 +139,9 @@ _POD_SUFFIXES = [
     re.compile(r"-[a-z0-9]{5}$"),  # pod hash
     re.compile(r"-\d+$"),  # StatefulSet ordinal, CronJob timestamp
 ]
-# KubeRay names the head pod of a user's Ray cluster after it: ray-train-<user>-head-<suffix>.
-_RAY_HEAD_POD = re.compile(rf"ray-train-.+-head-{_K8S_SUFFIX}")
+# KubeRay names the pods of a user's Ray cluster after it: ray-train-<user>-head-<suffix>,
+# ray-train-<user>-<group>-worker-<suffix>.
+_RAY_CLUSTER_POD = re.compile(rf"ray-train-.+-(?:head|worker)-{_K8S_SUFFIX}")
 
 
 @dataclass(frozen=True)
@@ -288,7 +289,7 @@ def parse_loki(payload: dict[str, Any]) -> list[dict[str, str]]:
 def workload_of(pod: str) -> str:
     if pod.startswith("jupyter-"):
         return "jupyter-*"
-    if _RAY_HEAD_POD.fullmatch(pod):
+    if _RAY_CLUSTER_POD.fullmatch(pod):
         return "ray-train-*"
     previous = None
     while previous != pod:

@@ -1,4 +1,5 @@
-# Sessions reach only the gateway, and users' Ray clusters only hear from the gateway.
+# Sessions reach only the gateway, and users' Ray clusters hear from the gateway and,
+# through the NetworkPolicy KubeRay writes for each (raycluster.yaml), from their own pods.
 # Kubelet probes come from the node host IP, which NetworkPolicy does not block under Calico.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

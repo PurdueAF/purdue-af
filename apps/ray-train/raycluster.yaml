@@ -1,5 +1,6 @@
-# One AF user's Ray cluster: a single pod with one T4, running as that user.
-# The gateway fills in the name, the user's identity and the token Secret.
+# One AF user's Ray cluster: a head with one T4 and up to three workers with
+# one each, all running as that user. The gateway fills in the name, the
+# user's identity, the token Secret and the workers.
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
@@ -10,6 +11,24 @@ spec:
   authOptions:
     mode: token
     secretName: ray-train-template
+  # Pods of one cluster reach each other; networkpolicy.yaml adds the gateway.
+  networkPolicy:
+    mode: DenyAllIngress
+  # On for af-ray-gpus: auto.
+  enableInTreeAutoscaling: false
+  autoscalerOptions:
+    idleTimeoutSeconds: 60
+    # The image's user, not the cluster's: the token is the autoscaler's alone.
+    securityContext:
+      runAsUser: 1000
+      runAsGroup: 100
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+    volumeMounts:
+      - name: autoscaler-token
+        mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        readOnly: true
   headGroupSpec:
     rayStartParams: {}
     template:
@@ -17,7 +36,7 @@ spec:
         labels:
           app: ray-train-cluster
       spec:
-        # No autoscaler, so no ServiceAccount: user code runs in this pod.
+        # User code runs in this pod: only the autoscaler mounts a token.
         automountServiceAccountToken: false
         # The image's Python is under /home/ray, which only group 100 may enter; the gateway adds the user's UID/GID.
         securityContext:
@@ -83,3 +102,24 @@ spec:
           - name: cvmfs
             persistentVolumeClaim:
               claimName: cvmfs
+          # The autoscaler's ServiceAccount token; the gateway drops it unless autoscaling.
+          - name: autoscaler-token
+            projected:
+              sources:
+                - serviceAccountToken:
+                    path: token
+                    expirationSeconds: 3600
+                - configMap:
+                    name: kube-root-ca.crt
+                    items:
+                      - key: ca.crt
+                        path: ca.crt
+                - downwardAPI:
+                    items:
+                      - path: namespace
+                        fieldRef:
+                          fieldPath: metadata.namespace
+  # The workers: copies of the head's pod, which the gateway counts.
+  workerGroupSpecs:
+    - groupName: gpu
+      rayStartParams: {}
