@@ -1,4 +1,3 @@
-# A change to gateway.py reaches the pod when it restarts; raycluster.yaml is read at every cluster creation.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

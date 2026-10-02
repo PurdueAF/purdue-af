@@ -1,14 +1,15 @@
 # Training on GPUs with Ray
 
 [Ray](https://docs.ray.io/en/latest/ray-core/walkthrough.html) runs a
-function of your notebook on a GPU that is yours only while your code needs
-it. Your session does not need a GPU of its own: you add a decorator to your
-PyTorch training function, and calling it runs it on the GPU.
+function of your notebook on a GPU. Your session does not need a GPU of its
+own: you add a decorator to your PyTorch training function, and calling it
+runs it on the GPU.
 
-The function runs in a Ray cluster of your own, with one **NVIDIA T4** GPU
-(16 GB). It starts when your notebook first connects or submits a job, runs as
-you, sees your storage at the same paths as your session, and is removed after
-some minutes without work. No other user can see, stop or reach it.
+The function runs in a Ray cluster of your own, with one
+[NVIDIA T4](../docs/gpus.md) or [more](#more-than-one-gpu). It starts when your
+notebook first connects or submits a job, runs as you, and is
+[removed](#good-to-know) some minutes after its last work. No other user can
+see, stop or reach it.
 
 ## 1. Connect
 
@@ -20,8 +21,10 @@ import ray
 ray.init("ray://ray-train-gateway:10001")
 ```
 
-The first connection starts your cluster, which takes a minute or two when a
-T4 is free; when none is, `ray.init` waits for one.
+The first connection starts your cluster, which takes a minute or two. Its
+GPUs join as T4s come free, and a call that asks for one waits until then:
+`ray.cluster_resources()` shows the GPUs that have joined. The dashboard link
+`ray.init` shows does not open, since only the gateway reaches your cluster.
 
 ## 2. Send the training to the GPU
 
@@ -74,28 +77,11 @@ each a T4 in a worker pod of its own:
 ray.init("ray://ray-train-gateway:10001", _metadata=[("af-ray-gpus", "4")])
 ```
 
-* Your cluster holds that many GPUs until it is removed.
-* [Ray Train](https://docs.ray.io/en/latest/train/getting-started-pytorch.html)
-  spreads one training over several GPUs, and keeps its checkpoints where
-  [Data and results](#data-and-results) says:
-
-    ```python
-    from ray.train import RunConfig, ScalingConfig
-    from ray.train.torch import TorchTrainer
-
-    trainer = TorchTrainer(
-        train_func,
-        scaling_config=ScalingConfig(num_workers=4, use_gpu=True),
-        run_config=RunConfig(storage_path="/work/users/<username>/ray_results"),
-    )
-    result = trainer.fit()
-    ```
-
-* Everyone's sessions and clusters share the T4s: when too few are free, your
-  cluster's workers wait for them.
-* Asking for another number of GPUs replaces your cluster when nothing runs on
-  it, as asking for another environment does. Both go in one list:
-  `_metadata=[("af-ray-env", ...), ("af-ray-gpus", "2")]`.
+* Your cluster holds that many GPUs until it is removed or replaced.
+* [Ray Train](#ray-train), which spreads one training over several GPUs, runs
+  as a job.
+* With an [environment of your own](#your-own-environment), name both in one
+  list: `_metadata=[("af-ray-env", ...), ("af-ray-gpus", "2")]`.
 
 ## Trainings that outlast your notebook
 
@@ -138,8 +124,44 @@ job = client.submit_job(
 * A job runs in your cluster's environment and with its GPUs, which a client
   names in headers as `ray.init` does in `_metadata`:
   `JobSubmissionClient("http://ray-train-gateway:8265", headers={"af-ray-gpus": "4"})`.
-* Your cluster is removed some minutes after its last job ends, with the record
-  and logs of its jobs: what you want to keep, have the job write to `/work`.
+
+### Ray Train
+
+[Ray Train](https://docs.ray.io/en/latest/train/getting-started-pytorch.html)
+spreads one training over several GPUs. Ray advises running it as a job rather
+than over a notebook's connection. The script builds the trainer:
+
+```python
+# train.py
+from ray.train import RunConfig, ScalingConfig
+from ray.train.torch import TorchTrainer
+
+
+def train_func():
+    # The training loop each GPU runs, as in Ray Train's guide.
+    ...
+
+
+trainer = TorchTrainer(
+    train_func,
+    scaling_config=ScalingConfig(num_workers=4, use_gpu=True),
+    run_config=RunConfig(storage_path="/work/users/<username>/ray_results"),
+)
+result = trainer.fit()
+```
+
+and the submission asks for the GPUs, with no `entrypoint_num_gpus`, so the
+trainer's workers hold all four:
+
+```python
+client = JobSubmissionClient(
+    "http://ray-train-gateway:8265", headers={"af-ray-gpus": "4"}
+)
+job = client.submit_job(entrypoint="python train.py", runtime_env={"working_dir": "."})
+```
+
+`storage_path` keeps the checkpoints where
+[Data and results](#data-and-results) says.
 
 ## Your own environment
 
@@ -165,10 +187,6 @@ ray.init(
   `pixi add --pypi "ray[default]" torch`.
 * It must be on storage your cluster sees (see
   [Data and results](#data-and-results)).
-* Your cluster runs one environment at a time. Connecting, or submitting a
-  job, with another one, the global one included, replaces the cluster when
-  nothing runs on it. While something does, `ray.init` fails with a connection
-  timeout, and a submission with the reason.
 
 ## Data and results
 
@@ -192,6 +210,12 @@ your session reads like any other.
 
 * You have one cluster, so calls that ask for GPUs share its GPUs, and a call
   that asks for more GPUs than one pod holds never starts.
-* A cluster with nothing running for some minutes is removed. A notebook still
-  connected to it then fails its next call with a disconnection error: run
-  `ray.shutdown()` and `ray.init(...)` again, which starts a new cluster.
+* Your cluster runs one environment and one number of GPUs at a time.
+  Connecting, or submitting a job, with another of either, the defaults
+  included (the global environment, one GPU), replaces the cluster when
+  nothing runs on it. While something does, `ray.init` fails with a
+  connection timeout, and a submission with the reason.
+* A cluster with nothing running for some minutes is removed, with the records
+  and logs of its jobs: have a job write what you keep to `/work`. A notebook
+  still connected to it then fails its next call with a disconnection error:
+  run `ray.shutdown()` and `ray.init(...)` again, which starts a new cluster.
