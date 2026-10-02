@@ -159,6 +159,12 @@
       addLabels: ['major'],
     },
     {
+      // KubeRay's chart is indexed days before quay.io/kuberay/operator has its image.
+      matchManagers: ['flux'],
+      matchPackageNames: ['kuberay-operator'],
+      minimumReleaseAge: '7 days',
+    },
+    {
       // dask-gateway >=2025.4.0 requires kubeVersion >=1.30; cluster is on
       // 1.29. Hold at 2024.1.0 until the cluster is upgraded to 1.30+.
       matchManagers: ['flux'],
