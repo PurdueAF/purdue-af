@@ -356,10 +356,6 @@ def counts(group):
     return group["replicas"], group["minReplicas"], group["maxReplicas"]
 
 
-def volume_names(pod_template):
-    return {v["name"] for v in pod_template["spec"]["volumes"]}
-
-
 def live(env):
     """The clusters not being deleted."""
     return {
@@ -614,58 +610,29 @@ async def test_a_ray_without_token_authentication_is_refused(env):
 
 async def test_a_cluster_holds_one_gpu_unless_asked_for_more(env):
     await call(env)
-    assert counts(workers(env)) == (0, 0, 0)
-    assert not cluster_spec(env)["enableInTreeAutoscaling"]
+    assert counts(workers(env)) == (1, 1, 1)
 
 
 async def test_gpus_asked_for_are_held_from_the_start(env):
     await call(env, gpus="4")
-    assert counts(workers(env)) == (3, 3, 3)
-    assert not cluster_spec(env)["enableInTreeAutoscaling"]
+    assert counts(workers(env)) == (4, 4, 4)
     annotations = env.kube.clusters["ray-train-user-a"]["metadata"]["annotations"]
     assert annotations[gw.GPUS_ANNOTATION] == "4"
 
 
-async def test_auto_lets_the_autoscaler_add_workers_up_to_the_most_gpus(env):
-    await call(env, gpus="auto")
-    assert counts(workers(env)) == (0, 0, gw.MAX_GPUS - 1)
-    assert cluster_spec(env)["enableInTreeAutoscaling"]
-
-
-async def test_a_worker_is_the_users_head_pod_with_a_gpu_of_its_own(env):
+async def test_head_and_workers_run_as_the_user_in_the_environment(env):
     await call(env, gpus="2", env_path=ENV_A)
     head = cluster_spec(env)["headGroupSpec"]["template"]
     worker = workers(env)["template"]
     (head_container,) = head["spec"]["containers"]
     (worker_container,) = worker["spec"]["containers"]
-    assert worker_container["name"] == "ray-worker"
     assert worker_container["env"] == head_container["env"]
-    assert worker_container["resources"] == head_container["resources"]
+    assert any(v["value"].startswith(f"{ENV_A}/bin:") for v in worker_container["env"])
     assert worker["spec"]["securityContext"] == head["spec"]["securityContext"]
-    assert worker["metadata"]["labels"] == head["metadata"]["labels"]
+    assert worker["spec"]["securityContext"]["runAsUser"] == 5001
 
 
-async def test_only_the_autoscaler_mounts_a_kubernetes_token(env):
-    await call(env, gpus="auto")
-    head = cluster_spec(env)["headGroupSpec"]["template"]
-    assert gw.AUTOSCALER_TOKEN in volume_names(head)
-    for container in head["spec"]["containers"]:
-        assert gw.AUTOSCALER_TOKEN not in {m["name"] for m in container["volumeMounts"]}
-    mounts = cluster_spec(env)["autoscalerOptions"]["volumeMounts"]
-    assert [m["name"] for m in mounts] == [gw.AUTOSCALER_TOKEN]
-    assert gw.AUTOSCALER_TOKEN not in volume_names(workers(env)["template"])
-
-
-@pytest.mark.parametrize("gpus", ["1", "4"])
-async def test_without_the_autoscaler_no_pod_has_its_token(env, gpus):
-    await call(env, gpus=gpus)
-    assert gw.AUTOSCALER_TOKEN not in volume_names(
-        cluster_spec(env)["headGroupSpec"]["template"]
-    )
-    assert gw.AUTOSCALER_TOKEN not in volume_names(workers(env)["template"])
-
-
-@pytest.mark.parametrize("gpus", ["0", "5", "two", "1.5", "AUTO"])
+@pytest.mark.parametrize("gpus", ["0", "5", "two", "1.5", "auto"])
 async def test_a_gpu_count_out_of_range_is_refused(env, gpus):
     assert await refused(env, gpus=gpus) == grpc.StatusCode.INVALID_ARGUMENT
     assert env.kube.clusters == {}
@@ -673,21 +640,20 @@ async def test_a_gpu_count_out_of_range_is_refused(env, gpus):
 
 async def test_asking_for_other_gpus_replaces_an_idle_cluster(env):
     await call(env)
-    assert await call(env, gpus="auto") == [b"echo:ping"]
-    assert counts(workers(env)) == (0, 0, gw.MAX_GPUS - 1)
+    assert await call(env, gpus="3") == [b"echo:ping"]
+    assert counts(workers(env)) == (3, 3, 3)
 
 
 async def test_asking_for_other_gpus_leaves_a_busy_cluster_alone(env):
     await call(env)
     env.heads.running["ray-train-user-a"] = [{"task_id": "t", "state": "RUNNING"}]
     assert await refused(env, gpus="2") == grpc.StatusCode.FAILED_PRECONDITION
-    assert counts(workers(env)) == (0, 0, 0)
+    assert counts(workers(env)) == (1, 1, 1)
 
 
 def test_gpus_default_to_one():
     assert gw.requested_gpus("") == "1"
     assert gw.requested_gpus("3") == "3"
-    assert gw.requested_gpus(gw.AUTO) == gw.AUTO
 
 
 def test_environments_live_on_the_storage_the_cluster_mounts():
@@ -907,7 +873,7 @@ def test_building_a_cluster_leaves_the_template_alone():
     template = yaml.safe_load(TEMPLATE.read_text())
     before = copy.deepcopy(template)
     user = gw.User(name="user-a", account="user-a", uid=5001, gid=500)
-    gw.build_cluster(template, user, gw.Shape(ENV_A, gw.AUTO))
+    gw.build_cluster(template, user, gw.Shape(ENV_A, "4"))
     assert template == before
 
 

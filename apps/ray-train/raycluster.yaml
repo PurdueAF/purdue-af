@@ -1,6 +1,7 @@
-# One AF user's Ray cluster: a head with one T4 and up to three workers with
-# one each, all running as that user. The gateway fills in the name, the
-# user's identity, the token Secret and the workers.
+# One AF user's Ray cluster, running as that user: a head for Ray's own
+# processes and the notebooks' connections, and one to four workers with a T4
+# each. The gateway fills in the name, the user's identity, the token Secret
+# and the number of workers.
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
@@ -14,29 +15,16 @@ spec:
   # Pods of one cluster reach each other; networkpolicy.yaml adds the gateway.
   networkPolicy:
     mode: DenyAllIngress
-  # On for af-ray-gpus: auto.
-  enableInTreeAutoscaling: false
-  autoscalerOptions:
-    idleTimeoutSeconds: 60
-    # The image's user, not the cluster's: the token is the autoscaler's alone.
-    securityContext:
-      runAsUser: 1000
-      runAsGroup: 100
-      allowPrivilegeEscalation: false
-      capabilities:
-        drop: ["ALL"]
-    volumeMounts:
-      - name: autoscaler-token
-        mountPath: /var/run/secrets/kubernetes.io/serviceaccount
-        readOnly: true
   headGroupSpec:
-    rayStartParams: {}
+    # No tasks on the head, as Ray advises: it runs the GCS, the dashboard and the notebooks' connections.
+    rayStartParams:
+      num-cpus: "0"
     template:
       metadata:
         labels:
           app: ray-train-cluster
       spec:
-        # User code runs in this pod: only the autoscaler mounts a token.
+        # No autoscaler, so no ServiceAccount: user code runs in these pods.
         automountServiceAccountToken: false
         # The image's Python is under /home/ray, which only group 100 may enter; the gateway adds the user's UID/GID.
         securityContext:
@@ -61,14 +49,11 @@ spec:
                 value: /home/ray/anaconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/nvidia/bin
             resources:
               limits:
-                cpu: "8"
-                memory: 32Gi
-                # The T4s; the A100s are split into MIG devices with their own resource names.
-                nvidia.com/gpu: 1
+                cpu: "4"
+                memory: 16Gi
               requests:
-                cpu: "8"
-                memory: 32Gi
-                nvidia.com/gpu: 1
+                cpu: "4"
+                memory: 16Gi
             volumeMounts:
               - name: log-volume
                 mountPath: /tmp/ray
@@ -102,24 +87,73 @@ spec:
           - name: cvmfs
             persistentVolumeClaim:
               claimName: cvmfs
-          # The autoscaler's ServiceAccount token; the gateway drops it unless autoscaling.
-          - name: autoscaler-token
-            projected:
-              sources:
-                - serviceAccountToken:
-                    path: token
-                    expirationSeconds: 3600
-                - configMap:
-                    name: kube-root-ca.crt
-                    items:
-                      - key: ca.crt
-                        path: ca.crt
-                - downwardAPI:
-                    items:
-                      - path: namespace
-                        fieldRef:
-                          fieldPath: metadata.namespace
-  # The workers: copies of the head's pod, which the gateway counts.
+  # The head's pod, with a T4 and room to train beside it.
   workerGroupSpecs:
     - groupName: gpu
       rayStartParams: {}
+      template:
+        metadata:
+          labels:
+            app: ray-train-cluster
+        spec:
+          automountServiceAccountToken: false
+          securityContext:
+            supplementalGroups: [100]
+          nodeSelector:
+            cms-af-prod: "true"
+          tolerations:
+            - key: hub.jupyter.org/dedicated
+              operator: Equal
+              value: cms-af
+              effect: NoSchedule
+          containers:
+            - name: ray-worker
+              image: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray:2.58.0-py312-cpu
+              env:
+                - name: HOME
+                  value: /tmp
+                - name: PATH
+                  value: /home/ray/anaconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/nvidia/bin
+              resources:
+                limits:
+                  cpu: "8"
+                  memory: 32Gi
+                  # The T4s; the A100s are split into MIG devices with their own resource names.
+                  nvidia.com/gpu: 1
+                requests:
+                  cpu: "8"
+                  memory: 32Gi
+                  nvidia.com/gpu: 1
+              volumeMounts:
+                - name: log-volume
+                  mountPath: /tmp/ray
+                - name: work
+                  mountPath: /work
+                  mountPropagation: HostToContainer
+                - name: depot
+                  mountPath: /depot/cms
+                  mountPropagation: HostToContainer
+                - name: eos
+                  mountPath: /eos
+                  readOnly: true
+                  mountPropagation: HostToContainer
+                - name: cvmfs
+                  mountPath: /cvmfs
+                  readOnly: true
+                  mountPropagation: HostToContainer
+          volumes:
+            - name: log-volume
+              emptyDir: {}
+            - name: work
+              persistentVolumeClaim:
+                claimName: af-shared-storage
+            - name: depot
+              nfs:
+                server: datadepot.rcac.purdue.edu
+                path: /depot/cms
+            - name: eos
+              hostPath:
+                path: /eos
+            - name: cvmfs
+              persistentVolumeClaim:
+                claimName: cvmfs

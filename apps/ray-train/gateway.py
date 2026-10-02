@@ -6,7 +6,7 @@ with every call. The Hub says whose it is, and the call goes on, unread, to
 that user's RayCluster: created from raycluster.yaml when they first connect,
 running as them, and deleted once idle. Only the gateway holds a cluster's own
 Ray token. A cluster runs the global Pixi environment, or the one a notebook
-names in the af-ray-env metadata, on one GPU or as many as af-ray-gpus asks.
+names in the af-ray-env metadata, with one GPU or as many as af-ray-gpus asks.
 """
 
 from __future__ import annotations
@@ -60,14 +60,10 @@ ENV_METADATA = "af-ray-env"
 ENV_ANNOTATION = "purdue-af/ray-env"
 # The environment pixi-global-sync keeps (apps/af-utils/pixi-global-sync).
 DEFAULT_ENV = "/work/pixi/global/.pixi/envs/default"
-# Set as af-ray-env is: GPUs held from the start, or AUTO for KubeRay's autoscaler to add.
+# Set as af-ray-env is: the cluster's GPUs, one per worker.
 GPUS_METADATA = "af-ray-gpus"
 GPUS_ANNOTATION = "purdue-af/ray-gpus"
-AUTO = "auto"
-# A user's most: one on the head, the rest one per worker.
 MAX_GPUS = 4
-# raycluster.yaml's volume of the autoscaler's token
-AUTOSCALER_TOKEN = "autoscaler-token"
 # singleuser.podNameTemplate in the Hub values
 SESSION_POD = re.compile(r"purdue-af-(\d+)")
 # custom-spawner.py names the accounts from outside Purdue <login>-cern and <login>-fnal
@@ -113,7 +109,7 @@ class User:
 
 @dataclass(frozen=True)
 class Shape:
-    """What a user's cluster runs: an environment, and GPUs held or AUTO."""
+    """What a user's cluster runs: an environment, and its number of GPUs."""
 
     env: str
     gpus: str
@@ -202,34 +198,22 @@ def build_cluster(template: dict[str, Any], user: User, shape: Shape) -> dict[st
     )
     spec = cluster["spec"]
     spec["authOptions"]["secretName"] = user.cluster
-    head = spec["headGroupSpec"]["template"]
-    pod = head["spec"]
-    pod.setdefault("securityContext", {}).update(
-        {"runAsUser": user.uid, "runAsGroup": user.gid}
-    )
-    for container in pod["containers"]:
-        variables = container.setdefault("env", [])
-        # `ray start`, and with it every Ray process, then come from the environment.
-        for variable in variables:
-            if variable["name"] == "PATH":
-                variable["value"] = f"{shape.env}/bin:{variable['value']}"
-        variables.append({"name": "CONDA_PREFIX", "value": shape.env})
-        variables.append({"name": "USER", "value": user.account})
     (group,) = spec["workerGroupSpecs"]
-    group["template"] = worker = copy.deepcopy(head)
-    worker["spec"]["containers"][0]["name"] = "ray-worker"
-    tokenless = [worker["spec"]]
-    if shape.gpus == AUTO:
-        spec["enableInTreeAutoscaling"] = True
-        group.update(replicas=0, minReplicas=0, maxReplicas=MAX_GPUS - 1)
-    else:
-        tokenless.append(pod)
-        workers = int(shape.gpus) - 1
-        group.update(replicas=workers, minReplicas=workers, maxReplicas=workers)
-    for pod_spec in tokenless:
-        pod_spec["volumes"] = [
-            v for v in pod_spec["volumes"] if v["name"] != AUTOSCALER_TOKEN
-        ]
+    workers = int(shape.gpus)
+    group.update(replicas=workers, minReplicas=workers, maxReplicas=workers)
+    for template in (spec["headGroupSpec"]["template"], group["template"]):
+        pod = template["spec"]
+        pod.setdefault("securityContext", {}).update(
+            {"runAsUser": user.uid, "runAsGroup": user.gid}
+        )
+        for container in pod["containers"]:
+            variables = container.setdefault("env", [])
+            # `ray start`, and with it every Ray process, then come from the environment.
+            for variable in variables:
+                if variable["name"] == "PATH":
+                    variable["value"] = f"{shape.env}/bin:{variable['value']}"
+            variables.append({"name": "CONDA_PREFIX", "value": shape.env})
+            variables.append({"name": "USER", "value": user.account})
     return cluster
 
 
@@ -297,11 +281,11 @@ def requested_gpus(value: str) -> str:
     """The GPUs a call asks for, one by default."""
     if not value:
         return "1"
-    if value == AUTO or value in {str(n) for n in range(1, MAX_GPUS + 1)}:
+    if value in {str(n) for n in range(1, MAX_GPUS + 1)}:
         return value
     raise Refused(
         grpc.StatusCode.INVALID_ARGUMENT,
-        f"{GPUS_METADATA} is a number of GPUs from 1 to {MAX_GPUS}, or {AUTO}.",
+        f"{GPUS_METADATA} is a number of GPUs from 1 to {MAX_GPUS}.",
     )
 
 

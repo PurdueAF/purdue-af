@@ -67,28 +67,22 @@ weights = ray.get(train.remote(epochs=5, lr=1e-3))
 
 ## More than one GPU
 
-Your cluster has one GPU unless you ask for more when you connect, up to 4:
-the head's, and one on each worker the cluster adds, a T4 of its own on
-another node.
+Your cluster has one GPU unless you ask for more when you connect, up to 4,
+each a T4 in a worker pod of its own:
 
 ```python
 ray.init("ray://ray-train-gateway:10001", _metadata=[("af-ray-gpus", "4")])
 ```
 
-* A number from 1 to 4 holds that many GPUs from the start, until your cluster
-  is removed.
-* `auto` holds one, and adds workers, up to 4 GPUs in all, when your calls ask
-  for more; a worker goes about a minute after its last task. The autoscaler
-  that adds them runs Ray 2.58, the Ray of the global environment, so `auto`
-  may not scale a cluster in an environment with another Ray.
+* Your cluster holds that many GPUs until it is removed.
 * Ray Train spreads one training over several GPUs:
   `TorchTrainer(train_func, scaling_config=ScalingConfig(num_workers=4, use_gpu=True))`
   ([Ray Train with PyTorch](https://docs.ray.io/en/latest/train/getting-started-pytorch.html)).
-* Everyone's sessions and clusters share the T4s: when too few are free,
-  workers wait for them.
+* Everyone's sessions and clusters share the T4s: when too few are free, your
+  cluster's workers wait for them.
 * Asking for another number of GPUs replaces your cluster when nothing runs on
   it, as asking for another environment does. Both go in one list:
-  `_metadata=[("af-ray-env", ...), ("af-ray-gpus", "auto")]`.
+  `_metadata=[("af-ray-env", ...), ("af-ray-gpus", "2")]`.
 
 ## Your own environment
 
