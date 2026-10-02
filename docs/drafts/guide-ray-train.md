@@ -75,9 +75,22 @@ ray.init("ray://ray-train-gateway:10001", _metadata=[("af-ray-gpus", "4")])
 ```
 
 * Your cluster holds that many GPUs until it is removed.
-* Ray Train spreads one training over several GPUs:
-  `TorchTrainer(train_func, scaling_config=ScalingConfig(num_workers=4, use_gpu=True))`
-  ([Ray Train with PyTorch](https://docs.ray.io/en/latest/train/getting-started-pytorch.html)).
+* [Ray Train](https://docs.ray.io/en/latest/train/getting-started-pytorch.html)
+  spreads one training over several GPUs, and keeps its checkpoints where
+  [Data and results](#data-and-results) says:
+
+    ```python
+    from ray.train import RunConfig, ScalingConfig
+    from ray.train.torch import TorchTrainer
+
+    trainer = TorchTrainer(
+        train_func,
+        scaling_config=ScalingConfig(num_workers=4, use_gpu=True),
+        run_config=RunConfig(storage_path="/work/users/<username>/ray_results"),
+    )
+    result = trainer.fit()
+    ```
+
 * Everyone's sessions and clusters share the T4s: when too few are free, your
   cluster's workers wait for them.
 * Asking for another number of GPUs replaces your cluster when nothing runs on
@@ -120,6 +133,15 @@ Your home directory is not there.
 
 A function can return its results, as above, or write them to `/work`, where
 your session reads them like any file.
+
+Ray Train writes a training's checkpoints and results under
+`RunConfig(storage_path=...)`, which must be on storage every pod of your
+cluster sees, such as your directory on `/work`:
+`/work/users/<username>/ray_results`. They stay there after your cluster is
+removed. The default, `~/ray_results`, is inside each pod, and with it a
+training stops at its first checkpoint with *Unable to set up cluster
+storage*. `result.checkpoint.path` is the last checkpoint's directory, which
+your session reads like any other.
 
 ## Good to know
 
