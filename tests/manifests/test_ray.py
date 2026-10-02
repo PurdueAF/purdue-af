@@ -33,9 +33,9 @@ def test_values_reach_the_operator():
     ]
 
 
-def test_operator_installs_the_crds_in_cms_only():
+def test_operator_upgrades_its_crds_and_watches_cms_only():
     operator = load(RAY / "operator" / "helmrelease.yaml")
-    assert operator["spec"]["install"]["crds"] == "Create"
+    # Flux installs a chart's CRDs by default, but upgrades them only when told to.
     assert operator["spec"]["upgrade"]["crds"] == "CreateReplace"
     # singleNamespaceInstall keeps the watch and the RBAC inside cms.
     assert load(RAY / "operator" / "values.yaml")["singleNamespaceInstall"] is True

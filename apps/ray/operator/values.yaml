@@ -1,8 +1,3 @@
-# KubeRay operator for the AF: reconciles every ray.io resource in cms.
-
-# Watch the release namespace (cms) only, and create namespaced Role/RoleBinding
-# instead of cluster-wide ClusterRole/ClusterRoleBinding. The AF has no Ray
-# workloads outside cms, so there is no reason to grant cluster scope.
 singleNamespaceInstall: true
 
 # Every AF workload runs on the cms-af-prod nodes (alloy tails only those).
@@ -22,29 +17,7 @@ resources:
     cpu: 100m
     memory: 256Mi
 
-# The chart's list, which Helm replaces whole, with RayClusterNetworkPolicy on:
-# a RayCluster's networkPolicy (apps/ray-train) lets its own pods reach each other.
+# Unlisted gates keep the operator's defaults; this alpha one makes KubeRay write a RayCluster's spec.networkPolicy (apps/ray-train).
 featureGates:
-  - name: RayClusterStatusConditions
-    enabled: true
-  - name: RayJobDeletionPolicy
-    enabled: true
-  - name: RayMultiHostIndexing
-    enabled: true
-  - name: RayServiceIncrementalUpgrade
-    enabled: true
-  - name: RayCronJob
-    enabled: false
-  - name: RayClusterMTLS
-    enabled: false
   - name: RayClusterNetworkPolicy
     enabled: true
-  - name: RayClusterHistoryServer
-    enabled: false
-
-metrics:
-  enabled: true
-  # The AF Prometheus scrapes by Service label (scrape_metrics: "true"),
-  # not through prometheus-operator ServiceMonitors.
-  serviceMonitor:
-    enabled: false
