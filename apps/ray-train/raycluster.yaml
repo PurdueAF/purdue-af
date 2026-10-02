@@ -1,7 +1,4 @@
-# One AF user's Ray cluster, running as that user: a head for Ray's own
-# processes and the notebooks' connections, and one to four workers with a T4
-# each. The gateway fills in the name, the user's identity, the token Secret
-# and the number of workers.
+# One AF user's Ray cluster, running as them; build_cluster in gateway.py fills it in.
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
@@ -26,8 +23,10 @@ spec:
       spec:
         # No autoscaler, so no ServiceAccount: user code runs in these pods.
         automountServiceAccountToken: false
-        # The image's Python is under /home/ray, which only group 100 may enter; the gateway adds the user's UID/GID.
+        enableServiceLinks: false
+        # /home/ray, the image's working directory and Python, admits only group 100; the gateway adds the user's UID/GID.
         securityContext:
+          runAsNonRoot: true
           supplementalGroups: [100]
         nodeSelector:
           cms-af-prod: "true"
@@ -38,8 +37,12 @@ spec:
             effect: NoSchedule
         containers:
           - name: ray-head
-            # CPU flavor: the environments bring their own CUDA, and the CUDA flavors cost a 6.3 GB pull.
+            # The CPU flavor, on GPU workers too: Python, Ray and CUDA come from the cluster's environment.
             image: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray:2.58.0-py312-cpu
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
             env:
               # The user has no home directory in the image.
               - name: HOME
@@ -87,17 +90,18 @@ spec:
           - name: cvmfs
             persistentVolumeClaim:
               claimName: cvmfs
-  # The head's pod, with a T4 and room to train beside it.
+  # Each worker: the head's pod with a T4, and the CPU and memory to feed it.
   workerGroupSpecs:
     - groupName: gpu
-      rayStartParams: {}
       template:
         metadata:
           labels:
             app: ray-train-cluster
         spec:
           automountServiceAccountToken: false
+          enableServiceLinks: false
           securityContext:
+            runAsNonRoot: true
             supplementalGroups: [100]
           nodeSelector:
             cms-af-prod: "true"
@@ -109,6 +113,10 @@ spec:
           containers:
             - name: ray-worker
               image: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray:2.58.0-py312-cpu
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
               env:
                 - name: HOME
                   value: /tmp
