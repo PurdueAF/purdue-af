@@ -68,6 +68,7 @@ LOCK_STALE_SECONDS = int(os.environ.get("LOCK_STALE_SECONDS", "600"))
 LOCK_FROZEN_SECONDS = int(os.environ.get("LOCK_FROZEN_SECONDS", "90"))
 METRICS_PORT = int(os.environ.get("METRICS_PORT", "9099"))
 
+CODE = Path(__file__)
 LIVE_DIR = WORK_ROOT / "global"
 CACHE_DIR = WORK_ROOT / ".cache"
 LOCK_DIR = CACHE_DIR / ".sync-lock"
@@ -494,6 +495,7 @@ def main() -> int:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
+    running = CODE.read_bytes()
     log.info(
         "starting: env=%s poll=%ss verify=%ss cache=%s pixi=%s",
         LIVE_DIR,
@@ -522,6 +524,12 @@ def main() -> int:
     last_verify = 0.0
     try:
         while not STOP.is_set():
+            # Between cycles only, so a new script never cuts an install short.
+            if CODE.read_bytes() != running:
+                log.info(
+                    "%s changed: exiting, for the container to restart on it", CODE
+                )
+                break
             metric_set("loop_heartbeat_timestamp_seconds", time.time())
             try:
                 write_heartbeat()

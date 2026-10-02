@@ -285,6 +285,23 @@ def test_both_overlays_ship_every_script_the_probes_run():
             assert script in files, (path, script)
 
 
+def test_probes_and_the_exporter_run_the_scripts_they_watch():
+    """kubelet never updates a subPath mount, so a script would never see its new code."""
+    exporter = yaml.safe_load(DEPLOYMENT.read_text())
+    pods = [(exporter, EXPORTER.name)]
+    pods += [(ds, AGENT.name) for ds in daemonsets().values()]
+    for workload, script in pods:
+        name = workload["metadata"]["name"]
+        (scripts,) = [
+            m for m in container(workload)["volumeMounts"] if m["name"] == "scripts"
+        ]
+        assert "subPath" not in scripts, name
+        assert container(workload)["command"] == [
+            "python",
+            f"{scripts['mountPath']}/{script}",
+        ], name
+
+
 # ── one dead node must not freeze every other node ────────────────────────────
 
 

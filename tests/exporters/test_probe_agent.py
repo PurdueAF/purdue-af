@@ -26,6 +26,7 @@ os.environ.setdefault("PROBE_STARTUP_JITTER_S", "0")
 
 import probe_agent as pa  # noqa: E402
 import pytest  # noqa: E402
+from common import mount_configmap  # noqa: E402
 
 
 @pytest.fixture
@@ -320,6 +321,36 @@ def test_a_restarted_container_serves_its_last_verdict_but_is_not_ready(env):
 def test_start_without_a_previous_result_serves_nothing(env):
     pa.start()
     assert served() is None
+
+
+def test_only_new_probe_code_ends_the_probe_and_only_between_cycles(env, monkeypatch):
+    """The cycle new code lands in runs to its end and no other starts after
+    it; job_runner.py runs afresh every cycle."""
+    scripts = env / "scripts"
+    scripts.mkdir()
+    files = dict.fromkeys(
+        ("probe_agent.py", "job_runner.py", "node_healthcheck.py"), ""
+    )
+    mount_configmap(scripts, 0, files)
+    versions = [
+        {**files, "job_runner.py": "new"},
+        {**files, "job_runner.py": "new", "probe_agent.py": "new"},
+    ]
+    cycles = []
+
+    def cycle(seq):
+        if seq < len(versions):
+            mount_configmap(scripts, seq + 1, versions[seq])
+        cycles.append(seq)
+        return "published"
+
+    monkeypatch.setattr(pa, "CODE", scripts / "probe_agent.py")
+    monkeypatch.setattr(pa, "serve", lambda: None)
+    monkeypatch.setattr(pa, "cycle", cycle)
+    monkeypatch.setattr(pa, "PROBE_INTERVAL_S", 0.0)
+    monkeypatch.setattr(pa, "PROBE_STARTUP_JITTER_S", 0.0)
+    pa.main()
+    assert cycles == [0, 1]
 
 
 # ── the HTTP endpoint the exporter reads ──────────────────────────────────────

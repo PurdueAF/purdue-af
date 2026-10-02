@@ -25,6 +25,11 @@ the share is the persistent package cache at `/work/pixi/.cache`.
   after `FAIL_COOLDOWN`, and each start runs `pixi install --locked` once,
   a fast no-op on a current env. Change latency merge→live ≈ Flux
   interval + 1 min + install time.
+- **A new `sync-global-env.py` restarts the daemon.** Between cycles,
+  never during an install, it compares its own file's content and exits 0
+  once kubelet has swapped in another; kubelet restarts the container in
+  the same pod on the new code. A new `check-env.py` needs no restart:
+  every verify runs it afresh.
 
 ## Manual work / escape hatch
 

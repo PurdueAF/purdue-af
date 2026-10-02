@@ -17,6 +17,7 @@ import types
 
 import node_healthcheck as nh
 import pytest
+from common import mount_configmap
 from prometheus_client import REGISTRY
 
 NOW = time.time()
@@ -746,6 +747,15 @@ def test_a_runtime_that_cannot_bind_the_volume_is_a_mount_failure(status):
         fake_container_status(
             running=True, last_terminated="ContainerCannotRun", restart_count=9
         ),
+        pytest.param(
+            fake_container_status(
+                running=False,
+                waiting="CrashLoopBackOff",
+                last_terminated="Completed",
+                restart_count=9,
+            ),
+            id="exited-0-on-new-code",
+        ),
     ],
 )
 def test_other_container_trouble_is_not_a_mount_failure(status):
@@ -1061,3 +1071,33 @@ def test_clear_gauges_holds_objects_not_names():
     assert nh.mount_probe_up in nh.ALL_MOUNT_GAUGES
     assert nh.mount_probe_up not in nh.RESULT_GAUGES
     assert set(nh.RESULT_GAUGES) < set(nh.ALL_MOUNT_GAUGES)
+
+
+# ── new code ──────────────────────────────────────────────────────────────────
+
+
+def test_only_new_exporter_code_ends_the_exporter(monkeypatch, tmp_path):
+    """kubelet rewrites every file of the ConfigMap on any change; a new probe
+    script is the probes' to load."""
+    files = dict.fromkeys(
+        ("node_healthcheck.py", "probe_agent.py", "job_runner.py"), ""
+    )
+    mount_configmap(tmp_path, 0, files)
+    versions = [
+        {**files, "probe_agent.py": "new"},
+        {**files, "probe_agent.py": "new", "node_healthcheck.py": "new"},
+    ]
+    passes = 0
+
+    def update_metrics():
+        nonlocal passes
+        passes += 1
+        if passes <= len(versions):
+            mount_configmap(tmp_path, passes, versions[passes - 1])
+
+    monkeypatch.setattr(nh, "CODE", tmp_path / "node_healthcheck.py")
+    monkeypatch.setattr(nh, "start_http_server", lambda port: None)
+    monkeypatch.setattr(nh, "update_metrics", update_metrics)
+    monkeypatch.setattr(nh, "CHECK_INTERVAL_S", 0)
+    nh.main()
+    assert passes == 2

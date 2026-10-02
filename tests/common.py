@@ -16,6 +16,19 @@ def load_script(path, module_name):
     return module
 
 
+def mount_configmap(volume, version, files):
+    """Swap `files` into `volume` as kubelet does: a new directory, `..data`
+    relinked to it in one rename, each file a link through `..data`."""
+    data = volume / f"..{version}"
+    data.mkdir()
+    for name, text in files.items():
+        (data / name).write_text(text)
+        if not (volume / name).is_symlink():
+            (volume / name).symlink_to(f"..data/{name}")
+    (volume / "..data_tmp").symlink_to(data.name)
+    (volume / "..data_tmp").replace(volume / "..data")
+
+
 class ConfigSink(dict):
     """Accepts both attribute traversal (c.ServerApp.ip = 1) and dict ops
     (c.KubeSpawner.environment.setdefault(...)), like a traitlets config."""

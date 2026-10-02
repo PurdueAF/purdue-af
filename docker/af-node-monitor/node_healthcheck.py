@@ -9,6 +9,7 @@ import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List
 
 from prometheus_client import Counter, Gauge, start_http_server
@@ -44,6 +45,7 @@ PING_TIMEOUT_S = float(os.getenv("PING_TIMEOUT_S", "3"))
 METADATA_TIMEOUT_S = float(os.getenv("METADATA_TIMEOUT_S", "10"))
 
 CHECK_INTERVAL_S = float(os.getenv("CHECK_INTERVAL_S", "60"))
+CODE = Path(__file__)
 
 POD_NAMESPACE = os.getenv("POD_NAMESPACE", "default")
 
@@ -704,12 +706,21 @@ def update_metrics() -> None:
         monitor_results_available.set(0 if ready_nodes else 1)
 
 
-if __name__ == "__main__":  # pragma: no cover - process entrypoint
+def main() -> None:
+    """Export until kubelet swaps other code than this into the mounted ConfigMap."""
+    running = CODE.read_bytes()
     start_http_server(8000)
-    while True:
+    while CODE.read_bytes() == running:
         try:
             update_metrics()
             monitor_last_iteration_ts.set(time.time())
         except Exception as e:
             _elog(f"[node_healthcheck] update_metrics failed: {e}")
         time.sleep(CHECK_INTERVAL_S)
+    print(
+        f"[node_healthcheck] {CODE} changed: exiting, for the container to restart on it"
+    )
+
+
+if __name__ == "__main__":  # pragma: no cover - process entrypoint
+    main()
