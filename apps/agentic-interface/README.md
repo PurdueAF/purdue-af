@@ -6,12 +6,12 @@ clusters, storage and logs. Connecting, what it can do, troubleshooting:
 [the user guide](../../docs/docs/guide-agentic-interface.md). The agent-facing
 playbook is [the skill](../../.claude/skills/purdue-af-agentic-interface/SKILL.md).
 
-| Path                                          | Holds                                                  |
-| --------------------------------------------- | ------------------------------------------------------ |
-| `apps/agentic-interface/`                     | Deployment, Service, RBAC, NetworkPolicy               |
-| `docker/agentic-interface/`                   | Server source and Dockerfile                           |
-| `.claude/skills/purdue-af-agentic-interface/` | The skill; an input of the image hash                  |
-| `tests/agentic_interface/`                    | Unit tests                                             |
+| Path                                          | Holds                                                        |
+| --------------------------------------------- | ------------------------------------------------------------ |
+| `apps/agentic-interface/`                     | Deployment, Service, RBAC, NetworkPolicy                     |
+| `docker/agentic-interface/`                   | Server source and Dockerfile                                 |
+| `.claude/skills/purdue-af-agentic-interface/` | The skill; bundled in the image, which announces its version |
+| `tests/agentic_interface/`                    | Unit tests                                                   |
 
 Versioning and rollout: [RELEASING.md](../../RELEASING.md).
 
