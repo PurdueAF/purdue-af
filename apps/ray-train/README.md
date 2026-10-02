@@ -51,12 +51,17 @@ credentials.
 ## Running it
 
 A change to `raycluster.yaml` applies to the clusters created after it lands.
-One to `gateway.py` applies once the gateway pod is deleted and comes back.
-Unless it is back before Ray Client stops retrying, that ends notebooks' Ray
-Client connections and the calls running over them, but not their jobs.
+One to `gateway.py` applies once kubelet swaps it into the pod's copy of the
+ConfigMap: the gateway sees its own file change and exits, and kubelet restarts
+its container, in the same pod, on the new code. Each such change adds one to
+the container's restart count, and the previous container's log ends with the
+line that names it. Unless the gateway is back before Ray Client stops
+retrying, a restart ends notebooks' Ray Client connections and the calls
+running over them, but not their jobs.
 
 ```bash
 kubectl -n cms get rayclusters -l app.kubernetes.io/managed-by=ray-train-gateway
+kubectl -n cms get pod -l app=ray-train-gateway
 kubectl -n cms logs deploy/ray-train-gateway
-kubectl -n cms delete pod -l app=ray-train-gateway
+kubectl -n cms logs deploy/ray-train-gateway --previous
 ```
