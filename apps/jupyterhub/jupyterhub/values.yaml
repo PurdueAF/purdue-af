@@ -271,11 +271,15 @@ prePuller:
   continuous:
     enabled: true
   pullProfileListImages: false
-  # Users' Ray clusters (apps/ray-train) start without pulling their image.
+  # The pods users start on demand, their Ray clusters (apps/ray-train) and
+  # Dask clusters (apps/dask-gateway), start without pulling their image.
   extraImages:
     ray-train:
       name: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray
       tag: 2.58.0-py312-cpu
+    dask-gateway:
+      name: ghcr.io/dask/dask-gateway
+      tag: 2024.1.0
 hub:
   image:
     # Tag unset: the chart default follows the chart version in helmrelease.yaml.

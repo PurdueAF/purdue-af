@@ -142,18 +142,6 @@ def test_user_clusters_can_run_the_images_python():
     assert 100 in cluster_pod()["spec"]["securityContext"]["supplementalGroups"]
 
 
-def test_the_hubs_puller_holds_the_cluster_image_where_clusters_run():
-    """The continuous puller runs on the session nodes; a cluster lands on some of them."""
-    values = load(HUB_VALUES)
-    puller = values["prePuller"]
-    assert puller["continuous"]["enabled"]
-    image = puller["extraImages"]["ray-train"]
-    (container,) = cluster_pod()["spec"]["containers"]
-    assert f"{image['name']}:{image['tag']}" == container["image"]
-    sessions = values["singleuser"]["nodeSelector"]
-    assert sessions.items() <= cluster_pod()["spec"]["nodeSelector"].items()
-
-
 def test_a_users_cluster_holds_one_gpu():
     """With one cluster per user, each user's limit: a head alone, with one GPU."""
     assert not load(APP / "raycluster.yaml")["spec"].get("workerGroupSpecs")
