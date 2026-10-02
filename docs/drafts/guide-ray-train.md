@@ -65,6 +65,25 @@ weights = ray.get(train.remote(epochs=5, lr=1e-3))
   to send the notebook's directory along.
 * `ray.cancel(ref)` stops a call; `ray.shutdown()` disconnects the notebook.
 
+## More than one GPU
+
+Your cluster has one GPU unless you ask for more when you connect, up to 4,
+each a T4 in a worker pod of its own:
+
+```python
+ray.init("ray://ray-train-gateway:10001", _metadata=[("af-ray-gpus", "4")])
+```
+
+* Your cluster holds that many GPUs until it is removed.
+* Ray Train spreads one training over several GPUs:
+  `TorchTrainer(train_func, scaling_config=ScalingConfig(num_workers=4, use_gpu=True))`
+  ([Ray Train with PyTorch](https://docs.ray.io/en/latest/train/getting-started-pytorch.html)).
+* Everyone's sessions and clusters share the T4s: when too few are free, your
+  cluster's workers wait for them.
+* Asking for another number of GPUs replaces your cluster when nothing runs on
+  it, as asking for another environment does. Both go in one list:
+  `_metadata=[("af-ray-env", ...), ("af-ray-gpus", "2")]`.
+
 ## Your own environment
 
 Your cluster needs the same Python and Ray as your notebook. It runs the
@@ -104,8 +123,8 @@ your session reads them like any file.
 
 ## Good to know
 
-* You have one cluster, with one GPU: calls that ask for a GPU run one at a
-  time, and a call that asks for more than one never starts.
+* You have one cluster, so calls that ask for GPUs share its GPUs, and a call
+  that asks for more GPUs than one pod holds never starts.
 * A cluster with nothing running for some minutes is removed. A notebook still
   connected to it then fails its next call with a disconnection error: run
   `ray.shutdown()` and `ray.init(...)` again, which starts a new cluster.

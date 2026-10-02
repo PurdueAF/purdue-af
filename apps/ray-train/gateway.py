@@ -6,7 +6,7 @@ with every call. The Hub says whose it is, and the call goes on, unread, to
 that user's RayCluster: created from raycluster.yaml when they first connect,
 running as them, and deleted once idle. Only the gateway holds a cluster's own
 Ray token. A cluster runs the global Pixi environment, or the one a notebook
-names in the af-ray-env metadata.
+names in the af-ray-env metadata, with one GPU or as many as af-ray-gpus asks.
 """
 
 from __future__ import annotations
@@ -60,6 +60,10 @@ ENV_METADATA = "af-ray-env"
 ENV_ANNOTATION = "purdue-af/ray-env"
 # The environment pixi-global-sync keeps (apps/af-utils/pixi-global-sync).
 DEFAULT_ENV = "/work/pixi/global/.pixi/envs/default"
+# Set as af-ray-env is: the cluster's GPUs, one per worker.
+GPUS_METADATA = "af-ray-gpus"
+GPUS_ANNOTATION = "purdue-af/ray-gpus"
+MAX_GPUS = 4
 # singleuser.podNameTemplate in the Hub values
 SESSION_POD = re.compile(r"purdue-af-(\d+)")
 # custom-spawner.py names the accounts from outside Purdue <login>-cern and <login>-fnal
@@ -101,6 +105,14 @@ class User:
     @property
     def cluster(self) -> str:
         return cluster_name(self.name)
+
+
+@dataclass(frozen=True)
+class Shape:
+    """What a user's cluster runs: an environment, and its number of GPUs."""
+
+    env: str
+    gpus: str
 
 
 def cluster_name(username: str) -> str:
@@ -176,25 +188,32 @@ def client_address(cluster: str) -> str:
     return f"{cluster}-head-svc.{NAMESPACE}.svc.cluster.local:{CLIENT_PORT}"
 
 
-def build_cluster(template: dict[str, Any], user: User, env: str) -> dict[str, Any]:
+def build_cluster(template: dict[str, Any], user: User, shape: Shape) -> dict[str, Any]:
     cluster = copy.deepcopy(template)
     metadata = cluster["metadata"]
     metadata["name"] = user.cluster
     metadata.setdefault("labels", {})["app.kubernetes.io/managed-by"] = MANAGED_BY
-    metadata.setdefault("annotations", {})[ENV_ANNOTATION] = env
-    cluster["spec"]["authOptions"]["secretName"] = user.cluster
-    pod = cluster["spec"]["headGroupSpec"]["template"]["spec"]
-    pod.setdefault("securityContext", {}).update(
-        {"runAsUser": user.uid, "runAsGroup": user.gid}
+    metadata.setdefault("annotations", {}).update(
+        {ENV_ANNOTATION: shape.env, GPUS_ANNOTATION: shape.gpus}
     )
-    for container in pod["containers"]:
-        variables = container.setdefault("env", [])
-        # `ray start`, and with it every Ray process, then come from the environment.
-        for variable in variables:
-            if variable["name"] == "PATH":
-                variable["value"] = f"{env}/bin:{variable['value']}"
-        variables.append({"name": "CONDA_PREFIX", "value": env})
-        variables.append({"name": "USER", "value": user.account})
+    spec = cluster["spec"]
+    spec["authOptions"]["secretName"] = user.cluster
+    (group,) = spec["workerGroupSpecs"]
+    workers = int(shape.gpus)
+    group.update(replicas=workers, minReplicas=workers, maxReplicas=workers)
+    for template in (spec["headGroupSpec"]["template"], group["template"]):
+        pod = template["spec"]
+        pod.setdefault("securityContext", {}).update(
+            {"runAsUser": user.uid, "runAsGroup": user.gid}
+        )
+        for container in pod["containers"]:
+            variables = container.setdefault("env", [])
+            # `ray start`, and with it every Ray process, then come from the environment.
+            for variable in variables:
+                if variable["name"] == "PATH":
+                    variable["value"] = f"{shape.env}/bin:{variable['value']}"
+            variables.append({"name": "CONDA_PREFIX", "value": shape.env})
+            variables.append({"name": "USER", "value": user.account})
     return cluster
 
 
@@ -258,14 +277,31 @@ def requested_env(value: str, template: dict[str, Any]) -> str:
     return path
 
 
-def cluster_env(cluster: dict[str, Any]) -> str:
-    return str((cluster["metadata"].get("annotations") or {}).get(ENV_ANNOTATION, ""))
+def requested_gpus(value: str) -> str:
+    """The GPUs a call asks for, one by default."""
+    if not value:
+        return "1"
+    if value in {str(n) for n in range(1, MAX_GPUS + 1)}:
+        return value
+    raise Refused(
+        grpc.StatusCode.INVALID_ARGUMENT,
+        f"{GPUS_METADATA} is a number of GPUs from 1 to {MAX_GPUS}.",
+    )
 
 
-def runs(cluster: dict[str, Any], env: str) -> bool:
-    """Whether the cluster stays up and runs `env`."""
+def cluster_shape(cluster: dict[str, Any]) -> Shape:
+    annotations = cluster["metadata"].get("annotations") or {}
+    return Shape(
+        str(annotations.get(ENV_ANNOTATION, "")),
+        str(annotations.get(GPUS_ANNOTATION, "")),
+    )
+
+
+def runs(cluster: dict[str, Any], shape: Shape) -> bool:
+    """Whether the cluster stays up and is of `shape`."""
     return (
-        not cluster["metadata"].get("deletionTimestamp") and cluster_env(cluster) == env
+        not cluster["metadata"].get("deletionTimestamp")
+        and cluster_shape(cluster) == shape
     )
 
 
@@ -277,8 +313,8 @@ class Gateway:
         self.kube_http = kube
         self.token_file = token_file
         self.last_used: dict[str, float] = {}
-        # The environment each cluster was last found running, so that a call skips the checks.
-        self.started: dict[str, str] = {}
+        # The shape each cluster was last found in, so that a call skips the checks.
+        self.started: dict[str, Shape] = {}
         self.channels: dict[str, grpc.aio.Channel] = {}
         # cluster -> the Ray Client ids it serves; client id -> until when its cluster is known removed
         self.clients: dict[str, set[str]] = {}
@@ -344,7 +380,10 @@ class Gateway:
                 "No token: RAY_AUTH_MODE=token and RAY_AUTH_TOKEN=$JUPYTERHUB_API_TOKEN must be set.",
             )
         user = await self.user_for(token)
-        env = requested_env(values.get(ENV_METADATA, ""), load_template())
+        shape = Shape(
+            requested_env(values.get(ENV_METADATA, ""), load_template()),
+            requested_gpus(values.get(GPUS_METADATA, "")),
+        )
         now = time.monotonic()
         self.gone = {c: until for c, until in self.gone.items() if until > now}
         client = values.get("client_id", "")
@@ -355,9 +394,9 @@ class Gateway:
                 "Your Ray cluster was removed after it went idle: run ray.shutdown(), then ray.init() again.",
             )
         self.last_used[user.cluster] = now
-        if self.started.get(user.cluster) != env:
-            await self.start_cluster(user, env)
-            self.started[user.cluster] = env
+        if self.started.get(user.cluster) != shape:
+            await self.start_cluster(user, shape)
+            self.started[user.cluster] = shape
         self.clients.setdefault(user.cluster, set()).add(client)
         self.gone.pop(client, None)
         return user.cluster
@@ -445,22 +484,22 @@ class Gateway:
             )
         return body
 
-    async def start_cluster(self, user: User, env: str) -> None:
-        """Create the user's cluster for `env` unless it runs it; return once its head answers."""
+    async def start_cluster(self, user: User, shape: Shape) -> None:
+        """Create the user's cluster in `shape` unless it is in it; return once its head answers."""
         cluster = await self.cluster(user.cluster)
-        if cluster is not None and not runs(cluster, env):
+        if cluster is not None and not runs(cluster, shape):
             if not cluster["metadata"].get("deletionTimestamp"):
                 if await self.busy(cluster):
                     raise Refused(
                         grpc.StatusCode.FAILED_PRECONDITION,
-                        "Your Ray cluster runs another environment and is running tasks: wait for them, or stop them.",
+                        "Your Ray cluster runs another environment or number of GPUs and is running tasks: wait for them, or stop them.",
                     )
                 await self.delete(user.cluster)
             await self.wait_until_gone(user.cluster)
             cluster = None
         if cluster is None:
             status, created = await self.kube(
-                "POST", RAYCLUSTERS, build_cluster(load_template(), user, env)
+                "POST", RAYCLUSTERS, build_cluster(load_template(), user, shape)
             )
             if status == 201:
                 log.info("created %s", user.cluster)
@@ -473,7 +512,7 @@ class Gateway:
                     grpc.StatusCode.UNAVAILABLE,
                     f"Could not create your Ray cluster: {created.get('message', status)}",
                 )
-        if cluster is None or not runs(cluster, env):
+        if cluster is None or not runs(cluster, shape):
             raise Refused(
                 grpc.StatusCode.ABORTED,
                 "Another call is replacing your Ray cluster; connect again in a minute.",

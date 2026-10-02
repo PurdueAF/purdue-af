@@ -22,6 +22,26 @@ resources:
     cpu: 100m
     memory: 256Mi
 
+# The chart's list, which Helm replaces whole, with RayClusterNetworkPolicy on:
+# a RayCluster's networkPolicy (apps/ray-train) lets its own pods reach each other.
+featureGates:
+  - name: RayClusterStatusConditions
+    enabled: true
+  - name: RayJobDeletionPolicy
+    enabled: true
+  - name: RayMultiHostIndexing
+    enabled: true
+  - name: RayServiceIncrementalUpgrade
+    enabled: true
+  - name: RayCronJob
+    enabled: false
+  - name: RayClusterMTLS
+    enabled: false
+  - name: RayClusterNetworkPolicy
+    enabled: true
+  - name: RayClusterHistoryServer
+    enabled: false
+
 metrics:
   enabled: true
   # The AF Prometheus scrapes by Service label (scrape_metrics: "true"),

@@ -10,11 +10,13 @@ gateway exactly the token and scopes it uses.
 import tomllib
 from pathlib import Path
 
+import pytest
 import yaml
 from common import REPO, load_script
 
 APP = REPO / "apps" / "ray-train"
 HUB_VALUES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
+OPERATOR_VALUES = REPO / "apps" / "ray" / "operator" / "values.yaml"
 EXPERIMENTAL = REPO / "deploy" / "experimental" / "kustomization.yaml"
 CORE = REPO / "deploy" / "core-production" / "kustomization.yaml"
 GLOBAL_ENV = REPO / "pixi" / "global" / "pixi.toml"
@@ -118,14 +120,23 @@ def test_the_hub_points_sessions_at_the_gateway():
 
 
 def test_user_clusters_hold_no_kubernetes_credentials():
-    """User code runs in the head pod. KubeRay's autoscaler Role would let it
-    read every pod in the namespace and patch every RayCluster."""
+    """User code runs in every pod of a cluster. KubeRay's autoscaler Role
+    would let it read every pod in the namespace and patch every RayCluster."""
     spec = load(APP / "raycluster.yaml")["spec"]
     assert not spec.get("enableInTreeAutoscaling")
-    assert not spec.get("workerGroupSpecs")
-    pod = cluster_pod()["spec"]
-    assert pod["automountServiceAccountToken"] is False
-    assert "serviceAccountName" not in pod
+    (group,) = spec["workerGroupSpecs"]
+    for template in (spec["headGroupSpec"]["template"], group["template"]):
+        assert template["spec"]["automountServiceAccountToken"] is False
+        assert "serviceAccountName" not in template["spec"]
+
+
+def test_a_clusters_pods_reach_each_other_and_no_one_elses():
+    """KubeRay writes each cluster a NetworkPolicy admitting its own pods;
+    the operator does so only with the feature gate on."""
+    spec = load(APP / "raycluster.yaml")["spec"]
+    assert spec["networkPolicy"] == {"mode": "DenyAllIngress"}
+    gates = {g["name"]: g["enabled"] for g in load(OPERATOR_VALUES)["featureGates"]}
+    assert gates["RayClusterNetworkPolicy"] is True
 
 
 def test_user_clusters_demand_their_token():
@@ -142,15 +153,48 @@ def test_user_clusters_can_run_the_images_python():
     assert 100 in cluster_pod()["spec"]["securityContext"]["supplementalGroups"]
 
 
-def test_a_users_cluster_holds_one_gpu():
-    """With one cluster per user, each user's limit: a head alone, with one GPU."""
-    assert not load(APP / "raycluster.yaml")["spec"].get("workerGroupSpecs")
-    (container,) = cluster_pod()["spec"]["containers"]
-    for amounts in (
-        container["resources"]["limits"],
-        container["resources"]["requests"],
-    ):
-        assert amounts["nvidia.com/gpu"] == 1
+def test_the_head_runs_no_tasks_and_holds_no_gpu():
+    """Ray's advice: the head runs the GCS, the dashboard and the drivers."""
+    head = load(APP / "raycluster.yaml")["spec"]["headGroupSpec"]
+    assert head["rayStartParams"]["num-cpus"] == "0"
+    (container,) = head["template"]["spec"]["containers"]
+    for amounts in container["resources"].values():
+        assert "nvidia.com/gpu" not in amounts
+
+
+def test_a_worker_is_the_heads_pod_with_a_gpu():
+    spec = load(APP / "raycluster.yaml")["spec"]
+    (group,) = spec["workerGroupSpecs"]
+    head, worker = spec["headGroupSpec"]["template"], group["template"]
+    (head_container,) = head["spec"]["containers"]
+    (worker_container,) = worker["spec"]["containers"]
+    assert worker["metadata"] == head["metadata"]
+    assert {k: v for k, v in worker["spec"].items() if k != "containers"} == {
+        k: v for k, v in head["spec"].items() if k != "containers"
+    }
+    same = ("image", "env", "volumeMounts")
+    assert {k: worker_container[k] for k in same} == {
+        k: head_container[k] for k in same
+    }
+    resources = worker_container["resources"]
+    assert (
+        resources["limits"]["nvidia.com/gpu"]
+        == resources["requests"]["nvidia.com/gpu"]
+        == 1
+    )
+
+
+@pytest.mark.parametrize("gpus", ["1", "4"])
+def test_a_user_holds_four_gpus_at_most(gpus):
+    """One cluster per user, whose workers hold one GPU each."""
+    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+    user = gateway.User(name="user-a", account="user-a", uid=5001, gid=500)
+    shape = gateway.Shape(gateway.DEFAULT_ENV, gpus)
+    spec = gateway.build_cluster(load(APP / "raycluster.yaml"), user, shape)["spec"]
+    (group,) = spec["workerGroupSpecs"]
+    (container,) = group["template"]["spec"]["containers"]
+    held = group["maxReplicas"] * container["resources"]["limits"]["nvidia.com/gpu"]
+    assert held == int(gpus) <= gateway.MAX_GPUS == 4
 
 
 def test_the_gateway_never_reads_a_secret():

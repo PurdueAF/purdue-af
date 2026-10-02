@@ -3,8 +3,9 @@
 A gateway that gives every AF user a Ray cluster of their own. A notebook
 connects with Ray Client, `ray.init("ray://ray-train-gateway:10001")`, signed
 in with its session's JupyterHub token; the gateway asks the Hub whose token it
-is and relays the calls, unread, to that user's cluster: one pod with one T4,
-created when they first connect, running as them, and deleted once idle. How
+is and relays the calls, unread, to that user's cluster: a head and one to four
+workers with a T4 each, created when they first connect, running as them, and
+deleted once idle. How
 users send their training to it, not yet on the documentation site:
 [Training on GPUs with Ray](../../docs/drafts/guide-ray-train.md).
 
@@ -35,13 +36,18 @@ Secret. The `ray.io` CRDs and their controller are the KubeRay operator in
   reads from the pod name of their session, `purdue-af-<id>`.
 - **Isolation**: each cluster has its own Ray token, an HMAC of its name under
   the gateway's Hub token, which the gateway puts on every call it relays in
-  place of the session's. Users' pods mount no ServiceAccount token, and have
-  no autoscaler, whose Role would let user code read every pod in `cms` and
-  patch every RayCluster.
-- **One GPU per user**: a user's cluster is their only one, named after them,
-  and is one pod with one T4, with no worker groups and no autoscaler.
-  The gateway deletes a replaced or idle cluster in the foreground and waits
-  until it is gone, pod included, before creating the next.
+  place of the session's. The NetworkPolicy KubeRay writes for each cluster
+  (`networkPolicy` in the template, with the operator's
+  `RayClusterNetworkPolicy` gate) admits only the cluster's own pods, beside
+  the gateway. Users' pods mount no ServiceAccount token and have no
+  autoscaler, whose Role would let user code read every pod in `cms` and patch
+  every RayCluster.
+- **Up to four GPUs per user**: a user's cluster is their only one, named after
+  them. Its head runs Ray's own processes and the notebooks' connections, with
+  no GPU and no tasks (`num-cpus: 0`); its workers hold a T4 each, as many as
+  the `af-ray-gpus` metadata asks, from 1 to 4, one by default. The gateway
+  deletes a replaced or idle cluster in the foreground and waits until it is
+  gone, pods included, before creating the next.
 - **Environment**: Ray Client needs the same Python and Ray on both sides, so
   a cluster runs its notebook's environment: the global Pixi environment that
   [`pixi-global-sync`](../af-utils/pixi-global-sync) keeps, whose
