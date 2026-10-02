@@ -271,6 +271,11 @@ prePuller:
   continuous:
     enabled: true
   pullProfileListImages: false
+  # Users' Ray clusters (apps/ray-train) start without pulling their image.
+  extraImages:
+    ray-train:
+      name: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray
+      tag: 2.58.0-py312-cpu
 hub:
   image:
     # Tag unset: the chart default follows the chart version in helmrelease.yaml.
