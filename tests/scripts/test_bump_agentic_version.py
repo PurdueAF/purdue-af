@@ -111,3 +111,29 @@ def test_set_rejects_non_semver(bump, monkeypatch, manifest, bad):
 def test_one_action_is_required(bump, monkeypatch, manifest):
     with pytest.raises(SystemExit):
         run_main(bump, monkeypatch, "--file", manifest)
+
+
+@pytest.mark.parametrize(
+    "changed, stamp, kind", [(True, "0.5", "minor"), (False, "0.4", "patch")]
+)
+def test_skill_kind_accepts_the_version_the_bump_mints(bump, changed, stamp, kind):
+    assert bump.skill_kind("0.4.1", changed, f"Skill version: `{stamp}`\n") == kind
+
+
+@pytest.mark.parametrize(
+    "changed, text",
+    [
+        (True, "Skill version: `0.4`\n"),
+        (True, "Skill version: `0.6`\n"),
+        (False, "Skill version: `0.5`\n"),
+        (False, "no stamp\n"),
+    ],
+)
+def test_skill_kind_refuses_any_other_stamp(bump, changed, text):
+    with pytest.raises(SystemExit, match="set 'Skill version"):
+        bump.skill_kind("0.4.1", changed, text)
+
+
+def test_real_skill_carries_a_stamp(bump):
+    skill = REPO / bump.SKILL_DIR / "SKILL.md"
+    assert re.search(bump.SKILL_STAMP_RE, skill.read_text())

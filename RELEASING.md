@@ -121,10 +121,14 @@ with no human step.
 The bump kind is chosen automatically: **minor** when the skill
 (`.claude/skills/purdue-af-agentic-interface` — the user-facing contract of
 the MCP server, and an input of the image hash) changed since the last
-release, **patch** otherwise. So a skill-only change still mints and deploys
-a new version, and the version number tells users whether their side of the
-interface moved. Major versions are never minted automatically; if one is
-ever wanted, `--set` it by hand in a normal commit and let CI validate it.
+release, **patch** otherwise. So a skill-only change still mints and deploys a
+new version, and the version number tells users whether their side of the
+interface moved. The skill states the MAJOR.MINOR it ships in (its `Skill
+version:` line); the checks stage fails, naming the value to set, until that
+stamp matches the bump, and the server announces it so an agent can tell its
+user how far behind their copy is. Major versions are never minted
+automatically; if one is ever wanted, `--set` it by hand in a normal commit
+and let CI validate it.
 
 The bump commit is the ONE deliberate exception to "everything on
 `main-validated` ran its own pipeline": it is pushed with `GITHUB_TOKEN`

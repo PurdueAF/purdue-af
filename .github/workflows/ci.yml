@@ -233,16 +233,7 @@ jobs:
               | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          # MINOR when the skill tree differs from the pinned release's, else PATCH.
-          skill=".claude/skills/purdue-af-agentic-interface"
-          kind=patch
-          if [ "$cur" != "0.0.0" ]; then
-            prev_skill=$(git rev-parse "agentic-interface-v$cur:$skill" 2>/dev/null || echo none)
-            now_skill=$(git rev-parse "$GITHUB_SHA:$skill")
-            if [ "$prev_skill" != "$now_skill" ]; then
-              kind=minor
-            fi
-          fi
+          kind=$(python3 .github/workflows/bump-agentic-version.py --skill-kind)
           new=$(python3 .github/workflows/bump-agentic-version.py --bump "$kind" | tail -1)
           ghcr_retry "imagetools create" \
             docker buildx imagetools create -t "$repo:$new" "$repo@$want_digest"

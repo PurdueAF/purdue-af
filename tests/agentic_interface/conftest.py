@@ -1,5 +1,6 @@
 """Fixtures for the agentic-interface suite (helpers in agentic_helpers.py)."""
 
+import os
 import sys
 from pathlib import Path
 
@@ -11,6 +12,11 @@ _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "docker" / "agentic-interface"))
 # gpu_queries.py is shared with the hub config and copied into the image.
 sys.path.insert(1, str(_REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles"))
+# The image bundles the skill beside server.py.
+os.environ.setdefault(
+    "SKILL_PATH",
+    str(_REPO / ".claude" / "skills" / "purdue-af-agentic-interface" / "SKILL.md"),
+)
 
 import auth  # noqa: E402
 from agentic_helpers import USER  # noqa: E402

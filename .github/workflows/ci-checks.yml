@@ -56,6 +56,11 @@ jobs:
           uv run --project tests --frozen
           pytest -q -c tests/pyproject.toml tests
           --cov --cov-report=xml
+      - name: Skill version stamp names the release it ships in
+        run: |
+          tag="agentic-interface-v$(python3 .github/workflows/bump-agentic-version.py --print-current)"
+          git fetch -q --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}"
+          python3 .github/workflows/bump-agentic-version.py --skill-kind
       # Coverage reporting is informational: a Codecov outage (CLI download,
       # GPG keyserver, upload) must not fail the test job. Genuinely silent
       # processing rejections exit 0 regardless, so fail_ci_if_error would

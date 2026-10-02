@@ -31,6 +31,7 @@ COPY docker/agentic-interface/server.py .
 COPY docker/agentic-interface/tools/ ./tools/
 # Shared with the Hub's profile form so both report the same GPU numbers.
 COPY apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py .
+COPY .claude/skills/purdue-af-agentic-interface/SKILL.md .
 
 USER 1000
 

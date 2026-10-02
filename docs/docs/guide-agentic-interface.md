@@ -143,6 +143,9 @@ curl -fsSL -o ~/.claude/skills/purdue-af-agentic-interface/SKILL.md \
 The skill then activates automatically whenever you mention your Purdue AF
 session, Dask clusters, or AF logs/storage.
 
+The MCP server announces the current skill version, so the agent tells you when
+your copy is out of date; rerun the same command to update it.
+
 For **other agents**, copy the same file's contents into whatever your agent
 uses for persistent instructions — `~/.codex/AGENTS.md` for Codex,
 `~/.config/opencode/AGENTS.md` for opencode, **Customize → Rules** for Cursor.

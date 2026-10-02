@@ -38,6 +38,9 @@ DASK_GATEWAY_URL = os.environ.get(
 # Shared pixi env pre-built for everyone.
 GLOBAL_PIXI_PROJECT = os.environ.get("DASK_GLOBAL_PIXI_PROJECT", "/work/pixi/global")
 
+# The agent skill, bundled so the server can announce its current version.
+SKILL_PATH = os.environ.get("SKILL_PATH", "/app/SKILL.md")
+
 # Stateful streamable-HTTP sessions are required for server→client requests
 # such as elicitation. Stateless mode keeps one-shot POSTs working (handy for
 # curl) but disables elicitation; the deployment (single replica) sets false.

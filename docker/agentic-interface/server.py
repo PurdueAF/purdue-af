@@ -15,7 +15,13 @@ import re
 
 import uvicorn
 from auth import HubTokenVerifier, HubUnavailable
-from config import NAMESPACE, SERVICE_PREFIX, STATELESS_HTTP, TOKEN_URL
+from config import (
+    NAMESPACE,
+    SERVICE_PREFIX,
+    SKILL_PATH,
+    STATELESS_HTTP,
+    TOKEN_URL,
+)
 from context import current_user
 from metrics import (
     InstrumentedFastMCP,
@@ -314,6 +320,17 @@ class _McpAccessFilter(logging.Filter):
 
 # ── MCP server ────────────────────────────────────────────────────────────────
 
+
+def skill_version(text: str) -> str:
+    """The MAJOR.MINOR the skill states it ships in."""
+    m = re.search(r"(?m)^Skill version: `(\d+\.\d+)`$", text)
+    if not m:
+        raise ValueError("the skill states no 'Skill version: `X.Y`'")
+    return m.group(1)
+
+
+SKILL_VERSION = skill_version(open(SKILL_PATH).read())
+
 # JupyterHub's proxy passes the full path (including the service prefix) to
 # the service, so the MCP app is told to serve exactly that path.
 mcp = InstrumentedFastMCP(
@@ -329,7 +346,15 @@ mcp = InstrumentedFastMCP(
         "get_dask_worker_count / get_dask_cluster_usage / scale_dask_cluster / "
         "stop_dask_cluster for Dask; "
         "use get_session_status / start_af_session / stop_af_session for pod lifecycle. "
-        "Each tool result names the next step."
+        "Each tool result names the next step. "
+        f"The current purdue-af-agentic-interface skill is version {SKILL_VERSION}, "
+        "this server's MAJOR.MINOR (a patch release never changes the skill). "
+        "If the copy you loaded states another version, or you have none, tell "
+        "the user once, naming both versions: on their own machine they "
+        "reinstall it as in "
+        "https://analysis-facility.physics.purdue.edu/guide-agentic-interface/"
+        "#installing-the-skill-recommended; inside an AF session it comes with "
+        "the session image and updates when the session restarts on a newer one."
     ),
 )
 
