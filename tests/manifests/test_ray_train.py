@@ -71,10 +71,10 @@ def test_the_gateway_runs_the_files_it_is_given():
         service["spec"]["selector"].items()
         <= gateway_pod()["metadata"]["labels"].items()
     )
-    (port,) = service["spec"]["ports"]
-    (container_port,) = container["ports"]
-    assert port["port"] == container_port["containerPort"] == gateway.CLIENT_PORT
-    assert port["targetPort"] == container_port["name"]
+    ports = {p["targetPort"]: p["port"] for p in service["spec"]["ports"]}
+    container_ports = {p["name"]: p["containerPort"] for p in container["ports"]}
+    assert ports == container_ports
+    assert sorted(ports.values()) == [gateway.DASHBOARD_PORT, gateway.CLIENT_PORT]
 
 
 def test_the_hub_gives_the_gateway_its_token_and_scopes():
@@ -210,14 +210,14 @@ def test_only_sessions_reach_the_gateway_and_only_the_gateway_reaches_clusters()
     policies = {
         p["metadata"]["name"]: p["spec"] for p in load_all(APP / "networkpolicy.yaml")
     }
-    port = load(APP / "service.yaml")["spec"]["ports"][0]["port"]
+    ports = [p["port"] for p in load(APP / "service.yaml")["spec"]["ports"]]
     gateway_labels = gateway_pod()["metadata"]["labels"]
     cluster_labels = cluster_pod()["metadata"]["labels"]
 
     gateway = policies["ray-train-gateway"]
     assert gateway["podSelector"]["matchLabels"].items() <= gateway_labels.items()
     (rule,) = gateway["ingress"]
-    assert rule["ports"] == [{"protocol": "TCP", "port": port}]
+    assert rule["ports"] == [{"protocol": "TCP", "port": port} for port in ports]
     assert rule["from"] == [
         {
             "podSelector": {
