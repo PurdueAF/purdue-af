@@ -17,15 +17,15 @@ import urllib.error
 import urllib.request
 
 import pytest
-from common import REPO, load_script
+import yaml
+from common import REPO, load_script, mount_configmap
+
+APP = REPO / "apps" / "af-utils" / "pixi-global-sync"
 
 
 @pytest.fixture()
 def sync(tmp_path):
-    mod = load_script(
-        REPO / "apps" / "af-utils" / "pixi-global-sync" / "sync-global-env.py",
-        "sync_global_env",
-    )
+    mod = load_script(APP / "sync-global-env.py", "sync_global_env")
     mod.WORK_ROOT = tmp_path / "work" / "pixi"
     mod.LIVE_DIR = mod.WORK_ROOT / "global"
     mod.CACHE_DIR = mod.WORK_ROOT / ".cache"
@@ -766,3 +766,49 @@ class TestMain:
         assert child.terminated
         sync._current_child["proc"] = None
         daemon["handlers"][signal.SIGINT](signal.SIGINT, None)  # no child: fine
+
+    def test_only_a_new_script_ends_the_loop_and_only_between_cycles(
+        self, sync, daemon, monkeypatch
+    ):
+        """A new lock is the daemon's to install. A new script that lands
+        mid-install lets the install finish, starts no other cycle, and
+        releases the lock for the restarted container."""
+        sync.CONFIG_DIR.mkdir()
+        files = dict.fromkeys(
+            ("sync-global-env.py", "check-env.py", "pixi.toml", "pixi.lock"), ""
+        )
+        mount_configmap(sync.CONFIG_DIR, 0, files)
+        versions = [
+            {**files, "pixi.lock": "new"},
+            {**files, "pixi.lock": "new", "sync-global-env.py": "new"},
+        ]
+
+        def reconcile():
+            daemon["events"].append("reconcile")
+            cycle = daemon["events"].count("reconcile")
+            if cycle <= len(versions):
+                mount_configmap(sync.CONFIG_DIR, cycle, versions[cycle - 1])
+
+        monkeypatch.setattr(sync, "CODE", sync.CONFIG_DIR / "sync-global-env.py")
+        monkeypatch.setattr(sync, "reconcile", reconcile)
+        assert sync.main() == 0
+        assert daemon["events"] == [
+            "lock",
+            "reconcile",
+            "verify",
+            "reconcile",
+            "unlock",
+        ]
+
+
+def test_the_daemon_runs_the_script_it_watches(sync):
+    docs = yaml.safe_load_all((APP / "deployment.yaml").read_text())
+    (deployment,) = [d for d in docs if d["kind"] == "Deployment"]
+    (container,) = deployment["spec"]["template"]["spec"]["containers"]
+    (config,) = [m for m in container["volumeMounts"] if m["name"] == "config"]
+    # kubelet never updates a subPath mount, so the daemon would never see new code.
+    assert "subPath" not in config
+    assert container["command"] == [
+        "python3",
+        f"{config['mountPath']}/{sync.CODE.name}",
+    ]

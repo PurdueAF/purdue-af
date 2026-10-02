@@ -42,6 +42,7 @@ NODE_NAME = os.getenv("NODE_NAME") or ""
 RUNTIME_DIR = Path(_get_env("PROBE_RUNTIME_DIR", "/run/af-node-monitor"))
 RESULTS_DIR = Path(_get_env("RESULTS_DIR", str(RUNTIME_DIR / "results")))
 JOB_RUNNER = _get_env("JOB_RUNNER_PATH", "/scripts/job_runner.py")
+CODE = Path(__file__)
 HTTP_PORT = int(_get_env("PROBE_HTTP_PORT", "8080"))
 
 PROBE_INTERVAL_S = float(_get_env("PROBE_INTERVAL_S", "600"))
@@ -370,7 +371,10 @@ def serve(port: int = HTTP_PORT) -> HTTPServer:
     return server
 
 
-def main() -> None:  # pragma: no cover - process entrypoint
+def main() -> None:
+    """Probe until kubelet swaps other code than this into the mounted ConfigMap,
+    exiting only between cycles. job_runner.py needs no restart: each cycle runs it afresh."""
+    running = CODE.read_bytes()
     start()
     serve()
     # The jitter goes after the first cycle, not before it: a pod that has to
@@ -378,7 +382,7 @@ def main() -> None:  # pragma: no cover - process entrypoint
     # advances one wave at a time on readiness.
     jitter = random.uniform(0, PROBE_STARTUP_JITTER_S)
     seq = 0
-    while True:
+    while CODE.read_bytes() == running:
         started = time.time()
         cycle(seq)
         delay = PROBE_INTERVAL_S + (jitter if seq == 0 else 0.0)
@@ -386,6 +390,10 @@ def main() -> None:  # pragma: no cover - process entrypoint
         # Pace on cycle starts, not on cycle ends, so a slow check does not
         # stretch the interval past the exporter's staleness window.
         time.sleep(max(0.0, started + delay - time.time()))
+    print(
+        f"[probe_agent] {CODE} changed: exiting, for the container to restart on it",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover - process entrypoint

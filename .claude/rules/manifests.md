@@ -18,5 +18,10 @@ paths:
   ConfigMaps carry no name hash (`disableNameSuffixHash` in every root). A
   HelmRelease still upgrades when its `valuesFrom` ConfigMap changes, because
   Flux watches it; a Deployment mounting a generated ConfigMap does not roll.
+  A long-running process that runs its code out of one compares its own
+  file's content between iterations and exits 0 once it changes, so kubelet
+  restarts the container on the new code (`CODE` in
+  `apps/af-utils/pixi-global-sync/sync-global-env.py`); that mount takes no
+  `subPath`, which kubelet never updates.
 - To change a Secret: decrypt, edit, `sops -e -i` it again. The encrypted diff
   says nothing, so the commit message describes the change.
