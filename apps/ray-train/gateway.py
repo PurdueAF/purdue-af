@@ -51,6 +51,8 @@ log = logging.getLogger("ray-train-gateway")
 NAMESPACE = os.environ.get("NAMESPACE", "cms")
 HUB_API = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
 TEMPLATE = Path("/app/raycluster.yaml")
+CODE = Path(__file__)
+CODE_POLL_S = 10.0
 IDLE_TIMEOUT_S = float(os.environ.get("IDLE_TIMEOUT_S", "900"))
 START_TIMEOUT_S = float(os.environ.get("START_TIMEOUT_S", "600"))
 START_POLL_S = 5.0
@@ -885,12 +887,23 @@ async def serve() -> None:
             await gateway.close()
 
 
+async def until_changed(path: Path, running: bytes) -> None:
+    """Return once kubelet has swapped other code than `running` into the mounted ConfigMap."""
+    while path.read_bytes() == running:
+        await asyncio.sleep(CODE_POLL_S)
+    log.info("%s changed: exiting, for the container to restart on it", path)
+
+
 async def main() -> None:
-    """Serve until SIGTERM, which Python as a container's PID 1 would otherwise ignore."""
+    """Serve until SIGTERM, which Python as a container's PID 1 would otherwise ignore,
+    or until this file changes."""
     serving = asyncio.ensure_future(serve())
     asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, serving.cancel)
+    changed = asyncio.ensure_future(until_changed(CODE, CODE.read_bytes()))
+    changed.add_done_callback(lambda _: serving.cancel())
     with contextlib.suppress(asyncio.CancelledError):
         await serving
+    changed.cancel()
 
 
 if __name__ == "__main__":

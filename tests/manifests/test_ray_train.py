@@ -63,6 +63,8 @@ def test_the_gateway_runs_the_files_it_is_given():
     volumes = {v["name"]: v for v in pod["volumes"]}
     (app,) = [m for m in container["volumeMounts"] if m["name"] == "app"]
     assert volumes["app"]["configMap"]["name"] == "ray-train-gateway"
+    # kubelet never updates a subPath mount, so the gateway would never see new code.
+    assert "subPath" not in app
     assert container["command"] == ["python", f"{app['mountPath']}/gateway.py"]
     assert gateway.TEMPLATE == Path(app["mountPath"]) / "raycluster.yaml"
     service = load(APP / "service.yaml")

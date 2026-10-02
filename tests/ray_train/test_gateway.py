@@ -1200,6 +1200,56 @@ async def test_the_gateway_stops_at_sigterm(monkeypatch):
     assert stopped.is_set()
 
 
+def mount_configmap(volume, version, files):
+    """Swap `files` into `volume` as kubelet does: a new directory, `..data`
+    relinked to it in one rename, each file a link through `..data`."""
+    data = volume / f"..{version}"
+    data.mkdir()
+    for name, text in files.items():
+        (data / name).write_text(text)
+        if not (volume / name).is_symlink():
+            (volume / name).symlink_to(f"..data/{name}")
+    (volume / "..data_tmp").symlink_to(data.name)
+    (volume / "..data_tmp").replace(volume / "..data")
+
+
+async def test_only_new_gateway_code_ends_the_gateway(monkeypatch, tmp_path):
+    """A new raycluster.yaml is read at the next cluster creation; ending the
+    gateway for it would end every open Ray Client connection."""
+    files = {"gateway.py": "running", "raycluster.yaml": "template"}
+    mount_configmap(tmp_path, 1, files)
+    monkeypatch.setattr(gw, "CODE_POLL_S", 0)
+    changed = asyncio.create_task(gw.until_changed(tmp_path / "gateway.py", b"running"))
+    mount_configmap(tmp_path, 2, {**files, "raycluster.yaml": "new template"})
+    for _ in range(10):
+        await asyncio.sleep(0)
+    assert not changed.done()
+    mount_configmap(tmp_path, 3, {**files, "gateway.py": "new code"})
+    await asyncio.wait_for(changed, timeout=5)
+
+
+async def test_the_gateway_stops_when_its_code_changes(monkeypatch, tmp_path):
+    """It exits cleanly, and kubelet restarts the container on the new code."""
+    stopped = asyncio.Event()
+
+    async def serve():
+        try:
+            await asyncio.Event().wait()
+        finally:
+            stopped.set()
+
+    code = tmp_path / "gateway.py"
+    code.write_text("running")
+    monkeypatch.setattr(gw, "serve", serve)
+    monkeypatch.setattr(gw, "CODE", code)
+    monkeypatch.setattr(gw, "CODE_POLL_S", 0)
+    main = asyncio.create_task(gw.main())
+    await asyncio.sleep(0)
+    code.write_text("new code")
+    await asyncio.wait_for(main, timeout=5)
+    assert stopped.is_set()
+
+
 def test_ldap_ids_reads_the_account_at_its_dn(monkeypatch):
     searched = []
 
