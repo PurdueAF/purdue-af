@@ -23,6 +23,7 @@ import logging
 import os
 import posixpath
 import re
+import signal
 import ssl
 import time
 import urllib.parse
@@ -49,7 +50,7 @@ log = logging.getLogger("ray-train-gateway")
 
 NAMESPACE = os.environ.get("NAMESPACE", "cms")
 HUB_API = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
-TEMPLATE = Path(os.environ.get("RAY_CLUSTER_TEMPLATE", "/app/raycluster.yaml"))
+TEMPLATE = Path("/app/raycluster.yaml")
 IDLE_TIMEOUT_S = float(os.environ.get("IDLE_TIMEOUT_S", "900"))
 START_TIMEOUT_S = float(os.environ.get("START_TIMEOUT_S", "600"))
 START_POLL_S = 5.0
@@ -701,7 +702,7 @@ class Gateway:
             if time.monotonic() > deadline:
                 raise Refused(
                     grpc.StatusCode.UNAVAILABLE,
-                    "Your Ray cluster did not start in time: no T4 may be free. Try again later.",
+                    "Your Ray cluster's head did not start in time: try again later.",
                 )
             await asyncio.sleep(START_POLL_S)
         # A Ray that ignores RAY_AUTH_MODE would serve anyone who reaches it.
@@ -713,10 +714,15 @@ class Gateway:
             )
 
     async def delete(self, name: str) -> None:
-        # Foreground: the RayCluster outlasts its pod, so waiting it out frees the user's one GPU.
-        await self.kube(
+        # Foreground: the RayCluster outlasts its pods, so waiting it out frees the user's GPUs.
+        status, _ = await self.kube(
             "DELETE", f"{RAYCLUSTERS}/{name}", {"propagationPolicy": "Foreground"}
         )
+        if status not in (200, 202, 404):
+            raise Refused(
+                grpc.StatusCode.UNAVAILABLE,
+                f"Kubernetes answered HTTP {status} deleting the Ray cluster.",
+            )
         self.started.pop(name, None)
         until = time.monotonic() + GONE_S
         for client in self.clients.pop(name, set()):
@@ -757,17 +763,21 @@ class Gateway:
         now = time.monotonic()
         for cluster in listing.get("items", []):
             name = cluster["metadata"]["name"]
-            # Its idle clock starts when its last task or job ends, or its last call does.
-            if await self.busy(cluster):
-                self.last_used[name] = now
-            # A cluster first seen here (the gateway restarted) starts its idle clock now.
-            elif now - self.last_used.setdefault(name, now) >= IDLE_TIMEOUT_S:
-                await self.delete(name)
-                self.last_used.pop(name, None)
-                log.info("deleted idle %s", name)
+            try:
+                # Its idle clock starts when its last task or job ends, or its last call does.
+                if await self.busy(cluster):
+                    self.last_used[name] = now
+                # A cluster first seen here (the gateway restarted) starts its idle clock now.
+                elif now - self.last_used.setdefault(name, now) >= IDLE_TIMEOUT_S:
+                    await self.delete(name)
+                    self.last_used.pop(name, None)
+                    log.info("deleted idle %s", name)
+            except Exception:
+                log.exception("checking %s", name)
 
     async def busy(self, cluster: dict[str, Any]) -> bool:
-        """A running task or job keeps a cluster; so does a ready head that did not answer."""
+        """A running task or job keeps a cluster; so does a ready head that did not
+        answer, or answered as no Ray this gateway knows does."""
         name = cluster["metadata"]["name"]
         try:
             tasks = await self.head_get(
@@ -781,19 +791,20 @@ class Gateway:
                 },
             )
             jobs = await self.head_get(name, "/api/jobs/")
+            # A job's own process is no task: only its status tells it runs.
+            return bool(tasks["data"]["result"]["result"]) or any(
+                job.get("type") == "SUBMISSION"
+                and job.get("status") in ("PENDING", "RUNNING")
+                for job in jobs
+            )
         except ClientResponseError as e:
             if e.status in (401, 403):
                 # Made under another service token: nothing can reach it any more.
                 return False
             return head_ready(cluster)
-        except (ClientError, asyncio.TimeoutError):
+        # The head runs whatever Ray its environment has, whose answers may differ.
+        except (ClientError, asyncio.TimeoutError, LookupError, TypeError, ValueError):
             return head_ready(cluster)
-        # A job's own process is no task: only its status tells it runs.
-        return bool(tasks["data"]["result"]["result"]) or any(
-            job.get("type") == "SUBMISSION"
-            and job.get("status") in ("PENDING", "RUNNING")
-            for job in jobs
-        )
 
     async def head_get(
         self, cluster: str, path: str, params: dict[str, str] | None = None
@@ -860,7 +871,10 @@ async def serve() -> None:
         server.add_generic_rpc_handlers((Relay(gateway),))
         server.add_insecure_port(f"0.0.0.0:{CLIENT_PORT}")
         await server.start()
-        dashboard = web.AppRunner(dashboard_app(gateway), access_log=None)
+        # Within the pod's grace period, open log tails or not.
+        dashboard = web.AppRunner(
+            dashboard_app(gateway), access_log=None, shutdown_timeout=5
+        )
         await dashboard.setup()
         await web.TCPSite(dashboard, "0.0.0.0", DASHBOARD_PORT).start()
         try:
@@ -871,8 +885,16 @@ async def serve() -> None:
             await gateway.close()
 
 
+async def main() -> None:
+    """Serve until SIGTERM, which Python as a container's PID 1 would otherwise ignore."""
+    serving = asyncio.ensure_future(serve())
+    asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, serving.cancel)
+    with contextlib.suppress(asyncio.CancelledError):
+        await serving
+
+
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
-    asyncio.run(serve())
+    asyncio.run(main())

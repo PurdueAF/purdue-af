@@ -8,7 +8,7 @@ session's JupyterHub token either way; the gateway asks the Hub whose token it
 is and relays the calls, unread, to that user's cluster: a head and one to four
 workers with a T4 each, created when they first connect or submit a job,
 running as them, and deleted once idle. How users send their training to it,
-not yet on the documentation site:
+not on the documentation site:
 [Training on GPUs with Ray](../../docs/drafts/guide-ray-train.md).
 
 | File                 | What it is                                                                                                                |
@@ -29,55 +29,34 @@ gives every session `RAY_AUTH_MODE=token` and its own token as
 Secret. The `ray.io` CRDs and their controller are the KubeRay operator in
 [`apps/ray/operator`](../ray/operator).
 
-- **Identity**: the Hub resolves the token to a user, whose cluster is
-  `ray-train-<username>` (a hashed form for a username that cannot be part of
-  a Kubernetes name) and runs as their LDAP account: their Purdue login, or
-  for a CERN or FNAL user the pooled `paf<id>` account of
-  [`set-user-info.py`](../jupyterhub/jupyterhub/extraFiles/set-user-info.py),
-  whose `<id>` the gateway's own token (`read:servers`, `admin:server_state`)
-  reads from the pod name of their session, `purdue-af-<id>`.
-- **Isolation**: each cluster has its own Ray token, an HMAC of its name under
-  the gateway's Hub token, which the gateway puts on every call it relays in
-  place of the session's. The NetworkPolicy KubeRay writes for each cluster
-  (`networkPolicy` in the template, with the operator's
-  `RayClusterNetworkPolicy` gate) admits only the cluster's own pods, beside
-  the gateway. Users' pods mount no ServiceAccount token and have no
-  autoscaler, whose Role would let user code read every pod in `cms` and patch
-  every RayCluster.
-- **Up to four GPUs per user**: a user's cluster is their only one, named after
-  them. Its head runs Ray's own processes and the notebooks' connections, with
-  no GPU and no tasks (`num-cpus: 0`); its workers hold a T4 each, as many as
-  a call's `af-ray-gpus` asks, from 1 to 4, one by default. The gateway
-  deletes a replaced or idle cluster in the foreground and waits until it is
-  gone, pods included, before creating the next.
-- **Environment**: Ray Client needs the same Python and Ray on both sides, so
-  a cluster runs its notebook's environment: the global Pixi environment that
-  [`pixi-global-sync`](../af-utils/pixi-global-sync) keeps, whose
-  [`pixi.toml`](../../pixi/global/pixi.toml) has `ray-default` and `ray-train`
-  for it, or the one a call names in `af-ray-env`, on storage the cluster
-  mounts. The environment's `bin/` comes first on the cluster's `PATH`. A call
-  naming another environment or number of GPUs replaces a cluster that runs no
-  task or job. Ray Client sends `af-ray-env` and `af-ray-gpus` as gRPC
-  metadata, the Jobs API's client as HTTP headers.
-- **Jobs**: the gateway relays the dashboard's HTTP API, the Jobs API's among
-  it, with the WebSockets of its log tails. A job's driver runs in the cluster,
-  so it outlives its notebook, the notebook's connection and the gateway. Only
-  a submission, with the package uploads it brings, starts or replaces a
-  cluster; any other call goes to the user's cluster whatever it runs, or is
-  answered 404 when there is none, and the gateway answers `/api/version`
-  itself, so that a client asking after its jobs starts nothing.
-- **Lifetime**: the first call of a connection, or a job's submission, waits
-  while the cluster starts. A cluster is deleted, with its token Secret, once
-  `IDLE_TIMEOUT_S` has passed since its last running task or job and its last
-  call; the logs it streams back do not count. Its notebooks' reconnects are
-  then refused rather than given a new cluster.
-- **Before the Hub registers the service** the gateway refuses every call as
-  unavailable. Its token then appears in the mounted `hub` Secret, which the
-  gateway reads on every call, so no restart is needed.
+A cluster runs as the user's LDAP account, in its notebook's environment,
+since Ray Client needs the same Python and Ray on both sides: the global Pixi
+environment that [`pixi-global-sync`](../af-utils/pixi-global-sync) keeps, or
+the one a call names. Only the gateway reaches it, with a Ray
+token derived for that cluster alone, and its pods hold no Kubernetes
+credentials.
 
-## Checking on it
+## Tuning
+
+- `IDLE_TIMEOUT_S` and `START_TIMEOUT_S` are read from the gateway
+  container's environment, which `deployment.yaml` leaves unset, so the
+  defaults in `gateway.py` apply: how long a cluster stays after its last task,
+  job or call, and how long a call waits for a head to start or an old cluster
+  to go.
+- `MAX_GPUS` in `gateway.py` is the most workers, a T4 each, that a call may
+  ask for.
+- `raycluster.yaml` holds the pods' sizes, mounts and image. The image's tag is
+  also in `deployment.yaml` and in the Hub's `prePuller.extraImages`.
+
+## Running it
+
+A change to `raycluster.yaml` applies to the clusters created after it lands.
+One to `gateway.py` applies once the gateway pod is deleted and comes back.
+Unless it is back before Ray Client stops retrying, that ends notebooks' Ray
+Client connections and the calls running over them, but not their jobs.
 
 ```bash
 kubectl -n cms get rayclusters -l app.kubernetes.io/managed-by=ray-train-gateway
 kubectl -n cms logs deploy/ray-train-gateway
+kubectl -n cms delete pod -l app=ray-train-gateway
 ```

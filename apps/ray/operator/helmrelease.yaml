@@ -14,9 +14,6 @@ spec:
         name: kuberay
       interval: 1m
   install:
-    # The ray.io CRDs (RayCluster/RayJob/RayService/RayCronJob) ship in the
-    # chart's crds/ directory; nothing else in the cluster installs them.
-    crds: Create
     remediation:
       retries: -1
   upgrade:

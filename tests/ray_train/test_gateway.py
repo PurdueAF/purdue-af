@@ -11,6 +11,7 @@ import copy
 import json
 import logging
 import os
+import signal
 import socket
 import ssl
 import sys
@@ -96,6 +97,8 @@ class FakeKube:
         self.fail_list = False
         self.reject_create = False
         self.reject_secret = False
+        # Clusters whose deletion Kubernetes refuses
+        self.reject_delete = set()
         # Clusters another call is creating, absent to a GET and present to a POST:
         # name -> the environment that call asks for, or None if it deletes the cluster again.
         self.racing = {}
@@ -156,6 +159,8 @@ class FakeKube:
 
         async def delete(request):
             name = request.match_info["name"]
+            if name in self.reject_delete:
+                return web.json_response({"message": "forbidden"}, status=403)
             if name not in self.clusters:
                 return web.json_response({}, status=404)
             if (await request.json()).get("propagationPolicy") == "Foreground":
@@ -197,6 +202,8 @@ class FakeHeads:
         self.down_checks = 0
         # cluster -> its running tasks
         self.running = {}
+        # Clusters whose task listing comes back in a shape no Ray gives
+        self.malformed = set()
         # (method, metadata) of every call a head's Ray Client server took
         self.calls = []
         # Holds back a log stream's second line.
@@ -245,6 +252,8 @@ class FakeHeads:
                 "state",
                 "RUNNING",
             )
+            if request.match_info["cluster"] in self.malformed:
+                return web.json_response({})
             running = self.running.get(request.match_info["cluster"], [])
             limit = int(request.query["limit"])
             listing = {"total": len(running), "result": running[:limit]}
@@ -985,15 +994,9 @@ async def test_an_unreachable_head_is_reported_and_checked_again(
     assert "ray-train-user-a" not in env.gateway.started
 
 
-def test_gpus_default_to_one():
-    assert gw.requested_gpus("") == "1"
-    assert gw.requested_gpus("3") == "3"
-
-
 def test_environments_live_on_the_storage_the_cluster_mounts():
     template = yaml.safe_load(TEMPLATE.read_text())
     assert gw.env_roots(template) == ["/work", "/depot/cms", "/eos", "/cvmfs"]
-    assert gw.requested_env("", template) == gw.DEFAULT_ENV
     assert gw.requested_env(ENV_A + "/", template) == ENV_A
 
 
@@ -1082,6 +1085,37 @@ async def test_a_cluster_made_under_another_service_token_is_deleted(env):
     assert live(env) == set()
 
 
+async def test_a_ready_head_answering_out_of_shape_is_kept_and_not_replaced(env):
+    await call(env)
+    env.kube.clusters["ray-train-user-a"]["status"] = {
+        "conditions": [{"type": "HeadPodReady", "status": "True"}]
+    }
+    env.heads.malformed.add("ray-train-user-a")
+    idle(env, "ray-train-user-a")
+
+    await env.gateway.reap_idle()
+
+    assert "ray-train-user-a" in live(env)
+    assert await refused(env, gpus="2") == grpc.StatusCode.FAILED_PRECONDITION
+
+
+async def test_a_refused_deletion_is_tried_again_and_holds_up_no_other_cluster(env):
+    await call(env, token="session-a")
+    await call(env, token="session-b", client="client-b")
+    # Listed first, so the rest are reaped only past it.
+    env.kube.reject_delete.add("ray-train-user-a")
+    idle(env, "ray-train-user-a", "ray-train-user-b-cern")
+
+    await env.gateway.reap_idle()
+
+    assert live(env) == {"ray-train-user-a"}
+    assert await call(env) == [b"echo:ping"]
+    idle(env, "ray-train-user-a")
+    env.kube.reject_delete.clear()
+    await env.gateway.reap_idle()
+    assert live(env) == set()
+
+
 async def test_reaping_waits_out_a_failed_listing(env):
     await call(env)
     env.kube.fail_list = True
@@ -1141,6 +1175,29 @@ async def test_the_gateway_serves_both_ports_until_stopped(monkeypatch, tmp_path
     serving.cancel()
     with pytest.raises(asyncio.CancelledError):
         await serving
+
+
+async def test_the_gateway_stops_at_sigterm(monkeypatch):
+    stopped = asyncio.Event()
+
+    async def serve():
+        try:
+            await asyncio.Event().wait()
+        finally:
+            stopped.set()
+
+    monkeypatch.setattr(gw, "serve", serve)
+    default = signal.getsignal(signal.SIGTERM)
+    main = asyncio.create_task(gw.main())
+    for _ in range(100):
+        if signal.getsignal(signal.SIGTERM) is not default:
+            break
+        await asyncio.sleep(0)
+    # Never signal the test run itself before the gateway handles it.
+    assert signal.getsignal(signal.SIGTERM) is not default
+    os.kill(os.getpid(), signal.SIGTERM)
+    await asyncio.wait_for(main, timeout=5)
+    assert stopped.is_set()
 
 
 def test_ldap_ids_reads_the_account_at_its_dn(monkeypatch):
