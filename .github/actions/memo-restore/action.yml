@@ -1,0 +1,37 @@
+name: memo restore
+description: >-
+  Look up a recorded green run for a memo key. Jobs guard their real work
+  with `if: steps.<id>.outputs.hit != 'true'` — identical input state with a
+  recorded green run skips as verified reuse. Markers are run artifacts, so
+  one recorded on a PR is found on main and on every other branch; only
+  markers from runs of this repository count, never from a fork.
+inputs:
+  key:
+    description: Memo key (includes the full input-state hash); empty disables the lookup
+    required: true
+outputs:
+  hit:
+    description: "'true' when this key already has a recorded green run"
+    value: ${{ steps.lookup.outputs.hit }}
+runs:
+  using: composite
+  steps:
+    - id: lookup
+      shell: bash
+      env:
+        KEY: ${{ inputs.key }}
+        GH_TOKEN: ${{ github.token }}
+        REPO_ID: ${{ github.repository_id }}
+      run: |
+        hit=false
+        if [ -n "$KEY" ]; then
+          # A failed lookup is a miss: the job runs instead of being skipped.
+          n=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=memo-${KEY}&per_page=100" \
+            --jq "[.artifacts[] | select((.expired | not) and .workflow_run.head_repository_id == ${REPO_ID})] | length" \
+            2>/dev/null) || n=0
+          if [ "${n:-0}" -gt 0 ]; then
+            hit=true
+            echo "skipping — ${KEY} already green" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+        fi
+        echo "hit=$hit" >> "$GITHUB_OUTPUT"

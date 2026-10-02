@@ -69,6 +69,7 @@ jobs:
       af-image-available: ${{ needs.images.outputs.af-image-available }}
     permissions:
       contents: read
+      actions: read # memo lookup
       packages: read
 
   ci-ok:

@@ -54,7 +54,7 @@ jobs:
       - name: Run tests with coverage
         run: >-
           uv run --project tests --frozen
-          pytest -q -c tests/pyproject.toml tests
+          pytest -q -c tests/pyproject.toml tests -n auto
           --cov --cov-report=xml
       - name: Skill version stamp names the release it ships in
         run: |
