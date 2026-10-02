@@ -18,8 +18,11 @@ spec:
               app: jupyterhub
               component: singleuser-server
       ports:
+        # Ray Client, and the dashboard's HTTP API the gateway relays
         - protocol: TCP
           port: 10001
+        - protocol: TCP
+          port: 8265
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

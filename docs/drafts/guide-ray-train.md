@@ -6,9 +6,9 @@ it. Your session does not need a GPU of its own: you add a decorator to your
 PyTorch training function, and calling it runs it on the GPU.
 
 The function runs in a Ray cluster of your own, with one **NVIDIA T4** GPU
-(16 GB). It starts when your notebook first connects, runs as you, sees your
-storage at the same paths as your session, and is removed after some minutes
-without work. No other user can see, stop or reach it.
+(16 GB). It starts when your notebook first connects or submits a job, runs as
+you, sees your storage at the same paths as your session, and is removed after
+some minutes without work. No other user can see, stop or reach it.
 
 ## 1. Connect
 
@@ -97,6 +97,50 @@ ray.init("ray://ray-train-gateway:10001", _metadata=[("af-ray-gpus", "4")])
   it, as asking for another environment does. Both go in one list:
   `_metadata=[("af-ray-env", ...), ("af-ray-gpus", "2")]`.
 
+## Trainings that outlast your notebook
+
+A call from your notebook lasts as long as the notebook's connection to your
+cluster: a kernel restart, a closed notebook or a lost connection stops it. A
+training of hours is better submitted as a
+[Ray job](https://docs.ray.io/en/latest/cluster/running-applications/job-submission/sdk.html):
+a script your cluster runs by itself, which any notebook of yours can follow
+and stop.
+
+Put the training in a script, say `train.py` beside your notebook, that writes
+what it makes to `/work`, and submit it:
+
+```python
+from ray.job_submission import JobSubmissionClient
+
+client = JobSubmissionClient("http://ray-train-gateway:8265")
+job = client.submit_job(
+    entrypoint="python train.py",
+    runtime_env={"working_dir": "."},
+    entrypoint_num_gpus=1,
+)
+```
+
+* `entrypoint_num_gpus=1` gives the script a GPU, so a PyTorch training script
+  runs as it is. Without it, the script has no GPU and sends its training to
+  the GPUs as a notebook does, with `@ray.remote(num_gpus=1)` or Ray Train.
+* `runtime_env={"working_dir": "."}` takes the notebook's directory along, the
+  script and its modules with it. Leave data out of it: your cluster reads
+  `/work` itself.
+* `client.get_job_status(job)`, `client.get_job_logs(job)` and
+  `client.stop_job(job)` work from any notebook of yours, and
+  `client.list_jobs()` lists your jobs. To follow a job's output as it comes:
+
+    ```python
+    async for lines in client.tail_job_logs(job):
+        print(lines, end="")
+    ```
+
+* A job runs in your cluster's environment and with its GPUs, which a client
+  names in headers as `ray.init` does in `_metadata`:
+  `JobSubmissionClient("http://ray-train-gateway:8265", headers={"af-ray-gpus": "4"})`.
+* Your cluster is removed some minutes after its last job ends, with the record
+  and logs of its jobs: what you want to keep, have the job write to `/work`.
+
 ## Your own environment
 
 Your cluster needs the same Python and Ray as your notebook. It runs the
@@ -121,9 +165,10 @@ ray.init(
   `pixi add --pypi "ray[default]" torch`.
 * It must be on storage your cluster sees (see
   [Data and results](#data-and-results)).
-* Your cluster runs one environment at a time. Connecting with another one,
-  the global one included, replaces the cluster when nothing runs on it; while
-  something does, `ray.init` fails with a connection timeout.
+* Your cluster runs one environment at a time. Connecting, or submitting a
+  job, with another one, the global one included, replaces the cluster when
+  nothing runs on it. While something does, `ray.init` fails with a connection
+  timeout, and a submission with the reason.
 
 ## Data and results
 

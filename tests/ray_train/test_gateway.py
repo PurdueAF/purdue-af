@@ -1,13 +1,16 @@
 """Tests for apps/ray-train/gateway.py against fake JupyterHub, Kubernetes and Ray heads.
 
-What the isolation rests on: a call is resolved to a user only by the Hub, it
-reaches that user's cluster and no other, the cluster runs as the user's LDAP
-account, and a head only ever sees its own derived token, never a session's.
+What the isolation rests on: a call, of Ray Client's or of the Jobs API's, is
+resolved to a user only by the Hub, it reaches that user's cluster and no
+other, the cluster runs as the user's LDAP account, and a head only ever sees
+its own derived token, never a session's.
 """
 
 import asyncio
 import copy
 import json
+import logging
+import os
 import socket
 import ssl
 import sys
@@ -18,7 +21,13 @@ from types import SimpleNamespace
 import grpc
 import pytest
 import yaml
-from aiohttp import ClientSession, web
+from aiohttp import (
+    ClientConnectionError,
+    ClientSession,
+    WSMsgType,
+    WSServerHandshakeError,
+    web,
+)
 from aiohttp.test_utils import TestServer
 from common import REPO, load_script
 
@@ -36,6 +45,8 @@ SESSIONS = {
 LOOKUPS = []
 LDAP = {"user-a": (5001, 500), "paf0042": (6042, 600)}
 ENV_A = "/work/users/user-a/proj/.pixi/envs/default"
+# The heads' own, whatever a test makes of the gateway's.
+HeadWebSocket = web.WebSocketResponse
 ENV_B = "/depot/cms/users/user-a/other"
 # Ray Client methods: a unary call, a stream, and one the fake head refuses.
 PING = "/ray.rpc.RayletDriver/ClusterInfo"
@@ -190,6 +201,14 @@ class FakeHeads:
         self.calls = []
         # Holds back a log stream's second line.
         self.more_logs = asyncio.Event()
+        # cluster -> its jobs, as the Jobs API lists them
+        self.jobs = {}
+        # (cluster, package) -> what was uploaded
+        self.packages = {}
+        # (cluster, method, raw path, headers, body) of every call to a dashboard but the gateway's checks
+        self.seen = []
+        # Holds back a log tail's second line.
+        self.more_lines = asyncio.Event()
 
     def dashboards(self):
         @web.middleware
@@ -201,6 +220,18 @@ class FakeHeads:
             expected = f"Bearer {gw.cluster_token(SERVICE_TOKEN, cluster)}"
             if not self.open and token != expected:
                 raise web.HTTPUnauthorized()
+            checks = ("/api/version", "/api/v0/tasks", "/api/jobs/")
+            if not (request.method == "GET" and request.path.endswith(checks)):
+                body = await request.read()
+                self.seen.append(
+                    (
+                        cluster,
+                        request.method,
+                        request.rel_url.raw_path_qs,
+                        dict(request.headers),
+                        body,
+                    )
+                )
             return await handler(request)
 
         async def version(request):
@@ -219,9 +250,52 @@ class FakeHeads:
             listing = {"total": len(running), "result": running[:limit]}
             return web.json_response({"result": True, "data": {"result": listing}})
 
-        app = web.Application(middlewares=[check])
+        def found(request):
+            cluster = request.match_info["cluster"]
+            return {j["submission_id"]: j for j in self.jobs.get(cluster, [])}
+
+        async def list_jobs(request):
+            return web.json_response(self.jobs.get(request.match_info["cluster"], []))
+
+        async def submit(request):
+            return web.json_response({"submission_id": "raysubmit_1"})
+
+        async def job(request):
+            submission = request.match_info["job"]
+            if submission not in found(request):
+                return web.Response(status=404, text=f"Job {submission} does not exist")
+            return web.json_response(found(request)[submission])
+
+        async def package(request):
+            key = (request.match_info["cluster"], request.match_info["package"])
+            if request.method == "PUT":
+                self.packages[key] = await request.read()
+                return web.Response()
+            return web.Response(status=200 if key in self.packages else 404)
+
+        async def tail(request):
+            submission = request.match_info["job"]
+            if submission not in found(request):
+                return web.Response(status=404, text=f"Job {submission} does not exist")
+            ws = HeadWebSocket()
+            await ws.prepare(request)
+            await ws.send_str("line 1\n")
+            if found(request)[submission].get("binary"):
+                await ws.send_bytes(b"not a line")
+            await self.more_lines.wait()
+            await ws.send_str("line 2\n")
+            await ws.close()
+            return ws
+
+        # As Ray's: working_dir uploads may reach 100 MiB.
+        app = web.Application(middlewares=[check], client_max_size=100 * 2**20)
         app.router.add_get("/{cluster}/api/version", version)
         app.router.add_get("/{cluster}/api/v0/tasks", tasks)
+        app.router.add_get("/{cluster}/api/jobs/", list_jobs)
+        app.router.add_post("/{cluster}/api/jobs/", submit)
+        app.router.add_get("/{cluster}/api/jobs/{job}", job)
+        app.router.add_get("/{cluster}/api/jobs/{job}/logs/tail", tail)
+        app.router.add_route("*", "/{cluster}/api/packages/gcs/{package}", package)
         return app
 
     def client_server(self):
@@ -281,20 +355,29 @@ async def env(monkeypatch, tmp_path):
         gw, "client_address", lambda cluster: f"127.0.0.1:{client_port}"
     )
 
-    async with ClientSession() as http, ClientSession() as kube_http:
+    async with (
+        ClientSession() as http,
+        ClientSession() as kube_http,
+        ClientSession() as session,
+    ):
         gateway = gw.Gateway(http, kube_http, token_file)
         server = grpc.aio.server(options=gw.GRPC_OPTIONS)
         server.add_generic_rpc_handlers((gw.Relay(gateway),))
         port = server.add_insecure_port("127.0.0.1:0")
         await server.start()
         channel = grpc.aio.insecure_channel(f"127.0.0.1:{port}")
+        dashboard = TestServer(gw.dashboard_app(gateway))
+        await dashboard.start_server()
         yield SimpleNamespace(
             channel=channel,
+            dashboard=str(dashboard.make_url("")).rstrip("/"),
+            session=session,
             gateway=gateway,
             kube=kube,
             heads=heads,
             token_file=token_file,
         )
+        await dashboard.close()
         await channel.close()
         await server.stop(None)
         await gateway.close()
@@ -328,6 +411,43 @@ async def refused(env, **kwargs):
     with pytest.raises(grpc.aio.AioRpcError) as e:
         await call(env, **kwargs)
     return e.value.code()
+
+
+def job_headers(token="session-a", env_path=None, gpus=None):
+    headers = {}
+    if token is not None:
+        headers["Authorization"] = f"Bearer {token}"
+    if env_path is not None:
+        headers[gw.ENV_METADATA] = env_path
+    if gpus is not None:
+        headers[gw.GPUS_METADATA] = gpus
+    return headers
+
+
+async def job_call(env, method="GET", path="/api/jobs/", body=None, **kwargs):
+    """A call of JobSubmissionClient's from a session: its status, reason and body."""
+    async with env.session.request(
+        method, env.dashboard + path, data=body, headers=job_headers(**kwargs)
+    ) as r:
+        return r.status, r.reason, await r.read()
+
+
+async def submit(env, **kwargs):
+    return await job_call(
+        env,
+        "POST",
+        "/api/jobs/",
+        json.dumps({"entrypoint": "python train.py"}),
+        **kwargs,
+    )
+
+
+def running_job(submission="raysubmit_1", **fields):
+    return {
+        "type": "SUBMISSION",
+        "submission_id": submission,
+        "status": "RUNNING",
+    } | fields
 
 
 def head_pod(env, name="ray-train-user-a"):
@@ -412,7 +532,7 @@ async def test_connecting_starts_the_users_cluster_as_them(env):
 
 
 async def test_a_head_sees_its_own_token_and_the_clients_own_metadata(env):
-    await call(env, env_path=ENV_A)
+    await call(env, env_path=ENV_A, gpus="2")
     ((method, metadata),) = env.heads.calls
     assert method == PING
     assert metadata["authorization"] == (
@@ -420,6 +540,7 @@ async def test_a_head_sees_its_own_token_and_the_clients_own_metadata(env):
     )
     assert metadata["client_id"] == "client-1"
     assert gw.ENV_METADATA not in metadata
+    assert gw.GPUS_METADATA not in metadata
     assert "session-a" not in json.dumps(metadata)
 
 
@@ -651,6 +772,219 @@ async def test_asking_for_other_gpus_leaves_a_busy_cluster_alone(env):
     assert counts(workers(env)) == (1, 1, 1)
 
 
+async def test_a_job_client_without_a_token_is_refused(env):
+    status, _, _ = await job_call(env, path="/api/version", token=None)
+    assert status == 401
+    assert env.kube.clusters == {}
+
+
+async def test_the_version_check_starts_no_cluster(env):
+    status, _, body = await job_call(env, path="/api/version")
+    assert status == 200
+    template = yaml.safe_load(TEMPLATE.read_text())
+    assert json.loads(body) == {"ray_version": template["spec"]["rayVersion"]}
+    assert env.kube.clusters == {}
+
+
+async def test_a_refusal_says_why_in_its_status_line(env):
+    """JobSubmissionClient's version check shows a refusal's status line only."""
+    status, reason, body = await job_call(env, path="/api/version", gpus="9")
+    assert status == 400
+    assert reason == body.decode()
+    assert reason.startswith(gw.GPUS_METADATA)
+
+
+async def test_submitting_a_job_starts_the_users_cluster_in_the_shape_it_names(env):
+    status, _, body = await submit(env, env_path=ENV_A, gpus="2")
+    assert (status, json.loads(body)) == (200, {"submission_id": "raysubmit_1"})
+    assert cluster_env(env) == ENV_A
+    assert counts(workers(env)) == (2, 2, 2)
+    ((cluster, method, path, headers, sent),) = env.heads.seen
+    assert (cluster, method, path) == (
+        "ray-train-user-a",
+        "POST",
+        "/ray-train-user-a/api/jobs/",
+    )
+    assert headers["Authorization"] == (
+        f"Bearer {gw.cluster_token(SERVICE_TOKEN, 'ray-train-user-a')}"
+    )
+    assert not {gw.ENV_METADATA, gw.GPUS_METADATA} & {k.lower() for k in headers}
+    assert "session-a" not in json.dumps(headers)
+    assert json.loads(sent) == {"entrypoint": "python train.py"}
+
+
+async def test_an_upload_reaches_the_head_whole(env):
+    package = os.urandom(3 * 2**20)
+    path = "/api/packages/gcs/_ray_pkg_1.zip"
+    assert (await job_call(env, "GET", path))[0] == 404
+    assert (await job_call(env, "PUT", path, package))[0] == 200
+    assert env.heads.packages[("ray-train-user-a", "_ray_pkg_1.zip")] == package
+    assert (await job_call(env, "GET", path))[0] == 200
+
+
+@pytest.mark.parametrize(
+    "path", ["/api/jobs/", "/api/jobs/raysubmit_1", "/api/jobs/raysubmit_1/logs"]
+)
+async def test_asking_about_jobs_without_a_cluster_starts_none(env, path):
+    status, _, body = await job_call(env, path=path)
+    assert status == 404
+    assert body.startswith(b"You have no Ray cluster")
+    assert env.kube.clusters == {}
+
+
+async def test_asking_about_jobs_reaches_the_cluster_whatever_it_runs(env):
+    await submit(env, env_path=ENV_A, gpus="2")
+    env.heads.jobs["ray-train-user-a"] = [running_job()]
+    # As after the gateway restarted
+    env.gateway.started.clear()
+    status, _, body = await job_call(env, path="/api/jobs/raysubmit_1")
+    assert (status, json.loads(body)["status"]) == (200, "RUNNING")
+    assert cluster_env(env) == ENV_A
+    assert env.kube.created == 1
+
+
+async def test_a_cluster_being_deleted_has_no_jobs_to_ask_about(env):
+    await submit(env)
+    env.gateway.started.clear()
+    env.kube.clusters["ray-train-user-a"]["metadata"]["deletionTimestamp"] = "now"
+    assert (await job_call(env, path="/api/jobs/raysubmit_1"))[0] == 404
+
+
+async def test_a_heads_answer_comes_back_as_it_is(env):
+    await submit(env)
+    status, _, body = await job_call(env, path="/api/jobs/raysubmit_9")
+    assert (status, body) == (404, b"Job raysubmit_9 does not exist")
+
+
+async def test_paths_and_queries_reach_the_head_as_sent(env):
+    await submit(env)
+    await job_call(env, path="/api/jobs/my%20job%231?verbose=1")
+    assert env.heads.seen[-1][1:3] == (
+        "GET",
+        "/ray-train-user-a/api/jobs/my%20job%231?verbose=1",
+    )
+
+
+async def test_a_submission_in_another_shape_leaves_a_cluster_with_a_running_job(env):
+    await submit(env, env_path=ENV_A)
+    env.heads.jobs["ray-train-user-a"] = [running_job()]
+    status, reason, _ = await submit(env, env_path=ENV_B)
+    assert status == 409
+    assert "tasks or jobs" in reason
+    assert cluster_env(env) == ENV_A
+
+
+async def test_a_submission_in_another_shape_replaces_a_cluster_whose_jobs_ended(env):
+    await submit(env, env_path=ENV_A)
+    env.heads.jobs["ray-train-user-a"] = [running_job(status="SUCCEEDED")]
+    assert (await submit(env, env_path=ENV_B))[0] == 200
+    assert cluster_env(env) == ENV_B
+
+
+@pytest.mark.parametrize(
+    "job, kept",
+    [
+        (running_job(), True),
+        (running_job(status="PENDING"), True),
+        (running_job(status="SUCCEEDED"), False),
+        # A notebook's Ray Client session, which keeps no cluster by itself
+        (running_job(type="DRIVER"), False),
+    ],
+    ids=["running", "pending", "ended", "ray-client-driver"],
+)
+async def test_a_submitted_job_keeps_its_cluster_until_it_ends(env, job, kept):
+    await submit(env)
+    env.heads.jobs["ray-train-user-a"] = [job]
+    idle(env, "ray-train-user-a")
+    await env.gateway.reap_idle()
+    assert (live(env) == {"ray-train-user-a"}) is kept
+
+
+async def test_a_cluster_stays_for_the_idle_timeout_after_its_last_job_ends(env):
+    await submit(env)
+    env.heads.jobs["ray-train-user-a"] = [running_job()]
+    idle(env, "ray-train-user-a")
+    await env.gateway.reap_idle()
+    env.heads.jobs["ray-train-user-a"] = [running_job(status="SUCCEEDED")]
+    await env.gateway.reap_idle()
+    assert live(env) == {"ray-train-user-a"}
+    idle(env, "ray-train-user-a")
+    await env.gateway.reap_idle()
+    assert live(env) == set()
+
+
+async def test_asking_about_jobs_keeps_a_cluster(env):
+    await submit(env)
+    idle(env, "ray-train-user-a")
+    await job_call(env, path="/api/jobs/raysubmit_1")
+    await env.gateway.reap_idle()
+    assert live(env) == {"ray-train-user-a"}
+
+
+async def tail(env, submission="raysubmit_1"):
+    """JobSubmissionClient.tail_job_logs, as the lines it yields."""
+    lines = []
+    url = f"{env.dashboard}/api/jobs/{submission}/logs/tail"
+    async with env.session.ws_connect(url, headers=job_headers()) as ws:
+        async for message in ws:
+            assert message.type == WSMsgType.TEXT
+            lines.append(message.data)
+            env.heads.more_lines.set()
+    return lines
+
+
+async def test_a_jobs_log_tail_is_relayed_until_the_job_ends(env):
+    await submit(env)
+    env.heads.jobs["ray-train-user-a"] = [running_job()]
+    assert await tail(env) == ["line 1\n", "line 2\n"]
+
+
+async def test_a_log_tail_ends_at_anything_but_a_line(env):
+    await submit(env)
+    env.heads.jobs["ray-train-user-a"] = [running_job(binary=True)]
+    assert await tail(env) == ["line 1\n"]
+
+
+async def test_a_tail_to_a_session_gone_without_a_word_ends_quietly(
+    env, monkeypatch, caplog
+):
+    """A session pod that vanished leaves its connection half open: only a write finds out."""
+
+    class HalfOpen(web.WebSocketResponse):
+        async def send_str(self, data, compress=None):
+            raise ConnectionResetError("Cannot write to closing transport")
+
+    monkeypatch.setattr(web, "WebSocketResponse", HalfOpen)
+    await submit(env)
+    env.heads.jobs["ray-train-user-a"] = [running_job()]
+    env.heads.more_lines.set()
+    assert await tail(env) == []
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+async def test_the_log_tail_of_an_unknown_job_is_refused(env):
+    await submit(env)
+    with pytest.raises(WSServerHandshakeError) as e:
+        await tail(env, "raysubmit_9")
+    assert e.value.status == 404
+
+
+@pytest.mark.parametrize("call", ["http", "websocket"])
+async def test_an_unreachable_head_is_reported_and_checked_again(
+    env, monkeypatch, call
+):
+    await submit(env)
+    port = free_port()
+    monkeypatch.setattr(gw, "head_url", lambda cluster: f"http://127.0.0.1:{port}")
+    if call == "http":
+        assert (await job_call(env, path="/api/jobs/raysubmit_1"))[0] == 503
+    else:
+        with pytest.raises(WSServerHandshakeError) as e:
+            await tail(env)
+        assert e.value.status == 503
+    assert "ray-train-user-a" not in env.gateway.started
+
+
 def test_gpus_default_to_one():
     assert gw.requested_gpus("") == "1"
     assert gw.requested_gpus("3") == "3"
@@ -774,7 +1108,7 @@ async def test_the_reaper_outlives_its_errors(monkeypatch):
         await reaper
 
 
-async def test_the_gateway_serves_ray_client_until_stopped(monkeypatch, tmp_path):
+async def test_the_gateway_serves_both_ports_until_stopped(monkeypatch, tmp_path):
     monkeypatch.setattr(gw, "SERVICE_ACCOUNT", tmp_path)
     monkeypatch.setattr(
         gw,
@@ -784,8 +1118,9 @@ async def test_the_gateway_serves_ray_client_until_stopped(monkeypatch, tmp_path
         ),
     )
     monkeypatch.setattr(gw, "SERVICE_TOKEN_FILE", tmp_path / "hub-token")
-    port = free_port()
+    port, dashboard_port = free_port(), free_port()
     monkeypatch.setattr(gw, "CLIENT_PORT", port)
+    monkeypatch.setattr(gw, "DASHBOARD_PORT", dashboard_port)
     serving = asyncio.create_task(gw.serve())
     async with grpc.aio.insecure_channel(f"127.0.0.1:{port}") as channel:
         await channel.channel_ready()
@@ -793,6 +1128,16 @@ async def test_the_gateway_serves_ray_client_until_stopped(monkeypatch, tmp_path
             async for _ in channel.stream_stream(PING)(iter([b"ping"])):
                 pass
     assert e.value.code() == grpc.StatusCode.UNAVAILABLE
+    async with ClientSession() as session:
+        while True:
+            try:
+                async with session.get(
+                    f"http://127.0.0.1:{dashboard_port}/api/version"
+                ) as r:
+                    assert r.status == 503
+                    break
+            except ClientConnectionError:
+                await asyncio.sleep(0.05)
     serving.cancel()
     with pytest.raises(asyncio.CancelledError):
         await serving
