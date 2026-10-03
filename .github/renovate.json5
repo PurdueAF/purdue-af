@@ -34,6 +34,10 @@
   timezone: 'America/Indiana/Indianapolis',
   labels: ['dependencies'],
 
+  // Every dependency is grouped: packageRules name one group per artifact,
+  // and this default takes whatever no rule matches.
+  groupName: 'other dependencies',
+
   prConcurrentLimit: 2,
   branchConcurrentLimit: 2,
 
@@ -137,31 +141,70 @@
       matchUpdateTypes: ['minor', 'patch', 'digest', 'pin', 'pinDigest'],
       automerge: true,
     },
+    // Groups: one PR per artifact CI builds or validates, so a cycle rebuilds
+    // each image once. A dependency pinned in two artifacts splits by file.
+    // Later rules override earlier ones; the top-level groupName catches the rest.
     {
-      // Merged by hand: pixi-global-sync installs with the released image's
-      // pixi, which cannot read a lock in a format a newer pixi writes.
+      // Actions, pre-commit hooks and the test suite's own dependencies.
+      matchManagers: ['github-actions', 'pre-commit'],
+      groupName: 'ci-tooling',
+    },
+    {
+      matchFileNames: ['tests/pyproject.toml'],
+      groupName: 'ci-tooling',
+    },
+    {
+      // Chart versions and the image tags in their values.
+      matchFileNames: ['apps/**', 'deploy/**'],
+      groupName: 'cluster-manifests',
+    },
+    {
+      // The base env, the coding-agent CLIs and ACP adapters, the code-server
+      // extension: co-dependent pins (jupyterlab and jupyter_server) bump together.
+      matchFileNames: ['docker/purdue-af/**', 'pixi/base/**'],
+      groupName: 'af-image',
+    },
+    {
+      matchFileNames: ['docker/agentic-interface/**'],
+      groupName: 'agentic-interface-image',
+    },
+    {
+      matchFileNames: ['docker/self-repair/**'],
+      groupName: 'self-repair-image',
+    },
+    {
+      matchFileNames: ['docker/af-node-monitor/**'],
+      groupName: 'af-node-monitor-image',
+    },
+    {
+      matchFileNames: ['docker/af-pod-monitor/**'],
+      groupName: 'af-pod-monitor-image',
+    },
+    {
+      matchFileNames: ['docker/supersonic-model-manager/**'],
+      groupName: 'supersonic-model-manager-image',
+    },
+    {
+      matchFileNames: ['docker/interlink-slurm-plugin/**'],
+      groupName: 'interlink-slurm-plugin-image',
+    },
+    {
+      matchFileNames: ['pixi/global/**'],
+      groupName: 'pixi-global',
+    },
+    {
+      // The Flyte workflow's env and both pins of the upstream revision.
+      matchFileNames: ['workflows/integration-challenge/**', 'tests/integration_challenge/**'],
+      groupName: 'integration-challenge',
+    },
+    {
+      // Merged by hand, outside af-image: pixi-global-sync installs with the
+      // released image's pixi, which cannot read a lock in a format a newer pixi writes.
       matchPackageNames: ['prefix-dev/pixi'],
+      groupName: 'pixi-cli',
       automerge: false,
     },
     {
-      // Group all GitHub Actions bumps into one PR.
-      matchManagers: ['github-actions'],
-      groupName: 'github-actions',
-    },
-    {
-      // One PR for the coding-agent CLIs and ACP adapters: each changes the
-      // AF image's input hash, so separate PRs rebuild the image after every merge.
-      matchPackageNames: [
-        '@anthropic-ai/claude-code',
-        '@openai/codex',
-        'opencode-ai',
-        '@agentclientprotocol/claude-agent-acp',
-        '@zed-industries/codex-acp',
-      ],
-      groupName: 'coding agents',
-    },
-    {
-      // Helm chart bumps stay individual PRs, labelled for triage.
       matchManagers: ['flux'],
       addLabels: ['helm'],
     },
@@ -218,18 +261,6 @@
       matchManagers: ['pixi'],
       skipArtifactsUpdate: true,
       addLabels: ['pixi'],
-    },
-    {
-      // One PR for the AF base env so co-dependent pins bump together
-      // (e.g. jupyterlab needing a matching jupyter_server).
-      matchManagers: ['pixi'],
-      matchFileNames: ['pixi/base/**'],
-      groupName: 'pixi-base',
-    },
-    {
-      matchManagers: ['pixi'],
-      matchFileNames: ['pixi/global/**'],
-      groupName: 'pixi-global',
     },
     {
       // Stable releases only — no a/b/rc.
