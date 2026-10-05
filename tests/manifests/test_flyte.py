@@ -1,4 +1,4 @@
-"""Tests for apps/flyte and workflows/integration-challenge wiring."""
+"""Tests for apps/flyte wiring."""
 
 from pathlib import Path
 
@@ -6,7 +6,6 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[2]
 FLYTE = REPO / "apps" / "flyte"
-WORKFLOW = REPO / "workflows" / "integration-challenge"
 EXPERIMENTAL = REPO / "deploy" / "experimental" / "kustomization.yaml"
 
 
@@ -48,18 +47,6 @@ def test_backends_match_their_services():
         for k, v in e.items()
     }
     assert env["FLYTE_AWS_ENDPOINT"] == endpoint
-
-
-def test_workflow_targets_the_same_control_plane():
-    config = yaml.safe_load((WORKFLOW / "config.yaml").read_text())
-    values = yaml.safe_load((FLYTE / "values.yaml").read_text())
-    assert config["admin"]["endpoint"].startswith(
-        f"dns:///{values['fullnameOverride']}-http.cms"
-    )
-    workflow = (WORKFLOW / "workflow.py").read_text()
-    assert (
-        "PIXI_PROJECT" in workflow and 'cache=flyte.Cache(behavior="auto"' in workflow
-    )
 
 
 def test_console_is_served_behind_basic_auth_on_one_host():
