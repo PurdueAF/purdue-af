@@ -1,7 +1,7 @@
 """Dask cluster tools — create, list, inspect, scale, stop via Gateway API.
 
-The gateway uses SimpleAuthenticator (password ignored). Calls authenticate as
-the Hub username via HTTP Basic so each user only sees their own clusters.
+Calls carry the caller's own JupyterHub token, so the gateway shows each user
+only their own clusters.
 
 Worker counts come from the AF Prometheus (dask_scheduler_workers). Live CPU /
 memory usage comes from the cluster Prometheus (cadvisor), filtered to Running
@@ -9,7 +9,6 @@ worker pods.
 """
 
 import asyncio
-import base64
 import re
 import time
 from typing import Any, Optional
@@ -83,10 +82,9 @@ def _validate_cluster_name(cluster_name: str) -> None:
         )
 
 
-def _auth(username: str) -> dict:
-    """HTTP Basic for SimpleAuthenticator (password field ignored when unset)."""
-    cred = base64.b64encode(f"{username}:".encode()).decode()
-    return {"Authorization": f"Basic {cred}"}
+def _auth() -> dict:
+    """The caller's Hub token, in the scheme the gateway reads it from."""
+    return {"Authorization": f"jupyterhub {require_user()['token']}"}
 
 
 # ── failure reporting ─────────────────────────────────────────────────────────
@@ -99,8 +97,8 @@ def _gateway_http_error(
 ) -> Failure:
     """What a non-2xx gateway answer means for this user.
 
-    The gateway authenticates by Hub username, so a refusal is about the
-    user's access, not about the token; a 404 is about the cluster name.
+    The Hub has already accepted the token, so a refusal is about the user's
+    access; a 404 is about the cluster name.
     """
     code = resp.status_code
     if code in (401, 403):
@@ -159,12 +157,11 @@ def _fmt_cluster(c: dict) -> str:
     return "\n".join(lines)
 
 
-async def _cluster_status(cluster_name: str, username: str) -> str:
+async def _cluster_status(cluster_name: str) -> str:
     """The gateway's current status word for ``cluster_name`` (upper-case)."""
     resp = await _gateway(
         "GET",
         f"/api/v1/clusters/{cluster_name}",
-        username=username,
         action=f"check the state of cluster '{cluster_name}'",
         cluster_name=cluster_name,
     )
@@ -175,7 +172,7 @@ async def _cluster_status(cluster_name: str, username: str) -> str:
 
 
 async def _await_scheduler(
-    cluster_name: str, username: str, timeout: Optional[float] = None
+    cluster_name: str, timeout: Optional[float] = None
 ) -> tuple[str, float]:
     """Poll until ``cluster_name`` is RUNNING, or the wait runs out.
 
@@ -194,7 +191,7 @@ async def _await_scheduler(
     )
     start = time.monotonic()
     while True:
-        status = await _cluster_status(cluster_name, username)
+        status = await _cluster_status(cluster_name)
         if status == "RUNNING":
             return status, time.monotonic() - start
         if status in _TERMINAL_STATUSES:
@@ -214,7 +211,6 @@ async def _gateway(
     method: str,
     path: str,
     *,
-    username: str,
     action: str,
     cluster_name: Optional[str] = None,
     ok: tuple[int, ...] = (200,),
@@ -227,7 +223,7 @@ async def _gateway(
         resp = await shared_client("dask-gateway").request(
             method,
             f"{DASK_GATEWAY_URL}{path}",
-            headers=_auth(username),
+            headers=_auth(),
             json=json,
             timeout=timeout,
         )
@@ -238,12 +234,11 @@ async def _gateway(
     return resp
 
 
-async def _require_owned_cluster(username: str, cluster_name: str) -> None:
+async def _require_owned_cluster(cluster_name: str) -> None:
     """Raise a Failure if the user cannot access ``cluster_name``."""
     await _gateway(
         "GET",
         f"/api/v1/clusters/{cluster_name}",
-        username=username,
         action=f"access cluster '{cluster_name}'",
         cluster_name=cluster_name,
     )
@@ -462,7 +457,6 @@ def register(mcp: Any) -> None:
         resp = await _gateway(
             "GET",
             "/api/v1/clusters/",
-            username=require_user()["username"],
             action="list clusters",
         )
         payload = json_body(resp)
@@ -485,7 +479,6 @@ def register(mcp: Any) -> None:
         resp = await _gateway(
             "GET",
             "/api/v1/options",
-            username=require_user()["username"],
             action="list cluster options",
         )
         payload = json_body(resp)
@@ -661,7 +654,6 @@ def register(mcp: Any) -> None:
         resp = await _gateway(
             "POST",
             "/api/v1/clusters/",
-            username=username,
             action="create the cluster",
             ok=(200, 201),
             timeout=60.0,
@@ -701,7 +693,7 @@ def register(mcp: Any) -> None:
         # from here is reported inside the result rather than as a failure of
         # the call — the caller still needs the name.
         try:
-            status, waited = await _await_scheduler(cluster_name, username)
+            status, waited = await _await_scheduler(cluster_name)
         except Failure as exc:
             lines += [
                 "",
@@ -725,7 +717,6 @@ def register(mcp: Any) -> None:
             await _gateway(
                 "POST",
                 f"/api/v1/clusters/{cluster_name}/scale",
-                username=username,
                 action=f"scale to {n_workers} worker(s)",
                 cluster_name=cluster_name,
                 ok=(200, 204),
@@ -754,11 +745,9 @@ def register(mcp: Any) -> None:
             cluster_name: Cluster identifier returned by list_dask_clusters.
         """
         _validate_cluster_name(cluster_name)
-        user = require_user()
         resp = await _gateway(
             "GET",
             f"/api/v1/clusters/{cluster_name}",
-            username=user["username"],
             action=f"inspect cluster '{cluster_name}'",
             cluster_name=cluster_name,
         )
@@ -796,7 +785,7 @@ def register(mcp: Any) -> None:
         """
         _validate_cluster_name(cluster_name)
         username = require_user()["username"]
-        await _require_owned_cluster(username, cluster_name)
+        await _require_owned_cluster(cluster_name)
 
         cid = _cluster_id(cluster_name)
         quser = quote_label(username)
@@ -856,8 +845,7 @@ def register(mcp: Any) -> None:
             cluster_name: Cluster identifier returned by list_dask_clusters.
         """
         _validate_cluster_name(cluster_name)
-        username = require_user()["username"]
-        await _require_owned_cluster(username, cluster_name)
+        await _require_owned_cluster(cluster_name)
 
         cid = _cluster_id(cluster_name)
         # re.escape: '.' is a regex metachar and legitimately appears in names.
@@ -950,10 +938,9 @@ def register(mcp: Any) -> None:
             raise UserError("Error: n_workers must be ≥ 0.")
         if n_workers > MAX_WORKERS:
             raise UserError(f"Error: n_workers must be ≤ {MAX_WORKERS}.")
-        username = require_user()["username"]
 
         # A starting cluster rejects scaling; a RUNNING one costs one extra GET here.
-        status, waited = await _await_scheduler(cluster_name, username)
+        status, waited = await _await_scheduler(cluster_name)
         if status != "RUNNING":
             return (
                 f"No scale request was sent: cluster '{cluster_name}' was still "
@@ -968,7 +955,6 @@ def register(mcp: Any) -> None:
         await _gateway(
             "POST",
             f"/api/v1/clusters/{cluster_name}/scale",
-            username=username,
             action=f"scale to {n_workers} worker(s)",
             cluster_name=cluster_name,
             ok=(200, 204),
@@ -991,11 +977,9 @@ def register(mcp: Any) -> None:
             cluster_name: Cluster identifier returned by list_dask_clusters.
         """
         _validate_cluster_name(cluster_name)
-        username = require_user()["username"]
         resp = await _gateway(
             "DELETE",
             f"/api/v1/clusters/{cluster_name}",
-            username=username,
             action=f"stop cluster '{cluster_name}'",
             cluster_name=cluster_name,
             ok=(200, 204, 404),

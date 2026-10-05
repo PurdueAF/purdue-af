@@ -299,6 +299,34 @@ gateway:
           return await _orig_kube_start_cluster(self, user, cluster_options)
 
       KubeBackend.start_cluster = _kube_start_cluster_limited
+
+      # A session started without DASK_GATEWAY__AUTH__TYPE sends Basic; every other client sends its Hub token.
+      import aiohttp
+      from aiohttp import web
+      from dask_gateway_server.auth import SimpleAuthenticator, unauthorized
+
+      class HubTokenAuthenticator(SimpleAuthenticator):
+          hub_api_url = 'http://hub.${namespace}.svc.cluster.local:8081/hub/api'
+
+          async def authenticate(self, request):
+              scheme, _, token = request.headers.get("Authorization", "").partition(" ")
+              if scheme != "jupyterhub":
+                  return await super().authenticate(request)
+              async with aiohttp.ClientSession() as session:
+                  async with session.get(
+                      self.hub_api_url + "/user",
+                      headers={"Authorization": "token " + token},
+                  ) as resp:
+                      if resp.status in (401, 403):
+                          raise unauthorized("jupyterhub")
+                      if resp.status != 200:
+                          raise web.HTTPBadGateway(reason="JupyterHub could not verify the token")
+                      owner = await resp.json()
+              if owner.get("kind") != "user":
+                  raise unauthorized("jupyterhub")
+              return models.User(owner["name"])
+
+      c.DaskGateway.authenticator_class = HubTokenAuthenticator
 traefik:
   replicas: 2
   image:

@@ -1,6 +1,5 @@
 """Tests for tools/dask.py — cluster operations against Dask Gateway."""
 
-import base64
 import json
 import pathlib
 import re
@@ -21,8 +20,8 @@ def clusters_payload(*clusters):
     return {c["name"]: c for c in clusters}
 
 
-def basic_alice():
-    return "Basic " + base64.b64encode(b"alice:").decode()
+def alice_token():
+    return "jupyterhub tok-alice"
 
 
 def scheduler_running(name):
@@ -122,13 +121,13 @@ async def test_list_clusters_empty(user_ctx):
 
 
 @respx.mock
-async def test_list_clusters_sends_basic_username(user_ctx):
+async def test_list_clusters_sends_the_callers_token(user_ctx):
     route = respx.get(CLUSTERS).respond(200, json={})
 
     tools = register_tools(dask).tools
     await tools["list_dask_clusters"]()
 
-    assert route.calls.last.request.headers["Authorization"] == basic_alice()
+    assert route.calls.last.request.headers["Authorization"] == alice_token()
 
 
 # ── get_dask_cluster_info ─────────────────────────────────────────────────────
@@ -167,7 +166,7 @@ async def test_scale_posts_count(user_ctx):
     out = await tools["scale_dask_cluster"]("c1", 8)
 
     assert json.loads(route.calls.last.request.content) == {"count": 8}
-    assert route.calls.last.request.headers["Authorization"] == basic_alice()
+    assert route.calls.last.request.headers["Authorization"] == alice_token()
     assert "scaling to 8 worker(s)" in out
 
 
@@ -796,18 +795,18 @@ async def test_require_owned_cluster_error_shapes(user_ctx):
 
     respx.get(f"{GATEWAY}/api/v1/clusters/c1").mock(side_effect=ConnectError("down"))
     with pytest.raises(UpstreamError, match="unreachable"):
-        await dask._require_owned_cluster("alice", "c1")
+        await dask._require_owned_cluster("c1")
 
     respx.get(f"{GATEWAY}/api/v1/clusters/c1").respond(403)
     with pytest.raises(AuthError, match="not authorised"):
-        await dask._require_owned_cluster("alice", "c1")
+        await dask._require_owned_cluster("c1")
 
     respx.get(f"{GATEWAY}/api/v1/clusters/c1").respond(500, text="boom")
     with pytest.raises(UpstreamError, match="HTTP 500"):
-        await dask._require_owned_cluster("alice", "c1")
+        await dask._require_owned_cluster("c1")
 
     respx.get(f"{GATEWAY}/api/v1/clusters/c1").respond(200, json={"name": "c1"})
-    assert await dask._require_owned_cluster("alice", "c1") is None
+    assert await dask._require_owned_cluster("c1") is None
 
 
 @respx.mock
@@ -816,7 +815,7 @@ async def test_cluster_status_rejects_a_malformed_record(user_ctx):
 
     respx.get(f"{GATEWAY}/api/v1/clusters/c1").respond(200, json=["c1"])
     with pytest.raises(UpstreamError, match="was not a cluster record"):
-        await dask._cluster_status("c1", "alice")
+        await dask._cluster_status("c1")
 
 
 @respx.mock

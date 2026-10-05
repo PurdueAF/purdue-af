@@ -138,3 +138,4 @@ def test_dask_gateway_env_set_in_cms_namespace(monkeypatch):
     env = ns["c"]["KubeSpawner"]["environment"]
     assert "DASK_GATEWAY__ADDRESS" in env
     assert "DASK_GATEWAY__PROXY_ADDRESS" in env
+    assert env["DASK_GATEWAY__AUTH__TYPE"] == "jupyterhub"
