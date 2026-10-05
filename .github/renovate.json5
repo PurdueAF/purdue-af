@@ -121,8 +121,8 @@
     {
       // The IRIS-HEP integration challenge revision (tests/integration_challenge/upstream.pin).
       customType: 'regex',
-      managerFilePatterns: ['/(^|/)upstream\\.pin$/', '/(^|/)workflows/integration-challenge/workflow\\.py$/'],
-      matchStrings: ['ref=(?<currentDigest>[0-9a-f]{40})', 'IC_REF = "(?<currentDigest>[0-9a-f]{40})"'],
+      managerFilePatterns: ['/(^|/)upstream\\.pin$/'],
+      matchStrings: ['ref=(?<currentDigest>[0-9a-f]{40})'],
       currentValueTemplate: 'main',
       datasourceTemplate: 'git-refs',
       depNameTemplate: 'https://github.com/iris-hep/integration-challenge',
@@ -193,8 +193,7 @@
       groupName: 'pixi-global',
     },
     {
-      // The Flyte workflow's env and both pins of the upstream revision.
-      matchFileNames: ['workflows/integration-challenge/**', 'tests/integration_challenge/**'],
+      matchFileNames: ['tests/integration_challenge/**'],
       groupName: 'integration-challenge',
     },
     {

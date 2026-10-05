@@ -13,9 +13,7 @@ Covers the AF image, the global env, XRootD reads from `eospublic.cern.ch`
 cuts, histogramming, and the roastcoffea metrics layer. One process at
 `max_files=1`: ~500k events, about 90 s.
 
-[`upstream.pin`](upstream.pin) fixes the challenge commit. The same challenge
-runs on the cluster as a Flyte workflow:
-[`workflows/integration-challenge`](../../workflows/integration-challenge/README.md).
+[`upstream.pin`](upstream.pin) fixes the challenge commit.
 
 Corrections and systematics are off, and their config blocks emptied, in
 `run_challenge.py`: upstream's `example_opendata` spells both in a schema its
