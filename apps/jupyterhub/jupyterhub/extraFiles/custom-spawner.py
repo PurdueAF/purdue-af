@@ -116,3 +116,4 @@ if os.environ["POD_NAMESPACE"] == "cms":
         "DASK_GATEWAY__PROXY_ADDRESS",
         "traefik-dask-gateway.cms.geddes.rcac.purdue.edu:8786",
     )
+    c.KubeSpawner.environment.setdefault("DASK_GATEWAY__AUTH__TYPE", "jupyterhub")
