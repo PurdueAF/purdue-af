@@ -19,7 +19,7 @@ send their training to it, not on the documentation site:
 | `gateway.py`         | The gateway: relays Ray Client and Jobs API calls, creates and deletes users' RayClusters                                 |
 | `config.yaml`        | The gateway's settings: timeouts, GPU limits, and the addresses it asks                                                   |
 | `raycluster.yaml`    | The template of a user's cluster; the gateway fills in its name, the user's UID/GID, its environment and its token Secret |
-| `deployment.yaml`    | The gateway pod: the stock Ray image, with the three files above from the `ray-train-gateway` ConfigMap                        |
+| `deployment.yaml`    | The gateway pod: the stock Ray image, with the files above from the `ray-train-gateway` ConfigMap                         |
 | `service.yaml`       | `ray-train-gateway:10001` for Ray Client and `:8265` for the Jobs API, the addresses notebooks connect to                 |
 | `rbac.yaml`          | Create, read and delete RayClusters; create their token Secrets                                                           |
 | `networkpolicy.yaml` | Only sessions reach the gateway, and only the gateway reaches users' clusters                                             |
