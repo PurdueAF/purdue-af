@@ -7,6 +7,7 @@ gateway and only the gateway reaches the clusters, and the Hub hands the
 gateway exactly the token and scopes it uses.
 """
 
+import sys
 import tomllib
 from pathlib import Path
 
@@ -19,6 +20,8 @@ OPERATOR_VALUES = REPO / "apps" / "ray" / "operator" / "values.yaml"
 EXPERIMENTAL = REPO / "deploy" / "experimental" / "kustomization.yaml"
 CORE = REPO / "deploy" / "core-production" / "kustomization.yaml"
 GLOBAL_ENV = REPO / "pixi" / "global" / "pixi.toml"
+# gpu_queries.py is in the gateway's ConfigMap, beside gateway.py.
+sys.path.insert(0, str(HUB_VALUES.parent / "extraFiles"))
 
 
 def load(path):
@@ -51,6 +54,7 @@ def test_flux_deploys_the_gateway():
     assert generator["files"] == [
         "../../apps/ray-train/gateway.py",
         "../../apps/ray-train/raycluster.yaml",
+        "../../apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py",
     ]
     annotations = generator["options"]["annotations"]
     assert annotations["kustomize.toolkit.fluxcd.io/substitute"] == "disabled"
@@ -196,6 +200,15 @@ def test_a_worker_is_the_heads_pod_with_a_gpu():
         == resources["requests"]["nvidia.com/gpu"]
         == 1
     )
+
+
+def test_the_gateway_counts_the_gpus_its_workers_take():
+    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+    (group,) = load(APP / "raycluster.yaml")["spec"]["workerGroupSpecs"]
+    (container,) = group["template"]["spec"]["containers"]
+    assert container["resources"]["limits"][gateway.GPU_RESOURCE] == 1
+    assert gateway.GPU_RESOURCE in gateway.GPU_METRICS
+    assert gateway.MAX_GPUS <= gateway.GPU_BUDGET
 
 
 def test_the_gateway_never_reads_a_secret():

@@ -142,14 +142,15 @@ def _generator_owner(
 ) -> str:
     """Which component a ConfigMap belongs to.
 
-    Usually its own files say so. When they all live outside apps/ (scripts
+    Usually its own files say so, a component the channel deploys before one
+    it only borrows a file from. When they all live outside apps/ (scripts
     and env manifests under docker/, pixi/ or workflows/), fall back to the
     component whose manifests mount it by name, then to one holding a
     manifest named after it.
     """
     owners = {_component_of(f) for f in files if f.startswith("apps/")}
     if owners:
-        return sorted(owners)[0]
+        return sorted(owners & components.keys() or owners)[0]
     for component, paths in components.items():
         for p in paths:
             manifest = REPO / p

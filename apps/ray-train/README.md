@@ -7,8 +7,11 @@ submits jobs with the Jobs API's client,
 session's JupyterHub token either way; the gateway asks the Hub whose token it
 is and relays the calls, unread, to that user's cluster: a head and one to four
 workers with a T4 each, created when they first connect or submit a job,
-running as them, and deleted once idle. How users send their training to it,
-not on the documentation site:
+running as them, and deleted once idle. A cluster starts only while the T4s
+it asks for are free, by the count of the Hub's profile form
+([`gpu_queries.py`](../jupyterhub/jupyterhub/extraFiles/gpu_queries.py), in the
+gateway's ConfigMap too), and within the budget all clusters share. How users
+send their training to it, not on the documentation site:
 [Training on GPUs with Ray](../../docs/drafts/guide-ray-train.md).
 
 | File                 | What it is                                                                                                                |
@@ -45,6 +48,11 @@ credentials.
   to go.
 - `MAX_GPUS` in `gateway.py` is the most workers, a T4 each, that a call may
   ask for.
+- `GPU_BUDGET`, from the environment too, is the most T4s all clusters hold
+  together: what is left is for sessions and Triton servers. Without an answer
+  from `PROMETHEUS_URL` it is the only limit.
+- `PROVISION_TIMEOUT_S`, from the environment too, is how long a cluster may
+  wait for the last of its workers before it is removed, whatever runs on it.
 - `raycluster.yaml` holds the pods' sizes, mounts and image. The image's tag is
   also in `deployment.yaml` and in the Hub's `prePuller.extraImages`.
 
