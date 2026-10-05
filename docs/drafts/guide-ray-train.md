@@ -14,10 +14,11 @@ From the most to the least recommended:
 | --- | ----------------------------------------------------------------------------- | --------------------------------- | --------------------- | ---------------------------------------------- |
 | 1   | [Ray Train, as a job](#1-ray-train-as-a-job)                                  | 1 to 4, all in one training       | Yes                   | Most trainings, and any on several GPUs        |
 | 2   | [A PyTorch script, as a job](#2-a-pytorch-script-as-a-job)                    | 1                                 | Yes                   | A script that already trains on one GPU        |
-| 3   | [A function called from the notebook](#3-a-function-called-from-the-notebook) | 1 per call, up to 4 calls at once | No                    | Short trainings, trying things out, scans      |
+| 3   | [A function called from the notebook](#3-a-function-called-from-the-notebook) | 1 per call, up to 4 calls at once | No                    | Short trainings, trying things out             |
 
 Ray Train called over a notebook's connection is not among them: Ray advises
-running it as a job.
+running it as a job. A scan or a search of hyperparameters is
+[several trainings at once](#several-trainings-at-once).
 
 Every example runs in a notebook on the **Python (pixi global)** kernel.
 
@@ -157,10 +158,11 @@ weights = ray.get(train.remote(epochs=100, lr=1e-2))
   to send the notebook's directory along.
 * `ray.cancel(ref)` stops a call; `ray.shutdown()` disconnects the notebook.
 
-### Several trainings at once
+## Several trainings at once
 
-Each call takes one GPU, so a cluster with several GPUs runs as many calls
-side by side, each a training of its own, as in a scan of hyperparameters:
+A cluster with several GPUs runs as many one-GPU trainings side by side, as in
+a scan of hyperparameters. From the notebook, each is a call of the
+[function above](#3-a-function-called-from-the-notebook):
 
 ```python
 ray.init("ray://ray-train-gateway:10001", _metadata=[("af-ray-gpus", "4")])
@@ -170,9 +172,49 @@ results = ray.get(refs)
 ```
 
 Calls beyond the number of GPUs wait their turn, while Ray prints *No
-available node types can fulfill resource requests*. A job's script makes the
-same calls when it is submitted without `entrypoint_num_gpus`, and then they
-outlast the notebook.
+available node types can fulfill resource requests*.
+
+[Ray Tune](https://docs.ray.io/en/latest/tune/index.html) picks the values
+itself and stops the trainings that fall behind. The function reports its loss
+as it trains, and the script, say `search.py`, is a job:
+
+```python
+# search.py
+import torch
+from ray import tune
+from ray.tune.schedulers import ASHAScheduler
+from torch import nn
+
+
+def train(config):
+    X = torch.randn(100_000, 20, device="cuda")
+    y = (X.sum(dim=1, keepdim=True) > 0).float()
+    model = nn.Sequential(nn.Linear(20, 64), nn.ReLU(), nn.Linear(64, 1)).to("cuda")
+    optimizer = torch.optim.Adam(model.parameters(), lr=config["lr"])
+    for epoch in range(100):
+        loss = nn.functional.binary_cross_entropy_with_logits(model(X), y)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        tune.report({"loss": loss.item()})
+
+
+tuner = tune.Tuner(
+    tune.with_resources(train, {"gpu": 1}),
+    param_space={"lr": tune.loguniform(1e-3, 1e-1)},
+    tune_config=tune.TuneConfig(
+        metric="loss", mode="min", num_samples=20, scheduler=ASHAScheduler()
+    ),
+    run_config=tune.RunConfig(storage_path="/work/users/<username>/ray_results"),
+)
+best = tuner.fit().get_best_result()
+print(best.config, best.metrics["loss"])
+```
+
+Submit it as in [Ray Train, as a job](#1-ray-train-as-a-job), with
+`af-ray-gpus` the number of trainings to run at once and the same rule for
+`storage_path`. Without `entrypoint_num_gpus`, the script itself holds no GPU,
+and a script that makes the calls above runs the same way.
 
 ## Jobs
 
