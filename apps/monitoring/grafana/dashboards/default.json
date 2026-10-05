@@ -6688,349 +6688,13 @@
       "type": "timeseries"
     },
     {
-      "id": 60,
-      "type": "table",
-      "title": "Ray Train clusters",
-      "gridPos": {
-        "x": 0,
-        "y": 108,
-        "w": 24,
-        "h": 6
-      },
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (user)(label_replace(kube_pod_container_resource_requests{namespace=\"cms\",resource=\"nvidia_com_gpu\",pod=~\"ray-train-.+-gpu-worker-.+\"} * on (namespace, pod) group_left() (kube_pod_status_phase{namespace=\"cms\",phase=\"Running\"} == 1), \"user\", \"$1\", \"pod\", \"ray-train-(.+)-gpu-worker-.+\"))",
-          "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true,
-          "format": "table"
-        },
-        {
-          "refId": "B",
-          "expr": "sum by (user)(label_replace(kube_pod_container_resource_requests{namespace=\"cms\",resource=\"nvidia_com_gpu\",pod=~\"ray-train-.+-gpu-worker-.+\"} * on (namespace, pod) group_left() (kube_pod_status_phase{namespace=\"cms\",phase=\"Pending\"} == 1), \"user\", \"$1\", \"pod\", \"ray-train-(.+)-gpu-worker-.+\"))",
-          "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true,
-          "format": "table"
-        },
-        {
-          "refId": "C",
-          "expr": "max by (user)(label_replace(time() - kube_pod_created{namespace=\"cms\",pod=~\"ray-train-.+-head-.+\"}, \"user\", \"$1\", \"pod\", \"ray-train-(.+)-head-.+\"))",
-          "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true,
-          "format": "table"
-        },
-        {
-          "refId": "D",
-          "expr": "avg by (user)(label_replace(DCGM_FI_DEV_GPU_UTIL{namespace=\"cms\",pod=~\"ray-train-.+-gpu-worker-.+\"}, \"user\", \"$1\", \"pod\", \"ray-train-(.+)-gpu-worker-.+\")) / 100",
-          "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
-          "range": false,
-          "instant": true,
-          "format": "table"
-        },
-        {
-          "refId": "E",
-          "expr": "sum by (user)(label_replace(sum_over_time((kube_pod_container_resource_requests{namespace=\"cms\",resource=\"nvidia_com_gpu\",pod=~\"ray-train-.+-gpu-worker-.+\"} * on (namespace, pod) group_left() (kube_pod_status_phase{namespace=\"cms\",phase=\"Running\"} == 1))[$__range:5m]), \"user\", \"$1\", \"pod\", \"ray-train-(.+)-gpu-worker-.+\")) / 12",
-          "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true,
-          "format": "table"
-        },
-        {
-          "refId": "F",
-          "expr": "avg by (user)(label_replace(avg_over_time(DCGM_FI_DEV_GPU_UTIL{namespace=\"cms\",pod=~\"ray-train-.+-gpu-worker-.+\"}[$__range]), \"user\", \"$1\", \"pod\", \"ray-train-(.+)-gpu-worker-.+\")) / 100",
-          "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
-          "range": false,
-          "instant": true,
-          "format": "table"
-        }
-      ],
-      "description": "One row per user whose Ray cluster held T4s in the time range. GPUs waited for: workers that found no free T4 yet. A cluster holds its GPUs until nothing has run on it for some minutes, whatever their utilization.",
-      "transformations": [
-        {
-          "id": "joinByField",
-          "options": {
-            "byField": "user",
-            "mode": "outer"
-          }
-        },
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "pattern": "^(user|Value #A|Value #B|Value #C|Value #D|Value #E|Value #F)$"
-            }
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {},
-            "renameByName": {
-              "user": "User",
-              "Value #A": "GPUs held",
-              "Value #B": "GPUs waited for",
-              "Value #C": "Up for",
-              "Value #D": "GPU utilization",
-              "Value #E": "GPU-hours, time range",
-              "Value #F": "GPU utilization, time range"
-            },
-            "indexByName": {
-              "user": 0,
-              "Value #A": 1,
-              "Value #B": 2,
-              "Value #C": 3,
-              "Value #D": 4,
-              "Value #E": 5,
-              "Value #F": 6
-            }
-          }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "sort": [
-              {
-                "field": "GPU-hours, time range",
-                "desc": true
-              }
-            ]
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false,
-            "filterable": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "text",
-                "value": null
-              }
-            ]
-          },
-          "noValue": "No Ray clusters in the time range"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "User"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 160
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "GPUs held"
-            },
-            "properties": [
-              {
-                "id": "decimals",
-                "value": 0
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "special",
-                    "options": {
-                      "match": "null",
-                      "result": {
-                        "text": "0",
-                        "index": 0
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "GPUs waited for"
-            },
-            "properties": [
-              {
-                "id": "decimals",
-                "value": 0
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "special",
-                    "options": {
-                      "match": "null",
-                      "result": {
-                        "text": "0",
-                        "index": 0
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Up for"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "dtdurations"
-              },
-              {
-                "id": "decimals",
-                "value": 0
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "GPU utilization"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percentunit"
-              },
-              {
-                "id": "decimals",
-                "value": 0
-              },
-              {
-                "id": "min",
-                "value": 0
-              },
-              {
-                "id": "max",
-                "value": 1
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "gauge",
-                  "mode": "basic",
-                  "valueDisplayMode": "text"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "GPU-hours, time range"
-            },
-            "properties": [
-              {
-                "id": "decimals",
-                "value": 1
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "GPU utilization, time range"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percentunit"
-              },
-              {
-                "id": "decimals",
-                "value": 0
-              },
-              {
-                "id": "min",
-                "value": 0
-              },
-              {
-                "id": "max",
-                "value": 1
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "gauge",
-                  "mode": "basic",
-                  "valueDisplayMode": "text"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false,
-          "reducer": ["sum"],
-          "countRows": false,
-          "fields": ""
-        },
-        "sortBy": []
-      }
-    },
-    {
       "id": 46,
       "type": "row",
       "title": "Software environment",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 114,
+        "y": 108,
         "w": 24,
         "h": 1
       },
@@ -7182,7 +6846,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 115,
+        "y": 109,
         "w": 8,
         "h": 8
       },
@@ -7493,7 +7157,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 115,
+        "y": 109,
         "w": 8,
         "h": 8
       },
@@ -7707,7 +7371,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 115,
+        "y": 109,
         "w": 8,
         "h": 8
       },
@@ -7764,7 +7428,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 123,
+        "y": 117,
         "w": 24,
         "h": 1
       },
@@ -7826,7 +7490,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 124,
+        "y": 118,
         "w": 8,
         "h": 8
       },
@@ -7916,7 +7580,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 124,
+        "y": 118,
         "w": 8,
         "h": 8
       },
@@ -8043,7 +7707,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 124,
+        "y": 118,
         "w": 8,
         "h": 8
       },
@@ -8139,7 +7803,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 132,
+        "y": 126,
         "w": 8,
         "h": 8
       },
@@ -8237,7 +7901,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 132,
+        "y": 126,
         "w": 8,
         "h": 8
       },
@@ -8278,7 +7942,7 @@
       "title": "Session container restarts per hour",
       "gridPos": {
         "x": 16,
-        "y": 132,
+        "y": 126,
         "w": 8,
         "h": 8
       },
@@ -8384,7 +8048,7 @@
       "title": "Monitoring volumes",
       "gridPos": {
         "x": 0,
-        "y": 140,
+        "y": 134,
         "w": 8,
         "h": 8
       },
@@ -8496,7 +8160,7 @@
       "title": "Prometheus head series",
       "gridPos": {
         "x": 8,
-        "y": 140,
+        "y": 134,
         "w": 8,
         "h": 8
       },
@@ -8602,7 +8266,7 @@
       "title": "GPU temperature",
       "gridPos": {
         "x": 16,
-        "y": 140,
+        "y": 134,
         "w": 8,
         "h": 8
       },

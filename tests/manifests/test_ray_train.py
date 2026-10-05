@@ -53,6 +53,7 @@ def test_flux_deploys_the_gateway():
     generator = generators["ray-train-gateway"]
     assert generator["files"] == [
         "../../apps/ray-train/gateway.py",
+        "../../apps/ray-train/config.yaml",
         "../../apps/ray-train/raycluster.yaml",
         "../../apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py",
     ]
@@ -71,6 +72,7 @@ def test_the_gateway_runs_the_files_it_is_given():
     assert "subPath" not in app
     assert container["command"] == ["python", f"{app['mountPath']}/gateway.py"]
     assert gateway.TEMPLATE == Path(app["mountPath"]) / "raycluster.yaml"
+    assert gateway.CONFIG_FILE == APP / "config.yaml"
     service = load(APP / "service.yaml")
     assert (
         service["spec"]["selector"].items()

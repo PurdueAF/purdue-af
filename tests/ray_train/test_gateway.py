@@ -896,7 +896,8 @@ async def test_a_refused_replacement_leaves_the_cluster_it_would_replace(env):
 
 
 @pytest.mark.parametrize("failure", ["up", "empty"])
-async def test_without_prometheus_only_the_budget_holds(env, failure):
+async def test_without_prometheus_only_the_budget_holds(env, monkeypatch, failure):
+    monkeypatch.setattr(gw, "GPU_BUDGET", 6)
     setattr(env.prometheus, failure, failure == "empty")
     env.prometheus.used = 8
     assert await call(env, gpus="4") == [b"echo:ping"]
@@ -1400,8 +1401,11 @@ async def test_only_new_gateway_code_ends_the_gateway(monkeypatch, tmp_path):
     await asyncio.wait_for(changed, timeout=5)
 
 
-async def test_the_gateway_stops_when_its_code_changes(monkeypatch, tmp_path):
-    """It exits cleanly, and kubelet restarts the container on the new code."""
+@pytest.mark.parametrize("changing", ["CODE", "CONFIG_FILE"])
+async def test_the_gateway_stops_when_its_code_or_settings_change(
+    monkeypatch, tmp_path, changing
+):
+    """It exits cleanly, and kubelet restarts the container on the new file."""
     stopped = asyncio.Event()
 
     async def serve():
@@ -1413,7 +1417,7 @@ async def test_the_gateway_stops_when_its_code_changes(monkeypatch, tmp_path):
     code = tmp_path / "gateway.py"
     code.write_text("running")
     monkeypatch.setattr(gw, "serve", serve)
-    monkeypatch.setattr(gw, "CODE", code)
+    monkeypatch.setattr(gw, changing, code)
     monkeypatch.setattr(gw, "CODE_POLL_S", 0)
     main = asyncio.create_task(gw.main())
     await asyncio.sleep(0)

@@ -9,7 +9,7 @@ or submit a job, running as them, and deleted once idle. Only the gateway
 holds a cluster's own Ray token. A cluster runs the global Pixi environment,
 or the one a call names in af-ray-env, with one GPU or as many as af-ray-gpus
 asks: a cluster starts only while that many T4s are free, and all clusters
-together hold GPU_BUDGET of them at most.
+together hold GPU_BUDGET of them at most. The settings are in config.yaml.
 """
 
 from __future__ import annotations
@@ -55,20 +55,27 @@ NAMESPACE = os.environ.get("NAMESPACE", "cms")
 HUB_API = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
 TEMPLATE = Path("/app/raycluster.yaml")
 CODE = Path(__file__)
-CODE_POLL_S = 10.0
-IDLE_TIMEOUT_S = float(os.environ.get("IDLE_TIMEOUT_S", "900"))
-START_TIMEOUT_S = float(os.environ.get("START_TIMEOUT_S", "600"))
-START_POLL_S = 5.0
-# How long a cluster may wait for the last of its workers before it is removed.
-PROVISION_TIMEOUT_S = float(os.environ.get("PROVISION_TIMEOUT_S", "600"))
-REAP_EVERY_S = 60.0
+# Beside this file in the ConfigMap, as in the repository.
+CONFIG_FILE = CODE.with_name("config.yaml")
+CONFIG: dict[str, Any] = yaml.safe_load(CONFIG_FILE.read_text())
+CODE_POLL_S = float(CONFIG["codePollSeconds"])
+IDLE_TIMEOUT_S = float(CONFIG["idleTimeoutSeconds"])
+START_TIMEOUT_S = float(CONFIG["startTimeoutSeconds"])
+START_POLL_S = float(CONFIG["startPollSeconds"])
+PROVISION_TIMEOUT_S = float(CONFIG["provisionTimeoutSeconds"])
+REAP_EVERY_S = float(CONFIG["reapEverySeconds"])
+USER_CACHE_S = float(CONFIG["userCacheSeconds"])
+GONE_S = float(CONFIG["goneSeconds"])
+GRANT_S = float(CONFIG["grantSeconds"])
+MAX_GPUS = int(CONFIG["maxGpus"])
+GPU_BUDGET = int(CONFIG["gpuBudget"])
+GPU_RESOURCE = str(CONFIG["gpuResource"])
+PROMETHEUS_URL = str(CONFIG["prometheusUrl"])
+DEFAULT_ENV = str(CONFIG["defaultEnv"])
+LDAP_HOST = str(CONFIG["ldapHost"])
+LDAP_BASE = str(CONFIG["ldapBase"])
 # This service's own Hub token, from the `hub` Secret: the file appears once the Hub registers the service.
 SERVICE_TOKEN_FILE = Path("/etc/hub-token/token")
-USER_CACHE_S = 300.0
-# How long the clients of a removed cluster hear so, instead of starting another: Ray Client retries for 30 s.
-GONE_S = 300.0
-LDAP_HOST = "geddes-auth.rcac.purdue.edu"
-LDAP_BASE = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
 KUBE_API = "https://kubernetes.default.svc"
 SERVICE_ACCOUNT = Path("/var/run/secrets/kubernetes.io/serviceaccount")
 RAYCLUSTERS = f"/apis/ray.io/v1/namespaces/{NAMESPACE}/rayclusters"
@@ -81,19 +88,9 @@ DASHBOARD_PORT = 8265
 # Set by a notebook: ray.init(..., _metadata=[(ENV_METADATA, <environment>)]), or a header of JobSubmissionClient.
 ENV_METADATA = "af-ray-env"
 ENV_ANNOTATION = "purdue-af/ray-env"
-# The environment pixi-global-sync keeps (apps/af-utils/pixi-global-sync).
-DEFAULT_ENV = "/work/pixi/global/.pixi/envs/default"
 # Set as af-ray-env is: the cluster's GPUs, one per worker.
 GPUS_METADATA = "af-ray-gpus"
 GPUS_ANNOTATION = "purdue-af/ray-gpus"
-MAX_GPUS = 4
-# The resource of a worker's GPU in raycluster.yaml.
-GPU_RESOURCE = "nvidia.com/gpu"
-# The most GPUs all clusters hold together: sessions and Triton servers share the same T4s.
-GPU_BUDGET = int(os.environ.get("GPU_BUDGET", "6"))
-PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
-# How long an admitted cluster's GPUs count as taken, for Prometheus to see its pods.
-GRANT_S = 120.0
 REMOVED_IDLE = "Your Ray cluster was removed after it went idle: run ray.shutdown(), then ray.init() again."
 REMOVED_UNPROVISIONED = f"Your Ray cluster was removed, as not all of its GPUs started in time: ask for fewer with {GPUS_METADATA}, or try again later."
 # singleuser.podNameTemplate in the Hub values
@@ -1008,7 +1005,7 @@ async def serve() -> None:
 
 
 async def until_changed(path: Path, running: bytes) -> None:
-    """Return once kubelet has swapped other code than `running` into the mounted ConfigMap."""
+    """Return once kubelet has swapped other content than `running` into the mounted ConfigMap."""
     while path.read_bytes() == running:
         await asyncio.sleep(CODE_POLL_S)
     log.info("%s changed: exiting, for the container to restart on it", path)
@@ -1016,14 +1013,19 @@ async def until_changed(path: Path, running: bytes) -> None:
 
 async def main() -> None:
     """Serve until SIGTERM, which Python as a container's PID 1 would otherwise ignore,
-    or until this file changes."""
+    or until this file or its settings change."""
     serving = asyncio.ensure_future(serve())
     asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, serving.cancel)
-    changed = asyncio.ensure_future(until_changed(CODE, CODE.read_bytes()))
-    changed.add_done_callback(lambda _: serving.cancel())
+    changed = [
+        asyncio.ensure_future(until_changed(path, path.read_bytes()))
+        for path in (CODE, CONFIG_FILE)
+    ]
+    for change in changed:
+        change.add_done_callback(lambda _: serving.cancel())
     with contextlib.suppress(asyncio.CancelledError):
         await serving
-    changed.cancel()
+    for change in changed:
+        change.cancel()
 
 
 if __name__ == "__main__":

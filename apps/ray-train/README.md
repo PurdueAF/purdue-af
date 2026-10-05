@@ -17,8 +17,9 @@ send their training to it, not on the documentation site:
 | File                 | What it is                                                                                                                |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `gateway.py`         | The gateway: relays Ray Client and Jobs API calls, creates and deletes users' RayClusters                                 |
+| `config.yaml`        | The gateway's settings: timeouts, GPU limits, and the addresses it asks                                                   |
 | `raycluster.yaml`    | The template of a user's cluster; the gateway fills in its name, the user's UID/GID, its environment and its token Secret |
-| `deployment.yaml`    | The gateway pod: the stock Ray image, with both files above from the `ray-train-gateway` ConfigMap                        |
+| `deployment.yaml`    | The gateway pod: the stock Ray image, with the three files above from the `ray-train-gateway` ConfigMap                        |
 | `service.yaml`       | `ray-train-gateway:10001` for Ray Client and `:8265` for the Jobs API, the addresses notebooks connect to                 |
 | `rbac.yaml`          | Create, read and delete RayClusters; create their token Secrets                                                           |
 | `networkpolicy.yaml` | Only sessions reach the gateway, and only the gateway reaches users' clusters                                             |
@@ -41,27 +42,19 @@ credentials.
 
 ## Tuning
 
-- `IDLE_TIMEOUT_S` and `START_TIMEOUT_S` are read from the gateway
-  container's environment, which `deployment.yaml` leaves unset, so the
-  defaults in `gateway.py` apply: how long a cluster stays after its last task,
-  job or call, and how long a call waits for a head to start or an old cluster
-  to go.
-- `MAX_GPUS` in `gateway.py` is the most workers, a T4 each, that a call may
-  ask for.
-- `GPU_BUDGET`, from the environment too, is the most T4s all clusters hold
-  together: what is left is for sessions and Triton servers. Without an answer
-  from `PROMETHEUS_URL` it is the only limit.
-- `PROVISION_TIMEOUT_S`, from the environment too, is how long a cluster may
-  wait for the last of its workers before it is removed, whatever runs on it.
-- `raycluster.yaml` holds the pods' sizes, mounts and image. The image's tag is
-  also in `deployment.yaml` and in the Hub's `prePuller.extraImages`.
+[`config.yaml`](config.yaml) holds the gateway's settings, each with what it
+does: the timeouts, the most GPUs a call may ask for, and `gpuBudget`, the most
+GPUs all clusters hold together, which is the only limit while Prometheus does
+not answer. `raycluster.yaml` holds the pods' sizes, mounts and image. The
+image's tag is also in `deployment.yaml` and in the Hub's
+`prePuller.extraImages`.
 
 ## Running it
 
 A change to `raycluster.yaml` applies to the clusters created after it lands.
-One to `gateway.py` applies once kubelet swaps it into the pod's copy of the
-ConfigMap: the gateway sees its own file change and exits, and kubelet restarts
-its container, in the same pod, on the new code. Each such change adds one to
+One to `gateway.py` or `config.yaml` applies once kubelet swaps it into the
+pod's copy of the ConfigMap: the gateway sees the file change and exits, and
+kubelet restarts its container, in the same pod, on the new file. Each such change adds one to
 the container's restart count, and the previous container's log ends with the
 line that names it. Unless the gateway is back before Ray Client stops
 retrying, a restart ends notebooks' Ray Client connections and the calls
