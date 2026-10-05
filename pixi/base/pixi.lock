@@ -27,7 +27,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cairo-1.18.4-he90730b_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cffi-2.1.0-py312h460c074_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/code-server-4.140.0-h65c4c7d_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/conda-26.9.0-py312h20c3967_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/conda-26.9.1-py312h20c3967_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/configurable-http-proxy-5.2.0-hbf95b10_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/contourpy-1.3.3-py312h0a2e395_4.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cpp-expected-1.3.1-h171cf75_0.conda
@@ -463,7 +463,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cairo-1.18.4-he90730b_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cffi-2.1.0-py312h460c074_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/code-server-4.140.0-h65c4c7d_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/conda-26.9.0-py312h20c3967_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/conda-26.9.1-py312h20c3967_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/configurable-http-proxy-5.2.0-hbf95b10_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/contourpy-1.3.3-py312h0a2e395_4.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cpp-expected-1.3.1-h171cf75_0.conda
@@ -1082,9 +1082,9 @@ packages:
   run_exports: {}
   size: 147605375
   timestamp: 1790915359656
-- conda: https://conda.anaconda.org/conda-forge/linux-64/conda-26.9.0-py312h20c3967_0.conda
-  sha256: 0e2897a45a2ce95185808f4c3d300099e15b36315b1d7ab117a8926b94c02d46
-  md5: e4976ee635b3ec47e6bc232c1c630b71
+- conda: https://conda.anaconda.org/conda-forge/linux-64/conda-26.9.1-py312h20c3967_0.conda
+  sha256: 70b0b7d1e44a47a4744a46fee4b7dc5a66529605f3dbdb89ab5235c895746c33
+  md5: 76cc69938fdf8eb03b11e05dfee6a60c
   depends:
   - archspec >=0.2.3
   - backports.zstd >=1.3.0
@@ -1116,11 +1116,12 @@ packages:
   - conda-content-trust >=0.3.0
   - conda-env >=2.6
   license: BSD-3-Clause
+  license_family: BSD
   purls:
   - pkg:pypi/conda?source=compressed-mapping
   run_exports: {}
-  size: 1445035
-  timestamp: 1790938312242
+  size: 1445279
+  timestamp: 1790968143765
 - conda: https://conda.anaconda.org/conda-forge/linux-64/configurable-http-proxy-5.2.0-hbf95b10_0.conda
   sha256: 0e455bdf061191858eb9cc14c2993a1d777bd8155ebae4461d4fd5f32477502e
   md5: 27c4163479d940d3b3dc22efa2e74ee6
@@ -3494,7 +3495,7 @@ packages:
   license: BSD-3-Clause
   license_family: BSD
   purls:
-  - pkg:pypi/bokeh?source=hash-mapping
+  - pkg:pypi/bokeh?source=compressed-mapping
   size: 4454345
   timestamp: 1787144786949
 - conda: https://conda.anaconda.org/conda-forge/noarch/boltons-26.0.0-pyhd8ed1ab_0.conda
@@ -3547,7 +3548,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/cachetools?source=compressed-mapping
+  - pkg:pypi/cachetools?source=hash-mapping
   size: 21776
   timestamp: 1788215593744
 - conda: https://conda.anaconda.org/conda-forge/noarch/certifi-2026.6.17-pyhd8ed1ab_0.conda
