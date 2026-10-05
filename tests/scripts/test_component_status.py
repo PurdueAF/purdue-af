@@ -124,6 +124,16 @@ def test_configmap_files_join_their_owning_component(cs, components):
     assert any(p.startswith("docker/af-node-monitor/") for p in monitoring)
 
 
+def test_a_borrowed_file_makes_no_component_of_its_owner(cs):
+    """The Ray gateway's ConfigMap carries the Hub's gpu_queries.py."""
+    owner = cs._generator_owner(
+        "ray-train-gateway",
+        ["apps/ray-train/gateway.py", "apps/jupyterhub/jupyterhub/gpu_queries.py"],
+        {"apps/ray-train": ["apps/ray-train/deployment.yaml"]},
+    )
+    assert owner == "apps/ray-train"
+
+
 def test_generator_owner_falls_back_to_its_own_name(cs):
     """An unattached ConfigMap still gets a row rather than vanishing."""
     owner = cs._generator_owner("orphan-config", ["docker/orphan/x.py"], {})

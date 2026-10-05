@@ -8,7 +8,8 @@ that user's RayCluster: created from raycluster.yaml when they first connect
 or submit a job, running as them, and deleted once idle. Only the gateway
 holds a cluster's own Ray token. A cluster runs the global Pixi environment,
 or the one a call names in af-ray-env, with one GPU or as many as af-ray-gpus
-asks.
+asks: a cluster starts only while that many T4s are free, and all clusters
+together hold GPU_BUDGET of them at most. The settings are in config.yaml.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ import time
 import urllib.parse
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +46,7 @@ from aiohttp import (
     WSServerHandshakeError,
     web,
 )
+from gpu_queries import ALLOC_QUERY, GPU_METRICS, USED_QUERY
 from yarl import URL
 
 log = logging.getLogger("ray-train-gateway")
@@ -52,18 +55,27 @@ NAMESPACE = os.environ.get("NAMESPACE", "cms")
 HUB_API = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
 TEMPLATE = Path("/app/raycluster.yaml")
 CODE = Path(__file__)
-CODE_POLL_S = 10.0
-IDLE_TIMEOUT_S = float(os.environ.get("IDLE_TIMEOUT_S", "900"))
-START_TIMEOUT_S = float(os.environ.get("START_TIMEOUT_S", "600"))
-START_POLL_S = 5.0
-REAP_EVERY_S = 60.0
+# Beside this file in the ConfigMap, as in the repository.
+CONFIG_FILE = CODE.with_name("config.yaml")
+CONFIG: dict[str, Any] = yaml.safe_load(CONFIG_FILE.read_text())
+CODE_POLL_S = float(CONFIG["codePollSeconds"])
+IDLE_TIMEOUT_S = float(CONFIG["idleTimeoutSeconds"])
+START_TIMEOUT_S = float(CONFIG["startTimeoutSeconds"])
+START_POLL_S = float(CONFIG["startPollSeconds"])
+PROVISION_TIMEOUT_S = float(CONFIG["provisionTimeoutSeconds"])
+REAP_EVERY_S = float(CONFIG["reapEverySeconds"])
+USER_CACHE_S = float(CONFIG["userCacheSeconds"])
+GONE_S = float(CONFIG["goneSeconds"])
+GRANT_S = float(CONFIG["grantSeconds"])
+MAX_GPUS = int(CONFIG["maxGpus"])
+GPU_BUDGET = int(CONFIG["gpuBudget"])
+GPU_RESOURCE = str(CONFIG["gpuResource"])
+PROMETHEUS_URL = str(CONFIG["prometheusUrl"])
+DEFAULT_ENV = str(CONFIG["defaultEnv"])
+LDAP_HOST = str(CONFIG["ldapHost"])
+LDAP_BASE = str(CONFIG["ldapBase"])
 # This service's own Hub token, from the `hub` Secret: the file appears once the Hub registers the service.
 SERVICE_TOKEN_FILE = Path("/etc/hub-token/token")
-USER_CACHE_S = 300.0
-# How long the clients of a removed cluster hear so, instead of starting another: Ray Client retries for 30 s.
-GONE_S = 300.0
-LDAP_HOST = "geddes-auth.rcac.purdue.edu"
-LDAP_BASE = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
 KUBE_API = "https://kubernetes.default.svc"
 SERVICE_ACCOUNT = Path("/var/run/secrets/kubernetes.io/serviceaccount")
 RAYCLUSTERS = f"/apis/ray.io/v1/namespaces/{NAMESPACE}/rayclusters"
@@ -76,12 +88,11 @@ DASHBOARD_PORT = 8265
 # Set by a notebook: ray.init(..., _metadata=[(ENV_METADATA, <environment>)]), or a header of JobSubmissionClient.
 ENV_METADATA = "af-ray-env"
 ENV_ANNOTATION = "purdue-af/ray-env"
-# The environment pixi-global-sync keeps (apps/af-utils/pixi-global-sync).
-DEFAULT_ENV = "/work/pixi/global/.pixi/envs/default"
 # Set as af-ray-env is: the cluster's GPUs, one per worker.
 GPUS_METADATA = "af-ray-gpus"
 GPUS_ANNOTATION = "purdue-af/ray-gpus"
-MAX_GPUS = 4
+REMOVED_IDLE = "Your Ray cluster was removed after it went idle: run ray.shutdown(), then ray.init() again."
+REMOVED_UNPROVISIONED = f"Your Ray cluster was removed, as not all of its GPUs started in time: ask for fewer with {GPUS_METADATA}, or try again later."
 # singleuser.podNameTemplate in the Hub values
 SESSION_POD = re.compile(r"purdue-af-(\d+)")
 # custom-spawner.py names the accounts from outside Purdue <login>-cern and <login>-fnal
@@ -124,6 +135,7 @@ HTTP_STATUS = {
     grpc.StatusCode.NOT_FOUND: 404,
     grpc.StatusCode.FAILED_PRECONDITION: 409,
     grpc.StatusCode.ABORTED: 409,
+    grpc.StatusCode.RESOURCE_EXHAUSTED: 429,
     grpc.StatusCode.UNAVAILABLE: 503,
 }
 
@@ -305,6 +317,24 @@ def head_ready(cluster: dict[str, Any]) -> bool:
     )
 
 
+def unprovisioned(cluster: dict[str, Any], now: float) -> bool:
+    """Whether the cluster still waits for its first full set of pods, past the time it has for it."""
+    metadata = cluster["metadata"]
+    conditions = (cluster.get("status") or {}).get("conditions") or []
+    if metadata.get("deletionTimestamp") or not any(
+        c.get("type") == "RayClusterProvisioned" and c.get("status") == "False"
+        for c in conditions
+    ):
+        return False
+    created = datetime.fromisoformat(metadata["creationTimestamp"])
+    return now - created.timestamp() >= PROVISION_TIMEOUT_S
+
+
+def held_gpus(cluster: dict[str, Any]) -> int:
+    gpus = cluster_shape(cluster).gpus
+    return int(gpus) if gpus.isdigit() else 0
+
+
 def load_template() -> dict[str, Any]:
     template: dict[str, Any] = yaml.safe_load(TEMPLATE.read_text())
     return template
@@ -375,9 +405,14 @@ class Gateway:
         # The shape each cluster was last found in, so that a call skips the checks.
         self.started: dict[str, Shape] = {}
         self.channels: dict[str, grpc.aio.Channel] = {}
-        # cluster -> the Ray Client ids it serves; client id -> until when its cluster is known removed
+        # cluster -> the Ray Client ids it serves; client id -> until when its cluster is known removed, and why
         self.clients: dict[str, set[str]] = {}
-        self.gone: dict[str, float] = {}
+        self.gone: dict[str, tuple[float, str]] = {}
+        # cluster -> why it was removed before it ever ran, until the user's next one
+        self.never_started: dict[str, str] = {}
+        # cluster -> the GPUs it was admitted with, and until when they count as taken
+        self.grants: dict[str, tuple[int, float]] = {}
+        self.admitting = asyncio.Lock()
         self._users: dict[str, tuple[float, User]] = {}
 
     @property
@@ -403,13 +438,10 @@ class Gateway:
         try:
             user, shape = await self.caller(values)
             now = time.monotonic()
-            self.gone = {c: until for c, until in self.gone.items() if until > now}
+            self.gone = {c: gone for c, gone in self.gone.items() if gone[0] > now}
             # Ray Client reconnecting: its session went with the cluster.
             if client in self.gone:
-                raise Refused(
-                    grpc.StatusCode.NOT_FOUND,
-                    "Your Ray cluster was removed after it went idle: run ray.shutdown(), then ray.init() again.",
-                )
+                raise Refused(grpc.StatusCode.NOT_FOUND, self.gone[client][1])
             cluster = await self.cluster_for(user, shape)
         except Refused as e:
             await context.abort(e.code, e.text)
@@ -472,7 +504,10 @@ class Gateway:
             if cluster is None or cluster["metadata"].get("deletionTimestamp"):
                 raise Refused(
                     grpc.StatusCode.NOT_FOUND,
-                    "You have no Ray cluster: one is removed once idle, with the records and logs of its jobs.",
+                    self.never_started.get(
+                        user.cluster,
+                        "You have no Ray cluster: one is removed once idle, with the records and logs of its jobs.",
+                    ),
                 )
         self.last_used[user.cluster] = time.monotonic()
         return user.cluster
@@ -662,20 +697,28 @@ class Gateway:
                         grpc.StatusCode.FAILED_PRECONDITION,
                         "Your Ray cluster runs another environment or number of GPUs, and tasks or jobs: wait for them, or stop them.",
                     )
+                # Before the deletion: a refusal leaves the user the cluster they have.
+                await self.admit(user, shape, held_gpus(cluster))
                 await self.delete(user.cluster)
+            else:
+                await self.admit(user, shape)
             await self.wait_until_gone(user.cluster)
             cluster = None
+        elif cluster is None:
+            await self.admit(user, shape)
         if cluster is None:
             status, created = await self.kube(
                 "POST", RAYCLUSTERS, build_cluster(load_template(), user, shape)
             )
             if status == 201:
                 log.info("created %s", user.cluster)
+                self.never_started.pop(user.cluster, None)
                 cluster = created
             elif status == 409:
                 # Another call created it first.
                 cluster = await self.cluster(user.cluster)
             else:
+                self.grants.pop(user.cluster, None)
                 raise Refused(
                     grpc.StatusCode.UNAVAILABLE,
                     f"Could not create your Ray cluster: {created.get('message', status)}",
@@ -715,7 +758,75 @@ class Gateway:
                 "The Ray in that environment does not enforce the cluster's token.",
             )
 
-    async def delete(self, name: str) -> None:
+    async def admit(self, user: User, shape: Shape, replaced: int = 0) -> None:
+        """Refuse a cluster whose GPUs are not all free now, or that would take the
+        clusters past their budget; `replaced` are the GPUs its predecessor gives back."""
+        wanted = int(shape.gpus)
+        async with self.admitting:
+            status, listing = await self.kube(
+                "GET",
+                f"{RAYCLUSTERS}?labelSelector=app.kubernetes.io%2Fmanaged-by%3D{MANAGED_BY}",
+            )
+            if status != 200:
+                raise Refused(
+                    grpc.StatusCode.UNAVAILABLE,
+                    f"Kubernetes answered HTTP {status} for the Ray clusters.",
+                )
+            now = time.monotonic()
+            self.grants = {c: g for c, g in self.grants.items() if g[1] > now}
+            others = {
+                c["metadata"]["name"]: held_gpus(c)
+                for c in listing.get("items", [])
+                if c["metadata"]["name"] != user.cluster
+            }
+            granted = {
+                c: gpus for c, (gpus, _) in self.grants.items() if c != user.cluster
+            }
+            # A cluster admitted and not created yet is in no listing.
+            available = GPU_BUDGET - sum({**granted, **others}.values())
+            free = await self.free_gpus()
+            if free is not None:
+                # Prometheus may not see the pods of a cluster just admitted.
+                available = min(available, free + replaced - sum(granted.values()))
+            if wanted > available:
+                log.info(
+                    "refused %s %d GPUs: %d available, %s free",
+                    user.cluster,
+                    wanted,
+                    available,
+                    free,
+                )
+                raise Refused(
+                    grpc.StatusCode.RESOURCE_EXHAUSTED,
+                    f"Your Ray cluster asks for {wanted} T4 GPUs and Ray clusters can take {max(available, 0)} more now: ask for fewer with {GPUS_METADATA}, or try again later.",
+                )
+            self.grants[user.cluster] = (wanted, now + GRANT_S)
+
+    async def free_gpus(self) -> int | None:
+        """The T4s no pod holds, as the Hub's profile form counts them; None if Prometheus does not say."""
+        metric = GPU_METRICS[GPU_RESOURCE]
+        try:
+            allocatable, used = await asyncio.gather(
+                self.prometheus(ALLOC_QUERY), self.prometheus(USED_QUERY)
+            )
+            if metric not in allocatable:
+                return None
+            return max(int(allocatable[metric] - used.get(metric, 0)), 0)
+        except (ClientError, asyncio.TimeoutError, LookupError, TypeError, ValueError):
+            log.warning("Prometheus did not say how many GPUs are free")
+            return None
+
+    async def prometheus(self, query: str) -> dict[str, float]:
+        async with self.http.get(
+            f"{PROMETHEUS_URL}/api/v1/query",
+            params={"query": query},
+            timeout=ClientTimeout(total=5),
+            raise_for_status=True,
+        ) as r:
+            samples = (await r.json())["data"]["result"]
+        return {s["metric"]["resource"]: float(s["value"][1]) for s in samples}
+
+    async def delete(self, name: str, why: str = REMOVED_IDLE) -> None:
         # Foreground: the RayCluster outlasts its pods, so waiting it out frees the user's GPUs.
         status, _ = await self.kube(
             "DELETE", f"{RAYCLUSTERS}/{name}", {"propagationPolicy": "Foreground"}
@@ -728,7 +839,7 @@ class Gateway:
         self.started.pop(name, None)
         until = time.monotonic() + GONE_S
         for client in self.clients.pop(name, set()):
-            self.gone[client] = until
+            self.gone[client] = (until, why)
         channel = self.channels.pop(name, None)
         if channel is not None:
             await channel.close()
@@ -766,8 +877,14 @@ class Gateway:
         for cluster in listing.get("items", []):
             name = cluster["metadata"]["name"]
             try:
+                # Busy or not: its workers hold GPUs for work that waits on the rest.
+                if unprovisioned(cluster, time.time()):
+                    await self.delete(name, REMOVED_UNPROVISIONED)
+                    self.last_used.pop(name, None)
+                    self.never_started[name] = REMOVED_UNPROVISIONED
+                    log.info("deleted %s: its workers did not all start", name)
                 # Its idle clock starts when its last task or job ends, or its last call does.
-                if await self.busy(cluster):
+                elif await self.busy(cluster):
                     self.last_used[name] = now
                 # A cluster first seen here (the gateway restarted) starts its idle clock now.
                 elif now - self.last_used.setdefault(name, now) >= IDLE_TIMEOUT_S:
@@ -888,7 +1005,7 @@ async def serve() -> None:
 
 
 async def until_changed(path: Path, running: bytes) -> None:
-    """Return once kubelet has swapped other code than `running` into the mounted ConfigMap."""
+    """Return once kubelet has swapped other content than `running` into the mounted ConfigMap."""
     while path.read_bytes() == running:
         await asyncio.sleep(CODE_POLL_S)
     log.info("%s changed: exiting, for the container to restart on it", path)
@@ -896,14 +1013,19 @@ async def until_changed(path: Path, running: bytes) -> None:
 
 async def main() -> None:
     """Serve until SIGTERM, which Python as a container's PID 1 would otherwise ignore,
-    or until this file changes."""
+    or until this file or its settings change."""
     serving = asyncio.ensure_future(serve())
     asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, serving.cancel)
-    changed = asyncio.ensure_future(until_changed(CODE, CODE.read_bytes()))
-    changed.add_done_callback(lambda _: serving.cancel())
+    changed = [
+        asyncio.ensure_future(until_changed(path, path.read_bytes()))
+        for path in (CODE, CONFIG_FILE)
+    ]
+    for change in changed:
+        change.add_done_callback(lambda _: serving.cancel())
     with contextlib.suppress(asyncio.CancelledError):
         await serving
-    changed.cancel()
+    for change in changed:
+        change.cancel()
 
 
 if __name__ == "__main__":

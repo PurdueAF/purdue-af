@@ -1,0 +1,30 @@
+# The settings of gateway.py, which restarts when they change.
+
+# How long a cluster stays after its last task, job or call.
+idleTimeoutSeconds: 900
+# How long a call waits for a head to start, or for an old cluster to go.
+startTimeoutSeconds: 600
+startPollSeconds: 5
+# How long a cluster may wait for the last of its workers before it is removed.
+provisionTimeoutSeconds: 600
+reapEverySeconds: 60
+codePollSeconds: 10
+userCacheSeconds: 300
+# How long the clients of a removed cluster hear so, instead of starting another: Ray Client retries for 30 s.
+goneSeconds: 300
+
+# The most workers, a GPU each, that a call may ask for.
+maxGpus: 4
+# The most GPUs all clusters hold together.
+gpuBudget: 8
+# The resource of a worker's GPU in raycluster.yaml.
+gpuResource: nvidia.com/gpu
+# How long an admitted cluster's GPUs count as taken, for Prometheus to see its pods.
+grantSeconds: 120
+prometheusUrl: http://prometheus-server:9090
+
+# The environment pixi-global-sync keeps (apps/af-utils/pixi-global-sync).
+defaultEnv: /work/pixi/global/.pixi/envs/default
+
+ldapHost: geddes-auth.rcac.purdue.edu
+ldapBase: ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu

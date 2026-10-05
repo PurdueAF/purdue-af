@@ -17,6 +17,7 @@ import ssl
 import sys
 import time
 import types
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import grpc
@@ -32,6 +33,8 @@ from aiohttp import (
 from aiohttp.test_utils import TestServer
 from common import REPO, load_script
 
+# gpu_queries.py is in the gateway's ConfigMap, beside gateway.py.
+sys.path.insert(0, str(REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles"))
 gw = load_script(REPO / "apps" / "ray-train" / "gateway.py", "ray_train_gateway")
 
 TEMPLATE = REPO / "apps" / "ray-train" / "raycluster.yaml"
@@ -191,6 +194,34 @@ class FakeKube:
         return app
 
 
+class FakePrometheus:
+    """The T4s of the AF nodes, and those some pod holds."""
+
+    def __init__(self):
+        self.up = True
+        self.allocatable = 8
+        self.used = 0
+        # Without the series of kube-state-metrics
+        self.empty = False
+
+    def app(self):
+        async def query(request):
+            if not self.up:
+                return web.json_response({}, status=503)
+            counts = {gw.ALLOC_QUERY: self.allocatable, gw.USED_QUERY: self.used}
+            value = counts[request.query["query"]]
+            samples = [
+                {"metric": {"resource": "nvidia_com_gpu"}, "value": [0, str(value)]},
+                {"metric": {"resource": "nvidia_com_mig_1g_5gb"}, "value": [0, "0"]},
+            ]
+            result = [] if self.empty else samples
+            return web.json_response({"status": "success", "data": {"result": result}})
+
+        app = web.Application()
+        app.router.add_get("/api/v1/query", query)
+        return app
+
+
 class FakeHeads:
     """Every user's Ray head: a dashboard at /<cluster>/... that accepts only its
     own token, and one Ray Client server standing in for all of them."""
@@ -336,15 +367,19 @@ class FakeHeads:
 @pytest.fixture
 async def env(monkeypatch, tmp_path):
     LOOKUPS.clear()
-    kube, heads = FakeKube(), FakeHeads()
+    kube, heads, prometheus = FakeKube(), FakeHeads(), FakePrometheus()
     servers = [
         TestServer(hub_app()),
         TestServer(kube.app()),
         TestServer(heads.dashboards()),
+        TestServer(prometheus.app()),
     ]
     for server in servers:
         await server.start_server()
-    hub, kube_server, dashboards = servers
+    hub, kube_server, dashboards, prometheus_server = servers
+    monkeypatch.setattr(
+        gw, "PROMETHEUS_URL", str(prometheus_server.make_url("")).rstrip("/")
+    )
     client_server = heads.client_server()
     client_port = client_server.add_insecure_port("127.0.0.1:0")
     await client_server.start()
@@ -384,6 +419,7 @@ async def env(monkeypatch, tmp_path):
             gateway=gateway,
             kube=kube,
             heads=heads,
+            prometheus=prometheus,
             token_file=token_file,
         )
         await dashboard.close()
@@ -497,6 +533,24 @@ def live(env):
 def idle(env, *clusters):
     long_ago = time.monotonic() - gw.IDLE_TIMEOUT_S - 1
     env.gateway.last_used.update(dict.fromkeys(clusters, long_ago))
+
+
+def provisioning(env, name="ray-train-user-a", age=0.0, provisioned="False"):
+    """The cluster as KubeRay reports it `age` seconds in, its pods not all ready yet."""
+    created = datetime.fromtimestamp(time.time() - age, timezone.utc)
+    cluster = env.kube.clusters[name]
+    cluster["metadata"]["creationTimestamp"] = created.strftime("%Y-%m-%dT%H:%M:%SZ")
+    cluster["status"] = {
+        "conditions": [
+            {"type": "HeadPodReady", "status": "True"},
+            {"type": "RayClusterProvisioned", "status": provisioned},
+        ]
+    }
+
+
+def scraped(env):
+    """Prometheus has seen every admitted cluster's pods."""
+    env.gateway.grants.clear()
 
 
 async def test_a_call_without_a_token_is_refused(env):
@@ -779,6 +833,125 @@ async def test_asking_for_other_gpus_leaves_a_busy_cluster_alone(env):
     env.heads.running["ray-train-user-a"] = [{"task_id": "t", "state": "RUNNING"}]
     assert await refused(env, gpus="2") == grpc.StatusCode.FAILED_PRECONDITION
     assert counts(workers(env)) == (1, 1, 1)
+
+
+async def test_a_cluster_asking_for_more_gpus_than_are_free_is_refused(env):
+    env.prometheus.used = 6
+    assert await refused(env, gpus="3") == grpc.StatusCode.RESOURCE_EXHAUSTED
+    assert env.kube.clusters == {}
+    assert await call(env, gpus="2") == [b"echo:ping"]
+
+
+async def test_a_refused_submission_says_how_many_gpus_are_free(env):
+    env.prometheus.used = 7
+    status, reason, _ = await submit(env, gpus="4")
+    assert status == 429
+    assert "asks for 4 T4 GPUs and Ray clusters can take 1 more now" in reason
+    assert env.kube.clusters == {}
+
+
+async def test_gpus_just_admitted_count_as_taken_until_prometheus_sees_them(env):
+    env.prometheus.used = 4
+    await call(env, gpus="3")
+    assert (
+        await refused(env, token="session-b", gpus="2")
+        == grpc.StatusCode.RESOURCE_EXHAUSTED
+    )
+    assert await call(env, token="session-b", client="client-b") == [b"echo:ping"]
+
+
+async def test_all_clusters_together_stay_within_the_budget(env, monkeypatch):
+    monkeypatch.setattr(gw, "GPU_BUDGET", 4)
+    await call(env, gpus="3")
+    scraped(env)
+    env.prometheus.used = 3
+    assert (
+        await refused(env, token="session-b", gpus="2")
+        == grpc.StatusCode.RESOURCE_EXHAUSTED
+    )
+    assert live(env) == {"ray-train-user-a"}
+    assert await call(env, token="session-b", client="client-b") == [b"echo:ping"]
+
+
+async def test_a_replacement_may_take_the_gpus_its_predecessor_holds(env):
+    await call(env, gpus="2")
+    scraped(env)
+    env.prometheus.used = 6
+    assert await call(env, gpus="4") == [b"echo:ping"]
+    assert counts(workers(env)) == (4, 4, 4)
+    # Prometheus has not seen the four yet.
+    assert (
+        await refused(env, token="session-b", gpus="3")
+        == grpc.StatusCode.RESOURCE_EXHAUSTED
+    )
+
+
+async def test_a_refused_replacement_leaves_the_cluster_it_would_replace(env):
+    await call(env, gpus="2")
+    scraped(env)
+    env.prometheus.used = 8
+    assert await refused(env, gpus="3") == grpc.StatusCode.RESOURCE_EXHAUSTED
+    assert live(env) == {"ray-train-user-a"}
+    assert counts(workers(env)) == (2, 2, 2)
+
+
+@pytest.mark.parametrize("failure", ["up", "empty"])
+async def test_without_prometheus_only_the_budget_holds(env, monkeypatch, failure):
+    monkeypatch.setattr(gw, "GPU_BUDGET", 6)
+    setattr(env.prometheus, failure, failure == "empty")
+    env.prometheus.used = 8
+    assert await call(env, gpus="4") == [b"echo:ping"]
+    assert (
+        await refused(env, token="session-b", gpus="3")
+        == grpc.StatusCode.RESOURCE_EXHAUSTED
+    )
+
+
+async def test_admission_needs_the_listing_of_clusters(env):
+    env.kube.fail_list = True
+    assert await refused(env) == grpc.StatusCode.UNAVAILABLE
+    assert env.kube.clusters == {}
+
+
+async def test_a_cluster_whose_workers_never_all_start_is_removed(env):
+    await call(env, gpus="4")
+    env.heads.jobs["ray-train-user-a"] = [running_job()]
+    provisioning(env, age=gw.PROVISION_TIMEOUT_S + 1)
+
+    await env.gateway.reap_idle()
+
+    assert live(env) == set()
+    assert await refused(env) == grpc.StatusCode.NOT_FOUND
+    status, reason, _ = await job_call(env, path="/api/jobs/raysubmit_1")
+    assert status == 404
+    assert "not all of its GPUs started" in reason
+
+
+async def test_the_next_cluster_forgets_why_the_last_was_removed(env):
+    await call(env, gpus="4")
+    provisioning(env, age=gw.PROVISION_TIMEOUT_S + 1)
+    await env.gateway.reap_idle()
+    await call(env, client="client-2")
+    assert env.gateway.never_started == {}
+
+
+async def test_a_cluster_still_within_its_time_to_start_is_kept(env):
+    await call(env, gpus="4")
+    provisioning(env, age=gw.PROVISION_TIMEOUT_S - 60)
+    await env.gateway.reap_idle()
+    assert live(env) == {"ray-train-user-a"}
+
+
+@pytest.mark.parametrize("provisioned", ["True", None])
+async def test_a_cluster_that_started_is_never_removed_for_a_worker_lost_later(
+    env, provisioned
+):
+    """KubeRay sets RayClusterProvisioned once, and an operator without the
+    condition says nothing about it."""
+    await call(env, gpus="4")
+    provisioning(env, age=gw.PROVISION_TIMEOUT_S + 1, provisioned=provisioned)
+    await env.gateway.reap_idle()
+    assert live(env) == {"ray-train-user-a"}
 
 
 async def test_a_job_client_without_a_token_is_refused(env):
@@ -1228,8 +1401,11 @@ async def test_only_new_gateway_code_ends_the_gateway(monkeypatch, tmp_path):
     await asyncio.wait_for(changed, timeout=5)
 
 
-async def test_the_gateway_stops_when_its_code_changes(monkeypatch, tmp_path):
-    """It exits cleanly, and kubelet restarts the container on the new code."""
+@pytest.mark.parametrize("changing", ["CODE", "CONFIG_FILE"])
+async def test_the_gateway_stops_when_its_code_or_settings_change(
+    monkeypatch, tmp_path, changing
+):
+    """It exits cleanly, and kubelet restarts the container on the new file."""
     stopped = asyncio.Event()
 
     async def serve():
@@ -1241,7 +1417,7 @@ async def test_the_gateway_stops_when_its_code_changes(monkeypatch, tmp_path):
     code = tmp_path / "gateway.py"
     code.write_text("running")
     monkeypatch.setattr(gw, "serve", serve)
-    monkeypatch.setattr(gw, "CODE", code)
+    monkeypatch.setattr(gw, changing, code)
     monkeypatch.setattr(gw, "CODE_POLL_S", 0)
     main = asyncio.create_task(gw.main())
     await asyncio.sleep(0)

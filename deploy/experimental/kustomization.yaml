@@ -134,7 +134,10 @@ configMapGenerator:
         kustomize.toolkit.fluxcd.io/substitute: disabled
     files:
       - ../../apps/ray-train/gateway.py
+      - ../../apps/ray-train/config.yaml
       - ../../apps/ray-train/raycluster.yaml
+      # how the Hub's profile form counts free GPUs
+      - ../../apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py
 
   - name: flyte-config
     files:

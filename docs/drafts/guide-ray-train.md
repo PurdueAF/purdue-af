@@ -212,10 +212,18 @@ you reach it: in the `headers` of a `JobSubmissionClient`, as in
 ### GPUs
 
 Each GPU is a T4 in a worker pod of its own, so a call that asks for more
-than one never starts. The GPUs join as T4s come free, and what asks for one
-waits until then: `ray.cluster_resources()`, in a connected notebook, shows
-those that have joined. Your cluster holds its GPUs until it is removed or
-replaced.
+than one never starts. `ray.cluster_resources()`, in a connected notebook,
+shows the GPUs that have joined. Your cluster holds its GPUs until it is
+removed or replaced.
+
+The T4s are shared with everyone's sessions and clusters:
+
+* Your cluster starts only while as many T4s as it asks for are free, and all
+  Ray clusters together hold only a part of the facility's T4s. Otherwise a
+  submission fails with the number that are free for you, and `ray.init` with
+  a connection timeout: ask for fewer, or try again later.
+* A cluster whose GPUs have not all joined some minutes after it started is
+  removed, with the job submitted to it.
 
 ### Environment
 
