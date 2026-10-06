@@ -9,9 +9,15 @@ as pods on the Purdue Geddes cluster.
 | Limit | Value |
 | --- | --- |
 | Active clusters per user | 1 |
-| Cluster size | up to 200 workers; 201 cores and 1200 GiB of memory in total, scheduler included |
+| Cluster size | up to 1000 workers; 1000 cores and 6000 GiB of memory in total, scheduler included |
+| Guaranteed workers | the first 100 cores of a cluster |
 | Cores per worker | up to 64 |
 | Memory per worker | up to 64 GiB |
+
+Workers beyond the guaranteed ones run at low priority. Kubernetes evicts them
+when a session, or another cluster's guaranteed workers, needs their place;
+Dask reruns their tasks on the remaining workers, and a replacement starts once
+there is room.
 
 If cluster creation fails with a message about an existing cluster,
 [shut the old cluster down](#5-shutting-down-clusters) (or wait for it to finish

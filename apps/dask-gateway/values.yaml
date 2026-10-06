@@ -131,9 +131,9 @@ gateway:
       c.DaskGateway.address = ':8000'
       c.KubeBackend.api_url = 'http://dask-gateway.geddes.rcac.purdue.edu:80/api'
 
-      c.ClusterConfig.cluster_max_cores = 201
-      c.ClusterConfig.cluster_max_memory = '1200 G'
-      c.ClusterConfig.cluster_max_workers = 200
+      c.ClusterConfig.cluster_max_cores = 1000
+      c.ClusterConfig.cluster_max_memory = '6000 G'
+      c.ClusterConfig.cluster_max_workers = 1000
       c.ClusterConfig.adaptive_period = 15
       c.ClusterConfig.idle_timeout = 3600
 
