@@ -1,7 +1,7 @@
 # Training on GPUs with Ray
 
 [Ray](https://docs.ray.io/en/latest/) runs your PyTorch training on GPUs your
-session does not hold. You have a Ray cluster of your own, with one to four
+session does not hold. You have a Ray cluster of your own, with one or more
 [NVIDIA T4s](../docs/gpus.md): it starts when you submit a job, which takes a
 minute or two, runs as you, and is [removed](#lifetime) once idle. No other
 user can see, stop or reach it.
@@ -172,7 +172,7 @@ You have one cluster, which every job runs on. What it runs is set in the
 
 | Setting     | Header        | Value                        | Default                     |
 | ----------- | ------------- | ---------------------------- | --------------------------- |
-| GPUs        | `af-ray-gpus` | `"1"` to `"4"`               | `"1"`                       |
+| GPUs        | `af-ray-gpus` | A number of T4s, as a string | `"1"`                       |
 | Environment | `af-ray-env`  | The path of your environment | The global Pixi environment |
 
 ### GPUs
@@ -181,14 +181,16 @@ Each GPU is a T4 in a worker pod of its own, so nothing that asks for more
 than one at a time, such as `entrypoint_num_gpus=2`, ever starts. The T4s are
 shared with everyone's sessions and clusters:
 
-* Your cluster starts only while as many T4s as it asks for are free, and all
-  Ray clusters together hold only a part of the facility's T4s. Otherwise the
-  submission fails with the number that are free for you: ask for fewer, or
-  try again later.
+* Your cluster starts only while as many T4s as it asks for are free, up to
+  all of them. Otherwise the submission fails with the number that are free
+  for you: ask for fewer, or try again later.
+* A cluster of one GPU also starts while none is free and another cluster
+  holds more than its first: it takes one of those.
 * A cluster whose GPUs have not all joined some minutes after it started is
   removed, with the job submitted to it.
 * Your cluster keeps its first GPU. Each of the others may be taken at any
-  time for work of a higher priority, which stops what runs on it: the worker
+  time for work of a higher priority, such as another cluster's first GPU,
+  which stops what runs on it: the worker
   returns when a T4 is free again. A training that
   [saves checkpoints](https://docs.ray.io/en/latest/train/user-guides/fault-tolerance.html)
   and sets `FailureConfig(max_failures=...)` resumes from the last one.
