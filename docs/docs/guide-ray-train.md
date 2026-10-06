@@ -7,17 +7,26 @@ you submit a job, which takes a minute or two, runs as you, and is
 [removed](#lifetime) once idle. No other
 user can see, stop or reach it.
 
-Ray clusters are available to all users, with a Purdue, CERN or FNAL account,
-from sessions [started without a GPU](gpus.md#1-direct-connection). A session
-that holds a GPU trains on that one: its submissions fail, though it still
-follows and stops the jobs your cluster already runs.
+## Before you start
+
+Ray clusters are available to all users, with a Purdue, CERN or FNAL account.
+You need:
+
+* **A session started without a GPU.** A session
+  [that holds a GPU](gpus.md#1-direct-connection) trains on that one: its
+  submissions fail, though it still follows and stops the jobs your cluster
+  already runs.
+* **A notebook on the Python (pixi global) kernel**, which has Ray and
+  PyTorch, or [an environment of your own](#environment) that has both.
+* **Your data on `/work`, `/depot/cms`, `/eos/purdue` or `/cvmfs`**: your
+  cluster [does not see your home directory](#data-and-results).
 
 ## Submitting a job
 
 A [Ray job](https://docs.ray.io/en/latest/cluster/running-applications/job-submission/sdk.html)
 is a script your cluster runs by itself, whether or not the notebook that
-submitted it stays open. A script that already trains on one GPU runs as it
-is. With `train.py` beside a notebook on the **Python (pixi global)** kernel:
+submitted it stays open. With `train.py` beside a notebook on the
+**Python (pixi global)** kernel:
 
 ```python
 from ray.job_submission import JobSubmissionClient
@@ -48,11 +57,24 @@ async for lines in client.tail_job_logs(job):
     print(lines, end="")
 ```
 
-How many GPUs your cluster has, and which, is in its
-[settings](#cluster-settings). Two libraries of Ray do more with the same job: [Ray Train](#ray-train), the
-recommended way to write a training and the only one that uses several GPUs
-for it, and [Ray Tune](#ray-tune), which runs many trainings to find the best
-hyperparameters.
+## From a PyTorch script
+
+A script that already trains on one GPU runs as it is, once it:
+
+* **reads and writes outside your home directory**: the data, and the model
+  and checkpoints it saves, are on `/work` or `/depot/cms`;
+* **takes its settings from the command line or a file**, not from notebook
+  variables: `entrypoint="python train.py --epochs 20"`;
+* **prints what you want to follow**: its output is the job's log, and
+  nothing of the job is left once your cluster is [removed](#lifetime).
+
+From there, change the script only for what you want more of:
+
+| To                                    | Do                                                                                    |
+| ------------------------------------- | ------------------------------------------------------------------------------------- |
+| Pick the GPUs, CPU cores and memory   | Set them in the [cluster settings](#cluster-settings), with the script as it is       |
+| Train one model on several GPUs       | Move the training loop into a function for [Ray Train](#ray-train)                    |
+| Train many models to compare them     | Have the function report its loss to [Ray Tune](#ray-tune)                            |
 
 ## Cluster settings
 
