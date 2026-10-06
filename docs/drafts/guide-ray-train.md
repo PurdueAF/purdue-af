@@ -187,6 +187,11 @@ shared with everyone's sessions and clusters:
   try again later.
 * A cluster whose GPUs have not all joined some minutes after it started is
   removed, with the job submitted to it.
+* Your cluster keeps its first GPU. Each of the others may be taken at any
+  time for work of a higher priority, which stops what runs on it: the worker
+  returns when a T4 is free again. A training that
+  [saves checkpoints](https://docs.ray.io/en/latest/train/user-guides/fault-tolerance.html)
+  and sets `FailureConfig(max_failures=...)` resumes from the last one.
 
 ### Environment
 

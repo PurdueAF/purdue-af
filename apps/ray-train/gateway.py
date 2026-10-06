@@ -70,6 +70,7 @@ GRANT_S = float(CONFIG["grantSeconds"])
 MAX_GPUS = int(CONFIG["maxGpus"])
 GPU_BUDGET = int(CONFIG["gpuBudget"])
 GPU_RESOURCE = str(CONFIG["gpuResource"])
+PREEMPTIBLE_PRIORITY_CLASS = str(CONFIG["preemptiblePriorityClass"])
 PROMETHEUS_URL = str(CONFIG["prometheusUrl"])
 DEFAULT_ENV = str(CONFIG["defaultEnv"])
 LDAP_HOST = str(CONFIG["ldapHost"])
@@ -270,8 +271,7 @@ def build_cluster(template: dict[str, Any], user: User, shape: Shape) -> dict[st
     spec = cluster["spec"]
     spec["authOptions"]["secretName"] = user.cluster
     (group,) = spec["workerGroupSpecs"]
-    workers = int(shape.gpus)
-    group.update(replicas=workers, minReplicas=workers, maxReplicas=workers)
+    group.update(replicas=1, minReplicas=1, maxReplicas=1)
     for template in (spec["headGroupSpec"]["template"], group["template"]):
         pod = template["spec"]
         pod.setdefault("securityContext", {}).update(
@@ -285,6 +285,16 @@ def build_cluster(template: dict[str, Any], user: User, shape: Shape) -> dict[st
                     variable["value"] = f"{shape.env}/bin:{variable['value']}"
             variables.append({"name": "CONDA_PREFIX", "value": shape.env})
             variables.append({"name": "USER", "value": user.account})
+    preemptible = int(shape.gpus) - 1
+    if preemptible:
+        # Every worker but the first gives way to pods of the default priority.
+        extra = copy.deepcopy(group)
+        extra["groupName"] = f"{group['groupName']}-preemptible"
+        extra.update(
+            replicas=preemptible, minReplicas=preemptible, maxReplicas=preemptible
+        )
+        extra["template"]["spec"]["priorityClassName"] = PREEMPTIBLE_PRIORITY_CLASS
+        spec["workerGroupSpecs"].append(extra)
     return cluster
 
 
