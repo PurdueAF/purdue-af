@@ -367,6 +367,8 @@ class FakeHeads:
                 async def answer(requests, context):
                     calls.append((method, dict(context.invocation_metadata())))
                     if method == FAILING:
+                        # Refusing ahead of the request races the relay's write of it, which grpc reports as INTERNAL.
+                        await anext(requests, None)
                         await context.abort(grpc.StatusCode.NOT_FOUND, "no such object")
                     if method == LOGS:
                         yield b"log 1"
