@@ -42,7 +42,7 @@ _SERVICE = "Dask Gateway"
 
 
 # Mirror apps/dask-gateway/values.yaml.
-MAX_WORKERS = 200
+MAX_WORKERS = 1000
 _WORKER_CORES = (0.1, 64.0)
 _WORKER_MEMORY = (0.1, 64.0)
 
@@ -548,7 +548,7 @@ def register(mcp: Any) -> None:
                           picks the default size.
             worker_memory: Memory per worker in GiB (0.1–64). Defaults to 4 if
                            the user picks the default size.
-            n_workers: Workers to start with (0–200). 0 (or omitted with a
+            n_workers: Workers to start with (0–1000). 0 (or omitted with a
                        non-eliciting client) starts the cluster empty. A
                        non-zero count waits for the scheduler to come up
                        before scaling, so the call takes as long as the
@@ -931,7 +931,7 @@ def register(mcp: Any) -> None:
 
         Args:
             cluster_name: Cluster identifier returned by list_dask_clusters.
-            n_workers: Target worker count (0–200).
+            n_workers: Target worker count (0–1000).
         """
         _validate_cluster_name(cluster_name)
         if n_workers < 0:

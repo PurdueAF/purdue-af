@@ -73,3 +73,39 @@ spec:
               - op: add
                 path: /spec/type
                 value: LoadBalancer
+          # The chart has no controller extraConfig: the launch command makes workers past a cluster's floor preemptible.
+          - target:
+              kind: Deployment
+              name: "controller-.*"
+            patch: |
+              - op: replace
+                path: /spec/template/spec/containers/0/args
+                value:
+                  - python
+                  - -c
+                  - |
+                    from dask_gateway_server.app import main
+                    from dask_gateway_server.backends.kubernetes import controller
+
+                    FLOOR_CORES = 100
+                    PREEMPTIBLE = "low-priority-preemptible"
+                    create_pods = controller.KubeController.batch_create_pods
+                    container_status = controller.get_container_status
+
+                    async def create_tiered_pods(self, info, namespace, pod, count):
+                        cores = float(pod["spec"]["containers"][0]["resources"]["requests"]["cpu"])
+                        live = (self.informers["pod"].get(f"{namespace}.{name}") for name in info.running | info.pending)
+                        kept = sum(1 for p in live if p and p["spec"].get("priorityClassName") != PREEMPTIBLE)
+                        floor = min(count, max(0, int(FLOOR_CORES // cores) - kept))
+                        burst = {**pod, "spec": {**pod["spec"], "priorityClassName": PREEMPTIBLE}}
+                        failed = await create_pods(self, info, namespace, pod, floor)
+                        return await create_pods(self, info, namespace, burst, count - floor) or failed
+
+                    # Upstream tracks a worker pod only once it is scheduled, and creates the ones still waiting again.
+                    def worker_status(pod, name):
+                        by_phase = name == "dask-worker" and pod["status"].get("phase") != "Running"
+                        return container_status(pod, name) or ({} if by_phase else None)
+
+                    controller.KubeController.batch_create_pods = create_tiered_pods
+                    controller.get_container_status = worker_status
+                    main(["kube-controller", "--config", "/etc/dask-gateway/dask_gateway_config.py"])
