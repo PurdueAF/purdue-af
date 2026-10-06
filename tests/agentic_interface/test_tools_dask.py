@@ -8,6 +8,7 @@ import httpx
 import pytest
 import respx
 from agentic_helpers import failure, needs_choices, register_tools
+from context import current_user
 from httpx import ConnectError
 from tools import dask
 
@@ -128,6 +129,25 @@ async def test_list_clusters_sends_the_callers_token(user_ctx):
     await tools["list_dask_clusters"]()
 
     assert route.calls.last.request.headers["Authorization"] == alice_token()
+
+
+@respx.mock
+async def test_gateway_session_cookie_is_not_replayed_for_the_next_caller(user_ctx):
+    route = respx.get(CLUSTERS).respond(
+        200, json={}, headers={"Set-Cookie": "dask-gateway-abc=alice; Path=/"}
+    )
+    tools = register_tools(dask).tools
+    await tools["list_dask_clusters"]()
+
+    token = current_user.set({**user_ctx, "username": "bob", "token": "tok-bob"})
+    try:
+        await tools["list_dask_clusters"]()
+    finally:
+        current_user.reset(token)
+
+    request = route.calls.last.request
+    assert request.headers["Authorization"] == "jupyterhub tok-bob"
+    assert "cookie" not in request.headers
 
 
 # ── get_dask_cluster_info ─────────────────────────────────────────────────────
