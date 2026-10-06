@@ -5886,13 +5886,14 @@
     {
       "id": 60,
       "type": "timeseries",
-      "title": "Workers preempted per hour",
+      "title": "Workers preempted",
       "gridPos": {
         "x": 6,
         "y": 82,
         "w": 6,
         "h": 8
       },
+      "interval": "1m",
       "datasource": {
         "type": "datasource",
         "uid": "-- Mixed --"
@@ -5900,18 +5901,17 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum((scheduler_preemption_victims_sum - scheduler_preemption_victims_sum offset 1h >= 0) or scheduler_preemption_victims_sum)",
+          "expr": "sum((scheduler_preemption_victims_sum - scheduler_preemption_victims_sum offset $__interval >= 0) or (scheduler_preemption_victims_sum < scheduler_preemption_victims_sum offset $__interval))",
           "legendFormat": "preempted",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
           "range": true,
-          "instant": false,
-          "interval": "1h"
+          "instant": false
         }
       ],
-      "description": "Pods the Kubernetes scheduler evicted to make room for a higher-priority pod, bucketed per hour. Counted across Geddes, so it includes Ray Train workers as well as Dask workers past a cluster's guaranteed ones.",
+      "description": "Pods the Kubernetes scheduler evicted to make room for a higher-priority pod. Each point counts the evictions since the previous point, a minute at the finest. Counted across Geddes, so it includes Ray Train workers as well as Dask workers past a cluster's guaranteed ones.",
       "fieldConfig": {
         "defaults": {
           "color": {
