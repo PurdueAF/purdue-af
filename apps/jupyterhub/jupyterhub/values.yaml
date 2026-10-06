@@ -15,6 +15,7 @@ singleuser:
     - display_name: "Purdue AF 0.14.1"
       slug: purdue-af
       default: true
+      description: 'To use <a href="https://analysis-facility.physics.purdue.edu/guide-ray-train/" target="_blank">Ray</a> for multi-GPU distributed training, start the session with 0 GPUs.'
       kubespawner_override:
         image: "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af:0.14.1"
         node_selector: { "cms-af-prod": "true" }
@@ -63,7 +64,7 @@ singleuser:
           display_name: "GPUs"
           choices:
             1:
-              display_name: "0 — start with 0 GPUs to use Ray for multi-GPU distributed training"
+              display_name: "0"
               kubespawner_override:
                 extra_resource_limits:
                   nvidia.com/mig-1g.5gb: 0
