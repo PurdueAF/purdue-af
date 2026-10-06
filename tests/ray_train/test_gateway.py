@@ -201,6 +201,8 @@ class FakePrometheus:
         self.up = True
         self.allocatable = 8
         self.used = 0
+        # Of the used, those preemptible workers hold.
+        self.preemptible = 0
         # Without the series of kube-state-metrics
         self.empty = False
 
@@ -208,7 +210,11 @@ class FakePrometheus:
         async def query(request):
             if not self.up:
                 return web.json_response({}, status=503)
-            counts = {gw.ALLOC_QUERY: self.allocatable, gw.USED_QUERY: self.used}
+            counts = {
+                gw.ALLOC_QUERY: self.allocatable,
+                gw.USED_QUERY: self.used,
+                gw.PREEMPTIBLE_QUERY: self.preemptible,
+            }
             value = counts[request.query["query"]]
             samples = [
                 {"metric": {"resource": "nvidia_com_gpu"}, "value": [0, str(value)]},
@@ -837,7 +843,7 @@ async def test_head_and_workers_run_as_the_user_in_the_environment(env):
     assert worker["spec"]["securityContext"]["runAsUser"] == 5001
 
 
-@pytest.mark.parametrize("gpus", ["0", "5", "two", "1.5", "auto"])
+@pytest.mark.parametrize("gpus", ["0", "9", "two", "1.5", "auto"])
 async def test_a_gpu_count_out_of_range_is_refused(env, gpus):
     assert await refused(env, gpus=gpus) == grpc.StatusCode.INVALID_ARGUMENT
     assert env.kube.clusters == {}
@@ -881,17 +887,41 @@ async def test_gpus_just_admitted_count_as_taken_until_prometheus_sees_them(env)
     assert await call(env, token="session-b", client="client-b") == [b"echo:ping"]
 
 
-async def test_all_clusters_together_stay_within_the_budget(env, monkeypatch):
-    monkeypatch.setattr(gw, "GPU_BUDGET", 4)
-    await call(env, gpus="3")
+async def test_one_cluster_may_hold_every_gpu(env):
+    await call(env, gpus="8")
+    assert counts(preemptible(env)) == (7, 7, 7)
+
+
+async def test_a_cluster_of_one_gpu_takes_it_from_a_preemptible_worker(env):
+    await call(env, gpus="8")
     scraped(env)
-    env.prometheus.used = 3
+    env.prometheus.used, env.prometheus.preemptible = 8, 7
     assert (
         await refused(env, token="session-b", gpus="2")
         == grpc.StatusCode.RESOURCE_EXHAUSTED
     )
-    assert live(env) == {"ray-train-user-a"}
     assert await call(env, token="session-b", client="client-b") == [b"echo:ping"]
+    assert live(env) == {"ray-train-user-a", "ray-train-user-b-cern"}
+
+
+async def test_no_cluster_takes_a_gpu_from_a_pod_that_keeps_it(env):
+    env.prometheus.used = 8
+    assert await refused(env) == grpc.StatusCode.RESOURCE_EXHAUSTED
+    assert env.kube.clusters == {}
+
+
+async def test_a_preemptible_gpu_is_taken_by_one_cluster_only(env):
+    env.prometheus.used, env.prometheus.preemptible = 8, 1
+    await call(env)
+    assert await refused(env, token="session-b") == grpc.StatusCode.RESOURCE_EXHAUSTED
+
+
+async def test_a_replacement_takes_no_gpu_of_its_predecessors_workers(env):
+    await call(env, gpus="3")
+    scraped(env)
+    env.prometheus.used, env.prometheus.preemptible = 8, 2
+    assert await refused(env, gpus="4") == grpc.StatusCode.RESOURCE_EXHAUSTED
+    assert live(env) == {"ray-train-user-a"}
 
 
 async def test_a_replacement_may_take_the_gpus_its_predecessor_holds(env):

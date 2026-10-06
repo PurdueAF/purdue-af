@@ -14,8 +14,8 @@ userCacheSeconds: 300
 goneSeconds: 300
 
 # The most workers, a GPU each, that a call may ask for.
-maxGpus: 4
-# The most GPUs all clusters hold together.
+maxGpus: 8
+# The most GPUs all clusters hold together while Prometheus does not say how many are free.
 gpuBudget: 8
 # The resource of a worker's GPU in raycluster.yaml.
 gpuResource: nvidia.com/gpu

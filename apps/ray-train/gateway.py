@@ -8,8 +8,9 @@ that user's RayCluster: created from raycluster.yaml when they first connect
 or submit a job, running as them, and deleted once idle. Only the gateway
 holds a cluster's own Ray token. A cluster runs the global Pixi environment,
 or the one a call names in af-ray-env, with one GPU or as many as af-ray-gpus
-asks: a cluster starts only while that many T4s are free, and all clusters
-together hold GPU_BUDGET of them at most. The settings are in config.yaml.
+asks: a cluster starts only while that many T4s are free, or with one GPU
+while another cluster's preemptible worker holds a T4. The settings are in
+config.yaml.
 """
 
 from __future__ import annotations
@@ -71,6 +72,13 @@ MAX_GPUS = int(CONFIG["maxGpus"])
 GPU_BUDGET = int(CONFIG["gpuBudget"])
 GPU_RESOURCE = str(CONFIG["gpuResource"])
 PREEMPTIBLE_PRIORITY_CLASS = str(CONFIG["preemptiblePriorityClass"])
+# The GPUs that running pods of that class hold.
+PREEMPTIBLE_QUERY = (
+    "sum by (resource) (kube_pod_container_resource_requests"
+    f'{{resource="{GPU_METRICS[GPU_RESOURCE]}", node!=""}}'
+    " * on (namespace, pod) group_left() group by (namespace, pod) "
+    f'(kube_pod_info{{priority_class="{PREEMPTIBLE_PRIORITY_CLASS}"}}))'
+)
 PROMETHEUS_URL = str(CONFIG["prometheusUrl"])
 DEFAULT_ENV = str(CONFIG["defaultEnv"])
 LDAP_HOST = str(CONFIG["ldapHost"])
@@ -769,8 +777,8 @@ class Gateway:
             )
 
     async def admit(self, user: User, shape: Shape, replaced: int = 0) -> None:
-        """Refuse a cluster whose GPUs are not all free now, or that would take the
-        clusters past their budget; `replaced` are the GPUs its predecessor gives back."""
+        """Refuse a cluster whose GPUs are not all free now, unless it asks for one
+        and a preemptible worker holds one; `replaced` are the GPUs its predecessor gives back."""
         wanted = int(shape.gpus)
         async with self.admitting:
             status, listing = await self.kube(
@@ -792,12 +800,17 @@ class Gateway:
             granted = {
                 c: gpus for c, (gpus, _) in self.grants.items() if c != user.cluster
             }
-            # A cluster admitted and not created yet is in no listing.
-            available = GPU_BUDGET - sum({**granted, **others}.values())
             free = await self.free_gpus()
-            if free is not None:
+            if free is None:
+                # A cluster admitted and not created yet is in no listing.
+                available = GPU_BUDGET - sum({**granted, **others}.values())
+            else:
+                unheld, preemptible = free
                 # Prometheus may not see the pods of a cluster just admitted.
-                available = min(available, free + replaced - sum(granted.values()))
+                available = unheld + replaced - sum(granted.values())
+                # Its first worker evicts a preemptible one; its predecessor's leave with it.
+                if available < 1 <= available + preemptible - max(replaced - 1, 0):
+                    available = 1
             if wanted > available:
                 log.info(
                     "refused %s %d GPUs: %d available, %s free",
@@ -812,16 +825,20 @@ class Gateway:
                 )
             self.grants[user.cluster] = (wanted, now + GRANT_S)
 
-    async def free_gpus(self) -> int | None:
-        """The T4s no pod holds, as the Hub's profile form counts them; None if Prometheus does not say."""
+    async def free_gpus(self) -> tuple[int, int] | None:
+        """The T4s no pod holds, as the Hub's profile form counts them, and those
+        preemptible workers hold; None if Prometheus does not say."""
         metric = GPU_METRICS[GPU_RESOURCE]
         try:
-            allocatable, used = await asyncio.gather(
-                self.prometheus(ALLOC_QUERY), self.prometheus(USED_QUERY)
+            allocatable, used, preemptible = await asyncio.gather(
+                self.prometheus(ALLOC_QUERY),
+                self.prometheus(USED_QUERY),
+                self.prometheus(PREEMPTIBLE_QUERY),
             )
             if metric not in allocatable:
                 return None
-            return max(int(allocatable[metric] - used.get(metric, 0)), 0)
+            unheld = max(int(allocatable[metric] - used.get(metric, 0)), 0)
+            return unheld, int(preemptible.get(metric, 0))
         except (ClientError, asyncio.TimeoutError, LookupError, TypeError, ValueError):
             log.warning("Prometheus did not say how many GPUs are free")
             return None
