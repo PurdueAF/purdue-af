@@ -4,6 +4,10 @@
 its own). Clients live for the process — never ``async with`` them closed at a
 call site.
 
+Every pooled client serves all users, so ``upstream_transport`` drops the
+cookies a backend sets: the caller's token is the only identity a request
+carries.
+
 ``quote_label`` escapes a value for interpolation inside a PromQL/LogQL label
 matcher (``{label="<value>"}``). Usernames come from the Hub and are the only
 dynamic values we interpolate, but escaping centrally removes the injection
@@ -22,6 +26,28 @@ from metrics import instrumented_transport
 _clients: dict[str, httpx.AsyncClient] = {}
 
 
+class _CookielessTransport(httpx.AsyncBaseTransport):
+    """Transport wrapper that removes ``Set-Cookie`` from every response."""
+
+    def __init__(self, inner: httpx.AsyncBaseTransport) -> None:
+        self._inner = inner
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        response = await self._inner.handle_async_request(request)
+        # Dask Gateway prefers its session cookie over the Authorization header.
+        if "set-cookie" in response.headers:
+            del response.headers["set-cookie"]
+        return response
+
+    async def aclose(self) -> None:
+        await self._inner.aclose()
+
+
+def upstream_transport(name: str, **transport_kwargs: Any) -> httpx.AsyncBaseTransport:
+    """The transport for a client shared between users: metered, cookieless."""
+    return _CookielessTransport(instrumented_transport(name, **transport_kwargs))
+
+
 def shared_client(name: str, **transport_kwargs: Any) -> httpx.AsyncClient:
     """Return the process-wide pooled client for ``name``, creating it once.
 
@@ -31,7 +57,7 @@ def shared_client(name: str, **transport_kwargs: Any) -> httpx.AsyncClient:
     client = _clients.get(name)
     if client is None or client.is_closed:
         client = httpx.AsyncClient(
-            transport=instrumented_transport(name, **transport_kwargs)
+            transport=upstream_transport(name, **transport_kwargs)
         )
         _clients[name] = client
     return client

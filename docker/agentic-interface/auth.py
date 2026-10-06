@@ -14,7 +14,8 @@ from cachetools import TTLCache
 from config import HUB_API_URL, NAMESPACE
 from errors import describe_exception, json_body, response_detail
 from mcp.server.auth.provider import AccessToken
-from metrics import instrumented_transport, record_auth
+from metrics import record_auth
+from shared import upstream_transport
 
 
 class HubUnavailable(Exception):
@@ -71,9 +72,7 @@ _client: Optional[httpx.AsyncClient] = None
 def _get_client() -> httpx.AsyncClient:
     global _client
     if _client is None:
-        _client = httpx.AsyncClient(
-            timeout=10.0, transport=instrumented_transport("hub")
-        )
+        _client = httpx.AsyncClient(timeout=10.0, transport=upstream_transport("hub"))
     return _client
 
 
