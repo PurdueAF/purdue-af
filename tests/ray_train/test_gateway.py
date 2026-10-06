@@ -217,12 +217,12 @@ class FakePrometheus:
                 return web.json_response({}, status=503)
             counts = {
                 gw.ALLOC_QUERY: self.allocatable,
-                gw.USED_QUERY: self.used,
+                gw.USED_QUERY: self.used - self.preemptible,
                 gw.PREEMPTIBLE_QUERY: self.preemptible,
             }
             slices = {
                 gw.ALLOC_QUERY: self.slices,
-                gw.USED_QUERY: self.slices_used,
+                gw.USED_QUERY: self.slices_used - self.slices_preemptible,
                 gw.PREEMPTIBLE_QUERY: self.slices_preemptible,
             }
             query = request.query["query"]

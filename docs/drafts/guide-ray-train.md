@@ -201,7 +201,7 @@ shared with everyone's sessions and clusters:
 * A cluster whose GPUs have not all joined some minutes after it started is
   removed, with the job submitted to it.
 * Your cluster keeps its first GPU. Each of the others may be taken at any
-  time for work of a higher priority, such as another cluster's first GPU,
+  time for someone's session or another cluster's first GPU,
   which stops what runs on it: the worker
   returns when a GPU is free again. A training that
   [saves checkpoints](https://docs.ray.io/en/latest/train/user-guides/fault-tolerance.html)

@@ -213,6 +213,14 @@ def test_the_gateway_counts_the_gpus_its_workers_take():
     assert all(f.resource in gateway.GPU_METRICS for f in gateway.FLAVORS)
 
 
+def test_the_hub_counts_as_free_the_gpus_of_the_class_the_gateway_assigns():
+    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+    queries = load_script(
+        REPO / "apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py", "gpu_queries"
+    )
+    assert gateway.PREEMPTIBLE_PRIORITY_CLASS == queries.PREEMPTIBLE_PRIORITY_CLASS
+
+
 def test_the_gateway_never_reads_a_secret():
     role = by_kind(APP / "rbac.yaml", "Role")
     (secrets,) = [rule for rule in role["rules"] if "secrets" in rule["resources"]]

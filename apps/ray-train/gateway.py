@@ -47,7 +47,7 @@ from aiohttp import (
     WSServerHandshakeError,
     web,
 )
-from gpu_queries import ALLOC_QUERY, GPU_METRICS, USED_QUERY
+from gpu_queries import ALLOC_QUERY, GPU_METRICS, PREEMPTIBLE_QUERY, USED_QUERY
 from yarl import URL
 
 log = logging.getLogger("ray-train-gateway")
@@ -89,13 +89,6 @@ FLAVORS = [
     for g in CONFIG["gpus"]
 ]
 PREEMPTIBLE_PRIORITY_CLASS = str(CONFIG["preemptiblePriorityClass"])
-# The GPUs that running pods of that class hold.
-PREEMPTIBLE_QUERY = (
-    "sum by (resource) (kube_pod_container_resource_requests"
-    f'{{resource=~"{"|".join(GPU_METRICS[f.resource] for f in FLAVORS)}", node!=""}}'
-    " * on (namespace, pod) group_left() group by (namespace, pod) "
-    f'(kube_pod_info{{priority_class="{PREEMPTIBLE_PRIORITY_CLASS}"}}))'
-)
 PROMETHEUS_URL = str(CONFIG["prometheusUrl"])
 DEFAULT_ENV = str(CONFIG["defaultEnv"])
 LDAP_HOST = str(CONFIG["ldapHost"])
@@ -937,8 +930,8 @@ class Gateway:
             return mix
 
     async def free_gpus(self) -> dict[str, tuple[int, int]] | None:
-        """Of each GPU resource, those no pod holds, as the Hub's profile form counts
-        them, and those preemptible workers hold; None if Prometheus does not say."""
+        """Of each GPU resource, those no pod holds, and those preemptible pods hold,
+        which the Hub's profile form counts as free; None if Prometheus does not say."""
         try:
             allocatable, used, preemptible = await asyncio.gather(
                 self.prometheus(ALLOC_QUERY),
@@ -950,8 +943,10 @@ class Gateway:
                 metric = GPU_METRICS[flavor.resource]
                 if metric not in allocatable:
                     return None
-                unheld = max(int(allocatable[metric] - used.get(metric, 0)), 0)
-                free[flavor.resource] = (unheld, int(preemptible.get(metric, 0)))
+                evictable = int(preemptible.get(metric, 0))
+                held = used.get(metric, 0) + evictable
+                unheld = max(int(allocatable[metric] - held), 0)
+                free[flavor.resource] = (unheld, evictable)
             return free
         except (ClientError, asyncio.TimeoutError, LookupError, TypeError, ValueError):
             log.warning("Prometheus did not say how many GPUs are free")
