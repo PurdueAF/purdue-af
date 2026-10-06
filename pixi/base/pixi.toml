@@ -33,7 +33,7 @@ metakernel            = "==1.0.7"
 # Other tools
 # xrootd puts xrdcp/xrdfs on the session PATH.
 xrootd        = "==5.9.2"  # matches the global env
-rucio-clients = "==41.3.0"
+rucio-clients = "==41.4.0"
 pytest        = "==9.1.1"
 lz4           = "==4.4.5"
 ipywidgets    = "==8.1.9"
