@@ -90,7 +90,7 @@ spec:
           - name: cvmfs
             persistentVolumeClaim:
               claimName: cvmfs
-  # Each worker: the head's pod with a T4, and the CPU and memory to feed it.
+  # Each worker: the head's pod with a GPU, and the CPU and memory to feed it. The gateway makes a group of it per kind of GPU.
   workerGroupSpecs:
     - groupName: gpu
       template:
@@ -126,7 +126,7 @@ spec:
                 limits:
                   cpu: "8"
                   memory: 32Gi
-                  # The T4s; the A100s are split into MIG devices with their own resource names.
+                  # A T4, which the gateway replaces with the resource of the group's GPU.
                   nvidia.com/gpu: 1
                 requests:
                   cpu: "8"

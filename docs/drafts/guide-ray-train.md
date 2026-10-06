@@ -2,7 +2,7 @@
 
 [Ray](https://docs.ray.io/en/latest/) runs your PyTorch training on GPUs your
 session does not hold. You have a Ray cluster of your own, with one or more
-[NVIDIA T4s](../docs/gpus.md): it starts when you submit a job, which takes a
+[GPUs](../docs/gpus.md), NVIDIA T4s and 5 GB slices of A100s: it starts when you submit a job, which takes a
 minute or two, runs as you, and is [removed](#lifetime) once idle. No other
 user can see, stop or reach it.
 
@@ -170,18 +170,30 @@ values, each trained once, is
 You have one cluster, which every job runs on. What it runs is set in the
 `headers` of the `JobSubmissionClient`:
 
-| Setting     | Header        | Value                        | Default                     |
-| ----------- | ------------- | ---------------------------- | --------------------------- |
-| GPUs        | `af-ray-gpus` | A number of T4s, as a string | `"1"`                       |
-| Environment | `af-ray-env`  | The path of your environment | The global Pixi environment |
+| Setting     | Header              | Value                                   | Default                     |
+| ----------- | ------------------- | --------------------------------------- | --------------------------- |
+| GPUs        | `af-ray-gpus`       | A number of GPUs, as a string           | `"1"`                       |
+| GPU memory  | `af-ray-gpu-memory` | The GB each GPU must have, as a string  | Any GPU                     |
+| Environment | `af-ray-env`        | The path of your environment            | The global Pixi environment |
 
 ### GPUs
 
-Each GPU is a T4 in a worker pod of its own, so nothing that asks for more
-than one at a time, such as `entrypoint_num_gpus=2`, ever starts. The T4s are
+Each GPU is in a worker pod of its own, so nothing that asks for more than one
+at a time, such as `entrypoint_num_gpus=2`, ever starts. A GPU is a 5 GB slice
+of an A100 or a 16 GB T4, and your cluster may have some of each. If your
+training needs more than 5 GB on a GPU, say how much and every GPU is a T4:
+
+```python
+client = JobSubmissionClient(
+    "http://ray-train-gateway:8265",
+    headers={"af-ray-gpus": "2", "af-ray-gpu-memory": "12"},
+)
+```
+
+A submission that asks for more memory than a T4 has fails. The GPUs are
 shared with everyone's sessions and clusters:
 
-* Your cluster starts only while as many T4s as it asks for are free, up to
+* Your cluster starts only while as many GPUs as it asks for are free, up to
   all of them. Otherwise the submission fails with the number that are free
   for you: ask for fewer, or try again later.
 * A cluster of one GPU also starts while none is free and another cluster
@@ -191,7 +203,7 @@ shared with everyone's sessions and clusters:
 * Your cluster keeps its first GPU. Each of the others may be taken at any
   time for work of a higher priority, such as another cluster's first GPU,
   which stops what runs on it: the worker
-  returns when a T4 is free again. A training that
+  returns when a GPU is free again. A training that
   [saves checkpoints](https://docs.ray.io/en/latest/train/user-guides/fault-tolerance.html)
   and sets `FailureConfig(max_failures=...)` resumes from the last one.
 
@@ -228,8 +240,8 @@ included, to `/work`: its records and logs go with the cluster.
 ### Lifetime
 
 * Your cluster holds its GPUs until it is removed or replaced, and runs one
-  environment and one number of GPUs at a time. Submitting a job with another
-  of either, the defaults included, replaces it when nothing runs on it. While
+  environment, one number of GPUs and one kind of them at a time. Submitting a
+  job with another of any, the defaults included, replaces it when nothing runs on it. While
   something does, the submission fails with the reason.
 * A cluster with nothing running for some minutes is removed. Following its
   jobs then fails with *You have no Ray cluster*.

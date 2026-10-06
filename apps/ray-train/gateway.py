@@ -8,9 +8,9 @@ that user's RayCluster: created from raycluster.yaml when they first connect
 or submit a job, running as them, and deleted once idle. Only the gateway
 holds a cluster's own Ray token. A cluster runs the global Pixi environment,
 or the one a call names in af-ray-env, with one GPU or as many as af-ray-gpus
-asks: a cluster starts only while that many T4s are free, or with one GPU
-while another cluster's preemptible worker holds a T4. The settings are in
-config.yaml.
+asks, each of the memory af-ray-gpu-memory asks or more: a cluster starts only
+while that many such GPUs are free, or with one GPU while another cluster's
+preemptible worker holds one. The settings are in config.yaml.
 """
 
 from __future__ import annotations
@@ -68,14 +68,31 @@ REAP_EVERY_S = float(CONFIG["reapEverySeconds"])
 USER_CACHE_S = float(CONFIG["userCacheSeconds"])
 GONE_S = float(CONFIG["goneSeconds"])
 GRANT_S = float(CONFIG["grantSeconds"])
-MAX_GPUS = int(CONFIG["maxGpus"])
-GPU_BUDGET = int(CONFIG["gpuBudget"])
-GPU_RESOURCE = str(CONFIG["gpuResource"])
+
+
+@dataclass(frozen=True)
+class Flavor:
+    """A kind of GPU a worker may hold."""
+
+    resource: str
+    memory: float
+    budget: int
+
+    @property
+    def group(self) -> str:
+        """The name of its worker group: `gpu` for nvidia.com/gpu."""
+        return re.sub(r"[^a-z0-9]+", "-", self.resource.rpartition("/")[2])
+
+
+FLAVORS = [
+    Flavor(str(g["resource"]), float(g["memoryGb"]), int(g["budget"]))
+    for g in CONFIG["gpus"]
+]
 PREEMPTIBLE_PRIORITY_CLASS = str(CONFIG["preemptiblePriorityClass"])
 # The GPUs that running pods of that class hold.
 PREEMPTIBLE_QUERY = (
     "sum by (resource) (kube_pod_container_resource_requests"
-    f'{{resource="{GPU_METRICS[GPU_RESOURCE]}", node!=""}}'
+    f'{{resource=~"{"|".join(GPU_METRICS[f.resource] for f in FLAVORS)}", node!=""}}'
     " * on (namespace, pod) group_left() group by (namespace, pod) "
     f'(kube_pod_info{{priority_class="{PREEMPTIBLE_PRIORITY_CLASS}"}}))'
 )
@@ -100,6 +117,9 @@ ENV_ANNOTATION = "purdue-af/ray-env"
 # Set as af-ray-env is: the cluster's GPUs, one per worker.
 GPUS_METADATA = "af-ray-gpus"
 GPUS_ANNOTATION = "purdue-af/ray-gpus"
+# Set as af-ray-env is: the GPU memory each worker needs, in GB.
+MEMORY_METADATA = "af-ray-gpu-memory"
+MEMORY_ANNOTATION = "purdue-af/ray-gpu-memory"
 REMOVED_IDLE = "Your Ray cluster was removed after it went idle: run ray.shutdown(), then ray.init() again."
 REMOVED_UNPROVISIONED = f"Your Ray cluster was removed, as not all of its GPUs started in time: ask for fewer with {GPUS_METADATA}, or try again later."
 # singleuser.podNameTemplate in the Hub values
@@ -121,13 +141,20 @@ GRPC_OPTIONS = [
     ("grpc.http2.max_ping_strikes", 0),
 ]
 # Metadata a relayed call does not carry on: the gateway's own, and what gRPC sets itself.
-NOT_RELAYED = {"authorization", ENV_METADATA, GPUS_METADATA, "user-agent"}
+NOT_RELAYED = {
+    "authorization",
+    ENV_METADATA,
+    GPUS_METADATA,
+    MEMORY_METADATA,
+    "user-agent",
+}
 # Headers a relayed HTTP call carries on neither way: the gateway's own, and its connections' framing.
 NOT_PASSED_ON = {
     "authorization",
     "host",
     ENV_METADATA,
     GPUS_METADATA,
+    MEMORY_METADATA,
     "connection",
     "keep-alive",
     "upgrade",
@@ -172,10 +199,16 @@ class User:
 
 @dataclass(frozen=True)
 class Shape:
-    """What a user's cluster runs: an environment, and its number of GPUs."""
+    """What a user's cluster runs: an environment, its number of GPUs, and the
+    memory of the smallest GPU it may hold, in GB."""
 
     env: str
     gpus: str
+    memory: str
+
+    @property
+    def flavors(self) -> list[Flavor]:
+        return [f for f in FLAVORS if f.memory >= float(self.memory)]
 
 
 def cluster_name(username: str) -> str:
@@ -268,18 +301,24 @@ def submits(request: web.Request) -> bool:
     )
 
 
-def build_cluster(template: dict[str, Any], user: User, shape: Shape) -> dict[str, Any]:
+def build_cluster(
+    template: dict[str, Any], user: User, shape: Shape, mix: dict[str, int]
+) -> dict[str, Any]:
+    """The user's cluster, with `mix` workers of each GPU resource."""
     cluster = copy.deepcopy(template)
     metadata = cluster["metadata"]
     metadata["name"] = user.cluster
     metadata.setdefault("labels", {})["app.kubernetes.io/managed-by"] = MANAGED_BY
     metadata.setdefault("annotations", {}).update(
-        {ENV_ANNOTATION: shape.env, GPUS_ANNOTATION: shape.gpus}
+        {
+            ENV_ANNOTATION: shape.env,
+            GPUS_ANNOTATION: shape.gpus,
+            MEMORY_ANNOTATION: shape.memory,
+        }
     )
     spec = cluster["spec"]
     spec["authOptions"]["secretName"] = user.cluster
     (group,) = spec["workerGroupSpecs"]
-    group.update(replicas=1, minReplicas=1, maxReplicas=1)
     for template in (spec["headGroupSpec"]["template"], group["template"]):
         pod = template["spec"]
         pod.setdefault("securityContext", {}).update(
@@ -293,17 +332,39 @@ def build_cluster(template: dict[str, Any], user: User, shape: Shape) -> dict[st
                     variable["value"] = f"{shape.env}/bin:{variable['value']}"
             variables.append({"name": "CONDA_PREFIX", "value": shape.env})
             variables.append({"name": "USER", "value": user.account})
-    preemptible = int(shape.gpus) - 1
-    if preemptible:
-        # Every worker but the first gives way to pods of the default priority.
-        extra = copy.deepcopy(group)
-        extra["groupName"] = f"{group['groupName']}-preemptible"
-        extra.update(
-            replicas=preemptible, minReplicas=preemptible, maxReplicas=preemptible
-        )
-        extra["template"]["spec"]["priorityClassName"] = PREEMPTIBLE_PRIORITY_CLASS
-        spec["workerGroupSpecs"].append(extra)
+    spec["workerGroupSpecs"] = []
+    # Every worker but the first gives way to pods of the default priority.
+    kept = 1
+    for flavor in FLAVORS:
+        workers = mix.get(flavor.resource, 0)
+        for replicas, preemptible in (
+            (min(kept, workers), False),
+            (workers - kept, True),
+        ):
+            if replicas > 0:
+                spec["workerGroupSpecs"].append(
+                    worker_group(group, flavor, replicas, preemptible)
+                )
+        kept = max(kept - workers, 0)
     return cluster
+
+
+def worker_group(
+    template: dict[str, Any], flavor: Flavor, replicas: int, preemptible: bool
+) -> dict[str, Any]:
+    """The template's worker group, as `replicas` workers with a GPU of `flavor` each."""
+    group = copy.deepcopy(template)
+    group["groupName"] = flavor.group + ("-preemptible" if preemptible else "")
+    group.update(replicas=replicas, minReplicas=replicas, maxReplicas=replicas)
+    pod = group["template"]["spec"]
+    if preemptible:
+        pod["priorityClassName"] = PREEMPTIBLE_PRIORITY_CLASS
+    for container in pod["containers"]:
+        for amounts in container["resources"].values():
+            for other in FLAVORS:
+                amounts.pop(other.resource, None)
+            amounts[flavor.resource] = 1
+    return group
 
 
 def token_secret(user: User, owner_uid: str, token: str) -> dict[str, Any]:
@@ -348,9 +409,18 @@ def unprovisioned(cluster: dict[str, Any], now: float) -> bool:
     return now - created.timestamp() >= PROVISION_TIMEOUT_S
 
 
-def held_gpus(cluster: dict[str, Any]) -> int:
-    gpus = cluster_shape(cluster).gpus
-    return int(gpus) if gpus.isdigit() else 0
+def held_gpus(cluster: dict[str, Any]) -> dict[str, int]:
+    """The workers the cluster has of each GPU resource."""
+    held: dict[str, int] = {}
+    for group in cluster["spec"].get("workerGroupSpecs") or []:
+        for container in group["template"]["spec"]["containers"]:
+            limits = (container.get("resources") or {}).get("limits") or {}
+            for flavor in FLAVORS:
+                if flavor.resource in limits:
+                    held[flavor.resource] = held.get(flavor.resource, 0) + int(
+                        group.get("replicas", 0)
+                    )
+    return held
 
 
 def load_template() -> dict[str, Any]:
@@ -384,15 +454,34 @@ def requested_env(value: str, template: dict[str, Any]) -> str:
     return path
 
 
-def requested_gpus(value: str) -> str:
+def requested_memory(value: str) -> str:
+    """The GPU memory a call asks of each worker, as that of the smallest GPU that has it."""
+    try:
+        wanted = float(value or 0)
+    except ValueError:
+        raise Refused(
+            grpc.StatusCode.INVALID_ARGUMENT,
+            f"{MEMORY_METADATA} is a number of GB.",
+        ) from None
+    enough = [f.memory for f in FLAVORS if f.memory >= wanted]
+    if not enough:
+        raise Refused(
+            grpc.StatusCode.INVALID_ARGUMENT,
+            f"No GPU of a Ray cluster has {value} GB: the largest has {max(f.memory for f in FLAVORS):g} GB.",
+        )
+    return f"{min(enough):g}"
+
+
+def requested_gpus(value: str, flavors: list[Flavor]) -> str:
     """The GPUs a call asks for, one by default."""
     if not value:
         return "1"
-    if value in {str(n) for n in range(1, MAX_GPUS + 1)}:
+    most = sum(f.budget for f in flavors)
+    if value in {str(n) for n in range(1, most + 1)}:
         return value
     raise Refused(
         grpc.StatusCode.INVALID_ARGUMENT,
-        f"{GPUS_METADATA} is a number of GPUs from 1 to {MAX_GPUS}.",
+        f"{GPUS_METADATA} is a number of GPUs from 1 to {most}.",
     )
 
 
@@ -401,6 +490,8 @@ def cluster_shape(cluster: dict[str, Any]) -> Shape:
     return Shape(
         str(annotations.get(ENV_ANNOTATION, "")),
         str(annotations.get(GPUS_ANNOTATION, "")),
+        # Without it, a cluster holds GPUs that any call may have.
+        str(annotations.get(MEMORY_ANNOTATION, requested_memory(""))),
     )
 
 
@@ -429,7 +520,7 @@ class Gateway:
         # cluster -> why it was removed before it ever ran, until the user's next one
         self.never_started: dict[str, str] = {}
         # cluster -> the GPUs it was admitted with, and until when they count as taken
-        self.grants: dict[str, tuple[int, float]] = {}
+        self.grants: dict[str, tuple[dict[str, int], float]] = {}
         self.admitting = asyncio.Lock()
         self._users: dict[str, tuple[float, User]] = {}
 
@@ -501,11 +592,14 @@ class Gateway:
                 "No token: RAY_AUTH_MODE=token and RAY_AUTH_TOKEN=$JUPYTERHUB_API_TOKEN must be set.",
             )
         user = await self.user_for(token)
+        memory = requested_memory(values.get(MEMORY_METADATA, ""))
         shape = Shape(
             requested_env(values.get(ENV_METADATA, ""), load_template()),
-            requested_gpus(values.get(GPUS_METADATA, "")),
+            "1",
+            memory,
         )
-        return user, shape
+        gpus = requested_gpus(values.get(GPUS_METADATA, ""), shape.flavors)
+        return user, Shape(shape.env, gpus, memory)
 
     async def cluster_for(self, user: User, shape: Shape) -> str:
         """The user's cluster, started in `shape` unless it runs in it."""
@@ -713,20 +807,20 @@ class Gateway:
                 if await self.busy(cluster):
                     raise Refused(
                         grpc.StatusCode.FAILED_PRECONDITION,
-                        "Your Ray cluster runs another environment or number of GPUs, and tasks or jobs: wait for them, or stop them.",
+                        "Your Ray cluster runs another environment, number of GPUs or GPU memory, and tasks or jobs: wait for them, or stop them.",
                     )
                 # Before the deletion: a refusal leaves the user the cluster they have.
-                await self.admit(user, shape, held_gpus(cluster))
+                mix = await self.admit(user, shape, held_gpus(cluster))
                 await self.delete(user.cluster)
             else:
-                await self.admit(user, shape)
+                mix = await self.admit(user, shape)
             await self.wait_until_gone(user.cluster)
             cluster = None
         elif cluster is None:
-            await self.admit(user, shape)
+            mix = await self.admit(user, shape)
         if cluster is None:
             status, created = await self.kube(
-                "POST", RAYCLUSTERS, build_cluster(load_template(), user, shape)
+                "POST", RAYCLUSTERS, build_cluster(load_template(), user, shape, mix)
             )
             if status == 201:
                 log.info("created %s", user.cluster)
@@ -776,10 +870,15 @@ class Gateway:
                 "The Ray in that environment does not enforce the cluster's token.",
             )
 
-    async def admit(self, user: User, shape: Shape, replaced: int = 0) -> None:
-        """Refuse a cluster whose GPUs are not all free now, unless it asks for one
-        and a preemptible worker holds one; `replaced` are the GPUs its predecessor gives back."""
+    async def admit(
+        self, user: User, shape: Shape, replaced: dict[str, int] | None = None
+    ) -> dict[str, int]:
+        """The workers a cluster gets of each GPU resource its shape allows, the
+        first of FLAVORS first. Refuse one whose GPUs are not all free now, unless
+        it asks for one and a preemptible worker holds one; `replaced` are the GPUs
+        its predecessor gives back."""
         wanted = int(shape.gpus)
+        replaced = replaced or {}
         async with self.admitting:
             status, listing = await self.kube(
                 "GET",
@@ -801,16 +900,27 @@ class Gateway:
                 c: gpus for c, (gpus, _) in self.grants.items() if c != user.cluster
             }
             free = await self.free_gpus()
-            if free is None:
-                # A cluster admitted and not created yet is in no listing.
-                available = GPU_BUDGET - sum({**granted, **others}.values())
-            else:
-                unheld, preemptible = free
-                # Prometheus may not see the pods of a cluster just admitted.
-                available = unheld + replaced - sum(granted.values())
-                # Its first worker evicts a preemptible one; its predecessor's leave with it.
-                if available < 1 <= available + preemptible - max(replaced - 1, 0):
-                    available = 1
+            mix: dict[str, int] = {}
+            evicting = None
+            for flavor in shape.flavors:
+                resource = flavor.resource
+                taken = sum(g.get(resource, 0) for g in granted.values())
+                if free is None:
+                    # A cluster admitted and not created yet is in no listing.
+                    held = {**granted, **others}.values()
+                    available = flavor.budget - sum(h.get(resource, 0) for h in held)
+                else:
+                    unheld, preemptible = free[resource]
+                    # Prometheus may not see the pods of a cluster just admitted.
+                    available = unheld + replaced.get(resource, 0) - taken
+                    # Its predecessor's preemptible workers leave with it.
+                    if unheld + preemptible - replaced.get(resource, 0) - taken > 0:
+                        evicting = evicting or resource
+                mix[resource] = max(min(available, wanted - sum(mix.values())), 0)
+            available = sum(mix.values())
+            if wanted == 1 and not available and evicting:
+                # Its worker evicts a preemptible one.
+                mix[evicting] = available = 1
             if wanted > available:
                 log.info(
                     "refused %s %d GPUs: %d available, %s free",
@@ -821,24 +931,28 @@ class Gateway:
                 )
                 raise Refused(
                     grpc.StatusCode.RESOURCE_EXHAUSTED,
-                    f"Your Ray cluster asks for {wanted} T4 GPUs and Ray clusters can take {max(available, 0)} more now: ask for fewer with {GPUS_METADATA}, or try again later.",
+                    f"Your Ray cluster asks for {wanted} GPUs of {shape.memory} GB or more and Ray clusters can take {available} more now: ask for fewer with {GPUS_METADATA}, or try again later.",
                 )
-            self.grants[user.cluster] = (wanted, now + GRANT_S)
+            self.grants[user.cluster] = (mix, now + GRANT_S)
+            return mix
 
-    async def free_gpus(self) -> tuple[int, int] | None:
-        """The T4s no pod holds, as the Hub's profile form counts them, and those
-        preemptible workers hold; None if Prometheus does not say."""
-        metric = GPU_METRICS[GPU_RESOURCE]
+    async def free_gpus(self) -> dict[str, tuple[int, int]] | None:
+        """Of each GPU resource, those no pod holds, as the Hub's profile form counts
+        them, and those preemptible workers hold; None if Prometheus does not say."""
         try:
             allocatable, used, preemptible = await asyncio.gather(
                 self.prometheus(ALLOC_QUERY),
                 self.prometheus(USED_QUERY),
                 self.prometheus(PREEMPTIBLE_QUERY),
             )
-            if metric not in allocatable:
-                return None
-            unheld = max(int(allocatable[metric] - used.get(metric, 0)), 0)
-            return unheld, int(preemptible.get(metric, 0))
+            free = {}
+            for flavor in FLAVORS:
+                metric = GPU_METRICS[flavor.resource]
+                if metric not in allocatable:
+                    return None
+                unheld = max(int(allocatable[metric] - used.get(metric, 0)), 0)
+                free[flavor.resource] = (unheld, int(preemptible.get(metric, 0)))
+            return free
         except (ClientError, asyncio.TimeoutError, LookupError, TypeError, ValueError):
             log.warning("Prometheus did not say how many GPUs are free")
             return None
