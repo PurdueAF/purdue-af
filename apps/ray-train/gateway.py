@@ -7,8 +7,8 @@ with every call. The Hub says whose it is, and the call goes on, unread, to
 that user's RayCluster: created from raycluster.yaml when they first connect
 or submit a job, running as them, and deleted once idle. Only the gateway
 holds a cluster's own Ray token. A cluster runs the global Pixi environment,
-or the one a call names in af-ray-env, with one GPU or as many as af-ray-gpus
-asks, each of the memory af-ray-gpu-memory asks or more: a cluster starts only
+or the one a call names in `env`, with one GPU or as many as `gpus`
+asks, each of the memory `min-memory-per-gpu` asks or more: a cluster starts only
 while that many such GPUs are free, or with one GPU while another cluster's
 preemptible worker holds one. The settings are in config.yaml.
 """
@@ -105,13 +105,13 @@ CLIENT_PORT = 10001
 # The dashboard's, whose HTTP API, the Jobs API's among it, the gateway relays.
 DASHBOARD_PORT = 8265
 # Set by a notebook: ray.init(..., _metadata=[(ENV_METADATA, <environment>)]), or a header of JobSubmissionClient.
-ENV_METADATA = "af-ray-env"
+ENV_METADATA = "env"
 ENV_ANNOTATION = "purdue-af/ray-env"
-# Set as af-ray-env is: the cluster's GPUs, one per worker.
-GPUS_METADATA = "af-ray-gpus"
+# Set as `env` is: the cluster's GPUs, one per worker.
+GPUS_METADATA = "gpus"
 GPUS_ANNOTATION = "purdue-af/ray-gpus"
-# Set as af-ray-env is: the GPU memory each worker needs, in GB.
-MEMORY_METADATA = "af-ray-gpu-memory"
+# Set as `env` is: the least memory a worker's GPU may have, in GB.
+MEMORY_METADATA = "min-memory-per-gpu"
 MEMORY_ANNOTATION = "purdue-af/ray-gpu-memory"
 REMOVED_IDLE = "Your Ray cluster was removed after it went idle: run ray.shutdown(), then ray.init() again."
 REMOVED_UNPROVISIONED = f"Your Ray cluster was removed, as not all of its GPUs started in time: ask for fewer with {GPUS_METADATA}, or try again later."

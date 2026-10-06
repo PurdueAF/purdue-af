@@ -106,9 +106,7 @@ Submit it without `entrypoint_num_gpus`, since the trainer's workers hold the
 GPUs, and ask for as many GPUs as it has workers:
 
 ```python
-client = JobSubmissionClient(
-    "http://ray-train-gateway:8265", headers={"af-ray-gpus": "2"}
-)
+client = JobSubmissionClient("http://ray-train-gateway:8265", headers={"gpus": "2"})
 job = client.submit_job(entrypoint="python train.py", runtime_env={"working_dir": "."})
 ```
 
@@ -159,7 +157,7 @@ best = tuner.fit().get_best_result()
 print(best.config, best.metrics["loss"])
 ```
 
-Submit it as for [Ray Train](#ray-train), with `af-ray-gpus` the number of
+Submit it as for [Ray Train](#ray-train), with `gpus` the number of
 trainings to run at once and the same rule for `storage_path`. A fixed list of
 values, each trained once, is
 `param_space={"lr": tune.grid_search([1e-1, 1e-2, 1e-3])}` with
@@ -170,27 +168,35 @@ values, each trained once, is
 You have one cluster, which every job runs on. What it runs is set in the
 `headers` of the `JobSubmissionClient`:
 
-| Setting     | Header              | Value                                   | Default                     |
-| ----------- | ------------------- | --------------------------------------- | --------------------------- |
-| GPUs        | `af-ray-gpus`       | A number of GPUs, as a string           | `"1"`                       |
-| GPU memory  | `af-ray-gpu-memory` | The GB each GPU must have, as a string  | Any GPU                     |
-| Environment | `af-ray-env`        | The path of your environment            | The global Pixi environment |
+| Setting     | Header               | Value                                    | Default                     |
+| ----------- | -------------------- | ---------------------------------------- | --------------------------- |
+| GPUs        | `gpus`               | A number of GPUs, as a string            | `"1"`                       |
+| GPU memory  | `min-memory-per-gpu` | The GB each GPU must have, as a string   | Any GPU                     |
+| Environment | `env`                | The path of your environment             | The global Pixi environment |
 
 ### GPUs
 
 Each GPU is in a worker pod of its own, so nothing that asks for more than one
 at a time, such as `entrypoint_num_gpus=2`, ever starts. A GPU is a 5 GB slice
-of an A100 or a 16 GB T4, and your cluster may have some of each. If your
-training needs more than 5 GB on a GPU, say how much and every GPU is a T4:
+of an A100 or a 16 GB T4, and `min-memory-per-gpu` decides which your cluster
+has:
+
+| `min-memory-per-gpu`      | Your cluster's GPUs                           |
+| ------------------------- | --------------------------------------------- |
+| Not set, or `"5"` or less | A100 slices and T4s, whichever are free       |
+| Above `"5"`, up to `"16"` | T4s only                                      |
+| Above `"16"`              | None: the submission fails, as no GPU has it  |
+
+A training that needs 12 GB on each GPU:
 
 ```python
 client = JobSubmissionClient(
     "http://ray-train-gateway:8265",
-    headers={"af-ray-gpus": "2", "af-ray-gpu-memory": "12"},
+    headers={"gpus": "2", "min-memory-per-gpu": "12"},
 )
 ```
 
-A submission that asks for more memory than a T4 has fails. The GPUs are
+The GPUs are
 shared with everyone's sessions and clusters:
 
 * Your cluster starts only while as many GPUs as it asks for are free, up to
@@ -222,7 +228,7 @@ import sys
 
 client = JobSubmissionClient(
     "http://ray-train-gateway:8265",
-    headers={"af-ray-env": os.path.realpath(sys.prefix)},
+    headers={"env": os.path.realpath(sys.prefix)},
 )
 ```
 
