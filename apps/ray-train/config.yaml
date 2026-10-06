@@ -19,6 +19,8 @@ maxGpus: 4
 gpuBudget: 8
 # The resource of a worker's GPU in raycluster.yaml.
 gpuResource: nvidia.com/gpu
+# The PriorityClass of a cluster's workers past its first.
+preemptiblePriorityClass: low-priority-preemptible
 # How long an admitted cluster's GPUs count as taken, for Prometheus to see its pods.
 grantSeconds: 120
 prometheusUrl: http://prometheus-server:9090

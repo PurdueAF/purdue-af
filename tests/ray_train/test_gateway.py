@@ -513,7 +513,13 @@ def cluster_spec(env, name="ray-train-user-a"):
 
 
 def workers(env, name="ray-train-user-a"):
-    (group,) = cluster_spec(env, name)["workerGroupSpecs"]
+    """The worker that keeps its GPU."""
+    return cluster_spec(env, name)["workerGroupSpecs"][0]
+
+
+def preemptible(env, name="ray-train-user-a"):
+    """The workers that give their GPUs up to pods of the default priority."""
+    (group,) = cluster_spec(env, name)["workerGroupSpecs"][1:]
     return group
 
 
@@ -794,14 +800,29 @@ async def test_a_ray_without_token_authentication_is_refused(env):
 
 async def test_a_cluster_holds_one_gpu_unless_asked_for_more(env):
     await call(env)
-    assert counts(workers(env)) == (1, 1, 1)
+    (group,) = cluster_spec(env)["workerGroupSpecs"]
+    assert counts(group) == (1, 1, 1)
+    assert "priorityClassName" not in group["template"]["spec"]
 
 
 async def test_gpus_asked_for_are_held_from_the_start(env):
     await call(env, gpus="4")
-    assert counts(workers(env)) == (4, 4, 4)
+    assert counts(workers(env)) == (1, 1, 1)
+    assert counts(preemptible(env)) == (3, 3, 3)
     annotations = env.kube.clusters["ray-train-user-a"]["metadata"]["annotations"]
     assert annotations[gw.GPUS_ANNOTATION] == "4"
+
+
+async def test_only_the_gpus_past_the_first_are_preemptible(env):
+    await call(env, gpus="3")
+    first, rest = workers(env), preemptible(env)
+    assert first["groupName"] != rest["groupName"]
+    assert "priorityClassName" not in first["template"]["spec"]
+    assert (
+        rest["template"]["spec"].pop("priorityClassName")
+        == gw.PREEMPTIBLE_PRIORITY_CLASS
+    )
+    assert rest["template"] == first["template"]
 
 
 async def test_head_and_workers_run_as_the_user_in_the_environment(env):
@@ -825,7 +846,7 @@ async def test_a_gpu_count_out_of_range_is_refused(env, gpus):
 async def test_asking_for_other_gpus_replaces_an_idle_cluster(env):
     await call(env)
     assert await call(env, gpus="3") == [b"echo:ping"]
-    assert counts(workers(env)) == (3, 3, 3)
+    assert counts(preemptible(env)) == (2, 2, 2)
 
 
 async def test_asking_for_other_gpus_leaves_a_busy_cluster_alone(env):
@@ -878,7 +899,7 @@ async def test_a_replacement_may_take_the_gpus_its_predecessor_holds(env):
     scraped(env)
     env.prometheus.used = 6
     assert await call(env, gpus="4") == [b"echo:ping"]
-    assert counts(workers(env)) == (4, 4, 4)
+    assert counts(preemptible(env)) == (3, 3, 3)
     # Prometheus has not seen the four yet.
     assert (
         await refused(env, token="session-b", gpus="3")
@@ -892,7 +913,7 @@ async def test_a_refused_replacement_leaves_the_cluster_it_would_replace(env):
     env.prometheus.used = 8
     assert await refused(env, gpus="3") == grpc.StatusCode.RESOURCE_EXHAUSTED
     assert live(env) == {"ray-train-user-a"}
-    assert counts(workers(env)) == (2, 2, 2)
+    assert counts(preemptible(env)) == (1, 1, 1)
 
 
 @pytest.mark.parametrize("failure", ["up", "empty"])
@@ -980,7 +1001,7 @@ async def test_submitting_a_job_starts_the_users_cluster_in_the_shape_it_names(e
     status, _, body = await submit(env, env_path=ENV_A, gpus="2")
     assert (status, json.loads(body)) == (200, {"submission_id": "raysubmit_1"})
     assert cluster_env(env) == ENV_A
-    assert counts(workers(env)) == (2, 2, 2)
+    assert counts(preemptible(env)) == (1, 1, 1)
     ((cluster, method, path, headers, sent),) = env.heads.seen
     assert (cluster, method, path) == (
         "ray-train-user-a",

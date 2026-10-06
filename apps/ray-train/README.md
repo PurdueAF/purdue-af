@@ -7,7 +7,9 @@ submits jobs with the Jobs API's client,
 session's JupyterHub token either way; the gateway asks the Hub whose token it
 is and relays the calls, unread, to that user's cluster: a head and one to four
 workers with a T4 each, created when they first connect or submit a job,
-running as them, and deleted once idle. A cluster starts only while the T4s
+running as them, and deleted once idle. Its first worker keeps its T4; the
+others run in the `low-priority-preemptible` PriorityClass, which the scheduler
+evicts for a pod of the default priority that fits nowhere else. A cluster starts only while the T4s
 it asks for are free, by the count of the Hub's profile form
 ([`gpu_queries.py`](../jupyterhub/jupyterhub/extraFiles/gpu_queries.py), in the
 gateway's ConfigMap too), and within the budget all clusters share. How users
@@ -43,7 +45,8 @@ credentials.
 ## Tuning
 
 [`config.yaml`](config.yaml) holds the gateway's settings, each with what it
-does: the timeouts, the most GPUs a call may ask for, and `gpuBudget`, the most
+does: the timeouts, the most GPUs a call may ask for, the PriorityClass of
+the preemptible workers, and `gpuBudget`, the most
 GPUs all clusters hold together, which is the only limit while Prometheus does
 not answer. `raycluster.yaml` holds the pods' sizes, mounts and image. The
 image's tag is also in `deployment.yaml` and in the Hub's
