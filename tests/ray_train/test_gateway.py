@@ -49,6 +49,8 @@ SESSIONS = {
 LOOKUPS = []
 LDAP = {"user-a": (5001, 500), "paf0042": (6042, 600)}
 ENV_A = "/work/users/user-a/proj/.pixi/envs/default"
+T4 = "nvidia.com/gpu"
+SLICE = "nvidia.com/mig-1g.5gb"
 # The heads' own, whatever a test makes of the gateway's.
 HeadWebSocket = web.WebSocketResponse
 ENV_B = "/depot/cms/users/user-a/other"
@@ -195,7 +197,7 @@ class FakeKube:
 
 
 class FakePrometheus:
-    """The T4s of the AF nodes, and those some pod holds."""
+    """The T4s of the AF nodes, and those some pod holds; the A100 slices likewise."""
 
     def __init__(self):
         self.up = True
@@ -203,6 +205,9 @@ class FakePrometheus:
         self.used = 0
         # Of the used, those preemptible workers hold.
         self.preemptible = 0
+        self.slices = 0
+        self.slices_used = 0
+        self.slices_preemptible = 0
         # Without the series of kube-state-metrics
         self.empty = False
 
@@ -212,13 +217,21 @@ class FakePrometheus:
                 return web.json_response({}, status=503)
             counts = {
                 gw.ALLOC_QUERY: self.allocatable,
-                gw.USED_QUERY: self.used,
+                gw.USED_QUERY: self.used - self.preemptible,
                 gw.PREEMPTIBLE_QUERY: self.preemptible,
             }
-            value = counts[request.query["query"]]
+            slices = {
+                gw.ALLOC_QUERY: self.slices,
+                gw.USED_QUERY: self.slices_used - self.slices_preemptible,
+                gw.PREEMPTIBLE_QUERY: self.slices_preemptible,
+            }
+            query = request.query["query"]
             samples = [
-                {"metric": {"resource": "nvidia_com_gpu"}, "value": [0, str(value)]},
-                {"metric": {"resource": "nvidia_com_mig_1g_5gb"}, "value": [0, "0"]},
+                {"metric": {"resource": metric}, "value": [0, str(value)]}
+                for metric, value in (
+                    ("nvidia_com_gpu", counts[query]),
+                    ("nvidia_com_mig_1g_5gb", slices[query]),
+                )
             ]
             result = [] if self.empty else samples
             return web.json_response({"status": "success", "data": {"result": result}})
@@ -445,6 +458,7 @@ async def call(
     env_path=None,
     client="client-1",
     gpus=None,
+    memory=None,
 ):
     """A Ray Client call from a session, as the stream of raw messages the gateway sees."""
     metadata = [("client_id", client)]
@@ -454,6 +468,8 @@ async def call(
         metadata.append((gw.ENV_METADATA, env_path))
     if gpus is not None:
         metadata.append((gw.GPUS_METADATA, gpus))
+    if memory is not None:
+        metadata.append((gw.MEMORY_METADATA, memory))
     responses = env.channel.stream_stream(method)(iter(messages), metadata=metadata)
     return [response async for response in responses]
 
@@ -464,7 +480,7 @@ async def refused(env, **kwargs):
     return e.value.code()
 
 
-def job_headers(token="session-a", env_path=None, gpus=None):
+def job_headers(token="session-a", env_path=None, gpus=None, memory=None):
     headers = {}
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
@@ -472,6 +488,8 @@ def job_headers(token="session-a", env_path=None, gpus=None):
         headers[gw.ENV_METADATA] = env_path
     if gpus is not None:
         headers[gw.GPUS_METADATA] = gpus
+    if memory is not None:
+        headers[gw.MEMORY_METADATA] = memory
     return headers
 
 
@@ -527,6 +545,17 @@ def preemptible(env, name="ray-train-user-a"):
     """The workers that give their GPUs up to pods of the default priority."""
     (group,) = cluster_spec(env, name)["workerGroupSpecs"][1:]
     return group
+
+
+def gpus(env, name="ray-train-user-a"):
+    """The workers of each group, by its name, and the GPU resource of each."""
+    held = {}
+    for group in cluster_spec(env, name)["workerGroupSpecs"]:
+        (container,) = group["template"]["spec"]["containers"]
+        (resource,) = (r for r in container["resources"]["limits"] if "nvidia" in r)
+        assert container["resources"]["requests"][resource] == 1
+        held[group["groupName"]] = (group["replicas"], resource)
+    return held
 
 
 def counts(group):
@@ -843,7 +872,7 @@ async def test_head_and_workers_run_as_the_user_in_the_environment(env):
     assert worker["spec"]["securityContext"]["runAsUser"] == 5001
 
 
-@pytest.mark.parametrize("gpus", ["0", "9", "two", "1.5", "auto"])
+@pytest.mark.parametrize("gpus", ["0", "23", "two", "1.5", "auto"])
 async def test_a_gpu_count_out_of_range_is_refused(env, gpus):
     assert await refused(env, gpus=gpus) == grpc.StatusCode.INVALID_ARGUMENT
     assert env.kube.clusters == {}
@@ -873,7 +902,7 @@ async def test_a_refused_submission_says_how_many_gpus_are_free(env):
     env.prometheus.used = 7
     status, reason, _ = await submit(env, gpus="4")
     assert status == 429
-    assert "asks for 4 T4 GPUs and Ray clusters can take 1 more now" in reason
+    assert "asks for 4 GPUs of 5 GB or more and Ray clusters can take 1 more" in reason
     assert env.kube.clusters == {}
 
 
@@ -948,14 +977,104 @@ async def test_a_refused_replacement_leaves_the_cluster_it_would_replace(env):
 
 @pytest.mark.parametrize("failure", ["up", "empty"])
 async def test_without_prometheus_only_the_budget_holds(env, monkeypatch, failure):
-    monkeypatch.setattr(gw, "GPU_BUDGET", 6)
     setattr(env.prometheus, failure, failure == "empty")
     env.prometheus.used = 8
-    assert await call(env, gpus="4") == [b"echo:ping"]
+    assert await call(env, gpus="6", memory="16") == [b"echo:ping"]
     assert (
-        await refused(env, token="session-b", gpus="3")
+        await refused(env, token="session-b", gpus="3", memory="16")
         == grpc.StatusCode.RESOURCE_EXHAUSTED
     )
+    assert await call(env, token="session-b", client="client-b", gpus="3") == [
+        b"echo:ping"
+    ]
+    assert gpus(env, "ray-train-user-b-cern") == {
+        "mig-1g-5gb": (1, SLICE),
+        "mig-1g-5gb-preemptible": (2, SLICE),
+    }
+
+
+async def test_small_gpus_are_taken_before_large_ones(env):
+    env.prometheus.slices = 14
+    env.prometheus.slices_used = 12
+    await call(env, gpus="5")
+    assert gpus(env) == {
+        "mig-1g-5gb": (1, SLICE),
+        "mig-1g-5gb-preemptible": (1, SLICE),
+        "gpu-preemptible": (3, T4),
+    }
+    annotations = env.kube.clusters["ray-train-user-a"]["metadata"]["annotations"]
+    assert annotations[gw.MEMORY_ANNOTATION] == "5"
+
+
+@pytest.mark.parametrize("memory", ["0", "2.5", "5"])
+async def test_a_worker_that_needs_little_memory_may_hold_any_gpu(env, memory):
+    env.prometheus.slices = 14
+    await call(env, gpus="22", memory=memory)
+    assert gpus(env) == {
+        "mig-1g-5gb": (1, SLICE),
+        "mig-1g-5gb-preemptible": (13, SLICE),
+        "gpu-preemptible": (8, T4),
+    }
+
+
+@pytest.mark.parametrize("memory", ["5.5", "8", "16"])
+async def test_a_worker_that_needs_more_memory_than_a_slice_holds_a_t4(env, memory):
+    env.prometheus.slices = 14
+    assert (
+        await refused(env, gpus="9", memory=memory) == grpc.StatusCode.INVALID_ARGUMENT
+    )
+    await call(env, gpus="8", memory=memory)
+    assert gpus(env) == {"gpu": (1, T4), "gpu-preemptible": (7, T4)}
+    annotations = env.kube.clusters["ray-train-user-a"]["metadata"]["annotations"]
+    assert annotations[gw.MEMORY_ANNOTATION] == "16"
+
+
+@pytest.mark.parametrize("memory", ["16.5", "40", "inf", "nan", "lots"])
+async def test_memory_that_no_gpu_has_is_refused(env, memory):
+    env.prometheus.slices = 14
+    assert await refused(env, memory=memory) == grpc.StatusCode.INVALID_ARGUMENT
+    assert env.kube.clusters == {}
+
+
+async def test_asking_for_more_memory_replaces_an_idle_cluster_of_slices(env):
+    env.prometheus.slices = 14
+    await call(env)
+    assert gpus(env) == {"mig-1g-5gb": (1, SLICE)}
+    await call(env, memory="4")
+    assert env.kube.created == 1
+    await call(env, memory="10")
+    assert env.kube.created == 2
+    assert gpus(env) == {"gpu": (1, T4)}
+
+
+async def test_a_cluster_from_before_the_memory_setting_serves_any_call(env):
+    await call(env)
+    del env.kube.clusters["ray-train-user-a"]["metadata"]["annotations"][
+        gw.MEMORY_ANNOTATION
+    ]
+    env.gateway.started.clear()
+    await call(env)
+    assert env.kube.created == 1
+
+
+async def test_clusters_count_the_gpus_of_each_kind_just_admitted(env):
+    env.prometheus.slices = 2
+    await call(env, gpus="2")
+    await call(env, token="session-b", client="client-b", gpus="2")
+    assert gpus(env, "ray-train-user-b-cern") == {
+        "gpu": (1, T4),
+        "gpu-preemptible": (1, T4),
+    }
+
+
+async def test_a_cluster_of_one_gpu_takes_a_preemptible_slice(env):
+    env.prometheus.used = 8
+    env.prometheus.slices = env.prometheus.slices_used = 14
+    assert await refused(env) == grpc.StatusCode.RESOURCE_EXHAUSTED
+    env.prometheus.slices_preemptible = 3
+    assert await refused(env, memory="16") == grpc.StatusCode.RESOURCE_EXHAUSTED
+    await call(env)
+    assert gpus(env) == {"mig-1g-5gb": (1, SLICE)}
 
 
 async def test_admission_needs_the_listing_of_clusters(env):
@@ -1021,7 +1140,7 @@ async def test_the_version_check_starts_no_cluster(env):
 
 async def test_a_refusal_says_why_in_its_status_line(env):
     """JobSubmissionClient's version check shows a refusal's status line only."""
-    status, reason, body = await job_call(env, path="/api/version", gpus="9")
+    status, reason, body = await job_call(env, path="/api/version", gpus="23")
     assert status == 400
     assert reason == body.decode()
     assert reason.startswith(gw.GPUS_METADATA)
@@ -1552,7 +1671,7 @@ def test_building_a_cluster_leaves_the_template_alone():
     template = yaml.safe_load(TEMPLATE.read_text())
     before = copy.deepcopy(template)
     user = gw.User(name="user-a", account="user-a", uid=5001, gid=500)
-    gw.build_cluster(template, user, gw.Shape(ENV_A, "4"))
+    gw.build_cluster(template, user, gw.Shape(ENV_A, "4", "5"), {T4: 4})
     assert template == before
 
 

@@ -2,8 +2,9 @@
 
 [Ray](https://docs.ray.io/en/latest/) runs your PyTorch training on GPUs your
 session does not hold. You have a Ray cluster of your own, with one or more
-[NVIDIA T4s](../docs/gpus.md): it starts when you submit a job, which takes a
-minute or two, runs as you, and is [removed](#lifetime) once idle. No other
+[GPUs](../docs/gpus.md), NVIDIA T4s and 5 GB slices of A100s: it starts when
+you submit a job, which takes a minute or two, runs as you, and is
+[removed](#lifetime) once idle. No other
 user can see, stop or reach it.
 
 ## Submitting a job
@@ -42,10 +43,45 @@ async for lines in client.tail_job_logs(job):
     print(lines, end="")
 ```
 
-Two libraries of Ray do more with the same job: [Ray Train](#ray-train), the
+How many GPUs your cluster has, and which, is in its
+[settings](#cluster-settings). Two libraries of Ray do more with the same job: [Ray Train](#ray-train), the
 recommended way to write a training and the only one that uses several GPUs
 for it, and [Ray Tune](#ray-tune), which runs many trainings to find the best
 hyperparameters.
+
+## Cluster settings
+
+Every job runs on your one cluster, which has one GPU and runs the global Pixi
+environment unless the `headers` of the `JobSubmissionClient` say otherwise:
+
+| Setting     | Header               | Value                                         | Default                     |
+| ----------- | -------------------- | --------------------------------------------- | --------------------------- |
+| GPUs        | `gpus`               | A number of GPUs, as a string                 | `"1"`                       |
+| GPU memory  | `min-memory-per-gpu` | The GB each GPU must have, as a string        | Any GPU                     |
+| Environment | `env`                | The path of [your environment](#environment)  | The global Pixi environment |
+
+A GPU is a 5 GB slice of an A100 or a 16 GB T4, and `min-memory-per-gpu`
+decides which your cluster has:
+
+| `min-memory-per-gpu`      | Your cluster's GPUs                          |
+| ------------------------- | -------------------------------------------- |
+| Not set, or `"5"` or less | A100 slices and T4s, whichever are free      |
+| Above `"5"`, up to `"16"` | T4s only                                     |
+| Above `"16"`              | None: the submission fails, as no GPU has it |
+
+Two GPUs with at least 12 GB each:
+
+```python
+client = JobSubmissionClient(
+    "http://ray-train-gateway:8265",
+    headers={"gpus": "2", "min-memory-per-gpu": "12"},
+)
+```
+
+Each GPU is in a worker pod of its own, so nothing that asks for more than one
+at a time, such as `entrypoint_num_gpus=2`, ever starts. The GPUs are
+[shared](#gpus), and a cluster with other settings
+[replaces](#lifetime) the one you have.
 
 ## Ray Train
 
@@ -106,9 +142,7 @@ Submit it without `entrypoint_num_gpus`, since the trainer's workers hold the
 GPUs, and ask for as many GPUs as it has workers:
 
 ```python
-client = JobSubmissionClient(
-    "http://ray-train-gateway:8265", headers={"af-ray-gpus": "2"}
-)
+client = JobSubmissionClient("http://ray-train-gateway:8265", headers={"gpus": "2"})
 job = client.submit_job(entrypoint="python train.py", runtime_env={"working_dir": "."})
 ```
 
@@ -159,7 +193,7 @@ best = tuner.fit().get_best_result()
 print(best.config, best.metrics["loss"])
 ```
 
-Submit it as for [Ray Train](#ray-train), with `af-ray-gpus` the number of
+Submit it as for [Ray Train](#ray-train), with `gpus` the number of
 trainings to run at once and the same rule for `storage_path`. A fixed list of
 values, each trained once, is
 `param_space={"lr": tune.grid_search([1e-1, 1e-2, 1e-3])}` with
@@ -167,21 +201,11 @@ values, each trained once, is
 
 ## Your cluster
 
-You have one cluster, which every job runs on. What it runs is set in the
-`headers` of the `JobSubmissionClient`:
-
-| Setting     | Header        | Value                        | Default                     |
-| ----------- | ------------- | ---------------------------- | --------------------------- |
-| GPUs        | `af-ray-gpus` | A number of T4s, as a string | `"1"`                       |
-| Environment | `af-ray-env`  | The path of your environment | The global Pixi environment |
-
 ### GPUs
 
-Each GPU is a T4 in a worker pod of its own, so nothing that asks for more
-than one at a time, such as `entrypoint_num_gpus=2`, ever starts. The T4s are
-shared with everyone's sessions and clusters:
+The GPUs are shared with everyone's sessions and clusters:
 
-* Your cluster starts only while as many T4s as it asks for are free, up to
+* Your cluster starts only while as many GPUs as it asks for are free, up to
   all of them. Otherwise the submission fails with the number that are free
   for you: ask for fewer, or try again later.
 * A cluster of one GPU also starts while none is free and another cluster
@@ -189,9 +213,8 @@ shared with everyone's sessions and clusters:
 * A cluster whose GPUs have not all joined some minutes after it started is
   removed, with the job submitted to it.
 * Your cluster keeps its first GPU. Each of the others may be taken at any
-  time for work of a higher priority, such as another cluster's first GPU,
-  which stops what runs on it: the worker
-  returns when a T4 is free again. A training that
+  time for someone's session or another cluster's first GPU, which stops what
+  runs on it: the worker returns when a GPU is free again. A training that
   [saves checkpoints](https://docs.ray.io/en/latest/train/user-guides/fault-tolerance.html)
   and sets `FailureConfig(max_failures=...)` resumes from the last one.
 
@@ -210,7 +233,7 @@ import sys
 
 client = JobSubmissionClient(
     "http://ray-train-gateway:8265",
-    headers={"af-ray-env": os.path.realpath(sys.prefix)},
+    headers={"env": os.path.realpath(sys.prefix)},
 )
 ```
 
@@ -228,8 +251,8 @@ included, to `/work`: its records and logs go with the cluster.
 ### Lifetime
 
 * Your cluster holds its GPUs until it is removed or replaced, and runs one
-  environment and one number of GPUs at a time. Submitting a job with another
-  of either, the defaults included, replaces it when nothing runs on it. While
+  set of [settings](#cluster-settings) at a time. Submitting a job with other
+  settings, the defaults included, replaces it when nothing runs on it. While
   something does, the submission fails with the reason.
 * A cluster with nothing running for some minutes is removed. Following its
   jobs then fails with *You have no Ray cluster*.

@@ -6,13 +6,17 @@ submits jobs with the Jobs API's client,
 `JobSubmissionClient("http://ray-train-gateway:8265")`, signed in with its
 session's JupyterHub token either way; the gateway asks the Hub whose token it
 is and relays the calls, unread, to that user's cluster: a head and
-workers with a T4 each, one unless a call asks for more, created when they first connect or submit a job,
-running as them, and deleted once idle. Its first worker keeps its T4; the
-others run in the `low-priority-preemptible` PriorityClass, which the scheduler
-evicts for a pod of the default priority that fits nowhere else. A cluster starts only while the T4s
-it asks for are free, by the count of the Hub's profile form
+workers with a GPU each, one unless a call asks for more, created when they
+first connect or submit a job, running as them, and deleted once idle. A
+worker's GPU is a 5 GB A100 slice or a T4, whichever is free, slices first;
+a call that asks for more GPU memory than a slice has gets T4s only. The
+first worker keeps its GPU; the others run in the `low-priority-preemptible`
+PriorityClass, which the scheduler evicts for a pod of the default priority
+that fits nowhere else: a session, to which the Hub's profile form shows such
+a worker's GPU as free, or another cluster's first worker. A cluster starts
+only while the GPUs it asks for are free, by the queries of that form
 ([`gpu_queries.py`](../jupyterhub/jupyterhub/extraFiles/gpu_queries.py), in the
-gateway's ConfigMap too); one that asks for a single T4 also starts while a
+gateway's ConfigMap too); one that asks for a single GPU also starts while a
 preemptible worker holds one, which its worker evicts. How users
 send their training to it, not on the documentation site:
 [Training on GPUs with Ray](../../docs/drafts/guide-ray-train.md).
@@ -21,7 +25,7 @@ send their training to it, not on the documentation site:
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `gateway.py`         | The gateway: relays Ray Client and Jobs API calls, creates and deletes users' RayClusters                                 |
 | `config.yaml`        | The gateway's settings: timeouts, GPU limits, and the addresses it asks                                                   |
-| `raycluster.yaml`    | The template of a user's cluster; the gateway fills in its name, the user's UID/GID, its environment and its token Secret |
+| `raycluster.yaml`    | The template of a user's cluster; the gateway fills in its name, the user's UID/GID, its environment, its token Secret and its worker groups, one per kind of GPU and priority |
 | `deployment.yaml`    | The gateway pod: the stock Ray image, with the files above from the `ray-train-gateway` ConfigMap                         |
 | `service.yaml`       | `ray-train-gateway:10001` for Ray Client and `:8265` for the Jobs API, the addresses notebooks connect to                 |
 | `rbac.yaml`          | Create, read and delete RayClusters; create their token Secrets                                                           |
@@ -46,9 +50,9 @@ credentials.
 ## Tuning
 
 [`config.yaml`](config.yaml) holds the gateway's settings, each with what it
-does: the timeouts, the most GPUs a call may ask for, the PriorityClass of
-the preemptible workers, and `gpuBudget`, the most
-GPUs all clusters hold together while Prometheus does not answer. `raycluster.yaml` holds the pods' sizes, mounts and image. The
+does: the timeouts, the PriorityClass of the preemptible workers, and `gpus`,
+the kinds of GPU a worker may hold, each with its memory and with the most of
+them all clusters hold together while Prometheus does not answer. `raycluster.yaml` holds the pods' sizes, mounts and image. The
 image's tag is also in `deployment.yaml` and in the Hub's
 `prePuller.extraImages`.
 

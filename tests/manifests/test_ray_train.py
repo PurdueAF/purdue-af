@@ -208,9 +208,17 @@ def test_the_gateway_counts_the_gpus_its_workers_take():
     gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
     (group,) = load(APP / "raycluster.yaml")["spec"]["workerGroupSpecs"]
     (container,) = group["template"]["spec"]["containers"]
-    assert container["resources"]["limits"][gateway.GPU_RESOURCE] == 1
-    assert gateway.GPU_RESOURCE in gateway.GPU_METRICS
-    assert gateway.MAX_GPUS <= gateway.GPU_BUDGET
+    limits = container["resources"]["limits"]
+    assert [limits[f.resource] for f in gateway.FLAVORS if f.resource in limits] == [1]
+    assert all(f.resource in gateway.GPU_METRICS for f in gateway.FLAVORS)
+
+
+def test_the_hub_counts_as_free_the_gpus_of_the_class_the_gateway_assigns():
+    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+    queries = load_script(
+        REPO / "apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py", "gpu_queries"
+    )
+    assert gateway.PREEMPTIBLE_PRIORITY_CLASS == queries.PREEMPTIBLE_PRIORITY_CLASS
 
 
 def test_the_gateway_never_reads_a_secret():
