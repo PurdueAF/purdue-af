@@ -5721,7 +5721,7 @@
       "gridPos": {
         "x": 0,
         "y": 82,
-        "w": 8,
+        "w": 6,
         "h": 8
       },
       "datasource": {
@@ -5884,6 +5884,97 @@
       }
     },
     {
+      "id": 60,
+      "type": "timeseries",
+      "title": "Workers preempted",
+      "gridPos": {
+        "x": 6,
+        "y": 82,
+        "w": 6,
+        "h": 8
+      },
+      "interval": "1m",
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum((scheduler_preemption_victims_sum - scheduler_preemption_victims_sum offset $__interval >= 0) or (scheduler_preemption_victims_sum < scheduler_preemption_victims_sum offset $__interval))",
+          "legendFormat": "preempted",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "description": "Pods the Kubernetes scheduler evicted to make room for a higher-priority pod. Each point counts the evictions since the previous point, a minute at the finest. Counted across Geddes, so it includes Ray Train workers as well as Dask workers past a cluster's guaranteed ones.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "pointSize": 4,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "lineInterpolation": "linear",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
       "datasource": {
         "type": "datasource",
         "uid": "-- Mixed --"
@@ -5940,9 +6031,9 @@
         "overrides": []
       },
       "gridPos": {
-        "x": 8,
+        "x": 12,
         "y": 82,
-        "w": 8,
+        "w": 6,
         "h": 8
       },
       "id": 36,
@@ -6044,9 +6135,9 @@
         "overrides": []
       },
       "gridPos": {
-        "x": 16,
+        "x": 18,
         "y": 82,
-        "w": 8,
+        "w": 6,
         "h": 8
       },
       "id": 37,
