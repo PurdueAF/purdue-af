@@ -406,9 +406,9 @@ hub:
       description: "Scrape /hub/metrics"
       scopes: ["read:metrics"]
       services: ["prometheus"]
-    # The session pod name gives the AF id, which picks the pooled account of a non-Purdue user.
+    # The session pod name gives the AF id, which picks the pooled account of a non-Purdue user, and the GPUs the session holds.
     ray-train-gateway:
-      description: "Read session pod names, to run each user's Ray cluster as them"
+      description: "Read session pod names, to run each user's Ray cluster as them, and only for sessions without a GPU"
       scopes: ["read:servers", "admin:server_state"]
       services: ["ray-train-gateway"]
 scheduling:

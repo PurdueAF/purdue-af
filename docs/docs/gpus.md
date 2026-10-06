@@ -65,6 +65,13 @@ for a Slurm job, simply add the `--gpus-per-node=1` argument to the `sbatch` com
         The **only** storage volume shared between Purdue AF and the Gilbreth
         cluster is `/depot/` — save the outputs of your jobs there.
 
+### 3. Ray clusters
+
+From a session started without a GPU, you can train on GPUs all the same: a
+job submitted from a notebook runs on a [Ray](https://docs.ray.io/en/latest/) cluster of your own,
+with one or more A100 slices or T4s, whether or not the notebook stays open —
+see [Training on GPUs with Ray](guide-ray-train.md).
+
 ## GPU support in common ML libraries
 
 * **PyTorch** — does not require any special installation, as long as its version

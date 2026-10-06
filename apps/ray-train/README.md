@@ -6,20 +6,24 @@ submits jobs with the Jobs API's client,
 `JobSubmissionClient("http://ray-train-gateway:8265")`, signed in with its
 session's JupyterHub token either way; the gateway asks the Hub whose token it
 is and relays the calls, unread, to that user's cluster: a head and
-workers with a GPU each, one unless a call asks for more, created when they
+workers, one with one GPU unless a call asks for more of either, created when they
 first connect or submit a job, running as them, and deleted once idle. A
 worker's GPU is a 5 GB A100 slice or a T4, whichever is free, slices first;
-a call that asks for more GPU memory than a slice has gets T4s only. The
-first worker keeps its GPU; the others run in the `low-priority-preemptible`
+a call that asks for more GPU memory than a slice has, or for two GPUs a
+worker, gets T4s only. A call
+may also name each worker's CPU cores and memory. The
+first worker keeps its GPUs; the others run in the `low-priority-preemptible`
 PriorityClass, which the scheduler evicts for a pod of the default priority
 that fits nowhere else: a session, to which the Hub's profile form shows such
 a worker's GPU as free, or another cluster's first worker. A cluster starts
 only while the GPUs it asks for are free, by the queries of that form
 ([`gpu_queries.py`](../jupyterhub/jupyterhub/extraFiles/gpu_queries.py), in the
 gateway's ConfigMap too); one that asks for a single GPU also starts while a
-preemptible worker holds one, which its worker evicts. How users
-send their training to it, not on the documentation site:
-[Training on GPUs with Ray](../../docs/drafts/guide-ray-train.md).
+preemptible worker holds one, which its worker evicts. A user whose session
+holds a GPU, by the Hub's name of its pod and that pod's requests in
+Prometheus, starts and submits to none. How users
+send their training to it:
+[Training on GPUs with Ray](../../docs/docs/guide-ray-train.md).
 
 | File                 | What it is                                                                                                                |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -50,8 +54,9 @@ credentials.
 ## Tuning
 
 [`config.yaml`](config.yaml) holds the gateway's settings, each with what it
-does: the timeouts, the PriorityClass of the preemptible workers, and `gpus`,
-the kinds of GPU a worker may hold, each with its memory and with the most of
+does: the timeouts, the PriorityClass of the preemptible workers, the bounds
+of the worker size a call may ask for, and `gpus`,
+the kinds of GPU a worker may hold, each with its memory, the most one worker holds, and with the most of
 them all clusters hold together while Prometheus does not answer. `raycluster.yaml` holds the pods' sizes, mounts and image. The
 image's tag is also in `deployment.yaml` and in the Hub's
 `prePuller.extraImages`.

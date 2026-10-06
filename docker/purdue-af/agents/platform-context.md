@@ -29,7 +29,9 @@ right now.
 anything above them is used only while the node has spare capacity, so size work
 to the reserved amount. Sessions holding any GPU are culled after 24 h idle, all
 others after 14 days. A session without a GPU has no `nvidia-smi` and no visible
-CUDA device, so code must fall back to CPU rather than assume one appeared.
+CUDA device, so code must fall back to CPU rather than assume one appeared;
+training that needs a GPU goes to a Ray cluster instead (Scale-out below),
+which only such a session can use.
 Restarting or stopping the session kills every process in it — including an
 agent running inside it — while `/home`, `/work` and `/depot` survive untouched.
 
@@ -38,15 +40,15 @@ agent running inside it — while `/home`, `/work` and `/depot` survive untouche
 Which volumes a worker can see is what most often breaks an otherwise correct
 job — a path that works in the notebook may not exist on the worker.
 
-| Path | Access | Visible to Slurm jobs | Visible to Dask Gateway workers |
-| --- | --- | --- | --- |
-| `/home/<username>/` | read/write | no | no |
-| `/work/users/<username>/` | read/write | no | yes |
-| `/work/projects/<project>/` | read/write | no | yes |
-| `/depot/cms/` | group-owned; read/write for Purdue accounts, read-only for others | yes | yes |
-| `/eos/purdue/` | read-only POSIX mount, for browsing; read/write over XRootD (`gfal`/`xrdcp`) | no | not to be relied on |
-| `/cvmfs/` | read-only | yes | yes |
-| `/eos/cern/` (CERNBox) | read/write, mounted on request | no | no |
+| Path | Access | Visible to Slurm jobs | Visible to Dask Gateway workers | Visible to Ray clusters |
+| --- | --- | --- | --- | --- |
+| `/home/<username>/` | read/write | no | no | no |
+| `/work/users/<username>/` | read/write | no | yes | yes |
+| `/work/projects/<project>/` | read/write | no | yes | yes |
+| `/depot/cms/` | group-owned; read/write for Purdue accounts, read-only for others | yes | yes | yes |
+| `/eos/purdue/` | read-only POSIX mount, for browsing; read/write over XRootD (`gfal`/`xrdcp`) | no | not to be relied on | read-only |
+| `/cvmfs/` | read-only | yes | yes | yes |
+| `/eos/cern/` (CERNBox) | read/write, mounted on request | no | no | no |
 
 Worker code must never depend on the EOS mount. Slurm jobs have no `/eos`
 at all, and the mount on Dask Gateway workers is not something to build on:
@@ -177,6 +179,7 @@ holds the file. A dataset does not need to be at Purdue to be read.
 | --- | --- | --- |
 | Local Dask cluster | all users | the session itself; bounded by its reserved cores |
 | Dask Gateway | all users | `/work`, `/depot`, `/cvmfs` |
+| Ray cluster (GPU training) | all users, from a session without a GPU | `/work`, `/depot`, `/eos/purdue` (read-only), `/cvmfs` |
 | Slurm batch (`sbatch`) | Purdue accounts, account `cms` | `/depot`, `/cvmfs` |
 | CRAB | all CMS users | WLCG |
 
@@ -199,6 +202,27 @@ whose default `/tmp` no worker sees.
 At most one active Dask Gateway cluster per user; creating another requires
 stopping the existing one. `Gateway()` needs no arguments:
 `DASK_GATEWAY__ADDRESS` and `DASK_GATEWAY__PROXY_ADDRESS` are preset.
+
+Each user whose session holds no GPU has one Ray cluster, with GPUs of its own
+— 5 GB A100 slices and 16 GB T4s, on worker pods with one GPU each by default,
+so nothing that asks for more GPUs at once than one worker has ever starts. From a session that holds a GPU, submissions are
+refused: train on the session's GPU. It starts when a job is submitted with
+`JobSubmissionClient("http://ray-train-gateway:8265")` from `ray.job_submission`
+— `RAY_AUTH_MODE` and `RAY_AUTH_TOKEN` are preset, so it needs no credentials —
+only while the GPUs it asks for are free, and is removed once idle, with the
+records and logs of its jobs. The client's `headers` set its shape: `af-n-workers` (a
+number as a string, default `"1"`), `af-gpus-per-worker` (`"1"` or `"2"`, two
+being T4s only), `af-min-gpu-memory-gb` (GB; above `"5"` means T4s only),
+`af-cpus-per-worker` and `af-ram-per-worker-gb` (each worker's cores and GB,
+default `"8"` and `"32"`) and `af-env` (an environment's path, default the
+global one); any other `af-` header is refused with the list of these. That
+environment must sit on storage the cluster sees and have the same Python and
+Ray as the submitter. Submitting with other headers replaces an idle cluster
+and is refused while the cluster runs something. The cluster has no `/home`:
+ship code with `runtime_env={"working_dir": "."}`, write results to `/work`, and
+give Ray Train and Ray Tune a `storage_path` on `/work`. Every worker past the
+first can be taken back at any time, so multi-GPU training needs checkpoints.
+Details: https://analysis-facility.physics.purdue.edu/guide-ray-train/
 
 Slurm GPU jobs need `--gpus-per-node=1`. `/depot` is the only volume shared
 between the AF and the Gilbreth cluster (`ssh gilbreth`).

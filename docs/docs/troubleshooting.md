@@ -139,6 +139,37 @@ solutions. If your problem is not listed here, please
 
     See [Reading data via XRootD](guide-dask-gateway.md#environment-variables).
 
+## Ray
+
+??? failure "A submission fails with \"Ray clusters can take N more now\""
+
+    Fewer GPUs are free than your cluster asks for — see
+    [GPUs](guide-ray-train.md#gpus).
+
+??? failure "A submission fails because my cluster \"runs other settings, and tasks or jobs\""
+
+    Your cluster runs one set of settings at a time — see
+    [Lifetime](guide-ray-train.md#lifetime).
+
+??? failure "\"You have no Ray cluster\""
+
+    Idle clusters are removed with the records and logs of their jobs — see
+    [Lifetime](guide-ray-train.md#lifetime).
+
+??? failure "A training stops with \"Unable to set up cluster storage\""
+
+    Set `storage_path` to a directory on `/work` — see
+    [Ray Train](guide-ray-train.md#ray-train).
+
+??? failure "A submission fails with \"Your session holds a GPU\""
+
+    Ray clusters are for sessions started without a GPU — see
+    [Training on GPUs with Ray](guide-ray-train.md).
+
+??? failure "A submission fails with \"No token\""
+
+    Your session has no `RAY_AUTH_TOKEN`: restart it.
+
 ## SSH and IDE connections
 
 

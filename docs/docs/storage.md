@@ -5,15 +5,15 @@
 The following table summarizes size, access modes, and accessibility of each storage
 volume (scroll sideways for details).
 
-| Storage volume | Path | Size per user | Access mode | Mounted in Slurm jobs | Mounted in Dask Gateway workers | Writable by users w/o Purdue account |
-| --- | --- | --- | --- | --- | --- | --- |
-| AF home storage | `/home/<username>/` | 25 GB | Read/write | ❌ | ❌ | ✅ |
-| Purdue Depot storage | `/depot/cms/` | up to 1 TB | Read/write for Purdue users, read-only for others | ✅ | ✅ | ❌ |
-| AF work storage | `/work/users/<username>/` | 100 GB | Read/write | ❌ | ✅ | ✅ |
-| AF shared project storage | `/work/projects/` | up to 1 TB | Read/write | ❌ | ✅ | ✅ |
-| Purdue EOS | `/eos/purdue/` | up to 100 TB | Read-only (writable via `gfal`/`xrdcp`) | ❌ | ✅ | ❌ |
-| CVMFS | `/cvmfs/` | N/A | Read-only | ✅ | ✅ | ❌ |
-| CERNBox (CERN EOS) | `/eos/cern/` | N/A | Read/write | ❌ | ❌ | ✅ |
+| Storage volume | Path | Size per user | Access mode | Mounted in Slurm jobs | Mounted in Dask Gateway workers | Mounted in Ray clusters | Writable by users w/o Purdue account |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| AF home storage | `/home/<username>/` | 25 GB | Read/write | ❌ | ❌ | ❌ | ✅ |
+| Purdue Depot storage | `/depot/cms/` | up to 1 TB | Read/write for Purdue users, read-only for others | ✅ | ✅ | ✅ | ❌ |
+| AF work storage | `/work/users/<username>/` | 100 GB | Read/write | ❌ | ✅ | ✅ | ✅ |
+| AF shared project storage | `/work/projects/` | up to 1 TB | Read/write | ❌ | ✅ | ✅ | ✅ |
+| Purdue EOS | `/eos/purdue/` | up to 100 TB | Read-only (writable via `gfal`/`xrdcp`) | ❌ | ✅ | ✅ | ❌ |
+| CVMFS | `/cvmfs/` | N/A | Read-only | ✅ | ✅ | ✅ | ❌ |
+| CERNBox (CERN EOS) | `/eos/cern/` | N/A | Read/write | ❌ | ❌ | ❌ | ✅ |
 
 In the JupyterLab file browser, your home directory contains shortcuts to the
 other volumes: `work` (`/work/`), `depot` (group directories under

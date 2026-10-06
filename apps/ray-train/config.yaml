@@ -13,16 +13,24 @@ userCacheSeconds: 300
 # How long the clients of a removed cluster hear so, instead of starting another: Ray Client retries for 30 s.
 goneSeconds: 300
 
-# The GPUs a worker may hold, one each, those a cluster takes first at the top: the resource, its memory,
-# and the most of them all clusters hold together while Prometheus does not say how many are free.
-# A call may ask for as many workers as the budgets of the GPUs with the memory it asks for.
+# The GPUs a worker may hold, of one kind each, those a cluster takes first at the top: the resource, its memory,
+# the most of them all clusters hold together while Prometheus does not say how many are free, and the most one
+# worker may hold: a process uses one MIG slice only, and no node has more than two T4s.
+# A call may ask for as many workers as the budgets of the GPUs with the memory it asks for hold.
 gpus:
   - resource: nvidia.com/mig-1g.5gb
     memoryGb: 5
     budget: 14
+    maxPerWorker: 1
   - resource: nvidia.com/gpu
     memoryGb: 16
     budget: 8
+    maxPerWorker: 2
+# The most CPU cores, and the least and the most memory, a call may ask for each worker; raycluster.yaml holds what
+# a worker has unless a call asks.
+workerCpusMax: 16
+workerMemoryGbMin: 4
+workerMemoryGbMax: 64
 # The PriorityClass of a cluster's workers past its first.
 preemptiblePriorityClass: low-priority-preemptible
 # How long an admitted cluster's GPUs count as taken, for Prometheus to see its pods.
