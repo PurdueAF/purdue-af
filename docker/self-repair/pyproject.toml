@@ -4,7 +4,7 @@ version = "0.0.0"
 description = "Task image of the self-repair Flyte workflow"
 requires-python = ">=3.12"
 dependencies = [
-    "flyte==2.10.7",
+    "flyte==2.11.0",
     # For the agent's `ruff check --fix` / `ruff format` on the files it edits.
     "ruff>=0.16",
 ]
