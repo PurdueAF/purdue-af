@@ -12,10 +12,10 @@ singleuser:
     docker_image_tag: "0.14.1"
   startTimeout: 3600
   profileList:
-    - display_name: "Purdue AF 0.14.1 – Pixi-based environment management."
+    - display_name: "Purdue AF 0.14.1"
       slug: purdue-af
       default: true
-      description: 'Please refer to the Purdue AF documentation for instructions on how to switch from Conda to Pixi: <a href="https://analysis-facility.physics.purdue.edu/guide-pixi/" target="_blank">https://analysis-facility.physics.purdue.edu/guide-pixi/</a>.'
+      description: 'To use <a href="https://analysis-facility.physics.purdue.edu/guide-ray-train/" target="_blank">Ray</a> for multi-GPU distributed training, start the session with 0 GPUs.'
       kubespawner_override:
         image: "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af:0.14.1"
         node_selector: { "cms-af-prod": "true" }
