@@ -822,7 +822,7 @@
       "gridPos": {
         "x": 12,
         "y": 5,
-        "w": 6,
+        "w": 12,
         "h": 4
       },
       "datasource": {
@@ -976,98 +976,14 @@
       }
     },
     {
-      "id": 8,
-      "type": "stat",
-      "title": "Dask Gateway",
-      "gridPos": {
-        "x": 18,
-        "y": 5,
-        "w": 6,
-        "h": 4
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "count(count by (instance)(dask_scheduler_clients)) or vector(0)",
-          "legendFormat": "clusters",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true
-        },
-        {
-          "refId": "B",
-          "expr": "sum(dask_scheduler_workers) or vector(0)",
-          "legendFormat": "workers",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true
-        },
-        {
-          "refId": "C",
-          "expr": "sum(dask_scheduler_workers{state=\"idle\"}) or vector(0)",
-          "legendFormat": "idle workers",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true
-        }
-      ],
-      "description": "Dask Gateway clusters right now. Idle workers are reserved cores doing nothing.",
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#5794F2",
-                "value": null
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value_and_name",
-        "orientation": "auto",
-        "justifyMode": "center",
-        "wideLayout": true,
-        "showPercentChange": false
-      }
-    },
-    {
       "id": 9,
       "type": "table",
       "title": "Namespace quota",
       "gridPos": {
         "x": 0,
         "y": 9,
-        "w": 6,
-        "h": 7
+        "w": 5,
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -1225,7 +1141,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 140
+                "value": 105
               }
             ]
           },
@@ -1321,7 +1237,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 70
+                "value": 50
               }
             ]
           },
@@ -1337,7 +1253,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 70
+                "value": 50
               }
             ]
           }
@@ -1360,10 +1276,10 @@
       "type": "table",
       "title": "GPUs",
       "gridPos": {
-        "x": 6,
+        "x": 5,
         "y": 9,
-        "w": 6,
-        "h": 7
+        "w": 5,
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -1520,7 +1436,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 140
+                "value": 130
               }
             ]
           },
@@ -1616,7 +1532,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 60
+                "value": 50
               }
             ]
           },
@@ -1632,7 +1548,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 60
+                "value": 50
               }
             ]
           }
@@ -1655,10 +1571,10 @@
       "type": "bargauge",
       "title": "Storage utilization",
       "gridPos": {
-        "x": 12,
+        "x": 10,
         "y": 9,
-        "w": 6,
-        "h": 7
+        "w": 5,
+        "h": 8
       },
       "datasource": {
         "type": "datasource",
@@ -1744,18 +1660,22 @@
         "sizing": "auto",
         "minVizHeight": 14,
         "minVizWidth": 8,
-        "maxVizHeight": 26
+        "maxVizHeight": 26,
+        "text": {
+          "titleSize": 14,
+          "valueSize": 22
+        }
       }
     },
     {
       "id": 12,
       "type": "histogram",
-      "title": "Home directory usage, distribution over users",
+      "title": "Home directory usage over users",
       "gridPos": {
-        "x": 18,
+        "x": 15,
         "y": 9,
-        "w": 6,
-        "h": 7
+        "w": 5,
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -1848,13 +1768,181 @@
       }
     },
     {
+      "id": 8,
+      "type": "stat",
+      "title": "Dask Gateway",
+      "gridPos": {
+        "x": 20,
+        "y": 9,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(count by (instance)(dask_scheduler_clients)) or vector(0)",
+          "legendFormat": "clusters",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum(dask_scheduler_workers) or vector(0)",
+          "legendFormat": "workers",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "C",
+          "expr": "sum(dask_scheduler_workers{state=\"idle\"}) or vector(0)",
+          "legendFormat": "idle workers",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        }
+      ],
+      "description": "Dask Gateway clusters right now. Idle workers are reserved cores doing nothing.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#5794F2",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 61,
+      "type": "stat",
+      "title": "Ray",
+      "gridPos": {
+        "x": 20,
+        "y": 13,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(kube_pod_info{namespace=\"cms\",pod=~\"ray-train-.+-head-.+\"}) or vector(0)",
+          "legendFormat": "clusters",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum(kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-train-.*\",container=~\"ray-head|ray-worker\",resource=~\"nvidia.*\"}) or vector(0)",
+          "legendFormat": "GPUs",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "C",
+          "expr": "count(avg_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-train-.*\"}[5m]) < 0.01) or vector(0)",
+          "legendFormat": "idle GPUs",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": false,
+          "instant": true
+        }
+      ],
+      "description": "Users' Ray clusters right now, and the GPUs their workers hold. Idle GPUs did nothing in the last 5 minutes.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#5794F2",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
       "id": 13,
       "type": "row",
       "title": "Compute capacity",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 16,
+        "y": 17,
         "w": 24,
         "h": 1
       },
@@ -1866,7 +1954,7 @@
       "title": "AF nodes: reserved vs. free",
       "gridPos": {
         "x": 0,
-        "y": 17,
+        "y": 18,
         "w": 24,
         "h": 20
       },
@@ -2720,7 +2808,7 @@
       "title": "CPU: reserved vs. used",
       "gridPos": {
         "x": 0,
-        "y": 37,
+        "y": 38,
         "w": 8,
         "h": 8
       },
@@ -2774,8 +2862,30 @@
           "instant": false
         },
         {
+          "refId": "G",
+          "expr": "sum(kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-train-.*\",container=~\"ray-head|ray-worker\",resource=\"cpu\"})",
+          "legendFormat": "Ray clusters: reserved",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "H",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"cms\",pod=~\"ray-train-.*\",container=~\"ray-head|ray-worker\"}[5m]))",
+          "legendFormat": "Ray clusters: used",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
           "refId": "E",
-          "expr": "sum(kube_pod_container_resource_requests{namespace=\"cms\",pod!~\"purdue-af-.*|dask-worker-.*\",resource=\"cpu\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})",
+          "expr": "sum(kube_pod_container_resource_requests{namespace=\"cms\",pod!~\"purdue-af-.*|dask-worker-.*\",container!~\"ray-head|ray-worker\",resource=\"cpu\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})",
           "legendFormat": "other: reserved",
           "datasource": {
             "type": "prometheus",
@@ -2786,7 +2896,7 @@
         },
         {
           "refId": "F",
-          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"cms\",pod!~\"purdue-af-.*|dask-worker-.*\",container!=\"\",container!=\"POD\"}[5m]) * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"cms\",pod!~\"purdue-af-.*|dask-worker-.*\",container!~\"ray-head|ray-worker\",container!=\"\",container!=\"POD\"}[5m]) * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})",
           "legendFormat": "other: used",
           "datasource": {
             "type": "prometheus",
@@ -2796,7 +2906,7 @@
           "instant": false
         }
       ],
-      "description": "Cores on AF nodes. Solid: reserved by requests. Dashed: actually used. Other: everything in the cms namespace that is not a session or a Dask worker (hub, Dask Gateway, inference servers, monitoring).",
+      "description": "Cores on AF nodes. Solid: reserved by requests. Dashed: actually used. Other: everything in the cms namespace that is not a session, a Dask worker or a Ray cluster (hub, Dask Gateway, inference servers, monitoring).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2922,6 +3032,43 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Ray clusters: reserved"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3EBDB0"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ray clusters: used"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3EBDB0"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [6, 4]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "other: reserved"
             },
             "properties": [
@@ -2999,7 +3146,7 @@
       "title": "RAM: reserved vs. used",
       "gridPos": {
         "x": 8,
-        "y": 37,
+        "y": 38,
         "w": 8,
         "h": 8
       },
@@ -3053,8 +3200,30 @@
           "instant": false
         },
         {
+          "refId": "G",
+          "expr": "sum(kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-train-.*\",container=~\"ray-head|ray-worker\",resource=\"memory\"})",
+          "legendFormat": "Ray clusters: reserved",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "H",
+          "expr": "sum(container_memory_working_set_bytes{namespace=\"cms\",pod=~\"ray-train-.*\",container=~\"ray-head|ray-worker\"})",
+          "legendFormat": "Ray clusters: used",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
           "refId": "E",
-          "expr": "sum(kube_pod_container_resource_requests{namespace=\"cms\",pod!~\"purdue-af-.*|dask-worker-.*\",resource=\"memory\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})",
+          "expr": "sum(kube_pod_container_resource_requests{namespace=\"cms\",pod!~\"purdue-af-.*|dask-worker-.*\",container!~\"ray-head|ray-worker\",resource=\"memory\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})",
           "legendFormat": "other: reserved",
           "datasource": {
             "type": "prometheus",
@@ -3065,7 +3234,7 @@
         },
         {
           "refId": "F",
-          "expr": "sum(container_memory_working_set_bytes{namespace=\"cms\",pod!~\"purdue-af-.*|dask-worker-.*\",container!=\"\",container!=\"POD\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})",
+          "expr": "sum(container_memory_working_set_bytes{namespace=\"cms\",pod!~\"purdue-af-.*|dask-worker-.*\",container!~\"ray-head|ray-worker\",container!=\"\",container!=\"POD\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})",
           "legendFormat": "other: used",
           "datasource": {
             "type": "prometheus",
@@ -3201,6 +3370,43 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Ray clusters: reserved"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3EBDB0"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ray clusters: used"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3EBDB0"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [6, 4]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "other: reserved"
             },
             "properties": [
@@ -3278,7 +3484,7 @@
       "title": "GPUs: reserved vs. used",
       "gridPos": {
         "x": 16,
-        "y": 37,
+        "y": 38,
         "w": 8,
         "h": 8
       },
@@ -3310,8 +3516,30 @@
           "instant": false
         },
         {
+          "refId": "E",
+          "expr": "sum(kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-train-.*\",container=~\"ray-head|ray-worker\",resource=~\"nvidia.*\"})",
+          "legendFormat": "Ray clusters: reserved",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "F",
+          "expr": "sum(DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node=~\"geddes-g00[0-2]|paf-.*\", pod=~\"ray-train-.*\"})",
+          "legendFormat": "Ray clusters: used",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
           "refId": "C",
-          "expr": "sum(kube_pod_container_resource_requests{namespace=\"cms\",pod!~\"purdue-af-.*\",resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})",
+          "expr": "sum(kube_pod_container_resource_requests{namespace=\"cms\",pod!~\"purdue-af-.*|ray-train-.*\",resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})",
           "legendFormat": "other: reserved",
           "datasource": {
             "type": "prometheus",
@@ -3322,7 +3550,7 @@
         },
         {
           "refId": "D",
-          "expr": "sum(DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node=~\"geddes-g00[0-2]|paf-.*\", pod!~\"purdue-af-.*\"})",
+          "expr": "sum(DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node=~\"geddes-g00[0-2]|paf-.*\", pod!~\"purdue-af-.*|ray-train-.*\"})",
           "legendFormat": "other: used",
           "datasource": {
             "type": "prometheus",
@@ -3421,14 +3649,14 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Dask workers: reserved"
+              "options": "Ray clusters: reserved"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FF9830"
+                  "fixedColor": "#3EBDB0"
                 }
               }
             ]
@@ -3436,14 +3664,14 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Dask workers: used"
+              "options": "Ray clusters: used"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#FF9830"
+                  "fixedColor": "#3EBDB0"
                 }
               },
               {
@@ -3536,7 +3764,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 45,
+        "y": 46,
         "w": 24,
         "h": 1
       },
@@ -3548,7 +3776,7 @@
       "title": "Storage mounts on AF nodes",
       "gridPos": {
         "x": 0,
-        "y": 46,
+        "y": 47,
         "w": 8,
         "h": 8
       },
@@ -3828,7 +4056,7 @@
       "title": "Metadata latency by mount, median over nodes",
       "gridPos": {
         "x": 8,
-        "y": 46,
+        "y": 47,
         "w": 8,
         "h": 8
       },
@@ -3966,7 +4194,7 @@
       "title": "Read throughput by mount, average over nodes",
       "gridPos": {
         "x": 16,
-        "y": 46,
+        "y": 47,
         "w": 8,
         "h": 8
       },
@@ -4121,7 +4349,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 54,
+        "y": 55,
         "w": 6,
         "h": 7
       },
@@ -4206,7 +4434,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 54,
+        "y": 55,
         "w": 6,
         "h": 7
       },
@@ -4291,7 +4519,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 54,
+        "y": 55,
         "w": 6,
         "h": 7
       },
@@ -4376,7 +4604,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 54,
+        "y": 55,
         "w": 6,
         "h": 7
       },
@@ -4445,186 +4673,20 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 61,
+        "y": 62,
         "w": 24,
         "h": 1
       },
       "panels": []
     },
     {
-      "id": 27,
-      "type": "stat",
-      "title": "Right now",
-      "gridPos": {
-        "x": 0,
-        "y": 62,
-        "w": 6,
-        "h": 6
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "count(count by (instance)(dask_scheduler_clients)) or vector(0)",
-          "legendFormat": "clusters",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true
-        },
-        {
-          "refId": "B",
-          "expr": "sum(dask_scheduler_workers) or vector(0)",
-          "legendFormat": "workers",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true
-        },
-        {
-          "refId": "C",
-          "expr": "sum(dask_scheduler_workers{state=\"idle\"}) or vector(0)",
-          "legendFormat": "idle workers",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true
-        },
-        {
-          "refId": "D",
-          "expr": "sum(kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"dask-worker-.*\",resource=\"cpu\"}) or vector(0)",
-          "legendFormat": "cores reserved",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true
-        },
-        {
-          "refId": "E",
-          "expr": "sum(dask_scheduler_tasks{state=\"processing\"}) or vector(0)",
-          "legendFormat": "tasks running",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true
-        },
-        {
-          "refId": "F",
-          "expr": "sum(dask_scheduler_tasks{state=~\"queued|waiting\"}) or vector(0)",
-          "legendFormat": "tasks queued",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true
-        }
-      ],
-      "description": "All Dask Gateway clusters. Idle workers hold reserved cores while doing nothing.",
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#FF9830",
-                "value": null
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "idle workers"
-            },
-            "properties": [
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "#8E8E8E",
-                      "value": null
-                    },
-                    {
-                      "color": "orange",
-                      "value": 1
-                    }
-                  ]
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "tasks queued"
-            },
-            "properties": [
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "#8E8E8E",
-                      "value": null
-                    },
-                    {
-                      "color": "#FF9830",
-                      "value": 1
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value_and_name",
-        "orientation": "auto",
-        "justifyMode": "center",
-        "wideLayout": true,
-        "showPercentChange": false
-      }
-    },
-    {
       "id": 28,
       "type": "state-timeline",
       "title": "Cluster activity by user",
       "gridPos": {
-        "x": 6,
-        "y": 62,
-        "w": 12,
+        "x": 0,
+        "y": 63,
+        "w": 10,
         "h": 6
       },
       "datasource": {
@@ -4715,9 +4777,9 @@
       "type": "gauge",
       "title": "Utilization right now",
       "gridPos": {
-        "x": 18,
-        "y": 62,
-        "w": 6,
+        "x": 10,
+        "y": 63,
+        "w": 4,
         "h": 6
       },
       "datasource": {
@@ -4795,12 +4857,242 @@
       }
     },
     {
+      "id": 33,
+      "type": "bargauge",
+      "title": "Core-hours computed per user",
+      "gridPos": {
+        "x": 14,
+        "y": 63,
+        "w": 5,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (user)(increase(dask_scheduler_tasks_compute_seconds_total[$__range])) / 3600 > 0",
+          "legendFormat": "{{ user }}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        }
+      ],
+      "description": "Task compute time delivered to each user over the selected time range, in core-hours. This is the useful work done, as opposed to cores merely reserved.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "min": 0,
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "sizing": "auto",
+        "minVizHeight": 14,
+        "minVizWidth": 8,
+        "maxVizHeight": 26
+      }
+    },
+    {
+      "id": 34,
+      "type": "timeseries",
+      "title": "Cores: computing vs. transferring",
+      "gridPos": {
+        "x": 19,
+        "y": 63,
+        "w": 5,
+        "h": 6
+      },
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(dask_scheduler_tasks_compute_seconds_total[5m]))",
+          "legendFormat": "computing",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(dask_scheduler_tasks_transfer_seconds_total[5m]))",
+          "legendFormat": "transferring",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "C",
+          "expr": "sum(dask_scheduler_workers)",
+          "legendFormat": "workers",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "description": "Task-seconds per second summed over all workers; above the worker count means multi-threaded workers. Transferring high relative to computing means the work is network-bound.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "pointSize": 4,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "lineInterpolation": "linear",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0,
+          "decimals": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "computing"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "transferring"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "workers"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF9830"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [6, 4]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
       "id": 30,
       "type": "table",
       "title": "Clusters",
       "gridPos": {
         "x": 0,
-        "y": 68,
+        "y": 69,
         "w": 24,
         "h": 6
       },
@@ -5274,455 +5566,14 @@
       }
     },
     {
-      "id": 31,
-      "type": "bargauge",
-      "title": "Cores reserved per user, right now",
-      "gridPos": {
-        "x": 0,
-        "y": 74,
-        "w": 6,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (user)( sum by (cluster)(label_replace(kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"dask-worker-.*\",resource=\"cpu\"}, \"cluster\", \"$1\", \"pod\", \"dask-worker-([0-9a-f]{32})-.*\")) * on(cluster) group_left(user) (sum by (user, cluster)(label_replace(dask_scheduler_workers, \"cluster\", \"$1\", \"pod\", \"dask-scheduler-([0-9a-f]{32})\")) > bool -1) )",
-          "legendFormat": "{{ user }}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true
-        }
-      ],
-      "description": "Cores requested by each user's Dask workers. Compare with the activity timeline above: a large bar for a grey row is capacity nobody can use.",
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#FF9830",
-                "value": null
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          },
-          "min": 0,
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "orientation": "horizontal",
-        "displayMode": "basic",
-        "showUnfilled": true,
-        "valueMode": "color",
-        "namePlacement": "left",
-        "sizing": "auto",
-        "minVizHeight": 14,
-        "minVizWidth": 8,
-        "maxVizHeight": 26
-      }
-    },
-    {
-      "id": 32,
-      "type": "piechart",
-      "title": "Workers by state, right now",
-      "gridPos": {
-        "x": 6,
-        "y": 74,
-        "w": 6,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "As reported by the schedulers. Idle: nothing to do. Partially saturated and saturated: working. Paused: over the memory limit, not accepting tasks. Retiring: being scaled down.",
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (state)(dask_scheduler_workers) > 0",
-          "legendFormat": "{{ state }}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true
-        }
-      ],
-      "options": {
-        "pieType": "donut",
-        "displayLabels": ["percent"],
-        "legend": {
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": true,
-          "values": ["value"]
-        },
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          },
-          "decimals": 0,
-          "noValue": "no workers"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "idle"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#8E8E8E"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "saturated"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "partially_saturated"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#FF9830"
-                }
-              },
-              {
-                "id": "displayName",
-                "value": "partially saturated"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "paused"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "orange"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "retiring"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#8AB8FF"
-                }
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "id": 33,
-      "type": "bargauge",
-      "title": "Core-hours computed per user, time range",
-      "gridPos": {
-        "x": 12,
-        "y": 74,
-        "w": 6,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (user)(increase(dask_scheduler_tasks_compute_seconds_total[$__range])) / 3600 > 0",
-          "legendFormat": "{{ user }}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true
-        }
-      ],
-      "description": "Task compute time delivered to each user over the selected time range, in core-hours. This is the useful work done, as opposed to cores merely reserved.",
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          },
-          "min": 0,
-          "unit": "none",
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "orientation": "horizontal",
-        "displayMode": "basic",
-        "showUnfilled": true,
-        "valueMode": "color",
-        "namePlacement": "left",
-        "sizing": "auto",
-        "minVizHeight": 14,
-        "minVizWidth": 8,
-        "maxVizHeight": 26
-      }
-    },
-    {
-      "id": 34,
-      "type": "timeseries",
-      "title": "Cores busy: computing vs. transferring data",
-      "gridPos": {
-        "x": 18,
-        "y": 74,
-        "w": 6,
-        "h": 8
-      },
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum(rate(dask_scheduler_tasks_compute_seconds_total[5m]))",
-          "legendFormat": "computing",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": true,
-          "instant": false
-        },
-        {
-          "refId": "B",
-          "expr": "sum(rate(dask_scheduler_tasks_transfer_seconds_total[5m]))",
-          "legendFormat": "transferring",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": true,
-          "instant": false
-        },
-        {
-          "refId": "C",
-          "expr": "sum(dask_scheduler_workers)",
-          "legendFormat": "workers",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": true,
-          "instant": false
-        }
-      ],
-      "description": "Task-seconds per second summed over all workers; above the worker count means multi-threaded workers. Transferring high relative to computing means the work is network-bound.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "min": 0,
-          "decimals": 1
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "computing"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "transferring"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "orange"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "workers"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#FF9830"
-                }
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "fill": "dash",
-                  "dash": [6, 4]
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
       "id": 35,
       "type": "timeseries",
       "title": "Workers by saturation",
       "gridPos": {
         "x": 0,
-        "y": 82,
+        "y": 75,
         "w": 6,
-        "h": 8
+        "h": 7
       },
       "datasource": {
         "type": "datasource",
@@ -5889,9 +5740,9 @@
       "title": "Workers preempted",
       "gridPos": {
         "x": 6,
-        "y": 82,
+        "y": 75,
         "w": 6,
-        "h": 8
+        "h": 7
       },
       "interval": "1m",
       "datasource": {
@@ -6032,9 +5883,9 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 82,
+        "y": 75,
         "w": 6,
-        "h": 8
+        "h": 7
       },
       "id": 36,
       "options": {
@@ -6136,9 +5987,9 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 82,
+        "y": 75,
         "w": 6,
-        "h": 8
+        "h": 7
       },
       "id": 37,
       "options": {
@@ -6172,13 +6023,1341 @@
       "type": "timeseries"
     },
     {
+      "id": 62,
+      "type": "row",
+      "title": "Ray",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 82,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 64,
+      "type": "state-timeline",
+      "title": "Cluster activity by user",
+      "gridPos": {
+        "x": 0,
+        "y": 83,
+        "w": 10,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (user)((avg_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-train-.*\"}[5m]) >= bool 0.01) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"))) or on(user) (count by (user)(group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"))) * 0)",
+          "legendFormat": "{{ user }}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "description": "Per user: teal while any GPU of their cluster is working, grey while the cluster exists but its GPUs do nothing, blank when they have no cluster. Long grey stretches are reserved GPUs doing nothing.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "fillOpacity": 75,
+            "lineWidth": 0,
+            "spanNulls": false,
+            "insertNulls": false,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "idle",
+                  "color": "#5A5A5A",
+                  "index": 0
+                },
+                "1": {
+                  "text": "busy",
+                  "color": "#3EBDB0",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#5A5A5A",
+                "value": null
+              },
+              {
+                "color": "#3EBDB0",
+                "value": 0.5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "mergeValues": true,
+        "showValue": "never",
+        "alignValue": "center",
+        "rowHeight": 0.8,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 65,
+      "type": "gauge",
+      "title": "Utilization right now",
+      "gridPos": {
+        "x": 10,
+        "y": 83,
+        "w": 4,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(count(avg_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-train-.*\"}[5m]) >= 0.01) or vector(0)) / count(avg_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-train-.*\"}[5m]))",
+          "legendFormat": "GPUs busy",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "avg(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-train-.*\"})",
+          "legendFormat": "GPU compute",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": false,
+          "instant": true
+        }
+      ],
+      "description": "GPUs busy: share of the GPUs Ray workers hold whose engine worked in the last 5 minutes. GPU compute: engine activity averaged over those GPUs. Both low with many GPUs held means capacity is reserved but wasted.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.3
+              },
+              {
+                "color": "green",
+                "value": 0.6
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "no clusters"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto",
+        "minVizHeight": 75,
+        "minVizWidth": 75
+      }
+    },
+    {
+      "id": 69,
+      "type": "bargauge",
+      "title": "GPU-hours used per user",
+      "gridPos": {
+        "x": 14,
+        "y": 83,
+        "w": 5,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (user)(sum_over_time((DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-train-.*\"} * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))[$__range:1m])) / 60 > 0",
+          "legendFormat": "{{ user }}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": false,
+          "instant": true
+        }
+      ],
+      "description": "Graphics-engine activity of each user's Ray workers summed over the selected time range, in GPU-hours. This is the useful work done, as opposed to GPUs merely reserved.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#3EBDB0",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "min": 0,
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "sizing": "auto",
+        "minVizHeight": 14,
+        "minVizWidth": 8,
+        "maxVizHeight": 26
+      }
+    },
+    {
+      "id": 70,
+      "type": "timeseries",
+      "title": "GPUs: reserved, busy, waited for",
+      "gridPos": {
+        "x": 19,
+        "y": 83,
+        "w": 5,
+        "h": 6
+      },
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-train-.*\",container=~\"ray-head|ray-worker\",resource=~\"nvidia.*\"}) or vector(0)",
+          "legendFormat": "reserved",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "sum(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-train-.*\"}) or vector(0)",
+          "legendFormat": "busy",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "C",
+          "expr": "sum(kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-train-.*\",container=~\"ray-head|ray-worker\",resource=~\"nvidia.*\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-train-.+-worker-.+\",phase=\"Pending\"} == 1)) or vector(0)",
+          "legendFormat": "waited for",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "description": "Reserved: GPUs Ray workers hold. Busy: their graphics-engine activity, in GPU-equivalents; far below reserved means the training is starved by something else, often data loading. Waited for: GPUs of workers that have no node yet.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "pointSize": 4,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "lineInterpolation": "linear",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0,
+          "decimals": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reserved"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3EBDB0"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [6, 4]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "busy"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "waited for"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 66,
+      "type": "table",
+      "title": "Clusters",
+      "gridPos": {
+        "x": 0,
+        "y": 89,
+        "w": 24,
+        "h": 6
+      },
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (user)((time() - kube_pod_created{namespace=\"cms\",pod=~\"ray-train-.+-head-.+\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "expr": "count by (user)(group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",pod=~\"ray-train-.+-worker-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "expr": "count by (user)((kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-train-.+-worker-.+\",phase=\"Pending\"} == 1) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "D",
+          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-train-.*\",container=~\"ray-head|ray-worker\",resource=\"nvidia_com_gpu\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "E",
+          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-train-.*\",container=~\"ray-head|ray-worker\",resource=~\"nvidia_com_mig.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "F",
+          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-train-.*\",container=~\"ray-head|ray-worker\",resource=~\"nvidia.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",priority_class=\"low-priority-preemptible\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "G",
+          "expr": "avg by (user)((DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-train-.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "H",
+          "expr": "sum by (user)((DCGM_FI_DEV_FB_USED{pod=~\"ray-train-.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"))) / sum by (user)((DCGM_FI_DEV_FB_USED{pod=~\"ray-train-.*\"} + DCGM_FI_DEV_FB_FREE{pod=~\"ray-train-.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "I",
+          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-train-.*\",container=~\"ray-head|ray-worker\",resource=\"cpu\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "J",
+          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-train-.*\",container=~\"ray-head|ray-worker\",resource=\"memory\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "K",
+          "expr": "max by (user)((avg_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-train-.*\"}[5m]) >= bool 0.01) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "description": "One row per user's Ray cluster. Waiting workers have no GPU yet. Preemptible GPUs are those of the workers past a cluster's first: a session or another user's first worker takes them. GPUs IDLE: no GPU of the cluster worked in the last 5 minutes; the gateway removes a cluster once it runs no task or job.",
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "user",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "pattern": "^(user|Value #A|Value #B|Value #C|Value #D|Value #E|Value #F|Value #G|Value #H|Value #I|Value #J|Value #K)$"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "renameByName": {
+              "user": "User",
+              "Value #A": "Age",
+              "Value #B": "Workers",
+              "Value #C": "Waiting workers",
+              "Value #D": "T4s",
+              "Value #E": "A100 slices",
+              "Value #F": "Preemptible GPUs",
+              "Value #G": "GPU compute",
+              "Value #H": "GPU memory",
+              "Value #I": "Cores reserved",
+              "Value #J": "RAM reserved",
+              "Value #K": "Status"
+            },
+            "indexByName": {
+              "user": 0,
+              "Value #A": 1,
+              "Value #B": 2,
+              "Value #C": 3,
+              "Value #D": 4,
+              "Value #E": 5,
+              "Value #F": 6,
+              "Value #G": 7,
+              "Value #H": 8,
+              "Value #I": 9,
+              "Value #J": 10,
+              "Value #K": 11
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Age",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false,
+            "filterable": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "No Ray clusters running"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "User"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Age"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "unit",
+                "value": "dtdurations"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Workers"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Waiting workers"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 140
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "0",
+                        "index": 0
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "T4s"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "0",
+                        "index": 0
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "A100 slices"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "0",
+                        "index": 0
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Preemptible GPUs"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "0",
+                        "index": 0
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GPU compute"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "unit",
+                "value": "percentunit"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GPU memory"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "unit",
+                "value": "percentunit"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cores reserved"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "RAM reserved"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "GPUs IDLE",
+                        "color": "orange",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "active",
+                        "color": "green",
+                        "index": 1
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "starting",
+                        "color": "#8E8E8E",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": ["sum"],
+          "countRows": false,
+          "fields": ""
+        },
+        "sortBy": []
+      }
+    },
+    {
+      "id": 71,
+      "type": "timeseries",
+      "title": "GPU compute, per cluster",
+      "gridPos": {
+        "x": 0,
+        "y": 95,
+        "w": 6,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "avg by (user)((DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-train-.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))",
+          "legendFormat": "{{ user }}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "description": "Graphics-engine activity averaged over each cluster's GPUs. A flat zero is a cluster holding GPUs it does not use.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "pointSize": 4,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "lineInterpolation": "linear",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0,
+          "decimals": 0,
+          "unit": "percentunit",
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 72,
+      "type": "timeseries",
+      "title": "Workers preempted",
+      "gridPos": {
+        "x": 6,
+        "y": 95,
+        "w": 6,
+        "h": 7
+      },
+      "interval": "1m",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum((group by (pod, created_by_name)(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",pod=~\"ray-train-.+-worker-.+\",priority_class=\"low-priority-preemptible\"} offset $__interval) unless on(pod) kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",pod=~\"ray-train-.+-worker-.+\",priority_class=\"low-priority-preemptible\"}) and on(created_by_name) ((kube_pod_info{namespace=\"cms\",pod=~\"ray-train-.+-head-.+\",created_by_kind=\"RayCluster\"} and on(pod) (kube_pod_info{namespace=\"cms\",pod=~\"ray-train-.+-head-.+\",created_by_kind=\"RayCluster\"} offset $__interval)) unless on(pod) kube_pod_deletion_timestamp{namespace=\"cms\"})) or vector(0)",
+          "legendFormat": "preempted",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "description": "Preemptible workers that left a Ray cluster which itself stayed: the Kubernetes scheduler evicted them for a session or for another cluster's first worker, or their node failed. Each point counts the workers gone since the previous point, a minute at the finest. KubeRay starts a replacement, which waits for a free GPU.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "pointSize": 4,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "lineInterpolation": "linear",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 73,
+      "type": "timeseries",
+      "title": "Worker CPU, share of request, per cluster",
+      "gridPos": {
+        "x": 12,
+        "y": 95,
+        "w": 6,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (user)((rate(container_cpu_usage_seconds_total{namespace=\"cms\",pod=~\"ray-train-.+-worker-.+\",container=\"ray-worker\"}[5m])) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"))) / sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-train-.+-worker-.+\",container=\"ray-worker\",resource=\"cpu\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))",
+          "legendFormat": "{{ user }}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "description": "Near 100% with GPUs far from busy means the workers' CPUs, usually data loading, hold the training back.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "pointSize": 4,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "lineInterpolation": "linear",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0,
+          "decimals": 0,
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 74,
+      "type": "timeseries",
+      "title": "Worker memory, share of limit, per cluster",
+      "gridPos": {
+        "x": 18,
+        "y": 95,
+        "w": 6,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (user)((container_memory_working_set_bytes{namespace=\"cms\",pod=~\"ray-train-.+-worker-.+\",container=\"ray-worker\"} / on(pod) group_left() sum by (pod)(kube_pod_container_resource_limits{namespace=\"cms\",pod=~\"ray-train-.+-worker-.+\",container=\"ray-worker\",resource=\"memory\"})) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))",
+          "legendFormat": "{{ user }}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "description": "The fullest worker of each cluster. Near 100% means a worker is about to be killed for memory.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "pointSize": 4,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "lineInterpolation": "linear",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0,
+          "decimals": 0,
+          "unit": "percentunit",
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
       "id": 38,
       "type": "row",
       "title": "Slurm on Hammer",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 90,
+        "y": 102,
         "w": 24,
         "h": 1
       },
@@ -6190,7 +7369,7 @@
       "title": "CMS cores in use, by type",
       "gridPos": {
         "x": 0,
-        "y": 91,
+        "y": 103,
         "w": 8,
         "h": 8
       },
@@ -6325,7 +7504,7 @@
       "title": "Cores per user",
       "gridPos": {
         "x": 8,
-        "y": 91,
+        "y": 103,
         "w": 8,
         "h": 8
       },
@@ -6414,7 +7593,7 @@
       "title": "Jobs per user",
       "gridPos": {
         "x": 16,
-        "y": 91,
+        "y": 103,
         "w": 8,
         "h": 8
       },
@@ -6504,7 +7683,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 99,
+        "y": 111,
         "w": 24,
         "h": 1
       },
@@ -6567,7 +7746,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 100,
+        "y": 112,
         "w": 8,
         "h": 8
       },
@@ -6657,7 +7836,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 100,
+        "y": 112,
         "w": 8,
         "h": 8
       },
@@ -6745,7 +7924,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 100,
+        "y": 112,
         "w": 8,
         "h": 8
       },
@@ -6785,7 +7964,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 108,
+        "y": 120,
         "w": 24,
         "h": 1
       },
@@ -6937,7 +8116,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 109,
+        "y": 121,
         "w": 8,
         "h": 8
       },
@@ -7248,7 +8427,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 109,
+        "y": 121,
         "w": 8,
         "h": 8
       },
@@ -7462,7 +8641,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 109,
+        "y": 121,
         "w": 8,
         "h": 8
       },
@@ -7519,7 +8698,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 117,
+        "y": 129,
         "w": 24,
         "h": 1
       },
@@ -7581,7 +8760,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 118,
+        "y": 130,
         "w": 8,
         "h": 8
       },
@@ -7671,7 +8850,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 118,
+        "y": 130,
         "w": 8,
         "h": 8
       },
@@ -7798,7 +8977,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 118,
+        "y": 130,
         "w": 8,
         "h": 8
       },
@@ -7894,7 +9073,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 126,
+        "y": 138,
         "w": 8,
         "h": 8
       },
@@ -7992,7 +9171,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 126,
+        "y": 138,
         "w": 8,
         "h": 8
       },
@@ -8033,7 +9212,7 @@
       "title": "Session container restarts per hour",
       "gridPos": {
         "x": 16,
-        "y": 126,
+        "y": 138,
         "w": 8,
         "h": 8
       },
@@ -8139,7 +9318,7 @@
       "title": "Monitoring volumes",
       "gridPos": {
         "x": 0,
-        "y": 134,
+        "y": 146,
         "w": 8,
         "h": 8
       },
@@ -8251,7 +9430,7 @@
       "title": "Prometheus head series",
       "gridPos": {
         "x": 8,
-        "y": 134,
+        "y": 146,
         "w": 8,
         "h": 8
       },
@@ -8357,7 +9536,7 @@
       "title": "GPU temperature",
       "gridPos": {
         "x": 16,
-        "y": 134,
+        "y": 146,
         "w": 8,
         "h": 8
       },
