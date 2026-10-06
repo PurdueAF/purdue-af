@@ -7,10 +7,13 @@ with every call. The Hub says whose it is, and the call goes on, unread, to
 that user's RayCluster: created from raycluster.yaml when they first connect
 or submit a job, running as them, and deleted once idle. Only the gateway
 holds a cluster's own Ray token. A cluster runs the global Pixi environment,
-or the one a call names in `env`, with one GPU or as many as `gpus`
-asks, each of the memory `min-memory-per-gpu` asks or more: a cluster starts only
-while that many such GPUs are free, or with one GPU while another cluster's
-preemptible worker holds one. The settings are in config.yaml.
+or the one a call names in `af-env`, with one worker or as many as
+`af-n-workers` asks, each with one GPU or as many as `af-gpus-per-worker` asks,
+of the memory `af-min-gpu-memory-gb` asks or more, and with the cores and
+memory `af-cpus-per-worker` and `af-ram-per-worker-gb` ask; a call with any
+other `af-` name is refused. A cluster starts only while that many such GPUs
+are free, or with one GPU while another cluster's preemptible worker holds one. A user whose session holds a GPU starts and
+submits to none. The settings are in config.yaml.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import copy
+import dataclasses
 import hashlib
 import hmac
 import json
@@ -77,6 +81,8 @@ class Flavor:
     resource: str
     memory: float
     budget: int
+    # The most of them one worker may hold.
+    per_worker: int
 
     @property
     def group(self) -> str:
@@ -85,9 +91,17 @@ class Flavor:
 
 
 FLAVORS = [
-    Flavor(str(g["resource"]), float(g["memoryGb"]), int(g["budget"]))
+    Flavor(
+        str(g["resource"]),
+        float(g["memoryGb"]),
+        int(g["budget"]),
+        int(g["maxPerWorker"]),
+    )
     for g in CONFIG["gpus"]
 ]
+WORKER_CPUS_MAX = int(CONFIG["workerCpusMax"])
+WORKER_MEMORY_GB_MIN = int(CONFIG["workerMemoryGbMin"])
+WORKER_MEMORY_GB_MAX = int(CONFIG["workerMemoryGbMax"])
 PREEMPTIBLE_PRIORITY_CLASS = str(CONFIG["preemptiblePriorityClass"])
 PROMETHEUS_URL = str(CONFIG["prometheusUrl"])
 DEFAULT_ENV = str(CONFIG["defaultEnv"])
@@ -104,17 +118,36 @@ MANAGED_BY = "ray-train-gateway"
 CLIENT_PORT = 10001
 # The dashboard's, whose HTTP API, the Jobs API's among it, the gateway relays.
 DASHBOARD_PORT = 8265
+# What the name of every setting starts with: any other header or metadata so named is a mistake.
+SETTING_PREFIX = "af-"
 # Set by a notebook: ray.init(..., _metadata=[(ENV_METADATA, <environment>)]), or a header of JobSubmissionClient.
-ENV_METADATA = "env"
+ENV_METADATA = SETTING_PREFIX + "env"
 ENV_ANNOTATION = "purdue-af/ray-env"
-# Set as `env` is: the cluster's GPUs, one per worker.
-GPUS_METADATA = "gpus"
-GPUS_ANNOTATION = "purdue-af/ray-gpus"
-# Set as `env` is: the least memory a worker's GPU may have, in GB.
-MEMORY_METADATA = "min-memory-per-gpu"
+# Set as the environment is: the cluster's workers, and the GPUs of each.
+WORKERS_METADATA = SETTING_PREFIX + "n-workers"
+WORKERS_ANNOTATION = "purdue-af/ray-workers"
+PER_WORKER_METADATA = SETTING_PREFIX + "gpus-per-worker"
+PER_WORKER_ANNOTATION = "purdue-af/ray-gpus-per-worker"
+# Set as the environment is: the least memory a worker's GPU may have, in GB.
+MEMORY_METADATA = SETTING_PREFIX + "min-gpu-memory-gb"
 MEMORY_ANNOTATION = "purdue-af/ray-gpu-memory"
+# Set as the environment is: the CPU cores of each worker, and its memory in GB.
+CPUS_METADATA = SETTING_PREFIX + "cpus-per-worker"
+CPUS_ANNOTATION = "purdue-af/ray-worker-cpus"
+RAM_METADATA = SETTING_PREFIX + "ram-per-worker-gb"
+SETTINGS = {
+    ENV_METADATA,
+    WORKERS_METADATA,
+    PER_WORKER_METADATA,
+    MEMORY_METADATA,
+    CPUS_METADATA,
+    RAM_METADATA,
+}
+# A setting's name without its prefix is no header of Ray's either.
+UNPREFIXED = {name.removeprefix(SETTING_PREFIX) for name in SETTINGS}
+RAM_ANNOTATION = "purdue-af/ray-worker-memory"
 REMOVED_IDLE = "Your Ray cluster was removed after it went idle: run ray.shutdown(), then ray.init() again."
-REMOVED_UNPROVISIONED = f"Your Ray cluster was removed, as not all of its GPUs started in time: ask for fewer with {GPUS_METADATA}, or try again later."
+REMOVED_UNPROVISIONED = f"Your Ray cluster was removed, as not all of its GPUs started in time: ask for fewer with {WORKERS_METADATA}, or try again later."
 # singleuser.podNameTemplate in the Hub values
 SESSION_POD = re.compile(r"purdue-af-(\d+)")
 # custom-spawner.py names the accounts from outside Purdue <login>-cern and <login>-fnal
@@ -134,20 +167,12 @@ GRPC_OPTIONS = [
     ("grpc.http2.max_ping_strikes", 0),
 ]
 # Metadata a relayed call does not carry on: the gateway's own, and what gRPC sets itself.
-NOT_RELAYED = {
-    "authorization",
-    ENV_METADATA,
-    GPUS_METADATA,
-    MEMORY_METADATA,
-    "user-agent",
-}
+NOT_RELAYED = {"authorization", "user-agent"} | SETTINGS
 # Headers a relayed HTTP call carries on neither way: the gateway's own, and its connections' framing.
 NOT_PASSED_ON = {
     "authorization",
     "host",
-    ENV_METADATA,
-    GPUS_METADATA,
-    MEMORY_METADATA,
+    *SETTINGS,
     "connection",
     "keep-alive",
     "upgrade",
@@ -184,6 +209,8 @@ class User:
     account: str
     uid: int
     gid: int
+    # Whether their session holds a GPU of its own.
+    session_gpu: bool = False
 
     @property
     def cluster(self) -> str:
@@ -192,16 +219,24 @@ class User:
 
 @dataclass(frozen=True)
 class Shape:
-    """What a user's cluster runs: an environment, its number of GPUs, and the
-    memory of the smallest GPU it may hold, in GB."""
+    """What a user's cluster runs: an environment, its number of workers, the
+    memory of the smallest GPU it may hold, in GB, and the CPU cores, the
+    memory, in GB, and the GPUs of each worker."""
 
     env: str
-    gpus: str
+    workers: str
     memory: str
+    cpus: str
+    ram: str
+    per_worker: str
 
     @property
     def flavors(self) -> list[Flavor]:
-        return [f for f in FLAVORS if f.memory >= float(self.memory)]
+        return [
+            f
+            for f in FLAVORS
+            if f.memory >= float(self.memory) and f.per_worker >= int(self.per_worker)
+        ]
 
 
 def cluster_name(username: str) -> str:
@@ -221,12 +256,20 @@ def bearer_token(header: str) -> str | None:
     return token if scheme.lower() in ("bearer", "token") and token else None
 
 
-def session_af_id(user_model: dict[str, Any]) -> int | None:
-    """The user's AF id, from the pod name of their running session."""
+def session_pod(user_model: dict[str, Any]) -> re.Match[str] | None:
+    """The pod name of the user's running session, and the AF id in it."""
     server = (user_model.get("servers") or {}).get("") or {}
     pod_name = (server.get("state") or {}).get("pod_name", "")
-    match = SESSION_POD.fullmatch(pod_name)
-    return int(match[1]) if match else None
+    return SESSION_POD.fullmatch(pod_name)
+
+
+def session_gpus_query(pod: str) -> str:
+    """The GPUs a session pod asks for, of every kind a session may hold."""
+    resources = "|".join(GPU_METRICS.values())
+    return (
+        "sum by (resource) (kube_pod_container_resource_requests"
+        f'{{namespace="{NAMESPACE}",pod="{pod}",resource=~"{resources}"}})'
+    )
 
 
 def pooled_account(af_id: int) -> str:
@@ -305,13 +348,19 @@ def build_cluster(
     metadata.setdefault("annotations", {}).update(
         {
             ENV_ANNOTATION: shape.env,
-            GPUS_ANNOTATION: shape.gpus,
+            WORKERS_ANNOTATION: shape.workers,
             MEMORY_ANNOTATION: shape.memory,
+            CPUS_ANNOTATION: shape.cpus,
+            RAM_ANNOTATION: shape.ram,
+            PER_WORKER_ANNOTATION: shape.per_worker,
         }
     )
     spec = cluster["spec"]
     spec["authOptions"]["secretName"] = user.cluster
     (group,) = spec["workerGroupSpecs"]
+    for container in group["template"]["spec"]["containers"]:
+        for amounts in container["resources"].values():
+            amounts.update(cpu=shape.cpus, memory=f"{shape.ram}Gi")
     for template in (spec["headGroupSpec"]["template"], group["template"]):
         pod = template["spec"]
         pod.setdefault("securityContext", {}).update(
@@ -336,16 +385,22 @@ def build_cluster(
         ):
             if replicas > 0:
                 spec["workerGroupSpecs"].append(
-                    worker_group(group, flavor, replicas, preemptible)
+                    worker_group(
+                        group, flavor, int(shape.per_worker), replicas, preemptible
+                    )
                 )
         kept = max(kept - workers, 0)
     return cluster
 
 
 def worker_group(
-    template: dict[str, Any], flavor: Flavor, replicas: int, preemptible: bool
+    template: dict[str, Any],
+    flavor: Flavor,
+    per_worker: int,
+    replicas: int,
+    preemptible: bool,
 ) -> dict[str, Any]:
-    """The template's worker group, as `replicas` workers with a GPU of `flavor` each."""
+    """The template's worker group, as `replicas` workers with `per_worker` GPUs of `flavor` each."""
     group = copy.deepcopy(template)
     group["groupName"] = flavor.group + ("-preemptible" if preemptible else "")
     group.update(replicas=replicas, minReplicas=replicas, maxReplicas=replicas)
@@ -356,7 +411,7 @@ def worker_group(
         for amounts in container["resources"].values():
             for other in FLAVORS:
                 amounts.pop(other.resource, None)
-            amounts[flavor.resource] = 1
+            amounts[flavor.resource] = per_worker
     return group
 
 
@@ -403,7 +458,7 @@ def unprovisioned(cluster: dict[str, Any], now: float) -> bool:
 
 
 def held_gpus(cluster: dict[str, Any]) -> dict[str, int]:
-    """The workers the cluster has of each GPU resource."""
+    """The GPUs the cluster's workers have of each resource."""
     held: dict[str, int] = {}
     for group in cluster["spec"].get("workerGroupSpecs") or []:
         for container in group["template"]["spec"]["containers"]:
@@ -412,7 +467,7 @@ def held_gpus(cluster: dict[str, Any]) -> dict[str, int]:
                 if flavor.resource in limits:
                     held[flavor.resource] = held.get(flavor.resource, 0) + int(
                         group.get("replicas", 0)
-                    )
+                    ) * int(limits[flavor.resource])
     return held
 
 
@@ -447,6 +502,26 @@ def requested_env(value: str, template: dict[str, Any]) -> str:
     return path
 
 
+def worker_size(template: dict[str, Any]) -> tuple[str, str]:
+    """The CPU cores and the memory, in GB, of the template's worker."""
+    (group,) = template["spec"]["workerGroupSpecs"]
+    (container,) = group["template"]["spec"]["containers"]
+    limits = container["resources"]["limits"]
+    return str(limits["cpu"]), str(limits["memory"]).removesuffix("Gi")
+
+
+def requested_size(name: str, value: str, default: str, least: int, most: int) -> str:
+    """What a call asks each worker to have of CPU cores or memory, or the template's."""
+    if not value:
+        return default
+    if value in {str(n) for n in range(least, most + 1)}:
+        return value
+    raise Refused(
+        grpc.StatusCode.INVALID_ARGUMENT,
+        f"{name} is a whole number from {least} to {most}.",
+    )
+
+
 def requested_memory(value: str) -> str:
     """The GPU memory a call asks of each worker, as that of the smallest GPU that has it."""
     try:
@@ -465,26 +540,44 @@ def requested_memory(value: str) -> str:
     return f"{min(enough):g}"
 
 
-def requested_gpus(value: str, flavors: list[Flavor]) -> str:
-    """The GPUs a call asks for, one by default."""
+def requested_per_worker(value: str, memory: str) -> str:
+    """The GPUs a call asks each worker to have, one by default."""
     if not value:
         return "1"
-    most = sum(f.budget for f in flavors)
+    most = max(f.per_worker for f in FLAVORS if f.memory >= float(memory))
     if value in {str(n) for n in range(1, most + 1)}:
         return value
     raise Refused(
         grpc.StatusCode.INVALID_ARGUMENT,
-        f"{GPUS_METADATA} is a number of GPUs from 1 to {most}.",
+        f"{PER_WORKER_METADATA} is a number of GPUs from 1 to {most}.",
+    )
+
+
+def requested_workers(value: str, shape: Shape) -> str:
+    """The workers a call asks for, one by default."""
+    if not value:
+        return "1"
+    most = sum(f.budget // int(shape.per_worker) for f in shape.flavors)
+    if value in {str(n) for n in range(1, most + 1)}:
+        return value
+    raise Refused(
+        grpc.StatusCode.INVALID_ARGUMENT,
+        f"{WORKERS_METADATA} is a number of workers from 1 to {most}.",
     )
 
 
 def cluster_shape(cluster: dict[str, Any]) -> Shape:
     annotations = cluster["metadata"].get("annotations") or {}
+    cpus, ram = worker_size(load_template())
     return Shape(
         str(annotations.get(ENV_ANNOTATION, "")),
-        str(annotations.get(GPUS_ANNOTATION, "")),
+        str(annotations.get(WORKERS_ANNOTATION, "")),
         # Without it, a cluster holds GPUs that any call may have.
         str(annotations.get(MEMORY_ANNOTATION, requested_memory(""))),
+        # Without them, its workers are the template's.
+        str(annotations.get(CPUS_ANNOTATION, cpus)),
+        str(annotations.get(RAM_ANNOTATION, ram)),
+        str(annotations.get(PER_WORKER_ANNOTATION, "1")),
     )
 
 
@@ -584,18 +677,47 @@ class Gateway:
                 grpc.StatusCode.UNAUTHENTICATED,
                 "No token: RAY_AUTH_MODE=token and RAY_AUTH_TOKEN=$JUPYTERHUB_API_TOKEN must be set.",
             )
+        unknown = sorted(
+            name
+            for name in values
+            if name in UNPREFIXED
+            or (name.startswith(SETTING_PREFIX) and name not in SETTINGS)
+        )
+        if unknown:
+            raise Refused(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"{', '.join(unknown)} is no setting of a Ray cluster: the settings are {', '.join(sorted(SETTINGS))}.",
+            )
         user = await self.user_for(token)
+        template = load_template()
+        cpus, ram = worker_size(template)
         memory = requested_memory(values.get(MEMORY_METADATA, ""))
         shape = Shape(
-            requested_env(values.get(ENV_METADATA, ""), load_template()),
+            requested_env(values.get(ENV_METADATA, ""), template),
             "1",
             memory,
+            requested_size(
+                CPUS_METADATA, values.get(CPUS_METADATA, ""), cpus, 1, WORKER_CPUS_MAX
+            ),
+            requested_size(
+                RAM_METADATA,
+                values.get(RAM_METADATA, ""),
+                ram,
+                WORKER_MEMORY_GB_MIN,
+                WORKER_MEMORY_GB_MAX,
+            ),
+            requested_per_worker(values.get(PER_WORKER_METADATA, ""), memory),
         )
-        gpus = requested_gpus(values.get(GPUS_METADATA, ""), shape.flavors)
-        return user, Shape(shape.env, gpus, memory)
+        workers = requested_workers(values.get(WORKERS_METADATA, ""), shape)
+        return user, dataclasses.replace(shape, workers=workers)
 
     async def cluster_for(self, user: User, shape: Shape) -> str:
         """The user's cluster, started in `shape` unless it runs in it."""
+        if user.session_gpu:
+            raise Refused(
+                grpc.StatusCode.FAILED_PRECONDITION,
+                "Your session holds a GPU, and Ray clusters are for sessions without one: train on your session's GPU, or start a session without a GPU.",
+            )
         self.last_used[user.cluster] = time.monotonic()
         if self.started.get(user.cluster) != shape:
             await self.start_cluster(user, shape)
@@ -724,17 +846,23 @@ class Gateway:
             return cached[1]
         name = await self.whoami(token)
         account = name
+        pod = session_pod(await self.hub_user(name))
         if name.endswith(EXTERNAL_SUFFIXES):
-            # Numbered after the hub id, which the pod name of the user's session carries.
-            af_id = session_af_id(await self.hub_user(name))
-            if af_id is None:
+            if pod is None:
                 raise Refused(
                     grpc.StatusCode.FAILED_PRECONDITION,
                     "Start your AF session first: a Ray cluster runs as the user of a running session.",
                 )
-            account = pooled_account(af_id)
+            # Numbered after the hub id, which the pod name of the user's session carries.
+            account = pooled_account(int(pod[1]))
         uid, gid = await asyncio.to_thread(ldap_ids, account)
-        user = User(name=name, account=account, uid=uid, gid=gid)
+        user = User(
+            name=name,
+            account=account,
+            uid=uid,
+            gid=gid,
+            session_gpu=pod is not None and await self.session_holds_gpu(pod[0]),
+        )
         self._users = {k: v for k, v in self._users.items() if v[0] > now}
         self._users[key] = (now + USER_CACHE_S, user)
         return user
@@ -800,7 +928,7 @@ class Gateway:
                 if await self.busy(cluster):
                     raise Refused(
                         grpc.StatusCode.FAILED_PRECONDITION,
-                        "Your Ray cluster runs another environment, number of GPUs or GPU memory, and tasks or jobs: wait for them, or stop them.",
+                        "Your Ray cluster runs other settings, and tasks or jobs: wait for them, or stop them.",
                     )
                 # Before the deletion: a refusal leaves the user the cluster they have.
                 mix = await self.admit(user, shape, held_gpus(cluster))
@@ -870,7 +998,7 @@ class Gateway:
         first of FLAVORS first. Refuse one whose GPUs are not all free now, unless
         it asks for one and a preemptible worker holds one; `replaced` are the GPUs
         its predecessor gives back."""
-        wanted = int(shape.gpus)
+        wanted, per_worker = int(shape.workers), int(shape.per_worker)
         replaced = replaced or {}
         async with self.admitting:
             status, listing = await self.kube(
@@ -909,24 +1037,31 @@ class Gateway:
                     # Its predecessor's preemptible workers leave with it.
                     if unheld + preemptible - replaced.get(resource, 0) - taken > 0:
                         evicting = evicting or resource
-                mix[resource] = max(min(available, wanted - sum(mix.values())), 0)
+                mix[resource] = max(
+                    min(available // per_worker, wanted - sum(mix.values())), 0
+                )
             available = sum(mix.values())
-            if wanted == 1 and not available and evicting:
+            if wanted == per_worker == 1 and not available and evicting:
                 # Its worker evicts a preemptible one.
                 mix[evicting] = available = 1
             if wanted > available:
                 log.info(
-                    "refused %s %d GPUs: %d available, %s free",
+                    "refused %s %d workers of %d GPUs: %d available, %s free",
                     user.cluster,
                     wanted,
+                    per_worker,
                     available,
                     free,
                 )
+                gpus = "a GPU" if per_worker == 1 else f"{per_worker} GPUs"
                 raise Refused(
                     grpc.StatusCode.RESOURCE_EXHAUSTED,
-                    f"Your Ray cluster asks for {wanted} GPUs of {shape.memory} GB or more and Ray clusters can take {available} more now: ask for fewer with {GPUS_METADATA}, or try again later.",
+                    f"Your Ray cluster asks for {wanted} workers with {gpus} of {shape.memory} GB or more each, and Ray clusters can take {available} more now: ask for fewer with {WORKERS_METADATA}, or try again later.",
                 )
-            self.grants[user.cluster] = (mix, now + GRANT_S)
+            self.grants[user.cluster] = (
+                {resource: workers * per_worker for resource, workers in mix.items()},
+                now + GRANT_S,
+            )
             return mix
 
     async def free_gpus(self) -> dict[str, tuple[int, int]] | None:
@@ -951,6 +1086,15 @@ class Gateway:
         except (ClientError, asyncio.TimeoutError, LookupError, TypeError, ValueError):
             log.warning("Prometheus did not say how many GPUs are free")
             return None
+
+    async def session_holds_gpu(self, pod: str) -> bool:
+        """Whether a session pod holds a GPU; not, if Prometheus does not say."""
+        try:
+            held = await self.prometheus(session_gpus_query(pod))
+        except (ClientError, asyncio.TimeoutError, LookupError, TypeError, ValueError):
+            log.warning("Prometheus did not say whether %s holds a GPU", pod)
+            return False
+        return any(count > 0 for count in held.values())
 
     async def prometheus(self, query: str) -> dict[str, float]:
         async with self.http.get(

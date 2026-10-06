@@ -51,6 +51,7 @@ LDAP = {"user-a": (5001, 500), "paf0042": (6042, 600)}
 ENV_A = "/work/users/user-a/proj/.pixi/envs/default"
 T4 = "nvidia.com/gpu"
 SLICE = "nvidia.com/mig-1g.5gb"
+SLICE_METRIC = "nvidia_com_mig_1g_5gb"
 # The heads' own, whatever a test makes of the gateway's.
 HeadWebSocket = web.WebSocketResponse
 ENV_B = "/depot/cms/users/user-a/other"
@@ -210,6 +211,8 @@ class FakePrometheus:
         self.slices_preemptible = 0
         # Without the series of kube-state-metrics
         self.empty = False
+        # Session pod -> the GPUs it holds
+        self.session_gpus = {}
 
     def app(self):
         async def query(request):
@@ -226,6 +229,21 @@ class FakePrometheus:
                 gw.PREEMPTIBLE_QUERY: self.slices_preemptible,
             }
             query = request.query["query"]
+            if query not in counts:
+                (pod,) = [
+                    f"purdue-af-{af_id}"
+                    for _, af_id in SESSIONS.values()
+                    if query == gw.session_gpus_query(f"purdue-af-{af_id}")
+                ]
+                held = self.session_gpus.get(pod)
+                result = (
+                    [{"metric": {"resource": SLICE_METRIC}, "value": [0, str(held)]}]
+                    if held is not None and not self.empty
+                    else []
+                )
+                return web.json_response(
+                    {"status": "success", "data": {"result": result}}
+                )
             samples = [
                 {"metric": {"resource": metric}, "value": [0, str(value)]}
                 for metric, value in (
@@ -461,15 +479,24 @@ async def call(
     client="client-1",
     gpus=None,
     memory=None,
+    cpus=None,
+    ram=None,
+    per_worker=None,
 ):
     """A Ray Client call from a session, as the stream of raw messages the gateway sees."""
     metadata = [("client_id", client)]
+    if per_worker is not None:
+        metadata.append((gw.PER_WORKER_METADATA, per_worker))
+    if cpus is not None:
+        metadata.append((gw.CPUS_METADATA, cpus))
+    if ram is not None:
+        metadata.append((gw.RAM_METADATA, ram))
     if token is not None:
         metadata.append(("authorization", f"Bearer {token}"))
     if env_path is not None:
         metadata.append((gw.ENV_METADATA, env_path))
     if gpus is not None:
-        metadata.append((gw.GPUS_METADATA, gpus))
+        metadata.append((gw.WORKERS_METADATA, gpus))
     if memory is not None:
         metadata.append((gw.MEMORY_METADATA, memory))
     responses = env.channel.stream_stream(method)(iter(messages), metadata=metadata)
@@ -489,7 +516,7 @@ def job_headers(token="session-a", env_path=None, gpus=None, memory=None):
     if env_path is not None:
         headers[gw.ENV_METADATA] = env_path
     if gpus is not None:
-        headers[gw.GPUS_METADATA] = gpus
+        headers[gw.WORKERS_METADATA] = gpus
     if memory is not None:
         headers[gw.MEMORY_METADATA] = memory
     return headers
@@ -558,6 +585,11 @@ def gpus(env, name="ray-train-user-a"):
         assert container["resources"]["requests"][resource] == 1
         held[group["groupName"]] = (group["replicas"], resource)
     return held
+
+
+def gpus_of(env, name="ray-train-user-a"):
+    """The GPUs the cluster's workers hold of each resource."""
+    return gw.held_gpus(env.kube.clusters[name])
 
 
 def counts(group):
@@ -646,7 +678,7 @@ async def test_a_head_sees_its_own_token_and_the_clients_own_metadata(env):
     )
     assert metadata["client_id"] == "client-1"
     assert gw.ENV_METADATA not in metadata
-    assert gw.GPUS_METADATA not in metadata
+    assert gw.WORKERS_METADATA not in metadata
     assert "session-a" not in json.dumps(metadata)
 
 
@@ -658,11 +690,183 @@ async def test_an_external_user_runs_as_their_pooled_account(env):
     assert head_env(env, "ray-train-user-b-cern")["USER"] == "paf0042"
 
 
-async def test_a_purdue_user_is_not_looked_up_in_the_hub(env):
+async def test_a_users_session_is_looked_up_in_the_hub_once(env):
     await call(env)
-    assert LOOKUPS == []
+    await call(env)
+    assert LOOKUPS == ["user-a"]
     await call(env, token="session-b")
-    assert LOOKUPS == ["user-b-cern"]
+    assert LOOKUPS == ["user-a", "user-b-cern"]
+
+
+async def test_a_user_whose_session_holds_a_gpu_gets_no_cluster(env):
+    env.prometheus.session_gpus["purdue-af-7"] = 1
+    assert await refused(env) == grpc.StatusCode.FAILED_PRECONDITION
+    status, reason, _ = await submit(env)
+    assert (status, "session holds a GPU" in reason) == (409, True)
+    assert env.kube.clusters == {}
+    await call(env, token="session-b")
+    assert list(env.kube.clusters) == ["ray-train-user-b-cern"]
+
+
+def worker_resources(env):
+    (container,) = workers(env)["template"]["spec"]["containers"]
+    return container["resources"]
+
+
+async def test_a_worker_has_the_cores_and_memory_of_the_template(env):
+    await call(env)
+    template = yaml.safe_load(TEMPLATE.read_text())
+    (group,) = template["spec"]["workerGroupSpecs"]
+    (container,) = group["template"]["spec"]["containers"]
+    assert worker_resources(env) == container["resources"]
+
+
+async def test_a_worker_has_the_cores_and_memory_a_call_asks_for(env):
+    await call(env, cpus="2", ram="48", gpus="2")
+    for group in cluster_spec(env)["workerGroupSpecs"]:
+        (container,) = group["template"]["spec"]["containers"]
+        for amounts in container["resources"].values():
+            assert (amounts["cpu"], amounts["memory"]) == ("2", "48Gi")
+    (head,) = head_pod(env)["containers"]
+    assert head["resources"]["limits"]["cpu"] != "2"
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["af-gpus", "af-n-worker", "n-workers", "env", "ram-per-worker-gb"],
+)
+async def test_a_setting_the_gateway_does_not_know_is_refused_with_those_it_does(
+    env, name
+):
+    with pytest.raises(grpc.aio.AioRpcError) as e:
+        await env.channel.stream_stream(PING)(
+            iter([b"ping"]),
+            metadata=[("authorization", "Bearer session-a"), (name, "2")],
+        ).read()
+    assert e.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+    assert all(setting in e.value.details() for setting in gw.SETTINGS)
+    async with env.session.post(
+        env.dashboard + "/api/jobs/",
+        data="{}",
+        headers={"Authorization": "Bearer session-a", name.title(): "2"},
+    ) as r:
+        assert r.status == 400
+        assert name in r.reason and all(s in r.reason for s in gw.SETTINGS)
+    assert env.kube.clusters == {}
+
+
+async def test_workers_have_the_gpus_a_call_asks_for_each(env):
+    await call(env, gpus="2", per_worker="2")
+    for group in cluster_spec(env)["workerGroupSpecs"]:
+        (container,) = group["template"]["spec"]["containers"]
+        assert group["replicas"] == 1
+        for amounts in container["resources"].values():
+            assert amounts[T4] == 2 and SLICE not in amounts
+    annotations = env.kube.clusters["ray-train-user-a"]["metadata"]["annotations"]
+    assert annotations[gw.WORKERS_ANNOTATION] == "2"
+    assert annotations[gw.PER_WORKER_ANNOTATION] == "2"
+
+
+async def test_workers_of_two_gpus_take_no_slices(env):
+    env.prometheus.slices = 14
+    await call(env, per_worker="2")
+    assert gpus_of(env) == {T4: 2}
+
+
+@pytest.mark.parametrize("per_worker", ["0", "3", "two", "1.5"])
+async def test_more_gpus_a_worker_than_any_may_hold_are_refused(env, per_worker):
+    assert await refused(env, per_worker=per_worker) == grpc.StatusCode.INVALID_ARGUMENT
+    assert env.kube.clusters == {}
+
+
+async def test_a_worker_starts_only_while_all_its_gpus_are_free(env):
+    env.prometheus.used = 7
+    assert await refused(env, per_worker="2") == grpc.StatusCode.RESOURCE_EXHAUSTED
+    env.prometheus.used = 3
+    assert (
+        await refused(env, gpus="3", per_worker="2")
+        == grpc.StatusCode.RESOURCE_EXHAUSTED
+    )
+    await call(env, gpus="2", per_worker="2")
+    assert gpus_of(env) == {T4: 4}
+
+
+async def test_a_worker_of_two_gpus_evicts_none(env):
+    env.prometheus.used, env.prometheus.preemptible = 8, 4
+    assert await refused(env, per_worker="2") == grpc.StatusCode.RESOURCE_EXHAUSTED
+
+
+async def test_without_prometheus_every_gpu_of_a_worker_counts_against_the_budget(
+    env,
+):
+    env.prometheus.up = False
+    await call(env, gpus="3", per_worker="2")
+    assert (
+        await refused(env, token="session-b", gpus="2", per_worker="2")
+        == grpc.StatusCode.RESOURCE_EXHAUSTED
+    )
+    await call(env, token="session-b", per_worker="2")
+
+
+async def test_no_more_workers_than_the_gpus_allow_may_be_asked_for(env):
+    assert (
+        await refused(env, gpus="5", per_worker="2") == grpc.StatusCode.INVALID_ARGUMENT
+    )
+
+
+async def test_no_setting_reaches_a_head(env):
+    await call(env, env_path=ENV_A, gpus="2", memory="5", cpus="2", ram="8")
+    ((_, metadata),) = env.heads.calls
+    assert not gw.SETTINGS & set(metadata)
+
+
+@pytest.mark.parametrize(
+    "size",
+    [
+        {"cpus": "0"},
+        {"cpus": "1.5"},
+        {"cpus": str(gw.WORKER_CPUS_MAX + 1)},
+        {"ram": str(gw.WORKER_MEMORY_GB_MIN - 1)},
+        {"ram": str(gw.WORKER_MEMORY_GB_MAX + 1)},
+        {"ram": "32Gi"},
+    ],
+)
+async def test_a_worker_size_out_of_range_is_refused(env, size):
+    assert await refused(env, **size) == grpc.StatusCode.INVALID_ARGUMENT
+    assert env.kube.clusters == {}
+
+
+async def test_a_call_for_another_worker_size_replaces_an_idle_cluster(env):
+    await call(env)
+    await call(env, cpus="4")
+    assert worker_resources(env)["limits"]["cpu"] == "4"
+    assert env.kube.created == 2
+
+
+async def test_a_session_asking_for_no_gpu_gets_a_cluster(env):
+    env.prometheus.session_gpus["purdue-af-7"] = 0
+    await call(env)
+    assert list(env.kube.clusters) == ["ray-train-user-a"]
+
+
+async def test_a_session_gets_a_cluster_while_prometheus_does_not_say_what_it_holds(
+    env,
+):
+    env.prometheus.session_gpus["purdue-af-7"] = 1
+    env.prometheus.up = False
+    await call(env)
+    assert list(env.kube.clusters) == ["ray-train-user-a"]
+
+
+async def test_a_session_that_holds_a_gpu_follows_and_stops_the_jobs_of_its_users_cluster(
+    env,
+):
+    await submit(env)
+    env.prometheus.session_gpus["purdue-af-7"] = 1
+    env.gateway._users.clear()
+    assert (await job_call(env))[0] == 200
+    assert (await submit(env))[0] == 409
+    assert list(env.kube.clusters) == ["ray-train-user-a"]
 
 
 async def test_a_user_from_outside_purdue_without_a_running_session_is_told_to_start_one(
@@ -847,7 +1051,7 @@ async def test_gpus_asked_for_are_held_from_the_start(env):
     assert counts(workers(env)) == (1, 1, 1)
     assert counts(preemptible(env)) == (3, 3, 3)
     annotations = env.kube.clusters["ray-train-user-a"]["metadata"]["annotations"]
-    assert annotations[gw.GPUS_ANNOTATION] == "4"
+    assert annotations[gw.WORKERS_ANNOTATION] == "4"
 
 
 async def test_only_the_gpus_past_the_first_are_preemptible(env):
@@ -904,7 +1108,10 @@ async def test_a_refused_submission_says_how_many_gpus_are_free(env):
     env.prometheus.used = 7
     status, reason, _ = await submit(env, gpus="4")
     assert status == 429
-    assert "asks for 4 GPUs of 5 GB or more and Ray clusters can take 1 more" in reason
+    assert (
+        "asks for 4 workers with a GPU of 5 GB or more each, and Ray clusters can take 1 more"
+        in reason
+    )
     assert env.kube.clusters == {}
 
 
@@ -1145,7 +1352,7 @@ async def test_a_refusal_says_why_in_its_status_line(env):
     status, reason, body = await job_call(env, path="/api/version", gpus="23")
     assert status == 400
     assert reason == body.decode()
-    assert reason.startswith(gw.GPUS_METADATA)
+    assert reason.startswith(gw.WORKERS_METADATA)
 
 
 async def test_submitting_a_job_starts_the_users_cluster_in_the_shape_it_names(env):
@@ -1162,7 +1369,7 @@ async def test_submitting_a_job_starts_the_users_cluster_in_the_shape_it_names(e
     assert headers["Authorization"] == (
         f"Bearer {gw.cluster_token(SERVICE_TOKEN, 'ray-train-user-a')}"
     )
-    assert not {gw.ENV_METADATA, gw.GPUS_METADATA} & {k.lower() for k in headers}
+    assert not {gw.ENV_METADATA, gw.WORKERS_METADATA} & {k.lower() for k in headers}
     assert "session-a" not in json.dumps(headers)
     assert json.loads(sent) == {"entrypoint": "python train.py"}
 
@@ -1649,9 +1856,9 @@ def test_accounts_from_outside_purdue_map_onto_the_pool():
     assert e.value.code == grpc.StatusCode.PERMISSION_DENIED
 
 
-def test_a_user_without_a_running_session_has_no_af_id():
-    assert gw.session_af_id({"name": "user-a", "servers": {}}) is None
-    assert gw.session_af_id({"name": "user-a"}) is None
+def test_a_user_without_a_running_session_has_no_session_pod():
+    assert gw.session_pod({"name": "user-a", "servers": {}}) is None
+    assert gw.session_pod({"name": "user-a"}) is None
 
 
 @pytest.mark.parametrize(
@@ -1673,7 +1880,7 @@ def test_building_a_cluster_leaves_the_template_alone():
     template = yaml.safe_load(TEMPLATE.read_text())
     before = copy.deepcopy(template)
     user = gw.User(name="user-a", account="user-a", uid=5001, gid=500)
-    gw.build_cluster(template, user, gw.Shape(ENV_A, "4", "5"), {T4: 4})
+    gw.build_cluster(template, user, gw.Shape(ENV_A, "4", "5", "8", "32", "1"), {T4: 4})
     assert template == before
 
 
