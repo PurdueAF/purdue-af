@@ -58,7 +58,7 @@ codeGen:
   uproot-raw:
     enabled: true
     image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_code_gen_raw_uproot
-    tag: "v1.8.4"
+    tag: "v1.8.6"
     defaultScienceContainerImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_science_image_combined_root
     defaultScienceContainerTag: 5.7.2-6.38.04
     compressionAlgorithm: ZSTD
@@ -197,8 +197,8 @@ didFinder:
 gridAccount: dkondrat
 x509Secrets:
   image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/x509-secrets
-  tag: "v1.8.4"
-  initImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/alpine:3.6
+  tag: "v1.8.6"
+  initImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/alpine:3.24
   pullPolicy: Always
   vomsOrg: cms
   nodeSelector:
@@ -211,7 +211,7 @@ x509Secrets:
 
 scheduledTasks:
   image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/python
-  tag: "3.10"
+  tag: "3.12"
   nodeSelector:
     cms-af-prod: "true"
   tolerations:
