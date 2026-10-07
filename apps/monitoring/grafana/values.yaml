@@ -9,6 +9,10 @@ persistence:
   accessModes:
     - ReadWriteOnce
 
+# No sidecar reads other namespaces, so the chart's ClusterRole would be empty.
+rbac:
+  namespaced: true
+
 ingress:
   enabled: ${enable_ingresses}
   ingressClassName: public

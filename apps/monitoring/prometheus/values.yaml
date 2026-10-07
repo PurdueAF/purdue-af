@@ -15,8 +15,6 @@ server:
   automountServiceAccountToken: true
   image:
     repository: geddes-registry.rcac.purdue.edu/docker-hub-cache/prom/prometheus
-  useExistingClusterRoleName: prometheus-sa-role
-  releaseNamespace: true
   configPath: /etc/config/prometheus.yml
   storagePath: /prometheus
 
@@ -43,8 +41,6 @@ server:
 
   extraFlags:
     - query.timeout=2m
-    - query.max-concurrency=20
-    - storage.tsdb.wal-compression
     # serverFiles changes do not roll the pod; the server polls its config files for them.
     - config.auto-reload
   # Non-recursive: chmod -R walks every TSDB inode and can hang Init for minutes.
@@ -119,8 +115,12 @@ server:
         - targets:
             - prometheus-alertmanager.cms.svc.cluster.local:9093
 
-  retention: 30d
-  retentionSize: 30GB
+  # Retention lives in the config file; the chart turns `retention` into a deprecated flag.
+  retention: ""
+  tsdb:
+    retention:
+      time: 30d
+      size: 30GB
 
 # The chart default k8s jobs need cluster-scoped RBAC prometheus-sa lacks; keep only self-scrape.
 scrapeConfigs:
@@ -257,7 +257,7 @@ serverFiles:
               names:
                 - ${namespace}
         relabel_configs:
-          # Excludes the memcached cache pods, which share app.kubernetes.io/name=loki.
+          # The Loki container and its fs-exporter sidecar.
           - source_labels:
               [
                 __meta_kubernetes_pod_label_app_kubernetes_io_component,
@@ -269,6 +269,29 @@ serverFiles:
             target_label: "pod"
           - source_labels: [__meta_kubernetes_pod_node_name]
             target_label: "pod_node"
+      # Log shipping only: what Alloy sent to Loki, retried and dropped.
+      - job_name: "alloy"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - ${namespace}
+        relabel_configs:
+          - source_labels:
+              [
+                __meta_kubernetes_pod_label_app_kubernetes_io_name,
+                __meta_kubernetes_pod_container_port_name,
+              ]
+            action: keep
+            regex: "alloy;http-metrics"
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: "pod"
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: "pod_node"
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            action: keep
+            regex: "loki_write_(sent|dropped)_(entries|bytes)_total|loki_write_batch_retries_total|loki_process_dropped_lines_total"
       - job_name: "envoy-monitor"
         metrics_path: "/stats/prometheus"
         kubernetes_sd_configs:
@@ -350,34 +373,6 @@ serverFiles:
               [__meta_kubernetes_service_label_app_kubernetes_io_component]
             action: keep
             regex: envoy
-      - job_name: "seldon-monitor-envoy"
-        metrics_path: "/stats/prometheus"
-        kubernetes_sd_configs:
-          - role: endpoints
-            namespaces:
-              names:
-                - ${namespace}
-        relabel_configs:
-          - source_labels: [__meta_kubernetes_pod_name]
-            target_label: "pod"
-          - source_labels: [__meta_kubernetes_namespace]
-            target_label: "namespace"
-            replacement: "$1"
-          - source_labels: [__meta_kubernetes_pod_node_name]
-            target_label: "node"
-          - source_labels:
-              [__meta_kubernetes_service_label_app_kubernetes_io_name]
-            target_label: "app"
-          - source_labels:
-              [__meta_kubernetes_service_label_app_kubernetes_io_instance]
-            target_label: "release"
-          - source_labels:
-              [__meta_kubernetes_service_label_app_kubernetes_io_component]
-            target_label: "component"
-          - source_labels:
-              [__meta_kubernetes_service_label_app_kubernetes_io_name]
-            action: keep
-            regex: seldon-envoy
   # Figures of merit for the SuperSONIC releases' scaling.
   recording_rules.yml:
     groups:
@@ -837,8 +832,6 @@ alertmanager:
     tls:
       - hosts:
           - prometheus-af-alerts.geddes.rcac.purdue.edu
-pushgateway:
-  enabled: false
 kube-state-metrics:
   enabled: false
 prometheus-node-exporter:

@@ -1,12 +1,7 @@
 deploymentMode: Monolithic
 
 singleBinary:
-  enabled: true
   replicas: 1
-  service:
-    type: ClusterIP
-    port: 3100
-    annotations: {}
   resources:
     requests:
       cpu: 1000m
@@ -20,10 +15,6 @@ singleBinary:
       operator: "Equal"
       value: "cms-af"
       effect: "NoSchedule"
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 10001
-    fsGroup: 10001
   persistence:
     enabled: true
     accessModes: ["ReadWriteOnce"]
@@ -32,8 +23,6 @@ singleBinary:
     # The chart key is storageClass; unset keeps the default class the live PVC is on.
     # The chart defaults both PVC retention policies to Delete; this is the only copy of the logs.
     enableStatefulSetAutoDeletePVC: false
-    annotations: {}
-    mountPath: /var/loki
   # Free bytes of the Loki PVC, which node-exporter and kubelet stats do not expose here.
   extraContainers:
     - name: fs-exporter
@@ -66,23 +55,11 @@ singleBinary:
           mountPath: /var/loki
           readOnly: true
 
-# IMPORTANT: keep config as empty string so the legacy templated path is inert
 loki:
+  # Empty: structuredConfig below is the whole Loki configuration.
   config: ""
-  auth_enabled: false
-  commonConfig: null
-
-  # Required by the chart validator even for filesystem storage.
   storage:
-    bucketNames:
-      chunks: loki-chunks-placeholder
-      ruler: loki-ruler-placeholder
-      admin: loki-admin-placeholder
     type: filesystem
-    filesystem: {}
-
-  pattern_ingester:
-    enabled: false
   ui:
     enabled: true
 
@@ -93,18 +70,12 @@ loki:
       enabled: true
 
     server:
-      http_listen_port: 3100
-      grpc_listen_port: 9096
       log_level: warn
 
     common:
       ring:
         kvstore:
           store: memberlist
-
-    memberlist:
-      abort_if_cluster_join_fails: false
-      join_members: []
 
     schema_config:
       configs:
@@ -120,8 +91,6 @@ loki:
       tsdb_shipper:
         active_index_directory: /var/loki/tsdb-index
         cache_location: /var/loki/tsdb-cache
-        cache_ttl: 24h
-        query_ready_num_days: 0
       filesystem:
         directory: /var/loki/chunks
 
@@ -133,30 +102,22 @@ loki:
           replication_factor: 1
 
     limits_config:
-      allow_structured_metadata: true
-      reject_old_samples: true
       reject_old_samples_max_age: 168h
       ingestion_rate_mb: 10
       ingestion_burst_size_mb: 20
       max_query_length: 0h
-      max_query_parallelism: 32
-      max_streams_per_user: 0
-      max_line_size: 256KB
-      max_line_size_truncate: false
-      per_stream_rate_limit: 3MB
-      per_stream_rate_limit_burst: 15MB
-      volume_enabled: true
 
       # Required: retention_period defaults to 0s (keep forever), so retention_enabled alone deletes nothing.
       retention_period: 720h
 
+    # Cached in-process: the embedded cache is the default results_cache backend.
+    query_range:
+      cache_results: true
+
     compactor:
       working_directory: /var/loki/compactor
-      compaction_interval: 10m
       retention_enabled: true
       delete_request_store: filesystem
-      retention_delete_delay: 2h
-      retention_delete_worker_count: 150
 
 gateway:
   enabled: false
@@ -165,18 +126,11 @@ gateway:
 ingress:
   enabled: false
 
-# Turn off the ruler so those placeholder buckets are never used
-ruler:
-  enabled: false
-
 read:
-  enabled: false
   replicas: 0
 write:
-  enabled: false
   replicas: 0
 backend:
-  enabled: false
   replicas: 0
 
 lokiCanary:
@@ -187,29 +141,11 @@ sidecar:
   rules:
     enabled: false
 
+# Loki reads its configuration from structuredConfig alone, which names no memcached.
 chunksCache:
-  nodeSelector:
-    cms-af-prod: "true"
-  tolerations:
-    - key: "hub.jupyter.org/dedicated"
-      operator: "Equal"
-      value: "cms-af"
-      effect: "NoSchedule"
-
+  enabled: false
 resultsCache:
-  nodeSelector:
-    cms-af-prod: "true"
-  tolerations:
-    - key: "hub.jupyter.org/dedicated"
-      operator: "Equal"
-      value: "cms-af"
-      effect: "NoSchedule"
-
-memcachedExporter:
-  image:
-    registry: geddes-registry.rcac.purdue.edu
-    repository: docker-hub-cache/prom/memcached-exporter
-    tag: v0.15.3
+  enabled: false
 
 test:
   enabled: false
