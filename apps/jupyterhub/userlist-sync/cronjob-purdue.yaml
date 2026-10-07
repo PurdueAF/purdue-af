@@ -27,7 +27,7 @@ spec:
               effect: "NoSchedule"
           containers:
             - name: af-userlist-sync-purdue
-              image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/rockylinux:8.9
+              image: geddes-registry.rcac.purdue.edu/docker-hub-cache/rockylinux/rockylinux:8.10
               command: [/bin/bash, /scripts/sync-userlist.sh, purdue]
               resources:
                 requests:

@@ -39,7 +39,7 @@ spec:
                   mountPath: /etc/grid-certs-ro/
           containers:
             - name: x509-secrets
-              image: sslhep/x509-secrets:develop
+              image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/x509-secrets:v1.8.6
               command: ["bash", "-c"]
               args:
                 [
@@ -61,7 +61,6 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.namespace
-              imagePullPolicy: Always
               volumeMounts:
                 - name: grid-certs-rw-copy
                   mountPath: /etc/grid-certs/

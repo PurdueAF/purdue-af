@@ -10,7 +10,6 @@ singleuser:
   extraLabels:
     username_unescaped: "{username}"
     docker_image_tag: "0.14.1"
-  startTimeout: 3600
   profileList:
     - display_name: "Purdue AF 0.14.1"
       slug: purdue-af
@@ -214,7 +213,6 @@ singleuser:
         except Exception:
             pass
   extraEnv:
-    JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
     CHOWN_HOME: "yes"
     NAMESPACE: ${namespace}
     PYROSCOPE_SERVER: "http://pyroscope.cms.svc.cluster.local:4040"
@@ -353,7 +351,7 @@ hub:
       admin_users: ["dkondra"]
       oauth_callback_url: ${jupyterhub_oauth_callback_url}
       enable_auth_state: true
-      allowed_idps:
+      idps:
         https://cern.ch/login:
           allow_all: true
           username_derivation:
@@ -366,9 +364,6 @@ hub:
           allow_all: true
           username_derivation:
             username_claim: eppn
-    JupyterHub:
-      authenticator_class: cilogon
-      admin_access: True
   services:
     agentic-interface:
       url: "http://agentic-interface.${namespace}.svc.cluster.local:8888"
@@ -414,6 +409,8 @@ hub:
 scheduling:
   userScheduler:
     enabled: false
+  userPlaceholder:
+    enabled: false
   userPods:
     tolerations:
       - key: "hub.jupyter.org/dedicated"
@@ -426,61 +423,8 @@ ingress:
   hosts:
     - ${jupyterhub_host}
   annotations:
-    kubernetes.io/ingress.class: "public"
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
 proxy:
-  https:
-    enabled: true
-    type: letsencrypt
-  service:
-    extraPorts:
-      - name: ssh
-        port: 22
-        targetPort: ssh
-      - name: sftp
-        port: 2222
-        targetPort: sftp
-  traefik:
-    nodeSelector:
-      cms-af-prod: "true"
-    tolerations:
-      - key: "hub.jupyter.org/dedicated"
-        operator: "Equal"
-        value: "cms-af"
-        effect: "NoSchedule"
-    extraPorts:
-      - name: ssh
-        containerPort: 8022
-      - name: sftp
-        containerPort: 2222
-    networkPolicy:
-      allowedIngressPorts: [http, https, ssh, sftp]
-    extraStaticConfig:
-      entryPoints:
-        ssh-entrypoint:
-          address: :8022
-        sftp-entrypoint:
-          address: :2222
-    extraDynamicConfig:
-      tcp:
-        services:
-          ssh-service:
-            loadBalancer:
-              servers:
-                - address: jupyterhub-ssh:22
-          sftp-service:
-            loadBalancer:
-              servers:
-                - address: jupyterhub-sftp:22
-        routers:
-          ssh-router:
-            entrypoints: [ssh-entrypoint]
-            rule: HostSNI(`*`)
-            service: ssh-service
-          sftp-router:
-            entrypoints: [sftp-entrypoint]
-            rule: HostSNI(`*`)
-            service: sftp-service
   chp:
     nodeSelector:
       cms-af-prod: "true"
