@@ -26,7 +26,7 @@ singleBinary:
   # Free bytes of the Loki PVC, which node-exporter and kubelet stats do not expose here.
   extraContainers:
     - name: fs-exporter
-      image: geddes-registry.rcac.purdue.edu/docker-hub-cache/prom/node-exporter:v1.8.2
+      image: geddes-registry.rcac.purdue.edu/docker-hub-cache/prom/node-exporter:v1.12.1
       args:
         - --collector.disable-defaults
         - --collector.filesystem
