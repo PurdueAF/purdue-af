@@ -274,7 +274,7 @@ prePuller:
   extraImages:
     ray-train:
       name: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray
-      tag: 2.58.0-py312-cpu
+      tag: 2.59.0-py312-cpu
     dask-gateway:
       name: ghcr.io/dask/dask-gateway
       tag: 2024.1.0
