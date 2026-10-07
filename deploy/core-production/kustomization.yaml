@@ -21,6 +21,7 @@ resources:
   - ../../apps/jupyterhub/userlist-sync/rbac.yaml
 
   - ../../apps/monitoring/helmrepo-grafana.yaml
+  - ../../apps/monitoring/helmrepo-grafana-community.yaml
   - ../../apps/monitoring/helmrepo-prometheus.yaml
   - ../../apps/monitoring/grafana/helmrelease.yaml
   - ../../apps/monitoring/grafana/helmrelease-private.yaml

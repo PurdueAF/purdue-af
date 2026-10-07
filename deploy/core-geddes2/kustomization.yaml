@@ -16,7 +16,7 @@ resources:
   - ../../apps/jupyterhub/userlist-sync/cronjob-cern.yaml
   - ../../apps/jupyterhub/userlist-sync/rbac.yaml
 
-  - ../../apps/monitoring/helmrepo-grafana.yaml
+  - ../../apps/monitoring/helmrepo-grafana-community.yaml
   - ../../apps/monitoring/helmrepo-prometheus.yaml
   - ../../apps/monitoring/af-monitoring/services.yaml
   - ../../apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml
