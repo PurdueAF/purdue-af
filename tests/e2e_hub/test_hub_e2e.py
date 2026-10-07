@@ -29,8 +29,7 @@ def test_purdue_user_in_list_logs_in(login):
 
 def test_purdue_user_not_in_list_is_rejected(login):
     _, response = login("mallory@purdue.edu")
-    # custom-spawner.py denies unlisted users with HTTPError(500)
-    assert response.status_code == 500
+    assert response.status_code == 403
 
 
 def test_cern_user_gets_suffixed_username(login, admin):
@@ -43,7 +42,7 @@ def test_cern_user_gets_suffixed_username(login, admin):
 
 def test_unknown_domain_is_rejected(login):
     _, response = login("eve@evil.example")
-    assert response.status_code in (403, 500)
+    assert response.status_code == 403
 
 
 def test_production_spawn_carries_ownership_label(login, admin):
@@ -296,7 +295,7 @@ def test_logout_clears_session(login):
         timeout=10,
     )
     response = client.get("/hub/home")  # follows into OAuth as mallory
-    assert response.status_code in (403, 500)  # denied: old session is gone
+    assert response.status_code == 403  # denied: old session is gone
 
 
 def test_prerelease_profile_spawns_ci_built_image(login, admin):

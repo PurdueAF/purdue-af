@@ -9,53 +9,50 @@ from tornado import web
 c: Any
 
 
+# Home domain of an eppn -> suffix of the AF username.
+SUFFIXES = {"purdue.edu": "", "cern.ch": "-cern", "fnal.gov": "-fnal"}
+USERLISTS = {
+    "purdue.edu": (
+        "/etc/secrets/af-auth-purdue/userlist",
+        "Access denied! User {username} is not in the list of authorized users.",
+    ),
+    "cern.ch": (
+        "/etc/secrets/af-auth-cern/userlist",
+        "Access denied! Only CMS members are allowed to log in with CERN credentials.",
+    ),
+}
+
+
 class PurdueCILogonOAuthenticator(CILogonOAuthenticator):
-    async def authenticate(self, handler: Any, data: Any = None) -> Any:
-        ret = await super().authenticate(handler, data)
-        username, domain = ret["auth_state"]["cilogon_user"]["eppn"].split("@")
-        fixedUsername = None
+    def _af_identity(self, user_info: Any) -> tuple[str, str]:
+        """The eppn split into its local part and a domain the AF knows."""
+        eppn = super().user_info_to_username(user_info)
+        username, _, domain = eppn.partition("@")
+        if domain not in SUFFIXES:
+            raise web.HTTPError(403, "Failed to get username from CILogon")
+        return username, domain
 
-        if domain == "purdue.edu":
-            fixedUsername = username
-            with open("/etc/secrets/af-auth-purdue/userlist") as file:
+    def user_info_to_username(self, user_info: Any) -> str:
+        username, domain = self._af_identity(user_info)
+        # Denied here: Authenticator.allow_all skips check_allowed.
+        if domain in USERLISTS:
+            path, message = USERLISTS[domain]
+            with open(path) as file:
                 if f"{username}\n" not in file.readlines():
-                    raise web.HTTPError(
-                        500,
-                        f"Access denied! User {username} is not in the list of authorized users.",
-                    )
+                    raise web.HTTPError(403, message.format(username=username))
+        return username + SUFFIXES[domain]
 
-        elif domain == "cern.ch":
-            fixedUsername = username + "-cern"
-            with open("/etc/secrets/af-auth-cern/userlist") as file:
-                if f"{username}\n" not in file.readlines():
-                    raise web.HTTPError(
-                        500,
-                        "Access denied! Only CMS members are allowed to log in with CERN credentials.",
-                    )
-
-        elif domain == "fnal.gov":
-            fixedUsername = username + "-fnal"
-        else:
-            raise web.HTTPError(500, "Failed to get username from CILogon")
-
-        ret["name"] = fixedUsername
-        ret["domain"] = domain
-        os.environ["USERNAME"] = fixedUsername
-        return ret
+    def build_auth_state_dict(self, token_info: Any, user_info: Any) -> Any:
+        auth_state = super().build_auth_state_dict(token_info, user_info)
+        username, domain = self._af_identity(user_info)
+        # set-user-info.py reads both.
+        auth_state["name"] = self.normalize_username(username + SUFFIXES[domain])
+        auth_state["domain"] = domain
+        return auth_state
 
     async def refresh_user(self, user: Any, handler: Any = None, **kwargs: Any) -> Any:
-        # oauthenticator >= 17.2 would drop the auth_state keys set-user-info.py reads.
+        # No refresh against CILogon: the identity from login stands.
         return True
-
-
-def passthrough_post_auth_hook(
-    authenticator: Any, handler: Any, authentication: Any
-) -> Any:
-    if authentication["auth_state"] is None:
-        authentication["auth_state"] = {}
-    authentication["auth_state"]["name"] = authentication["name"]
-    authentication["auth_state"]["domain"] = authentication["domain"]
-    return authentication
 
 
 async def drop_stale_user_options(spawner: Any, user_options: dict[str, Any]) -> None:
@@ -105,7 +102,6 @@ async def drop_stale_user_options(spawner: Any, user_options: dict[str, Any]) ->
 
 
 c.JupyterHub.authenticator_class = PurdueCILogonOAuthenticator
-c.PurdueCILogonOAuthenticator.post_auth_hook = passthrough_post_auth_hook
 c.KubeSpawner.apply_user_options = drop_stale_user_options
 
 if os.environ["POD_NAMESPACE"] == "cms":
