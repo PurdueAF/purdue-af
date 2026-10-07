@@ -331,7 +331,7 @@ traefik:
   replicas: 2
   image:
     name: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/traefik
-    tag: 2.10.4
+    tag: 2.11.58
     pullPolicy: IfNotPresent
   resources:
     limits:
