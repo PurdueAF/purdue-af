@@ -1,10 +1,6 @@
 gateway:
-  replicas: 1
-  prefix: /
   loglevel: WARN
   image:
-    name: ghcr.io/dask/dask-gateway-server
-    tag: 2024.1.0
     pullPolicy: IfNotPresent
   auth:
     type: simple
@@ -28,13 +24,11 @@ gateway:
     annotations:
       metallb.universe.tf/address-pool: geddes-public-pool
   backend:
+    # The Hub's image puller holds this image: prePuller.extraImages in apps/jupyterhub.
     image:
       name: ghcr.io/dask/dask-gateway
       tag: 2024.1.0
-      pullPolicy:
-    imagePullSecrets: []
     namespace: ${namespace}
-    environment: {}
     scheduler:
       cores:
         request: 4
@@ -128,9 +122,6 @@ gateway:
             mountPropagation: HostToContainer
   extraConfig:
     config: |
-      c.DaskGateway.address = ':8000'
-      c.KubeBackend.api_url = 'http://dask-gateway.geddes.rcac.purdue.edu:80/api'
-
       c.ClusterConfig.cluster_max_cores = 1000
       c.ClusterConfig.cluster_max_memory = '6000 G'
       c.ClusterConfig.cluster_max_workers = 1000
@@ -138,14 +129,13 @@ gateway:
       c.ClusterConfig.idle_timeout = 3600
 
       def ldap_lookup(username):
-          import subprocess
-          import pkg_resources
-          import sys
-
+          # The server image has no ldap3.
           try:
-              pkg_resources.get_distribution('ldap3')
-          except pkg_resources.DistributionNotFound:
-              subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "ldap3"])
+              import ldap3
+          except ImportError:
+              import subprocess
+              import sys
+              subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "ldap3==2.9.1"])
 
           # geddes-auth has no uid index: read the account DN directly; search only as a fallback.
           from ldap3 import BASE, SUBTREE, Server, Connection
@@ -179,13 +169,22 @@ gateway:
 
 
       from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
+      import asyncio
       import os.path
       import re
 
-      def options_handler(options, user):
-          if user.name=="jovyan":
+      def is_external(user):
+          return ("-cern" in user.name) or ("-fnal" in user.name)
+
+      # `ids` is the user's (uid, gid), or the error their LDAP lookup raised.
+      def options_handler(options, user, ids=None):
+          if isinstance(ids, Exception):
+              raise ids
+          if ids is not None:
+              uid, gid = ids
+          elif user.name=="jovyan":
             uid, gid = 1000, 1000
-          elif ("-cern" in user.name) or ("-fnal" in user.name):
+          elif is_external(user):
               if not options.env:
                 raise ValueError("'env' must be specified in new_cluster(), for example env=dict(os.environ)")
               if ("NB_UID" not in options.env) or ("NB_GID" not in options.env):
@@ -244,13 +243,7 @@ gateway:
           worker_cmd = [f"{conda_env}/bin/dask", "worker", "--death-timeout", "180"]
           scheduler_cmd = [f"{conda_env}/bin/dask", "scheduler"]
 
-          extra_pod_config = {"securityContext": {"runAsUser": uid, "runAsGroup": gid,}}
-          c.KubeClusterConfig.scheduler_extra_pod_config.update(extra_pod_config)
-          c.KubeClusterConfig.worker_extra_pod_config.update(extra_pod_config)
-          c.KubeClusterConfig.scheduler_extra_pod_labels = {"user": user.name}
-          c.KubeClusterConfig.worker_extra_pod_labels = {
-            "user": user.name,
-          }
+          security_context = {"securityContext": {"runAsUser": uid, "runAsGroup": gid}}
 
           desired_cores = options.worker_cores
           desired_memory = int(options.worker_memory * 2 ** 30)
@@ -262,16 +255,31 @@ gateway:
               "environment": options.env,
               "scheduler_cmd": scheduler_cmd,
               "worker_cmd": worker_cmd,
+              "scheduler_extra_pod_config": {**c.KubeClusterConfig.scheduler_extra_pod_config, **security_context},
+              "worker_extra_pod_config": {**c.KubeClusterConfig.worker_extra_pod_config, **security_context},
+              "scheduler_extra_pod_labels": {"user": user.name},
+              "worker_extra_pod_labels": {"user": user.name},
           }
-      c.Backend.cluster_options = Options(
-          String("conda_env", default="", label="Conda environment"),
-          String("pixi_project", default="", label="Pixi project name (mutually exclusive with conda-env)"),
-          String("pixi_env", default="default", label="Pixi environment within project (default: 'default')"),
-          Float("worker_cores", default=1, min=0.1, max=64, label="Cores per worker"),
-          Float("worker_memory", default=4, min=0.1, max=64, label="Memory per worker (GiB)"),
-          Mapping("env", {}, label="Environment variables"),
-          handler=options_handler,
-      )
+
+      # Called per request: the LDAP lookup runs off the event loop, which every API call and scheduler heartbeat shares.
+      async def cluster_options(user):
+          ids = None
+          if user.name != "jovyan" and not is_external(user):
+              try:
+                  ids = await asyncio.to_thread(ldap_lookup, user.name)
+              except Exception as exc:
+                  ids = exc
+          return Options(
+              String("conda_env", default="", label="Conda environment"),
+              String("pixi_project", default="", label="Pixi project name (mutually exclusive with conda-env)"),
+              String("pixi_env", default="default", label="Pixi environment within project (default: 'default')"),
+              Float("worker_cores", default=1, min=0.1, max=64, label="Cores per worker"),
+              Float("worker_memory", default=4, min=0.1, max=64, label="Memory per worker (GiB)"),
+              Mapping("env", {}, label="Environment variables"),
+              handler=lambda options, user: options_handler(options, user, ids),
+          )
+
+      c.Backend.cluster_options = cluster_options
 
       # Per-user cluster cap, not in upstream Dask Gateway.
       from dask_gateway_server.backends.kubernetes import KubeBackend
@@ -341,18 +349,12 @@ traefik:
       cpu: 2
       memory: 4Gi
   loglevel: ERROR
-  dashboard: false
   service:
-    type: LoadBalancer
     annotations:
       metallb.universe.tf/address-pool: geddes-private-pool
     ports:
-      web:
-        port: 80
-        nodePort: null
       tcp:
         port: 8786
-        nodePort: null
   nodeSelector:
     cms-af-prod: "true"
   tolerations:
@@ -362,8 +364,6 @@ traefik:
       effect: "NoSchedule"
 
 controller:
-  enabled: true
-  annotations: {}
   resources:
     limits:
       cpu: 2
@@ -371,17 +371,8 @@ controller:
     requests:
       cpu: 2
       memory: 4Gi
-  imagePullSecrets: []
   loglevel: WARN
-  completedClusterMaxAge: 86400
-  completedClusterCleanupPeriod: 600
-  backoffBaseDelay: 0.1
-  backoffMaxDelay: 300
-  k8sApiRateLimit: 50
-  k8sApiRateLimitBurst: 100
   image:
-    name: ghcr.io/dask/dask-gateway-server
-    tag: 2024.1.0
     pullPolicy: IfNotPresent
   nodeSelector:
     cms-af-prod: "true"
@@ -390,4 +381,3 @@ controller:
       operator: "Equal"
       value: "cms-af"
       effect: "NoSchedule"
-  affinity: {}

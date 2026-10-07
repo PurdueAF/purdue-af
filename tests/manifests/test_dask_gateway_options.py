@@ -125,6 +125,99 @@ def test_env_names_kubernetes_rejects_are_dropped(options_handler):
     assert environment["my.env-name"] == "kept"
 
 
+def request_options(**env):
+    return types.SimpleNamespace(
+        env={"PATH": "/usr/bin", **env},
+        conda_env="/opt/env",
+        pixi_project="",
+        pixi_env="default",
+        worker_cores=1,
+        worker_memory=4,
+    )
+
+
+def test_pods_run_as_the_user_without_changing_the_shared_config(config):
+    """The uid and the user label are returned for this cluster; the config
+    every later request starts from keeps what the chart put there."""
+    shared = config["c"].KubeClusterConfig
+    shared["scheduler_extra_pod_config"] = {"nodeSelector": {"cms-af-prod": "true"}}
+    shared["worker_extra_pod_config"] = {"volumes": ["cvmfs"]}
+    user = types.SimpleNamespace(name="someone-cern")
+    options = request_options(NB_UID="4001", NB_GID="4002")
+
+    cluster = config["options_handler"](options, user)
+
+    run_as = {"runAsUser": 4001, "runAsGroup": 4002}
+    assert cluster["scheduler_extra_pod_config"] == {
+        "nodeSelector": {"cms-af-prod": "true"},
+        "securityContext": run_as,
+    }
+    assert cluster["worker_extra_pod_config"] == {
+        "volumes": ["cvmfs"],
+        "securityContext": run_as,
+    }
+    assert cluster["scheduler_extra_pod_labels"] == {"user": "someone-cern"}
+    assert cluster["worker_extra_pod_labels"] == {"user": "someone-cern"}
+    assert shared["scheduler_extra_pod_config"] == {
+        "nodeSelector": {"cms-af-prod": "true"}
+    }
+    assert shared["worker_extra_pod_config"] == {"volumes": ["cvmfs"]}
+
+
+async def cluster_handler(config, username, lookup):
+    """The handler `cluster_options` builds for one user, and where the lookup ran."""
+    import threading
+
+    threads = []
+
+    def ldap_lookup(name):
+        threads.append(threading.current_thread() is threading.main_thread())
+        return lookup(name)
+
+    config["ldap_lookup"] = ldap_lookup
+    config["Options"] = lambda *fields, handler: handler
+    user = types.SimpleNamespace(name=username)
+    return await config["cluster_options"](user), user, threads
+
+
+async def test_purdue_uid_is_looked_up_off_the_event_loop(config):
+    handler, user, threads = await cluster_handler(
+        config, "someone", lambda name: (5555, 6666)
+    )
+    cluster = handler(request_options(), user)
+    assert threads == [False]
+    assert cluster["worker_extra_pod_config"]["securityContext"] == {
+        "runAsUser": 5555,
+        "runAsGroup": 6666,
+    }
+
+
+async def test_failed_lookup_fails_the_cluster_not_the_options_listing(config):
+    def missing(name):
+        raise ValueError("no LDAP entry for " + name)
+
+    handler, user, _ = await cluster_handler(config, "someone", missing)
+    with pytest.raises(ValueError, match="no LDAP entry for someone"):
+        handler(request_options(), user)
+
+
+@pytest.mark.parametrize("username", ["jovyan", "someone-cern", "someone-fnal"])
+async def test_accounts_outside_purdue_ldap_are_not_looked_up(config, username):
+    handler, user, threads = await cluster_handler(config, username, None)
+    cluster = handler(request_options(NB_UID="4001", NB_GID="4002"), user)
+    assert threads == []
+    expected = 1000 if username == "jovyan" else 4001
+    assert (
+        cluster["worker_extra_pod_config"]["securityContext"]["runAsUser"] == expected
+    )
+
+
+def test_clusters_report_to_the_gateway_inside_the_cluster(config):
+    """The chart points schedulers at the gateway's Service; an override here
+    would route their heartbeats elsewhere."""
+    assert "api_url" not in config["c"].get("KubeBackend", {})
+
+
 def test_lookup_reads_the_dn_at_base_scope(code):
     assert 'search_base = "uid={0},{1}".format(username, baseDN)' in code
     assert "search_scope = BASE" in code
