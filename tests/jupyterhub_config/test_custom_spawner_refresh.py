@@ -1,8 +1,7 @@
-"""refresh_user contract: login-time auth_state must stay authoritative.
+"""refresh_user contract: the identity from login stands.
 
-oauthenticator's refresh_user rebuilds auth_state from the raw CILogon data,
-dropping the name/domain keys injected at login that set-user-info.py's
-auth_state_hook needs. custom-spawner.py pins refresh_user to "no change".
+custom-spawner.py pins refresh_user to "no change", so a session is never
+re-validated against CILogon between logins.
 """
 
 import asyncio
