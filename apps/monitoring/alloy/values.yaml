@@ -1,8 +1,5 @@
 controller:
   type: daemonset
-  replicas: 1
-  service:
-    enabled: false
   # Roll up to 3 nodes at a time; the default of 1 is too slow.
   updateStrategy:
     type: RollingUpdate
@@ -22,11 +19,13 @@ controller:
   nodeSelector:
     cms-af-dev: "true"
 
-serviceAccount:
-  create: true
+# Nothing addresses Alloy through a Service; Prometheus scrapes the pods.
+service:
+  enabled: false
 
+# A Role in the one namespace Alloy discovers pods in.
 rbac:
-  create: true
+  namespaces: [cms]
 
 alloy:
   initialDelaySeconds: 30
