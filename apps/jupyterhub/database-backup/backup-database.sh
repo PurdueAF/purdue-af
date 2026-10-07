@@ -34,9 +34,25 @@ if ! kubectl exec -n cms "$HUB_POD" -- test -f "$DB_PATH"; then
 	exit 1
 fi
 
-echo "Copying database from pod ${HUB_POD} to ${BACKUP_PATH}..."
-if ! kubectl cp "cms/${HUB_POD}:${DB_PATH}" "$BACKUP_PATH"; then
-	echo "ERROR: Failed to copy database from pod"
+# SQLite's online backup: a file copy of a database the hub is writing can be torn.
+echo "Backing up database from pod ${HUB_POD} to ${BACKUP_PATH}..."
+if ! kubectl exec -n cms "$HUB_POD" -- python3 -c '
+import os, sqlite3, sys, tempfile
+
+src = sqlite3.connect(sys.argv[1], timeout=60)
+fd, tmp = tempfile.mkstemp(suffix=".sqlite")
+os.close(fd)
+try:
+    dst = sqlite3.connect(tmp)
+    src.backup(dst)
+    dst.close()
+    with open(tmp, "rb") as f:
+        sys.stdout.buffer.write(f.read())
+finally:
+    os.unlink(tmp)
+' "$DB_PATH" >"$BACKUP_PATH"; then
+	echo "ERROR: Failed to back up database from pod"
+	rm -f "$BACKUP_PATH"
 	exit 1
 fi
 
