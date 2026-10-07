@@ -8,13 +8,18 @@
 //
 // Covers:
 //   - Flux HelmRelease chart versions (apps/**) via the flux manager
+//   - Container images in chart values (helm-values) and in plain manifests
+//     under apps/ (kubernetes), looked up through registryAliases when they
+//     are pulled through the cluster registry's Docker Hub cache
 //   - Dockerfile base images (FROM tags)
 //   - GitHub Actions versions (+ pins them to commit SHAs)
 //   - Python deps (docker/agentic-interface/pyproject.toml + uv.lock) via the uv manager
 //   - pixi manifests (pixi/{base,global}/pixi.toml) — NOT lockfiles
 //   - pre-commit hook versions
 //   - regex managers: Dockerfile ARG pins (pixi CLI, coding-agent CLIs, ACP
-//     adapters) and the integration-challenge revision
+//     adapters), the integration-challenge revision, `name:`/`tag:` image
+//     pairs in chart values, the hadolint hook image, and the `*_VERSION`
+//     tool pins in workflows (the githubActionsVersions preset)
 //
 // Pixi lockfiles: Renovate only bumps pixi.toml. CI (ci-pixi-base.yml /
 // ci-pixi-global.yml) regenerates pixi.lock when out of sync, runs check-env,
@@ -28,6 +33,8 @@
     ':dependencyDashboard',
     // Pin `uses:` action refs to immutable commit SHAs (tag kept as comment).
     'helpers:pinGitHubActionDigests',
+    // `# renovate: datasource=… depName=…` above a `*_VERSION:` env var in a workflow.
+    'customManagers:githubActionsVersions',
   ],
   // Batch update PRs into a weekly window to keep noise down.
   schedule: ['before 6am on monday'],
@@ -56,6 +63,17 @@
   // Flux manager is opt-in by path: parse everything Flux reconciles.
   flux: {
     managerFilePatterns: ['/(^|/)apps/.*\\.ya?ml$/', '/(^|/)deploy/.*\\.ya?ml$/'],
+  },
+
+  // Images in plain manifests; this manager matches no file by default.
+  kubernetes: {
+    managerFilePatterns: ['/(^|/)apps/.*\\.ya?ml$/'],
+  },
+
+  // The cluster registry's pull-through cache of Docker Hub: look the image
+  // up upstream, keep the cache hostname in the manifest.
+  registryAliases: {
+    'geddes-registry.rcac.purdue.edu/docker-hub-cache': 'docker.io',
   },
 
   'pre-commit': {
@@ -127,12 +145,41 @@
       datasourceTemplate: 'git-refs',
       depNameTemplate: 'https://github.com/iris-hep/integration-challenge',
     },
+    {
+      // Charts that take an image as `name:` + `tag:` (dask-gateway,
+      // jupyterhub); helm-values only reads `repository:` + `tag:`.
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)apps/.*/values\\.ya?ml$/'],
+      matchStrings: [
+        'name: "?(?<depName>(?:ghcr|quay|docker|nvcr)\\.io/[\\w./-]+)"?\\n\\s+tag: "?(?<currentValue>[\\w.-]+)"?',
+      ],
+      datasourceTemplate: 'docker',
+    },
+    {
+      // The same pairs behind the Docker Hub cache; a regex manager does not
+      // apply registryAliases.
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)apps/.*/values\\.ya?ml$/'],
+      matchStrings: [
+        'name: "?geddes-registry\\.rcac\\.purdue\\.edu/docker-hub-cache/(?<image>[\\w./-]+)"?\\n\\s+tag: "?(?<currentValue>[\\w.-]+)"?',
+      ],
+      datasourceTemplate: 'docker',
+      depNameTemplate: 'docker.io/{{{image}}}',
+    },
+    {
+      // The hadolint hook runs this image; the pre-commit manager bumps only `rev`.
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)\\.pre-commit-config\\.yaml$/'],
+      matchStrings: ['entry: (?<depName>ghcr\\.io/hadolint/hadolint):(?<currentValue>\\S+)'],
+      datasourceTemplate: 'docker',
+    },
   ],
 
   packageRules: [
     {
-      // Private cluster registry — Renovate has no credentials for it and the
-      // images are built in-repo anyway (CI builds).
+      // Images built in this repo and served through the cluster registry;
+      // the release workflows set their tags. Third-party images behind the
+      // Docker Hub cache are renamed by registryAliases and do not match.
       matchDatasources: ['docker'],
       matchPackageNames: ['geddes-registry.rcac.purdue.edu/**'],
       enabled: false,
@@ -147,6 +194,11 @@
     {
       // Actions, pre-commit hooks and the test suite's own dependencies.
       matchManagers: ['github-actions', 'pre-commit'],
+      groupName: 'ci-tooling',
+    },
+    {
+      // The regex-managed pins: workflow tool versions, the hadolint image.
+      matchFileNames: ['.github/**', '.pre-commit-config.yaml'],
       groupName: 'ci-tooling',
     },
     {
@@ -243,6 +295,65 @@
       allowedVersions: '/^26\\.04/',
     },
     {
+      // An image unpacked on CVMFS follows the unpacked.cern.ch sync recipe,
+      // not a registry.
+      matchDatasources: ['docker'],
+      matchPackageNames: ['/cvmfs/**'],
+      enabled: false,
+    },
+    {
+      // The dask-gateway images move with the chart held above.
+      matchDatasources: ['docker'],
+      matchPackageNames: ['ghcr.io/dask/dask-gateway', 'ghcr.io/dask/dask-gateway-server'],
+      allowedVersions: '/^2024\\.1\\./',
+    },
+    {
+      // dask-gateway's proxy, on the path of every client-to-scheduler
+      // connection: merged by hand. Traefik 3 needs the CRDs and RBAC of
+      // chart >=2025.4.0.
+      matchDatasources: ['docker'],
+      matchPackageNames: ['docker.io/library/traefik'],
+      allowedVersions: '/^2\\./',
+      groupName: 'dask-gateway-traefik',
+      automerge: false,
+    },
+    {
+      // The Ray Train clusters, their gateway and the pre-pulled copy: one
+      // version in every file, merged by hand.
+      matchDatasources: ['docker'],
+      matchPackageNames: ['docker.io/rayproject/ray'],
+      groupName: 'ray-image',
+      automerge: false,
+    },
+    {
+      // The AF image base, merged by hand: a CUDA minor is a GPU re-test.
+      // CUDA 13 needs a newer host driver than Geddes runs (see Triton above).
+      matchDatasources: ['docker'],
+      matchPackageNames: ['docker.io/nvidia/cuda'],
+      allowedVersions: '/^12\\./',
+      groupName: 'af-image-base',
+      automerge: false,
+    },
+    {
+      // A PostgreSQL major needs a dump and restore, not a tag bump.
+      matchDatasources: ['docker'],
+      matchPackageNames: ['docker.io/library/postgres'],
+      allowedVersions: '/^16([.-]|$)/',
+    },
+    {
+      // ServiceX's PostgreSQL and RabbitMQ: versions belong to the chart's
+      // subcharts, and this catalog is frozen upstream.
+      matchDatasources: ['docker'],
+      matchPackageNames: ['docker.io/bitnamilegacy/**'],
+      enabled: false,
+    },
+    {
+      // kubectl is supported within one minor of the API server (1.29).
+      matchDatasources: ['docker'],
+      matchPackageNames: ['alpine/kubectl'],
+      allowedVersions: '/^1\\.(28|29|30)\\./',
+    },
+    {
       // interlink-slurm-plugin base must stay on Rocky 8: site clients are
       // slurm-*-1.el8.x86_64.rpm, the Dockerfile installs EPEL 8, and RCAC
       // Slurm itself runs on EL8. A jump to Rocky 10 (Renovate dashboard)
@@ -251,7 +362,11 @@
       // retargeted (Dockerfile + epel + rpm glob together).
       // docker versioning has no range support — use a regex pin.
       matchDatasources: ['docker'],
-      matchPackageNames: ['docker.io/rockylinux/rockylinux', 'rockylinux/rockylinux'],
+      matchPackageNames: [
+        'docker.io/rockylinux/rockylinux',
+        'rockylinux/rockylinux',
+        'docker.io/library/rockylinux',
+      ],
       allowedVersions: '/^8([.-]|$)/',
     },
     {
@@ -312,7 +427,7 @@
       // 3.12.x patch releases stay allowed.
       // Regex (not '<3.13'): docker versioning has no range support, and this
       // rule also matches the docker datasource (FROM python:3.12-slim).
-      matchPackageNames: ['python'],
+      matchPackageNames: ['python', 'docker.io/library/python'],
       matchDatasources: ['docker', 'conda'],
       allowedVersions: '/^3\\.12([.-]|$)/',
     },
