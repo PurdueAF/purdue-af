@@ -5,8 +5,6 @@ interlink:
   image: ghcr.io/interlink-hq/interlink/interlink:0.7.0-pre1
   enabled: true
   socket: unix:///var/run/interlink.sock
-  address: http://0.0.0.0
-  port: 3000
   logging:
     verboseLogging: false
     errorsOnlyLogging: true
@@ -22,6 +20,15 @@ plugin:
       mountPath: /depot/cms/purdue-af/interlink/
     - name: cvmfs
       mountPath: /cvmfs
+    - name: munge-key
+      mountPath: /etc/secrets/munge
+      readOnly: true
+  resources:
+    # null drops the chart's CPU request and limit.
+    CPU: null
+    memory:
+      request: 16Gi
+      limit: 16Gi
   envs:
     - name: SLURM_CLUSTER
       value: "hammer"
@@ -49,9 +56,6 @@ plugin:
       - "--nv"
       - "--no-eval"
     Namespace: "${namespace}"
-    Tsocks: false
-    TsocksPath: "$WORK/tsocks-1.8beta5+ds1/libtsocks.so"
-    TsocksLoginNode: "login01"
     BashPath: /bin/bash
 
 virtualNode:
@@ -65,10 +69,8 @@ virtualNode:
 
   network:
     enableTunnel: true
-    tunnelImage: "ghcr.io/erebe/wstunnel:latest"
+    tunnelImage: "ghcr.io/erebe/wstunnel:v11.0.0"
     wildcardDNS: "geddes.rcac.purdue.edu"
-    wstunnelTemplatePath: "/etc/templates/wstunnel.yaml"
-    customTemplate: ""
     # Bare $DOWNLOAD_DIR: Flux postBuild substitutes only the braced form.
     wstunnelCommand: |
       export DOWNLOAD_DIR="/depot/cms/purdue-af/interlink" && \
@@ -85,6 +87,9 @@ extraVolumes:
   - name: cvmfs
     persistentVolumeClaim:
       claimName: cvmfs
+  - name: munge-key
+    persistentVolumeClaim:
+      claimName: munge-key-hammer
 
 podScheduling:
   nodeSelector:
@@ -94,6 +99,3 @@ podScheduling:
       operator: "Equal"
       value: "cms-af"
       effect: "NoSchedule"
-
-serviceAccount:
-  create: true

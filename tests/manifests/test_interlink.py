@@ -2,11 +2,8 @@
 Slurm. Nothing here talks to a cluster or to Purdue's Slurm; these assert the
 wiring that otherwise fails silently *after* deployment:
 
-  * a postRenderer patch whose target matches no rendered resource is a no-op,
-    so the munge key simply never gets mounted and the node comes up unable to
-    authenticate to Slurm;
-  * every chart resource is named after `nodeName`, so renaming a node without
-    renaming the patch target is exactly that no-op;
+  * a node without its cluster's munge key comes up unable to authenticate
+    to Slurm;
   * Flux's postBuild substitution rewrites `${VAR}` in these values — an
     unintended placeholder is replaced with an empty string, not left alone.
 
@@ -21,14 +18,6 @@ import yaml
 from common import REPO
 
 INTERLINK = REPO / "apps" / "interlink"
-
-
-def patches(release):
-    return release["spec"]["postRenderers"][0]["kustomize"]["patches"]
-
-
-def ops(patch):
-    return yaml.safe_load(patch["patch"])
 
 
 # --- node naming ----------------------------------------------------------
@@ -46,16 +35,6 @@ def test_node_names_are_unique(interlink_clusters):
     assert len(names) == len(set(names))
 
 
-def test_patch_target_follows_the_node_name(interlink_clusters):
-    """The chart names every resource `<nodeName>-*`. A stale target here
-    matches nothing and kustomize applies the patch to no object."""
-    for cluster, app in interlink_clusters.items():
-        expected = f"{app['values']['nodeName']}-node"
-        for patch in patches(app["release"]):
-            assert patch["target"]["kind"] == "Deployment", cluster
-            assert patch["target"]["name"] == expected, cluster
-
-
 def test_release_name_matches_the_node(interlink_clusters):
     """Helm-release-scoped resources (`<release>-test`, `<release>-node-reader`)
     would collide between clusters in the shared namespace."""
@@ -63,36 +42,7 @@ def test_release_name_matches_the_node(interlink_clusters):
         assert app["release"]["metadata"]["name"] == f"interlink-{cluster}"
 
 
-# --- the postRenderer patches --------------------------------------------
-
-
-def test_patched_mounts_have_a_matching_volume(interlink_clusters):
-    """A volumeMount without its volume makes the node Deployment unschedulable
-    — the API server rejects the pod spec outright."""
-    for cluster, app in interlink_clusters.items():
-        for patch in patches(app["release"]):
-            added = ops(patch)
-            volumes = {
-                op["value"]["name"]
-                for op in added
-                if op["path"] == "/spec/template/spec/volumes/-"
-            }
-            mounts = {
-                op["value"]["name"]
-                for op in added
-                if op["path"].endswith("/volumeMounts/-")
-            }
-            assert mounts <= volumes, f"{cluster}: {mounts - volumes} unmounted"
-
-
-def test_every_patch_op_is_an_add(interlink_clusters):
-    """`replace`/`remove` against a path the chart may not render fails the
-    whole HelmRelease; `add` on a `/-` list tail always applies."""
-    for cluster, app in interlink_clusters.items():
-        for patch in patches(app["release"]):
-            for op in ops(patch):
-                assert op["op"] == "add", cluster
-                assert op["path"].endswith("/-") or op["path"].endswith("/resources")
+# --- the munge key ---------------------------------------------------------
 
 
 def test_munge_key_comes_from_a_per_cluster_pvc(interlink_clusters):
@@ -101,17 +51,28 @@ def test_munge_key_comes_from_a_per_cluster_pvc(interlink_clusters):
     makes every sbatch fail authentication."""
     for cluster, app in interlink_clusters.items():
         mounted = [
-            op["value"]
-            for patch in patches(app["release"])
-            for op in ops(patch)
-            if op["path"] == "/spec/template/spec/volumes/-"
-            and op["value"]["name"] == "munge-key"
+            volume
+            for volume in app["values"].get("extraVolumes", [])
+            if volume["name"] == "munge-key"
         ]
         assert len(mounted) == 1, f"{cluster}: expected exactly one munge volume"
         volume = mounted[0]
         assert "secret" not in volume, f"{cluster}: munge key must not be a Secret"
         claim = volume["persistentVolumeClaim"]["claimName"]
         assert claim == f"munge-key-{cluster}", f"{cluster}: mounts {claim}"
+
+
+def test_plugin_reads_the_munge_key_where_its_startup_looks(interlink_clusters):
+    """The Slurm sidecar is the container that authenticates; the key is not
+    its to change."""
+    for cluster, app in interlink_clusters.items():
+        mounts = {
+            mount["name"]: mount
+            for mount in app["values"]["plugin"].get("extraVolumeMounts", [])
+        }
+        assert "munge-key" in mounts, f"{cluster}: munge key not mounted"
+        assert mounts["munge-key"]["mountPath"] == "/etc/secrets/munge", cluster
+        assert mounts["munge-key"]["readOnly"] is True, cluster
 
 
 def test_slurm_cluster_env_matches_directory(active_clusters):
