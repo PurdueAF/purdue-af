@@ -31,8 +31,8 @@ gpus:
 workerCpusMax: 16
 workerMemoryGbMin: 4
 workerMemoryGbMax: 64
-# The PriorityClass of a cluster's workers past its first.
-preemptiblePriorityClass: low-priority-preemptible
+# The PriorityClass of a cluster's workers past its first: below the default, above Dask Gateway's preemptible workers.
+preemptiblePriorityClass: medium-priority-preemptible
 # How long an admitted cluster's GPUs count as taken, for Prometheus to see its pods.
 grantSeconds: 120
 prometheusUrl: http://prometheus-server:9090

@@ -11,7 +11,7 @@ preemptible PriorityClass holds counts as free: the scheduler evicts that pod
 for a session.
 """
 
-PREEMPTIBLE_PRIORITY_CLASS = "low-priority-preemptible"
+PREEMPTIBLE_PRIORITY_CLASS = "medium-priority-preemptible"
 
 GPU_METRICS = {
     "nvidia.com/mig-1g.5gb": "nvidia_com_mig_1g_5gb",
