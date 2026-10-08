@@ -52,8 +52,6 @@ KEEP = [
     ".codex/auth.json",
     ".codex/sessions/a-session.jsonl",
     ".codex/.tmp/plugins/some-plugin.js",
-    ".continue/config.yaml",
-    ".continue/api-key.txt",
     # Caches and installed servers: expensive to rebuild, not runtime state.
     ".claude/cache/blob",
     ".cache/pip/wheel",

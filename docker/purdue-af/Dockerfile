@@ -185,7 +185,6 @@ RUN mkdir -p "${HOME}/.globus" "${HOME}/.rnd" && \
 COPY docker/purdue-af/jupyter/jupyter_server_config.py \
     docker/purdue-af/scripts/eos-connect.sh \
     docker/purdue-af/jupyter/jupyter_config.json \
-    docker/purdue-af/scripts/continue-config.yaml \
     /etc/jupyter/
 COPY --chown=root:root docker/purdue-af/scripts/run-as-root.sh \
     docker/purdue-af/scripts/config-extensions.sh \
@@ -199,8 +198,6 @@ COPY --chown=root:root \
     docker/purdue-af/jupyter/start.sh \
     docker/purdue-af/jupyter/start-notebook.sh \
     docker/purdue-af/jupyter/start-singleuser.sh \
-    docker/purdue-af/scripts/upload-genaistudio-key \
-    docker/purdue-af/scripts/delete-genaistudio-key \
     /usr/local/bin/
 COPY --chown=root:root \
     docker/purdue-af/code-server/purdue-af-interface-controls \
