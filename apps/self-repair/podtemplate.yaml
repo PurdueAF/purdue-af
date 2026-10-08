@@ -38,6 +38,11 @@ template:
                 name: self-repair-opencode
                 key: api-key
                 optional: true
+          # The image pins opencode; a task pod neither updates it nor fetches language servers.
+          - name: OPENCODE_DISABLE_AUTOUPDATE
+            value: "1"
+          - name: OPENCODE_DISABLE_LSP_DOWNLOAD
+            value: "1"
         volumeMounts:
           # Same path as in the purdue-af image.
           - name: platform-context
