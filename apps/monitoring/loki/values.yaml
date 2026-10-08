@@ -109,6 +109,10 @@ loki:
 
       # Required: retention_period defaults to 0s (keep forever), so retention_enabled alone deletes nothing.
       retention_period: 720h
+      retention_stream:
+        - selector: '{container="dask-worker"}'
+          priority: 1
+          period: 168h
 
     # Cached in-process: the embedded cache is the default results_cache backend.
     query_range:

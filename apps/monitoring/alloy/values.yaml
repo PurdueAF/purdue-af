@@ -104,6 +104,18 @@ alloy:
           older_than          = "168h"
           drop_counter_reason = "older_than_loki_reject_window"
         }
+        // Per-pod cap in lines per second: one worker logging per event outruns the Loki volume.
+        stage.match {
+          selector = "{container=\"dask-worker\"}"
+          stage.limit {
+            rate          = 10
+            burst         = 1000
+            drop          = true
+            by_label_name = "pod"
+            // The stage's minimum.
+            max_distinct_labels = 10000
+          }
+        }
         forward_to = [loki.write.default.receiver]
       }
 
