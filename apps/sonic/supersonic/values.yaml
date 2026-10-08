@@ -11,7 +11,6 @@ serverLoadMetric: |-
   )
 
 serverLoadThreshold: 100
-serverLoadRateInterval: "30s"
 
 scaleFromZero:
   enabled: true
@@ -42,7 +41,6 @@ triton:
       --load-model=unifiedparticletransformer_AK4_V01 \
       --allow-gpu-metrics=true \
       --log-verbose=0 \
-      --strict-model-config=false \
       --exit-timeout-secs=60
 
   resources:
@@ -105,7 +103,6 @@ envoy:
 keda:
   enabled: true
   # RepositoryIndex raises this to 1 through the Envoy admission sidecar.
-  metricType: Value
   minReplicaCount: 0
   # Below the free GPU count, so neither arm is ever starved.
   maxReplicaCount: 5
