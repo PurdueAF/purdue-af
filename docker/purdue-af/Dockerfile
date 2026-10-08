@@ -167,6 +167,9 @@ COPY --from=stack /opt/pixi /opt/pixi
 
 # The CLIs' shebangs resolve `node` from PATH (the base env, below).
 COPY --from=stack /opt/npm-global /opt/npm-global
+# The CLIs are pinned in a root-owned prefix: Claude Code and opencode do not look for updates.
+ENV DISABLE_AUTOUPDATER=1 \
+    OPENCODE_DISABLE_AUTOUPDATE=1
 
 COPY --chown=root:root docker/purdue-af/pixi-wrapper /usr/local/bin/pixi
 
@@ -180,7 +183,6 @@ RUN mkdir -p "${HOME}/.globus" "${HOME}/.rnd" && \
     chmod 700 "${HOME}/.globus"
 
 COPY docker/purdue-af/jupyter/jupyter_server_config.py \
-    docker/purdue-af/jupyter/docker_healthcheck.py \
     docker/purdue-af/scripts/eos-connect.sh \
     docker/purdue-af/jupyter/jupyter_config.json \
     docker/purdue-af/scripts/continue-config.yaml \
@@ -229,8 +231,6 @@ WORKDIR "${HOME}"
 EXPOSE 8888
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["start-notebook.sh"]
-HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/etc/jupyter/docker_healthcheck.py"]
 
 # --------------------------------------------------------------------------
 # Build-time checks, built by ci-images.yml with `--target smoke`.

@@ -1,13 +1,10 @@
 #!/bin/bash
 base_env_dir=/opt/pixi/.pixi/envs/base-env/
 
-# Configure JupyterLab overrides (single-click unfold, disable PyPI extension manager)
+# Configure JupyterLab overrides (disable PyPI extension manager)
 mkdir -p $base_env_dir/share/jupyter/lab/settings
 cat >$base_env_dir/share/jupyter/lab/settings/overrides.json <<'OVERRIDES_EOF'
 {
-  "jupyterlab-unfold:jupyterlab-unfold-settings": {
-    "singleClickToUnfold": false
-  },
   "@jupyterlab/extensionmanager-extension:plugin": {
     "enabled": false
   }
@@ -26,7 +23,6 @@ TOPBAR_TEXT_CONFIG_PATH=$NEW_HOME/.jupyter/lab/user-settings/jupyterlab-topbar-t
 chown -Rh "$NB_USER:users" "$NEW_HOME/.jupyter/lab/user-settings" 2>/dev/null || true
 af_as_user mkdir -p $TOPBAR_CONFIG_PATH
 af_as_user mkdir -p $TOPBAR_TEXT_CONFIG_PATH
-af_as_user rm -rf $NEW_HOME/.jupyter/lab/user-settings/jupyterlab-topbar-extension/
 
 IMAGE_VERSION=${JUPYTER_IMAGE#*:}
 
@@ -69,17 +65,6 @@ echo '{
         }
     ]
 }' | af_as_user tee $TOPBAR_CONFIG_PATH/top-bar.jupyterlab-settings >/dev/null
-
-JIL_PATH=$NEW_HOME/.jupyter/lab/user-settings/purdue-af-grafana-iframe/
-af_as_user mkdir -p $JIL_PATH
-DASHBOARD_URL="https://cms.geddes.rcac.purdue.edu/grafana/d-solo/single-user-stat-dashboard/single-user-statistics"
-THEME="&theme=light"
-echo "{
-    \"url\": \"$DASHBOARD_URL?orgId=1&refresh=1m&var-user=$HOSTNAME&from=now-3h&to=now&panelId=1$THEME\",
-    \"label\": \"Resource usage\",
-    \"caption\": \"Open grafana panel\",
-    \"rank\": 0
-}" | af_as_user tee $JIL_PATH/plugin.jupyterlab-settings >/dev/null
 
 CODE_SERVER_BIN="${base_env_dir%/}/bin/code-server"
 # A broken code-server skips the editor setup, never the session.

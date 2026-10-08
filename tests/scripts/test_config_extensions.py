@@ -193,6 +193,6 @@ def test_root_owned_user_settings_are_repaired_before_the_first_write(tmp_path):
     ), calls
     assert (
         home
-        / ".jupyter/lab/user-settings/purdue-af-grafana-iframe"
+        / ".jupyter/lab/user-settings/jupyterlab-topbar-text"
         / "plugin.jupyterlab-settings"
     ).is_file()

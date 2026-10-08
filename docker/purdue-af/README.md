@@ -13,7 +13,7 @@ agents.
 | Path | What it is |
 | --- | --- |
 | `Dockerfile` | the build; the `smoke` stage holds the build-time checks |
-| `jupyter/` | `start.sh` and the hook runner, server config, healthcheck |
+| `jupyter/` | `start.sh` and the hook runner, server config |
 | `scripts/` | the `before-notebook.d` hooks, `af-as-user.sh`, `managed-block.py` |
 | `agents/platform-context.md` | the facility context every in-session agent reads |
 | `pixi-wrapper` | the `pixi` on a session's PATH |
