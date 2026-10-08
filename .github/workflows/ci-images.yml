@@ -34,9 +34,6 @@ permissions:
 
 env:
   AF_REPO: ghcr.io/purdueaf/purdue-af
-  # keep in sync with the FROM line in docker/purdue-af/Dockerfile
-  GEDDES_BASE: geddes-registry.rcac.purdue.edu/docker-hub-cache/nvidia/cuda:12.4.1-devel-rockylinux8
-  PUBLIC_BASE: docker.io/nvidia/cuda:12.4.1-devel-rockylinux8
 
 jobs:
   resolve:
@@ -121,6 +118,15 @@ jobs:
         run: df -h / | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
         if: env.AF_EXISTS != 'true'
+      - name: Resolve the Dockerfile's base image on docker.io
+        if: env.AF_EXISTS != 'true'
+        run: |
+          geddes=$(awk '$1 == "FROM" && $2 ~ /\/docker-hub-cache\// {print $2; exit}' docker/purdue-af/Dockerfile)
+          [[ -n "$geddes" ]] || { echo "::error::no docker-hub-cache FROM in docker/purdue-af/Dockerfile"; exit 1; }
+          {
+            echo "GEDDES_BASE=$geddes"
+            echo "PUBLIC_BASE=docker.io/${geddes#*/docker-hub-cache/}"
+          } | tee -a "$GITHUB_ENV"
       # Login first: cache-from needs read; cache-to/push need write.
       - name: Login to ghcr.io
         if: env.AF_EXISTS != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
