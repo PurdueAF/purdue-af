@@ -829,7 +829,7 @@
     {
       "id": 7,
       "type": "timeseries",
-      "title": "Session starts per hour",
+      "title": "Session starts",
       "gridPos": {
         "x": 12,
         "y": 5,
@@ -843,7 +843,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(increase(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"success\"}[1h]))",
+          "expr": "sum(clamp_min(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"success\"} - jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"success\"} offset $__interval, 0))",
           "legendFormat": "succeeded",
           "datasource": {
             "type": "prometheus",
@@ -851,11 +851,11 @@
           },
           "range": true,
           "instant": false,
-          "interval": "1h"
+          "interval": "5m"
         },
         {
           "refId": "B",
-          "expr": "sum(increase(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"failure\"}[1h]))",
+          "expr": "sum(clamp_min(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"failure\"} - jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"failure\"} offset $__interval, 0))",
           "legendFormat": "failed",
           "datasource": {
             "type": "prometheus",
@@ -863,11 +863,11 @@
           },
           "range": true,
           "instant": false,
-          "interval": "1h"
+          "interval": "5m"
         },
         {
           "refId": "C",
-          "expr": "sum(increase(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=~\"throttled|too-many-users\"}[1h]))",
+          "expr": "sum(clamp_min(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=~\"throttled|too-many-users\"} - jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=~\"throttled|too-many-users\"} offset $__interval, 0))",
           "legendFormat": "refused",
           "datasource": {
             "type": "prometheus",
@@ -875,10 +875,10 @@
           },
           "range": true,
           "instant": false,
-          "interval": "1h"
+          "interval": "5m"
         }
       ],
-      "description": "Bucketed per hour because starts are rare. Failed: the hub could not start the session. Refused: the hub rate-limited on purpose.",
+      "description": "Starts counted in consecutive buckets: 5 minutes wide, wider once the time range is too long to draw them. Failed: the hub could not start the session. Refused: the hub rate-limited on purpose.",
       "fieldConfig": {
         "defaults": {
           "color": {
