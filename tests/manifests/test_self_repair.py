@@ -104,7 +104,11 @@ def test_task_pods_get_the_github_token_from_the_pod_template():
     assert template["metadata"]["name"] == "self-repair"
     (container,) = template["template"]["spec"]["containers"]
     assert container["name"] == "default"
-    env = {e["name"]: e["valueFrom"]["secretKeyRef"] for e in container["env"]}
+    env = {
+        e["name"]: e["valueFrom"]["secretKeyRef"]
+        for e in container["env"]
+        if "valueFrom" in e
+    }
     assert env["GITHUB_TOKEN"] == {"name": "self-repair-github", "key": "token"}
     assert env["OPENCODE_API_KEY"]["optional"] is True
     assert env["GENAI_API_KEY"] == {"name": "self-repair-genai", "key": "api-key"}
@@ -112,6 +116,15 @@ def test_task_pods_get_the_github_token_from_the_pod_template():
 
     workflow = (WORKFLOW / "self_repair.py").read_text()
     assert 'pod_template="self-repair"' in workflow
+
+
+def test_task_pods_run_the_opencode_the_image_pins():
+    """A session that updated itself would run another opencode than the one
+    the image was built and tested with."""
+    (template,) = docs(APP / "podtemplate.yaml")
+    (container,) = template["template"]["spec"]["containers"]
+    plain = {e["name"]: e["value"] for e in container["env"] if "value" in e}
+    assert plain["OPENCODE_DISABLE_AUTOUPDATE"] == "1"
 
 
 def test_agents_read_the_platform_context_the_sessions_read():
