@@ -38,8 +38,6 @@ postgresql:
         memory: 128Mi
     persistence:
       enabled: false
-      storageClass: ${multinode_storage_class}
-      accessModes: [ReadWriteMany]
     nodeSelector:
       cms-af-prod: "true"
     tolerations:
@@ -62,7 +60,7 @@ codeGen:
     defaultScienceContainerImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_science_image_combined_root
     defaultScienceContainerTag: 5.7.2-6.38.04
     compressionAlgorithm: ZSTD
-    compressionLevel: 0
+    compressionLevel: 5
     nodeSelector:
       cms-af-prod: "true"
     tolerations:
@@ -77,11 +75,11 @@ codeGen:
   python:
     enabled: true
     image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_code_gen_python
-    tag: python-codegen-compression
     defaultScienceContainerImage: docker.io/sslhep/servicex_science_image_combined_root
     defaultScienceContainerTag: 5.7.4-6.38.04-coffea
-    compressionAlgorithm: ZSTD
-    compressionLevel: 0
+    compressionAlgorithm: ZLIB
+    # A string: the chart reads a numeric 0 as unset and falls back to 5.
+    compressionLevel: "0"
     nodeSelector:
       cms-af-prod: "true"
     tolerations:
@@ -134,41 +132,11 @@ rabbitmq:
       operator: "Equal"
       value: "cms-af"
       effect: "NoSchedule"
-minio:
-  enabled: false
-  persistence:
+# The chart's default ships the logs of the app and the DID finders to a Logstash outside the facility.
+logging:
+  logstash:
     enabled: false
-    storageClass: ${multinode_storage_class}
-    accessModes: [ReadWriteMany]
-    size: 10Gi
-  service:
-    ports:
-      api: 9000
-  ingress:
-    enabled: false
-    hostname: servicex-anvil-minio.geddes.rcac.purdue.edu
-    ingressClassName: public
-  apiIngress:
-    enabled: false
-    hostname: "servicex-anvil-minio-api.geddes.rcac.purdue.edu"
-    ingressClassName: public
-  resources:
-    requests:
-      cpu: 1
-      memory: 1Gi
-    limits:
-      cpu: 1
-      memory: 1Gi
-  nodeSelector:
-    cms-af-prod: "true"
-  tolerations:
-    - key: "hub.jupyter.org/dedicated"
-      operator: "Equal"
-      value: "cms-af"
-      effect: "NoSchedule"
 
-minioCleanup:
-  enabled: true
 didFinder:
   rucio:
     enabled: false
@@ -193,6 +161,8 @@ didFinder:
   CERNOpenData:
     enabled: false
   atlasopenmagic:
+    enabled: false
+  servicex:
     enabled: false
 gridAccount: dkondrat
 x509Secrets:
