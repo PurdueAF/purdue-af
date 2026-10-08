@@ -417,6 +417,8 @@
       // and XrdEc is deprecated.
       // 5.9.x is NOT stale — it is maintained in parallel with 6.x (5.9.6 and
       // 6.1.0 shipped the same day), so patch bumps stay allowed.
+      // pixi/global also carries libxrootd 6.x, which root_base links; the cap
+      // governs xrdcp and the Python module there.
       // To lift: move pixi/base AND pixi/global together, add `python-xrootd`
       // explicitly, and confirm `import XRootD` plus fsspec-xrootd still work
       // (pixi/check-env.py gates the import).

@@ -2,7 +2,10 @@
 authors = ["Dmitry Kondratyev"]
 channels = ["conda-forge"]
 name = "pixi-global"
-platforms = ["linux-64"]
+# The cuda entry is the __cuda virtual package the GPU builds need.
+platforms = [{ platform = "linux-64", cuda = "12.4" }]
+# A lock written by a newer pixi is not readable by an older one.
+requires-pixi = ">=0.81"
 version = "0.1.0"
 
 [dependencies]
@@ -43,9 +46,7 @@ jupyter-sshd-proxy = "0.3.0.*"
 law = "*"
 lhapdf = "*"
 libgcc-devel_linux-64 = "*"
-libgcc-ng = "*"
 libstdcxx-devel_linux-64 = "*"
-libstdcxx-ng = "*"
 lmfit = "*"
 # madminer = "*"
 mamba = "*"
@@ -95,12 +96,9 @@ vdt = "*"
 vector = "*"
 wrapt = "<2"
 xgboost = "*"
-xrootd = "*"
-yaml = "*"
+# The version pixi/base pins; root_base links libxrootd 6.x on its own.
+xrootd = "5.9.2.*"
 zuko = "*"
-
-[system-requirements]
-cuda = "12.4"
 
 [pypi-dependencies]
 cmsstyle = "*"
