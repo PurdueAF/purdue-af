@@ -45,6 +45,6 @@ backup `*.old` / `*.new` copies, etc.
 3. Create and populate the `munge-key-<name>` PVC in `cms` (out of band, never
    in git).
 4. Add `apps/interlink/<name>/`: `SLURM_CLUSTER=<name>` in the plugin env of
-   `values.yaml`, and the HelmRelease postRenderer that mounts `munge-key-<name>`.
+   `values.yaml`, and the `munge-key-<name>` volume and its mount there.
 5. Merge to `main`; the plugin image rebuilds, since `slurm/` is one of its
    inputs.

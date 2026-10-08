@@ -22,8 +22,7 @@ node pod never gets past Pending, so a new cluster stays commented out in
 Each node is three containers in one Deployment (`<nodeName>-node`): the
 interLink API, the Slurm sidecar plugin that shells out to `sbatch`, and the
 virtual kubelet that registers the Node object. Chart resources are all named
-`<nodeName>-*`, so `nodeName` is the one value that must never drift from the
-HelmRelease `postRenderers` target.
+`<nodeName>-*`.
 
 To use a node, target it explicitly — it carries a
 `virtual-node.interlink/no-schedule` taint so nothing lands there by accident:
