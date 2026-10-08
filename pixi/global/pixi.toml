@@ -96,7 +96,8 @@ vdt = "*"
 vector = "*"
 wrapt = "<2"
 xgboost = "*"
-xrootd = "*"
+# The version pixi/base pins; root_base links libxrootd 6.x on its own.
+xrootd = "5.9.2.*"
 zuko = "*"
 
 [pypi-dependencies]

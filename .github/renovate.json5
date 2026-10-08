@@ -407,15 +407,22 @@
       allowedVersions: '<23',
     },
     {
-      // pixi/base stays on xrootd 5.9.x, which is maintained in parallel with
-      // 6.x. The 6.0 packaging split moved the Python bindings out of `xrootd`
-      // into `python-xrootd`, which pixi/base does not list: a bump would drop
-      // the `XRootD` module rucio-clients imports while xrdcp kept working.
-      // pixi/global resolves xrootd 6 together with python-xrootd.
-      // To lift: add `python-xrootd` to pixi/base and confirm `import XRootD`
+      // xrootd is capped below 6.x in BOTH pixi manifests. The 6.0
+      // packaging split moved the Python bindings out of the `xrootd` package
+      // into `python-xrootd`: conda-forge ships no py312 build of `xrootd` 6.x
+      // at all, so an automated bump would silently drop the `XRootD` module
+      // that rucio-clients and fsspec-xrootd import, while xrdcp kept working.
+      // 6.0 also breaks callers: glob/iglob default to raise_error=true,
+      // `xrdcp --allow-http` is gone, the Davix XrdClHttp plugin is removed,
+      // and XrdEc is deprecated.
+      // 5.9.x is NOT stale — it is maintained in parallel with 6.x (5.9.6 and
+      // 6.1.0 shipped the same day), so patch bumps stay allowed.
+      // pixi/global also carries libxrootd 6.x, which root_base links; the cap
+      // governs xrdcp and the Python module there.
+      // To lift: move pixi/base AND pixi/global together, add `python-xrootd`
+      // explicitly, and confirm `import XRootD` plus fsspec-xrootd still work
       // (pixi/check-env.py gates the import).
       matchPackageNames: ['xrootd', 'python-xrootd', 'libxrootd'],
-      matchFileNames: ['pixi/base/pixi.toml'],
       matchDatasources: ['conda'],
       allowedVersions: '<6',
     },
