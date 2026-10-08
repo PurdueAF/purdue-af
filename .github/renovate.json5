@@ -265,6 +265,12 @@
       addLabels: ['major'],
     },
     {
+      // check-manifests renders with the runner's Helm: 24.04 has Helm 3, as the cluster's Flux does; 26.04 has Helm 4.
+      matchDatasources: ['github-runners'],
+      matchPackageNames: ['ubuntu'],
+      allowedVersions: '/^2[024]\\.04$/',
+    },
+    {
       // KubeRay's chart is indexed days before quay.io/kuberay/operator has its image.
       matchManagers: ['flux'],
       matchPackageNames: ['kuberay-operator'],

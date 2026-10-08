@@ -47,6 +47,8 @@ KUBE_VERSION="${KUBE_VERSION:-1.29.0}"
 KUBECONFORM=(
 	kubeconform
 	-summary
+	-strict
+	-kubernetes-version "$KUBE_VERSION"
 	-schema-location default
 	-schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
 )
@@ -329,7 +331,8 @@ yq -N 'select(.kind=="GitRepository") | .metadata.name + "|" + .spec.url + "|" +
 for rendered in "$workdir"/rendered-*.yaml; do
 	name=$(basename "$rendered" .yaml)
 	echo "──── ${name#rendered-} ────"
-	"${KUBECONFORM[@]}" <"$rendered" || failed=1
+	# Flux decrypts a SOPS Secret before applying it; its `sops` block never reaches the API server.
+	yq 'del(.sops)' "$rendered" | "${KUBECONFORM[@]}" || failed=1
 	validate_helmreleases "$rendered" "$workdir/helm-repos.txt" "$workdir/git-repos.txt"
 done
 
