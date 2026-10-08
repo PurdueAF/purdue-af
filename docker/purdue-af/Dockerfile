@@ -230,7 +230,7 @@ EXPOSE 8888
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["start-notebook.sh"]
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
-    CMD /etc/jupyter/docker_healthcheck.py || exit 1
+    CMD ["/etc/jupyter/docker_healthcheck.py"]
 
 # --------------------------------------------------------------------------
 # Build-time checks, built by ci-images.yml with `--target smoke`.
