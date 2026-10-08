@@ -29,8 +29,12 @@ spec:
       containers:
         - name: af-node-monitor
           image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
+          # The script comes from the ConfigMap, and a registry outage must not stop the exporter that reports it.
+          imagePullPolicy: IfNotPresent
           command: ["python", "/scripts/node_healthcheck.py"]
           env:
+            - name: REGISTRY_URL
+              value: "https://geddes-registry.rcac.purdue.edu/v2/"
             # Timeout sentinels: must match the probe DaemonSets timeouts.
             - name: PING_TIMEOUT_S
               value: "3"

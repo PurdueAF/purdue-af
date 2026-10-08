@@ -75,3 +75,9 @@ def test_geddes_storage_spans_the_full_panel_range():
     assert _painted(0, 40) == 1  # every mount succeeded
     assert _painted(13, 13) == 0  # every mount failed: an outage, painted red
     assert 0 < _painted(5, 15) < 1  # some failed: partial, painted orange
+
+
+def test_geddes_registry_reads_the_probe_and_is_blank_without_it():
+    target = _target(_panel("Components"), "Geddes registry")
+    assert target["expr"] == "min(af_registry_up)"
+    assert target["datasource"]["uid"] == "prometheus"

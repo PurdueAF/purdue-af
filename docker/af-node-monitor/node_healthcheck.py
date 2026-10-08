@@ -6,6 +6,8 @@ from __future__ import annotations
 import json
 import os
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
@@ -83,6 +85,10 @@ MAX_RESULT_BYTES = 64 * 1024
 # Used when a probe pod declares no port named "http".
 DEFAULT_PROBE_PORT = 8080
 
+# Unset: the registry is not probed and af_registry_up has no series.
+REGISTRY_URL = os.getenv("REGISTRY_URL", "")
+REGISTRY_TIMEOUT_S = float(os.getenv("REGISTRY_TIMEOUT_S", "10"))
+
 # How long a refused pod list falls back to the last good one.
 POD_CACHE_TTL_S = float(os.getenv("POD_CACHE_TTL_S", "300"))
 
@@ -149,6 +155,13 @@ try:
         "Fraction of Ready probe pods that answered the exporter this pass. "
         "At 0 no mount is being checked at all, which reads as unknown, not "
         "as failing",
+    )
+
+    registry_up = Gauge(
+        "af_registry_up",
+        "1 when the container registry answered its API root this pass, 0 when "
+        "it timed out, refused the connection or returned a server error",
+        ["registry"],
     )
 
     # Held as objects, not names: a name resolved through globals() turns a
@@ -544,6 +557,18 @@ def _fetch_all(
     return results
 
 
+def _registry_answers(url: str) -> bool:
+    try:
+        with _opener.open(url, timeout=REGISTRY_TIMEOUT_S) as resp:
+            return bool(resp.status < 500)
+    except urllib.error.HTTPError as e:
+        # 401 is how a healthy registry answers an anonymous client.
+        return e.code < 500
+    except Exception as e:
+        _elog(f"[node_healthcheck] No answer from {url}: {e}")
+        return False
+
+
 # Last result per probe: a missed pull keeps its verdict, under the staleness rules.
 _result_cache: Dict[tuple[str, str], Dict[str, Any]] = {}
 
@@ -711,6 +736,10 @@ def main() -> None:
     running = CODE.read_bytes()
     start_http_server(8000)
     while CODE.read_bytes() == running:
+        if REGISTRY_URL:
+            registry_up.labels(
+                registry=urllib.parse.urlsplit(REGISTRY_URL).hostname or ""
+            ).set(_registry_answers(REGISTRY_URL))
         try:
             update_metrics()
             monitor_last_iteration_ts.set(time.time())
