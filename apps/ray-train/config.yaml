@@ -10,7 +10,7 @@ provisionTimeoutSeconds: 600
 reapEverySeconds: 60
 codePollSeconds: 10
 userCacheSeconds: 300
-# How long the clients of a removed cluster hear so, instead of starting another: Ray Client retries for 30 s.
+# How long the clients of a removed cluster hear so, instead of starting another: longer than Ray Client retries (RAY_CLIENT_RECONNECT_GRACE_PERIOD in the Hub's ray-train.py).
 goneSeconds: 300
 
 # The GPUs a worker may hold, of one kind each, those a cluster takes first at the top: the resource, its memory,
