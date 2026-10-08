@@ -53,17 +53,17 @@ RUN set -euo pipefail \
 COPY docker/purdue-af/configs/krb5.conf.d/ /etc/krb5.conf.d/
 COPY docker/purdue-af/configs/certs/ /etc/pki/tls/certs/
 
-COPY docker/purdue-af/osg/igtf-ca-certs-1.136-1.osg24.el8.noarch.rpm docker/purdue-af/osg/vo-client-138-2.osg24.el8.noarch.rpm /tmp/
-RUN dnf -y --disablerepo='*' install --nogpgcheck --setopt=install_weak_deps=False \
-        /tmp/igtf-ca-certs-1.136-1.osg24.el8.noarch.rpm \
-        /tmp/vo-client-138-2.osg24.el8.noarch.rpm && \
-     rm -f /tmp/*.rpm && dnf clean all && rm -rf /var/cache/dnf
+# RPMs are bind-mounted for the install: a COPY would keep them in a layer.
+RUN --mount=type=bind,source=docker/purdue-af/osg,target=/tmp/osg \
+    dnf -y --disablerepo='*' install --nogpgcheck --setopt=install_weak_deps=False \
+        /tmp/osg/igtf-ca-certs-1.136-1.osg24.el8.noarch.rpm \
+        /tmp/osg/vo-client-138-2.osg24.el8.noarch.rpm && \
+     dnf clean all && rm -rf /var/cache/dnf
 
-COPY slurm/slurm-25.11.4-1.el8.x86_64.rpm /etc/
 COPY slurm/slurm-configs-hammer /etc/slurm
-RUN set -euo pipefail \
- && dnf localinstall -y /etc/slurm-25.11.4-1.el8.x86_64.rpm \
- && rm -rf /etc/slurm-25.11.4-1.el8.x86_64.rpm \
+RUN --mount=type=bind,source=slurm/slurm-25.11.4-1.el8.x86_64.rpm,target=/tmp/slurm-25.11.4-1.el8.x86_64.rpm \
+    set -euo pipefail \
+ && dnf localinstall -y /tmp/slurm-25.11.4-1.el8.x86_64.rpm \
  && groupadd -g 1033 slurm || true \
  && adduser -u 2000 -g 1033 slurm || true \
  && chown -R slurm:slurm /etc/slurm/ \
@@ -80,8 +80,7 @@ ENV SHELL=/bin/bash \
     LC_ALL=en_US.UTF-8 \
     HOME="/home/${NB_USER}"
 
-COPY --chown=root:root docker/purdue-af/scripts/fix-permissions /usr/local/bin/fix-permissions
-RUN chmod a+rx /usr/local/bin/fix-permissions
+COPY --chown=root:root --chmod=755 docker/purdue-af/scripts/fix-permissions /usr/local/bin/fix-permissions
 
 RUN sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashrc && \
     echo "auth requisite pam_deny.so" >> /etc/pam.d/su && \
@@ -167,8 +166,11 @@ COPY --from=stack /opt/pixi /opt/pixi
 
 # The CLIs' shebangs resolve `node` from PATH (the base env, below).
 COPY --from=stack /opt/npm-global /opt/npm-global
+# The CLIs are pinned in a root-owned prefix: Claude Code and opencode do not look for updates.
+ENV DISABLE_AUTOUPDATER=1 \
+    OPENCODE_DISABLE_AUTOUPDATE=1
 
-COPY --chown=root:root docker/purdue-af/pixi-wrapper /usr/local/bin/pixi
+COPY --chown=root:root --chmod=755 docker/purdue-af/pixi-wrapper /usr/local/bin/pixi
 
 RUN mkdir -p /etc/cvmfs /etc/cvmfs/SITECONF/JobConfig/ /etc/cvmfs/SITECONF/PhEDEx
 COPY docker/purdue-af/xml/site-local-config.xml /etc/cvmfs/SITECONF/JobConfig/
@@ -180,25 +182,21 @@ RUN mkdir -p "${HOME}/.globus" "${HOME}/.rnd" && \
     chmod 700 "${HOME}/.globus"
 
 COPY docker/purdue-af/jupyter/jupyter_server_config.py \
-    docker/purdue-af/jupyter/docker_healthcheck.py \
     docker/purdue-af/scripts/eos-connect.sh \
     docker/purdue-af/jupyter/jupyter_config.json \
-    docker/purdue-af/scripts/continue-config.yaml \
     /etc/jupyter/
-COPY --chown=root:root docker/purdue-af/scripts/run-as-root.sh \
+COPY --chown=root:root --chmod=755 docker/purdue-af/scripts/run-as-root.sh \
     docker/purdue-af/scripts/config-extensions.sh \
     docker/purdue-af/scripts/config-agents.sh \
     docker/purdue-af/scripts/create-symlinks.sh \
     docker/purdue-af/scripts/clean-session-state.sh \
     /usr/local/bin/before-notebook.d/
 # A library for the hooks, so not in before-notebook.d.
-COPY --chown=root:root docker/purdue-af/scripts/af-as-user.sh /usr/local/bin/
-COPY --chown=root:root \
+COPY --chown=root:root --chmod=755 docker/purdue-af/scripts/af-as-user.sh /usr/local/bin/
+COPY --chown=root:root --chmod=755 \
     docker/purdue-af/jupyter/start.sh \
     docker/purdue-af/jupyter/start-notebook.sh \
     docker/purdue-af/jupyter/start-singleuser.sh \
-    docker/purdue-af/scripts/upload-genaistudio-key \
-    docker/purdue-af/scripts/delete-genaistudio-key \
     /usr/local/bin/
 COPY --chown=root:root \
     docker/purdue-af/code-server/purdue-af-interface-controls \
@@ -207,19 +205,15 @@ COPY --chown=root:root .claude/skills/purdue-af-agentic-interface/SKILL.md \
     /opt/purdue-af/skills/purdue-af-agentic-interface/SKILL.md
 COPY --chown=root:root docker/purdue-af/agents/platform-context.md \
     /opt/purdue-af/agents/platform-context.md
-COPY --chown=root:root docker/purdue-af/scripts/managed-block.py \
+COPY --chown=root:root --chmod=755 docker/purdue-af/scripts/managed-block.py \
     /usr/local/bin/managed-block.py
 
-COPY --chown=root:root docker/purdue-af/code-server/build-vsix.sh /usr/local/bin/build-paf-cs-vsix
-RUN chmod +x /usr/local/bin/build-paf-cs-vsix && \
-    build-paf-cs-vsix \
+COPY --chown=root:root --chmod=755 docker/purdue-af/code-server/build-vsix.sh /usr/local/bin/build-paf-cs-vsix
+RUN build-paf-cs-vsix \
         /opt/purdue-af/code-server/purdue-af-interface-controls \
         /opt/purdue-af/code-server/purdue-af-interface-controls.vsix
 
-RUN chmod +x /usr/local/bin/pixi && \
-    chmod +x /usr/local/bin/* && \
-    chmod +x /usr/local/bin/before-notebook.d/* && \
-    fix-permissions /etc/jupyter/ && \
+RUN fix-permissions /etc/jupyter/ && \
     fix-permissions "${HOME}"
 
 ENV PATH="/usr/local/bin:/opt/npm-global/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}"
@@ -229,8 +223,6 @@ WORKDIR "${HOME}"
 EXPOSE 8888
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["start-notebook.sh"]
-HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/etc/jupyter/docker_healthcheck.py"]
 
 # --------------------------------------------------------------------------
 # Build-time checks, built by ci-images.yml with `--target smoke`.

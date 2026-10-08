@@ -7,11 +7,8 @@ exactly as it ships in the image.
 
 import logging
 import os
-import stat
-import subprocess
 import sys
 import types
-from pathlib import Path
 
 import pytest
 from script_helpers import load_jupyter_config
@@ -58,7 +55,7 @@ def fake_tornado(monkeypatch):
 
 class TestBaseConfig:
     def test_server_settings(self, monkeypatch, tmp_path):
-        _, c = load_jupyter_config(monkeypatch, tmp_path)
+        _, c = load_jupyter_config(monkeypatch)
 
         assert c["ServerApp"]["ip"] == "0.0.0.0"
         assert c["ServerApp"]["open_browser"] is False
@@ -67,7 +64,7 @@ class TestBaseConfig:
         assert "clipboard-read=(self)" in headers["Permissions-Policy"]
 
     def test_contents_and_kernel_settings(self, monkeypatch, tmp_path):
-        _, c = load_jupyter_config(monkeypatch, tmp_path)
+        _, c = load_jupyter_config(monkeypatch)
 
         assert c["FileContentsManager"]["allow_hidden"] is True
         assert c["FileContentsManager"]["delete_to_trash"] is False
@@ -77,7 +74,7 @@ class TestBaseConfig:
     def test_no_cert_or_umask_side_effects_by_default(self, monkeypatch, tmp_path):
         umask_calls = []
         monkeypatch.setattr(os, "umask", lambda v: umask_calls.append(v))
-        _, c = load_jupyter_config(monkeypatch, tmp_path)
+        _, c = load_jupyter_config(monkeypatch)
 
         assert "certfile" not in c["ServerApp"]
         assert umask_calls == []
@@ -86,7 +83,7 @@ class TestBaseConfig:
 
 class TestXSRFNoiseFilter:
     def test_filter_drops_xsrf_skip_lines_only(self, monkeypatch, tmp_path):
-        ns, _ = load_jupyter_config(monkeypatch, tmp_path)
+        ns, _ = load_jupyter_config(monkeypatch)
         noise_filter = ns["_SuppressXSRFSkipNoise"]()
 
         def record(msg):
@@ -100,76 +97,22 @@ class TestXSRFNoiseFilter:
     def test_filter_installed_on_tornado_application_logger(
         self, monkeypatch, tmp_path
     ):
-        ns, _ = load_jupyter_config(monkeypatch, tmp_path)
+        ns, _ = load_jupyter_config(monkeypatch)
         logger = logging.getLogger("tornado.application")
         assert any(isinstance(f, ns["_SuppressXSRFSkipNoise"]) for f in logger.filters)
-
-
-class TestGenCert:
-    def _setup(self, monkeypatch, tmp_path, create_pem=True):
-        conda_dir = tmp_path / "conda"
-        (conda_dir / "ssl").mkdir(parents=True)
-        data_dir = tmp_path / "data"
-        calls = []
-
-        def fake_check_call(cmd):
-            calls.append(cmd)
-            if create_pem:
-                keyout = next(a for a in cmd if a.startswith("-keyout="))
-                Path(keyout.split("=", 1)[1]).touch()
-
-        monkeypatch.setattr(subprocess, "check_call", fake_check_call)
-        return conda_dir, data_dir, calls
-
-    def test_generates_cert_and_restricts_access(self, monkeypatch, tmp_path):
-        conda_dir, data_dir, calls = self._setup(monkeypatch, tmp_path)
-        ns, c = load_jupyter_config(
-            monkeypatch,
-            data_dir,
-            env={"GEN_CERT": "1", "CONDA_DIR": str(conda_dir)},
-        )
-
-        pem = data_dir / "notebook.pem"
-        assert c["ServerApp"]["certfile"] == str(pem)
-        assert len(calls) == 1
-        assert calls[0][0:2] == ["openssl", "req"]
-        assert f"-keyout={pem}" in calls[0]
-        assert f"-out={pem}" in calls[0]
-        assert stat.S_IMODE(pem.stat().st_mode) == 0o600
-
-    def test_writes_openssl_cnf_when_missing(self, monkeypatch, tmp_path):
-        conda_dir, data_dir, _ = self._setup(monkeypatch, tmp_path)
-        ns, _ = load_jupyter_config(
-            monkeypatch,
-            data_dir,
-            env={"GEN_CERT": "1", "CONDA_DIR": str(conda_dir)},
-        )
-        cnf = conda_dir / "ssl" / "openssl.cnf"
-        assert cnf.read_text() == ns["OPENSSL_CONFIG"]
-
-    def test_keeps_existing_openssl_cnf(self, monkeypatch, tmp_path):
-        conda_dir, data_dir, _ = self._setup(monkeypatch, tmp_path)
-        cnf = conda_dir / "ssl" / "openssl.cnf"
-        cnf.write_text("# pre-existing\n")
-        load_jupyter_config(
-            monkeypatch,
-            data_dir,
-            env={"GEN_CERT": "1", "CONDA_DIR": str(conda_dir)},
-        )
-        assert cnf.read_text() == "# pre-existing\n"
 
 
 class TestNBUmask:
     def test_umask_applied_as_octal(self, monkeypatch, tmp_path):
         calls = []
         monkeypatch.setattr(os, "umask", lambda v: calls.append(v))
-        load_jupyter_config(monkeypatch, tmp_path, env={"NB_UMASK": "022"})
+        load_jupyter_config(monkeypatch, env={"NB_UMASK": "022"})
         assert calls == [0o022]
 
 
 class TestWebSocketPingUnitsPatch:
     def _wrapped_protocol(self, monkeypatch, tmp_path, fake_tornado, params):
-        load_jupyter_config(monkeypatch, tmp_path)
+        load_jupyter_config(monkeypatch)
         fake_tornado.handler_cls.protocol = fake_tornado.Protocol(params)
         return fake_tornado.handler_cls().get_websocket_protocol()
 
@@ -200,7 +143,7 @@ class TestWebSocketPingUnitsPatch:
         assert proto.params.ping_timeout == 90.0
 
     def test_none_protocol_passthrough(self, monkeypatch, tmp_path, fake_tornado):
-        load_jupyter_config(monkeypatch, tmp_path)
+        load_jupyter_config(monkeypatch)
         fake_tornado.handler_cls.protocol = None
         assert fake_tornado.handler_cls().get_websocket_protocol() is None
 
@@ -213,7 +156,7 @@ class TestWebSocketPingUnitsPatch:
     def test_config_loads_without_tornado(self, monkeypatch, tmp_path):
         # Simulate tornado being absent: import raises, patch is skipped.
         monkeypatch.setitem(sys.modules, "tornado.websocket", None)
-        ns, c = load_jupyter_config(monkeypatch, tmp_path)
+        ns, c = load_jupyter_config(monkeypatch)
         assert c["ServerApp"]["ip"] == "0.0.0.0"
 
 
@@ -221,7 +164,7 @@ class TestJupyterAIDefaultPersona:
     """Who answers when the user just types, without picking anyone."""
 
     def test_opencode_is_the_default(self, monkeypatch, tmp_path):
-        _, c = load_jupyter_config(monkeypatch, tmp_path)
+        _, c = load_jupyter_config(monkeypatch)
         assert c["PersonaManager"]["default_persona_id"] == (
             "jupyter-ai-personas::jupyter_ai_acp_client::OpenCodeAcpPersona"
         )
@@ -231,7 +174,7 @@ class TestJupyterAIDefaultPersona:
         `jupyter-ai-personas::<package>::<class>`, derived from the module
         path -- not something we get to name. A typo here does not raise: the
         lookup is a plain `.get()`, so the chat just silently answers nobody."""
-        _, c = load_jupyter_config(monkeypatch, tmp_path)
+        _, c = load_jupyter_config(monkeypatch)
         prefix, package, klass = c["PersonaManager"]["default_persona_id"].split("::")
         assert prefix == "jupyter-ai-personas"
         # The distribution that ships the ACP personas, and the class inside it
@@ -243,7 +186,7 @@ class TestJupyterAIDefaultPersona:
         """Claude and Codex refuse until the user logs in with their own
         provider account; OpenCode answers out of the box. Defaulting to either
         of the other two would meet every new user with a login prompt."""
-        _, c = load_jupyter_config(monkeypatch, tmp_path)
+        _, c = load_jupyter_config(monkeypatch)
         assert "OpenCode" in c["PersonaManager"]["default_persona_id"]
 
 
@@ -253,7 +196,7 @@ class TestJupyterAIMCPServers:
     personas silently lose the ability to touch the notebook they are in."""
 
     def _servers(self, monkeypatch, tmp_path, **env):
-        _, c = load_jupyter_config(monkeypatch, tmp_path, env=env)
+        _, c = load_jupyter_config(monkeypatch, env=env)
         return {s["name"]: s for s in c["PersonaManager"]["builtin_mcp_servers"]}
 
     def test_notebook_toolkit_is_kept(self, monkeypatch, tmp_path):
@@ -261,7 +204,7 @@ class TestJupyterAIMCPServers:
         assert "Jupyter MCP Server" in servers
 
     def test_notebook_toolkit_url_matches_the_port_we_pin(self, monkeypatch, tmp_path):
-        _, c = load_jupyter_config(monkeypatch, tmp_path)
+        _, c = load_jupyter_config(monkeypatch)
         port = c["MCPExtensionApp"]["mcp_port"]
         jupyter = next(
             s
@@ -318,9 +261,7 @@ class TestJupyterAIServerNameAgreement:
         from common import REPO
 
         hook = (REPO / "docker/purdue-af/scripts/config-agents.sh").read_text()
-        _, c = load_jupyter_config(
-            monkeypatch, tmp_path, env={"JUPYTERHUB_API_TOKEN": "t"}
-        )
+        _, c = load_jupyter_config(monkeypatch, env={"JUPYTERHUB_API_TOKEN": "t"})
         af = next(
             s
             for s in c["PersonaManager"]["builtin_mcp_servers"]

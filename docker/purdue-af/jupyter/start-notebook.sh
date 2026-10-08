@@ -13,10 +13,5 @@ if [[ -n "${JUPYTERHUB_API_TOKEN}" ]]; then
 	exec /usr/local/bin/start-singleuser.sh "$@"
 fi
 
-wrapper=""
-if [[ "${RESTARTABLE}" == "yes" ]]; then
-	wrapper="run-one-constantly"
-fi
-
 # shellcheck disable=SC1091,SC2086
-exec /usr/local/bin/start.sh ${wrapper} jupyter ${DOCKER_STACKS_JUPYTER_CMD} ${NOTEBOOK_ARGS} "$@"
+exec /usr/local/bin/start.sh jupyter ${DOCKER_STACKS_JUPYTER_CMD} ${NOTEBOOK_ARGS} "$@"

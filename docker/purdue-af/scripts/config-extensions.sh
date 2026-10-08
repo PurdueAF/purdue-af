@@ -1,13 +1,10 @@
 #!/bin/bash
 base_env_dir=/opt/pixi/.pixi/envs/base-env/
 
-# Configure JupyterLab overrides (single-click unfold, disable PyPI extension manager)
+# Configure JupyterLab overrides (disable PyPI extension manager)
 mkdir -p $base_env_dir/share/jupyter/lab/settings
 cat >$base_env_dir/share/jupyter/lab/settings/overrides.json <<'OVERRIDES_EOF'
 {
-  "jupyterlab-unfold:jupyterlab-unfold-settings": {
-    "singleClickToUnfold": false
-  },
   "@jupyterlab/extensionmanager-extension:plugin": {
     "enabled": false
   }
@@ -26,7 +23,6 @@ TOPBAR_TEXT_CONFIG_PATH=$NEW_HOME/.jupyter/lab/user-settings/jupyterlab-topbar-t
 chown -Rh "$NB_USER:users" "$NEW_HOME/.jupyter/lab/user-settings" 2>/dev/null || true
 af_as_user mkdir -p $TOPBAR_CONFIG_PATH
 af_as_user mkdir -p $TOPBAR_TEXT_CONFIG_PATH
-af_as_user rm -rf $NEW_HOME/.jupyter/lab/user-settings/jupyterlab-topbar-extension/
 
 IMAGE_VERSION=${JUPYTER_IMAGE#*:}
 
@@ -69,17 +65,6 @@ echo '{
         }
     ]
 }' | af_as_user tee $TOPBAR_CONFIG_PATH/top-bar.jupyterlab-settings >/dev/null
-
-JIL_PATH=$NEW_HOME/.jupyter/lab/user-settings/purdue-af-grafana-iframe/
-af_as_user mkdir -p $JIL_PATH
-DASHBOARD_URL="https://cms.geddes.rcac.purdue.edu/grafana/d-solo/single-user-stat-dashboard/single-user-statistics"
-THEME="&theme=light"
-echo "{
-    \"url\": \"$DASHBOARD_URL?orgId=1&refresh=1m&var-user=$HOSTNAME&from=now-3h&to=now&panelId=1$THEME\",
-    \"label\": \"Resource usage\",
-    \"caption\": \"Open grafana panel\",
-    \"rank\": 0
-}" | af_as_user tee $JIL_PATH/plugin.jupyterlab-settings >/dev/null
 
 CODE_SERVER_BIN="${base_env_dir%/}/bin/code-server"
 # A broken code-server skips the editor setup, never the session.
@@ -126,7 +111,6 @@ if [ "$code_server_ok" = 1 ]; then
     ".*": true,
     "~*": true
   },
-  "continue.enableNextEdit": false,
   "purdueaf.jupyterLabPath": "${LAB_PATH}",
   "purdueaf.hubHomePath": "${HUB_HOME_PATH}",
   "purdueaf.servicePrefix": "${HUB_PREFIX}",
@@ -163,7 +147,6 @@ EOF
 
 	_cs_install_if_missing ms-python.python
 	_cs_install_if_missing ms-toolsai.jupyter
-	_cs_install_if_missing continue.continue@1.3.30
 	_cs_install_if_missing renan-r-santos.pixi-code
 	# Open VSX IDs (code-server's marketplace).
 	_cs_install_if_missing anthropic.claude-code
@@ -238,28 +221,15 @@ PY
 
 fi
 
-# Continue extension config (from bundled file)
-CONTINUE_DIR="$NEW_HOME/.continue"
-af_as_user mkdir -p "$CONTINUE_DIR"
-# Read the bundled file as root (it lives in the image), write it as the user.
-af_as_user tee "$CONTINUE_DIR/config.yaml" </etc/jupyter/continue-config.yaml >/dev/null
-# If user previously saved an API key, inject it into all apiKey fields so config survives image startup
-if [[ -s "$CONTINUE_DIR/api-key.txt" ]]; then
-	KEY=$(tr -d '\n\r' <"$CONTINUE_DIR/api-key.txt")
-	if [[ -n "$KEY" ]]; then
-		tmp=$(mktemp)
-		while IFS= read -r line; do
-			if [[ "$line" =~ ^([[:space:]]*apiKey:)[[:space:]]*(.*)$ ]]; then
-				printf '%s %s\n' "${BASH_REMATCH[1]}" "$KEY"
-			else
-				printf '%s\n' "$line"
-			fi
-		done <"$CONTINUE_DIR/config.yaml" >"$tmp"
-		# Not `mv`: the rename would be done by root, and the key travels on
-		# stdin rather than in argv, where `ps` would show it.
-		af_as_user tee "$CONTINUE_DIR/config.yaml" <"$tmp" >/dev/null
-		rm -f "$tmp"
+# A home that still holds the Continue extension loses it, with the config and the key it stored.
+_retire_continue() {
+	local extensions="$NEW_HOME/.local/share/code-server/extensions" dir="$NEW_HOME/.continue"
+	if compgen -G "$extensions/continue.continue-*" >/dev/null && [ -x "$CODE_SERVER_BIN" ]; then
+		af_as_user "$CODE_SERVER_BIN" --extensions-dir "$extensions" \
+			--user-data-dir "$NEW_HOME/.local/share/code-server" \
+			--uninstall-extension continue.continue >/dev/null 2>&1 || true
 	fi
-fi
-# Repairs root-owned homes; never fatal.
-chown -R $NB_USER:users "$CONTINUE_DIR" || true
+	af_as_user rm -f "$dir/config.yaml" "$dir/api-key.txt" || true
+	af_as_user rmdir "$dir" 2>/dev/null || true
+}
+_retire_continue

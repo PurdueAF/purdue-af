@@ -193,6 +193,65 @@ def test_root_owned_user_settings_are_repaired_before_the_first_write(tmp_path):
     ), calls
     assert (
         home
-        / ".jupyter/lab/user-settings/purdue-af-grafana-iframe"
+        / ".jupyter/lab/user-settings/jupyterlab-topbar-text"
         / "plugin.jupyterlab-settings"
     ).is_file()
+
+
+def _retire_continue(tmp_path, home):
+    """Run _retire_continue against `home` with a code-server that logs its arguments."""
+    log = tmp_path / "code-server.log"
+    code_server = tmp_path / "code-server"
+    code_server.write_text('#!/bin/bash\nprintf \'%s\\n\' "$*" >> "$CS_LOG"\n')
+    code_server.chmod(0o755)
+    program = "\n".join(
+        [
+            'af_as_user() { "$@"; }',
+            f'NEW_HOME="{home}"',
+            f'CODE_SERVER_BIN="{code_server}"',
+            _extract_function("_retire_continue"),
+            "_retire_continue",
+        ]
+    )
+    result = subprocess.run(
+        ["bash", "-c", f"set -e\n{program}"],
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin", "CS_LOG": str(log)},
+    )
+    assert result.returncode == 0, result.stderr
+    return log.read_text() if log.exists() else ""
+
+
+def test_a_home_with_the_continue_extension_loses_it_and_its_key(tmp_path):
+    home = tmp_path / "home" / "jovyan"
+    extension = home / ".local/share/code-server/extensions/continue.continue-1.3.30"
+    extension.mkdir(parents=True)
+    (home / ".continue").mkdir()
+    (home / ".continue/config.yaml").write_text("models: []\n")
+    (home / ".continue/api-key.txt").write_text("secret")
+
+    calls = _retire_continue(tmp_path, home)
+
+    assert "--uninstall-extension continue.continue" in calls
+    assert not (home / ".continue").exists()
+
+
+def test_other_files_under_dot_continue_are_left(tmp_path):
+    home = tmp_path / "home" / "jovyan"
+    (home / ".continue/sessions").mkdir(parents=True)
+    (home / ".continue/sessions/chat.json").write_text("{}")
+    (home / ".continue/api-key.txt").write_text("secret")
+
+    calls = _retire_continue(tmp_path, home)
+
+    assert calls == ""
+    assert not (home / ".continue/api-key.txt").exists()
+    assert (home / ".continue/sessions/chat.json").is_file()
+
+
+def test_a_home_without_continue_is_untouched(tmp_path):
+    home = tmp_path / "home" / "jovyan"
+    home.mkdir(parents=True)
+    assert _retire_continue(tmp_path, home) == ""
+    assert list(home.iterdir()) == []
