@@ -190,7 +190,9 @@
     },
     // Groups: one PR per artifact CI builds or validates, so a cycle rebuilds
     // each image once. A dependency pinned in two artifacts splits by file.
-    // Later rules override earlier ones; the top-level groupName catches the rest.
+    // Two groups cut across artifacts and wait for a person: the hand-merged
+    // pins and the majors. Later rules override earlier ones; the top-level
+    // groupName catches the rest.
     {
       // Actions, pre-commit hooks and the test suite's own dependencies.
       matchManagers: ['github-actions', 'pre-commit'],
@@ -252,17 +254,12 @@
       // Merged by hand, outside af-image: pixi-global-sync installs with the
       // released image's pixi, which cannot read a lock in a format a newer pixi writes.
       matchPackageNames: ['prefix-dev/pixi'],
-      groupName: 'pixi-cli',
+      groupName: 'hand-merged pins',
       automerge: false,
     },
     {
       matchManagers: ['flux'],
       addLabels: ['helm'],
-    },
-    {
-      // Major chart/image bumps: extra label so they stand out.
-      matchUpdateTypes: ['major'],
-      addLabels: ['major'],
     },
     {
       // KubeRay's chart is indexed days before quay.io/kuberay/operator has its image.
@@ -314,7 +311,7 @@
       matchDatasources: ['docker'],
       matchPackageNames: ['docker.io/library/traefik'],
       allowedVersions: '/^2\\./',
-      groupName: 'dask-gateway-traefik',
+      groupName: 'hand-merged pins',
       automerge: false,
     },
     {
@@ -322,7 +319,7 @@
       // version in every file, merged by hand.
       matchDatasources: ['docker'],
       matchPackageNames: ['docker.io/rayproject/ray'],
-      groupName: 'ray-image',
+      groupName: 'hand-merged pins',
       automerge: false,
     },
     {
@@ -331,8 +328,16 @@
       matchDatasources: ['docker'],
       matchPackageNames: ['docker.io/nvidia/cuda'],
       allowedVersions: '/^12\\./',
-      groupName: 'af-image-base',
+      groupName: 'hand-merged pins',
       automerge: false,
+    },
+    {
+      // Every major in one PR, on the branch renovate/major-versions. After
+      // every other groupName rule, so that it overrides them.
+      matchUpdateTypes: ['major'],
+      groupName: 'major versions',
+      groupSlug: 'versions',
+      addLabels: ['major'],
     },
     {
       // A PostgreSQL major needs a dump and restore, not a tag bump.
