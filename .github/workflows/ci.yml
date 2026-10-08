@@ -249,16 +249,16 @@ jobs:
             git diff --stat "$GITHUB_SHA" HEAD
             exit 1
           fi
-          # Never rebase onto an unvalidated tree; the next run releases past an orphaned ghcr tag.
-          git push origin HEAD:refs/heads/main \
-            || { echo "::error::pushing the auto-release commit failed (main moved?)"; exit 1; }
           bump_sha=$(git rev-parse HEAD)
           # The 'digest:' line is read back by the next run's no-release check.
           git tag -a "agentic-interface-v$new" -m "agentic-interface image $new
           image: $repo:$new
           inputs: $want
           digest: $want_digest"
-          git push origin "agentic-interface-v$new"
+          # Atomic: a bump commit on main without its tag fails the checks stage of every later pipeline.
+          # Never rebase onto an unvalidated tree; the next run releases past an orphaned ghcr tag.
+          git push --atomic origin HEAD:refs/heads/main "refs/tags/agentic-interface-v$new" \
+            || { echo "::error::pushing the auto-release commit and its tag failed (main moved?)"; exit 1; }
           # Stamp ci-ok on the bump commit for the purdue-af release gate.
           gh api "repos/${GITHUB_REPOSITORY}/check-runs" \
             -f name=ci-ok -f head_sha="$bump_sha" \
