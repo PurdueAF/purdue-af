@@ -1101,3 +1101,51 @@ def test_only_new_exporter_code_ends_the_exporter(monkeypatch, tmp_path):
     monkeypatch.setattr(nh, "CHECK_INTERVAL_S", 0)
     nh.main()
     assert passes == 2
+
+
+# ── registry ──────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("code", "answers"), [(200, True), (401, True), (500, False), (503, False)]
+)
+def test_registry_answers_unless_the_server_fails(http_probe, code, answers):
+    port, responses = http_probe
+    responses["/v2/"] = (code, b"")
+    assert nh._registry_answers(f"http://127.0.0.1:{port}/v2/") is answers
+
+
+def test_registry_that_refuses_the_connection_does_not_answer():
+    closed = http.server.HTTPServer(("127.0.0.1", 0), None)
+    closed_port = closed.server_address[1]
+    closed.server_close()
+    assert nh._registry_answers(f"http://127.0.0.1:{closed_port}/v2/") is False
+
+
+def _one_pass(monkeypatch, tmp_path):
+    code = tmp_path / "node_healthcheck.py"
+    code.write_text("old")
+    monkeypatch.setattr(nh, "CODE", code)
+    monkeypatch.setattr(nh, "start_http_server", lambda port: None)
+    monkeypatch.setattr(nh, "update_metrics", lambda: code.write_text("new"))
+    monkeypatch.setattr(nh, "CHECK_INTERVAL_S", 0)
+    nh.main()
+
+
+def _registry_up(registry):
+    return REGISTRY.get_sample_value("af_registry_up", {"registry": registry})
+
+
+@pytest.mark.parametrize("answers", [True, False])
+def test_each_pass_publishes_the_registry_verdict(monkeypatch, tmp_path, answers):
+    monkeypatch.setattr(nh, "REGISTRY_URL", "https://registry.test/v2/")
+    monkeypatch.setattr(nh, "_registry_answers", lambda url: answers)
+    _one_pass(monkeypatch, tmp_path)
+    assert _registry_up("registry.test") == answers
+
+
+def test_no_registry_url_publishes_no_series(monkeypatch, tmp_path):
+    nh.registry_up.clear()
+    monkeypatch.setattr(nh, "REGISTRY_URL", "")
+    _one_pass(monkeypatch, tmp_path)
+    assert _registry_up("registry.test") is None
