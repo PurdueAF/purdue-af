@@ -15,7 +15,8 @@ as pods on the Purdue Geddes cluster.
 | Memory per worker | up to 64 GiB |
 
 Workers beyond the guaranteed ones run at low priority. Kubernetes evicts them
-when a session, or another cluster's guaranteed workers, needs their place;
+when a session, a Ray cluster, or another cluster's guaranteed workers, needs
+their place;
 Dask reruns their tasks on the remaining workers, and a replacement starts once
 there is room.
 

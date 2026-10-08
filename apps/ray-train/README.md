@@ -12,8 +12,9 @@ worker's GPU is a 5 GB A100 slice or a T4, whichever is free, slices first;
 a call that asks for more GPU memory than a slice has, or for two GPUs a
 worker, gets T4s only. A call
 may also name each worker's CPU cores and memory. The
-first worker keeps its GPUs; the others run in the `low-priority-preemptible`
-PriorityClass, which the scheduler evicts for a pod of the default priority
+first worker keeps its GPUs; the others run in the `medium-priority-preemptible`
+PriorityClass, for which the scheduler evicts Dask Gateway's preemptible
+workers, and which it evicts for a pod of the default priority
 that fits nowhere else: a session, to which the Hub's profile form shows such
 a worker's GPU as free, or another cluster's first worker. A cluster starts
 only while the GPUs it asks for are free, by the queries of that form

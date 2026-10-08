@@ -6530,7 +6530,7 @@
         },
         {
           "refId": "F",
-          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-train-.*\",container=~\"ray-head|ray-worker\",resource=~\"nvidia.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",priority_class=\"low-priority-preemptible\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))",
+          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-train-.*\",container=~\"ray-head|ray-worker\",resource=~\"nvidia.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",priority_class=\"medium-priority-preemptible\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\")))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -7107,7 +7107,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum((group by (pod, created_by_name)(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",pod=~\"ray-train-.+-worker-.+\",priority_class=\"low-priority-preemptible\"} offset $__interval) unless on(pod) kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",pod=~\"ray-train-.+-worker-.+\",priority_class=\"low-priority-preemptible\"}) and on(created_by_name) ((kube_pod_info{namespace=\"cms\",pod=~\"ray-train-.+-head-.+\",created_by_kind=\"RayCluster\"} and on(pod) (kube_pod_info{namespace=\"cms\",pod=~\"ray-train-.+-head-.+\",created_by_kind=\"RayCluster\"} offset $__interval)) unless on(pod) kube_pod_deletion_timestamp{namespace=\"cms\"})) or vector(0)",
+          "expr": "sum((group by (pod, created_by_name)(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",pod=~\"ray-train-.+-worker-.+\",priority_class=\"medium-priority-preemptible\"} offset $__interval) unless on(pod) kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",pod=~\"ray-train-.+-worker-.+\",priority_class=\"medium-priority-preemptible\"}) and on(created_by_name) ((kube_pod_info{namespace=\"cms\",pod=~\"ray-train-.+-head-.+\",created_by_kind=\"RayCluster\"} and on(pod) (kube_pod_info{namespace=\"cms\",pod=~\"ray-train-.+-head-.+\",created_by_kind=\"RayCluster\"} offset $__interval)) unless on(pod) kube_pod_deletion_timestamp{namespace=\"cms\"})) or vector(0)",
           "legendFormat": "preempted",
           "datasource": {
             "type": "prometheus",
