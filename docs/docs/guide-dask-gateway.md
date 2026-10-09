@@ -73,6 +73,10 @@ A cluster runs the environment you name — it does not inherit the notebook's.
 The environment must be built before the cluster is created, on a volume the
 workers mount.
 
+The environment must contain the `prometheus_client` package, which the
+facility's monitoring reads the cluster through, and be readable by all users.
+The gateway refuses to create a cluster from any other environment.
+
 The path to a Pixi project is specified in the `pixi_project` argument of
 `new_cluster()`:
 
