@@ -123,6 +123,11 @@ solutions. If your problem is not listed here, please
     [Shutting down clusters](guide-dask-gateway.md#5-shutting-down-clusters)),
     or wait for it to finish stopping, then try again.
 
+??? failure "I can't create a cluster: \"prometheus_client is not installed\""
+
+    Add `prometheus_client` to the environment the cluster runs — see
+    [Pixi or Conda environments](guide-dask-gateway.md#pixi-or-conda-environments).
+
 ??? failure "Workers fail to start or crash immediately"
 
     * Check that the Pixi/Conda environment passed to `new_cluster()` is

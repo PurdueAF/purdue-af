@@ -170,6 +170,7 @@ gateway:
 
       from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
       import asyncio
+      import glob
       import os.path
       import re
 
@@ -231,6 +232,14 @@ gateway:
               if not user_conda_env or not user_conda_env.strip():
                   raise ValueError("Either conda_env or pixi_project must be specified")
               conda_env = user_conda_env.strip()
+
+          # Without it the scheduler serves no metrics and the monitoring does not see the cluster.
+          if not glob.glob(glob.escape(conda_env) + "/lib/python3*/site-packages/prometheus_client"):
+              raise ValueError(
+                  f"prometheus_client is not installed in {conda_env}, or the environment is not readable by everyone. "
+                  "The facility's monitoring needs it: run `pixi add prometheus_client` or `conda install prometheus_client` there, "
+                  "then create the cluster again."
+              )
 
           options.env["PATH"]=f"{conda_env}/bin/:"+options.env.pop("PATH")
           options.env["CPLUS_INCLUDE_PATH"]=f"{conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"

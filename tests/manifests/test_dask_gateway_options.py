@@ -102,7 +102,24 @@ async def test_other_schemes_go_to_basic(config, header):
     assert await authenticate(config, header) == "basic"
 
 
-def test_env_names_kubernetes_rejects_are_dropped(options_handler):
+def build_environment(project, *packages):
+    """A pixi project whose default environment holds `packages`; returns the
+    environment's prefix."""
+    prefix = project / ".pixi" / "envs" / "default"
+    (prefix / "bin").mkdir(parents=True)
+    (prefix / "bin" / "python").touch()
+    (project / "pixi.toml").touch()
+    for package in packages:
+        (prefix / "lib" / "python3.12" / "site-packages" / package).mkdir(parents=True)
+    return prefix
+
+
+@pytest.fixture
+def conda_env(tmp_path) -> str:
+    return str(build_environment(tmp_path, "distributed", "prometheus_client"))
+
+
+def test_env_names_kubernetes_rejects_are_dropped(options_handler, conda_env):
     options = types.SimpleNamespace(
         env={
             "PATH": "/usr/bin",
@@ -111,7 +128,7 @@ def test_env_names_kubernetes_rejects_are_dropped(options_handler):
             "BASH_FUNC_which%%": "() {  ( alias; eval ${which_declare} ) | /usr/bin/which $@\n}",
             "1_LEADING_DIGIT": "dropped",
         },
-        conda_env="/opt/env",
+        conda_env=conda_env,
         pixi_project="",
         pixi_env="default",
         worker_cores=1,
@@ -125,25 +142,43 @@ def test_env_names_kubernetes_rejects_are_dropped(options_handler):
     assert environment["my.env-name"] == "kept"
 
 
-def request_options(**env):
+def request_options(conda_env="", pixi_project="", **env):
     return types.SimpleNamespace(
         env={"PATH": "/usr/bin", **env},
-        conda_env="/opt/env",
-        pixi_project="",
+        conda_env=conda_env,
+        pixi_project=pixi_project,
         pixi_env="default",
         worker_cores=1,
         worker_memory=4,
     )
 
 
-def test_pods_run_as_the_user_without_changing_the_shared_config(config):
+@pytest.mark.parametrize("option", ["conda_env", "pixi_project"])
+def test_environment_without_prometheus_client_is_refused(
+    options_handler, tmp_path, option
+):
+    prefix = build_environment(tmp_path, "distributed")
+    named = {"conda_env": prefix, "pixi_project": tmp_path}[option]
+    options = request_options(**{option: str(named)})
+    with pytest.raises(ValueError, match="prometheus_client is not installed"):
+        options_handler(options, types.SimpleNamespace(name="jovyan"))
+
+
+def test_pixi_project_runs_its_environment(options_handler, tmp_path):
+    prefix = build_environment(tmp_path, "distributed", "prometheus_client")
+    options = request_options(pixi_project=str(tmp_path))
+    cluster = options_handler(options, types.SimpleNamespace(name="jovyan"))
+    assert cluster["scheduler_cmd"] == [f"{prefix}/bin/dask", "scheduler"]
+
+
+def test_pods_run_as_the_user_without_changing_the_shared_config(config, conda_env):
     """The uid and the user label are returned for this cluster; the config
     every later request starts from keeps what the chart put there."""
     shared = config["c"].KubeClusterConfig
     shared["scheduler_extra_pod_config"] = {"nodeSelector": {"cms-af-prod": "true"}}
     shared["worker_extra_pod_config"] = {"volumes": ["cvmfs"]}
     user = types.SimpleNamespace(name="someone-cern")
-    options = request_options(NB_UID="4001", NB_GID="4002")
+    options = request_options(conda_env, NB_UID="4001", NB_GID="4002")
 
     cluster = config["options_handler"](options, user)
 
@@ -180,11 +215,11 @@ async def cluster_handler(config, username, lookup):
     return await config["cluster_options"](user), user, threads
 
 
-async def test_purdue_uid_is_looked_up_off_the_event_loop(config):
+async def test_purdue_uid_is_looked_up_off_the_event_loop(config, conda_env):
     handler, user, threads = await cluster_handler(
         config, "someone", lambda name: (5555, 6666)
     )
-    cluster = handler(request_options(), user)
+    cluster = handler(request_options(conda_env), user)
     assert threads == [False]
     assert cluster["worker_extra_pod_config"]["securityContext"] == {
         "runAsUser": 5555,
@@ -192,19 +227,23 @@ async def test_purdue_uid_is_looked_up_off_the_event_loop(config):
     }
 
 
-async def test_failed_lookup_fails_the_cluster_not_the_options_listing(config):
+async def test_failed_lookup_fails_the_cluster_not_the_options_listing(
+    config, conda_env
+):
     def missing(name):
         raise ValueError("no LDAP entry for " + name)
 
     handler, user, _ = await cluster_handler(config, "someone", missing)
     with pytest.raises(ValueError, match="no LDAP entry for someone"):
-        handler(request_options(), user)
+        handler(request_options(conda_env), user)
 
 
 @pytest.mark.parametrize("username", ["jovyan", "someone-cern", "someone-fnal"])
-async def test_accounts_outside_purdue_ldap_are_not_looked_up(config, username):
+async def test_accounts_outside_purdue_ldap_are_not_looked_up(
+    config, conda_env, username
+):
     handler, user, threads = await cluster_handler(config, username, None)
-    cluster = handler(request_options(NB_UID="4001", NB_GID="4002"), user)
+    cluster = handler(request_options(conda_env, NB_UID="4001", NB_GID="4002"), user)
     assert threads == []
     expected = 1000 if username == "jovyan" else 4001
     assert (
