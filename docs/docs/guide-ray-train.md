@@ -1,16 +1,18 @@
 # Training on GPUs with Ray
 
-[Ray](https://docs.ray.io/en/latest/) trains your PyTorch models on GPUs your
-session does not hold. You submit a script as a job; a Ray cluster of your own
-starts for it in a minute or two, runs it as you on [shared GPUs](#gpus), and
-is [removed](#lifetime) once idle.
+[Ray](https://docs.ray.io/en/latest/) trains your models, and runs them, on
+GPUs your session does not hold. You submit a script as a job; a Ray cluster
+of your own starts for it in a minute or two, runs it as you on
+[shared GPUs](#gpus), and is [removed](#lifetime) once idle.
 
-| To train                             | Each GPU runs                                 | GPUs                    | See                                               |
-| ------------------------------------ | --------------------------------------------- | ----------------------- | ------------------------------------------------- |
-| One model                            | The training                                  | One                     | [Submitting a job](#submitting-a-job)             |
-| One model, faster                    | A copy of the model, on its share of the data | Up to those you ask for | [Data-parallel training](#data-parallel-training) |
-| Many models, to tune or compare them | One of the trainings                          | Up to those you ask for | [Hyperparameter search](#hyperparameter-search)   |
-| One model too large for a GPU        | A part of the model                           | Two                     | [A model on two GPUs](#a-model-on-two-gpus)       |
+| To                                         | Each GPU runs                                 | GPUs                    | See                                                     |
+| ------------------------------------------ | --------------------------------------------- | ----------------------- | ------------------------------------------------------- |
+| Train one model                            | The training                                  | One                     | [Submitting a job](#submitting-a-job)                   |
+| Train one model, faster                    | A copy of the model, on its share of the data | Up to those you ask for | [Data-parallel training](#data-parallel-training)       |
+| Train many models, to tune or compare them | One of the trainings                          | Up to those you ask for | [Hyperparameter search](#hyperparameter-search)         |
+| Train a model too large for a GPU          | A part of the model                           | Two, or a set number    | [A model larger than a GPU](#a-model-larger-than-a-gpu) |
+| Run a model over a dataset                 | A copy of the model, on its batches           | Up to those you ask for | [Batch inference](#batch-inference)                     |
+| Run any function many times                | One of the calls                              | Up to those you ask for | [Tasks](#tasks)                                         |
 
 ## Before you start
 
@@ -178,6 +180,40 @@ job = client.submit_job(entrypoint="python train.py", runtime_env={"working_dir"
   [`af-n-workers`](#cluster-settings) in place of `af-max-workers`, and train
   with `num_workers=int(os.environ["AF_MAX_WORKERS"])`.
 
+### Data in files
+
+[Ray Data](https://docs.ray.io/en/latest/train/user-guides/data-loading-preprocessing.html)
+reads and prepares files on the workers' CPU cores as the training goes, and
+deals the rows out among the workers, so the data need not fit in memory. It
+takes the place of the `DataLoader` and of `prepare_data_loader`:
+
+```python
+def train_func():
+    ...
+    data = ray.train.get_dataset_shard("train")
+    for epoch in range(first_epoch, 5):
+        # A batch is a dict of tensors by column, on this worker's GPU.
+        for batch in data.iter_torch_batches(batch_size=512):
+            ...
+
+
+trainer = TorchTrainer(
+    train_func,
+    datasets={"train": ray.data.read_parquet("/work/users/<username>/events")},
+    ...
+)
+```
+
+### Other libraries
+
+* XGBoost trains on the workers' GPUs with
+  [`XGBoostTrainer`](https://docs.ray.io/en/latest/train/getting-started-xgboost.html)
+  and `"device": "cuda"`, from the global Pixi environment as PyTorch does.
+* [Lightning](https://docs.ray.io/en/latest/train/getting-started-pytorch-lightning.html)
+  and [Transformers](https://docs.ray.io/en/latest/train/getting-started-transformers.html)
+  training loops run in the same `TorchTrainer`, from an
+  [environment of your own](#environment) that has them.
+
 ## Hyperparameter search
 
 [Ray Tune](https://docs.ray.io/en/latest/tune/index.html) runs one training
@@ -235,11 +271,24 @@ number of GPUs.
 * [`tune.grid_search`](https://docs.ray.io/en/latest/tune/api/doc/ray.tune.grid_search.html)
   in place of `tune.loguniform` runs one training per value it lists: the
   folds of a cross-validation, or the members of an ensemble.
+* A [search algorithm](https://docs.ray.io/en/latest/tune/api/suggestion.html)
+  picks each set of values from the results so far: `search_alg=OptunaSearch()`
+  works from the global Pixi environment. A
+  [scheduler](https://docs.ray.io/en/latest/tune/api/schedulers.html) other
+  than `ASHAScheduler`, such as population-based training, decides otherwise
+  which trainings go on.
+* For trainings that each run on several GPUs, a search
+  [starts a Ray Train run per training](https://docs.ray.io/en/latest/train/user-guides/hyperparameter-optimization.html).
 
-## A model on two GPUs
+## A model larger than a GPU
 
-A model that needs more memory than one GPU has spreads over the two T4s of
-one worker. The script puts each part of it on a GPU, or leaves that to
+A model that needs more memory than one GPU has runs on the two GPUs of one
+worker, or on the GPUs of several workers.
+
+### Two GPUs in one worker
+
+The script puts each part of the model on one of a worker's two T4s, or leaves
+that to
 [`device_map="auto"`](https://huggingface.co/docs/accelerate/usage_guides/big_modeling)
 for a Hugging Face model:
 
@@ -269,6 +318,114 @@ job = client.submit_job(
   [gives it the GPUs](https://docs.ray.io/en/latest/cluster/running-applications/job-submission/sdk.html#specifying-cpu-and-gpu-resources).
 * It has exactly two GPUs from start to end: your cluster starts only while
   two T4s are free, and [keeps](#gpus) its first worker.
+* A part of a model cannot be on another worker's GPU this way.
+
+### Several workers
+
+[FSDP](https://docs.pytorch.org/docs/stable/fsdp.html) is
+[data-parallel training](#data-parallel-training) in which every worker keeps
+a share of the parameters, of their gradients and of the optimizer's state,
+and gets a layer's parameters from the others when it computes that layer. In
+`train.py`:
+
+```python
+from torch.distributed.fsdp.wrap import ModuleWrapPolicy
+
+model = ray.train.torch.prepare_model(
+    net,
+    parallel_strategy="fsdp",
+    # The layers a GPU holds whole, one at a time.
+    parallel_strategy_kwargs={"auto_wrap_policy": ModuleWrapPolicy({nn.Linear})},
+)
+```
+
+* It saves the memory of the parameters only: a GPU still holds the
+  activations of its batches, and one whole layer at a time.
+* The fewer the workers, the more each one holds: submit with
+  [`af-n-workers`](#cluster-settings), and train with
+  `num_workers=int(os.environ["AF_MAX_WORKERS"])`.
+* Every worker takes part in a checkpoint, with FSDP's own calls:
+  `FSDP.state_dict_type` with `rank0_only` to save the model, and
+  `FSDP.optim_state_dict` and `FSDP.optim_state_dict_to_load` for the
+  optimizer.
+* Every step moves parameters between the workers, which makes it slower than
+  training a model that fits.
+
+## Batch inference
+
+[Ray Data](https://docs.ray.io/en/latest/data/batch_inference.html) runs a
+model over a dataset: every worker holds a copy of the model and takes batches
+as they are read, and the results are written as they come.
+
+??? example "score.py: the scores of a trained model for every row of a dataset"
+
+    ```python
+    # score.py
+    import os
+
+    import numpy as np
+    import ray
+    import torch
+    from torch import nn
+
+    FEATURES = [f"f{i}" for i in range(20)]
+
+
+    class Score:
+        def __init__(self):
+            state = torch.load("<checkpoint>/state.pt")
+            self.model = nn.Sequential(nn.Linear(20, 64), nn.ReLU(), nn.Linear(64, 1))
+            self.model.load_state_dict(state["model"])
+            self.model.cuda()
+
+        def __call__(self, batch):
+            x = torch.as_tensor(np.stack([batch[name] for name in FEATURES], axis=1))
+            with torch.inference_mode():
+                batch["score"] = self.model(x.cuda()).squeeze(1).cpu().numpy()
+            return batch
+
+
+    events = ray.data.read_parquet("/work/users/<username>/events")
+    events.map_batches(
+        Score,
+        num_gpus=1,
+        batch_size=4096,
+        # From one copy of the model to the most the submission asks for.
+        compute=ray.data.ActorPoolStrategy(
+            min_size=1, max_size=int(os.environ["AF_MAX_WORKERS"])
+        ),
+    ).write_parquet("/work/users/<username>/scores")
+    ```
+
+Submit it as for [data-parallel training](#data-parallel-training):
+`af-max-workers` is the most copies of the model.
+
+* There are as many copies as your cluster has workers, and a batch whose
+  worker [loses its GPU](#gpus) is run again on another.
+* What a batch holds is the dataset's: here, an array per column of a Parquet
+  file.
+
+## Tasks
+
+Any Python function runs on a GPU of your cluster as a
+[Ray task](https://docs.ray.io/en/latest/ray-core/tasks.html), as many of them
+at once as your cluster has workers:
+
+```python
+import ray
+
+
+@ray.remote(num_gpus=1)
+def evaluate(path): ...
+
+
+results = ray.get([evaluate.remote(path) for path in paths])
+```
+
+Submit it as for [data-parallel training](#data-parallel-training). A task
+whose worker [loses its GPU](#gpus) runs again,
+[three times at most](https://docs.ray.io/en/latest/ray-core/fault_tolerance/tasks.html)
+unless `max_retries` says otherwise.
 
 ## Cluster settings
 
@@ -314,9 +471,10 @@ The GPUs are shared with everyone's sessions and clusters:
   Ray clusters can take.
 * Your cluster keeps its first worker. The others may lose their GPUs at any
   time to a session or to another cluster's first worker, and return when
-  GPUs are free again. [Data-parallel training](#data-parallel-training) and
-  a [hyperparameter search](#hyperparameter-search) go on with the workers
-  left.
+  GPUs are free again. [Data-parallel training](#data-parallel-training), a
+  [hyperparameter search](#hyperparameter-search),
+  [batch inference](#batch-inference) and [tasks](#tasks) go on with the
+  workers left.
 
 ### Environment
 
