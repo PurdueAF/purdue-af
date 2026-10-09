@@ -16,11 +16,15 @@ first worker keeps its GPUs; the others run in the `medium-priority-preemptible`
 PriorityClass, for which the scheduler evicts Dask Gateway's preemptible
 workers, and which it evicts for a pod of the default priority
 that fits nowhere else: a session, to which the Hub's profile form shows such
-a worker's GPU as free, or another cluster's first worker. A cluster starts
-only while the GPUs it asks for are free, by the queries of that form
+a worker's GPU as free, or another cluster's first worker. A cluster that asks
+for a number of workers starts only while the GPUs of them all are free, by
+the queries of that form
 ([`gpu_queries.py`](../jupyterhub/jupyterhub/extraFiles/gpu_queries.py), in the
-gateway's ConfigMap too); one that asks for a single GPU also starts while a
-preemptible worker holds one, which its worker evicts. A user whose session
+gateway's ConfigMap too), and one that asks for up to a number, with those
+whose GPUs are free; one that a single GPU starts also starts while a
+preemptible worker holds one, which its worker evicts. A cluster's pods read
+the most workers it has from `AF_MAX_WORKERS`, by which a training sizes
+itself. A user whose session
 holds a GPU, by the Hub's name of its pod and that pod's requests in
 Prometheus, starts and submits to none. How users
 send their training to it:

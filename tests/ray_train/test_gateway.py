@@ -482,9 +482,12 @@ async def call(
     cpus=None,
     ram=None,
     per_worker=None,
+    most=None,
 ):
     """A Ray Client call from a session, as the stream of raw messages the gateway sees."""
     metadata = [("client_id", client)]
+    if most is not None:
+        metadata.append((gw.MOST_METADATA, most))
     if per_worker is not None:
         metadata.append((gw.PER_WORKER_METADATA, per_worker))
     if cpus is not None:
@@ -509,8 +512,10 @@ async def refused(env, **kwargs):
     return e.value.code()
 
 
-def job_headers(token="session-a", env_path=None, gpus=None, memory=None):
+def job_headers(token="session-a", env_path=None, gpus=None, memory=None, most=None):
     headers = {}
+    if most is not None:
+        headers[gw.MOST_METADATA] = most
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
     if env_path is not None:
@@ -1081,10 +1086,76 @@ async def test_head_and_workers_run_as_the_user_in_the_environment(env):
     assert worker["spec"]["securityContext"]["runAsUser"] == 5001
 
 
+@pytest.mark.parametrize("setting", ["gpus", "most"])
 @pytest.mark.parametrize("gpus", ["0", "23", "two", "1.5", "auto"])
-async def test_a_gpu_count_out_of_range_is_refused(env, gpus):
-    assert await refused(env, gpus=gpus) == grpc.StatusCode.INVALID_ARGUMENT
+async def test_a_gpu_count_out_of_range_is_refused(env, setting, gpus):
+    assert await refused(env, **{setting: gpus}) == grpc.StatusCode.INVALID_ARGUMENT
     assert env.kube.clusters == {}
+
+
+async def test_a_call_for_a_number_of_workers_and_for_up_to_as_many_is_refused(env):
+    assert await refused(env, gpus="2", most="4") == grpc.StatusCode.INVALID_ARGUMENT
+    assert env.kube.clusters == {}
+
+
+@pytest.mark.parametrize(("used", "rest"), [(0, 3), (6, 1)])
+async def test_a_cluster_of_up_to_some_workers_starts_with_those_whose_gpus_are_free(
+    env, used, rest
+):
+    env.prometheus.used = used
+    assert await call(env, most="4") == [b"echo:ping"]
+    assert counts(workers(env)) == (1, 1, 1)
+    assert counts(preemptible(env)) == (rest, rest, rest)
+    assert gpus_of(env) == {T4: 1 + rest}
+
+
+async def test_a_cluster_of_up_to_some_workers_takes_its_first_gpu_from_a_preemptible_worker(
+    env,
+):
+    env.prometheus.used, env.prometheus.preemptible = 8, 3
+    assert await call(env, most="4") == [b"echo:ping"]
+    (group,) = cluster_spec(env)["workerGroupSpecs"]
+    assert counts(group) == (1, 1, 1)
+    assert "priorityClassName" not in group["template"]["spec"]
+
+
+async def test_a_cluster_of_up_to_some_workers_needs_the_gpu_of_one(env):
+    env.prometheus.used = 8
+    status, reason, _ = await submit(env, most="4")
+    assert status == 429
+    assert "Ray clusters can take 0 more now: try again later" in reason
+    assert env.kube.clusters == {}
+
+
+@pytest.mark.parametrize(
+    ("asked", "most"), [({}, "1"), ({"gpus": "3"}, "3"), ({"most": "4"}, "4")]
+)
+async def test_a_clusters_pods_read_the_most_workers_it_has(env, asked, most):
+    env.prometheus.used = 5
+    await call(env, **asked)
+    assert head_env(env)[gw.MOST_VARIABLE] == most
+
+
+async def test_asking_for_up_to_as_many_workers_replaces_an_idle_cluster_of_that_many(
+    env,
+):
+    await call(env, gpus="3")
+    assert await call(env, most="3") == [b"echo:ping"]
+    assert env.kube.created == 2
+    annotations = env.kube.clusters["ray-train-user-a"]["metadata"]["annotations"]
+    assert annotations[gw.LEAST_ANNOTATION] == "1"
+
+
+async def test_a_cluster_from_before_the_most_workers_setting_serves_a_call_for_its_workers(
+    env,
+):
+    await call(env, gpus="2")
+    del env.kube.clusters["ray-train-user-a"]["metadata"]["annotations"][
+        gw.LEAST_ANNOTATION
+    ]
+    env.gateway.started.clear()
+    await call(env, gpus="2")
+    assert env.kube.created == 1
 
 
 async def test_asking_for_other_gpus_replaces_an_idle_cluster(env):
@@ -1115,6 +1186,7 @@ async def test_a_refused_submission_says_how_many_gpus_are_free(env):
         "asks for 4 workers with a GPU of 5 GB or more each, and Ray clusters can take 1 more"
         in reason
     )
+    assert gw.WORKERS_METADATA in reason and gw.MOST_METADATA in reason
     assert env.kube.clusters == {}
 
 
@@ -1896,7 +1968,9 @@ def test_building_a_cluster_leaves_the_template_alone():
     template = yaml.safe_load(TEMPLATE.read_text())
     before = copy.deepcopy(template)
     user = gw.User(name="user-a", account="user-a", uid=5001, gid=500)
-    gw.build_cluster(template, user, gw.Shape(ENV_A, "4", "5", "8", "32", "1"), {T4: 4})
+    gw.build_cluster(
+        template, user, gw.Shape(ENV_A, "4", "5", "8", "32", "1", "4"), {T4: 4}
+    )
     assert template == before
 
 

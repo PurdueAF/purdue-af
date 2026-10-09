@@ -164,7 +164,13 @@ solutions. If your problem is not listed here, please
 ??? failure "A training stops with \"Unable to set up cluster storage\""
 
     Set `storage_path` to a directory on `/work` — see
-    [Ray Train](guide-ray-train.md#ray-train).
+    [Data-parallel training](guide-ray-train.md#data-parallel-training).
+
+??? failure "A job's log says \"tasks with infeasible resource requests\""
+
+    Your cluster's workers are still starting, and the tasks run once they
+    have joined; or a task asks for more GPUs than one worker has — see
+    [Cluster settings](guide-ray-train.md#cluster-settings).
 
 ??? failure "A submission fails with \"Your session holds a GPU\""
 

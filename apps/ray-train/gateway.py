@@ -7,13 +7,17 @@ with every call. The Hub says whose it is, and the call goes on, unread, to
 that user's RayCluster: created from raycluster.yaml when they first connect
 or submit a job, running as them, and deleted once idle. Only the gateway
 holds a cluster's own Ray token. A cluster runs the global Pixi environment,
-or the one a call names in `af-env`, with one worker or as many as
-`af-n-workers` asks, each with one GPU or as many as `af-gpus-per-worker` asks,
-of the memory `af-min-gpu-memory-gb` asks or more, and with the cores and
-memory `af-cpus-per-worker` and `af-ram-per-worker-gb` ask; a call with any
-other `af-` name is refused. A cluster starts only while that many such GPUs
-are free, or with one GPU while another cluster's preemptible worker holds one. A user whose session holds a GPU starts and
-submits to none. The settings are in config.yaml.
+or the one a call names in `af-env`, with one worker, as many as
+`af-n-workers` asks or up to as many as `af-max-workers` asks, each with one
+GPU or as many as `af-gpus-per-worker` asks, of the memory
+`af-min-gpu-memory-gb` asks or more, and with the cores and memory
+`af-cpus-per-worker` and `af-ram-per-worker-gb` ask; a call with any other
+`af-` name is refused. A cluster of `af-n-workers` starts only while that many
+such GPUs are free, and one of `af-max-workers` with the workers whose GPUs
+are; one that a single GPU starts takes it from another cluster's preemptible
+worker while none is free. Its pods read the most workers it has from
+AF_MAX_WORKERS. A user whose session holds a GPU starts and submits to none.
+The settings are in config.yaml.
 """
 
 from __future__ import annotations
@@ -126,6 +130,11 @@ ENV_ANNOTATION = "purdue-af/ray-env"
 # Set as the environment is: the cluster's workers, and the GPUs of each.
 WORKERS_METADATA = SETTING_PREFIX + "n-workers"
 WORKERS_ANNOTATION = "purdue-af/ray-workers"
+# Set in place of the workers: the most of them, of which a cluster starts with those whose GPUs are free.
+MOST_METADATA = SETTING_PREFIX + "max-workers"
+LEAST_ANNOTATION = "purdue-af/ray-min-workers"
+# Where a cluster's pods read the most workers it has: what a training sizes itself by.
+MOST_VARIABLE = "AF_MAX_WORKERS"
 PER_WORKER_METADATA = SETTING_PREFIX + "gpus-per-worker"
 PER_WORKER_ANNOTATION = "purdue-af/ray-gpus-per-worker"
 # Set as the environment is: the least memory a worker's GPU may have, in GB.
@@ -138,6 +147,7 @@ RAM_METADATA = SETTING_PREFIX + "ram-per-worker-gb"
 SETTINGS = {
     ENV_METADATA,
     WORKERS_METADATA,
+    MOST_METADATA,
     PER_WORKER_METADATA,
     MEMORY_METADATA,
     CPUS_METADATA,
@@ -147,7 +157,7 @@ SETTINGS = {
 UNPREFIXED = {name.removeprefix(SETTING_PREFIX) for name in SETTINGS}
 RAM_ANNOTATION = "purdue-af/ray-worker-memory"
 REMOVED_IDLE = "Your Ray cluster was removed after it went idle: run ray.shutdown(), then ray.init() again."
-REMOVED_UNPROVISIONED = f"Your Ray cluster was removed, as not all of its GPUs started in time: ask for fewer with {WORKERS_METADATA}, or try again later."
+REMOVED_UNPROVISIONED = "Your Ray cluster was removed, as not all of its GPUs started in time: ask for fewer workers, or try again later."
 # singleuser.podNameTemplate in the Hub values
 SESSION_POD = re.compile(r"purdue-af-(\d+)")
 # custom-spawner.py names the accounts from outside Purdue <login>-cern and <login>-fnal
@@ -219,9 +229,9 @@ class User:
 
 @dataclass(frozen=True)
 class Shape:
-    """What a user's cluster runs: an environment, its number of workers, the
-    memory of the smallest GPU it may hold, in GB, and the CPU cores, the
-    memory, in GB, and the GPUs of each worker."""
+    """What a user's cluster runs: an environment, the most workers it has, the
+    memory of the smallest GPU it may hold, in GB, the CPU cores, the memory,
+    in GB, and the GPUs of each worker, and the fewest workers it starts with."""
 
     env: str
     workers: str
@@ -229,6 +239,7 @@ class Shape:
     cpus: str
     ram: str
     per_worker: str
+    least: str
 
     @property
     def flavors(self) -> list[Flavor]:
@@ -353,6 +364,7 @@ def build_cluster(
             CPUS_ANNOTATION: shape.cpus,
             RAM_ANNOTATION: shape.ram,
             PER_WORKER_ANNOTATION: shape.per_worker,
+            LEAST_ANNOTATION: shape.least,
         }
     )
     spec = cluster["spec"]
@@ -374,6 +386,7 @@ def build_cluster(
                     variable["value"] = f"{shape.env}/bin:{variable['value']}"
             variables.append({"name": "CONDA_PREFIX", "value": shape.env})
             variables.append({"name": "USER", "value": user.account})
+            variables.append({"name": MOST_VARIABLE, "value": shape.workers})
     spec["workerGroupSpecs"] = []
     # Every worker but the first gives way to pods of the default priority.
     kept = 1
@@ -553,31 +566,41 @@ def requested_per_worker(value: str, memory: str) -> str:
     )
 
 
-def requested_workers(value: str, shape: Shape) -> str:
-    """The workers a call asks for, one by default."""
+def requested_workers(exactly: str, at_most: str, shape: Shape) -> tuple[str, str]:
+    """The most workers a call asks for and the fewest its cluster starts with:
+    all of `exactly`, or one of up to `at_most`; one worker by default."""
+    if exactly and at_most:
+        raise Refused(
+            grpc.StatusCode.INVALID_ARGUMENT,
+            f"{WORKERS_METADATA} asks for a number of workers and {MOST_METADATA} for up to as many: set one of them.",
+        )
+    value = exactly or at_most
     if not value:
-        return "1"
+        return "1", "1"
     most = sum(f.budget // int(shape.per_worker) for f in shape.flavors)
     if value in {str(n) for n in range(1, most + 1)}:
-        return value
+        return value, exactly or "1"
     raise Refused(
         grpc.StatusCode.INVALID_ARGUMENT,
-        f"{WORKERS_METADATA} is a number of workers from 1 to {most}.",
+        f"{WORKERS_METADATA if exactly else MOST_METADATA} is a number of workers from 1 to {most}.",
     )
 
 
 def cluster_shape(cluster: dict[str, Any]) -> Shape:
     annotations = cluster["metadata"].get("annotations") or {}
     cpus, ram = worker_size(load_template())
+    workers = str(annotations.get(WORKERS_ANNOTATION, ""))
     return Shape(
         str(annotations.get(ENV_ANNOTATION, "")),
-        str(annotations.get(WORKERS_ANNOTATION, "")),
+        workers,
         # Without it, a cluster holds GPUs that any call may have.
         str(annotations.get(MEMORY_ANNOTATION, requested_memory(""))),
         # Without them, its workers are the template's.
         str(annotations.get(CPUS_ANNOTATION, cpus)),
         str(annotations.get(RAM_ANNOTATION, ram)),
         str(annotations.get(PER_WORKER_ANNOTATION, "1")),
+        # Without it, a cluster started with all its workers.
+        str(annotations.get(LEAST_ANNOTATION, workers)),
     )
 
 
@@ -707,9 +730,12 @@ class Gateway:
                 WORKER_MEMORY_GB_MAX,
             ),
             requested_per_worker(values.get(PER_WORKER_METADATA, ""), memory),
+            "1",
         )
-        workers = requested_workers(values.get(WORKERS_METADATA, ""), shape)
-        return user, dataclasses.replace(shape, workers=workers)
+        workers, least = requested_workers(
+            values.get(WORKERS_METADATA, ""), values.get(MOST_METADATA, ""), shape
+        )
+        return user, dataclasses.replace(shape, workers=workers, least=least)
 
     async def cluster_for(self, user: User, shape: Shape) -> str:
         """The user's cluster, started in `shape` unless it runs in it."""
@@ -995,10 +1021,11 @@ class Gateway:
         self, user: User, shape: Shape, replaced: dict[str, int] | None = None
     ) -> dict[str, int]:
         """The workers a cluster gets of each GPU resource its shape allows, the
-        first of FLAVORS first. Refuse one whose GPUs are not all free now, unless
-        it asks for one and a preemptible worker holds one; `replaced` are the GPUs
-        its predecessor gives back."""
-        wanted, per_worker = int(shape.workers), int(shape.per_worker)
+        first of FLAVORS first: as many of those it asks for as have free GPUs,
+        or one whose GPU a preemptible worker holds. Refuse one that gets fewer
+        than it starts with; `replaced` are the GPUs its predecessor gives back."""
+        wanted, least = int(shape.workers), int(shape.least)
+        per_worker = int(shape.per_worker)
         replaced = replaced or {}
         async with self.admitting:
             status, listing = await self.kube(
@@ -1044,20 +1071,28 @@ class Gateway:
             if per_worker == 1 and not available and evicting:
                 # One worker, and no more, may evict a preemptible one.
                 mix[evicting] = available = 1
-            if wanted > available:
+            if least > available:
                 log.info(
                     "refused %s %d workers of %d GPUs: %d available, %s free",
                     user.cluster,
-                    wanted,
+                    least,
                     per_worker,
                     available,
                     free,
                 )
                 gpus = "a GPU" if per_worker == 1 else f"{per_worker} GPUs"
+                fewer = (
+                    f"ask for fewer with {WORKERS_METADATA}, for those that are free with {MOST_METADATA}, or "
+                    if least > 1
+                    else ""
+                )
                 raise Refused(
                     grpc.StatusCode.RESOURCE_EXHAUSTED,
-                    f"Your Ray cluster asks for {wanted} workers with {gpus} of {shape.memory} GB or more each, and Ray clusters can take {available} more now: ask for fewer with {WORKERS_METADATA}, or try again later.",
+                    f"Your Ray cluster asks for {least} workers with {gpus} of {shape.memory} GB or more each, and Ray clusters can take {available} more now: {fewer}try again later.",
                 )
+            log.info(
+                "admitted %s with %d of %d workers", user.cluster, available, wanted
+            )
             self.grants[user.cluster] = (
                 {resource: workers * per_worker for resource, workers in mix.items()},
                 now + GRANT_S,

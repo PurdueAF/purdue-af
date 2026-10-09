@@ -209,9 +209,12 @@ so nothing that asks for more GPUs at once than one worker has ever starts. From
 refused: train on the session's GPU. It starts when a job is submitted with
 `JobSubmissionClient("http://ray-train-gateway:8265")` from `ray.job_submission`
 — `RAY_AUTH_MODE` and `RAY_AUTH_TOKEN` are preset, so it needs no credentials —
-only while the GPUs it asks for are free, and is removed once idle, with the
-records and logs of its jobs. The client's `headers` set its shape: `af-n-workers` (a
-number as a string, default `"1"`), `af-gpus-per-worker` (`"1"` or `"2"`, two
+only while GPUs are free, and is removed once idle, with the
+records and logs of its jobs. The client's `headers` set its shape: `af-max-workers` (a
+number as a string, default `"1"`: the cluster starts with as many of them as have
+free GPUs, and its pods read the number from `AF_MAX_WORKERS`) or `af-n-workers` (an
+exact number: the cluster starts only while the GPUs of them all are free),
+`af-gpus-per-worker` (`"1"` or `"2"`, two
 being T4s only), `af-min-gpu-memory-gb` (GB; above `"5"` means T4s only),
 `af-cpus-per-worker` and `af-ram-per-worker-gb` (each worker's cores and GB,
 default `"8"` and `"32"`) and `af-env` (an environment's path, default the
@@ -221,7 +224,10 @@ Ray as the submitter. Submitting with other headers replaces an idle cluster
 and is refused while the cluster runs something. The cluster has no `/home`:
 ship code with `runtime_env={"working_dir": "."}`, write results to `/work`, and
 give Ray Train and Ray Tune a `storage_path` on `/work`. Every worker past the
-first can be taken back at any time, so multi-GPU training needs checkpoints.
+first can be taken back at any time and returns when a GPU is free, so
+multi-GPU training needs checkpoints and a `FailureConfig(max_failures=...)`;
+Ray Train goes on with the workers left under
+`ScalingConfig(num_workers=(1, int(os.environ["AF_MAX_WORKERS"])), use_gpu=True)`.
 Details: https://analysis-facility.physics.purdue.edu/guide-ray-train/
 
 Slurm GPU jobs need `--gpus-per-node=1`. `/depot` is the only volume shared
