@@ -13,6 +13,10 @@ resources:
   - ../../apps/servicex/helmrepo.yaml
   - ../../apps/servicex/servicex-anvil/helmrelease.yaml
   - ../../apps/servicex/servicex-anvil/secrets.yaml
+  # ServiceX writing its output to Purdue EOS over XRootD.
+  - ../../apps/servicex/servicex-eos/gitrepo.yaml
+  - ../../apps/servicex/servicex-eos/helmrelease.yaml
+  - ../../apps/servicex/servicex-eos/secrets.yaml
 
   # Chart source for the SuperSONIC releases below, on SuperSONIC main.
   - ../../apps/sonic/supersonic/gitrepo.yaml
@@ -100,6 +104,10 @@ configMapGenerator:
   - name: servicex-anvil-config
     files:
       - values.yaml=../../apps/servicex/servicex-anvil/values.yaml
+
+  - name: servicex-eos-config
+    files:
+      - values.yaml=../../apps/servicex/servicex-eos/values.yaml
 
   - name: supersonic-config
     files:

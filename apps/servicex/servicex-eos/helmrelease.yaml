@@ -1,0 +1,54 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: servicex-eos
+spec:
+  suspend: false
+  interval: 1m
+  chart:
+    spec:
+      chart: helm/servicex
+      sourceRef:
+        kind: GitRepository
+        name: gitrepo-stefan
+      reconcileStrategy: Revision
+      interval: 1m
+  install:
+    remediation:
+      retries: -1
+  upgrade:
+    remediation:
+      retries: -1
+  valuesFrom:
+    - kind: ConfigMap
+      name: servicex-eos-config
+      valuesKey: values.yaml
+  postRenderers:
+    - kustomize:
+        patches:
+          # The chart names these two without the release; servicex-anvil owns them, and the proxy it renews is the one mounted here.
+          - target:
+              kind: Secret
+              name: x509-proxy
+            patch: |
+              $patch: delete
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: x509-proxy
+          - target:
+              kind: CronJob
+              name: x509-secrets
+            patch: |
+              $patch: delete
+              apiVersion: batch/v1
+              kind: CronJob
+              metadata:
+                name: x509-secrets
+          # A chart built from a git revision has "+<sha>" in its version, which is not a valid label value.
+          - target:
+              kind: ConfigMap
+              name: "servicex-eos-(flask|storage)-config"
+            patch: |
+              - op: remove
+                path: /metadata/labels/chart
