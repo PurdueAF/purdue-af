@@ -1806,8 +1806,8 @@
         },
         {
           "refId": "B",
-          "expr": "sum(dask_scheduler_workers) or vector(0)",
-          "legendFormat": "workers",
+          "expr": "count(kube_pod_info{namespace=\"cms\",pod=~\"dask-worker-.*\",priority_class!=\"low-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"dask-worker-.*\",phase=\"Running\"} == 1)) or vector(0)",
+          "legendFormat": "guaranteed workers",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1817,8 +1817,8 @@
         },
         {
           "refId": "C",
-          "expr": "sum(dask_scheduler_workers{state=\"idle\"}) or vector(0)",
-          "legendFormat": "idle workers",
+          "expr": "count(kube_pod_info{namespace=\"cms\",pod=~\"dask-worker-.*\",priority_class=\"low-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"dask-worker-.*\",phase=\"Running\"} == 1)) or vector(0)",
+          "legendFormat": "preemptible workers",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1827,7 +1827,7 @@
           "instant": true
         }
       ],
-      "description": "Dask Gateway clusters right now. Idle workers are reserved cores doing nothing.",
+      "description": "Dask Gateway clusters right now, and their running workers. Preemptible workers are those past a cluster's guaranteed ones: Kubernetes evicts them when a pod of higher priority needs their place.",
       "fieldConfig": {
         "defaults": {
           "mappings": [],
@@ -1856,10 +1856,14 @@
         "colorMode": "value",
         "graphMode": "none",
         "textMode": "value_and_name",
-        "orientation": "auto",
-        "justifyMode": "center",
+        "orientation": "horizontal",
+        "justifyMode": "auto",
         "wideLayout": true,
-        "showPercentChange": false
+        "showPercentChange": false,
+        "text": {
+          "titleSize": 14,
+          "valueSize": 24
+        }
       }
     },
     {
@@ -1873,8 +1877,8 @@
         "h": 4
       },
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "targets": [
         {
@@ -1890,8 +1894,8 @@
         },
         {
           "refId": "B",
-          "expr": "sum(kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-train-.*\",container=~\"ray-head|ray-worker\",resource=~\"nvidia.*\"}) or vector(0)",
-          "legendFormat": "GPUs",
+          "expr": "count(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",pod=~\"ray-train-.+-worker-.+\",priority_class!=\"medium-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-train-.*\",phase=\"Running\"} == 1)) or vector(0)",
+          "legendFormat": "guaranteed workers",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1901,17 +1905,17 @@
         },
         {
           "refId": "C",
-          "expr": "count(avg_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-train-.*\"}[5m]) < 0.01) or vector(0)",
-          "legendFormat": "idle GPUs",
+          "expr": "count(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",pod=~\"ray-train-.+-worker-.+\",priority_class=\"medium-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-train-.*\",phase=\"Running\"} == 1)) or vector(0)",
+          "legendFormat": "preemptible workers",
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus-rancher"
+            "uid": "prometheus"
           },
           "range": false,
           "instant": true
         }
       ],
-      "description": "Users' Ray clusters right now, and the GPUs their workers hold. Idle GPUs did nothing in the last 5 minutes.",
+      "description": "Users' Ray clusters right now, and their running workers. Preemptible workers are those past a cluster's first: a session or another user's first worker takes their GPUs.",
       "fieldConfig": {
         "defaults": {
           "mappings": [],
@@ -1940,10 +1944,14 @@
         "colorMode": "value",
         "graphMode": "none",
         "textMode": "value_and_name",
-        "orientation": "auto",
-        "justifyMode": "center",
+        "orientation": "horizontal",
+        "justifyMode": "auto",
         "wideLayout": true,
-        "showPercentChange": false
+        "showPercentChange": false,
+        "text": {
+          "titleSize": 14,
+          "valueSize": 24
+        }
       }
     },
     {
