@@ -1,4 +1,13 @@
 {
+  "uid": "phys390-dashboard",
+  "title": "PHYS 390 Display",
+  "description": "The Facility status section of the Purdue Analysis Facility dashboard, on one screen.",
+  "tags": ["purdue-af"],
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "preload": false,
+  "links": [],
   "annotations": {
     "list": [
       {
@@ -15,94 +24,187 @@
       }
     ]
   },
-  "editable": true,
-  "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
-  "id": 4,
-  "links": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "refresh": "1m",
+  "schemaVersion": 42,
+  "version": 1,
   "panels": [
     {
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
+      "id": 1,
+      "type": "row",
+      "title": "Purdue Analysis Facility",
+      "collapsed": false,
       "gridPos": {
-        "h": 2,
+        "x": 0,
+        "y": 0,
         "w": 24,
-        "x": 0,
-        "y": 0
+        "h": 1
       },
-      "id": 17,
-      "options": {
-        "code": {
-          "language": "plaintext",
-          "showLineNumbers": false,
-          "showMiniMap": false
-        },
-        "content": "# Purdue CMS Tier-2 and Analysis Facility",
-        "mode": "markdown"
-      },
-      "pluginVersion": "12.1.0",
-      "title": "",
-      "transparent": true,
-      "type": "text"
+      "panels": []
     },
     {
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
+      "id": 2,
+      "type": "stat",
+      "title": "Facility health",
       "gridPos": {
-        "h": 2,
-        "w": 6,
         "x": 0,
-        "y": 2
-      },
-      "id": 15,
-      "options": {
-        "code": {
-          "language": "plaintext",
-          "showLineNumbers": false,
-          "showMiniMap": false
-        },
-        "content": "## Purdue AF ↓",
-        "mode": "markdown"
-      },
-      "pluginVersion": "12.1.0",
-      "title": "",
-      "type": "text"
-    },
-    {
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 2,
+        "y": 1,
         "w": 6,
-        "x": 6,
-        "y": 2
+        "h": 5
       },
-      "id": 16,
-      "options": {
-        "code": {
-          "language": "plaintext",
-          "showLineNumbers": false,
-          "showMiniMap": false
-        },
-        "content": "## Hammer cluster ↓",
-        "mode": "markdown"
-      },
-      "pluginVersion": "12.1.0",
-      "title": "",
-      "type": "text"
-    },
-    {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
-      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max((ALERTS{alertstate=\"firing\",component!=\"dev\",severity=\"critical\"} unless on(node) group by (node)(af_node_mount_result_fresh{node_pool=\"dev\"})) * 3 or (ALERTS{alertstate=\"firing\",component!=\"dev\",severity=\"error\"} unless on(node) group by (node)(af_node_mount_result_fresh{node_pool=\"dev\"})) * 2 or (ALERTS{alertstate=\"firing\",component!=\"dev\",severity=\"warning\"} unless on(node) group by (node)(af_node_mount_result_fresh{node_pool=\"dev\"}))) or vector(0)",
+          "legendFormat": "health",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        }
+      ],
+      "description": "Worst firing alert on cms-af-prod nodes. Dev nodes (a337) are monitored but excluded. Warnings: everything works, something is slow or filling up. Degraded: a user-facing function is broken. Outage: users cannot get in.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Healthy",
+                  "color": "green",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Healthy, warnings",
+                  "color": "green",
+                  "index": 1
+                },
+                "2": {
+                  "text": "Degraded",
+                  "color": "orange",
+                  "index": 2
+                },
+                "3": {
+                  "text": "Outage",
+                  "color": "red",
+                  "index": 3
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "orientation": "auto",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      },
+      "links": [
+        {
+          "title": "Alert details",
+          "url": "/grafana/d/purdue-af-alerts",
+          "targetBlank": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "User sessions",
+      "gridPos": {
+        "x": 6,
+        "y": 1,
+        "w": 9,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(jupyterhub_running_servers{job=\"jupyterhub\"})",
+          "legendFormat": "running",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "count(kube_pod_status_phase{namespace=\"cms\",pod=~\"purdue-af-.*\",phase=\"Pending\"} == 1) or vector(0)",
+          "legendFormat": "pending",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "C",
+          "expr": "sum(increase(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"failure\"}[$__range])) or vector(0)",
+          "legendFormat": "failed starts",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "D",
+          "expr": "count((time() - kube_pod_deletion_timestamp{namespace=\"cms\",pod=~\"purdue-af-.*\"}) > 300) or vector(0)",
+          "legendFormat": "stuck terminating",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        }
+      ],
+      "description": "Interactive JupyterLab sessions. Running: right now. Pending: waiting for a node right now, non-zero for long means no node has the requested CPU, RAM or GPU. Failed starts: sessions the hub could not start within the selected time range. Stuck terminating: sessions deleted more than 5 minutes ago whose pod still exists, right now.",
       "fieldConfig": {
         "defaults": {
           "mappings": [],
@@ -111,1038 +213,1600 @@
             "steps": [
               {
                 "color": "green",
-                "value": 0
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pending"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "failed starts"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 5
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stuck terminating"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    }
+                  ]
+                }
               }
             ]
           }
-        },
-        "overrides": []
+        ]
       },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 12,
-        "y": 2
-      },
-      "id": 1,
       "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Users",
+      "gridPos": {
+        "x": 15,
+        "y": 1,
+        "w": 9,
+        "h": 5
       },
-      "pluginVersion": "12.1.0",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
+          "refId": "A",
+          "expr": "max(jupyterhub_active_users{job=\"jupyterhub\",period=\"24h\"})",
+          "legendFormat": "active 24 h",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "editorMode": "code",
-          "expr": "sum(count by (namespace)(kube_pod_info{pod=~\"purdue-af-.*\", namespace=~\"cms\"}))",
-          "interval": "",
-          "legendFormat": "Current AF Users",
-          "range": true,
-          "refId": "A"
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "max(jupyterhub_active_users{job=\"jupyterhub\",period=\"7d\"})",
+          "legendFormat": "active 7 d",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "C",
+          "expr": "max(jupyterhub_active_users{job=\"jupyterhub\",period=\"30d\"})",
+          "legendFormat": "active 30 d",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "D",
+          "expr": "max(jupyterhub_total_users{job=\"jupyterhub\"})",
+          "legendFormat": "registered",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
         }
       ],
-      "title": "",
-      "transparent": true,
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "infinity"
-      },
+      "description": "Distinct users who used the hub in each period, and all users registered with the hub.",
       "fieldConfig": {
         "defaults": {
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": 0
-              },
+                "color": "#5794F2",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "auto",
+        "justifyMode": "center",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "id": 4,
+      "type": "state-timeline",
+      "title": "Components",
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 11,
+        "h": 12
+      },
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(up{job=\"jupyterhub\",instance=\"cms.geddes.rcac.purdue.edu\"}) or vector(0)",
+          "legendFormat": "JupyterHub",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "(sum(kube_deployment_status_replicas_available{namespace=\"cms\",deployment=\"proxy\"}) > bool 0) or vector(0)",
+          "legendFormat": "Hub proxy",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "C",
+          "expr": "(sum(kube_deployment_status_replicas_available{namespace=\"cms\",deployment=\"api-dask-gateway\"}) > bool 0) or vector(0)",
+          "legendFormat": "Dask Gateway",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "E",
+          "expr": "(sum(kube_deployment_status_replicas_available{namespace=\"cms\",deployment=\"agentic-interface\"}) > bool 0) or vector(0)",
+          "legendFormat": "Agentic interface",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "F",
+          "expr": "sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"} and on(node) group by (node)(af_node_mount_result_fresh{node_pool=\"prod\"})) / count(group by (node)(af_node_mount_result_fresh{node_pool=\"prod\"}))",
+          "legendFormat": "AF nodes",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "G",
+          "expr": "min(pixi_global_sync_env_healthy{job=\"pixi-global-sync\"}) or vector(0)",
+          "legendFormat": "Global pixi env",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "H",
+          "expr": "sum(af_node_mount_valid{node_pool=\"prod\",mount_name=\"/depot/\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"/depot/\"} == 1)) / count(af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"/depot/\"})",
+          "legendFormat": "/depot",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "I",
+          "expr": "sum(af_node_mount_valid{node_pool=\"prod\",mount_name=\"/work/\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"/work/\"} == 1)) / count(af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"/work/\"})",
+          "legendFormat": "/work",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "J",
+          "expr": "sum(af_node_mount_valid{node_pool=\"prod\",mount_name=\"eos\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"eos\"} == 1)) / count(af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"eos\"})",
+          "legendFormat": "/eos",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "K",
+          "expr": "sum(af_node_mount_valid{node_pool=\"prod\",mount_name=\"cvmfs\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"cvmfs\"} == 1)) / count(af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"cvmfs\"})",
+          "legendFormat": "/cvmfs",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "L",
+          "expr": "((time() - max(af_node_monitor_last_iteration_timestamp_seconds)) < bool 900) or vector(0)",
+          "legendFormat": "Storage checks",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "M",
+          "expr": "min(label_replace(sum(af_session_responsive) / count(af_session_responsive), \"part\", \"probe\", \"\", \"\") or label_replace(sum((time() - (af_pod_monitor_last_pass_timestamp_seconds > 0)) < bool 900) / count(af_pod_monitor_last_pass_timestamp_seconds > 0), \"part\", \"fresh\", \"\", \"\"))",
+          "legendFormat": "Session responsiveness",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "N",
+          "expr": "1 - (sum(increase(csi_operations_seconds_count{driver_name=~\"rook-ceph.*\",method_name=~\".*Node(Stage|Publish)Volume\",grpc_status_code=~\"DeadlineExceeded|Unavailable|Internal|ResourceExhausted\"}[30m]) and on(node) group by (node)(kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) or vector(0)) / clamp_min((sum(increase(csi_operations_seconds_count{driver_name=~\"rook-ceph.*\",method_name=~\".*Node(Stage|Publish)Volume\",grpc_status_code=~\"OK|DeadlineExceeded|Unavailable|Internal|ResourceExhausted\"}[30m]) and on(node) group by (node)(kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) or vector(0)), 1)",
+          "legendFormat": "Geddes storage",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "P",
+          "expr": "min(af_registry_up)",
+          "legendFormat": "Geddes registry",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "O",
+          "expr": "max(up{job=\"loki\"}) or vector(0)",
+          "legendFormat": "Logs",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        }
+      ],
+      "description": "Green: OK. Orange: partial, some prod nodes affected. Red: down. Evaluated on cms-af-prod nodes only; each row shows history over the selected time range. AF nodes and the four mounts are fractions of prod nodes passing. Session responsiveness is the fraction of running sessions that answered a bounded listing of their home directory in time, measured from inside each pod; it is blank for sessions started before that probe shipped. Geddes storage is the fraction of CephFS mount attempts on prod nodes that succeeded in the last 30 minutes, which is how a Ceph problem reaches a user who is trying to start work: green while every attempt succeeds, red while every attempt fails and nobody can start a session. Geddes registry is whether the Geddes container registry answers its API root, checked once a minute from one AF pod: red while it does not, when no node can pull an image it has not cached; blank while the check itself is not running.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "fillOpacity": 75,
+            "lineWidth": 0,
+            "spanNulls": false,
+            "insertNulls": false,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 1,
+                "to": 1000000000.0,
+                "result": {
+                  "text": "OK",
+                  "index": 0
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 0.0001,
+                "to": 0.9999,
+                "result": {
+                  "text": "partial",
+                  "index": 1
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": -1,
+                "to": 0,
+                "result": {
+                  "text": "down",
+                  "index": 2
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
               {
                 "color": "red",
-                "value": 80
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.0001
+              },
+              {
+                "color": "green",
+                "value": 1
               }
             ]
           }
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 11,
-        "w": 9,
-        "x": 15,
-        "y": 2
-      },
-      "id": 21,
       "options": {
-        "afterRender": "",
-        "content": "<h1 style=\"font-family:sans-serif; margin-bottom:12px;\">Announcements</h1>\n{{#each data}}\n<div style=\"\n  padding: 14px 18px;\n  margin: 8px 0;\n  border-left: 5px solid {{#if (eq category 'issues')}}#e05353{{else if (eq category 'upcoming')}}#f0a500{{else}}#4caf7d{{/if}};\n  border-radius: 4px;\n  background: {{#if (eq category 'issues')}}rgba(224,83,83,0.08){{else if (eq category 'upcoming')}}rgba(240,165,0,0.08){{else}}rgba(76,175,125,0.08){{/if}};\n  font-family: sans-serif;\n\">\n  <div style=\"margin-bottom:6px;\">\n    <span style=\"margin-right:8px;\">{{#if (eq category 'issues')}}⚠️{{else if (eq category 'upcoming')}}🗓️{{else}}ℹ️{{/if}}</span>\n    <span style=\"font-weight:bold; font-size:1.0em;\">{{title}}</span>\n    <span style=\"float:right; font-size:0.75em; opacity:0.45;\">{{date}}</span>\n  </div>\n  <div style=\"font-size:0.9em; opacity:0.85; line-height:1.5; padding-left:26px;\">{{{message}}}</div>\n</div>\n{{/each}}",
-        "contentPartials": [],
-        "defaultContent": "<h1 style=\"font-family:sans-serif; margin-bottom:12px;\">Announcements</h1>\n<div style=\"\n  padding: 14px 18px;\n  margin: 8px 0;\n  border-left: 5px solid #888;\n  border-radius: 4px;\n  background: rgba(255,255,255,0.04);\n  font-family: sans-serif;\n  opacity: 0.5;\n\">\n  <span style=\"margin-right:8px;\">ℹ️</span>\n  <span style=\"font-size:0.9em;\">No announcements at this time.</span>\n</div>",
-        "editor": {
-          "format": "auto",
-          "language": "handlebars"
+        "mergeValues": true,
+        "showValue": "never",
+        "alignValue": "center",
+        "rowHeight": 0.7,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
         },
-        "editors": [],
-        "externalStyles": [],
-        "helpers": "",
-        "renderMode": "allRows",
-        "styles": "",
-        "wrap": true
-      },
-      "pluginVersion": "6.2.0",
-      "targets": [
-        {
-          "columns": [],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "infinity"
-          },
-          "filters": [],
-          "format": "table",
-          "global_query_id": "",
-          "parser": "backend",
-          "refId": "A",
-          "root_selector": "",
-          "source": "url",
-          "type": "json",
-          "url": "http://localhost:8080/announcements.json",
-          "url_options": {
-            "data": "",
-            "method": "GET"
-          }
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
         }
-      ],
-      "title": "",
-      "transparent": true,
-      "type": "marcusolsson-dynamictext-panel"
+      }
     },
     {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Session starts",
+      "gridPos": {
+        "x": 11,
+        "y": 6,
+        "w": 8,
+        "h": 12
+      },
       "datasource": {
         "type": "datasource",
         "uid": "-- Mixed --"
       },
-      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(clamp_min(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"success\"} - jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"success\"} offset $__interval, 0))",
+          "legendFormat": "succeeded",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false,
+          "interval": "5m"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(clamp_min(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"failure\"} - jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"failure\"} offset $__interval, 0))",
+          "legendFormat": "failed",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false,
+          "interval": "5m"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(clamp_min(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=~\"throttled|too-many-users\"} - jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=~\"throttled|too-many-users\"} offset $__interval, 0))",
+          "legendFormat": "refused",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false,
+          "interval": "5m"
+        }
+      ],
+      "description": "Starts counted in consecutive buckets: 5 minutes wide, wider once the time range is too long to draw them. Failed: the hub could not start the session. Refused: the hub rate-limited on purpose.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 6,
-            "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
             "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "showPoints": "never",
+            "pointSize": 4,
             "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            },
             "thresholdsStyle": {
               "mode": "off"
-            }
-          },
-          "decimals": 0,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": []
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 0,
-        "y": 4
-      },
-      "id": 10,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sum by (user) (dask_scheduler_workers)",
-          "interval": "",
-          "legendFormat": "{{ user }}",
-          "refId": "A"
-        }
-      ],
-      "title": "Dask Workers",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 40,
-            "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
             },
-            "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            },
-            "thresholdsStyle": {
-              "mode": "dashed"
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
             }
           },
-          "decimals": 0,
           "mappings": [],
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
-                "value": 0
-              },
+                "value": null
+              }
+            ]
+          },
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "failed"
+            },
+            "properties": [
               {
-                "color": "dark-red",
-                "value": 7216
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "succeeded"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "refused"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
               }
             ]
           }
-        },
-        "overrides": []
+        ]
       },
-      "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 6,
-        "y": 4
-      },
-      "id": 9,
       "options": {
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "right",
+          "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
-          "hideZeros": false,
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
-      },
-      "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "slurm_info_job_user",
-          "interval": "",
-          "legendFormat": "{{user}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Slurm jobs (Hammer)",
-      "type": "timeseries"
+      }
     },
     {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 12,
-        "y": 6
-      },
-      "id": 2,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(jupyterhub_total_users{job=\"jupyterhub\"})",
-          "interval": "",
-          "legendFormat": "Registered Users",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "",
-      "transparent": true,
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 0,
-        "y": 11
-      },
-      "id": 11,
-      "options": {
-        "colorMode": "none",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "(\n  sum by (namespace) (kube_resourcequota{namespace=\"cms\", resource=\"requests.cpu\", type=\"hard\"}) -\n  sum by (namespace) (kube_resourcequota{namespace=\"cms\", resource=\"requests.cpu\", type=\"used\"})\n)\n",
-          "instant": false,
-          "interval": "",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Free CPU cores",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "decbytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 3,
-        "y": 11
-      },
-      "id": 12,
-      "options": {
-        "colorMode": "none",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "(\n  sum by (namespace) (kube_resourcequota{namespace=\"cms\", resource=\"requests.memory\", type=\"hard\"}) -\n  sum by (namespace) (kube_resourcequota{namespace=\"cms\", resource=\"requests.memory\", type=\"used\"})\n)\n",
-          "instant": false,
-          "interval": "",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Free RAM",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 6,
-        "y": 11
-      },
-      "id": 13,
-      "options": {
-        "colorMode": "none",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "5632 - sum(slurm_info_core_user)",
-          "interval": "",
-          "legendFormat": "{{user}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Free CPU cores",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0,
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "decmbytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 9,
-        "y": 11
-      },
-      "id": 14,
-      "options": {
-        "colorMode": "none",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "11242000 - (sum (slurm_info_ram_user))\n",
-          "interval": "",
-          "legendFormat": "{{user}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Free RAM",
-      "type": "stat"
-    },
-    {
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 2,
-        "w": 12,
-        "x": 12,
-        "y": 13
-      },
-      "id": 20,
-      "options": {
-        "code": {
-          "language": "plaintext",
-          "showLineNumbers": false,
-          "showMiniMap": false
-        },
-        "content": "## Storage ↓",
-        "mode": "markdown"
-      },
-      "pluginVersion": "12.1.0",
-      "title": "",
-      "type": "text"
-    },
-    {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "fixedColor": "#C4162A",
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          },
-          "mappings": []
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 0,
-        "y": 15
-      },
       "id": 8,
-      "options": {
-        "displayLabels": ["value"],
-        "legend": {
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": true,
-          "values": []
-        },
-        "pieType": "pie",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "label_replace(\n  sum by (resource)(kube_pod_container_resource_requests{\n    namespace=\"cms\", pod=~\"purdue-af-.*\", resource=~\"nvidia_com_mig_1g_5gb\"\n  }),\n  \"state\", \"Used\", \"\", \"\"\n)\nor\nlabel_replace(\n  (\n    sum by (resource)(kube_node_status_allocatable{resource=~\"nvidia_com_mig_1g_5gb\"}\n      * on(node) group_left() kube_node_spec_taint{value=\"cms-af\"})\n    -\n    sum by (resource)(kube_pod_container_resource_requests{\n      namespace=\"cms\", pod=~\"purdue-af-.*\", resource=~\"nvidia_com_mig_1g_5gb\"\n    })\n  ),\n  \"state\", \"Free\", \"\", \"\"\n)",
-          "hide": false,
-          "instant": false,
-          "legendFormat": "{{state}}",
-          "range": true,
-          "refId": "B"
-        }
-      ],
-      "title": "GPUs: A100 5GB",
-      "type": "piechart"
-    },
-    {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          },
-          "mappings": []
-        },
-        "overrides": []
-      },
+      "type": "stat",
+      "title": "Dask Gateway",
       "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 3,
-        "y": 15
+        "x": 19,
+        "y": 6,
+        "w": 5,
+        "h": 6
       },
-      "id": 7,
-      "options": {
-        "displayLabels": ["value"],
-        "legend": {
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": true
-        },
-        "pieType": "pie",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "label_replace(\n  sum by (resource)(kube_pod_container_resource_requests{\n    namespace=\"cms\", pod=~\"purdue-af-.*\", resource=~\"nvidia_com_mig_7g_40gb\"\n  }),\n  \"state\", \"Used\", \"\", \"\"\n)\nor\nlabel_replace(\n  (\n    sum by (resource)(kube_node_status_allocatable{resource=~\"nvidia_com_mig_7g_40gb\"}\n      * on(node) group_left() kube_node_spec_taint{value=\"cms-af\"})\n    -\n    sum by (resource)(kube_pod_container_resource_requests{\n      namespace=\"cms\", pod=~\"purdue-af-.*\", resource=~\"nvidia_com_mig_7g_40gb\"\n    })\n  ),\n  \"state\", \"Free\", \"\", \"\"\n)",
-          "hide": false,
-          "legendFormat": "{{state}}",
-          "range": true,
-          "refId": "B"
-        }
-      ],
-      "title": "GPUs: A100 40GB",
-      "type": "piechart"
-    },
-    {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
-      },
-      "description": "Whole nvidia.com/gpu devices (T4). Used counts all consumers on cms-af nodes (AF sessions and SONIC).",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          },
-          "mappings": []
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 6,
-        "y": 15
-      },
-      "id": 22,
-      "options": {
-        "displayLabels": ["value"],
-        "legend": {
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": true
-        },
-        "pieType": "pie",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.1.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "label_replace(\n  sum by (resource)(\n    kube_pod_container_resource_requests{resource=\"nvidia_com_gpu\"}\n      * on(node) group_left() kube_node_spec_taint{value=\"cms-af\"}\n  ),\n  \"state\", \"Used\", \"\", \"\"\n)\nor\nlabel_replace(\n  (\n    sum by (resource)(\n      kube_node_status_allocatable{resource=\"nvidia_com_gpu\"}\n        * on(node) group_left() kube_node_spec_taint{value=\"cms-af\"}\n    )\n    -\n    sum by (resource)(\n      kube_pod_container_resource_requests{resource=\"nvidia_com_gpu\"}\n        * on(node) group_left() kube_node_spec_taint{value=\"cms-af\"}\n    )\n  ),\n  \"state\", \"Free\", \"\", \"\"\n)",
-          "hide": false,
-          "legendFormat": "{{state}}",
-          "range": true,
-          "refId": "B"
-        }
-      ],
-      "title": "GPUs: T4 16GB",
-      "type": "piechart"
-    },
-    {
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 12,
-        "y": 15
-      },
-      "id": 18,
-      "options": {
-        "calculate": false,
-        "cellGap": 2,
-        "cellValues": {
-          "unit": "ms"
-        },
-        "color": {
-          "exponent": 0.8,
-          "fill": "#C4162A",
-          "max": 10000,
-          "min": 0,
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "RdYlGn",
-          "steps": 128
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto",
-          "value": "Ping"
-        },
-        "tooltip": {
-          "mode": "single",
-          "showColorScale": false,
-          "yHistogram": false
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "reverse": false
-        }
-      },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "editorMode": "code",
-          "expr": "avg by (mount_name) (af_node_mount_metadata_latency_ms and on(node, mount_name, node_pool) (af_node_mount_result_fresh == 1))",
-          "interval": "10m",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
+          "refId": "A",
+          "expr": "count(count by (instance)(dask_scheduler_clients)) or vector(0)",
+          "legendFormat": "clusters",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "count(kube_pod_info{namespace=\"cms\",pod=~\"dask-worker-.*\",priority_class!=\"low-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"dask-worker-.*\",phase=\"Running\"} == 1)) or vector(0)",
+          "legendFormat": "guaranteed workers",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "C",
+          "expr": "count(kube_pod_info{namespace=\"cms\",pod=~\"dask-worker-.*\",priority_class=\"low-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"dask-worker-.*\",phase=\"Running\"} == 1)) or vector(0)",
+          "legendFormat": "preemptible workers",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
         }
       ],
-      "title": "Storage responsiveness (avg over AF nodes)",
-      "type": "heatmap"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
+      "description": "Dask Gateway clusters right now, and their running workers. Preemptible workers are those past a cluster's guaranteed ones: Kubernetes evicts them when a pod of higher priority needs their place.",
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
           "mappings": [],
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "semi-dark-red",
-                "value": 0
-              },
-              {
-                "color": "semi-dark-yellow",
-                "value": 0.05
-              },
-              {
-                "color": "semi-dark-green",
-                "value": 0.1
+                "color": "#5794F2",
+                "value": null
               }
             ]
           },
-          "unit": "Gbits"
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 18,
-        "y": 15
-      },
-      "id": 19,
       "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "sizing": "auto"
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "horizontal",
+        "justifyMode": "auto",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "text": {
+          "titleSize": 22,
+          "valueSize": 34
+        }
+      }
+    },
+    {
+      "id": 61,
+      "type": "stat",
+      "title": "Ray",
+      "gridPos": {
+        "x": 19,
+        "y": 12,
+        "w": 5,
+        "h": 6
       },
-      "pluginVersion": "12.1.0",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "editorMode": "code",
-          "expr": "avg by (mount_name) (af_node_mount_data_rate_gbps{mount_name!=\"cvmfs\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh == 1))",
-          "interval": "5m",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
+          "refId": "A",
+          "expr": "count(kube_pod_info{namespace=\"cms\",pod=~\"ray-train-.+-head-.+\"}) or vector(0)",
+          "legendFormat": "clusters",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "count(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",pod=~\"ray-train-.+-worker-.+\",priority_class!=\"medium-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-train-.*\",phase=\"Running\"} == 1)) or vector(0)",
+          "legendFormat": "guaranteed workers",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "C",
+          "expr": "count(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",pod=~\"ray-train-.+-worker-.+\",priority_class=\"medium-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-train-.*\",phase=\"Running\"} == 1)) or vector(0)",
+          "legendFormat": "preemptible workers",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
         }
       ],
-      "title": "Reading data rate (avg over AF nodes)",
-      "type": "gauge"
+      "description": "Users' Ray clusters right now, and their running workers. Preemptible workers are those past a cluster's first: a session or another user's first worker takes their GPUs.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#5794F2",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "horizontal",
+        "justifyMode": "auto",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "text": {
+          "titleSize": 22,
+          "valueSize": 34
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Namespace quota",
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\"))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\"))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "expr": "sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\")) - sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\"))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "D",
+          "expr": "sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\")) / sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\"))",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "description": "Kubernetes quota for the whole cms namespace: what pod requests have reserved against the hard limit. Reserved is the same quantity as the reserved columns in the AF nodes table. At 100% nothing new starts, even if nodes have room.",
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "resource",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "pattern": "^(resource|Value #C|Value #A|Value #D)$"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "renameByName": {
+              "resource": "Resource",
+              "Value #C": "Free",
+              "Value #A": "Total",
+              "Value #D": "Reserved"
+            },
+            "indexByName": {
+              "resource": 0,
+              "Value #C": 1,
+              "Value #A": 2,
+              "Value #D": 3
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Resource",
+                "desc": false
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false,
+            "filterable": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Resource"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "a CPU": {
+                        "text": "CPU, cores",
+                        "color": "text",
+                        "index": 0
+                      },
+                      "b Memory": {
+                        "text": "Memory, GiB",
+                        "color": "text",
+                        "index": 1
+                      },
+                      "c Pods": {
+                        "text": "Pods",
+                        "color": "text",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 105
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Reserved"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.8
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.95
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Free"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 0.0001
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 50
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 50
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "md",
+        "footer": {
+          "show": false,
+          "reducer": ["sum"],
+          "countRows": false,
+          "fields": ""
+        },
+        "sortBy": []
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "GPUs",
+      "gridPos": {
+        "x": 6,
+        "y": 18,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (resource)(kube_node_status_allocatable{resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) > 0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (resource)(kube_pod_container_resource_requests{namespace=\"cms\",resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "expr": "(sum by (resource)(kube_node_status_allocatable{resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) > 0) - on(resource) (sum by (resource)(kube_pod_container_resource_requests{namespace=\"cms\",resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) or (sum by (resource)(kube_node_status_allocatable{resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) > 0) * 0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "D",
+          "expr": "(sum by (resource)(kube_pod_container_resource_requests{namespace=\"cms\",resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) or (sum by (resource)(kube_node_status_allocatable{resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) > 0) * 0) / (sum by (resource)(kube_node_status_allocatable{resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) > 0)",
+          "legendFormat": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "description": "Whole T4 cards and A100 MIG slices are separate resources. Pick a type with free devices in the session profile.",
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "resource",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "pattern": "^(resource|Value #C|Value #A|Value #D)$"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "renameByName": {
+              "resource": "Type",
+              "Value #C": "Free",
+              "Value #A": "Total",
+              "Value #D": "In use"
+            },
+            "indexByName": {
+              "resource": 0,
+              "Value #C": 1,
+              "Value #A": 2,
+              "Value #D": 3
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false,
+            "filterable": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Type"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "nvidia_com_gpu": {
+                        "text": "T4 16gb",
+                        "color": "text",
+                        "index": 0
+                      },
+                      "nvidia_com_mig_1g_5gb": {
+                        "text": "A100 MIG 1g.5gb",
+                        "color": "text",
+                        "index": 1
+                      },
+                      "nvidia_com_mig_2g_10gb": {
+                        "text": "A100 MIG 2g.10gb",
+                        "color": "text",
+                        "index": 2
+                      },
+                      "nvidia_com_mig_3g_20gb": {
+                        "text": "A100 MIG 3g.20gb",
+                        "color": "text",
+                        "index": 3
+                      },
+                      "nvidia_com_mig_7g_40gb": {
+                        "text": "A100 MIG 7g.40gb",
+                        "color": "text",
+                        "index": 4
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "In use"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.75
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Free"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 50
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 50
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "md",
+        "footer": {
+          "show": false,
+          "reducer": ["sum"],
+          "countRows": false,
+          "fields": ""
+        },
+        "sortBy": []
+      }
+    },
+    {
+      "id": 11,
+      "type": "bargauge",
+      "title": "Storage utilization",
+      "gridPos": {
+        "x": 12,
+        "y": 18,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(kubelet_volume_stats_used_bytes{namespace=\"cms\",persistentvolumeclaim=\"af-shared-storage\"}) / max(kubelet_volume_stats_capacity_bytes{namespace=\"cms\",persistentvolumeclaim=\"af-shared-storage\"})",
+          "legendFormat": "/work, shared volume",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "quantile(0.5, af_home_dir_util{namespace=\"cms\",job=\"af-pod-monitor\",username!=\"\"})",
+          "legendFormat": "/home, median user",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        },
+        {
+          "refId": "C",
+          "expr": "max(af_home_dir_util{namespace=\"cms\",job=\"af-pod-monitor\",username!=\"\"})",
+          "legendFormat": "/home, fullest user",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": false,
+          "instant": true
+        }
+      ],
+      "description": "/work is the AF shared volume, as reported by kubelet. /home is a small per-user volume: median and fullest among running sessions. At 100% a session stops working. The distribution over all users is on the right.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.85
+              },
+              {
+                "color": "red",
+                "value": 0.95
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "min": 0,
+          "unit": "percentunit",
+          "max": 1,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "top",
+        "sizing": "auto",
+        "minVizHeight": 14,
+        "minVizWidth": 8,
+        "maxVizHeight": 26,
+        "text": {
+          "titleSize": 14,
+          "valueSize": 22
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "histogram",
+      "title": "Home directory usage over users",
+      "gridPos": {
+        "x": 18,
+        "y": 18,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "How full each user's /home volume is, one count per user, 10% buckets. Anything in the rightmost bucket is a session about to stop working; the exact users are on the Users Statistics dashboard.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "af_home_dir_util{namespace=\"cms\",job=\"af-pod-monitor\",username!=\"\"} * 100",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "legendFormat": ""
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["Value"]
+            }
+          }
+        }
+      ],
+      "options": {
+        "bucketSize": 10,
+        "bucketOffset": 0,
+        "combine": false,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#5794F2"
+          },
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#5794F2",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "users"
+              }
+            ]
+          }
+        ]
+      }
     }
-  ],
-  "preload": false,
-  "refresh": "5s",
-  "schemaVersion": 41,
-  "tags": [],
-  "templating": {
-    "list": []
-  },
-  "time": {
-    "from": "now-3h",
-    "to": "now"
-  },
-  "timepicker": {},
-  "timezone": "browser",
-  "title": "PHYS 390 Display",
-  "uid": "phys390-dashboard",
-  "version": 12
+  ]
 }
