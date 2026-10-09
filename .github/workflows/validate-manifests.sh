@@ -20,7 +20,8 @@
 #      mismatch fails here rather than in the cluster. A chart in someone
 #      else's repository is rendered from a shallow clone of the ref its
 #      GitRepository names — several track a branch, where the chart changes
-#      with no version to bump.
+#      with no version to bump. A GitRepository read through a secretRef is
+#      skipped when that clone is refused: the run holds no such credential.
 #   5. `promtool check rules` on Prometheus alerting/recording rules embedded
 #      in Helm values — a typo'd PromQL expression otherwise deploys silently
 #      and the alert simply never fires.
@@ -78,6 +79,7 @@ render_env() {
 }
 
 # Shallow-clone a GitRepository source once per (url, ref) and echo the path.
+# Returns 2 when the clone itself fails, 1 for anything wrong inside it.
 # A chart in git has no packaged dependencies, so fetch them on first use:
 # `dependency update`, not `build`, because build wants every repository in
 # Chart.yaml already registered via `helm repo add` and a fresh runner has
@@ -88,15 +90,17 @@ git_chart_dir() {
 	key=$(printf '%s@%s' "$url" "$ref" | shasum | cut -d' ' -f1)
 	clone_dir="$workdir/gitsrc-$key"
 	if [[ ! -d "$clone_dir" ]]; then
-		git clone --quiet --depth 1 --branch "$ref" "$url" "$clone_dir" >&2 || return 1
+		GIT_TERMINAL_PROMPT=0 git clone --quiet --depth 1 --branch "$ref" "$url" "$clone_dir" >&2 || return 2
 	fi
 	[[ -d "$clone_dir/$chart_path" ]] || {
 		echo "chart path '${chart_path}' not in ${url}@${ref}" >&2
 		return 1
 	}
+	# An apiVersion v1 chart lists them in requirements.yaml.
 	if [[ -f "$clone_dir/$chart_path/Chart.yaml" ]] &&
-		[[ $(yq -N '.dependencies | length' "$clone_dir/$chart_path/Chart.yaml") -gt 0 ]] &&
-		[[ ! -d "$clone_dir/$chart_path/charts" ]]; then
+		[[ ! -d "$clone_dir/$chart_path/charts" ]] &&
+		{ [[ $(yq -N '.dependencies | length' "$clone_dir/$chart_path/Chart.yaml") -gt 0 ]] ||
+			[[ -f "$clone_dir/$chart_path/requirements.yaml" ]]; }; then
 		if ! out=$(helm dependency update "$clone_dir/$chart_path" 2>&1); then
 			printf '%s\n' "$out" >&2
 			echo "could not fetch chart dependencies for ${chart_path} in ${url}@${ref}" >&2
@@ -143,8 +147,9 @@ validate_helmreleases() {
 	local repos_file=$2 # "name|type|url" lines from ALL envs: HelmRepositories
 	# may be created by a sibling Flux Kustomization on the same cluster
 	local git_repos_file=$3 # "name|url|ref" lines, same reasoning
+	local git_auth_file=$4  # names of the GitRepositories that carry a secretRef
 	local name chart version src_name src_kind repo_line repo_url repo_type
-	local values_files values_file values_args vhash kind src key path i local_chart out git_ref git_dir
+	local values_files values_file values_args vhash kind src key path i local_chart out git_ref git_dir rc
 	while IFS= read -r name; do
 		releases_seen=$((releases_seen + 1))
 		chart=$(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec.chart.spec.chart" "$rendered")
@@ -279,7 +284,12 @@ validate_helmreleases() {
 		echo "  helm template ${name} (${chart}@${version:-${git_ref}} from ${repo_url})"
 		local helm_src
 		if [[ "$repo_type" == "git" ]]; then
-			if ! git_dir=$(git_chart_dir "$repo_url" "$git_ref" "$chart"); then
+			rc=0
+			git_dir=$(git_chart_dir "$repo_url" "$git_ref" "$chart") || rc=$?
+			if [[ $rc -eq 2 ]] && grep -qx "$src_name" "$git_auth_file"; then
+				echo "  skip ${name}: GitRepository '${src_name}' is read with a Secret this run does not have"
+				continue
+			elif [[ $rc -ne 0 ]]; then
 				echo "✗ ${name}: could not fetch chart from ${repo_url}@${git_ref}" >&2
 				failed=1
 				continue
@@ -326,6 +336,8 @@ yq -N 'select(.kind=="HelmRepository") | .metadata.name + "|" + (.spec.type // "
 # can be cloned at the exact ref Flux would check out.
 yq -N 'select(.kind=="GitRepository") | .metadata.name + "|" + .spec.url + "|" + (.spec.ref.tag // .spec.ref.branch // .spec.ref.commit // "HEAD")' \
 	"$workdir/union.yaml" | sort -u >"$workdir/git-repos.txt"
+yq -N 'select(.kind=="GitRepository" and .spec.secretRef != null) | .metadata.name' \
+	"$workdir/union.yaml" | sort -u >"$workdir/git-repos-auth.txt"
 
 # Pass 2: validate.
 for rendered in "$workdir"/rendered-*.yaml; do
@@ -333,7 +345,7 @@ for rendered in "$workdir"/rendered-*.yaml; do
 	echo "──── ${name#rendered-} ────"
 	# Flux decrypts a SOPS Secret before applying it; its `sops` block never reaches the API server.
 	yq 'del(.sops)' "$rendered" | "${KUBECONFORM[@]}" || failed=1
-	validate_helmreleases "$rendered" "$workdir/helm-repos.txt" "$workdir/git-repos.txt"
+	validate_helmreleases "$rendered" "$workdir/helm-repos.txt" "$workdir/git-repos.txt" "$workdir/git-repos-auth.txt"
 done
 
 # --- Flux bootstrap objects ----------------------------------------------

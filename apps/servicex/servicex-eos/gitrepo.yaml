@@ -1,0 +1,12 @@
+# Chart source for servicex-eos.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: gitrepo-stefan
+spec:
+  interval: 1m
+  url: https://github.com/piperov/servicex-eos-dev
+  ref:
+    branch: develop
+  secretRef:
+    name: flux-github-token

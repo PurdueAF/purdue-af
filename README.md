@@ -60,6 +60,7 @@ Whether each component on the cluster is running what is on `main`
 ![loki][experimental-monitoring-loki]
 ![pyroscope][experimental-monitoring-pyroscope]
 ![servicex-anvil][experimental-servicex-servicex-anvil]
+![servicex-eos][experimental-servicex-servicex-eos]
 ![supersonic][experimental-sonic-supersonic]
 ![supersonic-af][experimental-sonic-supersonic-af]
 ![supersonic-interlink][experimental-sonic-supersonic-interlink]
@@ -115,6 +116,7 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-monitoring-loki]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-loki.json
 [experimental-monitoring-pyroscope]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-pyroscope.json
 [experimental-servicex-servicex-anvil]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex-servicex-anvil.json
+[experimental-servicex-servicex-eos]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-servicex-servicex-eos.json
 [experimental-sonic-model-manager]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-model-manager.json
 [experimental-sonic-supersonic]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic.json
 [experimental-sonic-supersonic-af]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic-af.json

@@ -1,0 +1,208 @@
+app:
+  allowedImagePrefixes:
+    - "geddes-registry.rcac.purdue.edu/docker-hub-cache/"
+    - "geddes-registry.rcac.purdue.edu/cms/"
+    - "docker.io/sslhep"
+    - "sslhep/"
+    - "gitlab-registry.cern.ch/"
+  resources:
+    requests:
+      cpu: 2
+      memory: 2Gi
+    limits:
+      cpu: 4
+      memory: 4Gi
+  ingress:
+    enabled: true
+    class: public
+    host: geddes.rcac.purdue.edu
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+noCerts: false
+postgres:
+  enabled: true
+postgresql:
+  image:
+    registry: geddes-registry.rcac.purdue.edu
+    repository: docker-hub-cache/bitnamilegacy/postgresql
+    tag: 14.5.0-debian-11-r35
+  global:
+    postgresql:
+      auth:
+        existingSecret: servicex-secrets-eos
+        secretKeys:
+          adminPasswordKey: postgresql-password
+  primary:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    persistence:
+      enabled: false
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+
+# Transformers write root://<host>/<pathPrefix>/<request id>/ with the x509 proxy.
+objectStore:
+  enabled: true
+  internal: false
+  type: eos
+  eos:
+    host: eos.cms.rcac.purdue.edu
+    protocol: root
+    pathPrefix: /store/user/dkondrat
+    useBucketDirectory: "true"
+
+codeGen:
+  uproot-raw:
+    enabled: true
+    image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_code_gen_raw_uproot
+    tag: "v1.8.6"
+    defaultScienceContainerImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_science_image_combined_root
+    defaultScienceContainerTag: 5.7.2-6.38.04
+    compressionAlgorithm: ZSTD
+    compressionLevel: 5
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+  rdataframe:
+    enabled: false
+  uproot:
+    enabled: false
+  python:
+    enabled: true
+    image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/servicex_code_gen_python
+    tag: "v1.8.6"
+    defaultScienceContainerImage: docker.io/sslhep/servicex_science_image_combined_root
+    defaultScienceContainerTag: 5.7.4-6.38.04-coffea
+    compressionAlgorithm: ZLIB
+    # A string: the chart reads a numeric 0 as unset and falls back to 5.
+    compressionLevel: "0"
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+  atlasr21:
+    enabled: false
+  atlasr22:
+    enabled: false
+  atlasr25:
+    enabled: false
+  topcp:
+    enabled: false
+  cmssw-5-3-32:
+    enabled: false
+
+transformer:
+  autoscaler:
+    maxReplicas: 100
+  cpuRequest: 500m
+  memoryRequest: 2Gi
+  cpuLimit: 1
+  memoryLimit: 4Gi
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+
+rabbitmq:
+  image:
+    registry: geddes-registry.rcac.purdue.edu
+    repository: docker-hub-cache/bitnamilegacy/rabbitmq
+    tag: 3.11.18-debian-11-r0
+  auth:
+    existingPasswordSecret: servicex-secrets-eos
+  resources:
+    requests:
+      cpu: 2
+      memory: 4Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+# The chart's default ships the logs of the app and the DID finders to a Logstash outside the facility.
+logging:
+  logstash:
+    enabled: false
+
+didFinder:
+  rucio:
+    enabled: false
+    rucio_host: http://cms-rucio.cern.ch
+    auth_host: https://cms-rucio-auth.cern.ch
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+  xrootd:
+    enabled: true
+    tag: "v1.8.6"
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: "hub.jupyter.org/dedicated"
+        operator: "Equal"
+        value: "cms-af"
+        effect: "NoSchedule"
+  CERNOpenData:
+    enabled: false
+  atlasopenmagic:
+    enabled: false
+  servicex:
+    enabled: false
+gridAccount: dkondrat
+x509Secrets:
+  image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/x509-secrets
+  tag: "v1.8.6"
+  initImage: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/alpine:3.24
+  pullPolicy: Always
+  vomsOrg: cms
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+
+scheduledTasks:
+  image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/python
+  tag: "3.12"
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"
+
+secrets: servicex-secrets-eos
