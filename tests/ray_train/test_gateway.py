@@ -793,7 +793,10 @@ async def test_a_worker_starts_only_while_all_its_gpus_are_free(env):
 
 async def test_a_worker_of_two_gpus_evicts_none(env):
     env.prometheus.used, env.prometheus.preemptible = 8, 4
-    assert await refused(env, per_worker="2") == grpc.StatusCode.RESOURCE_EXHAUSTED
+    with pytest.raises(grpc.aio.AioRpcError) as e:
+        await call(env, per_worker="2")
+    assert e.value.code() == grpc.StatusCode.RESOURCE_EXHAUSTED
+    assert "Ray clusters can take 0 more" in e.value.details()
 
 
 async def test_without_prometheus_every_gpu_of_a_worker_counts_against_the_budget(
@@ -1113,6 +1116,19 @@ async def test_a_refused_submission_says_how_many_gpus_are_free(env):
         in reason
     )
     assert env.kube.clusters == {}
+
+
+async def test_a_refused_submission_counts_the_worker_that_may_evict_a_preemptible_one(
+    env,
+):
+    env.prometheus.used, env.prometheus.preemptible = 8, 1
+    status, reason, _ = await submit(env, gpus="2")
+    assert status == 429
+    assert (
+        "asks for 2 workers with a GPU of 5 GB or more each, and Ray clusters can take 1 more"
+        in reason
+    )
+    assert await call(env) == [b"echo:ping"]
 
 
 async def test_gpus_just_admitted_count_as_taken_until_prometheus_sees_them(env):
