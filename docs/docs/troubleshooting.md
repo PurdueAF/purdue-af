@@ -148,34 +148,29 @@ solutions. If your problem is not listed here, please
 
 ??? failure "A submission fails with \"Ray clusters can take N more now\""
 
-    Fewer GPUs are free than your cluster asks for — see
-    [GPUs](guide-ray-train.md#gpus).
+    Fewer GPUs are free than you ask for: try again later, or ask for up to
+    as many with `af-max-workers` — see
+    [Settings](guide-ray-train.md#settings).
 
 ??? failure "A submission fails because my cluster \"runs other settings, and tasks or jobs\""
 
-    Your cluster runs one set of settings at a time — see
-    [Lifetime](guide-ray-train.md#lifetime).
+    A job of yours is running with other settings: wait for it to end, or
+    stop it — see [Settings](guide-ray-train.md#settings).
 
 ??? failure "\"You have no Ray cluster\""
 
-    Idle clusters are removed with the records and logs of their jobs — see
-    [Lifetime](guide-ray-train.md#lifetime).
+    A job's status and log are removed some minutes after your last job ends
+    — see [Good to know](guide-ray-train.md#good-to-know).
 
 ??? failure "A training stops with \"Unable to set up cluster storage\""
 
     Set `storage_path` to a directory on `/work` — see
     [Data-parallel training](guide-ray-train.md#data-parallel-training).
 
-??? failure "A job's log says \"tasks with infeasible resource requests\""
-
-    Your cluster's workers are still starting, and the tasks run once they
-    have joined; or a task asks for more GPUs than one worker has — see
-    [Cluster settings](guide-ray-train.md#cluster-settings).
-
 ??? failure "A submission fails with \"Your session holds a GPU\""
 
-    Ray clusters are for sessions started without a GPU — see
-    [Training on GPUs with Ray](guide-ray-train.md).
+    Submit from a session started without a GPU — see
+    [Before you start](guide-ray-train.md#before-you-start).
 
 ??? failure "A submission fails with \"No token\""
 
