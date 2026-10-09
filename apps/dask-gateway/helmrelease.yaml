@@ -87,16 +87,19 @@ spec:
                     from dask_gateway_server.app import main
                     from dask_gateway_server.backends.kubernetes import controller
 
+                    FLOOR_WORKERS = 100
                     FLOOR_CORES = 100
+                    FLOOR_MEMORY = 600 * 2**30
                     PREEMPTIBLE = "low-priority-preemptible"
                     create_pods = controller.KubeController.batch_create_pods
                     container_status = controller.get_container_status
 
                     async def create_tiered_pods(self, info, namespace, pod, count):
-                        cores = float(pod["spec"]["containers"][0]["resources"]["requests"]["cpu"])
+                        asked = pod["spec"]["containers"][0]["resources"]["requests"]
+                        guaranteed = min(FLOOR_WORKERS, FLOOR_CORES // float(asked["cpu"]), FLOOR_MEMORY // float(asked["memory"]))
                         live = (self.informers["pod"].get(f"{namespace}.{name}") for name in info.running | info.pending)
                         kept = sum(1 for p in live if p and p["spec"].get("priorityClassName") != PREEMPTIBLE)
-                        floor = min(count, max(0, int(FLOOR_CORES // cores) - kept))
+                        floor = min(count, max(0, int(guaranteed) - kept))
                         burst = {**pod, "spec": {**pod["spec"], "priorityClassName": PREEMPTIBLE}}
                         failed = await create_pods(self, info, namespace, pod, floor)
                         return await create_pods(self, info, namespace, burst, count - floor) or failed

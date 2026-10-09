@@ -10,7 +10,7 @@ as pods on the Purdue Geddes cluster.
 | --- | --- |
 | Active clusters per user | 1 |
 | Cluster size | up to 1000 workers; 1000 cores and 6000 GiB of memory in total, scheduler included |
-| Guaranteed workers | the first 100 cores of a cluster |
+| Guaranteed workers | the first of a cluster, up to 100 workers, 100 cores or 600 GiB of memory, whichever comes first |
 | Cores per worker | up to 64 |
 | Memory per worker | up to 64 GiB |
 
