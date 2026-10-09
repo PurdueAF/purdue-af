@@ -8,6 +8,7 @@ import yaml
 from common import REPO
 
 RELEASE = REPO / "apps" / "dask-gateway" / "helmrelease.yaml"
+GIB = 2**30
 
 
 class KubeController:
@@ -50,7 +51,9 @@ def launch(monkeypatch):
     return ns
 
 
-async def scale_up(launch, worker_cores, floor_live, burst_live, count, failing=()):
+async def scale_up(
+    launch, worker_cores, floor_live, burst_live, count, failing=(), worker_gib=1
+):
     """The (priority class, pod count) batches a scale-up by `count` creates."""
     burst = {"priorityClassName": launch["PREEMPTIBLE"]}
     live = [{}] * floor_live + [burst] * burst_live
@@ -61,8 +64,8 @@ async def scale_up(launch, worker_cores, floor_live, burst_live, count, failing=
     }
     controller.created, controller.failing = [], failing
     info = types.SimpleNamespace(running=set(names[::2]), pending=set(names[1::2]))
-    cpu = {"requests": {"cpu": f"{worker_cores:.3f}"}}
-    pod = {"spec": {"containers": [{"resources": cpu}]}}
+    requests = {"cpu": f"{worker_cores:.3f}", "memory": str(int(worker_gib * GIB))}
+    pod = {"spec": {"containers": [{"resources": {"requests": requests}}]}}
     failed = await controller.batch_create_pods(info, "cms", pod, count)
     return controller.created, failed
 
@@ -82,6 +85,19 @@ async def test_floor_is_counted_in_cores(launch):
     floor, preemptible = launch["FLOOR_CORES"], launch["PREEMPTIBLE"]
     created, _ = await scale_up(launch, 4, 0, 0, floor)
     assert created == [(None, floor // 4), (preemptible, floor - floor // 4)]
+
+
+async def test_floor_is_counted_in_memory(launch):
+    preemptible = launch["PREEMPTIBLE"]
+    tenth = launch["FLOOR_MEMORY"] / GIB / 10
+    created, _ = await scale_up(launch, 1, 0, 0, 50, worker_gib=tenth)
+    assert created == [(None, 10), (preemptible, 40)]
+
+
+async def test_floor_is_counted_in_workers(launch):
+    floor, preemptible = launch["FLOOR_WORKERS"], launch["PREEMPTIBLE"]
+    created, _ = await scale_up(launch, 0.1, 0, 0, floor + 50, worker_gib=0.1)
+    assert created == [(None, floor), (preemptible, 50)]
 
 
 async def test_lost_floor_workers_are_replaced_first(launch):
