@@ -1041,8 +1041,8 @@ class Gateway:
                     min(available // per_worker, wanted - sum(mix.values())), 0
                 )
             available = sum(mix.values())
-            if wanted == per_worker == 1 and not available and evicting:
-                # Its worker evicts a preemptible one.
+            if per_worker == 1 and not available and evicting:
+                # One worker, and no more, may evict a preemptible one.
                 mix[evicting] = available = 1
             if wanted > available:
                 log.info(
