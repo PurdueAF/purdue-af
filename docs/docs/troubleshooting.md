@@ -164,7 +164,7 @@ solutions. If your problem is not listed here, please
 ??? failure "A training stops with \"Unable to set up cluster storage\""
 
     Set `storage_path` to a directory on `/work` — see
-    [Ray Train](guide-ray-train.md#ray-train).
+    [Data-parallel training](guide-ray-train.md#data-parallel-training).
 
 ??? failure "A submission fails with \"Your session holds a GPU\""
 
