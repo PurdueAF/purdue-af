@@ -75,7 +75,7 @@ pyjuliacall = "*"
 pytest = "*"
 python = "3.13.*"
 python-graphviz = "*"
-pytorch = "2.13.*"
+pytorch = "2.14.*"
 # floor: Ray Train clusters run from this env, with Ray's token authentication (2.52+)
 ray-default = ">=2.52"
 ray-train = "*"
