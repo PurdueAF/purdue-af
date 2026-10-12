@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - ../../apps/dask-gateway/helmrepo.yaml
   - ../../apps/dask-gateway/helmrelease.yaml
+  - ../../apps/dask-gateway/rbac.yaml
   - ../../apps/dask-gateway/ingress.yaml
   - ../../apps/dask-gateway/aliases.yaml
 
