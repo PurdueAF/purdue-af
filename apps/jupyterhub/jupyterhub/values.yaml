@@ -279,6 +279,8 @@ prePuller:
       name: ghcr.io/dask/dask-gateway
       tag: 2024.1.0
 hub:
+  # A refused spawn (namespace quota, GPU gate) is not a hub fault: the hub stays up through any number of them.
+  consecutiveFailureLimit: 0
   image:
     # Tag unset: the chart default follows the chart version in helmrelease.yaml.
     name: geddes-registry.rcac.purdue.edu/docker-hub-cache/jupyterhub/k8s-hub-slim

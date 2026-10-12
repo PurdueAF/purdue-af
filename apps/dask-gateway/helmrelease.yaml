@@ -73,7 +73,7 @@ spec:
               - op: add
                 path: /spec/type
                 value: LoadBalancer
-          # The chart has no controller extraConfig: the launch command makes workers past a cluster's floor preemptible.
+          # The chart has no controller extraConfig: the launch command makes workers past a cluster's floor preemptible, and starts them only while the namespace quotas keep a reserve free.
           - target:
               kind: Deployment
               name: "controller-.*"
@@ -90,9 +90,27 @@ spec:
                     FLOOR_WORKERS = 100
                     FLOOR_CORES = 100
                     FLOOR_MEMORY = 600 * 2**30
+                    QUOTA_RESERVE = 0.15
                     PREEMPTIBLE = "low-priority-preemptible"
+                    UNITS = {"": 1, "m": 1e-3, **{s: 1000**i for i, s in enumerate("kMGTPE", 1)}, **{s + "i": 1024**i for i, s in enumerate("KMGTPE", 1)}}
                     create_pods = controller.KubeController.batch_create_pods
                     container_status = controller.get_container_status
+
+                    def quantity(text):
+                        number = str(text).rstrip("kKMGTPEmi")
+                        return float(number) * UNITS[str(text)[len(number):]]
+
+                    async def burst_room(self, namespace, pod, count):
+                        """How many of `count` such pods the namespace quotas take with the reserve left free."""
+                        resources = pod["spec"]["containers"][0]["resources"]
+                        asked = {f"{kind}.{name}": quantity(amount) for kind in ("requests", "limits") for name, amount in resources.get(kind, {}).items()}
+                        asked["pods"] = 1
+                        quotas = await self.core_client.list_namespaced_resource_quota(namespace)
+                        for status in (quota.status for quota in quotas.items):
+                            for resource in asked.keys() & status.hard.keys():
+                                free = quantity(status.hard[resource]) * (1 - QUOTA_RESERVE) - quantity(status.used.get(resource, 0))
+                                count = min(count, max(0, int(free // asked[resource])))
+                        return count
 
                     async def create_tiered_pods(self, info, namespace, pod, count):
                         asked = pod["spec"]["containers"][0]["resources"]["requests"]
@@ -102,7 +120,10 @@ spec:
                         floor = min(count, max(0, int(guaranteed) - kept))
                         burst = {**pod, "spec": {**pod["spec"], "priorityClassName": PREEMPTIBLE}}
                         failed = await create_pods(self, info, namespace, pod, floor)
-                        return await create_pods(self, info, namespace, burst, count - floor) or failed
+                        room = await burst_room(self, namespace, burst, count - floor) if count > floor else 0
+                        withheld = count - floor - room
+                        info.creates -= withheld
+                        return await create_pods(self, info, namespace, burst, room) or failed or withheld > 0
 
                     # Upstream tracks a worker pod only once it is scheduled, and creates the ones still waiting again.
                     def worker_status(pod, name):

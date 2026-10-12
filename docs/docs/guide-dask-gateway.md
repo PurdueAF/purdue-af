@@ -18,7 +18,9 @@ Workers beyond the guaranteed ones run at low priority. Kubernetes evicts them
 when a session, a Ray cluster, or another cluster's guaranteed workers, needs
 their place;
 Dask reruns their tasks on the remaining workers, and a replacement starts once
-there is room.
+there is room. They start only while the facility keeps room for new sessions,
+so a busy facility gives a cluster fewer workers than it asked for; the rest
+start as room appears.
 
 If cluster creation fails with a message about an existing cluster,
 [shut the old cluster down](#5-shutting-down-clusters) (or wait for it to finish
