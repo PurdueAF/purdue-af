@@ -8,7 +8,7 @@ its task pods and the launcher that starts runs on the Flyte control plane
 | File                 | What it is                                                                                 |
 | -------------------- | ------------------------------------------------------------------------------------------ |
 | `podtemplate.yaml`   | Pod spec of every task pod: AF node placement, the image's user, the keys from the Secrets |
-| `cronjob.yaml`       | The launcher: starts one `triage` run per hour, from the code ConfigMap                    |
+| `cronjob.yaml`       | The hourly launcher, suspended: starts one `triage` run from the code ConfigMap             |
 | `secret-github.yaml` | The GitHub token, sops-encrypted                                                           |
 | `secret-genai.yaml`  | The GenAI Studio key, sops-encrypted                                                       |
 
