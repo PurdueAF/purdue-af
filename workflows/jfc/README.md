@@ -22,7 +22,7 @@ to show the draft note before it looks at the full data.
 A workspace is `/work/projects/jfc/<name of its first run>`: the JFC checkout
 with the analysis scaffolded in it, its pixi environment and git history, the
 agent's session, the replies it was given, and its last message in `said.md`.
-An analysis's data is fetched once into `/work/projects/jfc/data/<analysis>`. A
+An analysis's data is fetched once per URL under `/work/projects/jfc/data`. A
 retried task resumes the session.
 
 ## Running
@@ -59,7 +59,7 @@ A directory `workflows/jfc-<name>` with an `analysis.toml`:
 
 | Key     | What it is                                                                              |
 | ------- | --------------------------------------------------------------------------------------- |
-| `name`  | Names the analysis in JFC, in run names and under `data/`                               |
+| `name`  | Names the analysis in JFC, in run names and in its data directory                       |
 | `kind`  | The JFC analysis type: `measurement` or `search`                                        |
 | `repo`  | Repository holding the physics prompt, `prompt.md`, at its top level                    |
 | `ref`   | The commit of it to use                                                                 |

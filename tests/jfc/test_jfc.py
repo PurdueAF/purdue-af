@@ -8,7 +8,6 @@ import json
 import re
 import sys
 import tarfile
-import tomllib
 import types
 
 import pytest
@@ -134,16 +133,6 @@ def test_the_credentials_secret_is_optional_so_a_task_can_say_it_is_missing():
     assert source["secretRef"]["optional"] is True
 
 
-def test_every_analysis_directory_describes_an_analysis_pinned_to_a_commit():
-    described = sorted((REPO / "workflows").glob("jfc-*/analysis.toml"))
-    assert described
-    for path in described:
-        analysis = jfc.Analysis(**tomllib.loads(path.read_text()))
-        assert path.parent.name == f"jfc-{analysis.name}"
-        assert analysis.kind in ("measurement", "search")
-        assert re.fullmatch(r"[0-9a-f]{40}", analysis.ref)
-
-
 # --- the launcher ---
 
 
@@ -159,13 +148,26 @@ def launched(tmp_path, monkeypatch):
     return str(tmp_path)
 
 
+def test_every_analysis_directory_launches_a_run_pinned_to_a_commit(launched):
+    described = sorted((REPO / "workflows").glob("jfc-*/analysis.toml"))
+    assert described
+    for path in described:
+        jfc.launch(str(path.parent))
+        run = Launcher.runs[-1]
+        analysis = run["analysis"]
+        assert path.parent.name == f"jfc-{analysis.name}"
+        assert analysis.kind in ("measurement", "search")
+        assert re.fullmatch(r"[0-9a-f]{40}", analysis.ref)
+        assert len(run["name"]) <= 30
+
+
 def test_launch_starts_a_run_named_after_the_analysis_in_a_workspace_of_its_own(
     launched,
 ):
     jfc.launch(launched)
     jfc.launch(launched)
 
-    first, second = Launcher.runs
+    first, _ = Launcher.runs
     assert first["task"] is jfc.advance
     assert first["analysis"] == jfc.Analysis(
         "zz", "search", "https://example.org/zz.git", "c0ffee"
@@ -173,7 +175,6 @@ def test_launch_starts_a_run_named_after_the_analysis_in_a_workspace_of_its_own(
     assert first["name"].startswith("jfc-zz-") and first["workspace"] == first["name"]
     assert first["reply"] == ""
     assert Launcher.projects == [jfc.NAME]
-    assert len(second["name"]) <= 30
 
 
 def test_launch_carries_a_reply_whole_to_the_workspace_it_names(launched):
@@ -275,7 +276,7 @@ def test_prepare_redoes_a_setup_that_died_before_its_last_step(root, monkeypatch
     assert calls[-1] == ("pixi", "install")
 
 
-def test_data_is_fetched_once_per_analysis(root, tmp_path_factory, monkeypatch):
+def test_data_is_fetched_once_per_url(root, tmp_path_factory, monkeypatch):
     source = tmp_path_factory.mktemp("s3") / "zz.tgz"
     with tarfile.open(source, "w:gz") as tar:
         info = tarfile.TarInfo("data/ZZTo4L.root")
@@ -290,10 +291,18 @@ def test_data_is_fetched_once_per_analysis(root, tmp_path_factory, monkeypatch):
 
     monkeypatch.setattr(jfc.urllib.request, "urlretrieve", urlretrieve)
 
-    assert jfc._data(ANALYSIS) == jfc._data(ANALYSIS) == root / "data/zz"
-    assert (root / "data/zz/ZZTo4L.root").read_bytes() == b"events"
+    data = jfc._data(ANALYSIS)
+    assert jfc._data(ANALYSIS) == data and data.parent == root / "data"
+    assert (data / "ZZTo4L.root").read_bytes() == b"events"
     assert fetched == [ANALYSIS.data]
-    assert [path.name for path in (root / "data").iterdir()] == ["zz"]
+
+    moved = jfc.Analysis(
+        "zz", "search", ANALYSIS.repo, ANALYSIS.ref, data="https://example.org/v2.tgz"
+    )
+    assert jfc._data(moved) != data
+    assert sorted(path.name for path in (root / "data").iterdir()) == sorted(
+        [data.name, jfc._data(moved).name]
+    )
 
 
 # --- the agent ---
@@ -428,7 +437,7 @@ def stretch(root, monkeypatch):
     work, _ = _workspace(root)
     state = types.SimpleNamespace(
         attempt_number=0,
-        action=types.SimpleNamespace(run_name="run-1"),
+        action=types.SimpleNamespace(run_name="ws"),
         prompts=[],
         slept=[],
     )
@@ -476,9 +485,12 @@ def test_advance_hands_a_reply_to_the_agent_once(root, stretch):
     assert (root / "ws/replies/run-2").read_text() == "REGRESS(2)"
 
 
-def test_advance_refuses_a_reply_to_a_workspace_that_does_not_exist(root, stretch):
+@pytest.mark.parametrize("reply", ["", "APPROVE"])
+def test_advance_refuses_a_workspace_that_is_neither_its_own_nor_there(
+    root, stretch, reply
+):
     with pytest.raises(jfc.flyte.errors.NonRecoverableError):
-        jfc.advance(ANALYSIS, "typo", "APPROVE")
+        jfc.advance(ANALYSIS, "typo", reply)
     assert stretch.prompts == [] and not (root / "typo").exists()
 
 

@@ -95,8 +95,9 @@ def _checkout(source: tuple[str, str], dest: Path) -> None:
 
 
 def _data(analysis: Analysis) -> Path:
-    """The analysis's input data, fetched once and shared by its workspaces."""
-    data = ROOT / "data" / analysis.name
+    """The analysis's input data, fetched once per URL and shared by its workspaces."""
+    version = uuid.uuid5(uuid.NAMESPACE_URL, analysis.data).hex[:8]
+    data = ROOT / "data" / f"{analysis.name}-{version}"
     if not data.exists():
         data.parent.mkdir(exist_ok=True)
         _log(f"fetching {analysis.data}")
@@ -237,13 +238,12 @@ def advance(analysis: Analysis, workspace: str, reply: str) -> str:
         raise flyte.errors.NonRecoverableError(
             f"none of {', '.join(CREDENTIALS)} is set: see apps/jfc/README.md"
         )
-    home = ROOT / workspace
-    if reply and not home.is_dir():
-        raise flyte.errors.NonRecoverableError(
-            f"no workspace {workspace!r} to reply to"
-        )
-    home.mkdir(exist_ok=True)
     ctx = flyte.ctx()
+    home = ROOT / workspace
+    # A run makes only the workspace named after it; any other must exist.
+    if workspace != ctx.action.run_name and not home.is_dir():
+        raise flyte.errors.NonRecoverableError(f"no workspace {workspace!r}")
+    home.mkdir(exist_ok=True)
     try:
         with open(home / "lock", "w") as lock:
             # One agent per workspace: a second run on it waits for the first.
