@@ -65,8 +65,11 @@ def fake_upstream(body: bytes, chunked_no_terminator: bool, status: bytes = b"20
     return srv.getsockname()[1], seen
 
 
-def through_proxy(port, path="/api/chat/completions", body=b'{"stream": true}'):
-    with genai_proxy.Proxy(upstream=("127.0.0.1", port, False), rpm=6000) as proxy:
+def through_proxy(
+    port, path="/api/chat/completions", body=b'{"stream": true}', **options
+):
+    upstream = ("127.0.0.1", port, False)
+    with genai_proxy.Proxy(upstream=upstream, rpm=6000, **options) as proxy:
         host, pport = proxy.url.removeprefix("http://").split(":")
         client = http.client.HTTPConnection(host, int(pport), timeout=10)
         client.request(
@@ -125,6 +128,46 @@ def test_other_upstream_errors_pass_through_with_their_body():
     )
     resp, data = through_proxy(port, body=b"{}")
     assert resp.status == 404 and data == b'{"detail":"model not found"}'
+
+
+def test_a_handler_adapts_the_request_and_an_upstream_error():
+    class Adapting(genai_proxy.Handler):
+        def ask(self, body):
+            return body + b" asked"
+
+        def refusal(self, status, body):
+            return b"%d:" % status + body
+
+    port, seen = fake_upstream(b'{"choices": []}', chunked_no_terminator=False)
+    resp, data = through_proxy(port, body=b"{}", handler=Adapting)
+    assert seen["body"] == b"{} asked"
+    assert (resp.status, data) == (200, b'{"choices": []}')
+
+    port, _ = fake_upstream(b'{"detail":"no"}', False, status=b"404 Not Found")
+    resp, data = through_proxy(port, body=b"{}", handler=Adapting)
+    assert (resp.status, data) == (404, b'404:{"detail":"no"}')
+
+
+def test_the_upstream_gets_its_own_host_and_is_asked_for_plain_bytes():
+    port, seen = fake_upstream(b"{}", chunked_no_terminator=False)
+    with genai_proxy.Proxy(upstream=("127.0.0.1", port, False), rpm=6000) as proxy:
+        host, pport = proxy.url.removeprefix("http://").split(":")
+        client = http.client.HTTPConnection(host, int(pport), timeout=10)
+        client.putrequest("POST", "/x", skip_host=True, skip_accept_encoding=True)
+        client.putheader("host", "the.proxy")
+        client.putheader("accept-encoding", "gzip, zstd")
+        client.putheader("Content-Length", "2")
+        client.endheaders(b"{}")
+        client.getresponse().read()
+
+    def sent(name):
+        return [
+            line.split(":", 1)[1].strip()
+            for line in seen["head"].splitlines()
+            if line.lower().startswith(name + ":")
+        ]
+
+    assert sent("accept-encoding") == ["identity"] and sent("host") == ["127.0.0.1"]
 
 
 def test_pacer_spreads_requests_to_the_budget():

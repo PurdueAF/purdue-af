@@ -104,14 +104,25 @@ class Handler(BaseHTTPRequestHandler):
     upstream = UPSTREAM
     pacer = Pacer(SESSION_RPM)
 
+    def ask(self, body: bytes) -> bytes:
+        """The body to send upstream for a request's `body`."""
+        return body
+
+    def refusal(self, status: int, body: bytes) -> bytes:
+        """The body the client gets for the `body` of an upstream error."""
+        return body
+
     def do_POST(self) -> None:
         host, port, tls = self.upstream
         waited = self.pacer.wait()
         if waited > 1:
             _log(f"paced {waited:.0f}s before {self.path}")
         length = int(self.headers.get("Content-Length") or 0)
-        body = self.rfile.read(length) if length else b""
-        headers = {k: v for k, v in self.headers.items() if k.lower() not in HOP}
+        body = self.ask(self.rfile.read(length)) if length else b""
+        # Without the client's Accept-Encoding the body comes uncompressed, as
+        # the checks below and a handler's `refusal` read it.
+        skipped = HOP | {"accept-encoding", "host"}
+        headers = {k: v for k, v in self.headers.items() if k.lower() not in skipped}
         headers["Host"] = host
         headers["Content-Length"] = str(len(body))
         conn: http.client.HTTPConnection = (
@@ -141,7 +152,7 @@ class Handler(BaseHTTPRequestHandler):
                 _log(f"upstream HTTP {resp.status} on {self.path}: {body[:400]!r}")
                 self._send(
                     resp.status,
-                    body,
+                    self.refusal(resp.status, body),
                     resp.getheader("Content-Type") or "application/json",
                 )
                 return
@@ -191,15 +202,19 @@ class Handler(BaseHTTPRequestHandler):
 
 
 class Proxy:
-    """`with Proxy() as p: ... p.url`; serves on a free localhost port."""
+    """`with Proxy() as p: ... p.url`; serves on a free localhost port, with
+    a `handler` that may adapt what passes through."""
 
     def __init__(
-        self, upstream: tuple[str, int, bool] = UPSTREAM, rpm: int = SESSION_RPM
+        self,
+        upstream: tuple[str, int, bool] = UPSTREAM,
+        rpm: int = SESSION_RPM,
+        handler: type[Handler] = Handler,
     ) -> None:
-        handler = type(
-            "BoundHandler", (Handler,), {"upstream": upstream, "pacer": Pacer(rpm)}
+        bound = type(
+            "BoundHandler", (handler,), {"upstream": upstream, "pacer": Pacer(rpm)}
         )
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), bound)
         self.server.daemon_threads = True
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
         self._thread = threading.Thread(target=self.server.serve_forever, daemon=True)

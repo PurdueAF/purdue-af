@@ -16,7 +16,11 @@ with an `analysis.toml`, such as [`workflows/jfc-h4l`](../jfc-h4l).
 
 Claude Code reaches GenAI Studio through the pacing proxy of
 [`workflows/self-repair`](../self-repair), `genai_proxy.py`, which the launcher
-ships with `jfc.py`.
+ships with `jfc.py`. `jfc.py` has the proxy fit the exchange to the model: the
+tool results of one step go in the order of their calls and are cut to a share
+of the model's context, an image the agent reads moves out of its tool result
+to where GenAI Studio passes it on, and a prompt past that context comes back
+as the refusal on which Claude Code compacts the conversation.
 
 A run is one `advance` task: the setup if the workspace is new, then one
 headless Claude Code turn. It ends when the agent ends its turn, either with
@@ -75,7 +79,9 @@ A directory `workflows/jfc-<name>` with an `analysis.toml`:
 All in `jfc.py`:
 
 - `JFC` pins the specification by commit.
-- `MODEL` is the GenAI Studio model, `CONTEXT` its context in tokens and `RPM`
+- `MODEL` is the GenAI Studio model and `EFFORT` the reasoning effort asked of
+  it. `CONTEXT` is its context in tokens, `OUTPUT` the part of that kept for a
+  reply and `RESULTS` the part the tool results of one step may take. `RPM` is
   the requests a minute the proxy lets through.
 - `PERMISSION_MODE` and `ALLOWED_TOOLS` are what Claude Code may do unasked.
 - `env` holds what a task pod reserves; `RETRIES` and the timeout of `advance`
