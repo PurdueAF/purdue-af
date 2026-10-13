@@ -21,11 +21,13 @@ template:
     containers:
       - name: default
         image: overridden-by-flyte
-        # Model credentials and endpoint, under Claude Code's own variable names.
-        envFrom:
-          - secretRef:
-              name: jfc-claude
-              optional: true
+        env:
+          # Claude Code's key for Purdue GenAI Studio: the one self-repair uses.
+          - name: ANTHROPIC_AUTH_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: self-repair-genai
+                key: api-key
         volumeMounts:
           # Of /work, the agent sees this directory only.
           - name: work

@@ -21,6 +21,10 @@ from typing import Any
 import flyte
 import flyte.errors
 
+# self-repair's pacing proxy for GenAI Studio; the launcher bundles both workflows' files.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "self-repair"))
+from genai_proxy import Proxy  # noqa: E402
+
 NAME = "jfc"
 IMAGE = "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/self-repair:latest"
 # The one directory of /work a task pod mounts (apps/jfc/podtemplate.yaml).
@@ -29,10 +33,26 @@ ROOT = Path("/work/projects") / NAME
 # The specification every analysis follows, at a fixed commit.
 JFC = ("https://github.com/jfc-mit/jfc.git", "9eecb0e0b4c95c362053ad6b121760b47379bc54")
 
-# The JFC specification asks for Opus in every role.
-MODEL = "opus"
-PERMISSION_MODE = "auto"
-CREDENTIALS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN")
+# Served by Purdue GenAI Studio; apps/jfc/podtemplate.yaml supplies the key.
+MODEL = "gpt-oss:120b"
+# Requests a minute: under GenAI Studio's limit for a key, which self-repair shares.
+RPM = 15
+# Its deployed context in tokens: where Claude Code compacts the conversation.
+CONTEXT = 65536
+# Nobody is there to ask, and auto mode needs Anthropic's own service: file edits
+# are accepted and these tools allowed outright. The pod is the boundary.
+PERMISSION_MODE = "acceptEdits"
+ALLOWED_TOOLS = "Bash,WebFetch"
+# Whichever model Claude Code or the JFC specification names, MODEL answers.
+SETTINGS = {
+    "ANTHROPIC_MODEL": MODEL,
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": MODEL,
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": MODEL,
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": MODEL,
+    "CLAUDE_CODE_SUBAGENT_MODEL": MODEL,
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": str(CONTEXT),
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+}
 CORES = 8
 RETRIES = 5
 LOG_LINE = 240
@@ -71,7 +91,7 @@ class Analysis:
 env = flyte.TaskEnvironment(
     name=NAME,
     image=IMAGE,
-    # apps/jfc/podtemplate.yaml: node placement, the model credentials, the workspace.
+    # apps/jfc/podtemplate.yaml: node placement, the GenAI Studio key, the workspace.
     pod_template=NAME,
     resources=flyte.Resources(cpu=CORES, memory="16Gi"),
 )
@@ -168,6 +188,11 @@ def _turn(work: Path, config: Path, reply: str) -> list[str]:
         MODEL,
         "--permission-mode",
         PERMISSION_MODE,
+        "--allowedTools",
+        ALLOWED_TOOLS,
+        # Web search runs on Anthropic's side, which this model has none of.
+        "--disallowedTools",
+        "WebSearch",
         "--output-format",
         "stream-json",
         "--verbose",
@@ -197,26 +222,33 @@ def _narrate(event: dict[str, Any]) -> str:
 def _claude(command: list[str], work: Path, config: Path) -> str:
     """Runs one turn to its end, narrating it, and returns the agent's last message."""
     result: dict[str, Any] = {}
-    with subprocess.Popen(
-        command,
-        cwd=work,
-        env={**os.environ, "CLAUDE_CONFIG_DIR": str(config)},
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    ) as proc:
-        for line in proc.stdout or ():
-            try:
-                event = json.loads(line)
-            except ValueError:
-                event = None
-            if not isinstance(event, dict):
-                _log(line.rstrip())
-            elif event.get("type") == "result":
-                result = event
-            elif narrated := _narrate(event):
-                _log(narrated)
+    with Proxy(rpm=RPM) as genai:
+        environment = {
+            **os.environ,
+            **SETTINGS,
+            "ANTHROPIC_BASE_URL": f"{genai.url}/api",
+            "CLAUDE_CONFIG_DIR": str(config),
+        }
+        with subprocess.Popen(
+            command,
+            cwd=work,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        ) as proc:
+            for line in proc.stdout or ():
+                try:
+                    event = json.loads(line)
+                except ValueError:
+                    event = None
+                if not isinstance(event, dict):
+                    _log(line.rstrip())
+                elif event.get("type") == "result":
+                    result = event
+                elif narrated := _narrate(event):
+                    _log(narrated)
     detail = result.get("result") or result.get("errors") or "no result"
     if result.get("api_error_status") in (401, 403):
         raise flyte.errors.NonRecoverableError(f"claude: {detail}")
@@ -234,10 +266,6 @@ def advance(analysis: Analysis, workspace: str, reply: str) -> str:
     """One stretch of the agent's work in ROOT/<workspace>, until it ends its
     turn: with the analysis note finished, or with something for a person.
     Returns what it said."""
-    if not any(os.environ.get(name) for name in CREDENTIALS):
-        raise flyte.errors.NonRecoverableError(
-            f"none of {', '.join(CREDENTIALS)} is set: see apps/jfc/README.md"
-        )
     ctx = flyte.ctx()
     home = ROOT / workspace
     # A run makes only the workspace named after it; any other must exist.
@@ -278,7 +306,9 @@ def launch(directory: str, workspace: str = "", *reply: str) -> None:
 
     with open(Path(directory) / "analysis.toml", "rb") as file:
         analysis = Analysis(**tomllib.load(file))
-    flyte.init_from_config("config.yaml", root_dir=Path(__file__).parent)
+    flyte.init_from_config(
+        "jfc/config.yaml", root_dir=Path(__file__).resolve().parents[1]
+    )
     if NAME not in {project.pb2.id for project in Project.listall()}:
         Project.create(id=NAME, name=NAME)
     name = f"{NAME}-{analysis.name}-{datetime.now(timezone.utc):%m%d-%H%M%S}"

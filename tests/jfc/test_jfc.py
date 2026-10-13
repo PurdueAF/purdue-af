@@ -127,10 +127,18 @@ def test_task_pods_mount_only_the_directory_the_workspace_job_creates_for_them()
     )
 
 
-def test_the_credentials_secret_is_optional_so_a_task_can_say_it_is_missing():
+def test_the_model_key_comes_from_a_secret_the_repository_ships():
     (template,) = docs(APP / "podtemplate.yaml")
-    (source,) = template["template"]["spec"]["containers"][0]["envFrom"]
-    assert source["secretRef"]["optional"] is True
+    (variable,) = template["template"]["spec"]["containers"][0]["env"]
+    wanted = variable["valueFrom"]["secretKeyRef"]
+    shipped = [
+        doc
+        for path in (REPO / "apps").glob("*/secret*.yaml")
+        for doc in docs(path)
+        if doc["kind"] == "Secret" and doc["metadata"]["name"] == wanted["name"]
+    ]
+    assert variable["name"] == "ANTHROPIC_AUTH_TOKEN"
+    assert [wanted["key"] in doc["stringData"] for doc in shipped] == [True]
 
 
 # --- the launcher ---
@@ -329,6 +337,7 @@ def test_first_turn_opens_a_session_with_the_analysis_prompt(root):
     assert command[2].endswith("search for ZZ")
     assert _session(command)[0] == "--session-id"
     assert command[command.index("--permission-mode") + 1] == jfc.PERMISSION_MODE
+    assert command[command.index("--allowedTools") + 1] == jfc.ALLOWED_TOOLS
     assert command[command.index("--model") + 1] == jfc.MODEL
 
 
@@ -352,7 +361,9 @@ def _fake_claude(tmp_path, lines, code=0):
     script.write_text(
         "import os, sys\n"
         f"for line in {lines!r}:\n"
-        "    print(line.replace('$CONFIG', os.environ['CLAUDE_CONFIG_DIR']))\n"
+        "    for name in ('CLAUDE_CONFIG_DIR', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_DEFAULT_OPUS_MODEL'):\n"
+        "        line = line.replace('$' + name, os.environ[name])\n"
+        "    print(line)\n"
         f"sys.exit({code})\n"
     )
     return [sys.executable, str(script)]
@@ -384,7 +395,7 @@ def test_claude_returns_the_result_and_narrates_the_turn(tmp_path, capsys):
             {
                 "type": "result",
                 "is_error": False,
-                "result": "gate: $CONFIG",
+                "result": "gate: $CLAUDE_CONFIG_DIR $ANTHROPIC_BASE_URL $ANTHROPIC_DEFAULT_OPUS_MODEL",
                 "num_turns": 7,
                 "total_cost_usd": 1.5,
             }
@@ -393,7 +404,9 @@ def test_claude_returns_the_result_and_narrates_the_turn(tmp_path, capsys):
 
     said = jfc._claude(_fake_claude(tmp_path, lines), tmp_path, tmp_path / "cfg")
 
-    assert said == f"gate: {tmp_path / 'cfg'}"
+    config, genai, model = said.removeprefix("gate: ").split()
+    assert config == str(tmp_path / "cfg") and model == jfc.MODEL
+    assert re.fullmatch(r"http://127\.0\.0\.1:\d+/api", genai)
     logged = [line.split("] ", 1)[1] for line in capsys.readouterr().out.splitlines()]
     assert logged == [
         "a warning that is not JSON",
@@ -452,17 +465,7 @@ def stretch(root, monkeypatch):
     monkeypatch.setattr(jfc, "_prepare", lambda home, analysis: work)
     monkeypatch.setattr(jfc, "_claude", claude)
     monkeypatch.setattr(jfc.time, "sleep", state.slept.append)
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "stand-in")
     return state
-
-
-def test_advance_refuses_to_start_without_credentials(root, monkeypatch):
-    for name in jfc.CREDENTIALS:
-        monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(jfc, "_prepare", lambda *args: pytest.fail("set up anyway"))
-
-    with pytest.raises(jfc.flyte.errors.NonRecoverableError):
-        jfc.advance(ANALYSIS, "ws", "")
 
 
 def test_advance_returns_and_keeps_what_the_agent_said(root, stretch):

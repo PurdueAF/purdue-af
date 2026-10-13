@@ -3,9 +3,9 @@
 Runs [JFC](https://github.com/jfc-mit/jfc) analyses unattended on
 [Flyte 2](https://www.union.ai/docs/v2/flyte/): Claude Code, following the JFC
 specification, takes a physics analysis from its prompt to a typeset analysis
-note. The control plane is [`apps/flyte`](../../apps/flyte); the task pods,
-their directory on `/work` and the model credentials are
-[`apps/jfc`](../../apps/jfc); the task image is
+note, on a model served by Purdue GenAI Studio. The control plane is
+[`apps/flyte`](../../apps/flyte); the task pods, their directory on `/work` and
+the GenAI Studio key are [`apps/jfc`](../../apps/jfc); the task image is
 [`docker/self-repair`](../../docker/self-repair). An analysis is a directory
 with an `analysis.toml`, such as [`workflows/jfc-h4l`](../jfc-h4l).
 
@@ -13,6 +13,10 @@ with an `analysis.toml`, such as [`workflows/jfc-h4l`](../jfc-h4l).
 | ------------- | ------------------------------------------------------- |
 | `jfc.py`      | The task, its environment and the launcher (`__main__`) |
 | `config.yaml` | Where `flyte` finds the control plane                   |
+
+Claude Code reaches GenAI Studio through the pacing proxy of
+[`workflows/self-repair`](../self-repair), `genai_proxy.py`, which the launcher
+ships with `jfc.py`.
 
 A run is one `advance` task: the setup if the workspace is new, then one
 headless Claude Code turn. It ends when the agent ends its turn, either with
@@ -71,6 +75,8 @@ A directory `workflows/jfc-<name>` with an `analysis.toml`:
 All in `jfc.py`:
 
 - `JFC` pins the specification by commit.
-- `MODEL` and `PERMISSION_MODE` are passed to Claude Code.
+- `MODEL` is the GenAI Studio model, `CONTEXT` its context in tokens and `RPM`
+  the requests a minute the proxy lets through.
+- `PERMISSION_MODE` and `ALLOWED_TOOLS` are what Claude Code may do unasked.
 - `env` holds what a task pod reserves; `RETRIES` and the timeout of `advance`
   bound a run.
