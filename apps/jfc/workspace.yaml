@@ -3,7 +3,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: jfc-h4l-workspace
+  name: jfc-workspace
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled
 spec:
@@ -24,7 +24,7 @@ spec:
           command:
             - sh
             - -c
-            - mkdir -p /projects/jfc-h4l && chown 1000:1000 /projects/jfc-h4l
+            - mkdir -p /projects/jfc && chown 1000:1000 /projects/jfc
           securityContext:
             runAsUser: 0
           volumeMounts:

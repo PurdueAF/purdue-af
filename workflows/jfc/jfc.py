@@ -1,5 +1,5 @@
-"""Flyte 2 run of the JFC tutorial's H→4ℓ exercise: Claude Code, headless,
-takes the analysis from the physics prompt to the analysis note."""
+"""Runs JFC analyses on Flyte 2: Claude Code, headless, takes an analysis from
+its physics prompt to the analysis note."""
 
 import fcntl
 import json
@@ -10,8 +10,10 @@ import sys
 import tarfile
 import tempfile
 import time
+import tomllib
 import urllib.request
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -19,18 +21,13 @@ from typing import Any
 import flyte
 import flyte.errors
 
-NAME = "jfc-h4l"
+NAME = "jfc"
 IMAGE = "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/self-repair:latest"
-# The one directory of /work a task pod mounts (apps/jfc-h4l/podtemplate.yaml).
+# The one directory of /work a task pod mounts (apps/jfc/podtemplate.yaml).
 ROOT = Path("/work/projects") / NAME
 
-# The tutorial's "full JFC" path, at fixed commits.
+# The specification every analysis follows, at a fixed commit.
 JFC = ("https://github.com/jfc-mit/jfc.git", "9eecb0e0b4c95c362053ad6b121760b47379bc54")
-EXERCISE = (
-    "https://github.com/violatingcp/h4l_agent_test.git",
-    "100d5b4636b3c5c9f3c29f4a935a3c7366c3ae90",
-)
-DATA = "https://s3-west.nrp-nautilus.io/transfer-bucket/h4l-data.tgz"
 
 # The JFC specification asks for Opus in every role.
 MODEL = "opus"
@@ -40,7 +37,7 @@ CORES = 8
 RETRIES = 5
 LOG_LINE = 240
 
-# What the tutorial leaves to the person at the terminal.
+# What an interactive session leaves to the person at the terminal.
 UNATTENDED = """\
 You are running unattended in a container with {cores} CPU cores and no batch \
 system. Run everything here; where the methodology says SLURM, use local \
@@ -58,10 +55,23 @@ INTERRUPTED = (
 )
 REPLY = "The human's reply: {reply}"
 
+
+@dataclass
+class Analysis:
+    """One analysis, as the `analysis.toml` of its directory describes it."""
+
+    name: str
+    kind: str
+    repo: str
+    ref: str
+    files: list[str] = field(default_factory=list)
+    data: str = ""
+
+
 env = flyte.TaskEnvironment(
     name=NAME,
     image=IMAGE,
-    # apps/jfc-h4l/podtemplate.yaml: node placement, the model credentials, the workspace.
+    # apps/jfc/podtemplate.yaml: node placement, the model credentials, the workspace.
     pod_template=NAME,
     resources=flyte.Resources(cpu=CORES, memory="16Gi"),
 )
@@ -84,62 +94,68 @@ def _checkout(source: tuple[str, str], dest: Path) -> None:
     _run("git", "checkout", "--quiet", "FETCH_HEAD", cwd=dest)
 
 
-def _data() -> Path:
-    """The tutorial's ntuples, fetched once and shared by every workspace."""
-    data = ROOT / "data"
+def _data(analysis: Analysis) -> Path:
+    """The analysis's input data, fetched once and shared by its workspaces."""
+    data = ROOT / "data" / analysis.name
     if not data.exists():
-        _log(f"fetching {DATA}")
-        with tempfile.TemporaryDirectory(dir=ROOT) as scratch:
-            archive, _ = urllib.request.urlretrieve(DATA, Path(scratch) / "data.tgz")
+        data.parent.mkdir(exist_ok=True)
+        _log(f"fetching {analysis.data}")
+        with tempfile.TemporaryDirectory(dir=data.parent) as scratch:
+            archive, _ = urllib.request.urlretrieve(
+                analysis.data, Path(scratch) / "data.tgz"
+            )
             with tarfile.open(archive) as tar:
                 tar.extractall(scratch, filter="data")
             (Path(scratch) / "data").rename(data)
     return data
 
 
-def _prepare(home: Path) -> Path:
-    """The tutorial's setup, once per workspace: JFC, an analysis scaffolded in
-    it, the exercise's files there, its environment. Returns the analysis."""
-    jfc, exercise = home / "jfc", home / "h4l_agent_test"
-    analysis = jfc / "analyses/h4l"
+def _prepare(home: Path, analysis: Analysis) -> Path:
+    """Sets a workspace up once: JFC, the analysis scaffolded in it, its prompt,
+    files and data there, its environment. Returns the analysis directory."""
+    spec, source = home / "jfc", home / "source"
+    work = spec / "analyses" / analysis.name
     staged = home / "staged"
     if not staged.exists():
-        shutil.rmtree(jfc, ignore_errors=True)
-        shutil.rmtree(exercise, ignore_errors=True)
-        _checkout(JFC, jfc)
-        _checkout(EXERCISE, exercise)
+        shutil.rmtree(spec, ignore_errors=True)
+        shutil.rmtree(source, ignore_errors=True)
+        _checkout(JFC, spec)
+        _checkout((analysis.repo, analysis.ref), source)
         _run(
             sys.executable,
             "src/scaffold_analysis.py",
-            "analyses/h4l",
+            f"analyses/{analysis.name}",
             "--type",
-            "measurement",
-            cwd=jfc,
+            analysis.kind,
+            cwd=spec,
         )
         # The agent commits its work in the analysis's own repository.
-        _run("git", "config", "user.name", NAME, cwd=analysis)
-        _run("git", "config", "user.email", f"{NAME}@purdue-af.invalid", cwd=analysis)
-        (analysis / "data").symlink_to(_data())
-        (analysis / ".analysis_config").write_text(
-            f"data_dir={analysis}/data\nallow={jfc}/src\n"
-        )
-        shutil.copytree(exercise / "docs", analysis / "docs")
-        shutil.copy(exercise / "h4l_ntuplize.py", analysis)
-        shutil.copy(exercise / "prompt.md", analysis)
-        _run("pixi", "install", cwd=analysis)
+        _run("git", "config", "user.name", NAME, cwd=work)
+        _run("git", "config", "user.email", f"{NAME}@purdue-af.invalid", cwd=work)
+        if analysis.data:
+            (work / "data").symlink_to(_data(analysis))
+            (work / ".analysis_config").write_text(
+                f"data_dir={work}/data\nallow={spec}/src\n"
+            )
+        for name in (*analysis.files, "prompt.md"):
+            if (source / name).is_dir():
+                shutil.copytree(source / name, work / name)
+            else:
+                shutil.copy(source / name, work / name)
+        _run("pixi", "install", cwd=work)
         staged.touch()
-    return analysis
+    return work
 
 
-def _turn(analysis: Path, config: Path, reply: str) -> list[str]:
-    """The Claude Code command of the next turn: the exercise's prompt on a new
+def _turn(work: Path, config: Path, reply: str) -> list[str]:
+    """The Claude Code command of the next turn: the analysis's prompt on a new
     session; on the one that exists, the human's reply, or a nudge without one."""
-    session = str(uuid.uuid5(uuid.NAMESPACE_URL, str(analysis)))
+    session = str(uuid.uuid5(uuid.NAMESPACE_URL, str(work)))
     if any(config.glob(f"projects/*/{session}.jsonl")):
         prompt = REPLY.format(reply=reply) if reply else INTERRUPTED
         how = "--resume"
     else:
-        prompt = UNATTENDED.format(cores=CORES) + (analysis / "prompt.md").read_text()
+        prompt = UNATTENDED.format(cores=CORES) + (work / "prompt.md").read_text()
         how = "--session-id"
     return [
         "claude",
@@ -177,12 +193,12 @@ def _narrate(event: dict[str, Any]) -> str:
     return ("  " if event.get("parent_tool_use_id") and line else "") + line
 
 
-def _claude(command: list[str], analysis: Path, config: Path) -> str:
+def _claude(command: list[str], work: Path, config: Path) -> str:
     """Runs one turn to its end, narrating it, and returns the agent's last message."""
     result: dict[str, Any] = {}
     with subprocess.Popen(
         command,
-        cwd=analysis,
+        cwd=work,
         env={**os.environ, "CLAUDE_CONFIG_DIR": str(config)},
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
@@ -213,13 +229,13 @@ def _claude(command: list[str], analysis: Path, config: Path) -> str:
 
 
 @env.task(retries=RETRIES, timeout=timedelta(hours=24))
-def advance(workspace: str, reply: str) -> str:
+def advance(analysis: Analysis, workspace: str, reply: str) -> str:
     """One stretch of the agent's work in ROOT/<workspace>, until it ends its
     turn: with the analysis note finished, or with something for a person.
     Returns what it said."""
     if not any(os.environ.get(name) for name in CREDENTIALS):
         raise flyte.errors.NonRecoverableError(
-            f"none of {', '.join(CREDENTIALS)} is set: see apps/jfc-h4l/README.md"
+            f"none of {', '.join(CREDENTIALS)} is set: see apps/jfc/README.md"
         )
     home = ROOT / workspace
     if reply and not home.is_dir():
@@ -232,7 +248,7 @@ def advance(workspace: str, reply: str) -> str:
         with open(home / "lock", "w") as lock:
             # One agent per workspace: a second run on it waits for the first.
             fcntl.flock(lock, fcntl.LOCK_EX)
-            analysis = _prepare(home)
+            work = _prepare(home, analysis)
             # A reply reaches the agent once: a retry of the run that carried it nudges.
             told = home / "replies" / ctx.action.run_name
             if reply and told.exists():
@@ -241,7 +257,7 @@ def advance(workspace: str, reply: str) -> str:
                 told.parent.mkdir(exist_ok=True)
                 told.write_text(reply)
             config = home / "claude"
-            said = _claude(_turn(analysis, config, reply), analysis, config)
+            said = _claude(_turn(work, config, reply), work, config)
             (home / "said.md").write_text(said)
     except flyte.errors.NonRecoverableError:
         raise
@@ -256,16 +272,21 @@ def advance(workspace: str, reply: str) -> str:
     return said
 
 
-if __name__ == "__main__":
-    # `python jfc_h4l.py [workspace [reply]]`: see README.md, Running.
+def launch(directory: str, workspace: str = "", *reply: str) -> None:
+    """Starts a run of the analysis in `directory` (README.md, Running)."""
     from flyte.remote import Project
 
+    with open(Path(directory) / "analysis.toml", "rb") as file:
+        analysis = Analysis(**tomllib.load(file))
     flyte.init_from_config("config.yaml", root_dir=Path(__file__).parent)
     if NAME not in {project.pb2.id for project in Project.listall()}:
         Project.create(id=NAME, name=NAME)
-    name = f"{NAME}-{datetime.now(timezone.utc):%m%d-%H%M%S}"
-    workspace, *words = sys.argv[1:] or [""]
+    name = f"{NAME}-{analysis.name}-{datetime.now(timezone.utc):%m%d-%H%M%S}"
     run = flyte.with_runcontext(name=name).run(
-        advance, workspace=workspace or name, reply=" ".join(words)
+        advance, analysis=analysis, workspace=workspace or name, reply=" ".join(reply)
     )
     print(run.name, run.url)
+
+
+if __name__ == "__main__":
+    launch(*sys.argv[1:])

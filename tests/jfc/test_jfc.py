@@ -1,21 +1,48 @@
-"""workflows/jfc-h4l against a stub `flyte` (the SDK is not a test dependency),
-and its wiring to apps/jfc-h4l. Git, pixi, the download and the agent are
-replaced per test."""
+"""workflows/jfc against a stub `flyte` (the SDK is not a test dependency), its
+wiring to apps/jfc, and the analyses beside it. Git, pixi, the download and the
+agent are replaced per test."""
 
 import fcntl
 import io
 import json
+import re
 import sys
 import tarfile
+import tomllib
 import types
 
 import pytest
 import yaml
 from common import REPO, load_script
 
-APP = REPO / "apps" / "jfc-h4l"
-WORKFLOW = REPO / "workflows" / "jfc-h4l"
+APP = REPO / "apps" / "jfc"
+WORKFLOW = REPO / "workflows" / "jfc"
 EXPERIMENTAL = REPO / "deploy" / "experimental" / "kustomization.yaml"
+
+
+class Launcher:
+    """What the launcher asks of the control plane, recorded."""
+
+    projects: list[str] = []
+    runs: list[dict] = []
+
+    @classmethod
+    def listall(cls):
+        return [
+            types.SimpleNamespace(pb2=types.SimpleNamespace(id=p)) for p in cls.projects
+        ]
+
+    @classmethod
+    def create(cls, id, name):
+        cls.projects.append(id)
+
+    @classmethod
+    def with_runcontext(cls, name):
+        def run(task, **inputs):
+            cls.runs.append({"name": name, "task": task, **inputs})
+            return types.SimpleNamespace(name=name, url="url")
+
+        return types.SimpleNamespace(run=run)
 
 
 def _load():
@@ -24,13 +51,17 @@ def _load():
         options=options, task=lambda **task: lambda fn: fn
     )
     flyte.Resources = lambda **kw: kw
+    flyte.init_from_config = lambda *args, **kw: None
+    flyte.with_runcontext = Launcher.with_runcontext
     flyte.errors = types.ModuleType("flyte.errors")
     flyte.errors.NonRecoverableError = type("NonRecoverable", (RuntimeError,), {})
-    stubs = {"flyte": flyte, "flyte.errors": flyte.errors}
+    flyte.remote = types.ModuleType("flyte.remote")
+    flyte.remote.Project = Launcher
+    stubs = {"flyte": flyte, "flyte.errors": flyte.errors, "flyte.remote": flyte.remote}
     saved = {name: sys.modules.get(name) for name in stubs}
     sys.modules.update(stubs)
     try:
-        return load_script(WORKFLOW / "jfc_h4l.py", "jfc_h4l_flows")
+        return load_script(WORKFLOW / "jfc.py", "jfc_flows"), stubs
     finally:
         for name, module in saved.items():
             if module is None:
@@ -39,7 +70,16 @@ def _load():
                 sys.modules[name] = module
 
 
-jfc = _load()
+jfc, STUBS = _load()
+
+ANALYSIS = jfc.Analysis(
+    name="zz",
+    kind="search",
+    repo="https://example.org/zz.git",
+    ref="c0ffee",
+    files=["docs", "ntuplize.py"],
+    data="https://example.org/zz.tgz",
+)
 
 
 @pytest.fixture
@@ -57,8 +97,8 @@ def docs(path):
 
 def test_flux_lists_every_manifest_of_the_app():
     resources = yaml.safe_load(EXPERIMENTAL.read_text())["resources"]
-    assert {r for r in resources if "jfc-h4l" in r} == {
-        f"../../apps/jfc-h4l/{path.name}" for path in APP.glob("*.yaml")
+    assert {r for r in resources if "/apps/jfc/" in r} == {
+        f"../../apps/jfc/{path.name}" for path in APP.glob("*.yaml")
     }
 
 
@@ -94,6 +134,56 @@ def test_the_credentials_secret_is_optional_so_a_task_can_say_it_is_missing():
     assert source["secretRef"]["optional"] is True
 
 
+def test_every_analysis_directory_describes_an_analysis_pinned_to_a_commit():
+    described = sorted((REPO / "workflows").glob("jfc-*/analysis.toml"))
+    assert described
+    for path in described:
+        analysis = jfc.Analysis(**tomllib.loads(path.read_text()))
+        assert path.parent.name == f"jfc-{analysis.name}"
+        assert analysis.kind in ("measurement", "search")
+        assert re.fullmatch(r"[0-9a-f]{40}", analysis.ref)
+
+
+# --- the launcher ---
+
+
+@pytest.fixture
+def launched(tmp_path, monkeypatch):
+    for name, module in STUBS.items():
+        monkeypatch.setitem(sys.modules, name, module)
+    (tmp_path / "analysis.toml").write_text(
+        'name = "zz"\nkind = "search"\nrepo = "https://example.org/zz.git"\nref = "c0ffee"\n'
+    )
+    Launcher.projects[:] = []
+    Launcher.runs[:] = []
+    return str(tmp_path)
+
+
+def test_launch_starts_a_run_named_after_the_analysis_in_a_workspace_of_its_own(
+    launched,
+):
+    jfc.launch(launched)
+    jfc.launch(launched)
+
+    first, second = Launcher.runs
+    assert first["task"] is jfc.advance
+    assert first["analysis"] == jfc.Analysis(
+        "zz", "search", "https://example.org/zz.git", "c0ffee"
+    )
+    assert first["name"].startswith("jfc-zz-") and first["workspace"] == first["name"]
+    assert first["reply"] == ""
+    assert Launcher.projects == [jfc.NAME]
+    assert len(second["name"]) <= 30
+
+
+def test_launch_carries_a_reply_whole_to_the_workspace_it_names(launched):
+    jfc.launch(launched, "jfc-zz-1013-120000", "ITERATE:", "redo the fit")
+
+    (run,) = Launcher.runs
+    assert run["workspace"] == "jfc-zz-1013-120000"
+    assert run["reply"] == "ITERATE: redo the fit"
+
+
 # --- setup ---
 
 
@@ -102,49 +192,63 @@ def _fake_tools(monkeypatch, data):
     calls = []
 
     def checkout(source, dest):
-        calls.append(("checkout", dest.name))
+        calls.append(("checkout", dest.name, *source))
         (dest / "docs").mkdir(parents=True)
         (dest / "docs" / "paper.pdf").write_text("paper")
-        (dest / "h4l_ntuplize.py").write_text("ntuplizer")
-        (dest / "prompt.md").write_text("measure the Higgs mass")
+        (dest / "ntuplize.py").write_text("ntuplizer")
+        (dest / "prompt.md").write_text("search for ZZ")
 
     def run(*command, cwd):
-        calls.append(command[:2])
+        calls.append(command[1:] if command[0] == sys.executable else command[:2])
         if "src/scaffold_analysis.py" in command:
             (cwd / command[2]).mkdir(parents=True)
 
     monkeypatch.setattr(jfc, "_checkout", checkout)
     monkeypatch.setattr(jfc, "_run", run)
-    monkeypatch.setattr(jfc, "_data", lambda: data)
+    monkeypatch.setattr(jfc, "_data", lambda analysis: data)
     return calls
 
 
-def test_prepare_stages_the_exercise_into_a_scaffolded_analysis(root, monkeypatch):
+def test_prepare_stages_the_analysis_into_its_scaffold(root, monkeypatch):
     data = root / "data"
     data.mkdir()
     calls = _fake_tools(monkeypatch, data)
 
-    analysis = jfc._prepare(root / "run")
+    work = jfc._prepare(root / "run", ANALYSIS)
 
-    assert analysis == root / "run/jfc/analyses/h4l"
-    assert (analysis / "data").resolve() == data.resolve()
-    assert (analysis / "prompt.md").read_text() == "measure the Higgs mass"
-    assert (analysis / "docs/paper.pdf").is_file()
-    assert (analysis / "h4l_ntuplize.py").is_file()
+    assert work == root / "run/jfc/analyses/zz"
+    assert ("checkout", "jfc", *jfc.JFC) in calls
+    assert ("checkout", "source", ANALYSIS.repo, ANALYSIS.ref) in calls
+    assert ("src/scaffold_analysis.py", "analyses/zz", "--type", "search") in calls
+    assert (work / "data").resolve() == data.resolve()
+    assert (work / "prompt.md").read_text() == "search for ZZ"
+    assert (work / "docs/paper.pdf").is_file()
+    assert (work / "ntuplize.py").is_file()
     assert calls[-1] == ("pixi", "install")
+
+
+def test_prepare_stages_only_the_prompt_of_an_analysis_that_names_nothing_else(
+    root, monkeypatch
+):
+    _fake_tools(monkeypatch, root)
+    bare = jfc.Analysis("zz", "search", ANALYSIS.repo, ANALYSIS.ref)
+
+    work = jfc._prepare(root / "run", bare)
+
+    assert sorted(path.name for path in work.iterdir()) == ["prompt.md"]
 
 
 def test_prepare_leaves_a_staged_workspace_to_the_agent(root, monkeypatch):
     calls = _fake_tools(monkeypatch, root)
-    analysis = jfc._prepare(root / "run")
-    (analysis / "prompt.md").unlink()
-    (analysis / "experiment_log.md").write_text("the agent's work")
+    work = jfc._prepare(root / "run", ANALYSIS)
+    (work / "prompt.md").unlink()
+    (work / "experiment_log.md").write_text("the agent's work")
     calls.clear()
 
-    assert jfc._prepare(root / "run") == analysis
+    assert jfc._prepare(root / "run", ANALYSIS) == work
 
     assert calls == []
-    assert (analysis / "experiment_log.md").is_file()
+    assert (work / "experiment_log.md").is_file()
 
 
 def test_prepare_redoes_a_setup_that_died_before_its_last_step(root, monkeypatch):
@@ -158,18 +262,21 @@ def test_prepare_redoes_a_setup_that_died_before_its_last_step(root, monkeypatch
 
     monkeypatch.setattr(jfc, "_run", dies_installing)
     with pytest.raises(OSError):
-        jfc._prepare(root / "run")
+        jfc._prepare(root / "run", ANALYSIS)
     monkeypatch.setattr(jfc, "_run", run)
     calls.clear()
 
-    jfc._prepare(root / "run")
+    jfc._prepare(root / "run", ANALYSIS)
 
-    assert calls[:2] == [("checkout", "jfc"), ("checkout", "h4l_agent_test")]
+    assert [call[:2] for call in calls[:2]] == [
+        ("checkout", "jfc"),
+        ("checkout", "source"),
+    ]
     assert calls[-1] == ("pixi", "install")
 
 
-def test_data_is_fetched_once(root, tmp_path_factory, monkeypatch):
-    source = tmp_path_factory.mktemp("s3") / "h4l.tgz"
+def test_data_is_fetched_once_per_analysis(root, tmp_path_factory, monkeypatch):
+    source = tmp_path_factory.mktemp("s3") / "zz.tgz"
     with tarfile.open(source, "w:gz") as tar:
         info = tarfile.TarInfo("data/ZZTo4L.root")
         info.size = 6
@@ -183,20 +290,20 @@ def test_data_is_fetched_once(root, tmp_path_factory, monkeypatch):
 
     monkeypatch.setattr(jfc.urllib.request, "urlretrieve", urlretrieve)
 
-    assert jfc._data() == jfc._data() == root / "data"
-    assert (root / "data/ZZTo4L.root").read_bytes() == b"events"
-    assert fetched == [jfc.DATA]
-    assert [path.name for path in root.iterdir()] == ["data"]
+    assert jfc._data(ANALYSIS) == jfc._data(ANALYSIS) == root / "data/zz"
+    assert (root / "data/zz/ZZTo4L.root").read_bytes() == b"events"
+    assert fetched == [ANALYSIS.data]
+    assert [path.name for path in (root / "data").iterdir()] == ["zz"]
 
 
 # --- the agent ---
 
 
 def _workspace(root):
-    analysis, config = root / "analysis", root / "claude"
-    analysis.mkdir()
-    (analysis / "prompt.md").write_text("measure the Higgs mass")
-    return analysis, config
+    work, config = root / "analysis", root / "claude"
+    work.mkdir()
+    (work / "prompt.md").write_text("search for ZZ")
+    return work, config
 
 
 def _session(command):
@@ -204,26 +311,26 @@ def _session(command):
     return flag, command[command.index(flag) + 1]
 
 
-def test_first_turn_opens_a_session_with_the_exercise_prompt(root):
-    analysis, config = _workspace(root)
+def test_first_turn_opens_a_session_with_the_analysis_prompt(root):
+    work, config = _workspace(root)
 
-    command = jfc._turn(analysis, config, "")
+    command = jfc._turn(work, config, "")
 
     assert command[:2] == ["claude", "--print"]
-    assert command[2].endswith("measure the Higgs mass")
+    assert command[2].endswith("search for ZZ")
     assert _session(command)[0] == "--session-id"
     assert command[command.index("--permission-mode") + 1] == jfc.PERMISSION_MODE
     assert command[command.index("--model") + 1] == jfc.MODEL
 
 
 def test_later_turns_resume_that_session_with_the_reply_or_a_nudge(root):
-    analysis, config = _workspace(root)
-    _, session = _session(jfc._turn(analysis, config, ""))
+    work, config = _workspace(root)
+    _, session = _session(jfc._turn(work, config, ""))
     (config / "projects/slug").mkdir(parents=True)
     (config / "projects/slug" / f"{session}.jsonl").write_text("{}")
 
-    replied = jfc._turn(analysis, config, "APPROVE")
-    nudged = jfc._turn(analysis, config, "")
+    replied = jfc._turn(work, config, "APPROVE")
+    nudged = jfc._turn(work, config, "")
 
     assert _session(replied) == _session(nudged) == ("--resume", session)
     assert replied[2] == jfc.REPLY.format(reply="APPROVE")
@@ -318,7 +425,7 @@ def test_a_rejected_credential_is_not_worth_a_retry(tmp_path):
 @pytest.fixture
 def stretch(root, monkeypatch):
     """`advance` with the setup done, the agent recorded, and no real pauses."""
-    analysis, _ = _workspace(root)
+    work, _ = _workspace(root)
     state = types.SimpleNamespace(
         attempt_number=0,
         action=types.SimpleNamespace(run_name="run-1"),
@@ -333,7 +440,7 @@ def stretch(root, monkeypatch):
         return "At the human gate."
 
     monkeypatch.setattr(jfc.flyte, "ctx", lambda: state, raising=False)
-    monkeypatch.setattr(jfc, "_prepare", lambda home: analysis)
+    monkeypatch.setattr(jfc, "_prepare", lambda home, analysis: work)
     monkeypatch.setattr(jfc, "_claude", claude)
     monkeypatch.setattr(jfc.time, "sleep", state.slept.append)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "stand-in")
@@ -343,24 +450,24 @@ def stretch(root, monkeypatch):
 def test_advance_refuses_to_start_without_credentials(root, monkeypatch):
     for name in jfc.CREDENTIALS:
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(jfc, "_prepare", lambda home: pytest.fail("set up anyway"))
+    monkeypatch.setattr(jfc, "_prepare", lambda *args: pytest.fail("set up anyway"))
 
     with pytest.raises(jfc.flyte.errors.NonRecoverableError):
-        jfc.advance("ws", "")
+        jfc.advance(ANALYSIS, "ws", "")
 
 
 def test_advance_returns_and_keeps_what_the_agent_said(root, stretch):
-    assert jfc.advance("ws", "") == "At the human gate."
+    assert jfc.advance(ANALYSIS, "ws", "") == "At the human gate."
     assert (root / "ws/said.md").read_text() == "At the human gate."
     assert stretch.slept == []
 
 
 def test_advance_hands_a_reply_to_the_agent_once(root, stretch):
-    jfc.advance("ws", "")
+    jfc.advance(ANALYSIS, "ws", "")
     stretch.action.run_name = "run-2"
 
-    jfc.advance("ws", "REGRESS(2)")
-    jfc.advance("ws", "REGRESS(2)")  # run-2 retried
+    jfc.advance(ANALYSIS, "ws", "REGRESS(2)")
+    jfc.advance(ANALYSIS, "ws", "REGRESS(2)")  # run-2 retried
 
     assert stretch.prompts[1:] == [
         jfc.REPLY.format(reply="REGRESS(2)"),
@@ -371,7 +478,7 @@ def test_advance_hands_a_reply_to_the_agent_once(root, stretch):
 
 def test_advance_refuses_a_reply_to_a_workspace_that_does_not_exist(root, stretch):
     with pytest.raises(jfc.flyte.errors.NonRecoverableError):
-        jfc.advance("typo", "APPROVE")
+        jfc.advance(ANALYSIS, "typo", "APPROVE")
     assert stretch.prompts == [] and not (root / "typo").exists()
 
 
@@ -382,7 +489,7 @@ def test_advance_runs_the_agent_under_the_workspace_lock(root, stretch, monkeypa
         return ""
 
     monkeypatch.setattr(jfc, "_claude", claude)
-    jfc.advance("ws", "")
+    jfc.advance(ANALYSIS, "ws", "")
 
 
 def _failing(error):
@@ -397,7 +504,7 @@ def test_advance_waits_after_a_failed_turn_longer_each_time(stretch, monkeypatch
 
     for stretch.attempt_number in (0, 1, 4, jfc.RETRIES):
         with pytest.raises(RuntimeError, match="usage limit"):
-            jfc.advance("ws", "")
+            jfc.advance(ANALYSIS, "ws", "")
 
     assert stretch.slept == [15 * 60, 30 * 60, 240 * 60]
 
@@ -407,6 +514,6 @@ def test_advance_does_not_wait_on_a_failure_no_retry_follows(stretch, monkeypatc
     monkeypatch.setattr(jfc, "_claude", _failing(final))
 
     with pytest.raises(jfc.flyte.errors.NonRecoverableError):
-        jfc.advance("ws", "")
+        jfc.advance(ANALYSIS, "ws", "")
 
     assert stretch.slept == []
