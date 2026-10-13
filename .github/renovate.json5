@@ -91,7 +91,7 @@
       extractVersionTemplate: '^v(?<version>.*)$',
     },
     {
-      // Coding-agent CLIs baked into the AF image. Pinned as Dockerfile ARGs
+      // Coding-agent CLIs baked into the images. Pinned as Dockerfile ARGs
       // (npm install -g <pkg>@<version>), so only a regex manager sees them.
       // The matching code-server extensions are pinned in
       // docker/purdue-af/scripts/config-extensions.sh and come from Open VSX,

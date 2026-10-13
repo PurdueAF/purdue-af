@@ -48,6 +48,11 @@ resources:
   - ../../apps/self-repair/secret-github.yaml
   - ../../apps/self-repair/secret-genai.yaml
 
+  # Runs the JFC tutorial's four-lepton Higgs exercise on demand
+  # (workflows/jfc-h4l).
+  - ../../apps/jfc-h4l/podtemplate.yaml
+  - ../../apps/jfc-h4l/workspace.yaml
+
   - ../../apps/ray/helmrepo.yaml
   - ../../apps/ray/operator/helmrelease.yaml
 

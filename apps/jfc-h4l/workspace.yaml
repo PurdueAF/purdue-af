@@ -1,0 +1,37 @@
+# The directory the task pods mount. A subPath that kubelet creates is root's,
+# and CephFS ignores fsGroup: create it for the task image's user.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jfc-h4l-workspace
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+        - key: hub.jupyter.org/dedicated
+          operator: Equal
+          value: cms-af
+          effect: NoSchedule
+      containers:
+        - name: mkdir
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/self-repair:latest
+          command:
+            - sh
+            - -c
+            - mkdir -p /projects/jfc-h4l && chown 1000:1000 /projects/jfc-h4l
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: work
+              mountPath: /projects
+              subPath: projects
+      volumes:
+        - name: work
+          persistentVolumeClaim:
+            claimName: af-shared-storage

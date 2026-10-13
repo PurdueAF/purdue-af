@@ -1,7 +1,7 @@
 [project]
 name = "self-repair"
 version = "0.0.0"
-description = "Task image of the self-repair Flyte workflow"
+description = "Task image of the Flyte workflows"
 requires-python = ">=3.12"
 dependencies = [
     "flyte==2.11.2",

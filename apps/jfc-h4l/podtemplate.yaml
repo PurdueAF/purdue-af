@@ -1,0 +1,37 @@
+# Pod spec of every jfc-h4l task; replaces the flyte-task default.
+apiVersion: v1
+kind: PodTemplate
+metadata:
+  name: jfc-h4l
+template:
+  spec:
+    automountServiceAccountToken: false
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: hub.jupyter.org/dedicated
+        operator: Equal
+        value: cms-af
+        effect: NoSchedule
+    # The image's `app` user (docker/self-repair/Dockerfile).
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+    containers:
+      - name: default
+        image: overridden-by-flyte
+        # Model credentials and endpoint, under Claude Code's own variable names.
+        envFrom:
+          - secretRef:
+              name: jfc-h4l-claude
+              optional: true
+        volumeMounts:
+          # Of /work, the agent sees this directory only.
+          - name: work
+            mountPath: /work/projects/jfc-h4l
+            subPath: projects/jfc-h4l
+    volumes:
+      - name: work
+        persistentVolumeClaim:
+          claimName: af-shared-storage
