@@ -3,7 +3,7 @@
 # is not baked in — Flyte ships it as a code bundle from the launcher.
 FROM python:3.12-slim
 
-COPY --from=ghcr.io/astral-sh/uv:0.13.0 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
 COPY --from=ghcr.io/prefix-dev/pixi:0.81.0 /usr/local/bin/pixi /usr/local/bin/pixi
 
 # The agents are npm packages around platform binaries; node comes from the
@@ -19,7 +19,7 @@ RUN apt-get update \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 ARG OPENCODE_VERSION="1.19.0"
-ARG CLAUDE_CODE_VERSION="2.1.296"
+ARG CLAUDE_CODE_VERSION="2.1.299"
 # hadolint ignore=DL3016  # pinned via the ARGs above
 RUN npm install -g --no-fund --no-audit \
         "opencode-ai@${OPENCODE_VERSION}" \
