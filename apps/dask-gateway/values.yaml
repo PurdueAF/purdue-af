@@ -137,8 +137,7 @@ gateway:
               import sys
               subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "ldap3==2.9.1"])
 
-          # geddes-auth has no uid index: read the account DN directly; search only as a fallback.
-          from ldap3 import BASE, SUBTREE, Server, Connection
+          from ldap3 import BASE, Server, Connection
           url = "geddes-auth.rcac.purdue.edu"
           baseDN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
           attrs = ['uidNumber','gidNumber']
@@ -152,14 +151,6 @@ gateway:
               attributes = attrs
           )
           entries = json.loads(conn.response_to_json())[u'entries']
-          if not entries:
-              conn.search(
-                  search_base = baseDN,
-                  search_filter = "(uid={0}*)".format(username),
-                  search_scope = SUBTREE,
-                  attributes = attrs
-              )
-              entries = json.loads(conn.response_to_json())[u'entries']
           if not entries:
               raise ValueError("no LDAP entry for " + username)
           result = entries[0][u'attributes']

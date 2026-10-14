@@ -41,32 +41,22 @@ def test_ldap_lookup_binds_in_plaintext_for_the_e2e_mock(monkeypatch, fake_ldap)
 
 
 def test_ldap_lookup_reads_the_dn_instead_of_searching(monkeypatch, fake_ldap):
-    """A base-scope read of the account's DN, never a filtered search: the
-    directory has no uid index, and a search blocks the Hub's event loop."""
+    """A base-scope read of the account's DN, never a filtered search."""
     ns = load(monkeypatch)
     ns["ldap_lookup"]("alice")
     assert fake_ldap["scopes"] == ["BASE"]
     assert fake_ldap["searches"] == ["(objectClass=*)"]
 
 
-def test_ldap_lookup_falls_back_to_search_when_dn_is_empty(monkeypatch, fake_ldap):
-    """An entry that is not at uid=<name>,<base> is still found, slowly."""
-    fake_ldap["missing_dns"].add(f"uid=alice,{ALL_PEOPLE}")
-    ns = load(monkeypatch)
-
-    assert ns["ldap_lookup"]("alice") == (12345, 67890)
-
-    assert fake_ldap["scopes"] == ["BASE", "SUBTREE"]
-    assert fake_ldap["searches"] == ["(objectClass=*)", "(uid=alice*)"]
-    assert fake_ldap["bases"] == [f"uid=alice,{ALL_PEOPLE}", ALL_PEOPLE]
-
-
 def test_ldap_lookup_raises_when_the_user_is_absent(monkeypatch, fake_ldap):
-    fake_ldap["missing_dns"].update({f"uid=alice,{ALL_PEOPLE}", ALL_PEOPLE})
+    """No search follows a miss: it could only match another account."""
+    fake_ldap["missing_dns"].add(f"uid=alice,{ALL_PEOPLE}")
     ns = load(monkeypatch)
 
     with pytest.raises(RuntimeError, match="no LDAP entry for alice"):
         ns["ldap_lookup"]("alice")
+
+    assert fake_ldap["bases"] == [f"uid=alice,{ALL_PEOPLE}"]
 
 
 # ── passthrough_auth_state_hook ───────────────────────────────────────────────

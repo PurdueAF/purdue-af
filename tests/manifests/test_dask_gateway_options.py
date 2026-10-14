@@ -262,11 +262,10 @@ def test_lookup_reads_the_dn_at_base_scope(code):
     assert "search_scope = BASE" in code
 
 
-def test_lookup_falls_back_to_a_search_and_reports_a_miss(code):
-    """An account not at its own DN is still resolved, and a genuine miss
-    raises instead of IndexError-ing on entries[0]."""
-    assert '"(uid={0}*)".format(username)' in code
-    assert "search_scope = SUBTREE" in code
+def test_lookup_reports_a_miss_without_searching(code):
+    """A miss raises: no search that could match another account, no
+    IndexError on entries[0]."""
+    assert "SUBTREE" not in code
     assert 'raise ValueError("no LDAP entry for " + username)' in code
     assert "[u'entries'][0]" not in code
 

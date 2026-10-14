@@ -18,8 +18,7 @@ def fake_ldap(monkeypatch):
         "hosts": [],
         # (use_ssl, "start_tls" | "bind") per connection
         "sessions": [],
-        # DNs the directory does not hold at their own entry, so a base-scope
-        # read of them comes back empty
+        # DNs the directory does not hold: a read of them comes back empty
         "missing_dns": set(),
     }
 
@@ -63,7 +62,6 @@ def fake_ldap(monkeypatch):
 
     ldap3 = types.ModuleType("ldap3")
     ldap3.BASE = "BASE"
-    ldap3.SUBTREE = "SUBTREE"
     ldap3.Server = fake_server
     ldap3.Connection = FakeConnection
     monkeypatch.setitem(sys.modules, "ldap3", ldap3)

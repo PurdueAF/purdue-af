@@ -3,7 +3,7 @@ import json
 import os
 from typing import Any
 
-from ldap3 import BASE, SUBTREE, Connection, Server
+from ldap3 import BASE, Connection, Server
 
 # JupyterHub injects `c` at exec time; the annotation is for type checkers only.
 c: Any
@@ -25,21 +25,8 @@ def _connect() -> Any:
     return conn
 
 
-def _entry(conn: Any) -> dict[str, Any] | None:
-    entries = json.loads(conn.response_to_json())["entries"]
-    return entries[0]["attributes"] if entries else None
-
-
 def ldap_lookup(username: str) -> tuple[Any, Any]:
-    """UID/GID for `username`, read by DN.
-
-    geddes-auth carries no index on uid: any filtered search under BASE_DN
-    scans the whole tree and takes 15-25s, and because this runs inline on
-    the Hub's event loop it froze every request for that long (2026-09-03
-    migration off geddes-aux). Accounts live at uid=<name>,<BASE_DN>, so a
-    base-scope read of that DN returns the same attributes in ~0ms. The
-    search stays as a fallback for any entry that is not at its own DN.
-    """
+    """UID/GID of the account at uid=<username>,<BASE_DN>."""
     conn = _connect()
     conn.search(
         search_base=f"uid={username},{BASE_DN}",
@@ -47,18 +34,10 @@ def ldap_lookup(username: str) -> tuple[Any, Any]:
         search_scope=BASE,
         attributes=ATTRS,
     )
-    result = _entry(conn)
-    if result is None:
-        print(f"LDAP: no entry at uid={username},{BASE_DN}; falling back to search")
-        conn.search(
-            search_base=BASE_DN,
-            search_filter=f"(uid={username}*)",
-            search_scope=SUBTREE,
-            attributes=ATTRS,
-        )
-        result = _entry(conn)
-    if result is None:
+    entries = json.loads(conn.response_to_json())["entries"]
+    if not entries:
         raise RuntimeError(f"no LDAP entry for {username}")
+    result = entries[0]["attributes"]
     uid_number = result["uidNumber"]
     gid_number = result["gidNumber"]
     print("UID", +uid_number)
