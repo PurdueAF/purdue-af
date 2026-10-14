@@ -1,5 +1,7 @@
 """The pre-commit hook that keeps every relative Markdown link resolving."""
 
+import subprocess
+
 from common import REPO, load_script
 
 check = load_script(
@@ -59,12 +61,20 @@ def test_main_exits_nonzero_on_a_broken_link(tmp_path, capsys):
     assert "missing.md" in capsys.readouterr().out
 
 
+def tracked_markdown():
+    """What pre-commit hands the hook on --all-files: tracked files it types
+    `markdown`, minus any deleted from the working tree."""
+    names = subprocess.run(
+        ["git", "ls-files", "-z", "--", "*.md", "*.markdown"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split("\0")
+    return [REPO / name for name in names if name and (REPO / name).is_file()]
+
+
 def test_every_tracked_markdown_file_passes():
     """The hook's real job: the repository's own links."""
-    failures = [
-        f
-        for path in REPO.rglob("*.md")
-        if ".pixi" not in path.parts and ".venv" not in path.parts
-        for f in check.broken(path)
-    ]
+    failures = [f for path in tracked_markdown() for f in check.broken(path)]
     assert failures == []
