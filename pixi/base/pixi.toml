@@ -43,7 +43,7 @@ bokeh         = "==3.10.0"
 # parses them via the regex-versioning rule in renovate.json5.
 # >=10.2p1 required alongside mamba >=2.8 (both sides must agree on krb5 1.22).
 openssh       = "10.5p1"
-uv            = "==0.13.0"
+uv            = "==0.13.1"
 
 [pypi-dependencies]
 jupyterlab-git            = "==0.55.0"
@@ -56,7 +56,7 @@ purdue-af-vscode-button   = "==0.1.2"
 jupyterlab-topbar-text    = "==1.1.0"
 jupyterlab-theme-toggler  = "==1.1.0"
 dask-gateway              = "==2026.3.0"
-pyroscope-io              = "==1.2.5"
+pyroscope-io              = "==1.3.0"
 jupyter-sshd-proxy        = "==0.3.0"
 pixi-kernel               = "==0.7.1"
 

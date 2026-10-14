@@ -149,7 +149,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tk-8.6.13-noxft_h366c992_103.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tornado-6.5.7-py312h4c3975b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/unicodedata2-17.0.1-py312h4c3975b_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/uv-0.13.0-h535ca38_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/uv-0.13.1-h535ca38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/watchfiles-1.2.0-py312h192e038_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/websockets-17.1-py312h89dfda2_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/xclip-0.13-hb9d3cd8_4.conda
@@ -422,11 +422,11 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/2f/9f/c79aa12d665c78a2dfa74f86eceb71527ef22ed1120de9cec2fe0ab996e6/jupyterlab_git_core-0.54.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/32/46/9cb0e58b2deb7f82b84065f37f3bffeb12413f947f9388e4cac22c4621ce/sortedcontainers-2.4.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/4a/cc/aa1a47f8c92280d37498a5ea56a2a36606d034383e3e6472d64cbb56cf85/msgspec-0.22.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/4d/65/230b61b133b888a45a0e6dbdb127a2f2dfb5f709cccafed2865ade339935/pyroscope_io-1.2.5-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/5b/a5/1a6b5b52cd14be5c0d024a51344e001b079b434a288b4c12838b5a9b2fb4/tornado_proxy_handlers-0.0.6-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/60/dd/75a852b276f29e131c33083cb57dfaf3996c94ac2e07b1c90cf5950b7505/nbdime-4.0.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6c/c0/a98505f18594f1bce828bb159cec0fcf9860562f1a2c85913409fc8f3d9e/fsspec-2026.9.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/71/e7/40fb618334dcdf7c5a316c0e7343c5cd82d3d866edc100d98e29bc945ecd/partd-1.4.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/7f/6c/bc6afe994dabca8fb516ea54a1597f1808dfd5ecbf39b5641fea3bea4214/pyroscope_io-1.3.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/80/ab/11a76c1e2126084fde2639514f24e6111b789b0bfa4fc6264a8975c7e1f1/zict-3.0.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/91/f3/fc82c9f22c851e68f17d26a8f3dd603f0bdfdc2005ab7e65961f9c870d2b/jupyterlab_iframe-0.5.0-py3-none-any.whl
@@ -585,7 +585,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tk-8.6.13-noxft_h366c992_103.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tornado-6.5.7-py312h4c3975b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/unicodedata2-17.0.1-py312h4c3975b_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/uv-0.13.0-h535ca38_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/uv-0.13.1-h535ca38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/watchfiles-1.2.0-py312h192e038_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/websockets-17.1-py312h89dfda2_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/xclip-0.13-hb9d3cd8_4.conda
@@ -858,11 +858,11 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/2f/9f/c79aa12d665c78a2dfa74f86eceb71527ef22ed1120de9cec2fe0ab996e6/jupyterlab_git_core-0.54.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/32/46/9cb0e58b2deb7f82b84065f37f3bffeb12413f947f9388e4cac22c4621ce/sortedcontainers-2.4.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/4a/cc/aa1a47f8c92280d37498a5ea56a2a36606d034383e3e6472d64cbb56cf85/msgspec-0.22.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/4d/65/230b61b133b888a45a0e6dbdb127a2f2dfb5f709cccafed2865ade339935/pyroscope_io-1.2.5-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/5b/a5/1a6b5b52cd14be5c0d024a51344e001b079b434a288b4c12838b5a9b2fb4/tornado_proxy_handlers-0.0.6-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/60/dd/75a852b276f29e131c33083cb57dfaf3996c94ac2e07b1c90cf5950b7505/nbdime-4.0.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6c/c0/a98505f18594f1bce828bb159cec0fcf9860562f1a2c85913409fc8f3d9e/fsspec-2026.9.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/71/e7/40fb618334dcdf7c5a316c0e7343c5cd82d3d866edc100d98e29bc945ecd/partd-1.4.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/7f/6c/bc6afe994dabca8fb516ea54a1597f1808dfd5ecbf39b5641fea3bea4214/pyroscope_io-1.3.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/80/ab/11a76c1e2126084fde2639514f24e6111b789b0bfa4fc6264a8975c7e1f1/zict-3.0.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/91/f3/fc82c9f22c851e68f17d26a8f3dd603f0bdfdc2005ab7e65961f9c870d2b/jupyterlab_iframe-0.5.0-py3-none-any.whl
@@ -2839,21 +2839,21 @@ packages:
   - pkg:pypi/unicodedata2?source=hash-mapping
   size: 410641
   timestamp: 1770909099497
-- conda: https://conda.anaconda.org/conda-forge/linux-64/uv-0.13.0-h535ca38_0.conda
-  sha256: 7b5adaeea6a8063d6d2b8616ca2c9bd2f22c651900121610601817cd021baba4
-  md5: 4b7caa30d9d6a3e03e51315d6324f2b8
+- conda: https://conda.anaconda.org/conda-forge/linux-64/uv-0.13.1-h535ca38_0.conda
+  sha256: c91f061e5a995d04a106477310be306a62bdb304b4c268b38830d24330d96b87
+  md5: 8ba559132729faf35ae2261250b49e03
   depends:
-  - libstdcxx >=15
-  - libgcc >=15
   - __glibc >=2.17,<3.0.a0
+  - libgcc >=15
+  - libstdcxx >=15
   - zstd >=1.5.7,<1.6.0a0
   constrains:
   - __glibc >=2.17
   license: Apache-2.0 OR MIT
   purls: []
   run_exports: {}
-  size: 15402666
-  timestamp: 1791605206284
+  size: 15078136
+  timestamp: 1791985600554
 - conda: https://conda.anaconda.org/conda-forge/linux-64/watchfiles-1.2.0-py312h192e038_1.conda
   sha256: 031a34fd258fe876c78bc382b719733b670b6704d875377adf3d74cd15cdeb88
   md5: 2631cc5eddeb5d1b230d7e2e2a5f9a71
@@ -3496,7 +3496,7 @@ packages:
   license: BSD-3-Clause
   license_family: BSD
   purls:
-  - pkg:pypi/bokeh?source=compressed-mapping
+  - pkg:pypi/bokeh?source=hash-mapping
   size: 4454345
   timestamp: 1787144786949
 - conda: https://conda.anaconda.org/conda-forge/noarch/boltons-26.0.0-pyhd8ed1ab_0.conda
@@ -6414,7 +6414,7 @@ packages:
   license: BSD-3-Clause
   license_family: BSD
   purls:
-  - pkg:pypi/uvicorn?source=compressed-mapping
+  - pkg:pypi/uvicorn?source=hash-mapping
   size: 60189
   timestamp: 1787133003107
 - conda: https://conda.anaconda.org/conda-forge/noarch/wcwidth-0.8.1-pyhd8ed1ab_0.conda
@@ -6602,11 +6602,6 @@ packages:
   - tomli-w ; extra == 'toml'
   - pyyaml ; extra == 'yaml'
   requires_python: '>=3.10'
-- pypi: https://files.pythonhosted.org/packages/4d/65/230b61b133b888a45a0e6dbdb127a2f2dfb5f709cccafed2865ade339935/pyroscope_io-1.2.5-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
-  name: pyroscope-io
-  version: 1.2.5
-  sha256: 2544bf5b47870ce1a370511f2aa7228a047ef153c98b5e62ce6f3c84f9c3d435
-  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/5b/a5/1a6b5b52cd14be5c0d024a51344e001b079b434a288b4c12838b5a9b2fb4/tornado_proxy_handlers-0.0.6-py2.py3-none-any.whl
   name: tornado-proxy-handlers
   version: 0.0.6
@@ -6770,6 +6765,11 @@ packages:
   - pyzmq ; extra == 'complete'
   - blosc ; extra == 'complete'
   requires_python: '>=3.9'
+- pypi: https://files.pythonhosted.org/packages/7f/6c/bc6afe994dabca8fb516ea54a1597f1808dfd5ecbf39b5641fea3bea4214/pyroscope_io-1.3.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+  name: pyroscope-io
+  version: 1.3.0
+  sha256: 3bc762bde88854cabf1c07ddcc4b31a36b8a4da190ee212004eb85be52bdfb7d
+  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/80/ab/11a76c1e2126084fde2639514f24e6111b789b0bfa4fc6264a8975c7e1f1/zict-3.0.0-py2.py3-none-any.whl
   name: zict
   version: 3.0.0
