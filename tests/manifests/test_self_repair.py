@@ -79,7 +79,7 @@ def test_launcher_is_an_hourly_cronjob_running_the_module():
     (cronjob,) = docs(APP / "cronjob.yaml")
     assert cronjob["kind"] == "CronJob" and cronjob["metadata"]["name"] == "self-repair"
     spec = cronjob["spec"]
-    assert spec["suspend"] is False
+    assert spec["suspend"] is True
     assert spec["schedule"] == "0 * * * *"
     assert spec["concurrencyPolicy"] == "Forbid"
     # every tick must reach back past the previous one

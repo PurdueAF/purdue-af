@@ -5,7 +5,7 @@ metadata:
   name: self-repair
 spec:
   schedule: "0 * * * *"
-  suspend: false
+  suspend: true
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 600
   successfulJobsHistoryLimit: 3
