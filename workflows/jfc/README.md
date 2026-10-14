@@ -9,10 +9,11 @@ their directory on `/work` and the model credentials are
 [`docker/self-repair`](../../docker/self-repair). An analysis is a directory
 with an `analysis.toml`, such as [`workflows/jfc-h4l`](../jfc-h4l).
 
-| File          | What it is                                              |
-| ------------- | ------------------------------------------------------- |
-| `jfc.py`      | The task, its environment and the launcher (`__main__`) |
-| `config.yaml` | Where `flyte` finds the control plane                   |
+| File               | What it is                                                   |
+| ------------------ | ------------------------------------------------------------ |
+| `jfc.py`           | The task, its environment and the launcher (`__main__`)      |
+| `jfc_profiling.py` | The profiler hook installed into each analysis's environment |
+| `config.yaml`      | Where `flyte` finds the control plane                        |
 
 A run is one `advance` task: the setup if the workspace is new, then one
 headless Claude Code turn. It ends when the agent ends its turn, either with
@@ -25,6 +26,13 @@ agent's session, the replies it was given, the tokens its runs have processed,
 and the last run's output in `said.md`.
 An analysis's data is fetched once per URL under `/work/projects/jfc/data`. A
 retried task resumes the session.
+
+Every Python process in an analysis's environment sends CPU profiles to
+[Pyroscope](../../apps/monitoring/pyroscope), under `service_name="jfc"` and
+tagged with its `analysis`, `workspace` and `script`. The setup keeps that
+environment's Python within the versions `pyroscope-io` ships wheels for,
+adds `pyroscope-io`, and installs `jfc_profiling.py` with a `.pth` file that
+starts it.
 
 ## Running
 
