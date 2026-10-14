@@ -75,6 +75,7 @@ def _load():
 
 jfc, STUBS = _load()
 profiling = jfc.jfc_profiling
+clusters = jfc.jfc_dask
 
 ANALYSIS = jfc.Analysis(
     name="zz",
@@ -152,6 +153,19 @@ def test_task_pods_send_profiles_where_the_sessions_do_as_the_workflow():
     hub = yaml.safe_load((REPO / "apps/jupyterhub/jupyterhub/values.yaml").read_text())
     assert env["PYROSCOPE_SERVER"] == _found(hub, "PYROSCOPE_SERVER")
     assert env["PYROSCOPE_APP"] == jfc.NAME
+
+
+def test_task_pods_reach_the_sessions_gateway_as_the_sessions_do():
+    (template,) = docs(APP / "podtemplate.yaml")
+    container = template["template"]["spec"]["containers"][0]
+    env = {variable["name"]: variable["value"] for variable in container["env"]}
+    spawner = (
+        REPO / "apps/jupyterhub/jupyterhub/extraFiles/custom-spawner.py"
+    ).read_text()
+    names = [name for name in env if name.startswith("DASK_GATEWAY__")]
+    assert len(names) == 3
+    for name in names:
+        assert re.search(rf'"{name}",\s*"{re.escape(env[name])}"', spawner)
 
 
 def test_the_credentials_secret_is_optional_so_a_task_can_say_it_is_missing():
@@ -237,7 +251,7 @@ def _fake_tools(monkeypatch, data):
     monkeypatch.setattr(jfc, "_checkout", checkout)
     monkeypatch.setattr(jfc, "_run", run)
     monkeypatch.setattr(jfc, "_data", lambda analysis: data)
-    monkeypatch.setattr(jfc, "_profile", lambda work: calls.append(("profile", work)))
+    monkeypatch.setattr(jfc, "_install", lambda work: calls.append(("install", work)))
     return calls
 
 
@@ -258,12 +272,14 @@ def test_prepare_stages_the_analysis_into_its_scaffold(root, monkeypatch):
     assert (work / "ntuplize.py").is_file()
     assert calls[-3:] == [
         ("pixi", "add", "--no-install", jfc.PYTHON),
-        ("pixi", "add", "--pypi", "pyroscope-io"),
-        ("profile", work),
+        ("pixi", "add", "--pypi", *jfc.PACKAGES),
+        ("install", work),
     ]
 
 
-def test_every_python_of_the_environment_starts_the_profiler(tmp_path, monkeypatch):
+def test_the_environment_gets_both_helpers_and_every_python_starts_the_profiler(
+    tmp_path, monkeypatch
+):
     packages, seen = tmp_path / "site-packages", tmp_path / "seen.json"
     packages.mkdir()
     pixi = tmp_path / "bin" / "pixi"
@@ -280,7 +296,10 @@ def test_every_python_of_the_environment_starts_the_profiler(tmp_path, monkeypat
         "    pass\n"
     )
 
-    jfc._profile(tmp_path)
+    jfc._install(tmp_path)
+    for module in (profiling, clusters):
+        installed = packages / f"{module.__name__}.py"
+        assert installed.read_text() == open(module.__file__).read()
     env = {
         **os.environ,
         "PYROSCOPE_SERVER": "http://pyroscope:4040",
@@ -422,8 +441,8 @@ def test_prepare_redoes_a_setup_that_died_before_its_last_step(root, monkeypatch
     ]
     assert calls[-3:] == [
         ("pixi", "add", "--no-install", jfc.PYTHON),
-        ("pixi", "add", "--pypi", "pyroscope-io"),
-        ("profile", work),
+        ("pixi", "add", "--pypi", *jfc.PACKAGES),
+        ("install", work),
     ]
 
 
@@ -454,6 +473,104 @@ def test_data_is_fetched_once_per_url(root, tmp_path_factory, monkeypatch):
     assert sorted(path.name for path in (root / "data").iterdir()) == sorted(
         [data.name, jfc._data(moved).name]
     )
+
+
+# --- the analysis's Dask cluster ---
+
+
+@pytest.fixture
+def gateway(tmp_path, monkeypatch):
+    """A stand-in for dask_gateway, over the clusters in `running`; the test's
+    Python is the default pixi environment of `project`."""
+    state = types.SimpleNamespace(
+        project=str(tmp_path / "zz"), running=[], started=[], held=[]
+    )
+    prefix = tmp_path / "zz/.pixi/envs/default"
+    prefix.mkdir(parents=True)
+
+    class Cluster:
+        def __init__(self, name):
+            self.name = name
+
+        def adapt(self, **bounds):
+            state.adapted = (self.name, bounds)
+
+        def get_client(self):
+            return f"client of {self.name}"
+
+    class Gateway:
+        def list_clusters(self):
+            return [
+                types.SimpleNamespace(name=name, options={"pixi_project": project})
+                for name, project in state.running
+            ]
+
+        def connect(self, name):
+            return Cluster(name)
+
+        def new_cluster(self, **options):
+            with open(prefix / "jfc_dask.lock") as other:
+                try:
+                    fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    state.held.append(True)
+            state.started.append(options)
+            return Cluster("new")
+
+    module = types.ModuleType("dask_gateway")
+    module.Gateway = Gateway
+    monkeypatch.setitem(sys.modules, "dask_gateway", module)
+    monkeypatch.setattr(clusters.sys, "prefix", str(prefix))
+    return state
+
+
+def test_a_script_starts_the_analysis_cluster_on_its_environment(gateway, monkeypatch):
+    monkeypatch.setenv("PYROSCOPE_SERVER", "http://pyroscope:4040")
+    monkeypatch.delenv("PYROSCOPE_APP", raising=False)
+    monkeypatch.setenv("JFC_ANALYSIS", "zz")
+    monkeypatch.setenv("JFC_WORKSPACE", "ws")
+    monkeypatch.setenv("JUPYTERHUB_API_TOKEN", "not for workers")
+
+    assert clusters.client(workers=12) == "client of new"
+
+    assert gateway.started == [
+        {
+            "pixi_project": gateway.project,
+            "pixi_env": "default",
+            "env": {
+                "PATH": os.environ["PATH"],
+                "PYROSCOPE_SERVER": "http://pyroscope:4040",
+                "JFC_ANALYSIS": "zz",
+                "JFC_WORKSPACE": "ws",
+            },
+            "shutdown_on_close": False,
+        }
+    ]
+    assert gateway.adapted == ("new", {"minimum": 0, "maximum": 12})
+
+
+def test_a_script_starts_a_cluster_while_no_other_of_the_analysis_can(gateway):
+    clusters.client()
+
+    assert gateway.held == [True]
+
+
+def test_the_analysis_scripts_share_its_running_cluster(gateway):
+    gateway.running = [("ours", gateway.project)]
+
+    assert clusters.client() == "client of ours"
+
+    assert gateway.started == []
+    assert gateway.adapted == ("ours", {"minimum": 0, "maximum": 50})
+
+
+def test_a_script_waits_for_another_cluster_of_the_user_to_end(gateway):
+    gateway.running = [("theirs", "/work/projects/jfc/other")]
+
+    with pytest.raises(RuntimeError, match="theirs is running"):
+        clusters.client()
+
+    assert gateway.started == []
 
 
 # --- the agent ---
@@ -776,6 +893,7 @@ def stretch(root, monkeypatch):
     monkeypatch.setattr(jfc, "_claude", claude)
     monkeypatch.setattr(jfc.time, "sleep", state.slept.append)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "stand-in")
+    monkeypatch.setenv(jfc.GATEWAY_TOKEN, "stand-in")
     return state
 
 
@@ -788,10 +906,36 @@ def test_advance_refuses_to_start_without_credentials(root, monkeypatch):
         jfc.advance(ANALYSIS, "ws", "")
 
 
+def test_advance_refuses_to_start_without_a_gateway_token(root, stretch, monkeypatch):
+    monkeypatch.delenv(jfc.GATEWAY_TOKEN)
+
+    with pytest.raises(jfc.flyte.errors.NonRecoverableError, match=jfc.GATEWAY_TOKEN):
+        jfc.advance(ANALYSIS, "ws", "")
+    assert stretch.prompts == []
+
+
 def test_advance_returns_and_keeps_what_the_agent_said(root, stretch):
     assert jfc.advance(ANALYSIS, "ws", "") == "At the human gate."
     assert (root / "ws/said.md").read_text() == "At the human gate."
     assert stretch.slept == []
+
+
+def test_each_turn_starts_with_the_runners_facility_rules_in_place(
+    root, stretch, monkeypatch
+):
+    memory = root / "ws" / "claude" / "CLAUDE.md"
+    memory.parent.mkdir(parents=True)
+    memory.write_text("the rules of an older runner")
+    read = []
+
+    def claude(command, cwd, config, *counted):
+        read.append((config / "CLAUDE.md").read_text())
+        return ""
+
+    monkeypatch.setattr(jfc, "_claude", claude)
+    jfc.advance(ANALYSIS, "ws", "")
+
+    assert read == [jfc.FACILITY.format(cores=jfc.CORES)]
 
 
 def test_advance_counts_in_the_workspace_and_refuses_once_its_tokens_are_spent(

@@ -13,12 +13,22 @@ with an `analysis.toml`, such as [`workflows/jfc-h4l`](../jfc-h4l).
 | ------------------ | ------------------------------------------------------------ |
 | `jfc.py`           | The task, its environment and the launcher (`__main__`)      |
 | `jfc_profiling.py` | The profiler hook installed into each analysis's environment |
+| `jfc_dask.py`      | The Dask cluster helper installed into the same environment  |
 | `config.yaml`      | Where `flyte` finds the control plane                        |
 
 A run is one `advance` task: the setup if the workspace is new, then one
 headless Claude Code turn. It ends when the agent ends its turn, either with
 the analysis note finished or with a message for a person. JFC stops that way
 to show the draft note before it looks at the full data.
+
+Before each turn the runner writes `FACILITY` as Claude Code's user memory,
+which the agent and every subagent read: start independent subagents
+together, and run every pass over the events on
+[Dask Gateway](../../apps/dask-gateway) through `jfc_dask.client()`, in place
+of the local processes and SLURM the methodology names. That returns a client
+of one cluster per analysis, whose workers run the analysis's environment and
+scale with the work. The cluster belongs to the owner of the Hub token in
+[`jfc-claude`](../../apps/jfc/README.md#secrets).
 
 A workspace is `/work/projects/jfc/<name of its first run>`: the JFC checkout
 with the analysis scaffolded in it, its pixi environment and git history, the
@@ -27,12 +37,12 @@ and the last run's output in `said.md`.
 An analysis's data is fetched once per URL under `/work/projects/jfc/data`. A
 retried task resumes the session.
 
-Every Python process in an analysis's environment sends CPU profiles to
-[Pyroscope](../../apps/monitoring/pyroscope), under `service_name="jfc"` and
-tagged with its `analysis`, `workspace` and `script`. The setup keeps that
-environment's Python within the versions `pyroscope-io` ships wheels for,
-adds `pyroscope-io`, and installs `jfc_profiling.py` with a `.pth` file that
-starts it.
+Every Python process in an analysis's environment, its Dask cluster's
+included, sends CPU profiles to [Pyroscope](../../apps/monitoring/pyroscope),
+under `service_name="jfc"` and tagged with its `analysis`, `workspace` and
+`script`. The setup keeps that environment's Python within the versions
+`pyroscope-io` ships wheels for, adds `PACKAGES`, and installs both helpers,
+with a `.pth` file that starts `jfc_profiling`.
 
 ## Running
 
@@ -83,6 +93,7 @@ A directory `workflows/jfc-<name>` with an `analysis.toml`:
 All in `jfc.py`:
 
 - `JFC` pins the specification by commit.
-- `MODEL` and `PERMISSION_MODE` are passed to Claude Code.
+- `MODEL` and `PERMISSION_MODE` are passed to Claude Code; `FACILITY` is what
+  every agent reads.
 - `env` holds what a task pod reserves; `RETRIES` and the timeout of `advance`
   bound a run.

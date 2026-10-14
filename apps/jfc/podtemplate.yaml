@@ -26,12 +26,19 @@ template:
           - secretRef:
               name: jfc-claude
               optional: true
-        # Where and as what the analysis's scripts send their profiles.
         env:
+          # Where and as what the analysis's scripts send their profiles.
           - name: PYROSCOPE_SERVER
             value: http://pyroscope.cms.svc.cluster.local:4040
           - name: PYROSCOPE_APP
             value: jfc
+          # The sessions' Dask Gateway, with jfc-claude's JUPYTERHUB_API_TOKEN.
+          - name: DASK_GATEWAY__ADDRESS
+            value: http://dask-gateway.geddes.rcac.purdue.edu
+          - name: DASK_GATEWAY__PROXY_ADDRESS
+            value: traefik-dask-gateway.cms.geddes.rcac.purdue.edu:8786
+          - name: DASK_GATEWAY__AUTH__TYPE
+            value: jupyterhub
         volumeMounts:
           # Of /work, the agent sees this directory only.
           - name: work
