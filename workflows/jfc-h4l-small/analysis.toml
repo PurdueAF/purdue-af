@@ -1,0 +1,19 @@
+name = "h4l-small"
+kind = "measurement"
+repo = "https://github.com/violatingcp/h4l_agent_test.git"
+ref = "100d5b4636b3c5c9f3c29f4a935a3c7366c3ae90"
+files = ["docs", "h4l_ntuplize.py"]
+data = "https://s3-west.nrp-nautilus.io/transfer-bucket/h4l-data.tgz"
+tokens = 25_000_000
+scope = """
+This run is a small test of the pipeline, not a physics result. Keep it small:
+
+- Use three samples only: data_secret_10fb.root, GluGluToHToZZ.root and ZZTo4L.root.
+- One selection, one four-lepton mass distribution, and one fit of the signal \
+strength with a flat uncertainty on the ZZ normalisation. No mass fit and no \
+other systematic uncertainty.
+- In each phase, one executor and then one critical reviewer: no review panel, \
+no arbiter, and at most one round of fixes.
+- An analysis note of two pages.
+- Of the methodology, read only the sections the step at hand needs.
+"""

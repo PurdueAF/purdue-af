@@ -21,7 +21,7 @@ template:
     containers:
       - name: default
         image: overridden-by-flyte
-        # Model credentials and endpoint, under Claude Code's own variable names.
+        # The Anthropic credential: apps/jfc/README.md#secrets.
         envFrom:
           - secretRef:
               name: jfc-claude

@@ -4,3 +4,4 @@ repo = "https://github.com/violatingcp/h4l_agent_test.git"
 ref = "100d5b4636b3c5c9f3c29f4a935a3c7366c3ae90"
 files = ["docs", "h4l_ntuplize.py"]
 data = "https://s3-west.nrp-nautilus.io/transfer-bucket/h4l-data.tgz"
+tokens = 600_000_000

@@ -36,6 +36,8 @@ CREDENTIALS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
 CORES = 8
 RETRIES = 5
 LOG_LINE = 240
+# Seconds Claude Code has to end once told to, before it is killed.
+GRACE = 30
 
 # What an interactive session leaves to the person at the terminal.
 UNATTENDED = """\
@@ -54,6 +56,23 @@ INTERRUPTED = (
     "turn again."
 )
 REPLY = "The human's reply: {reply}"
+SPENT = (
+    "Stopped: this workspace has processed its {tokens} tokens. A larger "
+    "`tokens` in the analysis.toml lets it go on."
+)
+USAGE = (
+    "input_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+    "output_tokens",
+)
+# The same, in the totals a turn reports at its end.
+TOTALS = (
+    "inputTokens",
+    "cacheCreationInputTokens",
+    "cacheReadInputTokens",
+    "outputTokens",
+)
 
 
 @dataclass
@@ -66,12 +85,14 @@ class Analysis:
     ref: str
     files: list[str] = field(default_factory=list)
     data: str = ""
+    scope: str = ""
+    tokens: int = 0
 
 
 env = flyte.TaskEnvironment(
     name=NAME,
     image=IMAGE,
-    # apps/jfc/podtemplate.yaml: node placement, the model credentials, the workspace.
+    # apps/jfc/podtemplate.yaml
     pod_template=NAME,
     resources=flyte.Resources(cpu=CORES, memory="16Gi"),
 )
@@ -143,6 +164,9 @@ def _prepare(home: Path, analysis: Analysis) -> Path:
                 shutil.copytree(source / name, work / name)
             else:
                 shutil.copy(source / name, work / name)
+        if analysis.scope:
+            with open(work / "prompt.md", "a") as prompt:
+                prompt.write(f"\n\n{analysis.scope}")
         _run("pixi", "install", cwd=work)
         staged.touch()
     return work
@@ -171,6 +195,8 @@ def _turn(work: Path, config: Path, reply: str) -> list[str]:
         # The scaffold links the methodology in from the JFC checkout beside it.
         "--add-dir",
         str(work.parents[1] / "src"),
+        # A subagent's final reply then reaches the stream, and the count.
+        "--forward-subagent-text",
         "--output-format",
         "stream-json",
         "--verbose",
@@ -197,9 +223,30 @@ def _narrate(event: dict[str, Any]) -> str:
     return ("  " if event.get("parent_tool_use_id") and line else "") + line
 
 
-def _claude(command: list[str], work: Path, config: Path) -> str:
-    """Runs one turn to its end, narrating it, and returns the agent's last message."""
+def _processed(ledger: Path) -> int:
+    """The tokens a workspace has processed so far."""
+    try:
+        return int(ledger.read_text()) if ledger.exists() else 0
+    except ValueError:
+        raise flyte.errors.NonRecoverableError(f"{ledger} holds no count") from None
+
+
+def _count(ledger: Path, total: int) -> None:
+    """Records `total` in `ledger`, whole or not at all."""
+    draft = ledger.with_name(f"{ledger.name}.new")
+    draft.write_text(str(total))
+    os.replace(draft, ledger)
+
+
+def _claude(
+    command: list[str], work: Path, config: Path, ledger: Path, limit: int
+) -> str:
+    """Runs one turn to its end, narrating it, and returns the agent's last
+    message. Adds the tokens of each request to `ledger`, and ends the turn
+    there once the count reaches `limit`, unless that is 0."""
     result: dict[str, Any] = {}
+    start = total = _processed(ledger)
+    requests: dict[str | None, int] = {}
     with subprocess.Popen(
         command,
         cwd=work,
@@ -218,17 +265,44 @@ def _claude(command: list[str], work: Path, config: Path) -> str:
                 _log(line.rstrip())
             elif event.get("type") == "result":
                 result = event
-            elif narrated := _narrate(event):
-                _log(narrated)
+            else:
+                # A request's blocks arrive as events of one message, each with its usage.
+                message = event.get("message") or {}
+                usage = (
+                    message.get("usage") if event.get("type") == "assistant" else None
+                )
+                if usage:
+                    size = sum(usage.get(kind) or 0 for kind in USAGE)
+                    total += size - requests.get(message.get("id"), 0)
+                    requests[message.get("id")] = size
+                    _count(ledger, total)
+                elif event.get("subtype") == "compact_boundary":
+                    # A compaction reads what it summarises and reports no usage.
+                    summarised = event.get("compact_metadata") or {}
+                    total += summarised.get("pre_tokens") or 0
+                    _count(ledger, total)
+                if narrated := _narrate(event):
+                    _log(narrated)
+                if limit and total >= limit:
+                    proc.terminate()
+                    try:
+                        proc.wait(GRACE)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                    _log(f"stopped at {total} of {limit} tokens")
+                    return SPENT.format(tokens=limit)
+    # The turn's totals also cover requests the stream does not show.
+    models = (result.get("modelUsage") or {}).values()
+    reported = sum(model.get(kind) or 0 for model in models for kind in TOTALS)
+    if reported > total - start:
+        total = start + reported
+        _count(ledger, total)
     detail = result.get("result") or result.get("errors") or "no result"
     if result.get("api_error_status") in (401, 403):
         raise flyte.errors.NonRecoverableError(f"claude: {detail}")
     if proc.returncode or result.get("is_error", True):
         raise RuntimeError(f"claude exited {proc.returncode}: {detail}")
-    _log(
-        f"turn over: {result.get('num_turns')} turns, "
-        f"${result.get('total_cost_usd') or 0:.2f}"
-    )
+    _log(f"turn over: {result.get('num_turns')} turns, {total - start} tokens")
     return str(result.get("result") or "")
 
 
@@ -252,6 +326,11 @@ def advance(analysis: Analysis, workspace: str, reply: str) -> str:
             # One agent per workspace: a second run on it waits for the first.
             fcntl.flock(lock, fcntl.LOCK_EX)
             work = _prepare(home, analysis)
+            config, ledger = home / "claude", home / "tokens"
+            if analysis.tokens and _processed(ledger) >= analysis.tokens:
+                raise flyte.errors.NonRecoverableError(
+                    SPENT.format(tokens=analysis.tokens)
+                )
             # A reply reaches the agent once: a retry of the run that carried it nudges.
             told = home / "replies" / ctx.action.run_name
             if reply and told.exists():
@@ -259,8 +338,8 @@ def advance(analysis: Analysis, workspace: str, reply: str) -> str:
             elif reply:
                 told.parent.mkdir(exist_ok=True)
                 told.write_text(reply)
-            config = home / "claude"
-            said = _claude(_turn(work, config, reply), work, config)
+            turn = _turn(work, config, reply)
+            said = _claude(turn, work, config, ledger, analysis.tokens)
             (home / "said.md").write_text(said)
     except flyte.errors.NonRecoverableError:
         raise

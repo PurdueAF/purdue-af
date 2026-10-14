@@ -228,6 +228,16 @@ def test_prepare_stages_the_analysis_into_its_scaffold(root, monkeypatch):
     assert calls[-1] == ("pixi", "install")
 
 
+def test_prepare_puts_the_scope_of_an_analysis_after_its_prompt(root, monkeypatch):
+    _fake_tools(monkeypatch, root)
+    narrowed = jfc.Analysis(**{**vars(ANALYSIS), "scope": "Two samples only."})
+
+    work = jfc._prepare(root / "run", narrowed)
+    jfc._prepare(root / "run", narrowed)
+
+    assert (work / "prompt.md").read_text() == "search for ZZ\n\nTwo samples only."
+
+
 def test_prepare_stages_only_the_prompt_of_an_analysis_that_names_nothing_else(
     root, monkeypatch
 ):
@@ -332,6 +342,7 @@ def test_first_turn_opens_a_session_with_the_analysis_prompt(root):
     assert command[command.index("--model") + 1] == jfc.MODEL
     # The scaffold's methodology, agents and conventions link into it.
     assert command[command.index("--add-dir") + 1] == str(root / "jfc" / "src")
+    assert "--forward-subagent-text" in command
 
 
 def test_later_turns_resume_that_session_with_the_reply_or_a_nudge(root):
@@ -388,12 +399,20 @@ def test_claude_returns_the_result_and_narrates_the_turn(tmp_path, capsys):
                 "is_error": False,
                 "result": "gate: $CONFIG",
                 "num_turns": 7,
-                "total_cost_usd": 1.5,
+                "modelUsage": {"opus": {"inputTokens": 1200, "costUSD": 1.5}},
             }
         ),
     ]
 
-    said = jfc._claude(_fake_claude(tmp_path, lines), tmp_path, tmp_path / "cfg")
+    (tmp_path / "tokens").write_text("50")
+
+    said = jfc._claude(
+        _fake_claude(tmp_path, lines),
+        tmp_path,
+        tmp_path / "cfg",
+        tmp_path / "tokens",
+        0,
+    )
 
     assert said == f"gate: {tmp_path / 'cfg'}"
     logged = [line.split("] ", 1)[1] for line in capsys.readouterr().out.splitlines()]
@@ -403,7 +422,7 @@ def test_claude_returns_the_result_and_narrates_the_turn(tmp_path, capsys):
         "  fit converged",
         "x" * jfc.LOG_LINE,
         "API retry 2/10: rate_limit",
-        "turn over: 7 turns, $1.50",
+        "turn over: 7 turns, 1200 tokens",
     ]
 
 
@@ -420,14 +439,154 @@ def test_claude_raises_unless_the_turn_ended_with_a_clean_result(
 ):
     command = _fake_claude(tmp_path, [json.dumps(result)], code)
     with pytest.raises(RuntimeError, match="claude exited"):
-        jfc._claude(command, tmp_path, tmp_path / "cfg")
+        jfc._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
+
+
+def _assistant_of(request, **usage):
+    """One block of the model's reply to `request`, with what the request counts."""
+    message = {
+        "id": request,
+        "usage": usage,
+        "content": [{"type": "text", "text": "."}],
+    }
+    return json.dumps({"type": "assistant", "message": message})
+
+
+def test_claude_counts_each_request_once_and_what_the_stream_shows_of_the_rest(
+    tmp_path,
+):
+    ledger = tmp_path / "tokens"
+    ledger.write_text("1000")
+    subagent = json.loads(_assistant_of("s", output_tokens=7))
+    subagent["parent_tool_use_id"] = "toolu_1"
+    compaction = {"type": "system", "subtype": "compact_boundary"}
+    full = {"input_tokens": 10, "cache_read_input_tokens": 200, "output_tokens": 5}
+    lines = [
+        _assistant_of("a", input_tokens=10, cache_read_input_tokens=200),
+        _assistant_of("a", **full),
+        _assistant_of(
+            "b",
+            input_tokens=1,
+            cache_creation_input_tokens=30,
+            cache_creation={"ephemeral_5m_input_tokens": 30},
+            output_tokens=None,
+        ),
+        _assistant_of("a", **full),
+        json.dumps(subagent),
+        json.dumps({**compaction, "compact_metadata": {"pre_tokens": 400}}),
+        json.dumps({"type": "user", "message": {"content": "tool output"}}),
+        json.dumps({"type": "result", "is_error": False, "result": "done"}),
+    ]
+
+    said = jfc._claude(
+        _fake_claude(tmp_path, lines), tmp_path, tmp_path / "c", ledger, 0
+    )
+
+    assert said == "done" and ledger.read_text() == str(1000 + 215 + 31 + 7 + 400)
+
+
+@pytest.mark.parametrize("reported, counted", [(100, 900), (900, 900), (5000, 5000)])
+def test_a_turn_counts_by_its_own_totals_when_they_say_more(
+    tmp_path, reported, counted
+):
+    ledger = tmp_path / "tokens"
+    ledger.write_text("10")
+    models = {
+        "opus": {"inputTokens": reported // 2, "cacheReadInputTokens": reported // 4},
+        "haiku": {"outputTokens": reported // 4, "costUSD": 1.5},
+    }
+    lines = [
+        _assistant_of("a", input_tokens=900),
+        json.dumps({"type": "result", "is_error": True, "modelUsage": models}),
+    ]
+
+    with pytest.raises(RuntimeError):
+        jfc._claude(
+            _fake_claude(tmp_path, lines, 1), tmp_path, tmp_path / "c", ledger, 0
+        )
+
+    assert ledger.read_text() == str(10 + counted)
+
+
+def test_claude_records_a_request_as_it_arrives(tmp_path):
+    ledger, seen = tmp_path / "tokens", tmp_path / "seen"
+    script = tmp_path / "claude.py"
+    script.write_text(
+        "import pathlib, time\n"
+        f"print({_assistant_of('a', input_tokens=10)!r}, flush=True)\n"
+        f"ledger = pathlib.Path({str(ledger)!r})\n"
+        "deadline = time.monotonic() + 5\n"
+        "while time.monotonic() < deadline and not ledger.exists():\n"
+        "    time.sleep(0.01)\n"
+        f"pathlib.Path({str(seen)!r}).write_text(ledger.read_text())\n"
+    )
+    command = [sys.executable, str(script)]
+
+    with pytest.raises(RuntimeError):
+        jfc._claude(command, tmp_path, tmp_path / "c", ledger, 0)
+
+    assert seen.read_text() == ledger.read_text() == "10"
+
+
+@pytest.mark.parametrize("held", ["", "12 tokens"])
+def test_a_count_that_cannot_be_read_stops_the_workspace(tmp_path, held):
+    ledger = tmp_path / "tokens"
+    ledger.write_text(held)
+    with pytest.raises(jfc.flyte.errors.NonRecoverableError, match=str(ledger)):
+        jfc._claude(_fake_claude(tmp_path, []), tmp_path, tmp_path / "c", ledger, 0)
+
+
+def test_a_subagent_counts_toward_the_limit_and_can_reach_it(tmp_path):
+    ledger = tmp_path / "tokens"
+    subagent = json.loads(_assistant_of("s", input_tokens=100))
+    subagent["parent_tool_use_id"] = "toolu_1"
+    lines = [
+        json.dumps(subagent),
+        json.dumps({"type": "result", "is_error": False, "result": "done"}),
+    ]
+
+    said = jfc._claude(
+        _fake_claude(tmp_path, lines), tmp_path, tmp_path / "c", ledger, 100
+    )
+
+    assert said == jfc.SPENT.format(tokens=100) and ledger.read_text() == "100"
+
+
+@pytest.mark.parametrize("deaf", [False, True])
+def test_claude_ends_a_turn_that_reaches_the_limit(tmp_path, monkeypatch, deaf):
+    monkeypatch.setattr(jfc, "GRACE", 0.5 if deaf else 20)
+    ledger, closed = tmp_path / "tokens", tmp_path / "closed"
+    ledger.write_text("90")
+    on_term = (
+        "signal.SIG_IGN"
+        if deaf
+        else f"lambda *_: (open({str(closed)!r}, 'w').close(), sys.exit(0))"
+    )
+    script = tmp_path / "claude.py"
+    script.write_text(
+        "import signal, sys, time\n"
+        f"signal.signal(signal.SIGTERM, {on_term})\n"
+        f"print({_assistant_of('a', input_tokens=4)!r}, flush=True)\n"
+        f"print({_assistant_of('b', input_tokens=6)!r}, flush=True)\n"
+        "time.sleep(60)\n"
+        f"print({_assistant_of('c', input_tokens=1000)!r}, flush=True)\n"
+    )
+    started = jfc.time.monotonic()
+    command = [sys.executable, str(script)]
+
+    said = jfc._claude(command, tmp_path, tmp_path / "c", ledger, 100)
+
+    assert said == jfc.SPENT.format(tokens=100) and ledger.read_text() == "100"
+    assert jfc.time.monotonic() - started < 10
+    # Told to end first, so that it can close its session; killed only if it does not.
+    assert closed.exists() is not deaf
 
 
 def test_a_rejected_credential_is_not_worth_a_retry(tmp_path):
     result = {"type": "result", "is_error": True, "api_error_status": 401}
     command = _fake_claude(tmp_path, [json.dumps(result)], 1)
     with pytest.raises(jfc.flyte.errors.NonRecoverableError):
-        jfc._claude(command, tmp_path, tmp_path / "cfg")
+        jfc._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
 
 
 # --- the task ---
@@ -441,11 +600,13 @@ def stretch(root, monkeypatch):
         attempt_number=0,
         action=types.SimpleNamespace(run_name="ws"),
         prompts=[],
+        limits=[],
         slept=[],
     )
 
-    def claude(command, cwd, config):
+    def claude(command, cwd, config, ledger, limit):
         state.prompts.append(command[2])
+        state.limits.append((ledger, limit))
         (config / "projects/slug").mkdir(parents=True, exist_ok=True)
         (config / "projects/slug" / f"{_session(command)[1]}.jsonl").write_text("{}")
         return "At the human gate."
@@ -473,6 +634,24 @@ def test_advance_returns_and_keeps_what_the_agent_said(root, stretch):
     assert stretch.slept == []
 
 
+def test_advance_counts_in_the_workspace_and_refuses_once_its_tokens_are_spent(
+    root, stretch
+):
+    capped = jfc.Analysis(**{**vars(ANALYSIS), "tokens": 500})
+
+    jfc.advance(capped, "ws", "")
+    (root / "ws" / "tokens").write_text("500")
+    with pytest.raises(jfc.flyte.errors.NonRecoverableError, match="500 tokens"):
+        jfc.advance(capped, "ws", "APPROVE")
+    jfc.advance(ANALYSIS, "ws", "")
+
+    assert stretch.limits == [
+        (root / "ws" / "tokens", 500),
+        (root / "ws" / "tokens", 0),
+    ]
+    assert not (root / "ws" / "replies").exists()
+
+
 def test_advance_hands_a_reply_to_the_agent_once(root, stretch):
     jfc.advance(ANALYSIS, "ws", "")
     stretch.action.run_name = "run-2"
@@ -497,7 +676,7 @@ def test_advance_refuses_a_workspace_that_is_neither_its_own_nor_there(
 
 
 def test_advance_runs_the_agent_under_the_workspace_lock(root, stretch, monkeypatch):
-    def claude(command, cwd, config):
+    def claude(command, cwd, config, *counted):
         with open(root / "ws/lock") as other, pytest.raises(BlockingIOError):
             fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return ""
@@ -507,7 +686,7 @@ def test_advance_runs_the_agent_under_the_workspace_lock(root, stretch, monkeypa
 
 
 def _failing(error):
-    def claude(command, cwd, config):
+    def claude(*turn):
         raise error
 
     return claude
