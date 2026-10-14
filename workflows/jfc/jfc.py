@@ -20,6 +20,7 @@ from typing import Any
 
 import flyte
 import flyte.errors
+import jfc_profiling
 
 NAME = "jfc"
 IMAGE = "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/self-repair:latest"
@@ -33,6 +34,8 @@ JFC = ("https://github.com/jfc-mit/jfc.git", "9eecb0e0b4c95c362053ad6b121760b473
 MODEL = "opus"
 PERMISSION_MODE = "auto"
 CREDENTIALS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
+# Under the newest Python that pyroscope-io has wheels for (jfc_profiling).
+PYTHON = "python<3.15"
 CORES = 8
 RETRIES = 5
 LOG_LINE = 240
@@ -167,9 +170,34 @@ def _prepare(home: Path, analysis: Analysis) -> Path:
         if analysis.scope:
             with open(work / "prompt.md", "a") as prompt:
                 prompt.write(f"\n\n{analysis.scope}")
-        _run("pixi", "install", cwd=work)
+        _run("pixi", "add", "--no-install", PYTHON, cwd=work)
+        _run("pixi", "add", "--pypi", "pyroscope-io", cwd=work)
+        _profile(work)
         staged.touch()
     return work
+
+
+def _profile(work: Path) -> None:
+    """Has every Python process of the analysis's environment start
+    jfc_profiling, by a .pth file in its site-packages."""
+    where = subprocess.run(
+        [
+            "pixi",
+            "run",
+            "python",
+            "-c",
+            "import sysconfig; print(sysconfig.get_path('purelib'))",
+        ],
+        cwd=work,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    packages = Path(where.stdout.strip().splitlines()[-1])
+    shutil.copy(jfc_profiling.__file__, packages / "jfc_profiling.py")
+    (packages / "jfc_profiling.pth").write_text(
+        "import jfc_profiling; jfc_profiling.start()\n"
+    )
 
 
 def _turn(work: Path, config: Path, reply: str) -> list[str]:
@@ -250,7 +278,13 @@ def _claude(
     with subprocess.Popen(
         command,
         cwd=work,
-        env={**os.environ, "CLAUDE_CONFIG_DIR": str(config)},
+        env={
+            **os.environ,
+            "CLAUDE_CONFIG_DIR": str(config),
+            # Tags of the profiles the analysis's scripts send.
+            "JFC_ANALYSIS": work.name,
+            "JFC_WORKSPACE": work.parents[2].name,
+        },
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,

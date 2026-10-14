@@ -5,7 +5,9 @@ agent are replaced per test."""
 import fcntl
 import io
 import json
+import os
 import re
+import subprocess
 import sys
 import tarfile
 import types
@@ -59,6 +61,8 @@ def _load():
     stubs = {"flyte": flyte, "flyte.errors": flyte.errors, "flyte.remote": flyte.remote}
     saved = {name: sys.modules.get(name) for name in stubs}
     sys.modules.update(stubs)
+    # The launcher and the task find jfc_profiling beside jfc.py.
+    sys.path.insert(0, str(WORKFLOW))
     try:
         return load_script(WORKFLOW / "jfc.py", "jfc_flows"), stubs
     finally:
@@ -70,6 +74,7 @@ def _load():
 
 
 jfc, STUBS = _load()
+profiling = jfc.jfc_profiling
 
 ANALYSIS = jfc.Analysis(
     name="zz",
@@ -125,6 +130,28 @@ def test_task_pods_mount_only_the_directory_the_workspace_job_creates_for_them()
     assert container["command"][-1] == (
         f"mkdir -p {directory} && chown {owner} {directory}"
     )
+
+
+def _found(document, key):
+    """The value of the first `key` anywhere in a parsed YAML document."""
+    if isinstance(document, dict):
+        if key in document:
+            return document[key]
+        document = list(document.values())
+    if isinstance(document, list):
+        for item in document:
+            if (value := _found(item, key)) is not None:
+                return value
+    return None
+
+
+def test_task_pods_send_profiles_where_the_sessions_do_as_the_workflow():
+    (template,) = docs(APP / "podtemplate.yaml")
+    container = template["template"]["spec"]["containers"][0]
+    env = {variable["name"]: variable["value"] for variable in container["env"]}
+    hub = yaml.safe_load((REPO / "apps/jupyterhub/jupyterhub/values.yaml").read_text())
+    assert env["PYROSCOPE_SERVER"] == _found(hub, "PYROSCOPE_SERVER")
+    assert env["PYROSCOPE_APP"] == jfc.NAME
 
 
 def test_the_credentials_secret_is_optional_so_a_task_can_say_it_is_missing():
@@ -200,13 +227,17 @@ def _fake_tools(monkeypatch, data):
         (dest / "prompt.md").write_text("search for ZZ")
 
     def run(*command, cwd):
-        calls.append(command[1:] if command[0] == sys.executable else command[:2])
+        if command[0] == "pixi":
+            calls.append(command)
+        else:
+            calls.append(command[1:] if command[0] == sys.executable else command[:2])
         if "src/scaffold_analysis.py" in command:
             (cwd / command[2]).mkdir(parents=True)
 
     monkeypatch.setattr(jfc, "_checkout", checkout)
     monkeypatch.setattr(jfc, "_run", run)
     monkeypatch.setattr(jfc, "_data", lambda analysis: data)
+    monkeypatch.setattr(jfc, "_profile", lambda work: calls.append(("profile", work)))
     return calls
 
 
@@ -225,7 +256,113 @@ def test_prepare_stages_the_analysis_into_its_scaffold(root, monkeypatch):
     assert (work / "prompt.md").read_text() == "search for ZZ"
     assert (work / "docs/paper.pdf").is_file()
     assert (work / "ntuplize.py").is_file()
-    assert calls[-1] == ("pixi", "install")
+    assert calls[-3:] == [
+        ("pixi", "add", "--no-install", jfc.PYTHON),
+        ("pixi", "add", "--pypi", "pyroscope-io"),
+        ("profile", work),
+    ]
+
+
+def test_every_python_of_the_environment_starts_the_profiler(tmp_path, monkeypatch):
+    packages, seen = tmp_path / "site-packages", tmp_path / "seen.json"
+    packages.mkdir()
+    pixi = tmp_path / "bin" / "pixi"
+    pixi.parent.mkdir()
+    pixi.write_text(f"#!/bin/sh\necho 'a notice'\necho {packages}\n")
+    pixi.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{pixi.parent}{os.pathsep}{os.environ['PATH']}")
+    (packages / "pyroscope.py").write_text(
+        "import json, os\n"
+        "def configure(**options):\n"
+        "    with open(os.environ['SEEN'], 'w') as seen:\n"
+        "        json.dump(options, seen)\n"
+        "def shutdown():\n"
+        "    pass\n"
+    )
+
+    jfc._profile(tmp_path)
+    env = {
+        **os.environ,
+        "PYROSCOPE_SERVER": "http://pyroscope:4040",
+        "PYROSCOPE_APP": "jfc",
+        "JFC_ANALYSIS": "zz",
+        "JFC_WORKSPACE": "ws",
+        "SEEN": str(seen),
+    }
+    load = f"import site; site.addsitedir({str(packages)!r})"
+    subprocess.run([sys.executable, "-c", load], env=env, check=True)
+
+    options = json.loads(seen.read_text())
+    assert options["application_name"] == "jfc"
+    assert options["server_address"] == "http://pyroscope:4040"
+    assert options["tags"] == {"analysis": "zz", "workspace": "ws", "script": "-c"}
+
+
+@pytest.fixture
+def pyroscope(monkeypatch):
+    """A stand-in for pyroscope-io, recording how it is started."""
+    calls = types.SimpleNamespace(configured=[], at_exit=[])
+    module = types.ModuleType("pyroscope")
+
+    # Keywords of pyroscope-io 1.3's configure: it refuses any other.
+    def configure(
+        *,
+        application_name=None,
+        server_address="http://localhost:4040",
+        enable_logging=False,
+        sample_rate=100,
+        oncpu=True,
+        gil_only=True,
+        report_pid=False,
+        tags=None,
+        upload_interval=10,
+        mem_enabled=False,
+    ):
+        calls.configured.append(dict(locals()))
+
+    module.configure = configure
+    module.shutdown = lambda: None
+    monkeypatch.setitem(sys.modules, "pyroscope", module)
+    monkeypatch.setattr(profiling, "started", False)
+    monkeypatch.setattr(profiling.atexit, "register", calls.at_exit.append)
+    calls.module = module
+    return calls
+
+
+def test_the_profiler_starts_once_and_only_where_a_server_is_named(
+    pyroscope, monkeypatch
+):
+    monkeypatch.delenv("PYROSCOPE_SERVER", raising=False)
+    profiling.start()
+    assert pyroscope.configured == []
+
+    monkeypatch.setenv("PYROSCOPE_SERVER", "http://pyroscope:4040")
+    profiling.start()
+    profiling.start()
+
+    (options,) = pyroscope.configured
+    assert options["server_address"] == "http://pyroscope:4040"
+    assert options["gil_only"] is False and options["oncpu"] is True
+    assert pyroscope.at_exit == [pyroscope.module.shutdown]
+
+
+@pytest.mark.parametrize("broken", ["missing", "raising"])
+def test_a_profiler_that_cannot_start_leaves_the_script_alone(
+    pyroscope, monkeypatch, broken
+):
+    monkeypatch.setenv("PYROSCOPE_SERVER", "http://pyroscope:4040")
+    if broken == "missing":
+        monkeypatch.setitem(sys.modules, "pyroscope", None)
+    else:
+
+        def configure(**options):
+            raise OSError("no route to pyroscope")
+
+        pyroscope.module.configure = configure
+
+    profiling.start()
+
+    assert pyroscope.at_exit == []
 
 
 def test_prepare_puts_the_scope_of_an_analysis_after_its_prompt(root, monkeypatch):
@@ -277,13 +414,17 @@ def test_prepare_redoes_a_setup_that_died_before_its_last_step(root, monkeypatch
     monkeypatch.setattr(jfc, "_run", run)
     calls.clear()
 
-    jfc._prepare(root / "run", ANALYSIS)
+    work = jfc._prepare(root / "run", ANALYSIS)
 
     assert [call[:2] for call in calls[:2]] == [
         ("checkout", "jfc"),
         ("checkout", "source"),
     ]
-    assert calls[-1] == ("pixi", "install")
+    assert calls[-3:] == [
+        ("pixi", "add", "--no-install", jfc.PYTHON),
+        ("pixi", "add", "--pypi", "pyroscope-io"),
+        ("profile", work),
+    ]
 
 
 def test_data_is_fetched_once_per_url(root, tmp_path_factory, monkeypatch):
@@ -365,10 +506,29 @@ def _fake_claude(tmp_path, lines, code=0):
     script.write_text(
         "import os, sys\n"
         f"for line in {lines!r}:\n"
+        "    for name in ('JFC_ANALYSIS', 'JFC_WORKSPACE'):\n"
+        "        line = line.replace('$' + name, os.environ[name])\n"
         "    print(line.replace('$CONFIG', os.environ['CLAUDE_CONFIG_DIR']))\n"
         f"sys.exit({code})\n"
     )
     return [sys.executable, str(script)]
+
+
+def test_claude_names_the_analysis_and_workspace_its_scripts_tag_profiles_with(
+    tmp_path,
+):
+    work = tmp_path / "ws" / "jfc" / "analyses" / "zz"
+    work.mkdir(parents=True)
+    result = {
+        "type": "result",
+        "is_error": False,
+        "result": "$JFC_ANALYSIS $JFC_WORKSPACE",
+    }
+    command = _fake_claude(tmp_path, [json.dumps(result)])
+
+    said = jfc._claude(command, work, tmp_path / "c", tmp_path / "tokens", 0)
+
+    assert said == "zz ws"
 
 
 def _assistant(*content, **extra):

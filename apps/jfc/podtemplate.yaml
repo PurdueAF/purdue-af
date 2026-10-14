@@ -26,6 +26,12 @@ template:
           - secretRef:
               name: jfc-claude
               optional: true
+        # Where and as what the analysis's scripts send their profiles.
+        env:
+          - name: PYROSCOPE_SERVER
+            value: http://pyroscope.cms.svc.cluster.local:4040
+          - name: PYROSCOPE_APP
+            value: jfc
         volumeMounts:
           # Of /work, the agent sees this directory only.
           - name: work
