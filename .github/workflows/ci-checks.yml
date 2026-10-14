@@ -13,7 +13,7 @@ permissions:
 env:
   FLUX_VERSION: 2.5.1
   # renovate: datasource=pypi depName=pre-commit
-  PRE_COMMIT_VERSION: 4.6.2
+  PRE_COMMIT_VERSION: 4.7.0
   # renovate: datasource=github-releases depName=yannh/kubeconform
   KUBECONFORM_VERSION: v0.8.0
   # renovate: datasource=github-releases depName=prometheus/prometheus extractVersion=^v(?<version>.+)$
