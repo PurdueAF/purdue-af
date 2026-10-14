@@ -49,7 +49,7 @@ jobs:
         uses: ./.github/actions/memo-restore
         with:
           key: ${{ steps.key.outputs.key }}
-      - uses: prefix-dev/setup-pixi@a2789fe3805b9ae22d6c25a15df2f2c624cd092e # v0.11.1 # Renovate pins to digest
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2 # Renovate pins to digest
         if: steps.memo.outputs.hit != 'true'
         with:
           pixi-version: v${{ steps.pixi.outputs.version }}
