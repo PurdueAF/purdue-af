@@ -48,6 +48,10 @@ resources:
   - ../../apps/self-repair/secret-github.yaml
   - ../../apps/self-repair/secret-genai.yaml
 
+  # Runs JFC analyses on demand (workflows/jfc).
+  - ../../apps/jfc/podtemplate.yaml
+  - ../../apps/jfc/workspace.yaml
+
   - ../../apps/ray/helmrepo.yaml
   - ../../apps/ray/operator/helmrelease.yaml
 

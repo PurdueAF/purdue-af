@@ -1,11 +1,12 @@
-# Task image of the self-repair workflow (workflows/self-repair): the Flyte 2
-# runtime, git, and opencode as the coding agent. The workflow code itself is
-# not baked in — Flyte ships it as a code bundle from the launcher.
+# Task image of the Flyte workflows under workflows/: the Flyte 2 runtime, git,
+# pixi, and the coding agents (opencode, Claude Code). The workflow code itself
+# is not baked in — Flyte ships it as a code bundle from the launcher.
 FROM python:3.12-slim
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.0 /uv /uvx /bin/
+COPY --from=ghcr.io/prefix-dev/pixi:0.81.0 /usr/local/bin/pixi /usr/local/bin/pixi
 
-# opencode is an npm package around a platform binary; node comes from the
+# The agents are npm packages around platform binaries; node comes from the
 # official image of the same Debian release rather than apt, which lags.
 COPY --from=node:24-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 COPY --from=node:24-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
@@ -18,12 +19,18 @@ RUN apt-get update \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 ARG OPENCODE_VERSION="1.19.0"
-# hadolint ignore=DL3016  # pinned via the ARG above
-RUN npm install -g --no-fund --no-audit "opencode-ai@${OPENCODE_VERSION}" \
+ARG CLAUDE_CODE_VERSION="2.1.296"
+# hadolint ignore=DL3016  # pinned via the ARGs above
+RUN npm install -g --no-fund --no-audit \
+        "opencode-ai@${OPENCODE_VERSION}" \
+        "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
     && opencode --version \
+    && claude --version \
     && rm -rf /root/.npm
+# Pinned in a root-owned prefix: Claude Code does not look for updates.
+ENV DISABLE_AUTOUPDATER=1
 
-# A real home: opencode keeps its state under ~/.local/share/opencode.
+# A real home: the agents and pixi keep state and caches under it.
 RUN useradd --uid 1000 --user-group --create-home --shell /bin/bash app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -38,3 +45,5 @@ USER 1000
 ENV HOME=/home/app
 # Flyte extracts the code bundle into the cwd; /app is root's.
 WORKDIR /home/app
+# Both run as that user.
+RUN claude --version && pixi --version

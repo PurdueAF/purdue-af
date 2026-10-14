@@ -55,6 +55,7 @@ Whether each component on the cluster is running what is on `main`
 ![flyte][experimental-flyte]
 ![interlink-hammer][experimental-interlink-hammer]
 ![self-repair][experimental-self-repair]
+![jfc][experimental-jfc]
 ![af-monitoring][experimental-monitoring-af-monitoring]
 ![alloy][experimental-monitoring-alloy]
 ![loki][experimental-monitoring-loki]
@@ -111,6 +112,7 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-flyte]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-flyte.json
 [experimental-interlink-hammer]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-hammer.json
 [experimental-self-repair]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-self-repair.json
+[experimental-jfc]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-jfc.json
 [experimental-monitoring-af-monitoring]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-af-monitoring.json
 [experimental-monitoring-alloy]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-alloy.json
 [experimental-monitoring-loki]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-loki.json

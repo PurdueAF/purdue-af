@@ -260,8 +260,8 @@ class TestLoki:
             for channel in status.CHANNELS
             for component in status.discover_components(channel)
         }
-        # apps/storage runs no pod; apps/self-repair is this workflow's own
-        unread = {"apps/storage", "apps/self-repair"}
+        # storage runs no pod; the other two narrate an agent's work, errors included
+        unread = {"apps/storage", "apps/self-repair", "apps/jfc"}
         listed = set(triage.WATCHED_WORKLOADS.values()) | unread
 
         def within(component, directory):

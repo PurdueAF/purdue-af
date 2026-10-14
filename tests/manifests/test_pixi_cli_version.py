@@ -1,5 +1,5 @@
-"""The pixi CLI version has one pin, ARG PIXI_VERSION in the AF Dockerfile,
-which the pixi workflows read at run time."""
+"""The pixi workflows read the pixi CLI version at run time from
+ARG PIXI_VERSION in the AF Dockerfile instead of carrying one."""
 
 import os
 import re
