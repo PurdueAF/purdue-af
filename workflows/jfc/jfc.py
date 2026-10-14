@@ -20,6 +20,7 @@ from typing import Any
 
 import flyte
 import flyte.errors
+import jfc_dask
 import jfc_profiling
 
 NAME = "jfc"
@@ -34,21 +35,68 @@ JFC = ("https://github.com/jfc-mit/jfc.git", "9eecb0e0b4c95c362053ad6b121760b473
 MODEL = "opus"
 PERMISSION_MODE = "auto"
 CREDENTIALS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
+# Whose Dask Gateway clusters the analysis gets (jfc_dask).
+GATEWAY_TOKEN = "JUPYTERHUB_API_TOKEN"
 # Under the newest Python that pyroscope-io has wheels for (jfc_profiling).
 PYTHON = "python<3.15"
+# What jfc_profiling and jfc_dask need; the gateway also asks for prometheus-client.
+PACKAGES = ("pyroscope-io", "dask-gateway", "distributed", "prometheus-client")
 CORES = 8
 RETRIES = 5
 LOG_LINE = 240
 # Seconds Claude Code has to end once told to, before it is killed.
 GRACE = 30
 
+# Claude Code's user memory: every agent and subagent reads it, at every turn.
+FACILITY = """\
+# The facility
+
+These rules hold for every agent of this analysis, and over the methodology's \
+where they differ.
+
+## Run independent work at the same time
+
+- Start subagents whose work does not depend on each other's in one message, \
+as several Agent calls in the foreground: they run at the same time, and the \
+results arrive when all have finished.
+- What may run at once is in methodology/03a-orchestration.md §3a.5: a review \
+panel's reviewers; the channels of Phases 2-3; shared calibrations beside \
+Phases 2-3; within a phase, independent pieces such as plots, systematic \
+variations, closure and injection tests, each on a subagent writing its own \
+directory, merged before the review.
+- Phases stay in order, and a review waits for the work it reviews.
+
+## Process data on Dask Gateway
+
+This container has {cores} cores and there is no batch system: every pass over \
+the events of data or simulation runs on the facility's Dask Gateway, never in \
+a local process, whatever its size. That replaces single-core, multicore, \
+ProcessPoolExecutor and SLURM wherever the methodology names them. Looking at \
+a file's branches or a few of its entries does not need it.
+
+```python
+from jfc_dask import client
+
+dask = client()
+```
+
+`client()` returns a dask.distributed Client of the analysis's cluster: its \
+workers run this pixi environment, grow with the work, and stop on their own. \
+Split the input by file and entry range, select and fill histograms in the \
+tasks, and bring back histograms, cutflows or small arrays, not events. Many \
+independent fits, such as toys, are tasks too.
+
+- Workers see /work as you do but start elsewhere: give them absolute paths.
+- Workers run as another user and cannot write here: tasks return what they \
+make, and the script writes it.
+- A task can call what its script defines or the environment installs; send \
+a module of the analysis's own with `dask.upload_file(path)`.
+"""
 # What an interactive session leaves to the person at the terminal.
 UNATTENDED = """\
-You are running unattended in a container with {cores} CPU cores and no batch \
-system. Run everything here; where the methodology says SLURM, use local \
-processes instead.
-Nobody can answer a question before the human gate. Do not stop to ask one: \
-decide, note the decision in experiment_log.md, and continue.
+You are running unattended. Nobody can answer a question before the human \
+gate. Do not stop to ask one: decide, note the decision in experiment_log.md, \
+and continue.
 At the human gate, end your turn with what you would show the human and where \
 the compiled note is. The reply arrives as your next message.
 
@@ -171,15 +219,15 @@ def _prepare(home: Path, analysis: Analysis) -> Path:
             with open(work / "prompt.md", "a") as prompt:
                 prompt.write(f"\n\n{analysis.scope}")
         _run("pixi", "add", "--no-install", PYTHON, cwd=work)
-        _run("pixi", "add", "--pypi", "pyroscope-io", cwd=work)
-        _profile(work)
+        _run("pixi", "add", "--pypi", *PACKAGES, cwd=work)
+        _install(work)
         staged.touch()
     return work
 
 
-def _profile(work: Path) -> None:
-    """Has every Python process of the analysis's environment start
-    jfc_profiling, by a .pth file in its site-packages."""
+def _install(work: Path) -> None:
+    """Puts jfc_profiling and jfc_dask into the analysis's environment, and has
+    every Python process of it start jfc_profiling, by a .pth file."""
     where = subprocess.run(
         [
             "pixi",
@@ -194,7 +242,8 @@ def _profile(work: Path) -> None:
         check=True,
     )
     packages = Path(where.stdout.strip().splitlines()[-1])
-    shutil.copy(jfc_profiling.__file__, packages / "jfc_profiling.py")
+    for module in (jfc_profiling, jfc_dask):
+        shutil.copy(str(module.__file__), packages / f"{module.__name__}.py")
     (packages / "jfc_profiling.pth").write_text(
         "import jfc_profiling; jfc_profiling.start()\n"
     )
@@ -208,7 +257,7 @@ def _turn(work: Path, config: Path, reply: str) -> list[str]:
         prompt = REPLY.format(reply=reply) if reply else INTERRUPTED
         how = "--resume"
     else:
-        prompt = UNATTENDED.format(cores=CORES) + (work / "prompt.md").read_text()
+        prompt = UNATTENDED + (work / "prompt.md").read_text()
         how = "--session-id"
     return [
         "claude",
@@ -349,6 +398,10 @@ def advance(analysis: Analysis, workspace: str, reply: str) -> str:
         raise flyte.errors.NonRecoverableError(
             f"none of {', '.join(CREDENTIALS)} is set: see apps/jfc/README.md"
         )
+    if not os.environ.get(GATEWAY_TOKEN):
+        raise flyte.errors.NonRecoverableError(
+            f"{GATEWAY_TOKEN} is not set: see apps/jfc/README.md"
+        )
     ctx = flyte.ctx()
     home = ROOT / workspace
     # A run makes only the workspace named after it; any other must exist.
@@ -372,6 +425,8 @@ def advance(analysis: Analysis, workspace: str, reply: str) -> str:
             elif reply:
                 told.parent.mkdir(exist_ok=True)
                 told.write_text(reply)
+            config.mkdir(exist_ok=True)
+            (config / "CLAUDE.md").write_text(FACILITY.format(cores=CORES))
             turn = _turn(work, config, reply)
             said = _claude(turn, work, config, ledger, analysis.tokens)
             (home / "said.md").write_text(said)
