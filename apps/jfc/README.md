@@ -7,8 +7,17 @@ the directory they work in. Runs are started by hand
 
 | File               | What it is                                                                                                  |
 | ------------------ | ----------------------------------------------------------------------------------------------------------- |
-| `podtemplate.yaml` | Pod spec of every task pod: AF node placement, the image's user, the GenAI Studio key, the workspace mount  |
+| `podtemplate.yaml` | Pod spec of every task pod: AF node placement, the image's user, the model credentials, the workspace mount |
 | `workspace.yaml`   | The Job that creates `/work/projects/jfc` for that user                                                     |
 
-The key is the `self-repair-genai` Secret of
-[`apps/self-repair`](../self-repair/README.md#secrets).
+## Secrets
+
+| Secret       | In repo | Holds                                                                                                     |
+| ------------ | ------- | --------------------------------------------------------------------------------------------------------- |
+| `jfc-claude` | no      | Created by hand. Each key becomes an environment variable of the task pods, named as Claude Code reads it |
+
+One of these keys:
+
+- `CLAUDE_CODE_OAUTH_TOKEN`, as printed by `claude setup-token`: runs count
+  against that account's subscription
+- `ANTHROPIC_API_KEY`: runs are billed to the API account
