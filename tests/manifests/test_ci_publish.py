@@ -1,7 +1,7 @@
 """Tests for the publish stage of .github/workflows/ci.yml.
 
-Every GHCR call is wrapped in the retry helper: rate limits and network blips
-are transient."""
+Every GHCR call that can end the step is wrapped in the retry helper: rate
+limits and network blips are transient."""
 
 import re
 
@@ -33,6 +33,9 @@ def test_every_imagetools_call_is_retried():
             if stripped.startswith(("until ", "retag()", "ghcr_retry()")):
                 continue
             if "ghcr_retry" in stripped or stripped.startswith("retag "):
+                continue
+            # a failing `if` condition takes the other branch instead of exiting
+            if stripped.startswith("if "):
                 continue
             unguarded.append(f"{step.get('name')}: {stripped}")
     assert not unguarded, f"GHCR calls with no retry: {unguarded}"

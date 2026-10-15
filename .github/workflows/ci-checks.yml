@@ -42,8 +42,13 @@ jobs:
         run: pre-commit run --all-files --show-diff-on-failure --color always
 
   check-unit:
+    # Sharded, as one job it is stage 0's long pole; codecov.yml's after_n_builds counts the shards.
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     permissions:
       contents: read
       id-token: write # Codecov OIDC upload (no token secret needed)
@@ -59,8 +64,10 @@ jobs:
         run: >-
           uv run --project tests --frozen
           pytest -q -c tests/pyproject.toml tests -n auto
+          --shard ${{ matrix.shard }}/${{ strategy.job-total }}
           --cov --cov-report=xml
       - name: Skill version stamp names the release it ships in
+        if: matrix.shard == 1
         run: |
           tag="agentic-interface-v$(python3 .github/workflows/bump-agentic-version.py --print-current)"
           git fetch -q --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}"

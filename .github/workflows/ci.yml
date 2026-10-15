@@ -143,13 +143,19 @@ jobs:
           first=1
           for pair in $AUX_TAGS; do
             # name=in-<hash>=<channel>
-            if [ "$first" -eq 0 ]; then sleep 5; else first=0; fi
             name="${pair%%=*}"; rest="${pair#*=}"
             tag="${rest%%=*}"; channel="${rest#*=}"
             repo="ghcr.io/purdueaf/${name}"
             digest=$(ghcr_retry "imagetools inspect $repo:$tag" \
               docker buildx imagetools inspect "$repo:$tag" --format '{{json .Manifest}}' | jq -r .digest)
             [ -n "$digest" ] && [ "$digest" != "null" ] || { echo "::error::cannot resolve $repo:$tag"; exit 1; }
+            # imagetools create wraps the image in an index, so a published channel tag lists the digest as a child.
+            if docker buildx imagetools inspect "$repo:$channel" --raw 2>/dev/null \
+                | jq -e --arg d "$digest" 'any(.manifests[]?; .digest == $d)' >/dev/null; then
+              echo "unchanged $repo@$digest ($tag) — :$channel already points at it" | tee -a "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            if [ "$first" -eq 0 ]; then sleep 5; else first=0; fi
             retag \
               -t "$repo:sha-$GITHUB_SHA" \
               -t "$repo:$channel" \
