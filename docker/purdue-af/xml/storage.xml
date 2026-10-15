@@ -9,10 +9,8 @@
   <lfn-to-pfn protocol="hadoop" path-match="/+store/(.+)" result="/store/$1"/>
 
   <!-- XCache for NANOAOD -->
-  <lfn-to-pfn protocol="xrootd" destination-match=".*" path-match="/+store/data/(.*/.*/NANOAOD/.*)" result="root://cms-xcache.rcac.purdue.edu:1094//store/data/$1"/>
-  <lfn-to-pfn protocol="xrootd" destination-match=".*" path-match="/+store/data/(.*/.*/NANOAOD/.*)" result="root://cms-xcache.rcac.purdue.edu:1094//store/data/$1"/>
-  <lfn-to-pfn protocol="fuse" destination-match=".*" path-match="/+store/mc/(.*/.*/NANOAODSIM/.*)" result="root://cms-xcache.rcac.purdue.edu:1094//store/mc/$1"/>
-  <lfn-to-pfn protocol="fuse" destination-match=".*" path-match="/+store/mc/(.*/.*/NANOAODSIM/.*)" result="root://cms-xcache.rcac.purdue.edu:1094//store/mc/$1"/>
+  <lfn-to-pfn protocol="xrootd" destination-match=".*" path-match="/+store/data/(.*/.*/NANOAOD/.*)" result="root://xcache.cms.rcac.purdue.edu//store/data/$1"/>
+  <lfn-to-pfn protocol="xrootd" destination-match=".*" path-match="/+store/mc/(.*/.*/NANOAODSIM/.*)" result="root://xcache.cms.rcac.purdue.edu//store/mc/$1"/>
   <!-- end of XCache for NANOAOD -->
 
   <!-- Xrootd fallback rules -->
