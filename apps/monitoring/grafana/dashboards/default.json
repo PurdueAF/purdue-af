@@ -9389,6 +9389,17 @@
           },
           "range": false,
           "instant": true
+        },
+        {
+          "refId": "E",
+          "expr": "max(kubelet_volume_stats_used_bytes{namespace=\"cms\",persistentvolumeclaim=\"pyroscope-data\"} / kubelet_volume_stats_capacity_bytes{namespace=\"cms\",persistentvolumeclaim=\"pyroscope-data\"})",
+          "legendFormat": "Pyroscope",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-rancher"
+          },
+          "range": false,
+          "instant": true
         }
       ],
       "description": "",

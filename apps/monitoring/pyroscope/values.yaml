@@ -15,6 +15,10 @@ pyroscope:
       cpu: 4
       memory: 8Gi
 
+  persistence:
+    enabled: true
+    existingClaim: pyroscope-data
+
   nodeSelector: { "cms-af-prod": "true" }
   tolerations:
     - key: "hub.jupyter.org/dedicated"
@@ -29,6 +33,7 @@ pyroscope:
       client_timeout: 5m
     limits:
       max_query_length: 30d
+      retention_period: 7d
 
 alloy:
   enabled: false
