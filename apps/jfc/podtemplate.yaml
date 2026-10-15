@@ -39,12 +39,36 @@ template:
             value: traefik-dask-gateway.cms.geddes.rcac.purdue.edu:8786
           - name: DASK_GATEWAY__AUTH__TYPE
             value: jupyterhub
+          # The facility's grid proxy, which af-x509-secrets renews, for XCache and DAS.
+          - name: X509_USER_PROXY
+            value: /etc/grid-security-ro/x509up
+          - name: X509_CERT_DIR
+            value: /cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
+          # CVMFS's dasgoclient picks its build by this on an image that is not EL.
+          - name: SCRAM_ARCH
+            value: el9_amd64_gcc12
         volumeMounts:
           # Of /work, the agent sees this directory only.
           - name: work
             mountPath: /work/projects/jfc
             subPath: projects/jfc
+          - name: cvmfs
+            mountPath: /cvmfs
+            mountPropagation: HostToContainer
+            readOnly: true
+          - name: x509-proxy
+            mountPath: /etc/grid-security-ro
+            readOnly: true
     volumes:
       - name: work
         persistentVolumeClaim:
           claimName: af-shared-storage
+      - name: cvmfs
+        persistentVolumeClaim:
+          claimName: cvmfs
+      - name: x509-proxy
+        secret:
+          secretName: ${x509_secret_name}
+          # 0444: the task user is not the Secret's owner.
+          defaultMode: 292
+          optional: true

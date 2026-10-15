@@ -4,6 +4,7 @@ its physics prompt to the analysis note."""
 import fcntl
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -22,6 +23,7 @@ import flyte
 import flyte.errors
 import jfc_dask
 import jfc_profiling
+import jfc_ray
 
 NAME = "jfc"
 IMAGE = "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/self-repair:latest"
@@ -35,17 +37,27 @@ JFC = ("https://github.com/jfc-mit/jfc.git", "9eecb0e0b4c95c362053ad6b121760b473
 MODEL = "opus"
 PERMISSION_MODE = "auto"
 CREDENTIALS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
-# Whose Dask Gateway clusters the analysis gets (jfc_dask).
+# Whose Dask and Ray clusters the analysis gets (jfc_dask, jfc_ray).
 GATEWAY_TOKEN = "JUPYTERHUB_API_TOKEN"
-# Under the newest Python that pyroscope-io has wheels for (jfc_profiling).
-PYTHON = "python<3.15"
-# What jfc_profiling and jfc_dask need; the gateway also asks for prometheus-client.
-PACKAGES = ("pyroscope-io", "dask-gateway", "distributed", "prometheus-client")
+# pyroscope-io's wheels bound Python; only conda-forge builds xrootd's bindings.
+CONDA = ("python<3.15", "xrootd")
+# The helpers' and XRootD's; the gateway also asks for prometheus-client.
+PACKAGES = (
+    "pyroscope-io",
+    "dask-gateway",
+    "distributed",
+    "prometheus-client",
+    "fsspec-xrootd",
+)
 CORES = 8
 RETRIES = 5
+# Minutes between attempts to resume a turn that a usage limit stopped.
+LIMITED = 20
 LOG_LINE = 240
 # Seconds Claude Code has to end once told to, before it is killed.
 GRACE = 30
+# The longest a foreground command may run: a pass over the data is one.
+COMMAND_HOURS = 24
 
 # Claude Code's user memory: every agent and subagent reads it, at every turn.
 FACILITY = """\
@@ -66,6 +78,15 @@ variations, closure and injection tests, each on a subagent writing its own \
 directory, merged before the review.
 - Phases stay in order, and a review waits for the work it reviews.
 
+## Read CMS data through XCache
+
+Read CMS datasets with uproot from \
+`root://xcache.cms.rcac.purdue.edu//store/...`, the dataset's file names after \
+the prefix. XCache asks for a grid proxy: this container and the analysis's \
+Dask workers hold the facility's, with which DAS answers too \
+(`/cvmfs/cms.cern.ch/common/dasgoclient`). Never copy the proxy anywhere. The \
+environment has xrootd and fsspec-xrootd.
+
 ## Process data on Dask Gateway
 
 This container has {cores} cores and there is no batch system: every pass over \
@@ -77,20 +98,52 @@ a file's branches or a few of its entries does not need it.
 ```python
 from jfc_dask import client
 
-dask = client()
+dask = client(workers=50)
 ```
 
 `client()` returns a dask.distributed Client of the analysis's cluster: its \
-workers run this pixi environment, grow with the work, and stop on their own. \
-Split the input by file and entry range, select and fill histograms in the \
-tasks, and bring back histograms, cutflows or small arrays, not events. Many \
-independent fits, such as toys, are tasks too.
+workers run this pixi environment, grow with the work up to `workers`, and \
+stop on their own. For a large cluster, make the workers larger rather than \
+more, as in `client(workers=250, cores=4, memory=16)`; the script that starts \
+the cluster sets their size. The gateway's limits are in \
+https://analysis-facility.physics.purdue.edu/guide-dask-gateway/. Split the \
+input by file and entry range, select and fill histograms in the tasks, and \
+bring back histograms, cutflows or small arrays, not events. Many independent \
+fits, such as toys, are tasks too.
 
+- A pass runs in the foreground: give its command a timeout long enough, up \
+to {hours} hours.
 - Workers see /work as you do but start elsewhere: give them absolute paths.
-- Workers run as another user and cannot write here: tasks return what they \
-make, and the script writes it.
+- Workers run as another user. In this workspace they write only under \
+{shared}, which you can read, into directories they make or the script makes \
+with mode 0o1777; otherwise tasks return what they make, and the script writes \
+it.
 - A task can call what its script defines or the environment installs; send \
 a module of the analysis's own with `dask.upload_file(path)`.
+
+## Train on GPUs with Ray
+
+A model that trains on GPUs trains on the facility's Ray, not here:
+
+```python
+from jfc_ray import client
+
+jobs = client(max_workers=4)
+job = jobs.submit_job(entrypoint="python /absolute/path/to/train.py")
+```
+
+`client()` returns a Ray JobSubmissionClient whose jobs run in this pixi \
+environment, with Ray and PyTorch added to it as \
+https://analysis-facility.physics.purdue.edu/guide-ray-train/ says. Its \
+keyword arguments are the settings of that guide without `af-`: \
+`max_workers=4` is `af-max-workers`. Its scripts show data-parallel training \
+that survives losing GPUs.
+
+- Ray's pods see /work as you do: give the entrypoint absolute paths, without \
+a working_dir.
+- They run as the same other user as Dask's workers, and hold no grid proxy: \
+they read what Dask's tasks wrote under {shared}, and write checkpoints, \
+models and outputs there.
 """
 # What an interactive session leaves to the person at the terminal.
 UNATTENDED = """\
@@ -107,10 +160,17 @@ INTERRUPTED = (
     "turn again."
 )
 REPLY = "The human's reply: {reply}"
+LIFTED = (
+    "The Claude account's usage limit paused the session, and it has lifted. "
+    "Continue from where you left off; a reply of the human's before the pause "
+    "still stands."
+)
 SPENT = (
     "Stopped: this workspace has processed its {tokens} tokens. A larger "
     "`tokens` in the analysis.toml lets it go on."
 )
+# How Claude Code words a request refused for the account's usage limit.
+LIMIT_REACHED = re.compile(r"hit your [\w ]*limit")
 USAGE = (
     "input_tokens",
     "cache_creation_input_tokens",
@@ -126,18 +186,29 @@ TOTALS = (
 )
 
 
+class Limited(RuntimeError):
+    """A turn the account's usage limit stopped, and when the limit resets
+    (Unix time) if Claude Code said."""
+
+    def __init__(self, detail: str, resets: float | None = None) -> None:
+        super().__init__(detail)
+        self.resets = resets
+
+
 @dataclass
 class Analysis:
     """One analysis, as the `analysis.toml` of its directory describes it."""
 
     name: str
     kind: str
-    repo: str
-    ref: str
+    repo: str = ""
+    ref: str = ""
     files: list[str] = field(default_factory=list)
     data: str = ""
     scope: str = ""
     tokens: int = 0
+    # Without a repo: prompt.md and the files, from the analysis's directory.
+    sources: dict[str, str] = field(default_factory=dict)
 
 
 env = flyte.TaskEnvironment(
@@ -193,7 +264,11 @@ def _prepare(home: Path, analysis: Analysis) -> Path:
         shutil.rmtree(spec, ignore_errors=True)
         shutil.rmtree(source, ignore_errors=True)
         _checkout(JFC, spec)
-        _checkout((analysis.repo, analysis.ref), source)
+        if analysis.repo:
+            _checkout((analysis.repo, analysis.ref), source)
+        for name, text in analysis.sources.items():
+            (source / name).parent.mkdir(parents=True, exist_ok=True)
+            (source / name).write_text(text, encoding="utf-8")
         _run(
             sys.executable,
             "src/scaffold_analysis.py",
@@ -218,46 +293,51 @@ def _prepare(home: Path, analysis: Analysis) -> Path:
         if analysis.scope:
             with open(work / "prompt.md", "a") as prompt:
                 prompt.write(f"\n\n{analysis.scope}")
-        _run("pixi", "add", "--no-install", PYTHON, cwd=work)
+        _run("pixi", "add", "--no-install", *CONDA, cwd=work)
         _run("pixi", "add", "--pypi", *PACKAGES, cwd=work)
-        _install(work)
         staged.touch()
+    # Each turn gets the helpers its rules name, a workspace staged earlier too.
+    try:
+        _install(work)
+    except (OSError, subprocess.CalledProcessError) as failed:
+        _log(f"the helpers are not installed: {failed}")
+    # Where Dask's and Ray's workers, another user, write what they make.
+    (home / "shared").mkdir(exist_ok=True)
+    (home / "shared").chmod(0o1777)
     return work
 
 
 def _install(work: Path) -> None:
-    """Puts jfc_profiling and jfc_dask into the analysis's environment, and has
-    every Python process of it start jfc_profiling, by a .pth file."""
+    """Puts jfc_profiling, jfc_dask and jfc_ray into the analysis's environment,
+    and has every Python process of it start jfc_profiling, by a .pth file."""
+    # The environment's own interpreter: pixi would re-solve the agent's manifest.
     where = subprocess.run(
         [
-            "pixi",
-            "run",
-            "python",
+            str(work / ".pixi/envs/default/bin/python"),
             "-c",
             "import sysconfig; print(sysconfig.get_path('purelib'))",
         ],
-        cwd=work,
         capture_output=True,
         text=True,
         check=True,
     )
     packages = Path(where.stdout.strip().splitlines()[-1])
-    for module in (jfc_profiling, jfc_dask):
+    for module in (jfc_profiling, jfc_dask, jfc_ray):
         shutil.copy(str(module.__file__), packages / f"{module.__name__}.py")
     (packages / "jfc_profiling.pth").write_text(
         "import jfc_profiling; jfc_profiling.start()\n"
     )
 
 
-def _turn(work: Path, config: Path, reply: str) -> list[str]:
+def _turn(work: Path, config: Path, reply: str, nudge: str = INTERRUPTED) -> list[str]:
     """The Claude Code command of the next turn: the analysis's prompt on a new
     session; on the one that exists, the human's reply, or a nudge without one."""
     session = str(uuid.uuid5(uuid.NAMESPACE_URL, str(work)))
     if any(config.glob(f"projects/*/{session}.jsonl")):
-        prompt = REPLY.format(reply=reply) if reply else INTERRUPTED
+        prompt = REPLY.format(reply=reply) if reply else nudge
         how = "--resume"
     else:
-        prompt = UNATTENDED + (work / "prompt.md").read_text()
+        prompt = UNATTENDED + (work / "prompt.md").read_text(encoding="utf-8")
         how = "--session-id"
     return [
         "claude",
@@ -322,6 +402,7 @@ def _claude(
     message. Adds the tokens of each request to `ledger`, and ends the turn
     there once the count reaches `limit`, unless that is 0."""
     result: dict[str, Any] = {}
+    resets = None
     start = total = _processed(ledger)
     requests: dict[str | None, int] = {}
     with subprocess.Popen(
@@ -330,6 +411,9 @@ def _claude(
         env={
             **os.environ,
             "CLAUDE_CONFIG_DIR": str(config),
+            # Headless, a turn that ends stops what still runs in the background.
+            "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1",
+            "BASH_MAX_TIMEOUT_MS": str(COMMAND_HOURS * 3600 * 1000),
             # Tags of the profiles the analysis's scripts send.
             "JFC_ANALYSIS": work.name,
             "JFC_WORKSPACE": work.parents[2].name,
@@ -348,6 +432,10 @@ def _claude(
                 _log(line.rstrip())
             elif event.get("type") == "result":
                 result = event
+            elif event.get("type") == "rate_limit_event":
+                info = event.get("rate_limit_info") or {}
+                if info.get("status") == "rejected":
+                    resets = info.get("resetsAt") or resets
             else:
                 # A request's blocks arrive as events of one message, each with its usage.
                 message = event.get("message") or {}
@@ -384,12 +472,19 @@ def _claude(
     if result.get("api_error_status") in (401, 403):
         raise flyte.errors.NonRecoverableError(f"claude: {detail}")
     if proc.returncode or result.get("is_error", True):
+        if (
+            resets
+            or result.get("api_error_status") == 429
+            or LIMIT_REACHED.search(str(detail))
+        ):
+            raise Limited(f"claude: {detail}", resets)
         raise RuntimeError(f"claude exited {proc.returncode}: {detail}")
     _log(f"turn over: {result.get('num_turns')} turns, {total - start} tokens")
     return str(result.get("result") or "")
 
 
-@env.task(retries=RETRIES, timeout=timedelta(hours=24))
+# Long enough to wait out the weekly usage limit within one run.
+@env.task(retries=RETRIES, timeout=timedelta(days=14))
 def advance(analysis: Analysis, workspace: str, reply: str) -> str:
     """One stretch of the agent's work in ROOT/<workspace>, until it ends its
     turn: with the analysis note finished, or with something for a person.
@@ -426,14 +521,26 @@ def advance(analysis: Analysis, workspace: str, reply: str) -> str:
                 told.parent.mkdir(exist_ok=True)
                 told.write_text(reply)
             config.mkdir(exist_ok=True)
-            (config / "CLAUDE.md").write_text(FACILITY.format(cores=CORES))
-            turn = _turn(work, config, reply)
-            said = _claude(turn, work, config, ledger, analysis.tokens)
+            (config / "CLAUDE.md").write_text(
+                FACILITY.format(
+                    cores=CORES, hours=COMMAND_HOURS, shared=home / "shared"
+                )
+            )
+            nudge = INTERRUPTED
+            while True:
+                turn = _turn(work, config, reply, nudge)
+                try:
+                    said = _claude(turn, work, config, ledger, analysis.tokens)
+                    break
+                except Limited as limited:
+                    # A usage limit lifts in hours, not within the retries' pauses.
+                    _wait_out(limited, config)
+                    reply, nudge = "", LIFTED
             (home / "said.md").write_text(said)
     except flyte.errors.NonRecoverableError:
         raise
     except RuntimeError as failed:
-        # The backend restarts a failed attempt at once; a provider's usage limit lasts hours.
+        # The backend restarts a failed attempt at once; a service that failed may need longer.
         if ctx.attempt_number < RETRIES:
             pause = min(15 * 2**ctx.attempt_number, 240)
             _log(f"{failed}; next attempt in {pause} min")
@@ -443,12 +550,76 @@ def advance(analysis: Analysis, workspace: str, reply: str) -> str:
     return said
 
 
+def _wait_out(limited: Limited, config: Path) -> None:
+    """Sleeps until the account's usage limit lifts: until the reset Claude Code
+    reported, or until a request outside the session goes through."""
+    if limited.resets and limited.resets > time.time():
+        _log(
+            f"{limited}; resuming after {datetime.fromtimestamp(limited.resets, timezone.utc):%Y-%m-%d %H:%M} UTC"
+        )
+        time.sleep(limited.resets - time.time() + 60)
+        return
+    while True:
+        _log(f"{limited}; asking again in {LIMITED} min")
+        time.sleep(LIMITED * 60)
+        if not _still_limited(config):
+            return
+
+
+def _still_limited(config: Path) -> bool:
+    """Whether a one-word request, of no session, is refused for the usage limit."""
+    asked = subprocess.run(
+        [
+            "claude",
+            "--print",
+            "ok",
+            "--no-session-persistence",
+            "--model",
+            MODEL,
+            "--output-format",
+            "json",
+        ],
+        env={**os.environ, "CLAUDE_CONFIG_DIR": str(config)},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+    )
+    try:
+        answer = json.loads(asked.stdout)
+    except ValueError:
+        return False
+    return answer.get("api_error_status") == 429 or bool(
+        LIMIT_REACHED.search(str(answer.get("result")))
+    )
+
+
+def _sources(directory: Path, names: list[str]) -> dict[str, str]:
+    """prompt.md and the files `names` name in `directory`, by relative path."""
+    found = {}
+    for name in ("prompt.md", *names):
+        path = directory / name
+        if not path.exists():
+            raise FileNotFoundError(f"{path}, which analysis.toml names")
+        for file in sorted(path.rglob("*")) if path.is_dir() else [path]:
+            hidden = any(
+                part.startswith(".") or part == "__pycache__"
+                for part in file.relative_to(directory).parts
+            )
+            if file.is_file() and not hidden:
+                found[str(file.relative_to(directory))] = file.read_text(
+                    encoding="utf-8"
+                )
+    return found
+
+
 def launch(directory: str, workspace: str = "", *reply: str) -> None:
     """Starts a run of the analysis in `directory` (README.md, Running)."""
     from flyte.remote import Project
 
     with open(Path(directory) / "analysis.toml", "rb") as file:
         analysis = Analysis(**tomllib.load(file))
+    if not analysis.repo:
+        analysis.sources = _sources(Path(directory), analysis.files)
     flyte.init_from_config("config.yaml", root_dir=Path(__file__).parent)
     if NAME not in {project.pb2.id for project in Project.listall()}:
         Project.create(id=NAME, name=NAME)
