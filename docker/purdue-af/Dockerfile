@@ -125,7 +125,7 @@ RUN chmod +x /usr/local/bin/pixi && \
 
 # Coding-agent CLIs in their own prefix, out of reach of a pixi rebuild. jupyter-ai's
 # Claude/Codex personas appear only when the *-acp adapters are on PATH.
-ARG CLAUDE_CODE_VERSION="2.1.299"
+ARG CLAUDE_CODE_VERSION="2.1.300"
 ARG CODEX_VERSION="0.162.1"
 ARG OPENCODE_VERSION="1.19.0"
 ARG CLAUDE_AGENT_ACP_VERSION="0.90.0"
