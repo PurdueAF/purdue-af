@@ -4,7 +4,7 @@
 FROM python:3.12-slim
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
-COPY --from=ghcr.io/prefix-dev/pixi:0.81.0 /usr/local/bin/pixi /usr/local/bin/pixi
+COPY --from=ghcr.io/prefix-dev/pixi:0.82.0 /usr/local/bin/pixi /usr/local/bin/pixi
 
 # The agents are npm packages around platform binaries; node comes from the
 # official image of the same Debian release rather than apt, which lags.
