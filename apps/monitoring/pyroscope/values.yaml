@@ -9,10 +9,10 @@ pyroscope:
 
   resources:
     limits:
-      cpu: 2
+      cpu: 8
       memory: 16Gi
     requests:
-      cpu: 1
+      cpu: 4
       memory: 8Gi
 
   nodeSelector: { "cms-af-prod": "true" }
@@ -23,6 +23,10 @@ pyroscope:
       effect: "NoSchedule"
 
   config: |
+    server:
+      http_server_write_timeout: 5m
+    query_backend:
+      client_timeout: 5m
     limits:
       max_query_length: 30d
 
