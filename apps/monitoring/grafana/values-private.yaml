@@ -20,6 +20,8 @@ ingress:
   pathType: Prefix
   hosts:
     - cms.geddes.rcac.purdue.edu
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
 
 service:
   type: ClusterIP
@@ -117,6 +119,8 @@ datasources:
         url: http://pyroscope.cms.svc.cluster.local:4040
         jsonData:
           minStep: 15s
+          # Seconds; the ingress read timeout and Pyroscope's query timeouts must not be shorter.
+          timeout: 300
       - name: loki
         uid: loki
         type: loki
