@@ -7,33 +7,38 @@ note. The control plane is [`apps/flyte`](../../apps/flyte); the task pods,
 their directory on `/work` and the model credentials are
 [`apps/jfc`](../../apps/jfc); the task image is
 [`docker/self-repair`](../../docker/self-repair). An analysis is a directory
-with an `analysis.toml`, such as [`workflows/jfc-h4l`](../jfc-h4l).
+with an `analysis.toml`, such as [`workflows/jfc-h4l`](../jfc-h4l) or
+[`workflows/jfc-hmm`](../jfc-hmm).
 
 | File               | What it is                                                   |
 | ------------------ | ------------------------------------------------------------ |
 | `jfc.py`           | The task, its environment and the launcher (`__main__`)      |
 | `jfc_profiling.py` | The profiler hook installed into each analysis's environment |
 | `jfc_dask.py`      | The Dask cluster helper installed into the same environment  |
+| `jfc_ray.py`       | The Ray jobs helper installed into the same environment      |
 | `config.yaml`      | Where `flyte` finds the control plane                        |
 
 A run is one `advance` task: the setup if the workspace is new, then one
 headless Claude Code turn. It ends when the agent ends its turn, either with
 the analysis note finished or with a message for a person. JFC stops that way
-to show the draft note before it looks at the full data.
+to show the draft note before it looks at the full data. A turn that the Claude
+account's usage limit stops resumes within the run once the limit lifts: at
+the reset Claude Code reports, or else when a request outside the session goes
+through, asked every `LIMITED` minutes. The task pod keeps its resources
+meanwhile.
 
 Before each turn the runner writes `FACILITY` as Claude Code's user memory,
-which the agent and every subagent read: start independent subagents
-together, and run every pass over the events on
-[Dask Gateway](../../apps/dask-gateway) through `jfc_dask.client()`, in place
-of the local processes and SLURM the methodology names. That returns a client
-of one cluster per analysis, whose workers run the analysis's environment and
-scale with the work. The cluster belongs to the owner of the Hub token in
-[`jfc-claude`](../../apps/jfc/README.md#secrets).
+which the agent and every subagent read: how this facility runs subagents,
+reads CMS data through XCache with the grid proxy the task pods hold, processes
+it on [Dask Gateway](../../apps/dask-gateway) with `jfc_dask.client()`, and
+trains on GPUs through [Ray](../../apps/ray-train) with `jfc_ray.client()`.
+Whose those clusters are: [`apps/jfc`](../../apps/jfc/README.md#secrets). In
+the workspace, they write only to `shared/`.
 
 A workspace is `/work/projects/jfc/<name of its first run>`: the JFC checkout
 with the analysis scaffolded in it, its pixi environment and git history, the
 agent's session, the replies it was given, the tokens its runs have processed,
-and the last run's output in `said.md`.
+the last run's output in `said.md`, and `shared/` for what the clusters write.
 An analysis's data is fetched once per URL under `/work/projects/jfc/data`. A
 retried task resumes the session.
 
@@ -41,8 +46,8 @@ Every Python process in an analysis's environment, its Dask cluster's
 included, sends CPU profiles to [Pyroscope](../../apps/monitoring/pyroscope),
 under `service_name="jfc"` and tagged with its `analysis`, `workspace` and
 `script`. The setup keeps that environment's Python within the versions
-`pyroscope-io` ships wheels for, adds `PACKAGES`, and installs both helpers,
-with a `.pth` file that starts `jfc_profiling`.
+`pyroscope-io` ships wheels for, adds `CONDA` and `PACKAGES`, and installs the
+three helpers, with a `.pth` file that starts `jfc_profiling`.
 
 ## Running
 
@@ -77,16 +82,16 @@ stopped, which is how a failed run is picked up.
 
 A directory `workflows/jfc-<name>` with an `analysis.toml`:
 
-| Key      | What it is                                                                                                                  |
-| -------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `name`   | Names the analysis in JFC, in run names and in its data directory                                                           |
-| `kind`   | The JFC analysis type: `measurement` or `search`                                                                            |
-| `repo`   | Repository holding the physics prompt, `prompt.md`, at its top level                                                        |
-| `ref`    | The commit of it to use                                                                                                     |
-| `files`  | Optional: files and directories at its top level to put beside the prompt                                                   |
-| `data`   | Optional: URL of a tarball that unpacks to `data/`, linked into the analysis as `data/`                                     |
-| `scope`  | Optional: text put after the prompt, to narrow what the analysis does                                                       |
-| `tokens` | Optional: the most tokens, cached context included, that the runs in one workspace may process; a run that reaches it stops |
+| Key      | What it is                                                                                                                    |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `name`   | Names the analysis in JFC, in run names and in its data directory                                                             |
+| `kind`   | The JFC analysis type: `measurement` or `search`                                                                              |
+| `repo`   | Optional: repository holding the physics prompt, `prompt.md`, at its top level; without it, the analysis's directory holds it |
+| `ref`    | With `repo`: the commit of it to use                                                                                          |
+| `files`  | Optional: files and directories beside the prompt to put beside it in the analysis; text files, without `repo`                |
+| `data`   | Optional: URL of a tarball that unpacks to `data/`, linked into the analysis as `data/`                                       |
+| `scope`  | Optional: text put after the prompt, to narrow what the analysis does                                                         |
+| `tokens` | Optional: the most tokens, cached context included, that the runs in one workspace may process; a run that reaches it stops   |
 
 ## Tuning
 
@@ -96,4 +101,5 @@ All in `jfc.py`:
 - `MODEL` and `PERMISSION_MODE` are passed to Claude Code; `FACILITY` is what
   every agent reads.
 - `env` holds what a task pod reserves; `RETRIES` and the timeout of `advance`
-  bound a run.
+  bound a run, `LIMITED` paces its waits on a usage limit, and `COMMAND_HOURS`
+  bounds a foreground command of the agent's.

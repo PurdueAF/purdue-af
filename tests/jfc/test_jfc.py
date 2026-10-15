@@ -10,7 +10,9 @@ import re
 import subprocess
 import sys
 import tarfile
+import threading
 import types
+from pathlib import Path
 
 import pytest
 import yaml
@@ -76,6 +78,7 @@ def _load():
 jfc, STUBS = _load()
 profiling = jfc.jfc_profiling
 clusters = jfc.jfc_dask
+gpus = jfc.jfc_ray
 
 ANALYSIS = jfc.Analysis(
     name="zz",
@@ -120,7 +123,8 @@ def test_task_pods_mount_only_the_directory_the_workspace_job_creates_for_them()
     (template,) = docs(APP / "podtemplate.yaml")
     (job,) = docs(APP / "workspace.yaml")
     pod = template["template"]["spec"]
-    (mount,) = pod["containers"][0]["volumeMounts"]
+    mounts = pod["containers"][0]["volumeMounts"]
+    (mount,) = [m for m in mounts if m["mountPath"].startswith("/work")]
     assert mount["mountPath"] == str(jfc.ROOT) == f"/work/{mount['subPath']}"
 
     container = job["spec"]["template"]["spec"]["containers"][0]
@@ -168,6 +172,31 @@ def test_task_pods_reach_the_sessions_gateway_as_the_sessions_do():
         assert re.search(rf'"{name}",\s*"{re.escape(env[name])}"', spawner)
 
 
+def test_task_pods_hold_the_facilitys_proxy_and_the_certificates_to_use_it():
+    (template,) = docs(APP / "podtemplate.yaml")
+    pod = template["template"]["spec"]
+    (container,) = pod["containers"]
+    env = {variable["name"]: variable["value"] for variable in container["env"]}
+    mounts = {m["name"]: m for m in container["volumeMounts"]}
+    volumes = {v["name"]: v for v in pod["volumes"]}
+    flux = yaml.safe_load((EXPERIMENTAL.parent / "flux-kustomization.yaml").read_text())
+    names = flux["spec"]["postBuild"]["substitute"]
+
+    (proxy,) = [n for n, v in volumes.items() if "secret" in v]
+    secret = volumes[proxy]["secret"]
+    assert secret["secretName"] == "${x509_secret_name}" and names["x509_secret_name"]
+    # Readable by the task user, whom the Secret's files do not belong to.
+    assert secret["defaultMode"] & 0o004
+    assert env["X509_USER_PROXY"] == f"{mounts[proxy]['mountPath']}/x509up"
+    (cvmfs,) = [
+        n
+        for n, v in volumes.items()
+        if v.get("persistentVolumeClaim", {}).get("claimName") == "cvmfs"
+    ]
+    assert env["X509_CERT_DIR"].startswith(f"{mounts[cvmfs]['mountPath']}/")
+    assert mounts[cvmfs]["readOnly"] and mounts[proxy]["readOnly"]
+
+
 def test_the_credentials_secret_is_optional_so_a_task_can_say_it_is_missing():
     (template,) = docs(APP / "podtemplate.yaml")
     (source,) = template["template"]["spec"]["containers"][0]["envFrom"]
@@ -189,7 +218,7 @@ def launched(tmp_path, monkeypatch):
     return str(tmp_path)
 
 
-def test_every_analysis_directory_launches_a_run_pinned_to_a_commit(launched):
+def test_every_analysis_directory_launches_a_run_on_inputs_it_pins(launched):
     described = sorted((REPO / "workflows").glob("jfc-*/analysis.toml"))
     assert described
     for path in described:
@@ -198,8 +227,50 @@ def test_every_analysis_directory_launches_a_run_pinned_to_a_commit(launched):
         analysis = run["analysis"]
         assert path.parent.name == f"jfc-{analysis.name}"
         assert analysis.kind in ("measurement", "search")
-        assert re.fullmatch(r"[0-9a-f]{40}", analysis.ref)
+        if analysis.repo:
+            assert re.fullmatch(r"[0-9a-f]{40}", analysis.ref)
+        else:
+            # The run carries the files themselves.
+            for name in ("prompt.md", *analysis.files):
+                assert any(
+                    sent == name or sent.startswith(f"{name}/")
+                    for sent in analysis.sources
+                )
         assert len(run["name"]) <= 30
+
+
+def test_an_analysis_without_a_repo_sends_its_prompt_and_files(launched):
+    directory = Path(launched)
+    (directory / "analysis.toml").write_text(
+        'name = "zz"\nkind = "search"\nfiles = ["datasets.yaml", "notes"]\n'
+    )
+    (directory / "prompt.md").write_text("search for ZZ")
+    (directory / "datasets.yaml").write_text("2018: []")
+    (directory / "notes").mkdir()
+    (directory / "notes" / "trigger.md").write_text("IsoMu24")
+    (directory / "README.md").write_text("not sent")
+    (directory / "notes" / ".DS_Store").write_bytes(b"\x00\x87")
+
+    jfc.launch(launched)
+
+    (run,) = Launcher.runs
+    assert run["analysis"].sources == {
+        "prompt.md": "search for ZZ",
+        "datasets.yaml": "2018: []",
+        "notes/trigger.md": "IsoMu24",
+    }
+
+
+def test_an_analysis_naming_a_file_it_lacks_does_not_launch(launched):
+    directory = Path(launched)
+    (directory / "analysis.toml").write_text(
+        'name = "zz"\nkind = "search"\nfiles = ["datasets.yaml"]\n'
+    )
+    (directory / "prompt.md").write_text("search for ZZ")
+
+    with pytest.raises(FileNotFoundError, match="datasets.yaml"):
+        jfc.launch(launched)
+    assert Launcher.runs == []
 
 
 def test_launch_starts_a_run_named_after_the_analysis_in_a_workspace_of_its_own(
@@ -271,22 +342,51 @@ def test_prepare_stages_the_analysis_into_its_scaffold(root, monkeypatch):
     assert (work / "docs/paper.pdf").is_file()
     assert (work / "ntuplize.py").is_file()
     assert calls[-3:] == [
-        ("pixi", "add", "--no-install", jfc.PYTHON),
+        ("pixi", "add", "--no-install", *jfc.CONDA),
         ("pixi", "add", "--pypi", *jfc.PACKAGES),
         ("install", work),
     ]
 
 
-def test_the_environment_gets_both_helpers_and_every_python_starts_the_profiler(
+def test_prepare_stages_an_analysis_that_brings_its_own_files(root, monkeypatch):
+    calls = _fake_tools(monkeypatch, root)
+    local = jfc.Analysis(
+        "zz",
+        "search",
+        files=["datasets.yaml", "notes"],
+        sources={
+            "prompt.md": "search for ZZ",
+            "datasets.yaml": "2018: []",
+            "notes/trigger.md": "IsoMu24",
+        },
+    )
+
+    work = jfc._prepare(root / "run", local)
+
+    assert [call for call in calls if call[:2] == ("checkout", "source")] == []
+    assert (work / "prompt.md").read_text() == "search for ZZ"
+    assert (work / "datasets.yaml").read_text() == "2018: []"
+    assert (work / "notes/trigger.md").read_text() == "IsoMu24"
+    assert not (work / "data").exists()
+
+
+def test_prepare_gives_the_workers_a_directory_they_can_write(root, monkeypatch):
+    _fake_tools(monkeypatch, root)
+
+    jfc._prepare(root / "run", ANALYSIS)
+
+    assert (root / "run/shared").stat().st_mode & 0o7777 == 0o1777
+
+
+def test_the_environment_gets_the_helpers_and_every_python_starts_the_profiler(
     tmp_path, monkeypatch
 ):
     packages, seen = tmp_path / "site-packages", tmp_path / "seen.json"
     packages.mkdir()
-    pixi = tmp_path / "bin" / "pixi"
-    pixi.parent.mkdir()
-    pixi.write_text(f"#!/bin/sh\necho 'a notice'\necho {packages}\n")
-    pixi.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{pixi.parent}{os.pathsep}{os.environ['PATH']}")
+    python = tmp_path / ".pixi/envs/default/bin/python"
+    python.parent.mkdir(parents=True)
+    python.write_text(f"#!/bin/sh\necho {packages}\n")
+    python.chmod(0o755)
     (packages / "pyroscope.py").write_text(
         "import json, os\n"
         "def configure(**options):\n"
@@ -297,7 +397,7 @@ def test_the_environment_gets_both_helpers_and_every_python_starts_the_profiler(
     )
 
     jfc._install(tmp_path)
-    for module in (profiling, clusters):
+    for module in (profiling, clusters, gpus):
         installed = packages / f"{module.__name__}.py"
         assert installed.read_text() == open(module.__file__).read()
     env = {
@@ -384,6 +484,17 @@ def test_a_profiler_that_cannot_start_leaves_the_script_alone(
     assert pyroscope.at_exit == []
 
 
+def test_a_turn_goes_on_when_the_helpers_cannot_be_installed(root, monkeypatch):
+    _fake_tools(monkeypatch, root)
+
+    def broken(work):
+        raise subprocess.CalledProcessError(1, "python")
+
+    monkeypatch.setattr(jfc, "_install", broken)
+
+    assert jfc._prepare(root / "run", ANALYSIS) == root / "run/jfc/analyses/zz"
+
+
 def test_prepare_puts_the_scope_of_an_analysis_after_its_prompt(root, monkeypatch):
     _fake_tools(monkeypatch, root)
     narrowed = jfc.Analysis(**{**vars(ANALYSIS), "scope": "Two samples only."})
@@ -405,17 +516,22 @@ def test_prepare_stages_only_the_prompt_of_an_analysis_that_names_nothing_else(
     assert sorted(path.name for path in work.iterdir()) == ["prompt.md"]
 
 
-def test_prepare_leaves_a_staged_workspace_to_the_agent(root, monkeypatch):
+def test_prepare_leaves_a_staged_workspace_to_the_agent_but_its_helpers(
+    root, monkeypatch
+):
     calls = _fake_tools(monkeypatch, root)
     work = jfc._prepare(root / "run", ANALYSIS)
     (work / "prompt.md").unlink()
     (work / "experiment_log.md").write_text("the agent's work")
+    (root / "run/shared").rmdir()
     calls.clear()
 
     assert jfc._prepare(root / "run", ANALYSIS) == work
 
-    assert calls == []
+    # The helpers of each turn's rules reach a workspace staged before them.
+    assert calls == [("install", work)]
     assert (work / "experiment_log.md").is_file()
+    assert (root / "run/shared").stat().st_mode & 0o7777 == 0o1777
 
 
 def test_prepare_redoes_a_setup_that_died_before_its_last_step(root, monkeypatch):
@@ -440,7 +556,7 @@ def test_prepare_redoes_a_setup_that_died_before_its_last_step(root, monkeypatch
         ("checkout", "source"),
     ]
     assert calls[-3:] == [
-        ("pixi", "add", "--no-install", jfc.PYTHON),
+        ("pixi", "add", "--no-install", *jfc.CONDA),
         ("pixi", "add", "--pypi", *jfc.PACKAGES),
         ("install", work),
     ]
@@ -496,12 +612,27 @@ def gateway(tmp_path, monkeypatch):
             state.adapted = (self.name, bounds)
 
         def get_client(self):
-            return f"client of {self.name}"
+            state.client = types.SimpleNamespace(
+                of=self.name,
+                status="running",
+                plugins=[],
+                register_plugin=lambda plugin, name: state.client.plugins.append(
+                    (name, plugin)
+                ),
+            )
+            return state.client
 
     class Gateway:
         def list_clusters(self):
             return [
-                types.SimpleNamespace(name=name, options={"pixi_project": project})
+                types.SimpleNamespace(
+                    name=name,
+                    options={
+                        "pixi_project": project,
+                        "worker_cores": 1,
+                        "worker_memory": 4,
+                    },
+                )
                 for name, project in state.running
             ]
 
@@ -521,6 +652,7 @@ def gateway(tmp_path, monkeypatch):
     module.Gateway = Gateway
     monkeypatch.setitem(sys.modules, "dask_gateway", module)
     monkeypatch.setattr(clusters.sys, "prefix", str(prefix))
+    monkeypatch.delenv("X509_USER_PROXY", raising=False)
     return state
 
 
@@ -530,23 +662,28 @@ def test_a_script_starts_the_analysis_cluster_on_its_environment(gateway, monkey
     monkeypatch.setenv("JFC_ANALYSIS", "zz")
     monkeypatch.setenv("JFC_WORKSPACE", "ws")
     monkeypatch.setenv("JUPYTERHUB_API_TOKEN", "not for workers")
+    monkeypatch.setenv("X509_CERT_DIR", "/cvmfs/certificates")
 
-    assert clusters.client(workers=12) == "client of new"
+    assert clusters.client(workers=12, cores=4, memory=16).of == "new"
 
     assert gateway.started == [
         {
             "pixi_project": gateway.project,
             "pixi_env": "default",
+            "worker_cores": 4,
+            "worker_memory": 16,
             "env": {
                 "PATH": os.environ["PATH"],
                 "PYROSCOPE_SERVER": "http://pyroscope:4040",
                 "JFC_ANALYSIS": "zz",
                 "JFC_WORKSPACE": "ws",
+                "X509_CERT_DIR": "/cvmfs/certificates",
             },
             "shutdown_on_close": False,
         }
     ]
     assert gateway.adapted == ("new", {"minimum": 0, "maximum": 12})
+    assert gateway.client.plugins == []
 
 
 def test_a_script_starts_a_cluster_while_no_other_of_the_analysis_can(gateway):
@@ -558,10 +695,72 @@ def test_a_script_starts_a_cluster_while_no_other_of_the_analysis_can(gateway):
 def test_the_analysis_scripts_share_its_running_cluster(gateway):
     gateway.running = [("ours", gateway.project)]
 
-    assert clusters.client() == "client of ours"
+    assert clusters.client().of == "ours"
 
     assert gateway.started == []
     assert gateway.adapted == ("ours", {"minimum": 0, "maximum": 50})
+
+
+def test_workers_get_the_pods_proxy_now_and_again_while_the_client_is_open(
+    gateway, tmp_path, monkeypatch
+):
+    proxy = tmp_path / "x509up"
+    proxy.write_bytes(b"proxy one")
+    monkeypatch.setenv("X509_USER_PROXY", str(proxy))
+    tick, ticked = threading.Event(), threading.Event()
+
+    def sleep(seconds):
+        assert seconds == clusters.RENEW
+        ticked.set()
+        tick.wait(5)
+        tick.clear()
+
+    monkeypatch.setattr(clusters.time, "sleep", sleep)
+
+    dask = clusters.client()
+    assert ticked.wait(5)
+    proxy.write_bytes(b"proxy two")
+    ticked.clear()
+    tick.set()
+    assert ticked.wait(5)
+    dask.status = "closed"
+    tick.set()
+
+    (name, first), (_, renewed) = dask.plugins
+    assert name == clusters.Proxy.name
+    assert (first.data, renewed.data) == (b"proxy one", b"proxy two")
+
+
+def test_workers_get_the_proxy_once_the_pod_has_it(gateway, tmp_path, monkeypatch):
+    proxy = tmp_path / "x509up"
+    monkeypatch.setenv("X509_USER_PROXY", str(proxy))
+    monkeypatch.setattr(
+        clusters.threading,
+        "Thread",
+        lambda target, daemon: types.SimpleNamespace(start=lambda: None),
+    )
+
+    dask = clusters.client()
+
+    assert dask.plugins == []
+
+
+def test_a_script_is_told_the_running_cluster_keeps_its_own_workers(gateway):
+    gateway.running = [("ours", gateway.project)]
+
+    with pytest.warns(UserWarning, match="1 cores and 4 GiB"):
+        clusters.client(cores=4, memory=16)
+
+
+def test_a_worker_keeps_the_proxy_in_a_file_of_its_own(tmp_path, monkeypatch):
+    monkeypatch.setattr(clusters.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.delenv("X509_USER_PROXY", raising=False)
+
+    clusters.Proxy(b"proxy").setup(worker=None)
+
+    kept = Path(os.environ.pop("X509_USER_PROXY"))
+    assert kept.parent == tmp_path and kept.read_bytes() == b"proxy"
+    assert kept.stat().st_mode & 0o777 == 0o600
 
 
 def test_a_script_waits_for_another_cluster_of_the_user_to_end(gateway):
@@ -571,6 +770,55 @@ def test_a_script_waits_for_another_cluster_of_the_user_to_end(gateway):
         clusters.client()
 
     assert gateway.started == []
+
+
+# --- the analysis's Ray jobs ---
+
+
+@pytest.fixture
+def ray(monkeypatch):
+    """A stand-in for ray.job_submission, recording the clients made."""
+    made = []
+
+    def JobSubmissionClient(address, headers):
+        made.append({"address": address, "headers": headers, "env": dict(os.environ)})
+        return made[-1]
+
+    module = types.ModuleType("ray.job_submission")
+    module.JobSubmissionClient = JobSubmissionClient
+    monkeypatch.setitem(sys.modules, "ray", types.ModuleType("ray"))
+    monkeypatch.setitem(sys.modules, "ray.job_submission", module)
+    monkeypatch.setenv("JUPYTERHUB_API_TOKEN", "hub token")
+    for name in ("RAY_AUTH_MODE", "RAY_AUTH_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    return made
+
+
+def test_ray_jobs_run_in_the_environment_on_the_settings_asked_for(ray):
+    gpus.client(max_workers=4, gpus_per_worker=2)
+
+    (made,) = ray
+    assert made["address"] == gpus.ADDRESS
+    assert made["headers"] == {
+        "Authorization": "Bearer hub token",
+        "af-env": os.path.realpath(sys.prefix),
+        "af-max-workers": "4",
+        "af-gpus-per-worker": "2",
+    }
+
+
+def test_ray_jobs_may_run_in_another_environment(ray):
+    gpus.client(env="/work/projects/jfc/ws/env")
+
+    assert ray[0]["headers"]["af-env"] == "/work/projects/jfc/ws/env"
+
+
+def test_the_ray_gateway_takes_the_settings_the_helper_sends():
+    gateway = (REPO / "apps/ray-train/gateway.py").read_text()
+    prefix = re.search(r'^SETTING_PREFIX = "(.+)"$', gateway, re.M).group(1)
+    settings = set(re.findall(r'SETTING_PREFIX \+ "([a-z-]+)"', gateway))
+    assert prefix == "af-"
+    assert {"env", "max-workers", "gpus-per-worker"} <= settings
 
 
 # --- the agent ---
@@ -623,12 +871,26 @@ def _fake_claude(tmp_path, lines, code=0):
     script.write_text(
         "import os, sys\n"
         f"for line in {lines!r}:\n"
-        "    for name in ('JFC_ANALYSIS', 'JFC_WORKSPACE'):\n"
+        "    for name in ('JFC_ANALYSIS', 'JFC_WORKSPACE', 'CLAUDE_CODE_DISABLE_BACKGROUND_TASKS', 'BASH_MAX_TIMEOUT_MS'):\n"
         "        line = line.replace('$' + name, os.environ[name])\n"
         "    print(line.replace('$CONFIG', os.environ['CLAUDE_CONFIG_DIR']))\n"
         f"sys.exit({code})\n"
     )
     return [sys.executable, str(script)]
+
+
+def test_claude_runs_every_subagent_and_command_in_the_foreground(tmp_path):
+    result = {
+        "type": "result",
+        "is_error": False,
+        "result": "$CLAUDE_CODE_DISABLE_BACKGROUND_TASKS $BASH_MAX_TIMEOUT_MS",
+    }
+    command = _fake_claude(tmp_path, [json.dumps(result)])
+
+    said = jfc._claude(command, tmp_path, tmp_path / "c", tmp_path / "tokens", 0)
+
+    # A foreground command may last as long as a pass over the data.
+    assert said == f"1 {jfc.COMMAND_HOURS * 3600 * 1000}"
 
 
 def test_claude_names_the_analysis_and_workspace_its_scripts_tag_profiles_with(
@@ -859,6 +1121,76 @@ def test_claude_ends_a_turn_that_reaches_the_limit(tmp_path, monkeypatch, deaf):
     assert closed.exists() is not deaf
 
 
+@pytest.mark.parametrize(
+    "result",
+    [
+        {"api_error_status": 429, "result": "API Error: 429"},
+        {"result": "You've hit your session limit · resets 3pm (UTC)"},
+        {"result": "You've hit your weekly limit · resets Oct 20"},
+    ],
+)
+def test_a_turn_the_usage_limit_stopped_is_told_from_other_failures(tmp_path, result):
+    stopped = {"type": "result", "is_error": True, **result}
+    command = _fake_claude(tmp_path, [json.dumps(stopped)], 1)
+    with pytest.raises(jfc.Limited) as limited:
+        jfc._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
+    assert limited.value.resets is None
+
+    overloaded = {"type": "result", "is_error": True, "api_error_status": 529}
+    command = _fake_claude(tmp_path, [json.dumps(overloaded)], 1)
+    with pytest.raises(RuntimeError) as failed:
+        jfc._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
+    assert not isinstance(failed.value, jfc.Limited)
+
+
+def test_a_limited_turn_says_when_the_limit_resets(tmp_path):
+    events = [
+        {"type": "rate_limit_event", "rate_limit_info": {"status": "allowed_warning"}},
+        {
+            "type": "rate_limit_event",
+            "rate_limit_info": {"status": "rejected", "resetsAt": 1760600000},
+        },
+        {"type": "result", "is_error": True, "result": "API Error"},
+    ]
+    command = _fake_claude(tmp_path, [json.dumps(e) for e in events], 1)
+
+    with pytest.raises(jfc.Limited) as limited:
+        jfc._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
+
+    assert limited.value.resets == 1760600000
+
+
+@pytest.mark.parametrize(
+    "answer, limited",
+    [
+        ({"is_error": True, "api_error_status": 429}, True),
+        (
+            {
+                "is_error": True,
+                "result": "You've hit your weekly limit · resets Oct 20",
+            },
+            True,
+        ),
+        ({"is_error": False, "result": "ok"}, False),
+    ],
+)
+def test_a_request_outside_the_session_tells_whether_the_limit_holds(
+    tmp_path, monkeypatch, answer, limited
+):
+    (tmp_path / "answer.json").write_text(json.dumps(answer))
+    claude = tmp_path / "bin" / "claude"
+    claude.parent.mkdir()
+    claude.write_text(
+        "#!/bin/sh\n"
+        f'[ "$CLAUDE_CONFIG_DIR" = "{tmp_path / "cfg"}" ] || exit 9\n'
+        f'cat "{tmp_path / "answer.json"}"\n'
+    )
+    claude.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{claude.parent}{os.pathsep}{os.environ['PATH']}")
+
+    assert jfc._still_limited(tmp_path / "cfg") is limited
+
+
 def test_a_rejected_credential_is_not_worth_a_retry(tmp_path):
     result = {"type": "result", "is_error": True, "api_error_status": 401}
     command = _fake_claude(tmp_path, [json.dumps(result)], 1)
@@ -935,7 +1267,11 @@ def test_each_turn_starts_with_the_runners_facility_rules_in_place(
     monkeypatch.setattr(jfc, "_claude", claude)
     jfc.advance(ANALYSIS, "ws", "")
 
-    assert read == [jfc.FACILITY.format(cores=jfc.CORES)]
+    assert read == [
+        jfc.FACILITY.format(
+            cores=jfc.CORES, hours=jfc.COMMAND_HOURS, shared=root / "ws" / "shared"
+        )
+    ]
 
 
 def test_advance_counts_in_the_workspace_and_refuses_once_its_tokens_are_spent(
@@ -1004,6 +1340,48 @@ def test_advance_waits_after_a_failed_turn_longer_each_time(stretch, monkeypatch
             jfc.advance(ANALYSIS, "ws", "")
 
     assert stretch.slept == [15 * 60, 30 * 60, 240 * 60]
+
+
+@pytest.fixture
+def limited(root, stretch, monkeypatch):
+    """`advance` on a session that exists, with each turn's outcome taken in turn
+    from `outcomes`, and the clock at 1000."""
+    state = types.SimpleNamespace(outcomes=[], prompts=[], probes=[])
+
+    def claude(command, cwd, config, ledger, limit):
+        state.prompts.append(command[2])
+        outcome = state.outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(jfc, "_claude", claude)
+    monkeypatch.setattr(jfc, "_still_limited", lambda config: state.probes.pop(0))
+    monkeypatch.setattr(jfc.time, "time", lambda: 1000.0)
+    _, session = _session(jfc._turn(root / "jfc/analyses/zz", root / "ws/claude", ""))
+    (root / "ws/claude/projects/slug").mkdir(parents=True)
+    (root / "ws/claude/projects/slug" / f"{session}.jsonl").write_text("{}")
+    stretch.action.run_name = "run-2"
+    return state
+
+
+def test_advance_sleeps_until_the_limit_resets_then_resumes_once(stretch, limited):
+    limited.outcomes = [jfc.Limited("limit", resets=4600.0), "At the human gate."]
+
+    assert jfc.advance(ANALYSIS, "ws", "APPROVE") == "At the human gate."
+
+    assert stretch.slept == [3600.0 + 60]
+    assert limited.prompts == [jfc.REPLY.format(reply="APPROVE"), jfc.LIFTED]
+
+
+def test_advance_asks_outside_the_session_while_no_reset_is_known(stretch, limited):
+    limited.outcomes = [jfc.Limited("limit"), "At the human gate."]
+    limited.probes = [True, True, False]
+
+    assert jfc.advance(ANALYSIS, "ws", "") == "At the human gate."
+
+    assert stretch.slept == [jfc.LIMITED * 60] * 3
+    assert limited.prompts == [jfc.INTERRUPTED, jfc.LIFTED]
 
 
 def test_advance_does_not_wait_on_a_failure_no_retry_follows(stretch, monkeypatch):
