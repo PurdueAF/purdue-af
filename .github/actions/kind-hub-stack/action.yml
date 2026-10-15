@@ -37,10 +37,14 @@ runs:
       uses: fluxcd/flux2/action@b9c17924adb533d3617ec7de97a7b0f4acc07b39 # v2.9.6
       with:
         version: ${{ inputs.flux-version }}
-    - name: Create kind cluster
+    # install_only: the action's post step would spend up to a minute deleting a cluster it created.
+    - name: Install kind and kubectl
       uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1 # Renovate pins to digest
       with:
-        cluster_name: af-e2e
+        install_only: true
+    - name: Create kind cluster
+      shell: bash
+      run: kind create cluster --name af-e2e --wait 60s
     - name: Login to ghcr.io
       if: inputs.ghcr-login == 'true'
       uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4 # Renovate pins to digest

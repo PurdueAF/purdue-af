@@ -96,6 +96,16 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+      # The runner's Docker 28 defaults to the classic store, which pulls the AF image about half as fast as containerd.
+      - name: Switch Docker to the containerd image store
+        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
+        run: |
+          set -euo pipefail
+          { sudo cat /etc/docker/daemon.json 2>/dev/null || echo '{}'; } \
+            | jq '.features["containerd-snapshotter"] = true' > /tmp/daemon.json
+          sudo mv /tmp/daemon.json /etc/docker/daemon.json
+          sudo systemctl restart docker
+          echo "docker storage driver: $(docker info --format '{{.Driver}}')"
       # The ~13 GB pull and the global-env install need each other's results
       # only at `docker run` time, so they overlap: the pull runs detached
       # while pixi installs, and by the smoke-test step the image is local.
@@ -105,9 +115,10 @@ jobs:
           AF_IMAGE: ${{ steps.image.outputs.image }}
         run: |
           set -euo pipefail
-          rm -f /tmp/af-pull.done /tmp/af-pull.failed
+          rm -f /tmp/af-pull.done /tmp/af-pull.failed /tmp/af-pull.secs
           nohup bash -c '
-            if docker pull -q "$AF_IMAGE"; then touch /tmp/af-pull.done
+            start=$SECONDS
+            if docker pull -q "$AF_IMAGE"; then echo $((SECONDS - start)) > /tmp/af-pull.secs; touch /tmp/af-pull.done
             else touch /tmp/af-pull.failed; fi
           ' >/tmp/af-pull.log 2>&1 &
           echo "pulling $AF_IMAGE in the background"
@@ -140,6 +151,19 @@ jobs:
       - name: Install CVMFS on the runner
         if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
         uses: cvmfs-contrib/github-action-cvmfs@72f2a8d366043978d6aebee154bc9ed321c2f2a8 # v5.6
+      # Revision: tests/integration_challenge/upstream.pin (part of the memo key).
+      - name: Check out the integration challenge
+        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
+        run: |
+          set -euo pipefail
+          pin=tests/integration_challenge/upstream.pin
+          repo=$(grep -E '^repo=' "$pin" | cut -d= -f2-)
+          ref=$(grep -E '^ref=' "$pin" | cut -d= -f2-)
+          git init -q challenge
+          git -C challenge remote add origin "$repo"
+          git -C challenge fetch -q --depth 1 origin "$ref"
+          git -C challenge checkout -q FETCH_HEAD
+          echo "integration challenge at $ref" | tee -a "$GITHUB_STEP_SUMMARY"
       # Fails loudly on a bad pull instead of letting `docker run` retry it
       # serially, which would silently give back the overlap.
       - name: Wait for the AF image
@@ -150,6 +174,26 @@ jobs:
           if [ -f /tmp/af-pull.failed ]; then
             echo "::error::AF image pull failed"; cat /tmp/af-pull.log; exit 1
           fi
+          echo "AF image pulled in $(cat /tmp/af-pull.secs)s"
+      # Runs the global env's own interpreter inside the AF image — the same
+      # combination a user gets from the `Python (pixi global)` kernel. Reads
+      # a CMS OpenData file straight from eospublic (no grid cert needed).
+      # Detached, so it overlaps the two smoke tests below.
+      - name: Start the integration challenge (detached)
+        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
+        env:
+          AF_IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          set -euo pipefail
+          rm -f /tmp/challenge.rc
+          nohup bash -c '
+            docker run --rm --user 0:0 -v "$PWD:$PWD" -w "$PWD" "$AF_IMAGE" \
+              pixi/global/.pixi/envs/default/bin/python \
+              tests/integration_challenge/run_challenge.py \
+              --challenge-root challenge/cms
+            echo $? > /tmp/challenge.rc.tmp && mv /tmp/challenge.rc.tmp /tmp/challenge.rc
+          ' >/tmp/challenge.log 2>&1 &
+          echo "running the integration challenge in the background"
       - name: CVMFS smoke test (cmsset_default.sh)
         if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
         run: |
@@ -167,31 +211,13 @@ jobs:
             "${{ steps.image.outputs.image }}" \
             pixi/global/.pixi/envs/default/bin/python pixi/check-env.py \
               --manifest pixi/global/pixi.toml --env default
-      # Revision: tests/integration_challenge/upstream.pin (part of the memo key).
-      - name: Check out the integration challenge
+      - name: Integration challenge result
         if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
         run: |
           set -euo pipefail
-          pin=tests/integration_challenge/upstream.pin
-          repo=$(grep -E '^repo=' "$pin" | cut -d= -f2-)
-          ref=$(grep -E '^ref=' "$pin" | cut -d= -f2-)
-          git init -q challenge
-          git -C challenge remote add origin "$repo"
-          git -C challenge fetch -q --depth 1 origin "$ref"
-          git -C challenge checkout -q FETCH_HEAD
-          echo "integration challenge at $ref" | tee -a "$GITHUB_STEP_SUMMARY"
-      # Runs the global env's own interpreter inside the AF image — the same
-      # combination a user gets from the `Python (pixi global)` kernel. Reads
-      # a CMS OpenData file straight from eospublic (no grid cert needed).
-      - name: Run the integration challenge
-        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
-        run: |
-          set -euo pipefail
-          docker run --rm --user 0:0 -v "$PWD:$PWD" -w "$PWD" \
-            "${{ steps.image.outputs.image }}" \
-            pixi/global/.pixi/envs/default/bin/python \
-            tests/integration_challenge/run_challenge.py \
-            --challenge-root challenge/cms
+          while [ ! -f /tmp/challenge.rc ]; do sleep 2; done
+          cat /tmp/challenge.log
+          exit "$(cat /tmp/challenge.rc)"
 
       - name: Commit regenerated lockfile
         if: success() && (steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true') && steps.lock.outputs.updated == 'true'
