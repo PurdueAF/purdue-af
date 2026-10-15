@@ -8,6 +8,7 @@ resources:
   - ../../apps/dask-gateway/aliases.yaml
 
   - ../../apps/monitoring/pyroscope/helmrelease.yaml
+  - ../../apps/monitoring/pyroscope/pvc.yaml
   - ../../apps/monitoring/loki/helmrelease.yaml
   - ../../apps/monitoring/alloy/helmrelease.yaml
 
