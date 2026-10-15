@@ -1,4 +1,4 @@
-about: "CMS Run 2 Ultra-Legacy NanoAODv15 datasets of the H→µµ search, by data-taking period: the data, the H→µµ samples of each production mode, and the simulated backgrounds. A signal's xsec_pb is σ·B(H→µµ) from the LHC Higgs Cross Section WG's Yellow Report 4 (arXiv:1610.07922) at m_H = 125.00 GeV, with B(H→µµ) = 2.176e-4. gg → ZH, bbH, tHq and tHW have no H→µµ sample; the Yellow Report gives their cross sections too. A background's cross section is for the analysis to establish from a citable source. The trigger is the unprescaled isolated single-muon trigger at the thresholds of arXiv:2009.04363, section 5."
+about: "CMS Run 2 Ultra-Legacy NanoAODv15 datasets of the H→µµ search, by data-taking period: the data, the H→µµ samples of each production mode, and the simulated backgrounds. A signal's xsec_pb is σ·B(H→µµ) from the LHC Higgs Cross Section WG's Yellow Report 4 (arXiv:1610.07922) at m_H = 125.00 GeV, with B(H→µµ) = 2.176e-4. gg → ZH, bbH, tHq and tHW have no H→µµ sample; the Yellow Report gives their cross sections too. One background, a private production, is listed by the directory of its files on Purdue's storage. A background's cross section is for the analysis to establish from a citable source. The trigger is the unprescaled isolated single-muon trigger at the thresholds of arXiv:2009.04363, section 5."
 periods:
   2016preVFP:
     luminosity_fb: 19.52
@@ -50,6 +50,10 @@ periods:
         datasets:
           - /DYJetsToMuMu_M-100to200_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/RunIISummer20UL16NanoAODAPVv15-150X_mcRun2_asymptotic_preVFP_v1-v1/NANOAODSIM
         note: a slice of the mass range of the m > 50 GeV MiNNLO sample
+      - process: Z/γ* → ℓℓ, 105 < m < 160 GeV, VBF filter, aMC@NLO
+        paths:
+          - /store/user/rasharma/customNanoAODv15/hadded/UL2016APV/DYJets_NanoAOD/
+        note: "a private NanoAODv15 production at Purdue, made with the generator configuration of CMS request HIG-RunIIFall18wmLHEGS-00874 (DYJetsToLL_M-105To160_VBFFilter_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8; https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get/HIG-RunIIFall18wmLHEGS-00874). It is not in DAS: list its files with `xrdfs root://eos.cms.rcac.purdue.edu ls` on the path, and read them through XCache like the others"
       - process: electroweak Z + 2 jets, Z → ℓℓ
         datasets:
           - /EWKZ2Jets_ZToLL_M-50_TuneCP5_withDipoleRecoil_13TeV-madgraph-pythia8/RunIISummer20UL16NanoAODAPVv15-150X_mcRun2_asymptotic_preVFP_v1-v1/NANOAODSIM
@@ -187,6 +191,10 @@ periods:
         datasets:
           - /DYJetsToMuMu_M-100to200_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/RunIISummer20UL16NanoAODv15-150X_mcRun2_asymptotic_v1-v1/NANOAODSIM
         note: a slice of the mass range of the m > 50 GeV MiNNLO sample
+      - process: Z/γ* → ℓℓ, 105 < m < 160 GeV, VBF filter, aMC@NLO
+        paths:
+          - /store/user/rasharma/customNanoAODv15/hadded/UL2016/DYJets_NanoAOD/
+        note: "a private NanoAODv15 production at Purdue, made with the generator configuration of CMS request HIG-RunIIFall18wmLHEGS-00874 (DYJetsToLL_M-105To160_VBFFilter_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8; https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get/HIG-RunIIFall18wmLHEGS-00874). It is not in DAS: list its files with `xrdfs root://eos.cms.rcac.purdue.edu ls` on the path, and read them through XCache like the others"
       - process: electroweak Z + 2 jets, Z → ℓℓ
         datasets:
           - /EWKZ2Jets_ZToLL_M-50_TuneCP5_withDipoleRecoil_13TeV-madgraph-pythia8/RunIISummer20UL16NanoAODv15-150X_mcRun2_asymptotic_v1-v1/NANOAODSIM
@@ -327,6 +335,10 @@ periods:
         datasets:
           - /DYJetsToMuMu_M-100to200_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/RunIISummer20UL17NanoAODv15-150X_mc2017_realistic_v1-v1/NANOAODSIM
         note: a slice of the mass range of the m > 50 GeV MiNNLO sample
+      - process: Z/γ* → ℓℓ, 105 < m < 160 GeV, VBF filter, aMC@NLO
+        paths:
+          - /store/user/rasharma/customNanoAODv15/hadded/UL2017/DYJets_NanoAOD/
+        note: "a private NanoAODv15 production at Purdue, made with the generator configuration of CMS request HIG-RunIIFall18wmLHEGS-00874 (DYJetsToLL_M-105To160_VBFFilter_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8; https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get/HIG-RunIIFall18wmLHEGS-00874). It is not in DAS: list its files with `xrdfs root://eos.cms.rcac.purdue.edu ls` on the path, and read them through XCache like the others"
       - process: electroweak Z + 2 jets, Z → ℓℓ
         datasets:
           - /EWKZ2Jets_ZToLL_M-50_TuneCP5_withDipoleRecoil_13TeV-madgraph-pythia8/RunIISummer20UL17NanoAODv15-150X_mc2017_realistic_v1-v1/NANOAODSIM
@@ -466,6 +478,10 @@ periods:
         datasets:
           - /DYJetsToMuMu_M-100to200_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos/RunIISummer20UL18NanoAODv15-150X_mc2018_realistic_v1-v1/NANOAODSIM
         note: a slice of the mass range of the m > 50 GeV MiNNLO sample
+      - process: Z/γ* → ℓℓ, 105 < m < 160 GeV, VBF filter, aMC@NLO
+        paths:
+          - /store/user/rasharma/customNanoAODv15/hadded/UL2018/DYJets_NanoAOD/
+        note: "a private NanoAODv15 production at Purdue, made with the generator configuration of CMS request HIG-RunIIFall18wmLHEGS-00874 (DYJetsToLL_M-105To160_VBFFilter_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8; https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get/HIG-RunIIFall18wmLHEGS-00874). It is not in DAS: list its files with `xrdfs root://eos.cms.rcac.purdue.edu ls` on the path, and read them through XCache like the others"
       - process: electroweak Z + 2 jets, Z → ℓℓ
         datasets:
           - /EWKZ2Jets_ZToLL_M-50_TuneCP5_withDipoleRecoil_13TeV-madgraph-pythia8/RunIISummer20UL18NanoAODv15-150X_mc2018_realistic_v1-v1/NANOAODSIM

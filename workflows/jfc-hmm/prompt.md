@@ -29,9 +29,10 @@ and the full set of systematic uncertainties.
 Data source: `datasets.yaml` lists, for each data-taking period (2016 before
 and after the change of the tracker's VFP setting, 2017, 2018), the SingleMuon
 data, the H→µµ signal samples and the simulated backgrounds as CMS NanoAOD
-datasets; the signal samples' cross sections; and each period's integrated
-luminosity, certified-luminosity JSON and single-muon trigger, with their
-sources. Find a dataset's files with DAS and read them through XCache.
+datasets, one private production by the directory of its files; the signal
+samples' cross sections; and each period's integrated luminosity,
+certified-luminosity JSON and single-muon trigger, with their sources. Find a
+dataset's files with DAS and read them through XCache.
 
 Resources: process the data on Dask Gateway with as many cores as help, up to
 1000. A model that trains on GPUs does so through Ray, on at most 10 GPUs at
