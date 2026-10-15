@@ -128,7 +128,7 @@ RUN chmod +x /usr/local/bin/pixi && \
 ARG CLAUDE_CODE_VERSION="2.1.300"
 ARG CODEX_VERSION="0.162.1"
 ARG OPENCODE_VERSION="1.19.0"
-ARG CLAUDE_AGENT_ACP_VERSION="0.90.0"
+ARG CLAUDE_AGENT_ACP_VERSION="0.91.0"
 ARG CODEX_ACP_VERSION="0.16.0"
 ENV NPM_GLOBAL="/opt/npm-global"
 # hadolint ignore=DL3016  # versions ARE pinned, via the ARGs above
