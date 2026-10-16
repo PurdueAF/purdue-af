@@ -191,6 +191,8 @@ NOT_PASSED_ON = {
 }
 # A long log tail or upload is no failure; only a head that cannot be reached is.
 RELAY_TIMEOUT = ClientTimeout(total=None, sock_connect=10)
+# How long a refusal waits for the call's first request, which a Ray client sends at once.
+REFUSAL_READ_S = 5.0
 # How the Jobs API's client shows a refusal: 401 and 403 as authentication errors, the rest with their text.
 HTTP_STATUS = {
     grpc.StatusCode.INVALID_ARGUMENT: 400,
@@ -662,6 +664,9 @@ class Gateway:
                 raise Refused(grpc.StatusCode.NOT_FOUND, self.gone[client][1])
             cluster = await self.cluster_for(user, shape)
         except Refused as e:
+            # Refusing ahead of the request races the client's write of it, which grpc reports as INTERNAL.
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(anext(requests, None), REFUSAL_READ_S)
             await context.abort(e.code, e.text)
         self.clients.setdefault(cluster, set()).add(client)
         self.gone.pop(client, None)
