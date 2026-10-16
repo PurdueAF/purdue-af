@@ -638,6 +638,26 @@ async def test_a_call_without_a_token_is_refused(env):
     assert env.kube.clusters == {}
 
 
+async def test_a_refusal_waits_for_the_calls_first_request(env):
+    stream = env.channel.stream_stream(PING)()
+    reading = asyncio.ensure_future(stream.read())
+    await asyncio.sleep(0.1)
+    assert not reading.done()
+    await stream.write(b"ping")
+    with pytest.raises(grpc.aio.AioRpcError) as e:
+        await reading
+    assert e.value.code() == grpc.StatusCode.UNAUTHENTICATED
+
+
+async def test_a_call_that_sends_nothing_is_refused_once_the_wait_passes(
+    env, monkeypatch
+):
+    monkeypatch.setattr(gw, "REFUSAL_READ_S", 0.1)
+    with pytest.raises(grpc.aio.AioRpcError) as e:
+        await asyncio.wait_for(env.channel.stream_stream(PING)().read(), timeout=5)
+    assert e.value.code() == grpc.StatusCode.UNAUTHENTICATED
+
+
 async def test_a_token_the_hub_does_not_know_is_refused(env):
     assert await refused(env, token="stolen") == grpc.StatusCode.UNAUTHENTICATED
     assert env.kube.clusters == {}
