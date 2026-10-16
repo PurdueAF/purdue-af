@@ -13,7 +13,7 @@
 //     are pulled through the cluster registry's Docker Hub cache
 //   - Dockerfile base images (FROM tags)
 //   - GitHub Actions versions (+ pins them to commit SHAs)
-//   - Python deps and their uv.lock (docker/agentic-interface/, tests/) via pep621
+//   - Python deps and their uv.lock files via pep621
 //   - pixi manifests (pixi/{base,global}/pixi.toml) — NOT lockfiles
 //   - pre-commit hook versions
 //   - regex managers: Dockerfile ARG pins (pixi CLI, coding-agent CLIs, ACP
@@ -84,7 +84,11 @@
   // release of a direct dependency, and a weekly refresh of the transitive pins.
   pep621: {
     rangeStrategy: 'update-lockfile',
-    lockFileMaintenance: { enabled: true },
+    lockFileMaintenance: {
+      enabled: true,
+      // One branch per group; groupName renders empty in a single-update title.
+      commitMessageExtra: '({{{packageFileDir}}})',
+    },
   },
 
   // The pixi CLI pin; ci-pixi-*.yml read it from the Dockerfile at run time.
