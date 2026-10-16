@@ -373,7 +373,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/rfc3987-syntax-1.1.0-pyhe01879c_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/rich-15.0.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/rich-rst-2.1.0-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.4.0-pyhd8ed1ab_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.5.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/send2trash-2.1.0-pyha191276_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/shellingham-1.5.4-pyhd8ed1ab_2.conda
@@ -809,7 +809,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/rfc3987-syntax-1.1.0-pyhe01879c_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/rich-15.0.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/rich-rst-2.1.0-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.4.0-pyhd8ed1ab_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.5.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/send2trash-2.1.0-pyha191276_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/shellingham-1.5.4-pyhd8ed1ab_2.conda
@@ -3495,7 +3495,7 @@ packages:
   license: BSD-3-Clause
   license_family: BSD
   purls:
-  - pkg:pypi/bokeh?source=hash-mapping
+  - pkg:pypi/bokeh?source=compressed-mapping
   size: 4454345
   timestamp: 1787144786949
 - conda: https://conda.anaconda.org/conda-forge/noarch/boltons-26.0.0-pyhd8ed1ab_0.conda
@@ -6026,9 +6026,9 @@ packages:
   - pkg:pypi/rich-rst?source=hash-mapping
   size: 212432
   timestamp: 1783238203113
-- conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.4.0-pyhd8ed1ab_1.conda
-  sha256: e0f039e4e5124646a4145c5b0511e8c9de20b4f6d427e41cf40273d25d6edb6f
-  md5: 236fd1d8998abe9b0d1803d8ff8cc550
+- conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.5.0-pyhd8ed1ab_0.conda
+  sha256: 490208875cc3f4636b474659b2e062eb99573645041d60b4993ee40cbba003d0
+  md5: 97fa87f8ae112edcc065c735cac6b27e
   depends:
   - click
   - dogpile.cache
@@ -6041,12 +6041,11 @@ packages:
   - typing_extensions
   - urllib3
   license: Apache-2.0
-  license_family: APACHE
   purls:
   - pkg:pypi/rucio-clients?source=hash-mapping
   run_exports: {}
-  size: 268236
-  timestamp: 1791281069382
+  size: 268899
+  timestamp: 1792157874126
 - conda: https://conda.anaconda.org/conda-forge/noarch/send2trash-2.1.0-pyha191276_1.conda
   sha256: 59656f6b2db07229351dfb3a859c35e57cc8e8bcbc86d4e501bff881a6f771f1
   md5: 28eb91468df04f655a57bcfbb35fc5c5
@@ -6414,7 +6413,7 @@ packages:
   license: BSD-3-Clause
   license_family: BSD
   purls:
-  - pkg:pypi/uvicorn?source=hash-mapping
+  - pkg:pypi/uvicorn?source=compressed-mapping
   size: 60189
   timestamp: 1787133003107
 - conda: https://conda.anaconda.org/conda-forge/noarch/wcwidth-0.8.1-pyhd8ed1ab_0.conda
