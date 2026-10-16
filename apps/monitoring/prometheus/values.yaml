@@ -617,7 +617,9 @@ serverFiles:
         rules:
           # fresh separates a failed check from one that never ran; mount blips stay warnings.
           - alert: AFMountInvalid
-            expr: af_node_mount_valid{node_pool="prod"} == 0 and af_node_mount_result_fresh{node_pool="prod"} == 1
+            expr: >
+              af_node_mount_valid{node_pool="prod",mount_name!="cvmfs"} == 0
+              and af_node_mount_result_fresh{node_pool="prod",mount_name!="cvmfs"} == 1
             for: 10m
             labels:
               severity: warning
@@ -649,12 +651,12 @@ serverFiles:
                 probe pod is missing, not Ready or not answering af-node-monitor;
                 1 means the probe answered but its result timestamp was rejected,
                 which is clock skew on that node. A mount that fails or times out
-                fires AFMountInvalid instead.
+                fires AFMountInvalid instead (AFCvmfsFailing for /cvmfs).
                 Check: kubectl -n cms get pods -l app=af-node-monitor,component=probe -o wide
-          # Completed checks only (unknown publishes the timeout sentinel); the upper bound leaves timeouts to AFMountInvalid.
+          # One timed-out check's 10000 ms sentinel lifts the 20m average into the band; the upper bound drops only windows of timeouts alone.
           - alert: AFMountSlow
             expr: >
-              avg_over_time((af_node_mount_metadata_latency_ms{node_pool="prod"}
+              avg_over_time((af_node_mount_metadata_latency_ms{node_pool="prod",mount_name!~"cvmfs|eos"}
               and on(node, mount_name, node_pool) af_node_mount_result_fresh{node_pool="prod"} == 1)[20m:])
               > 2000 < 10000
             for: 5m
@@ -667,6 +669,62 @@ serverFiles:
                 20-minute average metadata latency is {{ printf "%.0f" $value }} ms
                 against a healthy ceiling near 900 ms. Reads still work, but
                 analyses on this node will crawl.
+          # A timed-out check publishes the 10000 ms sentinel, so it counts as a slow one.
+          - alert: AFEosSlow
+            expr: >
+              avg_over_time((af_node_mount_metadata_latency_ms{node_pool="prod",mount_name="eos"} > bool 2000
+              and on(node, mount_name, node_pool) af_node_mount_result_fresh{node_pool="prod"} == 1)[1h:])
+              >= 0.5
+            for: 10m
+            labels:
+              severity: warning
+              component: data
+            annotations:
+              summary: "eos is slow on node {{ $labels.node }}"
+              description: >
+                {{ $value | humanizePercentage }} of the eos checks on this node
+                over the last hour took over 2 s to list a directory or timed
+                out. One slow check is a blip; this many means reads of /eos
+                crawl or stall for the sessions and Dask workers on this node.
+                /eos is the node's own EOS FUSE mount: report the node to RCAC.
+                Many nodes at once is EOS itself or the network.
+          # /cvmfs is autofs: a check after the repository expired pays a cold automount that can outlast the read timeout.
+          - alert: AFCvmfsFailing
+            expr: >
+              avg_over_time((af_node_mount_valid{node_pool="prod",mount_name="cvmfs"}
+              and on(node, mount_name, node_pool) af_node_mount_result_fresh{node_pool="prod"} == 1)[2h:])
+              < 0.5
+            for: 10m
+            labels:
+              severity: warning
+              component: data
+            annotations:
+              summary: "cvmfs is failing on node {{ $labels.node }}"
+              description: >
+                Only {{ $value | humanizePercentage }} of the /cvmfs checks on this
+                node passed over 2 hours. One failed check is a slow cold
+                automount; most of them failing means CVMFS on this node is
+                broken, and sessions and Dask workers here stall or fail when
+                they read /cvmfs. The CVMFS client and its automounter belong to
+                RCAC's CSI driver: report the node to RCAC.
+          - alert: AFCvmfsFailingWidely
+            expr: >
+              count(min_over_time((af_node_mount_valid{node_pool="prod",mount_name="cvmfs"}
+              and on(node, mount_name, node_pool) af_node_mount_result_fresh{node_pool="prod"} == 1)[10m:]) == 0)
+              / count(af_node_mount_result_fresh{node_pool="prod",mount_name="cvmfs"} == 1)
+              >= 0.5
+            for: 5m
+            labels:
+              severity: warning
+              component: data
+            annotations:
+              summary: /cvmfs is failing on half the nodes or more
+              description: >
+                {{ $value | humanizePercentage }} of the prod nodes had a failed
+                /cvmfs check in the last 10 minutes. Cold automounts fail on
+                one node at a time; this many at once is CVMFS itself, its
+                proxies or the network, and sessions and Dask workers anywhere
+                may fail to read /cvmfs.
           - alert: AFNodeMonitorStale
             expr: >
               absent(af_node_monitor_last_iteration_timestamp_seconds)

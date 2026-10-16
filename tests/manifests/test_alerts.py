@@ -203,11 +203,42 @@ def test_mount_alerts_name_the_worker_node_label():
         "AFMountSlow",
         "AFMountHealthUnknown",
         "AFMountInvalidDev",
+        "AFCvmfsFailing",
+        "AFEosSlow",
     ):
         rule = next(r for r in rules() if r["alert"] == name)
         summary = rule["annotations"]["summary"]
         assert "$labels.node" in summary, summary
         assert "exported_node" not in summary
+
+
+def test_cvmfs_alerts_wait_for_more_than_one_failed_check():
+    """A /cvmfs check after autofs expired the repository pays a cold
+    automount, which outlasts the read timeout on some node most hours. The
+    per-check rules leave /cvmfs out; its own rules need a node failing most
+    of its checks, or many nodes failing at once."""
+    invalid = next(r for r in rules() if r["alert"] == "AFMountInvalid")["expr"]
+    assert 'mount_name!="cvmfs"' in invalid
+    for name in ("AFCvmfsFailing", "AFCvmfsFailingWidely"):
+        expr = next(r for r in rules() if r["alert"] == name)["expr"]
+        assert 'mount_name="cvmfs"' in expr, name
+        assert "_over_time" in expr, name
+        assert "af_node_mount_result_fresh" in expr, name
+
+
+def test_eos_slow_needs_most_of_an_hour_of_slow_checks():
+    """A timed-out check publishes the 10000 ms sentinel, which averaged with a
+    healthy check lands inside AFMountSlow's band. eos times out one node and
+    one check at a time, so AFMountSlow leaves eos (and /cvmfs) out; AFEosSlow
+    needs half of a node's eos checks over an hour slow, timeouts included."""
+    slow = next(r for r in rules() if r["alert"] == "AFMountSlow")["expr"]
+    assert 'mount_name!~"cvmfs|eos"' in slow
+    eos = next(r for r in rules() if r["alert"] == "AFEosSlow")["expr"]
+    assert 'mount_name="eos"' in eos
+    assert "> bool 2000" in eos
+    assert "< 10000" not in eos
+    assert "[1h:]" in eos
+    assert "af_node_mount_result_fresh" in eos
 
 
 def test_mount_slow_excludes_the_probe_timeout_sentinel():
