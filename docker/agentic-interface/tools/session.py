@@ -29,7 +29,7 @@ from errors import (
     response_detail,
     unreachable,
 )
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 from shared import shared_client
 
 from tools.elicitation import ask, single_choice_model

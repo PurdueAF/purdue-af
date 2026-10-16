@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 # Runtime dependencies; uv.lock pins the full tree for the Docker image.
 # (Tests live in tests/ with their own project.)
 dependencies = [
-    "mcp[cli]>=1.3.0",
+    "mcp>=2.3,<3",
     "httpx>=0.27.0",
     "pyyaml>=6.0",
     "prometheus-client>=0.22.0",

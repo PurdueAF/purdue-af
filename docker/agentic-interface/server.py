@@ -24,7 +24,7 @@ from config import (
 )
 from context import current_user
 from metrics import (
-    InstrumentedFastMCP,
+    InstrumentedMCPServer,
     metrics_body,
     metrics_content_type,
     record_request,
@@ -331,12 +331,9 @@ def skill_version(text: str) -> str:
 
 SKILL_VERSION = skill_version(open(SKILL_PATH).read())
 
-# JupyterHub's proxy passes the full path (including the service prefix) to
-# the service, so the MCP app is told to serve exactly that path.
-mcp = InstrumentedFastMCP(
+mcp = InstrumentedMCPServer(
     "purdue-af-agentic-interface",
-    stateless_http=STATELESS_HTTP,
-    streamable_http_path=f"{SERVICE_PREFIX}/mcp",
+    version=SKILL_VERSION,
     instructions=(
         "Tools for the Purdue Analysis Facility. "
         "Use query_notebook_logs / query_dask_logs for log queries; "
@@ -370,16 +367,29 @@ prompts.register(mcp)
 # ── entry point ───────────────────────────────────────────────────────────────
 
 
+def build_app() -> ASGIApp:
+    """Bearer-token validation in front of the MCP app.
+
+    JupyterHub's proxy passes the full path (including the service prefix) to
+    the service, so the MCP app is told to serve exactly that path.
+    """
+    return _AuthMiddleware(
+        mcp.streamable_http_app(
+            streamable_http_path=f"{SERVICE_PREFIX}/mcp",
+            stateless_http=STATELESS_HTTP,
+        )
+    )
+
+
 def main() -> None:
+    # force: MCPServer() already configured the root logger at import time.
     logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        force=True,
     )
     logging.getLogger("uvicorn.access").addFilter(_McpAccessFilter())
-
-    # Bearer-token validation in front of the MCP app, which serves
-    # {SERVICE_PREFIX}/mcp itself.
-    app = _AuthMiddleware(mcp.streamable_http_app())
-    uvicorn.run(app, host="0.0.0.0", port=8888, log_level="info")
+    uvicorn.run(build_app(), host="0.0.0.0", port=8888, log_level="info")
 
 
 if __name__ == "__main__":

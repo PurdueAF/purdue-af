@@ -1,7 +1,7 @@
-"""MCP contract tests — exercise the *real* FastMCP server, not test fakes.
+"""MCP contract tests — exercise the *real* MCPServer, not test fakes.
 
 The rest of the suite registers tools against a recorder, which would stay
-green even if FastMCP failed to generate schemas for a tool (the exact risk
+green even if the SDK failed to generate schemas for a tool (the exact risk
 of an `mcp` dependency bump). These tests are the canary for that.
 """
 
@@ -46,7 +46,7 @@ async def test_all_tools_registered_with_schemas():
     assert {t.name for t in tools} == EXPECTED_TOOLS
     for tool in tools:
         assert tool.description, f"{tool.name} has no description"
-        assert tool.inputSchema.get("type") == "object", (
+        assert tool.input_schema.get("type") == "object", (
             f"{tool.name} has no generated input schema"
         )
 
@@ -60,10 +60,10 @@ async def test_tool_arguments_survive_schema_generation():
     """Spot-check that typed/optional parameters made it into the schema."""
     tools = {t.name: t for t in await server.mcp.list_tools()}
 
-    logs_props = tools["query_notebook_logs"].inputSchema["properties"]
+    logs_props = tools["query_notebook_logs"].input_schema["properties"]
     assert {"start", "end", "limit", "direction", "filter", "dedup"} <= set(logs_props)
 
-    scale = tools["scale_dask_cluster"].inputSchema
+    scale = tools["scale_dask_cluster"].input_schema
     assert "n_workers" in scale["properties"]
     assert "cluster_name" in scale["required"]
 
@@ -100,7 +100,7 @@ async def test_full_stack_handshake_and_auth(monkeypatch):
 
     monkeypatch.setattr(server, "verify_token", accept)
 
-    app = server._AuthMiddleware(server.mcp.streamable_http_app())
+    app = server.build_app()
     async with LifespanManager(app) as manager:
         transport = httpx.ASGITransport(app=manager.app)
         async with httpx.AsyncClient(transport=transport, base_url="http://hub") as c:
@@ -176,12 +176,13 @@ async def test_full_stack_handshake_and_auth(monkeypatch):
 # ── a declined elicitation must still be readable by the agent ────────────────
 #
 # Tools that ask the user for choices raise NeedsChoices when the client cannot
-# (or will not) render the prompt, and metrics.InstrumentedFastMCP turns that
+# (or will not) render the prompt, and metrics.InstrumentedMCPServer turns that
 # into an ordinary result carrying the help text. Because every tool is `-> str`
-# FastMCP declares an outputSchema for it, and the low-level server discards any
-# result without structuredContent — so the help text only survives the round
-# trip if it is returned in both halves. These two tests pin that down: the
-# shape assumption, and the actual round trip through the real server.
+# the SDK declares an output schema for it, and clients reject a successful
+# result without conforming structured content — so the help text only
+# survives the round trip if it is returned in both halves. These tests pin
+# that down: the shape assumption, and the round trip through the real server
+# for a client on each protocol era.
 
 
 async def test_every_tool_declares_a_wrapped_string_output_schema():
@@ -191,7 +192,7 @@ async def test_every_tool_declares_a_wrapped_string_output_schema():
     to learn the new shape or the NeedsChoices path silently regresses.
     """
     for tool in await server.mcp.list_tools():
-        schema = tool.outputSchema
+        schema = tool.output_schema
         assert schema is not None, f"{tool.name} declares no output schema"
         assert schema.get("type") == "object", f"{tool.name}: {schema}"
         assert list(schema.get("required", [])) == ["result"], f"{tool.name}: {schema}"
@@ -200,22 +201,52 @@ async def test_every_tool_declares_a_wrapped_string_output_schema():
         )
 
 
-async def test_declined_elicitation_returns_help_text_not_a_validation_error():
-    """A declined elicitation returns the ask-in-chat instructions as a
-    normal result that passes output validation."""
-    from mcp.shared.memory import create_connected_server_and_client_session
+def _assert_help_text(result):
+    assert not result.is_error
+    assert result.structured_content is not None
+    text = result.content[0].text
+    assert text == result.structured_content["result"]
+    assert "create_dask_cluster needs" in text
+
+
+async def test_declined_elicitation_returns_help_text_not_a_validation_error(caplog):
+    """A legacy-protocol client gets the form; declining it returns the
+    ask-in-chat instructions as a normal result that passes output validation."""
+    from mcp.client import Client
     from mcp.types import ElicitResult
 
+    asked = []
+
     async def decline(context, params):
+        asked.append(params.message)
         return ElicitResult(action="decline")
 
-    async with create_connected_server_and_client_session(
-        server.mcp, elicitation_callback=decline
-    ) as session:
-        result = await session.call_tool("create_dask_cluster", {})
+    with caplog.at_level("INFO", logger="tools.elicitation"):
+        async with Client(
+            server.mcp, mode="legacy", elicitation_callback=decline
+        ) as client:
+            result = await client.call_tool("create_dask_cluster", {})
 
-    assert result.isError is False
-    assert result.structuredContent is not None
-    text = result.content[0].text
-    assert text == result.structuredContent["result"]
-    assert "create_dask_cluster needs" in text
+    assert asked, "the legacy client was never shown the form"
+    assert "elicit action=decline" in caplog.text
+    _assert_help_text(result)
+
+
+async def test_modern_client_gets_help_text_without_a_form(caplog):
+    """Protocol 2026-07-28 has no server-to-client requests: the tool cannot
+    push the form, and answers with the same ask-in-chat instructions."""
+    from mcp.client import Client
+
+    asked = []
+
+    async def record(context, params):  # pragma: no cover - must not be called
+        asked.append(params.message)
+
+    with caplog.at_level("INFO", logger="tools.elicitation"):
+        async with Client(server.mcp, elicitation_callback=record) as client:
+            result = await client.call_tool("create_dask_cluster", {})
+
+    assert not asked
+    assert "no back-channel" in caplog.text
+    assert "protocol=2026-07-28" in caplog.text
+    _assert_help_text(result)

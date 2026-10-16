@@ -1,14 +1,16 @@
 """Tests for tools/elicitation.py + a guard that every elicitation schema is
-accepted by the real MCP SDK validator.
+accepted by the real MCP SDK renderer.
 
-The SDK's _validate_elicitation_schema accepts only raw primitive field
-annotations (str/int/float/bool); a fake context cannot check that.
+The SDK's render_elicitation_schema rejects any field the spec's
+PrimitiveSchemaDefinition does not accept, and it is what goes on the wire;
+a fake context cannot check that.
 """
 
 import types
 
 import pytest
-from mcp.server.elicitation import _validate_elicitation_schema
+from mcp.server.elicitation import render_elicitation_schema
+from mcp.shared.exceptions import NoBackChannelError
 from tools import dask
 from tools.elicitation import elicit, single_choice_model
 
@@ -26,7 +28,7 @@ _DASK_ELICIT_MODELS = [
 
 @pytest.mark.parametrize("model", _DASK_ELICIT_MODELS)
 def test_dask_elicit_models_pass_sdk_validator(model):
-    _validate_elicitation_schema(model)  # raises TypeError if not primitive-only
+    render_elicitation_schema(model)  # raises TypeError if not primitive-only
 
 
 def test_single_choice_model_passes_sdk_validator_and_uses_titled_oneof():
@@ -37,9 +39,8 @@ def test_single_choice_model_passes_sdk_validator_and_uses_titled_oneof():
         default="2",
         description="pick",
     )
-    _validate_elicitation_schema(model)
+    schema = render_elicitation_schema(model)
 
-    schema = model.model_json_schema()
     prop = schema["properties"]["value"]
     assert prop["type"] == "string"
     # Standards-compliant titled single-select — inline, no deprecated enumNames.
@@ -57,15 +58,14 @@ def test_single_choice_model_passes_sdk_validator_and_uses_titled_oneof():
 
 def test_single_choice_model_without_labels_uses_plain_enum():
     model = single_choice_model("Choice", ["red", "blue"])
-    _validate_elicitation_schema(model)
-    prop = model.model_json_schema()["properties"]["value"]
+    prop = render_elicitation_schema(model)["properties"]["value"]
     assert prop["enum"] == ["red", "blue"]
     assert "oneOf" not in prop
 
 
 def test_single_choice_model_default_falls_back_when_missing():
     model = single_choice_model("Choice", ["a", "b"], default="zzz")
-    assert model.model_json_schema()["properties"]["value"]["default"] == "a"
+    assert render_elicitation_schema(model)["properties"]["value"]["default"] == "a"
 
 
 def test_single_choice_model_requires_keys():
@@ -76,32 +76,62 @@ def test_single_choice_model_requires_keys():
 # ── elicit diagnostics ────────────────────────────────────────────────────────
 
 
-def _ctx(client_params, action="decline"):
+def _ctx(client_params, capabilities=None, protocol=None, answer="decline"):
     async def respond(message, schema):
-        return types.SimpleNamespace(action=action)
+        if isinstance(answer, Exception):
+            raise answer
+        return types.SimpleNamespace(action=answer)
 
     return types.SimpleNamespace(
-        session=types.SimpleNamespace(client_params=client_params), elicit=respond
+        session=types.SimpleNamespace(client_params=client_params),
+        client_capabilities=capabilities,
+        protocol_version=protocol,
+        elicit=respond,
     )
 
 
 async def test_elicit_logs_who_answered(caplog):
     """An agent client may auto-decline in milliseconds; the log has to say
-    which client it was and whether it claimed to support elicitation."""
+    which client it was, on which protocol, and whether it claimed to support
+    elicitation."""
+    capabilities = types.SimpleNamespace(elicitation=object())
     params = types.SimpleNamespace(
-        clientInfo=types.SimpleNamespace(name="claude-code", version="2.1"),
-        capabilities=types.SimpleNamespace(elicitation=object()),
+        client_info=types.SimpleNamespace(name="claude-code", version="2.1"),
+        capabilities=capabilities,
     )
     with caplog.at_level("INFO", logger="tools.elicitation"):
-        assert await elicit(_ctx(params), "pick", dask._EnvChoice) == (
-            "decline",
-            None,
-        )
-    assert "client=claude-code/2.1 elicitation_capability=True" in caplog.text
+        assert await elicit(
+            _ctx(params, capabilities, "2025-11-25"), "pick", dask._EnvChoice
+        ) == ("decline", None)
+    assert (
+        "client=claude-code/2.1 protocol=2025-11-25 elicitation_capability=True"
+        in caplog.text
+    )
 
 
 async def test_elicit_before_initialisation_logs_unknown_client(caplog):
     with caplog.at_level("INFO", logger="tools.elicitation"):
-        await elicit(_ctx(None, action="cancel"), "pick", dask._EnvChoice)
+        await elicit(_ctx(None, answer="cancel"), "pick", dask._EnvChoice)
     assert "action=cancel" in caplog.text
-    assert "client=None/None elicitation_capability=None" in caplog.text
+    assert "client=None/None protocol=None elicitation_capability=None" in caplog.text
+
+
+async def test_elicit_without_a_back_channel_is_unsupported_not_an_error(caplog):
+    """Stateless HTTP and protocol 2026-07-28 cannot carry a request to the
+    client; the tool falls back to asking in chat, so it is not a warning."""
+    ctx = _ctx(
+        None, protocol="2026-07-28", answer=NoBackChannelError("elicitation/create")
+    )
+    with caplog.at_level("INFO", logger="tools.elicitation"):
+        assert await elicit(ctx, "pick", dask._EnvChoice) == ("unsupported", None)
+    assert "no back-channel" in caplog.text
+    assert "protocol=2026-07-28" in caplog.text
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+
+async def test_elicit_error_is_unsupported_and_logged(caplog):
+    ctx = _ctx(None, answer=RuntimeError("stream closed"))
+    with caplog.at_level("INFO", logger="tools.elicitation"):
+        assert await elicit(ctx, "pick", dask._EnvChoice) == ("unsupported", None)
+    warning = next(r for r in caplog.records if r.levelname == "WARNING")
+    assert "stream closed" in warning.getMessage()
