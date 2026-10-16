@@ -19,15 +19,18 @@ controller:
   nodeSelector:
     cms-af-dev: "true"
 
-# Nothing addresses Alloy through a Service; Prometheus scrapes the pods.
+# Prometheus scrapes the pods; only the clustering peers use a Service (alloy-cluster).
 service:
   enabled: false
 
-# A Role in the one namespace Alloy discovers pods in.
+# A Role in the one namespace Alloy reads pods and events in.
 rbac:
   namespaces: [cms]
 
 alloy:
+  # Only loki.source.kubernetes_events opts in; pod logs stay with each node's pod.
+  clustering:
+    enabled: true
   initialDelaySeconds: 30
   timeoutSeconds: 5
   mounts:
@@ -115,6 +118,29 @@ alloy:
             // The stage's minimum.
             max_distinct_labels = 10000
           }
+        }
+        forward_to = [loki.write.default.receiver]
+      }
+
+      loki.source.kubernetes_events "events" {
+        namespaces = ["cms"]
+        forward_to = [loki.process.events.receiver]
+        // One pod of the DaemonSet ships each event, not every pod.
+        clustering {
+          enabled = true
+        }
+      }
+
+      loki.process "events" {
+        stage.logfmt {
+          mapping = { name = "", kind = "", reason = "", type = "" }
+        }
+        stage.labels {
+          values = { kind = "", reason = "", type = "" }
+        }
+        // One value per object: kept out of the stream labels.
+        stage.structured_metadata {
+          values = { name = "" }
         }
         forward_to = [loki.write.default.receiver]
       }
