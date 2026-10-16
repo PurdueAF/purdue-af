@@ -165,7 +165,7 @@ def test_malformed_response_and_argument_and_bug_messages():
 
 
 def test_failures_are_mcp_tool_errors_with_an_outcome_label():
-    from mcp.server.fastmcp.exceptions import ToolError
+    from mcp.server.mcpserver.exceptions import ToolError
 
     for cls, outcome in (
         (errors.UserError, "user_error"),

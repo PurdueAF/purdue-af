@@ -22,7 +22,7 @@ class _Result:
 
 
 class FakeCtx:
-    """Stand-in for FastMCP Context; scripts elicit() responses in order."""
+    """Stand-in for the MCP SDK Context; scripts elicit() responses in order."""
 
     def __init__(self, *responses):
         self._responses = list(responses)

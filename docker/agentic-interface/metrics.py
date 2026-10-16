@@ -23,10 +23,10 @@ from typing import Any
 import httpx
 from context import current_user
 from errors import Failure, invalid_arguments, unexpected_failure
-from mcp.server.fastmcp import FastMCP
-from mcp.server.fastmcp.exceptions import ToolError
-from mcp.shared.exceptions import UrlElicitationRequiredError
-from mcp.types import TextContent
+from mcp.server.mcpserver import Context, MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
+from mcp.shared.exceptions import MCPError, UrlElicitationRequiredError
+from mcp.types import CallToolResult, InputRequiredResult, TextContent
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     Counter,
@@ -100,19 +100,16 @@ def _username() -> str:
     return (user or {}).get("username") or "unknown"
 
 
-def _translate(name: str, username: str, exc: Exception) -> tuple[Exception, str]:
+def _translate(name: str, username: str, exc: ToolError) -> tuple[ToolError, str]:
     """Decide what a tool's exception means: ``(exception to raise, outcome)``.
 
-    Tools raise errors.Failure subclasses, which FastMCP wraps in a generic
+    Tools raise errors.Failure subclasses, which the SDK wraps in a generic
     ToolError ("Error executing tool X: …") on the way out; unwrap those so
     the user reads our message. Anything else is either the caller's
     arguments (pydantic) or a fault in this service — the one place that sees
     the original exception, so it is logged with its traceback here.
     """
-    if isinstance(exc, UrlElicitationRequiredError):
-        # carries its own protocol semantics (error code -32042)
-        return exc, "elicitation_required"
-    cause = exc.__cause__ if isinstance(exc, ToolError) and exc.__cause__ else exc
+    cause = exc.__cause__ or exc
     if isinstance(cause, Failure):
         logger.info("tool_call tool=%s user=%s failed: %s", name, username, cause)
         return cause, cause.outcome
@@ -121,7 +118,7 @@ def _translate(name: str, username: str, exc: Exception) -> tuple[Exception, str
             "tool_call tool=%s user=%s invalid arguments: %s", name, username, cause
         )
         return invalid_arguments(name, cause), "user_error"
-    if isinstance(exc, ToolError) and exc.__cause__ is None:
+    if exc.__cause__ is None:
         # Raised deliberately by the SDK with a complete message (unknown tool).
         logger.warning("tool_call tool=%s user=%s refused: %s", name, username, exc)
         return exc, "user_error"
@@ -129,24 +126,26 @@ def _translate(name: str, username: str, exc: Exception) -> tuple[Exception, str
     return unexpected_failure(name, cause), "exception"
 
 
-def _needs_input_result(text: str) -> tuple[list[TextContent], dict[str, str]]:
+def _needs_input_result(text: str) -> CallToolResult:
     """Package NeedsChoices help text as an ordinary (non-error) tool result.
 
-    Every tool is annotated ``-> str``, so FastMCP generates an outputSchema
-    for it ({"result": <string>}) and the low-level server rejects any result
-    that carries content but no structuredContent — it substitutes
-    "Output validation error: outputSchema defined but no structured output
-    returned", which is exactly the instruction the agent needed to read. So
-    return both halves in the shape the normal dispatch path produces.
+    Every tool is annotated ``-> str``, so the SDK declares an output schema
+    for it ({"result": <string>}), and a successful result must then carry
+    structured content that conforms to it — clients reject one that does
+    not, and the agent never reads the instruction it needed. So return both
+    halves in the shape the normal dispatch path produces.
 
     test_mcp_contract keeps the assumed ``{"result": <string>}`` output shape
     honest across the whole tool surface.
     """
-    return [TextContent(type="text", text=text)], {"result": text}
+    return CallToolResult(
+        content=[TextContent(type="text", text=text)],
+        structured_content={"result": text},
+    )
 
 
-class InstrumentedFastMCP(FastMCP):
-    """FastMCP that records metrics and a structured log line per tool call.
+class InstrumentedMCPServer(MCPServer):
+    """MCPServer that records metrics and a structured log line per tool call.
 
     ``call_tool`` is the SDK's public dispatch entry point (the low-level
     server calls it for every tools/call), so overriding it here needs no
@@ -155,16 +154,26 @@ class InstrumentedFastMCP(FastMCP):
     error.
     """
 
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+    async def call_tool(
+        self, name: str, arguments: dict[str, Any], context: Context | None = None
+    ) -> CallToolResult | InputRequiredResult:
         username = _username()
         start = time.monotonic()
         try:
-            result = await super().call_tool(name, arguments)
-        except Exception as exc:
-            cause = exc.__cause__ if isinstance(exc, ToolError) else None
-            if isinstance(cause, NeedsChoices):
+            result = await super().call_tool(name, arguments, context)
+        except MCPError as exc:
+            # A protocol error (UrlElicitationRequiredError is -32042) goes back as is.
+            outcome = (
+                "elicitation_required"
+                if isinstance(exc, UrlElicitationRequiredError)
+                else "exception"
+            )
+            self._record(name, outcome, username, start)
+            raise
+        except ToolError as exc:
+            if isinstance(exc.__cause__, NeedsChoices):
                 self._record(name, "needs_input", username, start)
-                return _needs_input_result(str(cause))
+                return _needs_input_result(str(exc.__cause__))
             failure, outcome = _translate(name, username, exc)
             self._record(name, outcome, username, start)
             if failure is exc:

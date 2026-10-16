@@ -32,7 +32,7 @@ from errors import (
     response_detail,
     unreachable,
 )
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 from pydantic import BaseModel, Field
 from shared import prom_query, prom_scalar, prom_vector, quote_label, shared_client
 

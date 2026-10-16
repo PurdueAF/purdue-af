@@ -136,7 +136,7 @@ def _tool_duration_count(tool: str) -> float:
 
 
 def _instrumented():
-    mcp = metrics.InstrumentedFastMCP("test-metrics-instrumented")
+    mcp = metrics.InstrumentedMCPServer("test-metrics-instrumented")
     return mcp
 
 
@@ -170,7 +170,7 @@ async def test_failure_subclass_sets_the_outcome_label():
 
 
 async def test_instrumented_tool_records_success_and_duration():
-    mcp = metrics.InstrumentedFastMCP("test-metrics")
+    mcp = metrics.InstrumentedMCPServer("test-metrics")
 
     @mcp.tool()
     async def hello() -> str:
@@ -179,14 +179,14 @@ async def test_instrumented_tool_records_success_and_duration():
     before = _tool_counter_value("hello", "success")
     duration_before = _tool_duration_count("hello")
 
-    content, _structured = await mcp.call_tool("hello", {})
-    assert content[0].text == "hi"
+    result = await mcp.call_tool("hello", {})
+    assert result.content[0].text == "hi"
     assert _tool_counter_value("hello", "success") == before + 1
     assert _tool_duration_count("hello") == duration_before + 1
 
 
 async def test_instrumented_tool_records_username_from_context():
-    mcp = metrics.InstrumentedFastMCP("test-metrics")
+    mcp = metrics.InstrumentedMCPServer("test-metrics")
 
     @mcp.tool()
     async def whoami() -> str:
@@ -205,9 +205,9 @@ async def test_instrumented_tool_records_username_from_context():
 async def test_needs_choices_returns_the_help_text_as_a_normal_result():
     """NeedsChoices is an instruction to the agent, not an error.
 
-    The result must carry structuredContent as well as content: every tool is
-    `-> str`, so FastMCP declares an outputSchema and the low-level server
-    replaces a structured-content-less result with an output-validation error.
+    The result must carry structured content as well as content: every tool is
+    `-> str`, so the SDK declares an output schema, and clients reject a
+    successful result that does not conform to it.
     """
     from tools.elicitation import NeedsChoices
 
@@ -219,17 +219,20 @@ async def test_needs_choices_returns_the_help_text_as_a_normal_result():
 
     before = _tool_counter_value("pick", "needs_input")
 
-    content, structured = await mcp.call_tool("pick", {})
+    result = await mcp.call_tool("pick", {})
 
-    assert content[0].text == "Ask the user for a backend, then call again."
-    assert structured == {"result": "Ask the user for a backend, then call again."}
+    assert not result.is_error
+    assert result.content[0].text == "Ask the user for a backend, then call again."
+    assert result.structured_content == {
+        "result": "Ask the user for a backend, then call again."
+    }
     assert _tool_counter_value("pick", "needs_input") == before + 1
 
 
 async def test_instrumented_tool_records_exception():
-    from mcp.server.fastmcp.exceptions import ToolError
+    from mcp.server.mcpserver.exceptions import ToolError
 
-    mcp = metrics.InstrumentedFastMCP("test-metrics")
+    mcp = metrics.InstrumentedMCPServer("test-metrics")
 
     @mcp.tool()
     async def fail_hard() -> str:
@@ -303,7 +306,7 @@ async def test_instrumented_transport_records_connection_error():
 
 
 async def test_unhandled_exception_becomes_a_clear_error_and_is_logged(caplog):
-    from mcp.server.fastmcp.exceptions import ToolError
+    from mcp.server.mcpserver.exceptions import ToolError
 
     mcp = _instrumented()
 
@@ -326,7 +329,7 @@ async def test_unhandled_exception_becomes_a_clear_error_and_is_logged(caplog):
 
 
 async def test_invalid_arguments_are_blamed_on_the_call():
-    from mcp.server.fastmcp.exceptions import ToolError
+    from mcp.server.mcpserver.exceptions import ToolError
 
     mcp = _instrumented()
 
@@ -346,7 +349,7 @@ async def test_invalid_arguments_are_blamed_on_the_call():
 
 
 async def test_unknown_tool_error_passes_through():
-    from mcp.server.fastmcp.exceptions import ToolError
+    from mcp.server.mcpserver.exceptions import ToolError
 
     mcp = _instrumented()
     with pytest.raises(ToolError, match="Unknown tool"):
@@ -362,7 +365,7 @@ async def test_url_elicitation_error_is_not_rewritten():
     needed = UrlElicitationRequiredError(
         [
             ElicitRequestURLParams(
-                message="authorise", url="https://example.org", elicitationId="e1"
+                message="authorise", url="https://example.org", elicitation_id="e1"
             )
         ]
     )
@@ -371,6 +374,8 @@ async def test_url_elicitation_error_is_not_rewritten():
     async def needs_url() -> str:
         raise needed
 
+    before = _tool_counter_value("needs_url", "elicitation_required")
     with pytest.raises(UrlElicitationRequiredError) as info:
         await mcp.call_tool("needs_url", {})
     assert info.value is needed
+    assert _tool_counter_value("needs_url", "elicitation_required") == before + 1

@@ -39,7 +39,7 @@ class _FakeResult:
 
 
 class FakeCtx:
-    """Stand-in for FastMCP Context; scripts elicit() responses in order."""
+    """Stand-in for the MCP SDK Context; scripts elicit() responses in order."""
 
     def __init__(self, *responses):
         # each response: (action, data) where data is a schema instance

@@ -10,7 +10,7 @@ USER = {
 
 
 class ToolRecorder:
-    """Stand-in for FastMCP that records registered tools and prompts."""
+    """Stand-in for MCPServer that records registered tools and prompts."""
 
     def __init__(self):
         self.tools = {}
