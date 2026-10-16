@@ -653,10 +653,10 @@ serverFiles:
                 which is clock skew on that node. A mount that fails or times out
                 fires AFMountInvalid instead (AFCvmfsFailing for /cvmfs).
                 Check: kubectl -n cms get pods -l app=af-node-monitor,component=probe -o wide
-          # Completed checks only (unknown publishes the timeout sentinel); the upper bound leaves timeouts to AFMountInvalid.
+          # One timed-out check's 10000 ms sentinel lifts the 20m average into the band; the upper bound drops only windows of timeouts alone.
           - alert: AFMountSlow
             expr: >
-              avg_over_time((af_node_mount_metadata_latency_ms{node_pool="prod",mount_name!="cvmfs"}
+              avg_over_time((af_node_mount_metadata_latency_ms{node_pool="prod",mount_name!~"cvmfs|eos"}
               and on(node, mount_name, node_pool) af_node_mount_result_fresh{node_pool="prod"} == 1)[20m:])
               > 2000 < 10000
             for: 5m
@@ -669,6 +669,25 @@ serverFiles:
                 20-minute average metadata latency is {{ printf "%.0f" $value }} ms
                 against a healthy ceiling near 900 ms. Reads still work, but
                 analyses on this node will crawl.
+          # A timed-out check publishes the 10000 ms sentinel, so it counts as a slow one.
+          - alert: AFEosSlow
+            expr: >
+              avg_over_time((af_node_mount_metadata_latency_ms{node_pool="prod",mount_name="eos"} > bool 2000
+              and on(node, mount_name, node_pool) af_node_mount_result_fresh{node_pool="prod"} == 1)[1h:])
+              >= 0.5
+            for: 10m
+            labels:
+              severity: warning
+              component: data
+            annotations:
+              summary: "eos is slow on node {{ $labels.node }}"
+              description: >
+                {{ $value | humanizePercentage }} of the eos checks on this node
+                over the last hour took over 2 s to list a directory or timed
+                out. One slow check is a blip; this many means reads of /eos
+                crawl or stall for the sessions and Dask workers on this node.
+                /eos is the node's own EOS FUSE mount: report the node to RCAC.
+                Many nodes at once is EOS itself or the network.
           # /cvmfs is autofs: a check after the repository expired pays a cold automount that can outlast the read timeout.
           - alert: AFCvmfsFailing
             expr: >
