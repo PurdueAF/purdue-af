@@ -776,17 +776,46 @@ serverFiles:
       - name: af-scale-out
         rules:
           - alert: AFDaskGatewayDown
-            expr: kube_deployment_status_replicas_available{namespace="cms",deployment="api-dask-gateway"} == 0
+            expr: kube_deployment_status_replicas_available{namespace="cms",deployment=~"(api|controller)-dask-gateway"} == 0
             for: 10m
             labels:
               severity: error
               component: scale-out
             annotations:
-              summary: Dask Gateway has no available replicas
+              summary: "{{ $labels.deployment }} has no available replicas"
               description: >
-                Users cannot create or reach Dask clusters; already running
-                clusters may survive.
-                Check: kubectl -n cms get deploy api-dask-gateway
+                The api serves every Dask Gateway request; the controller
+                starts, scales and stops the clusters' pods. Without either,
+                users get no new Dask workers; already running clusters may
+                survive. Check: kubectl -n cms get deploy {{ $labels.deployment }}
+          - alert: AFDaskControllerStalled
+            expr: count(time() - kube_pod_completion_time{namespace="cms",pod=~"dask-(scheduler|worker)-.*"} > 600) > 0
+            for: 5m
+            labels:
+              severity: error
+              component: scale-out
+            annotations:
+              summary: The Dask Gateway controller has stopped cleaning up finished Dask pods
+              description: >
+                {{ printf "%.0f" $value }} Dask pods finished more than 10 minutes
+                ago and still exist; a working controller deletes them within
+                seconds. Clusters it no longer reconciles get no new workers,
+                ignore stop requests, and keep their owner at the per-user
+                cluster limit. Check: kubectl -n cms logs deploy/controller-dask-gateway;
+                deleting its pod restarts it: kubectl -n cms delete pod
+                -l app.kubernetes.io/name=dask-gateway,app.kubernetes.io/component=controller
+          - alert: AFDaskControllerRestarted
+            expr: increase(kube_pod_container_status_restarts_total{namespace="cms",pod=~"controller-dask-gateway-.*",container="controller"}[1h]) > 0
+            for: 1m
+            labels:
+              severity: warning
+              component: scale-out
+            annotations:
+              summary: The Dask Gateway controller restarted in the last hour
+              description: >
+                Its liveness probe restarts it once its reconcilers stop taking
+                work, so Dask scaling stalled until the restart. Check: kubectl
+                -n cms logs deploy/controller-dask-gateway --previous
 
       # Can we still see what the facility is doing? -------------------------
       # node_filesystem_*{job="loki"} comes from the fs-exporter sidecar in loki/values.yaml.

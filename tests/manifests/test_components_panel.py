@@ -81,3 +81,10 @@ def test_geddes_registry_reads_the_probe_and_is_blank_without_it():
     target = _target(_panel("Components"), "Geddes registry")
     assert target["expr"] == "min(af_registry_up)"
     assert target["datasource"]["uid"] == "prometheus"
+
+
+def test_dask_gateway_row_needs_the_controller_ready():
+    """The api keeps answering while the controller is hung."""
+    expr = _target(_panel("Components"), "Dask Gateway")["expr"]
+    assert expr.startswith("(min(kube_deployment_status_replicas_available{"), expr
+    assert 'deployment=~"(api|controller)-dask-gateway"' in expr, expr

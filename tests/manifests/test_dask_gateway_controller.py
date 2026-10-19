@@ -1,10 +1,13 @@
 """The launch command helmrelease.yaml gives the Dask Gateway controller."""
 
+import asyncio
+import logging
 import sys
 import types
 
 import pytest
 import yaml
+from aiohttp import web
 from common import REPO
 
 RELEASE = REPO / "apps" / "dask-gateway" / "helmrelease.yaml"
@@ -17,6 +20,19 @@ class KubeController:
         self.created.append((priority, count))
         return priority in self.failing
 
+    async def reconcile_cluster(self, key):
+        self.reconciled.append(key)
+        return True
+
+    async def setup(self):
+        """Upstream starts the web app here, after which no route can be added."""
+        self.app.freeze()
+        self.queue = types.SimpleNamespace(closed=False, put=self.queued.append)
+        self.reconcilers = [
+            asyncio.ensure_future(asyncio.sleep(3600)) for _ in range(2)
+        ]
+        self.task_pool = types.SimpleNamespace(spawn=self.spawned.append)
+
 
 def get_container_status(pod, name):
     for status in pod["status"].get("containerStatuses", ()):
@@ -25,13 +41,17 @@ def get_container_status(pod, name):
     return None
 
 
+def controller_ops(release):
+    patches = release["spec"]["postRenderers"][0]["kustomize"]["patches"]
+    (patch,) = (p["patch"] for p in patches if p["target"]["name"] == "controller-.*")
+    return yaml.safe_load(patch)
+
+
 @pytest.fixture
 def launch(monkeypatch):
     """Exec the launch command against stub dask_gateway_server modules."""
     release = yaml.safe_load(RELEASE.read_text())
-    patches = release["spec"]["postRenderers"][0]["kustomize"]["patches"]
-    (patch,) = (p["patch"] for p in patches if p["target"]["name"] == "controller-.*")
-    (op,) = yaml.safe_load(patch)
+    (op,) = (op for op in controller_ops(release) if op["path"].endswith("/args"))
     *python, code = op["value"]
     assert python == ["python", "-c"]
 
@@ -242,3 +262,81 @@ def test_container_status_is_upstreams_otherwise(launch):
     assert status(running, "dask-worker") is reported
     assert status({"status": {"phase": "Running"}}, "dask-worker") is None
     assert status({"status": {"phase": "Failed"}}, "dask-scheduler") is None
+
+
+@pytest.fixture
+async def started(launch):
+    """A controller past the launch command's setup."""
+    controller = launch["controller"].KubeController()
+    controller.app = web.Application()
+    controller.app["controller"] = controller
+    controller.log = logging.getLogger("dask-gateway-controller")
+    controller.reconciled, controller.queued, controller.spawned = [], [], []
+    await controller.setup()
+    yield controller
+    for task in controller.reconcilers:
+        task.cancel()
+    for coroutine in controller.spawned:
+        coroutine.close()
+
+
+async def health(controller):
+    """The status the controller's /healthz answers with."""
+    routes = controller.app.router.routes()
+    (route,) = (
+        r for r in routes if (r.method, r.resource.canonical) == ("GET", "/healthz")
+    )
+    response = await route.handler(types.SimpleNamespace(app=controller.app))
+    return response.status
+
+
+async def stop(task):
+    """Cancel a task and return once its done callbacks have run."""
+    task.cancel()
+    await asyncio.wait([task])
+
+
+async def test_heartbeat_is_queued_with_the_clusters(launch, started):
+    (beat,) = started.spawned
+    task = asyncio.ensure_future(beat)
+    await asyncio.sleep(0)
+    await stop(task)
+    assert started.queued == [launch["HEARTBEAT"]]
+
+
+async def test_heartbeat_never_reaches_a_cluster(launch, started):
+    started.last_beat = 0
+    assert await started.reconcile_cluster(launch["HEARTBEAT"]) is None
+    assert started.last_beat > 0
+    assert await started.reconcile_cluster("cms.cluster") is True
+    assert started.reconciled == ["cms.cluster"]
+
+
+async def test_health_passes_while_heartbeats_get_through(started):
+    assert await health(started) == 200
+
+
+async def test_health_fails_once_the_heartbeat_is_stale(launch, started):
+    started.last_beat -= launch["STALL"]
+    assert await health(started) == 503
+
+
+async def test_an_exited_reconciler_fails_health_and_logs(started, caplog):
+    await stop(started.reconcilers[0])
+    assert await health(started) == 503
+    assert [r.levelno for r in caplog.records] == [logging.ERROR]
+
+
+async def test_shutdown_logs_no_exited_reconciler(started, caplog):
+    started.queue.closed = True
+    await stop(started.reconcilers[0])
+    assert not caplog.records
+
+
+def test_probes_read_the_health_route():
+    release = yaml.safe_load(RELEASE.read_text())
+    probes = {
+        op["path"].rsplit("/", 1)[1]: op["value"] for op in controller_ops(release)
+    }
+    for kind in ("livenessProbe", "readinessProbe"):
+        assert probes[kind]["httpGet"] == {"path": "/healthz", "port": "api"}, kind

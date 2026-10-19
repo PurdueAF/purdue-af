@@ -73,7 +73,7 @@ spec:
               - op: add
                 path: /spec/type
                 value: LoadBalancer
-          # The chart has no controller extraConfig: the launch command makes workers past a cluster's floor preemptible, and starts them only while the namespace quotas keep a reserve free.
+          # The chart has no controller extraConfig or probes: the launch command makes workers past a cluster's floor preemptible, starts them only while the namespace quotas keep a reserve free, and serves the /healthz both probes read.
           - target:
               kind: Deployment
               name: "controller-.*"
@@ -84,6 +84,10 @@ spec:
                   - python
                   - -c
                   - |
+                    import asyncio
+                    import time
+
+                    from aiohttp import web
                     from dask_gateway_server.app import main
                     from dask_gateway_server.backends.kubernetes import controller
 
@@ -93,8 +97,14 @@ spec:
                     QUOTA_RESERVE = 0.15
                     PREEMPTIBLE = "low-priority-preemptible"
                     UNITS = {"": 1, "m": 1e-3, **{s: 1000**i for i, s in enumerate("kMGTPE", 1)}, **{s + "i": 1024**i for i, s in enumerate("KMGTPE", 1)}}
+                    # Cluster keys are "<namespace>.<name>", so the heartbeat names no cluster.
+                    HEARTBEAT = "heartbeat"
+                    BEAT_PERIOD = 60
+                    STALL = 600
                     create_pods = controller.KubeController.batch_create_pods
                     container_status = controller.get_container_status
+                    reconcile = controller.KubeController.reconcile_cluster
+                    setup = controller.KubeController.setup
 
                     def quantity(text):
                         number = str(text).rstrip("kKMGTPEmi")
@@ -130,6 +140,61 @@ spec:
                         by_phase = name == "dask-worker" and pod["status"].get("phase") != "Running"
                         return container_status(pod, name) or ({} if by_phase else None)
 
+                    # Upstream reconcilers can stop without a log line while the pod stays Running; the heartbeat rides the same queue as the clusters.
+                    async def reconcile_or_beat(self, key):
+                        if key == HEARTBEAT:
+                            self.last_beat = time.monotonic()
+                            return
+                        return await reconcile(self, key)
+
+                    async def beat(self):
+                        while True:
+                            self.queue.put(HEARTBEAT)
+                            await asyncio.sleep(BEAT_PERIOD)
+
+                    async def health(request):
+                        self = request.app["controller"]
+                        age = time.monotonic() - self.last_beat
+                        exited = sum(task.done() for task in self.reconcilers)
+                        status = 200 if age < STALL and not exited else 503
+                        return web.Response(status=status, text=f"last heartbeat {age:.0f} s ago, {exited} reconcilers exited\n")
+
+                    def report_exit(self, task):
+                        if self.queue.closed:
+                            return
+                        if task.cancelled():
+                            self.log.error("A reconciler was cancelled")
+                        else:
+                            self.log.error("A reconciler exited", exc_info=task.exception())
+
+                    async def setup_with_health(self):
+                        self.last_beat = time.monotonic()
+                        self.app.router.add_get("/healthz", health)
+                        await setup(self)
+                        for task in self.reconcilers:
+                            task.add_done_callback(lambda task: report_exit(self, task))
+                        self.task_pool.spawn(beat(self))
+
                     controller.KubeController.batch_create_pods = create_tiered_pods
                     controller.get_container_status = worker_status
+                    controller.KubeController.reconcile_cluster = reconcile_or_beat
+                    controller.KubeController.setup = setup_with_health
                     main(["kube-controller", "--config", "/etc/dask-gateway/dask_gateway_config.py"])
+              - op: add
+                path: /spec/template/spec/containers/0/readinessProbe
+                value:
+                  httpGet:
+                    path: /healthz
+                    port: api
+                  periodSeconds: 30
+                  timeoutSeconds: 10
+              - op: add
+                path: /spec/template/spec/containers/0/livenessProbe
+                value:
+                  httpGet:
+                    path: /healthz
+                    port: api
+                  initialDelaySeconds: 60
+                  periodSeconds: 60
+                  timeoutSeconds: 10
+                  failureThreshold: 3
