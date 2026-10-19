@@ -235,8 +235,8 @@ for cluster_info in gateway.list_clusters():
 ## 6. Cluster lifetime and timeouts
 
 * `new_cluster()` waits for the scheduler to start with no time limit.
-* An idle cluster (no connected clients — for example, after the notebook that
-  created it is terminated) is automatically shut down after **1 hour**.
+* A cluster that runs no tasks for **1 hour** shuts down, whether or not a
+  client is still connected to it.
 
 !!! note "See also"
 
