@@ -70,6 +70,15 @@ def test_mount_invalid_is_a_warning_not_an_error():
     assert slow["labels"]["severity"] == "warning"
 
 
+def test_dask_controller_stall_counts_only_pods_that_still_exist():
+    """A range window over the phase series keeps a deleted pod's last
+    Succeeded samples, so it counts pods the controller already removed;
+    kube_pod_completion_time has a sample only while the pod exists."""
+    stall = next(r for r in rules() if r["alert"] == "AFDaskControllerStalled")
+    assert "kube_pod_completion_time" in stall["expr"]
+    assert "_over_time" not in stall["expr"]
+
+
 def test_mount_invalid_requires_fresh_completed_check():
     """Red (AFMountInvalid) is only a finished failing check — never a missing
     series from a NotReady node (those publish null and do not match)."""
