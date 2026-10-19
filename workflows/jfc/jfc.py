@@ -111,6 +111,9 @@ input by file and entry range, select and fill histograms in the tasks, and \
 bring back histograms, cutflows or small arrays, not events. Many independent \
 fits, such as toys, are tasks too.
 
+- Workers start only once work is submitted, so a check of the cluster \
+submits a task, as `dask.submit(lambda: 1).result(timeout=600)`, instead of \
+waiting for workers.
 - A pass runs in the foreground: give its command a timeout long enough, up \
 to {hours} hours.
 - Workers see /work as you do but start elsewhere: give them absolute paths.
