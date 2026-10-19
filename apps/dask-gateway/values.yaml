@@ -126,7 +126,6 @@ gateway:
       c.ClusterConfig.cluster_max_memory = '6000 G'
       c.ClusterConfig.cluster_max_workers = 1000
       c.ClusterConfig.adaptive_period = 15
-      c.ClusterConfig.idle_timeout = 3600
 
       def ldap_lookup(username):
           # The server image has no ldap3.
@@ -241,7 +240,8 @@ gateway:
           options.env["XRD_STREAMTIMEOUT"]="300"
           options.env["DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT"]="60s"
           worker_cmd = [f"{conda_env}/bin/dask", "worker", "--death-timeout", "180"]
-          scheduler_cmd = [f"{conda_env}/bin/dask", "scheduler"]
+          # dask-gateway's own idle_timeout compares loop.time() with wall-clock stamps and never fires.
+          scheduler_cmd = [f"{conda_env}/bin/dask", "scheduler", "--idle-timeout", "3600s"]
 
           security_context = {"securityContext": {"runAsUser": uid, "runAsGroup": gid}}
 

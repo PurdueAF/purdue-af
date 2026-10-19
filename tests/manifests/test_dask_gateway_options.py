@@ -168,7 +168,15 @@ def test_pixi_project_runs_its_environment(options_handler, tmp_path):
     prefix = build_environment(tmp_path, "distributed", "prometheus_client")
     options = request_options(pixi_project=str(tmp_path))
     cluster = options_handler(options, types.SimpleNamespace(name="jovyan"))
-    assert cluster["scheduler_cmd"] == [f"{prefix}/bin/dask", "scheduler"]
+    assert cluster["scheduler_cmd"][:2] == [f"{prefix}/bin/dask", "scheduler"]
+
+
+def test_idle_schedulers_shut_themselves_down(options_handler, conda_env):
+    cluster = options_handler(
+        request_options(conda_env=conda_env), types.SimpleNamespace(name="jovyan")
+    )
+    cmd = cluster["scheduler_cmd"]
+    assert cmd[cmd.index("--idle-timeout") + 1] == "3600s"
 
 
 def test_pods_run_as_the_user_without_changing_the_shared_config(config, conda_env):
