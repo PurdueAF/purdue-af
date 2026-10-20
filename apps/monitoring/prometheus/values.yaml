@@ -635,6 +635,24 @@ serverFiles:
                 outages are often transient; treat a widespread firing as a
                 storage-system or network problem rather than a node problem.
                 Check: kubectl -n cms logs -l app=af-node-monitor
+          - alert: AFMountFailingWidely
+            expr: >
+              count by (mount_name)(af_node_mount_valid{node_pool="prod",mount_name!="cvmfs"} == 0
+              and on(node, mount_name, node_pool) af_node_mount_result_fresh{node_pool="prod"} == 1)
+              / count by (mount_name)(af_node_mount_result_fresh{node_pool="prod",mount_name!="cvmfs"} == 1)
+              >= 0.5
+            for: 10m
+            labels:
+              severity: error
+              component: data
+            annotations:
+              summary: "{{ $labels.mount_name }} is failing on half the nodes or more"
+              description: >
+                {{ $value | humanizePercentage }} of the prod nodes failed their
+                {{ $labels.mount_name }} check for 10 minutes. This is the
+                storage system or the network, not a node: sessions and Dask
+                workers anywhere cannot use that path. Report it to RCAC.
+                Check: kubectl -n cms logs -l app=af-node-monitor
           - alert: AFMountHealthUnknown
             expr: af_node_mount_result_fresh{node_pool="prod"} == 0
             for: 10m
