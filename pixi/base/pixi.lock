@@ -149,7 +149,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tk-8.6.13-noxft_h366c992_103.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tornado-6.5.7-py312h4c3975b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/unicodedata2-17.0.1-py312h4c3975b_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/uv-0.13.1-h535ca38_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/uv-0.13.3-h535ca38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/watchfiles-1.2.0-py312h192e038_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/websockets-17.1-py312h89dfda2_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/xclip-0.13-hb9d3cd8_4.conda
@@ -585,7 +585,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tk-8.6.13-noxft_h366c992_103.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tornado-6.5.7-py312h4c3975b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/unicodedata2-17.0.1-py312h4c3975b_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/uv-0.13.1-h535ca38_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/uv-0.13.3-h535ca38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/watchfiles-1.2.0-py312h192e038_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/websockets-17.1-py312h89dfda2_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/xclip-0.13-hb9d3cd8_4.conda
@@ -2838,21 +2838,21 @@ packages:
   - pkg:pypi/unicodedata2?source=hash-mapping
   size: 410641
   timestamp: 1770909099497
-- conda: https://conda.anaconda.org/conda-forge/linux-64/uv-0.13.1-h535ca38_0.conda
-  sha256: c91f061e5a995d04a106477310be306a62bdb304b4c268b38830d24330d96b87
-  md5: 8ba559132729faf35ae2261250b49e03
+- conda: https://conda.anaconda.org/conda-forge/linux-64/uv-0.13.3-h535ca38_0.conda
+  sha256: fa2d54949dff809c1824ccb035125ecca7dd17163cad72945028eb4c6d5c3847
+  md5: b647d90a7f8d4dc8c84c9691a1a25d29
   depends:
-  - __glibc >=2.17,<3.0.a0
   - libgcc >=15
   - libstdcxx >=15
+  - __glibc >=2.17,<3.0.a0
   - zstd >=1.5.7,<1.6.0a0
   constrains:
   - __glibc >=2.17
   license: Apache-2.0 OR MIT
   purls: []
   run_exports: {}
-  size: 15078136
-  timestamp: 1791985600554
+  size: 14741834
+  timestamp: 1792474446286
 - conda: https://conda.anaconda.org/conda-forge/linux-64/watchfiles-1.2.0-py312h192e038_1.conda
   sha256: 031a34fd258fe876c78bc382b719733b670b6704d875377adf3d74cd15cdeb88
   md5: 2631cc5eddeb5d1b230d7e2e2a5f9a71
