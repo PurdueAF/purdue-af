@@ -3,7 +3,7 @@
 # is not baked in — Flyte ships it as a code bundle from the launcher.
 FROM python:3.12-slim
 
-COPY --from=ghcr.io/astral-sh/uv:0.13.3 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.4 /uv /uvx /bin/
 COPY --from=ghcr.io/prefix-dev/pixi:0.82.0 /usr/local/bin/pixi /usr/local/bin/pixi
 
 # The agents are npm packages around platform binaries; node comes from the
