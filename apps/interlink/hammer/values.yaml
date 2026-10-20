@@ -69,7 +69,7 @@ virtualNode:
 
   network:
     enableTunnel: true
-    tunnelImage: "ghcr.io/erebe/wstunnel:v11.0.0"
+    tunnelImage: "ghcr.io/erebe/wstunnel:v11.1.0"
     wildcardDNS: "geddes.rcac.purdue.edu"
     # Bare $DOWNLOAD_DIR: Flux postBuild substitutes only the braced form.
     wstunnelCommand: |
