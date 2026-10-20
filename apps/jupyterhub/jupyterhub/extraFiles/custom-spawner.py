@@ -1,12 +1,16 @@
 import os
 from typing import Any
 
+import jupyterhub.utils
 from jupyterhub.utils import maybe_future
 from oauthenticator.cilogon import CILogonOAuthenticator
 from tornado import web
 
 # JupyterHub injects `c` at exec time; the annotation is for type checkers only.
 c: Any
+
+# JupyterHub 5.5.3 rejects tokens of len >= 64, and the chart generates 64-char service tokens (jupyterhub/jupyterhub#5566).
+jupyterhub.utils._TOKEN_MAX_LEN = 65
 
 
 # Home domain of an eppn -> suffix of the AF username.
