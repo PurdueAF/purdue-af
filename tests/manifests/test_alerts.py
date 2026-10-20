@@ -235,6 +235,16 @@ def test_cvmfs_alerts_wait_for_more_than_one_failed_check():
         assert "af_node_mount_result_fresh" in expr, name
 
 
+def test_widespread_mount_failure_is_an_error():
+    """One node's failing mount is a warning; the same mount failing on most
+    nodes is a storage outage and must turn Facility health / MCP Degraded."""
+    widely = next(r for r in rules() if r["alert"] == "AFMountFailingWidely")
+    assert widely["labels"]["severity"] == "error"
+    assert 'mount_name!="cvmfs"' in widely["expr"]
+    assert "by (mount_name)" in widely["expr"]
+    assert "af_node_mount_result_fresh" in widely["expr"]
+
+
 def test_eos_slow_needs_most_of_an_hour_of_slow_checks():
     """A timed-out check publishes the 10000 ms sentinel, which averaged with a
     healthy check lands inside AFMountSlow's band. eos times out one node and
