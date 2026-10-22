@@ -60,8 +60,10 @@ then uncomment its entry in the kustomization.
 
 The NRP kubeconfig is the `kubeconfig-nrp-interlink` Secret in `cms`, minted
 by [`nrp/to-deploy-at-nrp/generate-nrp-kubeconfig.sh`](nrp/to-deploy-at-nrp/generate-nrp-kubeconfig.sh)
-against the RBAC in the same directory, applied to NRP out of band. Its token
-is time-bounded: rerun the script and re-create the Secret before it expires.
+against the RBAC in the same directory, applied to NRP out of band — the
+namespace-reader ClusterRole by a platform admin, as Nautilus users cannot
+create cluster-scoped objects. Its token is time-bounded: rerun the script
+and re-create the Secret before it expires.
 
 ## Verifying a node
 

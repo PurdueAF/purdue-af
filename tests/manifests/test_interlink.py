@@ -298,6 +298,29 @@ def test_offloaded_namespace_matches_the_remote_rbac(kubernetes_clusters):
         )
 
 
+def test_remote_rbac_lets_the_plugin_find_the_offloading_namespace(kubernetes_clusters):
+    """The plugin lists namespaces at cluster scope before every pod create;
+    without a namespace-reader ClusterRole every offload dies on a 403 the
+    moment the pod is submitted."""
+    for cluster, app in kubernetes_clusters.items():
+        rbac_files = sorted((app["dir"] / "to-deploy-at-nrp").glob("rbac-*.yaml"))
+        docs = [
+            doc
+            for doc in yaml.safe_load_all(rbac_files[0].read_text())
+            if isinstance(doc, dict)
+        ]
+        grants_read = any(
+            doc.get("kind") == "ClusterRole"
+            and any(
+                rule.get("resources") == ["namespaces"]
+                and {"get", "list"} <= set(rule.get("verbs", []))
+                for rule in doc.get("rules", [])
+            )
+            for doc in docs
+        )
+        assert grants_read, f"{cluster}: no ClusterRole granting namespace get/list"
+
+
 def test_kubernetes_nodes_are_batch_only(kubernetes_clusters):
     """The Kubernetes plugin runs no wstunnel client, so EnableTunnel would
     stand up shadow infrastructure nothing ever connects to; full mesh is the

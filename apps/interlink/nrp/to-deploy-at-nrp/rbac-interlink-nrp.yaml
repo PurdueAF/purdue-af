@@ -33,6 +33,31 @@ rules:
     resources: [events]
     verbs: [get, list]
 ---
+# Cluster-scoped: the plugin lists namespaces to find the offloading one
+# before every pod create; it never creates namespaces — interlink-cms is
+# created out of band.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: interlink-plugin-namespace-reader
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: interlink-plugin-namespace-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: interlink-plugin-namespace-reader
+subjects:
+  - kind: ServiceAccount
+    name: interlink-plugin
+    namespace: interlink-cms
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
