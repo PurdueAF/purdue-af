@@ -332,6 +332,29 @@ def test_offloaded_namespace_matches_the_remote_rbac(kubernetes_clusters):
         )
 
 
+def test_remote_rbac_lets_the_plugin_poll_pod_status(kubernetes_clusters):
+    """The plugin reads the pods/status subresource on every status poll;
+    `get` on pods does not cover it, and without the grant an offloaded pod
+    never leaves `Remote pod submitted` on the local cluster."""
+    for cluster, app in kubernetes_clusters.items():
+        rbac_files = sorted((app["dir"] / "to-deploy-at-nrp").glob("rbac-*.yaml"))
+        docs = [
+            doc
+            for doc in yaml.safe_load_all(rbac_files[0].read_text())
+            if isinstance(doc, dict)
+        ]
+        grants_read = any(
+            doc.get("kind") == "Role"
+            and any(
+                rule.get("resources") == ["pods/status"]
+                and "get" in rule.get("verbs", [])
+                for rule in doc.get("rules", [])
+            )
+            for doc in docs
+        )
+        assert grants_read, f"{cluster}: no Role granting get on pods/status"
+
+
 def test_kubernetes_nodes_are_batch_only(kubernetes_clusters):
     """The Kubernetes plugin runs no wstunnel client, so EnableTunnel would
     stand up shadow infrastructure nothing ever connects to; full mesh is the
