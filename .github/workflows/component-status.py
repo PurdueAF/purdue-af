@@ -55,6 +55,7 @@ CI_IMAGES = [
     "self-repair",
     "supersonic-model-manager",
     "interlink-slurm-plugin",
+    "interlink-kubernetes-plugin",
 ]
 VALUES_YAML = Path("apps/jupyterhub/jupyterhub/values.yaml")
 AGENTIC_DEPLOYMENT = Path("apps/agentic-interface/deployment.yaml")

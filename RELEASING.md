@@ -13,9 +13,11 @@ CI-owned. Never create a version tag or move a channel tag by hand.
 
 The monitor images (af-pod-monitor, af-node-monitor), supersonic-model-manager
 and self-repair have no release step at all: every green pipeline on `main`
-moves `:latest`. interlink-slurm-plugin publishes under its upstream plugin
-ref, `:$PLUGIN_REF`, which the interLink values pin; bumping `PLUGIN_REF` is its
-release ([its README](docker/interlink-slurm-plugin/README.md)). The agentic-interface
+moves `:latest`. The interLink plugin images publish under their upstream
+refs, `:$PLUGIN_REF`, which the interLink values pin; bumping a `PLUGIN_REF`
+is that image's release (their READMEs:
+[slurm](docker/interlink-slurm-plugin/README.md),
+[kubernetes](docker/interlink-kubernetes-plugin/README.md)). The agentic-interface
 image also publishes to `:latest` continuously, but its Deployment pins a
 released semver tag — the pod moves only when an auto-release rewrites the pin.
 The hub's pre-release profile pulls `:pre-release` on every spawn, so a merged

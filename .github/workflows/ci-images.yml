@@ -70,11 +70,11 @@ jobs:
             af_digest=""
           fi
           aux_tags=""
-          for name in agentic-interface af-pod-monitor af-node-monitor self-repair supersonic-model-manager interlink-slurm-plugin; do
+          for name in agentic-interface af-pod-monitor af-node-monitor self-repair supersonic-model-manager interlink-slurm-plugin interlink-kubernetes-plugin; do
             tag=$(./.github/workflows/image-inputs.sh "$name")
             channel=latest
-            if [ "$name" = interlink-slurm-plugin ]; then
-              channel=$(tr -d '[:space:]' < docker/interlink-slurm-plugin/PLUGIN_REF)
+            if [ "$name" = interlink-slurm-plugin ] || [ "$name" = interlink-kubernetes-plugin ]; then
+              channel=$(tr -d '[:space:]' < "docker/${name}/PLUGIN_REF")
             fi
             aux_tags="${aux_tags:+$aux_tags }${name}=${tag}=${channel}"
           done
@@ -281,6 +281,16 @@ jobs:
               test -x /opt/purdue-af/slurm-clients/25.11.4/usr/bin/sbatch;
               ls /opt/purdue-af/slurm-configs;
               echo ok"
+          # The upstream plugin image plus ensure-namespace.patch; the smoke
+          # import proves the patch applied and the modules still parse.
+          - name: interlink-kubernetes-plugin
+            dockerfile: docker/interlink-kubernetes-plugin/Dockerfile
+            context: .
+            smoke: >-
+              python -c "from app.common.config import Option;
+              from app.services import kubernetes_plugin_service;
+              assert Option.OFFLOADING_ENSURE_NAMESPACE;
+              print('ok')"
     name: aux ${{ matrix.name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -303,10 +313,16 @@ jobs:
           fi
           build_args=""
           build_contexts=""
-          if [ "${{ matrix.name }}" = interlink-slurm-plugin ]; then
+          case "${{ matrix.name }}" in
+          interlink-slurm-plugin)
             plugin_ref=$(tr -d '[:space:]' < docker/interlink-slurm-plugin/PLUGIN_REF)
             build_args="SLURM_PLUGIN_REF=${plugin_ref}"
-          fi
+            ;;
+          interlink-kubernetes-plugin)
+            plugin_ref=$(tr -d '[:space:]' < docker/interlink-kubernetes-plugin/PLUGIN_REF)
+            build_args="UPSTREAM_IMAGE=docker.io/mginfn/interlink-kubernetes-plugin:${plugin_ref}"
+            ;;
+          esac
           {
             echo "image=$image"
             echo "exists=$exists"

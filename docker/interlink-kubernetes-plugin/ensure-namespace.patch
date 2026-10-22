@@ -1,0 +1,30 @@
+--- a/app/common/config.py
++++ b/app/common/config.py
+@@ -35,6 +35,7 @@
+ 
+     OFFLOADING_NAMESPACE_PREFIX = ("offloading", "namespace_prefix")
+     OFFLOADING_NAMESPACE_PREFIX_EXCLUSIONS = ("offloading", "namespace_prefix_exclusions")
++    OFFLOADING_ENSURE_NAMESPACE = ("offloading", "ensure_namespace")
+     OFFLOADING_NODE_SELECTOR = ("offloading", "node_selector")
+     OFFLOADING_NODE_TOLERATIONS = ("offloading", "node_tolerations")
+ 
+--- a/app/services/kubernetes_plugin_service.py
++++ b/app/services/kubernetes_plugin_service.py
+@@ -52,6 +52,7 @@
+         self._offloading_params = {
+             "namespace_prefix": config.get(Option.OFFLOADING_NAMESPACE_PREFIX, ""),
+             "namespace_prefix_exclusions": json.loads(config.get(Option.OFFLOADING_NAMESPACE_PREFIX_EXCLUSIONS, "[]")),
++            "ensure_namespace": str(config.get(Option.OFFLOADING_ENSURE_NAMESPACE, "True")).lower() == "true",
+             "node_selector": None,
+             "node_tolerations": None,
+         }
+@@ -133,7 +134,8 @@
+         try:
+             # create namespace
+             assert i_pod_with_volumes.pod.metadata.namespace
+-            self._create_offloading_namespace(i_pod_with_volumes.pod.metadata.namespace)
++            if self._offloading_params["ensure_namespace"]:
++                self._create_offloading_namespace(i_pod_with_volumes.pod.metadata.namespace)
+ 
+             # create POD's volumes
+             for i_volume in i_pod_with_volumes.container:

@@ -51,6 +51,13 @@ def active_slurm_clusters(active_clusters):
     return {c: app for c, app in active_clusters.items() if _backend(app) == "slurm"}
 
 
+@pytest.fixture(scope="session")
+def active_kubernetes_clusters(active_clusters):
+    return {
+        c: app for c, app in active_clusters.items() if _backend(app) == "kubernetes"
+    }
+
+
 # --- node naming ----------------------------------------------------------
 
 
@@ -128,11 +135,15 @@ def test_slurm_clusters_share_one_plugin_image(active_slurm_clusters):
     assert "ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:" in image, image
 
 
-def test_plugin_image_tag_matches_plugin_ref(active_slurm_clusters):
-    """Tag == PLUGIN_REF == upstream interlink-slurm-plugin checkout. Not :latest."""
-    plugin_ref = (REPO / "docker/interlink-slurm-plugin/PLUGIN_REF").read_text().strip()
-    assert plugin_ref, "PLUGIN_REF is empty"
-    for cluster, app in active_slurm_clusters.items():
+def test_plugin_image_tag_matches_plugin_ref(active_clusters):
+    """Tag == PLUGIN_REF == the upstream ref each site image builds from.
+    Not :latest."""
+    for cluster, app in active_clusters.items():
+        backend = _backend(app)
+        plugin_ref = (
+            (REPO / f"docker/interlink-{backend}-plugin/PLUGIN_REF").read_text().strip()
+        )
+        assert plugin_ref, f"{backend}: PLUGIN_REF is empty"
         image = app["values"]["plugin"]["image"]
         assert image.endswith(f":{plugin_ref}"), f"{cluster}: {image} != :{plugin_ref}"
         assert not image.endswith(":latest"), cluster
@@ -271,13 +282,36 @@ def test_plugin_reads_the_config_the_chart_mounts(kubernetes_clusters):
         assert envs.get("CONFIG_FILE_PATH") == "/etc/interlink/plugin.yaml", cluster
 
 
-def test_kubernetes_plugin_image_is_pinned(kubernetes_clusters):
-    """Through the cluster registry's Docker Hub cache, so Renovate tracks
-    the upstream tag. Not :latest."""
-    for cluster, app in kubernetes_clusters.items():
+def test_kubernetes_plugin_image_is_the_site_build(active_kubernetes_clusters):
+    """Through the cluster registry's ghcr proxy cache. The upstream image
+    lists namespaces at cluster scope before every pod create — a request
+    NRP's namespaced-only RBAC forbids; the site image is the one carrying
+    the ensure-namespace patch."""
+    for cluster, app in active_kubernetes_clusters.items():
         image = app["values"]["plugin"]["image"]
-        assert "docker-hub-cache/mginfn/interlink-kubernetes-plugin:" in image, image
-        assert not image.endswith(":latest"), cluster
+        assert "ghcr-proxy-cache/purdueaf/interlink-kubernetes-plugin:" in image, image
+
+
+def test_kubernetes_dockerfile_upstream_image_arg_matches_plugin_ref_file():
+    """Dockerfile ARG default must not drift from PLUGIN_REF."""
+    plugin_ref = (
+        (REPO / "docker/interlink-kubernetes-plugin/PLUGIN_REF").read_text().strip()
+    )
+    dockerfile = (REPO / "docker/interlink-kubernetes-plugin/Dockerfile").read_text()
+    assert (
+        f"ARG UPSTREAM_IMAGE=docker.io/mginfn/interlink-kubernetes-plugin:{plugin_ref}"
+        in dockerfile
+    ), plugin_ref
+
+
+def test_plugin_leaves_the_offloading_namespace_to_the_rbac(active_kubernetes_clusters):
+    """The site image gates the plugin's cluster-scope namespace list behind
+    [offloading] ensure_namespace; without an explicit False the upstream
+    default re-enables it and every offload dies on a 403."""
+    for cluster, app in active_kubernetes_clusters.items():
+        value = _plugin_ini(app).get("offloading", "ensure_namespace", fallback=None)
+        assert value is not None, f"{cluster}: ensure_namespace not set"
+        assert value.lower() == "false", f"{cluster}: ensure_namespace={value}"
 
 
 def test_offloaded_namespace_matches_the_remote_rbac(kubernetes_clusters):
