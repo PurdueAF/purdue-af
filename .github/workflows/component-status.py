@@ -215,6 +215,7 @@ def write_badge(out: Path, slug: str, payload: dict[str, Any]) -> None:
 # cluster — is what a reader is looking for.
 LABEL_OVERRIDES = {
     "apps/interlink/hammer": "interlink-hammer",
+    "apps/interlink/nrp": "interlink-nrp",
 }
 
 

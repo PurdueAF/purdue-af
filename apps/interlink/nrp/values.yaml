@@ -1,0 +1,89 @@
+# interLink virtual node offloading pods to NRP Nautilus; see ../README.md.
+nodeName: interlink-nrp
+
+interlink:
+  image: ghcr.io/interlink-hq/interlink/interlink:0.7.0-pre1
+  enabled: true
+  socket: unix:///var/run/interlink.sock
+  logging:
+    verboseLogging: false
+    errorsOnlyLogging: true
+
+plugin:
+  enabled: true
+  image: "geddes-registry.rcac.purdue.edu/docker-hub-cache/mginfn/interlink-kubernetes-plugin:1.2.0"
+  address: "http://0.0.0.0"
+  port: 4000
+  privileged: false
+  envs:
+    # The chart mounts plugin.config at plugin.yaml; the plugin reads INI
+    # whatever the file is called.
+    - name: CONFIG_FILE_PATH
+      value: /etc/interlink/plugin.yaml
+  extraVolumeMounts:
+    - name: kubeconfig
+      mountPath: /interlink-kubernetes-plugin/private/k8s
+      readOnly: true
+  resources:
+    # null drops the chart's CPU request and limit.
+    CPU: null
+    memory:
+      request: 512Mi
+      limit: 1Gi
+  config: |
+    [app]
+    name=interlink-kubernetes-plugin
+    api_versions=v1
+    api_docs_path=/docs
+    socket_address=http://0.0.0.0
+    socket_port=4000
+
+    [log]
+    level=INFO
+    rich_enabled=True
+    requests_enabled=False
+
+    [k8s]
+    # Relative to the plugin image's workdir (/interlink-kubernetes-plugin),
+    # where the kubeconfig secret is mounted.
+    kubeconfig_path=private/k8s/kubeconfig.yaml
+
+    [offloading]
+    namespace_prefix=interlink
+
+    [mesh]
+    init_container=True
+    startup_probe=True
+    slurm_setup_script=False
+
+    [tcp_tunnel]
+    enabled=False
+
+virtualNode:
+  image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:0.7.0-pre1
+  resources:
+    CPUs: 256
+    memGiB: 1024
+    pods: 100
+    # The local scheduler's gate only; NRP places the real pod.
+    accelerators:
+      - resourceType: nvidia.com/gpu
+        model: a40
+        available: "4"
+
+  disableCSR: true
+
+extraVolumes:
+  - name: kubeconfig
+    secret:
+      secretName: kubeconfig-nrp-interlink
+      defaultMode: 0400
+
+podScheduling:
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: "hub.jupyter.org/dedicated"
+      operator: "Equal"
+      value: "cms-af"
+      effect: "NoSchedule"

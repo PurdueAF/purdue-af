@@ -1,28 +1,30 @@
-# interLink — virtual nodes backed by Slurm
+# interLink — virtual nodes
 
 Each subdirectory registers one [interLink](https://github.com/interlink-hq/interLink)
 virtual node in the `cms` namespace. A pod scheduled onto such a node is
-translated into a Slurm job on the named cluster and run under Singularity;
-to Kubernetes it still looks like an ordinary pod.
+translated by the node's plugin into work on a remote system — a Slurm job, or
+a pod in a remote Kubernetes cluster — and run there; to Kubernetes it still
+looks like an ordinary pod.
 
-| Node               | Cluster | Slurm partition | Depot path                       | Munge key PVC      | `SLURM_CLUSTER` | Deployed |
-| ------------------ | ------- | --------------- | -------------------------------- | ------------------ | --------------- | -------- |
-| `interlink-hammer` | Hammer  | `hammer-nodes`  | `/depot/cms/purdue-af/interlink` | `munge-key-hammer` | `hammer`        | yes      |
+| Node               | Remote system                  | Plugin                       | Credential (out of band)         | Offloaded work                     | Deployed |
+| ------------------ | ------------------------------ | ---------------------------- | -------------------------------- | ---------------------------------- | -------- |
+| `interlink-hammer` | Hammer, partition `hammer-nodes` | Slurm sidecar → `sbatch`   | `munge-key-hammer` PVC           | Slurm jobs under Singularity       | yes      |
+| `interlink-nrp`    | NRP Nautilus                   | Kubernetes → remote pods     | `kubeconfig-nrp-interlink` Secret | pods in namespace `interlink-cms` | yes      |
 
-Every node runs one plugin image, tagged with the upstream plugin ref
-(`PLUGIN_REF`); cluster identity comes from `SLURM_CLUSTER` plus the
-per-cluster munge PVC. The image and the per-cluster client versions:
-[`docker/interlink-slurm-plugin/README.md`](../../docker/interlink-slurm-plugin/README.md),
-[`slurm/README.md`](../../slurm/README.md).
+Every node is three containers in one Deployment (`<nodeName>-node`) from the
+shared chart (`helmrepo.yaml`): the interLink API, the plugin that submits the
+work to the remote system, and the virtual kubelet that registers the Node
+object. Chart resources are all named `<nodeName>-*`.
 
-A node is deployed only once its munge key PVC exists — without the key the
-node pod never gets past Pending, so a new cluster stays commented out in
-`deploy/experimental/kustomization.yaml` until its PVC is populated.
+hammer's plugin runs the site Slurm sidecar image
+([`docker/interlink-slurm-plugin/README.md`](../../docker/interlink-slurm-plugin/README.md)),
+tagged with the upstream plugin ref (`PLUGIN_REF`); nrp's plugin runs the
+upstream [interlink-kubernetes-plugin](https://github.com/interlink-hq/interlink-kubernetes-plugin)
+image, pinned in its values.
 
-Each node is three containers in one Deployment (`<nodeName>-node`): the
-interLink API, the Slurm sidecar plugin that shells out to `sbatch`, and the
-virtual kubelet that registers the Node object. Chart resources are all named
-`<nodeName>-*`.
+A node is deployed only once its credential exists — without it the node pod
+never starts — so a new node stays commented out in
+`deploy/experimental/kustomization.yaml` until its credential is created.
 
 To use a node, target it explicitly — it carries a
 `virtual-node.interlink/no-schedule` taint so nothing lands there by accident:
@@ -36,26 +38,39 @@ tolerations:
 ```
 
 Slurm submission options come from pod annotations
-(`slurm-job.vk.io/flags`, `slurm-job.vk.io/singularity-options`).
+(`slurm-job.vk.io/flags`, `slurm-job.vk.io/singularity-options`). On
+interlink-nrp, GPU pods request `nvidia.com/gpu`; the node advertises them
+and labels itself with the model (`nvidia-gpu-type`).
+
+Offloading to NRP is batch-style: a service inside an offloaded pod is not
+reachable from Geddes. The Kubernetes plugin runs no tunnel client, so
+hammer's wstunnel shadow would never connect; making one reachable takes
+interLink full mesh, which is not part of this setup.
 
 ## What is not in git
 
-The munge key each plugin authenticates to Slurm with. Munge keys live in
-per-cluster RWX PVCs created and populated out of band — never as Secrets, and
-never in this repo.
+The credential each plugin authenticates to its remote system with — created
+and populated out of band, never in this repo.
 
+Munge keys live in per-cluster RWX PVCs, never as Secrets.
 `munge-key-hammer` is also mounted by the AF sessions
 (`apps/jupyterhub/jupyterhub/values.yaml`).
-To add a further cluster: create its PVC, copy that cluster's key in, then
-uncomment its entry in the kustomization.
+To add a further Slurm cluster: create its PVC, copy that cluster's key in,
+then uncomment its entry in the kustomization.
+
+The NRP kubeconfig is the `kubeconfig-nrp-interlink` Secret in `cms`, minted
+by [`nrp/to-deploy-at-nrp/generate-nrp-kubeconfig.sh`](nrp/to-deploy-at-nrp/generate-nrp-kubeconfig.sh)
+against the RBAC in the same directory, applied to NRP out of band. Its token
+is time-bounded: rerun the script and re-create the Secret before it expires.
 
 ## Verifying a node
 
 ```bash
-kubectl get node interlink-hammer
+kubectl get node <nodeName>
 ```
 
-Schedule a short-lived pod with the nodeSelector/tolerations above and the
-Slurm annotations your partition expects. The pod should reach `Running`;
-`squeue` on the cluster shows the matching job. Delete it afterwards — it is
-not managed by Flux.
+Schedule a short-lived pod with the nodeSelector/tolerations above — on
+hammer, with the Slurm annotations your partition expects. The pod should
+reach `Running`: `squeue` on Hammer shows the matching job, and NRP shows the
+offloaded pod in `interlink-cms`. Delete it afterwards — it is not managed by
+Flux.
