@@ -16,6 +16,11 @@ rules:
   - apiGroups: [""]
     resources: [pods]
     verbs: [get, list, watch, create, delete]
+  # the plugin reads the status subresource on every poll; `get` on pods
+  # does not cover it
+  - apiGroups: [""]
+    resources: [pods/status]
+    verbs: [get]
   # GET /getLogs
   - apiGroups: [""]
     resources: [pods/log]
