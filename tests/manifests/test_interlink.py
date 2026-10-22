@@ -238,6 +238,16 @@ def test_plugin_opens_the_kubeconfig_where_it_is_mounted(kubernetes_clusters):
         )
 
 
+def test_plugin_config_carries_the_metadata_fastapi_requires(kubernetes_clusters):
+    """The plugin passes [app] name/description/version straight into its
+    FastAPI constructor, which asserts a non-empty version — a key trimmed
+    from the INI crashes the container at import time."""
+    for cluster, app in kubernetes_clusters.items():
+        ini = _plugin_ini(app)
+        for key in ("name", "description", "version"):
+            assert ini.get("app", key, fallback=""), f"{cluster}: [app] {key} is empty"
+
+
 def test_plugin_listens_where_the_api_server_calls_it(kubernetes_clusters):
     """The chart aims the interLink API at plugin.address:plugin.port; the
     plugin listens where its own INI says. A mismatch fails every offload
