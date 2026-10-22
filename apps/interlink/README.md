@@ -17,10 +17,13 @@ work to the remote system, and the virtual kubelet that registers the Node
 object. Chart resources are all named `<nodeName>-*`.
 
 hammer's plugin runs the site Slurm sidecar image
-([`docker/interlink-slurm-plugin/README.md`](../../docker/interlink-slurm-plugin/README.md)),
-tagged with the upstream plugin ref (`PLUGIN_REF`); nrp's plugin runs the
-upstream [interlink-kubernetes-plugin](https://github.com/interlink-hq/interlink-kubernetes-plugin)
-image, pinned in its values.
+([`docker/interlink-slurm-plugin/README.md`](../../docker/interlink-slurm-plugin/README.md));
+nrp's runs the site [interlink-kubernetes-plugin](https://github.com/interlink-hq/interlink-kubernetes-plugin)
+image ([`docker/interlink-kubernetes-plugin/README.md`](../../docker/interlink-kubernetes-plugin/README.md)).
+Both are tagged with their upstream ref (`PLUGIN_REF`), pinned in each node's
+values; the k8s image carries the `ensure-namespace` patch, and nrp sets
+`ensure_namespace=False` because NRP grants namespaced RBAC only — the
+offloading namespace is created out of band.
 
 A node is deployed only once its credential exists — without it the node pod
 never starts — so a new node stays commented out in

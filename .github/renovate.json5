@@ -196,6 +196,15 @@
       enabled: false,
     },
     {
+      // The upstream image docker/interlink-kubernetes-plugin builds on. Its
+      // tag is one third of the PLUGIN_REF lock (Dockerfile ARG, PLUGIN_REF,
+      // the values pin — the tests fail until all agree), and a bump must
+      // also re-verify the patch still applies to the new source.
+      matchDatasources: ['docker'],
+      matchPackageNames: ['docker.io/mginfn/interlink-kubernetes-plugin'],
+      enabled: false,
+    },
+    {
       matchUpdateTypes: ['minor', 'patch', 'digest', 'pin', 'pinDigest'],
       automerge: true,
     },

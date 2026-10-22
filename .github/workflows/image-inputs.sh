@@ -15,7 +15,7 @@
 #
 # Names: purdue-af, agentic-interface, af-pod-monitor, af-node-monitor,
 #        self-repair, supersonic-model-manager, interlink-slurm-plugin,
-#        pixi-base, pixi-global, e2e-hub
+#        interlink-kubernetes-plugin, pixi-base, pixi-global, e2e-hub
 #
 # The hash covers file content, names and modes of every TRACKED file under
 # the listed pathspecs (git ls-files -s), so it is independent of commit
@@ -74,6 +74,13 @@ paths_for() {
 		cat <<-EOF
 			docker/interlink-slurm-plugin
 			slurm
+			.github/workflows/ci-images.yml
+			.github/workflows/image-inputs.sh
+		EOF
+		;;
+	interlink-kubernetes-plugin)
+		cat <<-EOF
+			docker/interlink-kubernetes-plugin
 			.github/workflows/ci-images.yml
 			.github/workflows/image-inputs.sh
 		EOF
