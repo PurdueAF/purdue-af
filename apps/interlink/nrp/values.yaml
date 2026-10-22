@@ -33,6 +33,9 @@ plugin:
   config: |
     [app]
     name=interlink-kubernetes-plugin
+    # FastAPI asserts a non-empty version at import time; omit these and the plugin crash-loops.
+    description=InterLink Kubernetes Plugin - offload pods to a remote Kubernetes cluster
+    version=1.2.0
     api_versions=v1
     api_docs_path=/docs
     socket_address=http://0.0.0.0
