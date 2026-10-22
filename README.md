@@ -54,6 +54,7 @@ Whether each component on the cluster is running what is on `main`
 ![dask-gateway][experimental-dask-gateway]
 ![flyte][experimental-flyte]
 ![interlink-hammer][experimental-interlink-hammer]
+![interlink-nrp][experimental-interlink-nrp]
 ![self-repair][experimental-self-repair]
 ![jfc][experimental-jfc]
 ![af-monitoring][experimental-monitoring-af-monitoring]
@@ -111,6 +112,7 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-dask-gateway]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-dask-gateway.json
 [experimental-flyte]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-flyte.json
 [experimental-interlink-hammer]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-hammer.json
+[experimental-interlink-nrp]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-nrp.json
 [experimental-self-repair]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-self-repair.json
 [experimental-jfc]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-jfc.json
 [experimental-monitoring-af-monitoring]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-af-monitoring.json

@@ -1,0 +1,48 @@
+# These resources are to be deployed to NRP Nautilus, not Geddes.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: interlink-plugin
+  namespace: interlink-cms
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: interlink-plugin
+  namespace: interlink-cms
+rules:
+  # offloaded pods: create, status polling, delete
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch, create, delete]
+  # GET /getLogs
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  # volumes offloaded per pod and deleted with it (suffixed by pod UID)
+  - apiGroups: [""]
+    resources: [configmaps, secrets]
+    verbs: [get, list, create, update, delete]
+  # only needed with the interlink.io/remote-pvc annotation
+  - apiGroups: [""]
+    resources: [persistentvolumeclaims]
+    verbs: [get, list, create, delete]
+  # surfacing scheduling and pull errors in pod status
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: interlink-plugin
+  namespace: interlink-cms
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: interlink-plugin
+subjects:
+  - kind: ServiceAccount
+    name: interlink-plugin
+    namespace: interlink-cms
