@@ -65,6 +65,10 @@ reachable from Geddes. The Kubernetes plugin runs no tunnel client, so
 hammer's wstunnel shadow would never connect; making one reachable takes
 interLink full mesh, which is not part of this setup.
 
+The facility's NRP S3 keys, endpoint and bucket are the `nrp-s3` Secret,
+SOPS-encrypted in [`nrp/secret-s3.yaml`](nrp/secret-s3.yaml). The keys belong
+to one S3 pool, and `AWS_ENDPOINT_URL` names it.
+
 ## What is not in git
 
 The credential each plugin authenticates to its remote system with — created
