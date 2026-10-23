@@ -373,8 +373,11 @@ def test_kubernetes_nodes_are_batch_only(kubernetes_clusters):
 
 def test_pvcs_are_not_declared_in_git(interlink_clusters):
     """Out-of-band volumes (the munge PVCs) are created by hand; a git-declared
-    PVC would collide with the existing bound one, whose spec is immutable."""
+    PVC would collide with the existing bound one, whose spec is immutable.
+    Manifests for the remote cluster (`to-deploy-at-nrp/`) are not Geddes'."""
     for path in INTERLINK.rglob("*.yaml"):
+        if "to-deploy-at-nrp" in path.parts:
+            continue
         for doc in yaml.safe_load_all(path.read_text()):
             if isinstance(doc, dict) and doc.get("kind") == "PersistentVolumeClaim":
                 pytest.fail(f"{path}: out-of-band PVC declared in git")
