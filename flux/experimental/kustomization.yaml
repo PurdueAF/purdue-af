@@ -57,6 +57,7 @@ resources:
   - ../../apps/interlink/helmrepo.yaml
   - ../../apps/interlink/hammer/helmrelease.yaml
   - ../../apps/interlink/nrp/helmrelease.yaml
+  - ../../apps/interlink/nrp/secret-s3.yaml
 
   - ../../apps/af-utils/pixi-global-sync/deployment.yaml
 

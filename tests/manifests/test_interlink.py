@@ -385,11 +385,16 @@ def test_pvcs_are_not_declared_in_git(interlink_clusters):
 
 def test_credentials_are_never_committed():
     """The munge key is mounted from a PVC, the kubeconfig from a Secret
-    created out of band. A `data:`/`stringData:` block here would mean a
+    created out of band; a committed Secret is SOPS-encrypted
+    (test_secrets.py checks it). Any other Secret here would mean a
     credential leaked into git."""
     for path in INTERLINK.rglob("*.yaml"):
         for doc in yaml.safe_load_all(path.read_text()):
-            if isinstance(doc, dict) and doc.get("kind") == "Secret":
+            if (
+                isinstance(doc, dict)
+                and doc.get("kind") == "Secret"
+                and "sops" not in doc
+            ):
                 pytest.fail(f"{path}: Secret committed in plain text")
 
 
