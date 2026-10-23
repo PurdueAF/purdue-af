@@ -33,7 +33,6 @@ resources:
 
   - ../../apps/storage/af-shared-storage.yaml
   - ../../apps/storage/cvmfs-pvc.yaml
-  - ../../apps/storage/docker-secret.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
