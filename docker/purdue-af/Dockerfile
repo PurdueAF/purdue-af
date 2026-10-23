@@ -129,7 +129,7 @@ ARG CLAUDE_CODE_VERSION="2.1.309"
 ARG CODEX_VERSION="0.164.0"
 ARG OPENCODE_VERSION="1.19.4"
 ARG CLAUDE_AGENT_ACP_VERSION="0.94.0"
-ARG CODEX_ACP_VERSION="0.16.0"
+ARG CODEX_ACP_VERSION="2.2.2"
 ENV NPM_GLOBAL="/opt/npm-global"
 # hadolint ignore=DL3016  # versions ARE pinned, via the ARGs above
 RUN PATH="${BASE_ENV_DIR}/bin:${PATH}" \
@@ -138,7 +138,7 @@ RUN PATH="${BASE_ENV_DIR}/bin:${PATH}" \
         "@openai/codex@${CODEX_VERSION}" \
         "opencode-ai@${OPENCODE_VERSION}" \
         "@agentclientprotocol/claude-agent-acp@${CLAUDE_AGENT_ACP_VERSION}" \
-        "@zed-industries/codex-acp@${CODEX_ACP_VERSION}" && \
+        "@agentclientprotocol/codex-acp@${CODEX_ACP_VERSION}" && \
     PATH="${NPM_GLOBAL}/bin:${BASE_ENV_DIR}/bin:${PATH}" claude --version && \
     PATH="${NPM_GLOBAL}/bin:${BASE_ENV_DIR}/bin:${PATH}" codex --version && \
     PATH="${NPM_GLOBAL}/bin:${BASE_ENV_DIR}/bin:${PATH}" opencode --version && \

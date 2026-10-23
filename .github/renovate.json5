@@ -143,7 +143,7 @@
       managerFilePatterns: ['/(^|/)Dockerfile$/'],
       matchStrings: ['ARG CODEX_ACP_VERSION="(?<currentValue>[^"]+)"'],
       datasourceTemplate: 'npm',
-      depNameTemplate: '@zed-industries/codex-acp',
+      depNameTemplate: '@agentclientprotocol/codex-acp',
     },
     {
       // The IRIS-HEP integration challenge revision (tests/integration_challenge/upstream.pin).
