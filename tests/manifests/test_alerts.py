@@ -249,14 +249,17 @@ def test_eos_slow_needs_most_of_an_hour_of_slow_checks():
     """A timed-out check publishes the 10000 ms sentinel, which averaged with a
     healthy check lands inside AFMountSlow's band. eos times out one node and
     one check at a time, so AFMountSlow leaves eos (and /cvmfs) out; AFEosSlow
-    needs half of a node's eos checks over an hour slow, timeouts included."""
+    needs half of a node's eos checks over an hour slow, timeouts included,
+    and one slow check that completed, so an outage of timeouts alone fires
+    AFMountInvalid and not both."""
     slow = next(r for r in rules() if r["alert"] == "AFMountSlow")["expr"]
     assert 'mount_name!~"cvmfs|eos"' in slow
     eos = next(r for r in rules() if r["alert"] == "AFEosSlow")["expr"]
     assert 'mount_name="eos"' in eos
-    assert "> bool 2000" in eos
-    assert "< 10000" not in eos
-    assert "[1h:]" in eos
+    assert "} > bool 2000" in eos
+    assert "< 10000 > bool 2000" in eos
+    assert "max_over_time" in eos
+    assert eos.count("[1h:]") == 2
     assert "af_node_mount_result_fresh" in eos
 
 
