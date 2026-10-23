@@ -15,8 +15,8 @@ EXPORTER = REPO / "docker/af-node-monitor/node_healthcheck.py"
 AGENT = REPO / "docker/af-node-monitor/probe_agent.py"
 DEPLOYMENT = REPO / "apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml"
 DEPLOYMENTS = (
-    REPO / "deploy/experimental/kustomization.yaml",
-    REPO / "deploy/core-geddes2/kustomization.yaml",
+    REPO / "flux/experimental/kustomization.yaml",
+    REPO / "flux/core-geddes2/kustomization.yaml",
 )
 
 

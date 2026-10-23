@@ -1,5 +1,5 @@
 """Tests for .github/workflows/component-status.py (the README deployment
-dashboard). Runs against the REAL deploy kustomizations and the README badge
+dashboard). Runs against the REAL Flux root kustomizations and the README badge
 list, whose `[slug]:` link definitions must match the components the script
 publishes badges for."""
 
@@ -89,14 +89,14 @@ def test_components_are_not_too_deep(cs, components):
 def test_commented_out_resources_are_excluded(cs, tmp_path, monkeypatch):
     """A text-based parser would report a commented-out resource as live."""
     root = tmp_path.resolve()
-    (root / "deploy").mkdir()
-    (root / "deploy/kustomization.yaml").write_text(
+    (root / "flux").mkdir()
+    (root / "flux/kustomization.yaml").write_text(
         "resources:\n"
         "  - ../apps/live/helmrelease.yaml\n"
         "  # - ../apps/parked/helmrelease.yaml\n"
     )
     monkeypatch.setattr(cs, "REPO", root)
-    resources, _ = cs._read_kustomization(Path("deploy/kustomization.yaml"))
+    resources, _ = cs._read_kustomization(Path("flux/kustomization.yaml"))
     assert resources == ["apps/live/helmrelease.yaml"]
 
 
@@ -308,8 +308,8 @@ def test_git_runs_against_the_repo(cs):
 
 def test_paths_outside_the_repo_are_dropped(cs, monkeypatch, tmp_path):
     repo = tmp_path / "repo"
-    (repo / "deploy").mkdir(parents=True)
-    (repo / "deploy" / "k.yaml").write_text(
+    (repo / "flux").mkdir(parents=True)
+    (repo / "flux" / "k.yaml").write_text(
         yaml.safe_dump(
             {
                 "resources": ["../apps/a/hr.yaml", "../../elsewhere.yaml"],
@@ -321,7 +321,7 @@ def test_paths_outside_the_repo_are_dropped(cs, monkeypatch, tmp_path):
         )
     )
     monkeypatch.setattr(cs, "REPO", repo)
-    resources, generators = cs._read_kustomization(cs.Path("deploy/k.yaml"))
+    resources, generators = cs._read_kustomization(cs.Path("flux/k.yaml"))
     assert resources == ["apps/a/hr.yaml"]
     assert generators == [("a-config", ["apps/a/values.yaml"])]
 

@@ -62,7 +62,7 @@
 
   // Flux manager is opt-in by path: parse everything Flux reconciles.
   flux: {
-    managerFilePatterns: ['/(^|/)apps/.*\\.ya?ml$/', '/(^|/)deploy/.*\\.ya?ml$/'],
+    managerFilePatterns: ['/(^|/)apps/.*\\.ya?ml$/', '/(^|/)flux/.*\\.ya?ml$/'],
   },
 
   // Images in plain manifests; this manager matches no file by default.
@@ -226,7 +226,7 @@
     },
     {
       // Chart versions and the image tags in their values.
-      matchFileNames: ['apps/**', 'deploy/**'],
+      matchFileNames: ['apps/**', 'flux/**'],
       groupName: 'cluster-manifests',
     },
     {

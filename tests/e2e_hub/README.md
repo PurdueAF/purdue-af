@@ -29,7 +29,7 @@ core assumption), admin_users wiring, forged OAuth state rejection, logout.
 
 CI runs it in [`ci-e2e.yml`](../../.github/workflows/ci-e2e.yml), against
 the chart version in `helmrelease.yaml` and the hub configmaps of
-`deploy/core-production/kustomization.yaml`. To validate a chart upgrade, bump
+`flux/core-production/kustomization.yaml`. To validate a chart upgrade, bump
 `helmrelease.yaml` in a PR.
 
 Locally (needs docker + kind + helm + kubectl + flux):

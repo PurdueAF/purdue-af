@@ -2,7 +2,7 @@
 #
 # Validate everything Flux consumes, the same way Flux consumes it:
 #
-#   1. `kustomize build` each kustomize root under deploy/ (and standalone roots)
+#   1. `kustomize build` each kustomize root under flux/ (and standalone roots)
 #   2. apply that environment's postBuild.substitute variables, parsed straight
 #      from its flux-kustomization.yaml (no duplicated values — single source
 #      of truth), via `flux envsubst`
@@ -310,7 +310,7 @@ validate_helmreleases() {
 
 # --- Flux-managed environments -------------------------------------------
 # Pass 1: render everything (also builds the cross-env HelmRepository lookup).
-for env_dir in deploy/*/; do
+for env_dir in flux/*/; do
 	[[ -f "${env_dir}kustomization.yaml" ]] || continue
 	name=$(basename "$env_dir")
 	rendered="$workdir/rendered-${name}.yaml"
@@ -350,7 +350,7 @@ done
 
 # --- Flux bootstrap objects ----------------------------------------------
 echo "──── flux bootstrap objects ────"
-if ! "${KUBECONFORM[@]}" deploy/*/flux-kustomization.yaml deploy/*/git-repository.yaml; then
+if ! "${KUBECONFORM[@]}" flux/*/flux-kustomization.yaml flux/*/git-repository.yaml; then
 	failed=1
 fi
 

@@ -6,7 +6,7 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[2]
 FLYTE = REPO / "apps" / "flyte"
-EXPERIMENTAL = REPO / "deploy" / "experimental" / "kustomization.yaml"
+EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
 
 
 def test_flux_deploys_flyte():

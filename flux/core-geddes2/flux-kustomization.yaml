@@ -8,7 +8,7 @@ metadata:
 spec:
   interval: 1m
   timeout: 1m
-  path: "./deploy/core-geddes2/"
+  path: "./flux/core-geddes2/"
   prune: true
   sourceRef:
     kind: GitRepository

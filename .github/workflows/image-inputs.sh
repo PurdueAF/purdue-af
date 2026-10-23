@@ -128,7 +128,7 @@ paths_for() {
 		# appended to the memo key by ci-e2e.yml for the real-image job.
 		cat <<-EOF
 			apps/jupyterhub/jupyterhub
-			deploy/core-production/kustomization.yaml
+			flux/core-production/kustomization.yaml
 			tests/e2e_hub
 			tests/pyproject.toml
 			tests/uv.lock

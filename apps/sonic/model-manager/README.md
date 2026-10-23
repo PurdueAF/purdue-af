@@ -23,7 +23,7 @@ can be loaded and unloaded, but not deleted.
 
 ## Deployment
 
-Flux deploys it from [`deploy/experimental/`](../../../deploy/experimental/kustomization.yaml) into
+Flux deploys it from [`flux/experimental/`](../../../flux/experimental/kustomization.yaml) into
 the `cms` namespace, alongside the [`supersonic-af`](../supersonic-af/) release it manages, the
 one SuperSONIC release with a PVC model repository. Credentials are not in git — create the
 Secret once, or the HelmRelease keeps retrying:

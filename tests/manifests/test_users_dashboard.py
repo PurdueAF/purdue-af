@@ -58,7 +58,7 @@ def test_thresholds_track_the_cull_timeouts():
 
 def test_the_exporter_is_deployed_to_every_cluster():
     for overlay in OVERLAYS:
-        path = REPO / "deploy" / overlay / "kustomization.yaml"
+        path = REPO / "flux" / overlay / "kustomization.yaml"
         generators = yaml.safe_load(path.read_text())["configMapGenerator"]
         config = next(g for g in generators if g["name"] == "jupyterhub-extra-config")
         assert any(f.endswith(f"extraFiles/{SNIPPET.name}") for f in config["files"]), (
