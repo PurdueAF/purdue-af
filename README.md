@@ -65,6 +65,7 @@ Whether each component on the cluster is running what is on `main`
 ![supersonic][experimental-sonic-supersonic]
 ![supersonic-af][experimental-sonic-supersonic-af]
 ![supersonic-interlink][experimental-sonic-supersonic-interlink]
+![supersonic-interlink-nrp][experimental-sonic-supersonic-interlink-nrp]
 ![model-manager][experimental-sonic-model-manager]
 ![kuberay-operator][experimental-ray-operator]
 ![ray-train][experimental-ray-train]
@@ -124,6 +125,7 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-sonic-supersonic]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic.json
 [experimental-sonic-supersonic-af]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic-af.json
 [experimental-sonic-supersonic-interlink]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic-interlink.json
+[experimental-sonic-supersonic-interlink-nrp]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic-interlink-nrp.json
 [experimental-ray-operator]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-ray-operator.json
 [experimental-ray-train]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-ray-train.json
 [image-purdue-af]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-purdue-af.json

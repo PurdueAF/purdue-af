@@ -1,0 +1,93 @@
+# Triton offloaded to NRP Nautilus through the interlink-nrp node; Envoy stays on AF nodes.
+# Envoy and Prometheus reach an offloaded pod only through interLink full mesh (apps/interlink/README.md).
+
+serverLoadThreshold: 20
+
+# Waking schedules a pod on NRP; raise this together with idle_timeout in envoy-config.yaml.
+scaleFromZero:
+  enabled: true
+  readyTimeoutSeconds: 900
+  holdMinReplicasSeconds: 900
+
+serverLoadMetric: 'sum (rate(nv_inference_queue_duration_us{app=~"supersonic", release=~"supersonic-interlink-nrp", namespace=~"cms"}[30s])) / sum ((rate(nv_inference_exec_count{app=~"supersonic", release=~"supersonic-interlink-nrp", namespace=~"cms"}[30s]) * 1000))'
+
+inferenceServer:
+  image: nvcr.io/nvidia/tritonserver:26.04-py3
+  command: ["/bin/sh", "-c"]
+  args:
+    - |
+      /opt/tritonserver/bin/tritonserver \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_16_0_0_pre4/external/el9_amd64_gcc13/data/RecoBTag/Combined/data/models/ \
+      --allow-gpu-metrics=true \
+      --log-verbose=0 \
+      --exit-timeout-secs=60
+
+  resources:
+    limits: { cpu: 2, memory: 8G, nvidia.com/gpu: 1 }
+    requests: { cpu: 2, memory: 8G, nvidia.com/gpu: 1 }
+  nodeSelector:
+    kubernetes.io/hostname: interlink-nrp
+  tolerations:
+    - key: virtual-node.interlink/no-schedule
+      operator: Exists
+  annotations:
+    interlink.io/remote-pvc: cvmfs
+  service:
+    labels:
+      scrape_metrics: "true"
+  modelRepository:
+    enabled: true
+    storageType: cvmfs-pvc
+    mountPath: /cvmfs
+  readinessProbe:
+    successThreshold: 3
+  startupProbe:
+    periodSeconds: 5
+    failureThreshold: 60
+    httpGet:
+      path: /v2/health/ready
+      port: http
+
+envoy:
+  enabled: true
+  nodeSelector: { "cms-af-prod": "true" }
+  tolerations:
+    - key: hub.jupyter.org/dedicated
+      operator: Equal
+      value: cms-af
+      effect: NoSchedule
+  loadBalancerPolicy: "ROUND_ROBIN"
+  service:
+    type: LoadBalancer
+  # No public inference ingress; clients use the private-pool LoadBalancer or the in-cluster Service.
+  ingress:
+    enabled: false
+  external_config:
+    load_from_configmap: true
+    configmap_name: "supersonic-interlink-nrp-envoy-config-custom"
+    configmap_key: "envoy.yaml"
+
+keda:
+  enabled: true
+  # RepositoryIndex raises this to 1; the wake path lives in envoy-config.yaml.
+  minReplicaCount: 0
+  # Shares the node's GPUs with Ray Train.
+  maxReplicaCount: 4
+  scaleUp:
+    stabilizationWindowSeconds: 120
+    periodSeconds: 120
+    stepsize: 1
+  scaleDown:
+    stabilizationWindowSeconds: 120
+    periodSeconds: 30
+    stepsize: 1
+
+prometheus:
+  external:
+    enabled: true
+    url: prometheus-server.cms.svc.cluster.local
+    port: 9090
+    scheme: http
+
+grafana:
+  enabled: false
