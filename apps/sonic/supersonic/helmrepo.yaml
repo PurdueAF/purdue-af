@@ -1,4 +1,4 @@
-# Chart source for supersonic, supersonic-af and supersonic-interlink.
+# Chart source for supersonic, supersonic-af, supersonic-interlink and supersonic-interlink-nrp.
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
 metadata:

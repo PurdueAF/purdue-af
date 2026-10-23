@@ -31,6 +31,8 @@ resources:
   # Sweeps the Failed Triton pods interLink leaves behind, keeping the newest.
   - ../../apps/sonic/supersonic-interlink/pod-pruner-rbac.yaml
   - ../../apps/sonic/supersonic-interlink/pod-pruner-cronjob.yaml
+  # Triton offloaded to NRP Nautilus through the interlink-nrp node.
+  - ../../apps/sonic/supersonic-interlink-nrp/helmrelease.yaml
   # Model repository dashboard for the supersonic-af release above. Needs the
   # supersonic-model-manager-auth Secret to exist in the namespace.
   - ../../apps/sonic/model-manager/helmrelease.yaml
@@ -126,6 +128,14 @@ configMapGenerator:
   - name: supersonic-interlink-envoy-config-custom
     files:
       - envoy.yaml=../../apps/sonic/supersonic-interlink/envoy-config.yaml
+
+  - name: supersonic-interlink-nrp-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic-interlink-nrp/values.yaml
+
+  - name: supersonic-interlink-nrp-envoy-config-custom
+    files:
+      - envoy.yaml=../../apps/sonic/supersonic-interlink-nrp/envoy-config.yaml
 
   - name: supersonic-model-manager-config
     files:
