@@ -3,26 +3,14 @@ bucket, resumed from the latest one after a failure or a resubmission."""
 
 import os
 import tempfile
-from urllib.parse import urlparse
 
-import pyarrow.fs
 import ray
 import ray.train
 import ray.train.torch
 import torch
+from prepare import BUCKET, FEATURES, INPUTS, s3
 
-BUCKET = os.environ["S3_BUCKET"]
-INPUTS = f"{BUCKET}/ray-nrp/inputs"
 RUNS = f"{BUCKET}/ray-nrp/runs"
-FEATURES = 16
-
-
-def s3() -> pyarrow.fs.S3FileSystem:
-    endpoint = urlparse(os.environ["AWS_ENDPOINT_URL"])
-    # Ceph ignores the region; naming one keeps pyarrow from asking AWS for it.
-    return pyarrow.fs.S3FileSystem(
-        endpoint_override=endpoint.netloc, scheme=endpoint.scheme, region="us-east-1"
-    )
 
 
 def train_loop(config: dict) -> None:

@@ -1,11 +1,25 @@
-"""Writes the training inputs to NRP S3 with Ray Data, from an AF session: a
-synthetic regression set in the columns train.py reads."""
+"""Writes the training inputs to NRP S3 with Ray Data: a synthetic regression
+set in the columns train.py reads. Runs on the AF (prepare-job.yaml)."""
+
+import os
+from urllib.parse import urlparse
 
 import numpy as np
+import pyarrow.fs
 import ray
-from train import FEATURES, INPUTS, s3
 
+BUCKET = os.environ["S3_BUCKET"]
+INPUTS = f"{BUCKET}/ray-nrp/inputs"
+FEATURES = 16
 ROWS = 4_000_000
+
+
+def s3() -> pyarrow.fs.S3FileSystem:
+    endpoint = urlparse(os.environ["AWS_ENDPOINT_URL"])
+    # Ceph ignores the region; naming one keeps pyarrow from asking AWS for it.
+    return pyarrow.fs.S3FileSystem(
+        endpoint_override=endpoint.netloc, scheme=endpoint.scheme, region="us-east-1"
+    )
 
 
 def synthesize(batch: dict[str, np.ndarray]) -> dict[str, np.ndarray]:

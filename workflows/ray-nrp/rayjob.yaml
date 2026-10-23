@@ -30,7 +30,7 @@ spec:
               image: docker.io/rayproject/ray:2.59.0-py312-gpu
               envFrom:
                 - secretRef:
-                    name: ray-nrp-test-s3
+                    name: nrp-s3
               resources:
                 requests:
                   cpu: "2"
@@ -64,7 +64,7 @@ spec:
                 image: docker.io/rayproject/ray:2.59.0-py312-gpu
                 envFrom:
                   - secretRef:
-                      name: ray-nrp-test-s3
+                      name: nrp-s3
                 resources:
                   requests:
                     cpu: "8"

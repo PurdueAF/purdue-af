@@ -1,0 +1,55 @@
+# Applied by hand to Geddes; see README.md.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ray-nrp-prepare
+  namespace: cms
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        # The image's `ray` user, named rather than numbered in the image.
+        runAsUser: 1000
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+        - key: hub.jupyter.org/dedicated
+          operator: Equal
+          value: cms-af
+          effect: NoSchedule
+      containers:
+        - name: prepare
+          image: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray:2.59.0-py312-cpu
+          command: ["python", "/app/prepare.py"]
+          envFrom:
+            - secretRef:
+                name: nrp-s3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: "4"
+              memory: 8Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+          volumeMounts:
+            - name: code
+              mountPath: /app
+            - name: shm
+              mountPath: /dev/shm
+      volumes:
+        - name: code
+          configMap:
+            name: ray-nrp-test
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
