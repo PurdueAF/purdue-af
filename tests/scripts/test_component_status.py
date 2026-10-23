@@ -434,14 +434,18 @@ def test_main_without_out_only_prints(cs, fake_repo, monkeypatch, tmp_path, caps
 
 
 def test_generator_owner_is_the_component_mounting_it_by_name(cs):
-    """self-repair's ConfigMaps are built from workflows/ and docker/ only;
-    the CronJob under apps/self-repair names them, so they belong to it."""
+    """af-node-monitor's ConfigMap is built from docker/ only; the probe
+    DaemonSet under apps/monitoring/af-monitoring names it, so it belongs there."""
     owner = cs._generator_owner(
-        "self-repair-workflow",
-        ["workflows/self-repair/self_repair.py"],
-        {"apps/self-repair": ["apps/self-repair/cronjob.yaml"]},
+        "af-node-monitor-config",
+        ["docker/af-node-monitor/node_healthcheck.py"],
+        {
+            "apps/monitoring/af-monitoring": [
+                "apps/monitoring/af-monitoring/daemonset-af-node-probe.yaml"
+            ]
+        },
     )
-    assert owner == "apps/self-repair"
+    assert owner == "apps/monitoring/af-monitoring"
 
 
 def test_generator_owner_falls_back_to_a_manifest_named_after_it(cs):

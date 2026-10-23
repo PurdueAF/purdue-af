@@ -6,7 +6,7 @@ specification, takes a physics analysis from its prompt to a typeset analysis
 note. The control plane is [`apps/flyte`](../../apps/flyte); the task pods,
 their directory on `/work` and the model credentials are
 [`apps/jfc`](../../apps/jfc); the task image is
-[`docker/self-repair`](../../docker/self-repair). An analysis is a directory
+[`docker/jfc`](../../docker/jfc). An analysis is a directory
 with an `analysis.toml`, such as [`workflows/jfc-h4l`](../jfc-h4l) or
 [`workflows/jfc-hmm`](../jfc-hmm).
 
@@ -55,7 +55,7 @@ From an AF session, in a checkout of this repository, with the directory of an
 analysis:
 
 ```bash
-uv run --project docker/self-repair --frozen python workflows/jfc/jfc.py workflows/jfc-h4l-small
+uv run --project docker/jfc --frozen python workflows/jfc/jfc.py workflows/jfc-h4l-small
 ```
 
 It prints the name and URL of the run it started. The run's output is the
@@ -63,7 +63,7 @@ agent's last message, or the notice that the workspace has reached its
 `tokens`. While the run's pod exists, its log follows the agent:
 
 ```bash
-uv run --project docker/self-repair --frozen flyte --config workflows/jfc/config.yaml get logs <run>
+uv run --project docker/jfc --frozen flyte --config workflows/jfc/config.yaml get logs <run>
 ```
 
 A reply starts another run in the same workspace and reaches the agent
@@ -72,7 +72,7 @@ is the name of the first run; JFC's gate expects `APPROVE`, `ITERATE: ...` or
 `REGRESS(N)`:
 
 ```bash
-uv run --project docker/self-repair --frozen python workflows/jfc/jfc.py workflows/jfc-h4l-small <workspace> "APPROVE"
+uv run --project docker/jfc --frozen python workflows/jfc/jfc.py workflows/jfc-h4l-small <workspace> "APPROVE"
 ```
 
 Without a reply, a run on an existing workspace continues where the last one

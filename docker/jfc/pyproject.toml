@@ -1,0 +1,11 @@
+[project]
+name = "jfc"
+version = "0.0.0"
+description = "Task image of the jfc workflow"
+requires-python = ">=3.12"
+dependencies = [
+    "flyte==2.12.0",
+]
+
+[tool.uv]
+package = false

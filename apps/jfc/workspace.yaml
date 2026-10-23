@@ -20,7 +20,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: mkdir
-          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/self-repair:latest
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/jfc:latest
           command:
             - sh
             - -c

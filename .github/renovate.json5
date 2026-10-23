@@ -240,8 +240,8 @@
       groupName: 'agentic-interface-image',
     },
     {
-      matchFileNames: ['docker/self-repair/**'],
-      groupName: 'self-repair-image',
+      matchFileNames: ['docker/jfc/**'],
+      groupName: 'jfc-image',
     },
     {
       matchFileNames: ['docker/af-node-monitor/**'],

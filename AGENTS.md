@@ -26,9 +26,6 @@ only what those do not say.
 - No real usernames in commits, PRs or test fixtures. Aggregate or redact first.
 - Branch from `origin/main`, never from another PR's branch: when the base
   squash-merges, the PR retargets and its content never reaches `main`.
-- The `[self-repair]` pull requests are the workflow's output for a person to
-  judge. Never close, merge or comment on one; read them to improve the
-  workflow.
 - Carried verbatim, never edited: the Slurm RPMs and
   `slurm-configs-<cluster>/` trees copied from the clusters
   ([slurm/README.md](slurm/README.md)). The `pixi.lock` files under `pixi/`

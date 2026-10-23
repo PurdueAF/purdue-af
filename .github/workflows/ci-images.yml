@@ -70,7 +70,7 @@ jobs:
             af_digest=""
           fi
           aux_tags=""
-          for name in agentic-interface af-pod-monitor af-node-monitor self-repair supersonic-model-manager interlink-slurm-plugin interlink-kubernetes-plugin; do
+          for name in agentic-interface af-pod-monitor af-node-monitor jfc supersonic-model-manager interlink-slurm-plugin interlink-kubernetes-plugin; do
             tag=$(./.github/workflows/image-inputs.sh "$name")
             channel=latest
             if [ "$name" = interlink-slurm-plugin ] || [ "$name" = interlink-kubernetes-plugin ]; then
@@ -239,18 +239,18 @@ jobs:
               sh -c "fio --version && cd /opt/af-node-monitor &&
               AF_NODE_MONITOR_VERBOSE=1 MOUNT_NAME=smoke CHECK_FILE=smoke
               python -c 'import job_runner, node_healthcheck; print(\"ok\")'"
-          # The three runtimes a self-repair task pod needs, as the image's
-          # non-root user: the Flyte SDK, git, and the opencode binary — and a
-          # cwd that user can write, where Flyte extracts the code bundle.
+          # The runtimes a jfc task pod needs, as the image's non-root user:
+          # the Flyte SDK, git, pixi and Claude Code — and a cwd that user can
+          # write, where Flyte extracts the code bundle.
           # Single-quoted: the runner's bash interpolates this string before
           # docker runs, so a double-quoted $(id -u) would test the RUNNER's uid.
-          - name: self-repair
-            dockerfile: docker/self-repair/Dockerfile
+          - name: jfc
+            dockerfile: docker/jfc/Dockerfile
             context: .
             smoke: >-
               sh -c 'set -e; test "$(id -u)" = 1000;
               python -c "import flyte, os, tempfile; tempfile.mkstemp(dir=os.getcwd()); print(flyte.version())";
-              git --version; ruff --version; opencode --version; echo ok'
+              git --version; pixi --version; claude --version; echo ok'
           # Imports the app, asserts the dashboard and its logo assets ship in
           # the image, and that the ASGI routes are wired.
           - name: supersonic-model-manager
