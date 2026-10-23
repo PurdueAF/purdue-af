@@ -21,22 +21,8 @@ clusters.
 
 ## Credentials
 
-`nrp-s3` in `cms` holds the facility's NRP S3 keys, created out of band from an
-env file kept outside the repository:
-
-```
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-AWS_ENDPOINT_URL=https://s3-west.nrp-nautilus.io
-S3_BUCKET=purdue-af
-```
-
-```bash
-kubectl -n cms create secret generic nrp-s3 --from-env-file="$HOME/ray-nrp-s3.env"
-```
-
-The keys belong to one S3 pool, and `AWS_ENDPOINT_URL` must name that pool.
-NRP is reached with `kubeconfig-nrp-interlink`
+`nrp-s3` in `cms` is the facility's NRP S3 Secret, deployed with
+[`apps/interlink`](../../apps/interlink/README.md). NRP is reached with `kubeconfig-nrp-interlink`
 ([`apps/interlink`](../../apps/interlink/README.md#what-is-not-in-git)), whose
 Role in [`rbac-interlink-nrp.yaml`](../../apps/interlink/nrp/to-deploy-at-nrp/rbac-interlink-nrp.yaml)
 grants RayJobs.
