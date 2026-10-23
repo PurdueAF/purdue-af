@@ -17,8 +17,8 @@ from common import REPO, load_script
 APP = REPO / "apps" / "ray-train"
 HUB_VALUES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
 OPERATOR_VALUES = REPO / "apps" / "ray" / "operator" / "values.yaml"
-EXPERIMENTAL = REPO / "deploy" / "experimental" / "kustomization.yaml"
-CORE = REPO / "deploy" / "core-production" / "kustomization.yaml"
+EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
+CORE = REPO / "flux" / "core-production" / "kustomization.yaml"
 GLOBAL_ENV = REPO / "pixi" / "global" / "pixi.toml"
 # gpu_queries.py is in the gateway's ConfigMap, beside gateway.py.
 sys.path.insert(0, str(HUB_VALUES.parent / "extraFiles"))

@@ -10,7 +10,7 @@ import yaml
 from common import REPO
 
 INTERLINK = REPO / "apps" / "interlink"
-EXPERIMENTAL = REPO / "deploy" / "experimental" / "kustomization.yaml"
+EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
 
 
 def load(path):

@@ -6,7 +6,7 @@ Flux.
 
 Read before asking: [README.md](README.md) (what runs, and its live status),
 [RELEASING.md](RELEASING.md) (how a change reaches a cluster, how to roll it
-back), [deploy/README.md](deploy/README.md) (the Flux roots). This file holds
+back), [flux/README.md](flux/README.md) (the Flux roots). This file holds
 only what those do not say.
 
 ## Hard rules
@@ -41,7 +41,7 @@ uv run --project tests --frozen pytest -q -c tests/pyproject.toml tests
 
 Lint, format and types (the hooks CI runs); the unit tests, from the repo root;
 every Flux root rendered and validated. A change is done when the first two
-pass — the third as well whenever `apps/` or `deploy/` changed. First-party
+pass — the third as well whenever `apps/` or `flux/` changed. First-party
 Python that is not listed in `files =` in `mypy.ini` is never type-checked. The
 hub e2e needs a kind cluster: [tests/README.md](tests/README.md).
 

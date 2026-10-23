@@ -84,7 +84,7 @@ kubectl -n "$NS" create secret generic af-auth-cern \
 # set-user-info.py talks to the mock LDAP (AF_LDAP_* env in
 # values-kind.yaml); gpu-availability.py finds no Prometheus and fails open
 # by design; the gpu-culler service idles (no pod ever holds a full GPU).
-PROD_KUSTOMIZATION=deploy/core-production/kustomization.yaml
+PROD_KUSTOMIZATION=flux/core-production/kustomization.yaml
 for cm in jupyterhub-extra-config jupyterhub-gpu-culler; do
 	from_file_args=()
 	while IFS= read -r entry; do

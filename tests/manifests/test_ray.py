@@ -5,7 +5,7 @@ import yaml
 from common import REPO
 
 RAY = REPO / "apps" / "ray"
-EXPERIMENTAL = REPO / "deploy" / "experimental" / "kustomization.yaml"
+EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
 
 
 def load(path):

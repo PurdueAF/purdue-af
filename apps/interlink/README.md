@@ -27,7 +27,7 @@ offloading namespace is created out of band.
 
 A node is deployed only once its credential exists — without it the node pod
 never starts — so a new node stays commented out in
-`deploy/experimental/kustomization.yaml` until its credential is created.
+`flux/experimental/kustomization.yaml` until its credential is created.
 
 To use a node, target it explicitly — it carries a
 `virtual-node.interlink/no-schedule` taint so nothing lands there by accident:

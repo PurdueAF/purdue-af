@@ -19,7 +19,7 @@ Admin documentation: [https://purdue-cms-tier2.gitlab.io/documentation](https://
 
 |                  |                                                                                                                                                                                                                                                                                                                       |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Orchestration    | [Kubernetes](https://github.com/kubernetes/kubernetes) on the [Geddes](https://www.rcac.purdue.edu/compute/geddes) cluster; [Flux](https://github.com/fluxcd/flux2) CD ([roots](deploy/README.md))                                                                                                                    |
+| Orchestration    | [Kubernetes](https://github.com/kubernetes/kubernetes) on the [Geddes](https://www.rcac.purdue.edu/compute/geddes) cluster; [Flux](https://github.com/fluxcd/flux2) CD ([roots](flux/README.md))                                                                                                                    |
 | Sessions         | [JupyterHub](https://github.com/jupyterhub/zero-to-jupyterhub-k8s) — [JupyterLab](https://github.com/jupyterlab/jupyterlab) and [code-server](https://github.com/coder/code-server) interfaces, [CILogon](https://www.cilogon.org) auth                                                                               |
 | Scale-out        | [Dask Gateway](https://github.com/dask/dask-gateway)                                                                                                                                                                                                                                                                  |
 | Training         | [Ray](https://docs.ray.io/en/latest/ray-core/walkthrough.html) on [KubeRay](https://github.com/ray-project/kuberay) — GPU training sent from notebooks, one cluster per user ([gateway](apps/ray-train/README.md))                                                                                                                    |
@@ -32,7 +32,7 @@ Admin documentation: [https://purdue-cms-tier2.gitlab.io/documentation](https://
 ## Component status
 
 Whether each component on the cluster is running what is on `main`
-([which ref each root deploys](deploy/README.md);
+([which ref each root deploys](flux/README.md);
 [![awaiting deployment][status-pending]](https://github.com/PurdueAF/purdue-af/releases)).
 
 **Core** — ![platform][platform-version]

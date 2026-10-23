@@ -8,7 +8,7 @@ metadata:
 spec:
   interval: 1m
   timeout: 1m
-  path: "./deploy/experimental/"
+  path: "./flux/experimental/"
   prune: true
   sourceRef:
     kind: GitRepository

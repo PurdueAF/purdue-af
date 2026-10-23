@@ -1,7 +1,7 @@
 ---
 paths:
   - "apps/**"
-  - "deploy/**"
+  - "flux/**"
 ---
 
 # Flux manifests
@@ -13,7 +13,7 @@ paths:
   against the old chart. `tests/manifests/test_inrepo_charts.py` asserts it.
 - Do not add a `timeout:` to a HelmRelease. A release that hangs is waiting
   for something real; find what.
-- Every manifest and ConfigMap generator is listed in a `deploy/*/kustomization.yaml`
+- Every manifest and ConfigMap generator is listed in a `flux/*/kustomization.yaml`
   directly; no component carries a kustomization of its own. Generated
   ConfigMaps carry no name hash (`disableNameSuffixHash` in every root). A
   HelmRelease still upgrades when its `valuesFrom` ConfigMap changes, because

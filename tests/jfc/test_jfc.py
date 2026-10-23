@@ -20,7 +20,7 @@ from common import REPO, load_script
 
 APP = REPO / "apps" / "jfc"
 WORKFLOW = REPO / "workflows" / "jfc"
-EXPERIMENTAL = REPO / "deploy" / "experimental" / "kustomization.yaml"
+EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
 
 
 class Launcher:

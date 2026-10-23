@@ -7,8 +7,8 @@ cluster the same as what's on `main`, and if not, why not?**
 Everything is derived from git refs alone — no cluster access — because the
 two Flux channels track refs in this repo:
 
-    core    newest platform tag `YYYY.M.SEQ`  (deploy/core-production)
-    experimental  branch `main-validated`           (deploy/experimental)
+    core    newest platform tag `YYYY.M.SEQ`  (flux/core-production)
+    experimental  branch `main-validated`           (flux/experimental)
 
 `main-validated` doubles as the validation boundary: the ci.yml publish
 stage only advances it when every stage of that commit was green. So for a
@@ -19,7 +19,7 @@ component's own paths:
     commits past main-validated               → not validated yet (CI state
                                                 decides: running vs failed)
 
-Components and their input paths are read from the deploy kustomizations, so
+Components and their input paths are read from the Flux root kustomizations, so
 a component added there appears here automatically. Each CI image gets its
 own row, with input paths from image-inputs.sh — the same list that
 content-addresses the image in CI.
@@ -42,8 +42,8 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[2]
 CHANNELS = {
-    "core": Path("deploy/core-production/kustomization.yaml"),
-    "experimental": Path("deploy/experimental/kustomization.yaml"),
+    "core": Path("flux/core-production/kustomization.yaml"),
+    "experimental": Path("flux/experimental/kustomization.yaml"),
 }
 IMAGE_INPUTS = Path(".github/workflows/image-inputs.sh")
 # Images ci-images.yml builds; which tag each ships on: RELEASING.md.
