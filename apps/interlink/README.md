@@ -42,8 +42,23 @@ tolerations:
 
 Slurm submission options come from pod annotations
 (`slurm-job.vk.io/flags`, `slurm-job.vk.io/singularity-options`). On
-interlink-nrp, GPU pods request `nvidia.com/gpu`; the node advertises them
-and labels itself with the model (`nvidia-gpu-type`).
+interlink-nrp, GPU pods request `nvidia.com/gpu`, which the node advertises;
+NRP places them on any free GPU.
+
+On interlink-nrp only `emptyDir`, ConfigMap, Secret and PersistentVolumeClaim
+volumes reach the remote pod; every other volume and its mounts are dropped. A
+PVC is offloaded only when the pod names it in the `interlink.io/remote-pvc`
+annotation (comma-separated); the plugin uses the claim of that name in
+`interlink-cms`. For `/cvmfs`, that claim is `cvmfs`, created out of band
+([`nrp/to-deploy-at-nrp/cvmfs-pvc.yaml`](nrp/to-deploy-at-nrp/cvmfs-pvc.yaml))
+on NRP's `cvmfs` storage class, so a pod that mounts the AF's `cvmfs` claim
+gets the same mount on NRP:
+
+```yaml
+metadata:
+  annotations:
+    interlink.io/remote-pvc: cvmfs
+```
 
 Offloading to NRP is batch-style: a service inside an offloaded pod is not
 reachable from Geddes. The Kubernetes plugin runs no tunnel client, so

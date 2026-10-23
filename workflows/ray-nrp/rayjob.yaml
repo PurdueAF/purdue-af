@@ -1,0 +1,84 @@
+# Applied to NRP Nautilus, not Geddes; see README.md.
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: ray-nrp-test
+  namespace: interlink-cms
+spec:
+  entrypoint: python /app/train.py
+  runtimeEnvYAML: |
+    pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu126
+      - torch==2.8.0+cu126
+    env_vars:
+      RAY_TRAIN_V2_ENABLED: "1"
+      # One Ray Train worker per GPU across the worker group.
+      NUM_WORKERS: "4"
+      EPOCHS: "20"
+  shutdownAfterJobFinishes: true
+  ttlSecondsAfterFinished: 600
+  activeDeadlineSeconds: 7200
+  rayClusterSpec:
+    rayVersion: "2.59.0"
+    headGroupSpec:
+      rayStartParams:
+        num-cpus: "0"
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              image: docker.io/rayproject/ray:2.59.0-py312-gpu
+              envFrom:
+                - secretRef:
+                    name: ray-nrp-test-s3
+              resources:
+                requests:
+                  cpu: "2"
+                  memory: 8Gi
+                limits:
+                  cpu: "2"
+                  memory: 8Gi
+              volumeMounts:
+                - name: code
+                  mountPath: /app
+                - name: shm
+                  mountPath: /dev/shm
+          volumes:
+            - name: code
+              configMap:
+                name: ray-nrp-test
+            - name: shm
+              emptyDir:
+                medium: Memory
+                sizeLimit: 2Gi
+    workerGroupSpecs:
+      - groupName: gpu
+        replicas: 2
+        minReplicas: 2
+        maxReplicas: 2
+        rayStartParams: {}
+        template:
+          spec:
+            containers:
+              - name: ray-worker
+                image: docker.io/rayproject/ray:2.59.0-py312-gpu
+                envFrom:
+                  - secretRef:
+                      name: ray-nrp-test-s3
+                resources:
+                  requests:
+                    cpu: "8"
+                    memory: 24Gi
+                    nvidia.com/gpu: 2
+                  limits:
+                    cpu: "8"
+                    memory: 24Gi
+                    nvidia.com/gpu: 2
+                volumeMounts:
+                  - name: shm
+                    mountPath: /dev/shm
+            volumes:
+              - name: shm
+                emptyDir:
+                  medium: Memory
+                  sizeLimit: 8Gi
