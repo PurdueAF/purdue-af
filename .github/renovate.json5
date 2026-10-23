@@ -86,8 +86,6 @@
     rangeStrategy: 'update-lockfile',
     lockFileMaintenance: {
       enabled: true,
-      // One branch per group; groupName renders empty in a single-update title.
-      commitMessageExtra: '({{{packageFileDir}}})',
     },
   },
 
@@ -209,7 +207,8 @@
       automerge: true,
     },
     // Groups: one PR per artifact CI builds or validates, so a cycle rebuilds
-    // each image once. A dependency pinned in two artifacts splits by file.
+    // each image once. A dependency pinned in two artifacts splits by file; one
+    // merged by hand holds its artifact's PR for review.
     // Later rules override earlier ones; the top-level groupName catches the rest.
     {
       // Actions, pre-commit hooks and the test suite's own dependencies.
@@ -269,10 +268,14 @@
       groupName: 'integration-challenge',
     },
     {
-      // Merged by hand, outside af-image: pixi-global-sync installs with the
-      // released image's pixi, which cannot read a lock in a format a newer pixi writes.
+      // Renovate cannot put lock file maintenance on another group's branch.
+      matchUpdateTypes: ['lockFileMaintenance'],
+      groupName: 'uv-lockfiles',
+    },
+    {
+      // Merged by hand: pixi-global-sync installs with the released image's
+      // pixi, which cannot read a lock in a format a newer pixi writes.
       matchPackageNames: ['prefix-dev/pixi'],
-      groupName: 'pixi-cli',
       automerge: false,
     },
     {
@@ -340,7 +343,6 @@
       matchDatasources: ['docker'],
       matchPackageNames: ['docker.io/library/traefik'],
       allowedVersions: '/^2\\./',
-      groupName: 'dask-gateway-traefik',
       automerge: false,
     },
     {
@@ -348,7 +350,6 @@
       // version in every file, merged by hand.
       matchDatasources: ['docker'],
       matchPackageNames: ['docker.io/rayproject/ray'],
-      groupName: 'ray-image',
       automerge: false,
     },
     {
@@ -357,7 +358,6 @@
       matchDatasources: ['docker'],
       matchPackageNames: ['docker.io/nvidia/cuda'],
       allowedVersions: '/^12\\./',
-      groupName: 'af-image-base',
       automerge: false,
     },
     {
