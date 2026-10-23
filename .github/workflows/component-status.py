@@ -52,7 +52,7 @@ CI_IMAGES = [
     "agentic-interface",
     "af-pod-monitor",
     "af-node-monitor",
-    "self-repair",
+    "jfc",
     "supersonic-model-manager",
     "interlink-slurm-plugin",
     "interlink-kubernetes-plugin",

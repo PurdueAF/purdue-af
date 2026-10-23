@@ -26,7 +26,7 @@ import jfc_profiling
 import jfc_ray
 
 NAME = "jfc"
-IMAGE = "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/self-repair:latest"
+IMAGE = "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/jfc:latest"
 # The one directory of /work a task pod mounts (apps/jfc/podtemplate.yaml).
 ROOT = Path("/work/projects") / NAME
 

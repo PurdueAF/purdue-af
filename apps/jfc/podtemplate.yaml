@@ -13,7 +13,7 @@ template:
         operator: Equal
         value: cms-af
         effect: NoSchedule
-    # The image's `app` user (docker/self-repair/Dockerfile).
+    # The image's `app` user (docker/jfc/Dockerfile).
     securityContext:
       runAsNonRoot: true
       runAsUser: 1000

@@ -151,12 +151,6 @@ serverFiles:
         static_configs:
           - targets:
               - "pixi-global-sync:9099"
-      # honor_labels keeps the job label the workflow pushed.
-      - job_name: "self-repair"
-        honor_labels: true
-        static_configs:
-          - targets:
-              - "prometheus-prometheus-pushgateway:9091"
       - job_name: "jupyterhub"
         metrics_path: "/hub/metrics"
         scheme: https
@@ -941,19 +935,5 @@ kube-state-metrics:
   enabled: false
 prometheus-node-exporter:
   enabled: false
-# The self-repair workflow pushes per-tick metrics here; the self-repair scrape job reads them.
 prometheus-pushgateway:
-  enabled: true
-  nodeSelector:
-    cms-af-prod: "true"
-  tolerations:
-    - key: "hub.jupyter.org/dedicated"
-      operator: "Equal"
-      value: "cms-af"
-      effect: "NoSchedule"
-  resources:
-    requests:
-      cpu: 20m
-      memory: 32Mi
-    limits:
-      memory: 128Mi
+  enabled: false

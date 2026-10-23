@@ -110,6 +110,26 @@ def test_flux_lists_every_manifest_of_the_app():
     }
 
 
+def test_the_task_image_is_built_published_and_pulled_under_one_name():
+    inputs = (REPO / ".github/workflows/image-inputs.sh").read_text()
+    assert "\tjfc)" in inputs and "docker/jfc" in inputs
+    ci = yaml.safe_load((REPO / ".github/workflows/ci-images.yml").read_text())
+    matrix = {
+        m["name"]: m
+        for m in ci["jobs"]["build-aux-images"]["strategy"]["matrix"]["include"]
+    }
+    assert matrix["jfc"]["dockerfile"] == "docker/jfc/Dockerfile"
+    resolve = ci["jobs"]["resolve"]["steps"][-1]["run"]
+    assert " jfc " in resolve, "publish only moves :latest for names listed in resolve"
+    status = (REPO / ".github/workflows/component-status.py").read_text()
+    assert '"jfc",' in status
+    assert (REPO / "docker/jfc/uv.lock").is_file()
+    (job,) = docs(APP / "workspace.yaml")
+    (container,) = job["spec"]["template"]["spec"]["containers"]
+    assert jfc.IMAGE == container["image"]
+    assert jfc.IMAGE.endswith("/purdueaf/jfc:latest")
+
+
 def test_the_task_runs_in_the_pod_template_and_project_named_after_the_workflow():
     (template,) = docs(APP / "podtemplate.yaml")
     config = yaml.safe_load((WORKFLOW / "config.yaml").read_text())
