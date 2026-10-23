@@ -94,7 +94,7 @@ RUN sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashr
 # ------------------------------------------------------------
 FROM system AS stack
 
-ARG PIXI_VERSION="0.82.0" # read by ci-pixi-*.yml
+ARG PIXI_VERSION="0.83.0" # read by ci-pixi-*.yml
 
 ENV PIXI_HOME="/opt/pixi" \
     BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env"
@@ -125,9 +125,9 @@ RUN chmod +x /usr/local/bin/pixi && \
 
 # Coding-agent CLIs in their own prefix, out of reach of a pixi rebuild. jupyter-ai's
 # Claude/Codex personas appear only when the *-acp adapters are on PATH.
-ARG CLAUDE_CODE_VERSION="2.1.304"
-ARG CODEX_VERSION="0.163.0"
-ARG OPENCODE_VERSION="1.19.3"
+ARG CLAUDE_CODE_VERSION="2.1.309"
+ARG CODEX_VERSION="0.164.0"
+ARG OPENCODE_VERSION="1.19.4"
 ARG CLAUDE_AGENT_ACP_VERSION="0.94.0"
 ARG CODEX_ACP_VERSION="0.16.0"
 ENV NPM_GLOBAL="/opt/npm-global"
