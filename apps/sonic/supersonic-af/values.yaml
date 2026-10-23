@@ -7,7 +7,7 @@ scaleFromZero:
   readyTimeoutSeconds: 300
   holdMinReplicasSeconds: 300
 
-triton:
+inferenceServer:
   image: nvcr.io/nvidia/tritonserver:26.04-py3
   command: ["/bin/sh", "-c"]
   args:

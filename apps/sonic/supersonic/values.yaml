@@ -17,7 +17,7 @@ scaleFromZero:
   readyTimeoutSeconds: 300
   holdMinReplicasSeconds: 300
 
-triton:
+inferenceServer:
   # Geometric build: ParticleNet and UParT need torch-geometric ops the stock image lacks.
   image: fastml/triton-torchgeo:26.04-py3-geometric
   command: ["/bin/sh", "-c"]

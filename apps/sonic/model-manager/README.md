@@ -47,7 +47,7 @@ helm install model-manager ./chart -n cms -f values-supersonic-af.yaml --set aut
 ```
 
 `supersonicRelease` is the value worth setting: it derives the Triton pod selector
-(`app.kubernetes.io/component=triton,app.kubernetes.io/instance=<release>`) and the Prometheus
+(`app.kubernetes.io/component=inference-server,app.kubernetes.io/instance=<release>`) and the Prometheus
 matcher (`release="<release>"`). The latter must be overridden when a ServiceMonitor-based
 Prometheus scrapes Triton without adding a `release` label.
 
@@ -55,7 +55,7 @@ To let Triton serve what you upload, point it at the same claim — this is how
 [`apps/sonic/supersonic-af/values.yaml`](../supersonic-af/values.yaml) is wired:
 
 ```yaml
-triton:
+inferenceServer:
   modelRepository: { enabled: true, storageType: pvc, mountPath: /models, pvc: { claimName: supersonic-model-repository } }
   args:
     - |

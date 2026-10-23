@@ -377,16 +377,16 @@ serverFiles:
             expr: |-
               max by (release) (
                 label_replace(
-                  kube_deployment_spec_replicas{namespace="cms", deployment=~"supersonic.*-triton"},
-                  "release", "$1", "deployment", "(.*)-triton"
+                  kube_deployment_spec_replicas{namespace="cms", deployment=~"supersonic.*-inference-server"},
+                  "release", "$1", "deployment", "(.*)-inference-server"
                 )
               )
           - record: sonic:replicas_ready
             expr: |-
               max by (release) (
                 label_replace(
-                  kube_deployment_status_replicas_ready{namespace="cms", deployment=~"supersonic.*-triton"},
-                  "release", "$1", "deployment", "(.*)-triton"
+                  kube_deployment_status_replicas_ready{namespace="cms", deployment=~"supersonic.*-inference-server"},
+                  "release", "$1", "deployment", "(.*)-inference-server"
                 )
               )
           # Above zero means the run is measuring GPU supply, not the metric.
@@ -396,8 +396,8 @@ serverFiles:
             expr: |-
               max by (release) (
                 label_replace(
-                  changes(kube_deployment_spec_replicas{namespace="cms", deployment=~"supersonic.*-triton"}[10m]),
-                  "release", "$1", "deployment", "(.*)-triton"
+                  changes(kube_deployment_spec_replicas{namespace="cms", deployment=~"supersonic.*-inference-server"}[10m]),
+                  "release", "$1", "deployment", "(.*)-inference-server"
                 )
               )
           - record: sonic:throughput_inferences:rate30s
@@ -405,20 +405,20 @@ serverFiles:
           - record: sonic:throughput_requests:rate30s
             expr: |-
               sum by (release) (
-                rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="triton_grpc_service"}[30s])
+                rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="inference_server_grpc_service"}[30s])
               )
           - record: sonic:latency_envoy_mean_ms
             expr: |-
-              sum by (release) (rate(envoy_cluster_upstream_rq_time_sum{envoy_cluster_name="triton_grpc_service"}[30s]))
+              sum by (release) (rate(envoy_cluster_upstream_rq_time_sum{envoy_cluster_name="inference_server_grpc_service"}[30s]))
               / clamp_min(
-                  sum by (release) (rate(envoy_cluster_upstream_rq_time_count{envoy_cluster_name="triton_grpc_service"}[30s])),
+                  sum by (release) (rate(envoy_cluster_upstream_rq_time_count{envoy_cluster_name="inference_server_grpc_service"}[30s])),
                   1
                 )
           - record: sonic:latency_envoy_p95_ms
             expr: |-
               histogram_quantile(0.95,
                 sum by (release, le) (
-                  rate(envoy_cluster_upstream_rq_time_bucket{envoy_cluster_name="triton_grpc_service"}[30s])
+                  rate(envoy_cluster_upstream_rq_time_bucket{envoy_cluster_name="inference_server_grpc_service"}[30s])
                 )
               )
           - record: sonic:queue_fraction

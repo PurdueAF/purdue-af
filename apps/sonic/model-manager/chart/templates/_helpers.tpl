@@ -41,9 +41,9 @@ name when not set explicitly.
 {{- if .Values.triton.labelSelector -}}
   {{- .Values.triton.labelSelector -}}
 {{- else if .Values.supersonicRelease -}}
-  {{- printf "app.kubernetes.io/component=triton,app.kubernetes.io/instance=%s" .Values.supersonicRelease -}}
+  {{- printf "app.kubernetes.io/component=inference-server,app.kubernetes.io/instance=%s" .Values.supersonicRelease -}}
 {{- else -}}
-  {{- printf "app.kubernetes.io/component=triton" -}}
+  {{- printf "app.kubernetes.io/component=inference-server" -}}
 {{- end -}}
 {{- end -}}
 
