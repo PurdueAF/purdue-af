@@ -1,0 +1,16 @@
+# To be deployed to NRP Nautilus, not Geddes. Offloaded pods annotated
+# `interlink.io/remote-pvc: cvmfs` mount this claim instead of the AF's.
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cvmfs
+  namespace: interlink-cms
+spec:
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      # Ignored by the CVMFS CSI driver, but must be non-zero.
+      storage: 1
+  storageClassName: cvmfs

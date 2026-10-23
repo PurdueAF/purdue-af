@@ -69,15 +69,15 @@ plugin:
 
 virtualNode:
   image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:0.7.0-pre1
+  # The local scheduler's gate only; NRP places the real pod. One pod per GPU,
+  # each the default Ray Train worker of apps/ray-train/raycluster.yaml.
   resources:
-    CPUs: 256
-    memGiB: 1024
-    pods: 100
-    # The local scheduler's gate only; NRP places the real pod.
+    CPUs: 160
+    memGiB: 640
+    pods: 20
     accelerators:
       - resourceType: nvidia.com/gpu
-        model: a40
-        available: "4"
+        available: "20"
 
   disableCSR: true
 
