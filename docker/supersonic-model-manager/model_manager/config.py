@@ -59,7 +59,7 @@ class Settings:
     triton_namespace: str = field(default_factory=lambda: _str("TRITON_NAMESPACE"))
     triton_label_selector: str = field(
         default_factory=lambda: _str(
-            "TRITON_LABEL_SELECTOR", "app.kubernetes.io/component=triton"
+            "TRITON_LABEL_SELECTOR", "app.kubernetes.io/component=inference-server"
         )
     )
     triton_http_port: int = field(

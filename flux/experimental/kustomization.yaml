@@ -20,8 +20,8 @@ resources:
   - ../../apps/servicex/servicex-eos/helmrelease.yaml
   - ../../apps/servicex/servicex-eos/secrets.yaml
 
-  # Chart source for the SuperSONIC releases below, on SuperSONIC main.
-  - ../../apps/sonic/supersonic/gitrepo.yaml
+  # Chart source for the SuperSONIC releases below.
+  - ../../apps/sonic/supersonic/helmrepo.yaml
   # Default SuperSONIC: CMS Run 3 MiniAOD models off CVMFS.
   - ../../apps/sonic/supersonic/helmrelease.yaml
   # AF-facing SuperSONIC with a PVC model repository.

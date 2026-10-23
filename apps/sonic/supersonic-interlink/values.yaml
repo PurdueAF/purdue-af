@@ -10,7 +10,7 @@ scaleFromZero:
 
 serverLoadMetric: 'sum (rate(nv_inference_queue_duration_us{app=~"supersonic", release=~"supersonic-interlink", namespace=~"cms"}[30s])) / sum ((rate(nv_inference_exec_count{app=~"supersonic", release=~"supersonic-interlink", namespace=~"cms"}[30s]) * 1000))'
 
-triton:
+inferenceServer:
   # The tag must exist under /cvmfs/unpacked.cern.ch/nvcr.io/nvidia/, or the job fails at startup.
   image: /cvmfs/unpacked.cern.ch/nvcr.io/nvidia/tritonserver:24.11-py3
   command: ["/bin/sh", "-c"]

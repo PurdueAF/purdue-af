@@ -29,7 +29,7 @@ NOTE: prometheus.url is empty, so per-model metrics will be blank.
 To let Triton serve models from this PVC, mount the same claim in your
 SuperSONIC release and enable explicit model control:
 
-  triton:
+  inferenceServer:
     modelRepository:
       enabled: true
       storageType: pvc
