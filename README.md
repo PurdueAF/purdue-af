@@ -55,7 +55,7 @@ Whether each component on the cluster is running what is on `main`
 ![flyte][experimental-flyte]
 ![interlink-hammer][experimental-interlink-hammer]
 ![interlink-nrp][experimental-interlink-nrp]
-![jfc][experimental-jfc]
+![agentic-analysis][experimental-agentic-analysis]
 ![af-monitoring][experimental-monitoring-af-monitoring]
 ![alloy][experimental-monitoring-alloy]
 ![loki][experimental-monitoring-loki]
@@ -75,7 +75,7 @@ Whether each component on the cluster is running what is on `main`
 ![agentic-interface][image-agentic-interface]
 ![af-pod-monitor][image-af-pod-monitor]
 ![af-node-monitor][image-af-node-monitor]
-![jfc][image-jfc]
+![agentic-analysis][image-agentic-analysis]
 ![supersonic-model-manager][image-supersonic-model-manager]
 ![interlink-slurm-plugin][image-interlink-slurm-plugin]
 ![interlink-kubernetes-plugin][image-interlink-kubernetes-plugin]
@@ -113,7 +113,7 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-flyte]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-flyte.json
 [experimental-interlink-hammer]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-hammer.json
 [experimental-interlink-nrp]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-interlink-nrp.json
-[experimental-jfc]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-jfc.json
+[experimental-agentic-analysis]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-agentic-analysis.json
 [experimental-monitoring-af-monitoring]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-af-monitoring.json
 [experimental-monitoring-alloy]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-alloy.json
 [experimental-monitoring-loki]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-monitoring-loki.json
@@ -130,7 +130,7 @@ How a change reaches the cluster, version rules and rollback:
 [image-agentic-interface]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-agentic-interface.json
 [image-af-pod-monitor]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-af-pod-monitor.json
 [image-af-node-monitor]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-af-node-monitor.json
-[image-jfc]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-jfc.json
+[image-agentic-analysis]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-agentic-analysis.json
 [image-supersonic-model-manager]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-supersonic-model-manager.json
 [image-interlink-slurm-plugin]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-interlink-slurm-plugin.json
 [image-interlink-kubernetes-plugin]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-interlink-kubernetes-plugin.json

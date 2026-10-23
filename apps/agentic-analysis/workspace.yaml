@@ -1,9 +1,10 @@
-# The directory the task pods mount. A subPath that kubelet creates is root's,
-# and CephFS ignores fsGroup: create it for the task image's user.
+# The task pods' directory on /work and the root of the agentic-analysis
+# volume. A subPath that kubelet creates and a new CephFS volume's root are
+# root's, and CephFS ignores fsGroup: hand both to the task image's user.
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: jfc-workspace
+  name: agentic-analysis-workspace
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled
 spec:
@@ -20,18 +21,25 @@ spec:
           effect: NoSchedule
       containers:
         - name: mkdir
-          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/jfc:latest
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-analysis:latest
           command:
             - sh
             - -c
-            - mkdir -p /projects/jfc && chown 1000:1000 /projects/jfc
+            - >-
+              mkdir -p /projects/agentic-analysis &&
+              chown 1000:1000 /projects/agentic-analysis /volume
           securityContext:
             runAsUser: 0
           volumeMounts:
             - name: work
               mountPath: /projects
               subPath: projects
+            - name: volume
+              mountPath: /volume
       volumes:
         - name: work
           persistentVolumeClaim:
             claimName: af-shared-storage
+        - name: volume
+          persistentVolumeClaim:
+            claimName: agentic-analysis

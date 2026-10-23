@@ -42,9 +42,10 @@ resources:
   - ../../apps/flyte/podtemplate.yaml
   - ../../apps/flyte/secret-console-auth.yaml
 
-  # Runs JFC analyses on demand (workflows/jfc).
-  - ../../apps/jfc/podtemplate.yaml
-  - ../../apps/jfc/workspace.yaml
+  # Runs analyses with the JFC methodology on demand (workflows/agentic-analysis).
+  - ../../apps/agentic-analysis/podtemplate.yaml
+  - ../../apps/agentic-analysis/volume.yaml
+  - ../../apps/agentic-analysis/workspace.yaml
 
   - ../../apps/ray/helmrepo.yaml
   - ../../apps/ray/operator/helmrelease.yaml

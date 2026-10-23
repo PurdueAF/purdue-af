@@ -1,4 +1,4 @@
-# Task image of workflows/jfc: the Flyte 2 runtime, git, pixi and Claude Code.
+# Task image of workflows/agentic-analysis: the Flyte 2 runtime, git, pixi and Claude Code.
 # The workflow code itself is not baked in — Flyte ships it as a code bundle
 # from the launcher.
 FROM python:3.12-slim
@@ -34,7 +34,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
-COPY docker/jfc/pyproject.toml docker/jfc/uv.lock ./
+COPY docker/agentic-analysis/pyproject.toml docker/agentic-analysis/uv.lock ./
 RUN uv sync --frozen --no-dev
 ENV PATH="/app/.venv/bin:$PATH"
 

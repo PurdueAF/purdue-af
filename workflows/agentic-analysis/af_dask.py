@@ -24,8 +24,8 @@ PASSED = (
     "PATH",
     "PYROSCOPE_SERVER",
     "PYROSCOPE_APP",
-    "JFC_ANALYSIS",
-    "JFC_WORKSPACE",
+    "AF_ANALYSIS",
+    "AF_WORKSPACE",
     "X509_CERT_DIR",
 )
 # Seconds between handing the workers the mounted proxy, which af-x509-secrets renews.
@@ -35,13 +35,13 @@ RENEW = 1800
 class Proxy(WorkerPlugin):
     """Puts a grid proxy into a file of the worker's own, for XRootD."""
 
-    name = "jfc-proxy"
+    name = "af-proxy"
 
     def __init__(self, data: bytes) -> None:
         self.data = data
 
     def setup(self, worker: Any) -> None:
-        path = Path(tempfile.gettempdir()) / "jfc-x509up"
+        path = Path(tempfile.gettempdir()) / "af-x509up"
         draft = path.with_name(f"{path.name}.new")
         with open(
             os.open(draft, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb"
@@ -64,7 +64,7 @@ def client(workers: int = 50, cores: float = 1, memory: float = 4) -> Any:
     # A pixi environment is <project>/.pixi/envs/<name>.
     project = str(prefix.parents[2])
     # The gateway's one cluster per user does not hold for requests made at once.
-    with open(prefix / "jfc_dask.lock", "w") as lock:
+    with open(prefix / "af_dask.lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         cluster = _running(gateway, project, cores, memory) or gateway.new_cluster(
             pixi_project=project,
@@ -113,7 +113,7 @@ def _hand_proxy(dask: Any, proxy: Path) -> None:
         if proxy.is_file():
             dask.register_plugin(Proxy(proxy.read_bytes()), name=Proxy.name)
         else:
-            print(f"jfc_dask: no proxy at {proxy} to hand the workers", file=sys.stderr)
+            print(f"af_dask: no proxy at {proxy} to hand the workers", file=sys.stderr)
 
     def renew() -> None:
         while dask.status not in ("closing", "closed"):
@@ -122,7 +122,7 @@ def _hand_proxy(dask: Any, proxy: Path) -> None:
                 hand()
             except Exception as failed:
                 print(
-                    f"jfc_dask: the workers' proxy is not renewed: {failed}",
+                    f"af_dask: the workers' proxy is not renewed: {failed}",
                     file=sys.stderr,
                 )
 

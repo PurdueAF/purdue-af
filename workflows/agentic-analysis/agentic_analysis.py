@@ -1,5 +1,5 @@
-"""Runs JFC analyses on Flyte 2: Claude Code, headless, takes an analysis from
-its physics prompt to the analysis note."""
+"""Runs analyses on Flyte 2 with the JFC methodology: Claude Code, headless,
+takes an analysis from its physics prompt to the analysis note."""
 
 import fcntl
 import json
@@ -19,25 +19,27 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+import af_dask
+import af_profiling
+import af_ray
 import flyte
 import flyte.errors
-import jfc_dask
-import jfc_profiling
-import jfc_ray
 
-NAME = "jfc"
-IMAGE = "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/jfc:latest"
-# The one directory of /work a task pod mounts (apps/jfc/podtemplate.yaml).
+NAME = "agentic-analysis"
+IMAGE = (
+    "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-analysis:latest"
+)
+# The one directory of /work a task pod mounts (apps/agentic-analysis/podtemplate.yaml).
 ROOT = Path("/work/projects") / NAME
 
-# The specification every analysis follows, at a fixed commit.
+# The JFC methodology every analysis follows, at a fixed commit.
 JFC = ("https://github.com/jfc-mit/jfc.git", "9eecb0e0b4c95c362053ad6b121760b47379bc54")
 
 # The JFC specification asks for Opus in every role.
 MODEL = "opus"
 PERMISSION_MODE = "auto"
 CREDENTIALS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
-# Whose Dask and Ray clusters the analysis gets (jfc_dask, jfc_ray).
+# Whose Dask and Ray clusters the analysis gets (af_dask, af_ray).
 GATEWAY_TOKEN = "JUPYTERHUB_API_TOKEN"
 # pyroscope-io's wheels bound Python; only conda-forge builds xrootd's bindings.
 CONDA = ("python<3.15", "xrootd")
@@ -96,7 +98,7 @@ ProcessPoolExecutor and SLURM wherever the methodology names them. Looking at \
 a file's branches or a few of its entries does not need it.
 
 ```python
-from jfc_dask import client
+from af_dask import client
 
 dask = client(workers=50)
 ```
@@ -129,7 +131,7 @@ a module of the analysis's own with `dask.upload_file(path)`.
 A model that trains on GPUs trains on the facility's Ray, not here:
 
 ```python
-from jfc_ray import client
+from af_ray import client
 
 jobs = client(max_workers=4)
 job = jobs.submit_job(entrypoint="python /absolute/path/to/train.py")
@@ -217,7 +219,7 @@ class Analysis:
 env = flyte.TaskEnvironment(
     name=NAME,
     image=IMAGE,
-    # apps/jfc/podtemplate.yaml
+    # apps/agentic-analysis/podtemplate.yaml
     pod_template=NAME,
     resources=flyte.Resources(cpu=CORES, memory="16Gi"),
 )
@@ -311,8 +313,8 @@ def _prepare(home: Path, analysis: Analysis) -> Path:
 
 
 def _install(work: Path) -> None:
-    """Puts jfc_profiling, jfc_dask and jfc_ray into the analysis's environment,
-    and has every Python process of it start jfc_profiling, by a .pth file."""
+    """Puts af_profiling, af_dask and af_ray into the analysis's environment,
+    and has every Python process of it start af_profiling, by a .pth file."""
     # The environment's own interpreter: pixi would re-solve the agent's manifest.
     where = subprocess.run(
         [
@@ -325,10 +327,10 @@ def _install(work: Path) -> None:
         check=True,
     )
     packages = Path(where.stdout.strip().splitlines()[-1])
-    for module in (jfc_profiling, jfc_dask, jfc_ray):
+    for module in (af_profiling, af_dask, af_ray):
         shutil.copy(str(module.__file__), packages / f"{module.__name__}.py")
-    (packages / "jfc_profiling.pth").write_text(
-        "import jfc_profiling; jfc_profiling.start()\n"
+    (packages / "af_profiling.pth").write_text(
+        "import af_profiling; af_profiling.start()\n"
     )
 
 
@@ -418,8 +420,8 @@ def _claude(
             "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1",
             "BASH_MAX_TIMEOUT_MS": str(COMMAND_HOURS * 3600 * 1000),
             # Tags of the profiles the analysis's scripts send.
-            "JFC_ANALYSIS": work.name,
-            "JFC_WORKSPACE": work.parents[2].name,
+            "AF_ANALYSIS": work.name,
+            "AF_WORKSPACE": work.parents[2].name,
         },
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
@@ -494,11 +496,11 @@ def advance(analysis: Analysis, workspace: str, reply: str) -> str:
     Returns what it said."""
     if not any(os.environ.get(name) for name in CREDENTIALS):
         raise flyte.errors.NonRecoverableError(
-            f"none of {', '.join(CREDENTIALS)} is set: see apps/jfc/README.md"
+            f"none of {', '.join(CREDENTIALS)} is set: see apps/agentic-analysis/README.md"
         )
     if not os.environ.get(GATEWAY_TOKEN):
         raise flyte.errors.NonRecoverableError(
-            f"{GATEWAY_TOKEN} is not set: see apps/jfc/README.md"
+            f"{GATEWAY_TOKEN} is not set: see apps/agentic-analysis/README.md"
         )
     ctx = flyte.ctx()
     home = ROOT / workspace
@@ -626,7 +628,7 @@ def launch(directory: str, workspace: str = "", *reply: str) -> None:
     flyte.init_from_config("config.yaml", root_dir=Path(__file__).parent)
     if NAME not in {project.pb2.id for project in Project.listall()}:
         Project.create(id=NAME, name=NAME)
-    name = f"{NAME}-{analysis.name}-{datetime.now(timezone.utc):%m%d-%H%M%S}"
+    name = f"{analysis.name}-{datetime.now(timezone.utc):%m%d-%H%M%S}"
     run = flyte.with_runcontext(name=name).run(
         advance, analysis=analysis, workspace=workspace or name, reply=" ".join(reply)
     )

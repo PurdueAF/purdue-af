@@ -1,8 +1,8 @@
-# Pod spec of every jfc task; replaces the flyte-task default.
+# Pod spec of every agentic-analysis task; replaces the flyte-task default.
 apiVersion: v1
 kind: PodTemplate
 metadata:
-  name: jfc
+  name: agentic-analysis
 template:
   spec:
     automountServiceAccountToken: false
@@ -13,7 +13,7 @@ template:
         operator: Equal
         value: cms-af
         effect: NoSchedule
-    # The image's `app` user (docker/jfc/Dockerfile).
+    # The image's `app` user (docker/agentic-analysis/Dockerfile).
     securityContext:
       runAsNonRoot: true
       runAsUser: 1000
@@ -21,7 +21,7 @@ template:
     containers:
       - name: default
         image: overridden-by-flyte
-        # The Anthropic credential: apps/jfc/README.md#secrets.
+        # The Anthropic credential: apps/agentic-analysis/README.md#secrets.
         envFrom:
           - secretRef:
               name: jfc-claude
@@ -31,7 +31,7 @@ template:
           - name: PYROSCOPE_SERVER
             value: http://pyroscope.cms.svc.cluster.local:4040
           - name: PYROSCOPE_APP
-            value: jfc
+            value: agentic-analysis
           # The sessions' Dask Gateway, with jfc-claude's JUPYTERHUB_API_TOKEN.
           - name: DASK_GATEWAY__ADDRESS
             value: http://dask-gateway.geddes.rcac.purdue.edu
@@ -50,8 +50,8 @@ template:
         volumeMounts:
           # Of /work, the agent sees this directory only.
           - name: work
-            mountPath: /work/projects/jfc
-            subPath: projects/jfc
+            mountPath: /work/projects/agentic-analysis
+            subPath: projects/agentic-analysis
           - name: cvmfs
             mountPath: /cvmfs
             mountPropagation: HostToContainer

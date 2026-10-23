@@ -1,5 +1,5 @@
-"""workflows/jfc against a stub `flyte` (the SDK is not a test dependency), its
-wiring to apps/jfc, and the analyses beside it. Git, pixi, the download and the
+"""workflows/agentic-analysis against a stub `flyte` (the SDK is not a test dependency), its
+wiring to apps/agentic-analysis, and the analyses beside it. Git, pixi, the download and the
 agent are replaced per test."""
 
 import fcntl
@@ -18,8 +18,8 @@ import pytest
 import yaml
 from common import REPO, load_script
 
-APP = REPO / "apps" / "jfc"
-WORKFLOW = REPO / "workflows" / "jfc"
+APP = REPO / "apps" / "agentic-analysis"
+WORKFLOW = REPO / "workflows" / "agentic-analysis"
 EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
 
 
@@ -63,10 +63,12 @@ def _load():
     stubs = {"flyte": flyte, "flyte.errors": flyte.errors, "flyte.remote": flyte.remote}
     saved = {name: sys.modules.get(name) for name in stubs}
     sys.modules.update(stubs)
-    # The launcher and the task find jfc_profiling beside jfc.py.
+    # The launcher and the task find af_profiling beside agentic_analysis.py.
     sys.path.insert(0, str(WORKFLOW))
     try:
-        return load_script(WORKFLOW / "jfc.py", "jfc_flows"), stubs
+        return load_script(
+            WORKFLOW / "agentic_analysis.py", "agentic_analysis_flows"
+        ), stubs
     finally:
         for name, module in saved.items():
             if module is None:
@@ -75,12 +77,12 @@ def _load():
                 sys.modules[name] = module
 
 
-jfc, STUBS = _load()
-profiling = jfc.jfc_profiling
-clusters = jfc.jfc_dask
-gpus = jfc.jfc_ray
+runner, STUBS = _load()
+profiling = runner.af_profiling
+clusters = runner.af_dask
+gpus = runner.af_ray
 
-ANALYSIS = jfc.Analysis(
+ANALYSIS = runner.Analysis(
     name="zz",
     kind="search",
     repo="https://example.org/zz.git",
@@ -92,7 +94,7 @@ ANALYSIS = jfc.Analysis(
 
 @pytest.fixture
 def root(tmp_path, monkeypatch):
-    monkeypatch.setattr(jfc, "ROOT", tmp_path)
+    monkeypatch.setattr(runner, "ROOT", tmp_path)
     return tmp_path
 
 
@@ -105,37 +107,41 @@ def docs(path):
 
 def test_flux_lists_every_manifest_of_the_app():
     resources = yaml.safe_load(EXPERIMENTAL.read_text())["resources"]
-    assert {r for r in resources if "/apps/jfc/" in r} == {
-        f"../../apps/jfc/{path.name}" for path in APP.glob("*.yaml")
+    assert {r for r in resources if "/apps/agentic-analysis/" in r} == {
+        f"../../apps/agentic-analysis/{path.name}" for path in APP.glob("*.yaml")
     }
 
 
 def test_the_task_image_is_built_published_and_pulled_under_one_name():
     inputs = (REPO / ".github/workflows/image-inputs.sh").read_text()
-    assert "\tjfc)" in inputs and "docker/jfc" in inputs
+    assert "\tagentic-analysis)" in inputs and "docker/agentic-analysis" in inputs
     ci = yaml.safe_load((REPO / ".github/workflows/ci-images.yml").read_text())
     matrix = {
         m["name"]: m
         for m in ci["jobs"]["build-aux-images"]["strategy"]["matrix"]["include"]
     }
-    assert matrix["jfc"]["dockerfile"] == "docker/jfc/Dockerfile"
+    assert (
+        matrix["agentic-analysis"]["dockerfile"] == "docker/agentic-analysis/Dockerfile"
+    )
     resolve = ci["jobs"]["resolve"]["steps"][-1]["run"]
-    assert " jfc " in resolve, "publish only moves :latest for names listed in resolve"
+    assert " agentic-analysis " in resolve, (
+        "publish only moves :latest for names listed in resolve"
+    )
     status = (REPO / ".github/workflows/component-status.py").read_text()
-    assert '"jfc",' in status
-    assert (REPO / "docker/jfc/uv.lock").is_file()
+    assert '"agentic-analysis",' in status
+    assert (REPO / "docker/agentic-analysis/uv.lock").is_file()
     (job,) = docs(APP / "workspace.yaml")
     (container,) = job["spec"]["template"]["spec"]["containers"]
-    assert jfc.IMAGE == container["image"]
-    assert jfc.IMAGE.endswith("/purdueaf/jfc:latest")
+    assert runner.IMAGE == container["image"]
+    assert runner.IMAGE.endswith("/purdueaf/agentic-analysis:latest")
 
 
 def test_the_task_runs_in_the_pod_template_and_project_named_after_the_workflow():
     (template,) = docs(APP / "podtemplate.yaml")
     config = yaml.safe_load((WORKFLOW / "config.yaml").read_text())
     flyte_values = yaml.safe_load((REPO / "apps/flyte/values.yaml").read_text())
-    assert jfc.env.options["pod_template"] == template["metadata"]["name"]
-    assert config["task"]["project"] == jfc.NAME
+    assert runner.env.options["pod_template"] == template["metadata"]["name"]
+    assert config["task"]["project"] == runner.NAME
     assert f"{flyte_values['fullnameOverride']}-http." in config["admin"]["endpoint"]
 
 
@@ -145,16 +151,36 @@ def test_task_pods_mount_only_the_directory_the_workspace_job_creates_for_them()
     pod = template["template"]["spec"]
     mounts = pod["containers"][0]["volumeMounts"]
     (mount,) = [m for m in mounts if m["mountPath"].startswith("/work")]
-    assert mount["mountPath"] == str(jfc.ROOT) == f"/work/{mount['subPath']}"
+    assert mount["mountPath"] == str(runner.ROOT) == f"/work/{mount['subPath']}"
 
     container = job["spec"]["template"]["spec"]["containers"][0]
-    (made,) = container["volumeMounts"]
-    directory = f"{made['mountPath']}/{jfc.NAME}"
+    made = {m["name"]: m for m in container["volumeMounts"]}
+    directory = f"{made['work']['mountPath']}/{runner.NAME}"
     owner = "{runAsUser}:{runAsGroup}".format(**pod["securityContext"])
-    assert f"{made['subPath']}/{jfc.NAME}" == mount["subPath"]
+    assert f"{made['work']['subPath']}/{runner.NAME}" == mount["subPath"]
     assert container["command"][-1] == (
-        f"mkdir -p {directory} && chown {owner} {directory}"
+        f"mkdir -p {directory} && "
+        f"chown {owner} {directory} {made['volume']['mountPath']}"
     )
+
+
+def test_the_workspace_job_and_the_browser_open_the_volume_the_app_declares():
+    (volume,) = docs(APP / "volume.yaml")
+    (job,) = docs(APP / "workspace.yaml")
+    name = volume["metadata"]["name"]
+    assert volume["metadata"]["annotations"]["kustomize.toolkit.fluxcd.io/prune"] == (
+        "disabled"
+    )
+    assert volume["spec"]["accessModes"] == ["ReadWriteMany"]
+    claims = {
+        v["name"]: v["persistentVolumeClaim"]["claimName"]
+        for v in job["spec"]["template"]["spec"]["volumes"]
+    }
+    assert claims["volume"] == name
+    browse = (WORKFLOW / "browse.sh").read_text()
+    assert f"image={runner.IMAGE}\n" in browse
+    assert f'"claimName": "{name}", "readOnly": true' in browse
+    assert '"mountPath": "$mount", "readOnly": true' in browse
 
 
 def _found(document, key):
@@ -176,7 +202,7 @@ def test_task_pods_send_profiles_where_the_sessions_do_as_the_workflow():
     env = {variable["name"]: variable["value"] for variable in container["env"]}
     hub = yaml.safe_load((REPO / "apps/jupyterhub/jupyterhub/values.yaml").read_text())
     assert env["PYROSCOPE_SERVER"] == _found(hub, "PYROSCOPE_SERVER")
-    assert env["PYROSCOPE_APP"] == jfc.NAME
+    assert env["PYROSCOPE_APP"] == runner.NAME
 
 
 def test_task_pods_reach_the_sessions_gateway_as_the_sessions_do():
@@ -239,13 +265,13 @@ def launched(tmp_path, monkeypatch):
 
 
 def test_every_analysis_directory_launches_a_run_on_inputs_it_pins(launched):
-    described = sorted((REPO / "workflows").glob("jfc-*/analysis.toml"))
+    described = sorted((WORKFLOW / "analyses").glob("*/analysis.toml"))
     assert described
     for path in described:
-        jfc.launch(str(path.parent))
+        runner.launch(str(path.parent))
         run = Launcher.runs[-1]
         analysis = run["analysis"]
-        assert path.parent.name == f"jfc-{analysis.name}"
+        assert path.parent.name == analysis.name
         assert analysis.kind in ("measurement", "search")
         if analysis.repo:
             assert re.fullmatch(r"[0-9a-f]{40}", analysis.ref)
@@ -271,7 +297,7 @@ def test_an_analysis_without_a_repo_sends_its_prompt_and_files(launched):
     (directory / "README.md").write_text("not sent")
     (directory / "notes" / ".DS_Store").write_bytes(b"\x00\x87")
 
-    jfc.launch(launched)
+    runner.launch(launched)
 
     (run,) = Launcher.runs
     assert run["analysis"].sources == {
@@ -289,31 +315,31 @@ def test_an_analysis_naming_a_file_it_lacks_does_not_launch(launched):
     (directory / "prompt.md").write_text("search for ZZ")
 
     with pytest.raises(FileNotFoundError, match="datasets.yaml"):
-        jfc.launch(launched)
+        runner.launch(launched)
     assert Launcher.runs == []
 
 
 def test_launch_starts_a_run_named_after_the_analysis_in_a_workspace_of_its_own(
     launched,
 ):
-    jfc.launch(launched)
-    jfc.launch(launched)
+    runner.launch(launched)
+    runner.launch(launched)
 
     first, _ = Launcher.runs
-    assert first["task"] is jfc.advance
-    assert first["analysis"] == jfc.Analysis(
+    assert first["task"] is runner.advance
+    assert first["analysis"] == runner.Analysis(
         "zz", "search", "https://example.org/zz.git", "c0ffee"
     )
-    assert first["name"].startswith("jfc-zz-") and first["workspace"] == first["name"]
+    assert first["name"].startswith("zz-") and first["workspace"] == first["name"]
     assert first["reply"] == ""
-    assert Launcher.projects == [jfc.NAME]
+    assert Launcher.projects == [runner.NAME]
 
 
 def test_launch_carries_a_reply_whole_to_the_workspace_it_names(launched):
-    jfc.launch(launched, "jfc-zz-1013-120000", "ITERATE:", "redo the fit")
+    runner.launch(launched, "zz-1013-120000", "ITERATE:", "redo the fit")
 
     (run,) = Launcher.runs
-    assert run["workspace"] == "jfc-zz-1013-120000"
+    assert run["workspace"] == "zz-1013-120000"
     assert run["reply"] == "ITERATE: redo the fit"
 
 
@@ -339,10 +365,12 @@ def _fake_tools(monkeypatch, data):
         if "src/scaffold_analysis.py" in command:
             (cwd / command[2]).mkdir(parents=True)
 
-    monkeypatch.setattr(jfc, "_checkout", checkout)
-    monkeypatch.setattr(jfc, "_run", run)
-    monkeypatch.setattr(jfc, "_data", lambda analysis: data)
-    monkeypatch.setattr(jfc, "_install", lambda work: calls.append(("install", work)))
+    monkeypatch.setattr(runner, "_checkout", checkout)
+    monkeypatch.setattr(runner, "_run", run)
+    monkeypatch.setattr(runner, "_data", lambda analysis: data)
+    monkeypatch.setattr(
+        runner, "_install", lambda work: calls.append(("install", work))
+    )
     return calls
 
 
@@ -351,10 +379,10 @@ def test_prepare_stages_the_analysis_into_its_scaffold(root, monkeypatch):
     data.mkdir()
     calls = _fake_tools(monkeypatch, data)
 
-    work = jfc._prepare(root / "run", ANALYSIS)
+    work = runner._prepare(root / "run", ANALYSIS)
 
     assert work == root / "run/jfc/analyses/zz"
-    assert ("checkout", "jfc", *jfc.JFC) in calls
+    assert ("checkout", "jfc", *runner.JFC) in calls
     assert ("checkout", "source", ANALYSIS.repo, ANALYSIS.ref) in calls
     assert ("src/scaffold_analysis.py", "analyses/zz", "--type", "search") in calls
     assert (work / "data").resolve() == data.resolve()
@@ -362,15 +390,15 @@ def test_prepare_stages_the_analysis_into_its_scaffold(root, monkeypatch):
     assert (work / "docs/paper.pdf").is_file()
     assert (work / "ntuplize.py").is_file()
     assert calls[-3:] == [
-        ("pixi", "add", "--no-install", *jfc.CONDA),
-        ("pixi", "add", "--pypi", *jfc.PACKAGES),
+        ("pixi", "add", "--no-install", *runner.CONDA),
+        ("pixi", "add", "--pypi", *runner.PACKAGES),
         ("install", work),
     ]
 
 
 def test_prepare_stages_an_analysis_that_brings_its_own_files(root, monkeypatch):
     calls = _fake_tools(monkeypatch, root)
-    local = jfc.Analysis(
+    local = runner.Analysis(
         "zz",
         "search",
         files=["datasets.yaml", "notes"],
@@ -381,7 +409,7 @@ def test_prepare_stages_an_analysis_that_brings_its_own_files(root, monkeypatch)
         },
     )
 
-    work = jfc._prepare(root / "run", local)
+    work = runner._prepare(root / "run", local)
 
     assert [call for call in calls if call[:2] == ("checkout", "source")] == []
     assert (work / "prompt.md").read_text() == "search for ZZ"
@@ -393,7 +421,7 @@ def test_prepare_stages_an_analysis_that_brings_its_own_files(root, monkeypatch)
 def test_prepare_gives_the_workers_a_directory_they_can_write(root, monkeypatch):
     _fake_tools(monkeypatch, root)
 
-    jfc._prepare(root / "run", ANALYSIS)
+    runner._prepare(root / "run", ANALYSIS)
 
     assert (root / "run/shared").stat().st_mode & 0o7777 == 0o1777
 
@@ -416,23 +444,23 @@ def test_the_environment_gets_the_helpers_and_every_python_starts_the_profiler(
         "    pass\n"
     )
 
-    jfc._install(tmp_path)
+    runner._install(tmp_path)
     for module in (profiling, clusters, gpus):
         installed = packages / f"{module.__name__}.py"
         assert installed.read_text() == open(module.__file__).read()
     env = {
         **os.environ,
         "PYROSCOPE_SERVER": "http://pyroscope:4040",
-        "PYROSCOPE_APP": "jfc",
-        "JFC_ANALYSIS": "zz",
-        "JFC_WORKSPACE": "ws",
+        "PYROSCOPE_APP": "agentic-analysis",
+        "AF_ANALYSIS": "zz",
+        "AF_WORKSPACE": "ws",
         "SEEN": str(seen),
     }
     load = f"import site; site.addsitedir({str(packages)!r})"
     subprocess.run([sys.executable, "-c", load], env=env, check=True)
 
     options = json.loads(seen.read_text())
-    assert options["application_name"] == "jfc"
+    assert options["application_name"] == "agentic-analysis"
     assert options["server_address"] == "http://pyroscope:4040"
     assert options["tags"] == {"analysis": "zz", "workspace": "ws", "script": "-c"}
 
@@ -510,17 +538,17 @@ def test_a_turn_goes_on_when_the_helpers_cannot_be_installed(root, monkeypatch):
     def broken(work):
         raise subprocess.CalledProcessError(1, "python")
 
-    monkeypatch.setattr(jfc, "_install", broken)
+    monkeypatch.setattr(runner, "_install", broken)
 
-    assert jfc._prepare(root / "run", ANALYSIS) == root / "run/jfc/analyses/zz"
+    assert runner._prepare(root / "run", ANALYSIS) == root / "run/jfc/analyses/zz"
 
 
 def test_prepare_puts_the_scope_of_an_analysis_after_its_prompt(root, monkeypatch):
     _fake_tools(monkeypatch, root)
-    narrowed = jfc.Analysis(**{**vars(ANALYSIS), "scope": "Two samples only."})
+    narrowed = runner.Analysis(**{**vars(ANALYSIS), "scope": "Two samples only."})
 
-    work = jfc._prepare(root / "run", narrowed)
-    jfc._prepare(root / "run", narrowed)
+    work = runner._prepare(root / "run", narrowed)
+    runner._prepare(root / "run", narrowed)
 
     assert (work / "prompt.md").read_text() == "search for ZZ\n\nTwo samples only."
 
@@ -529,9 +557,9 @@ def test_prepare_stages_only_the_prompt_of_an_analysis_that_names_nothing_else(
     root, monkeypatch
 ):
     _fake_tools(monkeypatch, root)
-    bare = jfc.Analysis("zz", "search", ANALYSIS.repo, ANALYSIS.ref)
+    bare = runner.Analysis("zz", "search", ANALYSIS.repo, ANALYSIS.ref)
 
-    work = jfc._prepare(root / "run", bare)
+    work = runner._prepare(root / "run", bare)
 
     assert sorted(path.name for path in work.iterdir()) == ["prompt.md"]
 
@@ -540,13 +568,13 @@ def test_prepare_leaves_a_staged_workspace_to_the_agent_but_its_helpers(
     root, monkeypatch
 ):
     calls = _fake_tools(monkeypatch, root)
-    work = jfc._prepare(root / "run", ANALYSIS)
+    work = runner._prepare(root / "run", ANALYSIS)
     (work / "prompt.md").unlink()
     (work / "experiment_log.md").write_text("the agent's work")
     (root / "run/shared").rmdir()
     calls.clear()
 
-    assert jfc._prepare(root / "run", ANALYSIS) == work
+    assert runner._prepare(root / "run", ANALYSIS) == work
 
     # The helpers of each turn's rules reach a workspace staged before them.
     assert calls == [("install", work)]
@@ -556,28 +584,28 @@ def test_prepare_leaves_a_staged_workspace_to_the_agent_but_its_helpers(
 
 def test_prepare_redoes_a_setup_that_died_before_its_last_step(root, monkeypatch):
     calls = _fake_tools(monkeypatch, root)
-    run = jfc._run
+    run = runner._run
 
     def dies_installing(*command, cwd):
         run(*command, cwd=cwd)
         if command[0] == "pixi":
             raise OSError("killed")
 
-    monkeypatch.setattr(jfc, "_run", dies_installing)
+    monkeypatch.setattr(runner, "_run", dies_installing)
     with pytest.raises(OSError):
-        jfc._prepare(root / "run", ANALYSIS)
-    monkeypatch.setattr(jfc, "_run", run)
+        runner._prepare(root / "run", ANALYSIS)
+    monkeypatch.setattr(runner, "_run", run)
     calls.clear()
 
-    work = jfc._prepare(root / "run", ANALYSIS)
+    work = runner._prepare(root / "run", ANALYSIS)
 
     assert [call[:2] for call in calls[:2]] == [
         ("checkout", "jfc"),
         ("checkout", "source"),
     ]
     assert calls[-3:] == [
-        ("pixi", "add", "--no-install", *jfc.CONDA),
-        ("pixi", "add", "--pypi", *jfc.PACKAGES),
+        ("pixi", "add", "--no-install", *runner.CONDA),
+        ("pixi", "add", "--pypi", *runner.PACKAGES),
         ("install", work),
     ]
 
@@ -595,19 +623,19 @@ def test_data_is_fetched_once_per_url(root, tmp_path_factory, monkeypatch):
         dest.write_bytes(source.read_bytes())
         return dest, None
 
-    monkeypatch.setattr(jfc.urllib.request, "urlretrieve", urlretrieve)
+    monkeypatch.setattr(runner.urllib.request, "urlretrieve", urlretrieve)
 
-    data = jfc._data(ANALYSIS)
-    assert jfc._data(ANALYSIS) == data and data.parent == root / "data"
+    data = runner._data(ANALYSIS)
+    assert runner._data(ANALYSIS) == data and data.parent == root / "data"
     assert (data / "ZZTo4L.root").read_bytes() == b"events"
     assert fetched == [ANALYSIS.data]
 
-    moved = jfc.Analysis(
+    moved = runner.Analysis(
         "zz", "search", ANALYSIS.repo, ANALYSIS.ref, data="https://example.org/v2.tgz"
     )
-    assert jfc._data(moved) != data
+    assert runner._data(moved) != data
     assert sorted(path.name for path in (root / "data").iterdir()) == sorted(
-        [data.name, jfc._data(moved).name]
+        [data.name, runner._data(moved).name]
     )
 
 
@@ -660,7 +688,7 @@ def gateway(tmp_path, monkeypatch):
             return Cluster(name)
 
         def new_cluster(self, **options):
-            with open(prefix / "jfc_dask.lock") as other:
+            with open(prefix / "af_dask.lock") as other:
                 try:
                     fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except BlockingIOError:
@@ -679,8 +707,8 @@ def gateway(tmp_path, monkeypatch):
 def test_a_script_starts_the_analysis_cluster_on_its_environment(gateway, monkeypatch):
     monkeypatch.setenv("PYROSCOPE_SERVER", "http://pyroscope:4040")
     monkeypatch.delenv("PYROSCOPE_APP", raising=False)
-    monkeypatch.setenv("JFC_ANALYSIS", "zz")
-    monkeypatch.setenv("JFC_WORKSPACE", "ws")
+    monkeypatch.setenv("AF_ANALYSIS", "zz")
+    monkeypatch.setenv("AF_WORKSPACE", "ws")
     monkeypatch.setenv("JUPYTERHUB_API_TOKEN", "not for workers")
     monkeypatch.setenv("X509_CERT_DIR", "/cvmfs/certificates")
 
@@ -695,8 +723,8 @@ def test_a_script_starts_the_analysis_cluster_on_its_environment(gateway, monkey
             "env": {
                 "PATH": os.environ["PATH"],
                 "PYROSCOPE_SERVER": "http://pyroscope:4040",
-                "JFC_ANALYSIS": "zz",
-                "JFC_WORKSPACE": "ws",
+                "AF_ANALYSIS": "zz",
+                "AF_WORKSPACE": "ws",
                 "X509_CERT_DIR": "/cvmfs/certificates",
             },
             "shutdown_on_close": False,
@@ -784,7 +812,7 @@ def test_a_worker_keeps_the_proxy_in_a_file_of_its_own(tmp_path, monkeypatch):
 
 
 def test_a_script_waits_for_another_cluster_of_the_user_to_end(gateway):
-    gateway.running = [("theirs", "/work/projects/jfc/other")]
+    gateway.running = [("theirs", "/work/projects/agentic-analysis/other")]
 
     with pytest.raises(RuntimeError, match="theirs is running"):
         clusters.client()
@@ -828,9 +856,9 @@ def test_ray_jobs_run_in_the_environment_on_the_settings_asked_for(ray):
 
 
 def test_ray_jobs_may_run_in_another_environment(ray):
-    gpus.client(env="/work/projects/jfc/ws/env")
+    gpus.client(env="/work/projects/agentic-analysis/ws/env")
 
-    assert ray[0]["headers"]["af-env"] == "/work/projects/jfc/ws/env"
+    assert ray[0]["headers"]["af-env"] == "/work/projects/agentic-analysis/ws/env"
 
 
 def test_the_ray_gateway_takes_the_settings_the_helper_sends():
@@ -859,13 +887,13 @@ def _session(command):
 def test_first_turn_opens_a_session_with_the_analysis_prompt(root):
     work, config = _workspace(root)
 
-    command = jfc._turn(work, config, "")
+    command = runner._turn(work, config, "")
 
     assert command[:2] == ["claude", "--print"]
     assert command[2].endswith("search for ZZ")
     assert _session(command)[0] == "--session-id"
-    assert command[command.index("--permission-mode") + 1] == jfc.PERMISSION_MODE
-    assert command[command.index("--model") + 1] == jfc.MODEL
+    assert command[command.index("--permission-mode") + 1] == runner.PERMISSION_MODE
+    assert command[command.index("--model") + 1] == runner.MODEL
     # The scaffold's methodology, agents and conventions link into it.
     assert command[command.index("--add-dir") + 1] == str(root / "jfc" / "src")
     assert "--forward-subagent-text" in command
@@ -873,16 +901,16 @@ def test_first_turn_opens_a_session_with_the_analysis_prompt(root):
 
 def test_later_turns_resume_that_session_with_the_reply_or_a_nudge(root):
     work, config = _workspace(root)
-    _, session = _session(jfc._turn(work, config, ""))
+    _, session = _session(runner._turn(work, config, ""))
     (config / "projects/slug").mkdir(parents=True)
     (config / "projects/slug" / f"{session}.jsonl").write_text("{}")
 
-    replied = jfc._turn(work, config, "APPROVE")
-    nudged = jfc._turn(work, config, "")
+    replied = runner._turn(work, config, "APPROVE")
+    nudged = runner._turn(work, config, "")
 
     assert _session(replied) == _session(nudged) == ("--resume", session)
-    assert replied[2] == jfc.REPLY.format(reply="APPROVE")
-    assert nudged[2] == jfc.INTERRUPTED
+    assert replied[2] == runner.REPLY.format(reply="APPROVE")
+    assert nudged[2] == runner.INTERRUPTED
 
 
 def _fake_claude(tmp_path, lines, code=0):
@@ -891,7 +919,7 @@ def _fake_claude(tmp_path, lines, code=0):
     script.write_text(
         "import os, sys\n"
         f"for line in {lines!r}:\n"
-        "    for name in ('JFC_ANALYSIS', 'JFC_WORKSPACE', 'CLAUDE_CODE_DISABLE_BACKGROUND_TASKS', 'BASH_MAX_TIMEOUT_MS'):\n"
+        "    for name in ('AF_ANALYSIS', 'AF_WORKSPACE', 'CLAUDE_CODE_DISABLE_BACKGROUND_TASKS', 'BASH_MAX_TIMEOUT_MS'):\n"
         "        line = line.replace('$' + name, os.environ[name])\n"
         "    print(line.replace('$CONFIG', os.environ['CLAUDE_CONFIG_DIR']))\n"
         f"sys.exit({code})\n"
@@ -907,10 +935,10 @@ def test_claude_runs_every_subagent_and_command_in_the_foreground(tmp_path):
     }
     command = _fake_claude(tmp_path, [json.dumps(result)])
 
-    said = jfc._claude(command, tmp_path, tmp_path / "c", tmp_path / "tokens", 0)
+    said = runner._claude(command, tmp_path, tmp_path / "c", tmp_path / "tokens", 0)
 
     # A foreground command may last as long as a pass over the data.
-    assert said == f"1 {jfc.COMMAND_HOURS * 3600 * 1000}"
+    assert said == f"1 {runner.COMMAND_HOURS * 3600 * 1000}"
 
 
 def test_claude_names_the_analysis_and_workspace_its_scripts_tag_profiles_with(
@@ -921,11 +949,11 @@ def test_claude_names_the_analysis_and_workspace_its_scripts_tag_profiles_with(
     result = {
         "type": "result",
         "is_error": False,
-        "result": "$JFC_ANALYSIS $JFC_WORKSPACE",
+        "result": "$AF_ANALYSIS $AF_WORKSPACE",
     }
     command = _fake_claude(tmp_path, [json.dumps(result)])
 
-    said = jfc._claude(command, work, tmp_path / "c", tmp_path / "tokens", 0)
+    said = runner._claude(command, work, tmp_path / "c", tmp_path / "tokens", 0)
 
     assert said == "zz ws"
 
@@ -965,7 +993,7 @@ def test_claude_returns_the_result_and_narrates_the_turn(tmp_path, capsys):
 
     (tmp_path / "tokens").write_text("50")
 
-    said = jfc._claude(
+    said = runner._claude(
         _fake_claude(tmp_path, lines),
         tmp_path,
         tmp_path / "cfg",
@@ -979,7 +1007,7 @@ def test_claude_returns_the_result_and_narrates_the_turn(tmp_path, capsys):
         "a warning that is not JSON",
         'Bash {"command": "pixi run all"}',
         "  fit converged",
-        "x" * jfc.LOG_LINE,
+        "x" * runner.LOG_LINE,
         "API retry 2/10: rate_limit",
         "turn over: 7 turns, 1200 tokens",
     ]
@@ -998,7 +1026,7 @@ def test_claude_raises_unless_the_turn_ended_with_a_clean_result(
 ):
     command = _fake_claude(tmp_path, [json.dumps(result)], code)
     with pytest.raises(RuntimeError, match="claude exited"):
-        jfc._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
+        runner._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
 
 
 def _assistant_of(request, **usage):
@@ -1037,7 +1065,7 @@ def test_claude_counts_each_request_once_and_what_the_stream_shows_of_the_rest(
         json.dumps({"type": "result", "is_error": False, "result": "done"}),
     ]
 
-    said = jfc._claude(
+    said = runner._claude(
         _fake_claude(tmp_path, lines), tmp_path, tmp_path / "c", ledger, 0
     )
 
@@ -1060,7 +1088,7 @@ def test_a_turn_counts_by_its_own_totals_when_they_say_more(
     ]
 
     with pytest.raises(RuntimeError):
-        jfc._claude(
+        runner._claude(
             _fake_claude(tmp_path, lines, 1), tmp_path, tmp_path / "c", ledger, 0
         )
 
@@ -1082,7 +1110,7 @@ def test_claude_records_a_request_as_it_arrives(tmp_path):
     command = [sys.executable, str(script)]
 
     with pytest.raises(RuntimeError):
-        jfc._claude(command, tmp_path, tmp_path / "c", ledger, 0)
+        runner._claude(command, tmp_path, tmp_path / "c", ledger, 0)
 
     assert seen.read_text() == ledger.read_text() == "10"
 
@@ -1091,8 +1119,8 @@ def test_claude_records_a_request_as_it_arrives(tmp_path):
 def test_a_count_that_cannot_be_read_stops_the_workspace(tmp_path, held):
     ledger = tmp_path / "tokens"
     ledger.write_text(held)
-    with pytest.raises(jfc.flyte.errors.NonRecoverableError, match=str(ledger)):
-        jfc._claude(_fake_claude(tmp_path, []), tmp_path, tmp_path / "c", ledger, 0)
+    with pytest.raises(runner.flyte.errors.NonRecoverableError, match=str(ledger)):
+        runner._claude(_fake_claude(tmp_path, []), tmp_path, tmp_path / "c", ledger, 0)
 
 
 def test_a_subagent_counts_toward_the_limit_and_can_reach_it(tmp_path):
@@ -1104,16 +1132,16 @@ def test_a_subagent_counts_toward_the_limit_and_can_reach_it(tmp_path):
         json.dumps({"type": "result", "is_error": False, "result": "done"}),
     ]
 
-    said = jfc._claude(
+    said = runner._claude(
         _fake_claude(tmp_path, lines), tmp_path, tmp_path / "c", ledger, 100
     )
 
-    assert said == jfc.SPENT.format(tokens=100) and ledger.read_text() == "100"
+    assert said == runner.SPENT.format(tokens=100) and ledger.read_text() == "100"
 
 
 @pytest.mark.parametrize("deaf", [False, True])
 def test_claude_ends_a_turn_that_reaches_the_limit(tmp_path, monkeypatch, deaf):
-    monkeypatch.setattr(jfc, "GRACE", 0.5 if deaf else 20)
+    monkeypatch.setattr(runner, "GRACE", 0.5 if deaf else 20)
     ledger, closed = tmp_path / "tokens", tmp_path / "closed"
     ledger.write_text("90")
     on_term = (
@@ -1130,13 +1158,13 @@ def test_claude_ends_a_turn_that_reaches_the_limit(tmp_path, monkeypatch, deaf):
         "time.sleep(60)\n"
         f"print({_assistant_of('c', input_tokens=1000)!r}, flush=True)\n"
     )
-    started = jfc.time.monotonic()
+    started = runner.time.monotonic()
     command = [sys.executable, str(script)]
 
-    said = jfc._claude(command, tmp_path, tmp_path / "c", ledger, 100)
+    said = runner._claude(command, tmp_path, tmp_path / "c", ledger, 100)
 
-    assert said == jfc.SPENT.format(tokens=100) and ledger.read_text() == "100"
-    assert jfc.time.monotonic() - started < 10
+    assert said == runner.SPENT.format(tokens=100) and ledger.read_text() == "100"
+    assert runner.time.monotonic() - started < 10
     # Told to end first, so that it can close its session; killed only if it does not.
     assert closed.exists() is not deaf
 
@@ -1152,15 +1180,15 @@ def test_claude_ends_a_turn_that_reaches_the_limit(tmp_path, monkeypatch, deaf):
 def test_a_turn_the_usage_limit_stopped_is_told_from_other_failures(tmp_path, result):
     stopped = {"type": "result", "is_error": True, **result}
     command = _fake_claude(tmp_path, [json.dumps(stopped)], 1)
-    with pytest.raises(jfc.Limited) as limited:
-        jfc._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
+    with pytest.raises(runner.Limited) as limited:
+        runner._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
     assert limited.value.resets is None
 
     overloaded = {"type": "result", "is_error": True, "api_error_status": 529}
     command = _fake_claude(tmp_path, [json.dumps(overloaded)], 1)
     with pytest.raises(RuntimeError) as failed:
-        jfc._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
-    assert not isinstance(failed.value, jfc.Limited)
+        runner._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
+    assert not isinstance(failed.value, runner.Limited)
 
 
 def test_a_limited_turn_says_when_the_limit_resets(tmp_path):
@@ -1174,8 +1202,8 @@ def test_a_limited_turn_says_when_the_limit_resets(tmp_path):
     ]
     command = _fake_claude(tmp_path, [json.dumps(e) for e in events], 1)
 
-    with pytest.raises(jfc.Limited) as limited:
-        jfc._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
+    with pytest.raises(runner.Limited) as limited:
+        runner._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
 
     assert limited.value.resets == 1760600000
 
@@ -1208,14 +1236,14 @@ def test_a_request_outside_the_session_tells_whether_the_limit_holds(
     claude.chmod(0o755)
     monkeypatch.setenv("PATH", f"{claude.parent}{os.pathsep}{os.environ['PATH']}")
 
-    assert jfc._still_limited(tmp_path / "cfg") is limited
+    assert runner._still_limited(tmp_path / "cfg") is limited
 
 
 def test_a_rejected_credential_is_not_worth_a_retry(tmp_path):
     result = {"type": "result", "is_error": True, "api_error_status": 401}
     command = _fake_claude(tmp_path, [json.dumps(result)], 1)
-    with pytest.raises(jfc.flyte.errors.NonRecoverableError):
-        jfc._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
+    with pytest.raises(runner.flyte.errors.NonRecoverableError):
+        runner._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
 
 
 # --- the task ---
@@ -1240,34 +1268,36 @@ def stretch(root, monkeypatch):
         (config / "projects/slug" / f"{_session(command)[1]}.jsonl").write_text("{}")
         return "At the human gate."
 
-    monkeypatch.setattr(jfc.flyte, "ctx", lambda: state, raising=False)
-    monkeypatch.setattr(jfc, "_prepare", lambda home, analysis: work)
-    monkeypatch.setattr(jfc, "_claude", claude)
-    monkeypatch.setattr(jfc.time, "sleep", state.slept.append)
+    monkeypatch.setattr(runner.flyte, "ctx", lambda: state, raising=False)
+    monkeypatch.setattr(runner, "_prepare", lambda home, analysis: work)
+    monkeypatch.setattr(runner, "_claude", claude)
+    monkeypatch.setattr(runner.time, "sleep", state.slept.append)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "stand-in")
-    monkeypatch.setenv(jfc.GATEWAY_TOKEN, "stand-in")
+    monkeypatch.setenv(runner.GATEWAY_TOKEN, "stand-in")
     return state
 
 
 def test_advance_refuses_to_start_without_credentials(root, monkeypatch):
-    for name in jfc.CREDENTIALS:
+    for name in runner.CREDENTIALS:
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(jfc, "_prepare", lambda *args: pytest.fail("set up anyway"))
+    monkeypatch.setattr(runner, "_prepare", lambda *args: pytest.fail("set up anyway"))
 
-    with pytest.raises(jfc.flyte.errors.NonRecoverableError):
-        jfc.advance(ANALYSIS, "ws", "")
+    with pytest.raises(runner.flyte.errors.NonRecoverableError):
+        runner.advance(ANALYSIS, "ws", "")
 
 
 def test_advance_refuses_to_start_without_a_gateway_token(root, stretch, monkeypatch):
-    monkeypatch.delenv(jfc.GATEWAY_TOKEN)
+    monkeypatch.delenv(runner.GATEWAY_TOKEN)
 
-    with pytest.raises(jfc.flyte.errors.NonRecoverableError, match=jfc.GATEWAY_TOKEN):
-        jfc.advance(ANALYSIS, "ws", "")
+    with pytest.raises(
+        runner.flyte.errors.NonRecoverableError, match=runner.GATEWAY_TOKEN
+    ):
+        runner.advance(ANALYSIS, "ws", "")
     assert stretch.prompts == []
 
 
 def test_advance_returns_and_keeps_what_the_agent_said(root, stretch):
-    assert jfc.advance(ANALYSIS, "ws", "") == "At the human gate."
+    assert runner.advance(ANALYSIS, "ws", "") == "At the human gate."
     assert (root / "ws/said.md").read_text() == "At the human gate."
     assert stretch.slept == []
 
@@ -1284,12 +1314,14 @@ def test_each_turn_starts_with_the_runners_facility_rules_in_place(
         read.append((config / "CLAUDE.md").read_text())
         return ""
 
-    monkeypatch.setattr(jfc, "_claude", claude)
-    jfc.advance(ANALYSIS, "ws", "")
+    monkeypatch.setattr(runner, "_claude", claude)
+    runner.advance(ANALYSIS, "ws", "")
 
     assert read == [
-        jfc.FACILITY.format(
-            cores=jfc.CORES, hours=jfc.COMMAND_HOURS, shared=root / "ws" / "shared"
+        runner.FACILITY.format(
+            cores=runner.CORES,
+            hours=runner.COMMAND_HOURS,
+            shared=root / "ws" / "shared",
         )
     ]
 
@@ -1297,13 +1329,13 @@ def test_each_turn_starts_with_the_runners_facility_rules_in_place(
 def test_advance_counts_in_the_workspace_and_refuses_once_its_tokens_are_spent(
     root, stretch
 ):
-    capped = jfc.Analysis(**{**vars(ANALYSIS), "tokens": 500})
+    capped = runner.Analysis(**{**vars(ANALYSIS), "tokens": 500})
 
-    jfc.advance(capped, "ws", "")
+    runner.advance(capped, "ws", "")
     (root / "ws" / "tokens").write_text("500")
-    with pytest.raises(jfc.flyte.errors.NonRecoverableError, match="500 tokens"):
-        jfc.advance(capped, "ws", "APPROVE")
-    jfc.advance(ANALYSIS, "ws", "")
+    with pytest.raises(runner.flyte.errors.NonRecoverableError, match="500 tokens"):
+        runner.advance(capped, "ws", "APPROVE")
+    runner.advance(ANALYSIS, "ws", "")
 
     assert stretch.limits == [
         (root / "ws" / "tokens", 500),
@@ -1313,15 +1345,15 @@ def test_advance_counts_in_the_workspace_and_refuses_once_its_tokens_are_spent(
 
 
 def test_advance_hands_a_reply_to_the_agent_once(root, stretch):
-    jfc.advance(ANALYSIS, "ws", "")
+    runner.advance(ANALYSIS, "ws", "")
     stretch.action.run_name = "run-2"
 
-    jfc.advance(ANALYSIS, "ws", "REGRESS(2)")
-    jfc.advance(ANALYSIS, "ws", "REGRESS(2)")  # run-2 retried
+    runner.advance(ANALYSIS, "ws", "REGRESS(2)")
+    runner.advance(ANALYSIS, "ws", "REGRESS(2)")  # run-2 retried
 
     assert stretch.prompts[1:] == [
-        jfc.REPLY.format(reply="REGRESS(2)"),
-        jfc.INTERRUPTED,
+        runner.REPLY.format(reply="REGRESS(2)"),
+        runner.INTERRUPTED,
     ]
     assert (root / "ws/replies/run-2").read_text() == "REGRESS(2)"
 
@@ -1330,8 +1362,8 @@ def test_advance_hands_a_reply_to_the_agent_once(root, stretch):
 def test_advance_refuses_a_workspace_that_is_neither_its_own_nor_there(
     root, stretch, reply
 ):
-    with pytest.raises(jfc.flyte.errors.NonRecoverableError):
-        jfc.advance(ANALYSIS, "typo", reply)
+    with pytest.raises(runner.flyte.errors.NonRecoverableError):
+        runner.advance(ANALYSIS, "typo", reply)
     assert stretch.prompts == [] and not (root / "typo").exists()
 
 
@@ -1341,8 +1373,8 @@ def test_advance_runs_the_agent_under_the_workspace_lock(root, stretch, monkeypa
             fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return ""
 
-    monkeypatch.setattr(jfc, "_claude", claude)
-    jfc.advance(ANALYSIS, "ws", "")
+    monkeypatch.setattr(runner, "_claude", claude)
+    runner.advance(ANALYSIS, "ws", "")
 
 
 def _failing(error):
@@ -1353,11 +1385,11 @@ def _failing(error):
 
 
 def test_advance_waits_after_a_failed_turn_longer_each_time(stretch, monkeypatch):
-    monkeypatch.setattr(jfc, "_claude", _failing(RuntimeError("usage limit")))
+    monkeypatch.setattr(runner, "_claude", _failing(RuntimeError("usage limit")))
 
-    for stretch.attempt_number in (0, 1, 4, jfc.RETRIES):
+    for stretch.attempt_number in (0, 1, 4, runner.RETRIES):
         with pytest.raises(RuntimeError, match="usage limit"):
-            jfc.advance(ANALYSIS, "ws", "")
+            runner.advance(ANALYSIS, "ws", "")
 
     assert stretch.slept == [15 * 60, 30 * 60, 240 * 60]
 
@@ -1375,10 +1407,12 @@ def limited(root, stretch, monkeypatch):
             raise outcome
         return outcome
 
-    monkeypatch.setattr(jfc, "_claude", claude)
-    monkeypatch.setattr(jfc, "_still_limited", lambda config: state.probes.pop(0))
-    monkeypatch.setattr(jfc.time, "time", lambda: 1000.0)
-    _, session = _session(jfc._turn(root / "jfc/analyses/zz", root / "ws/claude", ""))
+    monkeypatch.setattr(runner, "_claude", claude)
+    monkeypatch.setattr(runner, "_still_limited", lambda config: state.probes.pop(0))
+    monkeypatch.setattr(runner.time, "time", lambda: 1000.0)
+    _, session = _session(
+        runner._turn(root / "jfc/analyses/zz", root / "ws/claude", "")
+    )
     (root / "ws/claude/projects/slug").mkdir(parents=True)
     (root / "ws/claude/projects/slug" / f"{session}.jsonl").write_text("{}")
     stretch.action.run_name = "run-2"
@@ -1386,29 +1420,29 @@ def limited(root, stretch, monkeypatch):
 
 
 def test_advance_sleeps_until_the_limit_resets_then_resumes_once(stretch, limited):
-    limited.outcomes = [jfc.Limited("limit", resets=4600.0), "At the human gate."]
+    limited.outcomes = [runner.Limited("limit", resets=4600.0), "At the human gate."]
 
-    assert jfc.advance(ANALYSIS, "ws", "APPROVE") == "At the human gate."
+    assert runner.advance(ANALYSIS, "ws", "APPROVE") == "At the human gate."
 
     assert stretch.slept == [3600.0 + 60]
-    assert limited.prompts == [jfc.REPLY.format(reply="APPROVE"), jfc.LIFTED]
+    assert limited.prompts == [runner.REPLY.format(reply="APPROVE"), runner.LIFTED]
 
 
 def test_advance_asks_outside_the_session_while_no_reset_is_known(stretch, limited):
-    limited.outcomes = [jfc.Limited("limit"), "At the human gate."]
+    limited.outcomes = [runner.Limited("limit"), "At the human gate."]
     limited.probes = [True, True, False]
 
-    assert jfc.advance(ANALYSIS, "ws", "") == "At the human gate."
+    assert runner.advance(ANALYSIS, "ws", "") == "At the human gate."
 
-    assert stretch.slept == [jfc.LIMITED * 60] * 3
-    assert limited.prompts == [jfc.INTERRUPTED, jfc.LIFTED]
+    assert stretch.slept == [runner.LIMITED * 60] * 3
+    assert limited.prompts == [runner.INTERRUPTED, runner.LIFTED]
 
 
 def test_advance_does_not_wait_on_a_failure_no_retry_follows(stretch, monkeypatch):
-    final = jfc.flyte.errors.NonRecoverableError("claude: Invalid API key")
-    monkeypatch.setattr(jfc, "_claude", _failing(final))
+    final = runner.flyte.errors.NonRecoverableError("claude: Invalid API key")
+    monkeypatch.setattr(runner, "_claude", _failing(final))
 
-    with pytest.raises(jfc.flyte.errors.NonRecoverableError):
-        jfc.advance(ANALYSIS, "ws", "")
+    with pytest.raises(runner.flyte.errors.NonRecoverableError):
+        runner.advance(ANALYSIS, "ws", "")
 
     assert stretch.slept == []
