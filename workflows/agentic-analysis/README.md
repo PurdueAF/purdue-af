@@ -1,22 +1,24 @@
-# jfc
+# agentic-analysis
 
-Runs [JFC](https://github.com/jfc-mit/jfc) analyses unattended on
-[Flyte 2](https://www.union.ai/docs/v2/flyte/): Claude Code, following the JFC
-specification, takes a physics analysis from its prompt to a typeset analysis
-note. The control plane is [`apps/flyte`](../../apps/flyte); the task pods,
-their directory on `/work` and the model credentials are
-[`apps/jfc`](../../apps/jfc); the task image is
-[`docker/jfc`](../../docker/jfc). An analysis is a directory
-with an `analysis.toml`, such as [`workflows/jfc-h4l`](../jfc-h4l) or
-[`workflows/jfc-hmm`](../jfc-hmm).
+Runs physics analyses unattended on [Flyte 2](https://www.union.ai/docs/v2/flyte/)
+with the [JFC](https://github.com/jfc-mit/jfc) methodology: Claude Code,
+following the JFC specification, takes an analysis from its prompt to a typeset
+analysis note. The control plane is [`apps/flyte`](../../apps/flyte); the task
+pods, their directory on `/work`, the volume and the model credentials are
+[`apps/agentic-analysis`](../../apps/agentic-analysis); the task image is
+[`docker/agentic-analysis`](../../docker/agentic-analysis). An analysis is a
+directory under [`analyses/`](analyses) with an `analysis.toml`, such as
+[`h4l`](analyses/h4l) or [`hmm`](analyses/hmm).
 
-| File               | What it is                                                   |
-| ------------------ | ------------------------------------------------------------ |
-| `jfc.py`           | The task, its environment and the launcher (`__main__`)      |
-| `jfc_profiling.py` | The profiler hook installed into each analysis's environment |
-| `jfc_dask.py`      | The Dask cluster helper installed into the same environment  |
-| `jfc_ray.py`       | The Ray jobs helper installed into the same environment      |
-| `config.yaml`      | Where `flyte` finds the control plane                        |
+| File                  | What it is                                                   |
+| --------------------- | ------------------------------------------------------------ |
+| `agentic_analysis.py` | The task, its environment and the launcher (`__main__`)      |
+| `af_profiling.py`     | The profiler hook installed into each analysis's environment |
+| `af_dask.py`          | The Dask cluster helper installed into the same environment  |
+| `af_ray.py`           | The Ray jobs helper installed into the same environment      |
+| `browse.sh`           | Opens the `agentic-analysis` volume read-only                |
+| `config.yaml`         | Where `flyte` finds the control plane                        |
+| `analyses/`           | The analyses                                                 |
 
 A run is one `advance` task: the setup if the workspace is new, then one
 headless Claude Code turn. It ends when the agent ends its turn, either with
@@ -30,24 +32,25 @@ meanwhile.
 Before each turn the runner writes `FACILITY` as Claude Code's user memory,
 which the agent and every subagent read: how this facility runs subagents,
 reads CMS data through XCache with the grid proxy the task pods hold, processes
-it on [Dask Gateway](../../apps/dask-gateway) with `jfc_dask.client()`, and
-trains on GPUs through [Ray](../../apps/ray-train) with `jfc_ray.client()`.
-Whose those clusters are: [`apps/jfc`](../../apps/jfc/README.md#secrets). In
-the workspace, they write only to `shared/`.
+it on [Dask Gateway](../../apps/dask-gateway) with `af_dask.client()`, and
+trains on GPUs through [Ray](../../apps/ray-train) with `af_ray.client()`.
+Whose those clusters are:
+[`apps/agentic-analysis`](../../apps/agentic-analysis/README.md#secrets). In the
+workspace, they write only to `shared/`.
 
-A workspace is `/work/projects/jfc/<name of its first run>`: the JFC checkout
+A workspace is `/work/projects/agentic-analysis/<name of its first run>`: the JFC checkout
 with the analysis scaffolded in it, its pixi environment and git history, the
 agent's session, the replies it was given, the tokens its runs have processed,
 the last run's output in `said.md`, and `shared/` for what the clusters write.
-An analysis's data is fetched once per URL under `/work/projects/jfc/data`. A
+An analysis's data is fetched once per URL under `/work/projects/agentic-analysis/data`. A
 retried task resumes the session.
 
 Every Python process in an analysis's environment, its Dask cluster's
 included, sends CPU profiles to [Pyroscope](../../apps/monitoring/pyroscope),
-under `service_name="jfc"` and tagged with its `analysis`, `workspace` and
+under `service_name="agentic-analysis"` and tagged with its `analysis`, `workspace` and
 `script`. The setup keeps that environment's Python within the versions
 `pyroscope-io` ships wheels for, adds `CONDA` and `PACKAGES`, and installs the
-three helpers, with a `.pth` file that starts `jfc_profiling`.
+three helpers, with a `.pth` file that starts `af_profiling`.
 
 ## Running
 
@@ -55,7 +58,7 @@ From an AF session, in a checkout of this repository, with the directory of an
 analysis:
 
 ```bash
-uv run --project docker/jfc --frozen python workflows/jfc/jfc.py workflows/jfc-h4l-small
+uv run --project docker/agentic-analysis --frozen python workflows/agentic-analysis/agentic_analysis.py workflows/agentic-analysis/analyses/h4l-small
 ```
 
 It prints the name and URL of the run it started. The run's output is the
@@ -63,7 +66,7 @@ agent's last message, or the notice that the workspace has reached its
 `tokens`. While the run's pod exists, its log follows the agent:
 
 ```bash
-uv run --project docker/jfc --frozen flyte --config workflows/jfc/config.yaml get logs <run>
+uv run --project docker/agentic-analysis --frozen flyte --config workflows/agentic-analysis/config.yaml get logs <run>
 ```
 
 A reply starts another run in the same workspace and reaches the agent
@@ -72,15 +75,20 @@ is the name of the first run; JFC's gate expects `APPROVE`, `ITERATE: ...` or
 `REGRESS(N)`:
 
 ```bash
-uv run --project docker/jfc --frozen python workflows/jfc/jfc.py workflows/jfc-h4l-small <workspace> "APPROVE"
+uv run --project docker/agentic-analysis --frozen python workflows/agentic-analysis/agentic_analysis.py workflows/agentic-analysis/analyses/h4l-small <workspace> "APPROVE"
 ```
 
 Without a reply, a run on an existing workspace continues where the last one
 stopped, which is how a failed run is picked up.
 
+From a machine with `kubectl` access to `cms`, `browse.sh` opens the
+`agentic-analysis` volume read-only at `/agentic-analysis` in a pod of its own:
+a shell, a given command, or `serve [port]` for its files over HTTP on
+localhost.
+
 ## Adding an analysis
 
-A directory `workflows/jfc-<name>` with an `analysis.toml`:
+A directory `analyses/<name>` with an `analysis.toml`:
 
 | Key      | What it is                                                                                                                    |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -95,9 +103,9 @@ A directory `workflows/jfc-<name>` with an `analysis.toml`:
 
 ## Tuning
 
-All in `jfc.py`:
+All in `agentic_analysis.py`:
 
-- `JFC` pins the specification by commit.
+- `JFC` pins the methodology by commit.
 - `MODEL` and `PERMISSION_MODE` are passed to Claude Code; `FACILITY` is what
   every agent reads.
 - `env` holds what a task pod reserves; `RETRIES` and the timeout of `advance`

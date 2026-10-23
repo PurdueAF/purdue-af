@@ -1,14 +1,16 @@
-# jfc
+# agentic-analysis
 
-Cluster side of the [`jfc`](../../workflows/jfc) workflow: its task pods and
-the directory they work in. Runs are started by hand
-([Running](../../workflows/jfc/README.md#running)) on the Flyte control plane
-([`apps/flyte`](../flyte)).
+Cluster side of the [`agentic-analysis`](../../workflows/agentic-analysis)
+workflow: its task pods, the directory they work in and the volume
+[`browse.sh`](../../workflows/agentic-analysis/browse.sh) opens. Runs are
+started by hand ([Running](../../workflows/agentic-analysis/README.md#running))
+on the Flyte control plane ([`apps/flyte`](../flyte)).
 
 | File               | What it is                                                                                                                                                                            |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `podtemplate.yaml` | Pod spec of every task pod: AF node placement, the image's user, the model credentials, where profiles go, the Dask Gateway, the facility's grid proxy and CVMFS, the workspace mount |
-| `workspace.yaml`   | The Job that creates `/work/projects/jfc` for that user                                                                                                                               |
+| `volume.yaml`      | The `agentic-analysis` volume, which Flux never prunes                                                                                                                                |
+| `workspace.yaml`   | The Job that creates `/work/projects/agentic-analysis` and hands it and the volume's root to the task image's user                                                                    |
 
 ## Secrets
 

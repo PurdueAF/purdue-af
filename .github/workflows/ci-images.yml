@@ -70,7 +70,7 @@ jobs:
             af_digest=""
           fi
           aux_tags=""
-          for name in agentic-interface af-pod-monitor af-node-monitor jfc supersonic-model-manager interlink-slurm-plugin interlink-kubernetes-plugin; do
+          for name in agentic-interface af-pod-monitor af-node-monitor agentic-analysis supersonic-model-manager interlink-slurm-plugin interlink-kubernetes-plugin; do
             tag=$(./.github/workflows/image-inputs.sh "$name")
             channel=latest
             if [ "$name" = interlink-slurm-plugin ] || [ "$name" = interlink-kubernetes-plugin ]; then
@@ -239,13 +239,13 @@ jobs:
               sh -c "fio --version && cd /opt/af-node-monitor &&
               AF_NODE_MONITOR_VERBOSE=1 MOUNT_NAME=smoke CHECK_FILE=smoke
               python -c 'import job_runner, node_healthcheck; print(\"ok\")'"
-          # The runtimes a jfc task pod needs, as the image's non-root user:
+          # The runtimes an agentic-analysis task pod needs, as the image's non-root user:
           # the Flyte SDK, git, pixi and Claude Code — and a cwd that user can
           # write, where Flyte extracts the code bundle.
           # Single-quoted: the runner's bash interpolates this string before
           # docker runs, so a double-quoted $(id -u) would test the RUNNER's uid.
-          - name: jfc
-            dockerfile: docker/jfc/Dockerfile
+          - name: agentic-analysis
+            dockerfile: docker/agentic-analysis/Dockerfile
             context: .
             smoke: >-
               sh -c 'set -e; test "$(id -u)" = 1000;

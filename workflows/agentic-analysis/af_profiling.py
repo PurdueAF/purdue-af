@@ -21,15 +21,15 @@ def start() -> None:
         import pyroscope
 
         pyroscope.configure(
-            application_name=os.environ.get("PYROSCOPE_APP", "jfc"),
+            application_name=os.environ.get("PYROSCOPE_APP", "agentic-analysis"),
             server_address=server,
             sample_rate=100,
             oncpu=True,
             # Analysis code spends its time in numpy and uproot, outside the GIL.
             gil_only=False,
             tags={
-                "analysis": os.environ.get("JFC_ANALYSIS", "unknown"),
-                "workspace": os.environ.get("JFC_WORKSPACE", "unknown"),
+                "analysis": os.environ.get("AF_ANALYSIS", "unknown"),
+                "workspace": os.environ.get("AF_WORKSPACE", "unknown"),
                 "script": os.path.basename(sys.argv[0]) or "python",
             },
         )

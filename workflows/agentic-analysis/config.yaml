@@ -2,5 +2,5 @@ admin:
   endpoint: dns:///flyte-http.cms.svc.cluster.local:8090
   insecure: true
 task:
-  project: jfc
+  project: agentic-analysis
   domain: development
