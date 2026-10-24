@@ -46,6 +46,7 @@ resources:
 
   # Runs analyses with the JFC methodology on demand (workflows/agentic-analysis).
   - ../../apps/agentic-analysis/podtemplate.yaml
+  - ../../apps/agentic-analysis/secret-nrp.yaml
   - ../../apps/agentic-analysis/volume.yaml
   - ../../apps/agentic-analysis/workspace.yaml
 
