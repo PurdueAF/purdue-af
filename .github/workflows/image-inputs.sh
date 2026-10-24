@@ -93,7 +93,7 @@ paths_for() {
 		EOF
 		;;
 	agentic-analysis)
-		# Runtime only (Flyte SDK, git, pixi, Claude Code): the workflow code
+		# Runtime only (Flyte SDK, git, pixi, the agent's tools): the workflow code
 		# reaches the task pods as a Flyte code bundle, not through this image.
 		cat <<-EOF
 			docker/agentic-analysis
