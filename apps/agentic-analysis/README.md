@@ -9,14 +9,16 @@ on the Flyte control plane ([`apps/flyte`](../flyte)).
 | File               | What it is                                                                                                                                                                            |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `podtemplate.yaml` | Pod spec of every task pod: AF node placement, the image's user, the model credentials, where profiles go, the Dask Gateway, the facility's grid proxy and CVMFS, the workspace mount |
+| `secret-nrp.yaml`  | The `agentic-analysis-nrp` Secret ([Secrets](#secrets))                                                                                                                               |
 | `volume.yaml`      | The `agentic-analysis` volume, which Flux never prunes                                                                                                                                |
 | `workspace.yaml`   | The Job that creates `/work/projects/agentic-analysis` and hands it and the volume's root to the task image's user                                                                    |
 
 ## Secrets
 
-| Secret       | In repo | Holds                                                                                                   |
-| ------------ | ------- | ------------------------------------------------------------------------------------------------------- |
-| `jfc-claude` | no      | Created by hand. Each key becomes an environment variable of the task pods, named as its reader expects |
+| Secret                 | In repo     | Holds                                                                                                   |
+| ---------------------- | ----------- | ------------------------------------------------------------------------------------------------------- |
+| `agentic-analysis-nrp` | yes, SOPS   | `api-key`: the API key of [NRP's managed LLMs](https://nrp.ai/documentation/userdocs/ai/llm-managed/)   |
+| `jfc-claude`           | no          | Created by hand. Each key becomes an environment variable of the task pods, named as its reader expects |
 
 One of these keys:
 
