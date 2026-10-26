@@ -1,0 +1,87 @@
+# The one holder of the NRP key: llm_proxy.py with models.toml, from the
+# agentic-analysis-llm-proxy ConfigMap. One replica, as its budgets live in memory.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentic-analysis-llm-proxy
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: agentic-analysis-llm-proxy
+  template:
+    metadata:
+      labels:
+        app: agentic-analysis-llm-proxy
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+        - key: hub.jupyter.org/dedicated
+          operator: Equal
+          value: cms-af
+          effect: NoSchedule
+      containers:
+        - name: proxy
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-analysis:latest
+          command: ["python", "/proxy/llm_proxy.py"]
+          env:
+            - name: NRP_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agentic-analysis-nrp
+                  key: api-key
+            - name: LLM_PROXY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agentic-analysis-llm-proxy
+                  key: client-token
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            # Not /app: the image's Python environment lives there.
+            - name: code
+              mountPath: /proxy
+              readOnly: true
+      volumes:
+        - name: code
+          configMap:
+            name: agentic-analysis-llm-proxy
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentic-analysis-llm-proxy
+spec:
+  selector:
+    app: agentic-analysis-llm-proxy
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

@@ -1,0 +1,162 @@
+# What the LLM proxy serves: the agents' roles, the NRP models behind them, and
+# the limits that keep every request of the facility within NRP's fair use
+# (https://nrp.ai/documentation/userdocs/ai/llm-managed/fair-use).
+
+[proxy]
+upstream = "https://ellm.nrp-nautilus.io/v1"
+port = 8080
+# NRP's gateway answers bodies of about 4 MiB with an empty 500.
+max_body_bytes = 3_670_016
+bytes_per_token = 3.0
+keepalive_seconds = 15
+hold_hours = 2.5
+# NRP ends every stream at `cut_seconds`; replies are capped to finish
+# within `stream_seconds`.
+stream_seconds = 1080
+cut_seconds = 1200
+backoff_seconds = 30
+backoff_max_seconds = 600
+cut_retries = 3
+
+# Per model: `budget` is the tokens all its requests in flight may hold
+# (0.9 of the 35% of its context), `output_per_minute` 0.85 of NRP's per-key
+# rate, `max_tokens` the bounds of the cap that keeps a reply within
+# `stream_seconds`, and `ttft` and `decode` its typical and slow speeds: slots
+# shrink against the typical ones, and the cap follows the slow ones until it
+# has samples of its own.
+[models.glm-5]
+context = 1_048_576
+slots = [2, 2]
+budget = 330_000
+output_per_minute = 40_800
+max_tokens = [6_000, 20_000]
+image_tokens = 0
+ttft = [0.92, 3.4]
+decode = [30.3, 22.8]
+variants.high = { chat_template_kwargs = { reasoning_effort = "high" } }
+variants.low = { chat_template_kwargs = { reasoning_effort = "low" } }
+
+[models.deepseek-v4-flash]
+context = 1_048_576
+slots = [8, 16]
+budget = 330_000
+output_per_minute = 40_800
+max_tokens = [6_000, 20_000]
+image_tokens = 1_000
+ttft = [0.63, 1.5]
+decode = [27.9, 19.1]
+variants.high = { chat_template_kwargs = { reasoning_effort = "high" } }
+variants.low = { chat_template_kwargs = { reasoning_effort = "low" } }
+
+[models.qwen3]
+context = 1_000_000
+slots = [6, 12]
+budget = 315_000
+output_per_minute = 40_800
+max_tokens = [6_000, 16_000]
+image_tokens = 1_902
+ttft = [2.1, 35.0]
+decode = [23.3, 6.5]
+variants.medium = { reasoning_effort = "medium" }
+
+[models.qwen3-small]
+context = 1_000_000
+slots = [6, 8]
+budget = 315_000
+output_per_minute = 40_800
+max_tokens = [8_000, 32_000]
+image_tokens = 1_902
+ttft = [0.74, 2.3]
+decode = [141.6, 35.9]
+variants.medium = { reasoning_effort = "medium" }
+
+[models.gemma]
+context = 262_144
+slots = [4, 8]
+budget = 82_600
+output_per_minute = 40_800
+max_tokens = [6_000, 16_000]
+image_tokens = 268
+ttft = [0.58, 3.9]
+decode = [44.9, 41.9]
+
+# Per role, the model each agent asks for: its backends in order of preference
+# (`model#variant`), the context it works in (`context`, compacted from
+# `compact_at`), the most images one request may carry, and its queue class
+# (0 first).
+[roles.orchestrator]
+backends = ["glm-5#high", "deepseek-v4-flash", "qwen3#medium"]
+context = 120_000
+compact_at = 100_000
+images = 0
+class = 0
+
+[roles.arbiter]
+backends = ["glm-5#high", "deepseek-v4-flash"]
+context = 100_000
+compact_at = 80_000
+images = 0
+class = 1
+
+[roles.constructive-reviewer]
+backends = ["deepseek-v4-flash", "glm-5#high"]
+context = 100_000
+compact_at = 80_000
+images = 0
+class = 1
+
+[roles.physics-reviewer]
+backends = ["deepseek-v4-flash#high", "qwen3#medium"]
+context = 100_000
+compact_at = 80_000
+images = 8
+class = 1
+
+[roles.critical-reviewer]
+backends = ["qwen3-small#medium", "qwen3#medium"]
+context = 100_000
+compact_at = 80_000
+images = 8
+class = 1
+
+[roles.compaction]
+backends = ["qwen3-small#medium", "deepseek-v4-flash"]
+context = 200_000
+compact_at = 200_000
+images = 8
+class = 1
+
+[roles.executor]
+backends = ["deepseek-v4-flash", "qwen3-small#medium", "qwen3#medium"]
+context = 128_000
+compact_at = 100_000
+images = 4
+class = 2
+
+[roles.note-writer]
+backends = ["glm-5#high", "deepseek-v4-flash"]
+context = 120_000
+compact_at = 100_000
+images = 0
+class = 2
+
+[roles.typesetter]
+backends = ["qwen3-small#medium", "deepseek-v4-flash"]
+context = 80_000
+compact_at = 60_000
+images = 4
+class = 2
+
+[roles.plot-validator]
+backends = ["qwen3-small#medium", "qwen3#medium", "gemma"]
+context = 40_000
+compact_at = 32_000
+images = 4
+class = 3
+
+[roles.bibtex]
+backends = ["qwen3-small#medium", "deepseek-v4-flash"]
+context = 50_000
+compact_at = 40_000
+images = 0
+class = 4
