@@ -15,6 +15,7 @@ import yaml
 from common import REPO, load_script
 
 APP = REPO / "apps" / "ray-train"
+ANALYSIS = REPO / "apps" / "agentic-analysis"
 HUB_VALUES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
 OPERATOR_VALUES = REPO / "apps" / "ray" / "operator" / "values.yaml"
 EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
@@ -109,6 +110,25 @@ def test_the_hub_gives_the_gateway_its_token_and_scopes():
         gateway_pod()["metadata"]["labels"]["hub.jupyter.org/network-access-hub"]
         == "true"
     )
+
+
+def test_the_agentic_analysis_service_names_itself_and_runs_as_its_task_pods_do():
+    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+    service = gateway.AGENTIC_ANALYSIS
+    hub = load(HUB_VALUES)["hub"]
+    assert hub["services"][service["service"]] == {}
+    assert not any(
+        service["service"] in role.get("services", [])
+        for role in hub["loadRoles"].values()
+    )
+    (template,) = load_all(ANALYSIS / "podtemplate.yaml")
+    task = template["template"]["spec"]["securityContext"]
+    assert (service["uid"], service["gid"]) == (task["runAsUser"], task["runAsGroup"])
+    (claim,) = load_all(ANALYSIS / "volume.yaml")
+    assert service["claim"] == claim["metadata"]["name"]
+    assert set(service["keptVolumes"]) <= {
+        v["name"] for v in cluster_pod()["spec"]["volumes"]
+    }
 
 
 def test_the_gateway_reads_the_hubs_session_pod_names():

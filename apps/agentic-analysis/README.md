@@ -2,7 +2,8 @@
 
 Cluster side of the [`agentic-analysis`](../../workflows/agentic-analysis)
 workflow: its task pods, the directory they work in, the volume
-[`browse.sh`](../../workflows/agentic-analysis/browse.sh) opens, and an
+[`browse.sh`](../../workflows/agentic-analysis/browse.sh) opens, a
+[Hub service](#hub-service) with clusters of its own, and an
 [LLM proxy](#llm-proxy) for NRP's models. Runs are
 started by hand ([Running](../../workflows/agentic-analysis/README.md#running))
 on the Flyte control plane ([`apps/flyte`](../flyte)).
@@ -35,6 +36,19 @@ One of these keys:
 And `JUPYTERHUB_API_TOKEN`, a token from the hub's Token page: the analyses'
 Dask and Ray clusters are its owner's, run as that user and count as that
 user's one cluster of each.
+
+## Hub service
+
+The Hub registers the `agentic-analysis` service with no role
+([`values.yaml`](../jupyterhub/jupyterhub/values.yaml)), so its token,
+`hub.services.agentic-analysis.apiToken` in the `hub` Secret, names the
+service and does nothing more. The Dask Gateway
+([`values.yaml`](../dask-gateway/values.yaml)) and the Ray gateway
+([`config.yaml`](../ray-train/config.yaml)) give that token clusters of its
+own: they run as the task image's user, mount the `agentic-analysis` volume at
+`/agentic-analysis` and CVMFS, and none of the facility's storage, and carry
+the label `app.kubernetes.io/part-of: agentic-analysis`. The environment a
+cluster runs is on that volume or on CVMFS.
 
 ## LLM proxy
 

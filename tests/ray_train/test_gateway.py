@@ -44,7 +44,11 @@ SESSIONS = {
     "session-a": ("user-a", 7),
     "session-b": ("user-b-cern", 42),
     "session-idle": ("user-c-fnal", None),
+    "session-named-like-the-service": ("agentic-analysis", 9),
 }
+# service token -> the name of the Hub service it belongs to
+SERVICES = {"analysis-token": "agentic-analysis", "metrics-token": "prometheus"}
+ANALYSIS_ENV = "/agentic-analysis/hmm-1026-120000/jfc/.pixi/envs/default"
 # Users the fake Hub was asked about
 LOOKUPS = []
 LDAP = {"user-a": (5001, 500), "paf0042": (6042, 600)}
@@ -74,9 +78,11 @@ def hub_app():
         _, _, token = request.headers.get("Authorization", "").partition(" ")
         if token == "hub-down":
             return web.json_response({}, status=500)
+        if token in SERVICES:
+            return web.json_response({"kind": "service", "name": SERVICES[token]})
         if token not in SESSIONS:
             return web.json_response({}, status=403)
-        return web.json_response({"name": SESSIONS[token][0]})
+        return web.json_response({"kind": "user", "name": SESSIONS[token][0]})
 
     async def user(request):
         if request.headers.get("Authorization") != f"token {SERVICE_TOKEN}":
@@ -913,6 +919,74 @@ async def test_users_reach_only_their_own_cluster(env):
         f"Bearer {gw.cluster_token(SERVICE_TOKEN, name)}"
         for name in ("ray-train-user-a", "ray-train-user-b-cern")
     ]
+
+
+async def test_the_agentic_analysis_service_runs_as_its_task_user_on_its_own_volume(
+    env,
+):
+    service = gw.AGENTIC_ANALYSIS
+    assert await call(env, token="analysis-token", env_path=ANALYSIS_ENV) == [
+        b"echo:ping"
+    ]
+    name = "ray-train-agentic-analysis"
+    assert LOOKUPS == []
+    spec = cluster_spec(env, name)
+    for template in (
+        spec["headGroupSpec"]["template"],
+        *(group["template"] for group in spec["workerGroupSpecs"]),
+    ):
+        pod = template["spec"]
+        context = pod["securityContext"]
+        assert (context["runAsUser"], context["runAsGroup"]) == (
+            service["uid"],
+            service["gid"],
+        )
+        volumes = {v["name"]: v for v in pod["volumes"]}
+        assert volumes.keys() == {*service["keptVolumes"], "agentic-analysis"}
+        storage = {name for name, v in volumes.items() if "emptyDir" not in v}
+        assert storage == {"cvmfs", "agentic-analysis"}
+        assert volumes["agentic-analysis"]["persistentVolumeClaim"] == {
+            "claimName": service["claim"]
+        }
+        (container,) = pod["containers"]
+        assert {m["name"] for m in container["volumeMounts"]} == volumes.keys()
+        assert {
+            "name": "agentic-analysis",
+            "mountPath": service["mountPath"],
+        } in container["volumeMounts"]
+        labels = template["metadata"]["labels"]
+        assert labels["app.kubernetes.io/part-of"] == "agentic-analysis"
+        assert labels["app"] == "ray-train-cluster"
+    assert head_env(env, name)["USER"] == "agentic-analysis"
+    assert cluster_env(env, name) == ANALYSIS_ENV
+
+
+async def test_the_service_submits_jobs_to_its_own_cluster(env):
+    status, _, _ = await submit(env, token="analysis-token", env_path=ANALYSIS_ENV)
+    assert status == 200
+    assert list(env.kube.clusters) == ["ray-train-agentic-analysis"]
+    assert cluster_env(env, "ray-train-agentic-analysis") == ANALYSIS_ENV
+
+
+@pytest.mark.parametrize("env_path", [None, ENV_A])
+async def test_the_service_runs_only_an_environment_on_its_volume(env, env_path):
+    assert (
+        await refused(env, token="analysis-token", env_path=env_path)
+        == grpc.StatusCode.INVALID_ARGUMENT
+    )
+    assert env.kube.clusters == {}
+
+
+@pytest.mark.parametrize("token", ["metrics-token", "session-named-like-the-service"])
+async def test_no_other_service_and_no_user_of_the_services_name_gets_a_cluster(
+    env, token
+):
+    assert (
+        await refused(env, token=token, env_path=ANALYSIS_ENV)
+        == grpc.StatusCode.PERMISSION_DENIED
+    )
+    assert env.kube.clusters == {}
+    assert LOOKUPS == []
 
 
 async def test_streams_are_relayed_both_ways(env):

@@ -386,6 +386,8 @@ hub:
     prometheus: {}
     # Token only, in the same Secret: read by the Ray Train gateway (apps/ray-train).
     ray-train-gateway: {}
+    # Token only, in the same Secret, and no role (apps/agentic-analysis).
+    agentic-analysis: {}
   loadRoles:
     # read:servers!user lets a session see itself; delete:servers!server lets it shut itself down.
     server:

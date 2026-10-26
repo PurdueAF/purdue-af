@@ -167,13 +167,43 @@ gateway:
       def is_external(user):
           return ("-cern" in user.name) or ("-fnal" in user.name)
 
+      # The Hub service of apps/agentic-analysis.
+      AGENTIC_ANALYSIS = "agentic-analysis"
+      AGENTIC_ANALYSIS_VOLUME = {"name": AGENTIC_ANALYSIS, "persistentVolumeClaim": {"claimName": AGENTIC_ANALYSIS}}
+      AGENTIC_ANALYSIS_MOUNT = {"name": AGENTIC_ANALYSIS, "mountPath": "/agentic-analysis"}
+      AGENTIC_ANALYSIS_ROOTS = (AGENTIC_ANALYSIS_MOUNT["mountPath"], "/cvmfs")
+
+      def agentic_analysis_env(options):
+          """The service's environment, which has to be on the storage its pods mount."""
+          project = (getattr(options, 'pixi_project', None) or "").strip()
+          conda_env = (getattr(options, 'conda_env', None) or "").strip()
+          if project and conda_env:
+              raise ValueError("pixi-env and conda-env are mutually exclusive. Please specify only one.")
+          if not (project or conda_env):
+              raise ValueError("Either conda_env or pixi_project must be specified")
+          env = os.path.normpath(os.path.join(project, ".pixi", "envs", getattr(options, 'pixi_env', 'default')) if project else conda_env)
+          if not any(env == root or env.startswith(root + "/") for root in AGENTIC_ANALYSIS_ROOTS):
+              raise ValueError(f"{env} is not on the storage the cluster mounts: {', '.join(AGENTIC_ANALYSIS_ROOTS)}.")
+          return env
+
+      def agentic_analysis_pod(pod_config, container_config):
+          """A scheduler's or worker's pod and container config, with the agentic-analysis volume and CVMFS as its only storage."""
+          volumes = [v for v in pod_config.get("volumes", []) if v["name"] == "cvmfs"]
+          mounts = [m for m in container_config.get("volumeMounts", []) if m["name"] == "cvmfs"]
+          # The worker preload is on /work.
+          env = [e for e in container_config.get("env", []) if not e["name"].startswith("DASK_DISTRIBUTED__WORKER__PRELOAD")]
+          return (
+              {**pod_config, "volumes": volumes + [AGENTIC_ANALYSIS_VOLUME]},
+              {**container_config, "env": env, "volumeMounts": mounts + [AGENTIC_ANALYSIS_MOUNT]},
+          )
+
       # `ids` is the user's (uid, gid), or the error their LDAP lookup raised.
       def options_handler(options, user, ids=None):
           if isinstance(ids, Exception):
               raise ids
           if ids is not None:
               uid, gid = ids
-          elif user.name=="jovyan":
+          elif user.name in ("jovyan", AGENTIC_ANALYSIS):
             uid, gid = 1000, 1000
           elif is_external(user):
               if not options.env:
@@ -195,7 +225,9 @@ gateway:
           conda_env = None
           
           pixi_project = getattr(options, 'pixi_project', None)
-          if pixi_project and pixi_project.strip():
+          if user.name == AGENTIC_ANALYSIS:
+              conda_env = agentic_analysis_env(options)
+          elif pixi_project and pixi_project.strip():
               user_conda_env = getattr(options, 'conda_env', None)
               if user_conda_env and user_conda_env.strip():
                   raise ValueError("pixi-env and conda-env are mutually exclusive. Please specify only one.")
@@ -223,8 +255,9 @@ gateway:
                   raise ValueError("Either conda_env or pixi_project must be specified")
               conda_env = user_conda_env.strip()
 
-          # Without it the scheduler serves no metrics and the monitoring does not see the cluster.
-          if not glob.glob(glob.escape(conda_env) + "/lib/python3*/site-packages/prometheus_client"):
+          # Without it the scheduler serves no metrics and the monitoring does not see the cluster; the gateway cannot look on the service's volume.
+          unseen = user.name == AGENTIC_ANALYSIS and conda_env.startswith(AGENTIC_ANALYSIS_MOUNT["mountPath"] + "/")
+          if not unseen and not glob.glob(glob.escape(conda_env) + "/lib/python3*/site-packages/prometheus_client"):
               raise ValueError(
                   f"prometheus_client is not installed in {conda_env}, or the environment is not readable by everyone. "
                   "The facility's monitoring needs it: run `pixi add prometheus_client` or `conda install prometheus_client` there, "
@@ -247,7 +280,7 @@ gateway:
 
           desired_cores = options.worker_cores
           desired_memory = int(options.worker_memory * 2 ** 30)
-          return {
+          cluster = {
               "worker_cores": desired_cores,
               "worker_cores_limit": desired_cores,
               "worker_memory": desired_memory,
@@ -260,11 +293,20 @@ gateway:
               "scheduler_extra_pod_labels": {"user": user.name},
               "worker_extra_pod_labels": {"user": user.name},
           }
+          if user.name == AGENTIC_ANALYSIS:
+              for role in ("scheduler", "worker"):
+                  pod, container = agentic_analysis_pod(
+                      cluster[f"{role}_extra_pod_config"], getattr(c.KubeClusterConfig, f"{role}_extra_container_config")
+                  )
+                  cluster[f"{role}_extra_pod_config"] = pod
+                  cluster[f"{role}_extra_container_config"] = container
+                  cluster[f"{role}_extra_pod_labels"]["app.kubernetes.io/part-of"] = AGENTIC_ANALYSIS
+          return cluster
 
       # Called per request: the LDAP lookup runs off the event loop, which every API call and scheduler heartbeat shares.
       async def cluster_options(user):
           ids = None
-          if user.name != "jovyan" and not is_external(user):
+          if user.name not in ("jovyan", AGENTIC_ANALYSIS) and not is_external(user):
               try:
                   ids = await asyncio.to_thread(ldap_lookup, user.name)
               except Exception as exc:
@@ -319,7 +361,11 @@ gateway:
           async def authenticate(self, request):
               scheme, _, token = request.headers.get("Authorization", "").partition(" ")
               if scheme != "jupyterhub":
-                  return await super().authenticate(request)
+                  user = await super().authenticate(request)
+                  # Only the agentic-analysis service's own Hub token names it.
+                  if user.name == AGENTIC_ANALYSIS:
+                      raise unauthorized("Basic")
+                  return user
               async with aiohttp.ClientSession() as session:
                   async with session.get(
                       self.hub_api_url + "/user",
@@ -330,7 +376,9 @@ gateway:
                       if resp.status != 200:
                           raise web.HTTPBadGateway(reason="JupyterHub could not verify the token")
                       owner = await resp.json()
-              if owner.get("kind") != "user":
+              if (owner.get("kind"), owner.get("name")) == ("service", AGENTIC_ANALYSIS):
+                  return models.User(AGENTIC_ANALYSIS)
+              if owner.get("kind") != "user" or owner.get("name") == AGENTIC_ANALYSIS:
                   raise unauthorized("jupyterhub")
               return models.User(owner["name"])
 

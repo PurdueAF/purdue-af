@@ -42,3 +42,12 @@ defaultEnv: /work/pixi/global/.pixi/envs/default
 
 ldapHost: geddes-auth.rcac.purdue.edu
 ldapBase: ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+
+# The agentic-analysis Hub service's cluster (apps/agentic-analysis); keptVolumes are those of raycluster.yaml it keeps.
+agenticAnalysis:
+  service: agentic-analysis
+  uid: 1000
+  gid: 1000
+  claim: agentic-analysis
+  mountPath: /agentic-analysis
+  keptVolumes: [log-volume, cvmfs]

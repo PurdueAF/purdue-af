@@ -17,6 +17,7 @@ such GPUs are free, and one of `af-max-workers` with the workers whose GPUs
 are; one that a single GPU starts takes it from another cluster's preemptible
 worker while none is free. Its pods read the most workers it has from
 AF_MAX_WORKERS. A user whose session holds a GPU starts and submits to none.
+The agentic-analysis Hub service gets a cluster too, as config.yaml sets out.
 The settings are in config.yaml.
 """
 
@@ -111,6 +112,7 @@ PROMETHEUS_URL = str(CONFIG["prometheusUrl"])
 DEFAULT_ENV = str(CONFIG["defaultEnv"])
 LDAP_HOST = str(CONFIG["ldapHost"])
 LDAP_BASE = str(CONFIG["ldapBase"])
+AGENTIC_ANALYSIS: dict[str, Any] = CONFIG["agenticAnalysis"]
 # This service's own Hub token, from the `hub` Secret: the file appears once the Hub registers the service.
 SERVICE_TOKEN_FILE = Path("/etc/hub-token/token")
 KUBE_API = "https://kubernetes.default.svc"
@@ -223,6 +225,8 @@ class User:
     gid: int
     # Whether their session holds a GPU of its own.
     session_gpu: bool = False
+    # Whether it is the agentic-analysis Hub service.
+    service: bool = False
 
     @property
     def cluster(self) -> str:
@@ -491,6 +495,34 @@ def load_template() -> dict[str, Any]:
     return template
 
 
+def cluster_template(user: User) -> dict[str, Any]:
+    """The template of the user's cluster: for the agentic-analysis service,
+    with its volume in place of the volumes it does not keep."""
+    template = load_template()
+    if not user.service:
+        return template
+    kept = set(AGENTIC_ANALYSIS["keptVolumes"])
+    volume = {
+        "name": user.name,
+        "persistentVolumeClaim": {"claimName": AGENTIC_ANALYSIS["claim"]},
+    }
+    mount = {"name": user.name, "mountPath": AGENTIC_ANALYSIS["mountPath"]}
+    spec = template["spec"]
+    for pod in (
+        spec["headGroupSpec"]["template"],
+        *(group["template"] for group in spec["workerGroupSpecs"]),
+    ):
+        pod["metadata"]["labels"]["app.kubernetes.io/part-of"] = user.name
+        pod["spec"]["volumes"] = [
+            v for v in pod["spec"]["volumes"] if v["name"] in kept
+        ] + [volume]
+        for container in pod["spec"]["containers"]:
+            container["volumeMounts"] = [
+                m for m in container["volumeMounts"] if m["name"] in kept
+            ] + [mount]
+    return template
+
+
 def env_roots(template: dict[str, Any]) -> list[str]:
     """Where an environment may live: the storage a cluster mounts."""
     pod = template["spec"]["headGroupSpec"]["template"]["spec"]
@@ -503,8 +535,7 @@ def env_roots(template: dict[str, Any]) -> list[str]:
 
 def requested_env(value: str, template: dict[str, Any]) -> str:
     """The environment a call asks for, or the global one."""
-    if not value:
-        return DEFAULT_ENV
+    value = value or DEFAULT_ENV
     path = posixpath.normpath(value)
     roots = env_roots(template)
     if not value.startswith("/") or not any(
@@ -717,7 +748,7 @@ class Gateway:
                 f"{', '.join(unknown)} is no setting of a Ray cluster: the settings are {', '.join(sorted(SETTINGS))}.",
             )
         user = await self.user_for(token)
-        template = load_template()
+        template = cluster_template(user)
         cpus, ram = worker_size(template)
         memory = requested_memory(values.get(MEMORY_METADATA, ""))
         shape = Shape(
@@ -875,7 +906,28 @@ class Gateway:
         cached = self._users.get(key)
         if cached and cached[0] > now:
             return cached[1]
-        name = await self.whoami(token)
+        kind, name = await self.whoami(token)
+        if (kind, name) == ("service", AGENTIC_ANALYSIS["service"]):
+            user = User(
+                name=name,
+                account=name,
+                uid=int(AGENTIC_ANALYSIS["uid"]),
+                gid=int(AGENTIC_ANALYSIS["gid"]),
+                service=True,
+            )
+        elif kind != "user" or name == AGENTIC_ANALYSIS["service"]:
+            raise Refused(
+                grpc.StatusCode.PERMISSION_DENIED,
+                f"The Hub's {kind} {name} gets no Ray cluster.",
+            )
+        else:
+            user = await self.af_user(name)
+        self._users = {k: v for k, v in self._users.items() if v[0] > now}
+        self._users[key] = (now + USER_CACHE_S, user)
+        return user
+
+    async def af_user(self, name: str) -> User:
+        """An AF user, who runs as their LDAP account, or as the pooled account of their session."""
         account = name
         pod = session_pod(await self.hub_user(name))
         if name.endswith(EXTERNAL_SUFFIXES):
@@ -887,18 +939,16 @@ class Gateway:
             # Numbered after the hub id, which the pod name of the user's session carries.
             account = pooled_account(int(pod[1]))
         uid, gid = await asyncio.to_thread(ldap_ids, account)
-        user = User(
+        return User(
             name=name,
             account=account,
             uid=uid,
             gid=gid,
             session_gpu=pod is not None and await self.session_holds_gpu(pod[0]),
         )
-        self._users = {k: v for k, v in self._users.items() if v[0] > now}
-        self._users[key] = (now + USER_CACHE_S, user)
-        return user
 
-    async def whoami(self, token: str) -> str:
+    async def whoami(self, token: str) -> tuple[str, str]:
+        """The kind and the name of the token's owner."""
         async with self.http.get(
             f"{HUB_API}/user", headers={"Authorization": f"token {token}"}
         ) as r:
@@ -912,7 +962,7 @@ class Gateway:
                     grpc.StatusCode.UNAVAILABLE, f"JupyterHub answered HTTP {r.status}."
                 )
             model: dict[str, Any] = await r.json()
-        return str(model["name"])
+        return str(model["kind"]), str(model["name"])
 
     async def hub_user(self, name: str) -> dict[str, Any]:
         async with self.http.get(
@@ -972,7 +1022,9 @@ class Gateway:
             mix = await self.admit(user, shape)
         if cluster is None:
             status, created = await self.kube(
-                "POST", RAYCLUSTERS, build_cluster(load_template(), user, shape, mix)
+                "POST",
+                RAYCLUSTERS,
+                build_cluster(cluster_template(user), user, shape, mix),
             )
             if status == 201:
                 log.info("created %s", user.cluster)

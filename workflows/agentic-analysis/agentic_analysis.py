@@ -43,7 +43,7 @@ CREDENTIALS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
 GATEWAY_TOKEN = "JUPYTERHUB_API_TOKEN"
 # pyroscope-io's wheels bound Python; only conda-forge builds xrootd's bindings.
 CONDA = ("python<3.15", "xrootd")
-# The helpers' and XRootD's; the gateway also asks for prometheus-client.
+# The helpers' and XRootD's, and the prometheus-client a Dask cluster's environment needs (docs/docs/guide-dask-gateway.md#pixi-or-conda-environments).
 PACKAGES = (
     "pyroscope-io",
     "dask-gateway",

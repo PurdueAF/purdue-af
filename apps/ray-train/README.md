@@ -26,7 +26,9 @@ preemptible worker holds one, which its worker evicts. A cluster's pods read
 the most workers it has from `AF_MAX_WORKERS`, by which a training sizes
 itself. A user whose session
 holds a GPU, by the Hub's name of its pod and that pod's requests in
-Prometheus, starts and submits to none. How users
+Prometheus, starts and submits to none. The `agentic-analysis` Hub service
+gets a cluster too, on its own volume
+([apps/agentic-analysis](../agentic-analysis/README.md#hub-service)). How users
 send their training to it:
 [Training on GPUs with Ray](../../docs/docs/guide-ray-train.md).
 

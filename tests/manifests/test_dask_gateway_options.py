@@ -1,5 +1,8 @@
 """The Python the Dask Gateway execs (gateway.extraConfig.config)."""
 
+import base64
+import copy
+import json
 import sys
 import types
 
@@ -10,6 +13,9 @@ from aiohttp.test_utils import TestServer
 from common import REPO, ConfigSink
 
 VALUES = REPO / "apps" / "dask-gateway" / "values.yaml"
+RELEASE = REPO / "apps" / "dask-gateway" / "helmrelease.yaml"
+RAY_CONFIG = REPO / "apps" / "ray-train" / "config.yaml"
+ANALYSIS = REPO / "apps" / "agentic-analysis"
 BASE_DN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
 
 
@@ -24,7 +30,16 @@ class Unauthorized(Exception):
 
 class SimpleAuthenticator:
     async def authenticate(self, request):
-        return "basic"
+        """The user a Basic header names."""
+        scheme, _, encoded = request.headers.get("Authorization", "").partition(" ")
+        if scheme != "Basic":
+            raise Unauthorized("Basic")
+        name = base64.b64decode(encoded).decode().partition(":")[0]
+        return types.SimpleNamespace(name=name)
+
+
+def basic(name):
+    return "Basic " + base64.b64encode(f"{name}:".encode()).decode()
 
 
 @pytest.fixture
@@ -81,9 +96,20 @@ async def test_hub_token_names_its_owner(config):
     )
 
 
+async def test_the_agentic_analysis_services_token_names_it(config):
+    owner = {"kind": "service", "name": "agentic-analysis"}
+    assert await authenticate(config, "jupyterhub secret", owner=owner) == (
+        "agentic-analysis"
+    )
+
+
 @pytest.mark.parametrize(
     "hub_status, owner",
-    [(403, {}), (200, {"kind": "service", "name": "prometheus"})],
+    [
+        (403, {}),
+        (200, {"kind": "service", "name": "prometheus"}),
+        (200, {"kind": "user", "name": "agentic-analysis"}),
+    ],
 )
 async def test_token_the_hub_rejects_or_a_service_owns_is_refused(
     config, hub_status, owner
@@ -97,9 +123,15 @@ async def test_hub_failure_is_not_an_authentication_failure(config):
         await authenticate(config, "jupyterhub secret", 503, {})
 
 
-@pytest.mark.parametrize("header", ["Basic c29tZW9uZTo=", None])
-async def test_other_schemes_go_to_basic(config, header):
-    assert await authenticate(config, header) == "basic"
+async def test_other_schemes_go_to_basic(config):
+    assert (await authenticate(config, basic("someone"))).name == "someone"
+    with pytest.raises(Unauthorized):
+        await authenticate(config, None)
+
+
+async def test_basic_cannot_name_the_agentic_analysis_service(config):
+    with pytest.raises(Unauthorized):
+        await authenticate(config, basic("agentic-analysis"))
 
 
 def build_environment(project, *packages):
@@ -205,6 +237,7 @@ def test_pods_run_as_the_user_without_changing_the_shared_config(config, conda_e
         "nodeSelector": {"cms-af-prod": "true"}
     }
     assert shared["worker_extra_pod_config"] == {"volumes": ["cvmfs"]}
+    assert "worker_extra_container_config" not in cluster
 
 
 async def cluster_handler(config, username, lookup):
@@ -257,6 +290,142 @@ async def test_accounts_outside_purdue_ldap_are_not_looked_up(
     assert (
         cluster["worker_extra_pod_config"]["securityContext"]["runAsUser"] == expected
     )
+
+
+def load_all(path):
+    return [doc for doc in yaml.safe_load_all(path.read_text()) if doc]
+
+
+@pytest.fixture
+def chart_config(config):
+    """The scheduler's and worker's config as the chart sets it from values.yaml."""
+    backend = yaml.safe_load(VALUES.read_text())["gateway"]["backend"]
+    shared = config["c"].KubeClusterConfig
+    for role in ("scheduler", "worker"):
+        shared[f"{role}_extra_pod_config"] = backend[role]["extraPodConfig"]
+        shared[f"{role}_extra_container_config"] = backend[role]["extraContainerConfig"]
+    return copy.deepcopy(dict(shared))
+
+
+async def test_the_agentic_analysis_service_runs_as_its_task_user_on_its_own_volume(
+    config, chart_config
+):
+    (template,) = load_all(ANALYSIS / "podtemplate.yaml")
+    task = template["template"]["spec"]["securityContext"]
+    (claim,) = load_all(ANALYSIS / "volume.yaml")
+    handler, user, threads = await cluster_handler(config, "agentic-analysis", None)
+
+    cluster = handler(request_options(pixi_project="/agentic-analysis/run/jfc"), user)
+
+    assert threads == []
+    env = "/agentic-analysis/run/jfc/.pixi/envs/default"
+    assert cluster["scheduler_cmd"][0] == f"{env}/bin/dask"
+    assert cluster["environment"]["PATH"].startswith(f"{env}/bin/:")
+    for role in ("scheduler", "worker"):
+        pod = cluster[f"{role}_extra_pod_config"]
+        assert pod["securityContext"] == {
+            "runAsUser": task["runAsUser"],
+            "runAsGroup": task["runAsGroup"],
+        }
+        assert (
+            pod["nodeSelector"]
+            == chart_config[f"{role}_extra_pod_config"]["nodeSelector"]
+        )
+        volumes = {v["name"]: v for v in pod["volumes"]}
+        assert volumes.keys() == {"cvmfs", "agentic-analysis"}
+        assert volumes["agentic-analysis"]["persistentVolumeClaim"] == {
+            "claimName": claim["metadata"]["name"]
+        }
+        container = cluster[f"{role}_extra_container_config"]
+        mounts = {m["name"]: m["mountPath"] for m in container["volumeMounts"]}
+        assert mounts == {"cvmfs": "/cvmfs", "agentic-analysis": "/agentic-analysis"}
+        assert cluster[f"{role}_extra_pod_labels"] == {
+            "user": "agentic-analysis",
+            "app.kubernetes.io/part-of": "agentic-analysis",
+        }
+    worker = cluster["worker_extra_container_config"]
+    chart_worker = chart_config["worker_extra_container_config"]
+    assert worker["command"] == chart_worker["command"]
+    assert [e["name"] for e in worker["env"]] == [
+        e["name"]
+        for e in chart_worker["env"]
+        if not e["name"].startswith("DASK_DISTRIBUTED__WORKER__PRELOAD")
+    ]
+    assert dict(config["c"].KubeClusterConfig) == chart_config
+
+
+@pytest.mark.parametrize(
+    "project, conda_env, pixi_env",
+    [
+        ("", "/work/pixi/global/.pixi/envs/default", "default"),
+        ("/depot/cms/users/someone/proj", "", "default"),
+        (
+            "/agentic-analysis/run/jfc",
+            "",
+            "../../../../../work/pixi/global/.pixi/envs/default",
+        ),
+        ("agentic-analysis/run/jfc", "", "default"),
+        ("/agentic-analysis-old/run/jfc", "", "default"),
+    ],
+)
+async def test_the_service_runs_only_an_environment_its_pods_mount(
+    config, chart_config, project, conda_env, pixi_env
+):
+    roots = {
+        m["mountPath"].rstrip("/")
+        for role in ("scheduler", "worker")
+        for m in config["agentic_analysis_pod"](
+            chart_config[f"{role}_extra_pod_config"],
+            chart_config[f"{role}_extra_container_config"],
+        )[1]["volumeMounts"]
+    }
+    assert roots == set(config["AGENTIC_ANALYSIS_ROOTS"])
+    handler, user, _ = await cluster_handler(config, "agentic-analysis", None)
+    options = request_options(conda_env, project)
+    options.pixi_env = pixi_env
+    with pytest.raises(ValueError, match="not on the storage the cluster mounts"):
+        handler(options, user)
+
+
+async def test_the_service_names_a_cvmfs_environment_only_with_prometheus_client(
+    config,
+):
+    handler, user, _ = await cluster_handler(config, "agentic-analysis", None)
+    options = request_options("/cvmfs/none.invalid/env")
+    with pytest.raises(ValueError, match="prometheus_client is not installed"):
+        handler(options, user)
+
+
+@pytest.mark.parametrize("username", ["jovyan", "someone-cern"])
+def test_a_user_naming_the_services_volume_gets_the_prometheus_client_check(
+    options_handler, username
+):
+    options = request_options("/agentic-analysis/run/env", NB_UID="4001", NB_GID="4002")
+    with pytest.raises(ValueError, match="prometheus_client is not installed"):
+        options_handler(options, types.SimpleNamespace(name=username))
+
+
+def test_the_gateway_never_mounts_the_agentic_analysis_volume(config):
+    claim = config["AGENTIC_ANALYSIS_VOLUME"]["persistentVolumeClaim"]["claimName"]
+    gateway = yaml.safe_load(VALUES.read_text())["gateway"]
+    del gateway["extraConfig"]
+    assert claim not in json.dumps(yaml.safe_load(RELEASE.read_text()))
+    assert claim not in json.dumps(gateway)
+
+
+def test_both_gateways_give_the_service_the_same_user_and_storage(config):
+    ray = yaml.safe_load(RAY_CONFIG.read_text())["agenticAnalysis"]
+    assert ray["service"] == config["AGENTIC_ANALYSIS"]
+    assert (
+        ray["claim"]
+        == config["AGENTIC_ANALYSIS_VOLUME"]["persistentVolumeClaim"]["claimName"]
+    )
+    assert ray["mountPath"] == config["AGENTIC_ANALYSIS_MOUNT"]["mountPath"]
+    handler = config["options_handler"]
+    options = request_options(pixi_project=ray["mountPath"] + "/run")
+    cluster = handler(options, types.SimpleNamespace(name=config["AGENTIC_ANALYSIS"]))
+    context = cluster["worker_extra_pod_config"]["securityContext"]
+    assert (context["runAsUser"], context["runAsGroup"]) == (ray["uid"], ray["gid"])
 
 
 def test_clusters_report_to_the_gateway_inside_the_cluster(config):
