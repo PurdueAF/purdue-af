@@ -4,8 +4,8 @@
 # from the launcher.
 FROM python:3.12-slim
 
-COPY --from=ghcr.io/astral-sh/uv:0.13.4 /uv /uvx /bin/
-COPY --from=ghcr.io/prefix-dev/pixi:0.82.0 /usr/local/bin/pixi /usr/local/bin/pixi
+COPY --from=ghcr.io/astral-sh/uv:0.13.5 /uv /uvx /bin/
+COPY --from=ghcr.io/prefix-dev/pixi:0.83.0 /usr/local/bin/pixi /usr/local/bin/pixi
 
 # Claude Code is an npm package around a platform binary; node comes from the
 # official image of the same Debian release rather than apt, which lags.
@@ -22,7 +22,7 @@ RUN apt-get update \
     && ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
-ARG CLAUDE_CODE_VERSION="2.1.304"
+ARG CLAUDE_CODE_VERSION="2.1.310"
 # hadolint ignore=DL3016  # pinned via the ARG above
 RUN npm install -g --no-fund --no-audit \
         "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
