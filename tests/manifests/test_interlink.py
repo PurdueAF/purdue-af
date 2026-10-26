@@ -355,8 +355,8 @@ def test_remote_rbac_lets_the_plugin_poll_pod_status(kubernetes_clusters):
         assert grants_read, f"{cluster}: no Role granting get on pods/status"
 
 
-def _tunnel_nodes(kubernetes_clusters):
-    for cluster, app in kubernetes_clusters.items():
+def _tunnel_nodes(clusters):
+    for cluster, app in clusters.items():
         network = app["values"]["virtualNode"].get("network", {})
         if network.get("enableTunnel"):
             yield cluster, app, network
@@ -374,25 +374,49 @@ def test_kubernetes_tunnel_has_a_client(kubernetes_clusters):
         assert f"image: {client_image}" in network.get("customTemplate", ""), cluster
 
 
-def test_kubernetes_tunnel_command_uses_every_argument(kubernetes_clusters):
+def test_slurm_tunnel_client_matches_the_shadow_image(slurm_clusters):
+    """The Slurm job downloads the wstunnel release its command names; the
+    client speaks the protocol of the shadow's image."""
+    for cluster, _, network in _tunnel_nodes(slurm_clusters):
+        tags = re.findall(r"WSTUNNEL_TAG=(\S+)", network.get("wstunnelCommand", ""))
+        assert len(tags) == 1, f"{cluster}: no single WSTUNNEL_TAG"
+        image = f"ghcr.io/erebe/wstunnel:{tags[0]}"
+        assert image == network.get("tunnelImage"), cluster
+        assert f"image: {image}" in network.get("customTemplate", ""), cluster
+
+
+def test_tunnel_command_uses_every_argument(interlink_clusters):
     """The virtual kubelet fills the command with fmt.Sprintf(path prefix,
     -R options, shadow hostname); one dropped leaves the tunnel unauthorised,
-    portless or misrouted. The sidecar runs it as its main process, so a
-    backgrounded command exits the sidecar at once."""
-    for cluster, _, network in _tunnel_nodes(kubernetes_clusters):
+    portless or misrouted. The Kubernetes sidecar runs it as its main
+    process, so a backgrounded command exits the sidecar at once; a Slurm
+    job runs it ahead of the pod's own command, which a foreground client
+    never lets start."""
+    for cluster, app, network in _tunnel_nodes(interlink_clusters):
         command = network.get("wstunnelCommand", "")
         indexed = {int(n) for n in re.findall(r"%\[(\d)\]s", command)}
         plain = len(re.findall(r"%s", command))
         assert indexed == {1, 2, 3} or (not indexed and plain == 3), (
             f"{cluster}: {command}"
         )
-        assert not command.rstrip().endswith("&"), f"{cluster}: client backgrounded"
+        backgrounded = command.rstrip().endswith("&")
+        assert backgrounded == (_backend(app) == "slurm"), cluster
 
 
-def test_kubernetes_tunnel_ingress_uses_the_cluster_class(kubernetes_clusters):
+def test_tunnel_nodes_share_one_shadow_template(interlink_clusters):
+    """Both nodes' shadows sit behind the same Geddes ingress; the template
+    differs only by mistake."""
+    templates = {
+        network.get("customTemplate")
+        for _, _, network in _tunnel_nodes(interlink_clusters)
+    }
+    assert len(templates) == 1, "shadow templates differ"
+
+
+def test_tunnel_ingress_uses_the_cluster_class(interlink_clusters):
     """Geddes ingresses are served by the `public` class; a shadow Ingress of
     another class gets no route, and the client's upgrade a 404."""
-    for cluster, _, network in _tunnel_nodes(kubernetes_clusters):
+    for cluster, _, network in _tunnel_nodes(interlink_clusters):
         parts = network["customTemplate"].split("\n---\n")
         ingresses = [
             yaml.safe_load(re.sub(r"\{\{[^}]*\}\}", "x", part))
@@ -411,21 +435,21 @@ def test_kubernetes_tunnel_ingress_uses_the_cluster_class(kubernetes_clusters):
 _POD_SUFFIX = len("-0123456789-abcde")
 
 
-def test_supersonic_on_a_tunnel_node_gets_a_unique_shadow(kubernetes_clusters):
-    """SuperSONIC releases on a tunnelled Kubernetes node keep the shadow in
-    cms, the only namespace the facility uses, and name their inference
-    server short enough that each replica's shadow is its own."""
+def test_supersonic_on_a_tunnel_node_gets_a_unique_shadow(interlink_clusters):
+    """SuperSONIC releases on a tunnelled node keep the shadow in cms, the
+    only namespace the facility uses, and name their inference server short
+    enough that each replica's shadow is its own."""
     tunnel_nodes = {
-        app["values"]["nodeName"] for _, app, _ in _tunnel_nodes(kubernetes_clusters)
+        app["values"]["nodeName"] for _, app, _ in _tunnel_nodes(interlink_clusters)
     }
-    checked = 0
+    checked = set()
     for values_file in sorted((REPO / "apps" / "sonic").glob("*/values.yaml")):
         values = yaml.safe_load(values_file.read_text())
         server = values.get("inferenceServer", {})
         node = server.get("nodeSelector", {}).get("kubernetes.io/hostname")
         if node not in tunnel_nodes:
             continue
-        checked += 1
+        checked.add(node)
         release = yaml.safe_load((values_file.parent / "helmrelease.yaml").read_text())[
             "metadata"
         ]["name"]
@@ -435,7 +459,7 @@ def test_supersonic_on_a_tunnel_node_gets_a_unique_shadow(kubernetes_clusters):
         assert len(label) <= 63, f"{values_file}: shadow label {len(label)} > 63"
         annotations = server.get("annotations", {})
         assert annotations.get("interlink.eu/shadow-same-ns") == "true", values_file
-    assert checked, "no SuperSONIC release on a tunnelled Kubernetes node"
+    assert checked == tunnel_nodes, "a tunnelled node runs no SuperSONIC release"
 
 
 def test_kubernetes_nodes_have_no_full_mesh(kubernetes_clusters):

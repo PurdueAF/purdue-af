@@ -67,7 +67,7 @@ the plugin's `wstunnel-client` sidecar
 ([`docker/interlink-kubernetes-plugin/README.md`](../../docker/interlink-kubernetes-plugin/README.md)).
 Nothing on either side runs privileged.
 
-On interlink-nrp:
+On both nodes:
 
 - `geddes.rcac.purdue.edu` has no wildcard DNS, so the client dials
   `cms.geddes.rcac.purdue.edu` and sends the shadow's hostname as `Host`;

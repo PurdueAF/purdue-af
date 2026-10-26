@@ -71,13 +71,96 @@ virtualNode:
     enableTunnel: true
     tunnelImage: "ghcr.io/erebe/wstunnel:v11.1.0"
     wildcardDNS: "geddes.rcac.purdue.edu"
+    # No wildcard DNS: the client dials the ingress by a name that resolves and
+    # sends the shadow's hostname as Host. WSTUNNEL_TAG moves with tunnelImage.
     # Bare $DOWNLOAD_DIR: Flux postBuild substitutes only the braced form.
     wstunnelCommand: |
-      export DOWNLOAD_DIR="/depot/cms/purdue-af/interlink" && \
-      curl -L https://github.com/erebe/wstunnel/releases/download/v10.4.4/wstunnel_10.4.4_linux_amd64.tar.gz -o "$DOWNLOAD_DIR/wstunnel.tar.gz" && \
+      export DOWNLOAD_DIR="/depot/cms/purdue-af/interlink" WSTUNNEL_TAG=v11.1.0 && \
+      curl -L "https://github.com/erebe/wstunnel/releases/download/$WSTUNNEL_TAG/wstunnel_$(echo $WSTUNNEL_TAG | tr -d v)_linux_amd64.tar.gz" -o "$DOWNLOAD_DIR/wstunnel.tar.gz" && \
       tar -xzvf "$DOWNLOAD_DIR/wstunnel.tar.gz" -C "$DOWNLOAD_DIR" && \
       chmod +x "$DOWNLOAD_DIR/wstunnel" && \
-      "$DOWNLOAD_DIR/wstunnel" client --log-lvl WARN --http-upgrade-path-prefix %s %s ws://%s:80 2>&1 | tee -a "$DOWNLOAD_DIR/wstunnel_client.log" &
+      "$DOWNLOAD_DIR/wstunnel" client --log-lvl WARN --http-upgrade-path-prefix %[1]s %[2]s -H "Host: %[3]s" ws://cms.geddes.rcac.purdue.edu:80 2>&1 | tee -a "$DOWNLOAD_DIR/wstunnel_client.log" &
+    # The chart's nginx template with the Geddes ingress class and a pinned image.
+    customTemplate: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: {{.Name}}
+        namespace: {{.Namespace}}
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app.kubernetes.io/component: {{.Name}}
+        template:
+          metadata:
+            labels:
+              app.kubernetes.io/component: {{.Name}}
+          spec:
+            nodeSelector:
+              cms-af-prod: "true"
+            tolerations:
+              - key: hub.jupyter.org/dedicated
+                operator: Equal
+                value: cms-af
+                effect: NoSchedule
+            containers:
+            - name: wstunnel
+              image: ghcr.io/erebe/wstunnel:v11.1.0
+              command: ["/bin/sh", "-c"]
+              args:
+              - exec /home/app/wstunnel server --log-lvl WARN --restrict-http-upgrade-path-prefix {{.RandomPassword}} ws://0.0.0.0:28080
+              ports:
+              - containerPort: 28080
+                name: ws
+                protocol: TCP
+              {{- range .ExposedPorts}}
+              - containerPort: {{.Port}}
+                name: {{.Name}}
+                protocol: {{.Protocol}}
+              {{- end}}
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 90Mi
+                limits:
+                  memory: 256Mi
+      ---
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: {{.Name}}
+        namespace: {{.Namespace}}
+      spec:
+        type: ClusterIP
+        selector:
+          app.kubernetes.io/component: {{.Name}}
+        ports:
+          - port: 28080
+            targetPort: 28080
+            name: ws
+      ---
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: {{.Name}}
+        namespace: {{.Namespace}}
+        annotations:
+          nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+          nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+      spec:
+        ingressClassName: public
+        rules:
+        - host: {{.Name}}-{{.Namespace}}.{{.WildcardDNS}}
+          http:
+            paths:
+            - path: /
+              pathType: Prefix
+              backend:
+                service:
+                  name: {{.Name}}
+                  port:
+                    number: 28080
 
 extraVolumes:
   - name: plugin-data

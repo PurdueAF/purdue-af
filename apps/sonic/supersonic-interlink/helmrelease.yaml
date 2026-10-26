@@ -28,7 +28,7 @@ spec:
         patches:
           - target:
               kind: ScaledObject
-              name: "supersonic-interlink-keda-so"
+              name: "sonic-hammer-keda-so"
             patch: |
               - op: add
                 path: /spec/triggers/0/metadata/timeout
