@@ -91,7 +91,7 @@ jobs:
           key: ${{ steps.key.outputs.key }}
       - name: Login to ghcr.io
         if: (steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4 # Renovate pins to digest
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4 # Renovate pins to digest
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

@@ -47,7 +47,7 @@ runs:
       run: kind create cluster --name af-e2e --wait 60s
     - name: Login to ghcr.io
       if: inputs.ghcr-login == 'true'
-      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4 # Renovate pins to digest
+      uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4 # Renovate pins to digest
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
