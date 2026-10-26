@@ -45,7 +45,9 @@ resources:
   - ../../apps/flyte/secret-console-auth.yaml
 
   # Runs analyses with the JFC methodology on demand (workflows/agentic-analysis).
+  - ../../apps/agentic-analysis/llm-proxy.yaml
   - ../../apps/agentic-analysis/podtemplate.yaml
+  - ../../apps/agentic-analysis/secret-llm-proxy.yaml
   - ../../apps/agentic-analysis/secret-nrp.yaml
   - ../../apps/agentic-analysis/volume.yaml
   - ../../apps/agentic-analysis/workspace.yaml
@@ -147,6 +149,15 @@ configMapGenerator:
   - name: kuberay-operator-config
     files:
       - values.yaml=../../apps/ray/operator/values.yaml
+
+  - name: agentic-analysis-llm-proxy
+    options:
+      annotations:
+        # code and its config, not manifests — keep Flux substitution away
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../apps/agentic-analysis/llm_proxy.py
+      - ../../apps/agentic-analysis/models.toml
 
   - name: ray-train-gateway
     options:

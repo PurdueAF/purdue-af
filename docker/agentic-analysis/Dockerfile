@@ -59,4 +59,4 @@ ENV HOME=/home/app
 # Flyte extracts the code bundle into the cwd; /app is root's.
 WORKDIR /home/app
 # Each runs as that user.
-RUN opencode --version && claude --version && pixi --version
+RUN opencode --version && claude --version && pixi --version && python -c "import httpx"

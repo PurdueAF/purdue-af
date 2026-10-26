@@ -8,10 +8,14 @@ version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "flyte" },
+    { name = "httpx" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "flyte", specifier = "==2.12.1" }]
+requires-dist = [
+    { name = "flyte", specifier = "==2.12.1" },
+    { name = "httpx", specifier = "==0.28.1" },
+]
 
 [[package]]
 name = "aiofiles"
