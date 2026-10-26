@@ -100,6 +100,18 @@
       extractVersionTemplate: '^v(?<version>.*)$',
     },
     {
+      // The wstunnel images inside an interLink node's INI config and shadow
+      // template, both strings to the helm-values manager; they move with
+      // the node's tunnelImage.
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)apps/interlink/.*\\.ya?ml$/'],
+      matchStrings: [
+        'client_image=(?<depName>[^:\\s]+):(?<currentValue>\\S+)',
+        '\\n\\s+image: (?<depName>ghcr\\.io/erebe/wstunnel):(?<currentValue>\\S+)',
+      ],
+      datasourceTemplate: 'docker',
+    },
+    {
       // Coding-agent CLIs baked into the images. Pinned as Dockerfile ARGs
       // (npm install -g <pkg>@<version>), so only a regex manager sees them.
       // The matching code-server extensions are pinned in

@@ -355,17 +355,95 @@ def test_remote_rbac_lets_the_plugin_poll_pod_status(kubernetes_clusters):
         assert grants_read, f"{cluster}: no Role granting get on pods/status"
 
 
-def test_kubernetes_nodes_are_batch_only(kubernetes_clusters):
-    """The Kubernetes plugin runs no wstunnel client, so EnableTunnel would
-    stand up shadow infrastructure nothing ever connects to; full mesh is the
-    feature that makes offloaded pods reachable, and it is a deliberate
-    non-goal until a service needs it."""
+def _tunnel_nodes(kubernetes_clusters):
     for cluster, app in kubernetes_clusters.items():
         network = app["values"]["virtualNode"].get("network", {})
-        assert not network.get("enableTunnel"), (
-            f"{cluster}: enableTunnel is dead weight"
+        if network.get("enableTunnel"):
+            yield cluster, app, network
+
+
+def test_kubernetes_tunnel_has_a_client(kubernetes_clusters):
+    """EnableTunnel stands up a shadow pod per offloaded pod with ports; only
+    the site plugin's wstunnel-client sidecar ever connects to it, and only
+    when [wstunnel] client_image is set. The client speaks the protocol of the
+    shadow's image."""
+    for cluster, app, network in _tunnel_nodes(kubernetes_clusters):
+        client_image = _plugin_ini(app).get("wstunnel", "client_image", fallback="")
+        assert client_image, f"{cluster}: enableTunnel without a client sidecar"
+        assert client_image == network.get("tunnelImage"), cluster
+        assert f"image: {client_image}" in network.get("customTemplate", ""), cluster
+
+
+def test_kubernetes_tunnel_command_uses_every_argument(kubernetes_clusters):
+    """The virtual kubelet fills the command with fmt.Sprintf(path prefix,
+    -R options, shadow hostname); one dropped leaves the tunnel unauthorised,
+    portless or misrouted. The sidecar runs it as its main process, so a
+    backgrounded command exits the sidecar at once."""
+    for cluster, _, network in _tunnel_nodes(kubernetes_clusters):
+        command = network.get("wstunnelCommand", "")
+        indexed = {int(n) for n in re.findall(r"%\[(\d)\]s", command)}
+        plain = len(re.findall(r"%s", command))
+        assert indexed == {1, 2, 3} or (not indexed and plain == 3), (
+            f"{cluster}: {command}"
         )
-        assert not network.get("fullMesh"), f"{cluster}: full mesh is not configured"
+        assert not command.rstrip().endswith("&"), f"{cluster}: client backgrounded"
+
+
+def test_kubernetes_tunnel_ingress_uses_the_cluster_class(kubernetes_clusters):
+    """Geddes ingresses are served by the `public` class; a shadow Ingress of
+    another class gets no route, and the client's upgrade a 404."""
+    for cluster, _, network in _tunnel_nodes(kubernetes_clusters):
+        parts = network["customTemplate"].split("\n---\n")
+        ingresses = [
+            yaml.safe_load(re.sub(r"\{\{[^}]*\}\}", "x", part))
+            for part in parts
+            if re.search(r"^kind: Ingress$", part, re.M)
+        ]
+        assert ingresses, f"{cluster}: no shadow Ingress"
+        for ingress in ingresses:
+            assert ingress["spec"].get("ingressClassName") == "public", cluster
+
+
+# A pod's name becomes "wstunnel-<pod>-<ns>", then "<that>-<ns>" as the
+# shadow hostname's first label; past 63 characters the virtual kubelet
+# truncates the pod name, and replicas of one Deployment collide. A
+# Deployment's pods add "-<pod-template-hash, <=10>-<5>" to its name.
+_POD_SUFFIX = len("-0123456789-abcde")
+
+
+def test_supersonic_on_a_tunnel_node_gets_a_unique_shadow(kubernetes_clusters):
+    """SuperSONIC releases on a tunnelled Kubernetes node keep the shadow in
+    cms, the only namespace the facility uses, and name their inference
+    server short enough that each replica's shadow is its own."""
+    tunnel_nodes = {
+        app["values"]["nodeName"] for _, app, _ in _tunnel_nodes(kubernetes_clusters)
+    }
+    checked = 0
+    for values_file in sorted((REPO / "apps" / "sonic").glob("*/values.yaml")):
+        values = yaml.safe_load(values_file.read_text())
+        server = values.get("inferenceServer", {})
+        node = server.get("nodeSelector", {}).get("kubernetes.io/hostname")
+        if node not in tunnel_nodes:
+            continue
+        checked += 1
+        release = yaml.safe_load((values_file.parent / "helmrelease.yaml").read_text())[
+            "metadata"
+        ]["name"]
+        name = values.get("nameOverride") or release
+        pod = f"{name}-inference-server" + "x" * _POD_SUFFIX
+        label = f"wstunnel-{pod}-cms-cms"
+        assert len(label) <= 63, f"{values_file}: shadow label {len(label)} > 63"
+        annotations = server.get("annotations", {})
+        assert annotations.get("interlink.eu/shadow-same-ns") == "true", values_file
+    assert checked, "no SuperSONIC release on a tunnelled Kubernetes node"
+
+
+def test_kubernetes_nodes_have_no_full_mesh(kubernetes_clusters):
+    """Full mesh runs privileged, NET_ADMIN pods on both clusters, which the
+    Geddes admission policies refuse."""
+    for cluster, app in kubernetes_clusters.items():
+        network = app["values"]["virtualNode"].get("network", {})
+        assert not network.get("fullMesh"), f"{cluster}: full mesh is configured"
 
 
 # --- credentials stay out of git --------------------------------------------

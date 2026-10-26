@@ -1,0 +1,60 @@
+--- a/app/common/config.py
++++ b/app/common/config.py
+@@ -39,6 +39,8 @@
+     OFFLOADING_NODE_SELECTOR = ("offloading", "node_selector")
+     OFFLOADING_NODE_TOLERATIONS = ("offloading", "node_tolerations")
+ 
++    WSTUNNEL_CLIENT_IMAGE = ("wstunnel", "client_image")
++
+     TCP_TUNNEL_ENABLED = ("tcp_tunnel", "enabled")
+     TCP_TUNNEL_BASTION_NAMESPACE = ("tcp_tunnel", "bastion_namespace")
+     TCP_TUNNEL_BASTION_CHART_PATH = ("tcp_tunnel", "bastion_chart_path")
+--- a/app/services/kubernetes_plugin_service.py
++++ b/app/services/kubernetes_plugin_service.py
+@@ -27,6 +27,7 @@
+ _I_RMT_PVC_KEY: Final = "interlink.io/remote-pvc"  # comma-separated list of PVC names
+ _I_RMT_PVC_RETENTION_POLICY_KEY: Final = "interlink.io/pvc-retention-policy"  # "delete" or "retain"
+ _I_PRE_EXEC_KEY: Final = "slurm-job.vk.io/pre-exec"
++_I_WSTUNNEL_CLIENT_CMDS_KEY: Final = "interlink.eu/wstunnel-client-commands"
+ _I_COMMON_LABELS: Final = {"interlink.io": "offloading"}
+ 
+ _MAX_K8S_SEGMENT_NAME: Final = 63
+@@ -259,6 +260,12 @@
+             # for container in pod_spec.containers or []:
+             #     container.security_context = k.V1SecurityContext(privileged=True)
+ 
++        wstunnel_client_image = self.config.get(Option.WSTUNNEL_CLIENT_IMAGE, "")
++        if wstunnel_client_image and metadata.annotations and _I_WSTUNNEL_CLIENT_CMDS_KEY in metadata.annotations:
++            self._add_wstunnel_client_sidecar(
++                pod_spec, metadata.annotations[_I_WSTUNNEL_CLIENT_CMDS_KEY], wstunnel_client_image
++            )
++
+         pod = k.V1Pod(
+             api_version="v1",
+             kind="Pod",
+@@ -480,6 +487,25 @@
+             pod_spec.init_containers = []
+         pod_spec.init_containers.append(init_container)
+         # endregion / Add to pod spec the init container to write and execute mesh.sh
++
++    def _add_wstunnel_client_sidecar(self, pod_spec: k.V1PodSpec, client_cmd: str, image: str) -> None:
++        """Run the virtual kubelet's wstunnel client command beside the pod, unprivileged."""
++        sidecar = k.V1Container(
++            name="wstunnel-client",
++            image=image,
++            command=["/bin/sh", "-c"],
++            args=[client_cmd],
++            restart_policy="Always",
++            resources=k.V1ResourceRequirements(
++                requests={"cpu": "100m", "memory": "128Mi"}, limits={"cpu": "100m", "memory": "128Mi"}
++            ),
++            security_context=k.V1SecurityContext(
++                allow_privilege_escalation=False, capabilities=k.V1Capabilities(drop=["ALL"])
++            ),
++        )
++        if not pod_spec.init_containers:
++            pod_spec.init_containers = []
++        pod_spec.init_containers.append(sidecar)
+ 
+     def _extract_heredoc(self, text: str, marker: str) -> str:
+         """Extract heredoc content between markers."""

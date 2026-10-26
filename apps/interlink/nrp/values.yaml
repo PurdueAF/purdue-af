@@ -67,6 +67,11 @@ plugin:
     [tcp_tunnel]
     enabled=False
 
+    [wstunnel]
+    # Runs the virtual kubelet's tunnel command beside each offloaded pod with
+    # exposed ports; keep in step with virtualNode.network.tunnelImage.
+    client_image=ghcr.io/erebe/wstunnel:v11.1.0
+
 virtualNode:
   image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:0.7.0-pre1
   # The local scheduler's gate only; NRP places the real pod. One pod per GPU,
@@ -80,6 +85,97 @@ virtualNode:
         available: "20"
 
   disableCSR: true
+
+  # A pod with exposed ports gets a shadow pod here and a tunnel client on NRP
+  # (the plugin's wstunnel-client sidecar), so Geddes reaches its ports.
+  network:
+    enableTunnel: true
+    tunnelImage: "ghcr.io/erebe/wstunnel:v11.1.0"
+    wildcardDNS: "geddes.rcac.purdue.edu"
+    # No wildcard DNS: the client dials the ingress by a name that resolves and
+    # sends the shadow's hostname as Host. Runs in the foreground as the sidecar.
+    wstunnelCommand: 'exec /home/app/wstunnel client --log-lvl WARN --http-upgrade-path-prefix %[1]s %[2]s -H "Host: %[3]s" ws://cms.geddes.rcac.purdue.edu:80'
+    # The chart's nginx template with the Geddes ingress class and a pinned image.
+    customTemplate: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: {{.Name}}
+        namespace: {{.Namespace}}
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app.kubernetes.io/component: {{.Name}}
+        template:
+          metadata:
+            labels:
+              app.kubernetes.io/component: {{.Name}}
+          spec:
+            nodeSelector:
+              cms-af-prod: "true"
+            tolerations:
+              - key: hub.jupyter.org/dedicated
+                operator: Equal
+                value: cms-af
+                effect: NoSchedule
+            containers:
+            - name: wstunnel
+              image: ghcr.io/erebe/wstunnel:v11.1.0
+              command: ["/bin/sh", "-c"]
+              args:
+              - exec /home/app/wstunnel server --log-lvl WARN --restrict-http-upgrade-path-prefix {{.RandomPassword}} ws://0.0.0.0:28080
+              ports:
+              - containerPort: 28080
+                name: ws
+                protocol: TCP
+              {{- range .ExposedPorts}}
+              - containerPort: {{.Port}}
+                name: {{.Name}}
+                protocol: {{.Protocol}}
+              {{- end}}
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 90Mi
+                limits:
+                  memory: 256Mi
+      ---
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: {{.Name}}
+        namespace: {{.Namespace}}
+      spec:
+        type: ClusterIP
+        selector:
+          app.kubernetes.io/component: {{.Name}}
+        ports:
+          - port: 28080
+            targetPort: 28080
+            name: ws
+      ---
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: {{.Name}}
+        namespace: {{.Namespace}}
+        annotations:
+          nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+          nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+      spec:
+        ingressClassName: public
+        rules:
+        - host: {{.Name}}-{{.Namespace}}.{{.WildcardDNS}}
+          http:
+            paths:
+            - path: /
+              pathType: Prefix
+              backend:
+                service:
+                  name: {{.Name}}
+                  port:
+                    number: 28080
 
 extraVolumes:
   - name: kubeconfig
