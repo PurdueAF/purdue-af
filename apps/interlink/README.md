@@ -21,9 +21,8 @@ hammer's plugin runs the site Slurm sidecar image
 nrp's runs the site [interlink-kubernetes-plugin](https://github.com/interlink-hq/interlink-kubernetes-plugin)
 image ([`docker/interlink-kubernetes-plugin/README.md`](../../docker/interlink-kubernetes-plugin/README.md)).
 Both are tagged with their upstream ref (`PLUGIN_REF`), pinned in each node's
-values; the k8s image carries the `ensure-namespace` patch, and nrp sets
-`ensure_namespace=False` because NRP grants namespaced RBAC only — the
-offloading namespace is created out of band.
+values; nrp sets the k8s image's `ensure_namespace=False` because NRP grants
+namespaced RBAC only — the offloading namespace is created out of band.
 
 A node is deployed only once its credential exists — without it the node pod
 never starts — so a new node stays commented out in
@@ -60,10 +59,28 @@ metadata:
     interlink.io/remote-pvc: cvmfs
 ```
 
-Offloading to NRP is batch-style: a service inside an offloaded pod is not
-reachable from Geddes. The Kubernetes plugin runs no tunnel client, so
-hammer's wstunnel shadow would never connect; making one reachable takes
-interLink full mesh, which is not part of this setup.
+Both nodes make an offloaded pod's declared container ports reachable from
+Geddes with wstunnel: the virtual kubelet stands up a shadow pod behind an
+ingress under `geddes.rcac.purdue.edu`, and gives the pod its IP; the remote
+side opens a reverse tunnel to it — on Hammer the job's own command, on NRP
+the plugin's `wstunnel-client` sidecar
+([`docker/interlink-kubernetes-plugin/README.md`](../../docker/interlink-kubernetes-plugin/README.md)).
+Nothing on either side runs privileged.
+
+On interlink-nrp:
+
+- `geddes.rcac.purdue.edu` has no wildcard DNS, so the client dials
+  `cms.geddes.rcac.purdue.edu` and sends the shadow's hostname as `Host`;
+  the shadow Ingress is of the `public` class.
+- A pod sets `interlink.eu/shadow-same-ns: "true"` so its shadow lands in
+  `cms`; without it the virtual kubelet uses a `cms-wstunnel` namespace.
+- The shadow's hostname is built from the pod's name, truncated past 63
+  characters, so a Deployment's name must be short enough that its replicas
+  stay distinct — `tests/manifests/test_interlink.py` checks the SuperSONIC
+  releases.
+- A slow first start can outlast how long the virtual kubelet waits for the
+  shadow pod's IP; the pod annotation
+  `interlink.virtual-kubelet.io/wstunnel-timeout` raises it.
 
 The facility's NRP S3 keys, endpoint and bucket are the `nrp-s3` Secret,
 SOPS-encrypted in [`nrp/secret-s3.yaml`](nrp/secret-s3.yaml). The keys belong
