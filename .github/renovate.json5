@@ -101,14 +101,17 @@
     },
     {
       // The wstunnel images inside an interLink node's INI config and shadow
-      // template, both strings to the helm-values manager; they move with
-      // the node's tunnelImage.
+      // template, and the release Hammer's tunnel command downloads, all
+      // strings to the helm-values manager; they move with the node's
+      // tunnelImage.
       customType: 'regex',
       managerFilePatterns: ['/(^|/)apps/interlink/.*\\.ya?ml$/'],
       matchStrings: [
-        'client_image=(?<depName>[^:\\s]+):(?<currentValue>\\S+)',
-        '\\n\\s+image: (?<depName>ghcr\\.io/erebe/wstunnel):(?<currentValue>\\S+)',
+        'client_image=ghcr\\.io/erebe/wstunnel:(?<currentValue>\\S+)',
+        '\\n\\s+image: ghcr\\.io/erebe/wstunnel:(?<currentValue>\\S+)',
+        'WSTUNNEL_TAG=(?<currentValue>v[^\\s&]+)',
       ],
+      depNameTemplate: 'ghcr.io/erebe/wstunnel',
       datasourceTemplate: 'docker',
     },
     {

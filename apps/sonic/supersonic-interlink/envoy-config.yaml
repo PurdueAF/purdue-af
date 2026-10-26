@@ -136,5 +136,5 @@ static_resources:
                   address:
                     socket_address:
                       # Trailing dot: search domains could return NXDOMAIN and empty the host set.
-                      address: supersonic-interlink-inference-server.cms.svc.cluster.local.
+                      address: sonic-hammer-inference-server.cms.svc.cluster.local.
                       port_value: 8001

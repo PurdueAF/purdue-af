@@ -34,7 +34,7 @@ spec:
                 - |
                   set -eu
                   kubectl get pods \
-                    -l app.kubernetes.io/instance=supersonic-interlink,app.kubernetes.io/component=inference-server \
+                    -l app.kubernetes.io/instance=sonic-hammer,app.kubernetes.io/component=inference-server \
                     --field-selector status.phase=Failed \
                     -o name \
                   | xargs -r kubectl delete --wait=false

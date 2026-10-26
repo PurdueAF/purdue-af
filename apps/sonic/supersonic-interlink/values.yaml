@@ -1,4 +1,8 @@
-# Triton offloaded to Slurm on Hammer through interLink; Envoy stays on AF nodes.
+# Triton offloaded to Slurm on Hammer through interLink; Envoy stays on AF nodes
+# and reaches Triton's ports through the node's wstunnel (apps/interlink/README.md).
+
+# Short: interLink derives each Triton pod's shadow hostname from its name.
+nameOverride: sonic-hammer
 
 serverLoadThreshold: 20
 
@@ -8,7 +12,7 @@ scaleFromZero:
   readyTimeoutSeconds: 900
   holdMinReplicasSeconds: 900
 
-serverLoadMetric: 'sum (rate(nv_inference_queue_duration_us{app=~"supersonic", release=~"supersonic-interlink", namespace=~"cms"}[30s])) / sum ((rate(nv_inference_exec_count{app=~"supersonic", release=~"supersonic-interlink", namespace=~"cms"}[30s]) * 1000))'
+serverLoadMetric: 'sum (rate(nv_inference_queue_duration_us{app=~"supersonic", release=~"sonic-hammer", namespace=~"cms"}[30s])) / sum ((rate(nv_inference_exec_count{app=~"supersonic", release=~"sonic-hammer", namespace=~"cms"}[30s]) * 1000))'
 
 inferenceServer:
   # The tag must exist under /cvmfs/unpacked.cern.ch/nvcr.io/nvidia/, or the job fails at startup.
@@ -35,6 +39,8 @@ inferenceServer:
     slurm-job.vk.io/flags: "--uid=616617 -A cms --gres=gpu:1 --time=0-04:00:00"
     interlink.virtual-kubelet.io/wstunnel-timeout: "5m"
     interlink.eu/wstunnel-extra-ports: "8000:http:TCP,8001:grpc:TCP,8002:metrics:TCP"
+    # The shadow pod in cms rather than a cms-wstunnel namespace.
+    interlink.eu/shadow-same-ns: "true"
   service:
     labels:
       scrape_metrics: "true"
