@@ -17,15 +17,18 @@ def train_loop(config: dict) -> None:
     model = torch.nn.Sequential(
         torch.nn.Linear(FEATURES, 64), torch.nn.ReLU(), torch.nn.Linear(64, 1)
     )
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    start = 0
+    state = None
     if checkpoint := ray.train.get_checkpoint():
         with checkpoint.as_directory() as directory:
-            state = torch.load(os.path.join(directory, "state.pt"))
+            state = torch.load(os.path.join(directory, "state.pt"), map_location="cpu")
         model.load_state_dict(state["model"])
+    model = ray.train.torch.prepare_model(model)
+    # Created after the model is on its device: load_state_dict puts the optimizer's state on its parameters' device.
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    start = 0
+    if state:
         optimizer.load_state_dict(state["optimizer"])
         start = state["epoch"] + 1
-    model = ray.train.torch.prepare_model(model)
     device = ray.train.torch.get_device()
     rank = ray.train.get_context().get_world_rank()
     if rank == 0:
