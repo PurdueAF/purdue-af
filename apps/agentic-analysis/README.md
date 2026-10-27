@@ -15,7 +15,7 @@ on the Flyte control plane ([`apps/flyte`](../flyte)).
 | `llm_proxy.py`          | The [LLM proxy](#llm-proxy)                                                                                                                                                           |
 | `models.toml`           | The proxy's roles, models and limits                                                                                                                                                  |
 | `llm-proxy.yaml`        | The proxy's Deployment and Service, `agentic-analysis-llm-proxy`, running both files from the ConfigMap Flux makes of them                                                            |
-| `podtemplate.yaml`      | Pod spec of every task pod: AF node placement, the account's user, the model credentials, the account's token, where profiles go, the Dask Gateway, the facility's grid proxy and CVMFS, the volume at `/agentic-analysis` |
+| `podtemplate.yaml`      | Pod spec of every task pod: AF node placement, the account's user, the LLM proxy and its client token, the account's token, where profiles go, the Dask Gateway, the facility's grid proxy and CVMFS, the volume at `/agentic-analysis` |
 | `secret-account.yaml`   | The `agentic-analysis-account` Secret ([Secrets](#secrets))                                                                                                                           |
 | `secret-llm-proxy.yaml` | The `agentic-analysis-llm-proxy` Secret ([Secrets](#secrets))                                                                                                                         |
 | `secret-nrp.yaml`       | The `agentic-analysis-nrp` Secret ([Secrets](#secrets))                                                                                                                               |
@@ -24,20 +24,13 @@ on the Flyte control plane ([`apps/flyte`](../flyte)).
 
 ## Secrets
 
-| Secret                       | In repo   | Holds                                                                                                   |
-| ---------------------------- | --------- | ------------------------------------------------------------------------------------------------------- |
-| `agentic-analysis-account`   | yes, SOPS | `token`: the token of the workload account `account.yaml` declares                                      |
-| `agentic-analysis-llm-proxy` | yes, SOPS | `client-token`: the bearer token the proxy's clients send                                               |
-| `agentic-analysis-nrp`       | yes, SOPS | `api-key`: the API key of [NRP's managed LLMs](https://nrp.ai/documentation/userdocs/ai/llm-managed/)   |
-| `jfc-claude`                 | no        | Created by hand. Each key becomes an environment variable of the task pods, named as its reader expects |
+| Secret                       | Holds                                                                                                 |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `agentic-analysis-account`   | `token`: the token of the workload account `account.yaml` declares                                    |
+| `agentic-analysis-llm-proxy` | `client-token`: the bearer token the proxy's clients, the task pods, send                             |
+| `agentic-analysis-nrp`       | `api-key`: the API key of [NRP's managed LLMs](https://nrp.ai/documentation/userdocs/ai/llm-managed/) |
 
-`jfc-claude` holds one of these keys:
-
-- `CLAUDE_CODE_OAUTH_TOKEN`, as printed by `claude setup-token`: runs count
-  against that account's subscription
-- `ANTHROPIC_API_KEY`: runs are billed to the API account
-
-The task pods set `JUPYTERHUB_API_TOKEN` empty, whatever `jfc-claude` holds.
+Each is in this directory, encrypted with SOPS.
 
 ## LLM proxy
 
@@ -63,7 +56,7 @@ NRP's fair use:
 - it refuses bodies, image counts and prompt sizes the models would not take,
   as a context overflow, which OpenCode answers by compacting the session.
 
-`/v1/models` lists the roles, `/config` their contexts and image counts for a
+`/v1/models` lists the roles, `/config` their contexts and image counts for the
 runner, `/status` each model's slots and load, `/healthz` that it runs. Each
 request it forwards leaves one JSON line in its log. The proxy exits once the kubelet's
 copy of either file differs from the one it started with, and starts again with

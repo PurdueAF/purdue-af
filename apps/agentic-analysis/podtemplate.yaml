@@ -24,20 +24,20 @@ template:
     containers:
       - name: default
         image: overridden-by-flyte
-        # The Anthropic credential: apps/agentic-analysis/README.md#secrets.
-        envFrom:
-          - secretRef:
-              name: jfc-claude
-              optional: true
         env:
           # Where and as what the analysis's scripts send their profiles.
           - name: PYROSCOPE_SERVER
             value: http://pyroscope.cms.svc.cluster.local:4040
           - name: PYROSCOPE_APP
             value: agentic-analysis
-          # The clusters are the workload account's: a Hub token jfc-claude may hold stays out of the task.
-          - name: JUPYTERHUB_API_TOKEN
-            value: ""
+          # The LLM proxy the agents' models are behind, and the token it takes (llm-proxy.yaml).
+          - name: AF_LLM_PROXY
+            value: http://agentic-analysis-llm-proxy:8080
+          - name: AF_LLM_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: agentic-analysis-llm-proxy
+                key: client-token
           # The account's token, which af_dask and af_ray send (../dask-gateway/README.md#workload-accounts).
           - name: AF_ACCOUNT_TOKEN_FILE
             value: /etc/af-account/token
