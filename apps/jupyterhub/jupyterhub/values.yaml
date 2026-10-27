@@ -353,6 +353,8 @@ hub:
       admin_users: ["dkondra"]
       oauth_callback_url: ${jupyterhub_oauth_callback_url}
       enable_auth_state: true
+      # CILogon rejects any scope not registered for this client; keep in sync with tests/e2e_hub/mock-cilogon.py.
+      scope: ["openid", "email", "org.cilogon.userinfo"]
       idps:
         https://cern.ch/login:
           allow_all: true

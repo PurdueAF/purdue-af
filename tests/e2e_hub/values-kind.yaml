@@ -117,5 +117,13 @@ scheduling:
   userPods:
     tolerations: []
 
+prePuller:
+  extraImages:
+    # Its geddes-registry host resolves only inside Purdue, and the schema forbids null:
+    # stand in the AF image, already on the node and with the shell the puller runs.
+    ray-train:
+      name: "__PRODUCTION_IMAGE_NAME__"
+      tag: "__PRODUCTION_IMAGE_TAG__"
+
 ingress:
   enabled: false

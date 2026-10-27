@@ -47,6 +47,7 @@ send their training to it:
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `gateway.py`         | The gateway: relays Ray Client and Jobs API calls, creates and deletes users' RayClusters, and creates a RayJob per submission |
 | `config.yaml`        | The gateway's settings: timeouts, GPU limits, the addresses it asks, and the volumes a workload account's cluster keeps    |
+| `nrp_gpus.py`        | How many GPUs NRP Nautilus has free for Ray workers, by region, from NRP's public Prometheus; `GET /af/nrp-gpus` on the gateway's `:8265` answers it |
 | `raycluster.yaml`    | The template of a user's cluster, and of a job's; the gateway fills in its name, the user's UID/GID, its environment, its token Secret and its worker groups, one per kind of GPU and priority |
 | `deployment.yaml`    | The gateway pod: the stock Ray image, with the files above from the `ray-train-gateway` ConfigMap and the workload accounts' declarations from `af-accounts` |
 | `service.yaml`       | `ray-train-gateway:10001` for Ray Client and `:8265` for the Jobs API, the addresses notebooks connect to                 |
@@ -96,4 +97,12 @@ kubectl -n cms get rayjobs -l app.kubernetes.io/managed-by=ray-train-gateway
 kubectl -n cms get pod -l app=ray-train-gateway
 kubectl -n cms logs deploy/ray-train-gateway
 kubectl -n cms logs deploy/ray-train-gateway --previous
+```
+
+The GPUs free on NRP for workers of the shape `nrpWorker` in `config.yaml`
+names, from a session, or from a checkout with `aiohttp` and `pyyaml`:
+
+```bash
+curl -s http://ray-train-gateway:8265/af/nrp-gpus
+python apps/ray-train/nrp_gpus.py
 ```

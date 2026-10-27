@@ -322,6 +322,12 @@
       allowedVersions: '<2025.4.0',
     },
     {
+      // traefik chart >=42 requires kubeVersion >=1.30; cluster is on 1.29.
+      matchManagers: ['flux'],
+      matchPackageNames: ['traefik'],
+      allowedVersions: '<42.0.0',
+    },
+    {
       // Hold Triton at 26.04 for Geddes GPU nodes on NVIDIA driver R580.
       // 26.06+ is CUDA 13.3.x, whose paired Linux driver is >=610.43.02
       // (CUDA Toolkit release notes Table 3). CUDA 13.x MVC lists >=580 as
@@ -355,6 +361,7 @@
       // dask-gateway's proxy, on the path of every client-to-scheduler
       // connection: merged by hand. Traefik 3 needs the CRDs and RBAC of
       // chart >=2025.4.0.
+      matchFileNames: ['apps/dask-gateway/**'],
       matchDatasources: ['docker'],
       matchPackageNames: ['docker.io/library/traefik'],
       allowedVersions: '/^2\\./',

@@ -21,7 +21,9 @@ are; one that a single GPU starts takes it from another cluster's preemptible
 worker while none is free. Its pods read the most workers it has from
 AF_MAX_WORKERS. A user whose session holds a GPU starts and submits to none.
 A workload account's token gets the account a cluster of its own
-(../dask-gateway/README.md#workload-accounts). The settings are in config.yaml.
+(../dask-gateway/README.md#workload-accounts). `GET /af/nrp-gpus` on the Jobs
+API's port answers how many GPUs NRP Nautilus has free for Ray workers, by
+region (nrp_gpus.py). The settings are in config.yaml.
 """
 
 from __future__ import annotations
@@ -63,6 +65,7 @@ from aiohttp import (
     web,
 )
 from gpu_queries import ALLOC_QUERY, GPU_METRICS, PREEMPTIBLE_QUERY, USED_QUERY
+from nrp_gpus import as_dict, free_gpus, worker_of
 from yarl import URL
 
 log = logging.getLogger("ray-train-gateway")
@@ -116,6 +119,8 @@ WORKER_MEMORY_GB_MIN = int(CONFIG["workerMemoryGbMin"])
 WORKER_MEMORY_GB_MAX = int(CONFIG["workerMemoryGbMax"])
 PREEMPTIBLE_PRIORITY_CLASS = str(CONFIG["preemptiblePriorityClass"])
 PROMETHEUS_URL = str(CONFIG["prometheusUrl"])
+NRP_PROMETHEUS_URL = str(CONFIG["nrpPrometheusUrl"])
+NRP_WORKER = worker_of(CONFIG)
 DEFAULT_ENV = str(CONFIG["defaultEnv"])
 LDAP_HOST = str(CONFIG["ldapHost"])
 LDAP_BASE = str(CONFIG["ldapBase"])
@@ -1926,7 +1931,17 @@ async def reap_forever(gateway: Gateway) -> None:
 
 
 def dashboard_app(gateway: Gateway) -> web.Application:
+    async def nrp_gpus(request: web.Request) -> web.Response:
+        """The GPUs free on NRP for Ray workers, by region: public, so asked by no user."""
+        try:
+            regions = await free_gpus(gateway.http, NRP_PROMETHEUS_URL, NRP_WORKER)
+        except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as error:
+            log.warning("asking NRP's Prometheus: %r", error)
+            return web.Response(status=503, text="NRP's Prometheus did not answer")
+        return web.json_response(as_dict(regions))
+
     app = web.Application()
+    app.router.add_get("/af/nrp-gpus", nrp_gpus)
     app.router.add_route("*", "/{path:.*}", gateway.handle)
     return app
 

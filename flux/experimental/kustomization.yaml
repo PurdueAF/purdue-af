@@ -65,6 +65,8 @@ resources:
   - ../../apps/interlink/hammer/helmrelease.yaml
   - ../../apps/interlink/nrp/helmrelease.yaml
   - ../../apps/interlink/nrp/secret-s3.yaml
+  - ../../apps/interlink/traefik/helmrepo.yaml
+  - ../../apps/interlink/traefik/helmrelease.yaml
 
   - ../../apps/af-utils/pixi-global-sync/deployment.yaml
 
@@ -177,6 +179,7 @@ configMapGenerator:
       - ../../apps/ray-train/gateway.py
       - ../../apps/ray-train/config.yaml
       - ../../apps/ray-train/raycluster.yaml
+      - ../../apps/ray-train/nrp_gpus.py
       # how the Hub's profile form counts free GPUs
       - ../../apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py
 
@@ -191,6 +194,10 @@ configMapGenerator:
   - name: interlink-nrp-config
     files:
       - values.yaml=../../apps/interlink/nrp/values.yaml
+
+  - name: interlink-traefik-config
+    files:
+      - values.yaml=../../apps/interlink/traefik/values.yaml
 
   - name: af-node-monitor-config
     files:

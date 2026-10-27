@@ -37,6 +37,7 @@ from common import REFUSED_ACCOUNTS, REPO, account, load_script, mount_configmap
 
 # gpu_queries.py is in the gateway's ConfigMap, beside gateway.py.
 sys.path.insert(0, str(REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles"))
+sys.path.insert(0, str(REPO / "apps" / "ray-train"))
 gw = load_script(REPO / "apps" / "ray-train" / "gateway.py", "ray_train_gateway")
 
 TEMPLATE = REPO / "apps" / "ray-train" / "raycluster.yaml"
