@@ -85,6 +85,11 @@ On both nodes:
   shadow pod's IP; the pod annotation
   `interlink.virtual-kubelet.io/wstunnel-timeout` raises it.
 
+[`traefik/`](traefik/values.yaml) is a Traefik in `cms` on a
+`geddes-public-pool` address, for the tunnels' shadow Ingresses. It serves only
+Ingresses in `cms` annotated `kubernetes.io/ingress.class: interlink-tunnel`,
+from a namespaced Role.
+
 The facility's NRP S3 keys, endpoint and bucket are the `nrp-s3` Secret,
 SOPS-encrypted in [`nrp/secret-s3.yaml`](nrp/secret-s3.yaml). The keys belong
 to one S3 pool, and `AWS_ENDPOINT_URL` names it.
