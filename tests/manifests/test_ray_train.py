@@ -55,6 +55,7 @@ def test_flux_deploys_the_gateway():
         "../../apps/ray-train/gateway.py",
         "../../apps/ray-train/config.yaml",
         "../../apps/ray-train/raycluster.yaml",
+        "../../apps/ray-train/nrp_gpus.py",
         "../../apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py",
     ]
     annotations = generator["options"]["annotations"]
