@@ -62,6 +62,19 @@ def test_hub_alert_is_scoped_to_this_environment():
     )
 
 
+def test_login_callback_alert_ignores_denied_users_and_successes():
+    """A denied user gets a 403 at the callback; only a 400 run with no 302
+    in the same window means the identity provider is rejecting logins."""
+    rule = next(r for r in rules() if r["alert"] == "AFLoginCallbackFailing")
+    expr = rule["expr"]
+    assert expr.count('instance="${jupyterhub_host}"') == 2, expr
+    assert 'handler="oauthenticator.oauth2.OAuthCallbackHandler"' in expr
+    failing, _, succeeded = expr.partition("unless")
+    assert 'code="400"' in failing and "403" not in expr
+    assert 'code="302"' in succeeded
+    assert rule["labels"]["component"] == "access"
+
+
 def test_mount_invalid_is_a_warning_not_an_error():
     """Transient storage failures must not flip Facility health / MCP Degraded."""
     invalid = next(r for r in rules() if r["alert"] == "AFMountInvalid")
