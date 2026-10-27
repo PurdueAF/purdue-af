@@ -546,7 +546,8 @@ def test_remote_affinity_annotations_are_node_affinity_json(interlink_clusters):
 def test_probes_on_slurm_nodes_use_port_numbers(slurm_clusters):
     """The Slurm plugin runs a pod's probes in the job and passes a named port
     through as 0, so an HTTP probe on "http" never succeeds and the startup
-    probe kills the container."""
+    probe kills the container. The supersonic chart's schema requires a string
+    and renders it unquoted, so the number goes in quotes."""
     nodes = {app["values"]["nodeName"] for app in slurm_clusters.values()}
     checked = 0
     for values_file in sorted((REPO / "apps" / "sonic").glob("*/values.yaml")):
@@ -560,7 +561,7 @@ def test_probes_on_slurm_nodes_use_port_numbers(slurm_clusters):
         for probe in ("startupProbe", "readinessProbe", "livenessProbe"):
             for action in ("httpGet", "tcpSocket", "grpc"):
                 port = (server.get(probe) or {}).get(action, {}).get("port")
-                assert port is None or isinstance(port, int), (
+                assert port is None or (isinstance(port, str) and port.isdigit()), (
                     f"{values_file}: {probe}.{action}.port={port!r}"
                 )
         checked += 1
