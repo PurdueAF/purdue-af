@@ -136,6 +136,24 @@ def test_slurm_clusters_share_one_plugin_image(active_slurm_clusters):
     assert "ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:" in image, image
 
 
+def test_slurm_commands_run_the_client_startup_activates(slurm_clusters):
+    """The image keeps one Slurm client per version and startup.sh links the
+    chosen one into a single directory; nothing is installed in /usr/bin, so a
+    path elsewhere fails every submission."""
+    startup = (REPO / "docker/interlink-slurm-plugin/startup.sh").read_text()
+    active_bin = re.search(r'^active_bin="([^"]+)"', startup, re.M).group(1)
+    for cluster, app in slurm_clusters.items():
+        config = yaml.safe_load(app["values"]["plugin"]["config"])
+        for key, tool in (
+            ("SbatchPath", "sbatch"),
+            ("ScancelPath", "scancel"),
+            ("SqueuePath", "squeue"),
+        ):
+            assert config.get(key) == f"{active_bin}/{tool}", (
+                f"{cluster}: {key}={config.get(key)}"
+            )
+
+
 def test_plugin_image_tag_matches_plugin_ref(active_clusters):
     """Tag == PLUGIN_REF == the upstream ref each site image builds from.
     Not :latest."""

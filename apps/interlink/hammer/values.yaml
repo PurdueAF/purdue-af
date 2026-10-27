@@ -46,9 +46,10 @@ plugin:
     EnableProbes: true
     DataRootFolder: "/depot/cms/purdue-af/interlink/"
     ExportPodData: true
-    SbatchPath: "/usr/bin/sbatch"
-    ScancelPath: "/usr/bin/scancel"
-    SqueuePath: "/usr/bin/squeue"
+    # The image links the cluster's Slurm client here (docker/interlink-slurm-plugin/startup.sh).
+    SbatchPath: "/opt/purdue-af/slurm-active/bin/sbatch"
+    ScancelPath: "/opt/purdue-af/slurm-active/bin/scancel"
+    SqueuePath: "/opt/purdue-af/slurm-active/bin/squeue"
     CommandPrefix: ""
     ContainerRuntime: "singularity"
     SingularityPrefix: ""
