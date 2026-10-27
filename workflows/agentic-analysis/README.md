@@ -4,7 +4,7 @@ Runs physics analyses unattended on [Flyte 2](https://www.union.ai/docs/v2/flyte
 with the [JFC](https://github.com/jfc-mit/jfc) methodology: Claude Code,
 following the JFC specification, takes an analysis from its prompt to a typeset
 analysis note. The control plane is [`apps/flyte`](../../apps/flyte); the task
-pods, their directory on `/work`, the volume and the model credentials are
+pods, the volume they work in, their workload account and the model credentials are
 [`apps/agentic-analysis`](../../apps/agentic-analysis); the task image is
 [`docker/agentic-analysis`](../../docker/agentic-analysis). An analysis is a
 directory under [`analyses/`](analyses) with an `analysis.toml`, such as
@@ -34,15 +34,15 @@ which the agent and every subagent read: how this facility runs subagents,
 reads CMS data through XCache with the grid proxy the task pods hold, processes
 it on [Dask Gateway](../../apps/dask-gateway) with `af_dask.client()`, and
 trains on GPUs through [Ray](../../apps/ray-train) with `af_ray.client()`.
-Whose those clusters are:
-[`apps/agentic-analysis`](../../apps/agentic-analysis/README.md#secrets). In the
-workspace, they write only to `shared/`.
+Those clusters are the
+[workload account](../../apps/dask-gateway/README.md#workload-accounts)
+`agentic-analysis`'s.
 
-A workspace is `/work/projects/agentic-analysis/<name of its first run>`: the JFC checkout
+A workspace is `/agentic-analysis/<name of its first run>`: the JFC checkout
 with the analysis scaffolded in it, its pixi environment and git history, the
 agent's session, the replies it was given, the tokens its runs have processed,
-the last run's output in `said.md`, and `shared/` for what the clusters write.
-An analysis's data is fetched once per URL under `/work/projects/agentic-analysis/data`. A
+and the last run's output in `said.md`. An analysis's data is fetched once
+per URL under `/agentic-analysis/data`. A
 retried task resumes the session.
 
 Every Python process in an analysis's environment, its Dask cluster's

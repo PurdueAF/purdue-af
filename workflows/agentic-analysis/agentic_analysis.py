@@ -29,8 +29,8 @@ NAME = "agentic-analysis"
 IMAGE = (
     "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-analysis:latest"
 )
-# The one directory of /work a task pod mounts (apps/agentic-analysis/podtemplate.yaml).
-ROOT = Path("/work/projects") / NAME
+# The workload account's volume, where the task pods and its Dask and Ray clusters mount it (apps/agentic-analysis/podtemplate.yaml).
+ROOT = Path("/") / NAME
 
 # The JFC methodology every analysis follows, at a fixed commit.
 JFC = ("https://github.com/jfc-mit/jfc.git", "9eecb0e0b4c95c362053ad6b121760b47379bc54")
@@ -39,8 +39,6 @@ JFC = ("https://github.com/jfc-mit/jfc.git", "9eecb0e0b4c95c362053ad6b121760b473
 MODEL = "opus"
 PERMISSION_MODE = "auto"
 CREDENTIALS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
-# Whose Dask and Ray clusters the analysis gets (af_dask, af_ray).
-GATEWAY_TOKEN = "JUPYTERHUB_API_TOKEN"
 # pyroscope-io's wheels bound Python; only conda-forge builds xrootd's bindings.
 CONDA = ("python<3.15", "xrootd")
 # The helpers' and XRootD's; the gateway also asks for prometheus-client.
@@ -118,11 +116,9 @@ submits a task, as `dask.submit(lambda: 1).result(timeout=600)`, instead of \
 waiting for workers.
 - A pass runs in the foreground: give its command a timeout long enough, up \
 to {hours} hours.
-- Workers see /work as you do but start elsewhere: give them absolute paths.
-- Workers run as another user. In this workspace they write only under \
-{shared}, which you can read, into directories they make or the script makes \
-with mode 0o1777; otherwise tasks return what they make, and the script writes \
-it.
+- Workers see {root} as you do, and no other storage but /cvmfs, but start \
+elsewhere: give them absolute paths.
+- Workers run as you and write where you do.
 - A task can call what its script defines or the environment installs; send \
 a module of the analysis's own with `dask.upload_file(path)`.
 
@@ -144,11 +140,10 @@ keyword arguments are the settings of that guide without `af-`: \
 `max_workers=4` is `af-max-workers`. Its scripts show data-parallel training \
 that survives losing GPUs.
 
-- Ray's pods see /work as you do: give the entrypoint absolute paths, without \
-a working_dir.
-- They run as the same other user as Dask's workers, and hold no grid proxy: \
-they read what Dask's tasks wrote under {shared}, and write checkpoints, \
-models and outputs there.
+- Ray's pods see {root} as you do, and no other storage but /cvmfs: give the \
+entrypoint absolute paths, without a working_dir.
+- They run as you, and hold no grid proxy: they read what Dask's tasks wrote, \
+and write checkpoints, models and outputs in the workspace.
 """
 # What an interactive session leaves to the person at the terminal.
 UNATTENDED = """\
@@ -306,9 +301,6 @@ def _prepare(home: Path, analysis: Analysis) -> Path:
         _install(work)
     except (OSError, subprocess.CalledProcessError) as failed:
         _log(f"the helpers are not installed: {failed}")
-    # Where Dask's and Ray's workers, another user, write what they make.
-    (home / "shared").mkdir(exist_ok=True)
-    (home / "shared").chmod(0o1777)
     return work
 
 
@@ -498,9 +490,9 @@ def advance(analysis: Analysis, workspace: str, reply: str) -> str:
         raise flyte.errors.NonRecoverableError(
             f"none of {', '.join(CREDENTIALS)} is set: see apps/agentic-analysis/README.md"
         )
-    if not os.environ.get(GATEWAY_TOKEN):
+    if not Path(os.environ.get(af_dask.TOKEN_FILE, "")).is_file():
         raise flyte.errors.NonRecoverableError(
-            f"{GATEWAY_TOKEN} is not set: see apps/agentic-analysis/README.md"
+            f"{af_dask.TOKEN_FILE} names no file of the workload account's token: see apps/agentic-analysis/README.md"
         )
     ctx = flyte.ctx()
     home = ROOT / workspace
@@ -527,9 +519,7 @@ def advance(analysis: Analysis, workspace: str, reply: str) -> str:
                 told.write_text(reply)
             config.mkdir(exist_ok=True)
             (config / "CLAUDE.md").write_text(
-                FACILITY.format(
-                    cores=CORES, hours=COMMAND_HOURS, shared=home / "shared"
-                )
+                FACILITY.format(cores=CORES, hours=COMMAND_HOURS, root=ROOT)
             )
             nudge = INTERRUPTED
             while True:
