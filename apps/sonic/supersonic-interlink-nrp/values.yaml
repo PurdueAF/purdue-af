@@ -15,19 +15,34 @@ scaleFromZero:
 serverLoadMetric: 'sum (rate(nv_inference_queue_duration_us{app=~"supersonic", release=~"sonic-nrp", namespace=~"cms"}[30s])) / sum ((rate(nv_inference_exec_count{app=~"supersonic", release=~"sonic-nrp", namespace=~"cms"}[30s]) * 1000))'
 
 inferenceServer:
-  image: nvcr.io/nvidia/tritonserver:26.04-py3
+  # The models and image of apps/sonic/supersonic, so a CMSSW job can switch to this release.
+  image: fastml/triton-torchgeo:26.04-py3-geometric
   command: ["/bin/sh", "-c"]
   args:
     - |
       /opt/tritonserver/bin/tritonserver \
-      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_16_0_0_pre4/external/el9_amd64_gcc13/data/RecoBTag/Combined/data/models/ \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoBTag/Combined/data/models/ \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoEgamma/EgammaPhotonProducers/data/models/ \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoTauTag/TrainingFiles/data/DeepTauIdSONIC/ \
+      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoMET/METPUSubtraction/data/models/ \
+      --model-control-mode=explicit \
+      --load-model=deepmet \
+      --load-model=deeptau_2018v2p5 \
+      --load-model=particleNetFromMiniAODAK4CHSCentral \
+      --load-model=particleNetFromMiniAODAK4PuppiCentral \
+      --load-model=particleNetFromMiniAODAK4PuppiForward \
+      --load-model=particleNetFromMiniAODAK8 \
+      --load-model=particlenet_AK8_MD-2prong_PT \
+      --load-model=particlenet_AK8_MassRegression_PT \
+      --load-model=particlenet_PT \
+      --load-model=unifiedparticletransformer_AK4_V01 \
       --allow-gpu-metrics=true \
       --log-verbose=0 \
       --exit-timeout-secs=60
 
   resources:
-    limits: { cpu: 2, memory: 8G, nvidia.com/gpu: 1 }
-    requests: { cpu: 2, memory: 8G, nvidia.com/gpu: 1 }
+    limits: { cpu: 4, memory: 16G, nvidia.com/gpu: 1 }
+    requests: { cpu: 4, memory: 16G, nvidia.com/gpu: 1 }
   nodeSelector:
     kubernetes.io/hostname: interlink-nrp
   tolerations:
@@ -53,9 +68,10 @@ inferenceServer:
     mountPath: /cvmfs
   readinessProbe:
     successThreshold: 3
+  # A first load from a cold CVMFS cache on NRP; a failed startup probe ends the pod there.
   startupProbe:
     periodSeconds: 5
-    failureThreshold: 60
+    failureThreshold: 120
     httpGet:
       path: /v2/health/ready
       port: http

@@ -1,0 +1,5 @@
+# The workload account this app's Dask and Ray clusters run as: ../dask-gateway/README.md#workload-accounts
+name: agentic-analysis
+uid: 1000
+gid: 1000
+tokenSha256: 60096387b6ea4b1b35131e522777b4c6f2cf4460c0aee549f11cab63d031ed65

@@ -17,13 +17,16 @@ such GPUs are free, and one of `af-max-workers` with the workers whose GPUs
 are; one that a single GPU starts takes it from another cluster's preemptible
 worker while none is free. Its pods read the most workers it has from
 AF_MAX_WORKERS. A user whose session holds a GPU starts and submits to none.
-`GET /af/nrp-gpus` on the Jobs API's port answers how many GPUs NRP Nautilus
-has free for Ray workers, by region (nrp_gpus.py). The settings are in config.yaml.
+A workload account's token gets the account a cluster of its own
+(../dask-gateway/README.md#workload-accounts). `GET /af/nrp-gpus` on the Jobs
+API's port answers how many GPUs NRP Nautilus has free for Ray workers, by
+region (nrp_gpus.py). The settings are in config.yaml.
 """
 
 from __future__ import annotations
 
 import asyncio
+import collections
 import contextlib
 import copy
 import dataclasses
@@ -115,13 +118,28 @@ NRP_WORKER = worker_of(CONFIG)
 DEFAULT_ENV = str(CONFIG["defaultEnv"])
 LDAP_HOST = str(CONFIG["ldapHost"])
 LDAP_BASE = str(CONFIG["ldapBase"])
+ACCOUNT_KEPT_VOLUMES = {str(name) for name in CONFIG["accountKeptVolumes"]}
 # This service's own Hub token, from the `hub` Secret: the file appears once the Hub registers the service.
 SERVICE_TOKEN_FILE = Path("/etc/hub-token/token")
+# Workload accounts' declarations, from the af-accounts ConfigMap: read on every call.
+ACCOUNTS_DIR = Path("/etc/af-accounts")
+ACCOUNT_NAME = re.compile(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?")
+ACCOUNT_IDS = range(1000, 2000)
+# Top-level directories, the AF's storage roots, PVCs and image user, and volumes of the clusters' pods.
+RESERVED_NAMES = frozenset(
+    "bin boot dev etc home lib lib32 lib64 libx32 media mnt opt proc root run sbin srv sys tmp usr var "
+    "work depot eos cvmfs af-shared-storage hub-db-dir jovyan dask-credentials log-volume".split()
+)
+# The Hub's per-user PVCs.
+RESERVED_PREFIXES = ("claim-",)
+TOKEN_SHA256 = re.compile(r"[0-9a-f]{64}")
 KUBE_API = "https://kubernetes.default.svc"
 SERVICE_ACCOUNT = Path("/var/run/secrets/kubernetes.io/serviceaccount")
 RAYCLUSTERS = f"/apis/ray.io/v1/namespaces/{NAMESPACE}/rayclusters"
 SECRETS = f"/api/v1/namespaces/{NAMESPACE}/secrets"
 MANAGED_BY = "ray-train-gateway"
+# The label of a workload account's cluster's pods, which names the account.
+PART_OF = "app.kubernetes.io/part-of"
 # Ray Client's port, on the gateway as on every head.
 CLIENT_PORT = 10001
 # The dashboard's, whose HTTP API, the Jobs API's among it, the gateway relays.
@@ -169,6 +187,8 @@ EXTERNAL_SUFFIXES = ("-cern", "-fnal")
 # KubeRay's longest RayCluster name: the Services it names after one must fit in 63 characters.
 MAX_CLUSTER_NAME = 53
 DNS_LABEL = re.compile(r"[a-z]([-a-z0-9]*[a-z0-9])?")
+# An account's cluster is ray-train-<name>, as cluster_name gives a Hub user of its name.
+ACCOUNT_NAME_MAX = MAX_CLUSTER_NAME - len("ray-train-")
 # GRPC_OPTIONS in ray/util/client/common.py: Ray Client's message sizes and keepalives.
 GRPC_OPTIONS = [
     ("grpc.max_send_message_length", 2**31 - 1),
@@ -227,10 +247,31 @@ class User:
     gid: int
     # Whether their session holds a GPU of its own.
     session_gpu: bool = False
+    # Whether it is a workload account rather than a Hub user.
+    workload: bool = False
 
     @property
     def cluster(self) -> str:
         return cluster_name(self.name)
+
+    @property
+    def owner(self) -> str:
+        """The workload account their cluster is of, or "" for a Hub user's."""
+        return self.name if self.workload else ""
+
+
+@dataclass(frozen=True)
+class Account:
+    """A workload account, as its declaration states it."""
+
+    name: str
+    uid: int
+    gid: int
+    token_sha256: str
+
+
+class AccountRefused(Exception):
+    """A declaration that breaks a rule, which the exception names."""
 
 
 @dataclass(frozen=True)
@@ -265,6 +306,104 @@ def cluster_name(username: str) -> str:
     stem = re.sub(r"[^a-z0-9]+", "-", username.lower()).strip("-")
     suffix = "---" + hashlib.sha256(username.encode()).hexdigest()[:8]
     return f"ray-train-{stem}"[: MAX_CLUSTER_NAME - len(suffix)] + suffix
+
+
+def checked_account(declared: Any) -> Account:
+    """The account a declaration states, if it keeps the rules."""
+    if not isinstance(declared, dict) or set(declared) != {
+        "name",
+        "uid",
+        "gid",
+        "tokenSha256",
+    }:
+        raise AccountRefused("keys")
+    name = declared["name"]
+    if (
+        not isinstance(name, str)
+        or len(name) > ACCOUNT_NAME_MAX
+        or not ACCOUNT_NAME.fullmatch(name)
+    ):
+        raise AccountRefused("name")
+    if (
+        name in RESERVED_NAMES
+        or name.startswith(RESERVED_PREFIXES)
+        or name.endswith(EXTERNAL_SUFFIXES)
+    ):
+        raise AccountRefused("reserved-name")
+    for key in ("uid", "gid"):
+        if type(declared[key]) is not int or declared[key] not in ACCOUNT_IDS:
+            raise AccountRefused(key)
+    token_sha256 = declared["tokenSha256"]
+    if not isinstance(token_sha256, str) or not TOKEN_SHA256.fullmatch(token_sha256):
+        raise AccountRefused("token-hash")
+    return Account(name, declared["uid"], declared["gid"], token_sha256)
+
+
+def read_accounts(paths: list[Path]) -> dict[str, Account]:
+    """The valid declarations among `paths`, by name; the others are logged and left out."""
+    found: list[Account] = []
+    for path in paths:
+        try:
+            found.append(checked_account(yaml.safe_load(path.read_text())))
+        except AccountRefused as refused:
+            log.warning("workload account %s refused: reason=%s", path.name, refused)
+        except Exception:
+            log.warning("workload account %s refused: reason=unreadable", path.name)
+    names = collections.Counter(a.name for a in found)
+    hashes = collections.Counter(a.token_sha256 for a in found)
+    valid: dict[str, Account] = {}
+    for account in found:
+        if names[account.name] > 1 or hashes[account.token_sha256] > 1:
+            log.warning("workload account %s refused: reason=duplicate", account.name)
+        else:
+            valid[account.name] = account
+    return valid
+
+
+_accounts: tuple[list[tuple[Path, int, int, int]] | None, dict[str, Account]] = (
+    None,
+    {},
+)
+
+
+def accounts() -> dict[str, Account]:
+    """The valid workload accounts by name, read again when a declaration changes; none without ACCOUNTS_DIR."""
+    global _accounts
+    stamp = []
+    try:
+        paths = sorted(ACCOUNTS_DIR.glob("*.yaml"))
+    except OSError:
+        paths = []
+    for path in paths:
+        try:
+            found = path.stat()
+        except OSError:
+            continue
+        stamp.append((path, found.st_ino, found.st_mtime_ns, found.st_size))
+    if stamp != _accounts[0]:
+        _accounts = (stamp, read_accounts([entry[0] for entry in stamp]))
+    return _accounts[1]
+
+
+def token_account(token: str) -> Account | None:
+    """The workload account whose token this is, or None."""
+    # A header that is no UTF-8 reaches here with its bytes as surrogates.
+    digest = hashlib.sha256(token.encode("utf-8", "surrogateescape")).hexdigest()
+    owner = None
+    for account in accounts().values():
+        if hmac.compare_digest(digest, account.token_sha256):
+            owner = account
+    return owner
+
+
+def refuse_account_name(name: str) -> None:
+    """Refuses a Hub user whose cluster would be a workload account's."""
+    if cluster_name(name) in {cluster_name(a) for a in accounts()}:
+        log.warning("Hub user refused: reason=account-name account=%s", name)
+        raise Refused(
+            grpc.StatusCode.PERMISSION_DENIED,
+            f"{name} is the name of a workload account: no Ray cluster runs for a Hub user of it.",
+        )
 
 
 def bearer_token(header: str) -> str | None:
@@ -495,6 +634,32 @@ def load_template() -> dict[str, Any]:
     return template
 
 
+def cluster_template(user: User) -> dict[str, Any]:
+    """The template of the user's cluster: a workload account's keeps
+    ACCOUNT_KEPT_VOLUMES of its volumes and mounts its own at /<name>."""
+    template = load_template()
+    if not user.workload:
+        return template
+    volume = {"name": user.name, "persistentVolumeClaim": {"claimName": user.name}}
+    mount = {"name": user.name, "mountPath": f"/{user.name}"}
+    spec = template["spec"]
+    for pod in (
+        spec["headGroupSpec"]["template"],
+        *(group["template"] for group in spec["workerGroupSpecs"]),
+    ):
+        pod["metadata"]["labels"][PART_OF] = user.name
+        pod["spec"]["volumes"] = [
+            v for v in pod["spec"]["volumes"] if v["name"] in ACCOUNT_KEPT_VOLUMES
+        ] + [volume]
+        for container in pod["spec"]["containers"]:
+            container["volumeMounts"] = [
+                m
+                for m in container["volumeMounts"]
+                if m["name"] in ACCOUNT_KEPT_VOLUMES
+            ] + [mount]
+    return template
+
+
 def env_roots(template: dict[str, Any]) -> list[str]:
     """Where an environment may live: the storage a cluster mounts."""
     pod = template["spec"]["headGroupSpec"]["template"]["spec"]
@@ -509,6 +674,11 @@ def requested_env(value: str, template: dict[str, Any]) -> str:
     """The environment a call asks for, or the global one."""
     if not value:
         return DEFAULT_ENV
+    return mounted_env(value, template)
+
+
+def mounted_env(value: str, template: dict[str, Any]) -> str:
+    """The environment at `value`, on storage the template's cluster mounts."""
     path = posixpath.normpath(value)
     roots = env_roots(template)
     if not value.startswith("/") or not any(
@@ -610,6 +780,22 @@ def cluster_shape(cluster: dict[str, Any]) -> Shape:
     )
 
 
+def cluster_owner(cluster: dict[str, Any]) -> str:
+    """Whose a cluster is, as User.owner states it."""
+    head = cluster["spec"]["headGroupSpec"]["template"]
+    return str(((head.get("metadata") or {}).get("labels") or {}).get(PART_OF, ""))
+
+
+def refuse_others(cluster: dict[str, Any], user: User) -> None:
+    """Refuses the user a cluster of their cluster's name that is someone else's."""
+    if cluster_owner(cluster) != user.owner:
+        log.warning("%s refused: reason=owner", user.cluster)
+        raise Refused(
+            grpc.StatusCode.PERMISSION_DENIED,
+            f"{user.cluster} is someone else's Ray cluster.",
+        )
+
+
 def runs(cluster: dict[str, Any], shape: Shape) -> bool:
     """Whether the cluster stays up and is of `shape`."""
     return (
@@ -626,8 +812,8 @@ class Gateway:
         self.kube_http = kube
         self.token_file = token_file
         self.last_used: dict[str, float] = {}
-        # The shape each cluster was last found in, so that a call skips the checks.
-        self.started: dict[str, Shape] = {}
+        # Whose each cluster was last found to be, and in what shape, so that a call skips the checks.
+        self.started: dict[str, tuple[str, Shape]] = {}
         self.channels: dict[str, grpc.aio.Channel] = {}
         # cluster -> the Ray Client ids it serves; client id -> until when its cluster is known removed, and why
         self.clients: dict[str, set[str]] = {}
@@ -721,7 +907,7 @@ class Gateway:
                 f"{', '.join(unknown)} is no setting of a Ray cluster: the settings are {', '.join(sorted(SETTINGS))}.",
             )
         user = await self.user_for(token)
-        template = load_template()
+        template = cluster_template(user)
         cpus, ram = worker_size(template)
         memory = requested_memory(values.get(MEMORY_METADATA, ""))
         shape = Shape(
@@ -753,15 +939,18 @@ class Gateway:
                 grpc.StatusCode.FAILED_PRECONDITION,
                 "Your session holds a GPU, and Ray clusters are for sessions without one: train on your session's GPU, or start a session without a GPU.",
             )
-        self.last_used[user.cluster] = time.monotonic()
-        if self.started.get(user.cluster) != shape:
+        # Here rather than in caller: asking after jobs needs no environment.
+        mounted_env(shape.env, cluster_template(user))
+        if self.started.get(user.cluster) != (user.owner, shape):
             await self.start_cluster(user, shape)
-            self.started[user.cluster] = shape
+            self.started[user.cluster] = (user.owner, shape)
+        self.last_used[user.cluster] = time.monotonic()
         return user.cluster
 
     async def running(self, user: User) -> str:
         """The user's cluster in whatever shape: asking about jobs starts none."""
-        if user.cluster not in self.started:
+        known = self.started.get(user.cluster)
+        if known is None or known[0] != user.owner:
             cluster = await self.cluster(user.cluster)
             if cluster is None or cluster["metadata"].get("deletionTimestamp"):
                 raise Refused(
@@ -771,6 +960,7 @@ class Gateway:
                         "You have no Ray cluster: one is removed once idle, with the records and logs of its jobs.",
                     ),
                 )
+            refuse_others(cluster, user)
         self.last_used[user.cluster] = time.monotonic()
         return user.cluster
 
@@ -874,12 +1064,35 @@ class Gateway:
         return self.channels[cluster]
 
     async def user_for(self, token: str) -> User:
+        workload = token_account(token)
+        if workload is not None:
+            return User(
+                name=workload.name,
+                account=workload.name,
+                uid=workload.uid,
+                gid=workload.gid,
+                workload=True,
+            )
         key = hashlib.sha256(token.encode()).hexdigest()
         now = time.monotonic()
         cached = self._users.get(key)
         if cached and cached[0] > now:
+            refuse_account_name(cached[1].name)
             return cached[1]
-        name = await self.whoami(token)
+        kind, name = await self.whoami(token)
+        if kind != "user":
+            log.warning("Hub %s refused: reason=not-a-user", kind)
+            raise Refused(
+                grpc.StatusCode.PERMISSION_DENIED,
+                f"A Ray cluster is for a JupyterHub user, not a {kind}.",
+            )
+        if ":" in name:
+            log.warning("Hub user refused: reason=colon")
+            raise Refused(
+                grpc.StatusCode.PERMISSION_DENIED,
+                f"{name} is no name a Ray cluster runs for.",
+            )
+        refuse_account_name(name)
         account = name
         pod = session_pod(await self.hub_user(name))
         if name.endswith(EXTERNAL_SUFFIXES):
@@ -902,21 +1115,23 @@ class Gateway:
         self._users[key] = (now + USER_CACHE_S, user)
         return user
 
-    async def whoami(self, token: str) -> str:
+    async def whoami(self, token: str) -> tuple[str, str]:
+        """The kind and the name of the token's owner."""
         async with self.http.get(
             f"{HUB_API}/user", headers={"Authorization": f"token {token}"}
         ) as r:
             if r.status in (401, 403):
+                log.warning("token refused: reason=unknown-token")
                 raise Refused(
                     grpc.StatusCode.UNAUTHENTICATED,
-                    "JupyterHub did not accept RAY_AUTH_TOKEN: it must be this session's JUPYTERHUB_API_TOKEN.",
+                    "No workload account has RAY_AUTH_TOKEN, and JupyterHub did not accept it: in a session, it must be the session's JUPYTERHUB_API_TOKEN.",
                 )
             if r.status != 200:
                 raise Refused(
                     grpc.StatusCode.UNAVAILABLE, f"JupyterHub answered HTTP {r.status}."
                 )
             model: dict[str, Any] = await r.json()
-        return str(model["name"])
+        return str(model.get("kind")), str(model["name"])
 
     async def hub_user(self, name: str) -> dict[str, Any]:
         async with self.http.get(
@@ -958,6 +1173,10 @@ class Gateway:
     async def start_cluster(self, user: User, shape: Shape) -> None:
         """Create the user's cluster in `shape` unless it is in it; return once its head answers."""
         cluster = await self.cluster(user.cluster)
+        if cluster is not None and not cluster["metadata"].get("deletionTimestamp"):
+            refuse_others(cluster, user)
+        # Only a call the cluster's owner makes keeps it from being reaped.
+        self.last_used[user.cluster] = time.monotonic()
         if cluster is not None and not runs(cluster, shape):
             if not cluster["metadata"].get("deletionTimestamp"):
                 if await self.busy(cluster):
@@ -976,7 +1195,9 @@ class Gateway:
             mix = await self.admit(user, shape)
         if cluster is None:
             status, created = await self.kube(
-                "POST", RAYCLUSTERS, build_cluster(load_template(), user, shape, mix)
+                "POST",
+                RAYCLUSTERS,
+                build_cluster(cluster_template(user), user, shape, mix),
             )
             if status == 201:
                 log.info("created %s", user.cluster)
@@ -985,6 +1206,8 @@ class Gateway:
             elif status == 409:
                 # Another call created it first.
                 cluster = await self.cluster(user.cluster)
+                if cluster is not None:
+                    refuse_others(cluster, user)
             else:
                 self.grants.pop(user.cluster, None)
                 raise Refused(

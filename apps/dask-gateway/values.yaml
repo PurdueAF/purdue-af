@@ -160,18 +160,164 @@ gateway:
 
       from dask_gateway_server.options import Options, Integer, Float, Mapping, String, Select
       import asyncio
+      import collections
       import glob
+      import hashlib
+      import hmac
+      import ipaddress
+      import logging
       import os.path
       import re
+      import yaml
 
       def is_external(user):
           return ("-cern" in user.name) or ("-fnal" in user.name)
 
-      # `ids` is the user's (uid, gid), or the error their LDAP lookup raised.
-      def options_handler(options, user, ids=None):
+      # Workload accounts: apps/dask-gateway/README.md#workload-accounts.
+      ACCOUNTS_DIR = "/etc/af-accounts"
+      # The Dask user of an account, a name no Basic or Hub user has: theirs hold no ':'.
+      ACCOUNT_USER = "account:"
+      ACCOUNT_NAME = re.compile(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?")
+      # ray-train-<name> fits the Ray gateway's MAX_CLUSTER_NAME (apps/ray-train/gateway.py).
+      ACCOUNT_NAME_MAX = 43
+      ACCOUNT_IDS = range(1000, 2000)
+      # Top-level directories, the AF's storage roots, PVCs and image user, and volumes of the clusters' pods.
+      RESERVED_NAMES = frozenset(
+          "bin boot dev etc home lib lib32 lib64 libx32 media mnt opt proc root run sbin srv sys tmp usr var "
+          "work depot eos cvmfs af-shared-storage hub-db-dir jovyan dask-credentials log-volume".split()
+      )
+      # The Hub's per-user PVCs, and the names custom-spawner.py gives users from outside Purdue.
+      RESERVED_PREFIXES = ("claim-",)
+      RESERVED_SUFFIXES = ("-cern", "-fnal")
+      TOKEN_SHA256 = re.compile(r"[0-9a-f]{64}")
+      # The variables a client's environment names its user by.
+      USER_VARIABLES = ("USER", "LOGNAME", "NB_USER", "JUPYTERHUB_USER")
+      # cms pods are in 10.5.0.0/17 (Services in 10.5.128.0/17), from .2 of each node's /24: .0 and .1 are the node's, which LoadBalancer traffic is masqueraded to.
+      POD_NETWORK = ipaddress.ip_network("10.5.0.0/17")
+      FORWARDED = ("X-Forwarded-For", "Forwarded", "X-Real-Ip")
+      log = logging.getLogger("DaskGateway")
+      _accounts = {"stamp": None, "valid": {}}
+
+      class AccountRefused(Exception):
+          pass
+
+      def checked_account(declared):
+          """The declaration if it keeps the rules; AccountRefused names the one it breaks."""
+          if not isinstance(declared, dict) or set(declared) != {"name", "uid", "gid", "tokenSha256"}:
+              raise AccountRefused("keys")
+          name = declared["name"]
+          if not isinstance(name, str) or len(name) > ACCOUNT_NAME_MAX or not ACCOUNT_NAME.fullmatch(name):
+              raise AccountRefused("name")
+          if name in RESERVED_NAMES or name.startswith(RESERVED_PREFIXES) or name.endswith(RESERVED_SUFFIXES):
+              raise AccountRefused("reserved-name")
+          for key in ("uid", "gid"):
+              if type(declared[key]) is not int or declared[key] not in ACCOUNT_IDS:
+                  raise AccountRefused(key)
+          if not isinstance(declared["tokenSha256"], str) or not TOKEN_SHA256.fullmatch(declared["tokenSha256"]):
+              raise AccountRefused("token-hash")
+          return declared
+
+      def read_accounts(paths):
+          """The valid declarations among `paths`, by name; the others are logged and left out."""
+          found = []
+          for path in paths:
+              try:
+                  with open(path) as f:
+                      found.append(checked_account(yaml.safe_load(f)))
+              except AccountRefused as refused:
+                  log.warning("workload account %s refused: reason=%s", os.path.basename(path), refused)
+              except Exception:
+                  log.warning("workload account %s refused: reason=unreadable", os.path.basename(path))
+          names = collections.Counter(a["name"] for a in found)
+          hashes = collections.Counter(a["tokenSha256"] for a in found)
+          valid = {}
+          for account in found:
+              if names[account["name"]] > 1 or hashes[account["tokenSha256"]] > 1:
+                  log.warning("workload account %s refused: reason=duplicate", account["name"])
+              else:
+                  valid[account["name"]] = account
+          return valid
+
+      def accounts():
+          """The valid workload accounts by name, read again when a declaration changes; none without ACCOUNTS_DIR."""
+          stamp = []
+          for path in sorted(glob.glob(os.path.join(glob.escape(ACCOUNTS_DIR), "*.yaml"))):
+              try:
+                  found = os.stat(path)
+              except OSError:
+                  continue
+              stamp.append((path, found.st_ino, found.st_mtime_ns, found.st_size))
+          if stamp != _accounts["stamp"]:
+              _accounts.update(stamp=stamp, valid=read_accounts([entry[0] for entry in stamp]))
+          return _accounts["valid"]
+
+      def token_account(token):
+          """The workload account whose token this is, or None."""
+          # A header that is no UTF-8 reaches here with its bytes as surrogates.
+          digest = hashlib.sha256(token.encode("utf-8", "surrogateescape")).hexdigest()
+          owner = None
+          for account in accounts().values():
+              if hmac.compare_digest(digest, account["tokenSha256"]):
+                  owner = account
+          return owner
+
+      def not_from_a_pod(request):
+          """Why a request does not come straight from a pod's own address, or None if it does."""
+          if any(header in request.headers for header in FORWARDED):
+              return "forwarded"
+          try:
+              address = ipaddress.ip_address(request.remote or "")
+          except ValueError:
+              return "outside-pod-network"
+          address = getattr(address, "ipv4_mapped", None) or address
+          if address not in POD_NETWORK or address.packed[-1] < 2:
+              return "outside-pod-network"
+          return None
+
+      def under(path, root):
+          return path == root or path.startswith(root + "/")
+
+      def account_env(options, account):
+          """The environment of an account's cluster, on the storage its pods mount."""
+          roots = ("/" + account["name"], "/cvmfs")
+          project = (getattr(options, 'pixi_project', None) or "").strip()
+          conda_env = (getattr(options, 'conda_env', None) or "").strip()
+          if project and conda_env:
+              raise ValueError("pixi-env and conda-env are mutually exclusive. Please specify only one.")
+          if not (project or conda_env):
+              raise ValueError("Either conda_env or pixi_project must be specified")
+          env = os.path.normpath(os.path.join(project, ".pixi", "envs", getattr(options, 'pixi_env', 'default')) if project else conda_env)
+          if not any(under(env, root) for root in roots):
+              raise ValueError(f"{env} is not on the storage the cluster mounts: {', '.join(roots)}.")
+          return env
+
+      def account_pods(cluster, account):
+          """An account's scheduler and worker: CVMFS and its volume their only storage, its name their labels."""
+          name = account["name"]
+          for role in ("scheduler", "worker"):
+              pod = cluster[f"{role}_extra_pod_config"]
+              container = getattr(c.KubeClusterConfig, f"{role}_extra_container_config")
+              cluster[f"{role}_extra_pod_config"] = {
+                  **pod,
+                  "volumes": [v for v in pod.get("volumes", []) if v["name"] == "cvmfs"]
+                  + [{"name": name, "persistentVolumeClaim": {"claimName": name}}],
+              }
+              cluster[f"{role}_extra_container_config"] = {
+                  **container,
+                  # The worker preload is on /work.
+                  "env": [e for e in container.get("env", []) if not e["name"].startswith("DASK_DISTRIBUTED__WORKER__PRELOAD")],
+                  "volumeMounts": [m for m in container.get("volumeMounts", []) if m["name"] == "cvmfs"]
+                  + [{"name": name, "mountPath": "/" + name}],
+              }
+              cluster[f"{role}_extra_pod_labels"] = {"user": name, "app.kubernetes.io/part-of": name}
+
+      # `ids` is the user's (uid, gid), or the error their LDAP lookup raised; `account` is a workload account's declaration.
+      def options_handler(options, user, ids=None, account=None):
           if isinstance(ids, Exception):
               raise ids
-          if ids is not None:
+          if account is not None:
+              uid, gid = account["uid"], account["gid"]
+          elif ids is not None:
               uid, gid = ids
           elif user.name=="jovyan":
             uid, gid = 1000, 1000
@@ -195,7 +341,10 @@ gateway:
           conda_env = None
           
           pixi_project = getattr(options, 'pixi_project', None)
-          if pixi_project and pixi_project.strip():
+          if account is not None:
+              conda_env = account_env(options, account)
+              options.env.update(dict.fromkeys(USER_VARIABLES, account["name"]))
+          elif pixi_project and pixi_project.strip():
               user_conda_env = getattr(options, 'conda_env', None)
               if user_conda_env and user_conda_env.strip():
                   raise ValueError("pixi-env and conda-env are mutually exclusive. Please specify only one.")
@@ -223,8 +372,9 @@ gateway:
                   raise ValueError("Either conda_env or pixi_project must be specified")
               conda_env = user_conda_env.strip()
 
-          # Without it the scheduler serves no metrics and the monitoring does not see the cluster.
-          if not glob.glob(glob.escape(conda_env) + "/lib/python3*/site-packages/prometheus_client"):
+          # Without it the scheduler serves no metrics and the monitoring does not see the cluster; this pod does not mount an account's volume.
+          unseen = account is not None and under(conda_env, "/" + account["name"])
+          if not unseen and not glob.glob(glob.escape(conda_env) + "/lib/python3*/site-packages/prometheus_client"):
               raise ValueError(
                   f"prometheus_client is not installed in {conda_env}, or the environment is not readable by everyone. "
                   "The facility's monitoring needs it: run `pixi add prometheus_client` or `conda install prometheus_client` there, "
@@ -247,7 +397,7 @@ gateway:
 
           desired_cores = options.worker_cores
           desired_memory = int(options.worker_memory * 2 ** 30)
-          return {
+          cluster = {
               "worker_cores": desired_cores,
               "worker_cores_limit": desired_cores,
               "worker_memory": desired_memory,
@@ -260,11 +410,19 @@ gateway:
               "scheduler_extra_pod_labels": {"user": user.name},
               "worker_extra_pod_labels": {"user": user.name},
           }
+          if account is not None:
+              account_pods(cluster, account)
+          return cluster
 
       # Called per request: the LDAP lookup runs off the event loop, which every API call and scheduler heartbeat shares.
       async def cluster_options(user):
           ids = None
-          if user.name != "jovyan" and not is_external(user):
+          account = None
+          if user.name.startswith(ACCOUNT_USER):
+              account = accounts().get(user.name[len(ACCOUNT_USER):])
+              if account is None:
+                  ids = ValueError("This workload account is not declared.")
+          elif user.name != "jovyan" and not is_external(user):
               try:
                   ids = await asyncio.to_thread(ldap_lookup, user.name)
               except Exception as exc:
@@ -276,7 +434,7 @@ gateway:
               Float("worker_cores", default=1, min=0.1, max=64, label="Cores per worker"),
               Float("worker_memory", default=4, min=0.1, max=64, label="Memory per worker (GiB)"),
               Mapping("env", {}, label="Environment variables"),
-              handler=lambda options, user: options_handler(options, user, ids),
+              handler=lambda options, user: options_handler(options, user, ids, account),
           )
 
       c.Backend.cluster_options = cluster_options
@@ -308,18 +466,52 @@ gateway:
 
       KubeBackend.start_cluster = _kube_start_cluster_limited
 
-      # A session started without DASK_GATEWAY__AUTH__TYPE sends Basic; every other client sends its Hub token.
+      # A session started without DASK_GATEWAY__AUTH__TYPE sends Basic, a workload account its own token as Bearer, every other client its Hub token.
       import aiohttp
       from aiohttp import web
       from dask_gateway_server.auth import SimpleAuthenticator, unauthorized
 
+      def person(user, scheme):
+          """A user who signed in as a person, under a name no workload account has or its Dask user could have."""
+          if ":" in user.name:
+              log.warning("%s user refused: reason=colon", scheme)
+              raise unauthorized(scheme)
+          if user.name in accounts():
+              log.warning("%s user refused: reason=account-name account=%s", scheme, user.name)
+              raise unauthorized(scheme)
+          return user
+
+      def account_user(request, token):
+          """The Dask user of the workload account whose token a pod sends straight to the gateway."""
+          account = token_account(token) if token else None
+          if account is None:
+              log.warning("workload account refused: reason=unknown-token")
+              raise unauthorized("Bearer")
+          reason = not_from_a_pod(request)
+          if reason:
+              log.warning("workload account %s refused: reason=%s", account["name"], reason)
+              raise unauthorized("Bearer")
+          return models.User(ACCOUNT_USER + account["name"])
+
       class HubTokenAuthenticator(SimpleAuthenticator):
           hub_api_url = 'http://hub.${namespace}.svc.cluster.local:8081/hub/api'
 
+          async def authenticate_and_handle(self, request, handler):
+              """No session cookie stands in for an account's token, or for a user whose name an account has."""
+              scheme = request.headers.get("Authorization", "").partition(" ")[0]
+              cookie = request.cookies.get(self.cookie_name)
+              cached = self.cache.get(cookie) if cookie is not None else None
+              if scheme == "Bearer" or (cached is not None and cached.name in accounts()):
+                  request["user"] = await self.authenticate(request)
+                  return await handler(request)
+              return await super().authenticate_and_handle(request, handler)
+
           async def authenticate(self, request):
               scheme, _, token = request.headers.get("Authorization", "").partition(" ")
+              if scheme == "Bearer":
+                  return account_user(request, token.strip())
               if scheme != "jupyterhub":
-                  return await super().authenticate(request)
+                  return person(await super().authenticate(request), "Basic")
               async with aiohttp.ClientSession() as session:
                   async with session.get(
                       self.hub_api_url + "/user",
@@ -332,7 +524,7 @@ gateway:
                       owner = await resp.json()
               if owner.get("kind") != "user":
                   raise unauthorized("jupyterhub")
-              return models.User(owner["name"])
+              return person(models.User(owner["name"]), "jupyterhub")
 
       c.DaskGateway.authenticator_class = HubTokenAuthenticator
 traefik:

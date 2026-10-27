@@ -1,40 +1,43 @@
 # agentic-analysis
 
 Cluster side of the [`agentic-analysis`](../../workflows/agentic-analysis)
-workflow: its task pods, the directory they work in, the volume
-[`browse.sh`](../../workflows/agentic-analysis/browse.sh) opens, and an
+workflow: its task pods, the volume they work in, which
+[`browse.sh`](../../workflows/agentic-analysis/browse.sh) opens, its
+[workload account](../dask-gateway/README.md#workload-accounts), whose Dask and
+Ray clusters run the analyses' work on that volume, and an
 [LLM proxy](#llm-proxy) for NRP's models. Runs are
 started by hand ([Running](../../workflows/agentic-analysis/README.md#running))
 on the Flyte control plane ([`apps/flyte`](../flyte)).
 
 | File                    | What it is                                                                                                                                                                            |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `account.yaml`          | The `agentic-analysis` [workload account](../dask-gateway/README.md#workload-accounts): the UID and GID of its Dask and Ray clusters, and its token's SHA-256                         |
 | `llm_proxy.py`          | The [LLM proxy](#llm-proxy)                                                                                                                                                           |
 | `models.toml`           | The proxy's roles, models and limits                                                                                                                                                  |
 | `llm-proxy.yaml`        | The proxy's Deployment and Service, `agentic-analysis-llm-proxy`, running both files from the ConfigMap Flux makes of them                                                            |
-| `podtemplate.yaml`      | Pod spec of every task pod: AF node placement, the image's user, the model credentials, where profiles go, the Dask Gateway, the facility's grid proxy and CVMFS, the workspace mount |
+| `podtemplate.yaml`      | Pod spec of every task pod: AF node placement, the account's user, the model credentials, the account's token, where profiles go, the Dask Gateway, the facility's grid proxy and CVMFS, the volume at `/agentic-analysis` |
+| `secret-account.yaml`   | The `agentic-analysis-account` Secret ([Secrets](#secrets))                                                                                                                           |
 | `secret-llm-proxy.yaml` | The `agentic-analysis-llm-proxy` Secret ([Secrets](#secrets))                                                                                                                         |
 | `secret-nrp.yaml`       | The `agentic-analysis-nrp` Secret ([Secrets](#secrets))                                                                                                                               |
 | `volume.yaml`           | The `agentic-analysis` volume, which Flux never prunes                                                                                                                                |
-| `workspace.yaml`        | The Job that creates `/work/projects/agentic-analysis` and hands it and the volume's root to the task image's user                                                                    |
+| `workspace.yaml`        | The Job that hands the volume's root to the account's user                                                                                                                            |
 
 ## Secrets
 
-| Secret                 | In repo     | Holds                                                                                                   |
-| ---------------------- | ----------- | ------------------------------------------------------------------------------------------------------- |
-| `agentic-analysis-llm-proxy` | yes, SOPS | `client-token`: the bearer token the proxy's clients send |
-| `agentic-analysis-nrp` | yes, SOPS   | `api-key`: the API key of [NRP's managed LLMs](https://nrp.ai/documentation/userdocs/ai/llm-managed/)   |
-| `jfc-claude`           | no          | Created by hand. Each key becomes an environment variable of the task pods, named as its reader expects |
+| Secret                       | In repo   | Holds                                                                                                   |
+| ---------------------------- | --------- | ------------------------------------------------------------------------------------------------------- |
+| `agentic-analysis-account`   | yes, SOPS | `token`: the token of the workload account `account.yaml` declares                                      |
+| `agentic-analysis-llm-proxy` | yes, SOPS | `client-token`: the bearer token the proxy's clients send                                               |
+| `agentic-analysis-nrp`       | yes, SOPS | `api-key`: the API key of [NRP's managed LLMs](https://nrp.ai/documentation/userdocs/ai/llm-managed/)   |
+| `jfc-claude`                 | no        | Created by hand. Each key becomes an environment variable of the task pods, named as its reader expects |
 
-One of these keys:
+`jfc-claude` holds one of these keys:
 
 - `CLAUDE_CODE_OAUTH_TOKEN`, as printed by `claude setup-token`: runs count
   against that account's subscription
 - `ANTHROPIC_API_KEY`: runs are billed to the API account
 
-And `JUPYTERHUB_API_TOKEN`, a token from the hub's Token page: the analyses'
-Dask and Ray clusters are its owner's, run as that user and count as that
-user's one cluster of each.
+The task pods set `JUPYTERHUB_API_TOKEN` empty, whatever `jfc-claude` holds.
 
 ## LLM proxy
 

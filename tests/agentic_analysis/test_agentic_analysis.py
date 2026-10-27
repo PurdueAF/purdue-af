@@ -106,10 +106,19 @@ def docs(path):
 
 
 def test_flux_lists_every_manifest_of_the_app():
-    resources = yaml.safe_load(EXPERIMENTAL.read_text())["resources"]
-    assert {r for r in resources if "/apps/agentic-analysis/" in r} == {
-        f"../../apps/agentic-analysis/{path.name}" for path in APP.glob("*.yaml")
+    """Each YAML file of the app is a manifest Flux applies, or its workload
+    account's declaration in the af-accounts ConfigMap."""
+    kustomization = yaml.safe_load(EXPERIMENTAL.read_text())
+    generators = {g["name"]: g for g in kustomization["configMapGenerator"]}
+    declarations = {
+        line.partition("=")[2] for line in generators["af-accounts"]["files"]
     }
+    files = {f"../../apps/agentic-analysis/{path.name}" for path in APP.glob("*.yaml")}
+    assert files & declarations == {"../../apps/agentic-analysis/account.yaml"}
+    resources = kustomization["resources"]
+    assert {r for r in resources if "/apps/agentic-analysis/" in r} == (
+        files - declarations
+    )
 
 
 def test_the_task_image_is_built_published_and_pulled_under_one_name():
@@ -145,23 +154,60 @@ def test_the_task_runs_in_the_pod_template_and_project_named_after_the_workflow(
     assert f"{flyte_values['fullnameOverride']}-http." in config["admin"]["endpoint"]
 
 
-def test_task_pods_mount_only_the_directory_the_workspace_job_creates_for_them():
+def test_task_pods_work_on_their_accounts_volume_as_its_clusters_do():
+    """The account's Dask and Ray pods mount its volume at /<name> as its UID:
+    apps/dask-gateway/README.md#workload-accounts."""
     (template,) = docs(APP / "podtemplate.yaml")
     (job,) = docs(APP / "workspace.yaml")
+    (account,) = docs(APP / "account.yaml")
     pod = template["template"]["spec"]
-    mounts = pod["containers"][0]["volumeMounts"]
-    (mount,) = [m for m in mounts if m["mountPath"].startswith("/work")]
-    assert mount["mountPath"] == str(runner.ROOT) == f"/work/{mount['subPath']}"
+    mounts = {m["name"]: m for m in pod["containers"][0]["volumeMounts"]}
+    claims = {
+        v["name"]: v["persistentVolumeClaim"]["claimName"]
+        for v in pod["volumes"]
+        if "persistentVolumeClaim" in v
+    }
+    (volume,) = [name for name, claim in claims.items() if claim == account["name"]]
+    assert mounts[volume]["mountPath"] == str(runner.ROOT) == f"/{account['name']}"
+    assert "subPath" not in mounts[volume]
+    assert set(claims.values()) == {account["name"], "cvmfs"}
+    ids = (pod["securityContext"]["runAsUser"], pod["securityContext"]["runAsGroup"])
+    assert ids == (account["uid"], account["gid"])
+    assert template["template"]["metadata"]["labels"] == {
+        "app.kubernetes.io/part-of": account["name"]
+    }
 
-    container = job["spec"]["template"]["spec"]["containers"][0]
-    made = {m["name"]: m for m in container["volumeMounts"]}
-    directory = f"{made['work']['mountPath']}/{runner.NAME}"
-    owner = "{runAsUser}:{runAsGroup}".format(**pod["securityContext"])
-    assert f"{made['work']['subPath']}/{runner.NAME}" == mount["subPath"]
-    assert container["command"][-1] == (
-        f"mkdir -p {directory} && "
-        f"chown {owner} {directory} {made['volume']['mountPath']}"
+    (container,) = job["spec"]["template"]["spec"]["containers"]
+    (made,) = container["volumeMounts"]
+    (handed,) = job["spec"]["template"]["spec"]["volumes"]
+    assert handed["persistentVolumeClaim"]["claimName"] == account["name"]
+    assert container["command"][-1] == "chown {}:{} {}".format(*ids, made["mountPath"])
+
+
+def test_task_pods_hold_their_accounts_token_where_the_helpers_read_it():
+    (template,) = docs(APP / "podtemplate.yaml")
+    (secret,) = docs(APP / "secret-account.yaml")
+    (account,) = docs(APP / "account.yaml")
+    pod = template["template"]["spec"]
+    (container,) = pod["containers"]
+    env = {v["name"]: v["value"] for v in container["env"]}
+    mounts = {m["name"]: m for m in container["volumeMounts"]}
+    assert secret["metadata"]["name"] == f"{account['name']}-account"
+    (name,) = [
+        v["name"]
+        for v in pod["volumes"]
+        if v.get("secret", {}).get("secretName") == secret["metadata"]["name"]
+    ]
+    assert "token" in secret["stringData"]
+    assert env[clusters.TOKEN_FILE] == f"{mounts[name]['mountPath']}/token"
+    assert mounts[name]["readOnly"]
+    # Readable by the task user, whom the Secret's files do not belong to.
+    assert (
+        next(v for v in pod["volumes"] if v["name"] == name)["secret"]["defaultMode"]
+        & 0o004
     )
+    # A Hub token in the hand-made Secret never reaches the task.
+    assert env["JUPYTERHUB_API_TOKEN"] == ""
 
 
 def test_the_workspace_job_and_the_browser_open_the_volume_the_app_declares():
@@ -205,17 +251,39 @@ def test_task_pods_send_profiles_where_the_sessions_do_as_the_workflow():
     assert env["PYROSCOPE_APP"] == runner.NAME
 
 
-def test_task_pods_reach_the_sessions_gateway_as_the_sessions_do():
+def test_task_pods_reach_the_sessions_gateway_from_a_pod_as_their_account():
+    """The gateway takes an account's token only from a pod, at its API Service, and
+    serves dashboards only through its Traefik."""
     (template,) = docs(APP / "podtemplate.yaml")
     container = template["template"]["spec"]["containers"][0]
     env = {variable["name"]: variable["value"] for variable in container["env"]}
     spawner = (
         REPO / "apps/jupyterhub/jupyterhub/extraFiles/custom-spawner.py"
     ).read_text()
-    names = [name for name in env if name.startswith("DASK_GATEWAY__")]
-    assert len(names) == 3
-    for name in names:
-        assert re.search(rf'"{name}",\s*"{re.escape(env[name])}"', spawner)
+    (release,) = docs(REPO / "apps/dask-gateway/helmrelease.yaml")
+    (ingress,) = docs(REPO / "apps/dask-gateway/ingress.yaml")
+    names = sorted(name for name in env if name.startswith("DASK_GATEWAY__"))
+    assert names == [
+        "DASK_GATEWAY__ADDRESS",
+        "DASK_GATEWAY__AUTH__TYPE",
+        "DASK_GATEWAY__PROXY_ADDRESS",
+        "DASK_GATEWAY__PUBLIC_ADDRESS",
+    ]
+    assert (
+        env["DASK_GATEWAY__ADDRESS"] == f"http://api-{release['metadata']['name']}:8000"
+    )
+    (rule,) = ingress["spec"]["rules"]
+    (path,) = rule["http"]["paths"]
+    assert path["path"] == "/"
+    assert (
+        path["backend"]["service"]["name"] == f"traefik-{release['metadata']['name']}"
+    )
+    assert env["DASK_GATEWAY__PUBLIC_ADDRESS"] == f"http://{rule['host']}"
+    assert env["DASK_GATEWAY__AUTH__TYPE"] == (
+        f"{clusters.__name__}.{clusters.AccountAuth.__name__}"
+    )
+    proxy = env["DASK_GATEWAY__PROXY_ADDRESS"]
+    assert re.search(rf'"DASK_GATEWAY__PROXY_ADDRESS",\s*"{re.escape(proxy)}"', spawner)
 
 
 def test_task_pods_hold_the_facilitys_proxy_and_the_certificates_to_use_it():
@@ -228,9 +296,13 @@ def test_task_pods_hold_the_facilitys_proxy_and_the_certificates_to_use_it():
     flux = yaml.safe_load((EXPERIMENTAL.parent / "flux-kustomization.yaml").read_text())
     names = flux["spec"]["postBuild"]["substitute"]
 
-    (proxy,) = [n for n, v in volumes.items() if "secret" in v]
+    (proxy,) = [
+        n
+        for n, v in volumes.items()
+        if v.get("secret", {}).get("secretName") == "${x509_secret_name}"
+    ]
     secret = volumes[proxy]["secret"]
-    assert secret["secretName"] == "${x509_secret_name}" and names["x509_secret_name"]
+    assert names["x509_secret_name"]
     # Readable by the task user, whom the Secret's files do not belong to.
     assert secret["defaultMode"] & 0o004
     assert env["X509_USER_PROXY"] == f"{mounts[proxy]['mountPath']}/x509up"
@@ -418,14 +490,6 @@ def test_prepare_stages_an_analysis_that_brings_its_own_files(root, monkeypatch)
     assert not (work / "data").exists()
 
 
-def test_prepare_gives_the_workers_a_directory_they_can_write(root, monkeypatch):
-    _fake_tools(monkeypatch, root)
-
-    runner._prepare(root / "run", ANALYSIS)
-
-    assert (root / "run/shared").stat().st_mode & 0o7777 == 0o1777
-
-
 def test_the_environment_gets_the_helpers_and_every_python_starts_the_profiler(
     tmp_path, monkeypatch
 ):
@@ -571,7 +635,6 @@ def test_prepare_leaves_a_staged_workspace_to_the_agent_but_its_helpers(
     work = runner._prepare(root / "run", ANALYSIS)
     (work / "prompt.md").unlink()
     (work / "experiment_log.md").write_text("the agent's work")
-    (root / "run/shared").rmdir()
     calls.clear()
 
     assert runner._prepare(root / "run", ANALYSIS) == work
@@ -579,7 +642,6 @@ def test_prepare_leaves_a_staged_workspace_to_the_agent_but_its_helpers(
     # The helpers of each turn's rules reach a workspace staged before them.
     assert calls == [("install", work)]
     assert (work / "experiment_log.md").is_file()
-    assert (root / "run/shared").stat().st_mode & 0o7777 == 0o1777
 
 
 def test_prepare_redoes_a_setup_that_died_before_its_last_step(root, monkeypatch):
@@ -671,6 +733,9 @@ def gateway(tmp_path, monkeypatch):
             return state.client
 
     class Gateway:
+        def __init__(self, auth=None):
+            state.auth = auth
+
         def list_clusters(self):
             return [
                 types.SimpleNamespace(
@@ -709,6 +774,7 @@ def test_a_script_starts_the_analysis_cluster_on_its_environment(gateway, monkey
     monkeypatch.delenv("PYROSCOPE_APP", raising=False)
     monkeypatch.setenv("AF_ANALYSIS", "zz")
     monkeypatch.setenv("AF_WORKSPACE", "ws")
+    monkeypatch.setenv(clusters.TOKEN_FILE, "/etc/af-account/token")
     monkeypatch.setenv("JUPYTERHUB_API_TOKEN", "not for workers")
     monkeypatch.setenv("X509_CERT_DIR", "/cvmfs/certificates")
 
@@ -732,6 +798,20 @@ def test_a_script_starts_the_analysis_cluster_on_its_environment(gateway, monkey
     ]
     assert gateway.adapted == ("new", {"minimum": 0, "maximum": 12})
     assert gateway.client.plugins == []
+
+
+def test_the_gateway_gets_the_accounts_token_read_again_for_every_request(
+    gateway, tmp_path, monkeypatch
+):
+    token = tmp_path / "token"
+    token.write_text("one\n")
+    monkeypatch.setenv(clusters.TOKEN_FILE, str(token))
+
+    clusters.client()
+    token.write_text("two")
+
+    assert isinstance(gateway.auth, clusters.AccountAuth)
+    assert gateway.auth.pre_request(None) == ({"Authorization": "Bearer two"}, None)
 
 
 def test_a_script_starts_a_cluster_while_no_other_of_the_analysis_can(gateway):
@@ -812,7 +892,7 @@ def test_a_worker_keeps_the_proxy_in_a_file_of_its_own(tmp_path, monkeypatch):
 
 
 def test_a_script_waits_for_another_cluster_of_the_user_to_end(gateway):
-    gateway.running = [("theirs", "/work/projects/agentic-analysis/other")]
+    gateway.running = [("theirs", "/agentic-analysis/other")]
 
     with pytest.raises(RuntimeError, match="theirs is running"):
         clusters.client()
@@ -824,7 +904,7 @@ def test_a_script_waits_for_another_cluster_of_the_user_to_end(gateway):
 
 
 @pytest.fixture
-def ray(monkeypatch):
+def ray(monkeypatch, tmp_path):
     """A stand-in for ray.job_submission, recording the clients made."""
     made = []
 
@@ -836,6 +916,8 @@ def ray(monkeypatch):
     module.JobSubmissionClient = JobSubmissionClient
     monkeypatch.setitem(sys.modules, "ray", types.ModuleType("ray"))
     monkeypatch.setitem(sys.modules, "ray.job_submission", module)
+    (tmp_path / "token").write_text("account token\n")
+    monkeypatch.setenv(clusters.TOKEN_FILE, str(tmp_path / "token"))
     monkeypatch.setenv("JUPYTERHUB_API_TOKEN", "hub token")
     for name in ("RAY_AUTH_MODE", "RAY_AUTH_TOKEN"):
         monkeypatch.delenv(name, raising=False)
@@ -848,7 +930,7 @@ def test_ray_jobs_run_in_the_environment_on_the_settings_asked_for(ray):
     (made,) = ray
     assert made["address"] == gpus.ADDRESS
     assert made["headers"] == {
-        "Authorization": "Bearer hub token",
+        "Authorization": "Bearer account token",
         "af-env": os.path.realpath(sys.prefix),
         "af-max-workers": "4",
         "af-gpus-per-worker": "2",
@@ -856,9 +938,9 @@ def test_ray_jobs_run_in_the_environment_on_the_settings_asked_for(ray):
 
 
 def test_ray_jobs_may_run_in_another_environment(ray):
-    gpus.client(env="/work/projects/agentic-analysis/ws/env")
+    gpus.client(env="/agentic-analysis/ws/env")
 
-    assert ray[0]["headers"]["af-env"] == "/work/projects/agentic-analysis/ws/env"
+    assert ray[0]["headers"]["af-env"] == "/agentic-analysis/ws/env"
 
 
 def test_the_ray_gateway_takes_the_settings_the_helper_sends():
@@ -1273,7 +1355,8 @@ def stretch(root, monkeypatch):
     monkeypatch.setattr(runner, "_claude", claude)
     monkeypatch.setattr(runner.time, "sleep", state.slept.append)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "stand-in")
-    monkeypatch.setenv(runner.GATEWAY_TOKEN, "stand-in")
+    (root / "token").write_text("stand-in")
+    monkeypatch.setenv(clusters.TOKEN_FILE, str(root / "token"))
     return state
 
 
@@ -1286,11 +1369,17 @@ def test_advance_refuses_to_start_without_credentials(root, monkeypatch):
         runner.advance(ANALYSIS, "ws", "")
 
 
-def test_advance_refuses_to_start_without_a_gateway_token(root, stretch, monkeypatch):
-    monkeypatch.delenv(runner.GATEWAY_TOKEN)
+@pytest.mark.parametrize("unset", [True, False])
+def test_advance_refuses_to_start_without_its_accounts_token(
+    root, stretch, monkeypatch, unset
+):
+    if unset:
+        monkeypatch.delenv(clusters.TOKEN_FILE)
+    else:
+        (root / "token").unlink()
 
     with pytest.raises(
-        runner.flyte.errors.NonRecoverableError, match=runner.GATEWAY_TOKEN
+        runner.flyte.errors.NonRecoverableError, match=clusters.TOKEN_FILE
     ):
         runner.advance(ANALYSIS, "ws", "")
     assert stretch.prompts == []
@@ -1321,7 +1410,7 @@ def test_each_turn_starts_with_the_runners_facility_rules_in_place(
         runner.FACILITY.format(
             cores=runner.CORES,
             hours=runner.COMMAND_HOURS,
-            shared=root / "ws" / "shared",
+            root=runner.ROOT,
         )
     ]
 

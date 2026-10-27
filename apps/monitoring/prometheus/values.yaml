@@ -193,8 +193,12 @@ serverFiles:
               - "paf-b01.cms.rcac.purdue.edu:9796"
               - "paf-d00.cms.rcac.purdue.edu:9796"
               - "paf-d01.cms.rcac.purdue.edu:9796"
+              - "paf-d02.cms.rcac.purdue.edu:9796"
+              - "paf-d03.cms.rcac.purdue.edu:9796"
               - "paf-e00.cms.rcac.purdue.edu:9796"
               - "paf-e01.cms.rcac.purdue.edu:9796"
+              - "paf-e02.cms.rcac.purdue.edu:9796"
+              - "paf-e03.cms.rcac.purdue.edu:9796"
       # Scraped directly: via af-pod-monitor, pod_node would carry the Deployment host.
       - job_name: "af-node-monitor"
         static_configs:

@@ -1,7 +1,7 @@
 """Gives an analysis's scripts a Dask cluster on the facility's Dask Gateway
 that runs the environment they run in. The runner installs it into each
-analysis's environment; the task pod's DASK_GATEWAY__* variables and
-JUPYTERHUB_API_TOKEN name the gateway and whose clusters they are."""
+analysis's environment; the task pod's DASK_GATEWAY__* variables name the
+gateway, and its workload account's token whose clusters they are."""
 
 import fcntl
 import os
@@ -14,10 +14,14 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from dask_gateway.auth import GatewayAuth
     from distributed import WorkerPlugin
 except ImportError:
     # The runner imports this module without Dask to install it.
-    WorkerPlugin = object
+    GatewayAuth = WorkerPlugin = object
+
+# The variable naming the file that holds the workload account's token, which af_ray reads too.
+TOKEN_FILE = "AF_ACCOUNT_TOKEN_FILE"
 
 # The gateway requires PATH; the rest make workers profile and verify XCache as the scripts do.
 PASSED = (
@@ -30,6 +34,17 @@ PASSED = (
 )
 # Seconds between handing the workers the mounted proxy, which af-x509-secrets renews.
 RENEW = 1800
+
+
+def account_token() -> str:
+    return Path(os.environ[TOKEN_FILE]).read_text().strip()
+
+
+class AccountAuth(GatewayAuth):
+    """The workload account's token, as the gateway asks for it: on every request."""
+
+    def pre_request(self, resp: Any) -> tuple[dict[str, str], None]:
+        return {"Authorization": f"Bearer {account_token()}"}, None
 
 
 class Proxy(WorkerPlugin):
@@ -59,7 +74,7 @@ def client(workers: int = 50, cores: float = 1, memory: float = 4) -> Any:
     of them."""
     from dask_gateway import Gateway
 
-    gateway = Gateway()
+    gateway = Gateway(auth=AccountAuth())
     prefix = Path(sys.prefix)
     # A pixi environment is <project>/.pixi/envs/<name>.
     project = str(prefix.parents[2])

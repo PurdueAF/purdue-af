@@ -26,20 +26,22 @@ preemptible worker holds one, which its worker evicts. A cluster's pods read
 the most workers it has from `AF_MAX_WORKERS`, by which a training sizes
 itself. A user whose session
 holds a GPU, by the Hub's name of its pod and that pod's requests in
-Prometheus, starts and submits to none. How users
+Prometheus, starts and submits to none. A
+[workload account](../dask-gateway/README.md#workload-accounts) signs in with
+its own token and gets a cluster of its own, `ray-train-<name>`. How users
 send their training to it:
 [Training on GPUs with Ray](../../docs/docs/guide-ray-train.md).
 
 | File                 | What it is                                                                                                                |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `gateway.py`         | The gateway: relays Ray Client and Jobs API calls, creates and deletes users' RayClusters                                 |
-| `config.yaml`        | The gateway's settings: timeouts, GPU limits, and the addresses it asks                                                   |
+| `config.yaml`        | The gateway's settings: timeouts, GPU limits, the addresses it asks, and the volumes a workload account's cluster keeps    |
 | `nrp_gpus.py`        | How many GPUs NRP Nautilus has free for Ray workers, by region, from NRP's public Prometheus; `GET /af/nrp-gpus` on the gateway's `:8265` answers it |
 | `raycluster.yaml`    | The template of a user's cluster; the gateway fills in its name, the user's UID/GID, its environment, its token Secret and its worker groups, one per kind of GPU and priority |
-| `deployment.yaml`    | The gateway pod: the stock Ray image, with the files above from the `ray-train-gateway` ConfigMap                         |
+| `deployment.yaml`    | The gateway pod: the stock Ray image, with the files above from the `ray-train-gateway` ConfigMap and the workload accounts' declarations from `af-accounts` |
 | `service.yaml`       | `ray-train-gateway:10001` for Ray Client and `:8265` for the Jobs API, the addresses notebooks connect to                 |
 | `rbac.yaml`          | Create, read and delete RayClusters; create their token Secrets                                                           |
-| `networkpolicy.yaml` | Only sessions reach the gateway, and only the gateway reaches users' clusters                                             |
+| `networkpolicy.yaml` | Admits sessions to the gateway, and the gateway to users' clusters; the namespace's own `np-default` admits its other pods, a workload account's among them, to both |
 
 The session side is in the Hub config:
 [`extraFiles/ray-train.py`](../jupyterhub/jupyterhub/extraFiles/ray-train.py)

@@ -47,6 +47,7 @@ resources:
   # Runs analyses with the JFC methodology on demand (workflows/agentic-analysis).
   - ../../apps/agentic-analysis/llm-proxy.yaml
   - ../../apps/agentic-analysis/podtemplate.yaml
+  - ../../apps/agentic-analysis/secret-account.yaml
   - ../../apps/agentic-analysis/secret-llm-proxy.yaml
   - ../../apps/agentic-analysis/secret-nrp.yaml
   - ../../apps/agentic-analysis/volume.yaml
@@ -91,6 +92,14 @@ configMapGenerator:
       - ../../pixi/check-env.py
       - ../../pixi/global/pixi.toml
       - ../../pixi/global/pixi.lock
+
+  # Workload accounts, read by both gateways (apps/dask-gateway/README.md#workload-accounts).
+  - name: af-accounts
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - agentic-analysis.yaml=../../apps/agentic-analysis/account.yaml
 
   - name: dask-gateway-config
     files:

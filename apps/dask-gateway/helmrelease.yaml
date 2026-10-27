@@ -66,6 +66,20 @@ spec:
                   name: cvmfs
                   mountPath: /cvmfs
                   mountPropagation: HostToContainer
+              # Workload accounts' declarations (README.md#workload-accounts), which kubelet updates in place.
+              - op: add
+                path: /spec/template/spec/volumes/-
+                value:
+                  name: af-accounts
+                  configMap:
+                    name: af-accounts
+                    optional: true
+              - op: add
+                path: /spec/template/spec/containers/0/volumeMounts/-
+                value:
+                  name: af-accounts
+                  mountPath: /etc/af-accounts
+                  readOnly: true
           - target:
               kind: Service
               name: "api-.*"
