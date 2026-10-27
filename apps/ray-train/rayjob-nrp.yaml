@@ -39,11 +39,13 @@ spec:
               envFrom:
                 - secretRef:
                     name: nrp-s3
-              # A replacement worker pulls the image before it joins, and NRP pods
-              # reach each other only over the pod network.
+              # A replacement worker pulls the image before it joins, NRP pods reach
+              # each other only over the pod network, and Ceph ignores S3's region.
               env: &env
                 - name: RAY_TRAIN_WORKER_GROUP_START_TIMEOUT_S
                   value: "1800"
+                - name: AWS_DEFAULT_REGION
+                  value: us-east-1
                 - name: NCCL_SOCKET_IFNAME
                   value: eth0
                 - name: NCCL_IB_DISABLE

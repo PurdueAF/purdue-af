@@ -17,13 +17,13 @@ NODES = [
 ]
 
 
-def build(**submitted):
+def build(data=None, **submitted):
     submission = {
         "entrypoint": "python train.py",
         "submission_id": "raysubmit_1",
     } | submitted
     return nrp.build_job(
-        TEMPLATE, "ray-job-0123", "owner-key", submission, "bucket", 3, NODES, 900
+        TEMPLATE, "ray-job-0123", "owner-key", submission, "bucket", 3, 900, data or {}
     )
 
 
@@ -43,9 +43,10 @@ def test_uploaded_packages_move_to_the_jobs_prefix_and_nothing_else_does():
     }
 
 
-def test_a_job_runs_its_submission_on_the_nodes_chosen_for_it():
+def test_a_job_runs_its_submission_suspended_until_placed():
     job = build(
-        runtime_env={"working_dir": "gcs://_ray_pkg_a.zip"},
+        {"AF_INPUTS": "s3://bucket/ray-nrp/jobs/ray-job-0123/inputs"},
+        runtime_env={"working_dir": "gcs://_ray_pkg_a.zip", "env_vars": {"A": "1"}},
         entrypoint_num_gpus=1,
         entrypoint_resources={"custom": 1},
     )
@@ -57,17 +58,29 @@ def test_a_job_runs_its_submission_on_the_nodes_chosen_for_it():
         "raysubmit_1",
         "python train.py",
     )
+    assert spec["suspend"] is True
     assert (spec["shutdownAfterJobFinishes"], spec["ttlSecondsAfterFinished"]) == (
         True,
         900,
     )
     assert yaml.safe_load(spec["runtimeEnvYAML"]) == {
-        "working_dir": "s3://bucket/ray-nrp/jobs/ray-job-0123/_ray_pkg_a.zip"
+        "working_dir": "s3://bucket/ray-nrp/jobs/ray-job-0123/_ray_pkg_a.zip",
+        "env_vars": {
+            "A": "1",
+            "AF_INPUTS": "s3://bucket/ray-nrp/jobs/ray-job-0123/inputs",
+        },
     }
     assert spec["entrypointNumGpus"] == 1
     assert json.loads(spec["entrypointResources"]) == {"custom": 1}
-    (group,) = spec["rayClusterSpec"]["workerGroupSpecs"]
-    assert (group["replicas"], group["minReplicas"], group["maxReplicas"]) == (3, 3, 3)
+    assert nrp.workers_of(job) == 3
+    assert nrp.held_gpus(job) == 3
+
+
+def test_a_placed_job_runs_its_workers_on_its_nodes_and_its_head_in_their_region():
+    job = build()
+    cluster = nrp.placed(job, 2, NODES)
+    (group,) = cluster["workerGroupSpecs"]
+    assert (group["replicas"], group["minReplicas"], group["maxReplicas"]) == (2, 2, 2)
     (term,) = group["template"]["spec"]["affinity"]["nodeAffinity"][
         "requiredDuringSchedulingIgnoredDuringExecution"
     ]["nodeSelectorTerms"]
@@ -78,9 +91,17 @@ def test_a_job_runs_its_submission_on_the_nodes_chosen_for_it():
             "values": ["node-1", "node-2"],
         }
     ]
-    head = spec["rayClusterSpec"]["headGroupSpec"]["template"]["spec"]
+    head = cluster["headGroupSpec"]["template"]["spec"]
     assert head["nodeSelector"] == {"topology.kubernetes.io/region": "us-west"}
-    assert nrp.held_gpus(job) == 3
+    # The job itself keeps its cluster until the patch reaches NRP.
+    assert "affinity" not in json.dumps(job)
+
+
+def test_a_jobs_data_is_under_its_prefix():
+    assert (
+        nrp.data_uri("bucket", "ray-job-0123", "output")
+        == "s3://bucket/ray-nrp/jobs/ray-job-0123/output"
+    )
 
 
 def test_a_job_without_a_runtime_environment_names_none():
