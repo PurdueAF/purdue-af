@@ -57,7 +57,8 @@ inferenceServer:
     failureThreshold: 60
     httpGet:
       path: /v2/health/ready
-      port: http
+      # The Slurm plugin does not resolve named ports; "http" probes port 0.
+      port: 8000
 
 envoy:
   enabled: true
