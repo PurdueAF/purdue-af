@@ -1,11 +1,14 @@
 """Ray gateway: each AF user's Ray Client, `ray.init("ray://ray-train-gateway:10001")`,
-and Jobs API client, `JobSubmissionClient("http://ray-train-gateway:8265")`,
-reach a Ray cluster of their own.
+reaches a Ray cluster of their own, and each job their Jobs API client,
+`JobSubmissionClient("http://ray-train-gateway:8265")`, submits runs in a
+RayJob of its own: a cluster made the same way, which KubeRay removes once the
+job ends and its logs were kept for the idle timeout. The RayJob keeps the job's
+status for jobRecordSeconds.
 
 A session's RAY_AUTH_TOKEN is its JupyterHub token, which both clients send
 with every call. The Hub says whose it is, and the call goes on, unread, to
-that user's RayCluster: created from raycluster.yaml when they first connect
-or submit a job, running as them, and deleted once idle. Only the gateway
+that user's RayCluster: created from raycluster.yaml when they first connect,
+running as them, and deleted once idle. Only the gateway
 holds a cluster's own Ray token. A cluster runs the global Pixi environment,
 or the one a call names in `af-env`, with one worker, as many as
 `af-n-workers` asks or up to as many as `af-max-workers` asks, each with one
@@ -37,8 +40,10 @@ import logging
 import os
 import posixpath
 import re
+import secrets
 import signal
 import ssl
+import string
 import time
 import urllib.parse
 from collections.abc import AsyncIterator, Mapping
@@ -81,6 +86,7 @@ REAP_EVERY_S = float(CONFIG["reapEverySeconds"])
 USER_CACHE_S = float(CONFIG["userCacheSeconds"])
 GONE_S = float(CONFIG["goneSeconds"])
 GRANT_S = float(CONFIG["grantSeconds"])
+JOB_RECORD_S = float(CONFIG["jobRecordSeconds"])
 
 
 @dataclass(frozen=True)
@@ -136,8 +142,18 @@ TOKEN_SHA256 = re.compile(r"[0-9a-f]{64}")
 KUBE_API = "https://kubernetes.default.svc"
 SERVICE_ACCOUNT = Path("/var/run/secrets/kubernetes.io/serviceaccount")
 RAYCLUSTERS = f"/apis/ray.io/v1/namespaces/{NAMESPACE}/rayclusters"
+RAYJOBS = f"/apis/ray.io/v1/namespaces/{NAMESPACE}/rayjobs"
 SECRETS = f"/api/v1/namespaces/{NAMESPACE}/secrets"
 MANAGED_BY = "ray-train-gateway"
+# The label KubeRay gives the cluster of a RayJob, which KubeRay, not the reaper, removes.
+FROM_CRD = "ray.io/originated-from-crd"
+# Whose a job is: the name of their own cluster.
+OWNER_LABEL = "purdue-af/ray-owner"
+ENTRYPOINT_ANNOTATION = "purdue-af/ray-entrypoint"
+# Why the gateway stopped a job, when it did.
+STOPPED_ANNOTATION = "purdue-af/ray-stopped"
+JOB_PATH = re.compile(r"/api/jobs/([^/]+)(/.*)?")
+SUBMISSION_ALPHABET = string.ascii_letters + string.digits
 # The label of a workload account's cluster's pods, which names the account.
 PART_OF = "app.kubernetes.io/part-of"
 # Ray Client's port, on the gateway as on every head.
@@ -180,6 +196,8 @@ UNPREFIXED = {name.removeprefix(SETTING_PREFIX) for name in SETTINGS}
 RAM_ANNOTATION = "purdue-af/ray-worker-memory"
 REMOVED_IDLE = "Your Ray cluster was removed after it went idle: run ray.shutdown(), then ray.init() again."
 REMOVED_UNPROVISIONED = "Your Ray cluster was removed, as not all of its GPUs started in time: ask for fewer workers, or try again later."
+STOPPED_UNPROVISIONED = "The job was stopped, as not all of its GPUs started in time: ask for fewer workers, or try again later."
+JOB_STARTING = "Its Ray cluster is starting."
 # singleuser.podNameTemplate in the Hub values
 SESSION_POD = re.compile(r"purdue-af-(\d+)")
 # custom-spawner.py names the accounts from outside Purdue <login>-cern and <login>-fnal
@@ -295,6 +313,17 @@ class Shape:
             for f in FLAVORS
             if f.memory >= float(self.memory) and f.per_worker >= int(self.per_worker)
         ]
+
+
+@dataclass(frozen=True)
+class Waiting:
+    """A RayJob whose head is up and waits for its job: what a submission's package
+    uploads reach, and then the submission itself."""
+
+    name: str
+    head: str
+    shape: Shape
+    since: float
 
 
 def cluster_name(username: str) -> str:
@@ -573,24 +602,114 @@ def worker_group(
     return group
 
 
-def token_secret(user: User, owner_uid: str, token: str) -> dict[str, Any]:
-    """KubeRay reads the cluster's token from it; it goes when the cluster goes."""
+def token_secret(name: str, kind: str, owner_uid: str, token: str) -> dict[str, Any]:
+    """KubeRay reads the cluster's token from it; it goes with the RayCluster or RayJob `name`."""
     return {
         "apiVersion": "v1",
         "kind": "Secret",
         "metadata": {
-            "name": user.cluster,
+            "name": name,
             "labels": {"app.kubernetes.io/managed-by": MANAGED_BY},
             "ownerReferences": [
                 {
                     "apiVersion": "ray.io/v1",
-                    "kind": "RayCluster",
-                    "name": user.cluster,
+                    "kind": kind,
+                    "name": name,
                     "uid": owner_uid,
                 }
             ],
         },
         "stringData": {"auth_token": token},
+    }
+
+
+def new_submission() -> str:
+    """A submission ID as Ray makes one."""
+    return "raysubmit_" + "".join(
+        secrets.choice(SUBMISSION_ALPHABET) for _ in range(16)
+    )
+
+
+def job_name(user: User, key: str) -> str:
+    """A RayJob of the user's, made before its job is known: short enough for the cluster KubeRay names after it."""
+    digest = hashlib.sha256(f"{user.owner}/{user.cluster}/{key}".encode()).hexdigest()
+    return f"ray-job-{digest[:16]}"
+
+
+def build_job(
+    template: dict[str, Any],
+    user: User,
+    shape: Shape,
+    mix: dict[str, int],
+    name: str,
+) -> dict[str, Any]:
+    """A RayJob whose cluster is the one build_cluster makes, which waits until
+    the gateway sets the jobId of the job it submits, and goes once that job
+    ends and its logs were kept for the idle timeout."""
+    cluster = build_cluster(template, user, shape, mix)
+    cluster["spec"]["authOptions"]["secretName"] = name
+    metadata = cluster["metadata"]
+    return {
+        "apiVersion": "ray.io/v1",
+        "kind": "RayJob",
+        "metadata": {
+            "name": name,
+            # KubeRay gives them to the cluster too, which admission then counts.
+            "labels": {**metadata["labels"], OWNER_LABEL: user.cluster},
+            "annotations": metadata["annotations"],
+        },
+        "spec": {
+            "submissionMode": "InteractiveMode",
+            "shutdownAfterJobFinishes": True,
+            "ttlSecondsAfterFinished": int(IDLE_TIMEOUT_S),
+            "rayClusterSpec": cluster["spec"],
+        },
+    }
+
+
+def epoch_ms(stamp: str | None) -> int | None:
+    return int(datetime.fromisoformat(stamp).timestamp() * 1000) if stamp else None
+
+
+def job_ended(job: dict[str, Any]) -> bool:
+    return (job.get("status") or {}).get("jobStatus") in (
+        "SUCCEEDED",
+        "FAILED",
+        "STOPPED",
+    )
+
+
+def owns(user: User, job: dict[str, Any]) -> bool:
+    """Whether the job is the user's: of their cluster's name, and running as they do, person or account."""
+    labels = job["metadata"].get("labels") or {}
+    cluster = {"spec": job["spec"]["rayClusterSpec"]}
+    return (
+        labels.get(OWNER_LABEL) == user.cluster and cluster_owner(cluster) == user.owner
+    )
+
+
+def job_details(job: dict[str, Any]) -> dict[str, Any]:
+    """The job as the Jobs API reports one, from its RayJob: what is left once its cluster is gone."""
+    status = job.get("status") or {}
+    ran = status.get("rayJobInfo") or {}
+    annotations = job["metadata"].get("annotations") or {}
+    stopped = annotations.get(STOPPED_ANNOTATION)
+    return {
+        "type": "SUBMISSION",
+        "job_id": None,
+        "submission_id": job["spec"]["jobId"],
+        "driver_info": None,
+        "status": status.get("jobStatus") or "PENDING",
+        "entrypoint": annotations.get(ENTRYPOINT_ANNOTATION, ""),
+        "message": stopped or status.get("message") or JOB_STARTING,
+        "error_type": None,
+        "start_time": epoch_ms(ran.get("startTime") or status.get("startTime")),
+        "end_time": epoch_ms(ran.get("endTime") or status.get("endTime")),
+        "metadata": {},
+        "runtime_env": {},
+        "driver_agent_http_address": None,
+        "driver_node_id": None,
+        "driver_exit_code": None,
     }
 
 
@@ -824,6 +943,9 @@ class Gateway:
         self.grants: dict[str, tuple[dict[str, int], float]] = {}
         self.admitting = asyncio.Lock()
         self._users: dict[str, tuple[float, User]] = {}
+        # user's cluster -> their job that waits for its submission, and the lock that makes one at a time
+        self.waiting: dict[str, Waiting] = {}
+        self.submitting: dict[str, asyncio.Lock] = collections.defaultdict(asyncio.Lock)
 
     @property
     def service_token(self) -> str:
@@ -964,8 +1086,192 @@ class Gateway:
         self.last_used[user.cluster] = time.monotonic()
         return user.cluster
 
+    async def submission(
+        self, user: User, shape: Shape, request: web.Request
+    ) -> tuple[str, str, bytes | None]:
+        """The head a submission or one of its uploads goes to, the job whose token
+        it carries, and a submission's body, which names the job that head waits for."""
+        if user.session_gpu:
+            raise Refused(
+                grpc.StatusCode.FAILED_PRECONDITION,
+                "Your session holds a GPU, and Ray jobs are for sessions without one: train on your session's GPU, or start a session without a GPU.",
+            )
+        mounted_env(shape.env, cluster_template(user))
+        submitted: dict[str, Any] | None = None
+        if request.method == "POST":
+            try:
+                submitted = json.loads(await request.read())
+            except ValueError:
+                submitted = None
+            if not isinstance(submitted, dict):
+                raise Refused(
+                    grpc.StatusCode.INVALID_ARGUMENT,
+                    "A job submission is a JSON object.",
+                )
+        async with self.submitting[user.cluster]:
+            if submitted is not None:
+                asked = str(submitted.get("submission_id") or new_submission())
+                if any(j["spec"]["jobId"] == asked for j in await self.jobs(user)):
+                    raise Refused(
+                        grpc.StatusCode.FAILED_PRECONDITION,
+                        f"You have a job {asked} already: submit it under another ID, or without one.",
+                    )
+            waiting = self.waiting.pop(user.cluster, None)
+            if waiting is not None and (
+                waiting.shape != shape
+                or time.monotonic() - waiting.since > START_TIMEOUT_S
+            ):
+                # The reaper removes what no submission came to.
+                waiting = None
+            if waiting is None:
+                waiting = await self.start_job(user, shape)
+            if submitted is None:
+                self.waiting[user.cluster] = waiting
+                return waiting.head, waiting.name, None
+            # KubeRay follows the job whose jobId is set on a RayJob that waits for one.
+            submitted["submission_id"] = asked
+            entrypoint = str(submitted.get("entrypoint", ""))[:4096]
+            await self.kube(
+                "PATCH",
+                f"{RAYJOBS}/{waiting.name}",
+                {
+                    "metadata": {"annotations": {ENTRYPOINT_ANNOTATION: entrypoint}},
+                    "spec": {"jobId": asked},
+                },
+            )
+        return waiting.head, waiting.name, json.dumps(submitted).encode()
+
+    async def start_job(self, user: User, shape: Shape) -> Waiting:
+        """Create a RayJob that waits for its job, and return once its head answers."""
+        name = job_name(user, new_submission())
+        mix = await self.admit(user, shape, name=name)
+        status, created = await self.kube(
+            "POST",
+            RAYJOBS,
+            build_job(cluster_template(user), user, shape, mix, name),
+        )
+        if status != 201:
+            self.grants.pop(name, None)
+            raise Refused(
+                grpc.StatusCode.UNAVAILABLE,
+                f"Could not create your Ray job: {created.get('message', status)}",
+            )
+        log.info("created %s", name)
+        secret = token_secret(
+            name,
+            "RayJob",
+            created["metadata"]["uid"],
+            cluster_token(self.service_token, name),
+        )
+        deadline = time.monotonic() + START_TIMEOUT_S
+        try:
+            while True:
+                status, body = await self.kube("POST", SECRETS, secret)
+                if status not in (201, 409):
+                    raise Refused(
+                        grpc.StatusCode.UNAVAILABLE,
+                        f"Could not create your Ray job's token: {body.get('message', status)}",
+                    )
+                job = await self.rayjob(name)
+                head = ((job or {}).get("status") or {}).get("rayClusterName")
+                if head and await self.head_status(head, keyed=name) == 200:
+                    break
+                if time.monotonic() > deadline:
+                    raise Refused(
+                        grpc.StatusCode.UNAVAILABLE,
+                        "Your Ray job's head did not start in time: try again later.",
+                    )
+                await asyncio.sleep(START_POLL_S)
+            # A Ray that ignores RAY_AUTH_MODE would serve anyone who reaches it.
+            if await self.head_status(head, authorized=False) == 200:
+                raise Refused(
+                    grpc.StatusCode.INVALID_ARGUMENT,
+                    "The Ray in that environment does not enforce the cluster's token.",
+                )
+        except Refused:
+            await self.kube(
+                "DELETE", f"{RAYJOBS}/{name}", {"propagationPolicy": "Background"}
+            )
+            raise
+        return Waiting(name, head, shape, time.monotonic())
+
+    async def rayjob(self, name: str) -> dict[str, Any] | None:
+        status, body = await self.kube("GET", f"{RAYJOBS}/{name}")
+        if status == 404:
+            return None
+        if status != 200:
+            raise Refused(
+                grpc.StatusCode.UNAVAILABLE,
+                f"Kubernetes answered HTTP {status} for the Ray job.",
+            )
+        return body
+
+    async def job(
+        self, user: User, submission: str
+    ) -> tuple[dict[str, Any], str | None] | None:
+        """The user's RayJob of `submission`, and its cluster while that is up; None if they have none of it."""
+        job = next(
+            (j for j in await self.jobs(user) if j["spec"]["jobId"] == submission),
+            None,
+        )
+        if job is None:
+            return None
+        head = (job.get("status") or {}).get("rayClusterName")
+        if head:
+            cluster = await self.cluster(head)
+            if cluster is None or cluster["metadata"].get("deletionTimestamp"):
+                head = None
+        return job, head
+
+    async def jobs(self, user: User) -> list[dict[str, Any]]:
+        selector = urllib.parse.quote(f"{OWNER_LABEL}={user.cluster}")
+        status, listing = await self.kube("GET", f"{RAYJOBS}?labelSelector={selector}")
+        if status != 200:
+            raise Refused(
+                grpc.StatusCode.UNAVAILABLE,
+                f"Kubernetes answered HTTP {status} for your Ray jobs.",
+            )
+        # One that waits for its job yet is none of the user's jobs.
+        return [
+            job
+            for job in listing.get("items", [])
+            if owns(user, job) and job["spec"].get("jobId")
+        ]
+
+    async def recorded(
+        self, job: dict[str, Any], method: str, rest: str
+    ) -> web.StreamResponse:
+        """A call about a job whose cluster is not up, answered from its RayJob."""
+        name = job["metadata"]["name"]
+        ended = job_ended(job)
+        if method == "GET" and not rest:
+            return web.json_response(job_details(job))
+        if method == "DELETE" and not rest:
+            if not ended:
+                text = "The job has not ended: stop it first"
+                return web.Response(status=400, reason=text, text=text)
+            await self.kube(
+                "DELETE", f"{RAYJOBS}/{name}", {"propagationPolicy": "Background"}
+            )
+            return web.json_response({"deleted": True})
+        if method == "POST" and rest == "/stop":
+            if not ended:
+                # Its cluster never came up: nothing ran, and nothing need wait for it.
+                await self.kube(
+                    "DELETE", f"{RAYJOBS}/{name}", {"propagationPolicy": "Background"}
+                )
+            return web.json_response({"stopped": not ended})
+        text = (
+            f"The job's Ray cluster was removed {int(IDLE_TIMEOUT_S // 60)} minutes after the job ended, and its logs with it"
+            if ended
+            else "The job's Ray cluster is starting: ask again in a minute"
+        )
+        return web.Response(status=404, reason=text, text=text)
+
     async def handle(self, request: web.Request) -> web.StreamResponse:
-        """An HTTP call to a dashboard, the Jobs API's among them, relayed to the caller's cluster."""
+        """An HTTP call to a dashboard, the Jobs API's among them: a submission and
+        its uploads reach a RayJob of its own, a call about a job that job's
+        cluster or its record, and any other call the caller's own cluster."""
         try:
             user, shape = await self.caller(
                 {key.lower(): value for key, value in request.headers.items()}
@@ -975,16 +1281,32 @@ class Gateway:
                 return web.json_response(
                     {"ray_version": load_template()["spec"]["rayVersion"]}
                 )
+            body = None
+            about = JOB_PATH.fullmatch(request.path)
             if submits(request):
-                cluster = await self.cluster_for(user, shape)
+                head, keyed, body = await self.submission(user, shape, request)
+            elif about:
+                found = await self.job(user, about[1])
+                if found is None:
+                    # A job submitted to the user's own cluster.
+                    head = keyed = await self.running(user)
+                else:
+                    job, cluster = found
+                    if cluster is None or request.method == "DELETE":
+                        return await self.recorded(job, request.method, about[2] or "")
+                    head, keyed = cluster, job["metadata"]["name"]
+            elif request.method == "GET" and request.path == "/api/jobs/":
+                return web.json_response(
+                    [job_details(j) for j in await self.jobs(user)]
+                )
             else:
-                cluster = await self.running(user)
-            url = URL(head_url(cluster) + request.rel_url.raw_path_qs, encoded=True)
+                head = keyed = await self.running(user)
+            url = URL(head_url(head) + request.rel_url.raw_path_qs, encoded=True)
             headers = passed_on(request.headers)
-            headers += self.cluster_auth(cluster).items()
+            headers += self.cluster_auth(keyed).items()
             if request.headers.get("Upgrade", "").lower() == "websocket":
-                return await self.relay_logs(request, cluster, url, headers)
-            return await self.relay_http(request, cluster, url, headers)
+                return await self.relay_logs(request, head, url, headers)
+            return await self.relay_http(request, head, url, headers, body)
         except Refused as e:
             # JobSubmissionClient ends the text with a period of its own.
             text = e.text.removesuffix(".")
@@ -996,14 +1318,19 @@ class Gateway:
         cluster: str,
         url: URL,
         headers: list[tuple[str, str]],
+        body: bytes | None = None,
     ) -> web.StreamResponse:
-        """The call's body and the head's answer, passed on as they come."""
+        """The call's body, or `body` in its place, and the head's answer, passed on as they come."""
+        if body is None and request.body_exists:
+            data: Any = request.content
+        else:
+            data = body
         try:
             upstream = await self.http.request(
                 request.method,
                 url,
                 headers=headers,
-                data=request.content if request.body_exists else None,
+                data=data,
                 allow_redirects=False,
                 auto_decompress=False,
                 timeout=RELAY_TIMEOUT,
@@ -1150,11 +1477,15 @@ class Gateway:
         self, method: str, path: str, body: dict[str, Any] | None = None
     ) -> tuple[int, dict[str, Any]]:
         token = (SERVICE_ACCOUNT / "token").read_text().strip()
+        headers = {"Authorization": f"Bearer {token}"}
+        if method == "PATCH":
+            headers["Content-Type"] = "application/merge-patch+json"
         async with self.kube_http.request(
             method,
             KUBE_API + path,
-            json=body,
-            headers={"Authorization": f"Bearer {token}"},
+            json=None if method == "PATCH" else body,
+            data=json.dumps(body) if method == "PATCH" else None,
+            headers=headers,
         ) as r:
             data: dict[str, Any] = await r.json(content_type=None)
             return r.status, data
@@ -1220,7 +1551,8 @@ class Gateway:
                 "Another call is replacing your Ray cluster: try again in a minute.",
             )
         secret = token_secret(
-            user,
+            user.cluster,
+            "RayCluster",
             cluster["metadata"]["uid"],
             cluster_token(self.service_token, user.cluster),
         )
@@ -1250,12 +1582,18 @@ class Gateway:
             )
 
     async def admit(
-        self, user: User, shape: Shape, replaced: dict[str, int] | None = None
+        self,
+        user: User,
+        shape: Shape,
+        replaced: dict[str, int] | None = None,
+        name: str | None = None,
     ) -> dict[str, int]:
         """The workers a cluster gets of each GPU resource its shape allows, the
         first of FLAVORS first: as many of those it asks for as have free GPUs,
         or one whose GPU a preemptible worker holds. Refuse one that gets fewer
-        than it starts with; `replaced` are the GPUs its predecessor gives back."""
+        than it starts with; `replaced` are the GPUs its predecessor gives back.
+        `name` is a RayJob's, whose cluster it is; the user's own cluster's by default."""
+        name = name or user.cluster
         wanted, least = int(shape.workers), int(shape.least)
         per_worker = int(shape.per_worker)
         replaced = replaced or {}
@@ -1271,14 +1609,15 @@ class Gateway:
                 )
             now = time.monotonic()
             self.grants = {c: g for c, g in self.grants.items() if g[1] > now}
+            # A RayJob's cluster under the name of the RayJob it was granted to.
             others = {
-                c["metadata"]["name"]: held_gpus(c)
+                (c["metadata"].get("labels") or {}).get(
+                    "ray.io/originated-from-cr-name", c["metadata"]["name"]
+                ): held_gpus(c)
                 for c in listing.get("items", [])
-                if c["metadata"]["name"] != user.cluster
             }
-            granted = {
-                c: gpus for c, (gpus, _) in self.grants.items() if c != user.cluster
-            }
+            others.pop(name, None)
+            granted = {c: gpus for c, (gpus, _) in self.grants.items() if c != name}
             free = await self.free_gpus()
             mix: dict[str, int] = {}
             evicting = None
@@ -1306,7 +1645,7 @@ class Gateway:
             if least > available:
                 log.info(
                     "refused %s %d workers of %d GPUs: %d available, %s free",
-                    user.cluster,
+                    name,
                     least,
                     per_worker,
                     available,
@@ -1322,10 +1661,8 @@ class Gateway:
                     grpc.StatusCode.RESOURCE_EXHAUSTED,
                     f"Your Ray cluster asks for {least} workers with {gpus} of {shape.memory} GB or more each, and Ray clusters can take {available} more now: {fewer}try again later.",
                 )
-            log.info(
-                "admitted %s with %d of %d workers", user.cluster, available, wanted
-            )
-            self.grants[user.cluster] = (
+            log.info("admitted %s with %d of %d workers", name, available, wanted)
+            self.grants[name] = (
                 {resource: workers * per_worker for resource, workers in mix.items()},
                 now + GRANT_S,
             )
@@ -1401,11 +1738,14 @@ class Gateway:
                 )
             await asyncio.sleep(START_POLL_S)
 
-    async def head_status(self, cluster: str, authorized: bool = True) -> int | None:
+    async def head_status(
+        self, cluster: str, authorized: bool = True, keyed: str | None = None
+    ) -> int | None:
+        """What the head answers, with the token of `keyed`, its RayJob, or of the cluster itself."""
         try:
             async with self.http.get(
                 head_url(cluster) + "/api/version",
-                headers=self.cluster_auth(cluster) if authorized else {},
+                headers=self.cluster_auth(keyed or cluster) if authorized else {},
                 timeout=ClientTimeout(total=5),
             ) as r:
                 return r.status
@@ -1423,6 +1763,8 @@ class Gateway:
         now = time.monotonic()
         for cluster in listing.get("items", []):
             name = cluster["metadata"]["name"]
+            if (cluster["metadata"].get("labels") or {}).get(FROM_CRD) == "RayJob":
+                continue
             try:
                 # Busy or not: its workers hold GPUs for work that waits on the rest.
                 if unprovisioned(cluster, time.time()):
@@ -1440,6 +1782,71 @@ class Gateway:
                     log.info("deleted idle %s", name)
             except Exception:
                 log.exception("checking %s", name)
+
+    async def reap_jobs(self) -> None:
+        """Remove a RayJob no job was submitted to in time, and a job's record once
+        kept long enough; stop a job whose workers did not all start in time."""
+        status, listing = await self.kube(
+            "GET",
+            f"{RAYJOBS}?labelSelector=app.kubernetes.io%2Fmanaged-by%3D{MANAGED_BY}",
+        )
+        if status != 200:
+            log.warning("listing Ray jobs: HTTP %s", status)
+            return
+        now = time.time()
+        waited_for = {w.name for w in self.waiting.values()}
+        for job in listing.get("items", []):
+            metadata = job["metadata"]
+            name = metadata["name"]
+            state = job.get("status") or {}
+            try:
+                created = datetime.fromisoformat(
+                    metadata["creationTimestamp"]
+                ).timestamp()
+                if metadata.get("deletionTimestamp"):
+                    continue
+                if not state.get("jobStatus"):
+                    if name not in waited_for and now - created >= 2 * START_TIMEOUT_S:
+                        await self.kube(
+                            "DELETE",
+                            f"{RAYJOBS}/{name}",
+                            {"propagationPolicy": "Background"},
+                        )
+                        log.info("deleted %s: no job was submitted to it", name)
+                elif job_ended(job):
+                    ended = epoch_ms(state.get("endTime"))
+                    if ended is not None and now - ended / 1000 >= JOB_RECORD_S:
+                        await self.kube(
+                            "DELETE",
+                            f"{RAYJOBS}/{name}",
+                            {"propagationPolicy": "Background"},
+                        )
+                        log.info("deleted the record of %s", name)
+                elif head := state.get("rayClusterName"):
+                    cluster = await self.cluster(head)
+                    if cluster is not None and unprovisioned(cluster, now):
+                        await self.stop_unprovisioned(job, head)
+            except Exception:
+                log.exception("checking %s", name)
+
+    async def stop_unprovisioned(self, job: dict[str, Any], head: str) -> None:
+        """Stop the job, say why on its RayJob, and free the GPUs its cluster holds."""
+        name = job["metadata"]["name"]
+        submission = job["spec"]["jobId"]
+        with contextlib.suppress(ClientError, asyncio.TimeoutError):
+            async with self.http.post(
+                f"{head_url(head)}/api/jobs/{submission}/stop",
+                headers=self.cluster_auth(name),
+                timeout=ClientTimeout(total=10),
+            ):
+                pass
+        await self.kube(
+            "PATCH",
+            f"{RAYJOBS}/{name}",
+            {"metadata": {"annotations": {STOPPED_ANNOTATION: STOPPED_UNPROVISIONED}}},
+        )
+        await self.delete(head)
+        log.info("stopped %s: its workers did not all start", name)
 
     async def busy(self, cluster: dict[str, Any]) -> bool:
         """A running task or job keeps a cluster; so does a ready head that did not
@@ -1517,6 +1924,10 @@ async def reap_forever(gateway: Gateway) -> None:
             await gateway.reap_idle()
         except Exception:
             log.exception("reaping idle Ray clusters")
+        try:
+            await gateway.reap_jobs()
+        except Exception:
+            log.exception("reaping Ray jobs")
 
 
 def dashboard_app(gateway: Gateway) -> web.Application:

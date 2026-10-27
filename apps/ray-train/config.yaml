@@ -2,6 +2,8 @@
 
 # How long a cluster stays after its last task, job or call.
 idleTimeoutSeconds: 900
+# How long a job's record stays after the job ends; its cluster and logs go after idleTimeoutSeconds.
+jobRecordSeconds: 604800
 # How long a call waits for a head to start, or for an old cluster to go.
 startTimeoutSeconds: 600
 startPollSeconds: 5

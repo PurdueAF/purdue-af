@@ -65,7 +65,8 @@ job = client.submit_job(
 )
 ```
 
-The job starts within a minute or two, and goes on if you close the notebook.
+The job starts within a minute or two on GPUs of its own, and goes on if you
+close the notebook.
 What the script prints is the job's log:
 
 ```python
@@ -486,7 +487,7 @@ value is a string:
 | `af-ram-per-worker-gb` | Memory of each worker in GB, up to `"64"`                       | `"32"`               |
 | `af-env`               | [An environment of your own](#your-own-environment)             | Python (pixi global) |
 
-To submit with other settings, wait for your running jobs to end.
+Each job runs with the settings it was submitted with.
 
 ## Your own environment
 
@@ -528,5 +529,5 @@ client = JobSubmissionClient(
   that happens.
 * **Storage.** A job sees `/work`, `/depot/cms`, `/eos/purdue` and `/cvmfs` as
   your session does, and not your home directory.
-* **Logs.** A job's status and log are removed some minutes after your last
-  job ends: have the script write what you keep to `/work`.
+* **Logs.** A job's log is removed some minutes after it ends, and its status
+  some days later: have the script write what you keep to `/work`.

@@ -110,9 +110,16 @@ def hub_app():
     return app
 
 
+# The suffix KubeRay adds to a RayJob's name to name its cluster.
+JOB_SUFFIX = "-abcde"
+
+
 class FakeKube:
     def __init__(self):
         self.clusters = {}
+        # RayJobs, each with its cluster, as KubeRay creates it, and its patches
+        self.jobs = {}
+        self.patches = []
         self.secrets = {}
         self.fail_get = False
         self.fail_list = False
@@ -193,6 +200,84 @@ class FakeKube:
                 del self.clusters[name]
             return web.json_response({})
 
+        rayjobs = "/apis/ray.io/v1/namespaces/cms/rayjobs"
+
+        def selected(request, items):
+            wanted = request.query.get("labelSelector")
+            if not wanted:
+                return items
+            key, _, value = wanted.partition("=")
+            return [i for i in items if i["metadata"]["labels"].get(key) == value]
+
+        async def create_job(request):
+            body = await request.json()
+            name = body["metadata"]["name"]
+            if self.reject_create:
+                return web.json_response({"message": "invalid spec"}, status=422)
+            if name in self.jobs:
+                return web.json_response({"message": "exists"}, status=409)
+            self.created += 1
+            body["metadata"]["uid"] = f"uid-{name}-{self.created}"
+            body["metadata"]["creationTimestamp"] = datetime.now(timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
+            labels = body["metadata"]["labels"]
+            stored(
+                {
+                    "metadata": {
+                        "name": name + JOB_SUFFIX,
+                        "labels": labels
+                        | {
+                            gw.FROM_CRD: "RayJob",
+                            "ray.io/originated-from-cr-name": name,
+                        },
+                    },
+                    "spec": copy.deepcopy(body["spec"]["rayClusterSpec"]),
+                }
+            )
+            body["status"] = {
+                "jobDeploymentStatus": "Running",
+                "rayClusterName": name + JOB_SUFFIX,
+            }
+            self.jobs[name] = body
+            return web.json_response(body, status=201)
+
+        async def get_job(request):
+            name = request.match_info["name"]
+            if self.fail_get:
+                return web.json_response({}, status=500)
+            if name not in self.jobs:
+                return web.json_response({"message": "not found"}, status=404)
+            return web.json_response(self.jobs[name])
+
+        async def list_jobs(request):
+            if self.fail_list:
+                return web.json_response({}, status=500)
+            return web.json_response(
+                {"items": selected(request, list(self.jobs.values()))}
+            )
+
+        async def patch_job(request):
+            name = request.match_info["name"]
+            assert request.content_type == "application/merge-patch+json"
+            patch = json.loads(await request.read())
+            self.patches.append((name, patch))
+            if name not in self.jobs:
+                return web.json_response({"message": "not found"}, status=404)
+            annotations = self.jobs[name]["metadata"].setdefault("annotations", {})
+            annotations.update(patch["metadata"]["annotations"])
+            self.jobs[name]["spec"].update(patch.get("spec", {}))
+            return web.json_response(self.jobs[name])
+
+        async def delete_job(request):
+            name = request.match_info["name"]
+            if name not in self.jobs:
+                return web.json_response({}, status=404)
+            del self.jobs[name]
+            if name + JOB_SUFFIX in self.clusters:
+                removed(name + JOB_SUFFIX)
+            return web.json_response({})
+
         async def secret(request):
             body = await request.json()
             name = body["metadata"]["name"]
@@ -208,6 +293,11 @@ class FakeKube:
         app.router.add_get(clusters, listing)
         app.router.add_get(clusters + "/{name}", get)
         app.router.add_delete(clusters + "/{name}", delete)
+        app.router.add_post(rayjobs, create_job)
+        app.router.add_get(rayjobs, list_jobs)
+        app.router.add_get(rayjobs + "/{name}", get_job)
+        app.router.add_patch(rayjobs + "/{name}", patch_job)
+        app.router.add_delete(rayjobs + "/{name}", delete_job)
         app.router.add_post("/api/v1/namespaces/cms/secrets", secret)
         return app
 
@@ -307,7 +397,9 @@ class FakeHeads:
                 raise web.HTTPServiceUnavailable()
             cluster = request.match_info.get("cluster", "")
             token = request.headers.get("Authorization", "")
-            expected = f"Bearer {gw.cluster_token(SERVICE_TOKEN, cluster)}"
+            # A RayJob's cluster takes the RayJob's token.
+            keyed = cluster.removesuffix(JOB_SUFFIX)
+            expected = f"Bearer {gw.cluster_token(SERVICE_TOKEN, keyed)}"
             if not self.open and token != expected:
                 raise web.HTTPUnauthorized()
             checks = ("/api/version", "/api/v0/tasks", "/api/jobs/")
@@ -350,13 +442,21 @@ class FakeHeads:
             return web.json_response(self.jobs.get(request.match_info["cluster"], []))
 
         async def submit(request):
-            return web.json_response({"submission_id": "raysubmit_1"})
+            submitted = await request.json()
+            return web.json_response(
+                {"submission_id": submitted.get("submission_id") or "raysubmit_1"}
+            )
 
         async def job(request):
             submission = request.match_info["job"]
             if submission not in found(request):
                 return web.Response(status=404, text=f"Job {submission} does not exist")
             return web.json_response(found(request)[submission])
+
+        async def stop(request):
+            return web.json_response(
+                {"stopped": request.match_info["job"] in found(request)}
+            )
 
         async def package(request):
             key = (request.match_info["cluster"], request.match_info["package"])
@@ -387,6 +487,7 @@ class FakeHeads:
         app.router.add_post("/{cluster}/api/jobs/", submit)
         app.router.add_get("/{cluster}/api/jobs/{job}", job)
         app.router.add_get("/{cluster}/api/jobs/{job}/logs/tail", tail)
+        app.router.add_post("/{cluster}/api/jobs/{job}/stop", stop)
         app.router.add_route("*", "/{cluster}/api/packages/gcs/{package}", package)
         return app
 
@@ -571,6 +672,31 @@ def running_job(submission="raysubmit_1", **fields):
         "submission_id": submission,
         "status": "RUNNING",
     } | fields
+
+
+def rayjob(env, submission=None):
+    """The RayJob of `submission`, or the one RayJob there is."""
+    if submission is None:
+        (job,) = env.kube.jobs.values()
+        return job
+    (job,) = (j for j in env.kube.jobs.values() if j["spec"]["jobId"] == submission)
+    return job
+
+
+def job_cluster(env, submission=None):
+    return rayjob(env, submission)["metadata"]["name"] + JOB_SUFFIX
+
+
+async def submitted(env, **kwargs):
+    """Submit a job; its submission ID."""
+    status, _, body = await submit(env, **kwargs)
+    assert status == 200, body
+    return json.loads(body)["submission_id"]
+
+
+def kuberay_reports(env, submission, **status):
+    """KubeRay's status of the job's RayJob, as it updates it from the job's head."""
+    rayjob(env, submission)["status"].update(status)
 
 
 def head_pod(env, name="ray-train-user-a"):
@@ -912,9 +1038,10 @@ async def test_a_session_that_holds_a_gpu_follows_and_stops_the_jobs_of_its_user
     await submit(env)
     env.prometheus.session_gpus["purdue-af-7"] = 1
     env.gateway._users.clear()
-    assert (await job_call(env))[0] == 200
+    status, _, body = await job_call(env)
+    assert (status, len(json.loads(body))) == (200, 1)
     assert (await submit(env))[0] == 409
-    assert list(env.kube.clusters) == ["ray-train-user-a"]
+    assert list(env.kube.clusters) == [job_cluster(env)]
 
 
 async def test_a_user_from_outside_purdue_without_a_running_session_is_told_to_start_one(
@@ -970,13 +1097,14 @@ async def test_a_workload_account_runs_as_itself_on_cvmfs_and_its_own_volume(env
     )
 
 
-async def test_a_workload_account_submits_jobs_to_its_own_cluster(env):
+async def test_a_workload_account_submits_jobs_that_run_as_itself(env):
     status, _, _ = await submit(env, token=WORKLOAD_TOKEN, env_path=WORKLOAD_ENV)
     assert status == 200
-    assert list(env.kube.clusters) == [WORKLOAD_CLUSTER]
-    status, _, _ = await job_call(env, token=WORKLOAD_TOKEN, env_path=WORKLOAD_ENV)
-    assert status == 200
-    assert [seen[0] for seen in env.heads.seen] == [WORKLOAD_CLUSTER]
+    assert list(env.kube.clusters) == [job_cluster(env)]
+    assert runs_as(env, job_cluster(env)) == (1234, 1235)
+    status, _, body = await job_call(env, token=WORKLOAD_TOKEN, env_path=WORKLOAD_ENV)
+    assert (status, len(json.loads(body))) == (200, 1)
+    assert [seen[0] for seen in env.heads.seen] == [job_cluster(env)]
 
 
 def test_an_accounts_cluster_is_named_as_a_hub_user_of_its_name_would_be():
@@ -1076,8 +1204,8 @@ async def test_an_account_asks_after_its_jobs_without_naming_its_environment(env
     status, reason, _ = await submit(env, token=WORKLOAD_TOKEN)
     assert status == 400
     assert gw.DEFAULT_ENV in reason
-    assert list(env.kube.clusters) == [WORKLOAD_CLUSTER]
-    assert cluster_env(env, WORKLOAD_CLUSTER) == WORKLOAD_ENV
+    assert list(env.kube.clusters) == [job_cluster(env)]
+    assert rayjob(env)["metadata"]["annotations"][gw.ENV_ANNOTATION] == WORKLOAD_ENV
 
 
 @pytest.fixture
@@ -1108,7 +1236,9 @@ async def test_an_account_never_reaches_a_cluster_of_its_name_that_runs_as_a_per
                 await refused(env, token=WORKLOAD_TOKEN, env_path="/cvmfs/env")
                 == grpc.StatusCode.PERMISSION_DENIED
             )
-            status, _, body = await job_call(env, token=WORKLOAD_TOKEN)
+            status, _, body = await job_call(
+                env, path="/api/jobs/raysubmit_persons_job", token=WORKLOAD_TOKEN
+            )
             assert status == 403
             assert b"raysubmit_persons_job" not in body
     assert len(env.heads.calls) == relayed
@@ -1133,7 +1263,7 @@ async def test_a_person_never_reaches_a_cluster_of_their_name_that_runs_as_an_ac
             await refused(env, token=namesake, env_path=env_path)
             == grpc.StatusCode.PERMISSION_DENIED
         )
-        status, _, _ = await job_call(env, token=namesake)
+        status, _, _ = await job_call(env, path="/api/jobs/raysubmit_1", token=namesake)
         assert status == 403
     assert len(env.heads.calls) == relayed
     assert live(env) == {WORKLOAD_CLUSTER}
@@ -1156,7 +1286,7 @@ async def test_a_refused_namesake_leaves_the_clusters_idle_clock_alone(
             await refused(env, token=namesake, env_path="/cvmfs/env")
             == grpc.StatusCode.PERMISSION_DENIED
         )
-        status, _, _ = await job_call(env, token=namesake)
+        status, _, _ = await job_call(env, path="/api/jobs/raysubmit_1", token=namesake)
         assert status == 403
     assert env.gateway.last_used[WORKLOAD_CLUSTER] == long_ago
 
@@ -1170,7 +1300,7 @@ async def test_a_user_whose_ids_changed_still_reaches_their_own_cluster(
     env.gateway._users.clear()
     env.gateway.started.clear()
     assert await call(env) == [b"echo:ping"]
-    status, _, body = await job_call(env)
+    status, _, body = await job_call(env, path="/api/jobs/raysubmit_their_job")
     assert status == 200
     assert b"raysubmit_their_job" in body
     assert env.kube.created == 1
@@ -1827,36 +1957,120 @@ async def test_a_refusal_says_why_in_its_status_line(env):
     assert reason.startswith(gw.WORKERS_METADATA)
 
 
-async def test_submitting_a_job_starts_the_users_cluster_in_the_shape_it_names(env):
+async def test_a_submission_runs_in_a_rayjob_of_its_own_in_the_shape_it_names(env):
     status, _, body = await submit(env, env_path=ENV_A, gpus="2")
-    assert (status, json.loads(body)) == (200, {"submission_id": "raysubmit_1"})
-    assert cluster_env(env) == ENV_A
-    assert counts(preemptible(env)) == (1, 1, 1)
-    ((cluster, method, path, headers, sent),) = env.heads.seen
-    assert (cluster, method, path) == (
-        "ray-train-user-a",
-        "POST",
-        "/ray-train-user-a/api/jobs/",
-    )
+    assert status == 200
+    submission = json.loads(body)["submission_id"]
+    job = rayjob(env)
+    assert job["spec"] | {"rayClusterSpec": None} == {
+        "submissionMode": "InteractiveMode",
+        "jobId": submission,
+        "shutdownAfterJobFinishes": True,
+        "ttlSecondsAfterFinished": int(gw.IDLE_TIMEOUT_S),
+        "rayClusterSpec": None,
+    }
+    assert job["metadata"]["labels"][gw.OWNER_LABEL] == "ray-train-user-a"
+    annotations = job["metadata"]["annotations"]
+    assert annotations[gw.ENV_ANNOTATION] == ENV_A
+    assert annotations[gw.ENTRYPOINT_ANNOTATION] == "python train.py"
+    cluster = job_cluster(env)
+    assert counts(preemptible(env, cluster)) == (1, 1, 1)
+    assert runs_as(env, cluster) == (5001, 500)
+    ((head, method, path, headers, sent),) = env.heads.seen
+    assert (head, method, path) == (cluster, "POST", f"/{cluster}/api/jobs/")
     assert headers["Authorization"] == (
-        f"Bearer {gw.cluster_token(SERVICE_TOKEN, 'ray-train-user-a')}"
+        f"Bearer {gw.cluster_token(SERVICE_TOKEN, job['metadata']['name'])}"
     )
     assert not {gw.ENV_METADATA, gw.WORKERS_METADATA} & {k.lower() for k in headers}
     assert "session-a" not in json.dumps(headers)
-    assert json.loads(sent) == {"entrypoint": "python train.py"}
+    assert json.loads(sent) == {
+        "entrypoint": "python train.py",
+        "submission_id": submission,
+    }
+    # The user's own cluster is for Ray Client alone.
+    assert "ray-train-user-a" not in env.kube.clusters
 
 
-async def test_an_upload_reaches_the_head_whole(env):
+async def test_a_job_takes_the_submission_id_its_client_names(env):
+    body = json.dumps({"entrypoint": "python train.py", "submission_id": "my-job"})
+    status, _, answer = await job_call(env, "POST", "/api/jobs/", body)
+    assert (status, json.loads(answer)) == (200, {"submission_id": "my-job"})
+    assert rayjob(env)["spec"]["jobId"] == "my-job"
+    status, reason, _ = await job_call(env, "POST", "/api/jobs/", body)
+    assert status == 409
+    assert "my-job" in reason
+
+
+async def test_a_job_whose_code_was_uploaded_first_takes_the_id_its_client_names(
+    env,
+):
+    await job_call(env, "PUT", "/api/packages/gcs/_ray_pkg_1.zip", b"zip")
+    assert "jobId" not in rayjob(env)["spec"]
+    body = json.dumps({"entrypoint": "python train.py", "submission_id": "my-job"})
+    status, _, answer = await job_call(env, "POST", "/api/jobs/", body)
+    assert (status, json.loads(answer)) == (200, {"submission_id": "my-job"})
+    assert rayjob(env)["spec"]["jobId"] == "my-job"
+    assert json.loads(env.heads.seen[-1][4])["submission_id"] == "my-job"
+
+
+async def test_a_submission_that_is_no_json_object_is_refused(env):
+    status, _, _ = await job_call(env, "POST", "/api/jobs/", b"[1]")
+    assert status == 400
+    assert env.kube.jobs == {}
+
+
+async def test_every_submission_gets_a_cluster_of_its_own(env):
+    first = await submitted(env)
+    second = await submitted(env)
+    assert first != second
+    assert live(env) == {job_cluster(env, first), job_cluster(env, second)}
+
+
+async def test_a_submission_leaves_the_users_own_cluster_alone(env):
+    assert await call(env, env_path=ENV_A) == [b"echo:ping"]
+    await submitted(env, env_path=ENV_B)
+    assert cluster_env(env) == ENV_A
+    assert len(live(env)) == 2
+
+
+async def test_an_upload_reaches_the_head_of_the_job_it_comes_with(env):
     package = os.urandom(3 * 2**20)
     path = "/api/packages/gcs/_ray_pkg_1.zip"
     assert (await job_call(env, "GET", path))[0] == 404
     assert (await job_call(env, "PUT", path, package))[0] == 200
-    assert env.heads.packages[("ray-train-user-a", "_ray_pkg_1.zip")] == package
+    cluster = job_cluster(env)
+    assert env.heads.packages[(cluster, "_ray_pkg_1.zip")] == package
     assert (await job_call(env, "GET", path))[0] == 200
+    await submitted(env)
+    assert len(env.kube.jobs) == 1
+    assert env.heads.seen[-1][:2] == (cluster, "POST")
+    assert env.gateway.waiting == {}
+
+
+async def test_an_upload_in_another_shape_starts_another_job(env):
+    path = "/api/packages/gcs/_ray_pkg_1.zip"
+    await job_call(env, "PUT", path, b"zip", env_path=ENV_A)
+    await submitted(env, env_path=ENV_B)
+    assert len(env.kube.jobs) == 2
+
+
+async def test_a_job_no_submission_came_to_is_removed(env):
+    await job_call(env, "PUT", "/api/packages/gcs/_ray_pkg_1.zip", b"zip")
+    await env.gateway.reap_jobs()
+    assert len(env.kube.jobs) == 1
+    env.gateway.waiting.clear()
+    long_ago = datetime.fromtimestamp(
+        time.time() - 2 * gw.START_TIMEOUT_S - 1, timezone.utc
+    )
+    rayjob(env)["metadata"]["creationTimestamp"] = long_ago.strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    await env.gateway.reap_jobs()
+    assert env.kube.jobs == {}
 
 
 @pytest.mark.parametrize(
-    "path", ["/api/jobs/", "/api/jobs/raysubmit_1", "/api/jobs/raysubmit_1/logs"]
+    "path", ["/api/jobs/raysubmit_1", "/api/jobs/raysubmit_1/logs"]
 )
 async def test_asking_about_jobs_without_a_cluster_starts_none(env, path):
     status, _, body = await job_call(env, path=path)
@@ -1865,96 +2079,243 @@ async def test_asking_about_jobs_without_a_cluster_starts_none(env, path):
     assert env.kube.clusters == {}
 
 
-async def test_asking_about_jobs_reaches_the_cluster_whatever_it_runs(env):
-    await submit(env, env_path=ENV_A, gpus="2")
-    env.heads.jobs["ray-train-user-a"] = [running_job()]
-    # As after the gateway restarted
-    env.gateway.started.clear()
-    status, _, body = await job_call(env, path="/api/jobs/raysubmit_1")
+async def test_the_jobs_listed_are_the_users_own(env):
+    status, _, body = await job_call(env)
+    assert (status, json.loads(body)) == (200, [])
+    mine = await submitted(env)
+    await submitted(env, token="session-b")
+    status, _, body = await job_call(env)
+    (listed,) = json.loads(body)
+    assert listed["submission_id"] == mine
+    assert listed["status"] == "PENDING"
+    assert listed["entrypoint"] == "python train.py"
+
+
+async def test_a_user_never_reaches_another_users_job(env):
+    theirs = await submitted(env, token="session-b")
+    status, _, body = await job_call(env, path=f"/api/jobs/{theirs}")
+    assert status == 404
+    assert body.startswith(b"You have no Ray cluster")
+
+
+async def test_a_jobs_status_comes_from_its_head_while_its_cluster_is_up(env):
+    submission = await submitted(env, env_path=ENV_A)
+    env.heads.jobs[job_cluster(env)] = [running_job(submission)]
+    status, _, body = await job_call(env, path=f"/api/jobs/{submission}")
     assert (status, json.loads(body)["status"]) == (200, "RUNNING")
-    assert cluster_env(env) == ENV_A
-    assert env.kube.created == 1
-
-
-async def test_a_cluster_being_deleted_has_no_jobs_to_ask_about(env):
-    await submit(env)
-    env.gateway.started.clear()
-    env.kube.clusters["ray-train-user-a"]["metadata"]["deletionTimestamp"] = "now"
-    assert (await job_call(env, path="/api/jobs/raysubmit_1"))[0] == 404
+    assert env.heads.seen[-1][:2] == (job_cluster(env), "GET")
 
 
 async def test_a_heads_answer_comes_back_as_it_is(env):
-    await submit(env)
-    status, _, body = await job_call(env, path="/api/jobs/raysubmit_9")
-    assert (status, body) == (404, b"Job raysubmit_9 does not exist")
+    submission = await submitted(env)
+    status, _, body = await job_call(env, path=f"/api/jobs/{submission}")
+    assert (status, body) == (404, f"Job {submission} does not exist".encode())
 
 
 async def test_paths_and_queries_reach_the_head_as_sent(env):
-    await submit(env)
+    body = json.dumps({"entrypoint": "python train.py", "submission_id": "my job#1"})
+    await job_call(env, "POST", "/api/jobs/", body)
+    cluster = job_cluster(env)
     await job_call(env, path="/api/jobs/my%20job%231?verbose=1")
     assert env.heads.seen[-1][1:3] == (
         "GET",
-        "/ray-train-user-a/api/jobs/my%20job%231?verbose=1",
+        f"/{cluster}/api/jobs/my%20job%231?verbose=1",
     )
 
 
-async def test_a_submission_in_another_shape_leaves_a_cluster_with_a_running_job(env):
-    await submit(env, env_path=ENV_A)
-    env.heads.jobs["ray-train-user-a"] = [running_job()]
-    status, reason, _ = await submit(env, env_path=ENV_B)
-    assert status == 409
-    assert "tasks or jobs" in reason
-    assert cluster_env(env) == ENV_A
+def ended(env, submission, at=None):
+    """The job ended, its cluster gone: what KubeRay leaves the idle timeout after."""
+    stamp = (at or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    kuberay_reports(
+        env,
+        submission,
+        jobStatus="SUCCEEDED",
+        jobDeploymentStatus="Complete",
+        message="Job finished successfully.",
+        endTime=stamp,
+    )
+    env.kube.clusters.pop(job_cluster(env, submission))
 
 
-async def test_a_submission_in_another_shape_replaces_a_cluster_whose_jobs_ended(env):
-    await submit(env, env_path=ENV_A)
-    env.heads.jobs["ray-train-user-a"] = [running_job(status="SUCCEEDED")]
-    assert (await submit(env, env_path=ENV_B))[0] == 200
-    assert cluster_env(env) == ENV_B
+async def test_a_jobs_status_outlives_its_cluster(env):
+    submission = await submitted(env)
+    ended(env, submission)
+    status, _, body = await job_call(env, path=f"/api/jobs/{submission}")
+    details = json.loads(body)
+    assert status == 200
+    assert (details["status"], details["message"], details["entrypoint"]) == (
+        "SUCCEEDED",
+        "Job finished successfully.",
+        "python train.py",
+    )
+    assert details["end_time"] is not None
+    status, reason, _ = await job_call(env, path=f"/api/jobs/{submission}/logs")
+    assert status == 404
+    assert "logs with it" in reason
 
 
-@pytest.mark.parametrize(
-    "job, kept",
-    [
-        (running_job(), True),
-        (running_job(status="PENDING"), True),
-        (running_job(status="SUCCEEDED"), False),
-        # A notebook's Ray Client session, which keeps no cluster by itself
-        (running_job(type="DRIVER"), False),
-    ],
-    ids=["running", "pending", "ended", "ray-client-driver"],
-)
-async def test_a_submitted_job_keeps_its_cluster_until_it_ends(env, job, kept):
-    await submit(env)
-    env.heads.jobs["ray-train-user-a"] = [job]
-    idle(env, "ray-train-user-a")
+async def test_a_jobs_record_goes_once_kept_long_enough(env):
+    submission = await submitted(env)
+    long_ago = datetime.fromtimestamp(time.time() - gw.JOB_RECORD_S - 1, timezone.utc)
+    ended(env, submission, at=long_ago)
+    await env.gateway.reap_jobs()
+    assert env.kube.jobs == {}
+
+
+async def test_a_job_is_deleted_only_once_it_ended(env):
+    submission = await submitted(env)
+    env.kube.clusters.pop(job_cluster(env))
+    status, reason, _ = await job_call(env, "DELETE", f"/api/jobs/{submission}")
+    assert status == 400
+    assert "stop it first" in reason
+    kuberay_reports(env, submission, jobStatus="STOPPED")
+    status, _, body = await job_call(env, "DELETE", f"/api/jobs/{submission}")
+    assert (status, json.loads(body)) == (200, {"deleted": True})
+    assert env.kube.jobs == {}
+
+
+async def test_stopping_a_job_whose_cluster_is_not_up_removes_it(env):
+    submission = await submitted(env)
+    env.kube.clusters.pop(job_cluster(env))
+    status, _, body = await job_call(env, "POST", f"/api/jobs/{submission}/stop")
+    assert (status, json.loads(body)) == (200, {"stopped": True})
+    assert env.kube.jobs == {}
+
+
+async def test_a_job_whose_workers_never_all_start_is_stopped_and_says_why(env):
+    submission = await submitted(env, gpus="2")
+    kuberay_reports(env, submission, jobStatus="RUNNING")
+    cluster = job_cluster(env)
+    provisioning(env, cluster, age=gw.PROVISION_TIMEOUT_S + 1)
+    await env.gateway.reap_jobs()
+    assert cluster not in live(env)
+    assert env.heads.seen[-1][:3] == (
+        cluster,
+        "POST",
+        f"/{cluster}/api/jobs/{submission}/stop",
+    )
+    env.kube.clusters.pop(cluster, None)
+    status, _, body = await job_call(env, path=f"/api/jobs/{submission}")
+    assert json.loads(body)["message"] == gw.STOPPED_UNPROVISIONED
+
+
+async def test_a_job_still_within_its_time_to_start_is_kept(env):
+    submission = await submitted(env, gpus="2")
+    kuberay_reports(env, submission, jobStatus="RUNNING")
+    provisioning(env, job_cluster(env), age=gw.PROVISION_TIMEOUT_S - 60)
+    await env.gateway.reap_jobs()
+    assert job_cluster(env) in live(env)
+
+
+async def test_the_idle_reaper_leaves_a_jobs_cluster_to_kuberay(env):
+    await submitted(env)
+    idle(env, job_cluster(env))
     await env.gateway.reap_idle()
-    assert (live(env) == {"ray-train-user-a"}) is kept
+    assert live(env) == {job_cluster(env)}
 
 
-async def test_a_cluster_stays_for_the_idle_timeout_after_its_last_job_ends(env):
-    await submit(env)
-    env.heads.jobs["ray-train-user-a"] = [running_job()]
-    idle(env, "ray-train-user-a")
-    await env.gateway.reap_idle()
-    env.heads.jobs["ray-train-user-a"] = [running_job(status="SUCCEEDED")]
-    await env.gateway.reap_idle()
-    assert live(env) == {"ray-train-user-a"}
-    idle(env, "ray-train-user-a")
-    await env.gateway.reap_idle()
-    assert live(env) == set()
+async def test_a_jobs_gpus_count_as_taken_until_prometheus_sees_them(env):
+    await submitted(env, gpus="8", memory="16")
+    status, _, _ = await submit(env, memory="16")
+    assert status == 429
 
 
-async def test_asking_about_jobs_keeps_a_cluster(env):
-    await submit(env)
-    idle(env, "ray-train-user-a")
-    await job_call(env, path="/api/jobs/raysubmit_1")
-    await env.gateway.reap_idle()
-    assert live(env) == {"ray-train-user-a"}
+async def test_without_prometheus_a_job_counts_against_the_budget_once(env):
+    env.prometheus.up = False
+    await submitted(env, gpus="4", memory="16")
+    await submitted(env, gpus="4", memory="16")
+    status, _, _ = await submit(env, memory="16")
+    assert status == 429
 
 
-async def tail(env, submission="raysubmit_1"):
+async def test_a_submission_that_is_no_json_is_refused(env):
+    status, _, _ = await job_call(env, "POST", "/api/jobs/", b"not json")
+    assert status == 400
+    assert env.kube.jobs == {}
+
+
+async def test_a_rayjob_kubernetes_refuses_is_reported_and_frees_its_grant(env):
+    env.kube.reject_create = True
+    status, reason, _ = await submit(env)
+    assert status == 503
+    assert "invalid spec" in reason
+    assert env.gateway.grants == {}
+
+
+async def test_a_job_whose_token_secret_is_refused_is_removed(env):
+    env.kube.reject_secret = True
+    status, reason, _ = await submit(env)
+    assert status == 503
+    assert "token" in reason
+    assert env.kube.jobs == {}
+
+
+async def test_a_job_whose_head_does_not_start_in_time_is_removed(env, monkeypatch):
+    monkeypatch.setattr(gw, "START_TIMEOUT_S", 0.2)
+    env.heads.up = False
+    status, reason, _ = await submit(env)
+    assert status == 503
+    assert "did not start in time" in reason
+    assert env.kube.jobs == {}
+
+
+async def test_a_job_on_a_ray_without_token_authentication_is_removed(env):
+    env.heads.open = True
+    status, reason, _ = await submit(env)
+    assert status == 400
+    assert "does not enforce" in reason
+    assert env.kube.jobs == {}
+
+
+async def test_a_failed_reading_of_jobs_is_reported(env):
+    env.kube.fail_list = True
+    assert (await job_call(env))[0] == 503
+    env.kube.fail_list = False
+    await submitted(env)
+    env.kube.fail_get = True
+    assert (await submit(env))[0] == 503
+
+
+async def test_a_job_submitted_to_the_users_own_cluster_is_still_reached(env):
+    assert await call(env) == [b"echo:ping"]
+    env.heads.jobs["ray-train-user-a"] = [running_job("raysubmit_old")]
+    status, _, body = await job_call(env, path="/api/jobs/raysubmit_old")
+    assert (status, json.loads(body)["status"]) == (200, "RUNNING")
+
+
+async def test_other_dashboard_calls_reach_the_users_own_cluster(env):
+    assert await call(env) == [b"echo:ping"]
+    path = "/api/v0/tasks?filter_keys=state&filter_predicates=%3D&filter_values=RUNNING&limit=1"
+    status, _, body = await job_call(env, path=path)
+    assert (status, json.loads(body)["data"]["result"]["total"]) == (200, 0)
+
+
+async def test_the_job_reaper_waits_out_a_failed_listing(env, caplog):
+    await submitted(env)
+    env.kube.fail_list = True
+    with caplog.at_level(logging.WARNING, logger="ray-train-gateway"):
+        await env.gateway.reap_jobs()
+    assert "listing Ray jobs: HTTP 500" in caplog.text
+    assert len(env.kube.jobs) == 1
+
+
+async def test_the_job_reaper_passes_over_a_job_being_deleted_and_outlives_a_bad_one(
+    env, caplog
+):
+    first = await submitted(env)
+    second = await submitted(env)
+    long_ago = datetime.fromtimestamp(time.time() - gw.JOB_RECORD_S - 1, timezone.utc)
+    for submission in (first, second):
+        ended(env, submission, at=long_ago)
+    rayjob(env, first)["metadata"]["deletionTimestamp"] = "now"
+    del rayjob(env, second)["metadata"]["creationTimestamp"]
+    with caplog.at_level(logging.ERROR, logger="ray-train-gateway"):
+        await env.gateway.reap_jobs()
+    assert len(env.kube.jobs) == 2
+    assert f"checking {rayjob(env, second)['metadata']['name']}" in caplog.text
+
+
+async def tail(env, submission):
     """JobSubmissionClient.tail_job_logs, as the lines it yields."""
     lines = []
     url = f"{env.dashboard}/api/jobs/{submission}/logs/tail"
@@ -1967,15 +2328,15 @@ async def tail(env, submission="raysubmit_1"):
 
 
 async def test_a_jobs_log_tail_is_relayed_until_the_job_ends(env):
-    await submit(env)
-    env.heads.jobs["ray-train-user-a"] = [running_job()]
-    assert await tail(env) == ["line 1\n", "line 2\n"]
+    submission = await submitted(env)
+    env.heads.jobs[job_cluster(env)] = [running_job(submission)]
+    assert await tail(env, submission) == ["line 1\n", "line 2\n"]
 
 
 async def test_a_log_tail_ends_at_anything_but_a_line(env):
-    await submit(env)
-    env.heads.jobs["ray-train-user-a"] = [running_job(binary=True)]
-    assert await tail(env) == ["line 1\n"]
+    submission = await submitted(env)
+    env.heads.jobs[job_cluster(env)] = [running_job(submission, binary=True)]
+    assert await tail(env, submission) == ["line 1\n"]
 
 
 async def test_a_tail_to_a_session_gone_without_a_word_ends_quietly(
@@ -1987,35 +2348,32 @@ async def test_a_tail_to_a_session_gone_without_a_word_ends_quietly(
         async def send_str(self, data, compress=None):
             raise ConnectionResetError("Cannot write to closing transport")
 
+    submission = await submitted(env)
     monkeypatch.setattr(web, "WebSocketResponse", HalfOpen)
-    await submit(env)
-    env.heads.jobs["ray-train-user-a"] = [running_job()]
+    env.heads.jobs[job_cluster(env)] = [running_job(submission)]
     env.heads.more_lines.set()
-    assert await tail(env) == []
+    assert await tail(env, submission) == []
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
 
 async def test_the_log_tail_of_an_unknown_job_is_refused(env):
-    await submit(env)
+    submission = await submitted(env)
     with pytest.raises(WSServerHandshakeError) as e:
-        await tail(env, "raysubmit_9")
+        await tail(env, submission)
     assert e.value.status == 404
 
 
 @pytest.mark.parametrize("call", ["http", "websocket"])
-async def test_an_unreachable_head_is_reported_and_checked_again(
-    env, monkeypatch, call
-):
-    await submit(env)
+async def test_an_unreachable_head_is_reported(env, monkeypatch, call):
+    submission = await submitted(env)
     port = free_port()
     monkeypatch.setattr(gw, "head_url", lambda cluster: f"http://127.0.0.1:{port}")
     if call == "http":
-        assert (await job_call(env, path="/api/jobs/raysubmit_1"))[0] == 503
+        assert (await job_call(env, path=f"/api/jobs/{submission}"))[0] == 503
     else:
         with pytest.raises(WSServerHandshakeError) as e:
-            await tail(env)
+            await tail(env, submission)
         assert e.value.status == 503
-    assert "ray-train-user-a" not in env.gateway.started
 
 
 def test_environments_live_on_the_storage_the_cluster_mounts():
