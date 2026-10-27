@@ -1,7 +1,7 @@
 # interLink Kubernetes plugin (Purdue)
 
 Site image for the [interlink-kubernetes-plugin](https://github.com/interlink-hq/interlink-kubernetes-plugin)
-sidecar: the upstream `1.2.0` image plus four patches.
+sidecar: the upstream `1.2.0` image plus five patches.
 
 - `ensure-namespace.patch` adds an `[offloading] ensure_namespace` option.
   Upstream lists namespaces at cluster scope before every pod create;
@@ -28,6 +28,10 @@ sidecar: the upstream `1.2.0` image plus four patches.
   ready, so the patch keeps the probes and reports a running, unready remote
   container as waiting. Only the first Ready waits: the virtual kubelet never
   sets a Running pod unready again.
+- `remote-pending.patch` reports each container of a remote pod that has no
+  container statuses yet — one still waiting to be scheduled — as waiting.
+  The virtual kubelet counts a pod's containers from that list, so an empty
+  one reads as every container terminated and the pod is marked Succeeded.
 
 ## Files
 
@@ -39,6 +43,7 @@ sidecar: the upstream `1.2.0` image plus four patches.
 | `wstunnel-client.patch` | adds `[wstunnel] client_image` (default unset: no sidecar, upstream behavior) |
 | `remote-placement.patch` | adds `interlink.eu/remote-affinity` and `[offloading] restart_policy` (default unset: the pod's own policy) |
 | `remote-readiness.patch` | keeps the probes and reports an unready container as waiting; patches the installed interLink SDK too, so it applies from `/` |
+| `remote-pending.patch` | reports the containers of an unscheduled remote pod as waiting; applies from `/` |
 
 ## Bumping the plugin
 

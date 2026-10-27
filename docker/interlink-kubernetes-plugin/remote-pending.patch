@@ -1,0 +1,25 @@
+--- a/interlink-kubernetes-plugin/app/services/kubernetes_plugin_service.py
++++ b/interlink-kubernetes-plugin/app/services/kubernetes_plugin_service.py
+@@ -78,6 +78,22 @@ class KubernetesPluginService(BaseService):
+                 assert remote_pod.metadata and remote_pod.status
+ 
+                 remote_container_statuses: list[k.V1ContainerStatus] = remote_pod.status.container_statuses or []
++                # The virtual kubelet counts containers from this list and reads an empty one
++                # (a remote pod not yet scheduled) as all of them terminated.
++                if not remote_container_statuses and remote_pod.spec:
++                    remote_container_statuses = [
++                        k.V1ContainerStatus(
++                            name=c.name,
++                            image=c.image,
++                            image_id="",
++                            ready=False,
++                            restart_count=0,
++                            state=k.V1ContainerState(
++                                waiting=k.V1ContainerStateWaiting(reason=remote_pod.status.reason or "Pending")
++                            ),
++                        )
++                        for c in remote_pod.spec.containers or []
++                    ]
+                 i_container_statuses: list[i.ContainerStatus] = []
+                 for cs in remote_container_statuses:
+                     # The virtual kubelet marks every running container ready.
