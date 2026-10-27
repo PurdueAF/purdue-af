@@ -56,6 +56,7 @@ CI_IMAGES = [
     "supersonic-model-manager",
     "interlink-slurm-plugin",
     "interlink-kubernetes-plugin",
+    "ray-nrp",
 ]
 VALUES_YAML = Path("apps/jupyterhub/jupyterhub/values.yaml")
 AGENTIC_DEPLOYMENT = Path("apps/agentic-interface/deployment.yaml")

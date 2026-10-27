@@ -81,6 +81,7 @@ Whether each component on the cluster is running what is on `main`
 ![supersonic-model-manager][image-supersonic-model-manager]
 ![interlink-slurm-plugin][image-interlink-slurm-plugin]
 ![interlink-kubernetes-plugin][image-interlink-kubernetes-plugin]
+![ray-nrp][image-ray-nrp]
 
 Reading the badges:
 
@@ -138,6 +139,7 @@ How a change reaches the cluster, version rules and rollback:
 [image-supersonic-model-manager]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-supersonic-model-manager.json
 [image-interlink-slurm-plugin]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-interlink-slurm-plugin.json
 [image-interlink-kubernetes-plugin]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-interlink-kubernetes-plugin.json
+[image-ray-nrp]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-ray-nrp.json
 [status-pending]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/_pending.json
 [platform-version]: https://img.shields.io/github/v/tag/PurdueAF/purdue-af?filter=2*&sort=semver&label=platform&color=blue
 [af-image-version]: https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2FPurdueAF%2Fpurdue-af%2Fmain%2Fapps%2Fjupyterhub%2Fjupyterhub%2Fvalues.yaml&query=%24.singleuser.image.tag&label=AF%20image&color=blue

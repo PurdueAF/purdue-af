@@ -70,7 +70,7 @@ jobs:
             af_digest=""
           fi
           aux_tags=""
-          for name in agentic-interface af-pod-monitor af-node-monitor agentic-analysis supersonic-model-manager interlink-slurm-plugin interlink-kubernetes-plugin; do
+          for name in agentic-interface af-pod-monitor af-node-monitor agentic-analysis supersonic-model-manager interlink-slurm-plugin interlink-kubernetes-plugin ray-nrp; do
             tag=$(./.github/workflows/image-inputs.sh "$name")
             channel=latest
             if [ "$name" = interlink-slurm-plugin ] || [ "$name" = interlink-kubernetes-plugin ]; then
@@ -281,6 +281,16 @@ jobs:
               test -x /opt/purdue-af/slurm-clients/25.11.4/usr/bin/sbatch;
               ls /opt/purdue-af/slurm-configs;
               echo ok"
+          # The global environment's Ray, PyTorch and S3 client run as the image's
+          # user, with the wget KubeRay's probes need.
+          - name: ray-nrp
+            dockerfile: docker/ray-nrp/Dockerfile
+            context: .
+            free_disk: true
+            smoke: >-
+              sh -c 'set -e; test "$(id -u)" = 1000; ray --version; wget --version | head -1;
+              python -c "import boto3, pyarrow, ray.train, smart_open, torch;
+              print(\"ok:\", ray.__version__, torch.__version__, torch.version.cuda, torch._C._cuda_getArchFlags())"'
           # The upstream plugin image plus ensure-namespace.patch; the smoke
           # import proves the patch applied and the modules still parse.
           - name: interlink-kubernetes-plugin
