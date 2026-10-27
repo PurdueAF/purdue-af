@@ -48,10 +48,9 @@ ldapBase: ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
 # The volumes of raycluster.yaml a workload account's cluster keeps (../dask-gateway/README.md#workload-accounts).
 accountKeptVolumes: [log-volume, cvmfs]
 
-# NRP Nautilus (apps/interlink/nrp): its public Prometheus, and the requests of one Ray worker pod there, those of
-# workflows/ray-nrp/rayjob.yaml. nrp_gpus.py counts how many such workers fit where.
+# NRP Nautilus (apps/interlink/nrp), where a job runs with af-site: nrp (rayjob-nrp.yaml): its public Prometheus,
+# by which nrp_gpus.py counts the workers that fit where, the most GPUs all AF jobs there hold together, and how
+# long a job's cluster may take to start, its nodes pulling the image first, before the job is removed.
 nrpPrometheusUrl: https://prometheus.nrp-nautilus.io
-nrpWorker:
-  gpus: 1
-  cpus: 4
-  memoryGb: 16
+nrpGpuBudget: 20
+nrpStartTimeoutSeconds: 1800
