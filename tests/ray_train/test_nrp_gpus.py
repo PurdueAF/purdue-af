@@ -5,6 +5,7 @@ import sys
 from types import SimpleNamespace
 
 import pytest
+import yaml
 from aiohttp import ClientSession, web
 from aiohttp.test_utils import TestServer
 from common import REPO, load_script
@@ -64,9 +65,48 @@ def test_free_gpus_count_schedulable_nodes_and_workers_fit_their_cores_and_memor
     }
 
 
-def test_the_worker_shape_is_read_from_the_gateway_settings():
-    assert gw.NRP_WORKER == nrp.worker_of(gw.CONFIG)
-    assert gw.NRP_WORKER.gpus >= 1
+def test_the_worker_shape_is_the_nrp_templates_worker():
+    template = yaml.safe_load((REPO / "apps/ray-train/rayjob-nrp.yaml").read_text())
+    assert gw.NRP_WORKER == nrp.worker_of(template) == nrp.Worker(1, 4, 16)
+
+
+MODELS = [
+    sample(1, Hostname="west-1", modelName="NVIDIA A10"),
+    sample(1, Hostname="west-2", modelName="NVIDIA A10"),
+    sample(1, Hostname="east-1", modelName="Tesla V100-SXM2-16GB"),
+    sample(1, Hostname="bare-1", modelName="NVIDIA A10"),
+]
+
+
+def test_open_nodes_have_room_a_region_and_a_gpu_model():
+    nodes = nrp.open_nodes(
+        ALLOCATABLE, REQUESTED, UNSCHEDULABLE, REGIONS, MODELS, WORKER
+    )
+    # west-2 is cordoned, east-1 has too few cores left, bare-1 is of no region.
+    assert nodes == [
+        nrp.Node("bare-1", "unlabeled", "NVIDIA A10", 1),
+        nrp.Node("west-1", "us-west", "NVIDIA A10", 2),
+    ]
+
+
+def node(name, workers, region="us-west", model="NVIDIA A10"):
+    return nrp.Node(name, region, model, workers)
+
+
+def test_a_job_is_placed_where_one_region_and_model_has_the_most_room():
+    nodes = [
+        node("a", 1),
+        node("b", 3),
+        node("c", 2),
+        node("d", 5, region="us-east"),
+        node("e", 4, model="NVIDIA L40"),
+    ]
+    assert nrp.most_in_one_group(nodes) == 6
+    # The roomiest first, and no more nodes than the workers need.
+    assert nrp.placement(nodes, wanted=4, least=1) == [node("b", 3), node("c", 2)]
+    assert nrp.placement(nodes, wanted=2, least=2) == [node("b", 3)]
+    assert nrp.placement(nodes, wanted=7, least=7) is None
+    assert nrp.placement([], wanted=1, least=1) is None
 
 
 @pytest.fixture

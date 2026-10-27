@@ -1,10 +1,11 @@
 """The GPUs free on NRP Nautilus for Ray workers of ours, by region, from NRP's
 public Prometheus: those of nodes that are Ready, not cordoned and carry no
 NoSchedule or NoExecute taint, less what the pods bound to them request, and
-how many workers of a shape fit beside them. An upper bound: NRP's scheduler
+how many workers of a shape fit beside them; and the nodes a job's workers
+may run on, of one region and one GPU model. An upper bound: NRP's scheduler
 also weighs affinities and policies that Prometheus does not show.
 
-    python nrp_gpus.py    # beside config.yaml
+    python nrp_gpus.py    # beside config.yaml and rayjob-nrp.yaml
 """
 
 from __future__ import annotations
@@ -38,6 +39,8 @@ UNSCHEDULABLE = (
     ' or max by (node) (kube_node_status_condition{condition="Ready", status="true"}) == 0'
 )
 REGIONS = "max by (node, label_topology_kubernetes_io_region) (kube_node_labels)"
+# DCGM names a node's GPU model, which no kube-state-metrics label does.
+MODELS = "count by (Hostname, modelName) (max_over_time(DCGM_FI_DEV_GPU_UTIL[1h]))"
 TIMEOUT = ClientTimeout(total=60)
 
 
@@ -50,6 +53,16 @@ class Worker:
     memory_gb: float
 
 
+@dataclass(frozen=True)
+class Node:
+    """A node with room for workers: its region, its GPU model, and how many fit."""
+
+    name: str
+    region: str
+    model: str
+    workers: int
+
+
 @dataclass
 class Region:
     gpus: int = 0
@@ -57,14 +70,12 @@ class Region:
     workers: int = 0
 
 
-def free_by_region(
+def free_by_node(
     allocatable: list[dict[str, Any]],
     requested: list[dict[str, Any]],
     unschedulable: list[dict[str, Any]],
-    regions: list[dict[str, Any]],
-    worker: Worker,
-) -> dict[str, Region]:
-    """Prometheus's results of the four queries, summed by region."""
+) -> tuple[dict[str, dict[str, float]], dict[str, dict[str, float]], set[str]]:
+    """What each GPU node has and what its pods hold, of GPUs, CPUs and memory, and the nodes that take no pods."""
     held: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     free: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     for sample in allocatable:
@@ -76,31 +87,99 @@ def free_by_region(
         held[sample["metric"]["node"]][sample["metric"]["resource"]] += float(
             sample["value"][1]
         )
-    closed = {s["metric"]["node"] for s in unschedulable}
-    region_of = {
+    return free, held, {s["metric"]["node"] for s in unschedulable}
+
+
+def fitting(has: dict[str, float], held: dict[str, float], worker: Worker) -> int:
+    """How many workers fit beside what a node's pods hold."""
+    gpus = int(has[GPU] - held[GPU])
+    cpus = has["cpu"] - held["cpu"]
+    memory_gb = (has["memory"] - held["memory"]) / 2**30
+    return max(
+        min(
+            gpus // worker.gpus,
+            int(cpus // worker.cpus),
+            int(memory_gb // worker.memory_gb),
+        ),
+        0,
+    )
+
+
+def regions_of(regions: list[dict[str, Any]]) -> dict[str, str]:
+    return {
         s["metric"]["node"]: s["metric"].get("label_topology_kubernetes_io_region")
         or "unlabeled"
         for s in regions
     }
+
+
+def free_by_region(
+    allocatable: list[dict[str, Any]],
+    requested: list[dict[str, Any]],
+    unschedulable: list[dict[str, Any]],
+    regions: list[dict[str, Any]],
+    worker: Worker,
+) -> dict[str, Region]:
+    """Prometheus's results of the four queries, summed by region."""
+    free, held, closed = free_by_node(allocatable, requested, unschedulable)
+    region_of = regions_of(regions)
     out: dict[str, Region] = defaultdict(Region)
     for node, has in free.items():
         region = out[region_of.get(node, "unlabeled")]
         region.gpus += int(has[GPU])
         if node in closed:
             continue
-        gpus = int(has[GPU] - held[node][GPU])
-        cpus = has["cpu"] - held[node]["cpu"]
-        memory_gb = (has["memory"] - held[node]["memory"]) / 2**30
-        region.free_gpus += max(gpus, 0)
-        region.workers += max(
-            min(
-                gpus // worker.gpus,
-                int(cpus // worker.cpus),
-                int(memory_gb // worker.memory_gb),
-            ),
-            0,
-        )
+        region.free_gpus += max(int(has[GPU] - held[node][GPU]), 0)
+        region.workers += fitting(has, held[node], worker)
     return dict(sorted(out.items()))
+
+
+def open_nodes(
+    allocatable: list[dict[str, Any]],
+    requested: list[dict[str, Any]],
+    unschedulable: list[dict[str, Any]],
+    regions: list[dict[str, Any]],
+    models: list[dict[str, Any]],
+    worker: Worker,
+) -> list[Node]:
+    """The nodes with room for a worker, of a known region and GPU model."""
+    free, held, closed = free_by_node(allocatable, requested, unschedulable)
+    region_of = regions_of(regions)
+    model_of = {s["metric"]["Hostname"]: s["metric"]["modelName"] for s in models}
+    out = []
+    for node, has in sorted(free.items()):
+        workers = 0 if node in closed else fitting(has, held[node], worker)
+        if workers and node in region_of and node in model_of:
+            out.append(Node(node, region_of[node], model_of[node], workers))
+    return out
+
+
+def most_in_one_group(nodes: list[Node]) -> int:
+    """The most workers nodes of one region and GPU model have room for."""
+    groups: dict[tuple[str, str], int] = defaultdict(int)
+    for node in nodes:
+        groups[(node.region, node.model)] += node.workers
+    return max(groups.values(), default=0)
+
+
+def placement(nodes: list[Node], wanted: int, least: int) -> list[Node] | None:
+    """The nodes for up to `wanted` workers, no fewer than `least`: of the region and
+    GPU model with room for the most, the roomiest first; None if no such pair has room for `least`."""
+    groups: dict[tuple[str, str], list[Node]] = defaultdict(list)
+    for node in nodes:
+        groups[(node.region, node.model)].append(node)
+    if not groups:
+        return None
+    best = max(groups.values(), key=lambda group: sum(n.workers for n in group))
+    if sum(n.workers for n in best) < least:
+        return None
+    chosen, room = [], 0
+    for node in sorted(best, key=lambda n: (-n.workers, n.name)):
+        if room >= wanted:
+            break
+        chosen.append(node)
+        room += node.workers
+    return chosen
 
 
 async def query(
@@ -125,14 +204,34 @@ async def free_gpus(
     return free_by_region(allocatable, requested, unschedulable, regions, worker)
 
 
-def worker_of(config: dict[str, Any]) -> Worker:
-    shape = config["nrpWorker"]
-    return Worker(int(shape["gpus"]), float(shape["cpus"]), float(shape["memoryGb"]))
+async def nodes(http: ClientSession, prometheus: str, worker: Worker) -> list[Node]:
+    allocatable, requested, unschedulable, regions, models = await asyncio.gather(
+        *(
+            query(http, prometheus, promql)
+            for promql in (ALLOCATABLE, REQUESTED, UNSCHEDULABLE, REGIONS, MODELS)
+        )
+    )
+    return open_nodes(allocatable, requested, unschedulable, regions, models, worker)
+
+
+def worker_of(template: dict[str, Any]) -> Worker:
+    """The requests of the template's worker, a RayJob's or a RayCluster's spec."""
+    spec = template["spec"].get("rayClusterSpec", template["spec"])
+    (group,) = spec["workerGroupSpecs"]
+    (container,) = group["template"]["spec"]["containers"]
+    requests = container["resources"]["requests"]
+    memory = str(requests["memory"])
+    return Worker(
+        int(requests["nvidia.com/gpu"]),
+        float(requests["cpu"]),
+        float(memory.removesuffix("Gi")),
+    )
 
 
 async def main() -> None:
-    config = yaml.safe_load(Path(__file__).with_name("config.yaml").read_text())
-    worker = worker_of(config)
+    here = Path(__file__).parent
+    config = yaml.safe_load((here / "config.yaml").read_text())
+    worker = worker_of(yaml.safe_load((here / "rayjob-nrp.yaml").read_text()))
     async with ClientSession() as http:
         regions = await free_gpus(http, config["nrpPrometheusUrl"], worker)
     print(

@@ -53,6 +53,7 @@ from pathlib import Path
 from typing import Any
 
 import grpc
+import nrp_jobs
 import yaml
 from aiohttp import (
     ClientError,
@@ -65,7 +66,8 @@ from aiohttp import (
     web,
 )
 from gpu_queries import ALLOC_QUERY, GPU_METRICS, PREEMPTIBLE_QUERY, USED_QUERY
-from nrp_gpus import as_dict, free_gpus, worker_of
+from nrp_gpus import as_dict, free_gpus, most_in_one_group, placement, worker_of
+from nrp_gpus import nodes as nrp_nodes
 from yarl import URL
 
 log = logging.getLogger("ray-train-gateway")
@@ -120,7 +122,13 @@ WORKER_MEMORY_GB_MAX = int(CONFIG["workerMemoryGbMax"])
 PREEMPTIBLE_PRIORITY_CLASS = str(CONFIG["preemptiblePriorityClass"])
 PROMETHEUS_URL = str(CONFIG["prometheusUrl"])
 NRP_PROMETHEUS_URL = str(CONFIG["nrpPrometheusUrl"])
-NRP_WORKER = worker_of(CONFIG)
+NRP_GPU_BUDGET = int(CONFIG["nrpGpuBudget"])
+NRP_START_TIMEOUT_S = float(CONFIG["nrpStartTimeoutSeconds"])
+# Beside this file in the ConfigMap, as in the repository.
+NRP_TEMPLATE = CODE.with_name("rayjob-nrp.yaml")
+NRP_WORKER = worker_of(yaml.safe_load(NRP_TEMPLATE.read_text()))
+# The interLink plugin's, from the kubeconfig-nrp-interlink Secret: without it, no job runs on NRP.
+NRP_KUBECONFIG = Path("/etc/nrp/kubeconfig.yaml")
 DEFAULT_ENV = str(CONFIG["defaultEnv"])
 LDAP_HOST = str(CONFIG["ldapHost"])
 LDAP_BASE = str(CONFIG["ldapBase"])
@@ -182,6 +190,9 @@ MEMORY_ANNOTATION = "purdue-af/ray-gpu-memory"
 CPUS_METADATA = SETTING_PREFIX + "cpus-per-worker"
 CPUS_ANNOTATION = "purdue-af/ray-worker-cpus"
 RAM_METADATA = SETTING_PREFIX + "ram-per-worker-gb"
+# Set as the environment is, by a job: where it runs.
+SITE_METADATA = SETTING_PREFIX + "site"
+SITES = ("purdue", "nrp")
 SETTINGS = {
     ENV_METADATA,
     WORKERS_METADATA,
@@ -190,7 +201,10 @@ SETTINGS = {
     MEMORY_METADATA,
     CPUS_METADATA,
     RAM_METADATA,
+    SITE_METADATA,
 }
+# What a job on NRP may set: its workers are those of rayjob-nrp.yaml, in its image's environment.
+NRP_SETTINGS = {WORKERS_METADATA, MOST_METADATA, SITE_METADATA}
 # A setting's name without its prefix is no header of Ray's either.
 UNPREFIXED = {name.removeprefix(SETTING_PREFIX) for name in SETTINGS}
 RAM_ANNOTATION = "purdue-af/ray-worker-memory"
@@ -305,6 +319,7 @@ class Shape:
     ram: str
     per_worker: str
     least: str
+    site: str = "purdue"
 
     @property
     def flavors(self) -> list[Flavor]:
@@ -881,6 +896,37 @@ def requested_workers(exactly: str, at_most: str, shape: Shape) -> tuple[str, st
     )
 
 
+def nrp_workers(exactly: str, at_most: str) -> tuple[str, str]:
+    """As requested_workers, for the workers of a job on NRP."""
+    if exactly and at_most:
+        raise Refused(
+            grpc.StatusCode.INVALID_ARGUMENT,
+            f"{WORKERS_METADATA} asks for a number of workers and {MOST_METADATA} for up to as many: set one of them.",
+        )
+    value = exactly or at_most
+    if not value:
+        return "1", "1"
+    most = NRP_GPU_BUDGET // NRP_WORKER.gpus
+    if value in {str(n) for n in range(1, most + 1)}:
+        return value, exactly or "1"
+    raise Refused(
+        grpc.StatusCode.INVALID_ARGUMENT,
+        f"{WORKERS_METADATA if exactly else MOST_METADATA} is a number of workers from 1 to {most} on NRP.",
+    )
+
+
+async def submitted_json(request: web.Request) -> dict[str, Any]:
+    try:
+        submitted = json.loads(await request.read())
+    except ValueError:
+        submitted = None
+    if not isinstance(submitted, dict):
+        raise Refused(
+            grpc.StatusCode.INVALID_ARGUMENT, "A job submission is a JSON object."
+        )
+    return submitted
+
+
 def cluster_shape(cluster: dict[str, Any]) -> Shape:
     annotations = cluster["metadata"].get("annotations") or {}
     cpus, ram = worker_size(load_template())
@@ -925,9 +971,17 @@ def runs(cluster: dict[str, Any], shape: Shape) -> bool:
 
 class Gateway:
     def __init__(
-        self, http: ClientSession, kube: ClientSession, token_file: Path
+        self,
+        http: ClientSession,
+        kube: ClientSession,
+        token_file: Path,
+        nrp: nrp_jobs.NrpApi | None = None,
+        bucket: nrp_jobs.Bucket | None = None,
     ) -> None:
         self.http = http
+        # Without either, no job runs on NRP.
+        self.nrp = nrp
+        self.bucket = bucket
         self.kube_http = kube
         self.token_file = token_file
         self.last_used: dict[str, float] = {}
@@ -946,6 +1000,11 @@ class Gateway:
         # user's cluster -> their job that waits for its submission, and the lock that makes one at a time
         self.waiting: dict[str, Waiting] = {}
         self.submitting: dict[str, asyncio.Lock] = collections.defaultdict(asyncio.Lock)
+        # user's cluster -> the RayJob on NRP whose code their submission uploads, and since when
+        self.nrp_waiting: dict[str, tuple[str, float]] = {}
+        # Jobs on NRP whose code is deleted, until their records are
+        self.nrp_cleaned: set[str] = set()
+        self.nrp_admitting = asyncio.Lock()
 
     @property
     def service_token(self) -> str:
@@ -1028,7 +1087,24 @@ class Gateway:
                 grpc.StatusCode.INVALID_ARGUMENT,
                 f"{', '.join(unknown)} is no setting of a Ray cluster: the settings are {', '.join(sorted(SETTINGS))}.",
             )
+        site = values.get(SITE_METADATA) or "purdue"
+        if site not in SITES:
+            raise Refused(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"{SITE_METADATA} is one of {', '.join(SITES)}.",
+            )
         user = await self.user_for(token)
+        if site == "nrp":
+            others = sorted(name for name in values if name in SETTINGS - NRP_SETTINGS)
+            if others:
+                raise Refused(
+                    grpc.StatusCode.INVALID_ARGUMENT,
+                    f"{', '.join(others)} sets a Ray cluster at Purdue: a job on NRP runs the AF's global environment on workers of {NRP_WORKER.gpus} GPU, {NRP_WORKER.cpus:g} CPUs and {NRP_WORKER.memory_gb:g} GB, and takes only {WORKERS_METADATA} or {MOST_METADATA}.",
+                )
+            workers, least = nrp_workers(
+                values.get(WORKERS_METADATA, ""), values.get(MOST_METADATA, "")
+            )
+            return user, Shape("", workers, "", "", "", "1", least, site)
         template = cluster_template(user)
         cpus, ram = worker_size(template)
         memory = requested_memory(values.get(MEMORY_METADATA, ""))
@@ -1056,6 +1132,11 @@ class Gateway:
 
     async def cluster_for(self, user: User, shape: Shape) -> str:
         """The user's cluster, started in `shape` unless it runs in it."""
+        if shape.site != "purdue":
+            raise Refused(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"{SITE_METADATA}: {shape.site} is for jobs a JobSubmissionClient submits: Ray Client reaches your own cluster at Purdue.",
+            )
         if user.session_gpu:
             raise Refused(
                 grpc.StatusCode.FAILED_PRECONDITION,
@@ -1099,19 +1180,11 @@ class Gateway:
         mounted_env(shape.env, cluster_template(user))
         submitted: dict[str, Any] | None = None
         if request.method == "POST":
-            try:
-                submitted = json.loads(await request.read())
-            except ValueError:
-                submitted = None
-            if not isinstance(submitted, dict):
-                raise Refused(
-                    grpc.StatusCode.INVALID_ARGUMENT,
-                    "A job submission is a JSON object.",
-                )
+            submitted = await submitted_json(request)
         async with self.submitting[user.cluster]:
             if submitted is not None:
                 asked = str(submitted.get("submission_id") or new_submission())
-                if any(j["spec"]["jobId"] == asked for j in await self.jobs(user)):
+                if await self.submitted_before(user, asked):
                     raise Refused(
                         grpc.StatusCode.FAILED_PRECONDITION,
                         f"You have a job {asked} already: submit it under another ID, or without one.",
@@ -1268,6 +1341,273 @@ class Gateway:
         )
         return web.Response(status=404, reason=text, text=text)
 
+    async def submitted_before(self, user: User, submission: str) -> bool:
+        """Whether the user has a job of that ID, at Purdue or on NRP."""
+        if any(j["spec"]["jobId"] == submission for j in await self.jobs(user)):
+            return True
+        return await self.nrp_job(user, submission) is not None
+
+    async def nrp_submission(
+        self, user: User, shape: Shape, request: web.Request
+    ) -> web.StreamResponse:
+        """A submission to NRP, or an upload of the code it takes along, which goes to
+        the S3 prefix of its RayJob: one the gateway creates on NRP at the submission."""
+        if self.nrp is None or self.bucket is None:
+            raise Refused(
+                grpc.StatusCode.UNAVAILABLE,
+                "Jobs on NRP are not enabled: the gateway has no NRP kubeconfig or S3 keys.",
+            )
+        async with self.submitting[user.cluster]:
+            name, since = self.nrp_waiting.get(user.cluster, ("", 0.0))
+            if not name or time.monotonic() - since > START_TIMEOUT_S:
+                name = job_name(user, new_submission())
+            package = request.path.rpartition("/")[2]
+            if request.path.startswith("/api/packages/"):
+                self.nrp_waiting[user.cluster] = (name, time.monotonic())
+                key = f"{nrp_jobs.code_prefix(name)}/{package}"
+                if request.method == "PUT":
+                    await self.bucket.put(key, await request.read())
+                    return web.Response()
+                return web.Response(
+                    status=200 if await self.bucket.exists(key) else 404
+                )
+            submitted = await submitted_json(request)
+            self.nrp_waiting.pop(user.cluster, None)
+            asked = str(submitted.get("submission_id") or new_submission())
+            if await self.submitted_before(user, asked):
+                raise Refused(
+                    grpc.StatusCode.FAILED_PRECONDITION,
+                    f"You have a job {asked} already: submit it under another ID, or without one.",
+                )
+            await self.start_nrp_job(
+                user, shape, name, submitted | {"submission_id": asked}
+            )
+        # As Ray answers: its client reads job_id too.
+        return web.json_response({"job_id": asked, "submission_id": asked})
+
+    async def start_nrp_job(
+        self, user: User, shape: Shape, name: str, submitted: dict[str, Any]
+    ) -> None:
+        """Create the job's RayJob on NRP, its workers on nodes of one region and GPU model with room for them."""
+        assert self.nrp is not None and self.bucket is not None
+        async with self.nrp_admitting:
+            held = sum(
+                nrp_jobs.held_gpus(j)
+                for j in await self.nrp_listing()
+                if not job_ended(j)
+            )
+            room = (NRP_GPU_BUDGET - held) // NRP_WORKER.gpus
+            wanted, least = int(shape.workers), int(shape.least)
+            try:
+                found = await nrp_nodes(self.http, NRP_PROMETHEUS_URL, NRP_WORKER)
+            except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
+                raise Refused(
+                    grpc.StatusCode.UNAVAILABLE,
+                    "NRP's Prometheus did not say which GPUs are free: try again in a minute.",
+                ) from e
+            chosen = (
+                placement(found, min(wanted, room), least) if room >= least else None
+            )
+            if chosen is None:
+                log.info(
+                    "refused %s %d workers on NRP: room %d, %d free",
+                    name,
+                    least,
+                    room,
+                    most_in_one_group(found),
+                )
+                raise Refused(
+                    grpc.StatusCode.RESOURCE_EXHAUSTED,
+                    f"Your job asks for {least} workers on NRP, which has room for {most_in_one_group(found)} of one region and GPU model now, and AF jobs may take {max(room, 0)} more there: ask for fewer, or try again later.",
+                )
+            workers = min(wanted, room, sum(n.workers for n in chosen))
+            job = nrp_jobs.build_job(
+                yaml.safe_load(NRP_TEMPLATE.read_text()),
+                name,
+                nrp_jobs.owner_key(user.cluster, user.owner),
+                submitted,
+                self.bucket.name,
+                workers,
+                chosen,
+                int(IDLE_TIMEOUT_S),
+            )
+            status, created = await self.nrp.call("POST", self.nrp.path("rayjobs"), job)
+        if status != 201:
+            message = (
+                created.get("message", status) if isinstance(created, dict) else status
+            )
+            raise Refused(
+                grpc.StatusCode.UNAVAILABLE, f"NRP did not take your job: {message}"
+            )
+        log.info(
+            "created %s on NRP: %d workers on %s, %s",
+            name,
+            workers,
+            chosen[0].region,
+            chosen[0].model,
+        )
+
+    async def nrp_listing(self, user: User | None = None) -> list[dict[str, Any]]:
+        """The gateway's RayJobs on NRP, or the user's."""
+        assert self.nrp is not None
+        selector = f"app.kubernetes.io/managed-by={MANAGED_BY}"
+        if user is not None:
+            selector = f"{OWNER_LABEL}={nrp_jobs.owner_key(user.cluster, user.owner)}"
+        status, listing = await self.nrp.call(
+            "GET",
+            f"{self.nrp.path('rayjobs')}?labelSelector={urllib.parse.quote(selector)}",
+        )
+        if status != 200:
+            raise Refused(
+                grpc.StatusCode.UNAVAILABLE,
+                f"NRP answered HTTP {status} for the Ray jobs.",
+            )
+        return list(listing.get("items", []))
+
+    async def nrp_jobs(self, user: User) -> list[dict[str, Any]]:
+        """The user's jobs on NRP; none, if NRP does not answer, with a warning."""
+        if self.nrp is None:
+            return []
+        try:
+            return await self.nrp_listing(user)
+        except (Refused, ClientError, asyncio.TimeoutError) as e:
+            log.warning("listing jobs on NRP: %r", e)
+            return []
+
+    async def nrp_job(self, user: User, submission: str) -> dict[str, Any] | None:
+        for job in await self.nrp_jobs(user):
+            if job["spec"].get("jobId") == submission:
+                return job
+        return None
+
+    async def nrp_recorded(
+        self, request: web.Request, job: dict[str, Any], rest: str
+    ) -> web.StreamResponse:
+        """A call about a job on NRP, answered from its RayJob and its submitter's log."""
+        assert self.nrp is not None
+        name = job["metadata"]["name"]
+        ended = job_ended(job)
+        if request.method == "GET" and not rest:
+            return web.json_response(job_details(job))
+        if request.method == "GET" and rest == "/logs":
+            if request.headers.get("Upgrade", "").lower() != "websocket":
+                return web.json_response({"logs": await self.nrp_log(name)})
+        if request.method == "GET" and rest == "/logs/tail":
+            return await self.nrp_tail(request, name)
+        if request.method == "POST" and rest == "/stop":
+            if not ended:
+                await self.delete_nrp(name)
+            return web.json_response({"stopped": not ended})
+        if request.method == "DELETE" and not rest:
+            if not ended:
+                text = "The job has not ended: stop it first"
+                return web.Response(status=400, reason=text, text=text)
+            await self.delete_nrp(name)
+            return web.json_response({"deleted": True})
+        return web.Response(status=404, text="Not found")
+
+    async def nrp_submitter(self, name: str) -> str | None:
+        """The pod of the job's submitter, which KubeRay names after it, once it runs."""
+        assert self.nrp is not None
+        selector = urllib.parse.quote(f"job-name={name}")
+        status, listing = await self.nrp.call(
+            "GET", f"{self.nrp.path('pods')}?labelSelector={selector}"
+        )
+        if status != 200:
+            return None
+        for pod in listing.get("items", []):
+            if (pod.get("status") or {}).get("phase") in (
+                "Running",
+                "Succeeded",
+                "Failed",
+            ):
+                return str(pod["metadata"]["name"])
+        return None
+
+    async def nrp_log(self, name: str) -> str:
+        """What the job printed, as its submitter followed it."""
+        assert self.nrp is not None
+        pod = await self.nrp_submitter(name)
+        if pod is None:
+            return ""
+        status, text = await self.nrp.call("GET", f"{self.nrp.path('pods')}/{pod}/log")
+        return text if status == 200 and isinstance(text, str) else ""
+
+    async def nrp_tail(self, request: web.Request, name: str) -> web.StreamResponse:
+        """The job's log as its submitter prints it, until the job ends."""
+        assert self.nrp is not None
+        response = web.WebSocketResponse()
+        await response.prepare(request)
+        deadline = time.monotonic() + NRP_START_TIMEOUT_S
+        pod = await self.nrp_submitter(name)
+        while pod is None and time.monotonic() < deadline:
+            await asyncio.sleep(START_POLL_S)
+            pod = await self.nrp_submitter(name)
+        if pod is not None:
+            with contextlib.suppress(ConnectionResetError):
+                async for line in self.nrp.lines(
+                    f"{self.nrp.path('pods')}/{pod}/log?follow=true"
+                ):
+                    await response.send_str(line)
+        await response.close()
+        return response
+
+    async def delete_nrp(self, name: str) -> None:
+        """Remove a job's RayJob on NRP, and its code."""
+        assert self.nrp is not None and self.bucket is not None
+        await self.nrp.call(
+            "DELETE",
+            f"{self.nrp.path('rayjobs')}/{name}",
+            {"propagationPolicy": "Background"},
+        )
+        await self.bucket.delete_prefix(nrp_jobs.code_prefix(name))
+        self.nrp_cleaned.discard(name)
+
+    async def reap_nrp(self) -> None:
+        """Delete the code of a job on NRP once it ends, and its record once kept long
+        enough; remove a job whose cluster did not start in time, and code no job took."""
+        if self.nrp is None or self.bucket is None:
+            return
+        try:
+            jobs = await self.nrp_listing()
+        except (Refused, ClientError, asyncio.TimeoutError) as e:
+            log.warning("listing Ray jobs on NRP: %r", e)
+            return
+        now = time.time()
+        for job in jobs:
+            name = job["metadata"]["name"]
+            state = job.get("status") or {}
+            try:
+                created = datetime.fromisoformat(
+                    job["metadata"]["creationTimestamp"]
+                ).timestamp()
+                if job_ended(job):
+                    if name not in self.nrp_cleaned:
+                        await self.bucket.delete_prefix(nrp_jobs.code_prefix(name))
+                        self.nrp_cleaned.add(name)
+                    ended = epoch_ms(state.get("endTime"))
+                    if ended is not None and now - ended / 1000 >= JOB_RECORD_S:
+                        await self.delete_nrp(name)
+                        log.info("deleted the record of %s on NRP", name)
+                elif state.get("jobDeploymentStatus") in (
+                    None,
+                    "",
+                    "Initializing",
+                ) and (now - created >= NRP_START_TIMEOUT_S):
+                    await self.delete_nrp(name)
+                    log.info(
+                        "deleted %s on NRP: its cluster did not start in time", name
+                    )
+            except Exception:
+                log.exception("checking %s on NRP", name)
+        taken = {j["metadata"]["name"] for j in jobs} | {
+            name for name, _ in self.nrp_waiting.values()
+        }
+        for name, written in (await self.bucket.jobs()).items():
+            if name not in taken and now - written >= 2 * START_TIMEOUT_S:
+                await self.bucket.delete_prefix(nrp_jobs.code_prefix(name))
+                log.info("deleted the code of %s, which no job took", name)
+
     async def handle(self, request: web.Request) -> web.StreamResponse:
         """An HTTP call to a dashboard, the Jobs API's among them: a submission and
         its uploads reach a RayJob of its own, a call about a job that job's
@@ -1283,11 +1623,16 @@ class Gateway:
                 )
             body = None
             about = JOB_PATH.fullmatch(request.path)
+            if submits(request) and shape.site == "nrp":
+                return await self.nrp_submission(user, shape, request)
             if submits(request):
                 head, keyed, body = await self.submission(user, shape, request)
             elif about:
                 found = await self.job(user, about[1])
                 if found is None:
+                    on_nrp = await self.nrp_job(user, about[1])
+                    if on_nrp is not None:
+                        return await self.nrp_recorded(request, on_nrp, about[2] or "")
                     # A job submitted to the user's own cluster.
                     head = keyed = await self.running(user)
                 else:
@@ -1296,9 +1641,8 @@ class Gateway:
                         return await self.recorded(job, request.method, about[2] or "")
                     head, keyed = cluster, job["metadata"]["name"]
             elif request.method == "GET" and request.path == "/api/jobs/":
-                return web.json_response(
-                    [job_details(j) for j in await self.jobs(user)]
-                )
+                listed = await self.jobs(user) + await self.nrp_jobs(user)
+                return web.json_response([job_details(j) for j in listed])
             else:
                 head = keyed = await self.running(user)
             url = URL(head_url(head) + request.rel_url.raw_path_qs, encoded=True)
@@ -1894,6 +2238,8 @@ class Gateway:
     async def close(self) -> None:
         for channel in self.channels.values():
             await channel.close()
+        if self.nrp is not None:
+            await self.nrp.close()
 
 
 class Relay(grpc.GenericRpcHandler):
@@ -1928,6 +2274,10 @@ async def reap_forever(gateway: Gateway) -> None:
             await gateway.reap_jobs()
         except Exception:
             log.exception("reaping Ray jobs")
+        try:
+            await gateway.reap_nrp()
+        except Exception:
+            log.exception("reaping Ray jobs on NRP")
 
 
 def dashboard_app(gateway: Gateway) -> web.Application:
@@ -1953,7 +2303,11 @@ async def serve() -> None:
         ClientSession(connector=TCPConnector(limit=0)) as http,
         ClientSession(connector=TCPConnector(ssl=kube_tls)) as kube,
     ):
-        gateway = Gateway(http, kube, SERVICE_TOKEN_FILE)
+        nrp = bucket = None
+        if NRP_KUBECONFIG.exists() and nrp_jobs.bucket_name():
+            nrp = nrp_jobs.NrpApi(NRP_KUBECONFIG)
+            bucket = nrp_jobs.Bucket(nrp_jobs.bucket_name())
+        gateway = Gateway(http, kube, SERVICE_TOKEN_FILE, nrp, bucket)
         server = grpc.aio.server(options=GRPC_OPTIONS)
         server.add_generic_rpc_handlers((Relay(gateway),))
         server.add_insecure_port(f"0.0.0.0:{CLIENT_PORT}")

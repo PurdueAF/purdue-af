@@ -50,6 +50,11 @@ spec:
         - name: gateway
           image: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray:2.59.0-py312-cpu
           command: ["python", "/app/gateway.py"]
+          # The NRP S3 keys and bucket, to which a job on NRP's code goes.
+          envFrom:
+            - secretRef:
+                name: nrp-s3
+                optional: true
           env:
             - name: PYTHONPATH
               value: /deps
@@ -91,6 +96,9 @@ spec:
             - name: af-accounts
               mountPath: /etc/af-accounts
               readOnly: true
+            - name: nrp
+              mountPath: /etc/nrp
+              readOnly: true
       volumes:
         - name: app
           configMap:
@@ -109,4 +117,9 @@ spec:
         - name: af-accounts
           configMap:
             name: af-accounts
+            optional: true
+        # The interLink plugin's NRP kubeconfig: jobs on NRP are its RayJobs.
+        - name: nrp
+          secret:
+            secretName: kubeconfig-nrp-interlink
             optional: true

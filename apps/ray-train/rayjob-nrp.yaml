@@ -1,0 +1,98 @@
+# The template of a job on NRP Nautilus (nrp_jobs.py): the gateway fills in its
+# name, owner, job, runtime environment, the number of workers and the nodes
+# they may run on. Its worker's requests are what nrp_gpus.py counts by.
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: ray-train-gateway
+spec:
+  submissionMode: K8sJobMode
+  shutdownAfterJobFinishes: true
+  submitterPodTemplate:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: ray-job-submitter
+          image: ghcr.io/purdueaf/ray-nrp:latest
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+  rayClusterSpec:
+    # The Ray of pixi/global, which the image installs.
+    rayVersion: "2.58.0"
+    headGroupSpec:
+      rayStartParams:
+        num-cpus: "0"
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              image: ghcr.io/purdueaf/ray-nrp:latest
+              imagePullPolicy: Always
+              # The job's code and data, under its own prefix of the bucket.
+              envFrom:
+                - secretRef:
+                    name: nrp-s3
+              # A replacement worker pulls the image before it joins, and NRP pods
+              # reach each other only over the pod network.
+              env: &env
+                - name: RAY_TRAIN_WORKER_GROUP_START_TIMEOUT_S
+                  value: "1800"
+                - name: NCCL_SOCKET_IFNAME
+                  value: eth0
+                - name: NCCL_IB_DISABLE
+                  value: "1"
+              resources:
+                requests:
+                  cpu: "2"
+                  memory: 8Gi
+                limits:
+                  cpu: "2"
+                  memory: 8Gi
+              volumeMounts:
+                - name: shm
+                  mountPath: /dev/shm
+          volumes:
+            - name: shm
+              emptyDir:
+                medium: Memory
+                sizeLimit: 2Gi
+    workerGroupSpecs:
+      - groupName: gpu
+        replicas: 1
+        minReplicas: 1
+        maxReplicas: 1
+        rayStartParams: {}
+        template:
+          spec:
+            containers:
+              - name: ray-worker
+                image: ghcr.io/purdueaf/ray-nrp:latest
+                imagePullPolicy: Always
+                envFrom:
+                  - secretRef:
+                      name: nrp-s3
+                env: *env
+                resources:
+                  requests:
+                    cpu: "4"
+                    memory: 16Gi
+                    nvidia.com/gpu: 1
+                  limits:
+                    cpu: "4"
+                    memory: 16Gi
+                    nvidia.com/gpu: 1
+                volumeMounts:
+                  - name: shm
+                    mountPath: /dev/shm
+            volumes:
+              - name: shm
+                emptyDir:
+                  medium: Memory
+                  sizeLimit: 4Gi

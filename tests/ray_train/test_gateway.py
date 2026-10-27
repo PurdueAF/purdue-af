@@ -39,6 +39,7 @@ from common import REFUSED_ACCOUNTS, REPO, account, load_script, mount_configmap
 sys.path.insert(0, str(REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles"))
 sys.path.insert(0, str(REPO / "apps" / "ray-train"))
 gw = load_script(REPO / "apps" / "ray-train" / "gateway.py", "ray_train_gateway")
+nrp_gpus = sys.modules["nrp_gpus"]
 
 TEMPLATE = REPO / "apps" / "ray-train" / "raycluster.yaml"
 SERVICE_TOKEN = "service-token"
@@ -2374,6 +2375,377 @@ async def test_an_unreachable_head_is_reported(env, monkeypatch, call):
         with pytest.raises(WSServerHandshakeError) as e:
             await tail(env, submission)
         assert e.value.status == 503
+
+
+# --- jobs on NRP ---------------------------------------------------------------
+
+
+class FakeNrp:
+    """NRP's API as the gateway sees it: RayJobs in interlink-cms, and their submitters' pods and logs."""
+
+    def __init__(self):
+        self.jobs = {}
+        self.pods = {}
+        self.fail_list = False
+        self.created = 0
+
+    def app(self):
+        rayjobs = "/apis/ray.io/v1/namespaces/interlink-cms/rayjobs"
+        pods = "/api/v1/namespaces/interlink-cms/pods"
+
+        async def create(request):
+            body = await request.json()
+            self.created += 1
+            body["metadata"]["creationTimestamp"] = datetime.now(timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
+            body["status"] = {"jobDeploymentStatus": "Initializing"}
+            self.jobs[body["metadata"]["name"]] = body
+            return web.json_response(body, status=201)
+
+        async def listing(request):
+            if self.fail_list:
+                return web.json_response({"message": "down"}, status=500)
+            key, _, value = request.query["labelSelector"].partition("=")
+            return web.json_response(
+                {
+                    "items": [
+                        j
+                        for j in self.jobs.values()
+                        if j["metadata"]["labels"].get(key) == value
+                    ]
+                }
+            )
+
+        async def delete(request):
+            self.jobs.pop(request.match_info["name"], None)
+            return web.json_response({})
+
+        async def pod_list(request):
+            name = request.query["labelSelector"].removeprefix("job-name=")
+            items = [
+                {"metadata": {"name": pod}, "status": {"phase": "Running"}}
+                for pod, (job, _) in self.pods.items()
+                if job == name
+            ]
+            return web.json_response({"items": items})
+
+        async def log(request):
+            _, lines = self.pods[request.match_info["pod"]]
+            return web.Response(text="".join(lines))
+
+        app = web.Application()
+        app.router.add_post(rayjobs, create)
+        app.router.add_get(rayjobs, listing)
+        app.router.add_delete(rayjobs + "/{name}", delete)
+        app.router.add_get(pods, pod_list)
+        app.router.add_get(pods + "/{pod}/log", log)
+        return app
+
+
+class FakeBucket:
+    def __init__(self):
+        self.name = "bucket"
+        # key -> (body, when written)
+        self.objects = {}
+
+    async def put(self, key, body):
+        self.objects[key] = (body, time.time())
+
+    async def exists(self, key):
+        return key in self.objects
+
+    async def delete_prefix(self, prefix):
+        gone = [k for k in self.objects if k.startswith(prefix + "/")]
+        for key in gone:
+            del self.objects[key]
+        return len(gone)
+
+    async def jobs(self):
+        newest = {}
+        for key, (_, written) in self.objects.items():
+            job = key.removeprefix("ray-nrp/jobs/").split("/", 1)[0]
+            newest[job] = max(newest.get(job, 0.0), written)
+        return newest
+
+
+def nrp_sample(value, **labels):
+    return {"metric": labels, "value": [0, str(value)]}
+
+
+def nrp_node(name, gpus, region="us-west", model="NVIDIA A10"):
+    return (
+        [
+            nrp_sample(gpus, node=name, resource="nvidia_com_gpu"),
+            nrp_sample(64, node=name, resource="cpu"),
+            nrp_sample(512 * 2**30, node=name, resource="memory"),
+        ],
+        nrp_sample(1, node=name, label_topology_kubernetes_io_region=region),
+        nrp_sample(1, Hostname=name, modelName=model),
+    )
+
+
+@pytest.fixture
+async def nrp_env(env, monkeypatch):
+    """The env, with NRP's API, its S3 bucket and its Prometheus: four free A10s in us-west, two V100s in us-east."""
+    fake = FakeNrp()
+    nodes = [
+        nrp_node("west-1", 3),
+        nrp_node("west-2", 1),
+        nrp_node("east-1", 2, "us-east", "Tesla V100-SXM2-16GB"),
+    ]
+    answers = {
+        nrp_gpus.ALLOCATABLE: [s for n in nodes for s in n[0]],
+        nrp_gpus.REQUESTED: [],
+        nrp_gpus.UNSCHEDULABLE: [],
+        nrp_gpus.REGIONS: [n[1] for n in nodes],
+        nrp_gpus.MODELS: [n[2] for n in nodes],
+    }
+
+    async def query(request):
+        return web.json_response({"data": {"result": answers[request.query["query"]]}})
+
+    prometheus = web.Application()
+    prometheus.router.add_get("/api/v1/query", query)
+    servers = [TestServer(fake.app()), TestServer(prometheus)]
+    for server in servers:
+        await server.start_server()
+    api = gw.nrp_jobs.NrpApi.__new__(gw.nrp_jobs.NrpApi)
+    api.server = str(servers[0].make_url("")).rstrip("/")
+    api.namespace, api.token, api.tls, api.http = (
+        "interlink-cms",
+        "t",
+        ssl.create_default_context(),
+        None,
+    )
+    env.gateway.nrp, env.gateway.bucket = api, FakeBucket()
+    monkeypatch.setattr(
+        gw, "NRP_PROMETHEUS_URL", str(servers[1].make_url("")).rstrip("/")
+    )
+    env.nrp, env.answers = fake, answers
+    yield env
+    await api.close()
+    for server in servers:
+        await server.close()
+
+
+def nrp_headers(**kwargs):
+    return {gw.SITE_METADATA: "nrp"} | kwargs
+
+
+async def nrp_call(
+    env, method="GET", path="/api/jobs/", body=None, token="session-a", **headers
+):
+    async with env.session.request(
+        method,
+        env.dashboard + path,
+        data=body,
+        headers={"Authorization": f"Bearer {token}"} | nrp_headers(**headers),
+    ) as r:
+        return r.status, r.reason, await r.read()
+
+
+async def nrp_submit(env, body=None, **headers):
+    body = body or {"entrypoint": "python train.py"}
+    return await nrp_call(env, "POST", "/api/jobs/", json.dumps(body), **headers)
+
+
+def nrp_job(env, submission=None):
+    if submission is None:
+        (job,) = env.nrp.jobs.values()
+        return job
+    (job,) = (j for j in env.nrp.jobs.values() if j["spec"]["jobId"] == submission)
+    return job
+
+
+def nrp_workers(job):
+    (group,) = job["spec"]["rayClusterSpec"]["workerGroupSpecs"]
+    (term,) = group["template"]["spec"]["affinity"]["nodeAffinity"][
+        "requiredDuringSchedulingIgnoredDuringExecution"
+    ]["nodeSelectorTerms"]
+    return group["replicas"], term["matchExpressions"][0]["values"]
+
+
+async def test_a_job_on_nrp_is_a_rayjob_there_named_for_no_one(nrp_env):
+    env = nrp_env
+    status, _, body = await nrp_submit(env)
+    assert status == 200
+    submission = json.loads(body)["submission_id"]
+    assert json.loads(body) == {"job_id": submission, "submission_id": submission}
+    job = nrp_job(env)
+    assert job["spec"]["jobId"] == submission
+    assert job["spec"]["entrypoint"] == "python train.py"
+    assert nrp_workers(job) == (1, ["west-1"])
+    assert "user-a" not in json.dumps(job)
+    # Nothing runs at Purdue.
+    assert env.kube.jobs == {} and env.kube.clusters == {}
+
+
+async def test_a_job_on_nrp_gets_its_workers_in_one_region_and_gpu_model(nrp_env):
+    env = nrp_env
+    assert (await nrp_submit(nrp_env, **{gw.WORKERS_METADATA: "4"}))[0] == 200
+    assert nrp_workers(nrp_job(env)) == (4, ["west-1", "west-2"])
+
+
+async def test_a_job_on_nrp_of_up_to_some_workers_takes_those_with_room(nrp_env):
+    env = nrp_env
+    assert (await nrp_submit(env, **{gw.MOST_METADATA: "9"}))[0] == 200
+    assert nrp_workers(nrp_job(env))[0] == 4
+
+
+async def test_a_job_on_nrp_that_no_region_and_model_has_room_for_is_refused(nrp_env):
+    status, reason, _ = await nrp_submit(nrp_env, **{gw.WORKERS_METADATA: "5"})
+    assert status == 429
+    assert "room for 4" in reason
+    assert nrp_env.nrp.jobs == {}
+
+
+async def test_jobs_on_nrp_hold_no_more_gpus_than_the_budget(nrp_env, monkeypatch):
+    monkeypatch.setattr(gw, "NRP_GPU_BUDGET", 3)
+    assert (await nrp_submit(nrp_env, **{gw.WORKERS_METADATA: "2"}))[0] == 200
+    status, reason, _ = await nrp_submit(nrp_env, **{gw.WORKERS_METADATA: "2"})
+    assert status == 429
+    assert "may take 1 more" in reason
+    assert (await nrp_submit(nrp_env))[0] == 200
+
+
+async def test_the_code_a_job_on_nrp_uploads_reaches_it_through_its_s3_prefix(nrp_env):
+    env = nrp_env
+    path = "/api/packages/gcs/_ray_pkg_1.zip"
+    assert (await nrp_call(env, "GET", path))[0] == 404
+    assert (await nrp_call(env, "PUT", path, b"zip"))[0] == 200
+    assert (await nrp_call(env, "GET", path))[0] == 200
+    body = {
+        "entrypoint": "python train.py",
+        "runtime_env": {"working_dir": "gcs://_ray_pkg_1.zip"},
+    }
+    assert (await nrp_submit(env, body))[0] == 200
+    job = nrp_job(env)
+    name = job["metadata"]["name"]
+    assert (
+        env.gateway.bucket.objects[f"ray-nrp/jobs/{name}/_ray_pkg_1.zip"][0] == b"zip"
+    )
+    assert yaml.safe_load(job["spec"]["runtimeEnvYAML"]) == {
+        "working_dir": f"s3://bucket/ray-nrp/jobs/{name}/_ray_pkg_1.zip"
+    }
+
+
+@pytest.mark.parametrize(
+    "setting", [gw.ENV_METADATA, gw.CPUS_METADATA, gw.PER_WORKER_METADATA]
+)
+async def test_a_job_on_nrp_takes_no_setting_of_a_cluster_at_purdue(nrp_env, setting):
+    status, reason, _ = await nrp_submit(nrp_env, **{setting: "2"})
+    assert status == 400
+    assert gw.WORKERS_METADATA in reason
+    assert nrp_env.nrp.jobs == {}
+
+
+async def test_a_site_the_gateway_does_not_know_is_refused(nrp_env):
+    status, reason, _ = await nrp_call(
+        nrp_env, path="/api/version", **{gw.SITE_METADATA: "mars"}
+    )
+    assert status == 400
+    assert "purdue" in reason
+
+
+async def test_ray_client_does_not_reach_nrp(env):
+    with pytest.raises(grpc.aio.AioRpcError) as e:
+        stream = env.channel.stream_stream(PING)(
+            iter([b"ping"]),
+            metadata=[("authorization", "Bearer session-a"), (gw.SITE_METADATA, "nrp")],
+        )
+        [r async for r in stream]
+    assert e.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+
+
+async def test_without_nrp_a_job_for_it_is_refused(env):
+    status, reason, _ = await nrp_submit(env)
+    assert status == 503
+    assert "not enabled" in reason
+
+
+async def test_a_job_on_nrp_is_followed_from_its_rayjob_and_its_submitter(nrp_env):
+    env = nrp_env
+    submission = json.loads((await nrp_submit(env))[2])["submission_id"]
+    await submit(env)
+    status, _, body = await job_call(env)
+    listed = [j["submission_id"] for j in json.loads(body)]
+    assert len(listed) == 2 and submission in listed
+    job = nrp_job(env)
+    job["status"] = {"jobDeploymentStatus": "Running", "jobStatus": "RUNNING"}
+    status, _, body = await job_call(env, path=f"/api/jobs/{submission}")
+    assert (status, json.loads(body)["status"]) == (200, "RUNNING")
+    env.nrp.pods["submitter"] = (job["metadata"]["name"], ["line 1\n", "line 2\n"])
+    status, _, body = await job_call(env, path=f"/api/jobs/{submission}/logs")
+    assert json.loads(body) == {"logs": "line 1\nline 2\n"}
+    lines = []
+    url = f"{env.dashboard}/api/jobs/{submission}/logs/tail"
+    async with env.session.ws_connect(url, headers=job_headers()) as ws:
+        async for message in ws:
+            lines.append(message.data)
+    assert lines == ["line 1\n", "line 2\n"]
+
+
+async def test_stopping_a_job_on_nrp_removes_it_and_its_code(nrp_env):
+    env = nrp_env
+    path = "/api/packages/gcs/_ray_pkg_1.zip"
+    await nrp_call(env, "PUT", path, b"zip")
+    submission = json.loads((await nrp_submit(env))[2])["submission_id"]
+    status, _, body = await job_call(env, "POST", f"/api/jobs/{submission}/stop")
+    assert (status, json.loads(body)) == (200, {"stopped": True})
+    assert env.nrp.jobs == {} and env.gateway.bucket.objects == {}
+
+
+async def test_users_reach_only_their_own_jobs_on_nrp(nrp_env):
+    env = nrp_env
+    submission = json.loads((await nrp_submit(env))[2])["submission_id"]
+    status, _, body = await job_call(env, token="session-b")
+    assert json.loads(body) == []
+    status, _, _ = await job_call(
+        env, path=f"/api/jobs/{submission}", token="session-b"
+    )
+    assert status == 404
+
+
+async def test_jobs_at_purdue_are_listed_while_nrp_does_not_answer(nrp_env, caplog):
+    env = nrp_env
+    await submit(env)
+    env.nrp.fail_list = True
+    status, _, body = await job_call(env)
+    assert (status, len(json.loads(body))) == (200, 1)
+    assert "listing jobs on NRP" in caplog.text
+
+
+def stamp(seconds_ago):
+    return datetime.fromtimestamp(time.time() - seconds_ago, timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+
+
+async def test_the_nrp_reaper_cleans_up_after_jobs_and_code_no_job_took(nrp_env):
+    env = nrp_env
+    bucket = env.gateway.bucket
+    await nrp_call(env, "PUT", "/api/packages/gcs/_ray_pkg_1.zip", b"zip")
+    ended = json.loads((await nrp_submit(env))[2])["submission_id"]
+    old = json.loads((await nrp_submit(env))[2])["submission_id"]
+    stuck = json.loads((await nrp_submit(env))[2])["submission_id"]
+    nrp_job(env, ended)["status"] = {"jobStatus": "SUCCEEDED", "endTime": stamp(60)}
+    nrp_job(env, old)["status"] = {
+        "jobStatus": "FAILED",
+        "endTime": stamp(gw.JOB_RECORD_S + 1),
+    }
+    nrp_job(env, stuck)["metadata"]["creationTimestamp"] = stamp(
+        gw.NRP_START_TIMEOUT_S + 1
+    )
+    await bucket.put("ray-nrp/jobs/ray-job-orphan/_ray_pkg_2.zip", b"zip")
+    bucket.objects["ray-nrp/jobs/ray-job-orphan/_ray_pkg_2.zip"] = (
+        b"zip",
+        time.time() - 2 * gw.START_TIMEOUT_S - 1,
+    )
+    await bucket.put("ray-nrp/jobs/ray-job-fresh/_ray_pkg_3.zip", b"zip")
+    await env.gateway.reap_nrp()
+    assert [j["spec"]["jobId"] for j in env.nrp.jobs.values()] == [ended]
+    assert list(bucket.objects) == ["ray-nrp/jobs/ray-job-fresh/_ray_pkg_3.zip"]
 
 
 def test_environments_live_on_the_storage_the_cluster_mounts():

@@ -48,6 +48,8 @@ send their training to it:
 | `gateway.py`         | The gateway: relays Ray Client and Jobs API calls, creates and deletes users' RayClusters, and creates a RayJob per submission |
 | `config.yaml`        | The gateway's settings: timeouts, GPU limits, the addresses it asks, and the volumes a workload account's cluster keeps    |
 | `nrp_gpus.py`        | How many GPUs NRP Nautilus has free for Ray workers, by region, from NRP's public Prometheus; `GET /af/nrp-gpus` on the gateway's `:8265` answers it |
+| `rayjob-nrp.yaml`    | The template of a job on NRP: its image, its head's and worker's sizes, its NCCL settings, and the nrp-s3 keys its pods read |
+| `nrp_jobs.py`        | A job on NRP: its RayJob, the NRP API it is made through, and the S3 prefix of its code |
 | `raycluster.yaml`    | The template of a user's cluster, and of a job's; the gateway fills in its name, the user's UID/GID, its environment, its token Secret and its worker groups, one per kind of GPU and priority |
 | `deployment.yaml`    | The gateway pod: the stock Ray image, with the files above from the `ray-train-gateway` ConfigMap and the workload accounts' declarations from `af-accounts` |
 | `service.yaml`       | `ray-train-gateway:10001` for Ray Client and `:8265` for the Jobs API, the addresses notebooks connect to                 |
@@ -69,6 +71,24 @@ environment that [`pixi-global-sync`](../af-utils/pixi-global-sync) keeps, or
 the one a call names. Only the gateway reaches it, with a Ray
 token derived for that cluster alone, and its pods hold no Kubernetes
 credentials.
+
+## Jobs on NRP
+
+A submission with the header `af-site: nrp` runs on
+[NRP Nautilus](../interlink/nrp) instead, as a RayJob that the gateway
+creates there through NRP's API with the interLink plugin's kubeconfig
+(`kubeconfig-nrp-interlink`), from [`rayjob-nrp.yaml`](rayjob-nrp.yaml): the
+image of the AF's global environment ([`docker/ray-nrp`](../../docker/ray-nrp)),
+whose job takes only `af-n-workers` or `af-max-workers`. Its workers run on
+nodes of one region and one GPU model with room for them, as
+[`nrp_gpus.py`](nrp_gpus.py) reads NRP's Prometheus, and all AF jobs there hold
+no more than `nrpGpuBudget` GPUs. The code a submission uploads goes to the
+job's prefix of the NRP S3 bucket (`nrp-s3`), `ray-nrp/jobs/<RayJob>/`, from
+which Ray fetches it, and which the gateway deletes once the job ends. A job's
+status comes from its RayJob, its log from the pod that submits it, and
+stopping it deletes the RayJob; so does a job whose cluster has not started
+within `nrpStartTimeoutSeconds`. A RayJob there carries a hash of its owner,
+not their name. [`nrp_jobs.py`](nrp_jobs.py) is that NRP side.
 
 ## Tuning
 
