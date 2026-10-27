@@ -42,3 +42,6 @@ defaultEnv: /work/pixi/global/.pixi/envs/default
 
 ldapHost: geddes-auth.rcac.purdue.edu
 ldapBase: ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+
+# The volumes of raycluster.yaml a workload account's cluster keeps (../dask-gateway/README.md#workload-accounts).
+accountKeptVolumes: [log-volume, cvmfs]

@@ -106,10 +106,19 @@ def docs(path):
 
 
 def test_flux_lists_every_manifest_of_the_app():
-    resources = yaml.safe_load(EXPERIMENTAL.read_text())["resources"]
-    assert {r for r in resources if "/apps/agentic-analysis/" in r} == {
-        f"../../apps/agentic-analysis/{path.name}" for path in APP.glob("*.yaml")
+    """Each YAML file of the app is a manifest Flux applies, or its workload
+    account's declaration in the af-accounts ConfigMap."""
+    kustomization = yaml.safe_load(EXPERIMENTAL.read_text())
+    generators = {g["name"]: g for g in kustomization["configMapGenerator"]}
+    declarations = {
+        line.partition("=")[2] for line in generators["af-accounts"]["files"]
     }
+    files = {f"../../apps/agentic-analysis/{path.name}" for path in APP.glob("*.yaml")}
+    assert files & declarations == {"../../apps/agentic-analysis/account.yaml"}
+    resources = kustomization["resources"]
+    assert {r for r in resources if "/apps/agentic-analysis/" in r} == (
+        files - declarations
+    )
 
 
 def test_the_task_image_is_built_published_and_pulled_under_one_name():

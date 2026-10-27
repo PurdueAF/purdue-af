@@ -1,9 +1,10 @@
 """Tests for apps/ray-train/gateway.py against fake JupyterHub, Kubernetes and Ray heads.
 
 What the isolation rests on: a call, of Ray Client's or of the Jobs API's, is
-resolved to a user only by the Hub, it reaches that user's cluster and no
-other, the cluster runs as the user's LDAP account, and a head only ever sees
-its own derived token, never a session's.
+resolved to a user only by the Hub, or to a workload account only by its
+declaration, it reaches that user's cluster and no other, the cluster runs as
+the user's LDAP account or as the account's IDs, and a head only ever sees its
+own derived token, never a session's.
 """
 
 import asyncio
@@ -11,6 +12,7 @@ import copy
 import json
 import logging
 import os
+import re
 import signal
 import socket
 import ssl
@@ -31,7 +33,7 @@ from aiohttp import (
     web,
 )
 from aiohttp.test_utils import TestServer
-from common import REPO, load_script
+from common import REFUSED_ACCOUNTS, REPO, account, load_script, mount_configmap
 
 # gpu_queries.py is in the gateway's ConfigMap, beside gateway.py.
 sys.path.insert(0, str(REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles"))
@@ -44,10 +46,20 @@ SESSIONS = {
     "session-a": ("user-a", 7),
     "session-b": ("user-b-cern", 42),
     "session-idle": ("user-c-fnal", None),
+    "session-named-like-an-account": ("demo-workload", 11),
+    "session-with-a-colon": ("account:demo-workload", 13),
 }
+# service token -> the name of the Hub service it belongs to
+SERVICES = {"metrics-token": "prometheus"}
 # Users the fake Hub was asked about
 LOOKUPS = []
 LDAP = {"user-a": (5001, 500), "paf0042": (6042, 600)}
+# A workload account (apps/dask-gateway/README.md#workload-accounts) and its token.
+WORKLOAD_TOKEN = "workload-token"
+WORKLOAD = account(token=WORKLOAD_TOKEN)
+# The name a Hub user demo-workload's would have, by which the dashboards name its user.
+WORKLOAD_CLUSTER = "ray-train-demo-workload"
+WORKLOAD_ENV = "/demo-workload/run/jfc/.pixi/envs/default"
 ENV_A = "/work/users/user-a/proj/.pixi/envs/default"
 T4 = "nvidia.com/gpu"
 SLICE = "nvidia.com/mig-1g.5gb"
@@ -74,9 +86,11 @@ def hub_app():
         _, _, token = request.headers.get("Authorization", "").partition(" ")
         if token == "hub-down":
             return web.json_response({}, status=500)
+        if token in SERVICES:
+            return web.json_response({"kind": "service", "name": SERVICES[token]})
         if token not in SESSIONS:
             return web.json_response({}, status=403)
-        return web.json_response({"name": SESSIONS[token][0]})
+        return web.json_response({"kind": "user", "name": SESSIONS[token][0]})
 
     async def user(request):
         if request.headers.get("Authorization") != f"token {SERVICE_TOKEN}":
@@ -423,6 +437,10 @@ async def env(monkeypatch, tmp_path):
     client_port = client_server.add_insecure_port("127.0.0.1:0")
     await client_server.start()
     (tmp_path / "token").write_text("sa-token")
+    accounts = tmp_path / "af-accounts"
+    accounts.mkdir()
+    mount_configmap(accounts, "1", {"demo-workload.yaml": yaml.safe_dump(WORKLOAD)})
+    monkeypatch.setattr(gw, "ACCOUNTS_DIR", accounts)
     token_file = tmp_path / "hub-token"
     token_file.write_text(SERVICE_TOKEN + "\n")
     monkeypatch.setattr(gw, "HUB_API", str(hub.make_url("/hub/api")))
@@ -460,6 +478,7 @@ async def env(monkeypatch, tmp_path):
             heads=heads,
             prometheus=prometheus,
             token_file=token_file,
+            accounts=accounts,
         )
         await dashboard.close()
         await channel.close()
@@ -913,6 +932,314 @@ async def test_users_reach_only_their_own_cluster(env):
         f"Bearer {gw.cluster_token(SERVICE_TOKEN, name)}"
         for name in ("ray-train-user-a", "ray-train-user-b-cern")
     ]
+
+
+async def test_a_workload_account_runs_as_itself_on_cvmfs_and_its_own_volume(env):
+    assert await call(env, token=WORKLOAD_TOKEN, env_path=WORKLOAD_ENV) == [
+        b"echo:ping"
+    ]
+    assert LOOKUPS == []
+    spec = cluster_spec(env, WORKLOAD_CLUSTER)
+    for template in (
+        spec["headGroupSpec"]["template"],
+        *(group["template"] for group in spec["workerGroupSpecs"]),
+    ):
+        pod = template["spec"]
+        context = pod["securityContext"]
+        assert (context["runAsUser"], context["runAsGroup"]) == (1234, 1235)
+        volumes = {v["name"]: v for v in pod["volumes"]}
+        assert volumes.keys() == {*gw.ACCOUNT_KEPT_VOLUMES, "demo-workload"}
+        storage = {name for name, v in volumes.items() if "emptyDir" not in v}
+        assert storage == {"cvmfs", "demo-workload"}
+        assert volumes["demo-workload"]["persistentVolumeClaim"] == {
+            "claimName": "demo-workload"
+        }
+        (container,) = pod["containers"]
+        assert {m["name"] for m in container["volumeMounts"]} == volumes.keys()
+        assert {"name": "demo-workload", "mountPath": "/demo-workload"} in container[
+            "volumeMounts"
+        ]
+        labels = template["metadata"]["labels"]
+        assert labels["app.kubernetes.io/part-of"] == "demo-workload"
+        assert labels["app"] == "ray-train-cluster"
+    assert head_env(env, WORKLOAD_CLUSTER)["USER"] == "demo-workload"
+    assert cluster_env(env, WORKLOAD_CLUSTER) == WORKLOAD_ENV
+    assert env.heads.calls[-1][1]["authorization"] == (
+        f"Bearer {gw.cluster_token(SERVICE_TOKEN, WORKLOAD_CLUSTER)}"
+    )
+
+
+async def test_a_workload_account_submits_jobs_to_its_own_cluster(env):
+    status, _, _ = await submit(env, token=WORKLOAD_TOKEN, env_path=WORKLOAD_ENV)
+    assert status == 200
+    assert list(env.kube.clusters) == [WORKLOAD_CLUSTER]
+    status, _, _ = await job_call(env, token=WORKLOAD_TOKEN, env_path=WORKLOAD_ENV)
+    assert status == 200
+    assert [seen[0] for seen in env.heads.seen] == [WORKLOAD_CLUSTER]
+
+
+def test_an_accounts_cluster_is_named_as_a_hub_user_of_its_name_would_be():
+    for name in ("demo-workload", "0x", "a" * gw.ACCOUNT_NAME_MAX):
+        user = gw.User(name=name, account=name, uid=1234, gid=1235, workload=True)
+        assert user.cluster == gw.cluster_name(name) == f"ray-train-{name}"
+        assert re.fullmatch("ray-train-(.+)", user.cluster)[1] == name
+        assert len(user.cluster) <= gw.MAX_CLUSTER_NAME
+
+
+@pytest.mark.parametrize(
+    "env_path",
+    [
+        None,
+        ENV_A,
+        ENV_B,
+        "/demo-workload-old/env",
+        "/demo-workload/../work/env",
+        "demo-workload/env",
+        "/other-workload/env",
+        "/eos/purdue/env",
+    ],
+)
+async def test_a_workload_account_runs_only_an_environment_its_pods_mount(
+    env, env_path
+):
+    assert (
+        await refused(env, token=WORKLOAD_TOKEN, env_path=env_path)
+        == grpc.StatusCode.INVALID_ARGUMENT
+    )
+    assert env.kube.clusters == {}
+
+
+@pytest.mark.parametrize(
+    "token, reason",
+    [
+        ("metrics-token", "not-a-user"),
+        ("session-named-like-an-account", "account-name account=demo-workload"),
+        ("session-with-a-colon", "colon"),
+    ],
+)
+async def test_no_hub_service_and_no_hub_user_of_an_accounts_name_gets_a_cluster(
+    env, token, reason, caplog
+):
+    with caplog.at_level(logging.WARNING, logger="ray-train-gateway"):
+        assert (
+            await refused(env, token=token, env_path="/cvmfs/env")
+            == grpc.StatusCode.PERMISSION_DENIED
+        )
+        status, _, _ = await submit(env, token=token, env_path="/cvmfs/env")
+    assert status == 403
+    assert env.kube.clusters == {}
+    assert LOOKUPS == []
+    assert f"refused: reason={reason}" in caplog.text
+    assert token not in caplog.text
+
+
+async def test_a_hub_user_is_refused_once_an_account_of_their_name_is_declared(env):
+    assert await call(env, env_path=ENV_A) == [b"echo:ping"]
+    mount_configmap(
+        env.accounts,
+        "2",
+        {
+            "demo-workload.yaml": yaml.safe_dump(WORKLOAD),
+            "user-a.yaml": yaml.safe_dump(account("user-a", "user-a-token")),
+        },
+    )
+    assert await refused(env, env_path=ENV_A) == grpc.StatusCode.PERMISSION_DENIED
+
+
+async def test_without_the_registry_an_account_token_is_refused(env, monkeypatch):
+    monkeypatch.setattr(gw, "ACCOUNTS_DIR", env.accounts / "missing")
+    assert (
+        await refused(env, token=WORKLOAD_TOKEN, env_path=WORKLOAD_ENV)
+        == grpc.StatusCode.UNAUTHENTICATED
+    )
+    assert env.kube.clusters == {}
+
+
+async def test_an_account_token_follows_the_registry(env):
+    await call(env, token=WORKLOAD_TOKEN, env_path=WORKLOAD_ENV)
+    replaced = account(token="new-token")
+    mount_configmap(env.accounts, "2", {"demo-workload.yaml": yaml.safe_dump(replaced)})
+    assert (
+        await refused(env, token=WORKLOAD_TOKEN, env_path=WORKLOAD_ENV)
+        == grpc.StatusCode.UNAUTHENTICATED
+    )
+    assert await call(env, token="new-token", env_path=WORKLOAD_ENV) == [b"echo:ping"]
+
+
+async def test_an_account_asks_after_its_jobs_without_naming_its_environment(env):
+    status, _, _ = await submit(env, token=WORKLOAD_TOKEN, env_path=WORKLOAD_ENV)
+    assert status == 200
+    for path in ("/api/version", "/api/jobs/"):
+        status, _, _ = await job_call(env, path=path, token=WORKLOAD_TOKEN)
+        assert status == 200, path
+    status, reason, _ = await submit(env, token=WORKLOAD_TOKEN)
+    assert status == 400
+    assert gw.DEFAULT_ENV in reason
+    assert list(env.kube.clusters) == [WORKLOAD_CLUSTER]
+    assert cluster_env(env, WORKLOAD_CLUSTER) == WORKLOAD_ENV
+
+
+@pytest.fixture
+def namesake(monkeypatch):
+    """The session token of a Hub user of the workload account's name, and their LDAP account."""
+    monkeypatch.setitem(LDAP, "demo-workload", (7777, 777))
+    return "session-named-like-an-account"
+
+
+def runs_as(env, name):
+    context = head_pod(env, name)["securityContext"]
+    return context["runAsUser"], context["runAsGroup"]
+
+
+async def test_an_account_never_reaches_a_cluster_of_its_name_that_runs_as_a_person(
+    env, namesake, monkeypatch, caplog
+):
+    monkeypatch.setattr(gw, "ACCOUNTS_DIR", env.accounts / "missing")
+    assert await call(env, token=namesake, env_path="/cvmfs/env") == [b"echo:ping"]
+    env.heads.jobs[WORKLOAD_CLUSTER] = [running_job("raysubmit_persons_job")]
+    monkeypatch.setattr(gw, "ACCOUNTS_DIR", env.accounts)
+    relayed = len(env.heads.calls)
+    with caplog.at_level(logging.WARNING, logger="ray-train-gateway"):
+        for restarted in (False, True):
+            if restarted:
+                env.gateway.started.clear()
+            assert (
+                await refused(env, token=WORKLOAD_TOKEN, env_path="/cvmfs/env")
+                == grpc.StatusCode.PERMISSION_DENIED
+            )
+            status, _, body = await job_call(env, token=WORKLOAD_TOKEN)
+            assert status == 403
+            assert b"raysubmit_persons_job" not in body
+    assert len(env.heads.calls) == relayed
+    assert env.kube.created == 1
+    assert runs_as(env, WORKLOAD_CLUSTER) == (7777, 777)
+    assert f"{WORKLOAD_CLUSTER} refused: reason=owner" in caplog.text
+
+
+@pytest.mark.parametrize("env_path", ["/cvmfs/env", "/cvmfs/other-env"])
+async def test_a_person_never_reaches_a_cluster_of_their_name_that_runs_as_an_account(
+    env, namesake, monkeypatch, env_path
+):
+    assert await call(env, token=WORKLOAD_TOKEN, env_path="/cvmfs/env") == [
+        b"echo:ping"
+    ]
+    monkeypatch.setattr(gw, "ACCOUNTS_DIR", env.accounts / "missing")
+    relayed = len(env.heads.calls)
+    for restarted in (False, True):
+        if restarted:
+            env.gateway.started.clear()
+        assert (
+            await refused(env, token=namesake, env_path=env_path)
+            == grpc.StatusCode.PERMISSION_DENIED
+        )
+        status, _, _ = await job_call(env, token=namesake)
+        assert status == 403
+    assert len(env.heads.calls) == relayed
+    assert live(env) == {WORKLOAD_CLUSTER}
+    assert runs_as(env, WORKLOAD_CLUSTER) == (1234, 1235)
+
+
+@pytest.mark.parametrize("declared", [True, False])
+async def test_a_token_no_one_has_is_refused_and_logged(
+    env, monkeypatch, caplog, declared
+):
+    """A token no declaration has goes to the Hub, as a session's does."""
+    token = "0" * 64
+    if not declared:
+        monkeypatch.setattr(gw, "ACCOUNTS_DIR", env.accounts / "missing")
+        token = WORKLOAD_TOKEN
+    with caplog.at_level(logging.WARNING, logger="ray-train-gateway"):
+        assert (
+            await refused(env, token=token, env_path=WORKLOAD_ENV)
+            == grpc.StatusCode.UNAUTHENTICATED
+        )
+        status, _, _ = await job_call(env, token=token)
+    assert status == 401
+    assert caplog.text.count("token refused: reason=unknown-token") == 2
+    assert token not in caplog.text
+    assert WORKLOAD["tokenSha256"] not in caplog.text
+    assert env.kube.clusters == {}
+
+
+async def test_a_hub_user_whose_cluster_name_is_an_accounts_is_refused(
+    env, monkeypatch, caplog
+):
+    """A name that is no DNS label gets a hashed cluster name, which an account's may equal."""
+    monkeypatch.setitem(SESSIONS, "session-some-user", ("Some.User", 21))
+    name = gw.cluster_name("Some.User").removeprefix("ray-train-")
+    assert name != "Some.User"
+    mount_configmap(
+        env.accounts, "2", {"collides.yaml": yaml.safe_dump(account(name, "c-token"))}
+    )
+    assert list(gw.accounts()) == [name]
+    with caplog.at_level(logging.WARNING, logger="ray-train-gateway"):
+        assert (
+            await refused(env, token="session-some-user", env_path=ENV_A)
+            == grpc.StatusCode.PERMISSION_DENIED
+        )
+    assert "reason=account-name account=Some.User" in caplog.text
+    assert env.kube.clusters == {}
+    assert LOOKUPS == []
+
+
+def test_a_token_that_is_no_utf8_is_no_accounts():
+    """aiohttp hands a header's bytes that are no UTF-8 on as surrogates."""
+    assert gw.token_account("\udcff\udcfe") is None
+
+
+def declare(directory, **files):
+    for name, declared in files.items():
+        (directory / name).write_text(yaml.safe_dump(declared))
+
+
+@pytest.mark.parametrize("declared, reason", REFUSED_ACCOUNTS)
+def test_a_declaration_that_breaks_a_rule_is_refused_and_logged(
+    monkeypatch, tmp_path, caplog, declared, reason
+):
+    monkeypatch.setattr(gw, "ACCOUNTS_DIR", tmp_path)
+    declare(tmp_path, **{"kept.yaml": WORKLOAD, "refused.yaml": declared})
+    with caplog.at_level(logging.WARNING, logger="ray-train-gateway"):
+        assert list(gw.accounts()) == ["demo-workload"]
+    assert f"refused.yaml refused: reason={reason}" in caplog.text
+    assert WORKLOAD["tokenSha256"] not in caplog.text
+
+
+def test_the_longest_name_is_accepted(monkeypatch, tmp_path):
+    monkeypatch.setattr(gw, "ACCOUNTS_DIR", tmp_path)
+    longest = account("a" * gw.ACCOUNT_NAME_MAX)
+    declare(tmp_path, **{"longest.yaml": longest})
+    (name,) = gw.accounts()
+    assert gw.cluster_name(name) == f"ray-train-{name}"
+    assert len(gw.cluster_name(name)) == gw.MAX_CLUSTER_NAME
+
+
+def test_an_unparsable_declaration_is_refused(monkeypatch, tmp_path, caplog):
+    monkeypatch.setattr(gw, "ACCOUNTS_DIR", tmp_path)
+    (tmp_path / "broken.yaml").write_text(
+        f"name: [demo\ntokenSha256: {WORKLOAD['tokenSha256']}\n"
+    )
+    with caplog.at_level(logging.WARNING, logger="ray-train-gateway"):
+        assert gw.accounts() == {}
+    assert "broken.yaml refused: reason=unreadable" in caplog.text
+    assert WORKLOAD["tokenSha256"] not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "second",
+    [
+        account(token="second-token", uid=1500),
+        account("second-workload", WORKLOAD_TOKEN),
+    ],
+)
+def test_declarations_sharing_a_name_or_a_hash_are_all_refused(
+    monkeypatch, tmp_path, caplog, second
+):
+    monkeypatch.setattr(gw, "ACCOUNTS_DIR", tmp_path)
+    other = account("other-workload", "other-token")
+    declare(tmp_path, **{"a.yaml": WORKLOAD, "b.yaml": second, "c.yaml": other})
+    with caplog.at_level(logging.WARNING, logger="ray-train-gateway"):
+        assert list(gw.accounts()) == ["other-workload"]
+    assert "reason=duplicate" in caplog.text
 
 
 async def test_streams_are_relayed_both_ways(env):
@@ -1858,19 +2185,6 @@ async def test_the_gateway_stops_at_sigterm(monkeypatch):
     os.kill(os.getpid(), signal.SIGTERM)
     await asyncio.wait_for(main, timeout=5)
     assert stopped.is_set()
-
-
-def mount_configmap(volume, version, files):
-    """Swap `files` into `volume` as kubelet does: a new directory, `..data`
-    relinked to it in one rename, each file a link through `..data`."""
-    data = volume / f"..{version}"
-    data.mkdir()
-    for name, text in files.items():
-        (data / name).write_text(text)
-        if not (volume / name).is_symlink():
-            (volume / name).symlink_to(f"..data/{name}")
-    (volume / "..data_tmp").symlink_to(data.name)
-    (volume / "..data_tmp").replace(volume / "..data")
 
 
 async def test_only_new_gateway_code_ends_the_gateway(monkeypatch, tmp_path):

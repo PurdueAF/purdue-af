@@ -88,6 +88,9 @@ spec:
             - name: hub-token
               mountPath: /etc/hub-token
               readOnly: true
+            - name: af-accounts
+              mountPath: /etc/af-accounts
+              readOnly: true
       volumes:
         - name: app
           configMap:
@@ -102,3 +105,8 @@ spec:
             items:
               - key: hub.services.ray-train-gateway.apiToken
                 path: token
+        # Workload accounts' declarations, which kubelet updates in place.
+        - name: af-accounts
+          configMap:
+            name: af-accounts
+            optional: true
