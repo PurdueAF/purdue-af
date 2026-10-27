@@ -20,11 +20,13 @@ def load(path):
 @pytest.fixture(scope="session")
 def interlink_clusters():
     """{cluster: {"values": ..., "release": ..., "dir": ...}} for every
-    apps/interlink/<cluster>/ that has a HelmRelease."""
+    apps/interlink/<cluster>/ whose HelmRelease is the interlink chart."""
     clusters = {}
     for d in sorted(INTERLINK.iterdir()):
         release = d / "helmrelease.yaml"
         if not d.is_dir() or not release.is_file():
+            continue
+        if load(release)["spec"]["chart"]["spec"]["chart"] != "interlink":
             continue
         clusters[d.name] = {
             "dir": d,

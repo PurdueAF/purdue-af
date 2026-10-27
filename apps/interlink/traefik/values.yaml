@@ -1,0 +1,59 @@
+# The ingress for interLink's wstunnel shadow pods; see ../README.md.
+
+image:
+  registry: geddes-registry.rcac.purdue.edu/docker-hub-cache
+  repository: library/traefik
+  tag: v3.7.14
+
+deployment:
+  replicas: 2
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Role and RoleBinding in cms only. Without cluster-scope reads Traefik ignores
+# spec.ingressClassName and matches the kubernetes.io/ingress.class annotation.
+rbac:
+  enabled: true
+  namespaced: true
+ingressClass:
+  enabled: false
+
+providers:
+  kubernetesCRD:
+    enabled: false
+  kubernetesIngress:
+    ingressClass: interlink-tunnel
+
+api:
+  dashboard: false
+
+ports:
+  web:
+    transport:
+      respondingTimeouts:
+        # Each tunnel is one long-lived WebSocket; the default 60 s would end it.
+        readTimeout: 0
+  websecure:
+    expose:
+      default: false
+
+service:
+  annotations:
+    metallb.universe.tf/address-pool: geddes-public-pool
+
+nodeSelector:
+  cms-af-prod: "true"
+tolerations:
+  - key: hub.jupyter.org/dedicated
+    operator: Equal
+    value: cms-af
+    effect: NoSchedule
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
