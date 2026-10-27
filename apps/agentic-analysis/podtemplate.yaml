@@ -4,6 +4,9 @@ kind: PodTemplate
 metadata:
   name: agentic-analysis
 template:
+  metadata:
+    labels:
+      app.kubernetes.io/part-of: agentic-analysis
   spec:
     automountServiceAccountToken: false
     nodeSelector:
@@ -32,13 +35,22 @@ template:
             value: http://pyroscope.cms.svc.cluster.local:4040
           - name: PYROSCOPE_APP
             value: agentic-analysis
-          # The sessions' Dask Gateway, with jfc-claude's JUPYTERHUB_API_TOKEN.
+          # The clusters are the workload account's: a Hub token jfc-claude may hold stays out of the task.
+          - name: JUPYTERHUB_API_TOKEN
+            value: ""
+          # The account's token, which af_dask and af_ray send (../dask-gateway/README.md#workload-accounts).
+          - name: AF_ACCOUNT_TOKEN_FILE
+            value: /etc/af-account/token
+          # The sessions' Dask Gateway, by its in-cluster address: it takes an account's token only from a pod.
           - name: DASK_GATEWAY__ADDRESS
+            value: http://api-dask-gateway:8000
+          # Dashboard links: the gateway's Traefik serves dashboards, its API does not.
+          - name: DASK_GATEWAY__PUBLIC_ADDRESS
             value: http://dask-gateway.geddes.rcac.purdue.edu
           - name: DASK_GATEWAY__PROXY_ADDRESS
             value: traefik-dask-gateway.cms.geddes.rcac.purdue.edu:8786
           - name: DASK_GATEWAY__AUTH__TYPE
-            value: jupyterhub
+            value: af_dask.AccountAuth
           # The facility's grid proxy, which af-x509-secrets renews, for XCache and DAS.
           - name: X509_USER_PROXY
             value: /etc/grid-security-ro/x509up
@@ -48,10 +60,12 @@ template:
           - name: SCRAM_ARCH
             value: el9_amd64_gcc12
         volumeMounts:
-          # Of /work, the agent sees this directory only.
-          - name: work
-            mountPath: /work/projects/agentic-analysis
-            subPath: projects/agentic-analysis
+          # The workload account's volume, where its Dask and Ray clusters mount it.
+          - name: volume
+            mountPath: /agentic-analysis
+          - name: account
+            mountPath: /etc/af-account
+            readOnly: true
           - name: cvmfs
             mountPath: /cvmfs
             mountPropagation: HostToContainer
@@ -60,9 +74,14 @@ template:
             mountPath: /etc/grid-security-ro
             readOnly: true
     volumes:
-      - name: work
+      - name: volume
         persistentVolumeClaim:
-          claimName: af-shared-storage
+          claimName: agentic-analysis
+      - name: account
+        secret:
+          secretName: agentic-analysis-account
+          # 0444, as the proxy's below.
+          defaultMode: 292
       - name: cvmfs
         persistentVolumeClaim:
           claimName: cvmfs
