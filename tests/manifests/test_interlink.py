@@ -543,6 +543,30 @@ def test_remote_affinity_annotations_are_node_affinity_json(interlink_clusters):
     assert checked, "no release carries interlink.eu/remote-affinity"
 
 
+def test_probes_on_slurm_nodes_use_port_numbers(slurm_clusters):
+    """The Slurm plugin runs a pod's probes in the job and passes a named port
+    through as 0, so an HTTP probe on "http" never succeeds and the startup
+    probe kills the container."""
+    nodes = {app["values"]["nodeName"] for app in slurm_clusters.values()}
+    checked = 0
+    for values_file in sorted((REPO / "apps" / "sonic").glob("*/values.yaml")):
+        server = (yaml.safe_load(values_file.read_text()) or {}).get(
+            "inferenceServer", {}
+        )
+        if (server.get("nodeSelector") or {}).get(
+            "kubernetes.io/hostname"
+        ) not in nodes:
+            continue
+        for probe in ("startupProbe", "readinessProbe", "livenessProbe"):
+            for action in ("httpGet", "tcpSocket", "grpc"):
+                port = (server.get(probe) or {}).get(action, {}).get("port")
+                assert port is None or isinstance(port, int), (
+                    f"{values_file}: {probe}.{action}.port={port!r}"
+                )
+        checked += 1
+    assert checked, "no SuperSONIC release runs on a Slurm node"
+
+
 def test_kubernetes_nodes_have_no_full_mesh(kubernetes_clusters):
     """Full mesh runs privileged, NET_ADMIN pods on both clusters, which the
     Geddes admission policies refuse."""
