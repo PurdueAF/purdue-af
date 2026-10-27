@@ -11,9 +11,9 @@ CI-owned. Never create a version tag or move a channel tag by hand.
 | Continuous (`:latest`, `:pre-release`, `sha-`)        | moving tags                       | `ci.yml` publish stage, behind `ci-ok` | on pod restart / session spawn                         |
 | Experimental Flux source (`main-validated`)           | moving branch                     | `ci.yml` publish stage, behind `ci-ok` | experimental Flux reconcile (~1 min)                   |
 
-The monitor images (af-pod-monitor, af-node-monitor), supersonic-model-manager
-and agentic-analysis have no release step at all: every green pipeline on `main`
-moves `:latest`. The interLink plugin images publish under their upstream
+The monitor images (af-pod-monitor, af-node-monitor), supersonic-model-manager,
+agentic-analysis and ray-nrp have no release step at all: every green pipeline
+on `main` moves `:latest`. The interLink plugin images publish under their upstream
 refs, `:$PLUGIN_REF`, which the interLink values pin; bumping a `PLUGIN_REF`
 is that image's release (their READMEs:
 [slurm](docker/interlink-slurm-plugin/README.md),

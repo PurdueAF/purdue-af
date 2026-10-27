@@ -259,6 +259,10 @@
       groupName: 'agentic-analysis-image',
     },
     {
+      matchFileNames: ['docker/ray-nrp/**'],
+      groupName: 'ray-nrp-image',
+    },
+    {
       matchFileNames: ['docker/af-node-monitor/**'],
       groupName: 'af-node-monitor-image',
     },

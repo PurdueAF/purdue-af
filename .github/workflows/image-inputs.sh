@@ -15,7 +15,7 @@
 #
 # Names: purdue-af, agentic-interface, af-pod-monitor, af-node-monitor,
 #        agentic-analysis, supersonic-model-manager, interlink-slurm-plugin,
-#        interlink-kubernetes-plugin, pixi-base, pixi-global, e2e-hub
+#        interlink-kubernetes-plugin, ray-nrp, pixi-base, pixi-global, e2e-hub
 #
 # The hash covers file content, names and modes of every TRACKED file under
 # the listed pathspecs (git ls-files -s), so it is independent of commit
@@ -97,6 +97,16 @@ paths_for() {
 		# reaches the task pods as a Flyte code bundle, not through this image.
 		cat <<-EOF
 			docker/agentic-analysis
+			.github/workflows/ci-images.yml
+			.github/workflows/image-inputs.sh
+		EOF
+		;;
+	ray-nrp)
+		# The global environment, installed into the image.
+		cat <<-EOF
+			docker/ray-nrp
+			pixi/global/pixi.toml
+			pixi/global/pixi.lock
 			.github/workflows/ci-images.yml
 			.github/workflows/image-inputs.sh
 		EOF
