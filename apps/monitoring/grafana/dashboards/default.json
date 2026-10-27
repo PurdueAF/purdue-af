@@ -1975,7 +1975,7 @@
         "x": 0,
         "y": 18,
         "w": 24,
-        "h": 20
+        "h": 23
       },
       "datasource": {
         "type": "prometheus",
@@ -2827,7 +2827,7 @@
       "title": "CPU: reserved vs. used",
       "gridPos": {
         "x": 0,
-        "y": 38,
+        "y": 41,
         "w": 8,
         "h": 8
       },
@@ -3165,7 +3165,7 @@
       "title": "RAM: reserved vs. used",
       "gridPos": {
         "x": 8,
-        "y": 38,
+        "y": 41,
         "w": 8,
         "h": 8
       },
@@ -3503,7 +3503,7 @@
       "title": "GPUs: reserved vs. used",
       "gridPos": {
         "x": 16,
-        "y": 38,
+        "y": 41,
         "w": 8,
         "h": 8
       },
@@ -3783,7 +3783,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 46,
+        "y": 49,
         "w": 24,
         "h": 1
       },
@@ -3795,7 +3795,7 @@
       "title": "Storage mounts on AF nodes",
       "gridPos": {
         "x": 0,
-        "y": 47,
+        "y": 50,
         "w": 8,
         "h": 8
       },
@@ -4075,7 +4075,7 @@
       "title": "Metadata latency by mount, median over nodes",
       "gridPos": {
         "x": 8,
-        "y": 47,
+        "y": 50,
         "w": 8,
         "h": 8
       },
@@ -4213,7 +4213,7 @@
       "title": "Read throughput by mount, average over nodes",
       "gridPos": {
         "x": 16,
-        "y": 47,
+        "y": 50,
         "w": 8,
         "h": 8
       },
@@ -4368,9 +4368,9 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 55,
+        "y": 58,
         "w": 6,
-        "h": 7
+        "h": 13
       },
       "id": 22,
       "options": {
@@ -4453,9 +4453,9 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 55,
+        "y": 58,
         "w": 6,
-        "h": 7
+        "h": 13
       },
       "id": 23,
       "options": {
@@ -4538,9 +4538,9 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 55,
+        "y": 58,
         "w": 6,
-        "h": 7
+        "h": 13
       },
       "id": 24,
       "options": {
@@ -4623,9 +4623,9 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 55,
+        "y": 58,
         "w": 6,
-        "h": 7
+        "h": 13
       },
       "id": 25,
       "options": {
@@ -4692,7 +4692,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 62,
+        "y": 71,
         "w": 24,
         "h": 1
       },
@@ -4704,7 +4704,7 @@
       "title": "Cluster activity by user",
       "gridPos": {
         "x": 0,
-        "y": 63,
+        "y": 72,
         "w": 10,
         "h": 6
       },
@@ -4797,7 +4797,7 @@
       "title": "Utilization right now",
       "gridPos": {
         "x": 10,
-        "y": 63,
+        "y": 72,
         "w": 4,
         "h": 6
       },
@@ -4881,7 +4881,7 @@
       "title": "Core-hours computed per user",
       "gridPos": {
         "x": 14,
-        "y": 63,
+        "y": 72,
         "w": 5,
         "h": 6
       },
@@ -4947,7 +4947,7 @@
       "title": "Cores: computing vs. transferring",
       "gridPos": {
         "x": 19,
-        "y": 63,
+        "y": 72,
         "w": 5,
         "h": 6
       },
@@ -5111,7 +5111,7 @@
       "title": "Clusters",
       "gridPos": {
         "x": 0,
-        "y": 69,
+        "y": 78,
         "w": 24,
         "h": 6
       },
@@ -5590,7 +5590,7 @@
       "title": "Workers by saturation",
       "gridPos": {
         "x": 0,
-        "y": 75,
+        "y": 84,
         "w": 6,
         "h": 7
       },
@@ -5759,7 +5759,7 @@
       "title": "Workers preempted",
       "gridPos": {
         "x": 6,
-        "y": 75,
+        "y": 84,
         "w": 6,
         "h": 7
       },
@@ -5902,7 +5902,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 75,
+        "y": 84,
         "w": 6,
         "h": 7
       },
@@ -6006,7 +6006,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 75,
+        "y": 84,
         "w": 6,
         "h": 7
       },
@@ -6048,7 +6048,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 82,
+        "y": 91,
         "w": 24,
         "h": 1
       },
@@ -6060,7 +6060,7 @@
       "title": "Cluster activity by user",
       "gridPos": {
         "x": 0,
-        "y": 83,
+        "y": 92,
         "w": 10,
         "h": 6
       },
@@ -6153,7 +6153,7 @@
       "title": "Utilization right now",
       "gridPos": {
         "x": 10,
-        "y": 83,
+        "y": 92,
         "w": 4,
         "h": 6
       },
@@ -6237,7 +6237,7 @@
       "title": "GPU-hours used per user",
       "gridPos": {
         "x": 14,
-        "y": 83,
+        "y": 92,
         "w": 5,
         "h": 6
       },
@@ -6303,7 +6303,7 @@
       "title": "GPUs: reserved, busy, waited for",
       "gridPos": {
         "x": 19,
-        "y": 83,
+        "y": 92,
         "w": 5,
         "h": 6
       },
@@ -6467,7 +6467,7 @@
       "title": "Clusters",
       "gridPos": {
         "x": 0,
-        "y": 89,
+        "y": 98,
         "w": 24,
         "h": 6
       },
@@ -7012,7 +7012,7 @@
       "title": "GPU compute, per cluster",
       "gridPos": {
         "x": 0,
-        "y": 95,
+        "y": 104,
         "w": 6,
         "h": 7
       },
@@ -7103,7 +7103,7 @@
       "title": "Workers preempted",
       "gridPos": {
         "x": 6,
-        "y": 95,
+        "y": 104,
         "w": 6,
         "h": 7
       },
@@ -7194,7 +7194,7 @@
       "title": "Worker CPU, share of request, per cluster",
       "gridPos": {
         "x": 12,
-        "y": 95,
+        "y": 104,
         "w": 6,
         "h": 7
       },
@@ -7284,7 +7284,7 @@
       "title": "Worker memory, share of limit, per cluster",
       "gridPos": {
         "x": 18,
-        "y": 95,
+        "y": 104,
         "w": 6,
         "h": 7
       },
@@ -7376,7 +7376,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 102,
+        "y": 111,
         "w": 24,
         "h": 1
       },
@@ -7388,7 +7388,7 @@
       "title": "CMS cores in use, by type",
       "gridPos": {
         "x": 0,
-        "y": 103,
+        "y": 112,
         "w": 8,
         "h": 8
       },
@@ -7523,7 +7523,7 @@
       "title": "Cores per user",
       "gridPos": {
         "x": 8,
-        "y": 103,
+        "y": 112,
         "w": 8,
         "h": 8
       },
@@ -7612,7 +7612,7 @@
       "title": "Jobs per user",
       "gridPos": {
         "x": 16,
-        "y": 103,
+        "y": 112,
         "w": 8,
         "h": 8
       },
@@ -7702,7 +7702,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 111,
+        "y": 120,
         "w": 24,
         "h": 1
       },
@@ -7765,7 +7765,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 112,
+        "y": 121,
         "w": 8,
         "h": 8
       },
@@ -7855,7 +7855,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 112,
+        "y": 121,
         "w": 8,
         "h": 8
       },
@@ -7943,7 +7943,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 112,
+        "y": 121,
         "w": 8,
         "h": 8
       },
@@ -7983,7 +7983,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 120,
+        "y": 129,
         "w": 24,
         "h": 1
       },
@@ -8135,7 +8135,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 121,
+        "y": 130,
         "w": 8,
         "h": 8
       },
@@ -8446,7 +8446,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 121,
+        "y": 130,
         "w": 8,
         "h": 8
       },
@@ -8660,7 +8660,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 121,
+        "y": 130,
         "w": 8,
         "h": 8
       },
@@ -8717,7 +8717,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 129,
+        "y": 138,
         "w": 24,
         "h": 1
       },
@@ -8779,7 +8779,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 130,
+        "y": 139,
         "w": 8,
         "h": 8
       },
@@ -8869,7 +8869,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 130,
+        "y": 139,
         "w": 8,
         "h": 8
       },
@@ -8996,7 +8996,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 130,
+        "y": 139,
         "w": 8,
         "h": 8
       },
@@ -9092,7 +9092,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 138,
+        "y": 147,
         "w": 8,
         "h": 8
       },
@@ -9190,7 +9190,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 138,
+        "y": 147,
         "w": 8,
         "h": 8
       },
@@ -9231,7 +9231,7 @@
       "title": "Session container restarts per hour",
       "gridPos": {
         "x": 16,
-        "y": 138,
+        "y": 147,
         "w": 8,
         "h": 8
       },
@@ -9337,7 +9337,7 @@
       "title": "Monitoring volumes",
       "gridPos": {
         "x": 0,
-        "y": 146,
+        "y": 155,
         "w": 8,
         "h": 8
       },
@@ -9460,7 +9460,7 @@
       "title": "Prometheus head series",
       "gridPos": {
         "x": 8,
-        "y": 146,
+        "y": 155,
         "w": 8,
         "h": 8
       },
@@ -9566,7 +9566,7 @@
       "title": "GPU temperature",
       "gridPos": {
         "x": 16,
-        "y": 146,
+        "y": 155,
         "w": 8,
         "h": 8
       },
