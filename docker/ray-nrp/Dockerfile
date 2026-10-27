@@ -22,7 +22,8 @@ RUN CONDA_OVERRIDE_CUDA=12.4 pixi install --frozen \
 ENV CONDA_PREFIX=/opt/pixi-global/.pixi/envs/default
 ENV PATH="${CONDA_PREFIX}/bin:${PATH}"
 
-# The uid of Ray's own images.
-RUN useradd --uid 1000 --user-group --create-home --shell /bin/bash ray
+# The uid of Ray's own images, which Ubuntu's image gives its own user.
+RUN userdel --remove ubuntu 2>/dev/null \
+    && useradd --uid 1000 --user-group --create-home --shell /bin/bash ray
 USER 1000
 WORKDIR /home/ray
