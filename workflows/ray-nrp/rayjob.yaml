@@ -12,6 +12,11 @@ spec:
       - torch==2.8.0+cu126
     env_vars:
       RAY_TRAIN_V2_ENABLED: "1"
+      # A replacement worker pod pulls the image and installs torch before it joins.
+      RAY_TRAIN_WORKER_GROUP_START_TIMEOUT_S: "1800"
+      # NRP pods reach each other only over the pod network.
+      NCCL_SOCKET_IFNAME: eth0
+      NCCL_IB_DISABLE: "1"
       # One Ray Train worker per GPU across the worker group.
       NUM_WORKERS: "4"
       EPOCHS: "20"
