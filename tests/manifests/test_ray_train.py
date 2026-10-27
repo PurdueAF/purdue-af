@@ -11,6 +11,7 @@ import sys
 import tomllib
 from pathlib import Path
 
+import pytest
 import yaml
 from common import REPO, load_script
 
@@ -109,6 +110,71 @@ def test_the_hub_gives_the_gateway_its_token_and_scopes():
         gateway_pod()["metadata"]["labels"]["hub.jupyter.org/network-access-hub"]
         == "true"
     )
+
+
+def test_the_gateway_mounts_the_workload_accounts_it_reads():
+    """kubelet never updates a subPath mount."""
+    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+    pod = gateway_pod()["spec"]
+    (volume,) = [
+        v for v in pod["volumes"] if v.get("configMap", {}).get("name") == "af-accounts"
+    ]
+    assert volume["configMap"]["optional"] is True
+    (container,) = pod["containers"]
+    (mount,) = [m for m in container["volumeMounts"] if m["name"] == volume["name"]]
+    assert "subPath" not in mount
+    assert Path(mount["mountPath"]) == gateway.ACCOUNTS_DIR
+
+
+def test_an_accounts_cluster_keeps_only_cvmfs_of_the_templates_storage():
+    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+    volumes = {v["name"]: v for v in cluster_pod()["spec"]["volumes"]}
+    assert gateway.ACCOUNT_KEPT_VOLUMES <= volumes.keys()
+    assert {
+        name for name in gateway.ACCOUNT_KEPT_VOLUMES if "emptyDir" not in volumes[name]
+    } == {"cvmfs"}
+
+
+def test_an_accounts_cluster_mounts_cvmfs_and_its_volume_and_a_users_the_template(
+    monkeypatch,
+):
+    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+    monkeypatch.setattr(gateway, "TEMPLATE", APP / "raycluster.yaml")
+    user = gateway.User(name="someone", account="someone", uid=5001, gid=500)
+    assert gateway.cluster_template(user) == gateway.load_template()
+    workload = gateway.User(
+        name="demo-workload", account="demo-workload", uid=1234, gid=1235, workload=True
+    )
+    template = gateway.cluster_template(workload)
+    spec = template["spec"]
+    for pod in (
+        spec["headGroupSpec"]["template"],
+        *(group["template"] for group in spec["workerGroupSpecs"]),
+    ):
+        assert pod["metadata"]["labels"]["app.kubernetes.io/part-of"] == "demo-workload"
+        volumes = {v["name"]: v for v in pod["spec"]["volumes"]}
+        assert {n for n, v in volumes.items() if "emptyDir" not in v} == {
+            "cvmfs",
+            "demo-workload",
+        }
+        assert volumes["demo-workload"]["persistentVolumeClaim"] == {
+            "claimName": "demo-workload"
+        }
+    assert sorted(gateway.env_roots(template)) == ["/cvmfs", "/demo-workload"]
+    # The global environment, a call's default, is on /work.
+    assert gateway.requested_env("", template) == gateway.DEFAULT_ENV
+    with pytest.raises(gateway.Refused):
+        gateway.mounted_env(gateway.DEFAULT_ENV, template)
+    assert gateway.mounted_env(gateway.DEFAULT_ENV, gateway.cluster_template(user))
+    assert gateway.requested_env("/demo-workload/env", template) == "/demo-workload/env"
+
+
+def test_committed_declarations_keep_the_rules():
+    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+    declared = sorted(REPO.glob("apps/*/account.yaml"))
+    assert declared
+    for path in declared:
+        gateway.checked_account(load(path))
 
 
 def test_the_gateway_reads_the_hubs_session_pod_names():
