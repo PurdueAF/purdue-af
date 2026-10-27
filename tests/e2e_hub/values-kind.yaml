@@ -119,10 +119,11 @@ scheduling:
 
 prePuller:
   extraImages:
-    # Its geddes-registry host resolves only inside Purdue; the chart schema forbids null.
+    # Its geddes-registry host resolves only inside Purdue, and the schema forbids null:
+    # stand in the AF image, already on the node and with the shell the puller runs.
     ray-train:
-      name: registry.k8s.io/pause
-      tag: "3.10.1"
+      name: "__PRODUCTION_IMAGE_NAME__"
+      tag: "__PRODUCTION_IMAGE_TAG__"
 
 ingress:
   enabled: false
