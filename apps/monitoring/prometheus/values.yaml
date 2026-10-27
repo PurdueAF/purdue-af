@@ -544,6 +544,26 @@ serverFiles:
                 The hub has been unreachable for 5 minutes. Nobody can start,
                 stop or reach a session while this is true.
                 Check: kubectl -n cms get pods -l component=hub
+          # The 15 s /hub/login poller reaches the callback whenever CILogon redirects back an error, so this needs no user traffic.
+          - alert: AFLoginCallbackFailing
+            expr: >
+              sum(increase(jupyterhub_request_duration_seconds_count{job="jupyterhub", instance="${jupyterhub_host}",
+                handler="oauthenticator.oauth2.OAuthCallbackHandler", code="400"}[10m])) > 5
+              unless
+              sum(increase(jupyterhub_request_duration_seconds_count{job="jupyterhub", instance="${jupyterhub_host}",
+                handler="oauthenticator.oauth2.OAuthCallbackHandler", code="302"}[10m])) > 0
+            for: 5m
+            labels:
+              severity: critical
+              component: access
+            annotations:
+              summary: JupyterHub logins are failing at the OAuth callback
+              description: >
+                {{ printf "%.0f" $value }} OAuth callbacks returned 400 in 10 minutes
+                and none succeeded: the identity provider is sending users back
+                with an error, so nobody can log in although the hub is up.
+                Check the hub logs for "OAuth error" and the scopes the
+                authenticator requests.
           # Only `failure` is a fault; the GPU gate files its refusals there too, so subtract them.
           - alert: AFSpawnFailures
             expr: >
