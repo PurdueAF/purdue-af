@@ -1,0 +1,24 @@
+--- a/interlink-kubernetes-plugin/app/services/kubernetes_plugin_service.py
++++ b/interlink-kubernetes-plugin/app/services/kubernetes_plugin_service.py
+@@ -78,6 +78,9 @@ class KubernetesPluginService(BaseService):
+                 remote_container_statuses: list[k.V1ContainerStatus] = remote_pod.status.container_statuses or []
+                 i_container_statuses: list[i.ContainerStatus] = []
+                 for cs in remote_container_statuses:
++                    # The virtual kubelet marks every running container ready.
++                    if cs.state and cs.state.running and not cs.ready:
++                        cs.state = k.V1ContainerState(waiting=k.V1ContainerStateWaiting(reason="NotReady"))
+                     i_cs = mappers.map_k_model_to_i_model(self._k_api_client, cs, i.ContainerStatus)
+                     if cs.state and cs.state.running and cs.state.running.started_at:
+                         assert i_cs.state.running
+--- a/usr/local/lib/python3.12/site-packages/interlink/spec.py
++++ b/usr/local/lib/python3.12/site-packages/interlink/spec.py
+@@ -93,6 +93,9 @@ class Container(BaseModel):
+         SecurityContext | None, Field(alias="securityContext")
+     ] = None
+     ports: Optional[List[ContainerPort]] = None  # Extension: not in v0.5.0 core spec
++    startup_probe: Annotated[dict | None, Field(alias="startupProbe")] = None
++    liveness_probe: Annotated[dict | None, Field(alias="livenessProbe")] = None
++    readiness_probe: Annotated[dict | None, Field(alias="readinessProbe")] = None
+     model_config = ConfigDict(populate_by_name=True)
+ 
+ 
