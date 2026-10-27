@@ -38,6 +38,12 @@ inferenceServer:
     interlink.virtual-kubelet.io/wstunnel-timeout: "5m"
     # The shadow pod in cms rather than a cms-wstunnel namespace.
     interlink.eu/shadow-same-ns: "true"
+    # NRP places the pod on any GPU; this Triton's CUDA needs compute capability 7.5 or newer.
+    interlink.eu/remote-affinity: >-
+      {"nodeAffinity": {"requiredDuringSchedulingIgnoredDuringExecution": {"nodeSelectorTerms": [
+      {"matchExpressions": [{"key": "nvidia.com/gpu.compute.major", "operator": "Gt", "values": ["7"]}]},
+      {"matchExpressions": [{"key": "nvidia.com/gpu.compute.major", "operator": "In", "values": ["7"]},
+      {"key": "nvidia.com/gpu.compute.minor", "operator": "Gt", "values": ["4"]}]}]}}}
   service:
     labels:
       scrape_metrics: "true"

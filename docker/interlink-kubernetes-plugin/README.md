@@ -1,7 +1,7 @@
 # interLink Kubernetes plugin (Purdue)
 
 Site image for the [interlink-kubernetes-plugin](https://github.com/interlink-hq/interlink-kubernetes-plugin)
-sidecar: the upstream `1.2.0` image plus two patches.
+sidecar: the upstream `1.2.0` image plus three patches.
 
 - `ensure-namespace.patch` adds an `[offloading] ensure_namespace` option.
   Upstream lists namespaces at cluster scope before every pod create;
@@ -15,6 +15,12 @@ sidecar: the upstream `1.2.0` image plus two patches.
   sidecar that runs that command, unprivileged, so the pod's ports reach its
   shadow pod in the local cluster. Upstream runs no tunnel client, and its full
   mesh needs privileged pods on both clusters.
+- `remote-placement.patch` places and restarts the remote pod. The
+  virtual kubelet sends the plugin no affinity, node selector or
+  tolerations, so a pod's `interlink.eu/remote-affinity` annotation — a JSON
+  core/v1 `Affinity` — becomes the remote pod's affinity, and the local
+  scheduler never sees it. An `[offloading] restart_policy` option overrides
+  every remote pod's restart policy.
 
 ## Files
 
@@ -24,6 +30,7 @@ sidecar: the upstream `1.2.0` image plus two patches.
 | `Dockerfile` | applies the patches to the source shipped in the upstream image |
 | `ensure-namespace.patch` | adds `[offloading] ensure_namespace` (default on, upstream behavior) |
 | `wstunnel-client.patch` | adds `[wstunnel] client_image` (default unset: no sidecar, upstream behavior) |
+| `remote-placement.patch` | adds `interlink.eu/remote-affinity` and `[offloading] restart_policy` (default unset: the pod's own policy) |
 
 ## Bumping the plugin
 
