@@ -12,6 +12,7 @@ suite covers what the chart itself cannot see.
 """
 
 import configparser
+import json
 import re
 from pathlib import Path
 
@@ -460,6 +461,46 @@ def test_supersonic_on_a_tunnel_node_gets_a_unique_shadow(interlink_clusters):
         annotations = server.get("annotations", {})
         assert annotations.get("interlink.eu/shadow-same-ns") == "true", values_file
     assert checked == tunnel_nodes, "a tunnelled node runs no SuperSONIC release"
+
+
+def test_kubernetes_remote_pods_never_restart_in_place(kubernetes_clusters):
+    """The virtual kubelet reports a remote restart as a failed local pod,
+    whose controller makes a replacement while the restarted remote pod keeps
+    its GPU."""
+    for cluster, app in kubernetes_clusters.items():
+        policy = _plugin_ini(app).get("offloading", "restart_policy", fallback="")
+        assert policy == "Never", f"{cluster}: restart_policy={policy!r}"
+
+
+def test_remote_affinity_annotations_are_node_affinity_json(interlink_clusters):
+    """The plugin loads the annotation as a core/v1 Affinity; malformed JSON
+    fails every pod create, and an unknown key is silently dropped."""
+    nodes = {
+        app["values"]["nodeName"]
+        for app in interlink_clusters.values()
+        if _backend(app) == "kubernetes"
+    }
+    checked = 0
+    for values_file in sorted((REPO / "apps").glob("**/values.yaml")):
+        values = yaml.safe_load(values_file.read_text()) or {}
+        server = values.get("inferenceServer", {}) if isinstance(values, dict) else {}
+        raw = (server.get("annotations") or {}).get("interlink.eu/remote-affinity")
+        if raw is None:
+            continue
+        node = (server.get("nodeSelector") or {}).get("kubernetes.io/hostname")
+        assert node in nodes, f"{values_file}: remote affinity off a Kubernetes node"
+        affinity = json.loads(raw)
+        assert set(affinity) <= {"nodeAffinity", "podAffinity", "podAntiAffinity"}
+        terms = affinity["nodeAffinity"][
+            "requiredDuringSchedulingIgnoredDuringExecution"
+        ]["nodeSelectorTerms"]
+        for term in terms:
+            for expr in term["matchExpressions"]:
+                assert set(expr) == {"key", "operator", "values"}, values_file
+                if expr["operator"] in ("Gt", "Lt"):
+                    assert len(expr["values"]) == 1 and expr["values"][0].isdigit()
+        checked += 1
+    assert checked, "no release carries interlink.eu/remote-affinity"
 
 
 def test_kubernetes_nodes_have_no_full_mesh(kubernetes_clusters):

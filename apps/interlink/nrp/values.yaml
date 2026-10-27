@@ -11,8 +11,7 @@ interlink:
 
 plugin:
   enabled: true
-  # Site build (docker/interlink-kubernetes-plugin): upstream 1.2.0 plus the
-  # ensure-namespace patch, for the namespaced-only RBAC NRP grants.
+  # Site build (docker/interlink-kubernetes-plugin): upstream 1.2.0 plus the site patches.
   image: "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-kubernetes-plugin:1.2.0"
   address: "http://0.0.0.0"
   port: 4000
@@ -58,6 +57,9 @@ plugin:
     # NRP grants namespaced RBAC only; the offloading namespace is created out
     # of band, and the plugin skips its cluster-scope namespace list.
     ensure_namespace=False
+    # The virtual kubelet cannot follow an in-place restart: the local pod
+    # goes Failed while the remote one restarts, holding its GPU.
+    restart_policy=Never
 
     [mesh]
     init_container=True

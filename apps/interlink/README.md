@@ -42,7 +42,10 @@ tolerations:
 Slurm submission options come from pod annotations
 (`slurm-job.vk.io/flags`, `slurm-job.vk.io/singularity-options`). On
 interlink-nrp, GPU pods request `nvidia.com/gpu`, which the node advertises;
-NRP places them on any free GPU.
+NRP places them on any free GPU unless the pod's
+`interlink.eu/remote-affinity` annotation narrows it, on NRP's
+`nvidia.com/gpu.*` node labels. Remote pods never restart in place: one that
+exits leaves its local pod failed, and its controller makes a new one.
 
 On interlink-nrp only `emptyDir`, ConfigMap, Secret and PersistentVolumeClaim
 volumes reach the remote pod; every other volume and its mounts are dropped. A
