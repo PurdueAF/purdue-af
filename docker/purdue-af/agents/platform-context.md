@@ -203,14 +203,15 @@ At most one active Dask Gateway cluster per user; creating another requires
 stopping the existing one. `Gateway()` needs no arguments:
 `DASK_GATEWAY__ADDRESS` and `DASK_GATEWAY__PROXY_ADDRESS` are preset.
 
-Each user whose session holds no GPU has one Ray cluster, with GPUs of its own
+Each job submitted with `JobSubmissionClient("http://ray-train-gateway:8265")`
+from `ray.job_submission` runs on a Ray cluster of its own, with GPUs of its own
 — 5 GB A100 slices and 16 GB T4s, on worker pods with one GPU each by default,
-so nothing that asks for more GPUs at once than one worker has ever starts. From a session that holds a GPU, submissions are
-refused: train on the session's GPU. It starts when a job is submitted with
-`JobSubmissionClient("http://ray-train-gateway:8265")` from `ray.job_submission`
-— `RAY_AUTH_MODE` and `RAY_AUTH_TOKEN` are preset, so it needs no credentials —
-only while GPUs are free, and is removed once idle, with the
-records and logs of its jobs. The client's `headers` set its shape: `af-max-workers` (a
+so nothing that asks for more GPUs at once than one worker has ever starts.
+`RAY_AUTH_MODE` and `RAY_AUTH_TOKEN` are preset, so it needs no credentials.
+From a session that holds a GPU, submissions are refused: train on the
+session's GPU. A job's cluster starts only while its GPUs are free, and is
+removed some minutes after the job ends, with the job's logs; its status stays
+some days. The client's `headers` set its shape: `af-max-workers` (a
 number as a string, default `"1"`: the cluster starts with as many of them as have
 free GPUs, and its pods read the number from `AF_MAX_WORKERS`) or `af-n-workers` (an
 exact number: the cluster starts only while the GPUs of them all are free),
@@ -220,8 +221,8 @@ being T4s only), `af-min-gpu-memory-gb` (GB; above `"5"` means T4s only),
 default `"8"` and `"32"`) and `af-env` (an environment's path, default the
 global one); any other `af-` header is refused with the list of these. That
 environment must sit on storage the cluster sees and have the same Python and
-Ray as the submitter. Submitting with other headers replaces an idle cluster
-and is refused while the cluster runs something. The cluster has no `/home`:
+Ray as the submitter. Each job runs with the headers it was submitted with.
+A job's cluster has no `/home`:
 ship code with `runtime_env={"working_dir": "."}`, write results to `/work`, and
 give Ray Train and Ray Tune a `storage_path` on `/work`. Every worker past the
 first can be taken back at any time and returns when a GPU is free, so

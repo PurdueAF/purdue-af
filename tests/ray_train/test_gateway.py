@@ -265,6 +265,7 @@ class FakeKube:
                 return web.json_response({"message": "not found"}, status=404)
             annotations = self.jobs[name]["metadata"].setdefault("annotations", {})
             annotations.update(patch["metadata"]["annotations"])
+            self.jobs[name]["spec"].update(patch.get("spec", {}))
             return web.json_response(self.jobs[name])
 
         async def delete_job(request):
@@ -1997,6 +1998,18 @@ async def test_a_job_takes_the_submission_id_its_client_names(env):
     status, reason, _ = await job_call(env, "POST", "/api/jobs/", body)
     assert status == 409
     assert "my-job" in reason
+
+
+async def test_a_job_whose_code_was_uploaded_first_takes_the_id_its_client_names(
+    env,
+):
+    await job_call(env, "PUT", "/api/packages/gcs/_ray_pkg_1.zip", b"zip")
+    assert "jobId" not in rayjob(env)["spec"]
+    body = json.dumps({"entrypoint": "python train.py", "submission_id": "my-job"})
+    status, _, answer = await job_call(env, "POST", "/api/jobs/", body)
+    assert (status, json.loads(answer)) == (200, {"submission_id": "my-job"})
+    assert rayjob(env)["spec"]["jobId"] == "my-job"
+    assert json.loads(env.heads.seen[-1][4])["submission_id"] == "my-job"
 
 
 async def test_a_submission_that_is_no_json_object_is_refused(env):

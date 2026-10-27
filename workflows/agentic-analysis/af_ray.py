@@ -14,10 +14,10 @@ ADDRESS = "http://ray-train-gateway:8265"
 
 
 def client(**settings: object) -> Any:
-    """A Ray JobSubmissionClient of the analysis's Ray cluster. Each keyword is
-    one of the cluster's settings, its name without `af-` and with `_` for `-`:
-    `max_workers=4` is `af-max-workers: "4"`. The cluster runs this
-    environment unless `env` names another."""
+    """A Ray JobSubmissionClient whose jobs each run on a Ray cluster of their own.
+    Each keyword is one of the clusters' settings, its name without `af-` and
+    with `_` for `-`: `max_workers=4` is `af-max-workers: "4"`. The clusters run
+    this environment unless `env` names another."""
     from ray.job_submission import JobSubmissionClient
 
     # Explicit: Ray reads RAY_AUTH_TOKEN once per process, maybe before this call.

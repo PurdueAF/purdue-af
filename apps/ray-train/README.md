@@ -15,8 +15,10 @@ gateway submits the job to that cluster's head, and KubeRay removes the
 cluster `idleTimeoutSeconds` after the job ends. A call about a job reaches its
 cluster while that is up, and its RayJob's record of it afterwards, until
 `jobRecordSeconds` after it ended; a job whose workers do not all start within
-`provisionTimeoutSeconds` is stopped. The submission ID is the RayJob's, the one
-the client named or one the gateway makes. A
+`provisionTimeoutSeconds` is stopped. The RayJob is created at the first call
+of a submission, a package upload or the submission itself, and waits; the
+gateway then sets its `jobId` to the submission ID the client named, or one it
+makes, and KubeRay follows the job of that ID. A
 worker's GPU is a 5 GB A100 slice or a T4, whichever is free, slices first;
 a call that asks for more GPU memory than a slice has, or for two GPUs a
 worker, gets T4s only. A call

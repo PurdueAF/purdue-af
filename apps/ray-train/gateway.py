@@ -317,7 +317,6 @@ class Waiting:
 
     name: str
     head: str
-    submission: str
     shape: Shape
     since: float
 
@@ -626,11 +625,9 @@ def new_submission() -> str:
     )
 
 
-def job_name(user: User, submission: str) -> str:
-    """The RayJob of a user's submission: short enough for the cluster KubeRay names after it."""
-    digest = hashlib.sha256(
-        f"{user.owner}/{user.cluster}/{submission}".encode()
-    ).hexdigest()
+def job_name(user: User, key: str) -> str:
+    """A RayJob of the user's, made before its job is known: short enough for the cluster KubeRay names after it."""
+    digest = hashlib.sha256(f"{user.owner}/{user.cluster}/{key}".encode()).hexdigest()
     return f"ray-job-{digest[:16]}"
 
 
@@ -640,10 +637,10 @@ def build_job(
     shape: Shape,
     mix: dict[str, int],
     name: str,
-    submission: str,
 ) -> dict[str, Any]:
-    """A RayJob whose cluster is the one build_cluster makes, which waits for the
-    gateway to submit `submission` and goes once the job ends and its logs were kept for the idle timeout."""
+    """A RayJob whose cluster is the one build_cluster makes, which waits until
+    the gateway sets the jobId of the job it submits, and goes once that job
+    ends and its logs were kept for the idle timeout."""
     cluster = build_cluster(template, user, shape, mix)
     cluster["spec"]["authOptions"]["secretName"] = name
     metadata = cluster["metadata"]
@@ -658,7 +655,6 @@ def build_job(
         },
         "spec": {
             "submissionMode": "InteractiveMode",
-            "jobId": submission,
             "shutdownAfterJobFinishes": True,
             "ttlSecondsAfterFinished": int(IDLE_TIMEOUT_S),
             "rayClusterSpec": cluster["spec"],
@@ -1108,6 +1104,13 @@ class Gateway:
                     "A job submission is a JSON object.",
                 )
         async with self.submitting[user.cluster]:
+            if submitted is not None:
+                asked = str(submitted.get("submission_id") or new_submission())
+                if any(j["spec"]["jobId"] == asked for j in await self.jobs(user)):
+                    raise Refused(
+                        grpc.StatusCode.FAILED_PRECONDITION,
+                        f"You have a job {asked} already: submit it under another ID, or without one.",
+                    )
             waiting = self.waiting.pop(user.cluster, None)
             if waiting is not None and (
                 waiting.shape != shape
@@ -1116,39 +1119,32 @@ class Gateway:
                 # The reaper removes what no submission came to.
                 waiting = None
             if waiting is None:
-                asked = (submitted or {}).get("submission_id")
-                waiting = await self.start_job(
-                    user, shape, str(asked) if asked else new_submission()
-                )
+                waiting = await self.start_job(user, shape)
             if submitted is None:
                 self.waiting[user.cluster] = waiting
-        if submitted is None:
-            return waiting.head, waiting.name, None
-        # The job is the one its RayJob waits for, whatever ID the client chose.
-        submitted["submission_id"] = waiting.submission
-        entrypoint = str(submitted.get("entrypoint", ""))[:4096]
-        await self.kube(
-            "PATCH",
-            f"{RAYJOBS}/{waiting.name}",
-            {"metadata": {"annotations": {ENTRYPOINT_ANNOTATION: entrypoint}}},
-        )
+                return waiting.head, waiting.name, None
+            # KubeRay follows the job whose jobId is set on a RayJob that waits for one.
+            submitted["submission_id"] = asked
+            entrypoint = str(submitted.get("entrypoint", ""))[:4096]
+            await self.kube(
+                "PATCH",
+                f"{RAYJOBS}/{waiting.name}",
+                {
+                    "metadata": {"annotations": {ENTRYPOINT_ANNOTATION: entrypoint}},
+                    "spec": {"jobId": asked},
+                },
+            )
         return waiting.head, waiting.name, json.dumps(submitted).encode()
 
-    async def start_job(self, user: User, shape: Shape, submission: str) -> Waiting:
-        """Create a RayJob for `submission` and return once its head answers."""
-        name = job_name(user, submission)
+    async def start_job(self, user: User, shape: Shape) -> Waiting:
+        """Create a RayJob that waits for its job, and return once its head answers."""
+        name = job_name(user, new_submission())
         mix = await self.admit(user, shape, name=name)
         status, created = await self.kube(
             "POST",
             RAYJOBS,
-            build_job(cluster_template(user), user, shape, mix, name, submission),
+            build_job(cluster_template(user), user, shape, mix, name),
         )
-        if status == 409:
-            self.grants.pop(name, None)
-            raise Refused(
-                grpc.StatusCode.FAILED_PRECONDITION,
-                f"You have a job {submission} already: submit it under another ID, or without one.",
-            )
         if status != 201:
             self.grants.pop(name, None)
             raise Refused(
@@ -1192,7 +1188,7 @@ class Gateway:
                 "DELETE", f"{RAYJOBS}/{name}", {"propagationPolicy": "Background"}
             )
             raise
-        return Waiting(name, head, submission, shape, time.monotonic())
+        return Waiting(name, head, shape, time.monotonic())
 
     async def rayjob(self, name: str) -> dict[str, Any] | None:
         status, body = await self.kube("GET", f"{RAYJOBS}/{name}")
@@ -1209,8 +1205,11 @@ class Gateway:
         self, user: User, submission: str
     ) -> tuple[dict[str, Any], str | None] | None:
         """The user's RayJob of `submission`, and its cluster while that is up; None if they have none of it."""
-        job = await self.rayjob(job_name(user, submission))
-        if job is None or not owns(user, job):
+        job = next(
+            (j for j in await self.jobs(user) if j["spec"]["jobId"] == submission),
+            None,
+        )
+        if job is None:
             return None
         head = (job.get("status") or {}).get("rayClusterName")
         if head:
@@ -1227,7 +1226,12 @@ class Gateway:
                 grpc.StatusCode.UNAVAILABLE,
                 f"Kubernetes answered HTTP {status} for your Ray jobs.",
             )
-        return [job for job in listing.get("items", []) if owns(user, job)]
+        # One that waits for its job yet is none of the user's jobs.
+        return [
+            job
+            for job in listing.get("items", [])
+            if owns(user, job) and job["spec"].get("jobId")
+        ]
 
     async def recorded(
         self, job: dict[str, Any], method: str, rest: str
