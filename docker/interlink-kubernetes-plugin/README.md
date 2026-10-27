@@ -1,7 +1,7 @@
 # interLink Kubernetes plugin (Purdue)
 
 Site image for the [interlink-kubernetes-plugin](https://github.com/interlink-hq/interlink-kubernetes-plugin)
-sidecar: the upstream `1.2.0` image plus three patches.
+sidecar: the upstream `1.2.0` image plus four patches.
 
 - `ensure-namespace.patch` adds an `[offloading] ensure_namespace` option.
   Upstream lists namespaces at cluster scope before every pod create;
@@ -21,6 +21,13 @@ sidecar: the upstream `1.2.0` image plus three patches.
   core/v1 `Affinity` — becomes the remote pod's affinity, and the local
   scheduler never sees it. An `[offloading] restart_policy` option overrides
   every remote pod's restart policy.
+- `remote-readiness.patch` gives the remote pod its containers' probes and
+  holds the local pod's Ready until the remote readiness probe passes. The
+  interLink SDK the plugin is built on drops `startupProbe`, `livenessProbe`
+  and `readinessProbe`, and the virtual kubelet marks every running container
+  ready, so the patch keeps the probes and reports a running, unready remote
+  container as waiting. Only the first Ready waits: the virtual kubelet never
+  sets a Running pod unready again.
 
 ## Files
 
@@ -31,6 +38,7 @@ sidecar: the upstream `1.2.0` image plus three patches.
 | `ensure-namespace.patch` | adds `[offloading] ensure_namespace` (default on, upstream behavior) |
 | `wstunnel-client.patch` | adds `[wstunnel] client_image` (default unset: no sidecar, upstream behavior) |
 | `remote-placement.patch` | adds `interlink.eu/remote-affinity` and `[offloading] restart_policy` (default unset: the pod's own policy) |
+| `remote-readiness.patch` | keeps the probes and reports an unready container as waiting; patches the installed interLink SDK too, so it applies from `/` |
 
 ## Bumping the plugin
 
