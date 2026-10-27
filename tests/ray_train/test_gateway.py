@@ -2228,6 +2228,93 @@ async def test_without_prometheus_a_job_counts_against_the_budget_once(env):
     assert status == 429
 
 
+async def test_a_submission_that_is_no_json_is_refused(env):
+    status, _, _ = await job_call(env, "POST", "/api/jobs/", b"not json")
+    assert status == 400
+    assert env.kube.jobs == {}
+
+
+async def test_a_rayjob_kubernetes_refuses_is_reported_and_frees_its_grant(env):
+    env.kube.reject_create = True
+    status, reason, _ = await submit(env)
+    assert status == 503
+    assert "invalid spec" in reason
+    assert env.gateway.grants == {}
+
+
+async def test_a_job_whose_token_secret_is_refused_is_removed(env):
+    env.kube.reject_secret = True
+    status, reason, _ = await submit(env)
+    assert status == 503
+    assert "token" in reason
+    assert env.kube.jobs == {}
+
+
+async def test_a_job_whose_head_does_not_start_in_time_is_removed(env, monkeypatch):
+    monkeypatch.setattr(gw, "START_TIMEOUT_S", 0.2)
+    env.heads.up = False
+    status, reason, _ = await submit(env)
+    assert status == 503
+    assert "did not start in time" in reason
+    assert env.kube.jobs == {}
+
+
+async def test_a_job_on_a_ray_without_token_authentication_is_removed(env):
+    env.heads.open = True
+    status, reason, _ = await submit(env)
+    assert status == 400
+    assert "does not enforce" in reason
+    assert env.kube.jobs == {}
+
+
+async def test_a_failed_reading_of_jobs_is_reported(env):
+    env.kube.fail_list = True
+    assert (await job_call(env))[0] == 503
+    env.kube.fail_list = False
+    await submitted(env)
+    env.kube.fail_get = True
+    assert (await submit(env))[0] == 503
+
+
+async def test_a_job_submitted_to_the_users_own_cluster_is_still_reached(env):
+    assert await call(env) == [b"echo:ping"]
+    env.heads.jobs["ray-train-user-a"] = [running_job("raysubmit_old")]
+    status, _, body = await job_call(env, path="/api/jobs/raysubmit_old")
+    assert (status, json.loads(body)["status"]) == (200, "RUNNING")
+
+
+async def test_other_dashboard_calls_reach_the_users_own_cluster(env):
+    assert await call(env) == [b"echo:ping"]
+    path = "/api/v0/tasks?filter_keys=state&filter_predicates=%3D&filter_values=RUNNING&limit=1"
+    status, _, body = await job_call(env, path=path)
+    assert (status, json.loads(body)["data"]["result"]["total"]) == (200, 0)
+
+
+async def test_the_job_reaper_waits_out_a_failed_listing(env, caplog):
+    await submitted(env)
+    env.kube.fail_list = True
+    with caplog.at_level(logging.WARNING, logger="ray-train-gateway"):
+        await env.gateway.reap_jobs()
+    assert "listing Ray jobs: HTTP 500" in caplog.text
+    assert len(env.kube.jobs) == 1
+
+
+async def test_the_job_reaper_passes_over_a_job_being_deleted_and_outlives_a_bad_one(
+    env, caplog
+):
+    first = await submitted(env)
+    second = await submitted(env)
+    long_ago = datetime.fromtimestamp(time.time() - gw.JOB_RECORD_S - 1, timezone.utc)
+    for submission in (first, second):
+        ended(env, submission, at=long_ago)
+    rayjob(env, first)["metadata"]["deletionTimestamp"] = "now"
+    del rayjob(env, second)["metadata"]["creationTimestamp"]
+    with caplog.at_level(logging.ERROR, logger="ray-train-gateway"):
+        await env.gateway.reap_jobs()
+    assert len(env.kube.jobs) == 2
+    assert f"checking {rayjob(env, second)['metadata']['name']}" in caplog.text
+
+
 async def tail(env, submission):
     """JobSubmissionClient.tail_job_logs, as the lines it yields."""
     lines = []
