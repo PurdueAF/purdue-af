@@ -94,10 +94,10 @@ virtualNode:
     enableTunnel: true
     tunnelImage: "ghcr.io/erebe/wstunnel:v11.1.0"
     wildcardDNS: "geddes.rcac.purdue.edu"
-    # No wildcard DNS: the client dials the ingress by a name that resolves and
-    # sends the shadow's hostname as Host. Runs in the foreground as the sidecar.
-    wstunnelCommand: 'exec /home/app/wstunnel client --log-lvl WARN --http-upgrade-path-prefix %[1]s %[2]s -H "Host: %[3]s" ws://cms.geddes.rcac.purdue.edu:80'
-    # The chart's nginx template with the Geddes ingress class and a pinned image.
+    # The client dials apps/interlink/traefik's pinned address and sends the
+    # shadow's hostname as Host. Runs in the foreground as the sidecar.
+    wstunnelCommand: 'exec /home/app/wstunnel client --log-lvl WARN --http-upgrade-path-prefix %[1]s %[2]s -H "Host: %[3]s" ws://128.211.160.122:80'
+    # The chart's nginx template on apps/interlink/traefik and a pinned image.
     customTemplate: |
       apiVersion: apps/v1
       kind: Deployment
@@ -163,10 +163,8 @@ virtualNode:
         name: {{.Name}}
         namespace: {{.Namespace}}
         annotations:
-          nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-          nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+          kubernetes.io/ingress.class: interlink-tunnel
       spec:
-        ingressClassName: public
         rules:
         - host: {{.Name}}-{{.Namespace}}.{{.WildcardDNS}}
           http:

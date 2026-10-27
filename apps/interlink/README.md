@@ -72,9 +72,11 @@ Nothing on either side runs privileged.
 
 On both nodes:
 
-- `geddes.rcac.purdue.edu` has no wildcard DNS, so the client dials
-  `cms.geddes.rcac.purdue.edu` and sends the shadow's hostname as `Host`;
-  the shadow Ingress is of the `public` class.
+- The shadow Ingress is served by [`traefik/`](traefik/values.yaml), not the
+  shared ingress: an nginx reload closes open connections about 240 s later,
+  and every tunnel is one long-lived connection. `geddes.rcac.purdue.edu` has
+  no wildcard DNS, so the client dials Traefik's pinned address and sends the
+  shadow's hostname as `Host`.
 - A pod sets `interlink.eu/shadow-same-ns: "true"` so its shadow lands in
   `cms`; without it the virtual kubelet uses a `cms-wstunnel` namespace.
 - The shadow's hostname is built from the pod's name, truncated past 63
@@ -85,10 +87,10 @@ On both nodes:
   shadow pod's IP; the pod annotation
   `interlink.virtual-kubelet.io/wstunnel-timeout` raises it.
 
-[`traefik/`](traefik/values.yaml) is a Traefik in `cms` on a
-`geddes-public-pool` address, for the tunnels' shadow Ingresses. It serves only
-Ingresses in `cms` annotated `kubernetes.io/ingress.class: interlink-tunnel`,
-from a namespaced Role.
+[`traefik/`](traefik/values.yaml) is a Traefik in `cms` on a pinned
+`geddes-public-pool` address. It serves only Ingresses in `cms` annotated
+`kubernetes.io/ingress.class: interlink-tunnel`, from a namespaced Role, and
+applies route changes without closing open connections.
 
 The facility's NRP S3 keys, endpoint and bucket are the `nrp-s3` Secret,
 SOPS-encrypted in [`nrp/secret-s3.yaml`](nrp/secret-s3.yaml). The keys belong

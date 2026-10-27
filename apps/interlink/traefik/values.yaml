@@ -39,9 +39,15 @@ ports:
     expose:
       default: false
 
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
 service:
   annotations:
     metallb.universe.tf/address-pool: geddes-public-pool
+    # Both nodes' wstunnelCommand dial this address.
+    metallb.universe.tf/loadBalancerIPs: 128.211.160.122
 
 nodeSelector:
   cms-af-prod: "true"
