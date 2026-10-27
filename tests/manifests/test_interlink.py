@@ -414,9 +414,16 @@ def test_tunnel_nodes_share_one_shadow_template(interlink_clusters):
     assert len(templates) == 1, "shadow templates differ"
 
 
-def test_tunnel_ingress_uses_the_cluster_class(interlink_clusters):
-    """Geddes ingresses are served by the `public` class; a shadow Ingress of
-    another class gets no route, and the client's upgrade a 404."""
+def _tunnel_traefik():
+    return yaml.safe_load((INTERLINK / "traefik" / "values.yaml").read_text())
+
+
+def test_tunnel_ingress_is_served_by_the_tunnel_traefik(interlink_clusters):
+    """The shared nginx ingress closes open connections about 240 s after any
+    reload; the shadow Ingress belongs to apps/interlink/traefik instead.
+    Namespaced, that Traefik ignores spec.ingressClassName and matches the
+    annotation, and nginx must not claim the Ingress."""
+    tunnel_class = _tunnel_traefik()["providers"]["kubernetesIngress"]["ingressClass"]
     for cluster, _, network in _tunnel_nodes(interlink_clusters):
         parts = network["customTemplate"].split("\n---\n")
         ingresses = [
@@ -426,7 +433,22 @@ def test_tunnel_ingress_uses_the_cluster_class(interlink_clusters):
         ]
         assert ingresses, f"{cluster}: no shadow Ingress"
         for ingress in ingresses:
-            assert ingress["spec"].get("ingressClassName") == "public", cluster
+            annotations = ingress["metadata"].get("annotations") or {}
+            assert annotations.get("kubernetes.io/ingress.class") == tunnel_class, (
+                cluster
+            )
+            assert "ingressClassName" not in ingress["spec"], cluster
+
+
+def test_tunnel_client_dials_the_pinned_traefik_address(interlink_clusters):
+    """No DNS name points at the Traefik; the client dials its address, which
+    MetalLB holds only while the Service pins it."""
+    annotations = _tunnel_traefik()["service"]["annotations"]
+    address = annotations["metallb.universe.tf/loadBalancerIPs"]
+    assert annotations["metallb.universe.tf/address-pool"] == "geddes-public-pool"
+    for cluster, _, network in _tunnel_nodes(interlink_clusters):
+        targets = re.findall(r"wss?://([^\s:/]+)", network.get("wstunnelCommand", ""))
+        assert targets == [address], f"{cluster}: dials {targets}"
 
 
 # A pod's name becomes "wstunnel-<pod>-<ns>", then "<that>-<ns>" as the
