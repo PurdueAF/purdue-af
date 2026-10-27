@@ -298,6 +298,12 @@
       automerge: false,
     },
     {
+      // Merged by hand: no CI check runs the agentic-analysis runner and plugin on OpenCode.
+      matchFileNames: ['docker/agentic-analysis/**'],
+      matchPackageNames: ['opencode-ai'],
+      automerge: false,
+    },
+    {
       matchManagers: ['flux'],
       addLabels: ['helm'],
     },

@@ -3,14 +3,18 @@ wiring to apps/agentic-analysis, and the analyses beside it. Git, pixi, the down
 agent are replaced per test."""
 
 import fcntl
+import http.server
 import io
 import json
 import os
 import re
+import shutil
+import stat
 import subprocess
 import sys
 import tarfile
 import threading
+import time
 import types
 from pathlib import Path
 
@@ -81,6 +85,9 @@ runner, STUBS = _load()
 profiling = runner.af_profiling
 clusters = runner.af_dask
 gpus = runner.af_ray
+llm = load_script(APP / "llm_proxy.py", "llm_proxy_for_the_runner")
+# What the proxy's /config serves.
+ROLES = llm.Proxy(llm.load(APP / "models.toml"), "key", "token").config_view()
 
 ANALYSIS = runner.Analysis(
     name="zz",
@@ -92,6 +99,13 @@ ANALYSIS = runner.Analysis(
 )
 
 
+@pytest.fixture(autouse=True)
+def user(tmp_path, monkeypatch):
+    """A $HOME of the test's own, which the runner moves OpenCode's configuration out of."""
+    monkeypatch.setenv("HOME", str(tmp_path / "user"))
+    return tmp_path / "user"
+
+
 @pytest.fixture
 def root(tmp_path, monkeypatch):
     monkeypatch.setattr(runner, "ROOT", tmp_path)
@@ -100,6 +114,11 @@ def root(tmp_path, monkeypatch):
 
 def docs(path):
     return [d for d in yaml.safe_load_all(path.read_text()) if d]
+
+
+def _variables(container):
+    """A container's environment: each variable's value, or where it comes from."""
+    return {v["name"]: v.get("value", v.get("valueFrom")) for v in container["env"]}
 
 
 # --- wiring ---
@@ -190,7 +209,7 @@ def test_task_pods_hold_their_accounts_token_where_the_helpers_read_it():
     (account,) = docs(APP / "account.yaml")
     pod = template["template"]["spec"]
     (container,) = pod["containers"]
-    env = {v["name"]: v["value"] for v in container["env"]}
+    env = _variables(container)
     mounts = {m["name"]: m for m in container["volumeMounts"]}
     assert secret["metadata"]["name"] == f"{account['name']}-account"
     (name,) = [
@@ -206,8 +225,42 @@ def test_task_pods_hold_their_accounts_token_where_the_helpers_read_it():
         next(v for v in pod["volumes"] if v["name"] == name)["secret"]["defaultMode"]
         & 0o004
     )
-    # A Hub token in the hand-made Secret never reaches the task.
-    assert env["JUPYTERHUB_API_TOKEN"] == ""
+
+
+def test_task_pods_reach_the_llm_proxy_with_the_token_it_takes():
+    (template,) = docs(APP / "podtemplate.yaml")
+    deployment, service = docs(APP / "llm-proxy.yaml")
+    (secret,) = docs(APP / "secret-llm-proxy.yaml")
+    env = _variables(template["template"]["spec"]["containers"][0])
+    (port,) = service["spec"]["ports"]
+    (proxy,) = deployment["spec"]["template"]["spec"]["containers"]
+    assert env[runner.PROXY] == f"http://{service['metadata']['name']}:{port['port']}"
+    taken = _variables(proxy)["LLM_PROXY_TOKEN"]["secretKeyRef"]
+    assert env[runner.TOKEN] == {"secretKeyRef": taken}
+    assert taken["name"] == secret["metadata"]["name"]
+    assert taken["key"] in secret["stringData"]
+
+
+def test_the_agents_run_on_roles_the_proxy_serves():
+    wanted = {"orchestrator", "compaction", *(r for r, _ in runner.AGENTS.values())}
+    assert wanted <= ROLES.keys()
+
+
+def test_opencode_waits_out_the_proxys_keepalives_and_holds():
+    """The proxy keeps a held request alive with comments, then lets it go."""
+    settings = llm.load(APP / "models.toml").settings
+    assert runner.WAITS["chunkTimeout"] > settings.keepalive_seconds * 1000
+    assert runner.WAITS["timeout"] > settings.hold_hours * 3_600_000
+
+
+def test_the_plugin_ships_with_the_task_and_needs_no_package():
+    """OpenCode installs no npm package into its read-only configuration."""
+    assert runner.env.options["include"] == (runner.PLUGIN.name,)
+    assert runner.PLUGIN.parent == WORKFLOW
+    imported = re.findall(
+        r'^import .* from "([^"]+)";$', runner.PLUGIN.read_text(), re.M
+    )
+    assert imported and all(name.startswith("node:") for name in imported)
 
 
 def test_the_workspace_job_and_the_browser_open_the_volume_the_app_declares():
@@ -245,7 +298,7 @@ def _found(document, key):
 def test_task_pods_send_profiles_where_the_sessions_do_as_the_workflow():
     (template,) = docs(APP / "podtemplate.yaml")
     container = template["template"]["spec"]["containers"][0]
-    env = {variable["name"]: variable["value"] for variable in container["env"]}
+    env = _variables(container)
     hub = yaml.safe_load((REPO / "apps/jupyterhub/jupyterhub/values.yaml").read_text())
     assert env["PYROSCOPE_SERVER"] == _found(hub, "PYROSCOPE_SERVER")
     assert env["PYROSCOPE_APP"] == runner.NAME
@@ -256,7 +309,7 @@ def test_task_pods_reach_the_sessions_gateway_from_a_pod_as_their_account():
     serves dashboards only through its Traefik."""
     (template,) = docs(APP / "podtemplate.yaml")
     container = template["template"]["spec"]["containers"][0]
-    env = {variable["name"]: variable["value"] for variable in container["env"]}
+    env = _variables(container)
     spawner = (
         REPO / "apps/jupyterhub/jupyterhub/extraFiles/custom-spawner.py"
     ).read_text()
@@ -290,7 +343,7 @@ def test_task_pods_hold_the_facilitys_proxy_and_the_certificates_to_use_it():
     (template,) = docs(APP / "podtemplate.yaml")
     pod = template["template"]["spec"]
     (container,) = pod["containers"]
-    env = {variable["name"]: variable["value"] for variable in container["env"]}
+    env = _variables(container)
     mounts = {m["name"]: m for m in container["volumeMounts"]}
     volumes = {v["name"]: v for v in pod["volumes"]}
     flux = yaml.safe_load((EXPERIMENTAL.parent / "flux-kustomization.yaml").read_text())
@@ -313,12 +366,6 @@ def test_task_pods_hold_the_facilitys_proxy_and_the_certificates_to_use_it():
     ]
     assert env["X509_CERT_DIR"].startswith(f"{mounts[cvmfs]['mountPath']}/")
     assert mounts[cvmfs]["readOnly"] and mounts[proxy]["readOnly"]
-
-
-def test_the_credentials_secret_is_optional_so_a_task_can_say_it_is_missing():
-    (template,) = docs(APP / "podtemplate.yaml")
-    (source,) = template["template"]["spec"]["containers"][0]["envFrom"]
-    assert source["secretRef"]["optional"] is True
 
 
 # --- the launcher ---
@@ -951,381 +998,840 @@ def test_the_ray_gateway_takes_the_settings_the_helper_sends():
     assert {"env", "max-workers", "gpus-per-worker"} <= settings
 
 
+# --- the agent's configuration ---
+
+
+@pytest.fixture
+def proxy(monkeypatch):
+    monkeypatch.setenv(runner.PROXY, "http://llm-proxy:8080")
+    monkeypatch.setenv(runner.TOKEN, "client token")
+    return "http://llm-proxy:8080"
+
+
+def test_opencode_is_configured_from_the_proxys_roles(proxy):
+    config = runner._config(ROLES, Path("/local/AGENTS.md"), Path("/ws/zz"))
+
+    af = config["provider"]["af"]
+    assert af["npm"] == "@ai-sdk/openai-compatible"
+    assert af["options"] == {
+        "baseURL": f"{proxy}/v1",
+        "apiKey": f"{{env:{runner.TOKEN}}}",
+        **runner.WAITS,
+    }
+    assert af["models"].keys() == ROLES.keys()
+    for name, role in ROLES.items():
+        model = af["models"][name]
+        # OpenCode compacts at context - output, and at most OUTPUT_MAX below it.
+        assert model["limit"]["context"] == role["context"]
+        assert model["limit"]["output"] == role["context"] - role["compact_at"]
+        assert 0 <= model["limit"]["output"] <= runner.OUTPUT_MAX
+        assert ("image" in model["modalities"]["input"]) == (role["images"] > 0)
+    agents = config["agent"]
+    assert agents["orchestrator"]["mode"] == "primary"
+    assert agents["orchestrator"]["model"] == "af/orchestrator"
+    spawns = agents["orchestrator"]["permission"]["task"]
+    assert list(spawns) == ["*", *runner.AGENTS] and spawns.pop("*") == "deny"
+    assert set(spawns.values()) == {"allow"}
+    for name, (role, description) in runner.AGENTS.items():
+        assert agents[name] == {
+            "mode": "subagent",
+            "model": f"af/{role}",
+            "description": description,
+            "permission": {"task": "deny"},
+        }
+    assert agents["compaction"] == {"model": "af/compaction"}
+    for builtin in ("build", "plan", "general", "explore", "title"):
+        assert agents[builtin] == {"disable": True}
+    assert config["default_agent"] == "orchestrator"
+    assert config["enabled_providers"] == ["af"]
+    # JFC's CLAUDE.md even beside an AGENTS.md, which OpenCode would load instead.
+    assert config["instructions"] == ["/local/AGENTS.md", "/ws/zz/CLAUDE.md"]
+    assert (config["snapshot"], config["share"], config["subagent_depth"]) == (
+        False,
+        "disabled",
+        1,
+    )
+    assert config["compaction"] == {"auto": True, "prune": True}
+
+
+def test_a_proxy_without_a_role_the_agents_need_stops_the_workspace(proxy):
+    fewer = {name: role for name, role in ROLES.items() if name != "bibtex"}
+    with pytest.raises(runner.flyte.errors.NonRecoverableError, match="bibtex"):
+        runner._config(fewer, Path("/local/AGENTS.md"), Path("/ws/zz"))
+
+
+@pytest.mark.parametrize("below", [-1, runner.OUTPUT_MAX + 1])
+def test_a_role_compacting_where_opencode_cannot_stops_the_workspace(proxy, below):
+    role = ROLES["executor"]
+    odd = {**ROLES, "executor": {**role, "compact_at": role["context"] - below}}
+    with pytest.raises(runner.flyte.errors.NonRecoverableError, match="executor"):
+        runner._config(odd, Path("/local/AGENTS.md"), Path("/ws/zz"))
+
+
+def _decides(rules, permission, path):
+    """OpenCode's verdict on a call: the last rule whose permission and
+    pattern match, with `*` matching anything, `/` included."""
+
+    def match(text, pattern):
+        return re.fullmatch(re.escape(pattern).replace(r"\*", ".*"), text, re.S)
+
+    verdict = "ask"
+    for key, value in rules.items():
+        for pattern, action in (
+            value if isinstance(value, dict) else {"*": value}
+        ).items():
+            if match(permission, key) and match(path, pattern):
+                verdict = action
+    return verdict
+
+
+def test_nothing_asks_and_opencodes_configuration_is_not_the_agents_to_write():
+    rules = runner.PERMISSION
+    assert next(iter(rules.items())) == ("*", "allow")
+    # A `task` rule here would let subagents start subagents.
+    assert "task" not in rules
+    for permission in ("bash", "read", "external_directory", "doom_loop", "webfetch"):
+        assert _decides(rules, permission, "/cvmfs/cms.cern.ch/x") == "allow"
+    assert _decides(rules, "question", "*") == "deny"
+    assert _decides(rules, "edit", "phase1_strategy/outputs/plan.md") == "allow"
+    for path in (
+        ".opencode/plugin/x.js",
+        "phase2/.opencode/agents/a.md",
+        "../../.opencode/opencode.json",
+        "opencode.json",
+        "phase3/opencode.jsonc",
+        "AGENTS.md",
+        "phase1_strategy/CONTEXT.md",
+    ):
+        assert _decides(rules, "edit", path) == "deny"
+
+
+@pytest.fixture
+def workspace(tmp_path):
+    home = tmp_path / "ws"
+    work = home / "jfc" / "analyses" / "zz"
+    work.mkdir(parents=True)
+    (home / "opencode").mkdir()
+    (work / "prompt.md").write_text("search for ZZ")
+    return work
+
+
+def test_setup_writes_opencodes_configuration_read_only_off_the_workspace(
+    tmp_path, workspace, proxy, user, monkeypatch
+):
+    for name in runner.XDG:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("XDG_CACHE_HOME", "/scratch/cache")
+    home = workspace.parents[2]
+    env = runner._setup(tmp_path / "local", ROLES, workspace, home)
+
+    config = Path(env["OPENCODE_CONFIG_DIR"])
+    assert config == Path(env["XDG_CONFIG_HOME"]) / "opencode"
+    assert config.is_relative_to(tmp_path / "local")
+    plugin_file = config / "plugin" / runner.PLUGIN.name
+    assert plugin_file.read_text() == runner.PLUGIN.read_text()
+    for directory in (config / "plugin", config, config.parent):
+        assert stat.S_IMODE(directory.stat().st_mode) == 0o555
+    facility, claude = json.loads(env["OPENCODE_CONFIG_CONTENT"])["instructions"]
+    # OpenCode's global AGENTS.md, so it loads no ~/.claude/CLAUDE.md.
+    assert Path(facility) == config / "AGENTS.md"
+    assert Path(claude) == workspace / "CLAUDE.md"
+    assert Path(facility).read_text() == runner.FACILITY.format(
+        cores=runner.CORES, hours=runner.COMMAND_HOURS, root=runner.ROOT
+    )
+    for file in (plugin_file, Path(facility)):
+        assert stat.S_IMODE(file.stat().st_mode) == 0o444
+    assert json.loads(env["OPENCODE_PERMISSION"]) == runner.PERMISSION
+    # The sessions stay with the workspace; the rest stays with the pod.
+    assert env["XDG_DATA_HOME"] == str(home / "opencode" / "data")
+    for name in ("XDG_CACHE_HOME", "XDG_STATE_HOME"):
+        assert Path(env[name]).is_relative_to(tmp_path / "local")
+    assert env["OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS"] == str(
+        runner.COMMAND_MINUTES * 60_000
+    )
+    plugin = json.loads(env["AF_PLUGIN"])
+    assert plugin["records"] == str(home / "opencode" / "records.jsonl")
+    assert plugin["seats"] == runner.SEATS
+    assert plugin["timeout"] == runner.COMMAND_HOURS * 3_600_000
+    assert plugin["images"] == {
+        "orchestrator": ROLES["orchestrator"]["images"],
+        **{name: ROLES[role]["images"] for name, (role, _) in runner.AGENTS.items()},
+    }
+    # The agents' commands keep the pod's own, writable, places.
+    assert plugin["env"] == {
+        "XDG_CONFIG_HOME": str(user / ".config"),
+        "XDG_DATA_HOME": str(user / ".local/share"),
+        "XDG_STATE_HOME": str(user / ".local/state"),
+        "XDG_CACHE_HOME": "/scratch/cache",
+    }
+    assert (env["AF_ANALYSIS"], env["AF_WORKSPACE"]) == ("zz", "ws")
+    # Either would hide the JFC CLAUDE.md files from the agents.
+    added = env.keys() - os.environ.keys()
+    assert not [name for name in added if name.startswith("OPENCODE_DISABLE_PROJECT")]
+    assert not [name for name in added if name.startswith("OPENCODE_DISABLE_CLAUDE")]
+
+
+def _retried(raised):
+    """Whether the task retries the failure pytest caught in `raised`."""
+    return not isinstance(raised.value, runner.flyte.errors.NonRecoverableError)
+
+
+def test_roles_are_asked_of_the_proxy_with_the_clients_token(monkeypatch):
+    class Proxy(http.server.BaseHTTPRequestHandler):
+        failing = 0
+
+        def log_message(self, *args):
+            pass
+
+        def do_GET(self):
+            allowed = self.headers["Authorization"] == "Bearer client token"
+            body = json.dumps(ROLES).encode() if allowed else b"{}"
+            ok = 200 if allowed and self.path == "/config" else 401
+            self.send_response(Proxy.failing or ok)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Proxy)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    monkeypatch.setenv(runner.PROXY, f"http://127.0.0.1:{server.server_port}")
+    monkeypatch.setenv(runner.TOKEN, "client token")
+    try:
+        assert runner._roles() == ROLES
+        Proxy.failing = 502
+        with pytest.raises(RuntimeError) as failed:
+            runner._roles()
+        Proxy.failing = 0
+        monkeypatch.setenv(runner.TOKEN, "stale token")
+        with pytest.raises(runner.flyte.errors.NonRecoverableError):
+            runner._roles()
+    finally:
+        server.shutdown()
+        server.server_close()
+    with pytest.raises(RuntimeError) as refused:
+        runner._roles()
+    assert _retried(failed) and _retried(refused)
+
+
+def test_opencodes_configuration_left_in_the_workspace_is_moved_aside(workspace, user):
+    home = workspace.parents[2]
+    planted = [
+        workspace / ".opencode" / "plugin" / "x.js",
+        workspace / "phase2" / "opencode.json",
+        workspace / "opencode.jsonc",
+        workspace / "AGENTS.md",
+        workspace / "phase2" / "CONTEXT.md",
+        home / "jfc" / "opencode.json",
+        home / "opencode.json",
+        user / ".opencode" / "plugin" / "x.js",
+    ]
+    for path in planted:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}")
+    kept = [
+        workspace / ".pixi" / "envs" / "opencode.json",
+        workspace / "phase2" / "fit.py",
+        workspace / "phase2" / "CLAUDE.md",
+    ]
+    for path in kept:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}")
+
+    runner._quarantine(workspace, home)
+
+    assert [path for path in planted if path.exists()] == []
+    assert all(path.exists() for path in kept)
+    (aside,) = (home / "opencode" / "quarantine").iterdir()
+    assert (aside / "jfc/analyses/zz/.opencode/plugin/x.js").is_file()
+    assert (aside / "jfc/analyses/zz/phase2/opencode.json").is_file()
+    assert (aside / "jfc/analyses/zz/AGENTS.md").is_file()
+    assert (aside / "opencode.json").is_file()
+    assert (aside / "home/.opencode/plugin/x.js").is_file()
+
+
 # --- the agent ---
 
 
-def _workspace(root):
-    work, config = root / "jfc" / "analyses" / "zz", root / "claude"
-    work.mkdir(parents=True)
-    (work / "prompt.md").write_text("search for ZZ")
-    return work, config
+def test_first_turn_opens_a_session_with_the_analysis_prompt(workspace):
+    command, prompt = runner._turn(workspace, workspace.parents[2], "")
+
+    assert command == [
+        "opencode",
+        "run",
+        "--format",
+        "json",
+        "--dir",
+        str(workspace),
+        "--agent",
+        "orchestrator",
+    ]
+    assert prompt == runner.UNATTENDED + "search for ZZ"
 
 
-def _session(command):
-    flag = "--resume" if "--resume" in command else "--session-id"
-    return flag, command[command.index(flag) + 1]
+def test_later_turns_resume_that_session_with_the_reply_or_a_nudge(workspace):
+    home = workspace.parents[2]
+    (home / "opencode" / "session").write_text("ses_1\n")
+
+    replied, told = runner._turn(workspace, home, "APPROVE")
+    nudged, nudge = runner._turn(workspace, home, "")
+
+    assert replied == nudged and replied[-2:] == ["--session", "ses_1"]
+    assert told == runner.REPLY.format(reply="APPROVE")
+    assert nudge == runner.INTERRUPTED
 
 
-def test_first_turn_opens_a_session_with_the_analysis_prompt(root):
-    work, config = _workspace(root)
-
-    command = runner._turn(work, config, "")
-
-    assert command[:2] == ["claude", "--print"]
-    assert command[2].endswith("search for ZZ")
-    assert _session(command)[0] == "--session-id"
-    assert command[command.index("--permission-mode") + 1] == runner.PERMISSION_MODE
-    assert command[command.index("--model") + 1] == runner.MODEL
-    # The scaffold's methodology, agents and conventions link into it.
-    assert command[command.index("--add-dir") + 1] == str(root / "jfc" / "src")
-    assert "--forward-subagent-text" in command
-
-
-def test_later_turns_resume_that_session_with_the_reply_or_a_nudge(root):
-    work, config = _workspace(root)
-    _, session = _session(runner._turn(work, config, ""))
-    (config / "projects/slug").mkdir(parents=True)
-    (config / "projects/slug" / f"{session}.jsonl").write_text("{}")
-
-    replied = runner._turn(work, config, "APPROVE")
-    nudged = runner._turn(work, config, "")
-
-    assert _session(replied) == _session(nudged) == ("--resume", session)
-    assert replied[2] == runner.REPLY.format(reply="APPROVE")
-    assert nudged[2] == runner.INTERRUPTED
-
-
-def _fake_claude(tmp_path, lines, code=0):
-    """A stand-in for the CLI: prints `lines`, then exits with `code`."""
-    script = tmp_path / "claude.py"
+def _fake_opencode(tmp_path, events, code=0, records=({"kind": "loaded"},), after=0.0):
+    """A stand-in for `opencode run`: keeps its stdin in `stdin`, writes the
+    plugin's `records`, prints `events` (a string as it is), lingers `after`
+    seconds and exits with `code`, or dies of signal -`code`."""
+    script = tmp_path / "opencode.py"
     script.write_text(
-        "import os, sys\n"
-        f"for line in {lines!r}:\n"
-        "    for name in ('AF_ANALYSIS', 'AF_WORKSPACE', 'CLAUDE_CODE_DISABLE_BACKGROUND_TASKS', 'BASH_MAX_TIMEOUT_MS'):\n"
-        "        line = line.replace('$' + name, os.environ[name])\n"
-        "    print(line.replace('$CONFIG', os.environ['CLAUDE_CONFIG_DIR']))\n"
-        f"sys.exit({code})\n"
+        "import json, os, sys, time\n"
+        f"open({str(tmp_path / 'stdin')!r}, 'w').write(sys.stdin.read())\n"
+        "path = json.loads(os.environ['AF_PLUGIN'])['records']\n"
+        f"for record in {list(records)!r}:\n"
+        "    open(path, 'a').write(json.dumps(record) + '\\n')\n"
+        f"for event in {list(events)!r}:\n"
+        "    print(event if isinstance(event, str) else json.dumps(event), flush=True)\n"
+        f"time.sleep({after})\n"
+        f"os.kill(os.getpid(), {-code}) if {code} < 0 else sys.exit({code})\n"
     )
     return [sys.executable, str(script)]
 
 
-def test_claude_runs_every_subagent_and_command_in_the_foreground(tmp_path):
-    result = {
-        "type": "result",
-        "is_error": False,
-        "result": "$CLAUDE_CODE_DISABLE_BACKGROUND_TASKS $BASH_MAX_TIMEOUT_MS",
+def _plugin(home):
+    return {
+        **os.environ,
+        "AF_PLUGIN": json.dumps({"records": str(home / "opencode" / "records.jsonl")}),
     }
-    command = _fake_claude(tmp_path, [json.dumps(result)])
-
-    said = runner._claude(command, tmp_path, tmp_path / "c", tmp_path / "tokens", 0)
-
-    # A foreground command may last as long as a pass over the data.
-    assert said == f"1 {runner.COMMAND_HOURS * 3600 * 1000}"
 
 
-def test_claude_names_the_analysis_and_workspace_its_scripts_tag_profiles_with(
-    tmp_path,
-):
-    work = tmp_path / "ws" / "jfc" / "analyses" / "zz"
-    work.mkdir(parents=True)
-    result = {
-        "type": "result",
-        "is_error": False,
-        "result": "$AF_ANALYSIS $AF_WORKSPACE",
-    }
-    command = _fake_claude(tmp_path, [json.dumps(result)])
-
-    said = runner._claude(command, work, tmp_path / "c", tmp_path / "tokens", 0)
-
-    assert said == "zz ws"
+def _step(*parts, reason="stop", session="ses_1"):
+    """The events of one step of the main session."""
+    events = [{"type": "step_start", "sessionID": session, "part": {}}]
+    for part in parts:
+        kind = "tool_use" if "tool" in part else "text"
+        events.append({"type": kind, "sessionID": session, "part": part})
+    events.append(
+        {"type": "step_finish", "sessionID": session, "part": {"reason": reason}}
+    )
+    return events
 
 
-def _assistant(*content, **extra):
-    return json.dumps({"type": "assistant", "message": {"content": content}, **extra})
-
-
-def test_claude_returns_the_result_and_narrates_the_turn(tmp_path, capsys):
-    tool = {"type": "tool_use", "name": "Bash", "input": {"command": "pixi run all"}}
-    lines = [
-        "a warning that is not JSON",
-        _assistant(tool),
-        _assistant({"type": "text", "text": "fit\nconverged"}, parent_tool_use_id="t"),
-        _assistant({"type": "text", "text": "x" * 999}),
-        _assistant(parent_tool_use_id="t"),
-        json.dumps({"type": "user", "message": {"content": "tool output"}}),
-        json.dumps(
-            {
-                "type": "system",
-                "subtype": "api_retry",
-                "attempt": 2,
-                "max_retries": 10,
-                "error": "rate_limit",
-            }
-        ),
-        json.dumps(
-            {
-                "type": "result",
-                "is_error": False,
-                "result": "gate: $CONFIG",
-                "num_turns": 7,
-                "modelUsage": {"opus": {"inputTokens": 1200, "costUSD": 1.5}},
-            }
-        ),
-    ]
-
-    (tmp_path / "tokens").write_text("50")
-
-    said = runner._claude(
-        _fake_claude(tmp_path, lines),
-        tmp_path,
-        tmp_path / "cfg",
-        tmp_path / "tokens",
-        0,
+def _run(tmp_path, workspace, events, taken=None, **fake):
+    home = workspace.parents[2]
+    command = _fake_opencode(tmp_path, events, **fake)
+    return runner._opencode(
+        command, "the prompt", workspace, _plugin(home), home, taken
     )
 
-    assert said == f"gate: {tmp_path / 'cfg'}"
+
+def test_a_turn_takes_its_prompt_on_stdin_and_keeps_the_session_it_opened(
+    tmp_path, workspace
+):
+    taken = []
+    said = _run(
+        tmp_path,
+        workspace,
+        ["not yet", *_step({"text": "at the gate"}, session="ses_9")],
+        taken=lambda: taken.append(time.monotonic()),
+    )
+
+    assert said == ([], "at the gate", "stop")
+    assert (tmp_path / "stdin").read_text() == "the prompt"
+    assert (workspace.parents[2] / "opencode" / "session").read_text() == "ses_9"
+    # Once, on the first event of the session, which OpenCode sends once it holds the prompt.
+    assert len(taken) == 1
+
+
+def test_a_prompt_opencode_never_took_is_not_taken(tmp_path, workspace):
+    taken = []
+    with pytest.raises(RuntimeError):
+        _run(
+            tmp_path,
+            workspace,
+            ["Error: opencode failed to start"],
+            code=1,
+            taken=lambda: taken.append(1),
+        )
+    assert taken == []
+
+
+def test_a_turn_returns_its_last_reply_and_narrates_the_main_session(
+    tmp_path, workspace, capsys
+):
+    bash = {
+        "tool": "bash",
+        "state": {"status": "completed", "input": {"command": "pixi run all"}},
+    }
+    failed = {
+        "tool": "read",
+        "state": {"status": "error", "input": {"filePath": "a.pdf"}, "error": "a PDF"},
+    }
+    events = [
+        "a warning that is not JSON",
+        *_step(bash, failed, {"text": "fit\nconverged"}, reason="tool-calls"),
+        {
+            "type": "text",
+            "sessionID": "ses_1",
+            "part": {"text": "Continue", "synthetic": True},
+        },
+        *_step({"text": "x" * 999}, {"text": "and more"}),
+        # Published again as OpenCode prunes its output.
+        {
+            "type": "tool_use",
+            "sessionID": "ses_1",
+            "part": {**bash, "state": {**bash["state"], "time": {"compacted": 1}}},
+        },
+    ]
+
+    assert _run(tmp_path, workspace, events) == (
+        [],
+        "x" * 999 + "\n\nand more",
+        "stop",
+    )
     logged = [line.split("] ", 1)[1] for line in capsys.readouterr().out.splitlines()]
     assert logged == [
         "a warning that is not JSON",
-        'Bash {"command": "pixi run all"}',
-        "  fit converged",
+        'bash {"command": "pixi run all"}',
+        'read {"filePath": "a.pdf"} failed: a PDF',
+        "fit converged",
         "x" * runner.LOG_LINE,
-        "API retry 2/10: rate_limit",
-        "turn over: 7 turns, 1200 tokens",
+        "and more",
+        "turn over: 2 steps, the last ending in stop",
     ]
 
 
-@pytest.mark.parametrize(
-    "result, code",
-    [
-        ({"type": "result", "is_error": True, "result": "Not logged in"}, 1),
-        ({"type": "result", "is_error": False, "result": "done"}, 143),
-        ({"type": "system", "subtype": "init"}, 0),
-    ],
-)
-def test_claude_raises_unless_the_turn_ended_with_a_clean_result(
-    tmp_path, result, code
-):
-    command = _fake_claude(tmp_path, [json.dumps(result)], code)
-    with pytest.raises(RuntimeError, match="claude exited"):
-        runner._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
-
-
-def _assistant_of(request, **usage):
-    """One block of the model's reply to `request`, with what the request counts."""
-    message = {
-        "id": request,
-        "usage": usage,
-        "content": [{"type": "text", "text": "."}],
-    }
-    return json.dumps({"type": "assistant", "message": message})
-
-
-def test_claude_counts_each_request_once_and_what_the_stream_shows_of_the_rest(
-    tmp_path,
-):
-    ledger = tmp_path / "tokens"
-    ledger.write_text("1000")
-    subagent = json.loads(_assistant_of("s", output_tokens=7))
-    subagent["parent_tool_use_id"] = "toolu_1"
-    compaction = {"type": "system", "subtype": "compact_boundary"}
-    full = {"input_tokens": 10, "cache_read_input_tokens": 200, "output_tokens": 5}
-    lines = [
-        _assistant_of("a", input_tokens=10, cache_read_input_tokens=200),
-        _assistant_of("a", **full),
-        _assistant_of(
-            "b",
-            input_tokens=1,
-            cache_creation_input_tokens=30,
-            cache_creation={"ephemeral_5m_input_tokens": 30},
-            output_tokens=None,
-        ),
-        _assistant_of("a", **full),
-        json.dumps(subagent),
-        json.dumps({**compaction, "compact_metadata": {"pre_tokens": 400}}),
-        json.dumps({"type": "user", "message": {"content": "tool output"}}),
-        json.dumps({"type": "result", "is_error": False, "result": "done"}),
-    ]
-
-    said = runner._claude(
-        _fake_claude(tmp_path, lines), tmp_path, tmp_path / "c", ledger, 0
-    )
-
-    assert said == "done" and ledger.read_text() == str(1000 + 215 + 31 + 7 + 400)
-
-
-@pytest.mark.parametrize("reported, counted", [(100, 900), (900, 900), (5000, 5000)])
-def test_a_turn_counts_by_its_own_totals_when_they_say_more(
-    tmp_path, reported, counted
-):
-    ledger = tmp_path / "tokens"
-    ledger.write_text("10")
-    models = {
-        "opus": {"inputTokens": reported // 2, "cacheReadInputTokens": reported // 4},
-        "haiku": {"outputTokens": reported // 4, "costUSD": 1.5},
-    }
-    lines = [
-        _assistant_of("a", input_tokens=900),
-        json.dumps({"type": "result", "is_error": True, "modelUsage": models}),
-    ]
-
-    with pytest.raises(RuntimeError):
-        runner._claude(
-            _fake_claude(tmp_path, lines, 1), tmp_path, tmp_path / "c", ledger, 0
-        )
-
-    assert ledger.read_text() == str(10 + counted)
-
-
-def test_claude_records_a_request_as_it_arrives(tmp_path):
-    ledger, seen = tmp_path / "tokens", tmp_path / "seen"
-    script = tmp_path / "claude.py"
-    script.write_text(
-        "import pathlib, time\n"
-        f"print({_assistant_of('a', input_tokens=10)!r}, flush=True)\n"
-        f"ledger = pathlib.Path({str(ledger)!r})\n"
-        "deadline = time.monotonic() + 5\n"
-        "while time.monotonic() < deadline and not ledger.exists():\n"
-        "    time.sleep(0.01)\n"
-        f"pathlib.Path({str(seen)!r}).write_text(ledger.read_text())\n"
-    )
-    command = [sys.executable, str(script)]
-
-    with pytest.raises(RuntimeError):
-        runner._claude(command, tmp_path, tmp_path / "c", ledger, 0)
-
-    assert seen.read_text() == ledger.read_text() == "10"
-
-
-@pytest.mark.parametrize("held", ["", "12 tokens"])
-def test_a_count_that_cannot_be_read_stops_the_workspace(tmp_path, held):
-    ledger = tmp_path / "tokens"
-    ledger.write_text(held)
-    with pytest.raises(runner.flyte.errors.NonRecoverableError, match=str(ledger)):
-        runner._claude(_fake_claude(tmp_path, []), tmp_path, tmp_path / "c", ledger, 0)
-
-
-def test_a_subagent_counts_toward_the_limit_and_can_reach_it(tmp_path):
-    ledger = tmp_path / "tokens"
-    subagent = json.loads(_assistant_of("s", input_tokens=100))
-    subagent["parent_tool_use_id"] = "toolu_1"
-    lines = [
-        json.dumps(subagent),
-        json.dumps({"type": "result", "is_error": False, "result": "done"}),
-    ]
-
-    said = runner._claude(
-        _fake_claude(tmp_path, lines), tmp_path, tmp_path / "c", ledger, 100
-    )
-
-    assert said == runner.SPENT.format(tokens=100) and ledger.read_text() == "100"
-
-
-@pytest.mark.parametrize("deaf", [False, True])
-def test_claude_ends_a_turn_that_reaches_the_limit(tmp_path, monkeypatch, deaf):
-    monkeypatch.setattr(runner, "GRACE", 0.5 if deaf else 20)
-    ledger, closed = tmp_path / "tokens", tmp_path / "closed"
-    ledger.write_text("90")
-    on_term = (
-        "signal.SIG_IGN"
-        if deaf
-        else f"lambda *_: (open({str(closed)!r}, 'w').close(), sys.exit(0))"
-    )
-    script = tmp_path / "claude.py"
-    script.write_text(
-        "import signal, sys, time\n"
-        f"signal.signal(signal.SIGTERM, {on_term})\n"
-        f"print({_assistant_of('a', input_tokens=4)!r}, flush=True)\n"
-        f"print({_assistant_of('b', input_tokens=6)!r}, flush=True)\n"
-        "time.sleep(60)\n"
-        f"print({_assistant_of('c', input_tokens=1000)!r}, flush=True)\n"
-    )
-    started = runner.time.monotonic()
-    command = [sys.executable, str(script)]
-
-    said = runner._claude(command, tmp_path, tmp_path / "c", ledger, 100)
-
-    assert said == runner.SPENT.format(tokens=100) and ledger.read_text() == "100"
-    assert runner.time.monotonic() - started < 10
-    # Told to end first, so that it can close its session; killed only if it does not.
-    assert closed.exists() is not deaf
-
-
-@pytest.mark.parametrize(
-    "result",
-    [
-        {"api_error_status": 429, "result": "API Error: 429"},
-        {"result": "You've hit your session limit · resets 3pm (UTC)"},
-        {"result": "You've hit your weekly limit · resets Oct 20"},
-    ],
-)
-def test_a_turn_the_usage_limit_stopped_is_told_from_other_failures(tmp_path, result):
-    stopped = {"type": "result", "is_error": True, **result}
-    command = _fake_claude(tmp_path, [json.dumps(stopped)], 1)
-    with pytest.raises(runner.Limited) as limited:
-        runner._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
-    assert limited.value.resets is None
-
-    overloaded = {"type": "result", "is_error": True, "api_error_status": 529}
-    command = _fake_claude(tmp_path, [json.dumps(overloaded)], 1)
-    with pytest.raises(RuntimeError) as failed:
-        runner._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
-    assert not isinstance(failed.value, runner.Limited)
-
-
-def test_a_limited_turn_says_when_the_limit_resets(tmp_path):
-    events = [
-        {"type": "rate_limit_event", "rate_limit_info": {"status": "allowed_warning"}},
+def test_subagents_are_narrated_from_the_plugins_records(tmp_path, workspace, capsys):
+    records = [
+        {"kind": "loaded"},
         {
-            "type": "rate_limit_event",
-            "rate_limit_info": {"status": "rejected", "resetsAt": 1760600000},
+            "kind": "tool",
+            "parent": None,
+            "agent": "orchestrator",
+            "tool": "task",
+            "status": "completed",
+            "input": "{}",
         },
-        {"type": "result", "is_error": True, "result": "API Error"},
+        {
+            "kind": "tool",
+            "parent": "ses_1",
+            "agent": "executor",
+            "tool": "bash",
+            "status": "completed",
+            "input": '{"command":"ls"}',
+        },
+        {
+            "kind": "error",
+            "parent": "ses_1",
+            "agent": "arbiter",
+            "error": "APIError",
+            "message": "gone",
+        },
+        {"kind": "cut", "parent": "ses_1", "agent": "note_writer"},
+        {"kind": "beat", "session": "ses_2"},
     ]
-    command = _fake_claude(tmp_path, [json.dumps(e) for e in events], 1)
+    with open(workspace.parents[2] / "opencode" / "records.jsonl", "w") as earlier:
+        earlier.write(json.dumps({**records[2], "agent": "an earlier turn's"}) + "\n")
 
-    with pytest.raises(runner.Limited) as limited:
-        runner._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
+    _run(tmp_path, workspace, _step({"text": "done"}), records=records)
 
-    assert limited.value.resets == 1760600000
+    logged = [line.split("] ", 1)[1] for line in capsys.readouterr().out.splitlines()]
+    assert [line for line in logged if line.startswith("  ")] == [
+        '  executor bash {"command":"ls"}',
+        "  arbiter APIError: gone",
+        "  note_writer: the reply ran out of output tokens",
+    ]
 
 
 @pytest.mark.parametrize(
-    "answer, limited",
+    "events, code, records",
     [
-        ({"is_error": True, "api_error_status": 429}, True),
         (
-            {
-                "is_error": True,
-                "result": "You've hit your weekly limit · resets Oct 20",
-            },
-            True,
+            _step(reason="error")
+            + [
+                {
+                    "type": "error",
+                    "error": {
+                        "name": "APIError",
+                        "data": {"message": "502", "statusCode": 502},
+                    },
+                }
+            ],
+            1,
+            ({"kind": "loaded"},),
         ),
-        ({"is_error": False, "result": "ok"}, False),
+        (_step({"text": "done"}), 143, ({"kind": "loaded"},)),
+        # The plugin did not load: OpenCode goes on without it, unguarded.
+        (_step({"text": "done"}), 0, ()),
     ],
 )
-def test_a_request_outside_the_session_tells_whether_the_limit_holds(
-    tmp_path, monkeypatch, answer, limited
+def test_a_turn_raises_unless_it_ended_cleanly_with_its_plugin(
+    tmp_path, workspace, events, code, records
 ):
-    (tmp_path / "answer.json").write_text(json.dumps(answer))
-    claude = tmp_path / "bin" / "claude"
-    claude.parent.mkdir()
-    claude.write_text(
-        "#!/bin/sh\n"
-        f'[ "$CLAUDE_CONFIG_DIR" = "{tmp_path / "cfg"}" ] || exit 9\n'
-        f'cat "{tmp_path / "answer.json"}"\n'
+    with pytest.raises(RuntimeError, match="opencode") as raised:
+        _run(tmp_path, workspace, events, code=code, records=records)
+    assert _retried(raised)
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_a_rejected_token_is_not_worth_a_retry(tmp_path, workspace, status):
+    error = {
+        "name": "APIError",
+        "data": {"message": "a bearer token is required", "statusCode": status},
+    }
+    with pytest.raises(runner.flyte.errors.NonRecoverableError, match="bearer"):
+        _run(tmp_path, workspace, [{"type": "error", "error": error}], code=1)
+
+
+OVERFLOW = [
+    {
+        "type": "error",
+        "error": {"name": "ContextOverflowError", "data": {"message": "too long"}},
+    },
+    # OpenCode's compaction, a step of the session.
+    *_step({"text": "SUMMARY of the session"}),
+]
+# OpenCode's prompt to go on after a compaction.
+CONTINUE = {
+    "type": "text",
+    "sessionID": "ses_1",
+    "part": {
+        "text": "Continue if you have next steps",
+        "synthetic": True,
+        "metadata": {"compaction_continue": True},
+    },
+}
+
+
+@pytest.mark.parametrize(
+    "events, said",
+    [
+        ([*OVERFLOW, *_step({"text": "done"})], "done"),
+        # OpenCode replayed the human's message, so no prompt to go on follows the summary.
+        ([*OVERFLOW, *_step()], ""),
+        # The replay overflowed too, and the second compaction prompts it to go on.
+        ([*OVERFLOW, *OVERFLOW, CONTINUE, *_step({"text": "done"})], "done"),
+    ],
+)
+def test_a_context_overflow_opencode_compacted_away_is_no_failure(
+    tmp_path, workspace, events, said
+):
+    assert _run(tmp_path, workspace, events, code=1) == ([], said, "stop")
+
+
+@pytest.mark.parametrize(
+    "events, code",
+    [
+        # Killed, as by the OOM killer, after it went on.
+        ([*OVERFLOW, *_step({"text": "Running the fit now."})], -9),
+        # Crashed in the middle of its work.
+        ([*OVERFLOW, *_step({"text": "Running the fit now."}, reason="tool-calls")], 1),
+        # Crashed before it went on from the compaction.
+        (OVERFLOW, 1),
+        # An overflow it never compacted.
+        (OVERFLOW[:1], 1),
+    ],
+)
+def test_a_turn_that_dies_after_a_context_overflow_fails(
+    tmp_path, workspace, events, code
+):
+    with pytest.raises(RuntimeError, match="opencode") as raised:
+        _run(tmp_path, workspace, events, code=code)
+    assert _retried(raised)
+
+
+# OpenCode's compaction of the session after the step before, and its prompt to go on.
+COMPACTED = [*_step({"text": "SUMMARY of the session"}), CONTINUE]
+
+
+GATE = _step({"text": "At the gate."})
+
+
+@pytest.mark.parametrize(
+    "events, outcome",
+    [
+        # The reply that ended the turn reached where the session compacts.
+        (
+            [*GATE, *COMPACTED, *_step({"text": "Waiting."})],
+            (["At the gate."], "Waiting.", "stop"),
+        ),
+        ([*GATE, *COMPACTED, *_step()], (["At the gate."], "", "stop")),
+        (
+            [*GATE, *COMPACTED, *_step({"text": "Going on"}, reason="length")],
+            (["At the gate."], "Going on", "length"),
+        ),
+        # A step with nothing to say ended the reply.
+        (
+            [
+                *_step({"text": "At the gate."}, {"tool": "bash"}, reason="tool-calls"),
+                *_step(),
+                *COMPACTED,
+                *_step({"text": "Waiting."}),
+            ],
+            (["At the gate."], "Waiting.", "stop"),
+        ),
+        # A step in the middle of the reply did.
+        (
+            [
+                *_step({"text": "Fitting."}, reason="tool-calls"),
+                *COMPACTED,
+                *_step({"text": "Done."}),
+            ],
+            ([], "Done.", "stop"),
+        ),
+    ],
+)
+def test_a_reply_opencode_compacted_after_and_went_on_from_is_kept(
+    tmp_path, workspace, events, outcome
+):
+    assert _run(tmp_path, workspace, events) == outcome
+
+
+NODE = pytest.mark.skipif(not shutil.which("node"), reason="runs the plugin on Node")
+# Runs the plugin in argv[2] on the events in argv[3], "resumed" starting a task that resumes ses_2, then hands it a task's result from ses_2.
+DRIVE = """
+import fs from "node:fs";
+const [plugin, events] = process.argv.slice(2);
+const hooks = await (await import(plugin)).default.server({ directory: "/" });
+for (const event of JSON.parse(fs.readFileSync(events)))
+  if (event === "resumed")
+    await hooks["tool.execute.before"](
+      { tool: "task", sessionID: "ses_1", callID: "call_1" },
+      { args: { task_id: "ses_2" } },
+    );
+  else await hooks.event({ event });
+const output = { output: "Done.", metadata: { sessionId: "ses_2" } };
+await hooks["tool.execute.after"]({ tool: "task", callID: "call_1" }, output);
+process.stdout.write(output.output);
+"""
+
+
+def _task_result(tmp_path, parts):
+    """The result of a task the plugin hands the orchestrator once OpenCode
+    has published `parts` of the subagent's session."""
+    plugin = tmp_path / "af_opencode.mjs"
+    plugin.write_text(runner.PLUGIN.read_text())
+    (tmp_path / "drive.mjs").write_text(DRIVE)
+    published = [
+        part
+        if part == "resumed"
+        else {
+            "type": "message.part.updated",
+            "properties": {"part": {"sessionID": "ses_2", **part}},
+        }
+        for part in parts
+    ]
+    (tmp_path / "events.json").write_text(json.dumps(published))
+    settings = {"records": str(tmp_path / "records.jsonl"), "seats": 1, "images": {}}
+    return subprocess.run(
+        ["node", tmp_path / "drive.mjs", plugin, tmp_path / "events.json"],
+        env={**os.environ, "AF_PLUGIN": json.dumps(settings)},
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+
+def _parts(text, reason="stop"):
+    """The parts of one step, as OpenCode publishes them."""
+    return [
+        {"type": "step-start"},
+        {"type": "text", "text": text, "time": {"end": 1}},
+        {"type": "step-finish", "reason": reason},
+    ]
+
+
+@NODE
+@pytest.mark.parametrize("reason, kept", [("stop", 1), ("tool-calls", 0)])
+def test_a_subagents_reply_opencode_compacted_after_reaches_the_orchestrator_once(
+    tmp_path, reason, kept
+):
+    compaction = {"type": "compaction", "id": "prt_1", "auto": True}
+    result = _task_result(
+        tmp_path,
+        [
+            *_parts("At the gate.", reason),
+            compaction,
+            *_parts("SUMMARY of the session"),
+            # Published again with the tail OpenCode keeps.
+            {**compaction, "tail_start_id": "msg_1"},
+            *_parts("Done."),
+        ],
     )
-    claude.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{claude.parent}{os.pathsep}{os.environ['PATH']}")
 
-    assert runner._still_limited(tmp_path / "cfg") is limited
+    assert result.startswith("Done.")
+    assert result.count("At the gate.") == kept and "SUMMARY" not in result
 
 
-def test_a_rejected_credential_is_not_worth_a_retry(tmp_path):
-    result = {"type": "result", "is_error": True, "api_error_status": 401}
-    command = _fake_claude(tmp_path, [json.dumps(result)], 1)
-    with pytest.raises(runner.flyte.errors.NonRecoverableError):
-        runner._claude(command, tmp_path, tmp_path / "cfg", tmp_path / "tokens", 0)
+@NODE
+def test_a_subagents_reply_a_failed_task_left_reaches_the_task_resumed(tmp_path):
+    result = _task_result(
+        tmp_path,
+        [
+            *_parts("At the gate."),
+            {"type": "compaction", "id": "prt_1", "auto": True},
+            *_parts("SUMMARY of the session"),
+            # The task failed as the subagent went on, and the orchestrator resumes it.
+            "resumed",
+            *_parts("Done."),
+        ],
+    )
+
+    assert result.startswith("Done.") and result.count("At the gate.") == 1
+
+
+@pytest.fixture
+def quick(monkeypatch):
+    monkeypatch.setattr(runner, "POLL", 0.05)
+    monkeypatch.setattr(runner, "LOADED", 1)
+    monkeypatch.setattr(runner, "STALL", 1)
+    monkeypatch.setattr(runner, "GRACE", 1)
+
+
+@pytest.mark.parametrize(
+    "records, why", [((), "did not load"), (({"kind": "loaded"},), "said nothing")]
+)
+def test_a_turn_whose_plugin_never_loads_or_that_falls_silent_is_ended(
+    tmp_path, workspace, quick, records, why
+):
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match=why) as raised:
+        _run(tmp_path, workspace, _step(reason="tool-calls"), records=records, after=60)
+    assert time.monotonic() - started < 10
+    assert _retried(raised)
+
+
+def test_a_turn_whose_plugin_notes_what_starts_is_not_silent(
+    tmp_path, workspace, quick
+):
+    """As while a subagent waits for its model, then for its command."""
+    script = _fake_opencode(tmp_path, _step({"text": "done"}), records=())
+    noting = (
+        "import json, os, time\n"
+        "path = json.loads(os.environ['AF_PLUGIN'])['records']\n"
+        "for kind in ['loaded'] + ['beat'] * 8:\n"
+        "    open(path, 'a').write(json.dumps({'kind': kind}) + '\\n')\n"
+        "    time.sleep(0.3)\n"
+    )
+    Path(script[1]).write_text(noting + Path(script[1]).read_text())
+    home = workspace.parents[2]
+    started = time.monotonic()
+
+    said = runner._opencode(script, "", workspace, _plugin(home), home)
+
+    assert said == ([], "done", "stop")
+    assert time.monotonic() - started > 2 * runner.STALL
+
+
+PROC = pytest.mark.skipif(not Path("/proc/self/environ").exists(), reason="reads /proc")
+
+
+@pytest.mark.parametrize(
+    "detached, code",
+    [
+        # Even what holds OpenCode's output open after it has exited.
+        (False, 0),
+        # The bash tool starts each command in a session of its own.
+        pytest.param(True, 0, marks=PROC),
+        pytest.param(True, 1, marks=PROC),
+    ],
+)
+def test_a_turn_ends_what_it_started(tmp_path, workspace, monkeypatch, detached, code):
+    monkeypatch.setattr(runner, "POLL", 0.05)
+    beat = tmp_path / "beat"
+    child = tmp_path / "child.py"
+    child.write_text(
+        "import pathlib, time\n"
+        "while True:\n"
+        f"    pathlib.Path({str(beat)!r}).write_text(str(time.time()))\n"
+        "    time.sleep(0.05)\n"
+    )
+    script = _fake_opencode(tmp_path, _step({"text": "done"}), code=code)
+    started = (
+        "import subprocess, time\n"
+        f"subprocess.Popen([{sys.executable!r}, {str(child)!r}], start_new_session={detached}, "
+        # A detached command does not hold OpenCode's output: one left running fails the test.
+        f"stdout=subprocess.DEVNULL if {detached} else None)\n"
+        f"while not __import__('os').path.exists({str(beat)!r}): time.sleep(0.01)\n"
+    )
+    Path(script[1]).write_text(started + Path(script[1]).read_text())
+    home = workspace.parents[2]
+
+    try:
+        runner._opencode(script, "", workspace, _plugin(home), home)
+    except RuntimeError:
+        assert code
+    else:
+        assert not code
+
+    last = beat.read_text()
+    time.sleep(0.3)
+    assert beat.read_text() == last
+
+
+@pytest.fixture
+def agent(workspace, monkeypatch):
+    """`_agent` with the proxy's roles, and each turn's outcome taken in turn
+    from `outcomes`; the first turn opens session ses_1, and every turn takes
+    its prompt and writes into OpenCode's configuration and the analysis's as
+    an agent might."""
+    state = types.SimpleNamespace(outcomes=[], prompts=[], configs=[], loaded=[])
+
+    def opencode(command, prompt, work, env, home, taken):
+        state.prompts.append(prompt)
+        state.configs.append(
+            [p.name for p in work.iterdir() if p.name in runner.CONFIGS]
+        )
+        plugin = Path(env["OPENCODE_CONFIG_DIR"]) / "plugin" / runner.PLUGIN.name
+        state.loaded.append(plugin.read_text())
+        plugin.chmod(0o644)
+        plugin.write_text("// edited by an agent")
+        (work / "AGENTS.md").write_text("planted by an agent")
+        (home / "opencode" / "session").write_text("ses_1")
+        if taken:
+            taken()
+        return state.outcomes.pop(0)
+
+    monkeypatch.setattr(runner, "_roles", lambda: ROLES)
+    monkeypatch.setattr(runner, "_opencode", opencode)
+    monkeypatch.setenv(runner.PROXY, "http://llm-proxy:8080")
+    return state
+
+
+def test_a_reply_cut_off_at_its_output_limit_is_resumed(workspace, agent):
+    home = workspace.parents[2]
+    (workspace / "opencode.json").write_text("{}")
+    agent.outcomes = [([], "half a", "length"), ([], "At the human gate.", "stop")]
+
+    assert runner._agent(workspace, home, "", home / "told") == "At the human gate."
+
+    assert agent.prompts == [runner.UNATTENDED + "search for ZZ", runner.INTERRUPTED]
+    assert agent.configs == [[], []]
+    # Each turn on OpenCode's configuration as the runner wrote it.
+    assert agent.loaded == [runner.PLUGIN.read_text()] * 2
+    assert not (home / "told").exists()
+
+
+def test_a_reply_opencode_went_on_from_outlasts_a_resume(workspace, agent):
+    home = workspace.parents[2]
+    agent.outcomes = [(["At the gate."], "cut", "length"), ([], "Waiting.", "stop")]
+
+    said = runner._agent(workspace, home, "", home / "told")
+
+    assert said == "At the gate.\n\nWaiting."
+
+
+def test_replies_that_keep_running_out_of_output_end_the_run(workspace, agent):
+    home = workspace.parents[2]
+    agent.outcomes = [([], "cut", "length")] * (runner.RESUMES + 1)
+
+    with pytest.raises(RuntimeError, match="output tokens"):
+        runner._agent(workspace, home, "APPROVE", home / "told")
+
+    assert len(agent.prompts) == runner.RESUMES + 1
+    assert agent.prompts[1] == runner.INTERRUPTED
+    assert (home / "told").read_text() == "APPROVE"
 
 
 # --- the task ---
@@ -1334,39 +1840,44 @@ def test_a_rejected_credential_is_not_worth_a_retry(tmp_path):
 @pytest.fixture
 def stretch(root, monkeypatch):
     """`advance` with the setup done, the agent recorded, and no real pauses."""
-    work, _ = _workspace(root)
+    work = root / "ws" / "jfc" / "analyses" / "zz"
+    work.mkdir(parents=True)
+    (work / "prompt.md").write_text("search for ZZ")
     state = types.SimpleNamespace(
         attempt_number=0,
         action=types.SimpleNamespace(run_name="ws"),
         prompts=[],
-        limits=[],
         slept=[],
     )
 
-    def claude(command, cwd, config, ledger, limit):
-        state.prompts.append(command[2])
-        state.limits.append((ledger, limit))
-        (config / "projects/slug").mkdir(parents=True, exist_ok=True)
-        (config / "projects/slug" / f"{_session(command)[1]}.jsonl").write_text("{}")
-        return "At the human gate."
+    def opencode(command, prompt, work, env, home, taken):
+        state.prompts.append(prompt)
+        (home / "opencode" / "session").write_text("ses_1")
+        if taken:
+            taken()
+        return [], "At the human gate.", "stop"
 
     monkeypatch.setattr(runner.flyte, "ctx", lambda: state, raising=False)
     monkeypatch.setattr(runner, "_prepare", lambda home, analysis: work)
-    monkeypatch.setattr(runner, "_claude", claude)
+    monkeypatch.setattr(runner, "_roles", lambda: ROLES)
+    monkeypatch.setattr(runner, "_opencode", opencode)
     monkeypatch.setattr(runner.time, "sleep", state.slept.append)
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "stand-in")
+    monkeypatch.setenv(runner.PROXY, "http://llm-proxy:8080")
+    monkeypatch.setenv(runner.TOKEN, "client token")
     (root / "token").write_text("stand-in")
     monkeypatch.setenv(clusters.TOKEN_FILE, str(root / "token"))
     return state
 
 
-def test_advance_refuses_to_start_without_credentials(root, monkeypatch):
-    for name in runner.CREDENTIALS:
-        monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(runner, "_prepare", lambda *args: pytest.fail("set up anyway"))
+@pytest.mark.parametrize("unset", ["AF_LLM_PROXY", "AF_LLM_TOKEN"])
+def test_advance_refuses_to_start_without_the_llm_proxy(
+    root, stretch, monkeypatch, unset
+):
+    monkeypatch.delenv(unset)
 
-    with pytest.raises(runner.flyte.errors.NonRecoverableError):
+    with pytest.raises(runner.flyte.errors.NonRecoverableError, match=unset):
         runner.advance(ANALYSIS, "ws", "")
+    assert stretch.prompts == []
 
 
 @pytest.mark.parametrize("unset", [True, False])
@@ -1391,19 +1902,15 @@ def test_advance_returns_and_keeps_what_the_agent_said(root, stretch):
     assert stretch.slept == []
 
 
-def test_each_turn_starts_with_the_runners_facility_rules_in_place(
-    root, stretch, monkeypatch
-):
-    memory = root / "ws" / "claude" / "CLAUDE.md"
-    memory.parent.mkdir(parents=True)
-    memory.write_text("the rules of an older runner")
+def test_each_turn_reads_the_runners_facility_rules(root, stretch, monkeypatch):
     read = []
 
-    def claude(command, cwd, config, *counted):
-        read.append((config / "CLAUDE.md").read_text())
-        return ""
+    def opencode(command, prompt, work, env, home, taken):
+        facility, _ = json.loads(env["OPENCODE_CONFIG_CONTENT"])["instructions"]
+        read.append(Path(facility).read_text())
+        return [], "", "stop"
 
-    monkeypatch.setattr(runner, "_claude", claude)
+    monkeypatch.setattr(runner, "_opencode", opencode)
     runner.advance(ANALYSIS, "ws", "")
 
     assert read == [
@@ -1413,24 +1920,6 @@ def test_each_turn_starts_with_the_runners_facility_rules_in_place(
             root=runner.ROOT,
         )
     ]
-
-
-def test_advance_counts_in_the_workspace_and_refuses_once_its_tokens_are_spent(
-    root, stretch
-):
-    capped = runner.Analysis(**{**vars(ANALYSIS), "tokens": 500})
-
-    runner.advance(capped, "ws", "")
-    (root / "ws" / "tokens").write_text("500")
-    with pytest.raises(runner.flyte.errors.NonRecoverableError, match="500 tokens"):
-        runner.advance(capped, "ws", "APPROVE")
-    runner.advance(ANALYSIS, "ws", "")
-
-    assert stretch.limits == [
-        (root / "ws" / "tokens", 500),
-        (root / "ws" / "tokens", 0),
-    ]
-    assert not (root / "ws" / "replies").exists()
 
 
 def test_advance_hands_a_reply_to_the_agent_once(root, stretch):
@@ -1447,6 +1936,23 @@ def test_advance_hands_a_reply_to_the_agent_once(root, stretch):
     assert (root / "ws/replies/run-2").read_text() == "REGRESS(2)"
 
 
+@pytest.mark.parametrize("fails", ["_roles", "_opencode"])
+def test_a_reply_opencode_never_took_reaches_the_agent_on_the_retry(
+    root, stretch, monkeypatch, fails
+):
+    runner.advance(ANALYSIS, "ws", "")
+    stretch.action.run_name = "run-2"
+    working = getattr(runner, fails)
+    monkeypatch.setattr(runner, fails, _failing(RuntimeError("proxy restarting")))
+
+    with pytest.raises(RuntimeError, match="restarting"):
+        runner.advance(ANALYSIS, "ws", "APPROVE")
+    monkeypatch.setattr(runner, fails, working)
+    runner.advance(ANALYSIS, "ws", "APPROVE")  # run-2 retried
+
+    assert stretch.prompts[1:] == [runner.REPLY.format(reply="APPROVE")]
+
+
 @pytest.mark.parametrize("reply", ["", "APPROVE"])
 def test_advance_refuses_a_workspace_that_is_neither_its_own_nor_there(
     root, stretch, reply
@@ -1457,79 +1963,37 @@ def test_advance_refuses_a_workspace_that_is_neither_its_own_nor_there(
 
 
 def test_advance_runs_the_agent_under_the_workspace_lock(root, stretch, monkeypatch):
-    def claude(command, cwd, config, *counted):
+    def opencode(command, prompt, work, env, home, taken):
         with open(root / "ws/lock") as other, pytest.raises(BlockingIOError):
             fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        return ""
+        return [], "", "stop"
 
-    monkeypatch.setattr(runner, "_claude", claude)
+    monkeypatch.setattr(runner, "_opencode", opencode)
     runner.advance(ANALYSIS, "ws", "")
 
 
 def _failing(error):
-    def claude(*turn):
+    def opencode(*turn):
         raise error
 
-    return claude
+    return opencode
 
 
 def test_advance_waits_after_a_failed_turn_longer_each_time(stretch, monkeypatch):
-    monkeypatch.setattr(runner, "_claude", _failing(RuntimeError("usage limit")))
+    monkeypatch.setattr(runner, "_opencode", _failing(RuntimeError("proxy down")))
 
     for stretch.attempt_number in (0, 1, 4, runner.RETRIES):
-        with pytest.raises(RuntimeError, match="usage limit"):
+        with pytest.raises(RuntimeError, match="proxy down"):
             runner.advance(ANALYSIS, "ws", "")
 
     assert stretch.slept == [15 * 60, 30 * 60, 240 * 60]
 
 
-@pytest.fixture
-def limited(root, stretch, monkeypatch):
-    """`advance` on a session that exists, with each turn's outcome taken in turn
-    from `outcomes`, and the clock at 1000."""
-    state = types.SimpleNamespace(outcomes=[], prompts=[], probes=[])
-
-    def claude(command, cwd, config, ledger, limit):
-        state.prompts.append(command[2])
-        outcome = state.outcomes.pop(0)
-        if isinstance(outcome, Exception):
-            raise outcome
-        return outcome
-
-    monkeypatch.setattr(runner, "_claude", claude)
-    monkeypatch.setattr(runner, "_still_limited", lambda config: state.probes.pop(0))
-    monkeypatch.setattr(runner.time, "time", lambda: 1000.0)
-    _, session = _session(
-        runner._turn(root / "jfc/analyses/zz", root / "ws/claude", "")
-    )
-    (root / "ws/claude/projects/slug").mkdir(parents=True)
-    (root / "ws/claude/projects/slug" / f"{session}.jsonl").write_text("{}")
-    stretch.action.run_name = "run-2"
-    return state
-
-
-def test_advance_sleeps_until_the_limit_resets_then_resumes_once(stretch, limited):
-    limited.outcomes = [runner.Limited("limit", resets=4600.0), "At the human gate."]
-
-    assert runner.advance(ANALYSIS, "ws", "APPROVE") == "At the human gate."
-
-    assert stretch.slept == [3600.0 + 60]
-    assert limited.prompts == [runner.REPLY.format(reply="APPROVE"), runner.LIFTED]
-
-
-def test_advance_asks_outside_the_session_while_no_reset_is_known(stretch, limited):
-    limited.outcomes = [runner.Limited("limit"), "At the human gate."]
-    limited.probes = [True, True, False]
-
-    assert runner.advance(ANALYSIS, "ws", "") == "At the human gate."
-
-    assert stretch.slept == [runner.LIMITED * 60] * 3
-    assert limited.prompts == [runner.INTERRUPTED, runner.LIFTED]
-
-
 def test_advance_does_not_wait_on_a_failure_no_retry_follows(stretch, monkeypatch):
-    final = runner.flyte.errors.NonRecoverableError("claude: Invalid API key")
-    monkeypatch.setattr(runner, "_claude", _failing(final))
+    final = runner.flyte.errors.NonRecoverableError(
+        "opencode: a bearer token is required"
+    )
+    monkeypatch.setattr(runner, "_opencode", _failing(final))
 
     with pytest.raises(runner.flyte.errors.NonRecoverableError):
         runner.advance(ANALYSIS, "ws", "")

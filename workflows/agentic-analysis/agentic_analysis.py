@@ -1,19 +1,24 @@
-"""Runs analyses on Flyte 2 with the JFC methodology: Claude Code, headless,
-takes an analysis from its physics prompt to the analysis note."""
+"""Runs analyses on Flyte 2 with the JFC methodology: OpenCode, headless, on
+the LLM proxy's models, takes an analysis from its physics prompt to the
+analysis note."""
 
 import fcntl
+import functools
 import json
 import os
-import re
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import time
 import tomllib
+import urllib.error
 import urllib.request
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -35,10 +40,93 @@ ROOT = Path("/") / NAME
 # The JFC methodology every analysis follows, at a fixed commit.
 JFC = ("https://github.com/jfc-mit/jfc.git", "9eecb0e0b4c95c362053ad6b121760b47379bc54")
 
-# The JFC specification asks for Opus in every role.
-MODEL = "opus"
-PERMISSION_MODE = "auto"
-CREDENTIALS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
+# Environment variables of the task pods: the LLM proxy's address and its clients' token.
+PROXY = "AF_LLM_PROXY"
+TOKEN = "AF_LLM_TOKEN"
+# Each JFC role (src/agents/<role>.md): the proxy's role it runs on (apps/agentic-analysis/models.toml), and what the orchestrator is told it does.
+AGENTS = {
+    "executor": (
+        "executor",
+        "Carries out a phase or one piece of it: plan.md first, then scripts and figures, the artifact last.",
+    ),
+    "fixer": (
+        "executor",
+        "Makes the smallest fixes that answer an arbiter's ITERATE findings or a regression ticket.",
+    ),
+    "note_writer": (
+        "note-writer",
+        "Writes the phase-stamped analysis note from the artifacts and results JSON: prose only.",
+    ),
+    "typesetter": (
+        "typesetter",
+        "Builds the analysis note's PDF with pandoc, postprocess_tex.py and tectonic: layout only.",
+    ),
+    "physics_reviewer": (
+        "physics-reviewer",
+        "Reviews the physics as a senior collaboration member would, without the methodology or conventions.",
+    ),
+    "critical_reviewer": (
+        "critical-reviewer",
+        "Finds every flaw of correctness and completeness, against the methodology and conventions.",
+    ),
+    "constructive_reviewer": (
+        "constructive-reviewer",
+        "Strengthens the analysis' clarity, validation and presentation, and flags real errors as Category A.",
+    ),
+    "plot_validator": (
+        "plot-validator",
+        "Lints plotting code and inspects the rendered figures it is given; red flags are Category A.",
+    ),
+    "bibtex_validator": (
+        "bibtex",
+        "Checks that every citation resolves to a real DOI, arXiv or INSPIRE record.",
+    ),
+    "rendering_reviewer": (
+        "critical-reviewer",
+        "Phase 5: compiles the analysis note to PDF and inspects its rendering, not its physics.",
+    ),
+    "arbiter": (
+        "arbiter",
+        "Adjudicates the reviews into PASS, ITERATE or ESCALATE, and raises what every reviewer missed.",
+    ),
+    "investigator": (
+        "arbiter",
+        "On a regression, traces its impact to the phase it started in and writes REGRESSION_TICKET.md; fixes nothing.",
+    ),
+}
+# OpenCode's waits on the proxy in ms: for headers, between keep-alives, and for a request the proxy holds.
+WAITS = {"headerTimeout": 60_000, "chunkTimeout": 90_000, "timeout": 3 * 3_600_000}
+# OpenCode's ceiling on a reply's tokens: it compacts limit.output below a model's context, or this far for 0.
+OUTPUT_MAX = 32_000
+# Nothing asks, as nobody answers ("*" first: the last rule that matches wins); no agent edits what OpenCode loads.
+PERMISSION = {
+    "*": "allow",
+    "read": "allow",
+    "external_directory": "allow",
+    "doom_loop": "allow",
+    "question": "deny",
+    "edit": {
+        "*": "allow",
+        "*.opencode/*": "deny",
+        "*opencode.json*": "deny",
+        "*AGENTS.md": "deny",
+        "*CONTEXT.md": "deny",
+    },
+}
+# What OpenCode would load from the analysis over the runner's configuration, and over JFC's CLAUDE.md files.
+CONFIGS = (".opencode", "opencode.json", "opencode.jsonc", "AGENTS.md", "CONTEXT.md")
+PLUGIN = Path(__file__).with_name("af_opencode.js")
+# Where commands keep their configuration, data, state and caches; the turn's own environment moves them.
+XDG = {
+    "XDG_CONFIG_HOME": ".config",
+    "XDG_DATA_HOME": ".local/share",
+    "XDG_STATE_HOME": ".local/state",
+    "XDG_CACHE_HOME": ".cache",
+}
+# The environment variable that marks every process of a turn, its commands' own sessions included.
+MARK = "AF_TURN"
+# Subagents that run at once; another `task` call waits for a seat.
+SEATS = 8
 # pyroscope-io's wheels bound Python; only conda-forge builds xrootd's bindings.
 CONDA = ("python<3.15", "xrootd")
 # The helpers' and XRootD's; the gateway also asks for prometheus-client.
@@ -51,32 +139,91 @@ PACKAGES = (
 )
 CORES = 8
 RETRIES = 5
-# Minutes between attempts to resume a turn that a usage limit stopped.
-LIMITED = 20
+# Turns a run resumes after a reply that ran out of output tokens.
+RESUMES = 3
+# Why a step ends that its reply goes on from, or no step: any other ends the reply.
+ONGOING = ("", "tool-calls", "unknown")
 LOG_LINE = 240
-# Seconds Claude Code has to end once told to, before it is killed.
+# Seconds OpenCode has to end once told to, before it is killed.
 GRACE = 30
+# Seconds within which the plugin must have loaded, or the turn ends.
+LOADED = 60
 # The longest a foreground command may run: a pass over the data is one.
 COMMAND_HOURS = 24
+# A command that sets no timeout of its own ends after this.
+COMMAND_MINUTES = 30
+# Seconds of silence that end a turn: longer than a request or a command, each of which the plugin notes as it starts.
+STALL = (COMMAND_HOURS + 1) * 3600
+POLL = 1.0
 
-# Claude Code's user memory: every agent and subagent reads it, at every turn.
+# Every agent and subagent reads it, at every turn.
 FACILITY = """\
 # The facility
 
 These rules hold for every agent of this analysis, and over the methodology's \
 where they differ.
 
+## Subagents
+
+- Only the orchestrator starts subagents, with the `task` tool. Its \
+`subagent_type` is the name of the role's definition in `agents/` without \
+`.md`, as `note_writer`; an ad-hoc subagent is an `executor`.
+- Where the methodology has a subagent start another or delegate a part of \
+its work, that subagent does the work itself, or ends with what it asks the \
+orchestrator to start.
+- The facility sets each role's model: `task` takes none, and the \
+methodology's choices of model do not apply.
+- A subagent runs until it ends, never in the background, so there is none to \
+watch. The orchestrator receives only its last message: the files it wrote, \
+its verdict and what is open. A failed one is resumed with its `task_id`, or \
+started afresh.
+- Plan mode is writing plan.md before anything else. The facility keeps \
+every session's transcript, so none is exported.
+
 ## Run independent work at the same time
 
 - Start subagents whose work does not depend on each other's in one message, \
-as several Agent calls in the foreground: they run at the same time, and the \
-results arrive when all have finished.
+as several `task` calls: they run at the same time, as many as the facility \
+has seats for, the others as seats free up, and the results arrive when all \
+have finished.
 - What may run at once is in methodology/03a-orchestration.md §3a.5: a review \
 panel's reviewers; the channels of Phases 2-3; shared calibrations beside \
 Phases 2-3; within a phase, independent pieces such as plots, systematic \
-variations, closure and injection tests, each on a subagent writing its own \
-directory, merged before the review.
+variations, MVA trainings, closure and injection tests. The orchestrator \
+splits them, each to an executor writing its own directory, merged by \
+another before the review.
 - Phases stay in order, and a review waits for the work it reviews.
+
+## Files, figures and PDFs
+
+- A reply's length is bounded: write a large file in parts. `read` returns a \
+long file in pieces: read on with `offset` to its end.
+- `read` shows a PNG to the roles that see images, a limited number per \
+session; a refused read says why. Review figures from their own PNGs, a few \
+related ones per plot validator, each batch to a fresh one.
+- Never `read` a PDF: render its pages with `pdftoppm -r 150 -png`, and use \
+`pdftotext` and `pdfinfo` for its text, unresolved references and page count. \
+Look at pages only for layout, captions and tables.
+- A subagent looks only at the figures or pages its prompt names. Where the \
+methodology has one agent look at every figure or page, as it has the \
+reviewers, the typesetter and the rendering reviewer, the orchestrator splits \
+the figures by name and the pages by range into batches, gives each batch to a \
+fresh session of that role, and merges their findings before the arbiter \
+sees them.
+
+## Review a figure by measuring it first
+
+- The orchestrator gives each figure it sends for review its intended \
+content: dataset, luminosity, axis ranges, binning, overflow handling and \
+where a signal is expected.
+- Whoever reviews a figure first copies out its axis titles, experiment label \
+and luminosity label as printed, then measures before judging: the lower \
+panel's y-range and the markers or error bars outside it; the first and last \
+x-axis ticks, and whether the last bin is drawn whole; whether the data points \
+of each panel carry error bars; each legend entry against the colour and \
+marker drawn for it. The findings follow from those measurements and the \
+intended content.
+- Error bars smaller than their marker are not missing.
 
 ## Read CMS data through XCache
 
@@ -114,8 +261,8 @@ fits, such as toys, are tasks too.
 - Workers start only once work is submitted, so a check of the cluster \
 submits a task, as `dask.submit(lambda: 1).result(timeout=600)`, instead of \
 waiting for workers.
-- A pass runs in the foreground: give its command a timeout long enough, up \
-to {hours} hours.
+- A pass runs in the foreground: give its bash call a `timeout` long enough, \
+up to {hours} hours.
 - Workers see {root} as you do, and no other storage but /cvmfs, but start \
 elsewhere: give them absolute paths.
 - Workers run as you and write where you do.
@@ -160,39 +307,6 @@ INTERRUPTED = (
     "turn again."
 )
 REPLY = "The human's reply: {reply}"
-LIFTED = (
-    "The Claude account's usage limit paused the session, and it has lifted. "
-    "Continue from where you left off; a reply of the human's before the pause "
-    "still stands."
-)
-SPENT = (
-    "Stopped: this workspace has processed its {tokens} tokens. A larger "
-    "`tokens` in the analysis.toml lets it go on."
-)
-# How Claude Code words a request refused for the account's usage limit.
-LIMIT_REACHED = re.compile(r"hit your [\w ]*limit")
-USAGE = (
-    "input_tokens",
-    "cache_creation_input_tokens",
-    "cache_read_input_tokens",
-    "output_tokens",
-)
-# The same, in the totals a turn reports at its end.
-TOTALS = (
-    "inputTokens",
-    "cacheCreationInputTokens",
-    "cacheReadInputTokens",
-    "outputTokens",
-)
-
-
-class Limited(RuntimeError):
-    """A turn the account's usage limit stopped, and when the limit resets
-    (Unix time) if Claude Code said."""
-
-    def __init__(self, detail: str, resets: float | None = None) -> None:
-        super().__init__(detail)
-        self.resets = resets
 
 
 @dataclass
@@ -206,7 +320,6 @@ class Analysis:
     files: list[str] = field(default_factory=list)
     data: str = ""
     scope: str = ""
-    tokens: int = 0
     # Without a repo: prompt.md and the files, from the analysis's directory.
     sources: dict[str, str] = field(default_factory=dict)
 
@@ -217,6 +330,7 @@ env = flyte.TaskEnvironment(
     # apps/agentic-analysis/podtemplate.yaml
     pod_template=NAME,
     resources=flyte.Resources(cpu=CORES, memory="16Gi"),
+    include=(PLUGIN.name,),
 )
 
 
@@ -326,169 +440,445 @@ def _install(work: Path) -> None:
     )
 
 
-def _turn(work: Path, config: Path, reply: str, nudge: str = INTERRUPTED) -> list[str]:
-    """The Claude Code command of the next turn: the analysis's prompt on a new
-    session; on the one that exists, the human's reply, or a nudge without one."""
-    session = str(uuid.uuid5(uuid.NAMESPACE_URL, str(work)))
-    if any(config.glob(f"projects/*/{session}.jsonl")):
-        prompt = REPLY.format(reply=reply) if reply else nudge
-        how = "--resume"
-    else:
-        prompt = UNATTENDED + (work / "prompt.md").read_text(encoding="utf-8")
-        how = "--session-id"
-    return [
-        "claude",
-        "--print",
-        prompt,
-        how,
-        session,
-        "--model",
-        MODEL,
-        "--permission-mode",
-        PERMISSION_MODE,
-        # The scaffold links the methodology in from the JFC checkout beside it.
-        "--add-dir",
-        str(work.parents[1] / "src"),
-        # A subagent's final reply then reaches the stream, and the count.
-        "--forward-subagent-text",
-        "--output-format",
-        "stream-json",
-        "--verbose",
+def _roles() -> dict[str, dict[str, Any]]:
+    """The LLM proxy's roles: each one's context, where it compacts, and the
+    images a request of it takes."""
+    asked = urllib.request.Request(
+        f"{os.environ[PROXY]}/config",
+        headers={"Authorization": f"Bearer {os.environ[TOKEN]}"},
+    )
+    try:
+        with urllib.request.urlopen(asked, timeout=60) as answer:
+            roles: dict[str, dict[str, Any]] = json.load(answer)
+            return roles
+    except urllib.error.HTTPError as refused:
+        if refused.code in (401, 403):
+            raise flyte.errors.NonRecoverableError(
+                f"the LLM proxy refuses {TOKEN}: {refused}"
+            ) from None
+        raise RuntimeError(f"the LLM proxy's roles: {refused}") from None
+    except (OSError, ValueError) as failed:
+        raise RuntimeError(f"the LLM proxy's roles: {failed}") from None
+
+
+def _config(
+    roles: dict[str, dict[str, Any]], facility: Path, work: Path
+) -> dict[str, Any]:
+    """OpenCode's configuration: the proxy as its one provider, with a model
+    per role; the orchestrator and an agent per JFC role on their roles' models;
+    FACILITY and the analysis's CLAUDE.md as every agent's instructions."""
+    wanted = {"orchestrator", "compaction", *(role for role, _ in AGENTS.values())}
+    if missing := sorted(wanted - roles.keys()):
+        raise flyte.errors.NonRecoverableError(
+            f"the LLM proxy has no role {', '.join(missing)}"
+        )
+    for name, role in roles.items():
+        if not 0 <= role["context"] - role["compact_at"] <= OUTPUT_MAX:
+            raise flyte.errors.NonRecoverableError(
+                f"the LLM proxy's role {name} compacts at {role['compact_at']} of "
+                f"{role['context']} tokens; OpenCode compacts within {OUTPUT_MAX} of a context"
+            )
+    models = {
+        name: {
+            "name": name,
+            "tool_call": True,
+            "modalities": {
+                "input": ["text", "image"] if role["images"] else ["text"],
+                "output": ["text"],
+            },
+            # OpenCode compacts at context - output; 0 is OUTPUT_MAX.
+            "limit": {
+                "context": role["context"],
+                "output": role["context"] - role["compact_at"],
+            },
+        }
+        for name, role in roles.items()
+    }
+    agents: dict[str, dict[str, Any]] = {
+        name: {
+            "mode": "subagent",
+            "model": f"af/{role}",
+            "description": description,
+            "permission": {"task": "deny"},
+        }
+        for name, (role, description) in AGENTS.items()
+    }
+    agents["orchestrator"] = {
+        "mode": "primary",
+        "model": "af/orchestrator",
+        "description": "Runs the analysis through its subagents.",
+        "permission": {"task": {"*": "deny", **dict.fromkeys(AGENTS, "allow")}},
+    }
+    agents["compaction"] = {"model": "af/compaction"}
+    for builtin in ("build", "plan", "general", "explore", "title"):
+        agents[builtin] = {"disable": True}
+    return {
+        "model": "af/orchestrator",
+        "default_agent": "orchestrator",
+        "enabled_providers": ["af"],
+        "autoupdate": False,
+        "share": "disabled",
+        "snapshot": False,
+        "subagent_depth": 1,
+        # OpenCode would load only the first of AGENTS.md and CLAUDE.md it finds.
+        "instructions": [str(facility), str(work / "CLAUDE.md")],
+        "compaction": {"auto": True, "prune": True},
+        "provider": {
+            "af": {
+                "npm": "@ai-sdk/openai-compatible",
+                "name": "AF",
+                "options": {
+                    "baseURL": f"{os.environ[PROXY]}/v1",
+                    "apiKey": f"{{env:{TOKEN}}}",
+                    **WAITS,
+                },
+                "models": models,
+            }
+        },
+        "agent": agents,
+    }
+
+
+def _setup(
+    local: Path, roles: dict[str, dict[str, Any]], work: Path, home: Path
+) -> dict[str, str]:
+    """Writes OpenCode's configuration directory into `local`, with the plugin
+    and FACILITY, read-only once written. Returns the environment of a turn."""
+    state = home / "opencode"
+    config = local / "config" / "opencode"
+    (config / "plugin").mkdir(parents=True)
+    plugin_file = config / "plugin" / PLUGIN.name
+    shutil.copy(PLUGIN, plugin_file)
+    # As the global AGENTS.md, which OpenCode loads instead of a ~/.claude/CLAUDE.md.
+    facility = config / "AGENTS.md"
+    facility.write_text(FACILITY.format(cores=CORES, hours=COMMAND_HOURS, root=ROOT))
+    for file in (plugin_file, facility):
+        file.chmod(0o444)
+    # OpenCode installs npm packages into a configuration directory it can write.
+    for directory in (config / "plugin", config, config.parent):
+        directory.chmod(0o555)
+    images = {name: roles[role]["images"] for name, (role, _) in AGENTS.items()}
+    plugin = {
+        "records": str(state / "records.jsonl"),
+        "seats": SEATS,
+        "images": {**images, "orchestrator": roles["orchestrator"]["images"]},
+        "timeout": COMMAND_HOURS * 3_600_000,
+        # The pod's own, for the agents' commands.
+        "env": {
+            name: os.environ.get(name, str(Path.home() / default))
+            for name, default in XDG.items()
+        },
+    }
+    return {
+        **os.environ,
+        "OPENCODE_CONFIG_CONTENT": json.dumps(_config(roles, facility, work)),
+        "OPENCODE_PERMISSION": json.dumps(PERMISSION),
+        "XDG_CONFIG_HOME": str(config.parent),
+        "OPENCODE_CONFIG_DIR": str(config),
+        "XDG_CACHE_HOME": str(local / "cache"),
+        "XDG_STATE_HOME": str(local / "state"),
+        # The sessions, which a later run resumes.
+        "XDG_DATA_HOME": str(state / "data"),
+        "OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS": str(COMMAND_MINUTES * 60_000),
+        "OPENCODE_DISABLE_MODELS_FETCH": "1",
+        "AF_PLUGIN": json.dumps(plugin),
+        # Tags of the profiles the analysis's scripts send.
+        "AF_ANALYSIS": work.name,
+        "AF_WORKSPACE": home.name,
+    }
+
+
+def _quarantine(work: Path, home: Path) -> None:
+    """Moves CONFIGS out of the analysis and the directories above it in the
+    workspace, and the .opencode OpenCode loads from $HOME, into the
+    workspace's opencode/quarantine."""
+    found = [
+        home / up / name for up in work.relative_to(home).parents for name in CONFIGS
     ]
+    for top, directories, files in os.walk(work):
+        found += [
+            Path(top) / name for name in (*directories, *files) if name in CONFIGS
+        ]
+        directories[:] = [
+            d for d in directories if d not in (".git", ".pixi", *CONFIGS)
+        ]
+    aside = home / "opencode" / "quarantine" / f"{time.time():.0f}"
+    moves = [(path, aside / path.relative_to(home)) for path in found]
+    moves.append((Path.home() / ".opencode", aside / "home" / ".opencode"))
+    for path, moved in moves:
+        if path.is_symlink() or path.exists():
+            moved.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(path, moved)
+            _log(f"moved {path} to {moved}")
+
+
+def _turn(work: Path, home: Path, reply: str) -> tuple[list[str], str]:
+    """The OpenCode command of the next turn and its prompt: the analysis's
+    prompt on a new session; on the one that exists, the human's reply, or a
+    nudge without one."""
+    command = ["opencode", "run", "--format", "json", "--dir", str(work)]
+    command += ["--agent", "orchestrator"]
+    session = home / "opencode" / "session"
+    if session.exists():
+        prompt = REPLY.format(reply=reply) if reply else INTERRUPTED
+        return [*command, "--session", session.read_text().strip()], prompt
+    return command, UNATTENDED + (work / "prompt.md").read_text(encoding="utf-8")
 
 
 def _narrate(event: dict[str, Any]) -> str:
-    """A stream-json event as one log line; empty for those not worth one."""
-    if event.get("type") == "system" and event.get("subtype") == "api_retry":
-        return (
-            f"API retry {event.get('attempt')}/{event.get('max_retries')}: "
-            f"{event.get('error')}"
-        )
-    if event.get("type") != "assistant":
-        return ""
-    said = []
-    for block in event.get("message", {}).get("content", []):
-        if block.get("type") == "text":
-            said.append(block["text"])
-        elif block.get("type") == "tool_use":
-            said.append(f"{block['name']} {json.dumps(block.get('input'))}")
-    line = " ".join(" | ".join(said).split())[:LOG_LINE]
-    # A subagent's events name the tool call that started it.
-    return ("  " if event.get("parent_tool_use_id") and line else "") + line
+    """An event of the main session, or a record of a subagent's, as one log
+    line; empty for those not worth one."""
+    part = event.get("part") or {}
+    state = part.get("state") or {}
+    error = event.get("error") or {}
+    match event.get("type") or event.get("kind"):
+        # A call OpenCode prunes the output of is published again.
+        case "tool_use" if not (state.get("time") or {}).get("compacted"):
+            line = f"{part.get('tool')} {json.dumps(state.get('input'))}"
+            if state.get("status") == "error":
+                line += f" failed: {state.get('error')}"
+        case "text" if not part.get("synthetic"):
+            line = part.get("text") or ""
+        case "step_finish" if part.get("reason") == "length":
+            line = "the reply ran out of output tokens"
+        case "cut":
+            line = f"{event.get('agent')}: the reply ran out of output tokens"
+        case "error" if "kind" in event:
+            line = f"{event.get('agent')} {event.get('error')}: {event.get('message')}"
+        case "error":
+            line = f"{error.get('name')}: {(error.get('data') or {}).get('message')}"
+        case "tool":
+            line = f"{event.get('agent')} {event.get('tool')} {event.get('input')}"
+            if event.get("status") == "error":
+                line += f" failed: {event.get('error')}"
+        case _:
+            return ""
+    return " ".join(line.split())[:LOG_LINE]
 
 
-def _processed(ledger: Path) -> int:
-    """The tokens a workspace has processed so far."""
+class _Watch:
+    """Follows a turn's OpenCode process and its plugin's records, from
+    `offset` on: ends the turn if the plugin has not loaded within LOADED
+    seconds, or if neither has said anything for STALL seconds."""
+
+    def __init__(
+        self, process: subprocess.Popen[str], records: Path, turn: str
+    ) -> None:
+        self.process = process
+        self.records = records
+        self.turn = turn
+        self.offset = records.stat().st_size if records.exists() else 0
+        self.loaded = False
+        self.started = self.heard = time.monotonic()
+        self.ended = ""
+        self.done = threading.Event()
+        self.thread = threading.Thread(target=self._watch, daemon=True)
+        self.thread.start()
+
+    def read(self) -> None:
+        """Takes in the records written since the last read, whole lines only."""
+        try:
+            with open(self.records, "rb") as file:
+                file.seek(self.offset)
+                written = file.read()
+        except FileNotFoundError:
+            return
+        whole = written[: written.rfind(b"\n") + 1]
+        self.offset += len(whole)
+        for line in whole.splitlines():
+            self.heard = time.monotonic()
+            try:
+                record = json.loads(line)
+            except ValueError:
+                continue
+            if record.get("kind") == "loaded":
+                self.loaded = True
+            # The main session's events come on stdout.
+            elif record.get("parent") and (said := _narrate(record)):
+                _log(f"  {said}")
+
+    def _watch(self) -> None:
+        while not self.done.wait(POLL):
+            self.read()
+            if self.process.poll() is not None:
+                # What it left behind may hold its output open.
+                _kill(self.process, self.turn)
+            now = time.monotonic()
+            if not self.loaded and now - self.started > LOADED:
+                self.end(f"its plugin did not load within {LOADED} s")
+            elif now - self.heard > STALL:
+                self.end(f"it said nothing for {STALL} s")
+
+    def end(self, why: str) -> None:
+        self.ended = why
+        _log(f"ending opencode: {why}")
+        _signal(self.process, signal.SIGTERM)
+        try:
+            self.process.wait(GRACE)
+        except subprocess.TimeoutExpired:
+            pass
+        _kill(self.process, self.turn)
+
+
+def _signal(process: subprocess.Popen[str], number: int) -> None:
+    """Signals the process group the turn's OpenCode leads."""
     try:
-        return int(ledger.read_text()) if ledger.exists() else 0
-    except ValueError:
-        raise flyte.errors.NonRecoverableError(f"{ledger} holds no count") from None
+        os.killpg(process.pid, number)
+    except ProcessLookupError:
+        pass
 
 
-def _count(ledger: Path, total: int) -> None:
-    """Records `total` in `ledger`, whole or not at all."""
-    draft = ledger.with_name(f"{ledger.name}.new")
-    draft.write_text(str(total))
-    os.replace(draft, ledger)
+def _kill(process: subprocess.Popen[str], turn: str) -> None:
+    """Kills what is left of a turn: OpenCode's process group, and every
+    process whose environment carries the turn's MARK, as the commands its bash
+    tool starts in sessions of their own do."""
+    _signal(process, signal.SIGKILL)
+    mark = f"{MARK}={turn}".encode()
+    for proc in Path("/proc").glob("[0-9]*"):
+        try:
+            if mark in (proc / "environ").read_bytes().split(b"\0"):
+                os.kill(int(proc.name), signal.SIGKILL)
+        except OSError:
+            pass
 
 
-def _claude(
-    command: list[str], work: Path, config: Path, ledger: Path, limit: int
-) -> str:
-    """Runs one turn to its end, narrating it, and returns the agent's last
-    message. Adds the tokens of each request to `ledger`, and ends the turn
-    there once the count reaches `limit`, unless that is 0."""
-    result: dict[str, Any] = {}
-    resets = None
-    start = total = _processed(ledger)
-    requests: dict[str | None, int] = {}
+def _opencode(
+    command: list[str],
+    prompt: str,
+    work: Path,
+    env: dict[str, str],
+    home: Path,
+    taken: Callable[[], object] | None = None,
+) -> tuple[list[str], str, str]:
+    """Runs one turn to its end, narrating it, and calls `taken` once OpenCode
+    holds the prompt. Returns each reply OpenCode compacted the session after
+    and had it go on from, the agent's last message, and why its last step
+    ended."""
+    session = home / "opencode" / "session"
+    known = session.exists()
+    said, finish, steps = "", "", 0
+    text: list[str] = []
+    replies: list[str] = []
+    # The agent's last message as each of the last two steps since the last compaction ended, and why it ended.
+    ended: list[tuple[str, str]] = []
+    error: dict[str, Any] = {}
+    # The step that compacted the session after a context overflow.
+    compacted = 0
+    turn = uuid.uuid4().hex
     with subprocess.Popen(
         command,
         cwd=work,
-        env={
-            **os.environ,
-            "CLAUDE_CONFIG_DIR": str(config),
-            # Headless, a turn that ends stops what still runs in the background.
-            "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1",
-            "BASH_MAX_TIMEOUT_MS": str(COMMAND_HOURS * 3600 * 1000),
-            # Tags of the profiles the analysis's scripts send.
-            "AF_ANALYSIS": work.name,
-            "AF_WORKSPACE": work.parents[2].name,
-        },
-        stdin=subprocess.DEVNULL,
+        env={**env, MARK: turn},
+        stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
         text=True,
-    ) as proc:
-        for line in proc.stdout or ():
+        start_new_session=True,
+    ) as process:
+        watch = _Watch(process, home / "opencode" / "records.jsonl", turn)
+        try:
+            assert process.stdin and process.stdout
+            # On stdin: OpenCode quotes a prompt given as an argument.
             try:
-                event = json.loads(line)
-            except ValueError:
-                event = None
-            if not isinstance(event, dict):
-                _log(line.rstrip())
-            elif event.get("type") == "result":
-                result = event
-            elif event.get("type") == "rate_limit_event":
-                info = event.get("rate_limit_info") or {}
-                if info.get("status") == "rejected":
-                    resets = info.get("resetsAt") or resets
-            else:
-                # A request's blocks arrive as events of one message, each with its usage.
-                message = event.get("message") or {}
-                usage = (
-                    message.get("usage") if event.get("type") == "assistant" else None
-                )
-                if usage:
-                    size = sum(usage.get(kind) or 0 for kind in USAGE)
-                    total += size - requests.get(message.get("id"), 0)
-                    requests[message.get("id")] = size
-                    _count(ledger, total)
-                elif event.get("subtype") == "compact_boundary":
-                    # A compaction reads what it summarises and reports no usage.
-                    summarised = event.get("compact_metadata") or {}
-                    total += summarised.get("pre_tokens") or 0
-                    _count(ledger, total)
+                process.stdin.write(prompt)
+                process.stdin.close()
+            except BrokenPipeError:
+                pass
+            for line in process.stdout:
+                watch.heard = time.monotonic()
+                try:
+                    event = json.loads(line)
+                except ValueError:
+                    event = None
+                if not isinstance(event, dict):
+                    _log(line.rstrip())
+                    continue
+                if event.get("sessionID"):
+                    if not known:
+                        session.write_text(event["sessionID"])
+                        known = True
+                    if taken:
+                        taken()
+                        taken = None
+                part = event.get("part") or {}
+                if event.get("type") == "step_start":
+                    text = []
+                elif event.get("type") == "text" and not part.get("synthetic"):
+                    text.append(part.get("text") or "")
+                    said = "\n\n".join(text)
+                elif (part.get("metadata") or {}).get("compaction_continue"):
+                    # OpenCode compacted the session after the step before the summary, and prompts it to go on.
+                    if len(ended) == 2 and ended[0][1] not in ONGOING and ended[0][0]:
+                        replies.append(ended[0][0])
+                    said, ended = "", []
+                elif event.get("type") == "step_finish":
+                    finish, steps = part.get("reason") or "", steps + 1
+                    # OpenCode compacts after a context overflow, this step its summary, and goes on.
+                    if error.get("name") == "ContextOverflowError":
+                        error, compacted, said = {}, steps, ""
+                    ended = [*ended[-1:], (said, finish)]
+                elif event.get("type") == "error":
+                    error = event.get("error") or {}
                 if narrated := _narrate(event):
                     _log(narrated)
-                if limit and total >= limit:
-                    proc.terminate()
-                    try:
-                        proc.wait(GRACE)
-                    except subprocess.TimeoutExpired:
-                        proc.kill()
-                    _log(f"stopped at {total} of {limit} tokens")
-                    return SPENT.format(tokens=limit)
-    # The turn's totals also cover requests the stream does not show.
-    models = (result.get("modelUsage") or {}).values()
-    reported = sum(model.get(kind) or 0 for model in models for kind in TOTALS)
-    if reported > total - start:
-        total = start + reported
-        _count(ledger, total)
-    detail = result.get("result") or result.get("errors") or "no result"
-    if result.get("api_error_status") in (401, 403):
-        raise flyte.errors.NonRecoverableError(f"claude: {detail}")
-    if proc.returncode or result.get("is_error", True):
-        if (
-            resets
-            or result.get("api_error_status") == 429
-            or LIMIT_REACHED.search(str(detail))
-        ):
-            raise Limited(f"claude: {detail}", resets)
-        raise RuntimeError(f"claude exited {proc.returncode}: {detail}")
-    _log(f"turn over: {result.get('num_turns')} turns, {total - start} tokens")
-    return str(result.get("result") or "")
+            process.wait()
+        finally:
+            watch.done.set()
+            watch.thread.join()
+            watch.read()
+            _kill(process, turn)
+    if watch.ended:
+        raise RuntimeError(f"opencode: {watch.ended}")
+    if not watch.loaded:
+        raise RuntimeError("opencode: its plugin did not load")
+    if error:
+        detail = (error.get("data") or {}).get("message") or error.get("name")
+        if (error.get("data") or {}).get("statusCode") in (401, 403):
+            raise flyte.errors.NonRecoverableError(f"opencode: {detail}")
+        raise RuntimeError(f"opencode: {detail}")
+    # A context overflow leaves OpenCode's exit status at 1 though it compacted and went on to the turn's end.
+    went_on = 0 < compacted < steps and finish not in ONGOING
+    if process.returncode and not (process.returncode == 1 and went_on):
+        raise RuntimeError(f"opencode exited {process.returncode}")
+    _log(f"turn over: {steps} steps, the last ending in {finish or 'nothing'}")
+    return replies, said, finish
 
 
-# Long enough to wait out the weekly usage limit within one run.
+def _agent(work: Path, home: Path, reply: str, told: Path) -> str:
+    """The agent's work until it ends its turn: each turn on OpenCode
+    configured afresh from the proxy's roles, a turn resumed while its last
+    reply ran out of output tokens. The reply is written to `told` once
+    OpenCode holds it. Returns what the agent said."""
+    (home / "opencode").mkdir(exist_ok=True)
+    roles = _roles()
+    kept: list[str] = []
+    for _ in range(RESUMES + 1):
+        _quarantine(work, home)
+        command, prompt = _turn(work, home, reply)
+        taken = functools.partial(told.write_text, reply) if reply else None
+        # Nothing a turn writes into it reaches the next.
+        with tempfile.TemporaryDirectory(
+            prefix="opencode-", ignore_cleanup_errors=True
+        ) as local:
+            env = _setup(Path(local), roles, work, home)
+            replies, said, finish = _opencode(command, prompt, work, env, home, taken)
+        kept += replies
+        if finish != "length":
+            return "\n\n".join(filter(None, [*kept, said]))
+        reply = ""
+    raise RuntimeError(
+        f"the agent's replies ran out of output tokens {RESUMES + 1} times"
+    )
+
+
+# A run lasts until the agent ends its turn, which can take an analysis days.
 @env.task(retries=RETRIES, timeout=timedelta(days=14))
 def advance(analysis: Analysis, workspace: str, reply: str) -> str:
     """One stretch of the agent's work in ROOT/<workspace>, until it ends its
     turn: with the analysis note finished, or with something for a person.
     Returns what it said."""
-    if not any(os.environ.get(name) for name in CREDENTIALS):
+    if not (os.environ.get(PROXY) and os.environ.get(TOKEN)):
         raise flyte.errors.NonRecoverableError(
-            f"none of {', '.join(CREDENTIALS)} is set: see apps/agentic-analysis/README.md"
+            f"{PROXY} and {TOKEN} are not both set: see apps/agentic-analysis/README.md"
         )
     if not Path(os.environ.get(af_dask.TOKEN_FILE, "")).is_file():
         raise flyte.errors.NonRecoverableError(
@@ -505,32 +895,10 @@ def advance(analysis: Analysis, workspace: str, reply: str) -> str:
             # One agent per workspace: a second run on it waits for the first.
             fcntl.flock(lock, fcntl.LOCK_EX)
             work = _prepare(home, analysis)
-            config, ledger = home / "claude", home / "tokens"
-            if analysis.tokens and _processed(ledger) >= analysis.tokens:
-                raise flyte.errors.NonRecoverableError(
-                    SPENT.format(tokens=analysis.tokens)
-                )
-            # A reply reaches the agent once: a retry of the run that carried it nudges.
+            # A reply reaches the agent once: a retry of the run whose turn took it nudges.
             told = home / "replies" / ctx.action.run_name
-            if reply and told.exists():
-                reply = ""
-            elif reply:
-                told.parent.mkdir(exist_ok=True)
-                told.write_text(reply)
-            config.mkdir(exist_ok=True)
-            (config / "CLAUDE.md").write_text(
-                FACILITY.format(cores=CORES, hours=COMMAND_HOURS, root=ROOT)
-            )
-            nudge = INTERRUPTED
-            while True:
-                turn = _turn(work, config, reply, nudge)
-                try:
-                    said = _claude(turn, work, config, ledger, analysis.tokens)
-                    break
-                except Limited as limited:
-                    # A usage limit lifts in hours, not within the retries' pauses.
-                    _wait_out(limited, config)
-                    reply, nudge = "", LIFTED
+            told.parent.mkdir(exist_ok=True)
+            said = _agent(work, home, "" if told.exists() else reply, told)
             (home / "said.md").write_text(said)
     except flyte.errors.NonRecoverableError:
         raise
@@ -543,49 +911,6 @@ def advance(analysis: Analysis, workspace: str, reply: str) -> str:
         raise
     print(said, flush=True)
     return said
-
-
-def _wait_out(limited: Limited, config: Path) -> None:
-    """Sleeps until the account's usage limit lifts: until the reset Claude Code
-    reported, or until a request outside the session goes through."""
-    if limited.resets and limited.resets > time.time():
-        _log(
-            f"{limited}; resuming after {datetime.fromtimestamp(limited.resets, timezone.utc):%Y-%m-%d %H:%M} UTC"
-        )
-        time.sleep(limited.resets - time.time() + 60)
-        return
-    while True:
-        _log(f"{limited}; asking again in {LIMITED} min")
-        time.sleep(LIMITED * 60)
-        if not _still_limited(config):
-            return
-
-
-def _still_limited(config: Path) -> bool:
-    """Whether a one-word request, of no session, is refused for the usage limit."""
-    asked = subprocess.run(
-        [
-            "claude",
-            "--print",
-            "ok",
-            "--no-session-persistence",
-            "--model",
-            MODEL,
-            "--output-format",
-            "json",
-        ],
-        env={**os.environ, "CLAUDE_CONFIG_DIR": str(config)},
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        text=True,
-    )
-    try:
-        answer = json.loads(asked.stdout)
-    except ValueError:
-        return False
-    return answer.get("api_error_status") == 429 or bool(
-        LIMIT_REACHED.search(str(answer.get("result")))
-    )
 
 
 def _sources(directory: Path, names: list[str]) -> dict[str, str]:
