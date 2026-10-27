@@ -68,7 +68,7 @@ for a Slurm job, simply add the `--gpus-per-node=1` argument to the `sbatch` com
 ### 3. Ray clusters
 
 From a session started without a GPU, you can train on GPUs all the same: a
-job submitted from a notebook runs on a [Ray](https://docs.ray.io/en/latest/) cluster of your own,
+job submitted from a notebook runs on a [Ray](https://docs.ray.io/en/latest/) cluster of its own,
 with one or more A100 slices or T4s, whether or not the notebook stays open —
 see [Training on GPUs with Ray](guide-ray-train.md).
 

@@ -45,7 +45,7 @@ frameworks such as Coffea and RDataFrame.
 
 [Ray](https://docs.ray.io/en/latest/) is an open-source framework for
 distributed machine learning. At Purdue AF, a training job submitted from a
-notebook in a session without a GPU runs on a Ray cluster of your own, with
+notebook in a session without a GPU runs on a Ray cluster of its own, with
 GPUs — see [Training on GPUs with Ray](guide-ray-train.md).
 
 ## Slurm (Purdue users only)

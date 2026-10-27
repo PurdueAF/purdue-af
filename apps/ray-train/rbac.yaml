@@ -12,6 +12,10 @@ rules:
   - apiGroups: ["ray.io"]
     resources: ["rayclusters"]
     verbs: ["get", "list", "create", "delete"]
+  # Submitted jobs, a RayJob each: KubeRay creates and removes their clusters.
+  - apiGroups: ["ray.io"]
+    resources: ["rayjobs"]
+    verbs: ["get", "list", "create", "patch", "delete"]
   # Their token Secrets, never read back: the gateway derives the tokens.
   - apiGroups: [""]
     resources: ["secrets"]

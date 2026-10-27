@@ -1,13 +1,22 @@
 # ray-train
 
-A gateway that gives every AF user a Ray cluster of their own. A notebook
-connects with Ray Client, `ray.init("ray://ray-train-gateway:10001")`, or
-submits jobs with the Jobs API's client,
-`JobSubmissionClient("http://ray-train-gateway:8265")`, signed in with its
-session's JupyterHub token either way; the gateway asks the Hub whose token it
-is and relays the calls, unread, to that user's cluster: a head and
-workers, one with one GPU unless a call asks for more of either, created when they
-first connect or submit a job, running as them, and deleted once idle. A
+A gateway that gives every AF user a Ray cluster of their own, and every job
+they submit a cluster of its own. A notebook connects with Ray Client,
+`ray.init("ray://ray-train-gateway:10001")`, or submits jobs with the Jobs
+API's client, `JobSubmissionClient("http://ray-train-gateway:8265")`, signed
+in with its session's JupyterHub token either way; the gateway asks the Hub
+whose token it is and relays the calls, unread. Ray Client's reach that user's
+RayCluster: a head and workers, one with one GPU unless a call asks for more
+of either, created when they first connect, running as them, and deleted once
+idle. A submission, and the uploads of the code it takes along, reach a RayJob
+of its own, `ray-job-<hash>`, labelled `purdue-af/ray-owner` with the user's
+cluster's name: KubeRay makes its cluster as the gateway makes a user's, the
+gateway submits the job to that cluster's head, and KubeRay removes the
+cluster `idleTimeoutSeconds` after the job ends. A call about a job reaches its
+cluster while that is up, and its RayJob's record of it afterwards, until
+`jobRecordSeconds` after it ended; a job whose workers do not all start within
+`provisionTimeoutSeconds` is stopped. The submission ID is the RayJob's, the one
+the client named or one the gateway makes. A
 worker's GPU is a 5 GB A100 slice or a T4, whichever is free, slices first;
 a call that asks for more GPU memory than a slice has, or for two GPUs a
 worker, gets T4s only. A call
@@ -34,12 +43,12 @@ send their training to it:
 
 | File                 | What it is                                                                                                                |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `gateway.py`         | The gateway: relays Ray Client and Jobs API calls, creates and deletes users' RayClusters                                 |
+| `gateway.py`         | The gateway: relays Ray Client and Jobs API calls, creates and deletes users' RayClusters, and creates a RayJob per submission |
 | `config.yaml`        | The gateway's settings: timeouts, GPU limits, the addresses it asks, and the volumes a workload account's cluster keeps    |
-| `raycluster.yaml`    | The template of a user's cluster; the gateway fills in its name, the user's UID/GID, its environment, its token Secret and its worker groups, one per kind of GPU and priority |
+| `raycluster.yaml`    | The template of a user's cluster, and of a job's; the gateway fills in its name, the user's UID/GID, its environment, its token Secret and its worker groups, one per kind of GPU and priority |
 | `deployment.yaml`    | The gateway pod: the stock Ray image, with the files above from the `ray-train-gateway` ConfigMap and the workload accounts' declarations from `af-accounts` |
 | `service.yaml`       | `ray-train-gateway:10001` for Ray Client and `:8265` for the Jobs API, the addresses notebooks connect to                 |
-| `rbac.yaml`          | Create, read and delete RayClusters; create their token Secrets                                                           |
+| `rbac.yaml`          | Create, read and delete RayClusters and RayJobs, and annotate RayJobs; create their token Secrets                          |
 | `networkpolicy.yaml` | Admits sessions to the gateway, and the gateway to users' clusters; the namespace's own `np-default` admits its other pods, a workload account's among them, to both |
 
 The session side is in the Hub config:
@@ -81,6 +90,7 @@ running over them, but not their jobs.
 
 ```bash
 kubectl -n cms get rayclusters -l app.kubernetes.io/managed-by=ray-train-gateway
+kubectl -n cms get rayjobs -l app.kubernetes.io/managed-by=ray-train-gateway
 kubectl -n cms get pod -l app=ray-train-gateway
 kubectl -n cms logs deploy/ray-train-gateway
 kubectl -n cms logs deploy/ray-train-gateway --previous
