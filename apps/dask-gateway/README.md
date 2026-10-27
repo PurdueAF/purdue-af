@@ -61,9 +61,9 @@ the name a user `<name>`'s would have, with `USER` set to `<name>`. In this
 gateway its Dask user is `account:<name>`, a name no user has. Both gateways
 refuse a user whose name is a declared account's or holds a `:`, this gateway
 a session cookie of such a user too, and the Ray gateway a Hub token of
-anything but a user. The Ray gateway relays a call only to a cluster that runs
-as its caller, by the cluster's UID, GID and `app.kubernetes.io/part-of`
-label.
+anything but a user. The Ray gateway relays an account's calls only to a
+cluster with its `app.kubernetes.io/part-of` label, and a user's only to one
+without it.
 
 The gateways refuse, and log, a declaration with other keys; a name that is no
 lowercase DNS label of at most `ACCOUNT_NAME_MAX` characters, or that is in

@@ -1139,6 +1139,42 @@ async def test_a_person_never_reaches_a_cluster_of_their_name_that_runs_as_an_ac
     assert runs_as(env, WORKLOAD_CLUSTER) == (1234, 1235)
 
 
+async def test_a_refused_namesake_leaves_the_clusters_idle_clock_alone(
+    env, namesake, monkeypatch
+):
+    assert await call(env, token=WORKLOAD_TOKEN, env_path="/cvmfs/env") == [
+        b"echo:ping"
+    ]
+    idle(env, WORKLOAD_CLUSTER)
+    long_ago = env.gateway.last_used[WORKLOAD_CLUSTER]
+    monkeypatch.setattr(gw, "ACCOUNTS_DIR", env.accounts / "missing")
+    for restarted in (False, True):
+        if restarted:
+            env.gateway.started.clear()
+        assert (
+            await refused(env, token=namesake, env_path="/cvmfs/env")
+            == grpc.StatusCode.PERMISSION_DENIED
+        )
+        status, _, _ = await job_call(env, token=namesake)
+        assert status == 403
+    assert env.gateway.last_used[WORKLOAD_CLUSTER] == long_ago
+
+
+async def test_a_user_whose_ids_changed_still_reaches_their_own_cluster(
+    env, monkeypatch
+):
+    assert await call(env) == [b"echo:ping"]
+    env.heads.jobs["ray-train-user-a"] = [running_job("raysubmit_their_job")]
+    monkeypatch.setitem(LDAP, "user-a", (5002, 501))
+    env.gateway._users.clear()
+    env.gateway.started.clear()
+    assert await call(env) == [b"echo:ping"]
+    status, _, body = await job_call(env)
+    assert status == 200
+    assert b"raysubmit_their_job" in body
+    assert env.kube.created == 1
+
+
 @pytest.mark.parametrize("declared", [True, False])
 async def test_a_token_no_one_has_is_refused_and_logged(
     env, monkeypatch, caplog, declared

@@ -250,9 +250,9 @@ class User:
         return cluster_name(self.name)
 
     @property
-    def owner(self) -> tuple[Any, Any, str]:
-        """Whom their cluster runs as: its UID and GID, and the workload account it is of, if any."""
-        return self.uid, self.gid, self.name if self.workload else ""
+    def owner(self) -> str:
+        """The workload account their cluster is of, or "" for a Hub user's."""
+        return self.name if self.workload else ""
 
 
 @dataclass(frozen=True)
@@ -775,25 +775,19 @@ def cluster_shape(cluster: dict[str, Any]) -> Shape:
     )
 
 
-def cluster_owner(cluster: dict[str, Any]) -> tuple[Any, Any, str]:
-    """Whom a cluster runs as, as User.owner states it."""
+def cluster_owner(cluster: dict[str, Any]) -> str:
+    """Whose a cluster is, as User.owner states it."""
     head = cluster["spec"]["headGroupSpec"]["template"]
-    context = head["spec"].get("securityContext") or {}
-    labels = (head.get("metadata") or {}).get("labels") or {}
-    return (
-        context.get("runAsUser"),
-        context.get("runAsGroup"),
-        str(labels.get(PART_OF, "")),
-    )
+    return str(((head.get("metadata") or {}).get("labels") or {}).get(PART_OF, ""))
 
 
 def refuse_others(cluster: dict[str, Any], user: User) -> None:
-    """Refuses the user a cluster of their cluster's name that runs as someone else."""
+    """Refuses the user a cluster of their cluster's name that is someone else's."""
     if cluster_owner(cluster) != user.owner:
         log.warning("%s refused: reason=owner", user.cluster)
         raise Refused(
             grpc.StatusCode.PERMISSION_DENIED,
-            f"{user.cluster} is a Ray cluster that runs as someone else.",
+            f"{user.cluster} is someone else's Ray cluster.",
         )
 
 
@@ -813,8 +807,8 @@ class Gateway:
         self.kube_http = kube
         self.token_file = token_file
         self.last_used: dict[str, float] = {}
-        # Whom each cluster was last found running as, and in what shape, so that a call skips the checks.
-        self.started: dict[str, tuple[tuple[Any, Any, str], Shape]] = {}
+        # Whose each cluster was last found to be, and in what shape, so that a call skips the checks.
+        self.started: dict[str, tuple[str, Shape]] = {}
         self.channels: dict[str, grpc.aio.Channel] = {}
         # cluster -> the Ray Client ids it serves; client id -> until when its cluster is known removed, and why
         self.clients: dict[str, set[str]] = {}
@@ -942,10 +936,10 @@ class Gateway:
             )
         # Here rather than in caller: asking after jobs needs no environment.
         mounted_env(shape.env, cluster_template(user))
-        self.last_used[user.cluster] = time.monotonic()
         if self.started.get(user.cluster) != (user.owner, shape):
             await self.start_cluster(user, shape)
             self.started[user.cluster] = (user.owner, shape)
+        self.last_used[user.cluster] = time.monotonic()
         return user.cluster
 
     async def running(self, user: User) -> str:
@@ -1176,6 +1170,8 @@ class Gateway:
         cluster = await self.cluster(user.cluster)
         if cluster is not None and not cluster["metadata"].get("deletionTimestamp"):
             refuse_others(cluster, user)
+        # Only a call the cluster's owner makes keeps it from being reaped.
+        self.last_used[user.cluster] = time.monotonic()
         if cluster is not None and not runs(cluster, shape):
             if not cluster["metadata"].get("deletionTimestamp"):
                 if await self.busy(cluster):
