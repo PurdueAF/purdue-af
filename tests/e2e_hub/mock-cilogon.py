@@ -15,6 +15,9 @@ import secrets
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+# The production client's registered scopes; like CILogon, /authorize rejects any other.
+REGISTERED_SCOPES = {"openid", "email", "org.cilogon.userinfo"}
+
 # code/token -> claims; _next holds claims for the next /authorize hit
 STATE = {
     "_next": {
@@ -64,11 +67,26 @@ class Handler(BaseHTTPRequestHandler):
         query = urllib.parse.parse_qs(url.query)
 
         if url.path == "/authorize":
-            code = secrets.token_hex(8)
-            STATE[code] = dict(STATE["_next"])
             redirect = query["redirect_uri"][0]
             sep = "&" if "?" in redirect else "?"
-            location = f"{redirect}{sep}code={code}&state={query.get('state', [''])[0]}"
+            state = query.get("state", [""])[0]
+            unregistered = sorted(
+                set(query.get("scope", [""])[0].split()) - REGISTERED_SCOPES
+            )
+            if unregistered:
+                error = urllib.parse.urlencode(
+                    {
+                        "error": "invalid_scope",
+                        "error_description": "Malformed scope parameter. "
+                        f'Unrecognized scope "{unregistered[0]}"',
+                        "state": state,
+                    }
+                )
+                location = f"{redirect}{sep}{error}"
+            else:
+                code = secrets.token_hex(8)
+                STATE[code] = dict(STATE["_next"])
+                location = f"{redirect}{sep}code={code}&state={state}"
             self.send_response(302)
             self.send_header("Location", location)
             self.end_headers()
