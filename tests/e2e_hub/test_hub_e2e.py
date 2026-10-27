@@ -27,6 +27,24 @@ def test_purdue_user_in_list_logs_in(login):
     assert "alice" in home.text
 
 
+def test_mock_cilogon_rejects_unregistered_scopes():
+    """Every login above passes only while the hub requests registered scopes."""
+    import httpx
+
+    response = httpx.get(
+        f"{MOCK}/authorize",
+        params={
+            "redirect_uri": f"{HUB}/hub/oauth_callback",
+            "scope": "openid profile",
+            "state": "s",
+        },
+        follow_redirects=False,
+        timeout=10,
+    )
+    assert response.status_code == 302
+    assert "error=invalid_scope" in response.headers["location"]
+
+
 def test_purdue_user_not_in_list_is_rejected(login):
     _, response = login("mallory@purdue.edu")
     assert response.status_code == 403
