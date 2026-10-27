@@ -46,7 +46,7 @@
 +            args=[client_cmd],
 +            restart_policy="Always",
 +            resources=k.V1ResourceRequirements(
-+                requests={"cpu": "100m", "memory": "128Mi"}, limits={"cpu": "100m", "memory": "128Mi"}
++                requests={"cpu": "1", "memory": "1Gi"}, limits={"cpu": "1", "memory": "1Gi"}
 +            ),
 +            security_context=k.V1SecurityContext(
 +                allow_privilege_escalation=False, capabilities=k.V1Capabilities(drop=["ALL"])
