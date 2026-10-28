@@ -47,8 +47,9 @@ template:
           # Dashboard links: the gateway's Traefik serves dashboards, its API does not.
           - name: DASK_GATEWAY__PUBLIC_ADDRESS
             value: http://dask-gateway.geddes.rcac.purdue.edu
+          # Its Traefik's route to schedulers, by its in-cluster address too, which networkpolicy.yaml admits.
           - name: DASK_GATEWAY__PROXY_ADDRESS
-            value: traefik-dask-gateway.cms.geddes.rcac.purdue.edu:8786
+            value: traefik-dask-gateway:8786
           - name: DASK_GATEWAY__AUTH__TYPE
             value: af_dask.AccountAuth
           # The facility's grid proxy, which af-x509-secrets renews, for XCache and DAS.

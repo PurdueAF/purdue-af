@@ -46,6 +46,7 @@ resources:
 
   # Runs analyses with the JFC methodology on demand (workflows/agentic-analysis).
   - ../../apps/agentic-analysis/llm-proxy.yaml
+  - ../../apps/agentic-analysis/networkpolicy.yaml
   - ../../apps/agentic-analysis/podtemplate.yaml
   - ../../apps/agentic-analysis/secret-account.yaml
   - ../../apps/agentic-analysis/secret-llm-proxy.yaml
