@@ -11,7 +11,6 @@ once. You submit the script from a notebook and read its output there.
 | Try many hyperparameters            | A training with one set of them             | [Hyperparameter search](#hyperparameter-search)         |
 | Train a model too large for one GPU | A part of the model                         | [A model larger than a GPU](#a-model-larger-than-a-gpu) |
 | Apply a trained model to a dataset  | A copy of the model, on a share of the rows | [Batch inference](#batch-inference)                     |
-| Train on more GPUs than are free here | As above, on NRP Nautilus                 | [More GPUs on NRP](#more-gpus-on-nrp)                   |
 
 ## Before you start
 
@@ -472,60 +471,6 @@ events.map_batches(
 Submit it as for [data-parallel training](#data-parallel-training):
 `af-max-workers` is the number of GPUs to score on.
 
-## More GPUs on NRP
-
-A job can also run on the GPUs of
-[NRP Nautilus](https://nrp.ai/documentation/), a national cluster the AF
-shares, when it needs more GPUs than are free here. Name the directories it
-reads and writes on `/work`, and submit it with `af-site: nrp`:
-
-```python
-client = JobSubmissionClient(
-    "http://ray-train-gateway:8265",
-    headers={
-        "af-site": "nrp",
-        "af-max-workers": "4",
-        "af-inputs": "/work/users/<username>/events",
-        "af-output": "/work/users/<username>/ray_results",
-    },
-)
-job = client.submit_job(entrypoint="python train.py", runtime_env={"working_dir": "."})
-```
-
-A job on NRP does not see `/work`: it reads its inputs from `AF_INPUTS` and
-writes to `AF_OUTPUT`. In the script of
-[Data-parallel training](#data-parallel-training), those take the place of
-its paths:
-
-```python
-trainer = TorchTrainer(
-    train_func,
-    scaling_config=ScalingConfig(
-        num_workers=(1, int(os.environ["AF_MAX_WORKERS"])), use_gpu=True
-    ),
-    run_config=RunConfig(
-        storage_path=os.environ["AF_OUTPUT"],
-        failure_config=FailureConfig(max_failures=10),
-    ),
-    datasets={"train": ray.data.read_parquet(os.environ["AF_INPUTS"])},
-)
-```
-
-The script then runs here as well, where `AF_INPUTS` and `AF_OUTPUT` are the
-directories you name. On NRP:
-
-* **Before it starts**, its inputs are copied there, and it waits for GPUs
-  of one model in one region. Its first start can take a quarter of an hour,
-  while NRP fetches the software it runs.
-* **When it ends**, what it wrote to `AF_OUTPUT` is copied to your directory:
-  `client.get_job_status(job)` says `RUNNING` until it is.
-* **Software.** It runs the **Python (pixi global)** environment: add
-  packages with `runtime_env={"pip": [...]}`. `af-env` and the worker sizes do
-  not apply; each worker has one GPU, of whichever model is free.
-* **Busy GPUs.** NRP asks jobs to keep their GPUs busy: a job whose GPUs stay
-  mostly idle is stopped, and its status says why.
-* **Interactive work**, through `ray.init`, stays on the AF.
-
 ## Settings
 
 The `headers` of the `JobSubmissionClient` say what your jobs run on. A
@@ -541,9 +486,6 @@ value is a string:
 | `af-cpus-per-worker`   | CPU cores of each worker, up to `"16"`                          | `"8"`                |
 | `af-ram-per-worker-gb` | Memory of each worker in GB, up to `"64"`                       | `"32"`               |
 | `af-env`               | [An environment of your own](#your-own-environment)             | Python (pixi global) |
-| `af-site`              | `"nrp"` for [more GPUs on NRP](#more-gpus-on-nrp)               | `"purdue"`           |
-| `af-inputs`            | A directory the job reads, as `AF_INPUTS`                       |                      |
-| `af-output`            | A directory the job writes, as `AF_OUTPUT`                      |                      |
 
 Each job runs with the settings it was submitted with.
 
