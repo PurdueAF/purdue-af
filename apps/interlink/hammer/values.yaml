@@ -66,6 +66,11 @@ virtualNode:
     memGiB: 4000
     pods: 300
 
+  containerResources:
+    memory:
+      request: 512Mi
+      limit: 2Gi
+
   disableCSR: true
 
   network:
