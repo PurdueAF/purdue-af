@@ -2490,7 +2490,8 @@ class Gateway:
 
     async def reap_jobs(self) -> None:
         """Remove a RayJob no job was submitted to in time, and a job's record once
-        kept long enough; stop a job whose workers did not all start in time."""
+        kept long enough; free an ended job's GPUs; stop a job whose workers did
+        not all start in time."""
         status, listing = await self.kube(
             "GET",
             f"{RAYJOBS}?labelSelector=app.kubernetes.io%2Fmanaged-by%3D{MANAGED_BY}",
@@ -2510,7 +2511,9 @@ class Gateway:
                 ).timestamp()
                 if metadata.get("deletionTimestamp"):
                     continue
-                if not state.get("jobStatus"):
+                # The gateway sets jobId as it submits the job.
+                submission = job["spec"].get("jobId")
+                if not submission:
                     if name not in waited_for and now - created >= 2 * START_TIMEOUT_S:
                         await self.kube(
                             "DELETE",
@@ -2518,6 +2521,8 @@ class Gateway:
                             {"propagationPolicy": "Background"},
                         )
                         log.info("deleted %s: no job was submitted to it", name)
+                elif not state.get("jobStatus"):
+                    await self.follow_on_head(job, submission, created, now)
                 elif job_ended(job):
                     await self.free_workers(name, state.get("rayClusterName"))
                     ended = epoch_ms(state.get("endTime"))
@@ -2534,6 +2539,49 @@ class Gateway:
                         await self.stop_unprovisioned(job, head)
             except Exception:
                 log.exception("checking %s", name)
+
+    async def follow_on_head(
+        self, job: dict[str, Any], submission: str, created: float, now: float
+    ) -> None:
+        """A submitted job KubeRay does not follow yet, as it does only once every
+        pod of its cluster runs: free its workers once its head says it ended, which
+        lets KubeRay follow it to its end; remove it if its head never ran it."""
+        name = job["metadata"]["name"]
+        head = (job.get("status") or {}).get("rayClusterName")
+        cluster = await self.cluster(head) if head else None
+        if cluster is None or cluster["metadata"].get("deletionTimestamp"):
+            if now - created >= JOB_RECORD_S:
+                await self.kube(
+                    "DELETE", f"{RAYJOBS}/{name}", {"propagationPolicy": "Background"}
+                )
+                log.info("deleted the record of %s, which has no cluster", name)
+            return
+        assert head is not None
+        state = await self.head_job_status(head, name, submission)
+        if state in ("SUCCEEDED", "FAILED", "STOPPED"):
+            await self.free_workers(name, head)
+        elif state == "" and now - created >= 2 * START_TIMEOUT_S:
+            await self.kube(
+                "DELETE", f"{RAYJOBS}/{name}", {"propagationPolicy": "Background"}
+            )
+            log.info("deleted %s: its head runs no job %s", name, submission)
+
+    async def head_job_status(
+        self, head: str, keyed: str, submission: str
+    ) -> str | None:
+        """The job's status as its head says; "" if the head has no such job, None if it does not answer."""
+        try:
+            async with self.http.get(
+                f"{head_url(head)}/api/jobs/{submission}",
+                headers=self.cluster_auth(keyed),
+                timeout=ClientTimeout(total=10),
+            ) as r:
+                if r.status == 404:
+                    return ""
+                r.raise_for_status()
+                return str((await r.json()).get("status") or "")
+        except (ClientError, asyncio.TimeoutError, ValueError):
+            return None
 
     async def free_workers(self, name: str, head: str | None) -> None:
         """Suspend the worker groups of an ended job's cluster, as KubeRay's
