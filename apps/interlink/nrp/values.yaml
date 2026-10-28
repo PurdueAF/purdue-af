@@ -60,6 +60,8 @@ plugin:
     # The virtual kubelet cannot follow an in-place restart: the local pod
     # goes Failed while the remote one restarts, holding its GPU.
     restart_policy=Never
+    # Envoy drops a deleted pod within seconds; Triton refuses new requests once stopping.
+    delete_delay_seconds=10
 
     [mesh]
     init_container=True
@@ -122,6 +124,7 @@ virtualNode:
                 operator: Equal
                 value: cms-af
                 effect: NoSchedule
+            terminationGracePeriodSeconds: 45
             containers:
             - name: wstunnel
               image: ghcr.io/erebe/wstunnel:v11.1.0
@@ -148,6 +151,11 @@ virtualNode:
                 name: {{.Name}}
                 protocol: {{.Protocol}}
               {{- end}}
+              # Keeps the tunnel up for requests in flight when the offloaded pod is deleted.
+              lifecycle:
+                preStop:
+                  exec:
+                    command: ["sleep", "30"]
               resources:
                 requests:
                   cpu: 100m

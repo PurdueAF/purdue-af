@@ -1,7 +1,7 @@
 # interLink Kubernetes plugin (Purdue)
 
 Site image for the [interlink-kubernetes-plugin](https://github.com/interlink-hq/interlink-kubernetes-plugin)
-sidecar: the upstream `1.2.0` image plus five patches.
+sidecar: the upstream `1.2.0` image plus seven patches.
 
 - `ensure-namespace.patch` adds an `[offloading] ensure_namespace` option.
   Upstream lists namespaces at cluster scope before every pod create;
@@ -32,6 +32,16 @@ sidecar: the upstream `1.2.0` image plus five patches.
   container statuses yet — one still waiting to be scheduled — as waiting.
   The virtual kubelet counts a pod's containers from that list, so an empty
   one reads as every container terminated and the pod is marked Succeeded.
+- `remote-gone.patch` reports a remote pod that failed (evicted, refused at
+  admission) or was deleted as failed. The virtual kubelet keeps the last
+  status of a pod the plugin returns nothing for, and never clears Ready, so
+  a Ready pod whose remote pod is gone stays in its Service. A 404 counts as
+  gone only for a pod the plugin has read before: the virtual kubelet polls
+  while the remote pod is still being created.
+- `remote-drain.patch` adds an `[offloading] delete_delay_seconds` option:
+  the plugin waits that long before deleting the remote pod, so clients stop
+  sending to it once the local pod has left its Service. The tunnel's shadow
+  pod (`apps/interlink/<cluster>/values.yaml`) outlives the wait.
 
 ## Files
 
@@ -44,6 +54,8 @@ sidecar: the upstream `1.2.0` image plus five patches.
 | `remote-placement.patch` | adds `interlink.eu/remote-affinity` and `[offloading] restart_policy` (default unset: the pod's own policy) |
 | `remote-readiness.patch` | keeps the probes and reports an unready container as waiting; patches the installed interLink SDK too, so it applies from `/` |
 | `remote-pending.patch` | reports the containers of an unscheduled remote pod as waiting; applies from `/` |
+| `remote-gone.patch` | reports a failed or deleted remote pod as failed; applies from `/` |
+| `remote-drain.patch` | adds `[offloading] delete_delay_seconds` (default 0: upstream behavior); applies from `/` |
 
 ## Bumping the plugin
 

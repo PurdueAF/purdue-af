@@ -526,6 +526,31 @@ def test_tunnel_ingress_is_served_by_the_tunnel_traefik(interlink_clusters):
             assert "ingressClassName" not in ingress["spec"], cluster
 
 
+def test_tunnel_shadow_outlives_the_remote_delete(interlink_clusters):
+    """The virtual kubelet deletes the shadow before it asks the plugin to
+    delete the remote pod; the shadow's preStop keeps the tunnel up through
+    the plugin's delete delay, and the grace period lets the preStop finish."""
+    for cluster, app, network in _tunnel_nodes(interlink_clusters):
+        parts = network["customTemplate"].split("\n---\n")
+        (deployment,) = [
+            yaml.safe_load(
+                re.sub(r"\{\{[^}]*\}\}", "x", re.sub(r"(?m)^\s*\{\{-.*\n", "", part))
+            )
+            for part in parts
+            if re.search(r"^kind: Deployment$", part, re.M)
+        ]
+        pod = deployment["spec"]["template"]["spec"]
+        (container,) = pod["containers"]
+        command = container["lifecycle"]["preStop"]["exec"]["command"]
+        assert command[0] == "sleep", cluster
+        delay = 0.0
+        if _backend(app) == "kubernetes":
+            delay = _plugin_ini(app).getfloat(
+                "offloading", "delete_delay_seconds", fallback=0.0
+            )
+        assert delay < float(command[1]) < pod["terminationGracePeriodSeconds"], cluster
+
+
 def test_tunnel_client_dials_the_pinned_traefik_address(interlink_clusters):
     """No DNS name points at the Traefik; the client dials its address, which
     MetalLB holds only while the Service pins it."""
