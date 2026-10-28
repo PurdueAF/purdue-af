@@ -432,6 +432,74 @@ def test_tunnel_nodes_share_one_shadow_template(interlink_clusters):
     assert len(templates) == 1, "shadow templates differ"
 
 
+def _render_shadow(template, prefix, ports):
+    """The virtual kubelet's text/template render, for the actions the shadow
+    template uses: fields, `range .ExposedPorts` and `{{-` trimming."""
+    text = re.sub(r"\s*\{\{-\s*", "{{", template)
+    text = re.sub(
+        r"\{\{range \.ExposedPorts\}\}(.*?)\{\{end\}\}",
+        lambda m: "".join(
+            re.sub(r"\{\{\.(\w+)\}\}", lambda f: str(port[f[1]]), m[1])
+            for port in ports
+        ),
+        text,
+        flags=re.S,
+    )
+    fields = {
+        "Name": "shadow",
+        "Namespace": "cms",
+        "RandomPassword": prefix,
+        "WildcardDNS": "example.org",
+    }
+    return re.sub(r"\{\{\.(\w+)\}\}", lambda f: fields[f[1]], text)
+
+
+class _TaggedLoader(yaml.SafeLoader):
+    """wstunnel's restriction file tags each rule with its kind."""
+
+
+_TaggedLoader.add_multi_constructor(
+    "!",
+    lambda loader, tag, node: {
+        tag: loader.construct_mapping(node, deep=True)
+        if isinstance(node, yaml.MappingNode)
+        else loader.construct_scalar(node)
+    },
+)
+
+
+def test_shadow_server_allows_only_the_clients_reverse_tunnels(interlink_clusters):
+    """The remote side opens `-R tcp://0.0.0.0:<port>:localhost:<port>` per
+    exposed TCP port, with the pod's path prefix; the shadow's wstunnel server
+    allows exactly those tunnels. The virtual kubelet splits the rendered
+    template on every "---"."""
+    prefix = "0123456789abcdef"
+    ports = [
+        {"Port": 8000, "Name": "http", "Protocol": "TCP"},
+        {"Port": 8001, "Name": "grpc", "Protocol": "TCP"},
+    ]
+    for cluster, _, network in _tunnel_nodes(interlink_clusters):
+        rendered = _render_shadow(network["customTemplate"], prefix, ports)
+        docs = [yaml.safe_load(part) for part in rendered.split("---") if part.strip()]
+        (deployment,) = [doc for doc in docs if doc["kind"] == "Deployment"]
+        (container,) = deployment["spec"]["template"]["spec"]["containers"]
+        assert container["command"] == ["/bin/sh", "-c"], cluster
+        script = container["args"][0]
+        restrictions = re.search(
+            r"^cat >(\S+) <<'EOF'\n(.*?)^EOF$", script, re.S | re.M
+        )
+        assert restrictions, f"{cluster}: the server loads no restriction file"
+        server = script[restrictions.end() :]
+        assert f"--restrict-config {restrictions[1]} " in server, cluster
+        rules = yaml.load(restrictions[2], Loader=_TaggedLoader)["restrictions"]
+        matches = [rule["match"] for rule in rules]
+        assert matches == [[{"PathPrefix": f"^{prefix}$"}]], cluster
+        assert [allow for rule in rules for allow in rule["allow"]] == [
+            {"ReverseTunnel": {"protocol": ["Tcp"], "port": [str(p["Port"])]}}
+            for p in ports
+        ], cluster
+
+
 def _tunnel_traefik():
     return yaml.safe_load((INTERLINK / "traefik" / "values.yaml").read_text())
 
