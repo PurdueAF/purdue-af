@@ -151,7 +151,7 @@ LOADED = 60
 # The longest a foreground command may run: a pass over the data is one.
 COMMAND_HOURS = 24
 # A command that sets no timeout of its own ends after this.
-COMMAND_MINUTES = 30
+COMMAND_MINUTES = 10
 # Seconds of silence that end a turn: longer than a request or a command, each of which the plugin notes as it starts.
 STALL = (COMMAND_HOURS + 1) * 3600
 POLL = 1.0
@@ -193,6 +193,19 @@ variations, MVA trainings, closure and injection tests. The orchestrator \
 splits them, each to an executor writing its own directory, merged by \
 another before the review.
 - Phases stay in order, and a review waits for the work it reviews.
+
+## Commands and where files are
+
+- A command that sets no `timeout` is ended after {minutes} minutes. Give one \
+that runs longer, as a pass over the data, a `timeout` long enough, up to \
+{hours} hours.
+- An analysis given input files has them in its `data/`, a link to where \
+they were fetched: `ls data/` lists them, and a search started above `data/` \
+passes over the link unless it is `find -L`. One without `data/` reads its \
+inputs as its prompt says.
+- Start a search for files in the analysis's directory or the JFC checkout it \
+is in, never at `/`, `/cvmfs` or `{root}`: they are too large to search, and \
+such a search runs until its command is ended.
 
 ## Files, figures and PDFs
 
@@ -259,10 +272,9 @@ bring back histograms, cutflows or small arrays, not events. Many independent \
 fits, such as toys, are tasks too.
 
 - Workers start only once work is submitted, so a check of the cluster \
-submits a task, as `dask.submit(lambda: 1).result(timeout=600)`, instead of \
+submits a task, as `dask.submit(lambda: 1).result(timeout=300)`, instead of \
 waiting for workers.
-- A pass runs in the foreground: give its bash call a `timeout` long enough, \
-up to {hours} hours.
+- A pass runs in the foreground, with a `timeout` long enough for it.
 - Workers see {root} as you do, and no other storage but /cvmfs, but start \
 elsewhere: give them absolute paths.
 - Workers run as you and write where you do.
@@ -551,7 +563,11 @@ def _setup(
     shutil.copy(PLUGIN, plugin_file)
     # As the global AGENTS.md, which OpenCode loads instead of a ~/.claude/CLAUDE.md.
     facility = config / "AGENTS.md"
-    facility.write_text(FACILITY.format(cores=CORES, hours=COMMAND_HOURS, root=ROOT))
+    facility.write_text(
+        FACILITY.format(
+            cores=CORES, hours=COMMAND_HOURS, minutes=COMMAND_MINUTES, root=ROOT
+        )
+    )
     for file in (plugin_file, facility):
         file.chmod(0o444)
     # OpenCode installs npm packages into a configuration directory it can write.

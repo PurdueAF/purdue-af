@@ -1290,7 +1290,10 @@ def test_setup_writes_opencodes_configuration_read_only_off_the_workspace(
     assert Path(facility) == config / "AGENTS.md"
     assert Path(claude) == workspace / "CLAUDE.md"
     assert Path(facility).read_text() == runner.FACILITY.format(
-        cores=runner.CORES, hours=runner.COMMAND_HOURS, root=runner.ROOT
+        cores=runner.CORES,
+        hours=runner.COMMAND_HOURS,
+        minutes=runner.COMMAND_MINUTES,
+        root=runner.ROOT,
     )
     for file in (plugin_file, Path(facility)):
         assert stat.S_IMODE(file.stat().st_mode) == 0o444
@@ -2070,6 +2073,7 @@ def test_each_turn_reads_the_runners_facility_rules(root, stretch, monkeypatch):
         runner.FACILITY.format(
             cores=runner.CORES,
             hours=runner.COMMAND_HOURS,
+            minutes=runner.COMMAND_MINUTES,
             root=runner.ROOT,
         )
     ]
