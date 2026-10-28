@@ -2112,6 +2112,59 @@ async def test_a_job_no_submission_came_to_is_removed(env):
     assert env.kube.jobs == {}
 
 
+def created_ago(env, submission, seconds):
+    then = datetime.fromtimestamp(time.time() - seconds, timezone.utc)
+    rayjob(env, submission)["metadata"]["creationTimestamp"] = then.strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+
+
+async def test_a_submitted_job_kuberay_does_not_follow_yet_is_kept_while_it_runs(env):
+    # KubeRay reports a job only once every pod of its cluster runs.
+    submission = await submitted(env, gpus="2")
+    created_ago(env, submission, 2 * gw.START_TIMEOUT_S + 1)
+    env.heads.jobs[job_cluster(env, submission)] = [running_job(submission)]
+    await env.gateway.reap_jobs()
+    assert len(env.kube.jobs) == 1
+    assert suspended(env, submission) == [False, False]
+    env.heads.up = False
+    await env.gateway.reap_jobs()
+    assert len(env.kube.jobs) == 1
+
+
+@pytest.mark.parametrize("state", ["SUCCEEDED", "FAILED", "STOPPED"])
+async def test_a_job_its_head_says_ended_frees_its_gpus_before_kuberay_follows_it(
+    env, state
+):
+    submission = await submitted(env, gpus="2")
+    env.heads.jobs[job_cluster(env, submission)] = [
+        running_job(submission, status=state)
+    ]
+    await env.gateway.reap_jobs()
+    assert suspended(env, submission) == [True, True]
+    assert len(env.kube.jobs) == 1
+
+
+async def test_a_submitted_job_its_head_does_not_have_is_removed_in_time(env):
+    submission = await submitted(env)
+    await env.gateway.reap_jobs()
+    assert len(env.kube.jobs) == 1
+    created_ago(env, submission, 2 * gw.START_TIMEOUT_S + 1)
+    await env.gateway.reap_jobs()
+    assert env.kube.jobs == {}
+
+
+async def test_a_submitted_job_whose_cluster_is_gone_is_forgotten_in_time(env):
+    submission = await submitted(env)
+    env.kube.clusters.pop(job_cluster(env, submission))
+    created_ago(env, submission, 2 * gw.START_TIMEOUT_S + 1)
+    await env.gateway.reap_jobs()
+    assert len(env.kube.jobs) == 1
+    created_ago(env, submission, gw.JOB_RECORD_S + 1)
+    await env.gateway.reap_jobs()
+    assert env.kube.jobs == {}
+
+
 @pytest.mark.parametrize(
     "path", ["/api/jobs/raysubmit_1", "/api/jobs/raysubmit_1/logs"]
 )
