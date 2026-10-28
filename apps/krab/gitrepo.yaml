@@ -1,0 +1,10 @@
+# Chart source for krab.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: krab
+spec:
+  interval: 1m
+  url: https://gitlab.cern.ch/bgalewsk/krab.git
+  ref:
+    branch: master

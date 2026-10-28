@@ -69,6 +69,12 @@ resources:
   - ../../apps/interlink/traefik/helmrepo.yaml
   - ../../apps/interlink/traefik/helmrelease.yaml
 
+  - ../../apps/krab/gitrepo.yaml
+  - ../../apps/krab/helmrelease.yaml
+  - ../../apps/krab/secret-postgres.yaml
+  - ../../apps/krab/secret-rabbitmq.yaml
+  - ../../apps/krab/secret-celery.yaml
+
   - ../../apps/af-utils/pixi-global-sync/deployment.yaml
 
   - ../../apps/agentic-interface/rbac.yaml
@@ -186,6 +192,10 @@ configMapGenerator:
       - ../../apps/ray-train/rayjob-nrp.yaml
       # how the Hub's profile form counts free GPUs
       - ../../apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py
+
+  - name: krab-config
+    files:
+      - values.yaml=../../apps/krab/values.yaml
 
   - name: flyte-config
     files:
