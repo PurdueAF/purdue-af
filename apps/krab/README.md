@@ -9,6 +9,7 @@ in [`helm/README.md`](https://gitlab.cern.ch/bgalewsk/krab/-/blob/master/helm/RE
 | `gitrepo.yaml` | the upstream repository, branch `master` |
 | `helmrelease.yaml` | the `krab` release of its `helm/` chart |
 | `values.yaml` | overrides of the chart's NGT values for Geddes |
+| `pvc.yaml` | `krab-outputs`, mounted at `/krab-outputs` in the Celery workers |
 | `secret-*.yaml` | SOPS-encrypted PostgreSQL, RabbitMQ and Celery connection Secrets |
 
 Flux deploys it from [`flux/experimental/`](../../flux/experimental/kustomization.yaml). Nothing

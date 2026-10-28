@@ -13,6 +13,18 @@ celery:
       node/type: null
     # The Dask burst workers' class. Ignored until upstream reads celery.worker.priorityClassName.
     priorityClassName: low-priority-preemptible
+    # A run writes its output here when its output_directory is under /krab-outputs.
+    volumes:
+      - name: work
+        emptyDir: {}
+      - name: outputs
+        persistentVolumeClaim:
+          claimName: krab-outputs
+    volumeMounts:
+      - name: work
+        mountPath: /work
+      - name: outputs
+        mountPath: /krab-outputs
     # Needs a CERN password in a kerberos-credentials Secret.
     kerberos:
       enabled: false
