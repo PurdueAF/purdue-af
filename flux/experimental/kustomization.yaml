@@ -72,6 +72,7 @@ resources:
   - ../../apps/krab/gitrepo.yaml
   - ../../apps/krab/helmrelease.yaml
   - ../../apps/krab/pvc.yaml
+  - ../../apps/krab/outputs-owner.yaml
   - ../../apps/krab/secret-postgres.yaml
   - ../../apps/krab/secret-rabbitmq.yaml
   - ../../apps/krab/secret-celery.yaml

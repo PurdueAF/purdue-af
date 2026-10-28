@@ -8,9 +8,15 @@ rabbitmqCredentials:
 celery:
   createSecret: false
   worker:
-    # NGT node label; the workers schedule anywhere in cms.
+    # The AF nodes, which mount /eos. Unschedulable until upstream reads celery.worker.tolerations.
     nodeSelector:
       node/type: null
+      cms-af-prod: "true"
+    tolerations:
+      - key: hub.jupyter.org/dedicated
+        operator: Equal
+        value: cms-af
+        effect: NoSchedule
     # The Dask burst workers' class. Ignored until upstream reads celery.worker.priorityClassName.
     priorityClassName: low-priority-preemptible
     # A run writes its output here when its output_directory is under /krab-outputs.
@@ -20,11 +26,18 @@ celery:
       - name: outputs
         persistentVolumeClaim:
           claimName: krab-outputs
+      - name: eos-purdue
+        hostPath:
+          path: /eos/purdue
     volumeMounts:
       - name: work
         mountPath: /work
       - name: outputs
         mountPath: /krab-outputs
+      - name: eos-purdue
+        mountPath: /eos/purdue
+        mountPropagation: HostToContainer
+        readOnly: true
     # Needs a CERN password in a kerberos-credentials Secret.
     kerberos:
       enabled: false
@@ -107,7 +120,8 @@ dagster:
           - name: krab-celery
         envConfigMaps:
           - name: krab-celery-env
-        # The sensor lists cmssw-docker tags with the gitlab-cern-registry deploy token.
+        # The sensor lists cmssw-docker tags with the gitlab-cern-registry deploy token. Run pods
+        # inherit these volumes and expand input_globs under /eos/purdue.
         volumes:
           - name: registry-credentials
             secret:
@@ -116,9 +130,16 @@ dagster:
               items:
                 - key: .dockerconfigjson
                   path: .dockerconfigjson
+          - name: eos-purdue
+            hostPath:
+              path: /eos/purdue
         volumeMounts:
           - name: registry-credentials
             mountPath: /etc/krab/registry
+            readOnly: true
+          - name: eos-purdue
+            mountPath: /eos/purdue
+            mountPropagation: HostToContainer
             readOnly: true
         resources:
           requests:
