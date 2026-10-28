@@ -2,6 +2,10 @@ apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: supersonic-interlink
+  # Bumped with each change to envoy-config.yaml; see its header.
+  annotations:
+    reconcile.fluxcd.io/requestedAt: "2026-10-28T21:30:00Z"
+    reconcile.fluxcd.io/forceAt: "2026-10-28T21:30:00Z"
 spec:
   suspend: false
   interval: 1m

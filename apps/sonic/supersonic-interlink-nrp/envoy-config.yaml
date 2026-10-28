@@ -1,4 +1,5 @@
 # Replaces the generated Envoy config; keep its scaleFromZero parts in step with helm/supersonic/templates/envoy.
+# The chart copies this file only on a release upgrade: set both force annotations in helmrelease.yaml to a new value with each change.
 admin:
   access_log:
     - name: envoy.access_loggers.file
