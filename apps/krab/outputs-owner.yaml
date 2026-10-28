@@ -1,0 +1,34 @@
+# A new CephFS volume's root is root's, and CephFS ignores fsGroup: hand it to the
+# cmssw-docker image's user.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: krab-outputs-owner
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+        - key: hub.jupyter.org/dedicated
+          operator: Equal
+          value: cms-af
+          effect: NoSchedule
+      containers:
+        - name: chown
+          image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.38
+          command:
+            - chown
+            - "1001"
+            - /volume
+          volumeMounts:
+            - name: volume
+              mountPath: /volume
+      volumes:
+        - name: volume
+          persistentVolumeClaim:
+            claimName: krab-outputs
