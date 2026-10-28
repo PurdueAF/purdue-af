@@ -11,11 +11,12 @@ of either, created when they first connect, running as them, and deleted once
 idle. A submission, and the uploads of the code it takes along, reach a RayJob
 of its own, `ray-job-<hash>`, labelled `purdue-af/ray-owner` with the user's
 cluster's name: KubeRay makes its cluster as the gateway makes a user's, the
-gateway submits the job to that cluster's head, suspends its workers once the
-job ends, which frees their GPUs, and KubeRay removes its head, with the job's
-logs, `idleTimeoutSeconds` after. A call about a job reaches its
-cluster while that is up, and its RayJob's record of it afterwards, until
-`jobRecordSeconds` after it ended; a job whose workers do not all start within
+gateway submits the job to that cluster's head, copies the end of the job's logs
+into a ConfigMap `ray-job-<hash>-logs` the RayJob owns once the
+job ends, then suspends its workers, which frees their GPUs, and KubeRay
+removes its head `idleTimeoutSeconds` after. A call about a job reaches its
+cluster while that is up, and its RayJob's record of it afterwards, with its
+logs from the ConfigMap, until `jobRecordSeconds` after it ended; a job whose workers do not all start within
 `provisionTimeoutSeconds` is stopped. The RayJob is created at the first call
 of a submission, a package upload or the submission itself, and waits; the
 gateway then sets its `jobId` to the submission ID the client named, or one it

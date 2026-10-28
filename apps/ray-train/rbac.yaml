@@ -25,6 +25,10 @@ rules:
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["create"]
+  # Ended jobs' logs, owned by their RayJobs.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

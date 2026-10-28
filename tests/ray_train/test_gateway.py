@@ -126,6 +126,7 @@ class FakeKube:
         # Geddes batch Jobs: those that copy a job on NRP's data
         self.batch = {}
         self.secrets = {}
+        self.configmaps = {}
         self.fail_get = False
         self.fail_list = False
         self.reject_create = False
@@ -293,6 +294,20 @@ class FakeKube:
             self.secrets[name] = body
             return web.json_response(body, status=201)
 
+        async def create_configmap(request):
+            body = await request.json()
+            name = body["metadata"]["name"]
+            if name in self.configmaps:
+                return web.json_response({"message": "exists"}, status=409)
+            self.configmaps[name] = body
+            return web.json_response(body, status=201)
+
+        async def get_configmap(request):
+            name = request.match_info["name"]
+            if name not in self.configmaps:
+                return web.json_response({"message": "not found"}, status=404)
+            return web.json_response(self.configmaps[name])
+
         async def patch(request):
             assert request.content_type == "application/json-patch+json"
             name = request.match_info["name"]
@@ -342,6 +357,9 @@ class FakeKube:
         app.router.add_patch(rayjobs + "/{name}", patch_job)
         app.router.add_delete(rayjobs + "/{name}", delete_job)
         app.router.add_post("/api/v1/namespaces/cms/secrets", secret)
+        configmaps = "/api/v1/namespaces/cms/configmaps"
+        app.router.add_post(configmaps, create_configmap)
+        app.router.add_get(configmaps + "/{name}", get_configmap)
         return app
 
 
@@ -517,7 +535,9 @@ class FakeHeads:
             await ws.send_str("line 1\n")
             if found(request)[submission].get("binary"):
                 await ws.send_bytes(b"not a line")
-            await self.more_lines.wait()
+            # A job that ended has written its last line.
+            if found(request)[submission]["status"] == "RUNNING":
+                await self.more_lines.wait()
             await ws.send_str("line 2\n")
             await ws.close()
             return ws
@@ -593,6 +613,7 @@ async def env(monkeypatch, tmp_path):
     monkeypatch.setattr(gw, "SERVICE_ACCOUNT", tmp_path)
     monkeypatch.setattr(gw, "TEMPLATE", TEMPLATE)
     monkeypatch.setattr(gw, "START_TIMEOUT_S", 5)
+    monkeypatch.setattr(gw, "LOG_TIMEOUT_S", 2)
     monkeypatch.setattr(gw, "START_POLL_S", 0)
     monkeypatch.setattr(gw, "ldap_ids", lambda account: LDAP[account])
     dashboards_url = str(dashboards.make_url("")).rstrip("/")
@@ -2319,11 +2340,8 @@ async def test_a_job_whose_workers_never_all_start_is_stopped_and_says_why(env):
     provisioning(env, cluster, age=gw.PROVISION_TIMEOUT_S + 1)
     await env.gateway.reap_jobs()
     assert cluster not in live(env)
-    assert env.heads.seen[-1][:3] == (
-        cluster,
-        "POST",
-        f"/{cluster}/api/jobs/{submission}/stop",
-    )
+    stop = (cluster, "POST", f"/{cluster}/api/jobs/{submission}/stop")
+    assert stop in [call[:3] for call in env.heads.seen]
     env.kube.clusters.pop(cluster, None)
     status, _, body = await job_call(env, path=f"/api/jobs/{submission}")
     assert json.loads(body)["message"] == gw.STOPPED_UNPROVISIONED
@@ -2455,6 +2473,48 @@ async def tail(env, submission):
             lines.append(message.data)
             env.heads.more_lines.set()
     return lines
+
+
+async def test_an_ended_jobs_logs_are_kept_before_its_workers_go(env):
+    submission = await submitted(env, gpus="2")
+    env.heads.jobs[job_cluster(env)] = [running_job(submission, status="SUCCEEDED")]
+    kuberay_reports(env, submission, jobStatus="SUCCEEDED", endTime=stamp_now())
+    await env.gateway.reap_jobs()
+    assert suspended(env, submission) == [True, True]
+    job = rayjob(env)
+    configmap = env.kube.configmaps[job["metadata"]["annotations"][gw.LOGS_ANNOTATION]]
+    assert configmap["data"] == {"logs": "line 1\nline 2\n"}
+    ((owner),) = configmap["metadata"]["ownerReferences"]
+    assert (owner["kind"], owner["uid"]) == ("RayJob", job["metadata"]["uid"])
+    # Its head, which has its logs no longer, is asked no more.
+    ended(env, submission)
+    env.heads.jobs.clear()
+    status, _, body = await job_call(env, path=f"/api/jobs/{submission}/logs")
+    assert (status, json.loads(body)) == (200, {"logs": "line 1\nline 2\n"})
+    assert await tail(env, submission) == ["line 1\nline 2\n"]
+    await env.gateway.reap_jobs()
+    assert len(env.kube.configmaps) == 1
+
+
+async def test_only_the_end_of_long_logs_is_kept(env, monkeypatch):
+    monkeypatch.setattr(gw, "LOG_BYTES", 10)
+    submission = await submitted(env)
+    env.heads.jobs[job_cluster(env)] = [running_job(submission, status="FAILED")]
+    kuberay_reports(env, submission, jobStatus="FAILED", endTime=stamp_now())
+    await env.gateway.reap_jobs()
+    (configmap,) = env.kube.configmaps.values()
+    first, kept = configmap["data"]["logs"].split("\n", 1)
+    assert "first lines are cut" in first
+    assert kept == "line 2\n"
+
+
+async def test_logs_that_could_not_be_kept_do_not_keep_the_gpus(env):
+    submission = await submitted(env)
+    kuberay_reports(env, submission, jobStatus="FAILED", endTime=stamp_now())
+    await env.gateway.reap_jobs()
+    assert suspended(env, submission) == [True]
+    assert env.kube.configmaps == {}
+    assert gw.LOGS_ANNOTATION not in rayjob(env)["metadata"].get("annotations", {})
 
 
 async def test_a_jobs_log_tail_is_relayed_until_the_job_ends(env):

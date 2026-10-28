@@ -3,8 +3,10 @@ reaches a Ray cluster of their own, and each job their Jobs API client,
 `JobSubmissionClient("http://ray-train-gateway:8265")`, submits runs in a
 RayJob of its own: a cluster made the same way, whose workers the gateway
 suspends once the job ends, freeing their GPUs, and whose head, with the job's
-logs, KubeRay removes after the idle timeout. The RayJob keeps the job's status
-for jobRecordSeconds.
+logs, KubeRay removes after the idle timeout. Before its workers go, the gateway
+copies the last LOG_BYTES of the job's logs into a ConfigMap the RayJob owns,
+from which it answers for them after. The RayJob keeps the job's status for
+jobRecordSeconds.
 
 A session's RAY_AUTH_TOKEN is its JupyterHub token, which both clients send
 with every call. The Hub says whose it is, and the call goes on, unread, to
@@ -156,6 +158,7 @@ SERVICE_ACCOUNT = Path("/var/run/secrets/kubernetes.io/serviceaccount")
 RAYCLUSTERS = f"/apis/ray.io/v1/namespaces/{NAMESPACE}/rayclusters"
 RAYJOBS = f"/apis/ray.io/v1/namespaces/{NAMESPACE}/rayjobs"
 SECRETS = f"/api/v1/namespaces/{NAMESPACE}/secrets"
+CONFIGMAPS = f"/api/v1/namespaces/{NAMESPACE}/configmaps"
 MANAGED_BY = "ray-train-gateway"
 # The label KubeRay gives the cluster of a RayJob, which KubeRay, not the reaper, removes.
 FROM_CRD = "ray.io/originated-from-crd"
@@ -164,6 +167,11 @@ OWNER_LABEL = "purdue-af/ray-owner"
 ENTRYPOINT_ANNOTATION = "purdue-af/ray-entrypoint"
 # Why the gateway stopped a job, when it did.
 STOPPED_ANNOTATION = "purdue-af/ray-stopped"
+# The ConfigMap that keeps an ended job's logs.
+LOGS_ANNOTATION = "purdue-af/ray-logs"
+# A ConfigMap holds at most 1 MiB.
+LOG_BYTES = 900 * 2**10
+LOG_TIMEOUT_S = 120
 JOB_PATH = re.compile(r"/api/jobs/([^/]+)(/.*)?")
 SUBMISSION_ALPHABET = string.ascii_letters + string.digits
 # The label of a workload account's cluster's pods, which names the account.
@@ -1489,6 +1497,26 @@ class Gateway:
         )
         return web.Response(status=404, reason=text, text=text)
 
+    async def kept_logs(
+        self, request: web.Request, configmap: str, rest: str
+    ) -> web.StreamResponse:
+        """An ended job's logs, as its head would answer for them, from the ConfigMap that keeps them."""
+        status, body = await self.kube("GET", f"{CONFIGMAPS}/{configmap}")
+        if status != 200:
+            text = (
+                f"The job's logs could not be read: Kubernetes answered HTTP {status}"
+            )
+            return web.Response(status=503, reason=text, text=text)
+        logs = str((body.get("data") or {}).get("logs", ""))
+        if rest == "/logs":
+            return web.json_response({"logs": logs})
+        response = web.WebSocketResponse()
+        await response.prepare(request)
+        if logs:
+            await response.send_str(logs)
+        await response.close()
+        return response
+
     async def submitted_before(self, user: User, submission: str) -> bool:
         """Whether the user has a job of that ID, at Purdue or on NRP."""
         if any(j["spec"]["jobId"] == submission for j in await self.jobs(user)):
@@ -1993,6 +2021,15 @@ class Gateway:
                     head = keyed = await self.running(user)
                 else:
                     job, cluster = found
+                    kept = (job["metadata"].get("annotations") or {}).get(
+                        LOGS_ANNOTATION
+                    )
+                    if (
+                        kept
+                        and request.method == "GET"
+                        and about[2] in ("/logs", "/logs/tail")
+                    ):
+                        return await self.kept_logs(request, kept, about[2])
                     if cluster is None or request.method == "DELETE":
                         return await self.recorded(job, request.method, about[2] or "")
                     head, keyed = cluster, job["metadata"]["name"]
@@ -2524,7 +2561,7 @@ class Gateway:
                 elif not state.get("jobStatus"):
                     await self.follow_on_head(job, submission, created, now)
                 elif job_ended(job):
-                    await self.free_workers(name, state.get("rayClusterName"))
+                    await self.free_workers(job, state.get("rayClusterName"))
                     ended = epoch_ms(state.get("endTime"))
                     if ended is not None and now - ended / 1000 >= JOB_RECORD_S:
                         await self.kube(
@@ -2559,7 +2596,7 @@ class Gateway:
         assert head is not None
         state = await self.head_job_status(head, name, submission)
         if state in ("SUCCEEDED", "FAILED", "STOPPED"):
-            await self.free_workers(name, head)
+            await self.free_workers(job, head)
         elif state == "" and now - created >= 2 * START_TIMEOUT_S:
             await self.kube(
                 "DELETE", f"{RAYJOBS}/{name}", {"propagationPolicy": "Background"}
@@ -2583,12 +2620,15 @@ class Gateway:
         except (ClientError, asyncio.TimeoutError, ValueError):
             return None
 
-    async def free_workers(self, name: str, head: str | None) -> None:
-        """Suspend the worker groups of an ended job's cluster, as KubeRay's
-        DeleteWorkers does: their GPUs go, the head with the job's logs stays."""
+    async def free_workers(self, job: dict[str, Any], head: str | None) -> None:
+        """Keep an ended job's logs, then suspend the worker groups of its cluster,
+        as KubeRay's DeleteWorkers does: their GPUs go, the head stays."""
+        name = job["metadata"]["name"]
         cluster = await self.cluster(head) if head else None
         if cluster is None or cluster["metadata"].get("deletionTimestamp"):
             return
+        assert head is not None
+        await self.keep_logs(job, head)
         groups = cluster["spec"].get("workerGroupSpecs") or []
         suspend = [
             {"op": "add", "path": f"/spec/workerGroupSpecs/{i}/suspend", "value": True}
@@ -2602,6 +2642,71 @@ class Gateway:
             log.warning("suspending the workers of %s: HTTP %s", name, status)
             return
         log.info("suspended the workers of %s: its job ended", name)
+
+    async def keep_logs(self, job: dict[str, Any], head: str) -> None:
+        """Copy the last LOG_BYTES of an ended job's logs into a ConfigMap the RayJob
+        owns, while every node its driver may have run on is up."""
+        metadata = job["metadata"]
+        if LOGS_ANNOTATION in (metadata.get("annotations") or {}):
+            return
+        name = metadata["name"]
+        url = f"{head_url(head)}/api/jobs/{job['spec']['jobId']}/logs/tail"
+        kept = bytearray()
+        try:
+            async with asyncio.timeout(LOG_TIMEOUT_S):
+                async with self.http.ws_connect(
+                    url, headers=self.cluster_auth(name)
+                ) as ws:
+                    async for message in ws:
+                        if message.type != WSMsgType.TEXT:
+                            break
+                        kept += message.data.encode()
+                        if len(kept) > 2 * LOG_BYTES:
+                            del kept[:-LOG_BYTES]
+        except WSServerHandshakeError as e:
+            log.warning("keeping the logs of %s: HTTP %s", name, e.status)
+            return
+        except (ClientError, asyncio.TimeoutError) as e:
+            log.warning("keeping the logs of %s: %s", name, type(e).__name__)
+            return
+        logs = bytes(kept[-LOG_BYTES:]).decode(errors="ignore")
+        if len(kept) > LOG_BYTES:
+            logs = (
+                f"[the first lines are cut: only the last {LOG_BYTES // 2**10} KiB are kept]\n"
+                + logs.partition("\n")[2]
+            )
+        configmap = f"{name}-logs"
+        status, _ = await self.kube(
+            "POST",
+            CONFIGMAPS,
+            {
+                "metadata": {
+                    "name": configmap,
+                    "labels": {
+                        "app.kubernetes.io/managed-by": MANAGED_BY,
+                        OWNER_LABEL: metadata["labels"][OWNER_LABEL],
+                    },
+                    "ownerReferences": [
+                        {
+                            "apiVersion": "ray.io/v1",
+                            "kind": "RayJob",
+                            "name": name,
+                            "uid": metadata["uid"],
+                        }
+                    ],
+                },
+                "data": {"logs": logs},
+            },
+        )
+        if status not in (201, 409):
+            log.warning("keeping the logs of %s: HTTP %s", name, status)
+            return
+        await self.kube(
+            "PATCH",
+            f"{RAYJOBS}/{name}",
+            {"metadata": {"annotations": {LOGS_ANNOTATION: configmap}}},
+        )
+        log.info("kept the logs of %s", name)
 
     async def stop_unprovisioned(self, job: dict[str, Any], head: str) -> None:
         """Stop the job, say why on its RayJob, and free the GPUs its cluster holds."""
@@ -2619,6 +2724,7 @@ class Gateway:
             f"{RAYJOBS}/{name}",
             {"metadata": {"annotations": {STOPPED_ANNOTATION: STOPPED_UNPROVISIONED}}},
         )
+        await self.keep_logs(job, head)
         await self.delete(head)
         log.info("stopped %s: its workers did not all start", name)
 
