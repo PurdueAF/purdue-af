@@ -11,7 +11,8 @@ version = "0.1.0"
 [dependencies]
 awkward = "*"
 awkward-pandas = "*"
-bokeh = "3.10.0.*"
+# distributed <2026.8.0 cannot stop a bokeh >=3.10 dashboard; dask-awkward holds distributed <2025.4.0.
+bokeh = "3.9.*"
 # boost = "*"
 cabinetry = "*"
 ca-certificates = "*"
