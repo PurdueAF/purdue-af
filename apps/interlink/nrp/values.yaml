@@ -97,7 +97,8 @@ virtualNode:
     # The client dials apps/interlink/traefik's pinned address and sends the
     # shadow's hostname as Host. Runs in the foreground as the sidecar.
     wstunnelCommand: 'exec /home/app/wstunnel client --log-lvl WARN --http-upgrade-path-prefix %[1]s %[2]s -H "Host: %[3]s" ws://128.211.160.122:80'
-    # The chart's nginx template on apps/interlink/traefik and a pinned image.
+    # The chart's nginx template on apps/interlink/traefik and a pinned image;
+    # the server accepts only the client's reverse tunnels to the pod's ports.
     customTemplate: |
       apiVersion: apps/v1
       kind: Deployment
@@ -126,7 +127,18 @@ virtualNode:
               image: ghcr.io/erebe/wstunnel:v11.1.0
               command: ["/bin/sh", "-c"]
               args:
-              - exec /home/app/wstunnel server --log-lvl WARN --restrict-http-upgrade-path-prefix {{.RandomPassword}} ws://0.0.0.0:28080
+              - |
+                cat >/tmp/restrictions.yaml <<'EOF'
+                restrictions:
+                - name: reverse tunnels to the exposed ports
+                  match:
+                  - !PathPrefix ^{{.RandomPassword}}$
+                  allow:
+                  {{- range .ExposedPorts}}
+                  - !ReverseTunnel {protocol: [Tcp], port: ["{{.Port}}"]}
+                  {{- end}}
+                EOF
+                exec /home/app/wstunnel server --log-lvl WARN --restrict-config /tmp/restrictions.yaml ws://0.0.0.0:28080
               ports:
               - containerPort: 28080
                 name: ws
