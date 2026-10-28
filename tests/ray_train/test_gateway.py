@@ -121,6 +121,8 @@ class FakeKube:
         # RayJobs, each with its cluster, as KubeRay creates it, and its patches
         self.jobs = {}
         self.patches = []
+        # RayClusters the gateway patched, once for each patch
+        self.cluster_patches = []
         # Geddes batch Jobs: those that copy a job on NRP's data
         self.batch = {}
         self.secrets = {}
@@ -291,7 +293,17 @@ class FakeKube:
             self.secrets[name] = body
             return web.json_response(body, status=201)
 
+        async def patch(request):
+            assert request.content_type == "application/json-patch+json"
+            name = request.match_info["name"]
+            self.cluster_patches.append(name)
+            for op in json.loads(await request.read()):
+                _, spec, groups, index, field = op["path"].split("/")
+                self.clusters[name][spec][groups][int(index)][field] = op["value"]
+            return web.json_response(self.clusters[name])
+
         app = web.Application()
+        app.router.add_patch(clusters + "/{name}", patch)
         app.router.add_post(clusters, create)
         app.router.add_get(clusters, listing)
         app.router.add_get(clusters + "/{name}", get)
@@ -2183,6 +2195,40 @@ async def test_a_jobs_status_outlives_its_cluster(env):
     status, reason, _ = await job_call(env, path=f"/api/jobs/{submission}/logs")
     assert status == 404
     assert "logs with it" in reason
+
+
+def suspended(env, submission):
+    """Whether each worker group of the job's cluster is suspended."""
+    groups = env.kube.clusters[job_cluster(env, submission)]["spec"]["workerGroupSpecs"]
+    return [bool(g.get("suspend")) for g in groups]
+
+
+@pytest.mark.parametrize("state", ["SUCCEEDED", "FAILED", "STOPPED"])
+async def test_an_ended_job_frees_its_gpus_and_keeps_its_head_for_its_logs(env, state):
+    submission = await submitted(env, gpus="2")
+    kuberay_reports(env, submission, jobStatus=state, endTime=stamp_now())
+    await env.gateway.reap_jobs()
+    assert suspended(env, submission) == [True, True]
+    assert job_cluster(env, submission) in live(env)
+    env.heads.jobs[job_cluster(env, submission)] = [
+        running_job(submission, status=state)
+    ]
+    status, _, body = await job_call(env, path=f"/api/jobs/{submission}")
+    assert (status, json.loads(body)["status"]) == (200, state)
+    await env.gateway.reap_jobs()
+    assert env.kube.cluster_patches == [job_cluster(env, submission)]
+
+
+async def test_a_running_job_keeps_its_workers(env):
+    submission = await submitted(env)
+    kuberay_reports(env, submission, jobStatus="RUNNING")
+    await env.gateway.reap_jobs()
+    assert suspended(env, submission) == [False]
+    assert env.kube.cluster_patches == []
+
+
+def stamp_now():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 async def test_a_jobs_record_goes_once_kept_long_enough(env):

@@ -8,10 +8,11 @@ kind: Role
 metadata:
   name: ray-train-gateway
 rules:
-  # Users' clusters: created on first use, deleted once idle.
+  # Users' clusters: created on first use, deleted once idle; an ended job's,
+  # its workers suspended.
   - apiGroups: ["ray.io"]
     resources: ["rayclusters"]
-    verbs: ["get", "list", "create", "delete"]
+    verbs: ["get", "list", "create", "patch", "delete"]
   # Submitted jobs, a RayJob each: KubeRay creates and removes their clusters.
   - apiGroups: ["ray.io"]
     resources: ["rayjobs"]
