@@ -122,7 +122,8 @@ def _running(gateway: Any, project: str, cores: float, memory: float) -> Any:
 
 def _hand_proxy(dask: Any, proxy: Path) -> None:
     """Gives every worker of the cluster, those yet to start included, the
-    proxy at `proxy`, again every RENEW seconds while `dask` is open."""
+    proxy at `proxy`, again every RENEW seconds while `dask` is open and
+    connected to its scheduler."""
 
     def hand() -> None:
         if proxy.is_file():
@@ -133,6 +134,8 @@ def _hand_proxy(dask: Any, proxy: Path) -> None:
     def renew() -> None:
         while dask.status not in ("closing", "closed"):
             time.sleep(RENEW)
+            if dask.status != "running":
+                continue
             try:
                 hand()
             except Exception as failed:

@@ -906,6 +906,62 @@ def test_workers_get_the_pods_proxy_now_and_again_while_the_client_is_open(
     assert (first.data, renewed.data) == (b"proxy one", b"proxy two")
 
 
+@pytest.mark.parametrize("ended", ["closing", "closed"])
+def test_workers_get_no_proxy_from_a_client_that_ended_while_it_waited(
+    gateway, tmp_path, monkeypatch, ended
+):
+    proxy = tmp_path / "x509up"
+    proxy.write_bytes(b"proxy")
+    monkeypatch.setenv("X509_USER_PROXY", str(proxy))
+    statuses = iter([ended])
+    monkeypatch.setattr(
+        clusters.time,
+        "sleep",
+        lambda seconds: setattr(gateway.client, "status", next(statuses)),
+    )
+    monkeypatch.setattr(
+        clusters.threading,
+        "Thread",
+        lambda target, daemon: types.SimpleNamespace(start=target),
+    )
+
+    dask = clusters.client()
+
+    assert len(dask.plugins) == 1
+
+
+def test_a_renewal_skips_a_reconnecting_client_and_tells_a_running_ones_failure(
+    gateway, tmp_path, monkeypatch, capsys
+):
+    proxy = tmp_path / "x509up"
+    proxy.write_bytes(b"proxy")
+    monkeypatch.setenv("X509_USER_PROXY", str(proxy))
+    statuses = iter(["connecting", "running", "closed"])
+
+    def register_plugin(plugin, name):
+        if gateway.client.status != "running":
+            raise AttributeError(
+                "'NoneType' object has no attribute 'register_worker_plugin'"
+            )
+        raise OSError("the scheduler is unreachable")
+
+    def sleep(seconds):
+        gateway.client.status = next(statuses)
+        gateway.client.register_plugin = register_plugin
+
+    monkeypatch.setattr(clusters.time, "sleep", sleep)
+    monkeypatch.setattr(
+        clusters.threading,
+        "Thread",
+        lambda target, daemon: types.SimpleNamespace(start=target),
+    )
+
+    clusters.client()
+
+    told = capsys.readouterr().err.splitlines()
+    assert len(told) == 1 and told[0].endswith("the scheduler is unreachable")
+
+
 def test_workers_get_the_proxy_once_the_pod_has_it(gateway, tmp_path, monkeypatch):
     proxy = tmp_path / "x509up"
     monkeypatch.setenv("X509_USER_PROXY", str(proxy))
