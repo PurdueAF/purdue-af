@@ -16,6 +16,10 @@ rules:
   - apiGroups: ["ray.io"]
     resources: ["rayjobs"]
     verbs: ["get", "list", "create", "patch", "delete"]
+  # The Jobs that copy a job on NRP's inputs there and its outputs back.
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "create", "patch", "delete"]
   # Their token Secrets, never read back: the gateway derives the tokens.
   - apiGroups: [""]
     resources: ["secrets"]

@@ -37,10 +37,11 @@ rules:
   - apiGroups: [""]
     resources: [events]
     verbs: [get, list]
-  # RayJobs submitted for the AF (workflows/ray-nrp)
+  # Jobs on NRP of the ray-train gateway (apps/ray-train/nrp_jobs.py), which
+  # suspends and resumes them and keeps their progress in their annotations
   - apiGroups: [ray.io]
     resources: [rayjobs]
-    verbs: [get, list, watch, create, delete]
+    verbs: [get, list, watch, create, patch, delete]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

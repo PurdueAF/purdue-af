@@ -121,6 +121,8 @@ class FakeKube:
         # RayJobs, each with its cluster, as KubeRay creates it, and its patches
         self.jobs = {}
         self.patches = []
+        # Geddes batch Jobs: those that copy a job on NRP's data
+        self.batch = {}
         self.secrets = {}
         self.fail_get = False
         self.fail_list = False
@@ -294,6 +296,34 @@ class FakeKube:
         app.router.add_get(clusters, listing)
         app.router.add_get(clusters + "/{name}", get)
         app.router.add_delete(clusters + "/{name}", delete)
+        batch = "/apis/batch/v1/namespaces/cms/jobs"
+
+        async def create_batch(request):
+            body = await request.json()
+            self.batch[body["metadata"]["name"]] = body
+            return web.json_response(body, status=201)
+
+        async def get_batch(request):
+            name = request.match_info["name"]
+            if name not in self.batch:
+                return web.json_response({"message": "not found"}, status=404)
+            return web.json_response(self.batch[name])
+
+        async def patch_batch(request):
+            assert request.content_type == "application/merge-patch+json"
+            self.batch[request.match_info["name"]]["spec"].update(
+                json.loads(await request.read())["spec"]
+            )
+            return web.json_response({})
+
+        async def delete_batch(request):
+            self.batch.pop(request.match_info["name"], None)
+            return web.json_response({})
+
+        app.router.add_post(batch, create_batch)
+        app.router.add_get(batch + "/{name}", get_batch)
+        app.router.add_patch(batch + "/{name}", patch_batch)
+        app.router.add_delete(batch + "/{name}", delete_batch)
         app.router.add_post(rayjobs, create_job)
         app.router.add_get(rayjobs, list_jobs)
         app.router.add_get(rayjobs + "/{name}", get_job)
@@ -2387,7 +2417,6 @@ class FakeNrp:
         self.jobs = {}
         self.pods = {}
         self.fail_list = False
-        self.created = 0
 
     def app(self):
         rayjobs = "/apis/ray.io/v1/namespaces/interlink-cms/rayjobs"
@@ -2395,11 +2424,8 @@ class FakeNrp:
 
         async def create(request):
             body = await request.json()
-            self.created += 1
-            body["metadata"]["creationTimestamp"] = datetime.now(timezone.utc).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            )
-            body["status"] = {"jobDeploymentStatus": "Initializing"}
+            body["metadata"]["creationTimestamp"] = stamp(0)
+            body["status"] = {"jobDeploymentStatus": "Suspended"}
             self.jobs[body["metadata"]["name"]] = body
             return web.json_response(body, status=201)
 
@@ -2416,6 +2442,18 @@ class FakeNrp:
                     ]
                 }
             )
+
+        async def patch(request):
+            assert request.content_type == "application/merge-patch+json"
+            job = self.jobs[request.match_info["name"]]
+            change = json.loads(await request.read())
+            job["metadata"].setdefault("annotations", {}).update(
+                (change.get("metadata") or {}).get("annotations") or {}
+            )
+            job["spec"].update(change.get("spec") or {})
+            if change.get("spec", {}).get("suspend") is False:
+                job["status"] = {"jobDeploymentStatus": "Initializing"}
+            return web.json_response(job)
 
         async def delete(request):
             self.jobs.pop(request.match_info["name"], None)
@@ -2437,6 +2475,7 @@ class FakeNrp:
         app = web.Application()
         app.router.add_post(rayjobs, create)
         app.router.add_get(rayjobs, listing)
+        app.router.add_patch(rayjobs + "/{name}", patch)
         app.router.add_delete(rayjobs + "/{name}", delete)
         app.router.add_get(pods, pod_list)
         app.router.add_get(pods + "/{pod}/log", log)
@@ -2467,6 +2506,12 @@ class FakeBucket:
             job = key.removeprefix("ray-nrp/jobs/").split("/", 1)[0]
             newest[job] = max(newest.get(job, 0.0), written)
         return newest
+
+
+def stamp(seconds_ago):
+    return datetime.fromtimestamp(time.time() - seconds_ago, timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
 
 
 def nrp_sample(value, **labels):
@@ -2512,12 +2557,8 @@ async def nrp_env(env, monkeypatch):
         await server.start_server()
     api = gw.nrp_jobs.NrpApi.__new__(gw.nrp_jobs.NrpApi)
     api.server = str(servers[0].make_url("")).rstrip("/")
-    api.namespace, api.token, api.tls, api.http = (
-        "interlink-cms",
-        "t",
-        ssl.create_default_context(),
-        None,
-    )
+    api.namespace, api.token, api.http = "interlink-cms", "t", None
+    api.tls = ssl.create_default_context()
     env.gateway.nrp, env.gateway.bucket = api, FakeBucket()
     monkeypatch.setattr(
         gw, "NRP_PROMETHEUS_URL", str(servers[1].make_url("")).rstrip("/")
@@ -2529,8 +2570,8 @@ async def nrp_env(env, monkeypatch):
         await server.close()
 
 
-def nrp_headers(**kwargs):
-    return {gw.SITE_METADATA: "nrp"} | kwargs
+INPUTS = "/work/users/user-a/skims"
+OUTPUT = "/work/users/user-a/runs"
 
 
 async def nrp_call(
@@ -2540,7 +2581,7 @@ async def nrp_call(
         method,
         env.dashboard + path,
         data=body,
-        headers={"Authorization": f"Bearer {token}"} | nrp_headers(**headers),
+        headers={"Authorization": f"Bearer {token}", gw.SITE_METADATA: "nrp"} | headers,
     ) as r:
         return r.status, r.reason, await r.read()
 
@@ -2548,6 +2589,12 @@ async def nrp_call(
 async def nrp_submit(env, body=None, **headers):
     body = body or {"entrypoint": "python train.py"}
     return await nrp_call(env, "POST", "/api/jobs/", json.dumps(body), **headers)
+
+
+async def nrp_submitted(env, **headers):
+    status, _, body = await nrp_submit(env, **headers)
+    assert status == 200, body
+    return json.loads(body)["submission_id"]
 
 
 def nrp_job(env, submission=None):
@@ -2560,10 +2607,36 @@ def nrp_job(env, submission=None):
 
 def nrp_workers(job):
     (group,) = job["spec"]["rayClusterSpec"]["workerGroupSpecs"]
-    (term,) = group["template"]["spec"]["affinity"]["nodeAffinity"][
+    affinity = group["template"]["spec"].get("affinity")
+    if affinity is None:
+        return group["replicas"], None
+    (term,) = affinity["nodeAffinity"][
         "requiredDuringSchedulingIgnoredDuringExecution"
     ]["nodeSelectorTerms"]
     return group["replicas"], term["matchExpressions"][0]["values"]
+
+
+async def details(env, submission):
+    status, _, body = await job_call(env, path=f"/api/jobs/{submission}")
+    assert status == 200, body
+    return json.loads(body)
+
+
+def copied(env, name, condition="Complete"):
+    """The Geddes Job `name` ended so."""
+    env.kube.batch[name]["status"] = {
+        "conditions": [{"type": condition, "status": "True"}]
+    }
+
+
+def kuberay_ends(env, submission, state="SUCCEEDED"):
+    job = nrp_job(env, submission)
+    job["status"] = {
+        "jobDeploymentStatus": "Complete",
+        "jobStatus": state,
+        "message": "Job finished successfully.",
+        "endTime": stamp(0),
+    }
 
 
 async def test_a_job_on_nrp_is_a_rayjob_there_named_for_no_one(nrp_env):
@@ -2575,38 +2648,49 @@ async def test_a_job_on_nrp_is_a_rayjob_there_named_for_no_one(nrp_env):
     job = nrp_job(env)
     assert job["spec"]["jobId"] == submission
     assert job["spec"]["entrypoint"] == "python train.py"
+    # Without inputs it is placed at once.
+    assert job["spec"]["suspend"] is False
     assert nrp_workers(job) == (1, ["west-1"])
     assert "user-a" not in json.dumps(job)
     # Nothing runs at Purdue.
-    assert env.kube.jobs == {} and env.kube.clusters == {}
+    assert env.kube.jobs == {} and env.kube.clusters == {} and env.kube.batch == {}
 
 
 async def test_a_job_on_nrp_gets_its_workers_in_one_region_and_gpu_model(nrp_env):
-    env = nrp_env
-    assert (await nrp_submit(nrp_env, **{gw.WORKERS_METADATA: "4"}))[0] == 200
-    assert nrp_workers(nrp_job(env)) == (4, ["west-1", "west-2"])
+    await nrp_submitted(nrp_env, **{gw.WORKERS_METADATA: "4"})
+    assert nrp_workers(nrp_job(nrp_env)) == (4, ["west-1", "west-2"])
 
 
 async def test_a_job_on_nrp_of_up_to_some_workers_takes_those_with_room(nrp_env):
+    await nrp_submitted(nrp_env, **{gw.MOST_METADATA: "9"})
+    assert nrp_workers(nrp_job(nrp_env))[0] == 4
+
+
+async def test_a_job_on_nrp_waits_for_room_and_is_stopped_if_none_comes(nrp_env):
     env = nrp_env
-    assert (await nrp_submit(env, **{gw.MOST_METADATA: "9"}))[0] == 200
-    assert nrp_workers(nrp_job(env))[0] == 4
-
-
-async def test_a_job_on_nrp_that_no_region_and_model_has_room_for_is_refused(nrp_env):
-    status, reason, _ = await nrp_submit(nrp_env, **{gw.WORKERS_METADATA: "5"})
-    assert status == 429
-    assert "room for 4" in reason
-    assert nrp_env.nrp.jobs == {}
+    submission = await nrp_submitted(env, **{gw.WORKERS_METADATA: "5"})
+    job = nrp_job(env)
+    assert job["spec"]["suspend"] is True
+    found = await details(env, submission)
+    assert (found["status"], found["message"]) == (
+        "PENDING",
+        "Waiting for room for its workers on NRP.",
+    )
+    job["metadata"]["annotations"][gw.SINCE_ANNOTATION] = stamp(
+        gw.NRP_START_TIMEOUT_S + 1
+    )
+    await env.gateway.reap_nrp()
+    found = await details(env, submission)
+    assert (found["status"], found["message"]) == ("STOPPED", gw.STOPPED_NO_ROOM)
 
 
 async def test_jobs_on_nrp_hold_no_more_gpus_than_the_budget(nrp_env, monkeypatch):
     monkeypatch.setattr(gw, "NRP_GPU_BUDGET", 3)
-    assert (await nrp_submit(nrp_env, **{gw.WORKERS_METADATA: "2"}))[0] == 200
+    await nrp_submitted(nrp_env, **{gw.WORKERS_METADATA: "2"})
     status, reason, _ = await nrp_submit(nrp_env, **{gw.WORKERS_METADATA: "2"})
     assert status == 429
-    assert "may take 1 more" in reason
-    assert (await nrp_submit(nrp_env))[0] == 200
+    assert "hold 2 of the 3" in reason
+    await nrp_submitted(nrp_env)
 
 
 async def test_the_code_a_job_on_nrp_uploads_reaches_it_through_its_s3_prefix(nrp_env):
@@ -2628,6 +2712,101 @@ async def test_the_code_a_job_on_nrp_uploads_reaches_it_through_its_s3_prefix(nr
     assert yaml.safe_load(job["spec"]["runtimeEnvYAML"]) == {
         "working_dir": f"s3://bucket/ray-nrp/jobs/{name}/_ray_pkg_1.zip"
     }
+
+
+async def test_a_job_on_nrp_has_its_inputs_copied_there_and_its_outputs_back(nrp_env):
+    env = nrp_env
+    submission = await nrp_submitted(
+        env, **{gw.INPUTS_METADATA: INPUTS, gw.OUTPUT_METADATA: OUTPUT}
+    )
+    job = nrp_job(env)
+    name = job["metadata"]["name"]
+    prefix = f"s3://bucket/ray-nrp/jobs/{name}"
+    assert yaml.safe_load(job["spec"]["runtimeEnvYAML"])["env_vars"] == {
+        "AF_INPUTS": f"{prefix}/inputs",
+        "AF_OUTPUT": f"{prefix}/output",
+    }
+    # NRP sees no AF path, which names its user.
+    assert "user-a" not in json.dumps(job)
+    copy_in, copy_out = env.kube.batch[f"{name}-in"], env.kube.batch[f"{name}-out"]
+    pod = copy_in["spec"]["template"]["spec"]
+    assert pod["containers"][0]["command"][-3:] == ["in", INPUTS, f"{prefix}/inputs"]
+    assert (
+        pod["securityContext"]["runAsUser"],
+        pod["securityContext"]["runAsGroup"],
+    ) == (5001, 500)
+    assert (copy_in["spec"]["suspend"], copy_out["spec"]["suspend"]) == (False, True)
+    assert (await details(env, submission))["message"] == "Copying its inputs to NRP."
+    assert job["spec"]["suspend"] is True
+
+    copied(env, f"{name}-in")
+    await env.gateway.reap_nrp()
+    assert job["spec"]["suspend"] is False
+    assert nrp_workers(job) == (1, ["west-1"])
+
+    kuberay_ends(env, submission)
+    # Before the reaper's next pass, as after it.
+    assert (await details(env, submission))["status"] == "RUNNING"
+    await env.gateway.reap_nrp()
+    found = await details(env, submission)
+    # Not ended for its client before its outputs are back.
+    assert (found["status"], found["message"]) == (
+        "RUNNING",
+        "The job is SUCCEEDED: copying its outputs back.",
+    )
+    assert copy_out["spec"]["suspend"] is False
+
+    await env.gateway.bucket.put(f"ray-nrp/jobs/{name}/output/model.pt", b"m")
+    copied(env, f"{name}-out")
+    await env.gateway.reap_nrp()
+    assert (await details(env, submission))["status"] == "SUCCEEDED"
+    assert env.gateway.bucket.objects == {}
+
+
+async def test_a_job_on_nrp_whose_inputs_could_not_be_copied_says_so(nrp_env):
+    env = nrp_env
+    submission = await nrp_submitted(env, **{gw.INPUTS_METADATA: INPUTS})
+    name = nrp_job(env)["metadata"]["name"]
+    copied(env, f"{name}-in", "Failed")
+    await env.gateway.reap_nrp()
+    found = await details(env, submission)
+    assert (found["status"], found["message"]) == ("STOPPED", gw.STOPPED_INPUTS)
+
+
+async def test_a_job_on_nrp_whose_outputs_could_not_be_copied_back_says_so(nrp_env):
+    env = nrp_env
+    submission = await nrp_submitted(env, **{gw.OUTPUT_METADATA: OUTPUT})
+    name = nrp_job(env)["metadata"]["name"]
+    kuberay_ends(env, submission)
+    await env.gateway.reap_nrp()
+    copied(env, f"{name}-out", "Failed")
+    await env.gateway.reap_nrp()
+    found = await details(env, submission)
+    assert found["status"] == "SUCCEEDED"
+    assert found["message"].endswith(gw.OUTPUT_FAILED)
+
+
+@pytest.mark.parametrize("path", ["/etc/passwd", "relative/dir", "/work/../etc"])
+async def test_data_off_the_users_storage_is_refused(nrp_env, path):
+    status, reason, _ = await nrp_submit(nrp_env, **{gw.INPUTS_METADATA: path})
+    assert status == 400
+    assert gw.INPUTS_METADATA in reason
+    assert nrp_env.nrp.jobs == {}
+
+
+async def test_a_job_at_purdue_finds_its_data_at_its_paths(env):
+    await submit_with(env, **{gw.INPUTS_METADATA: INPUTS, gw.OUTPUT_METADATA: OUTPUT})
+    sent = json.loads(env.heads.seen[-1][4])
+    assert sent["runtime_env"]["env_vars"] == {"AF_INPUTS": INPUTS, "AF_OUTPUT": OUTPUT}
+
+
+async def submit_with(env, **headers):
+    async with env.session.post(
+        env.dashboard + "/api/jobs/",
+        data=json.dumps({"entrypoint": "python train.py"}),
+        headers={"Authorization": "Bearer session-a"} | headers,
+    ) as r:
+        assert r.status == 200, await r.text()
 
 
 @pytest.mark.parametrize(
@@ -2652,7 +2831,10 @@ async def test_ray_client_does_not_reach_nrp(env):
     with pytest.raises(grpc.aio.AioRpcError) as e:
         stream = env.channel.stream_stream(PING)(
             iter([b"ping"]),
-            metadata=[("authorization", "Bearer session-a"), (gw.SITE_METADATA, "nrp")],
+            metadata=[
+                ("authorization", "Bearer session-a"),
+                (gw.SITE_METADATA, "nrp"),
+            ],
         )
         [r async for r in stream]
     assert e.value.code() == grpc.StatusCode.INVALID_ARGUMENT
@@ -2666,15 +2848,14 @@ async def test_without_nrp_a_job_for_it_is_refused(env):
 
 async def test_a_job_on_nrp_is_followed_from_its_rayjob_and_its_submitter(nrp_env):
     env = nrp_env
-    submission = json.loads((await nrp_submit(env))[2])["submission_id"]
+    submission = await nrp_submitted(env)
     await submit(env)
     status, _, body = await job_call(env)
     listed = [j["submission_id"] for j in json.loads(body)]
     assert len(listed) == 2 and submission in listed
     job = nrp_job(env)
     job["status"] = {"jobDeploymentStatus": "Running", "jobStatus": "RUNNING"}
-    status, _, body = await job_call(env, path=f"/api/jobs/{submission}")
-    assert (status, json.loads(body)["status"]) == (200, "RUNNING")
+    assert (await details(env, submission))["status"] == "RUNNING"
     env.nrp.pods["submitter"] = (job["metadata"]["name"], ["line 1\n", "line 2\n"])
     status, _, body = await job_call(env, path=f"/api/jobs/{submission}/logs")
     assert json.loads(body) == {"logs": "line 1\nline 2\n"}
@@ -2686,19 +2867,35 @@ async def test_a_job_on_nrp_is_followed_from_its_rayjob_and_its_submitter(nrp_en
     assert lines == ["line 1\n", "line 2\n"]
 
 
-async def test_stopping_a_job_on_nrp_removes_it_and_its_code(nrp_env):
+async def test_stopping_a_job_on_nrp_keeps_its_record_and_deletes_its_code(nrp_env):
     env = nrp_env
-    path = "/api/packages/gcs/_ray_pkg_1.zip"
-    await nrp_call(env, "PUT", path, b"zip")
-    submission = json.loads((await nrp_submit(env))[2])["submission_id"]
+    await nrp_call(env, "PUT", "/api/packages/gcs/_ray_pkg_1.zip", b"zip")
+    submission = await nrp_submitted(env)
     status, _, body = await job_call(env, "POST", f"/api/jobs/{submission}/stop")
     assert (status, json.loads(body)) == (200, {"stopped": True})
-    assert env.nrp.jobs == {} and env.gateway.bucket.objects == {}
+    assert nrp_job(env)["spec"]["suspend"] is True
+    found = await details(env, submission)
+    assert (found["status"], found["message"]) == ("STOPPED", gw.STOPPED_BY_USER)
+    await env.gateway.reap_nrp()
+    assert env.gateway.bucket.objects == {}
+    status, _, body = await job_call(env, "DELETE", f"/api/jobs/{submission}")
+    assert (status, json.loads(body)) == (200, {"deleted": True})
+    assert env.nrp.jobs == {}
+
+
+async def test_a_job_on_nrp_is_deleted_only_once_its_outputs_are_back(nrp_env):
+    env = nrp_env
+    submission = await nrp_submitted(env, **{gw.OUTPUT_METADATA: OUTPUT})
+    kuberay_ends(env, submission)
+    await env.gateway.reap_nrp()
+    status, reason, _ = await job_call(env, "DELETE", f"/api/jobs/{submission}")
+    assert status == 400
+    assert "copied back" in reason
 
 
 async def test_users_reach_only_their_own_jobs_on_nrp(nrp_env):
     env = nrp_env
-    submission = json.loads((await nrp_submit(env))[2])["submission_id"]
+    submission = await nrp_submitted(env)
     status, _, body = await job_call(env, token="session-b")
     assert json.loads(body) == []
     status, _, _ = await job_call(
@@ -2716,25 +2913,17 @@ async def test_jobs_at_purdue_are_listed_while_nrp_does_not_answer(nrp_env, capl
     assert "listing jobs on NRP" in caplog.text
 
 
-def stamp(seconds_ago):
-    return datetime.fromtimestamp(time.time() - seconds_ago, timezone.utc).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
-
-
-async def test_the_nrp_reaper_cleans_up_after_jobs_and_code_no_job_took(nrp_env):
+async def test_the_nrp_reaper_ends_what_did_not_start_and_forgets_old_records(nrp_env):
     env = nrp_env
     bucket = env.gateway.bucket
-    await nrp_call(env, "PUT", "/api/packages/gcs/_ray_pkg_1.zip", b"zip")
-    ended = json.loads((await nrp_submit(env))[2])["submission_id"]
-    old = json.loads((await nrp_submit(env))[2])["submission_id"]
-    stuck = json.loads((await nrp_submit(env))[2])["submission_id"]
-    nrp_job(env, ended)["status"] = {"jobStatus": "SUCCEEDED", "endTime": stamp(60)}
-    nrp_job(env, old)["status"] = {
-        "jobStatus": "FAILED",
-        "endTime": stamp(gw.JOB_RECORD_S + 1),
-    }
-    nrp_job(env, stuck)["metadata"]["creationTimestamp"] = stamp(
+    old = await nrp_submitted(env)
+    stuck = await nrp_submitted(env)
+    kuberay_ends(env, old, "FAILED")
+    await env.gateway.reap_nrp()
+    nrp_job(env, old)["metadata"]["annotations"][gw.SINCE_ANNOTATION] = stamp(
+        gw.JOB_RECORD_S + 1
+    )
+    nrp_job(env, stuck)["metadata"]["annotations"][gw.SINCE_ANNOTATION] = stamp(
         gw.NRP_START_TIMEOUT_S + 1
     )
     await bucket.put("ray-nrp/jobs/ray-job-orphan/_ray_pkg_2.zip", b"zip")
@@ -2744,7 +2933,9 @@ async def test_the_nrp_reaper_cleans_up_after_jobs_and_code_no_job_took(nrp_env)
     )
     await bucket.put("ray-nrp/jobs/ray-job-fresh/_ray_pkg_3.zip", b"zip")
     await env.gateway.reap_nrp()
-    assert [j["spec"]["jobId"] for j in env.nrp.jobs.values()] == [ended]
+    assert [j["spec"]["jobId"] for j in env.nrp.jobs.values()] == [stuck]
+    found = await details(env, stuck)
+    assert (found["status"], found["message"]) == ("STOPPED", gw.STOPPED_NOT_STARTED)
     assert list(bucket.objects) == ["ray-nrp/jobs/ray-job-fresh/_ray_pkg_3.zip"]
 
 

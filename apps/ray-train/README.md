@@ -49,11 +49,12 @@ send their training to it:
 | `config.yaml`        | The gateway's settings: timeouts, GPU limits, the addresses it asks, and the volumes a workload account's cluster keeps    |
 | `nrp_gpus.py`        | How many GPUs NRP Nautilus has free for Ray workers, by region, from NRP's public Prometheus; `GET /af/nrp-gpus` on the gateway's `:8265` answers it |
 | `rayjob-nrp.yaml`    | The template of a job on NRP: its image, its head's and worker's sizes, its NCCL settings, and the nrp-s3 keys its pods read |
-| `nrp_jobs.py`        | A job on NRP: its RayJob, the NRP API it is made through, and the S3 prefix of its code |
+| `nrp_jobs.py`        | A job on NRP: its RayJob, the NRP API it is made through, and the S3 prefix of its code and data |
+| `stage.py`           | What a job's `<RayJob>-in` and `-out` Jobs run: copies its inputs to S3, and its outputs back |
 | `raycluster.yaml`    | The template of a user's cluster, and of a job's; the gateway fills in its name, the user's UID/GID, its environment, its token Secret and its worker groups, one per kind of GPU and priority |
 | `deployment.yaml`    | The gateway pod: the stock Ray image, with the files above from the `ray-train-gateway` ConfigMap and the workload accounts' declarations from `af-accounts` |
 | `service.yaml`       | `ray-train-gateway:10001` for Ray Client and `:8265` for the Jobs API, the addresses notebooks connect to                 |
-| `rbac.yaml`          | Create, read and delete RayClusters and RayJobs, and annotate RayJobs; create their token Secrets                          |
+| `rbac.yaml`          | Create, read and delete RayClusters and RayJobs, and annotate RayJobs; create their token Secrets; create, resume and delete the Jobs that copy data |
 | `networkpolicy.yaml` | Admits sessions to the gateway, and the gateway to users' clusters; the namespace's own `np-default` admits its other pods, a workload account's among them, to both |
 
 The session side is in the Hub config:
@@ -79,16 +80,34 @@ A submission with the header `af-site: nrp` runs on
 creates there through NRP's API with the interLink plugin's kubeconfig
 (`kubeconfig-nrp-interlink`), from [`rayjob-nrp.yaml`](rayjob-nrp.yaml): the
 image of the AF's global environment ([`docker/ray-nrp`](../../docker/ray-nrp)),
-whose job takes only `af-n-workers` or `af-max-workers`. Its workers run on
-nodes of one region and one GPU model with room for them, as
-[`nrp_gpus.py`](nrp_gpus.py) reads NRP's Prometheus, and all AF jobs there hold
-no more than `nrpGpuBudget` GPUs. The code a submission uploads goes to the
-job's prefix of the NRP S3 bucket (`nrp-s3`), `ray-nrp/jobs/<RayJob>/`, from
-which Ray fetches it, and which the gateway deletes once the job ends. A job's
-status comes from its RayJob, its log from the pod that submits it, and
-stopping it deletes the RayJob; so does a job whose cluster has not started
-within `nrpStartTimeoutSeconds`. A RayJob there carries a hash of its owner,
-not their name. [`nrp_jobs.py`](nrp_jobs.py) is that NRP side.
+whose job takes only `af-n-workers` or `af-max-workers`, and all AF jobs there
+hold no more than `nrpGpuBudget` GPUs. A RayJob there carries a hash of its
+owner, and no name or path of theirs. [`nrp_jobs.py`](nrp_jobs.py) is that NRP
+side.
+
+A job anywhere may name directories of the storage its cluster mounts with
+`af-inputs` and `af-output`, which it finds in `AF_INPUTS` and `AF_OUTPUT`: at
+Purdue the paths themselves, on NRP the job's prefix of the NRP S3 bucket
+(`nrp-s3`), `ray-nrp/jobs/<RayJob>/inputs` and `/output`, beside the code a
+submission uploads, from which Ray fetches it.
+
+A job on NRP keeps its progress in its RayJob's annotations, and the reaper
+moves it on:
+
+1. **inputs** — created suspended, while a Job in `cms`, `<RayJob>-in`, runs
+   [`stage.py`](stage.py) as the user to copy its inputs to S3;
+2. **placing** — its workers placed, when there is room, on nodes of one region
+   and GPU model, as [`nrp_gpus.py`](nrp_gpus.py) reads NRP's Prometheus, with
+   its head in that region, and resumed;
+3. **running** — until it ends, or until it is stopped, which suspends it and
+   says why: by its user, for want of room or a cluster within
+   `nrpStartTimeoutSeconds`, or for inputs that could not be copied;
+4. **outputs** — `<RayJob>-out`, made suspended at the submission, copies its
+   outputs back to `af-output`; the job reports RUNNING until it has;
+5. **done** — its prefix deleted; its RayJob and Jobs go `jobRecordSeconds`
+   later.
+
+Its status comes from its RayJob, and its log from the pod that submits it.
 
 ## Tuning
 

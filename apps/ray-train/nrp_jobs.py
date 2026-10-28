@@ -1,6 +1,7 @@
 """Ray jobs on NRP Nautilus (apps/interlink/nrp): the RayJob a submission
 becomes there, the NRP API the gateway reaches with the interLink plugin's
-kubeconfig, and the S3 prefix, one per job, by which a job's code reaches it.
+kubeconfig, and the S3 prefix, one per job, by which a job's code, inputs and
+outputs travel.
 """
 
 from __future__ import annotations
@@ -58,11 +59,15 @@ class NrpApi:
     ) -> tuple[int, Any]:
         if self.http is None:
             self.http = ClientSession(connector=TCPConnector(ssl=self.tls))
+        headers = {"Authorization": f"Bearer {self.token}"}
+        if method == "PATCH":
+            headers["Content-Type"] = "application/merge-patch+json"
         async with self.http.request(
             method,
             self.server + path,
-            json=body,
-            headers={"Authorization": f"Bearer {self.token}"},
+            json=None if method == "PATCH" else body,
+            data=json.dumps(body) if method == "PATCH" else None,
+            headers=headers,
             timeout=ClientTimeout(total=timeout),
         ) as r:
             if r.content_type == "application/json":
@@ -95,6 +100,11 @@ def code_prefix(job: str) -> str:
     return f"{JOBS_PREFIX}/{job}"
 
 
+def data_uri(bucket: str, job: str, part: str) -> str:
+    """Where a job's inputs or outputs are while it runs on NRP."""
+    return f"s3://{bucket}/{code_prefix(job)}/{part}"
+
+
 def to_s3(runtime_env: dict[str, Any], bucket: str, job: str) -> dict[str, Any]:
     """The runtime environment with each uploaded package at the job's S3 prefix."""
 
@@ -120,11 +130,12 @@ def build_job(
     submission: dict[str, Any],
     bucket: str,
     workers: int,
-    nodes: list[Node],
     ttl: int,
+    data: dict[str, str],
 ) -> dict[str, Any]:
-    """The RayJob of a submission: the template's, with `workers` workers on `nodes`
-    and its head in their region, which KubeRay removes `ttl` seconds after the job ends."""
+    """The RayJob of a submission: the template's, with `workers` workers, created
+    suspended until the gateway places them (placed), which KubeRay removes `ttl`
+    seconds after the job ends. `data` are the job's AF_ variables, its inputs and outputs in S3."""
     job = copy.deepcopy(template)
     metadata = job["metadata"]
     metadata["name"] = name
@@ -133,10 +144,13 @@ def build_job(
         "purdue-af/ray-entrypoint": str(submission.get("entrypoint", ""))[:4096]
     }
     spec = job["spec"]
+    spec["suspend"] = True
     spec["jobId"] = submission["submission_id"]
     spec["entrypoint"] = str(submission["entrypoint"])
     spec["ttlSecondsAfterFinished"] = ttl
-    runtime_env = submission.get("runtime_env") or {}
+    runtime_env = dict(submission.get("runtime_env") or {})
+    if data:
+        runtime_env["env_vars"] = {**(runtime_env.get("env_vars") or {}), **data}
     if runtime_env:
         spec["runtimeEnvYAML"] = yaml.safe_dump(to_s3(runtime_env, bucket, name))
     for asked, field in ENTRYPOINT_RESOURCES.items():
@@ -144,7 +158,14 @@ def build_job(
             spec[field] = submission[asked]
     if submission.get("entrypoint_resources"):
         spec["entrypointResources"] = json.dumps(submission["entrypoint_resources"])
-    cluster = spec["rayClusterSpec"]
+    (group,) = spec["rayClusterSpec"]["workerGroupSpecs"]
+    group.update(replicas=workers, minReplicas=workers, maxReplicas=workers)
+    return job
+
+
+def placed(job: dict[str, Any], workers: int, nodes: list[Node]) -> dict[str, Any]:
+    """The job's cluster with `workers` workers on `nodes`, and its head in their region."""
+    cluster: dict[str, Any] = copy.deepcopy(job["spec"]["rayClusterSpec"])
     (group,) = cluster["workerGroupSpecs"]
     group.update(replicas=workers, minReplicas=workers, maxReplicas=workers)
     hosts = sorted(n.name for n in nodes)
@@ -168,7 +189,12 @@ def build_job(
     cluster["headGroupSpec"]["template"]["spec"]["nodeSelector"] = {
         "topology.kubernetes.io/region": nodes[0].region
     }
-    return job
+    return cluster
+
+
+def workers_of(job: dict[str, Any]) -> int:
+    (group,) = job["spec"]["rayClusterSpec"]["workerGroupSpecs"]
+    return int(group["replicas"])
 
 
 def held_gpus(job: dict[str, Any]) -> int:
@@ -228,7 +254,11 @@ class Bucket:
         for page in pages:
             for o in page.get("Contents", []):
                 job = o["Key"].removeprefix(JOBS_PREFIX + "/").split("/", 1)[0]
-                newest[job] = max(newest.get(job, 0.0), o["LastModified"].timestamp())
+                # pyarrow marks a directory it writes into with an empty object.
+                if job:
+                    newest[job] = max(
+                        newest.get(job, 0.0), o["LastModified"].timestamp()
+                    )
         return newest
 
 

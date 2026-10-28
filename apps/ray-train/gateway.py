@@ -48,7 +48,7 @@ import time
 import urllib.parse
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -66,7 +66,7 @@ from aiohttp import (
     web,
 )
 from gpu_queries import ALLOC_QUERY, GPU_METRICS, PREEMPTIBLE_QUERY, USED_QUERY
-from nrp_gpus import as_dict, free_gpus, most_in_one_group, placement, worker_of
+from nrp_gpus import as_dict, free_gpus, placement, worker_of
 from nrp_gpus import nodes as nrp_nodes
 from yarl import URL
 
@@ -190,8 +190,11 @@ MEMORY_ANNOTATION = "purdue-af/ray-gpu-memory"
 CPUS_METADATA = SETTING_PREFIX + "cpus-per-worker"
 CPUS_ANNOTATION = "purdue-af/ray-worker-cpus"
 RAM_METADATA = SETTING_PREFIX + "ram-per-worker-gb"
-# Set as the environment is, by a job: where it runs.
+# Set as the environment is, by a job: where it runs, and the directories of AF
+# storage it reads from and writes to, which it finds in AF_INPUTS and AF_OUTPUT.
 SITE_METADATA = SETTING_PREFIX + "site"
+INPUTS_METADATA = SETTING_PREFIX + "inputs"
+OUTPUT_METADATA = SETTING_PREFIX + "output"
 SITES = ("purdue", "nrp")
 SETTINGS = {
     ENV_METADATA,
@@ -202,9 +205,32 @@ SETTINGS = {
     CPUS_METADATA,
     RAM_METADATA,
     SITE_METADATA,
+    INPUTS_METADATA,
+    OUTPUT_METADATA,
 }
 # What a job on NRP may set: its workers are those of rayjob-nrp.yaml, in its image's environment.
-NRP_SETTINGS = {WORKERS_METADATA, MOST_METADATA, SITE_METADATA}
+NRP_SETTINGS = {
+    WORKERS_METADATA,
+    MOST_METADATA,
+    SITE_METADATA,
+    INPUTS_METADATA,
+    OUTPUT_METADATA,
+}
+# A job on NRP's progress, on its RayJob: the stage it is at and since when, whether
+# it has outputs to copy back, and the fewest workers it starts with.
+STAGE_ANNOTATION = "purdue-af/ray-stage"
+SINCE_ANNOTATION = "purdue-af/ray-since"
+OUTPUT_ANNOTATION = "purdue-af/ray-output"
+LEAST_WORKERS_ANNOTATION = "purdue-af/ray-least"
+OUTPUT_FAILED = "Copying its outputs back failed."
+STOPPED_BY_USER = "The job was stopped."
+STOPPED_INPUTS = "Copying its inputs to NRP failed: is it a directory you can read?"
+STOPPED_NO_ROOM = (
+    "NRP had no room for its workers in time: ask for fewer, or try again later."
+)
+STOPPED_NOT_STARTED = "Its Ray cluster on NRP did not start in time."
+# The Geddes Jobs that copy a job on NRP's inputs there and its outputs back.
+JOBS = f"/apis/batch/v1/namespaces/{NAMESPACE}/jobs"
 # A setting's name without its prefix is no header of Ray's either.
 UNPREFIXED = {name.removeprefix(SETTING_PREFIX) for name in SETTINGS}
 RAM_ANNOTATION = "purdue-af/ray-worker-memory"
@@ -686,6 +712,12 @@ def epoch_ms(stamp: str | None) -> int | None:
     return int(datetime.fromisoformat(stamp).timestamp() * 1000) if stamp else None
 
 
+def active(job: dict[str, Any]) -> bool:
+    """Whether a job on NRP holds, or waits for, its GPUs."""
+    annotations = job["metadata"].get("annotations") or {}
+    return not job_ended(job) and STOPPED_ANNOTATION not in annotations
+
+
 def job_ended(job: dict[str, Any]) -> bool:
     return (job.get("status") or {}).get("jobStatus") in (
         "SUCCEEDED",
@@ -709,14 +741,31 @@ def job_details(job: dict[str, Any]) -> dict[str, Any]:
     ran = status.get("rayJobInfo") or {}
     annotations = job["metadata"].get("annotations") or {}
     stopped = annotations.get(STOPPED_ANNOTATION)
+    state = "STOPPED" if stopped else status.get("jobStatus") or "PENDING"
+    message = stopped or status.get("message") or JOB_STARTING
+    stage = annotations.get(STAGE_ANNOTATION)
+    if stage == "inputs":
+        state, message = "PENDING", "Copying its inputs to NRP."
+    elif stage == "placing":
+        state, message = "PENDING", "Waiting for room for its workers on NRP."
+    elif stage == "outputs" or (
+        # Ended, and the reaper not yet at it.
+        stage == "running"
+        and job_ended(job)
+        and annotations.get(OUTPUT_ANNOTATION) == "true"
+    ):
+        # Not ended for its client before what it wrote is back.
+        state, message = "RUNNING", f"The job is {state}: copying its outputs back."
+    elif stage == "done" and annotations.get(OUTPUT_ANNOTATION) == OUTPUT_FAILED:
+        message = f"{message} {OUTPUT_FAILED}"
     return {
         "type": "SUBMISSION",
         "job_id": None,
         "submission_id": job["spec"]["jobId"],
         "driver_info": None,
-        "status": status.get("jobStatus") or "PENDING",
+        "status": state,
         "entrypoint": annotations.get(ENTRYPOINT_ANNOTATION, ""),
-        "message": stopped or status.get("message") or JOB_STARTING,
+        "message": message,
         "error_type": None,
         "start_time": epoch_ms(ran.get("startTime") or status.get("startTime")),
         "end_time": epoch_ms(ran.get("endTime") or status.get("endTime")),
@@ -894,6 +943,89 @@ def requested_workers(exactly: str, at_most: str, shape: Shape) -> tuple[str, st
         grpc.StatusCode.INVALID_ARGUMENT,
         f"{WORKERS_METADATA if exactly else MOST_METADATA} is a number of workers from 1 to {most}.",
     )
+
+
+def data_paths(user: User, headers: Mapping[str, str]) -> dict[str, str]:
+    """The directories of AF storage a job reads and writes, by `inputs` and `output`."""
+    roots = env_roots(cluster_template(user))
+    out = {}
+    for key, name in (("inputs", INPUTS_METADATA), ("output", OUTPUT_METADATA)):
+        value = headers.get(name, "")
+        if not value:
+            continue
+        path = posixpath.normpath(value)
+        if not value.startswith("/") or not any(
+            path.startswith(root.rstrip("/") + "/") for root in roots
+        ):
+            raise Refused(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"{name}: {value} is not on storage your jobs mount: {', '.join(roots)}.",
+            )
+        out[key] = path
+    return out
+
+
+def stage_job(
+    template: dict[str, Any],
+    user: User,
+    name: str,
+    direction: str,
+    source: str,
+    target: str,
+) -> dict[str, Any]:
+    """A Job that copies a job on NRP's inputs there (`in`), or its outputs back (`out`):
+    stage.py, run as the user, with their cluster's storage and the Ray image's Python."""
+    pod = copy.deepcopy(template["spec"]["headGroupSpec"]["template"])
+    spec = pod["spec"]
+    spec["restartPolicy"] = "Never"
+    spec.setdefault("securityContext", {}).update(
+        {"runAsUser": user.uid, "runAsGroup": user.gid}
+    )
+    (head,) = spec["containers"]
+    spec["containers"] = [
+        {
+            "name": "stage",
+            "image": head["image"],
+            "command": ["python", "/stage/stage.py", direction, source, target],
+            "envFrom": [{"secretRef": {"name": "nrp-s3"}}],
+            "resources": {
+                "requests": {"cpu": "1", "memory": "2Gi"},
+                "limits": {"cpu": "2", "memory": "4Gi"},
+            },
+            "volumeMounts": [
+                *head.get("volumeMounts", []),
+                {"name": "stage", "mountPath": "/stage", "readOnly": True},
+            ],
+        }
+    ]
+    spec["volumes"] = [
+        *spec.get("volumes", []),
+        {
+            "name": "stage",
+            "configMap": {
+                "name": "ray-train-gateway",
+                "items": [{"key": "stage.py", "path": "stage.py"}],
+            },
+        },
+    ]
+    pod["metadata"] = {"labels": {"app": "ray-train-stage"}}
+    return {
+        "apiVersion": "batch/v1",
+        "kind": "Job",
+        "metadata": {
+            "name": f"{name}-{direction}",
+            "labels": {
+                "app.kubernetes.io/managed-by": MANAGED_BY,
+                OWNER_LABEL: user.cluster,
+            },
+        },
+        # The copy back waits until the job ends.
+        "spec": {"suspend": direction == "out", "backoffLimit": 1, "template": pod},
+    }
+
+
+def stamp(when: float) -> str:
+    return datetime.fromtimestamp(when, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def nrp_workers(exactly: str, at_most: str) -> tuple[str, str]:
@@ -1203,6 +1335,14 @@ class Gateway:
                 return waiting.head, waiting.name, None
             # KubeRay follows the job whose jobId is set on a RayJob that waits for one.
             submitted["submission_id"] = asked
+            data = data_paths(user, request.headers)
+            if data:
+                runtime_env = dict(submitted.get("runtime_env") or {})
+                runtime_env["env_vars"] = {
+                    **(runtime_env.get("env_vars") or {}),
+                    **{f"AF_{key.upper()}": path for key, path in data.items()},
+                }
+                submitted["runtime_env"] = runtime_env
             entrypoint = str(submitted.get("entrypoint", ""))[:4096]
             await self.kube(
                 "PATCH",
@@ -1372,6 +1512,7 @@ class Gateway:
                     status=200 if await self.bucket.exists(key) else 404
                 )
             submitted = await submitted_json(request)
+            data = data_paths(user, request.headers)
             self.nrp_waiting.pop(user.cluster, None)
             asked = str(submitted.get("submission_id") or new_submission())
             if await self.submitted_before(user, asked):
@@ -1380,56 +1521,53 @@ class Gateway:
                     f"You have a job {asked} already: submit it under another ID, or without one.",
                 )
             await self.start_nrp_job(
-                user, shape, name, submitted | {"submission_id": asked}
+                user, shape, name, submitted | {"submission_id": asked}, data
             )
         # As Ray answers: its client reads job_id too.
         return web.json_response({"job_id": asked, "submission_id": asked})
 
     async def start_nrp_job(
-        self, user: User, shape: Shape, name: str, submitted: dict[str, Any]
+        self,
+        user: User,
+        shape: Shape,
+        name: str,
+        submitted: dict[str, Any],
+        data: dict[str, str],
     ) -> None:
-        """Create the job's RayJob on NRP, its workers on nodes of one region and GPU model with room for them."""
+        """Create the job's RayJob on NRP, suspended until its inputs are there and
+        its workers placed, and the Jobs that copy its inputs there and its outputs back."""
         assert self.nrp is not None and self.bucket is not None
+        wanted, least = int(shape.workers), int(shape.least)
         async with self.nrp_admitting:
             held = sum(
-                nrp_jobs.held_gpus(j)
-                for j in await self.nrp_listing()
-                if not job_ended(j)
+                nrp_jobs.held_gpus(j) for j in await self.nrp_listing() if active(j)
             )
             room = (NRP_GPU_BUDGET - held) // NRP_WORKER.gpus
-            wanted, least = int(shape.workers), int(shape.least)
-            try:
-                found = await nrp_nodes(self.http, NRP_PROMETHEUS_URL, NRP_WORKER)
-            except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
-                raise Refused(
-                    grpc.StatusCode.UNAVAILABLE,
-                    "NRP's Prometheus did not say which GPUs are free: try again in a minute.",
-                ) from e
-            chosen = (
-                placement(found, min(wanted, room), least) if room >= least else None
-            )
-            if chosen is None:
-                log.info(
-                    "refused %s %d workers on NRP: room %d, %d free",
-                    name,
-                    least,
-                    room,
-                    most_in_one_group(found),
-                )
+            if room < least:
                 raise Refused(
                     grpc.StatusCode.RESOURCE_EXHAUSTED,
-                    f"Your job asks for {least} workers on NRP, which has room for {most_in_one_group(found)} of one region and GPU model now, and AF jobs may take {max(room, 0)} more there: ask for fewer, or try again later.",
+                    f"AF jobs on NRP hold {held} of the {NRP_GPU_BUDGET} GPUs they may, and yours asks for {least * NRP_WORKER.gpus}: ask for fewer, or try again later.",
                 )
-            workers = min(wanted, room, sum(n.workers for n in chosen))
             job = nrp_jobs.build_job(
                 yaml.safe_load(NRP_TEMPLATE.read_text()),
                 name,
                 nrp_jobs.owner_key(user.cluster, user.owner),
                 submitted,
                 self.bucket.name,
-                workers,
-                chosen,
+                min(wanted, room),
                 int(IDLE_TIMEOUT_S),
+                {
+                    f"AF_{key.upper()}": nrp_jobs.data_uri(self.bucket.name, name, key)
+                    for key in data
+                },
+            )
+            job["metadata"]["annotations"].update(
+                {
+                    STAGE_ANNOTATION: "inputs" if "inputs" in data else "placing",
+                    SINCE_ANNOTATION: stamp(time.time()),
+                    LEAST_WORKERS_ANNOTATION: str(least),
+                    OUTPUT_ANNOTATION: "true" if "output" in data else "",
+                }
             )
             status, created = await self.nrp.call("POST", self.nrp.path("rayjobs"), job)
         if status != 201:
@@ -1439,13 +1577,194 @@ class Gateway:
             raise Refused(
                 grpc.StatusCode.UNAVAILABLE, f"NRP did not take your job: {message}"
             )
+        log.info("created %s on NRP", name)
+        template = cluster_template(user)
+        for direction, source, target in (
+            (
+                "in",
+                data.get("inputs"),
+                nrp_jobs.data_uri(self.bucket.name, name, "inputs"),
+            ),
+            (
+                "out",
+                nrp_jobs.data_uri(self.bucket.name, name, "output"),
+                data.get("output"),
+            ),
+        ):
+            if source and target:
+                status, body = await self.kube(
+                    "POST",
+                    JOBS,
+                    stage_job(template, user, name, direction, source, target),
+                )
+                if status != 201:
+                    await self.stop_nrp(created, STOPPED_INPUTS)
+                    raise Refused(
+                        grpc.StatusCode.UNAVAILABLE,
+                        f"Could not create the Job that copies your job's data: {body.get('message', status)}",
+                    )
+        await self.advance_nrp(created)
+
+    async def place_nrp(self, job: dict[str, Any]) -> bool:
+        """Place the job's workers on nodes of one region and GPU model with room, and
+        let KubeRay start its cluster; False if there is no room for the fewest it starts with."""
+        assert self.nrp is not None
+        name = job["metadata"]["name"]
+        annotations = job["metadata"].get("annotations") or {}
+        wanted = nrp_jobs.workers_of(job)
+        least = int(annotations.get(LEAST_WORKERS_ANNOTATION) or wanted)
+        async with self.nrp_admitting:
+            try:
+                found = await nrp_nodes(self.http, NRP_PROMETHEUS_URL, NRP_WORKER)
+            except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
+                log.warning("asking NRP's Prometheus: %r", e)
+                return False
+            chosen = placement(found, wanted, least)
+            if chosen is None:
+                return False
+            workers = min(wanted, sum(n.workers for n in chosen))
+            await self.nrp_patch(
+                name,
+                {
+                    "metadata": {
+                        "annotations": {
+                            STAGE_ANNOTATION: "running",
+                            SINCE_ANNOTATION: stamp(time.time()),
+                        }
+                    },
+                    "spec": {
+                        "suspend": False,
+                        "rayClusterSpec": nrp_jobs.placed(job, workers, chosen),
+                    },
+                },
+            )
         log.info(
-            "created %s on NRP: %d workers on %s, %s",
+            "placed %s on NRP: %d workers on %s, %s",
             name,
             workers,
             chosen[0].region,
             chosen[0].model,
         )
+        return True
+
+    async def nrp_patch(self, name: str, body: dict[str, Any]) -> None:
+        assert self.nrp is not None
+        status, answer = await self.nrp.call(
+            "PATCH", f"{self.nrp.path('rayjobs')}/{name}", body
+        )
+        if status != 200:
+            raise Refused(
+                grpc.StatusCode.UNAVAILABLE,
+                f"NRP answered HTTP {status} changing the Ray job.",
+            )
+
+    async def set_stage(self, job: dict[str, Any], stage: str, **more: str) -> None:
+        job["metadata"].setdefault("annotations", {}).update(
+            {STAGE_ANNOTATION: stage, SINCE_ANNOTATION: stamp(time.time()), **more}
+        )
+        await self.nrp_patch(
+            job["metadata"]["name"],
+            {
+                "metadata": {
+                    "annotations": {
+                        STAGE_ANNOTATION: stage,
+                        SINCE_ANNOTATION: stamp(time.time()),
+                        **more,
+                    }
+                }
+            },
+        )
+
+    async def stop_nrp(self, job: dict[str, Any], why: str) -> None:
+        """Stop a job on NRP, keeping its record, which says why; its outputs are copied back."""
+        annotations = job["metadata"].get("annotations") or {}
+        if not job_ended(job):
+            await self.nrp_patch(job["metadata"]["name"], {"spec": {"suspend": True}})
+        after = "outputs" if annotations.get(OUTPUT_ANNOTATION) == "true" else "done"
+        await self.set_stage(job, after, **{STOPPED_ANNOTATION: why})
+        log.info("stopped %s on NRP: %s", job["metadata"]["name"], why)
+
+    async def stage_state(self, name: str) -> str | None:
+        """Where the Geddes Job of that name is: suspended, running, succeeded or failed; None if there is none."""
+        status, body = await self.kube("GET", f"{JOBS}/{name}")
+        if status == 404:
+            return None
+        if status != 200:
+            raise Refused(
+                grpc.StatusCode.UNAVAILABLE,
+                f"Kubernetes answered HTTP {status} for the Job {name}.",
+            )
+        state = body.get("status") or {}
+        for condition in state.get("conditions") or []:
+            if condition.get("status") == "True" and condition.get("type") in (
+                "Complete",
+                "Failed",
+            ):
+                return "succeeded" if condition["type"] == "Complete" else "failed"
+        return "suspended" if body["spec"].get("suspend") else "running"
+
+    async def advance_nrp(self, job: dict[str, Any]) -> None:
+        """Move a job on NRP on: its inputs copied, its workers placed, its outputs
+        copied back once it ends, its code deleted, and its record once kept long enough."""
+        assert self.nrp is not None and self.bucket is not None
+        name = job["metadata"]["name"]
+        annotations = job["metadata"].get("annotations") or {}
+        # A job from before its progress was kept runs, since it was made.
+        stage = annotations.get(STAGE_ANNOTATION) or "running"
+        since = datetime.fromisoformat(
+            annotations.get(SINCE_ANNOTATION) or job["metadata"]["creationTimestamp"]
+        ).timestamp()
+        now = time.time()
+        if stage == "inputs":
+            copied = await self.stage_state(f"{name}-in")
+            if copied in ("failed", None):
+                await self.stop_nrp(job, STOPPED_INPUTS)
+                return
+            if copied != "succeeded":
+                return
+            await self.set_stage(job, "placing")
+            stage, since = "placing", now
+        if stage == "placing":
+            if not await self.place_nrp(job) and now - since >= NRP_START_TIMEOUT_S:
+                await self.stop_nrp(job, STOPPED_NO_ROOM)
+            return
+        if stage == "running":
+            if job_ended(job):
+                after = (
+                    "outputs"
+                    if annotations.get(OUTPUT_ANNOTATION) == "true"
+                    else "done"
+                )
+                await self.set_stage(job, after)
+                stage = after
+            elif (job.get("status") or {}).get("jobDeploymentStatus") in (
+                None,
+                "",
+                "Initializing",
+            ) and now - since >= NRP_START_TIMEOUT_S:
+                await self.stop_nrp(job, STOPPED_NOT_STARTED)
+                return
+            else:
+                return
+        if stage == "outputs":
+            copied = await self.stage_state(f"{name}-out")
+            if copied == "suspended":
+                await self.kube(
+                    "PATCH", f"{JOBS}/{name}-out", {"spec": {"suspend": False}}
+                )
+                return
+            if copied == "running":
+                return
+            failed = {OUTPUT_ANNOTATION: OUTPUT_FAILED} if copied != "succeeded" else {}
+            await self.set_stage(job, "done", **failed)
+            stage, since = "done", now
+        if stage == "done":
+            if name not in self.nrp_cleaned:
+                await self.bucket.delete_prefix(nrp_jobs.code_prefix(name))
+                self.nrp_cleaned.add(name)
+            if now - since >= JOB_RECORD_S:
+                await self.delete_nrp(name)
+                log.info("deleted the record of %s on NRP", name)
 
     async def nrp_listing(self, user: User | None = None) -> list[dict[str, Any]]:
         """The gateway's RayJobs on NRP, or the user's."""
@@ -1494,13 +1813,15 @@ class Gateway:
                 return web.json_response({"logs": await self.nrp_log(name)})
         if request.method == "GET" and rest == "/logs/tail":
             return await self.nrp_tail(request, name)
+        annotations = job["metadata"].get("annotations") or {}
+        finished = ended or STOPPED_ANNOTATION in annotations
         if request.method == "POST" and rest == "/stop":
-            if not ended:
-                await self.delete_nrp(name)
-            return web.json_response({"stopped": not ended})
+            if not finished:
+                await self.stop_nrp(job, STOPPED_BY_USER)
+            return web.json_response({"stopped": not finished})
         if request.method == "DELETE" and not rest:
-            if not ended:
-                text = "The job has not ended: stop it first"
+            if annotations.get(STAGE_ANNOTATION, "done") != "done":
+                text = "The job has not ended, or its outputs are being copied back: stop it, or wait"
                 return web.Response(status=400, reason=text, text=text)
             await self.delete_nrp(name)
             return web.json_response({"deleted": True})
@@ -1561,11 +1882,16 @@ class Gateway:
             {"propagationPolicy": "Background"},
         )
         await self.bucket.delete_prefix(nrp_jobs.code_prefix(name))
+        for direction in ("in", "out"):
+            await self.kube(
+                "DELETE",
+                f"{JOBS}/{name}-{direction}",
+                {"propagationPolicy": "Background"},
+            )
         self.nrp_cleaned.discard(name)
 
     async def reap_nrp(self) -> None:
-        """Delete the code of a job on NRP once it ends, and its record once kept long
-        enough; remove a job whose cluster did not start in time, and code no job took."""
+        """Move every job on NRP on (advance_nrp), and delete code no job took."""
         if self.nrp is None or self.bucket is None:
             return
         try:
@@ -1575,31 +1901,10 @@ class Gateway:
             return
         now = time.time()
         for job in jobs:
-            name = job["metadata"]["name"]
-            state = job.get("status") or {}
             try:
-                created = datetime.fromisoformat(
-                    job["metadata"]["creationTimestamp"]
-                ).timestamp()
-                if job_ended(job):
-                    if name not in self.nrp_cleaned:
-                        await self.bucket.delete_prefix(nrp_jobs.code_prefix(name))
-                        self.nrp_cleaned.add(name)
-                    ended = epoch_ms(state.get("endTime"))
-                    if ended is not None and now - ended / 1000 >= JOB_RECORD_S:
-                        await self.delete_nrp(name)
-                        log.info("deleted the record of %s on NRP", name)
-                elif state.get("jobDeploymentStatus") in (
-                    None,
-                    "",
-                    "Initializing",
-                ) and (now - created >= NRP_START_TIMEOUT_S):
-                    await self.delete_nrp(name)
-                    log.info(
-                        "deleted %s on NRP: its cluster did not start in time", name
-                    )
+                await self.advance_nrp(job)
             except Exception:
-                log.exception("checking %s on NRP", name)
+                log.exception("checking %s on NRP", job["metadata"]["name"])
         taken = {j["metadata"]["name"] for j in jobs} | {
             name for name, _ in self.nrp_waiting.values()
         }

@@ -58,6 +58,7 @@ def test_flux_deploys_the_gateway():
         "../../apps/ray-train/raycluster.yaml",
         "../../apps/ray-train/nrp_gpus.py",
         "../../apps/ray-train/nrp_jobs.py",
+        "../../apps/ray-train/stage.py",
         "../../apps/ray-train/rayjob-nrp.yaml",
         "../../apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py",
     ]
