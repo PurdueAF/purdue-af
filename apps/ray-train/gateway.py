@@ -748,7 +748,12 @@ def job_details(job: dict[str, Any]) -> dict[str, Any]:
         state, message = "PENDING", "Copying its inputs to NRP."
     elif stage == "placing":
         state, message = "PENDING", "Waiting for room for its workers on NRP."
-    elif stage == "outputs":
+    elif stage == "outputs" or (
+        # Ended, and the reaper not yet at it.
+        stage == "running"
+        and job_ended(job)
+        and annotations.get(OUTPUT_ANNOTATION) == "true"
+    ):
         # Not ended for its client before what it wrote is back.
         state, message = "RUNNING", f"The job is {state}: copying its outputs back."
     elif stage == "done" and annotations.get(OUTPUT_ANNOTATION) == OUTPUT_FAILED:

@@ -2745,6 +2745,8 @@ async def test_a_job_on_nrp_has_its_inputs_copied_there_and_its_outputs_back(nrp
     assert nrp_workers(job) == (1, ["west-1"])
 
     kuberay_ends(env, submission)
+    # Before the reaper's next pass, as after it.
+    assert (await details(env, submission))["status"] == "RUNNING"
     await env.gateway.reap_nrp()
     found = await details(env, submission)
     # Not ended for its client before its outputs are back.

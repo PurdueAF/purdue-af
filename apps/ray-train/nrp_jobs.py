@@ -254,7 +254,11 @@ class Bucket:
         for page in pages:
             for o in page.get("Contents", []):
                 job = o["Key"].removeprefix(JOBS_PREFIX + "/").split("/", 1)[0]
-                newest[job] = max(newest.get(job, 0.0), o["LastModified"].timestamp())
+                # pyarrow marks a directory it writes into with an empty object.
+                if job:
+                    newest[job] = max(
+                        newest.get(job, 0.0), o["LastModified"].timestamp()
+                    )
         return newest
 
 
