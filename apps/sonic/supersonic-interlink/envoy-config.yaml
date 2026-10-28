@@ -52,6 +52,8 @@ static_resources:
                             retry_policy:
                               retry_on: 5xx,gateway-error,reset,reset-before-request,connect-failure,refused-stream,retriable-status-codes,cancelled,deadline-exceeded,internal,resource-exhausted,unavailable
                               num_retries: 15
+                              # A deleted pod's shadow accepts connections its tunnel never carries.
+                              per_try_timeout: 10s
                               retriable_status_codes:
                                 - 404
                                 - 502
