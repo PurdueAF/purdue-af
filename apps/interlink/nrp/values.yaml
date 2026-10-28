@@ -88,6 +88,11 @@ virtualNode:
       - resourceType: nvidia.com/gpu
         available: "20"
 
+  containerResources:
+    memory:
+      request: 512Mi
+      limit: 2Gi
+
   disableCSR: true
 
   # A pod with exposed ports gets a shadow pod here and a tunnel client on NRP
