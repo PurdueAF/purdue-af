@@ -1,0 +1,79 @@
+# Egress of the task pods and of the account's Dask and Ray pods: the services they use here, and the internet.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agentic-analysis
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: agentic-analysis
+  policyTypes:
+    - Egress
+  egress:
+    # Any resolver: the cluster's runs outside this namespace.
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # A Dask or Ray cluster's own pods, and the task pod, on the ports they pick.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: agentic-analysis
+    - to:
+        - podSelector:
+            matchLabels:
+              app: agentic-analysis-llm-proxy
+      ports:
+        - protocol: TCP
+          port: 8080
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: dask-gateway
+              app.kubernetes.io/component: gateway
+      ports:
+        - protocol: TCP
+          port: 8000
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: dask-gateway
+              app.kubernetes.io/component: traefik
+      ports:
+        - protocol: TCP
+          port: 8786
+    - to:
+        - podSelector:
+            matchLabels:
+              app: ray-train-gateway
+      ports:
+        - protocol: TCP
+          port: 8265
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: pyroscope
+      ports:
+        - protocol: TCP
+          port: 4040
+    # Flyte's object store, which holds a task's code, inputs and outputs.
+    - to:
+        - podSelector:
+            matchLabels:
+              app: flyte-minio
+      ports:
+        - protocol: TCP
+          port: 9000
+    # Not the cluster's pods, Services, nodes and LoadBalancers, nor Geddes' public ingress and LoadBalancers.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 100.64.0.0/10
+              - 169.254.0.0/16
+              - 128.211.160.0/24

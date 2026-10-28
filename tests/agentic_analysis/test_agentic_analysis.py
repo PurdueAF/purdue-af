@@ -5,6 +5,7 @@ agent are replaced per test."""
 import fcntl
 import http.server
 import io
+import ipaddress
 import json
 import os
 import re
@@ -17,6 +18,7 @@ import threading
 import time
 import types
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 import yaml
@@ -306,7 +308,8 @@ def test_task_pods_send_profiles_where_the_sessions_do_as_the_workflow():
 
 def test_task_pods_reach_the_sessions_gateway_from_a_pod_as_their_account():
     """The gateway takes an account's token only from a pod, at its API Service, and
-    serves dashboards only through its Traefik."""
+    serves dashboards only through its Traefik; the pods reach schedulers through that
+    Traefik's in-cluster Service, at the sessions' port."""
     (template,) = docs(APP / "podtemplate.yaml")
     container = template["template"]["spec"]["containers"][0]
     env = _variables(container)
@@ -335,8 +338,102 @@ def test_task_pods_reach_the_sessions_gateway_from_a_pod_as_their_account():
     assert env["DASK_GATEWAY__AUTH__TYPE"] == (
         f"{clusters.__name__}.{clusters.AccountAuth.__name__}"
     )
-    proxy = env["DASK_GATEWAY__PROXY_ADDRESS"]
-    assert re.search(rf'"DASK_GATEWAY__PROXY_ADDRESS",\s*"{re.escape(proxy)}"', spawner)
+    (port,) = re.findall(r'"DASK_GATEWAY__PROXY_ADDRESS",\s*"[^"]*:(\d+)"', spawner)
+    assert env["DASK_GATEWAY__PROXY_ADDRESS"] == (
+        f"traefik-{release['metadata']['name']}:{port}"
+    )
+
+
+def test_the_workload_reaches_in_the_cluster_only_what_its_task_pods_are_pointed_at():
+    """The egress policy holds the task pods and the account's clusters to each other,
+    the pods behind the addresses the task pods are given, and the internet outside
+    the cluster's pod network."""
+    (policy,) = docs(APP / "networkpolicy.yaml")
+    (template,) = docs(APP / "podtemplate.yaml")
+    labels = template["template"]["metadata"]["labels"]
+    assert policy["spec"]["podSelector"] == {"matchLabels": labels}
+    assert policy["spec"]["policyTypes"] == ["Egress"]
+    admitted = {}
+    blocks = []
+    anywhere = set()
+    for rule in policy["spec"]["egress"]:
+        assert all(set(port) == {"protocol", "port"} for port in rule.get("ports", []))
+        ports = {(port["protocol"], port["port"]) for port in rule.get("ports", [])}
+        if "to" not in rule:
+            anywhere |= ports
+        for peer in rule.get("to", []):
+            # A pod peer in this namespace only, or an address block.
+            assert set(peer) in ({"podSelector"}, {"ipBlock"})
+            if "podSelector" in peer:
+                assert set(peer["podSelector"]) == {"matchLabels"}
+                selected = frozenset(peer["podSelector"]["matchLabels"].items())
+                assert selected not in admitted
+                admitted[selected] = ports
+            else:
+                blocks.append((peer["ipBlock"], ports))
+    env = _variables(template["template"]["spec"]["containers"][0])
+
+    def deployment(path):
+        (found,) = [d for d in docs(path) if d["kind"] == "Deployment"]
+        pod = found["spec"]["template"]
+        ports = {
+            p["containerPort"]
+            for c in pod["spec"]["containers"]
+            for p in c.get("ports", [])
+        }
+        return frozenset(found["spec"]["selector"]["matchLabels"].items()), ports
+
+    def released(path, component):
+        (release,) = docs(path)
+        instance = ("app.kubernetes.io/instance", release["metadata"]["name"])
+        return frozenset({instance, *component.items()})
+
+    gateway = REPO / "apps/dask-gateway/helmrelease.yaml"
+    flyte = REPO / "apps/flyte/values.yaml"
+    pointed = {
+        frozenset(labels.items()): set(),
+        deployment(APP / "llm-proxy.yaml")[0]: {
+            ("TCP", urlsplit(env[runner.PROXY]).port)
+        },
+        released(gateway, {"app.kubernetes.io/component": "gateway"}): {
+            ("TCP", urlsplit(env["DASK_GATEWAY__ADDRESS"]).port)
+        },
+        released(gateway, {"app.kubernetes.io/component": "traefik"}): {
+            ("TCP", int(env["DASK_GATEWAY__PROXY_ADDRESS"].rpartition(":")[2]))
+        },
+        deployment(REPO / "apps/ray-train/deployment.yaml")[0]: {
+            ("TCP", urlsplit(gpus.ADDRESS).port)
+        },
+        released(REPO / "apps/monitoring/pyroscope/helmrelease.yaml", {}): {
+            ("TCP", urlsplit(env["PYROSCOPE_SERVER"]).port)
+        },
+        deployment(REPO / "apps/flyte/minio.yaml")[0]: {
+            (
+                "TCP",
+                urlsplit(
+                    _found(yaml.safe_load(flyte.read_text()), "FLYTE_AWS_ENDPOINT")
+                ).port,
+            )
+        },
+    }
+    assert admitted == pointed
+    for path in (
+        APP / "llm-proxy.yaml",
+        REPO / "apps/ray-train/deployment.yaml",
+        REPO / "apps/flyte/minio.yaml",
+    ):
+        selected, ports = deployment(path)
+        assert {port for _, port in admitted[selected]} <= ports
+    # The cluster's resolver, wherever it runs.
+    assert anywhere == {("UDP", 53), ("TCP", 53)}
+    values = (REPO / "apps/dask-gateway/values.yaml").read_text()
+    (pods,) = re.findall(r'POD_NETWORK = ipaddress.ip_network\("([^"]+)"\)', values)
+    ((block, ports),) = blocks
+    assert block["cidr"] == "0.0.0.0/0" and ports == set()
+    assert any(
+        ipaddress.ip_network(pods).subnet_of(ipaddress.ip_network(cidr))
+        for cidr in block["except"]
+    )
 
 
 def test_task_pods_hold_the_facilitys_proxy_and_the_certificates_to_use_it():
