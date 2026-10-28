@@ -416,7 +416,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/bleach-with-css-6.4.0-hac0b51c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/blessed-1.33.0-pyha191276_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/blinker-1.9.0-pyhff2d567_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/bokeh-3.10.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/bokeh-3.9.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cabinetry-0.6.0-pyhff2d567_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_1.tar.bz2
@@ -6831,9 +6831,9 @@ packages:
   - pkg:pypi/blinker?source=hash-mapping
   size: 13934
   timestamp: 1731096548765
-- conda: https://conda.anaconda.org/conda-forge/noarch/bokeh-3.10.0-pyhd8ed1ab_0.conda
-  sha256: 34bb5cc4f6ccff1e410dea2d39880190f88a8be7ad5cfe9ff0da2cf3d2ad7ea1
-  md5: 67d0ed593951a4933024453b76ef1355
+- conda: https://conda.anaconda.org/conda-forge/noarch/bokeh-3.9.2-pyhd8ed1ab_0.conda
+  sha256: 577c2614f3a59512697c1ffe2021c5194818b55f734006fcdeb6c6921b514c44
+  md5: b2781afb860ae9ed84cb92bdebbc83ea
   depends:
   - contourpy >=1.2
   - jinja2 >=2.9
@@ -6841,7 +6841,7 @@ packages:
   - numpy >=1.16
   - packaging >=16.8
   - pillow >=7.1.0
-  - python >=3.12
+  - python >=3.10
   - pyyaml >=3.10
   - tornado >=6.2
   - xyzservices >=2021.09.1
@@ -6851,8 +6851,9 @@ packages:
   license_family: BSD
   purls:
   - pkg:pypi/bokeh?source=hash-mapping
-  size: 4454345
-  timestamp: 1787144786949
+  run_exports: {}
+  size: 4292921
+  timestamp: 1785249803504
 - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
   sha256: f8e3c730fa14ee3f170493779f06522c4acf89169f43db4f039727709b6419cf
   md5: a9965dd99f683c5f444428f896635716
@@ -9485,7 +9486,7 @@ packages:
   license: Apache-2.0
   license_family: APACHE
   purls:
-  - pkg:pypi/proto-plus?source=hash-mapping
+  - pkg:pypi/proto-plus?source=compressed-mapping
   size: 44095
   timestamp: 1787730369325
 - conda: https://conda.anaconda.org/conda-forge/noarch/ptyprocess-0.7.0-pyhd8ed1ab_1.conda
