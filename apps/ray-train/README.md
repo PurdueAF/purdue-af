@@ -107,10 +107,11 @@ moves it on:
    bans a namespace that keeps its GPUs idle;
 4. **outputs** — `<RayJob>-out`, made suspended at the submission, copies its
    outputs back to `af-output`; the job reports RUNNING until it has;
-5. **done** — its prefix deleted; its RayJob and Jobs go `jobRecordSeconds`
-   later.
+5. **done** — its prefix deleted, unless its outputs could not be copied
+   back; its RayJob and Jobs, and such a prefix, go `jobRecordSeconds` later.
 
-Its status comes from its RayJob, and its log from the pod that submits it.
+Its status comes from its RayJob, and its log from the pod that submits it,
+which outlasts its cluster: KubeRay removes that as soon as the job ends.
 
 ## Tuning
 

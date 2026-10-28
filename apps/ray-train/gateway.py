@@ -225,7 +225,7 @@ STAGE_ANNOTATION = "purdue-af/ray-stage"
 SINCE_ANNOTATION = "purdue-af/ray-since"
 OUTPUT_ANNOTATION = "purdue-af/ray-output"
 LEAST_WORKERS_ANNOTATION = "purdue-af/ray-least"
-OUTPUT_FAILED = "Copying its outputs back failed."
+OUTPUT_FAILED = "Copying its outputs back failed: they stay on NRP until the job is deleted, and the AF's admins can fetch them."
 STOPPED_BY_USER = "The job was stopped."
 STOPPED_INPUTS = "Copying its inputs to NRP failed: is it a directory you can read?"
 STOPPED_NO_ROOM = (
@@ -1562,7 +1562,8 @@ class Gateway:
                 submitted,
                 self.bucket.name,
                 min(wanted, room),
-                int(IDLE_TIMEOUT_S),
+                # Its log is its submitter's, which outlasts the cluster: the GPUs go at once.
+                0,
                 {
                     f"AF_{key.upper()}": nrp_jobs.data_uri(self.bucket.name, name, key)
                     for key in data
@@ -1805,7 +1806,10 @@ class Gateway:
             await self.set_stage(job, "done", **failed)
             stage, since = "done", now
         if stage == "done":
-            if name not in self.nrp_cleaned:
+            # Outputs that did not come back stay until the record goes.
+            if name not in self.nrp_cleaned and (
+                annotations.get(OUTPUT_ANNOTATION) != OUTPUT_FAILED
+            ):
                 await self.bucket.delete_prefix(nrp_jobs.code_prefix(name))
                 self.nrp_cleaned.add(name)
             if now - since >= JOB_RECORD_S:

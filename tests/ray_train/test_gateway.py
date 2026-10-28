@@ -2657,6 +2657,8 @@ async def test_a_job_on_nrp_is_a_rayjob_there_named_for_no_one(nrp_env):
     assert job["spec"]["entrypoint"] == "python train.py"
     # Without inputs it is placed at once.
     assert job["spec"]["suspend"] is False
+    # Its cluster goes as soon as it ends; its log is its submitter's.
+    assert job["spec"]["ttlSecondsAfterFinished"] == 0
     assert nrp_workers(job) == (1, ["west-1"])
     assert "user-a" not in json.dumps(job)
     # Nothing runs at Purdue.
@@ -2783,14 +2785,23 @@ async def test_a_job_on_nrp_whose_inputs_could_not_be_copied_says_so(nrp_env):
 async def test_a_job_on_nrp_whose_outputs_could_not_be_copied_back_says_so(nrp_env):
     env = nrp_env
     submission = await nrp_submitted(env, **{gw.OUTPUT_METADATA: OUTPUT})
-    name = nrp_job(env)["metadata"]["name"]
+    job = nrp_job(env)
+    name = job["metadata"]["name"]
+    kept = f"ray-nrp/jobs/{name}/output/model.pt"
+    await env.gateway.bucket.put(kept, b"m")
     kuberay_ends(env, submission)
     await env.gateway.reap_nrp()
     copied(env, f"{name}-out", "Failed")
     await env.gateway.reap_nrp()
+    await env.gateway.reap_nrp()
     found = await details(env, submission)
     assert found["status"] == "SUCCEEDED"
     assert found["message"].endswith(gw.OUTPUT_FAILED)
+    # What did not come back stays, until the job's record goes.
+    assert list(env.gateway.bucket.objects) == [kept]
+    job["metadata"]["annotations"][gw.SINCE_ANNOTATION] = stamp(gw.JOB_RECORD_S + 1)
+    await env.gateway.reap_nrp()
+    assert env.gateway.bucket.objects == {} and env.nrp.jobs == {}
 
 
 @pytest.mark.parametrize("path", ["/etc/passwd", "relative/dir", "/work/../etc"])
