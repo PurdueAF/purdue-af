@@ -1,9 +1,10 @@
 """Ray gateway: each AF user's Ray Client, `ray.init("ray://ray-train-gateway:10001")`,
 reaches a Ray cluster of their own, and each job their Jobs API client,
 `JobSubmissionClient("http://ray-train-gateway:8265")`, submits runs in a
-RayJob of its own: a cluster made the same way, which KubeRay removes once the
-job ends and its logs were kept for the idle timeout. The RayJob keeps the job's
-status for jobRecordSeconds.
+RayJob of its own: a cluster made the same way, whose workers the gateway
+suspends once the job ends, freeing their GPUs, and whose head, with the job's
+logs, KubeRay removes after the idle timeout. The RayJob keeps the job's status
+for jobRecordSeconds.
 
 A session's RAY_AUTH_TOKEN is its JupyterHub token, which both clients send
 with every call. The Hub says whose it is, and the call goes on, unread, to
@@ -225,7 +226,7 @@ STAGE_ANNOTATION = "purdue-af/ray-stage"
 SINCE_ANNOTATION = "purdue-af/ray-since"
 OUTPUT_ANNOTATION = "purdue-af/ray-output"
 LEAST_WORKERS_ANNOTATION = "purdue-af/ray-least"
-OUTPUT_FAILED = "Copying its outputs back failed."
+OUTPUT_FAILED = "Copying its outputs back failed: they stay on NRP until the job is deleted, and the AF's admins can fetch them."
 STOPPED_BY_USER = "The job was stopped."
 STOPPED_INPUTS = "Copying its inputs to NRP failed: is it a directory you can read?"
 STOPPED_NO_ROOM = (
@@ -692,8 +693,8 @@ def build_job(
     name: str,
 ) -> dict[str, Any]:
     """A RayJob whose cluster is the one build_cluster makes, which waits until
-    the gateway sets the jobId of the job it submits, and goes once that job
-    ends and its logs were kept for the idle timeout."""
+    the gateway sets the jobId of the job it submits, and whose head, with that
+    job's logs, goes the idle timeout after the job ends."""
     cluster = build_cluster(template, user, shape, mix)
     cluster["spec"]["authOptions"]["secretName"] = name
     metadata = cluster["metadata"]
@@ -1562,7 +1563,8 @@ class Gateway:
                 submitted,
                 self.bucket.name,
                 min(wanted, room),
-                int(IDLE_TIMEOUT_S),
+                # Its log is its submitter's, which outlasts the cluster: the GPUs go at once.
+                0,
                 {
                     f"AF_{key.upper()}": nrp_jobs.data_uri(self.bucket.name, name, key)
                     for key in data
@@ -1805,7 +1807,10 @@ class Gateway:
             await self.set_stage(job, "done", **failed)
             stage, since = "done", now
         if stage == "done":
-            if name not in self.nrp_cleaned:
+            # Outputs that did not come back stay until the record goes.
+            if name not in self.nrp_cleaned and (
+                annotations.get(OUTPUT_ANNOTATION) != OUTPUT_FAILED
+            ):
                 await self.bucket.delete_prefix(nrp_jobs.code_prefix(name))
                 self.nrp_cleaned.add(name)
             if now - since >= JOB_RECORD_S:
@@ -2169,12 +2174,17 @@ class Gateway:
         return model
 
     async def kube(
-        self, method: str, path: str, body: dict[str, Any] | None = None
+        self, method: str, path: str, body: Any = None
     ) -> tuple[int, dict[str, Any]]:
+        """A call to Kubernetes; a PATCH is a JSON patch if `body` is a list of operations, else a merge patch."""
         token = (SERVICE_ACCOUNT / "token").read_text().strip()
         headers = {"Authorization": f"Bearer {token}"}
         if method == "PATCH":
-            headers["Content-Type"] = "application/merge-patch+json"
+            headers["Content-Type"] = (
+                "application/json-patch+json"
+                if isinstance(body, list)
+                else "application/merge-patch+json"
+            )
         async with self.kube_http.request(
             method,
             KUBE_API + path,
@@ -2509,6 +2519,7 @@ class Gateway:
                         )
                         log.info("deleted %s: no job was submitted to it", name)
                 elif job_ended(job):
+                    await self.free_workers(name, state.get("rayClusterName"))
                     ended = epoch_ms(state.get("endTime"))
                     if ended is not None and now - ended / 1000 >= JOB_RECORD_S:
                         await self.kube(
@@ -2523,6 +2534,26 @@ class Gateway:
                         await self.stop_unprovisioned(job, head)
             except Exception:
                 log.exception("checking %s", name)
+
+    async def free_workers(self, name: str, head: str | None) -> None:
+        """Suspend the worker groups of an ended job's cluster, as KubeRay's
+        DeleteWorkers does: their GPUs go, the head with the job's logs stays."""
+        cluster = await self.cluster(head) if head else None
+        if cluster is None or cluster["metadata"].get("deletionTimestamp"):
+            return
+        groups = cluster["spec"].get("workerGroupSpecs") or []
+        suspend = [
+            {"op": "add", "path": f"/spec/workerGroupSpecs/{i}/suspend", "value": True}
+            for i, group in enumerate(groups)
+            if not group.get("suspend")
+        ]
+        if not suspend:
+            return
+        status, body = await self.kube("PATCH", f"{RAYCLUSTERS}/{head}", suspend)
+        if status != 200:
+            log.warning("suspending the workers of %s: HTTP %s", name, status)
+            return
+        log.info("suspended the workers of %s: its job ended", name)
 
     async def stop_unprovisioned(self, job: dict[str, Any], head: str) -> None:
         """Stop the job, say why on its RayJob, and free the GPUs its cluster holds."""

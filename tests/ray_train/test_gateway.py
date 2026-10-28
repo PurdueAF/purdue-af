@@ -121,6 +121,8 @@ class FakeKube:
         # RayJobs, each with its cluster, as KubeRay creates it, and its patches
         self.jobs = {}
         self.patches = []
+        # RayClusters the gateway patched, once for each patch
+        self.cluster_patches = []
         # Geddes batch Jobs: those that copy a job on NRP's data
         self.batch = {}
         self.secrets = {}
@@ -291,7 +293,17 @@ class FakeKube:
             self.secrets[name] = body
             return web.json_response(body, status=201)
 
+        async def patch(request):
+            assert request.content_type == "application/json-patch+json"
+            name = request.match_info["name"]
+            self.cluster_patches.append(name)
+            for op in json.loads(await request.read()):
+                _, spec, groups, index, field = op["path"].split("/")
+                self.clusters[name][spec][groups][int(index)][field] = op["value"]
+            return web.json_response(self.clusters[name])
+
         app = web.Application()
+        app.router.add_patch(clusters + "/{name}", patch)
         app.router.add_post(clusters, create)
         app.router.add_get(clusters, listing)
         app.router.add_get(clusters + "/{name}", get)
@@ -2185,6 +2197,40 @@ async def test_a_jobs_status_outlives_its_cluster(env):
     assert "logs with it" in reason
 
 
+def suspended(env, submission):
+    """Whether each worker group of the job's cluster is suspended."""
+    groups = env.kube.clusters[job_cluster(env, submission)]["spec"]["workerGroupSpecs"]
+    return [bool(g.get("suspend")) for g in groups]
+
+
+@pytest.mark.parametrize("state", ["SUCCEEDED", "FAILED", "STOPPED"])
+async def test_an_ended_job_frees_its_gpus_and_keeps_its_head_for_its_logs(env, state):
+    submission = await submitted(env, gpus="2")
+    kuberay_reports(env, submission, jobStatus=state, endTime=stamp_now())
+    await env.gateway.reap_jobs()
+    assert suspended(env, submission) == [True, True]
+    assert job_cluster(env, submission) in live(env)
+    env.heads.jobs[job_cluster(env, submission)] = [
+        running_job(submission, status=state)
+    ]
+    status, _, body = await job_call(env, path=f"/api/jobs/{submission}")
+    assert (status, json.loads(body)["status"]) == (200, state)
+    await env.gateway.reap_jobs()
+    assert env.kube.cluster_patches == [job_cluster(env, submission)]
+
+
+async def test_a_running_job_keeps_its_workers(env):
+    submission = await submitted(env)
+    kuberay_reports(env, submission, jobStatus="RUNNING")
+    await env.gateway.reap_jobs()
+    assert suspended(env, submission) == [False]
+    assert env.kube.cluster_patches == []
+
+
+def stamp_now():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 async def test_a_jobs_record_goes_once_kept_long_enough(env):
     submission = await submitted(env)
     long_ago = datetime.fromtimestamp(time.time() - gw.JOB_RECORD_S - 1, timezone.utc)
@@ -2657,6 +2703,8 @@ async def test_a_job_on_nrp_is_a_rayjob_there_named_for_no_one(nrp_env):
     assert job["spec"]["entrypoint"] == "python train.py"
     # Without inputs it is placed at once.
     assert job["spec"]["suspend"] is False
+    # Its cluster goes as soon as it ends; its log is its submitter's.
+    assert job["spec"]["ttlSecondsAfterFinished"] == 0
     assert nrp_workers(job) == (1, ["west-1"])
     assert "user-a" not in json.dumps(job)
     # Nothing runs at Purdue.
@@ -2783,14 +2831,23 @@ async def test_a_job_on_nrp_whose_inputs_could_not_be_copied_says_so(nrp_env):
 async def test_a_job_on_nrp_whose_outputs_could_not_be_copied_back_says_so(nrp_env):
     env = nrp_env
     submission = await nrp_submitted(env, **{gw.OUTPUT_METADATA: OUTPUT})
-    name = nrp_job(env)["metadata"]["name"]
+    job = nrp_job(env)
+    name = job["metadata"]["name"]
+    kept = f"ray-nrp/jobs/{name}/output/model.pt"
+    await env.gateway.bucket.put(kept, b"m")
     kuberay_ends(env, submission)
     await env.gateway.reap_nrp()
     copied(env, f"{name}-out", "Failed")
     await env.gateway.reap_nrp()
+    await env.gateway.reap_nrp()
     found = await details(env, submission)
     assert found["status"] == "SUCCEEDED"
     assert found["message"].endswith(gw.OUTPUT_FAILED)
+    # What did not come back stays, until the job's record goes.
+    assert list(env.gateway.bucket.objects) == [kept]
+    job["metadata"]["annotations"][gw.SINCE_ANNOTATION] = stamp(gw.JOB_RECORD_S + 1)
+    await env.gateway.reap_nrp()
+    assert env.gateway.bucket.objects == {} and env.nrp.jobs == {}
 
 
 @pytest.mark.parametrize("path", ["/etc/passwd", "relative/dir", "/work/../etc"])

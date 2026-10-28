@@ -11,8 +11,9 @@ of either, created when they first connect, running as them, and deleted once
 idle. A submission, and the uploads of the code it takes along, reach a RayJob
 of its own, `ray-job-<hash>`, labelled `purdue-af/ray-owner` with the user's
 cluster's name: KubeRay makes its cluster as the gateway makes a user's, the
-gateway submits the job to that cluster's head, and KubeRay removes the
-cluster `idleTimeoutSeconds` after the job ends. A call about a job reaches its
+gateway submits the job to that cluster's head, suspends its workers once the
+job ends, which frees their GPUs, and KubeRay removes its head, with the job's
+logs, `idleTimeoutSeconds` after. A call about a job reaches its
 cluster while that is up, and its RayJob's record of it afterwards, until
 `jobRecordSeconds` after it ended; a job whose workers do not all start within
 `provisionTimeoutSeconds` is stopped. The RayJob is created at the first call
@@ -107,10 +108,11 @@ moves it on:
    bans a namespace that keeps its GPUs idle;
 4. **outputs** — `<RayJob>-out`, made suspended at the submission, copies its
    outputs back to `af-output`; the job reports RUNNING until it has;
-5. **done** — its prefix deleted; its RayJob and Jobs go `jobRecordSeconds`
-   later.
+5. **done** — its prefix deleted, unless its outputs could not be copied
+   back; its RayJob and Jobs, and such a prefix, go `jobRecordSeconds` later.
 
-Its status comes from its RayJob, and its log from the pod that submits it.
+Its status comes from its RayJob, and its log from the pod that submits it,
+which outlasts its cluster: KubeRay removes that as soon as the job ends.
 
 ## Tuning
 
