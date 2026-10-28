@@ -11,6 +11,8 @@ celery:
     # NGT node label; the workers schedule anywhere in cms.
     nodeSelector:
       node/type: null
+    # The Dask burst workers' class. Ignored until upstream reads celery.worker.priorityClassName.
+    priorityClassName: low-priority-preemptible
     # Needs a CERN password in a kerberos-credentials Secret.
     kerberos:
       enabled: false
