@@ -283,10 +283,14 @@ jobs:
               echo ok"
           # The global environment's Ray, PyTorch and S3 client run as the image's
           # user, with the wget KubeRay's probes need.
+          # Built straight into the docker daemon, uncached: exporting its
+          # environment layer to the daemon or to the 10 GB GHA cache takes
+          # longer than building it.
           - name: ray-nrp
             dockerfile: docker/ray-nrp/Dockerfile
             context: .
             free_disk: true
+            uncached: true
             smoke: >-
               sh -c 'set -e; test "$(id -u)" = 1000; ray --version; wget --version | head -1;
               python -c "import boto3, pyarrow, ray.train, smart_open, torch;
@@ -351,6 +355,8 @@ jobs:
           large-packages: false
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
         if: steps.meta.outputs.exists != 'true'
+        with:
+          driver: ${{ matrix.uncached && 'docker' || 'docker-container' }}
       - name: Build image
         if: steps.meta.outputs.exists != 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
@@ -365,8 +371,8 @@ jobs:
           build-contexts: ${{ steps.meta.outputs.build_contexts }}
           push: false
           load: true
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+          cache-from: ${{ !matrix.uncached && format('type=gha,scope={0}', matrix.name) || '' }}
+          cache-to: ${{ !matrix.uncached && format('type=gha,scope={0},mode=max', matrix.name) || '' }}
       - name: Smoke test
         if: steps.meta.outputs.exists != 'true'
         env:
