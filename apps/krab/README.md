@@ -19,6 +19,10 @@ kubectl -n cms port-forward svc/krab-dagster-webserver 8080:3000
 kubectl -n cms port-forward svc/krab-rabbitmq 15672:15672
 ```
 
+The Celery workers mount `/cvmfs`, `/depot/cms` and `/work`, and the run pods `/depot/cms` and
+`/work`, so a run's `input_globs` and `output_directory` point under those two. EOS is not
+mounted.
+
 Upstream commits to `master` reach the cluster on the next reconcile; `values.yaml` overrides the
 upstream `helm/values.yaml`, so a change there can need one here.
 

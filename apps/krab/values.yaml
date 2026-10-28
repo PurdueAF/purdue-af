@@ -13,6 +13,34 @@ celery:
       node/type: null
     # The Dask burst workers' class. Ignored until upstream reads celery.worker.priorityClassName.
     priorityClassName: low-priority-preemptible
+    # The mounts a Dask worker has, but /eos: it is a hostPath on the tainted cms-af nodes, which these pods do not tolerate.
+    volumes:
+      - name: scratch
+        emptyDir: {}
+      - name: cvmfs
+        persistentVolumeClaim:
+          claimName: cvmfs
+      - name: depot
+        nfs:
+          server: datadepot.rcac.purdue.edu
+          path: /depot/cms
+      - name: work
+        persistentVolumeClaim:
+          claimName: af-shared-storage
+    volumeMounts:
+      - name: scratch
+        mountPath: /scratch
+      - name: cvmfs
+        mountPath: /cvmfs
+        mountPropagation: HostToContainer
+      - name: depot
+        mountPath: /depot/cms
+        mountPropagation: HostToContainer
+      - name: work
+        mountPath: /work
+        mountPropagation: HostToContainer
+    # cmsRun writes to $PWD; /work is shared storage, so it runs in the scratch emptyDir.
+    workingDir: /scratch
     # Needs a CERN password in a kerberos-credentials Secret.
     kerberos:
       enabled: false
@@ -96,6 +124,7 @@ dagster:
         envConfigMaps:
           - name: krab-celery-env
         # The sensor lists cmssw-docker tags with the gitlab-cern-registry deploy token.
+        # The run pods expand input_globs and create the output directory on depot and work.
         volumes:
           - name: registry-credentials
             secret:
@@ -104,10 +133,23 @@ dagster:
               items:
                 - key: .dockerconfigjson
                   path: .dockerconfigjson
+          - name: depot
+            nfs:
+              server: datadepot.rcac.purdue.edu
+              path: /depot/cms
+          - name: work
+            persistentVolumeClaim:
+              claimName: af-shared-storage
         volumeMounts:
           - name: registry-credentials
             mountPath: /etc/krab/registry
             readOnly: true
+          - name: depot
+            mountPath: /depot/cms
+            mountPropagation: HostToContainer
+          - name: work
+            mountPath: /work
+            mountPropagation: HostToContainer
         resources:
           requests:
             cpu: 100m
