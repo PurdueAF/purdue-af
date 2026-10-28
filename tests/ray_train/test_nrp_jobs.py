@@ -93,6 +93,10 @@ def test_a_placed_job_runs_its_workers_on_its_nodes_and_its_head_in_their_region
     ]
     head = cluster["headGroupSpec"]["template"]["spec"]
     assert head["nodeSelector"] == {"topology.kubernetes.io/region": "us-west"}
+    for pod in (head, group["template"]["spec"]):
+        (container,) = pod["containers"]
+        sized = [e for e in container["env"] if e["name"] == "AF_MAX_WORKERS"]
+        assert sized == [{"name": "AF_MAX_WORKERS", "value": "2"}]
     # The job itself keeps its cluster until the patch reaches NRP.
     assert "affinity" not in json.dumps(job)
 

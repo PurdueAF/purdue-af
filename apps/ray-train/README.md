@@ -98,10 +98,13 @@ moves it on:
    [`stage.py`](stage.py) as the user to copy its inputs to S3;
 2. **placing** — its workers placed, when there is room, on nodes of one region
    and GPU model, as [`nrp_gpus.py`](nrp_gpus.py) reads NRP's Prometheus, with
-   its head in that region, and resumed;
+   its head in that region and `AF_MAX_WORKERS` their number, and resumed;
 3. **running** — until it ends, or until it is stopped, which suspends it and
    says why: by its user, for want of room or a cluster within
-   `nrpStartTimeoutSeconds`, or for inputs that could not be copied;
+   `nrpStartTimeoutSeconds`, for inputs that could not be copied, or for GPUs
+   busy less than `nrpMinGpuUtilization` percent on average over
+   `nrpUtilizationWindowSeconds` of its running, by NRP's GPU metrics, since NRP
+   bans a namespace that keeps its GPUs idle;
 4. **outputs** — `<RayJob>-out`, made suspended at the submission, copies its
    outputs back to `af-output`; the job reports RUNNING until it has;
 5. **done** — its prefix deleted; its RayJob and Jobs go `jobRecordSeconds`
