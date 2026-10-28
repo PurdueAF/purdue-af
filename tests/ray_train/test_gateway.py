@@ -2547,8 +2547,15 @@ async def nrp_env(env, monkeypatch):
         nrp_gpus.MODELS: [n[2] for n in nodes],
     }
 
+    utilization = {}
+
     async def query(request):
-        return web.json_response({"data": {"result": answers[request.query["query"]]}})
+        promql = request.query["query"]
+        if promql.startswith("avg(avg_over_time(DCGM_FI_DEV_GPU_UTIL"):
+            busy = [v for c, v in utilization.items() if f'pod=~"{c}-' in promql]
+            result = [nrp_sample(busy[0])] if busy else []
+            return web.json_response({"data": {"result": result}})
+        return web.json_response({"data": {"result": answers[promql]}})
 
     prometheus = web.Application()
     prometheus.router.add_get("/api/v1/query", query)
@@ -2563,7 +2570,7 @@ async def nrp_env(env, monkeypatch):
     monkeypatch.setattr(
         gw, "NRP_PROMETHEUS_URL", str(servers[1].make_url("")).rstrip("/")
     )
-    env.nrp, env.answers = fake, answers
+    env.nrp, env.answers, env.utilization = fake, answers, utilization
     yield env
     await api.close()
     for server in servers:
@@ -2902,6 +2909,51 @@ async def test_users_reach_only_their_own_jobs_on_nrp(nrp_env):
         env, path=f"/api/jobs/{submission}", token="session-b"
     )
     assert status == 404
+
+
+def running_for(env, submission, seconds, cluster="c1"):
+    """KubeRay's status of a job that has run `seconds`, on `cluster`."""
+    nrp_job(env, submission)["status"] = {
+        "jobDeploymentStatus": "Running",
+        "jobStatus": "RUNNING",
+        "rayClusterName": cluster,
+        "rayJobInfo": {"startTime": stamp(seconds)},
+    }
+
+
+async def test_a_job_on_nrp_whose_gpus_sit_idle_is_stopped_and_says_why(nrp_env):
+    env = nrp_env
+    submission = await nrp_submitted(env, **{gw.OUTPUT_METADATA: OUTPUT})
+    running_for(env, submission, gw.NRP_UTILIZATION_WINDOW_S + 60)
+    env.utilization["c1"] = 12.4
+    await env.gateway.reap_nrp()
+    job = nrp_job(env)
+    assert job["spec"]["suspend"] is True
+    message = job["metadata"]["annotations"][gw.STOPPED_ANNOTATION]
+    assert message.startswith("Its GPUs were 12% busy over the last 30 minutes")
+    # What it wrote is still copied back, from the reaper's next pass.
+    assert (await details(env, submission))["status"] == "RUNNING"
+    await env.gateway.reap_nrp()
+    assert env.kube.batch[f"{job['metadata']['name']}-out"]["spec"]["suspend"] is False
+
+
+@pytest.mark.parametrize(
+    "seconds, busy",
+    [
+        (gw.NRP_UTILIZATION_WINDOW_S + 60, 85.0),
+        (gw.NRP_UTILIZATION_WINDOW_S - 60, 5.0),
+        (gw.NRP_UTILIZATION_WINDOW_S + 60, None),
+    ],
+    ids=["busy", "young", "unreported"],
+)
+async def test_a_job_on_nrp_is_kept_unless_long_idle(nrp_env, seconds, busy):
+    env = nrp_env
+    submission = await nrp_submitted(env)
+    running_for(env, submission, seconds)
+    if busy is not None:
+        env.utilization["c1"] = busy
+    await env.gateway.reap_nrp()
+    assert gw.STOPPED_ANNOTATION not in nrp_job(env)["metadata"]["annotations"]
 
 
 async def test_jobs_at_purdue_are_listed_while_nrp_does_not_answer(nrp_env, caplog):

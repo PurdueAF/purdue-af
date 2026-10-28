@@ -68,6 +68,7 @@ from aiohttp import (
 from gpu_queries import ALLOC_QUERY, GPU_METRICS, PREEMPTIBLE_QUERY, USED_QUERY
 from nrp_gpus import as_dict, free_gpus, placement, worker_of
 from nrp_gpus import nodes as nrp_nodes
+from nrp_gpus import query as nrp_query
 from yarl import URL
 
 log = logging.getLogger("ray-train-gateway")
@@ -124,6 +125,8 @@ PROMETHEUS_URL = str(CONFIG["prometheusUrl"])
 NRP_PROMETHEUS_URL = str(CONFIG["nrpPrometheusUrl"])
 NRP_GPU_BUDGET = int(CONFIG["nrpGpuBudget"])
 NRP_START_TIMEOUT_S = float(CONFIG["nrpStartTimeoutSeconds"])
+NRP_MIN_UTILIZATION = float(CONFIG["nrpMinGpuUtilization"])
+NRP_UTILIZATION_WINDOW_S = int(CONFIG["nrpUtilizationWindowSeconds"])
 # Beside this file in the ConfigMap, as in the repository.
 NRP_TEMPLATE = CODE.with_name("rayjob-nrp.yaml")
 NRP_WORKER = worker_of(yaml.safe_load(NRP_TEMPLATE.read_text()))
@@ -229,6 +232,10 @@ STOPPED_NO_ROOM = (
     "NRP had no room for its workers in time: ask for fewer, or try again later."
 )
 STOPPED_NOT_STARTED = "Its Ray cluster on NRP did not start in time."
+STOPPED_IDLE = (
+    "Its GPUs were {busy:.0f}% busy over the last {minutes} minutes, and NRP asks a job "
+    "for {least:.0f}%: keep them busier, with more data loaders or larger batches, or run it at Purdue."
+)
 # The Geddes Jobs that copy a job on NRP's inputs there and its outputs back.
 JOBS = f"/apis/batch/v1/namespaces/{NAMESPACE}/jobs"
 # A setting's name without its prefix is no header of Ray's either.
@@ -1703,6 +1710,35 @@ class Gateway:
                 return "succeeded" if condition["type"] == "Complete" else "failed"
         return "suspended" if body["spec"].get("suspend") else "running"
 
+    async def idle_utilization(self, job: dict[str, Any], now: float) -> float | None:
+        """How busy a job's GPUs were over the window, if under NRP's ask: None for
+        a job that has not run that long, or whose GPUs NRP's Prometheus does not report."""
+        assert self.nrp is not None
+        state = job.get("status") or {}
+        started = epoch_ms((state.get("rayJobInfo") or {}).get("startTime"))
+        cluster = state.get("rayClusterName")
+        if (
+            state.get("jobStatus") != "RUNNING"
+            or started is None
+            or not cluster
+            or now - started / 1000 < NRP_UTILIZATION_WINDOW_S
+        ):
+            return None
+        promql = (
+            "avg(avg_over_time(DCGM_FI_DEV_GPU_UTIL"
+            f'{{namespace="{self.nrp.namespace}", pod=~"{cluster}-.*"}}'
+            f"[{NRP_UTILIZATION_WINDOW_S}s]))"
+        )
+        try:
+            samples = await nrp_query(self.http, NRP_PROMETHEUS_URL, promql)
+        except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
+            log.warning("asking NRP's Prometheus about %s: %r", cluster, e)
+            return None
+        if not samples:
+            return None
+        busy = float(samples[0]["value"][1])
+        return busy if busy < NRP_MIN_UTILIZATION else None
+
     async def advance_nrp(self, job: dict[str, Any]) -> None:
         """Move a job on NRP on: its inputs copied, its workers placed, its outputs
         copied back once it ends, its code deleted, and its record once kept long enough."""
@@ -1745,6 +1781,16 @@ class Gateway:
                 await self.stop_nrp(job, STOPPED_NOT_STARTED)
                 return
             else:
+                busy = await self.idle_utilization(job, now)
+                if busy is not None:
+                    await self.stop_nrp(
+                        job,
+                        STOPPED_IDLE.format(
+                            busy=busy,
+                            minutes=NRP_UTILIZATION_WINDOW_S // 60,
+                            least=NRP_MIN_UTILIZATION,
+                        ),
+                    )
                 return
         if stage == "outputs":
             copied = await self.stage_state(f"{name}-out")

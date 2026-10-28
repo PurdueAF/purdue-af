@@ -54,3 +54,7 @@ accountKeptVolumes: [log-volume, cvmfs]
 nrpPrometheusUrl: https://prometheus.nrp-nautilus.io
 nrpGpuBudget: 20
 nrpStartTimeoutSeconds: 1800
+# A running job on NRP whose GPUs were busy less than this percentage, on average over the window, is stopped:
+# NRP asks for 40% or more, and bans a namespace that keeps GPUs idle.
+nrpMinGpuUtilization: 40
+nrpUtilizationWindowSeconds: 1800

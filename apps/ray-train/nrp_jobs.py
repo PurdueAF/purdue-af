@@ -189,6 +189,13 @@ def placed(job: dict[str, Any], workers: int, nodes: list[Node]) -> dict[str, An
     cluster["headGroupSpec"]["template"]["spec"]["nodeSelector"] = {
         "topology.kubernetes.io/region": nodes[0].region
     }
+    # What a training sizes itself by, as on a cluster at Purdue.
+    for pod in (cluster["headGroupSpec"]["template"], group["template"]):
+        for container in pod["spec"]["containers"]:
+            container["env"] = [
+                *(e for e in container.get("env", []) if e["name"] != "AF_MAX_WORKERS"),
+                {"name": "AF_MAX_WORKERS", "value": str(workers)},
+            ]
     return cluster
 
 
