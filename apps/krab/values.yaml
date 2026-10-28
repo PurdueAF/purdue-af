@@ -55,7 +55,7 @@ dagster:
       repository: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox
   dagsterWebserver:
     labels:
-      mount-eos: null
+      mount-eos: "false"
     nodeSelector:
       cms-af-prod: "true"
     tolerations:
@@ -65,7 +65,7 @@ dagster:
         effect: NoSchedule
   dagsterDaemon:
     labels:
-      mount-eos: null
+      mount-eos: "false"
     nodeSelector:
       cms-af-prod: "true"
     tolerations:
