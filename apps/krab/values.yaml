@@ -1,0 +1,121 @@
+# Overrides of the chart's NGT values (helm/values.yaml upstream). Lists replace, maps merge.
+
+# krab-postgresql, krab-rabbitmq and krab-celery are the SOPS Secrets next to this file.
+postgresCredentials:
+  create: false
+rabbitmqCredentials:
+  create: false
+celery:
+  createSecret: false
+  worker:
+    # NGT node label; the workers schedule anywhere in cms.
+    nodeSelector:
+      node/type: null
+    # Needs a CERN password in a kerberos-credentials Secret.
+    kerberos:
+      enabled: false
+
+# Both are labels for NGT's mount webhook, which Geddes does not run.
+mountEos: false
+mountCvmfs: false
+
+postgres:
+  image:
+    registry: geddes-registry.rcac.purdue.edu/docker-hub-cache
+    repository: library/postgres
+  storage:
+    requestedSize: 10Gi
+    className: ${singlenode_storage_class}
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: hub.jupyter.org/dedicated
+      operator: Equal
+      value: cms-af
+      effect: NoSchedule
+
+rabbitmq:
+  image:
+    registry: geddes-registry.rcac.purdue.edu/docker-hub-cache
+    repository: library/rabbitmq
+  initImage:
+    registry: geddes-registry.rcac.purdue.edu/docker-hub-cache
+    repository: library/busybox
+  nodeSelector:
+    cms-af-prod: "true"
+  tolerations:
+    - key: hub.jupyter.org/dedicated
+      operator: Equal
+      value: cms-af
+      effect: NoSchedule
+
+dagster:
+  busybox:
+    image:
+      repository: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox
+  dagsterWebserver:
+    labels:
+      mount-eos: null
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: hub.jupyter.org/dedicated
+        operator: Equal
+        value: cms-af
+        effect: NoSchedule
+  dagsterDaemon:
+    labels:
+      mount-eos: null
+    nodeSelector:
+      cms-af-prod: "true"
+    tolerations:
+      - key: hub.jupyter.org/dedicated
+        operator: Equal
+        value: cms-af
+        effect: NoSchedule
+  postgresql:
+    image:
+      registry: geddes-registry.rcac.purdue.edu/docker-hub-cache
+  dagster-user-deployments:
+    deployments:
+      - name: krab-code-location
+        image:
+          repository: gitlab-registry.cern.ch/bgalewsk/krab
+          tag: master
+          pullPolicy: Always
+        dagsterApiGrpcArgs:
+          - --module-name
+          - krab_code_location.definitions
+        port: 3030
+        includeConfigInLaunchedRuns:
+          enabled: true
+        envSecrets:
+          - name: krab-celery
+        envConfigMaps:
+          - name: krab-celery-env
+        # The sensor lists cmssw-docker tags with the gitlab-cern-registry deploy token.
+        volumes:
+          - name: registry-credentials
+            secret:
+              secretName: gitlab-cern-registry
+              optional: true
+              items:
+                - key: .dockerconfigjson
+                  path: .dockerconfigjson
+        volumeMounts:
+          - name: registry-credentials
+            mountPath: /etc/krab/registry
+            readOnly: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+        nodeSelector:
+          cms-af-prod: "true"
+        tolerations:
+          - key: hub.jupyter.org/dedicated
+            operator: Equal
+            value: cms-af
+            effect: NoSchedule
