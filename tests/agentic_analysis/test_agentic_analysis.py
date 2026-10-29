@@ -2,6 +2,7 @@
 wiring to apps/agentic-analysis, and the analyses beside it. Git, pixi, the download and the
 agent are replaced per test."""
 
+import base64
 import fcntl
 import http.server
 import io
@@ -1327,6 +1328,27 @@ def test_setup_writes_opencodes_configuration_read_only_off_the_workspace(
     assert not [name for name in added if name.startswith("OPENCODE_DISABLE_CLAUDE")]
 
 
+def test_the_images_a_session_holds_fit_in_a_request_the_proxy_takes(
+    tmp_path, workspace, proxy
+):
+    """As many images as its role takes, each as large as the agent may read,
+    sent in base64 beside a full context's text."""
+    env = runner._setup(tmp_path / "local", ROLES, workspace, workspace.parents[2])
+    most = json.loads(env["AF_PLUGIN"])["image_bytes"]
+
+    roles = {"orchestrator": "orchestrator"}
+    roles |= {name: role for name, (role, _) in runner.AGENTS.items()}
+    assert most.keys() == roles.keys()
+    for name, role in roles.items():
+        limits = ROLES[role]
+        if not limits["images"]:
+            assert most[name] == 0
+            continue
+        images = limits["images"] * len(base64.b64encode(bytes(most[name])))
+        text = limits["context"] * runner.TOKEN_BYTES
+        assert most[name] > 0 and images + text <= limits["max_body_bytes"]
+
+
 def _retried(raised):
     """Whether the task retries the failure pytest caught in `raised`."""
     return not isinstance(raised.value, runner.flyte.errors.NonRecoverableError)
@@ -1835,6 +1857,78 @@ def test_a_subagents_reply_a_failed_task_left_reaches_the_task_resumed(tmp_path)
     )
 
     assert result.startswith("Done.") and result.count("At the gate.") == 1
+
+
+# Runs the plugin in argv[2] as agent argv[4] of one session, through the steps in argv[3]: reading a file, or a webfetch returning a PNG of so many bytes.
+IMAGES = """
+import fs from "node:fs";
+const [plugin, steps, agent] = process.argv.slice(2);
+const hooks = await (await import(plugin)).default.server({ directory: "/" });
+await hooks["chat.headers"]({ sessionID: "ses_1", agent }, { headers: {} });
+const outcomes = [];
+for (const [i, step] of JSON.parse(fs.readFileSync(steps)).entries()) {
+  const call = { sessionID: "ses_1", callID: `call_${i}` };
+  if (step.read)
+    try {
+      const args = { filePath: step.read };
+      await hooks["tool.execute.before"]({ tool: "read", ...call }, { args });
+      outcomes.push("shown");
+    } catch (refusal) {
+      outcomes.push(refusal.message);
+    }
+  else {
+    const url = `data:image/png;base64,${Buffer.alloc(step.fetched).toString("base64")}`;
+    const output = { output: "", attachments: [{ mime: "image/png", url }] };
+    await hooks["tool.execute.after"]({ tool: "webfetch", ...call }, output);
+    outcomes.push(output.attachments.length ? "shown" : output.output);
+  }
+}
+process.stdout.write(JSON.stringify(outcomes));
+"""
+
+
+def _shown(tmp_path, steps, images, most):
+    """What the plugin does with each image a plot validator reads or fetches:
+    "shown", or why not."""
+    plugin = tmp_path / "af_opencode.mjs"
+    plugin.write_text(runner.PLUGIN.read_text())
+    (tmp_path / "images.mjs").write_text(IMAGES)
+    (tmp_path / "steps.json").write_text(json.dumps(steps))
+    settings = {
+        "records": str(tmp_path / "records.jsonl"),
+        "seats": 1,
+        "images": {"plot_validator": images},
+        "image_bytes": {"plot_validator": most},
+    }
+    return json.loads(
+        subprocess.run(
+            ["node", tmp_path / "images.mjs", plugin, tmp_path / "steps.json"]
+            + ["plot_validator"],
+            env={**os.environ, "AF_PLUGIN": json.dumps(settings)},
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    )
+
+
+@NODE
+def test_an_image_too_large_for_a_request_of_its_role_is_refused(tmp_path):
+    small, large = tmp_path / "small.png", tmp_path / "large.jpg"
+    small.write_bytes(b"\x89PNG" + bytes(996))
+    large.write_bytes(b"\xff\xd8\xff" + bytes(998))
+    steps = [
+        {"read": str(large)},
+        {"read": str(small)},
+        {"fetched": 1001},
+        {"fetched": 1000},
+        # Neither refusal took up one of the session's images.
+        {"read": str(small)},
+    ]
+
+    shown = _shown(tmp_path, steps, images=3, most=1000)
+
+    assert [outcome == "shown" for outcome in shown] == [False, True, False, True, True]
 
 
 @pytest.fixture
