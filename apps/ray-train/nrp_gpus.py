@@ -163,8 +163,9 @@ def most_in_one_group(nodes: list[Node]) -> int:
 
 
 def placement(nodes: list[Node], wanted: int, least: int) -> list[Node] | None:
-    """The nodes for up to `wanted` workers, no fewer than `least`: of the region and
-    GPU model with room for the most, the roomiest first; None if no such pair has room for `least`."""
+    """The nodes a job's workers may run on: all of the region and GPU model with room
+    for the most, the roomiest first, so that the scheduler finds room on another
+    when a job placed from the same reading took one; None if no such pair has room for `least`."""
     groups: dict[tuple[str, str], list[Node]] = defaultdict(list)
     for node in nodes:
         groups[(node.region, node.model)].append(node)
@@ -173,13 +174,7 @@ def placement(nodes: list[Node], wanted: int, least: int) -> list[Node] | None:
     best = max(groups.values(), key=lambda group: sum(n.workers for n in group))
     if sum(n.workers for n in best) < least:
         return None
-    chosen, room = [], 0
-    for node in sorted(best, key=lambda n: (-n.workers, n.name)):
-        if room >= wanted:
-            break
-        chosen.append(node)
-        room += node.workers
-    return chosen
+    return sorted(best, key=lambda n: (-n.workers, n.name))
 
 
 async def query(
