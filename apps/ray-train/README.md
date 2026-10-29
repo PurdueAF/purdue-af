@@ -129,7 +129,8 @@ image's tag is also in `deployment.yaml` and in the Hub's
 ## Running it
 
 A change to `raycluster.yaml` applies to the clusters created after it lands.
-One to `gateway.py` or `config.yaml` applies once kubelet swaps it into the
+One to `gateway.py`, a module it imports (`nrp_gpus.py`, `nrp_jobs.py`) or
+`config.yaml` applies once kubelet swaps it into the
 pod's copy of the ConfigMap: the gateway sees the file change and exits, and
 kubelet restarts its container, in the same pod, on the new file. Each such change adds one to
 the container's restart count, and the previous container's log ends with the

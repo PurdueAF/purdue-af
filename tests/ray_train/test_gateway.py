@@ -3471,6 +3471,34 @@ async def test_the_gateway_stops_when_its_code_or_settings_change(
     assert stopped.is_set()
 
 
+async def test_the_gateway_stops_when_a_module_it_imports_changes(
+    monkeypatch, tmp_path
+):
+    stopped = asyncio.Event()
+
+    async def serve():
+        try:
+            await asyncio.Event().wait()
+        finally:
+            stopped.set()
+
+    code, module = tmp_path / "gateway.py", tmp_path / "placing.py"
+    code.write_text("running")
+    module.write_text("placing")
+    monkeypatch.setitem(
+        sys.modules, "placing", types.SimpleNamespace(__file__=str(module))
+    )
+    monkeypatch.setattr(gw, "serve", serve)
+    monkeypatch.setattr(gw, "CODE", code)
+    monkeypatch.setattr(gw, "CODE_POLL_S", 0)
+    assert gw.code_files() == [code, module]
+    main = asyncio.create_task(gw.main())
+    await asyncio.sleep(0)
+    module.write_text("placing anew")
+    await asyncio.wait_for(main, timeout=5)
+    assert stopped.is_set()
+
+
 def test_ldap_ids_reads_the_account_at_its_dn(monkeypatch):
     searched = []
 

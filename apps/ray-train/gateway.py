@@ -47,6 +47,7 @@ import secrets
 import signal
 import ssl
 import string
+import sys
 import time
 import urllib.parse
 from collections.abc import AsyncIterator, Mapping
@@ -2892,14 +2893,24 @@ async def until_changed(path: Path, running: bytes) -> None:
     log.info("%s changed: exiting, for the container to restart on it", path)
 
 
+def code_files() -> list[Path]:
+    """This file and the modules beside it that it imports: the code the gateway runs."""
+    beside = {CODE}
+    for module in list(sys.modules.values()):
+        file = getattr(module, "__file__", None)
+        if file and Path(file).parent == CODE.parent:
+            beside.add(Path(file))
+    return sorted(beside)
+
+
 async def main() -> None:
     """Serve until SIGTERM, which Python as a container's PID 1 would otherwise ignore,
-    or until this file or its settings change."""
+    or until its code or its settings change."""
     serving = asyncio.ensure_future(serve())
     asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, serving.cancel)
     changed = [
         asyncio.ensure_future(until_changed(path, path.read_bytes()))
-        for path in (CODE, CONFIG_FILE)
+        for path in (*code_files(), CONFIG_FILE)
     ]
     for change in changed:
         change.add_done_callback(lambda _: serving.cancel())
