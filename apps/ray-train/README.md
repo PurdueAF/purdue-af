@@ -103,8 +103,8 @@ moves it on:
    its head in that region and `AF_MAX_WORKERS` their number, and resumed;
 3. **running** — until it ends, or until it is stopped, which suspends it and
    says why: by its user, for want of room or a cluster within
-   `nrpStartTimeoutSeconds`, for inputs that could not be copied, or for GPUs
-   busy less than `nrpMinGpuUtilization` percent on average over
+   `nrpStartTimeoutSeconds`, for inputs that could not be copied, or for any
+   GPU of it busy less than `nrpMinGpuUtilization` percent on average over
    `nrpUtilizationWindowSeconds` of its running, by NRP's GPU metrics, since NRP
    bans a namespace that keeps its GPUs idle;
 4. **outputs** — `<RayJob>-out`, made suspended at the submission, copies its

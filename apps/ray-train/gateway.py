@@ -242,7 +242,7 @@ STOPPED_NO_ROOM = (
 )
 STOPPED_NOT_STARTED = "Its Ray cluster on NRP did not start in time."
 STOPPED_IDLE = (
-    "Its GPUs were {busy:.0f}% busy over the last {minutes} minutes, and NRP asks a job "
+    "Its idlest GPU was {busy:.0f}% busy over the last {minutes} minutes, and NRP asks each GPU "
     "for {least:.0f}%: keep them busier, with more data loaders or larger batches, or run it at Purdue."
 )
 # The Geddes Jobs that copy a job on NRP's inputs there and its outputs back.
@@ -1741,7 +1741,7 @@ class Gateway:
         return "suspended" if body["spec"].get("suspend") else "running"
 
     async def idle_utilization(self, job: dict[str, Any], now: float) -> float | None:
-        """How busy a job's GPUs were over the window, if under NRP's ask: None for
+        """How busy a job's idlest GPU was over the window, if under NRP's ask: None for
         a job that has not run that long, or whose GPUs NRP's Prometheus does not report."""
         assert self.nrp is not None
         state = job.get("status") or {}
@@ -1754,11 +1754,13 @@ class Gateway:
             or now - started / 1000 < NRP_UTILIZATION_WINDOW_S
         ):
             return None
-        promql = (
-            "avg(avg_over_time(DCGM_FI_DEV_GPU_UTIL"
+        series = (
+            "DCGM_FI_DEV_GPU_UTIL"
             f'{{namespace="{self.nrp.namespace}", pod=~"{cluster}-.*"}}'
-            f"[{NRP_UTILIZATION_WINDOW_S}s]))"
         )
+        # Each GPU on its own, of the pods the job has now: a job's average hides a
+        # hung rank, and a replaced worker's old pod is no longer the job's.
+        promql = f"avg_over_time({series}[{NRP_UTILIZATION_WINDOW_S}s]) and {series}"
         try:
             samples = await nrp_query(self.http, NRP_PROMETHEUS_URL, promql)
         except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
@@ -1766,7 +1768,7 @@ class Gateway:
             return None
         if not samples:
             return None
-        busy = float(samples[0]["value"][1])
+        busy = min(float(sample["value"][1]) for sample in samples)
         return busy if busy < NRP_MIN_UTILIZATION else None
 
     async def advance_nrp(self, job: dict[str, Any]) -> None:
