@@ -24,14 +24,16 @@ version is minted: [RELEASING.md](../RELEASING.md).
 
 ## Images built outside CI
 
-These images are pulled straight from the `cms/` project on
-`geddes-registry.rcac.purdue.edu` rather than through `ghcr-proxy-cache`.
-`ci.yml` does not build them, and this repository holds neither their sources
-nor a build job for them: a new tag comes from outside it.
+These images are pulled straight from the `cms/` project on geddes2-registry
+rather than through `ghcr-proxy-cache`. `ci.yml` does not build them, and this
+repository holds neither their sources nor a build job for them: a new tag
+comes from outside it.
 
 | Image in `cms/` | Pinned by |
 | --- | --- |
 | `cmsaf-base-notebook` | `apps/jupyterhub/jupyterhub` |
+| `servicex_app` | `apps/servicex/servicex-eos` |
+| `servicex-transformer-sidecar` | `apps/servicex/servicex-eos` |
 
 ## Registry configuration
 

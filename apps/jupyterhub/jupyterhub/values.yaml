@@ -109,7 +109,7 @@ singleuser:
       default: false
       description: "Should be used only for debugging - no Analysis Facility functionality."
       kubespawner_override:
-        image: "geddes-registry.rcac.purdue.edu/cms/cmsaf-base-notebook:1.1"
+        image: "geddes2-registry.rcac.purdue.edu/cms/cmsaf-base-notebook:1.1"
         node_selector:
           cms-af-prod: "true"
         cpu_guarantee: 4

@@ -3,6 +3,7 @@ app:
     - "geddes-registry.rcac.purdue.edu/docker-hub-cache/"
     - "geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/"
     - "geddes-registry.rcac.purdue.edu/cms/"
+    - "geddes2-registry.rcac.purdue.edu/cms/"
     - "docker.io/sslhep"
     - "sslhep/"
     - "gitlab-registry.cern.ch/"
