@@ -2713,7 +2713,9 @@ async def nrp_env(env, monkeypatch):
         if promql.startswith("avg_over_time(DCGM_FI_DEV_GPU_UTIL"):
             busy = [v for c, v in utilization.items() if f'pod=~"{c}-' in promql]
             gpus = busy[0] if busy and isinstance(busy[0], list) else busy
-            return web.json_response({"data": {"result": [nrp_sample(b) for b in gpus]}})
+            return web.json_response(
+                {"data": {"result": [nrp_sample(b) for b in gpus]}}
+            )
         return web.json_response({"data": {"result": answers[promql]}})
 
     prometheus = web.Application()
