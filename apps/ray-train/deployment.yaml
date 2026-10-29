@@ -35,7 +35,7 @@ spec:
       initContainers:
         # The Ray image has aiohttp, grpcio and PyYAML, not ldap3.
         - name: pip-install
-          image: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray:2.59.0-py312-cpu
+          image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/rayproject/ray:2.59.0-py312-cpu
           command:
             - pip
             - install
@@ -48,7 +48,7 @@ spec:
               mountPath: /deps
       containers:
         - name: gateway
-          image: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray:2.59.0-py312-cpu
+          image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/rayproject/ray:2.59.0-py312-cpu
           command: ["python", "/app/gateway.py"]
           # The NRP S3 keys and bucket, to which a job on NRP's code goes.
           envFrom:

@@ -14,7 +14,7 @@ configmapReload:
 server:
   automountServiceAccountToken: true
   image:
-    repository: geddes-registry.rcac.purdue.edu/docker-hub-cache/prom/prometheus
+    repository: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/prom/prometheus
   configPath: /etc/config/prometheus.yml
   storagePath: /prometheus
 
@@ -46,7 +46,7 @@ server:
   # Non-recursive: chmod -R walks every TSDB inode and can hang Init for minutes.
   extraInitContainers:
     - name: prometheus-data-permission-fix
-      image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.38
+      image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/busybox:1.38
       command: ["/bin/sh", "-c", "chmod 777 /prometheus"]
       securityContext:
         runAsUser: 0

@@ -40,7 +40,7 @@ configuration:
 deployment:
   waitForDB:
     image:
-      repository: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/postgres
+      repository: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/postgres
       tag: 16-alpine
   resources:
     requests:

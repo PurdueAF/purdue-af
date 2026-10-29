@@ -74,6 +74,7 @@
   // up upstream, keep the cache hostname in the manifest.
   registryAliases: {
     'geddes-registry.rcac.purdue.edu/docker-hub-cache': 'docker.io',
+    'geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache': 'docker.io',
   },
 
   'pre-commit': {
@@ -185,7 +186,7 @@
       customType: 'regex',
       managerFilePatterns: ['/(^|/)apps/.*/values\\.ya?ml$/'],
       matchStrings: [
-        'name: "?geddes-registry\\.rcac\\.purdue\\.edu/docker-hub-cache/(?<image>[\\w./-]+)"?\\n\\s+tag: "?(?<currentValue>[\\w.-]+)"?',
+        'name: "?geddes2-registry\\.rcac\\.purdue\\.edu/dockerhub-proxy-cache/(?<image>[\\w./-]+)"?\\n\\s+tag: "?(?<currentValue>[\\w.-]+)"?',
       ],
       datasourceTemplate: 'docker',
       depNameTemplate: 'docker.io/{{{image}}}',

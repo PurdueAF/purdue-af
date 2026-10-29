@@ -73,7 +73,7 @@ extraVolumeMounts:
 # TRANSITIONAL: removes plugins dropped from the list, which stay installed on the PVC.
 extraInitContainers:
   - name: remove-unused-plugins
-    image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox:1.38
+    image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/busybox:1.38
     imagePullPolicy: IfNotPresent
     command:
       - sh
@@ -100,7 +100,7 @@ extraInitContainers:
 
 extraContainers: |
   - name: announcements-server
-    image: geddes-registry.rcac.purdue.edu/docker-hub-cache/nginxinc/nginx-unprivileged:alpine
+    image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/nginxinc/nginx-unprivileged:alpine
     ports:
       - containerPort: 8080
     volumeMounts:

@@ -273,7 +273,7 @@ prePuller:
   # Dask clusters (apps/dask-gateway), start without pulling their image.
   extraImages:
     ray-train:
-      name: geddes-registry.rcac.purdue.edu/docker-hub-cache/rayproject/ray
+      name: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/rayproject/ray
       tag: 2.59.0-py312-cpu
     dask-gateway:
       name: ghcr.io/dask/dask-gateway
@@ -283,7 +283,7 @@ hub:
   consecutiveFailureLimit: 0
   image:
     # Tag unset: the chart default follows the chart version in helmrelease.yaml.
-    name: geddes-registry.rcac.purdue.edu/docker-hub-cache/jupyterhub/k8s-hub-slim
+    name: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/jupyterhub/k8s-hub-slim
   nodeSelector: { "cms-af-prod": "true" }
   db:
     type: sqlite-pvc
