@@ -945,7 +945,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count(kube_pod_info{namespace=\"cms\",pod=~\"ray-train-.+-head-.+\"}) or vector(0)",
+          "expr": "count(kube_pod_info{namespace=\"cms\",pod=~\"ray-(train|job)-.+-head-.+\"}) or vector(0)",
           "legendFormat": "clusters",
           "datasource": {
             "type": "prometheus",
@@ -956,7 +956,7 @@
         },
         {
           "refId": "B",
-          "expr": "count(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",pod=~\"ray-train-.+-worker-.+\",priority_class!=\"medium-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-train-.*\",phase=\"Running\"} == 1)) or vector(0)",
+          "expr": "count(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\",pod=~\"ray-(train|job)-.+-worker-.+\",priority_class!=\"medium-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",phase=\"Running\"} == 1)) or vector(0)",
           "legendFormat": "guaranteed workers",
           "datasource": {
             "type": "prometheus",
@@ -967,7 +967,7 @@
         },
         {
           "refId": "C",
-          "expr": "count(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",pod=~\"ray-train-.+-worker-.+\",priority_class=\"medium-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-train-.*\",phase=\"Running\"} == 1)) or vector(0)",
+          "expr": "count(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\",pod=~\"ray-(train|job)-.+-worker-.+\",priority_class=\"medium-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",phase=\"Running\"} == 1)) or vector(0)",
           "legendFormat": "preemptible workers",
           "datasource": {
             "type": "prometheus",
