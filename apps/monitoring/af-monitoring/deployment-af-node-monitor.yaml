@@ -34,7 +34,7 @@ spec:
           command: ["python", "/scripts/node_healthcheck.py"]
           env:
             - name: REGISTRY_URL
-              value: "https://geddes-registry.rcac.purdue.edu/v2/"
+              value: "https://geddes2-registry.rcac.purdue.edu/v2/"
             # Timeout sentinels: must match the probe DaemonSets timeouts.
             - name: PING_TIMEOUT_S
               value: "3"
