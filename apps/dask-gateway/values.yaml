@@ -530,7 +530,7 @@ gateway:
 traefik:
   replicas: 2
   image:
-    name: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/traefik
+    name: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/traefik
     tag: 2.11.60
     pullPolicy: IfNotPresent
   resources:

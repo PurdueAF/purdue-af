@@ -22,7 +22,7 @@ spec:
               effect: "NoSchedule"
           containers:
             - name: updater
-              image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/python:3.12-slim
+              image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/python:3.12-slim
               command: ["/bin/bash", "-c"]
               args:
                 - |

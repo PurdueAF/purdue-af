@@ -27,7 +27,7 @@ trap 'rm -rf "$workdir"' EXIT
 # local bisecting. Used by the "production" test profile in values-kind.yaml.
 PROD_NAME=$(yq '.singleuser.image.name' "$HUB_DIR/values.yaml")
 PROD_TAG=$(yq '.singleuser.image.tag' "$HUB_DIR/values.yaml")
-PRODUCTION_IMAGE=${PRODUCTION_IMAGE:-${PROD_NAME/geddes-registry.rcac.purdue.edu\/ghcr-proxy-cache\//ghcr.io/}:${PROD_TAG}}
+PRODUCTION_IMAGE=${PRODUCTION_IMAGE:-${PROD_NAME/geddes2-registry.rcac.purdue.edu\/ghcr-proxy-cache\//ghcr.io/}:${PROD_TAG}}
 # name/tag split for singleuser.image (the chart wants them separate)
 PRODUCTION_IMAGE_NAME=${PRODUCTION_IMAGE%:*}
 PRODUCTION_IMAGE_TAG=${PRODUCTION_IMAGE##*:}

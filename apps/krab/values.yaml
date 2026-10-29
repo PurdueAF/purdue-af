@@ -48,7 +48,7 @@ mountCvmfs: false
 
 postgres:
   image:
-    registry: geddes-registry.rcac.purdue.edu/docker-hub-cache
+    registry: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache
     repository: library/postgres
   storage:
     requestedSize: 10Gi
@@ -63,10 +63,10 @@ postgres:
 
 rabbitmq:
   image:
-    registry: geddes-registry.rcac.purdue.edu/docker-hub-cache
+    registry: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache
     repository: library/rabbitmq
   initImage:
-    registry: geddes-registry.rcac.purdue.edu/docker-hub-cache
+    registry: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache
     repository: library/busybox
   nodeSelector:
     cms-af-prod: "true"
@@ -79,7 +79,7 @@ rabbitmq:
 dagster:
   busybox:
     image:
-      repository: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/busybox
+      repository: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/busybox
   dagsterWebserver:
     labels:
       mount-eos: "false"
@@ -102,7 +102,7 @@ dagster:
         effect: NoSchedule
   postgresql:
     image:
-      registry: geddes-registry.rcac.purdue.edu/docker-hub-cache
+      registry: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache
   dagster-user-deployments:
     deployments:
       - name: krab-code-location

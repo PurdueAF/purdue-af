@@ -32,7 +32,9 @@ DEFAULT_FILE = Path("apps/jupyterhub/jupyterhub/values.yaml")
 DEFAULT_SYNC_FILE = Path("apps/af-utils/pixi-global-sync/deployment.yaml")
 # Same pull path as the pre-release profile (geddes Harbor proxy of ghcr;
 # the CI-promoted semver tags live on ghcr.io/purdueaf/purdue-af).
-DEFAULT_REGISTRY = "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af"
+DEFAULT_REGISTRY = (
+    "geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af"
+)
 VERSION_RE = r"\d+\.\d+\.\d+"
 
 

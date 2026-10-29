@@ -64,7 +64,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: probe
-          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
+          image: geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
           imagePullPolicy: IfNotPresent
           command: ["python", "/scripts/probe_agent.py"]
           ports:
@@ -195,7 +195,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: probe
-          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
+          image: geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
           imagePullPolicy: IfNotPresent
           command: ["python", "/scripts/probe_agent.py"]
           ports:
@@ -324,7 +324,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: probe
-          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
+          image: geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
           imagePullPolicy: IfNotPresent
           command: ["python", "/scripts/probe_agent.py"]
           ports:
@@ -454,7 +454,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: probe
-          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
+          image: geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
           imagePullPolicy: IfNotPresent
           command: ["python", "/scripts/probe_agent.py"]
           ports:

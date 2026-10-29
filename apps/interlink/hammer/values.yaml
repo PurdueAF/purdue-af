@@ -11,7 +11,7 @@ interlink:
 
 plugin:
   enabled: true
-  image: "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:0.6.2-pre3"
+  image: "geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:0.6.2-pre3"
   address: "http://0.0.0.0"
   port: 4000
   privileged: false

@@ -62,7 +62,7 @@ jobs:
           tag=$(yq '.singleuser.image.tag' apps/jupyterhub/jupyterhub/values.yaml)
           # geddes ghcr-proxy-cache is unreachable from CI; the proxy mirrors
           # ghcr, so the ghcr ref resolves to the identical digest
-          repo=${name/geddes-registry.rcac.purdue.edu\/ghcr-proxy-cache\//ghcr.io/}
+          repo=${name/geddes2-registry.rcac.purdue.edu\/ghcr-proxy-cache\//ghcr.io/}
           {
             echo "image=${repo}:${tag}"
             echo "tag=${tag}"

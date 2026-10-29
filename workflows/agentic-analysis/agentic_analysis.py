@@ -32,7 +32,7 @@ import flyte.errors
 
 NAME = "agentic-analysis"
 IMAGE = (
-    "geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-analysis:latest"
+    "geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-analysis:latest"
 )
 # The workload account's volume, where the task pods and its Dask and Ray clusters mount it (apps/agentic-analysis/podtemplate.yaml).
 ROOT = Path("/") / NAME

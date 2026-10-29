@@ -26,7 +26,7 @@ spec:
           effect: "NoSchedule"
       containers:
         - name: nginx
-          image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/nginx:alpine
+          image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/nginx:alpine
           ports:
             - containerPort: 80
           resources:

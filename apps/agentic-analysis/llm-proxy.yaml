@@ -31,7 +31,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: proxy
-          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-analysis:latest
+          image: geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-analysis:latest
           command: ["python", "/proxy/llm_proxy.py"]
           env:
             - name: NRP_API_KEY

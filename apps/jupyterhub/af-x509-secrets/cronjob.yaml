@@ -23,7 +23,7 @@ spec:
               effect: "NoSchedule"
           initContainers:
             - name: take-data-dir-ownership
-              image: geddes-registry.rcac.purdue.edu/docker-hub-cache/library/alpine:3.24
+              image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/alpine:3.24
               command: ["/bin/sh", "-c"]
               args:
                 [
@@ -39,7 +39,7 @@ spec:
                   mountPath: /etc/grid-certs-ro/
           containers:
             - name: x509-secrets
-              image: geddes-registry.rcac.purdue.edu/docker-hub-cache/sslhep/x509-secrets:v1.8.6
+              image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/sslhep/x509-secrets:v1.8.6
               command: ["bash", "-c"]
               args:
                 [
