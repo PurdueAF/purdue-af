@@ -2710,10 +2710,12 @@ async def nrp_env(env, monkeypatch):
 
     async def query(request):
         promql = request.query["query"]
-        if promql.startswith("avg(avg_over_time(DCGM_FI_DEV_GPU_UTIL"):
+        if promql.startswith("avg_over_time(DCGM_FI_DEV_GPU_UTIL"):
             busy = [v for c, v in utilization.items() if f'pod=~"{c}-' in promql]
-            result = [nrp_sample(busy[0])] if busy else []
-            return web.json_response({"data": {"result": result}})
+            gpus = busy[0] if busy and isinstance(busy[0], list) else busy
+            return web.json_response(
+                {"data": {"result": [nrp_sample(b) for b in gpus]}}
+            )
         return web.json_response({"data": {"result": answers[promql]}})
 
     prometheus = web.Application()
@@ -3122,21 +3124,35 @@ async def test_a_job_on_nrp_whose_gpus_sit_idle_is_stopped_and_says_why(nrp_env)
     job = nrp_job(env)
     assert job["spec"]["suspend"] is True
     message = job["metadata"]["annotations"][gw.STOPPED_ANNOTATION]
-    assert message.startswith("Its GPUs were 12% busy over the last 30 minutes")
+    assert message.startswith("Its idlest GPU was 12% busy over the last 30 minutes")
     # What it wrote is still copied back, from the reaper's next pass.
     assert (await details(env, submission))["status"] == "RUNNING"
     await env.gateway.reap_nrp()
     assert env.kube.batch[f"{job['metadata']['name']}-out"]["spec"]["suspend"] is False
 
 
+async def test_a_job_on_nrp_with_one_idle_gpu_is_stopped_though_its_average_is_high(
+    nrp_env,
+):
+    env = nrp_env
+    submission = await nrp_submitted(env, **{gw.MOST_METADATA: "4"})
+    running_for(env, submission, gw.NRP_UTILIZATION_WINDOW_S + 60)
+    # A hung rank: NCCL spins on the GPUs that wait, while the others do nothing.
+    env.utilization["c1"] = [100.0, 100.0, 0.0, 0.0]
+    await env.gateway.reap_nrp()
+    message = nrp_job(env)["metadata"]["annotations"][gw.STOPPED_ANNOTATION]
+    assert message.startswith("Its idlest GPU was 0% busy")
+
+
 @pytest.mark.parametrize(
     "seconds, busy",
     [
         (gw.NRP_UTILIZATION_WINDOW_S + 60, 85.0),
+        (gw.NRP_UTILIZATION_WINDOW_S + 60, [85.0, 62.0]),
         (gw.NRP_UTILIZATION_WINDOW_S - 60, 5.0),
         (gw.NRP_UTILIZATION_WINDOW_S + 60, None),
     ],
-    ids=["busy", "young", "unreported"],
+    ids=["busy", "all-gpus-busy", "young", "unreported"],
 )
 async def test_a_job_on_nrp_is_kept_unless_long_idle(nrp_env, seconds, busy):
     env = nrp_env
