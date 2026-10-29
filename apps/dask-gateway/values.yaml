@@ -175,7 +175,7 @@ gateway:
 
       # Workload accounts: apps/dask-gateway/README.md#workload-accounts.
       ACCOUNTS_DIR = "/etc/af-accounts"
-      # The Dask user of an account, a name no Basic or Hub user has: theirs hold no ':'.
+      # The Dask user of an account, a name no Hub user has: theirs hold no ':'.
       ACCOUNT_USER = "account:"
       ACCOUNT_NAME = re.compile(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?")
       # ray-train-<name> fits the Ray gateway's MAX_CLUSTER_NAME (apps/ray-train/gateway.py).
@@ -466,19 +466,19 @@ gateway:
 
       KubeBackend.start_cluster = _kube_start_cluster_limited
 
-      # A session started without DASK_GATEWAY__AUTH__TYPE sends Basic, a workload account its own token as Bearer, every other client its Hub token.
+      # Every client sends its user's Hub token, a workload account its own token as Bearer.
       import aiohttp
       from aiohttp import web
-      from dask_gateway_server.auth import SimpleAuthenticator, unauthorized
+      from dask_gateway_server.auth import Authenticator, unauthorized
 
-      def person(user, scheme):
+      def person(user):
           """A user who signed in as a person, under a name no workload account has or its Dask user could have."""
           if ":" in user.name:
-              log.warning("%s user refused: reason=colon", scheme)
-              raise unauthorized(scheme)
+              log.warning("jupyterhub user refused: reason=colon")
+              raise unauthorized("jupyterhub")
           if user.name in accounts():
-              log.warning("%s user refused: reason=account-name account=%s", scheme, user.name)
-              raise unauthorized(scheme)
+              log.warning("jupyterhub user refused: reason=account-name account=%s", user.name)
+              raise unauthorized("jupyterhub")
           return user
 
       def account_user(request, token):
@@ -493,7 +493,7 @@ gateway:
               raise unauthorized("Bearer")
           return models.User(ACCOUNT_USER + account["name"])
 
-      class HubTokenAuthenticator(SimpleAuthenticator):
+      class HubTokenAuthenticator(Authenticator):
           hub_api_url = 'http://hub.${namespace}.svc.cluster.local:8081/hub/api'
 
           async def authenticate_and_handle(self, request, handler):
@@ -511,7 +511,7 @@ gateway:
               if scheme == "Bearer":
                   return account_user(request, token.strip())
               if scheme != "jupyterhub":
-                  return person(await super().authenticate(request), "Basic")
+                  raise unauthorized("jupyterhub")
               async with aiohttp.ClientSession() as session:
                   async with session.get(
                       self.hub_api_url + "/user",
@@ -524,7 +524,7 @@ gateway:
                       owner = await resp.json()
               if owner.get("kind") != "user":
                   raise unauthorized("jupyterhub")
-              return person(models.User(owner["name"]), "jupyterhub")
+              return person(models.User(owner["name"]))
 
       c.DaskGateway.authenticator_class = HubTokenAuthenticator
 traefik:
