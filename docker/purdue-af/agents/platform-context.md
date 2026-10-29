@@ -78,6 +78,9 @@ is theirs:
 
 - `/depot/cms/<project>/` is group-owned, so permissions already answer the
   question. A write that succeeds there is one the user is entitled to make.
+  `/depot/cms/` itself is the exception: any Purdue account can write there,
+  and nothing — no file, no directory, no job output — is ever created at its
+  top level.
 - `/work/projects/` has no group ownership behind it. Unless an owner has
   restricted their own directory, the session can write into project
   directories belonging to people the user has nothing to do with, so a write

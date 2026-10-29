@@ -66,6 +66,31 @@ def test_outputs_come_back_into_a_directory_made_for_them(stage, tmp_path):
     ]
 
 
+@pytest.mark.parametrize("missing", ["new", "new/runs"])
+def test_outputs_never_make_a_directory_at_the_top_of_a_volume(
+    stage, tmp_path, monkeypatch, missing
+):
+    module, recorded = stage()
+    monkeypatch.setattr(module.os.path, "ismount", lambda p: p == str(tmp_path))
+    with pytest.raises(SystemExit, match="top of a shared volume"):
+        module.main("out", "s3://bucket/ray-nrp/jobs/j/output", str(tmp_path / missing))
+    assert list(tmp_path.iterdir()) == [] and recorded.copies == []
+
+
+def test_outputs_may_go_into_a_directory_that_is_already_at_the_top(
+    stage, tmp_path, monkeypatch
+):
+    module, recorded = stage()
+    (tmp_path / "users").mkdir()
+    monkeypatch.setattr(module.os.path, "ismount", lambda p: p == str(tmp_path))
+    module.main(
+        "out",
+        "s3://bucket/ray-nrp/jobs/j/output",
+        str(tmp_path / "users" / "a" / "runs"),
+    )
+    assert (tmp_path / "users" / "a" / "runs").is_dir()
+
+
 def test_a_job_that_wrote_nothing_has_nothing_copied_back(stage, tmp_path, capsys):
     module, recorded = stage(present=False)
     module.main("out", "s3://bucket/ray-nrp/jobs/j/output", str(tmp_path / "runs"))
