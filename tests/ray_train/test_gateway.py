@@ -2192,7 +2192,7 @@ async def test_a_submitted_job_whose_cluster_is_gone_is_forgotten_in_time(env):
 async def test_asking_about_jobs_without_a_cluster_starts_none(env, path):
     status, _, body = await job_call(env, path=path)
     assert status == 404
-    assert body.startswith(b"You have no Ray cluster")
+    assert body.startswith(b"You have no job raysubmit_")
     assert env.kube.clusters == {}
 
 
@@ -2212,7 +2212,7 @@ async def test_a_user_never_reaches_another_users_job(env):
     theirs = await submitted(env, token="session-b")
     status, _, body = await job_call(env, path=f"/api/jobs/{theirs}")
     assert status == 404
-    assert body.startswith(b"You have no Ray cluster")
+    assert body.startswith(b"You have no job raysubmit_")
 
 
 async def test_a_jobs_status_comes_from_its_head_while_its_cluster_is_up(env):
@@ -2941,6 +2941,20 @@ async def test_a_job_on_nrp_whose_inputs_could_not_be_copied_says_so(nrp_env):
     await env.gateway.reap_nrp()
     found = await details(env, submission)
     assert (found["status"], found["message"]) == ("STOPPED", gw.STOPPED_INPUTS)
+
+
+async def test_a_job_on_nrp_stopped_before_it_started_copies_nothing_back(nrp_env):
+    env = nrp_env
+    submission = await nrp_submitted(
+        env, **{gw.INPUTS_METADATA: INPUTS, gw.OUTPUT_METADATA: OUTPUT}
+    )
+    name = nrp_job(env)["metadata"]["name"]
+    copied(env, f"{name}-in", "Failed")
+    await env.gateway.reap_nrp()
+    await env.gateway.reap_nrp()
+    found = await details(env, submission)
+    assert (found["status"], found["message"]) == ("STOPPED", gw.STOPPED_INPUTS)
+    assert env.kube.batch[f"{name}-out"]["spec"]["suspend"] is True
 
 
 async def test_a_job_on_nrp_whose_outputs_could_not_be_copied_back_says_so(nrp_env):

@@ -1720,11 +1720,14 @@ class Gateway:
         )
 
     async def stop_nrp(self, job: dict[str, Any], why: str) -> None:
-        """Stop a job on NRP, keeping its record, which says why; its outputs are copied back."""
+        """Stop a job on NRP, keeping its record, which says why; a job that started has its outputs copied back."""
         annotations = job["metadata"].get("annotations") or {}
         if not job_ended(job):
             await self.nrp_patch(job["metadata"]["name"], {"spec": {"suspend": True}})
-        after = "outputs" if annotations.get(OUTPUT_ANNOTATION) == "true" else "done"
+        # A job that never started wrote nothing to copy back.
+        started = ((job.get("status") or {}).get("rayJobInfo") or {}).get("startTime")
+        wrote = annotations.get(OUTPUT_ANNOTATION) == "true" and started
+        after = "outputs" if wrote else "done"
         await self.set_stage(job, after, **{STOPPED_ANNOTATION: why})
         log.info("stopped %s on NRP: %s", job["metadata"]["name"], why)
 
@@ -2027,7 +2030,18 @@ class Gateway:
                     if on_nrp is not None:
                         return await self.nrp_recorded(request, on_nrp, about[2] or "")
                     # A job submitted to the user's own cluster.
-                    head = keyed = await self.running(user)
+                    try:
+                        head = keyed = await self.running(user)
+                    except Refused as e:
+                        if (
+                            e.code != grpc.StatusCode.NOT_FOUND
+                            or user.cluster in self.never_started
+                        ):
+                            raise
+                        raise Refused(
+                            grpc.StatusCode.NOT_FOUND,
+                            f"You have no job {about[1]}: a job's record goes with delete_job, or {int(JOB_RECORD_S // 86400)} days after the job ends.",
+                        ) from e
                 else:
                     job, cluster = found
                     kept = (job["metadata"].get("annotations") or {}).get(
