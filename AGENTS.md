@@ -21,6 +21,8 @@ only what those do not say.
   their Dask cluster. They hold long-running kernels — someone's work.
 - Never move a tag or a branch by hand; [RELEASING.md](RELEASING.md) names the
   workflow that mints each one.
+- Never create anything directly in `/depot/cms/` — not by hand, not as a
+  test path, not as a job's output. Test from `/work/users/<you>/`.
 - Never commit a plaintext secret. A Secret under `apps/` is SOPS-encrypted per
   `.sops.yaml` and carries a `sops:` block.
 - No real usernames in commits, PRs or test fixtures. Aggregate or redact first.

@@ -17,6 +17,16 @@ def bucket() -> fs.S3FileSystem:
     )
 
 
+def make_directory(path: str) -> None:
+    """Makes `path` and its missing parents, none of them at the top of a mounted volume."""
+    top = path
+    while not os.path.isdir(os.path.dirname(top)):
+        top = os.path.dirname(top)
+    if not os.path.isdir(top) and os.path.ismount(os.path.dirname(top)):
+        raise SystemExit(f"{top} would be made at the top of a shared volume")
+    os.makedirs(path, exist_ok=True)
+
+
 def main(direction: str, source: str, target: str) -> None:
     local, s3 = fs.LocalFileSystem(), bucket()
     if direction == "in":
@@ -31,7 +41,7 @@ def main(direction: str, source: str, target: str) -> None:
         if s3.get_file_info(source).type == fs.FileType.NotFound:
             print(f"{source} has nothing to copy", flush=True)
             return
-        os.makedirs(target, exist_ok=True)
+        make_directory(target)
         fs.copy_files(
             source, target, source_filesystem=s3, destination_filesystem=local
         )

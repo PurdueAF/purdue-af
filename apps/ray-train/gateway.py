@@ -977,6 +977,13 @@ def data_paths(user: User, headers: Mapping[str, str]) -> dict[str, str]:
                 grpc.StatusCode.INVALID_ARGUMENT,
                 f"{name}: {value} is not on storage your jobs mount: {', '.join(roots)}.",
             )
+        if key == "output" and posixpath.dirname(path) in {
+            r.rstrip("/") for r in roots
+        }:
+            raise Refused(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"{name}: {value} would be made at the top of {posixpath.dirname(path)}, which is shared: name a directory inside your own, such as one under /work/users.",
+            )
         out[key] = path
     return out
 
@@ -1337,6 +1344,7 @@ class Gateway:
                         grpc.StatusCode.FAILED_PRECONDITION,
                         f"You have a job {asked} already: submit it under another ID, or without one.",
                     )
+            data = data_paths(user, request.headers)
             waiting = self.waiting.pop(user.cluster, None)
             if waiting is not None and (
                 waiting.shape != shape
@@ -1351,7 +1359,6 @@ class Gateway:
                 return waiting.head, waiting.name, None
             # KubeRay follows the job whose jobId is set on a RayJob that waits for one.
             submitted["submission_id"] = asked
-            data = data_paths(user, request.headers)
             if data:
                 runtime_env = dict(submitted.get("runtime_env") or {})
                 runtime_env["env_vars"] = {

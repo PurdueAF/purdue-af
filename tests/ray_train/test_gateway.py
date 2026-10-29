@@ -2971,6 +2971,28 @@ async def test_data_off_the_users_storage_is_refused(nrp_env, path):
     assert nrp_env.nrp.jobs == {}
 
 
+@pytest.mark.parametrize("path", ["/depot/cms/runs", "/work/runs", "/depot/cms/runs/"])
+async def test_an_output_at_the_top_of_shared_storage_is_refused(nrp_env, path):
+    status, reason, _ = await nrp_submit(nrp_env, **{gw.OUTPUT_METADATA: path})
+    assert status == 400
+    assert gw.OUTPUT_METADATA in reason
+    assert nrp_env.nrp.jobs == {}
+
+
+async def test_an_output_at_the_top_of_shared_storage_is_refused_at_purdue(env):
+    async with env.session.post(
+        env.dashboard + "/api/jobs/",
+        data=json.dumps({"entrypoint": "python train.py"}),
+        headers={
+            "Authorization": "Bearer session-a",
+            gw.OUTPUT_METADATA: "/depot/cms/runs",
+        },
+    ) as r:
+        assert r.status == 400
+        assert gw.OUTPUT_METADATA in r.reason
+    assert env.kube.clusters == {}
+
+
 async def test_a_job_at_purdue_finds_its_data_at_its_paths(env):
     await submit_with(env, **{gw.INPUTS_METADATA: INPUTS, gw.OUTPUT_METADATA: OUTPUT})
     sent = json.loads(env.heads.seen[-1][4])
