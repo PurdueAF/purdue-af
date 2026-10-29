@@ -20,7 +20,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: chown
-          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-analysis:latest
+          image: geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-analysis:latest
           command:
             - sh
             - -c

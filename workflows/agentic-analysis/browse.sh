@@ -5,7 +5,7 @@
 #   browse.sh serve [port]  its files over HTTP at http://localhost:<port>
 set -euo pipefail
 
-image=geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-analysis:latest
+image=geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-analysis:latest
 mount=/agentic-analysis
 pod="agentic-analysis-browse-$(date +%s)"
 

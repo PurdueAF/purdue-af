@@ -28,7 +28,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: af-node-monitor
-          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
+          image: geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
           # The script comes from the ConfigMap, and a registry outage must not stop the exporter that reports it.
           imagePullPolicy: IfNotPresent
           command: ["python", "/scripts/node_healthcheck.py"]

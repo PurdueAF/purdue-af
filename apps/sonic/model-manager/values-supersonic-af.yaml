@@ -3,7 +3,7 @@
 supersonicRelease: supersonic-af
 
 image:
-  repository: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/supersonic-model-manager
+  repository: geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/supersonic-model-manager
   tag: "latest"
 
 modelRepository:
