@@ -45,9 +45,9 @@ import posixpath
 import re
 import secrets
 import signal
-import sys
 import ssl
 import string
+import sys
 import time
 import urllib.parse
 from collections.abc import AsyncIterator, Mapping
@@ -2895,13 +2895,12 @@ async def until_changed(path: Path, running: bytes) -> None:
 
 def code_files() -> list[Path]:
     """This file and the modules beside it that it imports: the code the gateway runs."""
-    beside = {
-        Path(module.__file__)
-        for module in list(sys.modules.values())
-        if getattr(module, "__file__", None)
-        and Path(module.__file__).parent == CODE.parent
-    }
-    return sorted(beside | {CODE})
+    beside = {CODE}
+    for module in list(sys.modules.values()):
+        file = getattr(module, "__file__", None)
+        if file and Path(file).parent == CODE.parent:
+            beside.add(Path(file))
+    return sorted(beside)
 
 
 async def main() -> None:

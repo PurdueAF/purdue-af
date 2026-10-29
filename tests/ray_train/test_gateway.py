@@ -3471,7 +3471,9 @@ async def test_the_gateway_stops_when_its_code_or_settings_change(
     assert stopped.is_set()
 
 
-async def test_the_gateway_stops_when_a_module_it_imports_changes(monkeypatch, tmp_path):
+async def test_the_gateway_stops_when_a_module_it_imports_changes(
+    monkeypatch, tmp_path
+):
     stopped = asyncio.Event()
 
     async def serve():
