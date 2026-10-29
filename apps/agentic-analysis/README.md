@@ -57,8 +57,8 @@ NRP's fair use:
 - it refuses bodies, image counts and prompt sizes the models would not take,
   as a context overflow, which OpenCode answers by compacting the session.
 
-`/v1/models` lists the roles, `/config` their contexts and image counts for the
-runner, `/status` each model's slots and load, `/healthz` that it runs. Each
-request it forwards leaves one JSON line in its log. The proxy exits once the kubelet's
+`/v1/models` lists the roles, `/config` their contexts, image counts and the
+body cap for the runner, `/status` each model's slots and load, `/healthz`
+that it runs. Each request it forwards leaves one JSON line in its log. The proxy exits once the kubelet's
 copy of either file differs from the one it started with, and starts again with
 it.

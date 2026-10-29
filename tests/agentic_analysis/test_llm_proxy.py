@@ -517,6 +517,7 @@ def test_roles_and_their_limits_are_listed_for_the_runner(proxy):
         "context": 100_000,
         "compact_at": 80_000,
         "images": 2,
+        "max_body_bytes": 200_000,
         "backends": ["v"],
     }
 

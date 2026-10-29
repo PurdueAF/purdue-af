@@ -98,6 +98,8 @@ AGENTS = {
 WAITS = {"headerTimeout": 60_000, "chunkTimeout": 90_000, "timeout": 3 * 3_600_000}
 # OpenCode's ceiling on a reply's tokens: it compacts limit.output below a model's context, or this far for 0.
 OUTPUT_MAX = 32_000
+# The most bytes a token of a request's text takes, as OpenCode sends it.
+TOKEN_BYTES = 5
 # Nothing asks, as nobody answers ("*" first: the last rule that matches wins); no agent edits what OpenCode loads.
 PERMISSION = {
     "*": "allow",
@@ -203,17 +205,23 @@ that runs longer, as a pass over the data, a `timeout` long enough, up to \
 they were fetched: `ls data/` lists them, and a search started above `data/` \
 passes over the link unless it is `find -L`. One without `data/` reads its \
 inputs as its prompt says.
-- Start a search for files in the analysis's directory or the JFC checkout it \
-is in, never at `/`, `/cvmfs` or `{root}`: they are too large to search, and \
-such a search runs until its command is ended.
+- Never search for a file from `/`, `/cvmfs` or `{root}`, whether it is the \
+analysis's, a command or a font: they are too large to search, and such a \
+search runs until its command is ended. Search the analysis's directory and \
+the JFC checkout it is in for its files.
+- A command is on the `PATH`, as `command -v NAME` shows, or in the \
+analysis's pixi environment, `.pixi/envs/default`, as `pixi run which NAME` \
+shows; one in neither is not installed, and `pixi add NAME` adds it. Tectonic \
+keeps the TeX files and fonts it fetches in `~/.cache/tectonic`.
 
 ## Files, figures and PDFs
 
 - A reply's length is bounded: write a large file in parts. `read` returns a \
 long file in pieces: read on with `offset` to its end.
 - `read` shows a PNG to the roles that see images, a limited number per \
-session; a refused read says why. Review figures from their own PNGs, a few \
-related ones per plot validator, each batch to a fresh one.
+session, each of a limited size; a refused read says why. Review figures \
+from their own PNGs, a few related ones per plot validator, each batch to a \
+fresh one.
 - Never `read` a PDF: render its pages with `pdftoppm -r 150 -png`, and use \
 `pdftotext` and `pdfinfo` for its text, unresolved references and page count. \
 Look at pages only for layout, captions and tables.
@@ -551,6 +559,16 @@ def _config(
     }
 
 
+def _image_bytes(role: dict[str, Any]) -> int:
+    """The largest image a session of `role` may read: as many as it takes, in
+    base64, beside a full context's text, stay within the proxy's body cap."""
+    images: int = role["images"]
+    if not images:
+        return 0
+    room: int = role["max_body_bytes"] - role["context"] * TOKEN_BYTES
+    return room * 3 // 4 // images
+
+
 def _setup(
     local: Path, roles: dict[str, dict[str, Any]], work: Path, home: Path
 ) -> dict[str, str]:
@@ -573,11 +591,14 @@ def _setup(
     # OpenCode installs npm packages into a configuration directory it can write.
     for directory in (config / "plugin", config, config.parent):
         directory.chmod(0o555)
-    images = {name: roles[role]["images"] for name, (role, _) in AGENTS.items()}
+    role_of = {"orchestrator": "orchestrator"} | {n: r for n, (r, _) in AGENTS.items()}
     plugin = {
         "records": str(state / "records.jsonl"),
         "seats": SEATS,
-        "images": {**images, "orchestrator": roles["orchestrator"]["images"]},
+        "images": {name: roles[role]["images"] for name, role in role_of.items()},
+        "image_bytes": {
+            name: _image_bytes(roles[role]) for name, role in role_of.items()
+        },
         "timeout": COMMAND_HOURS * 3_600_000,
         # The pod's own, for the agents' commands.
         "env": {

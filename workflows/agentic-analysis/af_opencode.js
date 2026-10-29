@@ -72,8 +72,21 @@ function isImage(file) {
   return String(file.mime).startsWith("image/");
 }
 
-// Why `session` may not take another image, or "" if it may.
-function refused(session) {
+function size(file) {
+  try {
+    return fs.statSync(file).size;
+  } catch {
+    return 0;
+  }
+}
+
+// The bytes of the image a data URL carries.
+function decoded(url) {
+  return Buffer.byteLength(String(url).split(",")[1] ?? "", "base64");
+}
+
+// Why `session` may not take another image of `bytes`, or "" if it may.
+function refused(session, bytes) {
   const agent = agents.get(session);
   const cap = settings.images[agent] ?? 0;
   if (cap === 0) {
@@ -86,6 +99,13 @@ function refused(session) {
     return (
       `this session holds ${cap} images, as many as one of ${agent} takes. ` +
       "Finish with what you have seen; a fresh session takes further figures."
+    );
+  const most = settings.image_bytes[agent];
+  if (bytes > most)
+    return (
+      `it is ${bytes} bytes, over the ${most} an image of ${agent} may take. ` +
+      "Read a smaller copy: the page, or the figure's PDF, rendered with " +
+      "`pdftoppm -r 100 -png`, or a crop of the part to inspect."
     );
   return "";
 }
@@ -100,7 +120,7 @@ function guard(session, callID, file) {
         "or use `pdftotext` and `pdfinfo` for its text and page count.",
     );
   if (what !== "image") return;
-  const why = refused(session);
+  const why = refused(session, size(file));
   if (why) throw new Error(`${file} was not read: ${why}`);
   shown.set(session, (shown.get(session) ?? 0) + 1);
   pictures.set(callID, session);
@@ -182,7 +202,7 @@ export default {
         } else if (tool !== "read" && output.attachments?.length) {
           output.attachments = output.attachments.filter((file) => {
             if (!isImage(file)) return true;
-            const why = refused(sessionID);
+            const why = refused(sessionID, decoded(file.url));
             if (why) output.output += `\n\nAn image was dropped: ${why}`;
             else shown.set(sessionID, (shown.get(sessionID) ?? 0) + 1);
             return !why;

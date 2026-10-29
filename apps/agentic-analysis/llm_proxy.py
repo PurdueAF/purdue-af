@@ -712,6 +712,7 @@ class Proxy:
                 "context": r.context,
                 "compact_at": r.compact_at,
                 "images": r.images,
+                "max_body_bytes": self.config.settings.max_body_bytes,
                 "backends": [str(b) for b in r.backends],
             }
             for name, r in self.config.roles.items()
