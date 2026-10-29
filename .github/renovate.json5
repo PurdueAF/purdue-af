@@ -73,7 +73,6 @@
   // The cluster registry's pull-through cache of Docker Hub: look the image
   // up upstream, keep the cache hostname in the manifest.
   registryAliases: {
-    'geddes-registry.rcac.purdue.edu/docker-hub-cache': 'docker.io',
     'geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache': 'docker.io',
   },
 
@@ -206,7 +205,7 @@
       // the release workflows set their tags. Third-party images behind the
       // Docker Hub cache are renamed by registryAliases and do not match.
       matchDatasources: ['docker'],
-      matchPackageNames: ['geddes-registry.rcac.purdue.edu/**', 'geddes2-registry.rcac.purdue.edu/**'],
+      matchPackageNames: ['geddes2-registry.rcac.purdue.edu/**'],
       enabled: false,
     },
     {

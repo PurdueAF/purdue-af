@@ -5,7 +5,7 @@
 # ------------------------------------------------------------
 # Stage: system (dnf, OSG, Slurm, user; no pixi)
 # ------------------------------------------------------------
-FROM geddes-registry.rcac.purdue.edu/docker-hub-cache/nvidia/cuda:12.9.2-devel-rockylinux8 AS system
+FROM geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/nvidia/cuda:12.9.2-devel-rockylinux8 AS system
 
 LABEL maintainer="Dmitry Kondratyev <dkondra@purdue.edu>"
 ARG NB_USER="jovyan"

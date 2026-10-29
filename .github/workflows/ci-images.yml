@@ -121,11 +121,11 @@ jobs:
       - name: Resolve the Dockerfile's base image on docker.io
         if: env.AF_EXISTS != 'true'
         run: |
-          geddes=$(awk '$1 == "FROM" && $2 ~ /\/docker-hub-cache\// {print $2; exit}' docker/purdue-af/Dockerfile)
-          [[ -n "$geddes" ]] || { echo "::error::no docker-hub-cache FROM in docker/purdue-af/Dockerfile"; exit 1; }
+          geddes=$(awk '$1 == "FROM" && $2 ~ /\/dockerhub-proxy-cache\// {print $2; exit}' docker/purdue-af/Dockerfile)
+          [[ -n "$geddes" ]] || { echo "::error::no dockerhub-proxy-cache FROM in docker/purdue-af/Dockerfile"; exit 1; }
           {
             echo "GEDDES_BASE=$geddes"
-            echo "PUBLIC_BASE=docker.io/${geddes#*/docker-hub-cache/}"
+            echo "PUBLIC_BASE=docker.io/${geddes#*/dockerhub-proxy-cache/}"
           } | tee -a "$GITHUB_ENV"
       # Login first: cache-from needs read; cache-to/push need write.
       - name: Login to ghcr.io
@@ -143,7 +143,7 @@ jobs:
           context: .
           file: docker/purdue-af/Dockerfile
           target: smoke
-          # The Dockerfile's FROM points at the geddes docker-hub-cache proxy
+          # The Dockerfile's FROM points at the geddes dockerhub-proxy-cache proxy
           # (unreachable from GH runners); remap that exact ref to docker.io
           # without modifying the Dockerfile.
           build-contexts: |
