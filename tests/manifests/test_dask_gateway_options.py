@@ -1,6 +1,7 @@
 """The Python the Dask Gateway execs (gateway.extraConfig.config)."""
 
 import base64
+import contextlib
 import copy
 import json
 import logging
@@ -41,9 +42,9 @@ class Unauthorized(Exception):
     pass
 
 
-class SimpleAuthenticator:
-    """dask-gateway-server 2024.1.0's: a request's cookie, while the cache holds
-    its user, stands in for the credentials that signed them in."""
+class Authenticator:
+    """dask-gateway-server 2024.1.0's base class: a request's cookie, while the
+    cache holds its user, stands in for the credentials that signed them in."""
 
     cookie_name = "dask-gateway-cookie"
 
@@ -64,12 +65,7 @@ class SimpleAuthenticator:
         return response
 
     async def authenticate(self, request):
-        """The user a Basic header names, as dask-gateway-server's does."""
-        scheme, _, encoded = request.headers.get("Authorization", "").partition(" ")
-        if scheme != "Basic":
-            raise Unauthorized("Basic")
-        name = base64.b64decode(encoded).decode("ascii").split(":", 1)[0]
-        return types.SimpleNamespace(name=name)
+        raise NotImplementedError
 
 
 def basic(name):
@@ -87,7 +83,7 @@ def config(monkeypatch, code):
     base = types.ModuleType("dask_gateway_server.backends.base")
     base.PublicException = Exception
     auth = types.ModuleType("dask_gateway_server.auth")
-    auth.SimpleAuthenticator = SimpleAuthenticator
+    auth.Authenticator = Authenticator
     auth.unauthorized = Unauthorized
     package = types.ModuleType("dask_gateway_server")
     package.models = types.ModuleType("dask_gateway_server.models")
@@ -105,22 +101,31 @@ def options_handler(config):
     return config["options_handler"]
 
 
-async def authenticate(
-    config, header, hub_status=200, owner=None, remote=POD, headers=()
-):
+@contextlib.asynccontextmanager
+async def hub_authenticator(config, owners, status=200):
+    """A HubTokenAuthenticator whose Hub answers each token in owners with its owner."""
+
     async def whoami(request):
-        assert request.headers["Authorization"] == "token secret"
-        return web.json_response(owner, status=hub_status)
+        scheme, _, token = request.headers["Authorization"].partition(" ")
+        assert scheme == "token" and token in owners
+        return web.json_response(owners[token], status=status)
 
     hub = web.Application()
     hub.router.add_get("/hub/api/user", whoami)
     async with TestServer(hub) as server:
         authenticator = config["HubTokenAuthenticator"]()
         authenticator.hub_api_url = str(server.make_url("/hub/api"))
+        yield authenticator
+
+
+async def authenticate(
+    config, header, hub_status=200, owner=None, remote=POD, headers=()
+):
+    async with hub_authenticator(config, {"secret": owner}, hub_status) as auth:
         sent = CIMultiDict(headers)
         if header:
             sent["Authorization"] = header
-        return await authenticator.authenticate(
+        return await auth.authenticate(
             types.SimpleNamespace(headers=sent, remote=remote)
         )
 
@@ -129,10 +134,9 @@ async def test_hub_token_names_its_owner(config):
     owner = {"kind": "user", "name": "someone-cern"}
     user = await authenticate(config, "jupyterhub secret", owner=owner)
     assert user.name == "someone-cern"
-    assert (
-        config["c"]["DaskGateway"]["authenticator_class"]
-        is config["HubTokenAuthenticator"]
-    )
+    authenticator = config["HubTokenAuthenticator"]
+    assert config["c"]["DaskGateway"]["authenticator_class"] is authenticator
+    assert issubclass(authenticator, Authenticator)
 
 
 @pytest.mark.parametrize(
@@ -151,10 +155,12 @@ async def test_hub_failure_is_not_an_authentication_failure(config):
         await authenticate(config, "jupyterhub secret", 503, {})
 
 
-async def test_other_schemes_go_to_basic(config):
-    assert (await authenticate(config, basic("someone"))).name == "someone"
-    with pytest.raises(Unauthorized):
-        await authenticate(config, None)
+@pytest.mark.parametrize("header", [basic("someone"), "token secret", None])
+async def test_only_a_hub_or_an_accounts_token_signs_in(config, header):
+    owner = {"kind": "user", "name": "someone"}
+    with pytest.raises(Unauthorized) as refused:
+        await authenticate(config, header, owner=owner)
+    assert refused.value.args == ("jupyterhub",)
 
 
 def build_environment(project, *packages):
@@ -402,47 +408,31 @@ async def test_a_forwarded_account_token_is_refused(
 
 @pytest.mark.parametrize("registry_present", [True, False])
 @pytest.mark.parametrize("name", ["account:demo-workload", "someone:else", ":"])
-async def test_no_basic_or_hub_user_has_a_colon_in_their_name(
-    config, monkeypatch, tmp_path, caplog, registry_present, name
+async def test_no_hub_user_has_a_colon_in_their_name(
+    config, tmp_path, caplog, registry_present, name
 ):
-    """A Basic name never has one, as the credentials split at the first ':';
-    the gateway refuses one all the same."""
     config["ACCOUNTS_DIR"] = str(tmp_path / "missing")
     if registry_present:
         config["ACCOUNTS_DIR"] = str(tmp_path)
         declare(tmp_path, **{"demo-workload.yaml": WORKLOAD})
-
-    async def named(self, request):
-        return types.SimpleNamespace(name=name)
-
-    monkeypatch.setattr(SimpleAuthenticator, "authenticate", named)
-    with caplog.at_level(logging.WARNING), pytest.raises(Unauthorized):
-        await authenticate(config, basic("someone"))
     owner = {"kind": "user", "name": name}
     with caplog.at_level(logging.WARNING), pytest.raises(Unauthorized):
         await authenticate(config, "jupyterhub secret", owner=owner)
-    assert caplog.text.count("user refused: reason=colon") == 2
+    assert "jupyterhub user refused: reason=colon" in caplog.text
 
 
-async def test_no_basic_or_hub_user_has_a_declared_accounts_name(
-    config, registry, caplog
-):
-    with caplog.at_level(logging.WARNING), pytest.raises(Unauthorized):
-        await authenticate(config, basic("demo-workload"))
-    owner = {"kind": "user", "name": "other-workload"}
+@pytest.mark.parametrize("name", ["demo-workload", "other-workload"])
+async def test_no_hub_user_has_a_declared_accounts_name(config, registry, caplog, name):
+    owner = {"kind": "user", "name": name}
     with caplog.at_level(logging.WARNING), pytest.raises(Unauthorized):
         await authenticate(config, "jupyterhub secret", owner=owner)
-    assert "Basic user refused: reason=account-name account=demo-workload" in (
-        caplog.text
-    )
-    assert "jupyterhub user refused: reason=account-name account=other-workload" in (
+    assert f"jupyterhub user refused: reason=account-name account={name}" in (
         caplog.text
     )
 
 
 @pytest.mark.parametrize("name", ["someone", "demo-workload-old", "jovyan"])
 async def test_users_of_other_names_sign_in_under_them(config, registry, name):
-    assert (await authenticate(config, basic(name))).name == name
     owner = {"kind": "user", "name": name}
     assert (await authenticate(config, "jupyterhub secret", owner=owner)).name == name
 
@@ -505,24 +495,26 @@ async def test_a_users_cookie_lapses_once_an_account_takes_their_name(
     config, tmp_path, caplog
 ):
     config["ACCOUNTS_DIR"] = str(tmp_path)
-    authenticator = config["HubTokenAuthenticator"]()
-    users = {}
-    for name in ("demo-workload", "someone"):
-        user, cookie = await signed_in(
-            authenticator, Request({"Authorization": basic(name)})
-        )
-        assert user == name
-        users[name] = {authenticator.cookie_name: cookie}
-    declare(tmp_path, **{"demo-workload.yaml": WORKLOAD})
-    with caplog.at_level(logging.WARNING), pytest.raises(Unauthorized):
-        await signed_in(
-            authenticator,
-            Request(
-                {"Authorization": basic("demo-workload")},
-                cookies=users["demo-workload"],
-            ),
-        )
-    assert "Basic user refused: reason=account-name account=demo-workload" in (
+    names = ("demo-workload", "someone")
+    owners = {name: {"kind": "user", "name": name} for name in names}
+    async with hub_authenticator(config, owners) as authenticator:
+        users = {}
+        for name in names:
+            user, cookie = await signed_in(
+                authenticator, Request({"Authorization": f"jupyterhub {name}"})
+            )
+            assert user == name
+            users[name] = {authenticator.cookie_name: cookie}
+        declare(tmp_path, **{"demo-workload.yaml": WORKLOAD})
+        with caplog.at_level(logging.WARNING), pytest.raises(Unauthorized):
+            await signed_in(
+                authenticator,
+                Request(
+                    {"Authorization": "jupyterhub demo-workload"},
+                    cookies=users["demo-workload"],
+                ),
+            )
+    assert "jupyterhub user refused: reason=account-name account=demo-workload" in (
         caplog.text
     )
     assert await signed_in(authenticator, Request({}, cookies=users["someone"])) == (
