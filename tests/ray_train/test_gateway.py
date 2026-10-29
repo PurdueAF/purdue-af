@@ -2111,6 +2111,37 @@ async def test_an_upload_reaches_the_head_of_the_job_it_comes_with(env):
     assert env.gateway.waiting == {}
 
 
+async def scrape(env):
+    """The gateway's /metrics, as Prometheus scrapes it: its status and text."""
+    server = TestServer(gw.metrics_app(env.gateway))
+    await server.start_server()
+    try:
+        async with env.session.get(server.make_url("/metrics")) as r:
+            return r.status, await r.text()
+    finally:
+        await server.close()
+
+
+async def test_metrics_name_the_owner_of_each_jobs_cluster(env):
+    mine = await submitted(env)
+    theirs = await submitted(env, token="session-b")
+    status, text = await scrape(env)
+    assert status == 200
+    samples = sorted(line for line in text.splitlines() if not line.startswith("#"))
+    assert samples == sorted(
+        [
+            f'ray_train_job_owner{{ray_cluster="{job_cluster(env, mine)}",owner="ray-train-user-a"}} 1',
+            f'ray_train_job_owner{{ray_cluster="{job_cluster(env, theirs)}",owner="ray-train-user-b-cern"}} 1',
+        ]
+    )
+
+
+async def test_metrics_fail_while_kubernetes_lists_no_jobs(env):
+    env.kube.fail_list = True
+    status, _ = await scrape(env)
+    assert status == 503
+
+
 async def test_an_upload_in_another_shape_starts_another_job(env):
     path = "/api/packages/gcs/_ray_pkg_1.zip"
     await job_call(env, "PUT", path, b"zip", env_path=ENV_A)

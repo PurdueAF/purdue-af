@@ -26,7 +26,8 @@ AF_MAX_WORKERS. A user whose session holds a GPU starts and submits to none.
 A workload account's token gets the account a cluster of its own
 (../dask-gateway/README.md#workload-accounts). `GET /af/nrp-gpus` on the Jobs
 API's port answers how many GPUs NRP Nautilus has free for Ray workers, by
-region (nrp_gpus.py). The settings are in config.yaml.
+region (nrp_gpus.py). `GET /metrics` on METRICS_PORT names, for the dashboards,
+the owner of each job's cluster, whose name has none. The settings are in config.yaml.
 """
 
 from __future__ import annotations
@@ -181,6 +182,8 @@ PART_OF = "app.kubernetes.io/part-of"
 CLIENT_PORT = 10001
 # The dashboard's, whose HTTP API, the Jobs API's among it, the gateway relays.
 DASHBOARD_PORT = 8265
+# Prometheus's, for which job clusters' owners are the dashboards' to know.
+METRICS_PORT = 9090
 # What the name of every setting starts with: any other header or metadata so named is a mistake.
 SETTING_PREFIX = "af-"
 # Set by a notebook: ray.init(..., _metadata=[(ENV_METADATA, <environment>)]), or a header of JobSubmissionClient.
@@ -2518,6 +2521,22 @@ class Gateway:
         except (ClientError, asyncio.TimeoutError):
             return None
 
+    async def job_owners(self) -> dict[str, str]:
+        """The cluster of each RayJob that has one, and its owner's own cluster."""
+        status, listing = await self.kube(
+            "GET",
+            f"{RAYJOBS}?labelSelector=app.kubernetes.io%2Fmanaged-by%3D{MANAGED_BY}",
+        )
+        if status != 200:
+            raise RuntimeError(f"listing Ray jobs: HTTP {status}")
+        owners = {}
+        for job in listing.get("items", []):
+            cluster = (job.get("status") or {}).get("rayClusterName")
+            owner = (job["metadata"].get("labels") or {}).get(OWNER_LABEL)
+            if cluster and owner:
+                owners[cluster] = owner
+        return owners
+
     async def reap_idle(self) -> None:
         status, listing = await self.kube(
             "GET",
@@ -2856,6 +2875,28 @@ def dashboard_app(gateway: Gateway) -> web.Application:
     return app
 
 
+def metrics_app(gateway: Gateway) -> web.Application:
+    async def metrics(request: web.Request) -> web.Response:
+        try:
+            owners = await gateway.job_owners()
+        except (ClientError, asyncio.TimeoutError, RuntimeError) as error:
+            log.warning("%r", error)
+            return web.Response(status=503, text="Kubernetes did not list Ray jobs")
+        lines = [
+            "# HELP ray_train_job_owner The owner's own cluster of each Ray job cluster.",
+            "# TYPE ray_train_job_owner gauge",
+            *(
+                f'ray_train_job_owner{{ray_cluster="{cluster}",owner="{owner}"}} 1'
+                for cluster, owner in sorted(owners.items())
+            ),
+        ]
+        return web.Response(text="\n".join(lines) + "\n")
+
+    app = web.Application()
+    app.router.add_get("/metrics", metrics)
+    return app
+
+
 async def serve() -> None:
     kube_tls = ssl.create_default_context(cafile=str(SERVICE_ACCOUNT / "ca.crt"))
     async with (
@@ -2878,11 +2919,15 @@ async def serve() -> None:
         )
         await dashboard.setup()
         await web.TCPSite(dashboard, "0.0.0.0", DASHBOARD_PORT).start()
+        metrics = web.AppRunner(metrics_app(gateway), access_log=None)
+        await metrics.setup()
+        await web.TCPSite(metrics, "0.0.0.0", METRICS_PORT).start()
         try:
             await reap_forever(gateway)
         finally:
             await server.stop(None)
             await dashboard.cleanup()
+            await metrics.cleanup()
             await gateway.close()
 
 

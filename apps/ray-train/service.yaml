@@ -14,3 +14,19 @@ spec:
     - name: dashboard
       port: 8265
       targetPort: dashboard
+---
+# Its own Service: both Prometheus instances scrape every port of one labelled scrape-metrics.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ray-train-gateway-metrics
+  labels:
+    app: ray-train-gateway
+    scrape-metrics: "true"
+spec:
+  selector:
+    app: ray-train-gateway
+  ports:
+    - name: metrics
+      port: 9090
+      targetPort: metrics

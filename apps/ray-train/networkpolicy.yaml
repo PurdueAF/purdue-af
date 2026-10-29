@@ -24,6 +24,17 @@ spec:
           port: 10001
         - protocol: TCP
           port: 8265
+    - from:
+        # Rancher Prometheus, via the scrape-metrics ServiceMonitor
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cattle-monitoring-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 9090
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
