@@ -41,8 +41,8 @@ and the only holder of the NRP key. It serves `/v1/chat/completions` behind the
 `agentic-analysis-llm-proxy` Service to clients that send `client-token` as a
 bearer token. Each request names a role of `models.toml` as its model; the
 proxy sends it to that role's first healthy backend that has room for it, or to
-the one its session (`x-af-session`) started on, and keeps every request within
-NRP's fair use:
+the one its session (`x-af-session`) last went to in that role, and keeps every
+request within NRP's fair use:
 
 - it admits a request when its model has a free slot, room in the tokens its
   requests in flight may hold, and room in its output per minute, the waiting
