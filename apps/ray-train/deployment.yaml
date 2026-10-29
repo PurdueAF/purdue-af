@@ -69,6 +69,8 @@ spec:
               containerPort: 10001
             - name: dashboard
               containerPort: 8265
+            - name: metrics
+              containerPort: 9090
           readinessProbe:
             tcpSocket:
               port: ray-client

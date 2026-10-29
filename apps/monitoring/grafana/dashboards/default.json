@@ -6071,7 +6071,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (user)((avg_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}[5m]) >= bool 0.01) * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\"))) or on(user) (count by (user)(group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\"))) * 0)",
+          "expr": "max by (user)((avg_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}[5m]) >= bool 0.01) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\"))) or on(user) (count by (user)(group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\"))) * 0)",
           "legendFormat": "{{ user }}",
           "datasource": {
             "type": "prometheus",
@@ -6248,7 +6248,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (user)(sum_over_time((DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"} * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\")))[$__range:1m])) / 60 > 0",
+          "expr": "sum by (user)(sum_over_time((DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"} * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))[$__range:1m])) / 60 > 0",
           "legendFormat": "{{ user }}",
           "datasource": {
             "type": "prometheus",
@@ -6478,7 +6478,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (user)((time() - kube_pod_created{namespace=\"cms\",pod=~\"ray-(train|job)-.+-head-.+\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\")))",
+          "expr": "max by (user)((time() - kube_pod_created{namespace=\"cms\",pod=~\"ray-(train|job)-.+-head-.+\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6490,7 +6490,7 @@
         },
         {
           "refId": "B",
-          "expr": "count by (user)(group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\",pod=~\"ray-(train|job)-.+-worker-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\")))",
+          "expr": "count by (user)(group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",pod=~\"ray-(train|job)-.+-worker-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\",pod=~\"ray-(train|job)-.+-worker-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6502,7 +6502,7 @@
         },
         {
           "refId": "C",
-          "expr": "count by (user)((kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",phase=\"Pending\"} == 1) * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\")))",
+          "expr": "count by (user)((kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",phase=\"Pending\"} == 1) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6514,7 +6514,7 @@
         },
         {
           "refId": "D",
-          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=\"nvidia_com_gpu\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\")))",
+          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=\"nvidia_com_gpu\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6526,7 +6526,7 @@
         },
         {
           "refId": "E",
-          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=~\"nvidia_com_mig.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\")))",
+          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=~\"nvidia_com_mig.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6538,7 +6538,7 @@
         },
         {
           "refId": "F",
-          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=~\"nvidia.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\",priority_class=\"medium-priority-preemptible\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\")))",
+          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=~\"nvidia.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\",priority_class=\"medium-priority-preemptible\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\",priority_class=\"medium-priority-preemptible\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6550,7 +6550,7 @@
         },
         {
           "refId": "G",
-          "expr": "avg by (user)((DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\")))",
+          "expr": "avg by (user)((DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6562,7 +6562,7 @@
         },
         {
           "refId": "H",
-          "expr": "sum by (user)((DCGM_FI_DEV_FB_USED{pod=~\"ray-(train|job)-.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\"))) / sum by (user)((DCGM_FI_DEV_FB_USED{pod=~\"ray-(train|job)-.*\"} + DCGM_FI_DEV_FB_FREE{pod=~\"ray-(train|job)-.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\")))",
+          "expr": "sum by (user)((DCGM_FI_DEV_FB_USED{pod=~\"ray-(train|job)-.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\"))) / sum by (user)((DCGM_FI_DEV_FB_USED{pod=~\"ray-(train|job)-.*\"} + DCGM_FI_DEV_FB_FREE{pod=~\"ray-(train|job)-.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6574,7 +6574,7 @@
         },
         {
           "refId": "I",
-          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=\"cpu\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\")))",
+          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=\"cpu\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6586,7 +6586,7 @@
         },
         {
           "refId": "J",
-          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=\"memory\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\")))",
+          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=\"memory\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6598,7 +6598,7 @@
         },
         {
           "refId": "K",
-          "expr": "max by (user)((avg_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}[5m]) >= bool 0.01) * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\")))",
+          "expr": "max by (user)((avg_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}[5m]) >= bool 0.01) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -7023,7 +7023,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (user)((DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\")))",
+          "expr": "avg by (user)((DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
           "legendFormat": "{{ user }}",
           "datasource": {
             "type": "prometheus",
@@ -7205,7 +7205,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (user)((rate(container_cpu_usage_seconds_total{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",container=\"ray-worker\"}[5m])) * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\"))) / sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",container=\"ray-worker\",resource=\"cpu\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\")))",
+          "expr": "sum by (user)((rate(container_cpu_usage_seconds_total{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",container=\"ray-worker\"}[5m])) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\"))) / sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",container=\"ray-worker\",resource=\"cpu\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
           "legendFormat": "{{ user }}",
           "datasource": {
             "type": "prometheus",
@@ -7295,7 +7295,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (user)((container_memory_working_set_bytes{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",container=\"ray-worker\"} / on(pod) group_left() sum by (pod)(kube_pod_container_resource_limits{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",container=\"ray-worker\",resource=\"memory\"})) * on(pod) group_left(user) group by (pod, user)(label_replace(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\"), \"user\", \"submitted jobs\", \"created_by_name\", \"ray-job-.+\")))",
+          "expr": "max by (user)((container_memory_working_set_bytes{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",container=\"ray-worker\"} / on(pod) group_left() sum by (pod)(kube_pod_container_resource_limits{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",container=\"ray-worker\",resource=\"memory\"})) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
           "legendFormat": "{{ user }}",
           "datasource": {
             "type": "prometheus",

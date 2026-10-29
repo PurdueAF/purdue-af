@@ -78,15 +78,33 @@ def test_the_gateway_runs_the_files_it_is_given():
     assert container["command"] == ["python", f"{app['mountPath']}/gateway.py"]
     assert gateway.TEMPLATE == Path(app["mountPath"]) / "raycluster.yaml"
     assert gateway.CONFIG_FILE == APP / "config.yaml"
-    service = load(APP / "service.yaml")
-    assert (
-        service["spec"]["selector"].items()
-        <= gateway_pod()["metadata"]["labels"].items()
-    )
-    ports = {p["targetPort"]: p["port"] for p in service["spec"]["ports"]}
+    services = {s["metadata"]["name"]: s for s in load_all(APP / "service.yaml")}
+    for service in services.values():
+        assert (
+            service["spec"]["selector"].items()
+            <= gateway_pod()["metadata"]["labels"].items()
+        )
+    ports = {
+        p["targetPort"]: p["port"]
+        for s in services.values()
+        for p in s["spec"]["ports"]
+    }
     container_ports = {p["name"]: p["containerPort"] for p in container["ports"]}
     assert ports == container_ports
-    assert sorted(ports.values()) == [gateway.DASHBOARD_PORT, gateway.CLIENT_PORT]
+    assert sorted(ports.values()) == sorted(
+        [gateway.DASHBOARD_PORT, gateway.CLIENT_PORT, gateway.METRICS_PORT]
+    )
+
+
+def test_both_prometheus_instances_scrape_only_the_gateways_metrics_port():
+    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+    services = list(load_all(APP / "service.yaml"))
+    scraped = [s for s in services if s["metadata"]["labels"].get("scrape-metrics")]
+    (service,) = scraped
+    # The ServiceMonitor scrapes the port named "metrics"; af-pod-monitor every port.
+    assert service["spec"]["ports"] == [
+        {"name": "metrics", "port": gateway.METRICS_PORT, "targetPort": "metrics"}
+    ]
 
 
 def test_the_hub_gives_the_gateway_its_token_and_scopes():
@@ -304,19 +322,35 @@ def test_only_sessions_reach_the_gateway_and_only_the_gateway_reaches_clusters()
     policies = {
         p["metadata"]["name"]: p["spec"] for p in load_all(APP / "networkpolicy.yaml")
     }
-    ports = [p["port"] for p in load(APP / "service.yaml")["spec"]["ports"]]
+    ports = [
+        p["port"]
+        for s in load_all(APP / "service.yaml")
+        if s["metadata"]["name"] == "ray-train-gateway"
+        for p in s["spec"]["ports"]
+    ]
     gateway_labels = gateway_pod()["metadata"]["labels"]
     cluster_labels = cluster_pod()["metadata"]["labels"]
 
     gateway = policies["ray-train-gateway"]
     assert gateway["podSelector"]["matchLabels"].items() <= gateway_labels.items()
-    (rule,) = gateway["ingress"]
+    rule, scrape = gateway["ingress"]
     assert rule["ports"] == [{"protocol": "TCP", "port": port} for port in ports]
     assert rule["from"] == [
         {
             "podSelector": {
                 "matchLabels": {"app": "jupyterhub", "component": "singleuser-server"}
             }
+        }
+    ]
+    assert scrape["ports"] == [{"protocol": "TCP", "port": gw.METRICS_PORT}]
+    assert scrape["from"] == [
+        {
+            "namespaceSelector": {
+                "matchLabels": {
+                    "kubernetes.io/metadata.name": "cattle-monitoring-system"
+                }
+            },
+            "podSelector": {"matchLabels": {"app.kubernetes.io/name": "prometheus"}},
         }
     ]
 
