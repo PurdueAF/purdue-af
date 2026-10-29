@@ -480,7 +480,8 @@ class Proxy:
         self.gates = {
             name: Gate(m, config.settings) for name, m in config.models.items()
         }
-        self.sticky: OrderedDict[str, Backend] = OrderedDict()
+        # By role too: a compaction comes with the session of the agent it compacts.
+        self.sticky: OrderedDict[tuple[str, str], Backend] = OrderedDict()
         self.lock = threading.Lock()
         self.client = client or httpx.Client(
             timeout=httpx.Timeout(connect=15, read=300, write=60, pool=60),
@@ -507,10 +508,11 @@ class Proxy:
     def pick(
         self, role: Role, session: str, usable: Callable[[Backend], bool]
     ) -> Backend:
-        """The session's backend while it is healthy and usable, else the
-        role's first such one."""
+        """The backend this session last went to in this role while it is
+        healthy and usable, else the role's first such one."""
+        key = (role.name, session)
         with self.lock:
-            kept = self.sticky.get(session) if session else None
+            kept = self.sticky.get(key) if session else None
             if (
                 kept
                 and kept in role.backends
@@ -523,8 +525,8 @@ class Proxy:
                 (b for b in candidates if self.gates[b.model].healthy()), candidates[0]
             )
             if session:
-                self.sticky[session] = chosen
-                self.sticky.move_to_end(session)
+                self.sticky[key] = chosen
+                self.sticky.move_to_end(key)
                 while len(self.sticky) > STICKY:
                     self.sticky.popitem(last=False)
             return chosen

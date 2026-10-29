@@ -2,6 +2,7 @@
 breaks off the way NRP's gateway does, and its wiring to the app's manifests and
 models.toml."""
 
+import dataclasses
 import http.server
 import json
 import socket
@@ -675,6 +676,23 @@ def test_a_session_keeps_its_backend_while_it_is_healthy_and_usable(proxy):
     assert str(proxy.pick(worker, "s3", anything)) == "m#high"
     assert str(proxy.pick(worker, "s3", not_m)) == "v"
     assert str(proxy.pick(worker, "s4", not_m)) == "v"
+
+
+def test_a_session_keeps_a_backend_per_role(proxy):
+    """A compaction comes with the session of the agent it compacts: it takes its
+    own role's order, and leaves the agent on its backend."""
+    worker = proxy.config.roles["worker"]
+    compaction = dataclasses.replace(
+        worker, name="compaction", backends=worker.backends[::-1]
+    )
+
+    def anything(backend):
+        return True
+
+    assert str(proxy.pick(worker, "s1", anything)) == "m#high"
+    assert str(proxy.pick(compaction, "s1", anything)) == "v"
+    assert str(proxy.pick(proxy.config.roles["looker"], "s1", anything)) == "v"
+    assert str(proxy.pick(worker, "s1", anything)) == "m#high"
 
 
 def test_the_proxy_exits_once_its_mounted_files_change(tmp_path):
