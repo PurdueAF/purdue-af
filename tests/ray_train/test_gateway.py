@@ -2820,7 +2820,7 @@ async def test_a_job_on_nrp_is_a_rayjob_there_named_for_no_one(nrp_env):
     assert job["spec"]["suspend"] is False
     # Its cluster goes as soon as it ends; its log is its submitter's.
     assert job["spec"]["ttlSecondsAfterFinished"] == 0
-    assert nrp_workers(job) == (1, ["west-1"])
+    assert nrp_workers(job) == (1, ["west-1", "west-2"])
     assert "user-a" not in json.dumps(job)
     # Nothing runs at Purdue.
     assert env.kube.jobs == {} and env.kube.clusters == {} and env.kube.batch == {}
@@ -2912,7 +2912,7 @@ async def test_a_job_on_nrp_has_its_inputs_copied_there_and_its_outputs_back(nrp
     copied(env, f"{name}-in")
     await env.gateway.reap_nrp()
     assert job["spec"]["suspend"] is False
-    assert nrp_workers(job) == (1, ["west-1"])
+    assert nrp_workers(job) == (1, ["west-1", "west-2"])
 
     kuberay_ends(env, submission)
     # Before the reaper's next pass, as after it.
@@ -3143,6 +3143,18 @@ async def test_a_job_on_nrp_whose_gpus_sit_idle_is_stopped_and_says_why(nrp_env)
     assert (await details(env, submission))["status"] == "RUNNING"
     await env.gateway.reap_nrp()
     assert env.kube.batch[f"{job['metadata']['name']}-out"]["spec"]["suspend"] is False
+
+
+async def test_jobs_on_nrp_placed_from_one_reading_may_use_every_node_of_the_group(
+    nrp_env,
+):
+    env = nrp_env
+    # Prometheus has not yet seen the first job's pods when the second is placed:
+    # both may run on any node of the group, so the scheduler finds the room left.
+    first = await nrp_submitted(env)
+    second = await nrp_submitted(env)
+    for submission in (first, second):
+        assert nrp_workers(nrp_job(env, submission)) == (1, ["west-1", "west-2"])
 
 
 async def test_a_job_on_nrp_with_one_idle_gpu_is_stopped_though_its_average_is_high(
