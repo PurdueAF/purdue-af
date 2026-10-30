@@ -1,0 +1,11 @@
+# The OAuth tokens: Mattermost replaces the refresh token on each use.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mattermost-agent
+spec:
+  storageClassName: ${singlenode_storage_class}
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi

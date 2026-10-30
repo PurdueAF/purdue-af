@@ -5,13 +5,14 @@ interface's facility-wide tools, as a Hub service that no user stands behind."""
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
 import re
 import time
 from collections import defaultdict, deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -39,6 +40,8 @@ ANSWER_SECONDS = 300.0
 CONCURRENT_ANSWERS = 4
 USER_LIMIT = 5
 USER_WINDOW_SECONDS = 600.0
+# Refreshed this early, so that a poll never races the expiry.
+EXPIRY_MARGIN_SECONDS = 300.0
 DOC_TITLE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 # Before a name, so a reply can never ping @channel, @all or a person.
 AT_NAME = re.compile(r"(?<![\w.])@(?=[\w.-])")
@@ -48,6 +51,83 @@ SORRY = (
 )
 LIMITED = "You have reached my limit of questions for now. Please try again later."
 NOT_MEMBER = "I answer direct messages from members of {channel} only."
+
+
+class Unauthorized(Exception):
+    """Mattermost refused the refresh token: authorize.py has to run again."""
+
+
+class OAuth(httpx.Auth):
+    """Mattermost's OAuth tokens. Each refresh replaces the refresh token, so
+    they live in a file that outlasts the pod; a new seed from authorize.py,
+    in the Secret, takes over from what the file holds."""
+
+    def __init__(
+        self,
+        client: httpx.AsyncClient,
+        state_file: Path,
+        client_id: str,
+        client_secret: str,
+        seed: str,
+    ) -> None:
+        self.client = client
+        self.state_file = state_file
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.seed = hashlib.sha256(seed.encode()).hexdigest()
+        self.state = {"seed": self.seed, "refresh_token": seed, "access_token": ""}
+        self.expires_at = 0.0
+        self.lock = asyncio.Lock()
+        if state_file.exists():
+            saved = json.loads(state_file.read_text())
+            if saved["seed"] == self.seed:
+                self.state = saved
+                self.expires_at = saved["expires_at"]
+
+    def save(self) -> None:
+        temporary = self.state_file.with_suffix(".tmp")
+        temporary.touch(mode=0o600)
+        temporary.write_text(json.dumps(self.state | {"expires_at": self.expires_at}))
+        temporary.replace(self.state_file)
+
+    async def refresh(self) -> None:
+        response = await self.client.post(
+            "/oauth/access_token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": self.state["refresh_token"],
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+            },
+        )
+        if response.status_code in (400, 401, 403, 404):
+            raise Unauthorized(f"token refresh: HTTP {response.status_code}")
+        response.raise_for_status()
+        tokens = response.json()
+        self.state["refresh_token"] = tokens["refresh_token"]
+        self.state["access_token"] = tokens["access_token"]
+        self.expires_at = time.time() + tokens["expires_in"]
+        self.save()
+
+    async def token(self, rejected: str = "") -> str:
+        """A live access token, other than one Mattermost just rejected."""
+        async with self.lock:
+            current = self.state["access_token"]
+            fresh = time.time() < self.expires_at - EXPIRY_MARGIN_SECONDS
+            if not current or current == rejected or not fresh:
+                await self.refresh()
+            return self.state["access_token"]
+
+    async def async_auth_flow(
+        self, request: httpx.Request
+    ) -> AsyncGenerator[httpx.Request, httpx.Response]:
+        token = await self.token()
+        request.headers["Authorization"] = f"Bearer {token}"
+        response = yield request
+        if response.status_code == 401:
+            token = await self.token(rejected=token)
+            request.headers["Authorization"] = f"Bearer {token}"
+            yield request
 
 
 class Docs:
@@ -302,7 +382,7 @@ class Agent:
                     answer = SORRY
             await self.mattermost.reply(post, root, clean(answer) or SORRY)
             log.info("post %s: answered", post["id"])
-        except httpx.HTTPError:
+        except (httpx.HTTPError, Unauthorized):
             log.exception("post %s: no reply", post["id"])
 
     def thread_messages(
@@ -407,11 +487,15 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     # httpx logs every request at INFO, which is every poll.
     logging.getLogger("httpx").setLevel(logging.WARNING)
-    mattermost = httpx.AsyncClient(
-        base_url=os.environ["MATTERMOST_URL"],
-        headers={"Authorization": f"Bearer {os.environ['MATTERMOST_TOKEN']}"},
-        timeout=30.0,
+    url = os.environ["MATTERMOST_URL"]
+    oauth = OAuth(
+        httpx.AsyncClient(base_url=url, timeout=30.0),
+        Path(os.environ["STATE_FILE"]),
+        os.environ["MATTERMOST_CLIENT_ID"],
+        os.environ["MATTERMOST_CLIENT_SECRET"],
+        os.environ["MATTERMOST_REFRESH_TOKEN"],
     )
+    mattermost = httpx.AsyncClient(base_url=url, auth=oauth, timeout=30.0)
     llm = httpx.AsyncClient(
         base_url=os.environ["LLM_PROXY_URL"],
         headers={"Authorization": f"Bearer {os.environ['LLM_PROXY_TOKEN']}"},

@@ -1,6 +1,8 @@
 # mattermost-agent
 
-PurdueAF Agent, a bot on [CERN Mattermost](https://mattermost.web.cern.ch). It
+PurdueAF Agent, a service account on
+[CERN Mattermost](https://mattermost.web.cern.ch), acting through an OAuth 2.0
+application. It
 answers an @mention in one public channel, in a thread, and a direct message
 from a member of that channel, from the user docs and the
 [agentic interface](../agentic-interface/README.md)'s facility-wide tools, with
@@ -12,7 +14,9 @@ a role of the [LLM proxy](../agentic-analysis/README.md#llm-proxy).
 | `system-prompt.md`   | What the model is told; read on each question                                 |
 | `deployment.yaml`    | Runs `agent.py` from the `mattermost-agent` ConfigMap, the docs from `mattermost-agent-docs` |
 | `networkpolicy.yaml` | No ingress; egress to the agentic interface, the LLM proxy and HTTPS outside  |
-| `secret.yaml`        | The `mattermost-agent` Secret, SOPS-encrypted: `token`, the bot's access token |
+| `pvc.yaml`           | The volume holding the current OAuth tokens                                   |
+| `authorize.py`       | Run by hand, from a checkout: the service account's one browser login         |
+| `secret.yaml`        | The `mattermost-agent` Secret, SOPS-encrypted: the OAuth application's `client-id` and `client-secret`, and the first `refresh-token` |
 
 ## Identity
 
@@ -35,8 +39,26 @@ Tuning, all in `agent.py`: `POLL_SECONDS`, `USER_LIMIT` and
 docs apply on the next question; a change to `agent.py` applies when its pod is
 deleted, and a change to the role in `models.toml` when the LLM proxy's is.
 
-To replace the token, in the repo root:
+People mention the bot by the service account's username.
+
+## Authorizing
+
+Mattermost replaces the refresh token on every use, so the current one lives in
+`/state/oauth.json`, and `refresh-token` in the Secret only starts the chain. A
+new value there takes over from the file. The pod exits with `Unauthorized` when
+Mattermost refuses the refresh token.
+
+Register an OAuth 2.0 application in Mattermost, with the callback URL
+`http://localhost:8765/callback` and without "Is Trusted", then:
 
 ```bash
-sops set apps/mattermost-agent/secret.yaml '["stringData"]["token"]' '"<token>"'
+SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt sops apps/mattermost-agent/secret.yaml
 ```
+
+Set `client-id` and `client-secret`, save, and log the service account in:
+
+```bash
+SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt uv run --no-project --with httpx python apps/mattermost-agent/authorize.py
+```
+
+Commit `secret.yaml`; its pod loads a new value when deleted.

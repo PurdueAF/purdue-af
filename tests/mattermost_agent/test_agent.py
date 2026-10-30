@@ -3,6 +3,7 @@ server, and its wiring to the app's manifests."""
 
 import asyncio
 import json
+import socket
 import threading
 import time
 
@@ -17,6 +18,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 APP = REPO / "apps" / "mattermost-agent"
 EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
 agent = load_script(APP / "agent.py", "mattermost_agent")
+authorize = load_script(APP / "authorize.py", "mattermost_authorize")
 BOT = {"id": "bot", "username": "purdueaf-agent"}
 TEAM, CHANNEL = "CMS Experiment", "Purdue Analysis Facility"
 
@@ -420,6 +422,170 @@ async def test_a_session_against_a_real_mcp_server_sends_the_hub_token(tmp_path)
         live.should_exit = True
         thread.join(5)
     assert set(seen) == {b"Bearer hub-token"}
+
+
+class FakeOAuthServer:
+    """Replaces the refresh token on each use, as Mattermost does."""
+
+    def __init__(self, expires_in=3600):
+        self.expires_in = expires_in
+        self.refreshes = 0
+        self.valid = "seed"
+        self.rejected = set()
+        self.seen = []
+
+    def __call__(self, request):
+        if request.url.path == "/oauth/access_token":
+            form = dict(httpx.QueryParams(request.content.decode()))
+            assert form["grant_type"] == "refresh_token"
+            assert (form["client_id"], form["client_secret"]) == ("id", "secret")
+            if form["refresh_token"] != self.valid:
+                return httpx.Response(404)
+            self.refreshes += 1
+            self.valid = f"refresh-{self.refreshes}"
+            tokens = {
+                "access_token": f"access-{self.refreshes}",
+                "refresh_token": self.valid,
+                "expires_in": self.expires_in,
+            }
+            return httpx.Response(200, json=tokens)
+        token = request.headers["Authorization"].removeprefix("Bearer ")
+        self.seen.append(token)
+        return httpx.Response(401 if token in self.rejected else 200, json={})
+
+
+def oauth_client(server, state_file, seed="seed"):
+    transport = httpx.MockTransport(server)
+    plain = httpx.AsyncClient(base_url="http://mm", transport=transport)
+    auth = agent.OAuth(plain, state_file, "id", "secret", seed)
+    return httpx.AsyncClient(base_url="http://mm", transport=transport, auth=auth)
+
+
+async def test_oauth_refreshes_once_for_concurrent_requests(tmp_path):
+    server = FakeOAuthServer()
+    client = oauth_client(server, tmp_path / "oauth.json")
+    await asyncio.gather(*[client.get("/x") for _ in range(4)])
+    assert server.refreshes == 1
+    assert server.seen == ["access-1"] * 4
+
+
+async def test_oauth_tokens_survive_a_restart(tmp_path):
+    server, state = FakeOAuthServer(), tmp_path / "oauth.json"
+    await oauth_client(server, state).get("/x")
+    assert state.stat().st_mode & 0o777 == 0o600
+    await oauth_client(server, state).get("/x")
+    assert server.refreshes == 1
+    assert server.seen == ["access-1", "access-1"]
+
+
+async def test_oauth_uses_the_rotated_token_after_the_old_one_expires(tmp_path):
+    server, state = FakeOAuthServer(expires_in=0), tmp_path / "oauth.json"
+    await oauth_client(server, state).get("/x")
+    await oauth_client(server, state).get("/x")
+    assert server.seen == ["access-1", "access-2"]
+
+
+async def test_a_new_seed_takes_over_from_the_stored_tokens(tmp_path):
+    server, state = FakeOAuthServer(), tmp_path / "oauth.json"
+    await oauth_client(server, state).get("/x")
+    server.valid = "new-seed"
+    await oauth_client(server, state, seed="new-seed").get("/x")
+    assert server.seen == ["access-1", "access-2"]
+
+
+async def test_a_rejected_access_token_is_refreshed_and_retried_once(tmp_path):
+    server = FakeOAuthServer()
+    client = oauth_client(server, tmp_path / "oauth.json")
+    await client.get("/x")
+    server.rejected = {"access-1"}
+    response = await client.get("/x")
+    assert response.status_code == 200
+    assert server.seen == ["access-1", "access-1", "access-2"]
+
+
+async def test_a_dead_refresh_token_stops_the_bot(tmp_path, make):
+    server = FakeOAuthServer()
+    client = oauth_client(server, tmp_path / "oauth.json", seed="dead")
+    with pytest.raises(agent.Unauthorized):
+        await client.get("/x")
+    bot, *_ = await make()
+    bot.mattermost = agent.Mattermost(client)
+    with pytest.raises(agent.Unauthorized):
+        await bot.run()
+
+
+async def test_a_network_failure_keeps_the_refresh_token(tmp_path):
+    def down(request):
+        raise httpx.ConnectError("down")
+
+    client = oauth_client(down, tmp_path / "oauth.json")
+    with pytest.raises(httpx.ConnectError):
+        await client.get("/x")
+    assert client.auth.state["refresh_token"] == "seed"
+
+
+def test_authorize_asks_for_the_code_flow_on_its_redirect():
+    query = httpx.URL(authorize.authorize_url("id", "s")).params
+    assert dict(query) == {
+        "response_type": "code",
+        "client_id": "id",
+        "redirect_uri": authorize.REDIRECT,
+        "state": "s",
+    }
+
+
+def test_authorize_takes_only_the_code_with_its_state():
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    found = []
+    waiting = threading.Thread(
+        target=lambda: found.append(authorize.receive_code("right", port))
+    )
+    waiting.start()
+
+    def get(query):
+        for _ in range(200):
+            try:
+                return httpx.get(f"http://127.0.0.1:{port}/callback?{query}")
+            except httpx.ConnectError:
+                time.sleep(0.01)
+        raise AssertionError("the callback never listened")
+
+    assert get("code=forged&state=wrong").status_code == 400
+    assert get("code=real&state=right").status_code == 200
+    waiting.join(5)
+    assert found == ["real"]
+
+
+def test_authorize_exchanges_the_code_for_a_refresh_token():
+    def server(request):
+        form = dict(httpx.QueryParams(request.content.decode()))
+        assert request.url.path == "/oauth/access_token"
+        assert form == {
+            "grant_type": "authorization_code",
+            "code": "c",
+            "redirect_uri": authorize.REDIRECT,
+            "client_id": "id",
+            "client_secret": "secret",
+        }
+        return httpx.Response(200, json={"refresh_token": "r"})
+
+    client = httpx.Client(base_url="http://mm", transport=httpx.MockTransport(server))
+    assert authorize.exchange(client, "id", "secret", "c") == "r"
+
+
+def test_every_key_the_pod_reads_is_in_the_secret():
+    deployment = yaml.safe_load((APP / "deployment.yaml").read_text())
+    container = deployment["spec"]["template"]["spec"]["containers"][0]
+    keys = {
+        e["valueFrom"]["secretKeyRef"]["key"]
+        for e in container["env"]
+        if e.get("valueFrom", {}).get("secretKeyRef", {}).get("name")
+        == "mattermost-agent"
+    }
+    secret = yaml.safe_load((APP / "secret.yaml").read_text())
+    assert keys == set(secret["stringData"])
 
 
 def test_every_user_doc_is_mounted():

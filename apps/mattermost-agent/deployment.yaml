@@ -7,7 +7,7 @@ metadata:
     app: mattermost-agent
 spec:
   replicas: 1
-  # One poller: two would answer every mention twice.
+  # One poller: two would answer every mention twice, and fight over the refresh token.
   strategy:
     type: Recreate
   selector:
@@ -24,6 +24,7 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
+        fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
       nodeSelector:
@@ -49,11 +50,23 @@ spec:
               value: "CMS Experiment"
             - name: MATTERMOST_CHANNEL
               value: "Purdue Analysis Facility"
-            - name: MATTERMOST_TOKEN
+            - name: MATTERMOST_CLIENT_ID
               valueFrom:
                 secretKeyRef:
                   name: mattermost-agent
-                  key: token
+                  key: client-id
+            - name: MATTERMOST_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: mattermost-agent
+                  key: client-secret
+            - name: MATTERMOST_REFRESH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: mattermost-agent
+                  key: refresh-token
+            - name: STATE_FILE
+              value: /state/oauth.json
             - name: MCP_URL
               value: "http://agentic-interface.cms.svc.cluster.local:8888/services/agentic-interface/mcp"
             - name: HUB_TOKEN_FILE
@@ -92,6 +105,8 @@ spec:
             - name: hub-token
               mountPath: /etc/hub-token
               readOnly: true
+            - name: state
+              mountPath: /state
             - name: tmp
               mountPath: /tmp
       volumes:
@@ -109,6 +124,9 @@ spec:
             items:
               - key: hub.services.mattermost-agent.apiToken
                 path: token
+        - name: state
+          persistentVolumeClaim:
+            claimName: mattermost-agent
         - name: tmp
           emptyDir:
             sizeLimit: 16Mi
