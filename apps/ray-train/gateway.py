@@ -71,7 +71,7 @@ from aiohttp import (
     web,
 )
 from gpu_queries import ALLOC_QUERY, GPU_METRICS, PREEMPTIBLE_QUERY, USED_QUERY
-from nrp_gpus import as_dict, free_gpus, placement, worker_of
+from nrp_gpus import as_dict, free_gpus, most_when_empty, placement, worker_of
 from nrp_gpus import nodes as nrp_nodes
 from nrp_gpus import query as nrp_query
 from yarl import URL
@@ -128,7 +128,6 @@ WORKER_MEMORY_GB_MAX = int(CONFIG["workerMemoryGbMax"])
 PREEMPTIBLE_PRIORITY_CLASS = str(CONFIG["preemptiblePriorityClass"])
 PROMETHEUS_URL = str(CONFIG["prometheusUrl"])
 NRP_PROMETHEUS_URL = str(CONFIG["nrpPrometheusUrl"])
-NRP_GPU_BUDGET = int(CONFIG["nrpGpuBudget"])
 NRP_START_TIMEOUT_S = float(CONFIG["nrpStartTimeoutSeconds"])
 NRP_MIN_UTILIZATION = float(CONFIG["nrpMinGpuUtilization"])
 NRP_UTILIZATION_WINDOW_S = int(CONFIG["nrpUtilizationWindowSeconds"])
@@ -1065,12 +1064,11 @@ def nrp_workers(exactly: str, at_most: str) -> tuple[str, str]:
     value = exactly or at_most
     if not value:
         return "1", "1"
-    most = NRP_GPU_BUDGET // NRP_WORKER.gpus
-    if value in {str(n) for n in range(1, most + 1)}:
+    if re.fullmatch(r"[1-9][0-9]*", value):
         return value, exactly or "1"
     raise Refused(
         grpc.StatusCode.INVALID_ARGUMENT,
-        f"{WORKERS_METADATA if exactly else MOST_METADATA} is a number of workers from 1 to {most} on NRP.",
+        f"{WORKERS_METADATA if exactly else MOST_METADATA} is a whole number of workers, 1 or more, on NRP.",
     )
 
 
@@ -1585,39 +1583,44 @@ class Gateway:
         its workers placed, and the Jobs that copy its inputs there and its outputs back."""
         assert self.nrp is not None and self.bucket is not None
         wanted, least = int(shape.workers), int(shape.least)
-        async with self.nrp_admitting:
-            held = sum(
-                nrp_jobs.held_gpus(j) for j in await self.nrp_listing() if active(j)
+        try:
+            room = await most_when_empty(self.http, NRP_PROMETHEUS_URL, NRP_WORKER)
+        except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
+            log.warning("asking NRP's Prometheus: %r", e)
+            room = 0
+        if not room:
+            raise Refused(
+                grpc.StatusCode.UNAVAILABLE,
+                "NRP's Prometheus shows none of its GPU nodes now: try again later.",
             )
-            room = (NRP_GPU_BUDGET - held) // NRP_WORKER.gpus
-            if room < least:
-                raise Refused(
-                    grpc.StatusCode.RESOURCE_EXHAUSTED,
-                    f"AF jobs on NRP hold {held} of the {NRP_GPU_BUDGET} GPUs they may, and yours asks for {least * NRP_WORKER.gpus}: ask for fewer, or try again later.",
-                )
-            job = nrp_jobs.build_job(
-                yaml.safe_load(NRP_TEMPLATE.read_text()),
-                name,
-                nrp_jobs.owner_key(user.cluster, user.owner),
-                submitted,
-                self.bucket.name,
-                min(wanted, room),
-                # Its log is its submitter's, which outlasts the cluster: the GPUs go at once.
-                0,
-                {
-                    f"AF_{key.upper()}": nrp_jobs.data_uri(self.bucket.name, name, key)
-                    for key in data
-                },
+        if room < least:
+            raise Refused(
+                grpc.StatusCode.RESOURCE_EXHAUSTED,
+                f"Your job asks for {least} workers, and the GPU nodes of one region and model on NRP have room for at most {room}, empty: ask for fewer.",
             )
-            job["metadata"]["annotations"].update(
-                {
-                    STAGE_ANNOTATION: "inputs" if "inputs" in data else "placing",
-                    SINCE_ANNOTATION: stamp(time.time()),
-                    LEAST_WORKERS_ANNOTATION: str(least),
-                    OUTPUT_ANNOTATION: "true" if "output" in data else "",
-                }
-            )
-            status, created = await self.nrp.call("POST", self.nrp.path("rayjobs"), job)
+        job = nrp_jobs.build_job(
+            yaml.safe_load(NRP_TEMPLATE.read_text()),
+            name,
+            nrp_jobs.owner_key(user.cluster, user.owner),
+            submitted,
+            self.bucket.name,
+            min(wanted, room),
+            # Its log is its submitter's, which outlasts the cluster: the GPUs go at once.
+            0,
+            {
+                f"AF_{key.upper()}": nrp_jobs.data_uri(self.bucket.name, name, key)
+                for key in data
+            },
+        )
+        job["metadata"]["annotations"].update(
+            {
+                STAGE_ANNOTATION: "inputs" if "inputs" in data else "placing",
+                SINCE_ANNOTATION: stamp(time.time()),
+                LEAST_WORKERS_ANNOTATION: str(least),
+                OUTPUT_ANNOTATION: "true" if "output" in data else "",
+            }
+        )
+        status, created = await self.nrp.call("POST", self.nrp.path("rayjobs"), job)
         if status != 201:
             message = (
                 created.get("message", status) if isinstance(created, dict) else status

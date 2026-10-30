@@ -82,8 +82,8 @@ A submission with the header `af-site: nrp` runs on
 creates there through NRP's API with the interLink plugin's kubeconfig
 (`kubeconfig-nrp-interlink`), from [`rayjob-nrp.yaml`](rayjob-nrp.yaml): the
 image of the AF's global environment ([`docker/ray-nrp`](../../docker/ray-nrp)),
-whose job takes only `af-n-workers` or `af-max-workers`, and all AF jobs there
-hold no more than `nrpGpuBudget` GPUs. A RayJob there carries a hash of its
+whose job takes only `af-n-workers` or `af-max-workers`, up to as many workers
+as the GPU nodes of one region and model there would hold empty. A RayJob there carries a hash of its
 owner, and no name or path of theirs. [`nrp_jobs.py`](nrp_jobs.py) is that NRP
 side.
 
