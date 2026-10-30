@@ -861,7 +861,13 @@ def test_a_request_leaves_a_line_as_it_arrives_and_another_as_it_ends(
         proxy.url + "/v1/chat/completions", json=ASK, headers=headers, timeout=30
     ).raise_for_status()
 
-    arrived, ended = map(json.loads, capsys.readouterr().out.splitlines())
+    out = capsys.readouterr().out
+    # The proxy writes the second line after the client has its reply.
+    deadline = time.monotonic() + 5
+    while out.count("\n") < 2 and time.monotonic() < deadline:
+        time.sleep(0.01)
+        out += capsys.readouterr().out
+    arrived, ended = map(json.loads, out.splitlines())
     assert (arrived["kind"], ended["kind"]) == ("arrived", "llm")
     assert arrived["start"] == ended["start"]
     for line in (arrived, ended):
