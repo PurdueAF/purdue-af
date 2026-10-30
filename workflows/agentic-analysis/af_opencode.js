@@ -12,6 +12,9 @@ const finished = new Map(); // session -> why its last step ended
 const texts = new Map(); // session -> the text of its last step
 const replies = new Map(); // session -> the replies OpenCode compacted it after and had it go on from
 const compactions = new Set(); // IDs of the compaction parts seen
+const endings = new Map(); // session -> whether its last compaction came after the reply that ended its turn
+const nudges = new Map(); // ID of OpenCode's prompt to go on after a compaction -> its session's ending then
+const summarizing = new Set(); // sessions whose latest request is the compaction agent's
 const seated = new Set(); // callIDs of task calls holding a seat
 const waiting = [];
 let free = settings.seats;
@@ -142,14 +145,61 @@ function carried(messages) {
   return images;
 }
 
+// A subagent's task: its session's first message, kept for after a compaction takes it out of the context.
+function task(session, messages) {
+  const file = path.join(settings.tasks, session);
+  if (
+    messages.some(({ parts }) =>
+      parts?.some((part) => part.type === "compaction"),
+    )
+  )
+    try {
+      return fs.readFileSync(file, "utf8");
+    } catch {
+      return "";
+    }
+  const text = (messages[0].parts ?? [])
+    .filter((part) => part.type === "text" && !part.synthetic)
+    .map((part) => part.text)
+    .join("\n\n");
+  if (text && !fs.existsSync(file)) fs.writeFileSync(file, text);
+  return text;
+}
+
+// Said instead of OpenCode's prompt to go on after a compaction, or "" to leave it; `given` is a subagent's task.
+function nudge(given, ended) {
+  const to = given === undefined ? "the human" : "the orchestrator";
+  if (ended)
+    return (
+      "OpenCode summarized this session after your last reply, which ended your " +
+      `turn and reaches ${to} as it is. This message does not answer it: end ` +
+      "your turn now, in one line."
+    );
+  if (given === undefined) return "";
+  return (
+    "OpenCode summarized this session to free its context. Go on with your task " +
+    "from where the summary above leaves it, and nothing beyond it, and end with " +
+    "your result once it is done: only the orchestrator moves the analysis on.\n\n" +
+    (given
+      ? `Your task, as the orchestrator gave it:\n\n${given}`
+      : "Your task is the one the orchestrator gave you; where the summary above " +
+        "records more than that, such as a further phase, step or gate, do none of it.")
+  );
+}
+
 export default {
   id: "af",
   server: async (input) => {
+    fs.mkdirSync(settings.tasks, { recursive: true });
     record({ kind: "loaded", pid: process.pid });
     return {
       "chat.headers": async ({ sessionID, agent }, output) => {
         record({ kind: "beat", session: sessionID });
-        if (agent !== "compaction") agents.set(sessionID, agent);
+        if (agent === "compaction") summarizing.add(sessionID);
+        else {
+          summarizing.delete(sessionID);
+          agents.set(sessionID, agent);
+        }
         output.headers["x-af-session"] = sessionID;
         output.headers["x-af-agent"] = agent;
         const parent = parents.get(sessionID);
@@ -162,6 +212,15 @@ export default {
         shown.set(session, carried(messages));
         for (const [callID, owner] of pictures)
           if (owner === session) pictures.delete(callID);
+        const given = parents.has(session)
+          ? task(session, messages)
+          : undefined;
+        for (const { parts } of messages)
+          for (const part of parts ?? [])
+            if (part.metadata?.compaction_continue) {
+              const told = nudge(given, nudges.get(part.id));
+              if (told) part.text = told;
+            }
       },
       "shell.env": async ({ sessionID }, output) => {
         Object.assign(output.env, settings.env);
@@ -171,8 +230,15 @@ export default {
       "tool.execute.before": async ({ tool, sessionID, callID }, { args }) => {
         record({ kind: "beat", session: sessionID });
         if (tool === "task") {
-          // A resumed session is not created again.
-          if (args.task_id) parents.set(String(args.task_id), sessionID);
+          // A resumed session is not created again, and its task grows by what it is resumed with.
+          if (args.task_id) {
+            parents.set(String(args.task_id), sessionID);
+            if (args.prompt)
+              fs.appendFileSync(
+                path.join(settings.tasks, String(args.task_id)),
+                `\n\nThe orchestrator then resumed you with:\n\n${args.prompt}`,
+              );
+          }
           await sit(callID);
         } else if (tool === "bash" && typeof args.timeout === "number")
           args.timeout = Math.min(args.timeout, settings.timeout);
@@ -223,19 +289,28 @@ export default {
           // Published again after its summary step, with the tail it keeps.
           else if (part.type === "compaction" && !compactions.has(part.id)) {
             compactions.add(part.id);
-            // A compaction after the step that ended a reply, which OpenCode then has go on.
-            if (
+            const reply = (texts.get(part.sessionID) ?? []).join("\n\n");
+            // A compaction after the step that ended a reply, which OpenCode then has go on; one first seen after its summary was begun by an earlier turn, mid-work.
+            const ended = Boolean(
               part.auto &&
               !part.overflow &&
+              !summarizing.has(part.sessionID) &&
               reason &&
               reason !== "tool-calls" &&
-              reason !== "unknown"
-            )
+              reason !== "unknown",
+            );
+            // A reply cut at its output limit, or a last step that said nothing, is not one to end on.
+            endings.set(
+              part.sessionID,
+              ended && reason !== "length" && reply !== "",
+            );
+            if (ended)
               replies.set(part.sessionID, [
                 ...(replies.get(part.sessionID) ?? []),
-                (texts.get(part.sessionID) ?? []).join("\n\n"),
+                reply,
               ]);
-          }
+          } else if (part.metadata?.compaction_continue && !nudges.has(part.id))
+            nudges.set(part.id, endings.get(part.sessionID));
           if (part.type === "step-finish") {
             finished.set(part.sessionID, part.reason);
             if (part.reason === "length" && parents.has(part.sessionID))

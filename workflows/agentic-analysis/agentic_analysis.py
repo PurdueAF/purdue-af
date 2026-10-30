@@ -170,6 +170,11 @@ where they differ.
 - Only the orchestrator starts subagents, with the `task` tool. Its \
 `subagent_type` is the name of the role's definition in `agents/` without \
 `.md`, as `note_writer`; an ad-hoc subagent is an `executor`.
+- A subagent, which has no `task` tool, does the task the orchestrator gives \
+it, in its first message and in any it is resumed with, and nothing beyond \
+it, then ends with its result. Where the analysis's CLAUDE.md speaks to the \
+orchestrator, a subagent is not it: only the orchestrator moves the analysis \
+on to a next step, phase or gate.
 - Where the methodology has a subagent start another or delegate a part of \
 its work, that subagent does the work itself, or ends with what it asks the \
 orchestrator to start.
@@ -594,6 +599,7 @@ def _setup(
     role_of = {"orchestrator": "orchestrator"} | {n: r for n, (r, _) in AGENTS.items()}
     plugin = {
         "records": str(state / "records.jsonl"),
+        "tasks": str(state / "tasks"),
         "seats": SEATS,
         "images": {name: roles[role]["images"] for name, role in role_of.items()},
         "image_bytes": {

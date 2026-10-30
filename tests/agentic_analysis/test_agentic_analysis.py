@@ -1308,6 +1308,7 @@ def test_setup_writes_opencodes_configuration_read_only_off_the_workspace(
     )
     plugin = json.loads(env["AF_PLUGIN"])
     assert plugin["records"] == str(home / "opencode" / "records.jsonl")
+    assert plugin["tasks"] == str(home / "opencode" / "tasks")
     assert plugin["seats"] == runner.SEATS
     assert plugin["timeout"] == runner.COMMAND_HOURS * 3_600_000
     assert plugin["images"] == {
@@ -1801,7 +1802,12 @@ def _task_result(tmp_path, parts):
         for part in parts
     ]
     (tmp_path / "events.json").write_text(json.dumps(published))
-    settings = {"records": str(tmp_path / "records.jsonl"), "seats": 1, "images": {}}
+    settings = {
+        "records": str(tmp_path / "records.jsonl"),
+        "tasks": str(tmp_path / "tasks"),
+        "seats": 1,
+        "images": {},
+    }
     return subprocess.run(
         ["node", tmp_path / "drive.mjs", plugin, tmp_path / "events.json"],
         env={**os.environ, "AF_PLUGIN": json.dumps(settings)},
@@ -1859,6 +1865,193 @@ def test_a_subagents_reply_a_failed_task_left_reaches_the_task_resumed(tmp_path)
     assert result.startswith("Done.") and result.count("At the gate.") == 1
 
 
+# Runs the plugin in argv[2] on the steps in argv[3]: an event, a request's headers or messages, or the orchestrator resuming ses_2; prints what each request's messages carry in place of OpenCode's prompt to go on.
+NUDGE = """
+import fs from "node:fs";
+const [plugin, steps] = process.argv.slice(2);
+const hooks = await (await import(plugin)).default.server({ directory: "/" });
+for (const step of JSON.parse(fs.readFileSync(steps)))
+  if (step.messages) {
+    await hooks["experimental.chat.messages.transform"]({}, step);
+    for (const { parts } of step.messages)
+      for (const part of parts)
+        if (part.metadata?.compaction_continue) console.log(JSON.stringify(part.text));
+  } else if (step.request)
+    await hooks["chat.headers"]({ sessionID: step.session, agent: step.request }, { headers: {} });
+  else if ("resumed" in step)
+    await hooks["tool.execute.before"](
+      { tool: "task", sessionID: "ses_1", callID: "call_1" },
+      { args: { task_id: "ses_2", prompt: step.resumed } },
+    );
+  else await hooks.event({ event: step });
+"""
+GO_ON = "Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed."
+TASK = "Write Phases 1 and 2 only."
+
+
+def _nudged(tmp_path, steps):
+    """What the requests among `steps` carry in place of OpenCode's prompt to
+    go on, the plugin keeping its subagents' tasks in tmp_path/tasks."""
+    plugin = tmp_path / "af_opencode.mjs"
+    plugin.write_text(runner.PLUGIN.read_text())
+    (tmp_path / "nudge.mjs").write_text(NUDGE)
+    (tmp_path / "steps.json").write_text(json.dumps(steps))
+    settings = {
+        "records": str(tmp_path / "records.jsonl"),
+        "tasks": str(tmp_path / "tasks"),
+        "seats": 8,
+        "images": {},
+    }
+    printed = subprocess.run(
+        ["node", tmp_path / "nudge.mjs", plugin, tmp_path / "steps.json"],
+        env={**os.environ, "AF_PLUGIN": json.dumps(settings)},
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    return [json.loads(line) for line in printed.splitlines()]
+
+
+def _published(session, *parts):
+    return [
+        {
+            "type": "message.part.updated",
+            "properties": {"part": {"sessionID": session, **part}},
+        }
+        for part in parts
+    ]
+
+
+def _compacted(session, reason, n=1, said="At the gate.", overflow=False, died=False):
+    """A step of `session` that said `said` and ended for `reason`, OpenCode's
+    compaction after it, the summary, and the request that goes on with
+    OpenCode's prompt to go on; after `died`, as a later turn sees them once
+    the turn that began the compaction died before its summary."""
+    compaction = {
+        "type": "compaction",
+        "id": f"prt_c{n}",
+        "auto": True,
+        "overflow": overflow,
+    }
+    go_on = {
+        "id": f"prt_g{n}",
+        "type": "text",
+        "synthetic": True,
+        "text": GO_ON,
+        "metadata": {"compaction_continue": True},
+    }
+    step = (
+        _parts(said, reason)
+        if said
+        else [{"type": "step-start"}, {"type": "step-finish", "reason": reason}]
+    )
+    summary = "SUMMARY: Phase 3 is next."
+    return [
+        *([] if died else _published(session, *step, compaction)),
+        {"request": "compaction", "session": session},
+        *_published(
+            session, *_parts(summary), {**compaction, "tail_start_id": "msg_1"}, go_on
+        ),
+        {
+            "request": "executor" if session == "ses_2" else "orchestrator",
+            "session": session,
+        },
+        {
+            "messages": [
+                {"info": {"sessionID": session, "role": "user"}, "parts": [compaction]},
+                {
+                    "info": {"sessionID": session, "role": "assistant"},
+                    "parts": [{"type": "text", "text": summary}],
+                },
+                {"info": {"sessionID": session, "role": "user"}, "parts": [go_on]},
+            ]
+        },
+    ]
+
+
+SUBAGENT = {
+    "type": "session.created",
+    "properties": {"info": {"id": "ses_2", "parentID": "ses_1"}},
+}
+# The subagent's first request, its task the whole context.
+STARTED = {
+    "messages": [
+        {
+            "info": {"sessionID": "ses_2", "role": "user"},
+            "parts": [{"type": "text", "text": TASK}],
+        }
+    ]
+}
+MID_WORK = [
+    {"reason": "tool-calls"},
+    # A reply cut at its output limit goes on.
+    {"reason": "length"},
+    {"reason": "stop", "overflow": True},
+    {"reason": "stop", "died": True},
+]
+
+
+@NODE
+@pytest.mark.parametrize("how", MID_WORK)
+def test_a_subagent_goes_on_after_a_compaction_with_its_task_only(tmp_path, how):
+    (nudged,) = _nudged(tmp_path, [SUBAGENT, STARTED, *_compacted("ses_2", **how)])
+
+    assert GO_ON not in nudged and nudged.endswith(TASK)
+
+
+@NODE
+@pytest.mark.parametrize("how", MID_WORK)
+def test_the_orchestrator_goes_on_from_a_compaction_in_its_work_as_opencode_says(
+    tmp_path, how
+):
+    assert _nudged(tmp_path, _compacted("ses_1", **how)) == [GO_ON]
+
+
+@NODE
+@pytest.mark.parametrize("session", ["ses_1", "ses_2"])
+def test_an_agent_compacted_after_the_reply_that_ended_its_turn_ends_it_again(
+    tmp_path, session
+):
+    (nudged,) = _nudged(tmp_path, [SUBAGENT, STARTED, *_compacted(session, "stop")])
+
+    assert GO_ON not in nudged and TASK not in nudged
+
+
+@NODE
+def test_a_subagent_whose_last_step_said_nothing_goes_on_to_its_result(tmp_path):
+    said = _published("ses_2", *_parts("Writing the result.", "tool-calls"))
+    (nudged,) = _nudged(
+        tmp_path, [SUBAGENT, STARTED, *said, *_compacted("ses_2", "stop", said="")]
+    )
+
+    assert nudged.endswith(TASK)
+
+
+@NODE
+def test_each_compaction_is_nudged_by_the_step_before_it(tmp_path):
+    first, second = _nudged(
+        tmp_path,
+        [
+            SUBAGENT,
+            STARTED,
+            *_compacted("ses_2", "stop", 1),
+            *_compacted("ses_2", "tool-calls", 2),
+        ],
+    )
+
+    assert TASK not in first and second.endswith(TASK)
+
+
+@NODE
+def test_a_later_turn_finds_the_task_and_what_the_subagent_was_resumed_with(tmp_path):
+    _nudged(tmp_path, [SUBAGENT, STARTED])
+
+    (nudged,) = _nudged(
+        tmp_path, [{"resumed": "Fix finding A."}, *_compacted("ses_2", "tool-calls")]
+    )
+    assert TASK in nudged and nudged.endswith("Fix finding A.")
+
+
 # Runs the plugin in argv[2] as agent argv[4] of one session, through the steps in argv[3]: reading a file, or a webfetch returning a PNG of so many bytes.
 IMAGES = """
 import fs from "node:fs";
@@ -1896,6 +2089,7 @@ def _shown(tmp_path, steps, images, most):
     (tmp_path / "steps.json").write_text(json.dumps(steps))
     settings = {
         "records": str(tmp_path / "records.jsonl"),
+        "tasks": str(tmp_path / "tasks"),
         "seats": 1,
         "images": {"plot_validator": images},
         "image_bytes": {"plot_validator": most},

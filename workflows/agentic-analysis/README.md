@@ -55,7 +55,11 @@ Before each turn the runner configures OpenCode afresh from the proxy's
   `read` beyond them and dropping those other tools return, and
   refuses to `read` a PDF; tells the orchestrator when a subagent's last reply
   ran out of output tokens, and hands it the reply a subagent ended before
-  OpenCode compacted its session and had it go on; gives commands the pod's
+  OpenCode compacted its session and had it go on; in place of OpenCode's
+  prompt to go on after a compaction, tells an agent whose last reply had
+  ended its turn to end it again, and a subagent in the middle of its task to
+  go on with that task, as the orchestrator gave and resumed it, and nothing
+  beyond it; gives commands the pod's
   own XDG directories and holds their timeout to `COMMAND_HOURS`; and records
   each request and command as it starts and what the subagents do, which the
   task's log follows.
@@ -66,10 +70,10 @@ started ends with it, the sessions its commands run in included.
 
 A workspace is `/agentic-analysis/<name of its first run>`: the JFC checkout
 with the analysis scaffolded in it, its pixi environment and git history, the
-agent's sessions and the plugin's records in `opencode/`, the replies it was
-given, and the last run's output in `said.md`. An analysis's data is fetched
-once per URL under `/agentic-analysis/data`. A retried task resumes the
-session.
+agent's sessions, its subagents' tasks and the plugin's records in
+`opencode/`, the replies it was given, and the last run's output in
+`said.md`. An analysis's data is fetched once per URL under
+`/agentic-analysis/data`. A retried task resumes the session.
 
 Every Python process in an analysis's environment, its Dask cluster's
 included, sends CPU profiles to [Pyroscope](../../apps/monitoring/pyroscope),
