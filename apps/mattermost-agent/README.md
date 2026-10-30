@@ -10,13 +10,13 @@ a role of the [LLM proxy](../agentic-analysis/README.md#llm-proxy).
 
 | File                 | What it is                                                                    |
 | -------------------- | ----------------------------------------------------------------------------- |
-| `agent.py`           | The bot: polls its channels, answers mentions, caps each user's questions     |
+| `agent.py`           | The bot: polls its channels, answers mentions, caps each user's questions, serves the login |
 | `system-prompt.md`   | What the model is told; read on each question                                 |
 | `deployment.yaml`    | Runs `agent.py` from the `mattermost-agent` ConfigMap, the docs from `mattermost-agent-docs` |
-| `networkpolicy.yaml` | No ingress; egress to the agentic interface, the LLM proxy and HTTPS outside  |
+| `networkpolicy.yaml` | Ingress from the Hub's proxy; egress to the agentic interface, the LLM proxy and HTTPS outside |
 | `pvc.yaml`           | The volume holding the current OAuth tokens                                   |
-| `authorize.py`       | Run by hand, from a checkout: the service account's one browser login         |
-| `secret.yaml`        | The `mattermost-agent` Secret, SOPS-encrypted: the OAuth application's `client-id` and `client-secret`, and the first `refresh-token` |
+| `service.yaml`       | The route the Hub's proxy sends the login to                                  |
+| `secret.yaml`        | The `mattermost-agent` Secret, SOPS-encrypted: the OAuth application's `client-id` and `client-secret`, and the service account's `username` |
 
 ## Identity
 
@@ -43,22 +43,20 @@ People mention the bot by the service account's username.
 
 ## Authorizing
 
-Mattermost replaces the refresh token on every use, so the current one lives in
-`/state/oauth.json`, and `refresh-token` in the Secret only starts the chain. A
-new value there takes over from the file. The pod exits with `Unauthorized` when
-Mattermost refuses the refresh token.
+Mattermost replaces the refresh token on every use, so the tokens live in
+`/state/oauth.json`. The agent starts with none, and returns to that state when
+Mattermost refuses them: it waits for a login, and answers nothing until then.
 
-Register an OAuth 2.0 application in Mattermost, with the callback URL
-`http://localhost:8765/callback` and without "Is Trusted", then:
-
-```bash
-SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt sops apps/mattermost-agent/secret.yaml
-```
-
-Set `client-id` and `client-secret`, save, and log the service account in:
+Create the service account, add it to the channel, and register an OAuth 2.0
+application with the callback URL
+`https://cms.geddes.rcac.purdue.edu/services/mattermost-agent/callback`. Set
+`client-id`, `client-secret` and `username`, the service account's Mattermost
+username, in the Secret:
 
 ```bash
-SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt uv run --no-project --with httpx python apps/mattermost-agent/authorize.py
+sops apps/mattermost-agent/secret.yaml
 ```
 
-Commit `secret.yaml`; its pod loads a new value when deleted.
+Once that is deployed, log in as the service account, in a private window, at
+<https://cms.geddes.rcac.purdue.edu/services/mattermost-agent/>. Anyone can reach
+that page, but the agent keeps a login only when `username` made it.

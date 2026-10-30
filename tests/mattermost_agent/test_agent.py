@@ -3,7 +3,6 @@ server, and its wiring to the app's manifests."""
 
 import asyncio
 import json
-import socket
 import threading
 import time
 
@@ -18,9 +17,9 @@ from mcp.server.transport_security import TransportSecuritySettings
 APP = REPO / "apps" / "mattermost-agent"
 EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
 agent = load_script(APP / "agent.py", "mattermost_agent")
-authorize = load_script(APP / "authorize.py", "mattermost_authorize")
 BOT = {"id": "bot", "username": "purdueaf-agent"}
 TEAM, CHANNEL = "CMS Experiment", "Purdue Analysis Facility"
+PUBLIC = "https://af.example"
 
 
 def post(id="p1", message="@purdueaf-agent is the AF up?", at=2000, **fields):
@@ -151,6 +150,12 @@ class FakeFacility:
         return Context()
 
 
+class FakeAuth:
+    def __init__(self):
+        self.ready = asyncio.Event()
+        self.ready.set()
+
+
 def tool_call(name, arguments="{}", id="call-1"):
     function = {"name": name, "arguments": arguments}
     return {"tool_calls": [{"id": id, "type": "function", "function": function}]}
@@ -192,6 +197,7 @@ def make(tmp_path, docs):
             "facility-assistant",
             TEAM,
             CHANNEL,
+            FakeAuth(),
         )
         await bot.start()
         return bot, server, llm, facility
@@ -369,19 +375,6 @@ def test_the_limit_frees_up_with_time(make):
     assert bot.allowed("u", agent.USER_WINDOW_SECONDS + 1)
 
 
-async def test_a_rejected_token_stops_the_bot(make, monkeypatch):
-    bot, *_ = await make()
-
-    async def rejected():
-        request = httpx.Request("GET", "http://mm")
-        response = httpx.Response(401, request=request)
-        raise httpx.HTTPStatusError("401", request=request, response=response)
-
-    monkeypatch.setattr(bot, "poll", rejected)
-    with pytest.raises(httpx.HTTPStatusError):
-        await bot.run()
-
-
 async def test_a_session_against_a_real_mcp_server_sends_the_hub_token(tmp_path):
     seen = []
     server = MCPServer("fake")
@@ -412,7 +405,7 @@ async def test_a_session_against_a_real_mcp_server_sends_the_hub_token(tmp_path)
     token = tmp_path / "token"
     token.write_text("hub-token\n")
     facility = agent.Facility(f"http://127.0.0.1:{port}/mcp", token)
-    bot = agent.Agent(None, None, facility, None, None, "r", TEAM, CHANNEL)
+    bot = agent.Agent(None, None, facility, None, None, "r", TEAM, CHANNEL, None)
     try:
         async with facility.session() as session:
             listed = await session.list_tools()
@@ -429,73 +422,138 @@ class FakeOAuthServer:
 
     def __init__(self, expires_in=3600):
         self.expires_in = expires_in
-        self.refreshes = 0
-        self.valid = "seed"
+        self.issued = 0
+        self.valid = None
+        self.login = "agent-account"
         self.rejected = set()
         self.seen = []
+
+    def issue(self):
+        self.issued += 1
+        self.valid = f"refresh-{self.issued}"
+        return httpx.Response(
+            200,
+            json={
+                "access_token": f"access-{self.issued}",
+                "refresh_token": self.valid,
+                "expires_in": self.expires_in,
+            },
+        )
 
     def __call__(self, request):
         if request.url.path == "/oauth/access_token":
             form = dict(httpx.QueryParams(request.content.decode()))
-            assert form["grant_type"] == "refresh_token"
             assert (form["client_id"], form["client_secret"]) == ("id", "secret")
+            if form["grant_type"] == "authorization_code":
+                assert form["redirect_uri"] == f"{PUBLIC}{agent.PREFIX}/callback"
+                return self.issue() if form["code"] == "good" else httpx.Response(400)
+            assert form["grant_type"] == "refresh_token"
             if form["refresh_token"] != self.valid:
                 return httpx.Response(404)
-            self.refreshes += 1
-            self.valid = f"refresh-{self.refreshes}"
-            tokens = {
-                "access_token": f"access-{self.refreshes}",
-                "refresh_token": self.valid,
-                "expires_in": self.expires_in,
-            }
-            return httpx.Response(200, json=tokens)
+            return self.issue()
         token = request.headers["Authorization"].removeprefix("Bearer ")
+        if request.url.path == "/api/v4/users/me":
+            return httpx.Response(200, json={"username": self.login})
         self.seen.append(token)
         return httpx.Response(401 if token in self.rejected else 200, json={})
 
 
-def oauth_client(server, state_file, seed="seed"):
+def oauth(server, state_file):
     transport = httpx.MockTransport(server)
     plain = httpx.AsyncClient(base_url="http://mm", transport=transport)
-    auth = agent.OAuth(plain, state_file, "id", "secret", seed)
+    return agent.OAuth(plain, state_file, "id", "secret", "agent-account", PUBLIC)
+
+
+def oauth_client(server, state_file):
+    auth = oauth(server, state_file)
+    transport = httpx.MockTransport(server)
     return httpx.AsyncClient(base_url="http://mm", transport=transport, auth=auth)
 
 
-async def test_oauth_refreshes_once_for_concurrent_requests(tmp_path):
+def state_of(url):
+    return httpx.URL(url).params["state"]
+
+
+async def logged_in(server, state_file):
+    client = oauth_client(server, state_file)
+    state = state_of(client.auth.authorize_url("http://mm"))
+    assert await client.auth.callback(state, "good")
+    return client
+
+
+async def test_the_service_accounts_login_is_kept(tmp_path):
+    server, state = FakeOAuthServer(), tmp_path / "oauth.json"
+    client = await logged_in(server, state)
+    assert client.auth.ready.is_set()
+    assert state.stat().st_mode & 0o777 == 0o600
+    await client.get("/x")
+    assert server.seen == ["access-1"]
+
+
+async def test_a_login_as_anyone_else_is_not_kept(tmp_path):
+    server, state = FakeOAuthServer(), tmp_path / "oauth.json"
+    server.login = "someone-else"
+    auth = oauth(server, state)
+    url = auth.authorize_url("http://mm")
+    assert not await auth.callback(state_of(url), "good")
+    assert not auth.ready.is_set()
+    assert not state.exists()
+
+
+async def test_a_forged_reused_or_old_state_is_refused(tmp_path, monkeypatch):
     server = FakeOAuthServer()
-    client = oauth_client(server, tmp_path / "oauth.json")
+    auth = oauth(server, tmp_path / "oauth.json")
+    assert not await auth.callback("forged", "good")
+    state = state_of(auth.authorize_url("http://mm"))
+    assert await auth.callback(state, "good")
+    assert not await auth.callback(state, "good")
+    state = state_of(auth.authorize_url("http://mm"))
+    now = time.monotonic()
+    monkeypatch.setattr(agent.time, "monotonic", lambda: now + agent.LOGIN_SECONDS + 1)
+    assert not await auth.callback(state, "good")
+
+
+async def test_a_failed_code_exchange_is_refused(tmp_path):
+    auth = oauth(FakeOAuthServer(), tmp_path / "oauth.json")
+    assert not await auth.callback(state_of(auth.authorize_url("http://mm")), "bad")
+
+
+async def test_pending_logins_are_bounded(tmp_path):
+    auth = oauth(FakeOAuthServer(), tmp_path / "oauth.json")
+    for _ in range(agent.MAX_LOGINS * 2):
+        auth.authorize_url("http://mm")
+    assert len(auth.logins) == agent.MAX_LOGINS
+
+
+async def test_oauth_refreshes_once_for_concurrent_requests(tmp_path):
+    server = FakeOAuthServer(expires_in=0)
+    client = await logged_in(server, tmp_path / "oauth.json")
+    server.expires_in = 3600
     await asyncio.gather(*[client.get("/x") for _ in range(4)])
-    assert server.refreshes == 1
-    assert server.seen == ["access-1"] * 4
+    assert server.issued == 2
+    assert server.seen == ["access-2"] * 4
 
 
 async def test_oauth_tokens_survive_a_restart(tmp_path):
     server, state = FakeOAuthServer(), tmp_path / "oauth.json"
-    await oauth_client(server, state).get("/x")
-    assert state.stat().st_mode & 0o777 == 0o600
-    await oauth_client(server, state).get("/x")
-    assert server.refreshes == 1
-    assert server.seen == ["access-1", "access-1"]
+    await logged_in(server, state)
+    client = oauth_client(server, state)
+    assert client.auth.ready.is_set()
+    await client.get("/x")
+    assert server.issued == 1
+    assert server.seen == ["access-1"]
 
 
-async def test_oauth_uses_the_rotated_token_after_the_old_one_expires(tmp_path):
+async def test_oauth_uses_the_rotated_token_after_a_restart(tmp_path):
     server, state = FakeOAuthServer(expires_in=0), tmp_path / "oauth.json"
+    await (await logged_in(server, state)).get("/x")
     await oauth_client(server, state).get("/x")
-    await oauth_client(server, state).get("/x")
-    assert server.seen == ["access-1", "access-2"]
-
-
-async def test_a_new_seed_takes_over_from_the_stored_tokens(tmp_path):
-    server, state = FakeOAuthServer(), tmp_path / "oauth.json"
-    await oauth_client(server, state).get("/x")
-    server.valid = "new-seed"
-    await oauth_client(server, state, seed="new-seed").get("/x")
-    assert server.seen == ["access-1", "access-2"]
+    assert server.seen == ["access-2", "access-3"]
 
 
 async def test_a_rejected_access_token_is_refreshed_and_retried_once(tmp_path):
     server = FakeOAuthServer()
-    client = oauth_client(server, tmp_path / "oauth.json")
+    client = await logged_in(server, tmp_path / "oauth.json")
     await client.get("/x")
     server.rejected = {"access-1"}
     response = await client.get("/x")
@@ -503,76 +561,67 @@ async def test_a_rejected_access_token_is_refreshed_and_retried_once(tmp_path):
     assert server.seen == ["access-1", "access-1", "access-2"]
 
 
-async def test_a_dead_refresh_token_stops_the_bot(tmp_path, make):
-    server = FakeOAuthServer()
-    client = oauth_client(server, tmp_path / "oauth.json", seed="dead")
-    with pytest.raises(agent.Unauthorized):
-        await client.get("/x")
-    bot, *_ = await make()
-    bot.mattermost = agent.Mattermost(client)
-    with pytest.raises(agent.Unauthorized):
-        await bot.run()
-
-
 async def test_a_network_failure_keeps_the_refresh_token(tmp_path):
+    server, state = FakeOAuthServer(expires_in=0), tmp_path / "oauth.json"
+    client = await logged_in(server, state)
+
     def down(request):
         raise httpx.ConnectError("down")
 
-    client = oauth_client(down, tmp_path / "oauth.json")
+    client.auth.client = httpx.AsyncClient(
+        base_url="http://mm", transport=httpx.MockTransport(down)
+    )
     with pytest.raises(httpx.ConnectError):
         await client.get("/x")
-    assert client.auth.state["refresh_token"] == "seed"
+    assert client.auth.tokens["refresh_token"] == "refresh-1"
 
 
-def test_authorize_asks_for_the_code_flow_on_its_redirect():
-    query = httpx.URL(authorize.authorize_url("id", "s")).params
-    assert dict(query) == {
-        "response_type": "code",
-        "client_id": "id",
-        "redirect_uri": authorize.REDIRECT,
-        "state": "s",
-    }
+async def test_refused_tokens_send_the_agent_back_to_waiting_for_a_login(
+    make, tmp_path
+):
+    bot, *_ = await make()
+    server, state = FakeOAuthServer(), tmp_path / "oauth.json"
+    client = await logged_in(server, state)
+    client.auth.tokens["expires_at"] = 0
+    server.valid = "revoked"
+    bot.oauth = client.auth
+    bot.mattermost = agent.Mattermost(client)
+    running = asyncio.create_task(bot.run())
+    while client.auth.ready.is_set():
+        await asyncio.sleep(0)
+    assert not state.exists()
+    assert not running.done()
+    assert bot.alive()
+    running.cancel()
 
 
-def test_authorize_takes_only_the_code_with_its_state():
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
-    found = []
-    waiting = threading.Thread(
-        target=lambda: found.append(authorize.receive_code("right", port))
-    )
-    waiting.start()
-
-    def get(query):
-        for _ in range(200):
-            try:
-                return httpx.get(f"http://127.0.0.1:{port}/callback?{query}")
-            except httpx.ConnectError:
-                time.sleep(0.01)
-        raise AssertionError("the callback never listened")
-
-    assert get("code=forged&state=wrong").status_code == 400
-    assert get("code=real&state=right").status_code == 200
-    waiting.join(5)
-    assert found == ["real"]
+async def test_the_pages_start_a_login_and_finish_it(make, tmp_path):
+    bot, *_ = await make()
+    bot.oauth = oauth(FakeOAuthServer(), tmp_path / "oauth.json")
+    transport = httpx.ASGITransport(app=agent.web(bot, "http://mm"))
+    client = httpx.AsyncClient(base_url=PUBLIC, transport=transport)
+    page = await client.get(f"{agent.PREFIX}/")
+    assert page.status_code == 307
+    assert page.headers["location"].startswith("http://mm/oauth/authorize?")
+    query = {"state": "forged", "code": "good"}
+    refused = await client.get(f"{agent.PREFIX}/callback", params=query)
+    assert refused.status_code == 403
+    query["state"] = state_of(page.headers["location"])
+    done = await client.get(f"{agent.PREFIX}/callback", params=query)
+    assert done.status_code == 200
+    assert "refresh-" not in done.text and "access-" not in done.text
+    assert (await client.get(f"{agent.PREFIX}/")).status_code == 200
 
 
-def test_authorize_exchanges_the_code_for_a_refresh_token():
-    def server(request):
-        form = dict(httpx.QueryParams(request.content.decode()))
-        assert request.url.path == "/oauth/access_token"
-        assert form == {
-            "grant_type": "authorization_code",
-            "code": "c",
-            "redirect_uri": authorize.REDIRECT,
-            "client_id": "id",
-            "client_secret": "secret",
-        }
-        return httpx.Response(200, json={"refresh_token": "r"})
-
-    client = httpx.Client(base_url="http://mm", transport=httpx.MockTransport(server))
-    assert authorize.exchange(client, "id", "secret", "c") == "r"
+async def test_the_probe_fails_only_when_polling_has_stalled(make, tmp_path):
+    bot, *_ = await make()
+    transport = httpx.ASGITransport(app=agent.web(bot, "http://mm"))
+    client = httpx.AsyncClient(base_url=PUBLIC, transport=transport)
+    assert (await client.get("/healthz")).status_code == 200
+    bot.beat -= agent.STALE_SECONDS + 1
+    assert (await client.get("/healthz")).status_code == 503
+    bot.oauth.ready.clear()
+    assert (await client.get("/healthz")).status_code == 200
 
 
 def test_every_key_the_pod_reads_is_in_the_secret():

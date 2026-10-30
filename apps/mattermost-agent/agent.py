@@ -5,25 +5,36 @@ interface's facility-wide tools, as a Hub service that no user stands behind."""
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import os
 import re
+import secrets
 import time
 from collections import defaultdict, deque
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
+import uvicorn
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse, RedirectResponse, Response
+from starlette.routing import Route
 
 log = logging.getLogger("mattermost-agent")
 
-HEARTBEAT = Path("/tmp/heartbeat")
+# The Hub's proxy serves the service here, and passes the whole path on.
+PREFIX = "/services/mattermost-agent"
+PORT = 8080
+LOGIN_SECONDS = 600.0
+MAX_LOGINS = 32
+STALE_SECONDS = 180.0
 POLL_SECONDS = 10.0
 CHANNELS_SECONDS = 60.0
 # Everything else on the MCP server acts on the caller's own session and data.
@@ -54,13 +65,13 @@ NOT_MEMBER = "I answer direct messages from members of {channel} only."
 
 
 class Unauthorized(Exception):
-    """Mattermost refused the refresh token: authorize.py has to run again."""
+    """Mattermost refused the tokens: the service account has to log in again."""
 
 
 class OAuth(httpx.Auth):
     """Mattermost's OAuth tokens. Each refresh replaces the refresh token, so
-    they live in a file that outlasts the pod; a new seed from authorize.py,
-    in the Secret, takes over from what the file holds."""
+    they live in a file that outlasts the pod. ``ready`` is set while it holds
+    them; the service account's login at ``login_url`` provides them."""
 
     def __init__(
         self,
@@ -68,34 +79,98 @@ class OAuth(httpx.Auth):
         state_file: Path,
         client_id: str,
         client_secret: str,
-        seed: str,
+        username: str,
+        public_url: str,
     ) -> None:
         self.client = client
         self.state_file = state_file
         self.client_id = client_id
         self.client_secret = client_secret
-        self.seed = hashlib.sha256(seed.encode()).hexdigest()
-        self.state = {"seed": self.seed, "refresh_token": seed, "access_token": ""}
-        self.expires_at = 0.0
+        self.username = username
+        self.login_url = f"{public_url}{PREFIX}/"
+        self.redirect = f"{public_url}{PREFIX}/callback"
+        self.tokens: dict[str, Any] = {}
+        self.logins: dict[str, float] = {}
+        self.ready = asyncio.Event()
         self.lock = asyncio.Lock()
         if state_file.exists():
-            saved = json.loads(state_file.read_text())
-            if saved["seed"] == self.seed:
-                self.state = saved
-                self.expires_at = saved["expires_at"]
+            self.tokens = json.loads(state_file.read_text())
+            self.ready.set()
 
-    def save(self) -> None:
+    def store(self, tokens: dict[str, Any]) -> None:
+        self.tokens = {
+            "access_token": tokens["access_token"],
+            "refresh_token": tokens["refresh_token"],
+            "expires_at": time.time() + tokens["expires_in"],
+        }
         temporary = self.state_file.with_suffix(".tmp")
         temporary.touch(mode=0o600)
-        temporary.write_text(json.dumps(self.state | {"expires_at": self.expires_at}))
+        temporary.write_text(json.dumps(self.tokens))
         temporary.replace(self.state_file)
 
+    def forget(self) -> None:
+        self.tokens = {}
+        self.state_file.unlink(missing_ok=True)
+        self.ready.clear()
+
+    def authorize_url(self, base_url: str) -> str:
+        """Where a login starts, with a state that callback() accepts once."""
+        now = time.monotonic()
+        self.logins = {
+            state: at for state, at in self.logins.items() if now - at < LOGIN_SECONDS
+        }
+        while len(self.logins) >= MAX_LOGINS:
+            del self.logins[next(iter(self.logins))]
+        state = secrets.token_urlsafe(24)
+        self.logins[state] = now
+        query = urlencode(
+            {
+                "response_type": "code",
+                "client_id": self.client_id,
+                "redirect_uri": self.redirect,
+                "state": state,
+            }
+        )
+        return f"{base_url}/oauth/authorize?{query}"
+
+    async def callback(self, state: str, code: str) -> bool:
+        """Keeps the tokens of a login, only if it is the service account's."""
+        at = self.logins.pop(state, None)
+        if at is None or time.monotonic() - at >= LOGIN_SECONDS:
+            return False
+        response = await self.client.post(
+            "/oauth/access_token",
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": self.redirect,
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+            },
+        )
+        if not response.is_success:
+            log.warning("login: HTTP %s", response.status_code)
+            return False
+        tokens = response.json()
+        headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+        me = await self.client.get("/api/v4/users/me", headers=headers)
+        me.raise_for_status()
+        if me.json()["username"] != self.username:
+            log.warning("login: not the service account")
+            return False
+        async with self.lock:
+            self.store(tokens)
+        self.ready.set()
+        return True
+
     async def refresh(self) -> None:
+        if not self.tokens:
+            raise Unauthorized("no tokens")
         response = await self.client.post(
             "/oauth/access_token",
             data={
                 "grant_type": "refresh_token",
-                "refresh_token": self.state["refresh_token"],
+                "refresh_token": self.tokens["refresh_token"],
                 "client_id": self.client_id,
                 "client_secret": self.client_secret,
             },
@@ -103,20 +178,18 @@ class OAuth(httpx.Auth):
         if response.status_code in (400, 401, 403, 404):
             raise Unauthorized(f"token refresh: HTTP {response.status_code}")
         response.raise_for_status()
-        tokens = response.json()
-        self.state["refresh_token"] = tokens["refresh_token"]
-        self.state["access_token"] = tokens["access_token"]
-        self.expires_at = time.time() + tokens["expires_in"]
-        self.save()
+        self.store(response.json())
 
     async def token(self, rejected: str = "") -> str:
         """A live access token, other than one Mattermost just rejected."""
         async with self.lock:
-            current = self.state["access_token"]
-            fresh = time.time() < self.expires_at - EXPIRY_MARGIN_SECONDS
+            current = self.tokens.get("access_token")
+            expires_at = self.tokens.get("expires_at", 0.0)
+            fresh = time.time() < expires_at - EXPIRY_MARGIN_SECONDS
             if not current or current == rejected or not fresh:
                 await self.refresh()
-            return self.state["access_token"]
+            token: str = self.tokens["access_token"]
+            return token
 
     async def async_auth_flow(
         self, request: httpx.Request
@@ -273,6 +346,7 @@ class Agent:
         role: str,
         team_name: str,
         channel_name: str,
+        oauth: OAuth,
     ) -> None:
         self.mattermost = mattermost
         self.llm = llm
@@ -282,6 +356,8 @@ class Agent:
         self.role = role
         self.team_name = team_name
         self.channel_name = channel_name
+        self.oauth = oauth
+        self.beat = time.monotonic()
         self.me: dict[str, Any] = {}
         self.mention = re.compile("$^")
         self.cursors: dict[str, int] = {}
@@ -467,7 +543,12 @@ class Agent:
                     )
         return ""
 
-    async def run(self) -> None:
+    def alive(self) -> bool:
+        """Not stuck: polling recently, or waiting for the login."""
+        recent = time.monotonic() - self.beat < STALE_SECONDS
+        return recent or not self.oauth.ready.is_set()
+
+    async def polling(self) -> None:
         await self.start()
         log.info("polling as %s", self.me["username"])
         while True:
@@ -475,12 +556,59 @@ class Agent:
                 await self.poll()
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 401:
-                    raise
+                    raise Unauthorized("HTTP 401 with fresh tokens") from exc
                 log.warning("poll: HTTP %s", exc.response.status_code)
             except httpx.HTTPError as exc:
                 log.warning("poll: %s", type(exc).__name__)
-            HEARTBEAT.touch()
+            self.beat = time.monotonic()
             await asyncio.sleep(POLL_SECONDS)
+
+    async def run(self) -> None:
+        while True:
+            if not self.oauth.ready.is_set():
+                log.warning("waiting for the login at %s", self.oauth.login_url)
+            await self.oauth.ready.wait()
+            try:
+                await self.polling()
+            except Unauthorized as exc:
+                log.error("Mattermost refused the tokens: %s", exc)
+                self.oauth.forget()
+
+
+def web(agent: Agent, base_url: str) -> Starlette:
+    """The login's two pages, the only ones anyone outside can reach, and
+    the probe. No page shows a token, and only the service account's login
+    is kept."""
+
+    async def login(request: Request) -> Response:
+        if agent.oauth.ready.is_set():
+            return PlainTextResponse("Connected to Mattermost.")
+        return RedirectResponse(agent.oauth.authorize_url(base_url))
+
+    async def callback(request: Request) -> Response:
+        state = request.query_params.get("state", "")
+        code = request.query_params.get("code", "")
+        if await agent.oauth.callback(state, code):
+            return PlainTextResponse("Connected to Mattermost.")
+        return PlainTextResponse("This login was not accepted.", status_code=403)
+
+    async def health(request: Request) -> Response:
+        return PlainTextResponse("ok", status_code=200 if agent.alive() else 503)
+
+    return Starlette(
+        routes=[
+            Route(f"{PREFIX}/", login),
+            Route(f"{PREFIX}/callback", callback),
+            Route("/healthz", health),
+        ]
+    )
+
+
+async def serve(agent: Agent, base_url: str) -> None:
+    config = uvicorn.Config(
+        web(agent, base_url), host="0.0.0.0", port=PORT, log_level="warning"
+    )
+    await asyncio.gather(uvicorn.Server(config).serve(), agent.run())
 
 
 def main() -> None:
@@ -493,7 +621,8 @@ def main() -> None:
         Path(os.environ["STATE_FILE"]),
         os.environ["MATTERMOST_CLIENT_ID"],
         os.environ["MATTERMOST_CLIENT_SECRET"],
-        os.environ["MATTERMOST_REFRESH_TOKEN"],
+        os.environ["MATTERMOST_USERNAME"],
+        os.environ["PUBLIC_URL"],
     )
     mattermost = httpx.AsyncClient(base_url=url, auth=oauth, timeout=30.0)
     llm = httpx.AsyncClient(
@@ -510,8 +639,9 @@ def main() -> None:
         os.environ["LLM_ROLE"],
         os.environ["MATTERMOST_TEAM"],
         os.environ["MATTERMOST_CHANNEL"],
+        oauth,
     )
-    asyncio.run(agent.run())
+    asyncio.run(serve(agent, url))
 
 
 if __name__ == "__main__":

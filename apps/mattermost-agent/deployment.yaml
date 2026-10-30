@@ -60,11 +60,13 @@ spec:
                 secretKeyRef:
                   name: mattermost-agent
                   key: client-secret
-            - name: MATTERMOST_REFRESH_TOKEN
+            - name: MATTERMOST_USERNAME
               valueFrom:
                 secretKeyRef:
                   name: mattermost-agent
-                  key: refresh-token
+                  key: username
+            - name: PUBLIC_URL
+              value: "https://cms.geddes.rcac.purdue.edu"
             - name: STATE_FILE
               value: /state/oauth.json
             - name: MCP_URL
@@ -84,9 +86,13 @@ spec:
               value: /docs
             - name: PROMPT_FILE
               value: /agent/system-prompt.md
+          ports:
+            - name: http
+              containerPort: 8080
           livenessProbe:
-            exec:
-              command: ["sh", "-c", 'test -n "$(find /tmp/heartbeat -mmin -3)"']
+            httpGet:
+              path: /healthz
+              port: http
             initialDelaySeconds: 60
             periodSeconds: 60
           resources:

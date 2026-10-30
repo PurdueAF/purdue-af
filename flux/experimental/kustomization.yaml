@@ -90,6 +90,7 @@ resources:
   - ../../apps/mattermost-agent/deployment.yaml
   - ../../apps/mattermost-agent/networkpolicy.yaml
   - ../../apps/mattermost-agent/pvc.yaml
+  - ../../apps/mattermost-agent/service.yaml
   - ../../apps/mattermost-agent/secret.yaml
 
   - ../../apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml
