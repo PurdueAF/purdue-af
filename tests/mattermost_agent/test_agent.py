@@ -42,10 +42,12 @@ class FakeMattermost:
     def __init__(self):
         self.posts = {}
         self.direct_posts = {}
+        self.group_posts = {}
+        self.group = ["bot", "u1", "u2"]
         self.thread = {}
         self.replies = []
         self.since = []
-        self.members = {"u1"}
+        self.members = {"u1", "u2"}
         self.direct = [{"id": "dm", "type": "D", "display_name": ""}]
 
     def __call__(self, request):
@@ -73,9 +75,16 @@ class FakeMattermost:
         if path == "/users/bot/teams/t2/channels":
             other = [{"id": "c9", "type": "O", "display_name": CHANNEL}]
             return httpx.Response(200, json=other)
+        if path == "/channels/g1/members":
+            members = [{"user_id": user} for user in self.group]
+            return httpx.Response(200, json=members)
         if path.startswith("/channels/c1/members/"):
             member = path.rsplit("/", 1)[1] in self.members
             return httpx.Response(200 if member else 404, json={})
+        if path == "/channels/g1/posts":
+            if "since" in request.url.params or self.group_posts:
+                return httpx.Response(200, json={"posts": self.group_posts})
+            return httpx.Response(200, json={"posts": {"old": post("old", at=1000)}})
         if path in ("/channels/c1/posts", "/channels/dm/posts"):
             channel = path.split("/")[2]
             if "since" in request.url.params:
@@ -212,7 +221,7 @@ async def poll(bot):
 async def test_a_mention_is_answered_in_its_thread_and_older_posts_are_not(make):
     bot, server, llm, _ = await make({"content": "Yes, it is up."})
     await poll(bot)
-    assert bot.cursors == {"c1": 1000, "dm": 1000}
+    assert bot.cursors == {"c1": 1000, "dm": 1000, "g1": 1000}
     assert server.replies == []
     server.posts = {"p1": post()}
     server.thread = {"p1": post()}
@@ -248,13 +257,13 @@ async def test_only_a_new_post_by_a_person_that_mentions_the_bot_is_wanted(
 async def test_only_the_named_public_channel_and_direct_messages_are_polled(make):
     bot, *_ = await make()
     found = await bot.mattermost.channels("bot", TEAM, CHANNEL)
-    assert found == ("c1", {"dm"})
+    assert found == ("c1", {"dm"}, {"g1"})
 
 
 async def test_a_member_is_answered_in_a_direct_message_without_a_mention(make):
     bot, server, llm, _ = await make({"content": "It is up."})
     await poll(bot)
-    assert bot.cursors == {"c1": 1000, "dm": 1000}
+    assert bot.cursors == {"c1": 1000, "dm": 1000, "g1": 1000}
     question = post("d1", "is the AF up?", channel_id="dm")
     server.direct_posts = {
         "d0": post("d0", "Earlier.", 1500, channel_id="dm", user_id="bot"),
@@ -270,11 +279,59 @@ async def test_a_member_is_answered_in_a_direct_message_without_a_mention(make):
     ]
 
 
+def group_post(id="g", message="@purdueaf-agent is the AF up?", **fields):
+    return post(id, message, channel_id="g1", **fields)
+
+
+async def test_a_mention_in_a_group_of_members_is_answered(make):
+    bot, server, llm, _ = await make({"content": "It is up."})
+    await poll(bot)
+    server.group_posts = {
+        "g": group_post(),
+        "h": group_post("h", "no mention", at=2100),
+    }
+    await poll(bot)
+    assert server.replies == [
+        {"channel_id": "g1", "root_id": "", "message": "It is up."}
+    ]
+    assert llm.bodies[0]["messages"][1] == {"role": "user", "content": "is the AF up?"}
+
+
+async def test_a_group_with_anyone_outside_the_channel_gets_no_answer(make):
+    bot, server, llm, _ = await make({"content": "never"})
+    await poll(bot)
+    server.members = {"u1"}
+    server.group_posts = {"g": group_post()}
+    await poll(bot)
+    assert llm.bodies == []
+    expected = agent.NOT_ALL_MEMBERS.format(channel=CHANNEL)
+    assert [r["message"] for r in server.replies] == [expected]
+
+
+async def test_a_group_message_without_a_mention_is_left_alone(make):
+    bot, server, llm, _ = await make({"content": "never"})
+    await poll(bot)
+    server.group_posts = {"g": group_post(message="is the AF up?")}
+    await poll(bot)
+    assert server.replies == []
+
+
+async def test_private_conversations_say_so_while_the_bot_is_outside_the_channel(make):
+    bot, server, llm, _ = await make({"content": "never"})
+    await poll(bot)
+    bot.home = None
+    await bot.handle(post("d1", "hi", channel_id="dm"))
+    await bot.handle(group_post())
+    expected = agent.NOT_READY.format(channel=CHANNEL)
+    assert [r["message"] for r in server.replies] == [expected, expected]
+    assert llm.bodies == []
+
+
 async def test_a_new_direct_message_is_answered_from_its_first_post(make):
     bot, server, *_ = await make({"content": "Hello."})
     server.direct = []
     await poll(bot)
-    assert bot.cursors == {"c1": 1000}
+    assert bot.cursors == {"c1": 1000, "g1": 1000}
     server.direct = [{"id": "dm", "type": "D", "display_name": ""}]
     server.direct_posts = {"d1": post("d1", "hi", channel_id="dm")}
     bot.channels_at -= agent.CHANNELS_SECONDS + 1
